@@ -1,0 +1,25 @@
+{
+  "name": "@puppet-master/cli",
+  "version": "0.2.2",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "puppet-master": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node --enable-source-maps dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "tsx --test src/watch.test.ts src/watch-args.test.ts src/pair-link.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@puppet-master/shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

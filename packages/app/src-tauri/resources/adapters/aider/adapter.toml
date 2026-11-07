@@ -1,0 +1,47 @@
+# A reviewed adapter: a script we ship, run with the Python that the agent itself was installed with.
+# The app copies the script, pins its SHA-256 and checks it before every start (acp::adapter_overlay).
+# The pin covers only the script. Everything below is data: names and plain defaults, never a secret value.
+id = "aider"
+label = "Aider"
+program = "aider"
+runtime = "python"
+script = "aider_adapter.py"
+sha256 = "85382b70782985c08ab866982c89a5820f4b3cc971fbd5c159da26f27b064b45"
+tested_version = "0.86.2"
+import_name = "aider"
+resume = "none"
+# Keys the adapter may receive. `slot` (optional) names the Keys-settings slot that already holds the key; without
+# it the key lives in a per-adapter slot. The person approves each one; only approved names reach the child.
+env_keys = [
+  { env = "OPENROUTER_API_KEY", label = "OpenRouter", slot = "openrouter_api_key" },
+  { env = "OPENAI_API_KEY", label = "OpenAI", slot = "openai_api_key" },
+]
+# Key groups: each group needs at least one of its keys saved before Add chat is enabled. Here one provider key is enough.
+key_groups = [["OPENROUTER_API_KEY", "OPENAI_API_KEY"]]
+
+# Plain settings the adapter reads (not secret). `default` is a public model id. `options` are public choices the
+# screen offers; `needs_key` names the key that choice works with. The first choice whose key is saved is preselected.
+[[env_settings]]
+env = "AIDER_MODEL"
+label = "Model"
+default = "openrouter/deepseek/deepseek-chat"
+
+[[env_settings.options]]
+value = "openrouter/deepseek/deepseek-chat"
+label = "DeepSeek Chat (OpenRouter)"
+needs_key = "OPENROUTER_API_KEY"
+
+[[env_settings.options]]
+value = "openrouter/deepseek/deepseek-v4.1-flash-1017"
+label = "DeepSeek v4.1 Flash (OpenRouter)"
+needs_key = "OPENROUTER_API_KEY"
+
+[[env_settings.options]]
+value = "openai/gpt-4o-mini"
+label = "GPT-4o mini (OpenAI)"
+needs_key = "OPENAI_API_KEY"
+
+[[env_settings]]
+env = "AIDER_MODEL_2"
+label = "Second model"
+default = "openrouter/openai/gpt-4o"

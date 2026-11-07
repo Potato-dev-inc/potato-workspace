@@ -1,0 +1,87 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+import { resolve } from 'node:path';
+import { bridgeProxyConfig } from './vite-bridge-proxy';
+import { devInfoPlugin } from './vite-dev-info';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    devInfoPlugin(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      // Registered from main.tsx, and only outside the desktop app (see lib/service-worker.ts).
+      injectRegister: false,
+      includeAssets: ['app-icon.svg', 'icon-192.png', 'icon-512.png'],
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        // Same precache set as the old generateSW config.
+        globPatterns: ['**/*.{js,css,html,woff2}'],
+        // The main bundle grew past the 2 MiB default; without this the build fails instead of precaching it.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
+      manifest: {
+        name: 'Puppet Master',
+        short_name: 'PM',
+        description: 'Multi-agent terminal orchestrator',
+        display: 'standalone',
+        background_color: '#1b1a19',
+        theme_color: '#1b1a19',
+        icons: [
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+        ],
+      },
+      devOptions: {
+        enabled: true,
+      },
+    }),
+  ],
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+    },
+  },
+  clearScreen: false,
+  server: {
+    port: 1420,
+    strictPort: true,
+    host: true,
+    allowedHosts: true,
+    proxy: bridgeProxyConfig,
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
+  },
+  preview: {
+    host: true,
+    allowedHosts: true,
+    proxy: bridgeProxyConfig,
+  },
+  envPrefix: ['VITE_', 'TAURI_'],
+  build: {
+    target: 'es2022',
+    // Two lazy-free app chunks sit just above Vite's 500 kB default; see the note on manualChunks.
+    chunkSizeWarningLimit: 700,
+    minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
+    sourcemap: !!process.env.TAURI_DEBUG,
+    rollupOptions: {
+      output: {
+        // Split the big vendor libraries out of the app bundle so each chunk stays small.
+        manualChunks(id: string) {
+          // Never split app code by folder: its modules import each other in circles, and chunks that do
+          // that crash on load in built apps only (dev mode hides it). Lazy imports still get their own chunks.
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('/@xterm/')) return 'vendor-xterm';
+          if (id.includes('/qrcode/') || id.includes('/html5-qrcode/')) return 'vendor-qr';
+          if (id.includes('/@tauri-apps/')) return 'vendor-tauri';
+          if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'vendor-react';
+          return undefined;
+        },
+      },
+    },
+  },
+});

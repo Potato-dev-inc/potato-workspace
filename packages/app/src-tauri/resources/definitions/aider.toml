@@ -1,0 +1,17 @@
+# A bundled definition: a program the app lists in Settings > Agents when it is installed. Bundled files need no approval.
+# Chat (ACP) is not in this file: it comes from the reviewed adapter in resources/adapters/aider, through Add chat.
+schema_version = 1
+
+[agent]
+id = "aider"
+label = "Aider"
+description = "Aider, a terminal pair programmer (installed with pip as aider-chat)."
+
+[binary]
+names = ["aider"]
+windows_extensions = ["exe"]
+version_args = ["--version"]
+install_hint = "pip install aider-chat"
+
+[tui]
+argv = []

@@ -1,0 +1,622 @@
+//! Embedded HTTP server for the mobile PWA (production builds).
+//!
+//! Serves the staged `pwa-dist` assets on loopback, proxies `/bridge/*` to the
+//! embedded bridge, and exposes `/__puppet_master_dev__.json` for tunnel info.
+#![allow(dead_code)]
+
+use serde::Serialize;
+use std::fs;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::thread;
+
+const HOST: &str = "127.0.0.1";
+pub const PWA_PORT: u16 = 1420;
+
+/// The port the PWA server really listens on: `PWA_PORT` for the default profile, a free one for
+/// a non-default profile (`app_paths::pwa_port_for`). `PWA_PORT` until the server has started.
+pub fn pwa_port() -> u16 {
+    BOUND_PORT.get().copied().unwrap_or(PWA_PORT)
+}
+
+static BOUND_PORT: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DevInfoPayload {
+    pub local_url: String,
+    pub pwa_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tunnel_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tunnel_provider: Option<String>,
+    pub bridge_proxy_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bridge_direct_url: Option<String>,
+    pub updated_at: u64,
+}
+
+type DevInfoSupplier = Arc<dyn Fn() -> DevInfoPayload + Send + Sync>;
+
+pub struct PwaServerHandle {
+    _join: thread::JoinHandle<()>,
+}
+
+pub fn start_pwa_server(
+    dist_root: PathBuf,
+    bridge_port_file: PathBuf,
+    dev_info: DevInfoSupplier,
+) -> Result<PwaServerHandle, String> {
+    if !dist_root.is_dir() {
+        return Err(format!(
+            "PWA dist directory missing: {}",
+            dist_root.display()
+        ));
+    }
+
+    let wanted = crate::app_paths::pwa_port_for(crate::app_paths::profile().as_deref());
+    let listener = TcpListener::bind((HOST, wanted))
+        .map_err(|err| format!("bind PWA server on {HOST}:{wanted}: {err}"))?;
+    if let Ok(addr) = listener.local_addr() {
+        let _ = BOUND_PORT.set(addr.port());
+    }
+
+    let join = thread::Builder::new()
+        .name("puppet-master-pwa-server".into())
+        .spawn(move || {
+            for stream in listener.incoming() {
+                match stream {
+                    Ok(stream) => {
+                        let dist_root = dist_root.clone();
+                        let bridge_port_file = bridge_port_file.clone();
+                        let dev_info = dev_info.clone();
+                        thread::spawn(move || {
+                            if let Err(err) =
+                                handle_connection(stream, &dist_root, &bridge_port_file, &dev_info)
+                            {
+                                tracing::debug!(%err, "PWA request failed");
+                            }
+                        });
+                    }
+                    Err(err) => tracing::debug!(%err, "PWA accept failed"),
+                }
+            }
+        })
+        .map_err(|err| format!("spawn PWA server thread: {err}"))?;
+
+    Ok(PwaServerHandle { _join: join })
+}
+
+fn handle_connection(
+    mut stream: TcpStream,
+    dist_root: &Path,
+    bridge_port_file: &Path,
+    dev_info: &DevInfoSupplier,
+) -> Result<(), String> {
+    let mut buf = Vec::new();
+    let mut chunk = [0_u8; 4096];
+    let header_end;
+    loop {
+        let n = stream
+            .read(&mut chunk)
+            .map_err(|err| format!("read request: {err}"))?;
+        if n == 0 {
+            return Ok(());
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        if let Some(pos) = find_header_end(&buf) {
+            header_end = pos;
+            break;
+        }
+        if buf.len() > 1024 * 1024 {
+            return Err("request headers too large".into());
+        }
+    }
+
+    let headers_raw = String::from_utf8_lossy(&buf[..header_end]).into_owned();
+    let mut lines = headers_raw.lines();
+    let request_line = lines.next().ok_or("empty request")?;
+    let mut parts = request_line.split_whitespace();
+    let method = parts.next().unwrap_or("GET");
+    let target = parts.next().unwrap_or("/");
+    let (path, query) = split_target(target);
+
+    let content_length = parse_content_length(&headers_raw);
+    let body_start = header_end + 4;
+    while buf.len().saturating_sub(body_start) < content_length {
+        let n = stream
+            .read(&mut chunk)
+            .map_err(|err| format!("read body: {err}"))?;
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    }
+    let body = &buf[body_start..body_start.saturating_add(content_length).min(buf.len())];
+
+    if path == "/__puppet_master_dev__.json" && method == "GET" {
+        let payload = dev_info();
+        return write_json(&mut stream, 200, &payload);
+    }
+
+    if path == "/bridge" || path.starts_with("/bridge/") {
+        let bridge_path = path.strip_prefix("/bridge").unwrap_or("");
+        let bridge_path = if bridge_path.is_empty() {
+            "/"
+        } else {
+            bridge_path
+        };
+        // The query string travels with the path (`/events/poll?cursor=...`, `/panes/x/buffer?view=...`).
+        let bridge_path = if query.is_empty() {
+            bridge_path.to_string()
+        } else {
+            format!("{bridge_path}?{query}")
+        };
+        let bridge_path = bridge_path.as_str();
+        if is_websocket_upgrade(&headers_raw) {
+            // Bytes the client sent after the head belong to the tunnel, not to a body.
+            return proxy_upgrade(
+                &mut stream,
+                bridge_port_file,
+                method,
+                bridge_path,
+                &headers_raw,
+                &buf[body_start..],
+            );
+        }
+        return proxy_bridge(
+            &mut stream,
+            bridge_port_file,
+            method,
+            bridge_path,
+            &headers_raw,
+            body,
+        );
+    }
+
+    serve_static(&mut stream, dist_root, path, method)
+}
+
+fn looks_like_asset_path(path: &str) -> bool {
+    let rel = path.trim_start_matches('/');
+    if rel.is_empty() {
+        return false;
+    }
+    if rel.starts_with("assets/") || rel.starts_with("@") || rel.starts_with("src/") {
+        return true;
+    }
+    rel.rsplit_once('.').is_some_and(|(_, ext)| {
+        matches!(
+            ext,
+            "js" | "mjs"
+                | "ts"
+                | "tsx"
+                | "css"
+                | "map"
+                | "json"
+                | "wasm"
+                | "svg"
+                | "png"
+                | "ico"
+                | "woff2"
+        )
+    })
+}
+
+fn serve_static(
+    stream: &mut TcpStream,
+    dist_root: &Path,
+    path: &str,
+    method: &str,
+) -> Result<(), String> {
+    if method != "GET" && method != "HEAD" {
+        return write_text(stream, 405, "Method Not Allowed");
+    }
+
+    let rel = path.trim_start_matches('/');
+    let mut file_path = if rel.is_empty() {
+        dist_root.join("index.html")
+    } else {
+        dist_root.join(rel)
+    };
+
+    if file_path.is_dir() {
+        file_path = file_path.join("index.html");
+    }
+
+    if !file_path.exists() {
+        if looks_like_asset_path(path) {
+            return write_text(stream, 404, "Not Found");
+        }
+        file_path = dist_root.join("index.html");
+    }
+
+    let canonical_root = dist_root
+        .canonicalize()
+        .map_err(|err| format!("canonicalize dist root: {err}"))?;
+    let canonical_file = file_path
+        .canonicalize()
+        .map_err(|_| "not found".to_string())?;
+    if !canonical_file.starts_with(&canonical_root) {
+        return write_text(stream, 403, "Forbidden");
+    }
+
+    let bytes = fs::read(&canonical_file).map_err(|_| "not found".to_string())?;
+    let content_type = content_type_for(&canonical_file);
+    write_bytes(stream, 200, content_type, &bytes, method == "HEAD")
+}
+
+fn is_websocket_upgrade(headers_raw: &str) -> bool {
+    headers_raw.lines().skip(1).any(|line| {
+        line.split_once(':').is_some_and(|(name, value)| {
+            name.trim().eq_ignore_ascii_case("upgrade")
+                && value.trim().eq_ignore_ascii_case("websocket")
+        })
+    })
+}
+
+/// Header the bridge reads as "this request came through the PWA proxy, so it is a remote caller":
+/// it then demands a paired-device bearer token (`mobile_pairing::requires_pairing_token`).
+const PROXY_MARKER: &str = "X-PM-Proxied";
+
+/// True for a request-head line that names `name` (case-insensitive, and tolerant of leading
+/// whitespace the way the bridge's own header lookup is, so an obs-fold trick cannot slip one by).
+fn is_header_line(line: &str, name: &str) -> bool {
+    line.split_once(':')
+        .is_some_and(|(key, _)| key.trim().eq_ignore_ascii_case(name))
+}
+
+/// Append the marker. Every request this server forwards came from outside the machine (the
+/// tunnel), whatever the client claims, so the marker is not optional and not the client's to set.
+fn push_proxy_marker(request: &mut String) {
+    request.push_str(PROXY_MARKER);
+    request.push_str(": 1\r\n");
+}
+
+/// Pass a WebSocket upgrade through: the request head goes upstream as the client sent it
+/// (Connection/Upgrade/Sec-WebSocket-* included) except that any client `X-PM-Proxied` is dropped
+/// and ours is added, then bytes are copied both ways until either side closes.
+fn proxy_upgrade(
+    stream: &mut TcpStream,
+    bridge_port_file: &Path,
+    method: &str,
+    path: &str,
+    headers_raw: &str,
+    leftover: &[u8],
+) -> Result<(), String> {
+    let Some((mut upstream, _bridge_addr)) = connect_bridge(stream, bridge_port_file)? else {
+        return Ok(());
+    };
+
+    let mut request = format!("{method} {path} HTTP/1.1\r\n");
+    for line in headers_raw.lines().skip(1) {
+        if is_header_line(line, PROXY_MARKER) {
+            continue;
+        }
+        request.push_str(line);
+        request.push_str("\r\n");
+    }
+    push_proxy_marker(&mut request);
+    request.push_str("\r\n");
+    upstream
+        .write_all(request.as_bytes())
+        .map_err(|err| format!("write bridge upgrade request: {err}"))?;
+    if !leftover.is_empty() {
+        upstream
+            .write_all(leftover)
+            .map_err(|err| format!("write bridge upgrade body: {err}"))?;
+    }
+
+    let mut client_reader = stream
+        .try_clone()
+        .map_err(|err| format!("clone client socket: {err}"))?;
+    let mut upstream_writer = upstream
+        .try_clone()
+        .map_err(|err| format!("clone bridge socket: {err}"))?;
+    let client_shutdown = stream
+        .try_clone()
+        .map_err(|err| format!("clone client socket: {err}"))?;
+
+    // client -> bridge; when the client stops, close the bridge side so the other copy ends too.
+    let to_bridge = thread::spawn(move || {
+        let _ = std::io::copy(&mut client_reader, &mut upstream_writer);
+        let _ = upstream_writer.shutdown(std::net::Shutdown::Both);
+    });
+    // bridge -> client; when the bridge stops, close the client side so the other copy ends too.
+    let _ = std::io::copy(&mut upstream, stream);
+    let _ = client_shutdown.shutdown(std::net::Shutdown::Both);
+    let _ = to_bridge.join();
+    Ok(())
+}
+
+fn proxy_bridge(
+    stream: &mut TcpStream,
+    bridge_port_file: &Path,
+    method: &str,
+    path: &str,
+    headers_raw: &str,
+    body: &[u8],
+) -> Result<(), String> {
+    let Some((mut upstream, bridge_addr)) = connect_bridge(stream, bridge_port_file)? else {
+        return Ok(());
+    };
+
+    let mut request = format!("{method} {path} HTTP/1.1\r\n");
+    for line in headers_raw.lines().skip(1) {
+        let lower = line.to_ascii_lowercase();
+        if lower.starts_with("host:")
+            || lower.starts_with("connection:")
+            || lower.starts_with("proxy-connection:")
+            || lower.starts_with("content-length:")
+            || is_header_line(line, PROXY_MARKER)
+        {
+            continue;
+        }
+        request.push_str(line);
+        request.push_str("\r\n");
+    }
+    request.push_str(&format!("Host: {bridge_addr}\r\n"));
+    push_proxy_marker(&mut request);
+    request.push_str(&format!("Content-Length: {}\r\n", body.len()));
+    request.push_str("Connection: close\r\n\r\n");
+    upstream
+        .write_all(request.as_bytes())
+        .map_err(|err| format!("write bridge request: {err}"))?;
+    if !body.is_empty() {
+        upstream
+            .write_all(body)
+            .map_err(|err| format!("write bridge body: {err}"))?;
+    }
+
+    let mut response = Vec::new();
+    upstream
+        .read_to_end(&mut response)
+        .map_err(|err| format!("read bridge response: {err}"))?;
+    stream
+        .write_all(&response)
+        .map_err(|err| format!("write proxy response: {err}"))?;
+    Ok(())
+}
+
+/// Connect to the bridge named by the port file, re-read on every call (the app picks a new port
+/// each launch, so nothing is cached). When nothing listens, the phone gets a clear 502 JSON
+/// `{code:"BRIDGE_UNREACHABLE", message}` instead of a dropped connection, and `Ok(None)` comes back.
+/// The reply never names the port file's path (this server is reachable through the public tunnel).
+fn connect_bridge(
+    stream: &mut TcpStream,
+    bridge_port_file: &Path,
+) -> Result<Option<(TcpStream, String)>, String> {
+    let bridge_addr = read_bridge_addr(bridge_port_file);
+    match TcpStream::connect(&bridge_addr) {
+        Ok(upstream) => Ok(Some((upstream, bridge_addr))),
+        Err(err) => {
+            tracing::debug!(%err, %bridge_addr, "bridge unreachable");
+            let port = bridge_addr.rsplit(':').next().unwrap_or("?");
+            let body = serde_json::json!({
+                "code": "BRIDGE_UNREACHABLE",
+                "message": format!("The Puppet Master app's bridge is not running on port {port}."),
+            });
+            write_json(stream, 502, &body)?;
+            Ok(None)
+        }
+    }
+}
+
+/// `host:port` of the embedded bridge from its port file (`127.0.0.1:17321`, or just the port).
+/// Bare, not a URL: it goes to `TcpStream::connect` and the upstream `Host` header (it used to be
+/// `http://host:port`, which `connect` cannot resolve, so the proxy never reached the bridge).
+fn read_bridge_addr(bridge_port_file: &Path) -> String {
+    match fs::read_to_string(bridge_port_file) {
+        Ok(raw) => {
+            let trimmed = raw.trim();
+            if trimmed.contains(':') {
+                trimmed.to_string()
+            } else if !trimmed.is_empty() {
+                format!("127.0.0.1:{trimmed}")
+            } else {
+                "127.0.0.1:17321".into()
+            }
+        }
+        Err(_) => "127.0.0.1:17321".into(),
+    }
+}
+
+fn find_header_end(buf: &[u8]) -> Option<usize> {
+    buf.windows(4).position(|w| w == b"\r\n\r\n")
+}
+
+fn split_target(target: &str) -> (&str, &str) {
+    match target.split_once('?') {
+        Some((path, query)) => (path, query),
+        None => (target, ""),
+    }
+}
+
+fn parse_content_length(headers: &str) -> usize {
+    for line in headers.lines().skip(1) {
+        if let Some(value) = line
+            .strip_prefix("Content-Length:")
+            .or_else(|| line.strip_prefix("content-length:"))
+        {
+            if let Ok(n) = value.trim().parse::<usize>() {
+                return n;
+            }
+        }
+    }
+    0
+}
+
+fn content_type_for(path: &Path) -> &'static str {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some("html") => "text/html; charset=utf-8",
+        Some("js") => "application/javascript; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("json") => "application/json; charset=utf-8",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("ico") => "image/x-icon",
+        Some("woff2") => "font/woff2",
+        Some("webmanifest") => "application/manifest+json",
+        _ => "application/octet-stream",
+    }
+}
+
+fn write_json(stream: &mut TcpStream, status: u16, value: &impl Serialize) -> Result<(), String> {
+    let body = serde_json::to_string(value).map_err(|err| format!("json encode: {err}"))?;
+    write_text_body(stream, status, "application/json; charset=utf-8", &body)
+}
+
+fn write_text(stream: &mut TcpStream, status: u16, message: &str) -> Result<(), String> {
+    write_text_body(stream, status, "text/plain; charset=utf-8", message)
+}
+
+fn write_text_body(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &str,
+) -> Result<(), String> {
+    write_bytes(stream, status, content_type, body.as_bytes(), false)
+}
+
+fn write_bytes(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &[u8],
+    head_only: bool,
+) -> Result<(), String> {
+    let reason = match status {
+        200 => "OK",
+        403 => "Forbidden",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        502 => "Bad Gateway",
+        _ => "Error",
+    };
+    let response = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    stream
+        .write_all(response.as_bytes())
+        .map_err(|err| format!("write headers: {err}"))?;
+    if !head_only {
+        stream
+            .write_all(body)
+            .map_err(|err| format!("write body: {err}"))?;
+    }
+    Ok(())
+}
+
+/// Test hook: serve `handle_connection` on an ephemeral loopback port (the production listener is
+/// pinned to `PWA_PORT`). Returns the address to connect to.
+#[cfg(test)]
+pub(crate) fn spawn_test_server(dist_root: PathBuf, bridge_port_file: PathBuf) -> std::net::SocketAddr {
+    let listener = TcpListener::bind((HOST, 0)).expect("bind test pwa server");
+    let addr = listener.local_addr().expect("test pwa server addr");
+    let dev_info: DevInfoSupplier = Arc::new(|| unreachable!("dev info is not used in tests"));
+    thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            let (dist_root, bridge_port_file, dev_info) =
+                (dist_root.clone(), bridge_port_file.clone(), dev_info.clone());
+            thread::spawn(move || {
+                let _ = handle_connection(stream, &dist_root, &bridge_port_file, &dev_info);
+            });
+        }
+    });
+    addr
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_bridge_addr_parses_host_port_file() {
+        let dir = std::env::temp_dir().join(format!("pm-pwa-test-{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let file = dir.join("port");
+        fs::write(&file, "127.0.0.1:17355\n").unwrap();
+        assert_eq!(read_bridge_addr(&file), "127.0.0.1:17355");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A one-shot HTTP upstream on a free loopback port: answers every request with `label`.
+    fn tiny_upstream(label: &'static str) -> u16 {
+        let listener = TcpListener::bind((HOST, 0)).expect("bind upstream");
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                let mut buf = [0_u8; 4096];
+                let _ = stream.read(&mut buf);
+                let body = format!("{{\"from\":\"{label}\"}}");
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        });
+        port
+    }
+
+    fn free_port() -> u16 {
+        let listener = TcpListener::bind((HOST, 0)).expect("bind probe");
+        listener.local_addr().unwrap().port()
+    }
+
+    fn raw_get(addr: std::net::SocketAddr, path: &str) -> String {
+        let mut client = TcpStream::connect(addr).expect("connect pwa server");
+        write!(client, "GET {path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n").unwrap();
+        let mut out = String::new();
+        client.read_to_string(&mut out).unwrap();
+        out
+    }
+
+    /// The built app's phone server must follow the port file on every request: the bridge takes a
+    /// new port each launch, and a phone page that stays open across an app restart must reach it.
+    #[test]
+    fn bridge_proxy_rereads_the_port_file_on_every_request() {
+        let dir = std::env::temp_dir().join(format!("pm-pwa-rr-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let port_file = dir.join("bridge.port");
+        let (a, b) = (tiny_upstream("a"), tiny_upstream("b"));
+        let pwa = spawn_test_server(dir.clone(), port_file.clone());
+
+        fs::write(&port_file, format!("127.0.0.1:{a}\n")).unwrap();
+        assert!(raw_get(pwa, "/bridge/health").contains("\"from\":\"a\""));
+        fs::write(&port_file, format!("127.0.0.1:{b}\n")).unwrap();
+        let second = raw_get(pwa, "/bridge/health");
+        assert!(second.contains("\"from\":\"b\""), "second request must go to the new port: {second}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn bridge_proxy_answers_502_json_when_nothing_listens() {
+        let dir = std::env::temp_dir().join(format!("pm-pwa-502-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let port_file = dir.join("bridge.port");
+        let dead = free_port();
+        fs::write(&port_file, format!("127.0.0.1:{dead}\n")).unwrap();
+        let pwa = spawn_test_server(dir.clone(), port_file.clone());
+
+        let reply = raw_get(pwa, "/bridge/health");
+        assert!(reply.starts_with("HTTP/1.1 502 Bad Gateway"), "{reply}");
+        assert!(reply.contains("application/json"), "{reply}");
+        assert!(reply.contains("\"code\":\"BRIDGE_UNREACHABLE\""), "{reply}");
+        assert!(reply.contains(&format!("port {dead}")), "{reply}");
+        assert!(!reply.contains(port_file.to_string_lossy().as_ref()), "the reply must not leak the port file path");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn looks_like_asset_path_detects_js_and_vite_paths() {
+        assert!(looks_like_asset_path("/src/main.tsx"));
+        assert!(looks_like_asset_path("/assets/index.js"));
+        assert!(looks_like_asset_path("/@vite/client"));
+        assert!(!looks_like_asset_path("/pair/invite"));
+    }
+}

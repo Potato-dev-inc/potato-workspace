@@ -1,0 +1,552 @@
+/* Chat view of an agent tab on the phone (PhoneChatView over SessionChatView) and the Terminal | Chat switch.
+   Grayscale like the rest of the phone; text is phone-sized (the desktop's 12-13px is too small to read here),
+   16px gutters, and what waits on the person (the docked card) sits under the conversation in the flow. */
+
+/* ---------- Terminal | Chat switch ---------- */
+.ph .ph-viewbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 6px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--sep);
+}
+.ph .ph-viewswitch {
+  display: flex;
+  width: 100%;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--fill);
+}
+.ph .ph-viewswitch button {
+  flex: 1;
+  height: 32px;
+  border-radius: 8px;
+  text-align: center;
+  font: 500 14px/1 var(--font-ui);
+  color: var(--label-2);
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+}
+.ph .ph-viewswitch button[aria-pressed='true'] {
+  background: var(--fill-active);
+  color: var(--label);
+}
+
+/* ---------- chat ---------- */
+/* Over the terminal, which stays mounted under it (hidden, never unmounted: unmounting would break the grid). */
+.ph .ph-chat {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+.ph .ph-chat-plain {
+  margin: 0;
+  padding: 32px 16px;
+  text-align: center;
+  font: 400 15px/1.4 var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat {
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+  color: var(--label);
+  font: 16px/1.5 var(--font-ui);
+}
+.ph .ph-chat .ck-chat-head {
+  gap: 8px;
+  padding: 10px 16px;
+  background: transparent;
+  border-bottom: 1px solid var(--sep);
+  font-size: 13px;
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-model {
+  font-weight: 600;
+  color: var(--label);
+}
+.ph .ph-chat .ck-chat-cli {
+  font-size: 12px;
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-note {
+  padding: 8px 16px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--label-3);
+  border-bottom: 1px solid var(--sep);
+}
+.ph .ph-chat .ck-chat-body {
+  padding: 12px 16px 24px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.ph .ph-chat .ck-chat-bubble {
+  max-width: 88%;
+  padding: 9px 13px;
+  border-radius: 16px;
+  background: var(--fill);
+  color: var(--label);
+  line-height: 1.45;
+}
+.ph .ph-chat .ck-chat-text {
+  color: var(--label);
+  overflow-wrap: anywhere;
+}
+.ph .ph-chat .ck-chat-tool {
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font: 13px/1.4 var(--font-mono);
+  color: var(--label-2);
+}
+.ph .ph-chat .ck-chat-tool:active {
+  background: var(--fill-hover);
+}
+.ph .ph-chat .ck-chat-tool-name {
+  color: var(--label);
+}
+.ph .ph-chat .ck-chat-tool-summary {
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-tool-status {
+  font: 500 12px var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-tool-status--error {
+  color: var(--label);
+  font-weight: 600;
+}
+.ph .ph-chat .ck-chat-output {
+  margin: 4px 0 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  font: 12.5px/1.5 var(--font-mono);
+  color: var(--label-2);
+}
+.ph .ph-chat .ck-chat-end {
+  font-size: 12px;
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-rule {
+  background: var(--sep);
+}
+.ph .ph-chat .ck-chat-empty,
+.ph .ph-chat .ck-chat-waiting {
+  max-width: none;
+  padding: 24px 0;
+  font: 400 15px/1.4 var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-waiting-for {
+  font-size: 13px;
+}
+
+/* The docked card in the chat: under the conversation, in the flow (over the terminal it floats at the top). */
+.ph .ph-chat .ck-chat-dock {
+  flex: none;
+  background: var(--bg);
+  border-top: 1px solid var(--sep);
+}
+.ph .ph-chat .ph-dock {
+  position: static;
+  max-height: 55vh;
+  padding-bottom: calc(6px + var(--safe-b));
+  border-bottom: 0;
+}
+.ph .ph-chat .ck-chat-dock:empty {
+  display: none;
+}
+
+/* ---------- message box (the phone may type) ---------- */
+/* Grayscale, 16px text (no zoom when the field is tapped). The box sits at the bottom of the chat in the flow,
+   above the safe area; the visual viewport shortens the layout when the keyboard opens, so it stays in view. */
+.ph .ph-chat .ck-chat-composer {
+  flex: none;
+  padding: 8px 16px calc(10px + var(--safe-b));
+  background: var(--bg);
+  border-top: 1px solid var(--sep);
+}
+.ph .ph-chat .ck-chat-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 16px;
+}
+.ph .ph-chat .ck-chat-composer-row:focus-within {
+  border-color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-composer-field {
+  flex: 1;
+  min-width: 0;
+  max-height: 50vh;
+  margin: 0;
+  padding: 6px 0;
+  border: none;
+  outline: none;
+  min-height: 24px;
+  resize: none;
+  background: transparent;
+  color: var(--label);
+  font: 16px/1.4 var(--font-ui);
+}
+/* One focus ring: the row's (`:focus-within`). The field drops the ring `.ph :focus-visible` gives it. */
+.ph .ph-chat .ck-chat-composer-field:focus-visible {
+  box-shadow: none;
+}
+.ph .ph-chat .ck-chat-composer-field::placeholder {
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-composer-field:disabled {
+  color: var(--label-3);
+}
+/* 44px is the smallest touch target; the pill keeps its look, its box grows to reach it. */
+.ph .ph-chat .ck-chat-send {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: 600 15px/1 var(--font-ui);
+}
+.ph .ph-chat .ck-chat-send:disabled {
+  opacity: 0.35;
+}
+/* Voice typing (phone only): the mic is a 44px button in the row. The field's wrapper holds a mirror that shows
+   heard words in gray at the cursor, while the field's own text turns clear for that moment. */
+.ph .ph-chat .ck-chat-composer-field-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+.ph .ph-chat .ck-chat-composer-field-wrap .ck-chat-composer-field {
+  width: 100%;
+}
+.ph .ph-chat .ck-chat-composer-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  padding: 6px 0;
+  font: 16px/1.4 var(--font-ui);
+  color: var(--label);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.ph .ph-chat .ck-chat-composer-field--voice {
+  color: transparent;
+}
+.ph .ph-chat .ck-chat-composer-interim {
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-mic {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--label-2);
+  background: transparent;
+}
+.ph .ph-chat .ck-chat-mic[aria-pressed='true'] {
+  color: var(--label);
+  background: var(--fill-active);
+}
+.ph .ph-chat .ck-chat-mic[aria-disabled='true'] {
+  opacity: 0.35;
+}
+.ph .ph-chat .ck-chat-mic-dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--label);
+  animation: ph-mic-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ph-mic-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph .ph-chat .ck-chat-mic-dot {
+    animation: none;
+  }
+}
+.ph .ph-chat .ck-chat-composer-note {
+  margin: 6px 4px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--label-3);
+}
+.ph .ph-chat .ph-chat-send-off {
+  flex: none;
+  margin: 0;
+  padding: 12px 16px calc(12px + var(--safe-b));
+  border-top: 1px solid var(--sep);
+  font: 400 14px/1.4 var(--font-ui);
+  color: var(--label-3);
+  text-align: center;
+}
+
+/* Bubbles of messages the agent has not shown yet: the person's bubble with a dashed edge; failed ones heavier. */
+.ph .ph-chat .ck-chat-pending-list {
+  margin-top: 4px;
+}
+.ph .ph-chat .ck-chat-pending-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+.ph .ph-chat .ck-chat-bubble--pending {
+  background: transparent;
+  border: 1px dashed var(--label-3);
+  color: var(--label-2);
+}
+.ph .ph-chat .ck-chat-pending-body--failed .ck-chat-bubble--pending {
+  border-style: solid;
+  color: var(--label);
+}
+.ph .ph-chat .ck-chat-pending-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.ph .ph-chat .ck-chat-pending-body--failed .ck-chat-pending-meta {
+  color: var(--label-2);
+}
+/* Cancel, Copy text and Hide: 44px touch targets; the underlined text keeps its size. */
+.ph .ph-chat .ck-chat-link {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 2px;
+  font: inherit;
+  color: var(--label-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+
+/* Agent text as Markdown on the phone (ChatMarkdown): the same shapes as the desktop, at phone text sizes. Code
+   blocks and tables scroll inside their own box; the page never scrolls sideways at 390 px. Spacing order as on
+   the desktop: reset, sibling gap, headings, rules, then the first and last block. */
+.ph .ph-chat .ck-chat-md {
+  overflow-wrap: anywhere;
+}
+.ph .ph-chat .ck-chat-md-list {
+  padding-left: 20px;
+}
+.ph .ph-chat .ck-chat-md :where(p, h1, h2, h3, ul, ol, blockquote, pre, hr) {
+  margin: 0;
+}
+.ph .ph-chat .ck-chat-md > * + *,
+.ph .ph-chat .ck-chat-md-quote > * + * {
+  margin-top: 8px;
+}
+.ph .ph-chat .ck-chat-md .ck-chat-md-h + * {
+  margin-top: 2px;
+}
+.ph .ph-chat .ck-chat-md .ck-chat-md-h {
+  margin: 10px 0 2px;
+}
+.ph .ph-chat .ck-chat-md .ck-chat-md-rule {
+  margin: 6px 0;
+}
+.ph .ph-chat .ck-chat-md > :first-child {
+  margin-top: 0;
+}
+.ph .ph-chat .ck-chat-md > :last-child {
+  margin-bottom: 0;
+}
+.ph .ph-chat .ck-chat-md-h {
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--label);
+}
+.ph .ph-chat .ck-chat-md-h1 {
+  font-size: 18px;
+}
+.ph .ph-chat .ck-chat-md-h2 {
+  font-size: 17px;
+}
+.ph .ph-chat .ck-chat-md-h3 {
+  font-size: 16px;
+  color: var(--label-2);
+}
+.ph .ph-chat .ck-chat-md strong {
+  font-weight: 600;
+  color: var(--label);
+}
+.ph .ph-chat .ck-chat-md-code {
+  padding: 0 4px;
+  border-radius: 5px;
+  font: 0.9em/1.4 var(--font-mono);
+  color: var(--label-2);
+}
+.ph .ph-chat .ck-chat-md-pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font: 13px/1.45 var(--font-mono);
+  color: var(--label-2);
+  white-space: pre;
+  -webkit-overflow-scrolling: touch;
+}
+.ph .ph-chat .ck-chat-md-pre code {
+  font: inherit;
+}
+.ph .ph-chat .ck-chat-md-ul {
+  list-style: disc;
+}
+.ph .ph-chat .ck-chat-md-ol {
+  list-style: decimal;
+}
+.ph .ph-chat .ck-chat-md-list li + li {
+  margin-top: 3px;
+}
+.ph .ph-chat .ck-chat-md-list .ck-chat-md-list {
+  margin-top: 2px;
+}
+.ph .ph-chat .ck-chat-md-quote {
+  padding: 0 0 0 12px;
+  border-left: 2px solid var(--sep);
+  color: var(--label-2);
+}
+.ph .ph-chat .ck-chat-md-rule {
+  border: 0;
+  border-top: 1px solid var(--sep);
+}
+.ph .ph-chat .ck-chat-md-link {
+  color: var(--label-2);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+.ph .ph-chat .ck-chat-md-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.ph .ph-chat .ck-chat-md-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.ph .ph-chat .ck-chat-md-table th,
+.ph .ph-chat .ck-chat-md-table td {
+  max-width: 28ch;
+  padding: 5px 8px;
+  border: 1px solid var(--sep);
+  vertical-align: top;
+  text-align: left;
+}
+.ph .ph-chat .ck-chat-md-table th {
+  font-weight: 600;
+  color: var(--label);
+  background: var(--bg-raised);
+}
+.ph .ph-chat .ck-chat-md-align-center {
+  text-align: center;
+}
+.ph .ph-chat .ck-chat-md-align-right {
+  text-align: right;
+}
+
+/* The rows of a turn on the phone: a 44px touch area for every row, the activity line and the view switch. Text is
+   phone-sized; diffs and output scroll inside their own box, so the page never scrolls sideways. */
+.ph .ph-chat .ck-chat-tool {
+  min-height: 44px;
+  font-size: 14px;
+}
+.ph .ph-chat .ck-chat-activity {
+  min-height: 44px;
+  font-size: 14px;
+}
+.ph .ph-chat .ck-chat-activity-text {
+  font-size: 14px;
+}
+.ph .ph-chat .ck-chat-helper-row {
+  min-height: 44px;
+  font-size: 14px;
+}
+.ph .ph-chat .ck-chat-modes {
+  padding: 3px;
+}
+.ph .ph-chat .ck-chat-mode {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+/* Narrow phone: the one-pill switch keeps a 36px touch height; each menu row is a 44px touch target. */
+.ph .ph-chat .ck-chat-mode-pill {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.ph .ph-chat .ck-chat-mode-item {
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+.ph .ph-chat .ck-chat-plan-item {
+  font-size: 14px;
+}
+.ph .ph-chat .ck-chat-plan-head {
+  font-size: 13px;
+}
+.ph .ph-chat .ck-chat-diff,
+.ph .ph-chat .ck-chat-output {
+  font-size: 12.5px;
+}
+.ph .ph-chat .ck-chat-detail-label {
+  font-size: 11px;
+}
+.ph .ph-chat .ck-chat-notice {
+  font-size: 12px;
+}
+.ph .ph-chat .ck-chat-chip {
+  font-size: 12.5px;
+}
+
+/* A chat session over ACP on the phone: the "Working…" line with Stop, under the conversation. */
+.ph .ph-acp-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ph .ph-acp-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  opacity: 0.85;
+}

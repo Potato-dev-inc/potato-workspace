@@ -1,0 +1,191 @@
+// Settings > Agents: logins (accounts), keeping agents warm (preload) and agent definitions (TOML files,
+// consent, review and approval). Most blocks save through their own command; the Live updates row calls env.patch.
+import { AccountsGroup } from '../accounts/AccountsGroup';
+import { AgentDefinitions } from '../blocks/AgentDefinitions';
+import { AgentLaneRows } from '../blocks/AgentLaneRows';
+import { AgentVersions } from '../blocks/AgentVersions';
+import { CHAT_ADDONS_LABEL, ChatAddonRows } from '../blocks/ChatAddonRows';
+import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings';
+import { PreloadSettings } from '../blocks/PreloadSettings';
+import { useEffect, useState } from 'react';
+import { agentHealthApi, type AgentHealth } from '../../../lib/agent-health';
+import { DEV_LABS_KEYS } from '../../../lib/dev-labs';
+import { SETUP_CHECK_ROW_ID } from '../../../lib/openSettingsAt';
+import { SetupCheckPage } from '../SetupCheckPage';
+import { Popup } from '../controls';
+import type { RowDef, SettingsEnv } from '../model';
+import { SettingRow, SettingToggle } from '../settings-ui';
+import { KeepGoingRows } from './KeepGoingRows';
+import { LinuxRows } from './LinuxRows';
+
+type HookMode = 'off' | 'shadow' | 'evidence';
+
+/** Agents whose live updates are off until the user turns them on (the backend says which). */
+function useOptInAgents(): AgentHealth[] {
+  const [rows, setRows] = useState<AgentHealth[]>([]);
+  useEffect(() => {
+    let alive = true;
+    agentHealthApi
+      .check()
+      .then((all) => alive && setRows(all.filter((r) => r.installed && r.hooks?.opt_in)))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return rows;
+}
+
+function LiveUpdates({ env }: { env: SettingsEnv }) {
+  // 'evidence' is a later step that has no control yet; it reads as watch only here.
+  const value = env.settings.agent_hooks_mode === 'off' ? 'off' : 'shadow';
+  const optIn = useOptInAgents();
+  const chosen = env.settings.agent_hooks_agents ?? {};
+  const isOn = (r: AgentHealth) => (chosen[r.id] ? chosen[r.id] !== 'off' : Boolean(r.hooks?.enabled));
+  const setAgent = (id: string, on: boolean) => {
+    const next: Record<string, HookMode> = { ...chosen, [id]: on ? 'shadow' : 'off' };
+    void env.patch({ agent_hooks_agents: next });
+  };
+  return (
+    <>
+      <SettingRow
+        label="Live updates"
+        description="Claude and Codex tell Puppet Master when they start, ask and finish. For now it is only recorded; Puppet Master never acts on it."
+      >
+        <Popup
+          aria-label="Live updates"
+          value={value}
+          onChange={(event) => void env.patch({ agent_hooks_mode: event.target.value as 'off' | 'shadow' })}
+        >
+          <option value="shadow">Watch only</option>
+          <option value="off">Off</option>
+        </Popup>
+      </SettingRow>
+      {optIn.map((r) => (
+        <SettingToggle
+          key={r.id}
+          label={`Live updates from ${r.label}`}
+          description={r.hooks?.opt_in_note ?? undefined}
+          checked={value !== 'off' && isOn(r)}
+          disabled={value === 'off'}
+          onChange={(on) => setAgent(r.id, on)}
+        />
+      ))}
+    </>
+  );
+}
+
+/** "Check my setup": one list of what works and one fix per problem. Its id is SETUP_CHECK_ROW_ID (Repair install opens it). */
+export const setupCheckRow: RowDef = {
+  id: SETUP_CHECK_ROW_ID,
+  label: 'Check my setup',
+  hint: 'What is running, which agents are signed in, and what needs one fix.',
+  keywords: 'check setup health repair install bridge sign in agent deepseek key computer add-on labs copy report',
+  group: 'Check my setup',
+  render: (env) => (
+    <SetupCheckPage
+      ctx={{ bridgeUrl: env.bridgeUrl, labs: Object.fromEntries(DEV_LABS_KEYS.map((k) => [k, env.settings[k]])) }}
+    />
+  ),
+};
+
+export const agentsRows: RowDef[] = [
+  setupCheckRow,
+  {
+    id: 'accounts',
+    label: 'Accounts',
+    hint: 'Use the same agent with more than one login, and pick one per pane.',
+    keywords: 'login profile work personal open login pane add account remove',
+    group: 'Logins',
+    render: () => <AccountsGroup />,
+  },
+  {
+    id: 'preload',
+    label: 'Keep agents ready',
+    hint: 'Keep an agent started and waiting, so opening a pane feels instant.',
+    keywords: 'preload warm standby idle timeout status agents to keep warm',
+    group: 'Speed',
+    render: (env) => <PreloadSettings onSaved={env.markSaved} />,
+  },
+  {
+    id: 'helper-tools',
+    label: 'Puppet Master helpers inside agents',
+    hint: 'Give every agent you open here the Puppet Master helper tools, ready with no setup.',
+    keywords: 'mcp helpers helper tools run agent wait agents subagent spawn inside pane panes automatic setup bridge claude codex opencode',
+    group: 'Helpers',
+    render: (env) => (
+      <SettingToggle
+        label="Puppet Master helpers inside agents"
+        description="Panes you open here get the helper tools. Your agent settings files are not changed."
+        checked={env.settings.pane_mcp_enabled ?? true}
+        onChange={(value) => void env.patch({ pane_mcp_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'versions',
+    label: 'Agent versions',
+    hint: 'Check that an agent still starts the way Puppet Master expects after it updates.',
+    keywords: 'version update tested untested check canary strict unknown screens recognise capture folder fixture',
+    group: 'Updates',
+    render: () => <AgentVersions />,
+  },
+  {
+    id: 'agent-lane',
+    label: 'How to run',
+    hint: 'Run an agent in a terminal (the default) or as a chat.',
+    keywords: 'chat acp terminal lane run mode conversation session how to run',
+    group: 'Chat',
+    labsFlag: 'acp_chat_enabled',
+    render: () => <AgentLaneRows />,
+  },
+  {
+    id: 'chat-addons',
+    label: CHAT_ADDONS_LABEL,
+    hint: 'The small helper each agent needs to run as a chat. Install or remove it here.',
+    keywords: 'chat acp add-on addon adapter install remove helper download sign in claude codex',
+    group: 'Chat',
+    labsFlag: 'acp_chat_enabled',
+    render: () => <ChatAddonRows />,
+  },
+  {
+    id: 'live-updates',
+    label: 'Live updates',
+    hint: 'Claude and Codex tell Puppet Master when they start, ask and finish.',
+    keywords: 'hooks hook lane live updates claude codex watch report trust',
+    group: 'Live updates',
+    labs: { name: 'Live updates', about: 'Claude and Codex report when they start, ask and finish.' },
+    render: (env) => <LiveUpdates env={env} />,
+  },
+  {
+    id: 'keep-going',
+    label: 'When an agent runs out of usage',
+    hint: 'Pick the agents a task can move to when the agent it runs on runs out of usage.',
+    keywords: 'keep going continue move another agent limit usage run out reset back first resets offer order fallback backup hand over ask runs',
+    group: 'Keep going',
+    render: (env) => <KeepGoingRows onSaved={env.markSaved} />,
+  },
+  {
+    id: 'linux',
+    label: 'Run agents in Linux (WSL)',
+    hint: 'Run an agent inside WSL, in a folder on a Windows drive, instead of on Windows.',
+    keywords: 'linux wsl ubuntu distro subsystem runs on place check windows drive inside',
+    group: 'Linux',
+    render: (env) => <LinuxRows onSaved={env.markSaved} />,
+  },
+  {
+    id: 'collision',
+    label: COLLISION_LABEL,
+    hint: 'Warns when two agents change the same file. It never pauses or stops an agent.',
+    keywords: 'collision clash conflict same file two agents overlap warn warning changed lines copies folder alert',
+    group: 'Same file',
+    render: (env) => <CollisionSettings onSaved={env.markSaved} />,
+  },
+  {
+    id: 'definitions',
+    label: 'Agent definitions',
+    hint: 'Add your own agents from a small settings file. New ones stay off until you approve.',
+    keywords: 'toml consent project sources drafts import export fixtures revoke approve review extra directories generic agent reload',
+    render: (env) => <AgentDefinitions onOpenStore={env.openStore} />,
+  },
+];
