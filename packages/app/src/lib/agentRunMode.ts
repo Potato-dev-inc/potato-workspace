@@ -68,3 +68,20 @@ export function lapsedNote(agent: RunModeAgent): string {
     ? 'Set to One-task mode, but it is not verified now, so runs use a visible pane.'
     : '';
 }
+
+// "Allow hidden helpers": off by default. While it is off, an agent's `headless: true` does not hide a helper:
+// the helper is shown in a pane. Backed by `hidden_helpers_get/set` (the desktop window only).
+export interface HiddenHelpersView {
+  allowed: boolean;
+}
+
+export const tauriHiddenHelpersApi = {
+  get: () => call<HiddenHelpersView>('hidden_helpers_get'),
+  set: (allowed: boolean) => call<HiddenHelpersView>('hidden_helpers_set', { allowed }),
+};
+
+export type HiddenHelpersApi = typeof tauriHiddenHelpersApi;
+
+export const HIDDEN_HELPERS_LABEL = 'Allow hidden helpers';
+export const HIDDEN_HELPERS_HINT =
+  'Off: a helper an agent starts always shows up as a pane you can watch, even if the agent asks to hide it. On: an agent may run a helper with no pane; it then appears in your Inbox.';

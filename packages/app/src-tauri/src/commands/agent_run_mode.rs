@@ -20,3 +20,29 @@ pub fn agent_run_mode_set(id: String, mode: String) -> Result<Value, String> {
     agent_run_mode::set_checked(&id, mode)?;
     Ok(agent_run_mode::settings_view())
 }
+
+/// `{allowed: bool}`: whether an agent's `headless: true` may hide a helper ("Allow hidden helpers", off by default).
+#[tauri::command]
+pub fn hidden_helpers_get() -> Value {
+    serde_json::json!({ "allowed": agent_run_mode::hidden_helpers_allowed() })
+}
+
+/// Saves "Allow hidden helpers". Like the run-mode choice, only the Settings window writes it: neither an agent
+/// nor a phone has a route to it.
+#[tauri::command]
+pub fn hidden_helpers_set(allowed: bool) -> Result<Value, String> {
+    agent_run_mode::set_hidden_helpers_allowed(allowed)?;
+    Ok(hidden_helpers_get())
+}
+
+/// The helpers that ran hidden (no pane), newest first, for the Inbox.
+#[tauri::command]
+pub fn hidden_runs_list() -> Vec<crate::hidden_runs::HiddenRunView> {
+    crate::hidden_runs::list()
+}
+
+/// Takes one hidden run off the Inbox list.
+#[tauri::command]
+pub fn hidden_runs_dismiss(app: tauri::AppHandle, handle: String) -> bool {
+    crate::hidden_runs::dismiss(&handle, Some(&app))
+}

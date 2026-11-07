@@ -102,8 +102,10 @@ pub(crate) fn build_run_request(
         "wait_ms": clamp_wait(request.wait_ms),
         "idempotency_key": request.idempotency_key,
     });
-    serde_json::from_value(body)
-        .map_err(|error| OperationError::new("INVALID_ARGUMENT", error.to_string(), false))
+    let mut run: AgentRunRequest = serde_json::from_value(body)
+        .map_err(|error| OperationError::new("INVALID_ARGUMENT", error.to_string(), false))?;
+    run.quick = true;
+    Ok(run)
 }
 
 /// `{answer, receipt}` for a finished run, `{status:"running", ...}` for one still going.

@@ -19,6 +19,9 @@ import type { UserGesture } from '../lib/user-gesture';
 /** How long after an answer landed further clicks on the same card are ignored (the TUI redraws
  *  the dialog away within this; the backend's own window is 5 s). */
 const ANSWER_SETTLE_MS = 2_000;
+/** How long after an answer the screen is read again. The backend takes a repeat of the same answer as a duplicate for
+ *  5 s (`DEDUPE_WINDOW_MS`), so a retry offered earlier would send nothing. */
+const ANSWER_CHECK_MS = 5_500;
 
 /** How often a waiting pane with no card is looked at again (a question whose card went missing comes back). */
 const PROMPT_RECHECK_MS = 2_000;
@@ -207,7 +210,9 @@ export function useCockpit(): CockpitApi {
     let disposed = false;
     let off: (() => void) | undefined;
     void cockpitApi
-      .onPrompt((e) => setPrompts((p) => ({ ...p, [e.pane_id]: e.prompt })))
+      .onPrompt((e) =>
+        setPrompts((p) => ({ ...p, [e.pane_id]: e.prompt && p[e.pane_id]?.stalled && p[e.pane_id]?.promptId === e.prompt.promptId ? { ...e.prompt, stalled: true } : e.prompt })),
+      )
       .then((u) => (disposed ? u() : (off = u)));
     return () => {
       disposed = true;
@@ -406,6 +411,18 @@ export function useCockpit(): CockpitApi {
         answered.current.set(`${paneId}:${promptId}`, Date.now());
         notify(`Answered ${names.get(paneId) ?? 'agent'}: ${label}`);
         window.setTimeout(() => answering.current.delete(key), ANSWER_SETTLE_MS);
+        // The key is sent, not proven: if the same question is still drawn, say so and put the card back for a retry.
+        window.setTimeout(() => {
+          cockpitApi
+            .panePrompt(paneId)
+            .then((now) => {
+              if (!now || now.promptId !== promptId || !now.choices?.length) return;
+              answered.current.delete(`${paneId}:${promptId}`);
+              answering.current.delete(key);
+              setPrompts((cur) => ({ ...cur, [paneId]: { ...now, stalled: true } }));
+            })
+            .catch(() => {});
+        }, ANSWER_CHECK_MS);
       } catch (err) {
         answering.current.delete(key);
         notify(errText(err));

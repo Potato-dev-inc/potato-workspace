@@ -225,32 +225,33 @@ fn bot_text_signed_by_another_members_device_is_rejected() {
 }
 
 #[test]
-fn bot_text_over_the_number_is_rejected() {
+fn bot_text_from_a_bot_removed_later_is_still_accepted() {
     let mut r = roster_with_bot();
-    r.bot_rules.per_person = 0;
+    step(&mut r, OpBody::RemoveBot { bot: BOT });
     let e = bot_entry(&sam(), Some(BOT), CH);
-    assert_eq!(check(&r, &e, NOW), Verdict::Reject("too many bots"));
+    assert_eq!(check(&r, &e, NOW), Verdict::Ok { member: sam().member_key() });
+    // Someone else still cannot use the removed bot's id.
+    assert_eq!(check(&r, &bot_entry(&owner(), Some(BOT), CH), NOW), Verdict::Reject("bot is not yours"));
 }
 
 #[test]
-fn bot_text_in_a_closed_channel_is_rejected() {
+fn bot_text_in_a_channel_closed_later_is_still_accepted() {
     let mut r = roster_with_bot();
     step(&mut r, OpBody::AddChannel { channel: ChannelId([2; 8]), name: "ideas".into() });
     step(&mut r, OpBody::ArchiveChannel { channel: ChannelId([2; 8]) });
     let e = bot_entry(&sam(), Some(BOT), ChannelId([2; 8]));
-    assert_eq!(check(&r, &e, NOW), Verdict::Reject("channel is closed"));
+    assert_eq!(check(&r, &e, NOW), Verdict::Ok { member: sam().member_key() });
 }
 
 #[test]
-fn bot_text_in_a_channel_the_rules_do_not_allow_is_rejected() {
+fn bot_rules_changed_later_do_not_reject_old_bot_text() {
     let mut r = roster_with_bot();
     step(&mut r, OpBody::AddChannel { channel: ChannelId([2; 8]), name: "ideas".into() });
     step(&mut r, OpBody::SetBotRules { rules: BotRules { per_person: 1, channels: BotChannels::Only(vec![ChannelId([2; 8])]) } });
-    assert_eq!(check(&r, &bot_entry(&sam(), Some(BOT), CH), NOW), Verdict::Reject("bots not allowed here"));
-    assert_eq!(
-        check(&r, &bot_entry(&sam(), Some(BOT), ChannelId([2; 8])), NOW),
-        Verdict::Ok { member: sam().member_key() }
-    );
+    assert_eq!(check(&r, &bot_entry(&sam(), Some(BOT), CH), NOW), Verdict::Ok { member: sam().member_key() });
+    // The send-time filter is the roster's.
+    assert!(!r.bot_may_speak(&BOT, &CH));
+    assert!(r.bot_may_speak(&BOT, &ChannelId([2; 8])));
 }
 
 #[test]
@@ -273,4 +274,25 @@ fn a_bot_answering_a_bot_is_off() {
 fn the_message_id_survives_a_round_trip_for_diary_lines() {
     let e = bot_entry(&sam(), Some(BOT), CH);
     assert_eq!(Entry::from_bytes(&e.to_bytes()).unwrap().id(), e.id());
+}
+
+#[test]
+fn removed_member_cannot_date_an_entry_after_the_removal() {
+    let mut r = roster();
+    step(&mut r, OpBody::RemoveMember { member: sam().member_key(), reason: RemoveReason::Removed });
+    let later = NOW + 2 * DAY;
+    // Old epoch (1), so the epoch rule alone lets it through; the removal time must stop it.
+    let mut h = hdr(&sam(), KIND_TEXT);
+    h.created_ms = NOW + DAY;
+    let forged = Entry::seal(&sam(), h, &Body::Text { text: "hi".into(), mentions: vec![] }, &KEY).unwrap();
+    assert_eq!(check(&r, &forged, later), Verdict::Reject("after removal"));
+    // Before the removal, or within the clock skew of it, is fine.
+    let mut h = hdr(&sam(), KIND_TEXT);
+    h.created_ms = NOW - DAY;
+    let before = Entry::seal(&sam(), h, &Body::Text { text: "hi".into(), mentions: vec![] }, &KEY).unwrap();
+    assert_eq!(check(&r, &before, later), Verdict::Ok { member: sam().member_key() });
+    let mut h = hdr(&sam(), KIND_TEXT);
+    h.created_ms = NOW + FUTURE_SKEW_MS;
+    let skewed = Entry::seal(&sam(), h, &Body::Text { text: "hi".into(), mentions: vec![] }, &KEY).unwrap();
+    assert_eq!(check(&r, &skewed, later), Verdict::Ok { member: sam().member_key() });
 }

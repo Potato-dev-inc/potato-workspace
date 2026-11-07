@@ -139,5 +139,8 @@ pub fn apply_settings(public: &Value) {
     app_runtime().apply_settings(public);
 }
 
+/// The running service, if the switch is on and it has started. Commands read it; they never start it.
+pub fn running_service() -> Option<Arc<SpacesService>> { APP.get().and_then(|r| r.service()) }
+
 /// True once the app's runtime object exists (it is made only when the switch is first seen on).
 pub fn app_runtime_exists() -> bool { APP.get().is_some() }

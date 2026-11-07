@@ -283,3 +283,47 @@ fn delegate_work_with_ask_me_waits_for_the_card_too() {
     result.unwrap();
     assert_eq!(delegate.worker.account, None);
 }
+
+/// The helper from the bug report: Claude, a model, low effort, read-only, and `headless: true`, started by an
+/// agent. In the route's order, "Allow hidden helpers" (off) makes it visible, and the person's login choice
+/// still lands on it, so the visible pane starts under that account.
+#[test]
+fn a_helper_made_visible_still_takes_the_chosen_login() {
+    let s = Setup::new();
+    let work = s.store.add("claude", "Work", None).unwrap();
+    s.store.set_helper_login("claude", &work.id).unwrap();
+    let mut request: AgentRunRequest = serde_json::from_value(json!({
+        "task": "a simple task", "agent_type": "claude", "project_path": s.project,
+        "model": "claude-haiku-5-5", "reasoning": "low", "read_only": true, "headless": true,
+        "idempotency_key": "k-bug",
+    }))
+    .unwrap();
+    request.headless_unset = false;
+    crate::agent_run_mode::with_test_env(Default::default(), || {
+        assert!(crate::agent_run_mode::gate_hidden_helper(&mut request));
+    });
+    for_run(&mut request, Some(&s.session), &s.store, &|| {}).unwrap();
+    assert!(!request.headless && request.headless_ignored);
+    assert_eq!(request.account.as_deref(), Some(work.id.as_str()));
+    assert!(request.read_only && request.model.as_deref() == Some("claude-haiku-5-5"));
+}
+
+/// With no choice made, the card still asks for a helper the gate made visible.
+#[test]
+fn a_helper_made_visible_still_raises_the_login_card_when_the_person_said_ask() {
+    let s = Setup::new();
+    s.store.add("claude", "Work", None).unwrap();
+    let mut request = s.run(Some("k-bug-ask"), None);
+    request.headless = true;
+    request.headless_unset = false;
+    crate::agent_run_mode::with_test_env(Default::default(), || {
+        crate::agent_run_mode::gate_hidden_helper(&mut request);
+    });
+    let call = s.run_in_thread(request);
+    let card = s.wait_for_card(1);
+    s.answer(&card, "once:main");
+    let (result, request) = call.join().unwrap();
+    result.unwrap();
+    assert_eq!(request.account, None);
+    assert!(!request.headless);
+}

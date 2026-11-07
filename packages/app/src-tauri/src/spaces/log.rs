@@ -266,22 +266,25 @@ pub fn check(roster: &Roster, e: &Entry, now_ms: u64) -> Verdict {
     if h.epoch == 0 || h.epoch > roster.epoch { return Verdict::Reject("future epoch"); }
     if let Some(limit) = until {
         if h.epoch >= limit { return Verdict::Reject("removed author"); }
+        // Partial defence only: `created_ms` is set by the author, so a removed member can still claim a date
+        // from before the removal. What this stops is the lazy forgery (a plain current date in the old epoch).
+        if roster.past_ms.get(&h.device).is_some_and(|t| h.created_ms > t.saturating_add(FUTURE_SKEW_MS)) {
+            return Verdict::Reject("after removal");
+        }
     }
     if !e.signature_ok() { return Verdict::Reject("bad signature"); }
     if h.seq == 0 { return Verdict::Reject("bad seq"); }
     if h.created_ms > now_ms + FUTURE_SKEW_MS { return Verdict::Reject("from the future"); }
     if h.created_ms + KEEP_MS < now_ms { return Verdict::Old; }
-    let Some(channel) = roster.channel(&h.channel) else { return Verdict::Reject("unknown channel") };
+    if roster.channel(&h.channel).is_none() { return Verdict::Reject("unknown channel"); }
     if matches!(h.kind, KIND_REACT | KIND_DELETE) && h.refers.is_none() { return Verdict::Reject("missing target"); }
     if h.kind == KIND_BOT {
+        // Only what never changes is checked here: the bot existed and is this member's. Removal of the bot, the
+        // bot rules and a closed channel are as of today and differ between PCs and over time, so they are
+        // display/send filters (`Roster::bot_may_speak`, checked when sending), not reasons to refuse history.
         let Some(bot) = h.bot else { return Verdict::Reject("missing bot") };
-        let Some(known) = roster.bots.get(&bot) else { return Verdict::Reject("bot not on the roster") };
-        if known.member != member { return Verdict::Reject("bot is not yours"); }
-        if roster.bots_of(&member).len() as u32 > roster.bot_rules.per_person {
-            return Verdict::Reject("too many bots");
-        }
-        if channel.archived { return Verdict::Reject("channel is closed"); }
-        if !roster.bot_may_speak(&bot, &h.channel) { return Verdict::Reject("bots not allowed here"); }
+        let Some(owner) = roster.bot_owners.get(&bot) else { return Verdict::Reject("bot not on the roster") };
+        if *owner != member { return Verdict::Reject("bot is not yours"); }
     } else if h.bot.is_some() {
         return Verdict::Reject("bot id on a non-bot entry");
     }

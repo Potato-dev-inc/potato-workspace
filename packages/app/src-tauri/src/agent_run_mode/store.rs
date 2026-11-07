@@ -19,6 +19,9 @@ pub(super) struct StoreFile {
     /// Agent id (lower case) -> `visible` | `one_task`. Values are kept as text so one unknown
     /// value never discards the others.
     agents: BTreeMap<String, String>,
+    /// "Allow hidden helpers": an agent's `headless: true` hides a helper only when this is on.
+    /// Off (absent) by default: such a run is shown in a pane instead.
+    allow_hidden_helpers: bool,
 }
 
 #[cfg(not(test))]
@@ -50,6 +53,7 @@ thread_local! {
 pub struct TestEnv {
     pub modes: BTreeMap<String, RunMode>,
     pub verified: BTreeMap<String, bool>,
+    pub allow_hidden_helpers: bool,
 }
 
 #[cfg(test)]
@@ -97,6 +101,47 @@ pub fn setting_for(id: &str) -> RunMode {
     #[cfg(not(test))]
     {
         mode_in(&loaded(), id)
+    }
+}
+
+/// Whether an agent may hide a helper with `headless: true`. Off unless the person turned it on.
+pub fn hidden_helpers_allowed() -> bool {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| slot.borrow().as_ref().is_some_and(|env| env.allow_hidden_helpers))
+    }
+    #[cfg(not(test))]
+    {
+        loaded().allow_hidden_helpers
+    }
+}
+
+/// Writes "Allow hidden helpers" into the file at `target`; the agents' choices stay as they are.
+pub(super) fn save_hidden_at(target: &Path, allowed: bool) -> Result<StoreFile, String> {
+    let mut file = read_file(target);
+    file.version = FILE_VERSION;
+    file.allow_hidden_helpers = allowed;
+    let text = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
+    crate::settings_patch::write_atomic(target, &text).map_err(|e| format!("could not save: {e}"))?;
+    Ok(file)
+}
+
+/// Saves "Allow hidden helpers".
+pub fn set_hidden_helpers_allowed(allowed: bool) -> Result<(), String> {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| {
+            if let Some(env) = slot.borrow_mut().as_mut() {
+                env.allow_hidden_helpers = allowed;
+            }
+        });
+        Ok(())
+    }
+    #[cfg(not(test))]
+    {
+        let file = save_hidden_at(&path(), allowed)?;
+        *CACHE.write() = Some(file);
+        Ok(())
     }
 }
 

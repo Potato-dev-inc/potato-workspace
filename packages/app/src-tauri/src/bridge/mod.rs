@@ -35,6 +35,13 @@ mod startup_gate_tests;
 #[cfg(test)]
 mod tests;
 mod tool_names;
+
+/// What the bridge hands the pty layer to start a visible run's own pane: for tests that follow a run's asks
+/// (account, model, reasoning, read-only) all the way to the command line.
+#[cfg(test)]
+pub(crate) fn spawn_args_for_run(operation: &crate::operations::OperationSnapshot, agent_type: &str) -> crate::pty::SpawnPaneArgs {
+    dispatch::run_spawn_args(operation, agent_type, pane_util::visible_run_args(agent_type, operation).args)
+}
 pub(crate) mod typing_refusals;
 mod watchdog;
 mod ws;

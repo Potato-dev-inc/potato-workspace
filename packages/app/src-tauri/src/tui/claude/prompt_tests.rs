@@ -408,3 +408,40 @@ fn every_first_run_screen_reaches_the_card_through_the_shared_detector() {
     let narrow = FIRST_THEME.replace("\r\n", "\n").replace("Hello, World!", "Hello, World! Hello, World! Hello, World!\n  Hello, World! Hello").repeat(1);
     assert!(crate::pane_prompt::detect_in_screen("claude", &narrow, false).is_some());
 }
+
+const TRUST_PREAPPROVED: &str = include_str!("fixtures/trust_dialog_preapproved_tools.txt");
+// The same dialog with the title block above it (a tall pane).
+const TRUST_PREAPPROVED_TITLED: &str = "\u{2500}\u{2500}\u{2500}\n Accessing workspace:\n\n /work/app\n\n Quick safety check: Is this a project you created or one you trust?\n\n Claude Code'll be able to read, edit, and execute files here.\n\n \u{26a0} This folder pre-approves 1 tool permission in .claude/settings.json:\n   mcp__pencil\n\n ";
+
+#[test]
+fn the_trust_dialog_with_pre_approved_tools_is_a_trust_gate_with_no_first() {
+    for screen in [TRUST_PREAPPROVED.to_string(), format!("{TRUST_PREAPPROVED_TITLED}{}", TRUST_PREAPPROVED.rsplit("Security guide").next().unwrap().trim_start())] {
+        let prompt = detect(&screen, false);
+        assert_eq!(prompt["kind"], KIND_TRUST);
+        assert_eq!(prompt["choices"], json!(["trust", "deny"]));
+        assert_eq!(prompt["menu"]["selected"], 1);
+        assert_eq!(prompt["menu"]["options"][0]["choice"], "deny");
+        assert_eq!(prompt["menu"]["options"][1]["choice"], "trust");
+        // Trust is one row below the pointer; Don't trust is the row it is on.
+        assert_eq!(key(&prompt, "trust", false), DOWN);
+        assert_eq!(key(&prompt, "deny", false), "");
+        assert!(shows_trust_gate(&screen));
+    }
+}
+
+#[test]
+fn trust_moves_from_wherever_the_pointer_is() {
+    // Yes first and focused (the normal layout of other versions): Trust is Enter alone, Don't trust is one down.
+    let trust = TRUST.replace("\r\n", "\n");
+    let yes_first = trust.replace("\u{276f} No, exit\n   Yes, I trust this folder", "\u{276f} Yes, I trust this folder\n   No, exit");
+    let prompt = detect(&yes_first, false);
+    assert_eq!(prompt["menu"]["options"][0]["choice"], "trust");
+    assert_eq!(key(&prompt, "trust", false), "");
+    assert_eq!(key(&prompt, "deny", false), DOWN);
+    // Pointer already on Yes while Yes is second: Trust is Enter alone, Don't trust is one up.
+    let moved = trust.replace("\u{276f} No, exit\n   Yes, I trust this folder", "  No, exit\n \u{276f} Yes, I trust this folder");
+    let prompt = detect(&moved, false);
+    assert_eq!(prompt["menu"]["selected"], 2);
+    assert_eq!(key(&prompt, "trust", false), "");
+    assert_eq!(key(&prompt, "deny", false), UP);
+}

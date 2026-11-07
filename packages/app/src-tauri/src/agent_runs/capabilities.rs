@@ -71,6 +71,7 @@ pub fn read_only_unsupported_message(agent_type: &str, has_pane: bool) -> String
         crate::tui::read_only_backends().join(", "),
         crate::tui::read_only_spawned_pane_backends()
             .into_iter()
+            .chain(crate::tui::read_only_visible_flag_backends())
             .map(|id| format!("{id} (run-spawned pane only)"))
             .collect::<Vec<_>>()
             .join(", ")

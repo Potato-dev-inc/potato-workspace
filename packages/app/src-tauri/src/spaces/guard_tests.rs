@@ -186,3 +186,17 @@ fn limits_match_the_founder_defaults() {
     assert_eq!(BOT_PERSON_HOUR_CAP, 5);
     assert_eq!(BOT_UNPROMPTED_CAP, 4);
 }
+
+/// Cowork M2: nothing a member writes can reach merge, approve or action code. Messages offer Reply, React, Delete.
+#[test]
+fn spaces_has_no_action_route_from_member_content() {
+    let words = ["merge_green", "team::actions", "quote_untrusted", "auto_approve"];
+    for (name, code) in spaces_files() {
+        if name == "guard_tests.rs" {
+            continue;
+        }
+        for w in words {
+            assert!(!code.contains(w), "{name} uses {w}");
+        }
+    }
+}

@@ -16,10 +16,10 @@ use crate::team::keystore::KeyStore;
 
 const T0: u64 = 1_700_000_000_000;
 
-struct TempDir(PathBuf);
+pub(super) struct TempDir(pub(super) PathBuf);
 
 impl TempDir {
-    fn new(tag: &str) -> Self {
+    pub(super) fn new(tag: &str) -> Self {
         static N: AtomicU64 = AtomicU64::new(0);
         let p = std::env::temp_dir().join(format!("pm-svc-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::SeqCst)));
         let _ = std::fs::remove_dir_all(&p);
@@ -31,16 +31,16 @@ impl Drop for TempDir {
     fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
 }
 
-struct Node {
-    svc: Arc<SpacesService>,
-    key: NodeKey,
-    keystore: KeyStore,
-    dir: TempDir,
+pub(super) struct Node {
+    pub(super) svc: Arc<SpacesService>,
+    pub(super) key: NodeKey,
+    pub(super) keystore: KeyStore,
+    pub(super) dir: TempDir,
 }
 
 fn hint(n: NodeKey) -> PeerHint { PeerHint { node: n, relay: String::new(), lan: Vec::new() } }
 
-fn make(hub: &Arc<MemoryHub>, n: u8, clock: &Arc<AtomicU64>, keystore: Option<KeyStore>, dir: Option<TempDir>) -> Node {
+pub(super) fn make(hub: &Arc<MemoryHub>, n: u8, clock: &Arc<AtomicU64>, keystore: Option<KeyStore>, dir: Option<TempDir>) -> Node {
     let key = NodeKey([n; 32]);
     let perms = SpacePermissions::new();
     let net = hub.node(key, perms.clone());
@@ -51,13 +51,13 @@ fn make(hub: &Arc<MemoryHub>, n: u8, clock: &Arc<AtomicU64>, keystore: Option<Ke
     Node { svc, key, keystore, dir }
 }
 
-async fn node(hub: &Arc<MemoryHub>, n: u8, clock: &Arc<AtomicU64>) -> Node {
+pub(super) async fn node(hub: &Arc<MemoryHub>, n: u8, clock: &Arc<AtomicU64>) -> Node {
     let node = make(hub, n, clock, None, None);
     node.svc.start_with(false).await.unwrap();
     node
 }
 
-async fn eventually(what: &str, f: impl Fn() -> bool) {
+pub(super) async fn eventually(what: &str, f: impl Fn() -> bool) {
     for _ in 0..400 {
         if f() { return; }
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -65,24 +65,24 @@ async fn eventually(what: &str, f: impl Fn() -> bool) {
     panic!("timed out waiting for: {what}");
 }
 
-fn clock() -> Arc<AtomicU64> { Arc::new(AtomicU64::new(T0)) }
+pub(super) fn clock() -> Arc<AtomicU64> { Arc::new(AtomicU64::new(T0)) }
 
-fn general(n: &Node, space: &SpaceId) -> ChannelId {
+pub(super) fn general(n: &Node, space: &SpaceId) -> ChannelId {
     n.svc.with_open(space, |sp| sp.roster.channels[0].id).unwrap()
 }
 
-fn texts(n: &Node, space: &SpaceId) -> Vec<String> {
+pub(super) fn texts(n: &Node, space: &SpaceId) -> Vec<String> {
     let ch = general(n, space);
     n.svc
         .with_open(space, |sp| sp.store.messages_page(&ch, None, 200).unwrap().into_iter().map(|m| m.text).collect())
         .unwrap_or_default()
 }
 
-fn entry_count(n: &Node, space: &SpaceId) -> i64 {
+pub(super) fn entry_count(n: &Node, space: &SpaceId) -> i64 {
     n.svc.with_open(space, |sp| sp.store.conn.query_row("SELECT COUNT(*) FROM entries", [], |r| r.get(0)).unwrap()).unwrap_or(0)
 }
 
-async fn say(n: &Node, space: &SpaceId, t: &str) {
+pub(super) async fn say(n: &Node, space: &SpaceId, t: &str) {
     let ch = general(n, space);
     n.svc.send(space, &ch, Body::Text { text: t.into(), mentions: vec![] }, None).await.unwrap();
 }
@@ -94,7 +94,7 @@ fn joining_state(n: &Node) -> String {
 fn has_space(n: &Node) -> bool { !n.svc.view()["spaces"].as_array().unwrap().is_empty() }
 
 /// `owner` invites, `joiner` joins, the owner lets them in. Returns the space id.
-async fn join(owner: &Node, joiner: &Node, space_hex: &str) {
+pub(super) async fn join(owner: &Node, joiner: &Node, space_hex: &str) {
     let invite = owner.svc.create_invite(space_hex).await.unwrap();
     let words: Vec<String> = invite["words"].as_array().unwrap().iter().map(|w| w.as_str().unwrap().to_string()).collect();
     joiner.svc.start_join(invite["link"].as_str().unwrap(), &words.join(" ")).await.unwrap();
@@ -104,7 +104,7 @@ async fn join(owner: &Node, joiner: &Node, space_hex: &str) {
     eventually("the joiner is in", || has_space(joiner) && joining_state(joiner) == "joined").await;
 }
 
-async fn pair() -> (Arc<MemoryHub>, Arc<AtomicU64>, Node, Node, SpaceId) {
+pub(super) async fn pair() -> (Arc<MemoryHub>, Arc<AtomicU64>, Node, Node, SpaceId) {
     let (hub, clk) = (MemoryHub::new(), clock());
     let (a, b) = (node(&hub, 1, &clk).await, node(&hub, 2, &clk).await);
     let hex = a.svc.create_space("Book club").await.unwrap();
@@ -113,7 +113,7 @@ async fn pair() -> (Arc<MemoryHub>, Arc<AtomicU64>, Node, Node, SpaceId) {
     (hub, clk, a, b, SpaceId::from_hex(&hex).unwrap())
 }
 
-async fn trio() -> (Arc<MemoryHub>, Arc<AtomicU64>, Node, Node, Node, SpaceId) {
+pub(super) async fn trio() -> (Arc<MemoryHub>, Arc<AtomicU64>, Node, Node, Node, SpaceId) {
     let (hub, clk, a, b, space) = pair().await;
     let c = node(&hub, 3, &clk).await;
     join(&a, &c, &space.to_hex()).await;
@@ -188,12 +188,14 @@ async fn a_member_who_was_offline_catches_up_including_what_was_sent_while_away(
 
 #[tokio::test]
 async fn offline_member_catches_up_from_a_third_member() {
-    let (hub, _clk, a, b, c, space) = trio().await;
+    let (hub, clk, a, b, c, space) = trio().await;
     // c goes offline from both; b stays with a.
     hub.cut(a.key, c.key, true);
     hub.cut(b.key, c.key, true);
     eventually("c has no links", || c.svc.link_count() == 0).await;
     for i in 0..20 {
+        // Ten messages in ten seconds is the most one person may send: space them out.
+        clk.fetch_add(2_000, Ordering::SeqCst);
         say(&a, &space, &format!("m{i}")).await;
     }
     eventually("b has 20", || texts(&b, &space).len() == 20).await;
@@ -393,9 +395,258 @@ async fn prune_runs_after_every_thousand_stored_entries() {
     let space = SpaceId::from_hex(&hex).unwrap();
     put_old_text(&a, &space, NINETY_ONE_DAYS);
     for i in 0..999 {
+        clk.fetch_add(7_000, Ordering::SeqCst); // under the 10-per-10-seconds and 600-per-hour limits
         say(&a, &space, &format!("m{i}")).await;
     }
     assert_eq!(entry_count(&a, &space), 1000, "999 new ones and the old one");
+    clk.fetch_add(7_000, Ordering::SeqCst);
     say(&a, &space, "the thousandth").await;
     assert_eq!(entry_count(&a, &space), 1000, "the old one went");
+}
+
+// ---- D4.1 rules: send, channels -------------------------------------------------------------------------------
+
+#[tokio::test]
+async fn send_text_rules() {
+    let (hub, clk) = (MemoryHub::new(), clock());
+    let a = node(&hub, 1, &clk).await;
+    let hex = a.svc.create_space("Book club").await.unwrap();
+    let space = SpaceId::from_hex(&hex).unwrap();
+    let ch = general(&a, &space).to_hex();
+    assert_eq!(a.svc.send_text(&hex, &ch, "   ", None).await.unwrap_err(), "Write something first.");
+    let long = "x".repeat(4001);
+    assert_eq!(
+        a.svc.send_text(&hex, &ch, &long, None).await.unwrap_err(),
+        "This message is too long. The limit is 4,000 characters."
+    );
+    assert!(a.svc.send_text(&hex, &ch, &"x".repeat(4000), None).await.is_ok());
+    let detail = a.svc.channel_create(&hex, "books").await.unwrap();
+    let books = detail["channels"].as_array().unwrap().iter().find(|c| c["name"] == "books").unwrap()["id"]
+        .as_str().unwrap().to_string();
+    a.svc.channel_archive(&hex, &books).await.unwrap();
+    assert_eq!(a.svc.send_text(&hex, &books, "hi", None).await.unwrap_err(), "This channel is archived.");
+}
+
+#[tokio::test]
+async fn channel_create_rules() {
+    let (_hub, _clk, a, b, space) = pair().await;
+    let hex = space.to_hex();
+    assert_eq!(b.svc.channel_create(&hex, "books").await.unwrap_err(), "Only the owner can add channels.");
+    let detail = a.svc.channel_create(&hex, "Books!").await.unwrap();
+    assert!(detail["channels"].as_array().unwrap().iter().any(|c| c["name"] == "books"));
+    // general + books = 2; add up to 20 active channels, then the next is refused.
+    for i in 2..20 {
+        a.svc.channel_create(&hex, &format!("c{i}")).await.unwrap();
+    }
+    assert_eq!(
+        a.svc.channel_create(&hex, "one-more").await.unwrap_err(),
+        "This space has 20 channels. Archive one first."
+    );
+}
+
+#[tokio::test]
+async fn new_channel_reaches_members() {
+    let (_hub, _clk, a, b, space) = pair().await;
+    a.svc.channel_create(&space.to_hex(), "books").await.unwrap();
+    eventually("b lists books", || {
+        b.svc.detail(&space.to_hex()).map(|d| d["channels"].as_array().unwrap().iter().any(|c| c["name"] == "books")).unwrap_or(false)
+    })
+    .await;
+}
+
+// ---- D5.3: react and delete ------------------------------------------------------------------------------------
+
+fn msg_id(n: &Node, space: &SpaceId, text: &str) -> String {
+    let ch = general(n, space);
+    n.svc
+        .with_open(space, |sp| sp.store.messages_page(&ch, None, 200).unwrap().into_iter().find(|m| m.text == text).map(|m| m.id.to_hex()))
+        .flatten()
+        .unwrap_or_default()
+}
+
+fn message(n: &Node, space: &SpaceId, id: &str) -> serde_json::Value {
+    let list = n.svc.messages(&space.to_hex(), &general(n, space).to_hex(), None, 100).unwrap();
+    list.as_array().unwrap().iter().find(|m| m["id"] == id).cloned().unwrap_or(serde_json::Value::Null)
+}
+
+fn heart_count(n: &Node, space: &SpaceId, id: &str) -> u64 {
+    message(n, space, id)["reactions"].as_array().map(|r| {
+        r.iter().filter(|x| x["code"] == "heart").map(|x| x["count"].as_u64().unwrap()).sum()
+    }).unwrap_or(0)
+}
+
+#[tokio::test]
+async fn reaction_reaches_others_with_count() {
+    let (_hub, _clk, a, b, c, space) = trio().await;
+    say(&b, &space, "hi").await;
+    eventually("a and c have it", || !msg_id(&a, &space, "hi").is_empty() && !msg_id(&c, &space, "hi").is_empty()).await;
+    let id = msg_id(&b, &space, "hi");
+    a.svc.react(&space.to_hex(), &id, "heart", true).await.unwrap();
+    c.svc.react(&space.to_hex(), &id, "heart", true).await.unwrap();
+    eventually("b sees two hearts", || heart_count(&b, &space, &id) == 2).await;
+    assert_eq!(message(&b, &space, &id)["reactions"][0]["mine"], false);
+}
+
+#[tokio::test]
+async fn reaction_off_removes_mine() {
+    let (_hub, _clk, a, b, space) = pair().await;
+    say(&a, &space, "hi").await;
+    eventually("b has it", || !msg_id(&b, &space, "hi").is_empty()).await;
+    let id = msg_id(&a, &space, "hi");
+    a.svc.react(&space.to_hex(), &id, "heart", true).await.unwrap();
+    eventually("b sees one heart", || heart_count(&b, &space, &id) == 1).await;
+    a.svc.react(&space.to_hex(), &id, "heart", false).await.unwrap();
+    eventually("zero everywhere", || heart_count(&a, &space, &id) == 0 && heart_count(&b, &space, &id) == 0).await;
+}
+
+#[tokio::test]
+async fn unknown_reaction_is_refused() {
+    let (_hub, _clk, a, _b, space) = pair().await;
+    say(&a, &space, "hi").await;
+    let id = msg_id(&a, &space, "hi");
+    assert_eq!(a.svc.react(&space.to_hex(), &id, "fire", true).await.unwrap_err(), "That reaction isn't available.");
+}
+
+#[tokio::test]
+async fn author_deletes_for_everyone() {
+    let (_hub, _clk, a, b, c, space) = trio().await;
+    say(&b, &space, "oops").await;
+    eventually("a and c have it", || !msg_id(&a, &space, "oops").is_empty() && !msg_id(&c, &space, "oops").is_empty()).await;
+    let id = msg_id(&b, &space, "oops");
+    let reply = b.svc.delete(&space.to_hex(), &id).await.unwrap();
+    assert_eq!(reply["text"], "");
+    for n in [&a, &c] {
+        eventually("deleted by b", || {
+            let m = message(n, &space, &id);
+            m["deleted"]["byOwner"] == false && m["text"] == ""
+        })
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn owner_deletes_anyones() {
+    let (_hub, _clk, a, b, space) = pair().await;
+    say(&b, &space, "rude").await;
+    eventually("a has it", || !msg_id(&a, &space, "rude").is_empty()).await;
+    let id = msg_id(&a, &space, "rude");
+    let reply = a.svc.delete(&space.to_hex(), &id).await.unwrap();
+    assert_eq!(reply["deleted"]["byOwner"], true);
+    eventually("b shows it deleted by the owner", || message(&b, &space, &id)["deleted"]["byOwner"] == true).await;
+}
+
+#[tokio::test]
+async fn member_cannot_delete_others() {
+    let (_hub, _clk, _a, b, c, space) = trio().await;
+    say(&b, &space, "mine").await;
+    eventually("c has it", || !msg_id(&c, &space, "mine").is_empty()).await;
+    let id = msg_id(&c, &space, "mine");
+    let before = entry_count(&c, &space);
+    assert_eq!(c.svc.delete(&space.to_hex(), &id).await.unwrap_err(), "You can only delete your own messages.");
+    assert_eq!(entry_count(&c, &space), before);
+}
+
+#[tokio::test]
+async fn forged_delete_from_member_is_ignored() {
+    let (_hub, _clk, a, b, c, space) = trio().await;
+    say(&b, &space, "keep me").await;
+    eventually("a and c have it", || !msg_id(&a, &space, "keep me").is_empty() && !msg_id(&c, &space, "keep me").is_empty()).await;
+    let id = msg_id(&c, &space, "keep me");
+    // C skips the service rule and sends a Delete for B's message anyway.
+    let target = super::ids::EntryId::from_hex(&id).unwrap();
+    let (a_before, b_before) = (entry_count(&a, &space), entry_count(&b, &space));
+    c.svc.send(&space, &general(&c, &space), Body::Delete, Some(target)).await.unwrap();
+    eventually("the forged entry reached a and b", || entry_count(&a, &space) > a_before && entry_count(&b, &space) > b_before).await;
+    for n in [&a, &b] {
+        assert_eq!(message(n, &space, &id)["text"], "keep me");
+        assert!(message(n, &space, &id)["deleted"].is_null());
+    }
+}
+
+#[tokio::test]
+async fn sending_as_a_bot_that_may_not_speak_is_refused_before_it_is_signed() {
+    let (_hub, _clk, a, _b, space) = pair().await;
+    let ch = general(&a, &space);
+    let body = Body::BotText { text: "hi".into(), called_by: None, hops: 0 };
+    let err = a.svc.send_with_bot(&space, &ch, body, None, Some(BotId([5; 8]))).await.unwrap_err();
+    assert_eq!(err, "That bot may not speak here.");
+}
+
+#[tokio::test]
+async fn a_refused_join_closes_the_link() {
+    use super::identity::SpaceIdentity;
+    use super::invite::InviteTicket;
+    use super::join::{JoinRequestFrame, JOIN_REFUSED, JOIN_REQUEST};
+    let (hub, clk) = (MemoryHub::new(), clock());
+    let a = node(&hub, 1, &clk).await;
+    let hex = a.svc.create_space("Book club").await.unwrap();
+    let invite = a.svc.create_invite(&hex).await.unwrap();
+    let (ticket, _) = InviteTicket::parse(invite["link"].as_str().unwrap()).unwrap();
+    let stranger = SpaceIdentity::for_test(9);
+    let d = hub.node(stranger.node(), SpacePermissions::new());
+    let link = d.dial(&hint(a.key)).await.unwrap();
+    let mut s = link.open().await.unwrap();
+    let req = JoinRequestFrame::new(ticket.space, ticket.invite, stranger.certify(&ticket.space, "X", T0), [0u8; 32], None);
+    write_frame(&mut s.send, JOIN_REQUEST, &req.to_bytes()).await.unwrap();
+    let reply = super::frame::read_frame(&mut s.recv).await.unwrap();
+    assert_eq!(reply.kind, JOIN_REFUSED);
+    tokio::time::timeout(Duration::from_secs(3), link.closed()).await.expect("the owner closes a refused link");
+    eventually("the owner keeps no link", || a.svc.link_count() == 0).await;
+}
+
+#[tokio::test]
+async fn strangers_cannot_fill_every_link_slot() {
+    let (hub, clk) = (MemoryHub::new(), clock());
+    let a = node(&hub, 1, &clk).await;
+    let hex = a.svc.create_space("Book club").await.unwrap();
+    a.svc.create_invite(&hex).await.unwrap();
+    let mut held = Vec::new();
+    for n in 0..(super::limits::MAX_LINKS as u8 + 3) {
+        let d = hub.node(NodeKey([100 + n; 32]), SpacePermissions::new());
+        if let Ok(link) = d.dial(&hint(a.key)).await { held.push((d, link)); }
+    }
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(a.svc.link_count() <= super::limits::MAX_LINKS, "{} links", a.svc.link_count());
+}
+
+#[tokio::test]
+async fn invite_secrets_are_forgotten_once_the_invite_is_used_or_dead() {
+    use super::ids::space_tag;
+    let (hub, clk) = (MemoryHub::new(), clock());
+    let (a, b) = (node(&hub, 1, &clk).await, node(&hub, 2, &clk).await);
+    let hex = a.svc.create_space("Book club").await.unwrap();
+    let tag = space_tag(&SpaceId::from_hex(&hex).unwrap());
+    let kept = |n: &Node, inv: &serde_json::Value| n.keystore.invite_code(&tag, inv["id"].as_str().unwrap()).unwrap().is_some();
+    // Used: the owner answered.
+    let first = a.svc.create_invite(&hex).await.unwrap();
+    assert!(kept(&a, &first));
+    let words: Vec<String> = first["words"].as_array().unwrap().iter().map(|w| w.as_str().unwrap().to_string()).collect();
+    b.svc.start_join(first["link"].as_str().unwrap(), &words.join(" ")).await.unwrap();
+    eventually("a request", || !a.svc.view()["requests"].as_array().unwrap().is_empty()).await;
+    let id = a.svc.view()["requests"][0]["id"].as_i64().unwrap();
+    a.svc.answer_join(&hex, id, true).await.unwrap();
+    assert!(!kept(&a, &first), "the answered invite keeps no secret");
+    // Dead: the time ran out.
+    let second = a.svc.create_invite(&hex).await.unwrap();
+    assert!(kept(&a, &second));
+    clk.fetch_add(25 * 60 * 60 * 1000, Ordering::SeqCst);
+    a.svc.tick();
+    assert!(!kept(&a, &second), "the expired invite keeps no secret");
+}
+
+#[tokio::test]
+async fn control_ops_reach_the_disk_before_the_roster_in_memory() {
+    let (_hub, _clk, a, _b, space) = pair().await;
+    let (seq, bad) = a.svc.with_open(&space, |sp| {
+        // The log on disk gets one op the roster in memory does not have (as after a crash between the two).
+        let ahead = sp.roster.next_op(&sp.me, super::roster::OpBody::AddChannel { channel: ChannelId([77; 8]), name: "ahead".into() }, T0).unwrap();
+        assert_eq!(sp.store.control_append(&ahead).unwrap(), true);
+        let other = sp.roster.next_op(&sp.me, super::roster::OpBody::AddChannel { channel: ChannelId([78; 8]), name: "other".into() }, T0).unwrap();
+        (sp.roster.seq, other)
+    }).unwrap();
+    // The disk refuses this op (not the next in its log), so memory must not take it either.
+    let ok = a.svc.apply_control(&space, NodeKey([2; 32]), vec![bad]);
+    assert!(!ok);
+    let after = a.svc.with_open(&space, |sp| (sp.roster.seq, sp.roster.channel(&ChannelId([78; 8])).is_some())).unwrap();
+    assert_eq!(after, (seq, false));
 }

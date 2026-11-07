@@ -402,12 +402,23 @@ fn trust_gate(agent_type: &str, screen: &str) -> Option<Value> {
     let lower = text.to_ascii_lowercase();
     let yes_at = lower.rfind("yes, i trust this folder")?;
     let yes_end = yes_at + "yes, i trust this folder".len();
-    let title_at = ["quick safety check", "do you trust the files", "accessing workspace"]
-        .iter()
-        .filter_map(|marker| lower[..yes_at].rfind(marker))
-        .min()?;
-    // A live dialog ends with its footer; once answered, Claude draws its own screen over it.
-    let rest = FOOTER_MARKERS.iter().fold(lower[yes_end..].to_string(), |acc, marker| acc.replace(marker, ""));
+    // The title block differs by version. A dialog that lists pre-approved tools (`.claude/settings.json`) has no
+    // "Quick safety check" line in view, so its own sentences also open it; the rows are found by their words.
+    let title_at = [
+        "quick safety check",
+        "do you trust the files",
+        "accessing workspace",
+        "'ll be able to read, edit",
+        "\u{2019}ll be able to read, edit",
+        "pre-approves",
+    ]
+    .iter()
+    .filter_map(|marker| lower[..yes_at].rfind(marker))
+    .min()?;
+    // A live dialog ends with its footer; once answered, Claude draws its own screen over it. The last row is
+    // whichever of the two comes second: "No, exit" may follow the Yes row.
+    let rows_end = lower[title_at..].rfind("no, exit").map_or(yes_end, |at| (title_at + at + "no, exit".len()).max(yes_end));
+    let rest = FOOTER_MARKERS.iter().fold(lower[rows_end..].to_string(), |acc, marker| acc.replace(marker, ""));
     if rest.chars().any(|ch| ch.is_alphanumeric()) {
         return None;
     }

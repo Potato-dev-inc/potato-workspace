@@ -91,7 +91,7 @@ impl SyncView for FakeView {
 
 fn text(who: &SpaceIdentity, seq: u64, t: &str) -> Entry {
     let h = EntryHeader {
-        space: space(), channel: CH, device: who.device_key(), seq, lamport: seq, created_ms: NOW, epoch: 1, kind: KIND_TEXT,
+        space: space(), channel: CH, device: who.device_key(), seq, lamport: seq, created_ms: NOW - 10_000_000 + seq * 7_000, epoch: 1, kind: KIND_TEXT,
         refers: None, bot: None,
     };
     Entry::seal(who, h, &Body::Text { text: t.into(), mentions: vec![] }, &KEY).unwrap()
@@ -369,4 +369,61 @@ fn hundred_unknown_frames_close() {
         assert!(s.on_frame(&v, &f).is_empty());
     }
     assert_eq!(s.on_frame(&v, &f), vec![Out::Close(4)]);
+}
+
+fn entries_frame(entries: &[Vec<u8>], gone: &[(DeviceKey, u64)], last: bool) -> Frame {
+    let mut w = super::wire::Writer::new();
+    w.u16(entries.len() as u16);
+    for e in entries { w.blob(e); }
+    w.u16(gone.len() as u16);
+    for (d, s) in gone { w.fixed(&d.0).u64(*s); }
+    w.u8(last as u8);
+    Frame { kind: ENTRIES, body: w.finish() }
+}
+
+#[test]
+fn a_head_that_is_never_answered_is_dropped() {
+    let mut liar = FakeView::standard();
+    liar.extra_heads.push((owner().device_key(), 1, 1u64 << 62));
+    let me = FakeView::standard();
+    let mut s = SyncSession::new(NodeKey([1; 32]));
+    let first = s.on_frame(&me, &hello_of(&liar));
+    assert!(first.iter().any(|o| matches!(o, Out::Send(k, _) if *k == WANT)));
+    // An empty, complete reply: the peer does not have what it claimed.
+    let out = s.on_frame(&me, &entries_frame(&[], &[], true));
+    assert!(out.is_empty());
+    assert!(s.next_round(&me).is_empty(), "the same liar must not fill the budget again");
+    assert_eq!(s.their_high(&owner().device_key()), None);
+}
+
+#[test]
+fn gone_that_was_not_asked_is_ignored() {
+    let me = FakeView::standard();
+    let mut s = SyncSession::new(NodeKey([1; 32]));
+    s.on_frame(&me, &hello_of(&FakeView::standard()));
+    let out = s.on_frame(&me, &entries_frame(&[], &[(sam().device_key(), 1u64 << 40)], true));
+    assert!(!out.iter().any(|o| matches!(o, Out::Gone(_))));
+}
+
+#[test]
+fn gone_that_was_asked_is_kept() {
+    let mut a = FakeView::standard();
+    a.extra_heads.push((sam().device_key(), 1, 3));
+    let me = FakeView::standard();
+    let mut s = SyncSession::new(NodeKey([1; 32]));
+    s.on_frame(&me, &hello_of(&a));
+    let out = s.on_frame(&me, &entries_frame(&[], &[(sam().device_key(), 2)], false));
+    assert!(out.contains(&Out::Gone(vec![(sam().device_key(), 2)])));
+}
+
+#[test]
+fn a_hello_hint_for_another_node_is_not_kept() {
+    let me = FakeView::standard();
+    // The view's own hint names node [5; 32].
+    let mut from_stranger = SyncSession::new(NodeKey([1; 32]));
+    let out = from_stranger.on_frame(&me, &hello_of(&FakeView::standard()));
+    assert!(!out.iter().any(|o| matches!(o, Out::Hint(_))), "{out:?}");
+    let mut from_owner_of_hint = SyncSession::new(NodeKey([5; 32]));
+    let out = from_owner_of_hint.on_frame(&me, &hello_of(&FakeView::standard()));
+    assert!(out.iter().any(|o| matches!(o, Out::Hint(h) if h.node == NodeKey([5; 32]))));
 }

@@ -59,6 +59,7 @@ mod point;
 mod loop_guard;
 mod panic;
 mod askbar;
+mod hidden_runs;
 mod side_question;
 mod attention;
 mod second_opinion;
@@ -200,6 +201,26 @@ pub fn run() {
         .manage(commands::ChatImportState::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_panes,
+            spaces::commands::spaces_view,
+            spaces::commands::space_create,
+            spaces::commands::space_invite_create,
+            spaces::commands::space_invite_cancel,
+            spaces::commands::space_join,
+            spaces::commands::space_join_answer,
+            spaces::commands::space_join_cancel,
+            spaces::commands::space_detail,
+            spaces::commands::space_messages,
+            spaces::commands::space_send,
+            spaces::commands::space_read,
+            spaces::commands::space_channel_create,
+            spaces::commands::space_channel_rename,
+            spaces::commands::space_channel_archive,
+            spaces::commands::space_remove_member,
+            spaces::commands::space_leave,
+            spaces::commands::space_forget,
+            spaces::commands::space_block,
+            spaces::commands::space_react,
+            spaces::commands::space_delete,
             commands::session_chat_open,
             commands::session_chat_close,
             commands::chat_search,
@@ -661,6 +682,10 @@ pub fn run() {
             commands::acp_conversation_notices_seen,
             commands::agent_run_mode_get,
             commands::agent_run_mode_set,
+            commands::hidden_helpers_get,
+            commands::hidden_helpers_set,
+            commands::hidden_runs_list,
+            commands::hidden_runs_dismiss,
             commands::audit_recent,
             commands::audit_verify,
             commands::companion_list,

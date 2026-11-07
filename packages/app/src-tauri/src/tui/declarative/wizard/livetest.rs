@@ -74,6 +74,7 @@ pub fn stage_args(def: &Definition, stage: Stage, project: &str, resume: Option<
         trust_workspace: false,
         allow_shell: false,
         model,
+        reasoning: None,
     };
     template::render_headless(def, &launch).unwrap_or_default()
 }
@@ -218,6 +219,7 @@ fn planned_args(def: &Definition, stage: Stage) -> Vec<String> {
         trust_workspace: false,
         allow_shell: false,
         model,
+        reasoning: None,
     };
     template::render_headless(def, &launch).unwrap_or_default()
 }
@@ -251,6 +253,7 @@ pub fn plan(session: &Session, def: &Definition) -> Result<Plan, String> {
             trust_workspace: false,
             allow_shell: false,
             model: None,
+            reasoning: None,
         };
         template::render_stdin(h, &launch)
     });
@@ -382,6 +385,7 @@ impl Runner<'_> {
             trust_workspace: false,
             allow_shell: false,
             model: stage_model(stage),
+            reasoning: None,
         };
         let mask = |text: &str| mask_words(text, words);
         let spec = match self.profile.headless_spec(&launch, self.program.clone()) {

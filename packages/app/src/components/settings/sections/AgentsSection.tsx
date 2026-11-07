@@ -6,6 +6,7 @@ import { AgentLaneRows } from '../blocks/AgentLaneRows';
 import { AgentVersions } from '../blocks/AgentVersions';
 import { CHAT_ADDONS_LABEL, ChatAddonRows } from '../blocks/ChatAddonRows';
 import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings';
+import { HiddenHelpersToggle } from '../blocks/HiddenHelpers';
 import { PreloadSettings } from '../blocks/PreloadSettings';
 import { useEffect, useState } from 'react';
 import { agentHealthApi, type AgentHealth } from '../../../lib/agent-health';
@@ -121,6 +122,14 @@ export const agentsRows: RowDef[] = [
         onChange={(value) => void env.patch({ pane_mcp_enabled: value })}
       />
     ),
+  },
+  {
+    id: 'hidden-helpers',
+    label: 'Allow hidden helpers',
+    hint: 'Off: every helper is a pane you can watch. On: an agent may run one with no pane.',
+    keywords: 'hidden helper helpers headless background invisible no window pane subagent sub-agent agent hide show visible watch inbox',
+    group: 'Helpers',
+    render: (env) => <HiddenHelpersToggle onSaved={env.markSaved} />,
   },
   {
     id: 'versions',

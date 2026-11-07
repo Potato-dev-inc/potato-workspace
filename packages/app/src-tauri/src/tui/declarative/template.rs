@@ -11,6 +11,7 @@ struct Values<'a> {
     task: Option<&'a str>,
     project: Option<&'a str>,
     model: Option<&'a str>,
+    reasoning: Option<&'a str>,
     session: Option<&'a str>,
 }
 
@@ -20,6 +21,7 @@ impl<'a> Values<'a> {
             task: Some(launch.task),
             project: Some(launch.project),
             model: launch.model,
+            reasoning: launch.reasoning,
             session: launch.resume_session,
         }
     }
@@ -30,8 +32,7 @@ impl<'a> Values<'a> {
             "project" => Some(self.project),
             "model" => Some(self.model),
             "session" => Some(self.session),
-            // `{reasoning}` is in the closed set but no launch carries one yet: always absent.
-            "reasoning" => Some(None),
+            "reasoning" => Some(self.reasoning),
             _ => None,
         }
     }
@@ -125,7 +126,7 @@ fn has_task_placeholder(element: &str) -> bool {
 /// segments (`model`, `resume` when the value is known, `read_only`), then `read_only_argv` for a
 /// read-only run. No task: a visible pane is handed its task by typing it.
 pub fn render_tui(tui: &TuiTable, project: &str, read_only: bool, model: Option<&str>, session: Option<&str>) -> Vec<String> {
-    let values = Values { task: None, project: Some(project), model, session };
+    let values = Values { task: None, project: Some(project), model, reasoning: None, session };
     let mut out = Vec::new();
     push_all(&mut out, &tui.argv, &values);
     for OptionalSegment { when, args } in &tui.optional {

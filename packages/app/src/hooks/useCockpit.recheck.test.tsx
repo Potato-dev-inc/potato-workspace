@@ -37,7 +37,7 @@ vi.mock('../lib/cockpit-api', () => ({
     {
       get: (_t, name: string) => {
         if (name === 'panePrompt') return () => Promise.resolve(api_.reads.length > 1 ? api_.reads.shift() : (api_.reads[0] ?? null));
-        if (name === 'answerPanePrompt') return () => Promise.resolve();
+        if (name === 'answerPanePrompt') return () => (api_.answered++, Promise.resolve());
         return name.startsWith('on') ? () => Promise.resolve(() => {}) : () => Promise.resolve(null);
       },
     },
@@ -73,6 +73,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   registry.status = 'waiting_input';
   api_.reads = [null];
+  api_.answered = 0;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -108,5 +109,31 @@ describe('a pane that asks but has no card', () => {
     await rerender();
     await later(2_100);
     expect(api.prompts.p1 ?? null).toBeNull();
+  });
+});
+
+describe('an answer that did not take', () => {
+  it('marks the still-drawn question as stalled after the check, and a second click goes out again', async () => {
+    api_.reads = [PROMPT];
+    await rerender();
+    await later(50);
+    await act(async () => api.answer('p1', 'prompt-1', 'option_1', 'Update now', {} as never));
+    // A double click while the first is on its way sends nothing more.
+    await act(async () => api.answer('p1', 'prompt-1', 'option_1', 'Update now', {} as never));
+    expect(api_.answered).toBe(1);
+    await later(6_000);
+    expect(api.prompts.p1?.stalled).toBe(true);
+    await act(async () => api.answer('p1', 'prompt-1', 'option_1', 'Update now', {} as never));
+    expect(api_.answered).toBe(2);
+  });
+
+  it('says nothing when the question left the screen', async () => {
+    api_.reads = [PROMPT];
+    await rerender();
+    await later(50);
+    await act(async () => api.answer('p1', 'prompt-1', 'option_1', 'Update now', {} as never));
+    api_.reads = [null];
+    await later(6_000);
+    expect(api.prompts.p1?.stalled).toBeFalsy();
   });
 });

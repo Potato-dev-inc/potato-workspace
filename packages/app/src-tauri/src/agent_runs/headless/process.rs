@@ -54,6 +54,10 @@ pub(in crate::agent_runs) fn execute_headless(
         .as_ref()
         .and_then(|current| current.worker.requested_model.clone())
         .filter(|model| !model.trim().is_empty());
+    let requested_reasoning = snapshot
+        .as_ref()
+        .and_then(|current| current.worker.requested_reasoning.clone())
+        .filter(|effort| !effort.trim().is_empty());
     if profile.probes_default_model()
         && snapshot
             .as_ref()
@@ -98,6 +102,7 @@ pub(in crate::agent_runs) fn execute_headless(
             trust_workspace,
             allow_shell,
             model: requested_model.as_deref(),
+            reasoning: requested_reasoning.as_deref(),
         },
     ) {
         Ok(spec) if !read_only || spec.read_only_enforced => spec,
@@ -123,7 +128,7 @@ pub(in crate::agent_runs) fn execute_headless(
     };
     // Opt-in warm pool: a pre-launched process (startup already paid) takes the task over stdin.
     // A guarded run never takes a warm process: it was started without the run's env guard.
-    let pool_key = (resume_session.is_none() && !trust_workspace && !isolated && guard.is_none())
+    let pool_key = (resume_session.is_none() && !trust_workspace && !isolated && requested_reasoning.is_none() && guard.is_none())
         .then(|| {
             crate::standby::key_for_run(
                 &agent_type,
@@ -393,6 +398,10 @@ pub(in crate::agent_runs) fn publish(
 ) {
     if let Ok(snapshot) = operations::get_operation(project, id) {
         let _ = crate::bridge::publish_operation(&snapshot, registry, app);
+        if snapshot.status.terminal() && snapshot.pane_id.is_none() {
+            // A hidden run ended: its Inbox row changes from running to done / failed.
+            let _ = tauri::Emitter::emit(app, "hidden-runs://changed", ());
+        }
     }
 }
 

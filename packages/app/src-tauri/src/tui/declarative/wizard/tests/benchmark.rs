@@ -119,6 +119,7 @@ fn argv(def: &Definition, model: Option<&str>, resume: Option<&str>) -> Vec<Stri
         trust_workspace: false,
         allow_shell: false,
         model,
+        reasoning: None,
     };
     template::render_headless(def, &launch).unwrap_or_default()
 }

@@ -203,6 +203,24 @@ describe('ApprovalPrompt', () => {
     expect(btn("Don't trust")).toBeTruthy();
   });
 
+  it('a trust question whose answer did not take says so plainly and keeps both buttons for a retry', () => {
+    const trust: PanePrompt = {
+      promptId: 'p-trust',
+      kind: 'workspace_trust',
+      text: 'raw',
+      choices: [{ id: 'trust', label: 'Trust this folder' }, { id: 'deny', label: "Don't trust" }],
+      risk: { level: 'medium', headline: 'Trust this folder', reasons: ['The agent will be able to read and change files here.'] },
+      stalled: true,
+    };
+    const onAnswer = render(trust);
+    expect(host.textContent).toContain('That answer did not go through. Claude is still asking.');
+    expect(host.textContent).not.toContain('Claude Code');
+    act(() => btn('Trust this folder')!.click());
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+    expect(onAnswer).toHaveBeenCalledWith({ id: 'trust', label: 'Trust this folder' }, expect.anything());
+    expect(btn("Don't trust")).toBeTruthy();
+  });
+
   it('answers with the agent choice, not the renamed word', () => {
     const p: PanePrompt = { ...prompt('low', 'Run tests'), choices: [{ id: 'yes', label: 'Yes' }, { id: 'no', label: 'No, and tell Codex what to do differently (esc)' }] };
     const onAnswer = render(p);

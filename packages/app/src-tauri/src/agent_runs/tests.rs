@@ -2,6 +2,8 @@
 //! `fixtures`; the module-local tests sit beside the code they cover.
 
 mod checks;
+mod choices;
+mod hidden_gate;
 mod claims;
 mod continuity;
 mod definitions;

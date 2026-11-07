@@ -43,6 +43,12 @@ pub mod memnet;
 pub mod links;
 
 #[allow(dead_code)]
+pub mod moderation;
+
+#[allow(dead_code)]
+pub mod ratelimit;
+
+#[allow(dead_code)]
 pub mod retention;
 
 #[allow(dead_code)]
@@ -50,6 +56,9 @@ pub mod runtime;
 
 #[allow(dead_code)]
 pub mod service;
+
+#[allow(dead_code)]
+pub mod commands;
 
 #[allow(dead_code)]
 pub mod store;
@@ -97,3 +106,9 @@ mod service_tests;
 
 #[cfg(test)]
 mod retention_tests;
+
+#[cfg(test)]
+mod moderation_tests;
+
+#[cfg(test)]
+mod ratelimit_tests;

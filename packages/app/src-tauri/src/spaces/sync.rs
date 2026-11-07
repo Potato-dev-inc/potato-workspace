@@ -65,6 +65,8 @@ pub struct SyncSession {
     asked: BTreeSet<(DeviceKey, u64)>,
     /// Asked for and not sent back. Not asked again on this stream (another peer may have them).
     skipped: BTreeSet<(DeviceKey, u64)>,
+    /// Devices the peer answered for (an entry or an honoured Gone) since the last Want.
+    answered: BTreeSet<DeviceKey>,
     unknown_in_row: u32,
 }
 
@@ -78,6 +80,7 @@ impl SyncSession {
             their_heads: BTreeMap::new(),
             asked: BTreeSet::new(),
             skipped: BTreeSet::new(),
+            answered: BTreeSet::new(),
             unknown_in_row: 0,
         }
     }
@@ -106,7 +109,7 @@ impl SyncSession {
             }
             ENTRIES => {
                 self.unknown_in_row = 0;
-                self.on_entries(&f.body)
+                self.on_entries(v, &f.body)
             }
             PUSH => {
                 self.unknown_in_row = 0;
@@ -129,7 +132,9 @@ impl SyncSession {
         if h.space != v.space() { return vec![Out::Close(3)]; }
         self.heard_hello = true;
         for (d, low, high) in &h.heads { self.their_heads.insert(*d, (*low, *high)); }
-        let mut out = vec![Out::Hint(h.hint.clone())];
+        // Only the peer's own address is kept: a hint for any other node is not what that node said about itself.
+        let mut out = Vec::new();
+        if h.hint.node == self.peer { out.push(Out::Hint(h.hint.clone())); }
         let mine = v.control_seq();
         if h.control_seq <= mine {
             let same_prefix = h.control_seq == 0 || v.control_hash_at(h.control_seq) == Some(h.control_head);
@@ -164,11 +169,16 @@ impl SyncSession {
         encode_entries(&have, &gone).into_iter().map(|b| Out::Send(ENTRIES, b)).collect()
     }
 
-    fn on_entries(&mut self, body: &[u8]) -> Vec<Out> {
+    fn on_entries(&mut self, v: &dyn SyncView, body: &[u8]) -> Vec<Out> {
         let Ok((entries, gone, last)) = decode_entries(body) else { return vec![Out::Close(4)] };
+        // A Gone is honoured only for a seq this session asked for, of a device that is on the roster: a peer
+        // cannot make this PC write placeholders for seqs it never asked about.
+        let gone: Vec<(DeviceKey, u64)> =
+            gone.into_iter().filter(|(d, s)| self.asked.contains(&(*d, *s)) && v.knows_device(d)).collect();
         for (d, s) in &gone {
             self.asked.remove(&(*d, *s));
             self.skipped.insert((*d, *s));
+            self.answered.insert(*d);
         }
         let mut out = Vec::new();
         if !gone.is_empty() { out.push(Out::Gone(gone)); }
@@ -176,6 +186,7 @@ impl SyncSession {
             for b in &entries {
                 if let Some((d, s)) = header_of(b) {
                     self.asked.remove(&(d, s));
+                    self.answered.insert(d);
                     // Never asked again on this stream, even if the ingest refuses it.
                     self.skipped.insert((d, s));
                 }
@@ -185,8 +196,14 @@ impl SyncSession {
         if last {
             // The reply is complete: what is still asked for, the peer does not have.
             let rest: Vec<_> = self.asked.iter().cloned().collect();
+            // A device the peer answered nothing for: its claimed head was false, so it is not believed again
+            // (until a Push shows a real entry). Otherwise a huge claimed head would fill every round.
+            for (d, _) in &rest {
+                if !self.answered.contains(d) { self.their_heads.remove(d); }
+            }
             self.skipped.extend(rest);
             self.asked.clear();
+            self.answered.clear();
         }
         out
     }

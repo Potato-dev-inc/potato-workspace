@@ -19,7 +19,7 @@ use super::types::ToolDefinition;
 pub fn mcp_instructions() -> &'static str {
     "Puppet Master MCP: control other AI agents as subagents. Five tools cover almost everything:
 1. quick_ask(task) - a tiny one-shot question; read its answer (the receipt lists what was not verified).
-2. run_agent(agent_type, project_path, task) - start work. It creates its own pane in project_path (visible by default, in its own pop-out window; headless=true is the opt-out and the automatic backup, reported as fallback), runs the task and returns the result plus a handle. No spawn_agent needed.
+2. run_agent(agent_type, project_path, task) - start work. It creates its own pane in project_path (visible by default: a pane in the app's sidebar the person can watch, with no window popping up and no focus stolen. Do not pass headless for a helper or subagent, even a simple, read-only or low-effort one: hidden runs are off unless the person allowed them, and headless=true is then ignored and reported as headless_ignored. The automatic backup to headless when no pane can open is reported as fallback), runs the task and returns the result plus a handle. No spawn_agent needed.
 3. wait_agents(handles) - collect answers (default until: completed, failed, cancelled, needs_input).
 4. followup_task(handle, task) - the next turn on the same conversation. send_message(handle) only steers the current turn (a receipt is not a result).
 5. list_agents() - workers and live panes you can adopt: list_agents, then run_agent(worker_id or pane_id, task).

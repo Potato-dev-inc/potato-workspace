@@ -59,6 +59,10 @@ impl LinkTable {
         let peer = link.peer();
         self.next_id += 1;
         let id = self.next_id;
+        if !self.links.contains_key(&peer) && self.full() {
+            link.close(0, "full");
+            return Offer::Dropped;
+        }
         if let Some(old) = self.links.get(&peer) {
             let dialer_of = |d: bool| if d { me } else { peer };
             let (old_dialer, new_dialer) = (dialer_of(old.dialed), dialer_of(dialed));
@@ -97,6 +101,14 @@ impl LinkTable {
             self.writers.remove(&(space, peer));
         }
     }
+
+    /// Stop pushing this space to `peer` (frames already queued are still written). The link itself stays.
+    pub fn drop_writer(&mut self, space: &SpaceId, peer: &NodeKey) { self.writers.remove(&(*space, *peer)); }
+
+    pub fn has_writer(&self, space: &SpaceId) -> bool { self.writers.keys().any(|(s, _)| s == space) }
+
+    /// Stop pushing this space to anyone.
+    pub fn drop_space_writers(&mut self, space: &SpaceId) { self.writers.retain(|(s, _), _| s != space); }
 
     /// Queue a frame for every live writer of `space` except `except`. Returns how many got it.
     pub fn send_to_space(&self, space: &SpaceId, except: Option<NodeKey>, kind: u8, body: &[u8]) -> usize {

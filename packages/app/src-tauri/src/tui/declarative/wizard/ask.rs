@@ -80,6 +80,7 @@ fn ask_once(
         trust_workspace: false,
         allow_shell: false,
         model: None,
+        reasoning: None,
     };
     let spec = build(&launch).map_err(|e| WizardError::new(409, "WIZARD_DRAFTER_UNAVAILABLE", e))?;
     let args = without_task(&spec.args).ok_or_else(|| {

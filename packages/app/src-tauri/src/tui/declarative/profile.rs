@@ -549,6 +549,7 @@ impl TuiProfile for DeclarativeProfile {
             trust_workspace: false,
             allow_shell: false,
             model: None,
+            reasoning: None,
         };
         template::render_stdin(headless, &launch)
     }

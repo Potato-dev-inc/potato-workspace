@@ -25,7 +25,9 @@ use crate::operations::{RunFallback, RunModeNote};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-pub use store::{set_for_agent, setting_for};
+pub use store::{hidden_helpers_allowed, set_for_agent, set_hidden_helpers_allowed, setting_for};
+#[cfg(test)]
+pub use store::{with_test_env, TestEnv};
 #[cfg(feature = "dev-fake-tui")]
 pub use verify::e2e;
 pub use verify::{verification_for, Verification};
@@ -116,6 +118,31 @@ pub(crate) fn apply(request: &mut crate::agent_runs::AgentRunRequest) -> Decisio
     let decision = decide(setting, verified, possible);
     request.headless = decision.headless;
     decision
+}
+
+/// What a run result says when an agent's `headless: true` was not honoured.
+pub const HEADLESS_IGNORED_NOTE: &str = "headless: true was ignored: \"Allow hidden helpers\" is off in Settings > Agents, so this helper runs in a visible pane the person can see. Leave headless out; there is no need to hide a helper.";
+
+/// Added to a read-only refusal when the run could only have worked hidden.
+pub const HIDDEN_HELPERS_HINT: &str = " Hidden runs are off (Settings > Agents > \"Allow hidden helpers\"), so a hidden run is not an option unless the person turns that on.";
+
+/// The "Allow hidden helpers" switch, applied to a run an agent started with `headless: true`. While it
+/// is off (the default) the run is shown in a visible pane instead, and the request remembers it so the
+/// result can say so. `quick_ask`, follow-ups, the app's own runs and the automatic fallback never come
+/// here: they keep the mode they name. Returns true when `headless` was set aside.
+pub(crate) fn gate_hidden_helper(request: &mut crate::agent_runs::AgentRunRequest) -> bool {
+    if request.headless_unset
+        || !request.headless
+        || request.turn_index > 0
+        || request.pane_id.is_some()
+        || request.worker_id.is_some()
+        || hidden_helpers_allowed()
+    {
+        return false;
+    }
+    request.headless = false;
+    request.headless_ignored = true;
+    true
 }
 
 /// The run-mode facts of one agent type, as `GET /agents/types` and `list_agents` show them.

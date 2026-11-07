@@ -129,7 +129,8 @@ fn requested_model_is_not_silently_remapped() {
     let choice =
         crate::agent_runs::persist::resolve_model_choice(Some("luna-low"), Some("low"), None);
     assert_eq!(choice.requested_model.as_deref(), Some("luna-low"));
-    assert_eq!(choice.resolved_model.as_deref(), Some("luna-low"));
+    // What ran is read from the run itself; the request is never copied into it.
+    assert_eq!(choice.resolved_model, None);
     assert_eq!(choice.requested_reasoning.as_deref(), Some("low"));
     assert_eq!(choice.resolved_reasoning.as_deref(), Some("low"));
     assert!(!choice.mismatch);

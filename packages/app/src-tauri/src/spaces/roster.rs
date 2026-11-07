@@ -382,6 +382,9 @@ pub struct Roster {
     pub head: [u8; 32],
     pub mailboxes: Vec<NodeKey>,
     pub bots: BTreeMap<BotId, Bot>,
+    /// Every bot id that was ever added, with its owner. Never shrinks: an old BotText is judged by this, not by
+    /// the bots on the roster today.
+    pub bot_owners: BTreeMap<BotId, MemberKey>,
     pub bot_rules: BotRules,
     /// Every grant ever published, by (epoch, device).
     pub grants: BTreeMap<(u32, DeviceKey), SealedKey>,
@@ -389,6 +392,8 @@ pub struct Roster {
     pub gone: BTreeMap<MemberKey, u32>,
     /// Devices of members who were removed or left: (member, first epoch they are no longer valid for).
     pub past: BTreeMap<DeviceKey, (MemberKey, u32)>,
+    /// When (the owner's clock, from the removing op) each device in `past` was removed.
+    pub past_ms: BTreeMap<DeviceKey, u64>,
     needs_rotate: bool,
 }
 
@@ -445,8 +450,8 @@ impl Roster {
             space, name: name.clone(), kind: *kind, owner: op.signer, members,
             channels: vec![Channel { id: *channel, name: "general".into(), archived: false }],
             epoch: 1, seq: 1, head: op.hash(), mailboxes: Vec::new(),
-            bots: BTreeMap::new(), bot_rules: BotRules::default(),
-            grants, gone: BTreeMap::new(), past: BTreeMap::new(), needs_rotate: false,
+            bots: BTreeMap::new(), bot_owners: BTreeMap::new(), bot_rules: BotRules::default(),
+            grants, gone: BTreeMap::new(), past: BTreeMap::new(), past_ms: BTreeMap::new(), needs_rotate: false,
         })
     }
 
@@ -486,7 +491,10 @@ impl Roster {
                 if *member == self.owner { return fail("cannot remove owner"); }
                 if !self.members.contains_key(member) { return fail("not a member"); }
                 if let Some(m) = self.members.remove(member) {
-                    for c in &m.devices { self.past.insert(c.device, (m.member, self.epoch + 1)); }
+                    for c in &m.devices {
+                        self.past.insert(c.device, (m.member, self.epoch + 1));
+                        self.past_ms.insert(c.device, op.created_ms);
+                    }
                 }
                 self.bots.retain(|_, b| b.member != *member);
                 self.gone.insert(*member, self.epoch + 1);
@@ -548,6 +556,7 @@ impl Roster {
                     return fail("bot name taken");
                 }
                 if self.bots_of(member).len() as u32 >= self.bot_rules.per_person { return fail("too many bots"); }
+                self.bot_owners.insert(*bot, *member);
                 self.bots.insert(*bot, Bot { id: *bot, member: *member, name: name.clone(), added_ms: op.created_ms });
                 Ok(())
             }

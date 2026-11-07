@@ -100,6 +100,10 @@ pub struct AgentRunView {
     /// `receipt.run_mode`): `{mode: "one_task" | "visible", source: "agent_setting"}`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_mode: Option<crate::operations::RunModeNote>,
+    /// Present when the agent asked for a hidden run (`headless: true`) and "Allow hidden helpers" is
+    /// off, so the run was shown in a pane instead (same as `receipt.headless_ignored`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headless_ignored: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,7 +198,7 @@ impl From<OperationSnapshot> for AgentRunView {
             snapshot.worker.resolved_model.as_deref(),
         ) {
             (None, _) => None,
-            (Some(requested), Some(resolved)) => Some(requested == resolved),
+            (Some(requested), Some(resolved)) => Some(crate::agent_runs::persist::model_matches(requested, resolved)),
             (Some(_), None) => Some(false),
         };
         let receipt = build_receipt(&snapshot, &warnings, model_verified, &result_capture);
@@ -295,6 +299,7 @@ impl From<OperationSnapshot> for AgentRunView {
             standby_used: snapshot.worker.standby_used,
             fallback: snapshot.worker.fallback.clone(),
             run_mode: snapshot.worker.run_mode.clone(),
+            headless_ignored: snapshot.worker.headless_ignored.clone(),
         }
     }
 }

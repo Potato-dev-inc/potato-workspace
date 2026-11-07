@@ -428,6 +428,10 @@ pub struct WorkerPersist {
     /// (`agent_run_mode`); absent when the caller chose or the default applied.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_mode: Option<RunModeNote>,
+    /// The agent asked for a hidden run (`headless: true`) while "Allow hidden helpers" was off, so
+    /// the run was shown in a pane instead. The plain sentence the result and receipt carry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headless_ignored: Option<String>,
     /// Programs pre-authorised for allow-once on Cursor shell prompts (see approval_policy).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_commands: Vec<String>,
@@ -497,6 +501,9 @@ impl RunModeNote {
 pub struct RunFeatures {
     pub read_only_headless: bool,
     pub read_only_spawned_pane: bool,
+    /// A visible pane can be started read-only by launch flags (`TuiProfile::visible_run_args`).
+    #[serde(default)]
+    pub read_only_visible_flags: bool,
     pub experimental: bool,
 }
 
@@ -506,6 +513,7 @@ impl RunFeatures {
         Self {
             read_only_headless: features.read_only_headless,
             read_only_spawned_pane: features.read_only_spawned_pane,
+            read_only_visible_flags: crate::tui::enforces_read_only_by_flags(profile),
             experimental: profile.experimental(),
         }
     }

@@ -171,6 +171,13 @@ pub struct AgentRunRequest {
     /// runs) keeps the mode it names.
     #[serde(skip)]
     pub(crate) headless_unset: bool,
+    /// Crate-internal: the caller (an agent) passed `headless: true` and "Allow hidden helpers" is off,
+    /// so the run was made visible. Set by the `/agents/run` route; the receipt says so.
+    #[serde(skip)]
+    pub(crate) headless_ignored: bool,
+    /// Crate-internal: a `quick_ask` question. Hidden by design, so it is not listed as a hidden run.
+    #[serde(skip)]
+    pub(crate) quick: bool,
     /// Crate-internal (never in the MCP schema, never read from a JSON body): the env guard the
     /// run's pane or process starts under (`pty::env_guard`). Only Rust code inside the app sets
     /// it. A guarded run never takes a standby or an existing pane and never adopts a pane id.

@@ -232,15 +232,20 @@ pub fn run_agent(
         request.pane_id.as_deref().is_none_or(|pane| {
             capabilities::read_only_supported_for(&request.agent_type, Some(pane))
         })
+    } else if request.headless {
+        capabilities::read_only_supported(&request.agent_type, false)
     } else {
-        request.headless && capabilities::read_only_supported(&request.agent_type, false)
+        // A visible pane the run spawns itself, started read-only by the agent's own launch flags.
+        // A named or adopted pane was started by someone else and is never read-only.
+        request.pane_id.is_none()
+            && crate::tui::enforces_read_only_by_flags(crate::tui::profile_for(&request.agent_type).as_ref())
     };
     if request.read_only && !read_only_ok {
-        return Err(OperationError::new(
-            "READ_ONLY_UNSUPPORTED",
-            capabilities::read_only_unsupported_message(&request.agent_type, !request.headless),
-            false,
-        ));
+        let mut message = capabilities::read_only_unsupported_message(&request.agent_type, !request.headless);
+        if request.headless_ignored {
+            message.push_str(crate::agent_run_mode::HIDDEN_HELPERS_HINT);
+        }
+        return Err(OperationError::new("READ_ONLY_UNSUPPORTED", message, false));
     }
     let profile = crate::tui::profile_for(&request.agent_type);
     if !profile.features().dispatchable {
@@ -471,6 +476,11 @@ pub fn run_agent(
             }
         }
     }
+    // `headless: true` was set aside by "Allow hidden helpers"; say so unless the run ended up
+    // headless anyway (the agent has no visible mode), which the fallback already reports.
+    if request.headless_ignored && !request.headless && request.turn_index == 0 {
+        worker.headless_ignored = Some(crate::agent_run_mode::HEADLESS_IGNORED_NOTE.to_string());
+    }
     let supported = profile.run_options();
     if request.trust_workspace {
         if !supported.trust_workspace {
@@ -624,6 +634,10 @@ pub fn run_agent(
         };
     }
     note_companion_helper(companion_pane.as_deref().filter(|_| !adopting_pane), &snapshot.agent_type, &project_path);
+    // A run with no pane leaves a row in the Inbox, so a person can see that it ran.
+    if !request.quick {
+        crate::hidden_runs::note_started(&snapshot, Some(&app));
+    }
     if let Err(error) = crate::bridge::fail_operation_on_lock_conflict(&snapshot) {
         publish(&project_path, &snapshot.operation_id, &registry, &app);
         return Err(error);

@@ -255,3 +255,13 @@ fn a_failed_ingest_leaves_nothing_behind() {
     assert!(!s.has_entry(&e.id()).unwrap());
     assert!(s.heads().unwrap().is_empty());
 }
+
+#[test]
+fn a_lamport_far_ahead_of_the_clock_is_rejected() {
+    let (s, r) = (SpaceStore::open_memory().unwrap(), roster());
+    let far = text(&sam(), 1, 1u64 << 62, "far");
+    assert_eq!(put(&s, &r, &keys(), &far), Ingest::Rejected("lamport too far ahead"));
+    assert_eq!(s.next_lamport().unwrap(), 1, "the clock did not move");
+    let near = text(&sam(), 1, 1_000_000, "near");
+    assert!(matches!(put(&s, &r, &keys(), &near), Ingest::Stored { .. }));
+}

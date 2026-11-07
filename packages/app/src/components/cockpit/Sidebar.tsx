@@ -62,6 +62,9 @@ export function Sidebar({
   onNewCompanion,
   onOpenNewAgent,
   newAgentOpen = false,
+  spaces,
+  spacesOpen = false,
+  onOpenSpaces,
   onOpenToSide,
   onPaneAction,
   ship = shipApi,
@@ -98,6 +101,12 @@ export function Sidebar({
   onOpenNewAgent?: () => void;
   /** The New agent page is the view on screen: its row is the active one (and the Inbox row is not). */
   newAgentOpen?: boolean;
+  /** Spaces (Labs `spaces_enabled`). The Spaces row shows only when `enabled` is true. */
+  spaces?: { enabled: boolean };
+  /** The Spaces page is the view on screen: its row is the active one. */
+  spacesOpen?: boolean;
+  /** Opens the Spaces page. Absent: no Spaces row. */
+  onOpenSpaces?: () => void;
   ship?: ShipApi;
   /** Chat sessions (ACP): which agents can run as a chat, and starting one. Replaceable in tests. */
   acp?: AcpChatApi;
@@ -473,7 +482,7 @@ export function Sidebar({
               )))}
         <button
           type="button"
-          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen ? ' is-active' : ''}`}
+          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !spacesOpen ? ' is-active' : ''}`}
           onClick={() => {
             c.select(null);
             onOpenInbox?.();
@@ -545,6 +554,17 @@ export function Sidebar({
           <button type="button" className="ck-btn ck-btn--plain" onClick={onOpenReview}>
             <IconChart />
             Review{reviewCount > 0 && <span className="ck-side-count"> {reviewCount}</span>}
+          </button>
+        )}
+        {spaces?.enabled && onOpenSpaces && (
+          <button
+            type="button"
+            className={`ck-btn ck-btn--plain${spacesOpen ? ' is-active' : ''}`}
+            aria-current={spacesOpen ? 'page' : undefined}
+            onClick={onOpenSpaces}
+          >
+            <IconGlobe />
+            Spaces
           </button>
         )}
         <div className="ck-foot-row">

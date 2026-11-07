@@ -32,6 +32,8 @@ export interface PanePrompt {
   risk?: PromptRisk;
   /** Package check: the packages this command installs. Absent when it installs none. */
   packages?: PackageList;
+  /** Set by the app, never the backend: the answer was sent but this question is still on the screen. */
+  stalled?: boolean;
 }
 
 export interface PaneRunInfo {

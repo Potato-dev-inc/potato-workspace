@@ -203,6 +203,8 @@ impl SpaceStore {
         })
     }
     pub fn meta_set_u64(&self, key: &str, v: u64) -> rusqlite::Result<()> { self.meta_set(key, &v.to_be_bytes()) }
+    /// Local Lamport clock (0 when nothing was stored or sent yet).
+    pub fn lamport_now(&self) -> rusqlite::Result<u64> { self.meta_u64("lamport") }
 
     /// Appends only if `op.seq` is the last seq + 1. Otherwise writes nothing and returns Ok(false).
     pub fn control_append(&self, op: &ControlOp) -> rusqlite::Result<bool> {
@@ -578,7 +580,8 @@ impl SpaceStore {
              VALUES (?1, ?2, ?3, x'0000000000000000', 0, 0, 0, 0, NULL, 0, x'', 0, 1)",
             params![placeholder_id(device, seq).to_vec(), device.0.to_vec(), seq as i64],
         )?;
-        self.bump_high(device, seq)
+        // No bump_high: a placeholder is not proof the author ever reached this seq.
+        Ok(())
     }
     /// high + 1 (1 for an author with no entries).
     pub fn next_seq(&self, device: &DeviceKey) -> rusqlite::Result<u64> {
@@ -597,7 +600,7 @@ impl SpaceStore {
     }
     /// current + 1, stored.
     pub fn next_lamport(&self) -> rusqlite::Result<u64> {
-        let v = self.meta_u64("lamport")? + 1;
+        let v = self.meta_u64("lamport")?.saturating_add(1);
         self.meta_set_u64("lamport", v)?;
         Ok(v)
     }
@@ -672,6 +675,30 @@ impl SpaceStore {
                 params![channel.0.to_vec(), lamport as i64],
             )
             .map(|_| ())
+    }
+    /// Local block list (never sent anywhere): block or unblock one member.
+    pub fn block_set(&self, member: &MemberKey, on: bool, now_ms: u64) -> rusqlite::Result<()> {
+        if on {
+            self.conn.execute(
+                "INSERT OR REPLACE INTO blocks (member, since_ms) VALUES (?1, ?2)",
+                params![member.0.to_vec(), now_ms as i64],
+            )?;
+        } else {
+            self.conn.execute("DELETE FROM blocks WHERE member = ?1", params![member.0.to_vec()])?;
+        }
+        Ok(())
+    }
+    pub fn is_blocked(&self, member: &MemberKey) -> bool {
+        self.conn
+            .query_row("SELECT 1 FROM blocks WHERE member = ?1", params![member.0.to_vec()], |_| Ok(()))
+            .optional()
+            .map(|r| r.is_some())
+            .unwrap_or(false)
+    }
+    pub fn blocked(&self) -> rusqlite::Result<Vec<MemberKey>> {
+        let mut st = self.conn.prepare("SELECT member FROM blocks ORDER BY since_ms")?;
+        let rows = st.query_map([], |r| r.get::<_, Vec<u8>>(0))?;
+        Ok(rows.flatten().filter_map(|b| <[u8; 32]>::try_from(b).ok().map(MemberKey)).collect())
     }
     /// Messages after the last read point that are not mine and not deleted.
     pub fn unread(&self, channel: &ChannelId, me: &MemberKey) -> rusqlite::Result<u32> {

@@ -99,6 +99,20 @@ pub(super) fn read_only_pane_matches(agent_type: &str, run_read_only: bool, pane
         || crate::tui::opencode::read_only::is_enforced(pane_id) == run_read_only
 }
 
+/// The launch flags a run's own visible pane starts with (its model, reasoning effort, read-only),
+/// as its agent's profile writes them. Empty when the run asks for none of them or the profile has no
+/// such flags.
+pub(super) fn visible_run_args(
+    agent_type: &str,
+    operation: &crate::operations::OperationSnapshot,
+) -> crate::tui::VisibleRunArgs {
+    crate::tui::profile_for(agent_type).visible_run_args(&crate::tui::VisibleRun {
+        model: operation.worker.requested_model.as_deref(),
+        reasoning: operation.worker.requested_reasoning.as_deref(),
+        read_only: operation.read_only,
+    })
+}
+
 pub(super) fn pane_ready_for_dispatch(
     pane: &crate::pty::PaneInfo,
     agent_type: &str,

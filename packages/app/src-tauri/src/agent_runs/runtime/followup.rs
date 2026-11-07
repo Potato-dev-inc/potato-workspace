@@ -162,6 +162,8 @@ pub fn send_agent(
         join_worktree: None,
         // A follow-up continues in the mode of its run; the setting is never read again.
         headless_unset: false,
+        headless_ignored: false,
+        quick: false,
         // The guard is carried by the run's worker record, not by this request.
         guard_env: None,
         on_behalf_of_companion: None,

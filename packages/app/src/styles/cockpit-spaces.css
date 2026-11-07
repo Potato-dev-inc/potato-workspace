@@ -1,0 +1,180 @@
+/* Spaces sheets (invite, join request, join). Monochrome: state is shown by words and weight, never colour. */
+.cockpit .ck-spaces-sheet-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--label);
+  margin: 0;
+}
+.cockpit .ck-spaces-sheet-body {
+  font-size: 13px;
+  color: var(--label-2);
+  margin: 0;
+}
+.cockpit .ck-spaces-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.cockpit .ck-spaces-field input,
+.cockpit .ck-spaces-field textarea {
+  font: inherit;
+  color: var(--label);
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.cockpit .ck-spaces-words {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0 0 0 20px;
+  font-variant-numeric: tabular-nums;
+  color: var(--label);
+}
+.cockpit .ck-spaces-word {
+  font-size: 13px;
+}
+.cockpit .ck-spaces-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.cockpit .ck-spaces-qr img {
+  width: 192px;
+  height: 192px;
+  image-rendering: pixelated;
+}
+.cockpit .ck-spaces-note {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label-2);
+  margin: 0;
+}
+.cockpit .ck-spaces-hint {
+  font-size: 12px;
+  color: var(--label-3);
+  margin: 0;
+}
+.cockpit .ck-spaces-hint.is-error {
+  color: var(--label);
+  font-weight: 600;
+}
+.cockpit .ck-spaces-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.cockpit .ck-spaces-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  color: var(--label);
+  background: var(--fill);
+}
+.cockpit .ck-spaces-btn:hover {
+  background: var(--fill-hover);
+}
+.cockpit .ck-spaces-btn:disabled {
+  opacity: 0.45;
+}
+.cockpit .ck-spaces-btn.is-primary {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+.cockpit .ck-spaces-btn.is-danger {
+  font-weight: 600;
+  border: 1px solid var(--sep);
+  background: transparent;
+}
+
+/* Spaces page layout, rail, channels, feed, people. Same tokens as the rest of the cockpit. */
+.cockpit .ck-spaces-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); height: 100%; color: var(--label); }
+.cockpit .ck-spaces-rail { border-right: 1px solid var(--sep); display: flex; flex-direction: column; overflow: auto; }
+.cockpit .ck-spaces-rail ul,
+.cockpit .ck-spaces-channels ul,
+.cockpit .ck-spaces-members ul,
+.cockpit .ck-spaces-msgs,
+.cockpit .ck-spaces-reactions { list-style: none; margin: 0; padding: 0; }
+.cockpit .ck-spaces-rail-item {
+  display: grid; grid-template-columns: 1fr auto; width: 100%; padding: 6px 10px; text-align: left;
+  background: none; border: 0; border-radius: 6px; color: inherit; cursor: pointer; font: inherit;
+}
+.cockpit .ck-spaces-rail-item:hover { background: var(--fill-hover); }
+.cockpit .ck-spaces-rail-item.is-active { background: var(--fill-hover); font-weight: 600; }
+.cockpit .ck-spaces-rail-sub { grid-column: 1 / -1; color: var(--label-3); font-size: 12px; }
+.cockpit .ck-spaces-rail .ck-spaces-actions { margin-top: auto; flex-direction: column; padding: 8px; }
+.cockpit .ck-spaces-badge {
+  min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary-bg); color: var(--primary-fg);
+  font-size: 12px; text-align: center;
+}
+.cockpit .ck-spaces-main { display: flex; flex-direction: column; min-width: 0; }
+.cockpit .ck-spaces-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--sep); }
+.cockpit .ck-spaces-body { position: relative; display: grid; grid-template-columns: 180px minmax(0, 1fr) 200px; flex: 1; min-height: 0; }
+.cockpit .ck-spaces-channels { border-right: 1px solid var(--sep); padding: 8px; overflow: auto; }
+.cockpit .ck-spaces-channel {
+  display: flex; justify-content: space-between; width: 100%; padding: 4px 8px; background: none; border: 0;
+  border-radius: 6px; color: var(--label-2); cursor: pointer; font: inherit;
+}
+.cockpit .ck-spaces-channel.is-unread { color: var(--label); font-weight: 600; }
+.cockpit .ck-spaces-channel.is-active { background: var(--fill-hover); color: var(--label); }
+.cockpit .ck-spaces-feed { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.cockpit .ck-spaces-feed-title { font-size: 13px; font-weight: 600; margin: 8px 12px; }
+.cockpit .ck-spaces-msgs { flex: 1; overflow: auto; padding: 0 12px; }
+.cockpit .ck-spaces-msg { padding: 4px 0; }
+.cockpit .ck-spaces-msg-line { display: flex; align-items: baseline; gap: 8px; }
+.cockpit .ck-spaces-msg-author { font-weight: 600; }
+.cockpit .ck-spaces-msg-time { color: var(--label-3); font-size: 12px; }
+.cockpit .ck-spaces-msg-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cockpit .ck-spaces-msg-reply {
+  margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--sep); color: var(--label-2); font-size: 12px;
+}
+.cockpit .ck-spaces-msg.is-deleted .ck-spaces-msg-text,
+.cockpit .ck-spaces-msg.is-blocked .ck-spaces-msg-text { color: var(--label-3); font-style: italic; }
+.cockpit .ck-spaces-reactions { display: flex; gap: 4px; margin-top: 4px; }
+.cockpit .ck-spaces-reaction {
+  padding: 0 6px; border: 1px solid var(--sep); border-radius: 10px; background: none; color: inherit; cursor: pointer;
+}
+.cockpit .ck-spaces-reaction.is-mine { border-color: var(--label); }
+.cockpit .ck-spaces-link {
+  background: none; border: 0; padding: 0; color: var(--label-2); cursor: pointer; font-size: 12px; text-decoration: underline;
+}
+.cockpit .ck-spaces-members { border-left: 1px solid var(--sep); padding: 8px; overflow: auto; }
+.cockpit .ck-spaces-member { display: flex; align-items: center; gap: 6px; padding: 3px 4px; }
+.cockpit .ck-spaces-member.is-blocked .ck-spaces-member-name { color: var(--label-3); text-decoration: line-through; }
+.cockpit .ck-spaces-role { color: var(--label-3); font-size: 12px; }
+.cockpit .ck-spaces-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; border: 1.5px solid var(--label); }
+.cockpit .ck-spaces-dot.is-online { background: var(--label); }
+.cockpit .ck-spaces-dot.is-away { background: linear-gradient(90deg, var(--label) 50%, transparent 50%); }
+.cockpit .ck-spaces-dot.is-offline { background: transparent; border-color: var(--label-3); }
+.cockpit .ck-spaces-people-toggle { display: none; }
+@media (max-width: 900px) {
+  .cockpit .ck-spaces-layout { grid-template-columns: 160px minmax(0, 1fr); }
+  .cockpit .ck-spaces-body { grid-template-columns: 160px minmax(0, 1fr); }
+  .cockpit .ck-spaces-people-toggle { display: inline-flex; }
+  .cockpit .ck-spaces-members { display: none; }
+  .cockpit .ck-spaces-members.is-open { display: block; position: absolute; right: 0; top: 0; bottom: 0; width: 220px; background: var(--fill); }
+}
+
+/* Message and member menus (D5.4): a small list under a More link; sheets use the shared scrim. */
+.cockpit .ck-spaces-menu { position: relative; display: inline-flex; }
+.cockpit .ck-spaces-menu-list {
+  position: absolute; right: 0; top: 18px; z-index: 5; display: flex; flex-direction: column; min-width: 140px;
+  padding: 4px; border: 1px solid var(--sep); border-radius: 8px; background: var(--bg-raised);
+}
+.cockpit .ck-spaces-menu-list button {
+  background: none; border: 0; border-radius: 6px; padding: 5px 8px; text-align: left; color: var(--label);
+  font: inherit; font-size: 13px; cursor: pointer;
+}
+.cockpit .ck-spaces-menu-list button:hover { background: var(--fill-hover); }
+.cockpit .ck-spaces-picker { display: flex; flex-wrap: wrap; gap: 2px; max-width: 176px; padding: 2px 0; }
+.cockpit .ck-spaces-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px;
+  border-bottom: 1px solid var(--sep); background: var(--fill); font-size: 13px;
+}

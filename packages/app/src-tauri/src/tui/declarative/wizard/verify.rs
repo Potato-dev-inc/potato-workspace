@@ -181,6 +181,7 @@ fn rendered(def: &Definition) -> Option<Value> {
         trust_workspace: false,
         allow_shell: false,
         model,
+        reasoning: None,
     };
     Some(json!({
         "headless_argv": template::render_headless(def, &launch(None, None)),

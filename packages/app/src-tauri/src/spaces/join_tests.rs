@@ -175,35 +175,81 @@ async fn wrong_words_report_tries_left() {
     assert_eq!(refused(join(&rig, &id, &net, &wrong()).await), (RefuseReason::WrongWords, 4));
 }
 
-#[tokio::test]
-async fn fifth_wrong_try_kills_the_invite_end_to_end() {
-    let rig = rig();
-    let mut got = Vec::new();
-    for seed in 2..=6u8 {
-        let (id, net) = joiner(&rig, seed);
-        got.push(refused(join(&rig, &id, &net, &wrong()).await));
-    }
+/// A request from joiner `seed` with `proof`, run through the owner rules at `now`.
+fn try_at(
+    roster: &Roster, rec: &mut InviteRecord, secret: [u8; SECRET_BYTES], l: &mut Lockouts, seed: u8, right: bool, now: u64,
+) -> Result<(), (RefuseReason, u8)> {
+    let me = SpaceIdentity::for_test(seed);
+    let cert = me.certify(&space(), "Sam", NOW);
+    let proof = if right {
+        super::invite::join_proof(&secret, &space(), &rec.id, &me.node(), &me.member_key())
+    } else {
+        [0u8; 32]
+    };
+    let req = JoinRequestFrame::new(space(), rec.id, cert, proof, None);
+    owner_check(roster, Some(rec), Some(secret), l, &req, me.node(), now)
+}
+
+#[test]
+fn fresh_node_keys_cannot_burn_an_invite_in_a_burst() {
+    let (roster, _) = genesis();
+    let n = new_invite(space(), owner().node(), "", &[], "Club", NOW);
+    let mut rec = InviteRecord::new(n.ticket.invite, NOW);
+    let mut l = Lockouts::new();
+    let got: Vec<_> = (2..=9u8).map(|seed| try_at(&roster, &mut rec, n.secret, &mut l, seed, false, NOW)).collect();
+    assert_eq!(got[0], Err((RefuseReason::WrongWords, 4)));
+    assert!(got[1..].iter().all(|r| *r == Err((RefuseReason::Busy, 0))), "{got:?}");
+    assert_eq!(rec.strikes, 1);
+    assert_eq!(rec.state, InviteState::Open);
+    // The real joiner, from another node, gets in once the pause is over.
+    assert_eq!(try_at(&roster, &mut rec, n.secret, &mut l, 20, true, NOW + INVITE_TRY_GAP_MS), Ok(()));
+}
+
+#[test]
+fn five_spaced_wrong_tries_still_kill_the_invite() {
+    let (roster, _) = genesis();
+    let n = new_invite(space(), owner().node(), "", &[], "Club", NOW);
+    let mut rec = InviteRecord::new(n.ticket.invite, NOW);
+    let mut l = Lockouts::new();
+    let got: Vec<_> = (0..5u64)
+        .map(|i| try_at(&roster, &mut rec, n.secret, &mut l, 2 + i as u8, false, NOW + i * INVITE_TRY_GAP_MS))
+        .collect();
     assert_eq!(
         got,
         vec![
-            (RefuseReason::WrongWords, 4),
-            (RefuseReason::WrongWords, 3),
-            (RefuseReason::WrongWords, 2),
-            (RefuseReason::WrongWords, 1),
-            (RefuseReason::Gone, 0),
+            Err((RefuseReason::WrongWords, 4)),
+            Err((RefuseReason::WrongWords, 3)),
+            Err((RefuseReason::WrongWords, 2)),
+            Err((RefuseReason::WrongWords, 1)),
+            Err((RefuseReason::Gone, 0)),
         ]
     );
-    let (id, net) = joiner(&rig, 7);
-    assert_eq!(refused(join(&rig, &id, &net, &rig.secret).await), (RefuseReason::Gone, 0));
+    let late = NOW + 6 * INVITE_TRY_GAP_MS;
+    assert_eq!(try_at(&roster, &mut rec, n.secret, &mut l, 30, true, late), Err((RefuseReason::Gone, 0)));
+}
+
+#[test]
+fn a_locked_out_node_does_not_use_up_the_busy_budget() {
+    let (roster, _) = genesis();
+    let n = new_invite(space(), owner().node(), "", &[], "Club", NOW);
+    let mut rec = InviteRecord::new(n.ticket.invite, NOW);
+    let mut l = Lockouts::new();
+    let bad = SpaceIdentity::for_test(2).node();
+    for _ in 0..3 { l.strike(bad, NOW); }
+    for _ in 0..30 {
+        assert_eq!(try_at(&roster, &mut rec, n.secret, &mut l, 2, true, NOW), Err((RefuseReason::LockedOut, 0)));
+    }
+    assert_eq!(try_at(&roster, &mut rec, n.secret, &mut l, 3, true, NOW), Ok(()));
 }
 
 #[tokio::test]
 async fn three_failed_joins_lock_the_node_out() {
     let rig = rig();
     let (id, net) = joiner(&rig, 2);
-    for _ in 0..3 {
-        assert_eq!(refused(join(&rig, &id, &net, &wrong()).await).0, RefuseReason::WrongWords);
-    }
+    // The invite pauses after one wrong try, so the strikes are given to the node directly (this test is about the
+    // node lockout, not the invite).
+    assert_eq!(refused(join(&rig, &id, &net, &wrong()).await).0, RefuseReason::WrongWords);
+    for _ in 0..2 { rig.host.lockouts.lock().unwrap().strike(id.node(), NOW); }
     assert_eq!(refused(join(&rig, &id, &net, &rig.secret).await), (RefuseReason::LockedOut, 0));
 }
 
@@ -355,4 +401,34 @@ fn peer_hint_round_trips() {
     hint_to_bytes(&h, &mut w);
     let b = w.finish();
     assert_eq!(hint_from_bytes(&mut super::wire::Reader::new(&b)).unwrap(), h);
+}
+
+#[test]
+fn a_welcome_with_too_many_ops_is_refused_before_any_replay() {
+    let (_, g) = genesis();
+    let ops = vec![g; WELCOME_OPS_MAX + 1];
+    let me = SpaceIdentity::for_test(2);
+    let cert = me.certify(&space(), "Sam", NOW);
+    let r = accept_welcome(&ticket_for(owner().node()), &me, &cert, &ops, vec![]);
+    assert!(matches!(&r, Err(JoinError::BadWelcome(m)) if m == "welcome too large"), "{r:?}");
+}
+
+#[test]
+fn the_welcome_budget_stops_ops_and_bytes() {
+    let mut b = WelcomeBudget::new();
+    assert!(b.take(100, 1000).is_ok());
+    assert!(b.take(WELCOME_OPS_MAX - 100, 0).is_ok());
+    assert!(matches!(b.take(1, 0), Err(JoinError::BadWelcome(m)) if m == "welcome too large"));
+    let mut b = WelcomeBudget::new();
+    assert!(b.take(1, WELCOME_BYTES_MAX).is_ok());
+    assert!(matches!(b.take(0, 1), Err(JoinError::BadWelcome(m)) if m == "welcome too large"));
+}
+
+#[test]
+fn joined_outcome_debug_does_not_print_the_key() {
+    let (roster, _) = genesis();
+    let out = JoinOutcome::Joined { roster, epoch_key: [0xAB; 32], hints: vec![], ops: vec![] };
+    let text = format!("{out:?}");
+    assert!(!text.contains("171"), "{text}");
+    assert!(!text.contains("0xab") && !text.contains("0xAB") && !text.contains("ab, ab"), "{text}");
 }

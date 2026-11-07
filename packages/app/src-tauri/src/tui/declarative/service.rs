@@ -153,6 +153,7 @@ pub fn validate_text_in(text: &str, source: &str, code_ids: &[&str], dirs: &[Pat
                 trust_workspace: false,
                 allow_shell: false,
                 model: Some("<model>"),
+                reasoning: None,
             };
             (
                 template::render_headless(def, &launch).map(|argv| json!(argv)).unwrap_or(Value::Null),
@@ -391,6 +392,7 @@ fn rendered_argv(def: &super::schema::Definition) -> (Option<Vec<String>>, Optio
         trust_workspace: false,
         allow_shell: false,
         model: Some("<model>"),
+        reasoning: None,
     };
     (template::render_headless(def, &launch), tui_argv_preview(def))
 }

@@ -64,6 +64,8 @@ import { GO_LIVE_EVENT } from './lib/live-room';
 import './styles/cockpit.css';
 import './styles/night.css';
 import { registerSettingsOpener } from './lib/openSettingsAt';
+import { SpacesPage } from './components/spaces/SpacesPage';
+import { useSpacesEnabled } from './lib/spaces';
 import './styles/night-morning.css';
 import './styles/night-chip.css';
 
@@ -74,6 +76,7 @@ const inTerminal = (target: EventTarget | null): boolean => target instanceof El
 
 export default function CockpitApp() {
   const c = useCockpit();
+  const spacesOn = useSpacesEnabled();
   const [paletteOpen, setPaletteOpen] = useState(false);
   // Ctrl+Shift+F opens the palette in "Search all chats"; Ctrl+K in its commands.
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands');
@@ -404,6 +407,9 @@ export default function CockpitApp() {
         onNewCompanion={() => setSetupOpen(true)}
         onOpenNewAgent={() => setView('newagent')}
         newAgentOpen={view === 'newagent'}
+        spaces={{ enabled: spacesOn }}
+        spacesOpen={view === 'spaces' && spacesOn}
+        onOpenSpaces={() => setView('spaces')}
         onOpenToSide={openToSide}
         onPaneAction={(id, action) => {
           // The actions run in a pane's own view: a split view gives way to it.
@@ -467,6 +473,8 @@ export default function CockpitApp() {
           <SettingsView key={settings.viewKey} {...settings.viewProps} onOpenStore={openStore} />
         ) : view === 'newagent' ? (
           <NewAgentHost c={nav} onSetUp={() => setView('doctor')} />
+        ) : view === 'spaces' && spacesOn ? (
+          <SpacesPage />
         ) : view === 'spawn' && c.spawn ? (
           <SpawnView spawn={c.spawn} onDismiss={c.dismissSpawn} />
         ) : view === 'companion' && companion ? (

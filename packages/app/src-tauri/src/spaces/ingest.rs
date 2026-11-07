@@ -5,6 +5,7 @@ use rusqlite::{params, OptionalExtension};
 
 use super::ids::{to_hex, DeviceKey, EntryId, MemberKey};
 use super::log::{self, Body, Entry, Verdict, KIND_DELETE};
+use super::ratelimit::{author_over_limit, Over};
 use super::roster::Roster;
 use super::store::SpaceStore;
 
@@ -21,6 +22,9 @@ pub enum Ingest {
     Rejected(&'static str),
 }
 
+/// Most a stored entry's lamport may be ahead of the local clock.
+const LAMPORT_AHEAD_MAX: u64 = 1_000_000;
+
 pub fn ingest_entry(store: &SpaceStore, roster: &Roster, keys: &EpochKeys, bytes: &[u8], now_ms: u64) -> Ingest {
     let Ok(e) = Entry::from_bytes(bytes) else { return Ingest::Rejected("unreadable") };
     let id = e.id();
@@ -33,6 +37,14 @@ pub fn ingest_entry(store: &SpaceStore, roster: &Roster, keys: &EpochKeys, bytes
         }
         Verdict::Reject(r) => return Ingest::Rejected(r),
     };
+    // A lamport far ahead of this PC's clock would drag every later send up with it (and could reach i64::MAX).
+    if e.header.lamport > store.lamport_now().unwrap_or(0).saturating_add(LAMPORT_AHEAD_MAX) {
+        return Ingest::Rejected("lamport too far ahead");
+    }
+    // Too many entries from this author in their own timestamps (same answer on every PC): not stored, so not forwarded.
+    if !matches!(author_over_limit(store, &e.header.device, e.header.created_ms), Ok(Over::No)) {
+        return Ingest::Rejected("too fast");
+    }
     // The same (device, seq) with other bytes: the author signed two entries with one seq. A placeholder does not count.
     if store.has_seq(&e.header.device, e.header.seq).unwrap_or(false)
         && !store.is_placeholder(&e.header.device, e.header.seq).unwrap_or(false)

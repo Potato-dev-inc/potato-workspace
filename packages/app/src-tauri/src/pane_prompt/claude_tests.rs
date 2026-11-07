@@ -167,3 +167,23 @@ fn a_task_is_never_typed_over_claudes_dialogs() {
     }
     assert!(dispatch_blocker("claude", CLAUDE_READY).is_none(), "once the dialog is gone the task can be typed");
 }
+
+const CLAUDE_TRUST_PREAPPROVED: &str = include_str!("../tui/claude/fixtures/trust_dialog_preapproved_tools.txt");
+
+#[test]
+fn trust_is_chosen_from_the_rows_on_screen_in_both_layouts() {
+    // No first (the pre-approved tools dialog and the 2.1.299 dialog): Trust is one arrow down, Don't trust is Enter alone.
+    for screen in [CLAUDE_TRUST_PREAPPROVED.to_string(), CLAUDE_TRUST.replace("\r\n", "\n")] {
+        let prompt = detect_in_screen("claude", &screen, true).expect("a trust card");
+        assert_eq!(prompt["kind"], "workspace_trust");
+        let ui = PanePrompt::from_detected(&prompt).expect("ui prompt");
+        assert_eq!(ui.choices.iter().map(|c| c.label.as_str()).collect::<Vec<_>>(), ["Trust this folder", "Don't trust"]);
+        assert_eq!(reply_key("claude", &prompt, "trust", false).unwrap(), ("\u{1b}[B".to_string(), "trust".to_string()));
+        assert_eq!(reply_key("claude", &prompt, "deny", false).unwrap().0, "");
+    }
+    // Yes first and focused: Trust is Enter alone and Don't trust is one arrow down. Neither lands on the other.
+    let yes_first = CLAUDE_TRUST_PREAPPROVED.replace("\u{276f} No, exit\n   Yes, I trust this folder", "\u{276f} Yes, I trust this folder\n   No, exit");
+    let prompt = detect_in_screen("claude", &yes_first, true).expect("a trust card");
+    assert_eq!(reply_key("claude", &prompt, "trust", false).unwrap().0, "");
+    assert_eq!(reply_key("claude", &prompt, "deny", false).unwrap().0, "\u{1b}[B");
+}

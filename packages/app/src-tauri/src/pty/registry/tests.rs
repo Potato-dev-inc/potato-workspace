@@ -438,3 +438,56 @@ fn linux_pane_json_carries_place() {
     assert_eq!(json["place"]["cwd"], "/mnt/d/work/shop");
     assert!(json["place"].get("warnings").is_none());
 }
+
+/// A helper asked for a model, a reasoning effort, read-only and an account: the pane the bridge spawns for
+/// it is started with exactly that, all the way to the program's command line.
+#[test]
+fn a_visible_helper_pane_starts_with_the_asked_model_effort_read_only_and_account() {
+    use crate::operations::{DelegateWorkRequest, WorkerPersist};
+    let project = std::env::temp_dir().join(format!("pm-visible-flags-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&project).unwrap();
+    let worker = WorkerPersist {
+        requested_model: Some("claude-haiku-5-5".into()),
+        requested_reasoning: Some("low".into()),
+        account: Some("work".into()),
+        ..Default::default()
+    };
+    let operation = crate::operations::create_operation(DelegateWorkRequest {
+        project_path: project.to_string_lossy().into_owned(),
+        task: "a simple task".into(),
+        agent_type: "claude".into(),
+        pane_id: None,
+        idempotency_key: uuid::Uuid::new_v4().to_string(),
+        acceptance_criteria: None,
+        task_id: None,
+        exclusive: false,
+        locks: vec![],
+        timeout_ms: 900_000,
+        read_only: true,
+        keep_pane: false,
+        placement: None,
+        owner_session_id: None,
+        parent_pane_id: None,
+        worker_has_mcp_tools: false,
+        agent_run_id: Some("visible-flags".into()),
+        turn_index: 0,
+        worker,
+        context_policy: None,
+        checks: Vec::new(),
+    })
+    .unwrap()
+    .0;
+    let spawn = crate::bridge::spawn_args_for_run(&operation, "claude");
+    assert_eq!(spawn.account.as_deref(), Some("work"), "the chosen account reaches the pane");
+    assert!(spawn.read_only);
+    let extra = spawn.extra_args.clone().expect("the asks become launch flags");
+    let cwd = project.to_string_lossy().into_owned();
+    let claude = crate::tui::require_registered("claude").expect("claude is registered");
+    let request = crate::tui::SpawnRequest { cwd: &cwd, extra_args: &extra, cols: 80, rows: 24, read_only: true };
+    let cmd = launch_command(claude.as_ref(), &request, &crate::tui::LaunchEnv::default()).unwrap();
+    // On Windows the agent is started through PowerShell with one command string; elsewhere each flag is an argument.
+    let line = cmd.get_argv().iter().map(|arg| arg.to_string_lossy().replace('\'', "")).collect::<Vec<_>>().join(" ");
+    for flag in ["--model claude-haiku-5-5", "--effort low", "--permission-mode plan"] {
+        assert!(line.contains(flag), "{flag} missing from {line}");
+    }
+}

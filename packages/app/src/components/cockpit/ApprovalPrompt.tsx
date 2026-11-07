@@ -12,6 +12,9 @@ import '../../styles/approval-card.css';
 import { CardButton, InboxCard, InlineCode, RiskGlyph, focusWithRing } from './InboxCard';
 import { PackageFacts } from './PackageFacts';
 
+/** Shown when an answer was sent and the question is still on the screen: press the answer again. */
+export const STALLED_NOTE = 'That answer did not go through. Claude is still asking. Press your answer again.';
+
 export function ApprovalPrompt({
   prompt,
   onAnswer,
@@ -136,7 +139,7 @@ export function ApprovalPrompt({
           meta={who}
           status={asksQuestion ? null : LEVEL_WORD[risk.level]}
           age={age ?? null}
-          reason={firstReason(risk) || null}
+          reason={prompt.stalled ? STALLED_NOTE : firstReason(risk) || null}
           caution={high ? CAUTION : null}
           body={
             packageFacts || detailsPanel || runs.length > 0 ? (
@@ -187,7 +190,7 @@ export function ApprovalPrompt({
         <span className="ck-appr-headline">{risk.headline}</span>
         <span className="ck-appr-level">{LEVEL_WORD[risk.level]}</span>
       </div>
-      {firstReason(risk) && <p className="ck-appr-reason">{firstReason(risk)}</p>}
+      {(prompt.stalled || firstReason(risk)) && <p className="ck-appr-reason">{prompt.stalled ? STALLED_NOTE : firstReason(risk)}</p>}
       {runs.map((r) => (
         <p key={r} className="ck-appr-reason">
           Runs: <InlineCode>{r}</InlineCode>

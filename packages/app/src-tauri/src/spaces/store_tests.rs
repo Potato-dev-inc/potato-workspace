@@ -148,3 +148,19 @@ fn schema_has_bot_usage_and_no_fish() {
     assert!(has("bot_usage"));
     assert!(!has("fish_usage"));
 }
+
+#[test]
+fn a_gone_placeholder_does_not_raise_high() {
+    let s = SpaceStore::open_memory().unwrap();
+    let d = super::ids::DeviceKey([4; 32]);
+    s.insert_gone_placeholder(&d, 1u64 << 40).unwrap();
+    assert_eq!(s.next_seq(&d).unwrap(), 1);
+    assert!(s.heads().unwrap().iter().all(|h| h.2 < 1 << 40));
+}
+
+#[test]
+fn the_lamport_clock_does_not_overflow() {
+    let s = SpaceStore::open_memory().unwrap();
+    s.meta_set_u64("lamport", u64::MAX).unwrap();
+    assert_eq!(s.next_lamport().unwrap(), u64::MAX);
+}

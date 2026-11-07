@@ -156,6 +156,18 @@ pub trait TuiProfile: Send + Sync {
         false
     }
 
+    /// True when `headless_command` passes `HeadlessLaunch::reasoning` to the CLI (a per-run effort).
+    fn accepts_headless_reasoning(&self) -> bool {
+        false
+    }
+
+    /// Launch flags for a visible pane that must carry out `run` (a model, a reasoning effort,
+    /// read-only), and which of those it really carries. The default carries none, so a run that asks
+    /// for them says plainly that the pane could not apply them.
+    fn visible_run_args(&self, _run: &VisibleRun) -> VisibleRunArgs {
+        VisibleRunArgs::default()
+    }
+
     /// Final machine-readable result after a successful exit; never a human-readable fallback.
     fn extract_result(&self, _output: &str, _exit_code: i32) -> Option<String> {
         None

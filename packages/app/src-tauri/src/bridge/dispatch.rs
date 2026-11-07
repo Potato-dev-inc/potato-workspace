@@ -17,7 +17,7 @@ use super::locks::acquire_operation_locks;
 use super::startup_gate::dismiss_for_operation;
 use super::pane_util::{
     emit_panes_changed, note_pane_parent, pane_ready_for_dispatch, present_spawned_pane, read_only_pane_matches,
-    spawn_pane_with_timeout, wait_for_pane_idle,
+    spawn_pane_with_timeout, visible_run_args, wait_for_pane_idle,
 };
 use super::sse::push_operation_sse;
 use super::state::PANE_ASSIGNMENT_SERIAL;
@@ -235,8 +235,13 @@ fn assign_pane(
         };
     // A read-only run only reuses panes started read-only; other runs never land in
     // one (the worker there cannot write).
+    // A run that asks for a model, a reasoning effort or read-only gets a pane started with those
+    // flags: it never reuses a pane that was started without them.
+    let launch_flags = visible_run_args(agent_type, operation);
+    let needs_own_pane = !launch_flags.args.is_empty();
     let eligible = |pane: &&crate::pty::PaneInfo| {
-        read_only_pane_matches(agent_type, operation.read_only, &pane.id)
+        !needs_own_pane
+            && read_only_pane_matches(agent_type, operation.read_only, &pane.id)
             && pane.account.as_deref() == operation.worker.account.as_deref()
             // an isolated run gets its own pane in its own worktree, never a shared one
             && operation.worker.worktree.is_none()
@@ -264,7 +269,7 @@ fn assign_pane(
             .is_none()
     };
     // Opt-in warm pool: a run that needs a new pane may take a pre-launched one (see `standby`).
-    let pool_key = standby_key(operation, agent_type);
+    let pool_key = standby_key(operation, agent_type).filter(|_| !needs_own_pane);
     let mut standby_claim: Option<crate::standby::VisibleClaim> = None;
     let (pane_id, pane_created) = if let Some(requested_id) = operation.pane_id.clone() {
         let pane = existing_panes
@@ -360,17 +365,7 @@ fn assign_pane(
         let pane_id = spawn_pane_with_timeout(
             registry,
             app,
-            SpawnPaneArgs {
-                agent_type: agent_type.to_string(),
-                cwd: Some(operation.work_dir().to_string()),
-                cols: None,
-                rows: None,
-                extra_args: None,
-                pane_id: None,
-                read_only: operation.read_only,
-                account: operation.worker.account.clone(),
-                guard_env: operation.worker.guard_env.clone(),
-            },
+            run_spawn_args(operation, agent_type, launch_flags.args.clone()),
             Duration::from_secs(45),
         )?;
         pane_assignment_guard = PANE_ASSIGNMENT_SERIAL.lock();
@@ -419,6 +414,22 @@ fn assign_pane(
     }
     drop(pane_assignment_guard);
     Ok((pane_id, pane_created, standby))
+}
+
+/// The arguments of the pane a visible run spawns for itself: its folder, its account, its env guard and the
+/// launch flags its agent's profile wrote for the asked model, reasoning effort and read-only.
+pub(super) fn run_spawn_args(operation: &OperationSnapshot, agent_type: &str, flags: Vec<String>) -> SpawnPaneArgs {
+    SpawnPaneArgs {
+        agent_type: agent_type.to_string(),
+        cwd: Some(operation.work_dir().to_string()),
+        cols: None,
+        rows: None,
+        extra_args: Some(flags).filter(|args| !args.is_empty()),
+        pane_id: None,
+        read_only: operation.read_only,
+        account: operation.worker.account.clone(),
+        guard_env: operation.worker.guard_env.clone(),
+    }
 }
 
 /// False for a guarded run: it never takes an existing pane or a warm standby, because those were

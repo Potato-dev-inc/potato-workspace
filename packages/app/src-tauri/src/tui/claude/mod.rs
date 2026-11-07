@@ -187,6 +187,31 @@ impl TuiProfile for Claude {
         headless::command(launch)
     }
 
+    fn accepts_headless_model(&self) -> bool {
+        true
+    }
+
+    fn classify_headless_failure(&self, output: &str, _exit_code: i32) -> Option<(&'static str, String)> {
+        headless::reported_error(output).map(|message| ("AGENT_REPORTED_ERROR", message))
+    }
+
+    fn accepts_headless_reasoning(&self) -> bool {
+        true
+    }
+
+    /// The same flags a headless run gets, on the pane's command line: `--model`, `--effort`, and
+    /// plan mode (no edits, no commands) for a read-only run.
+    fn visible_run_args(&self, run: &super::VisibleRun) -> super::VisibleRunArgs {
+        let args = headless::choice_args(run.model, run.reasoning);
+        let model_applied = args.iter().any(|arg| arg == "--model");
+        let reasoning_applied = args.iter().any(|arg| arg == "--effort");
+        let mut args = args;
+        if run.read_only {
+            args.extend(["--permission-mode".to_string(), "plan".to_string()]);
+        }
+        super::VisibleRunArgs { args, model_applied, reasoning_applied, read_only_enforced: run.read_only }
+    }
+
     fn extract_result(&self, output: &str, exit_code: i32) -> Option<String> {
         headless::extract_result(output, exit_code)
     }

@@ -192,6 +192,22 @@ pub fn read_only_spawned_pane_backends() -> Vec<&'static str> {
         .collect()
 }
 
+/// Whether this profile starts a visible pane read-only with launch flags (`visible_run_args`).
+pub fn enforces_read_only_by_flags(profile: &dyn TuiProfile) -> bool {
+    profile
+        .visible_run_args(&VisibleRun { read_only: true, ..VisibleRun::default() })
+        .read_only_enforced
+}
+
+/// Agent types whose run-spawned visible pane enforces `read_only` by launch flags.
+pub fn read_only_visible_flag_backends() -> Vec<&'static str> {
+    registry::snapshot()
+        .iter()
+        .filter(|profile| enforces_read_only_by_flags(profile.as_ref()))
+        .map(|profile| profile.id())
+        .collect()
+}
+
 /// Backends that can have a warm standby worker, with the kinds each supports.
 pub fn standby_backends() -> Vec<(&'static str, StandbySupport)> {
     registry::snapshot()

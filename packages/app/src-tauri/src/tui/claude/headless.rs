@@ -15,6 +15,24 @@ fn policy_args(launch: &HeadlessLaunch) -> Vec<String> {
     ]
 }
 
+/// A value that starts with `-` would be read as another flag; never forward one.
+fn flag_value(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty() && !value.starts_with('-'))
+}
+
+/// `--model` and `--effort` for the run's asked model and reasoning. Without them the CLI takes the
+/// person's own settings file (`model`, `effortLevel`) and the run silently ran on that instead.
+pub(super) fn choice_args(model: Option<&str>, reasoning: Option<&str>) -> Vec<String> {
+    let mut args = Vec::new();
+    if let Some(model) = flag_value(model) {
+        args.extend(["--model".to_string(), model.to_string()]);
+    }
+    if let Some(effort) = flag_value(reasoning) {
+        args.extend(["--effort".to_string(), effort.to_string()]);
+    }
+    args
+}
+
 pub(super) fn command(launch: &HeadlessLaunch) -> Result<LaunchSpec, String> {
     let mut args: Vec<String> = vec![
         "-p".into(),
@@ -22,6 +40,7 @@ pub(super) fn command(launch: &HeadlessLaunch) -> Result<LaunchSpec, String> {
         "--output-format".into(),
         "json".into(),
     ];
+    args.extend(choice_args(launch.model, launch.reasoning));
     args.extend(policy_args(launch));
     Ok(LaunchSpec {
         program: crate::tui::executable("claude")?,
@@ -49,6 +68,7 @@ pub(super) fn standby_command(launch: &HeadlessLaunch) -> Result<LaunchSpec, Str
     .into_iter()
     .map(String::from)
     .collect();
+    args.extend(choice_args(launch.model, launch.reasoning));
     args.extend(policy_args(launch));
     Ok(LaunchSpec {
         program: crate::tui::executable("claude")?,
@@ -87,6 +107,16 @@ pub(super) fn extract_result(output: &str, exit_code: i32) -> Option<String> {
     }
     let value = result_object(output)?;
     value.get("result")?.as_str().map(str::to_string)
+}
+
+/// The CLI's own words when its `result` object says the turn failed (`is_error`): a refused model
+/// ("There's an issue with the selected model ...") reaches the receipt as the agent said it.
+pub(super) fn reported_error(output: &str) -> Option<String> {
+    let value = result_object(output)?;
+    if value.get("is_error").and_then(Value::as_bool) != Some(true) {
+        return None;
+    }
+    value.get("result")?.as_str().map(str::trim).filter(|text| !text.is_empty()).map(str::to_string)
 }
 
 pub(super) fn extract_provider_session(output: &str) -> Option<String> {

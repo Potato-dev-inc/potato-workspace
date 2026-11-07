@@ -104,6 +104,8 @@ pub fn hint_from_bytes(r: &mut Reader) -> Result<PeerHint, WireError> {
 pub struct Lockouts {
     /// node -> (strikes, locked until, last strike)
     by_node: BTreeMap<NodeKey, (u32, u64, u64)>,
+    /// invite -> no try before this time (set by a wrong try)
+    by_invite: BTreeMap<InviteId, u64>,
     minute_start: u64,
     minute_count: u32,
 }
@@ -111,7 +113,7 @@ pub struct Lockouts {
 const LOCKOUT_NODES_MAX: usize = 256;
 
 impl Lockouts {
-    pub fn new() -> Self { Self { by_node: BTreeMap::new(), minute_start: 0, minute_count: 0 } }
+    pub fn new() -> Self { Self { by_node: BTreeMap::new(), by_invite: BTreeMap::new(), minute_start: 0, minute_count: 0 } }
 
     pub fn locked(&self, node: &NodeKey, now_ms: u64) -> bool {
         matches!(self.by_node.get(node), Some((s, until, _)) if *s >= JOIN_LOCKOUT_STRIKES && now_ms < *until)
@@ -129,6 +131,22 @@ impl Lockouts {
         e.0 += 1;
         e.2 = now_ms;
         if e.0 >= JOIN_LOCKOUT_STRIKES { e.1 = now_ms + JOIN_LOCKOUT_MS; }
+    }
+
+    pub fn len(&self) -> usize { self.by_node.len() }
+
+    /// True while a wrong try on this invite is still being waited out.
+    pub fn invite_paused(&self, invite: &InviteId, now_ms: u64) -> bool {
+        matches!(self.by_invite.get(invite), Some(until) if now_ms < *until)
+    }
+
+    /// A wrong try on `invite`: no other try on it for INVITE_TRY_GAP_MS. At most 64 invites are remembered.
+    pub fn pause_invite(&mut self, invite: InviteId, now_ms: u64) {
+        self.by_invite.retain(|_, until| now_ms < *until);
+        if self.by_invite.len() >= 64 && !self.by_invite.contains_key(&invite) {
+            if let Some(first) = self.by_invite.keys().next().copied() { self.by_invite.remove(&first); }
+        }
+        self.by_invite.insert(invite, now_ms.saturating_add(INVITE_TRY_GAP_MS));
     }
 
     pub fn clear(&mut self, node: &NodeKey) { self.by_node.remove(node); }
@@ -223,11 +241,50 @@ async fn send_welcome(s: &mut SpaceStream, ops: &[ControlOp], hints: &[PeerHint]
     Ok(())
 }
 
-#[derive(Debug)]
+/// Most control ops, and most bytes, a welcome may carry in all. A real control log is far smaller.
+pub const WELCOME_OPS_MAX: usize = 5_000;
+pub const WELCOME_BYTES_MAX: usize = 32 * 1024 * 1024;
+
+/// Running total of a welcome, so a stream that never ends cannot make the joiner hold or replay without limit.
+pub struct WelcomeBudget { ops: usize, bytes: usize }
+
+impl WelcomeBudget {
+    pub fn new() -> Self { Self { ops: 0, bytes: 0 } }
+    pub fn take(&mut self, ops: usize, bytes: usize) -> Result<(), JoinError> {
+        self.ops = self.ops.saturating_add(ops);
+        self.bytes = self.bytes.saturating_add(bytes);
+        if self.ops > WELCOME_OPS_MAX || self.bytes > WELCOME_BYTES_MAX {
+            return Err(JoinError::BadWelcome("welcome too large".into()));
+        }
+        Ok(())
+    }
+}
+
+impl Default for WelcomeBudget {
+    fn default() -> Self { Self::new() }
+}
+
 pub enum JoinOutcome {
     /// `ops` is the whole control log the owner sent (the new member stores it so it can serve it on).
     Joined { roster: Roster, epoch_key: [u8; 32], hints: Vec<PeerHint>, ops: Vec<ControlOp> },
     Refused(RefuseReason, u8),
+}
+
+// Written by hand: the derived Debug would print the space key.
+impl std::fmt::Debug for JoinOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JoinOutcome::Joined { roster, hints, ops, .. } => f
+                .debug_struct("Joined")
+                .field("space", &roster.space)
+                .field("epoch", &roster.epoch)
+                .field("epoch_key", &"<hidden>")
+                .field("hints", &hints.len())
+                .field("ops", &ops.len())
+                .finish(),
+            JoinOutcome::Refused(r, left) => f.debug_tuple("Refused").field(r).field(left).finish(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -246,6 +303,7 @@ pub async fn run_joiner(
     let req = JoinRequestFrame::new(ticket.space, ticket.invite, cert.clone(), proof, account_proof);
     write_frame(&mut s.send, JOIN_REQUEST, &req.to_bytes()).await.map_err(|_| JoinError::Closed)?;
     let mut ops: Vec<ControlOp> = Vec::new();
+    let mut budget = WelcomeBudget::new();
     loop {
         let f = tokio::time::timeout(Duration::from_millis(JOIN_WAIT_MS + 60_000), read_frame(&mut s.recv))
             .await
@@ -262,8 +320,14 @@ pub async fn run_joiner(
             }
             JOIN_WELCOME => {
                 let (mut part, hints) = decode_welcome(&f.body).map_err(JoinError::BadWelcome)?;
+                budget.take(part.len(), f.body.len())?;
+                // The roster is replayed (every signature checked) only when my own AddMember has arrived,
+                // not after every frame.
+                let mine = part.iter().any(|o| matches!(&o.body, OpBody::AddMember { cert: c, .. } if *c == cert));
                 ops.append(&mut part);
-                if let Some(done) = accept_welcome(ticket, me, &cert, &ops, hints)? { return Ok(done); }
+                if mine {
+                    if let Some(done) = accept_welcome(ticket, me, &cert, &ops, hints)? { return Ok(done); }
+                }
             }
             _ => return Err(JoinError::BadWelcome("unexpected frame".into())),
         }
@@ -297,6 +361,7 @@ pub fn accept_welcome(
     ticket: &InviteTicket, me: &SpaceIdentity, my_cert: &DeviceCert, ops: &[ControlOp], hints: Vec<PeerHint>,
 ) -> Result<Option<JoinOutcome>, JoinError> {
     let bad = |m: &str| JoinError::BadWelcome(m.to_string());
+    if ops.len() > WELCOME_OPS_MAX { return Err(bad("welcome too large")); }
     let roster = Roster::replay(ticket.space, ops).map_err(|e| JoinError::BadWelcome(e.0))?;
     let owner_ok = roster
         .members
@@ -315,8 +380,12 @@ pub fn owner_check(
     roster: &Roster, invite: Option<&mut InviteRecord>, secret: Option<[u8; SECRET_BYTES]>, lockouts: &mut Lockouts,
     req: &JoinRequestFrame, joiner: NodeKey, now_ms: u64,
 ) -> Result<(), (RefuseReason, u8)> {
-    if lockouts.busy(now_ms) { return Err((RefuseReason::Busy, 0)); }
+    // A locked-out node is answered first and does not use up the shared per-minute budget.
     if lockouts.locked(&joiner, now_ms) { return Err((RefuseReason::LockedOut, 0)); }
+    // One wrong try pauses the whole invite (any node): fresh node keys cannot burn its five tries in a burst.
+    // Also before the budget, so a flood against a paused invite costs the real joiners nothing.
+    if lockouts.invite_paused(&req.invite, now_ms) { return Err((RefuseReason::Busy, 0)); }
+    if lockouts.busy(now_ms) { return Err((RefuseReason::Busy, 0)); }
     if req.space != roster.space || !req.cert.verify() || req.cert.space != roster.space || req.cert.node != joiner {
         lockouts.strike(joiner, now_ms);
         return Err((RefuseReason::Bad, 0));
@@ -336,6 +405,7 @@ pub fn owner_check(
         Check::Accept => {}
         Check::WrongWords { tries_left } => {
             lockouts.strike(joiner, now_ms);
+            lockouts.pause_invite(req.invite, now_ms);
             return Err((RefuseReason::WrongWords, tries_left as u8));
         }
         Check::Gone => {

@@ -1,0 +1,71 @@
+import type { ReactNode } from 'react';
+import type { SpaceMessage } from '../../lib/spaces';
+
+export const REACTION_PICTURE: Record<string, string> = {
+  thumbs_up: '\u{1F44D}', heart: '\u{2764}\u{FE0F}', laugh: '\u{1F602}', wow: '\u{1F62E}',
+  sad: '\u{1F622}', party: '\u{1F389}', eyes: '\u{1F440}', check: '\u{2705}',
+};
+
+export function timeOf(ms: number): string {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+export interface MessageRowProps {
+  message: SpaceMessage;
+  onReply: (m: SpaceMessage) => void;
+  /** The message menu (it owns Reply too). Without it the row shows its own Reply link. */
+  menu?: (m: SpaceMessage, reply: () => void) => ReactNode;
+  onReact?: (m: SpaceMessage, code: string, on: boolean) => void;
+  revealBlocked?: boolean;
+  onRevealBlocked?: () => void;
+}
+
+export function MessageRow({ message: m, onReply, menu, onReact, revealBlocked, onRevealBlocked }: MessageRowProps) {
+  const cls = ['ck-spaces-msg', m.isMine && 'is-mine', m.isFish && 'is-fish', m.deleted && 'is-deleted',
+    m.blocked && !revealBlocked && 'is-blocked'].filter(Boolean).join(' ');
+  if (m.blocked && !revealBlocked) {
+    return (
+      <li className={cls}>
+        <span className="ck-spaces-msg-text">Message from someone you blocked.</span>
+        <button type="button" className="ck-spaces-link" onClick={onRevealBlocked}>Show</button>
+      </li>
+    );
+  }
+  return (
+    <li className={cls} data-id={m.id}>
+      <div className="ck-spaces-msg-line">
+        <span className="ck-spaces-msg-author">{m.authorName}</span>
+        <time className="ck-spaces-msg-time" dateTime={new Date(m.createdAtMs).toISOString()}>{timeOf(m.createdAtMs)}</time>
+        {!m.deleted && !menu && (
+          <button type="button" className="ck-spaces-link" onClick={() => onReply(m)}>Reply</button>
+        )}
+        {menu?.(m, () => onReply(m))}
+      </div>
+      {m.replyPreview && (
+        <p className="ck-spaces-msg-reply">{m.replyPreview.authorName}: {m.replyPreview.text}</p>
+      )}
+      {m.deleted ? (
+        <p className="ck-spaces-msg-text">
+          {m.isMine && !m.deleted.byOwner ? 'You deleted this message.'
+            : m.deleted.byOwner ? 'Deleted by the owner.' : `${m.deleted.byName} deleted this message.`}
+        </p>
+      ) : (
+        <p className="ck-spaces-msg-text">{m.text}</p>
+      )}
+      {m.reactions.length > 0 && !m.deleted && (
+        <ul className="ck-spaces-reactions">
+          {m.reactions.map((r) => (
+            <li key={r.code}>
+              <button type="button" className={`ck-spaces-reaction${r.mine ? ' is-mine' : ''}`}
+                aria-pressed={r.mine} aria-label={`${r.code.replace('_', ' ')}, ${r.count}`}
+                onClick={() => onReact?.(m, r.code, !r.mine)}>
+                {REACTION_PICTURE[r.code]} {r.count}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}

@@ -267,6 +267,7 @@ pub fn run_turn(
         trust_workspace: false,
         allow_shell: false,
         model: None,
+        reasoning: None,
     };
     let spec = match crate::tui::headless_launch_with(profile, profile.id(), &launch) {
         Ok(spec) if !request.read_only || spec.read_only_enforced => spec,

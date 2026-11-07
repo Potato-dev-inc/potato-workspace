@@ -312,6 +312,8 @@ pub struct HeadlessLaunch<'a> {
     pub allow_shell: bool,
     /// Model requested for this run; only profiles with `accepts_headless_model` use it.
     pub model: Option<&'a str>,
+    /// Reasoning effort requested for this run; only profiles with `accepts_headless_reasoning` use it.
+    pub reasoning: Option<&'a str>,
 }
 
 impl<'a> HeadlessLaunch<'a> {
@@ -324,8 +326,29 @@ impl<'a> HeadlessLaunch<'a> {
             trust_workspace: false,
             allow_shell: false,
             model: None,
+            reasoning: None,
         }
     }
+}
+
+/// What a run asks of a visible pane's start-up: the model and reasoning effort it was told to use and
+/// whether it must be read-only. A profile turns these into launch flags (`TuiProfile::visible_run_args`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct VisibleRun<'a> {
+    pub model: Option<&'a str>,
+    pub reasoning: Option<&'a str>,
+    pub read_only: bool,
+}
+
+/// The launch flags a visible pane starts with for a [`VisibleRun`], and which of the asks they carry out.
+/// A flag a profile cannot express is simply not applied (and its `*_applied` stays false), so the run can
+/// say so instead of pretending.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VisibleRunArgs {
+    pub args: Vec<String>,
+    pub model_applied: bool,
+    pub reasoning_applied: bool,
+    pub read_only_enforced: bool,
 }
 
 /// Which definition a run was started from (SPEC OBS-2), recorded on the run and in its receipt so a
@@ -476,6 +499,7 @@ pub(crate) fn supports_headless(profile: &dyn TuiProfile) -> bool {
         trust_workspace: false,
         allow_shell: false,
         model: None,
+        reasoning: None,
     };
     match profile.headless_command(&probe) {
         Ok(_) => true,

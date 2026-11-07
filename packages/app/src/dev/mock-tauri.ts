@@ -305,6 +305,13 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'agent_run_mode_set':
           // The dev harness has no custom agents to choose for.
           return { agents: [] };
+        case 'hidden_helpers_get':
+        case 'hidden_helpers_set':
+          return { allowed: Boolean(a.allowed) };
+        case 'hidden_runs_list':
+          return [];
+        case 'hidden_runs_dismiss':
+          return false;
         case 'agent_authority_get':
           return authority;
         case 'agent_authority_set': {

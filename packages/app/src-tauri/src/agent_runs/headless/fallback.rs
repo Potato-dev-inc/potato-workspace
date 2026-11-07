@@ -138,6 +138,8 @@ pub(crate) fn start_headless(
         publish(project, operation_id, registry, app);
         return;
     }
+    // The visible pane failed before the turn started: this run is hidden now, so the Inbox lists it.
+    crate::hidden_runs::note_started(&snapshot, Some(app));
     let (project, operation_id) = (project.to_string(), operation_id.to_string());
     let (registry, app) = (registry.clone(), app.clone());
     let spawn = thread::Builder::new()

@@ -41,6 +41,9 @@ pub struct RunReceipt {
     /// reason: "not_verified"}`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_mode: Option<crate::operations::RunModeNote>,
+    /// Present when `headless: true` was ignored because "Allow hidden helpers" is off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headless_ignored: Option<String>,
     /// The definition (id, source, fingerprint, pinned binary) a declarative agent ran from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_definition: Option<crate::tui::DefinitionRef>,
@@ -131,6 +134,7 @@ pub(super) fn build_receipt(
     let read_only = if !snapshot.read_only {
         "off"
     } else if held.read_only_headless
+        || (held.read_only_visible_flags && snapshot.pane_id.is_some())
         || (held.read_only_spawned_pane
             && snapshot
                 .pane_id
@@ -215,6 +219,7 @@ pub(super) fn build_receipt(
         standby_used: snapshot.worker.standby_used,
         fallback: snapshot.worker.fallback.clone(),
         run_mode: snapshot.worker.run_mode.clone(),
+        headless_ignored: snapshot.worker.headless_ignored.clone(),
         agent_definition: snapshot.worker.agent_definition.clone(),
         worktree: snapshot.worker.worktree.as_ref().map(|worktree| ReceiptWorktree {
             path: worktree.path.clone(),
@@ -331,5 +336,44 @@ pub(super) fn run_warnings(snapshot: &OperationSnapshot) -> Vec<RunWarning> {
             });
         }
     }
+    if let Some(warning) = model_choice_warning(snapshot) {
+        warnings.push(warning);
+    }
     warnings
+}
+
+/// Says plainly when the model a run asked for is not the one that ran: either the agent cannot be told
+/// a model the way this run started (`MODEL_NOT_APPLIED`), or it was told and a different one ran
+/// (`MODEL_MISMATCH`). Nothing when no model was asked for, or the one that ran is the one asked.
+fn model_choice_warning(snapshot: &OperationSnapshot) -> Option<RunWarning> {
+    let requested = snapshot.worker.requested_model.as_deref()?;
+    let profile = crate::tui::profile_for(&snapshot.agent_type);
+    let visible = snapshot.pane_id.is_some();
+    let applied = if visible {
+        profile
+            .visible_run_args(&crate::tui::VisibleRun { model: Some(requested), ..Default::default() })
+            .model_applied
+    } else {
+        profile.accepts_headless_model()
+    };
+    let ran = snapshot.worker.resolved_model.as_deref().filter(|_| !snapshot.worker.model_unconfirmed);
+    let (code, detail) = if !applied {
+        let how = if visible { "in a pane" } else { "in a headless run" };
+        (
+            "MODEL_NOT_APPLIED",
+            format!(
+                "{} cannot be told which model to use {how}, so the requested model {requested} was not applied and the run used the agent's own choice{}.",
+                snapshot.agent_type,
+                ran.map(|model| format!(" ({model})")).unwrap_or_default()
+            ),
+        )
+    } else if let Some(ran) = ran.filter(|ran| !crate::agent_runs::persist::model_matches(requested, ran)) {
+        (
+            "MODEL_MISMATCH",
+            format!("The run asked for model {requested}, but {ran} is the model that ran. The agent or its settings did not use the requested model."),
+        )
+    } else {
+        return None;
+    };
+    Some(RunWarning { code: code.into(), source: "capture".into(), detail })
 }

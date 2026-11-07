@@ -1,7 +1,9 @@
 //! Every Spaces limit in one place. Changing a number here is a product decision.
 //!
 //! Bot caps are named `BOT_*` (not tied to one bot product): per the later public/private change, a cap is per
-//! bot, counted on and paid by that bot's owner's computer.
+//! bot, counted on and paid by that bot's owner's computer. The BOT_* caps are enforced by the bot side (the
+//! owner's PC before it answers); the log does not count them when history is received, because every PC must
+//! reach the same verdict on the same bytes.
 
 pub const MAX_MEMBERS: usize = 50;
 pub const MAX_CHANNELS: usize = 20;
@@ -11,6 +13,11 @@ pub const KEEP_BYTES: u64 = 200 * 1024 * 1024;
 pub const TRIM_TO_BYTES: u64 = 180 * 1024 * 1024;
 pub const INVITE_TTL_MS: u64 = 24 * 60 * 60 * 1000;
 pub const INVITE_MAX_STRIKES: u32 = 5;
+/// After a wrong try on an invite, the next try on that invite is refused (Busy) for this long, whoever sends it.
+/// Counted by invite, not by node: fresh node keys do not get around it, and five wrong tries need 2 minutes.
+pub const INVITE_TRY_GAP_MS: u64 = 30_000;
+/// A stranger's first frame (Hello or JoinRequest) may not be bigger than this.
+pub const FIRST_FRAME_MAX_BYTES: usize = 16 * 1024;
 pub const MAX_OPEN_INVITES: usize = 3;
 pub const JOIN_LOCKOUT_STRIKES: u32 = 3;
 pub const JOIN_LOCKOUT_MS: u64 = 600_000;

@@ -194,11 +194,10 @@ pub fn resolve_model_choice(
 ) -> ModelChoice {
     let requested_model = nonempty(requested_model);
     let requested_reasoning = nonempty(requested_reasoning);
-    // ponytail: never remap a requested model/reasoning; a later resolver may set
-    // a different resolved_* only if it also sets mismatch=true.
-    let resolved_model = requested_model
-        .clone()
-        .or_else(|| nonempty(profile_default_model));
+    // `resolved_model` is what ran, never what was asked for: it stays empty until the run's own output
+    // (or the live screen) says which model ran, so a run that never applied the request cannot look
+    // as if it had. Only the profile's configured default is a (flagged) guess.
+    let resolved_model = nonempty(profile_default_model);
     let resolved_reasoning = requested_reasoning.clone();
     ModelChoice {
         mismatch: visible_mismatch(
@@ -395,6 +394,15 @@ fn nonempty(value: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+/// Whether the model that ran is the one asked for. Names are compared without case, spaces and
+/// punctuation, and an alias that is part of the full name counts ("haiku" ran as "claude-haiku-5-5",
+/// "Haiku 5.5" is "claude-haiku-5-5").
+pub fn model_matches(requested: &str, resolved: &str) -> bool {
+    let squash = |name: &str| name.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
+    let (asked, ran) = (squash(requested), squash(resolved));
+    asked.is_empty() || ran.contains(&asked) || asked.contains(&ran)
 }
 
 fn differs(requested: Option<&str>, resolved: Option<&str>) -> bool {

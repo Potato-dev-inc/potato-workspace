@@ -73,6 +73,8 @@ pub fn handle_request_as(
         ("POST", ["agents", "run"]) => parse::<AgentRunRequest>(body).and_then(|mut request| {
             // The caller left `headless` out (or null): the agent's run-mode setting may decide.
             request.headless_unset = headless_left_out(body);
+            // An agent's `headless: true` hides a helper only when the person allowed it.
+            crate::agent_run_mode::gate_hidden_helper(&mut request);
             if request
                 .project_path
                 .as_deref()

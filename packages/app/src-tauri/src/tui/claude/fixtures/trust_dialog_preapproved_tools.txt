@@ -1,0 +1,13 @@
+ Claude Code'll be able to read, edit, and execute files here.
+
+ ⚠ This folder pre-approves 1 tool permission in .claude/settings.json:
+   mcp__pencil
+
+ These will apply without asking. Only proceed if you trust this configuration.
+
+ Security guide
+
+ ❯ No, exit
+   Yes, I trust this folder
+
+ Enter to confirm · Esc to cancel

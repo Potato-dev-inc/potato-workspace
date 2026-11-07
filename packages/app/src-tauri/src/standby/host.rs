@@ -103,6 +103,7 @@ impl LiveHost {
             trust_workspace: false,
             allow_shell: key.allow_shell,
             model: key.model.as_deref(),
+            reasoning: None,
         };
         let spec = profile
             .headless_standby_command(&launch)
