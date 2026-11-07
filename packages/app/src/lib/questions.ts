@@ -115,3 +115,26 @@ export function waitCaption(q: Question, now: number, paneName?: string): string
   if (left <= 0) return `${who} has stopped waiting`;
   return `${who} stops waiting in ${timeLeftText(left)}`;
 }
+
+/** "Which login should this Claude helper use?": raised when an agent starts a helper and the person's choice is "Ask me". */
+export const isHelperLogin = (q: Question): boolean => q.kind === 'helper_login';
+
+export interface HelperLoginOption {
+  /** `main` or an account id. */
+  id: string;
+  label: string;
+}
+
+/**
+ * The logins a helper-login card offers. The card carries each login twice, as `once:<id>` and `always:<id>`
+ * (so a phone or any other list of choices works unchanged); the desktop card shows each login once with an
+ * "Always use this" box and answers with the right one.
+ */
+export function helperLoginOptions(q: Question): HelperLoginOption[] {
+  return q.choices.filter((c) => c.id.startsWith('once:')).map((c) => ({ id: c.id.slice('once:'.length), label: c.label }));
+}
+
+/** The choice id for a pick: `once:<id>`, or `always:<id>` when the person ticked "Always use this". */
+export function helperLoginChoice(id: string, always: boolean): string {
+  return `${always ? 'always' : 'once'}:${id}`;
+}

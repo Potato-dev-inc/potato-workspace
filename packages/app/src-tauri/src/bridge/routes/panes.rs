@@ -146,7 +146,7 @@ fn spawn(cx: &Ctx) -> RouteResult {
     let registry = cx.registry;
     let app = cx.app;
     let session = cx.session;
-    let req: SpawnPaneArgs = parse_json(body)?;
+    let mut req: SpawnPaneArgs = parse_json(body)?;
     if let Some(id) = req.pane_id.as_deref().filter(|id| is_reserved_pane_id(id)) {
         return Err((400, json!({ "error": format!("pane id {id:?} is reserved: it names a bridge route under /panes"), "code": "INVALID_ARGUMENT" })));
     }
@@ -156,8 +156,16 @@ fn spawn(cx: &Ctx) -> RouteResult {
             unknown.valid,
         ))
     })?;
+    // An agent spawning a pane without naming an account: the person's login choice decides, or a card asks.
+    crate::agent_runs::helper_login::for_spawn(
+        &mut req,
+        session,
+        &crate::accounts::Store::default_location(),
+        &|| crate::questions::routes::publish_changed(app),
+    )
+    .map_err(operation_http_error)?;
     let agent_type = req.agent_type.clone();
-    let extra = serde_json::from_slice::<serde_json::Value>(body).ok();
+    let extra =serde_json::from_slice::<serde_json::Value>(body).ok();
     let placement = extra
         .as_ref()
         .and_then(|v| v.get("placement").and_then(|p| p.as_str().map(str::to_string)));

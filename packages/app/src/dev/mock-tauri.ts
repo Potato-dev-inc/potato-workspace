@@ -102,6 +102,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
       switch (cmd) {
         case 'list_panes':
           return panes;
+        case 'accounts_set_helper_login':
+          return a.value;
         case 'accounts_list':
           return { agents: ACCOUNT_AGENTS, accounts: scenario.accounts ?? [] };
         case 'new_pane':

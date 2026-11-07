@@ -50,6 +50,15 @@ fn delegate(cx: &Ctx) -> RouteResult {
     let app = cx.app.clone();
     let mut req: crate::operations::DelegateWorkRequest = parse_json(body)?;
     req.owner_session_id = request_session(headers).map(str::to_string);
+    // An agent delegating work without naming an account: the person's login choice decides, or a card asks.
+    let owner = req.owner_session_id.clone();
+    crate::agent_runs::helper_login::for_delegate(
+        &mut req,
+        owner.as_deref(),
+        &crate::accounts::Store::default_location(),
+        &|| crate::questions::routes::publish_changed(&app),
+    )
+    .map_err(operation_http_error)?;
     delegate_operation_http(req, registry, app)
 }
 

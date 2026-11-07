@@ -8,21 +8,106 @@
 
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-static INTERACTIVE_PATH: Lazy<String> = Lazy::new(discover_interactive_path);
+/// The start-up PATH without the bundled tools: login shell (or Windows registry / fallback) plus
+/// the dev-only e2e folders. Read once; [`path_for_spawn`] adds the live registry folders on top.
+static STARTUP_BASE: Lazy<String> = Lazy::new(discover_startup_path);
 
-/// PATH string to pass to spawned PTY children.
-pub fn path_for_spawn() -> &'static str {
-    &INTERACTIVE_PATH
+/// How long a Windows spawn PATH is reused before the registry is read again.
+#[cfg(windows)]
+const SPAWN_PATH_TTL: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// PATH string to pass to spawned children. Fresh on every call: on Windows the registry is read
+/// again (at most every 3 seconds), so a CLI installed while the app runs is found by new panes.
+pub fn path_for_spawn() -> String {
+    let exe_dir = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf));
+    #[cfg(windows)]
+    {
+        static CACHE: std::sync::Mutex<Option<(std::time::Instant, String)>> =
+            std::sync::Mutex::new(None);
+        let mut cache = CACHE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((at, path)) = cache.as_ref() {
+            if at.elapsed() < SPAWN_PATH_TTL {
+                return path.clone();
+            }
+        }
+        let registry = crate::agent_install::path_refresh::registry_folders();
+        let refs: Vec<&str> = registry.iter().map(String::as_str).collect();
+        let path = compose_spawn_path(&STARTUP_BASE, &refs, exe_dir.as_deref());
+        *cache = Some((std::time::Instant::now(), path.clone()));
+        path
+    }
+    #[cfg(not(windows))]
+    {
+        compose_spawn_path(&STARTUP_BASE, &[], exe_dir.as_deref())
+    }
+}
+
+/// Builds the PATH a spawned child gets: `base`, then the `registry` folders it lacks (in the order
+/// given), then the bundled tools in `exe_dir` LAST, so a tool the person installed always wins.
+/// Duplicates are dropped, ignoring case and a trailing slash on Windows. A `%VAR%` entry from the
+/// registry is skipped; it is not a folder. Pure: nothing is read from the system.
+pub(crate) fn compose_spawn_path(base: &str, registry: &[&str], exe_dir: Option<&Path>) -> String {
+    #[cfg(windows)]
+    let sep = ';';
+    #[cfg(not(windows))]
+    let sep = ':';
+
+    let bundled: Vec<String> = exe_dir
+        .map(bundled_tool_dirs)
+        .unwrap_or_default()
+        .iter()
+        .map(|dir| dir.to_string_lossy().into_owned())
+        .collect();
+    let bundled_keys: HashSet<String> = bundled.iter().map(|dir| path_key(dir)).collect();
+
+    // Bundled folders are taken out of the base so they always end up last.
+    let base_kept: Vec<&str> = base
+        .split(sep)
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty() && !bundled_keys.contains(&path_key(entry)))
+        .collect();
+    let base_kept = base_kept.join(&sep.to_string());
+    let joined = if registry.is_empty() {
+        base_kept
+    } else {
+        crate::agent_install::path_refresh::merge_path(&base_kept, registry).0
+    };
+
+    let mut seen = HashSet::new();
+    let mut out: Vec<String> = Vec::new();
+    for entry in joined.split(sep).map(str::trim).filter(|entry| !entry.is_empty()) {
+        if seen.insert(path_key(entry)) {
+            out.push(entry.to_string());
+        }
+    }
+    for dir in bundled {
+        if seen.insert(path_key(&dir)) {
+            out.push(dir);
+        }
+    }
+    out.join(&sep.to_string())
+}
+
+/// Identity of a PATH folder for duplicate checks.
+fn path_key(entry: &str) -> String {
+    #[cfg(windows)]
+    {
+        entry.trim().trim_end_matches(['\\', '/']).to_ascii_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        entry.trim().to_string()
+    }
 }
 
 /// Apply the interactive PATH to the current process (bridge, MCP helpers, etc.).
 pub fn apply_to_process() {
     let path = path_for_spawn();
-    std::env::set_var("PATH", path);
+    std::env::set_var("PATH", &path);
     #[cfg(windows)]
-    std::env::set_var("Path", path);
+    std::env::set_var("Path", &path);
     scrub_host_session_env();
 }
 
@@ -78,7 +163,7 @@ mod scrub_tests {
 /// shim directly, so a shim is followed to the native `.exe` it names. No install folder is
 /// assumed, so custom npm prefixes, pnpm, bun, Volta, Scoop and winget all resolve.
 pub fn resolve_opencode_executable() -> Result<String, String> {
-    resolve_opencode_in(path_for_spawn())
+    resolve_opencode_in(&path_for_spawn())
 }
 
 /// [`resolve_opencode_executable`] with the `PATH` string passed in, so a test can point it at a
@@ -208,16 +293,29 @@ fn which_on_path(name: &str, path: &str) -> Option<String> {
     None
 }
 
-fn discover_interactive_path() -> String {
+fn discover_startup_path() -> String {
     let path = match read_login_shell_path() {
         Some(path) if !path.is_empty() => dedupe_path(&path),
-        _ => dedupe_path(&build_fallback_path()),
+        _ => dedupe_path(&registry_or_fallback_path()),
     };
-    let path = prepend_e2e_dirs(path);
-    match std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from)) {
-        Some(dir) => append_bundled_tools(&path, &dir),
-        None => path,
+    prepend_e2e_dirs(path)
+}
+
+/// Windows: the registry PATH when PowerShell could not be read. Other systems: the fallback list.
+#[cfg(windows)]
+fn registry_or_fallback_path() -> String {
+    tracing::warn!("reading the user and machine PATH with PowerShell failed; using the registry");
+    let folders = crate::agent_install::path_refresh::registry_folders();
+    if folders.is_empty() {
+        build_fallback_path()
+    } else {
+        folders.join(";")
     }
+}
+
+#[cfg(not(windows))]
+fn registry_or_fallback_path() -> String {
+    build_fallback_path()
 }
 
 /// The tools the installer puts next to the app: Node.js with npm (`resources/node`) and MinGit
@@ -228,17 +326,6 @@ pub(crate) fn bundled_tool_dirs(exe_dir: &std::path::Path) -> Vec<PathBuf> {
         .map(|parts| parts.iter().fold(exe_dir.join("resources"), |dir, part| dir.join(part)))
         .filter(|dir| dir.is_dir())
         .collect()
-}
-
-/// `path` with the bundled tool folders appended LAST, so a tool the person installed themselves always wins.
-pub(crate) fn append_bundled_tools(path: &str, exe_dir: &std::path::Path) -> String {
-    #[cfg(windows)]
-    let sep = ';';
-    #[cfg(not(windows))]
-    let sep = ':';
-    let mut parts = vec![path.to_string()];
-    parts.extend(bundled_tool_dirs(exe_dir).iter().map(|dir| dir.to_string_lossy().into_owned()));
-    dedupe_path(&parts.join(&sep.to_string()))
 }
 
 /// Dev only (`dev-fake-tui`): the end-to-end runner (`packages/e2e`) puts folders holding fake agent programs
@@ -441,15 +528,57 @@ mod tests {
         let node = node_dir.to_string_lossy().into_owned();
 
         // No git folder: only node is added, after the person's own PATH.
-        assert_eq!(append_bundled_tools(user, &exe_dir), format!("{user}{sep}{node}"));
+        assert_eq!(compose_spawn_path(user, &[], Some(&exe_dir)), format!("{user}{sep}{node}"));
 
-        // With git too, and the node already first on PATH is not listed twice.
+        // With git too, and a bundled folder already listed in the base still ends up last.
         let git_cmd = exe_dir.join("resources").join("git").join("cmd");
         std::fs::create_dir_all(&git_cmd).unwrap();
         let git = git_cmd.to_string_lossy().into_owned();
-        assert_eq!(append_bundled_tools(&format!("{node}{sep}{user}"), &exe_dir), format!("{node}{sep}{user}{sep}{git}"));
+        assert_eq!(
+            compose_spawn_path(&format!("{node}{sep}{user}"), &[], Some(&exe_dir)),
+            format!("{user}{sep}{node}{sep}{git}")
+        );
 
         let _ = std::fs::remove_dir_all(exe_dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn compose_adds_a_new_registry_folder_and_keeps_the_base_order() {
+        let out = compose_spawn_path(r"C:\Windows;C:\Tools", &[r"C:\Windows;C:\Users\a\.local\bin"], None);
+        assert_eq!(out, r"C:\Windows;C:\Tools;C:\Users\a\.local\bin");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn compose_drops_duplicates_ignoring_case_and_trailing_slash() {
+        let out = compose_spawn_path(r"C:\A\;c:\a;C:\B", &[r"C:\b\", r"C:\C"], None);
+        assert_eq!(out, r"C:\A\;C:\B;C:\C");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn compose_keeps_bundled_folders_last_even_when_registry_repeats_them() {
+        let exe_dir = std::env::temp_dir().join(format!("pm-compose-{}", uuid::Uuid::new_v4()));
+        let node = exe_dir.join("resources").join("node");
+        std::fs::create_dir_all(&node).unwrap();
+        let node_s = node.to_string_lossy().into_owned();
+        let out = compose_spawn_path(&format!(r"{};C:\A", node_s.to_uppercase()), &[r"C:\New;C:\A"], Some(&exe_dir));
+        assert_eq!(out, format!(r"C:\A;C:\New;{node_s}"));
+        let _ = std::fs::remove_dir_all(exe_dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn compose_skips_unexpanded_variables_from_the_registry() {
+        let out = compose_spawn_path(r"C:\A", &[r"%NOPE%\bin;C:\New"], None);
+        assert_eq!(out, r"C:\A;C:\New");
+    }
+
+    #[test]
+    fn compose_with_no_registry_and_no_bundled_tools_is_the_base() {
+        let base = if cfg!(windows) { r"C:\A;C:\B" } else { "/a:/b" };
+        assert_eq!(compose_spawn_path(base, &[], None), base);
     }
 
     /// A throw-away directory that stands in for a PATH entry or an install folder.

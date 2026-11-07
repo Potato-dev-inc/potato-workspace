@@ -15,6 +15,7 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "night_shift_enabled",
     "acp_chat_enabled",
     "model_bridge_enabled",
+    "spaces_enabled",
 ];
 
 /// Tests turn the override on through this; it is off in every test unless a test sets it.
@@ -80,6 +81,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "night_shift_enabled",
     "acp_chat_enabled",
     "model_bridge_enabled",
+    "spaces_enabled",
 ];
 
 pub fn default_public_settings() -> Value {
@@ -116,6 +118,8 @@ pub fn default_public_settings() -> Value {
         "acp_chat_enabled": true,
         // Model Bridge (Labs): plug a model service into an app such as Codex. Off until chosen. Rust: model_bridge.
         "model_bridge_enabled": false,
+        // Spaces (Labs): small-group chat between people's own computers. Off until chosen. Rust: spaces.
+        "spaces_enabled": false,
     })
 }
 
@@ -161,6 +165,7 @@ fn apply_public_settings(effective: &Value) {
     crate::pane_mcp::apply_settings(effective);
     crate::acp::apply_settings(effective);
     crate::model_bridge::apply_settings(effective);
+    crate::spaces::runtime::apply_settings(effective);
 }
 
 /// Merge `patch` into the public mirror (bridge state + mobile SSE) without any window event.
@@ -323,5 +328,22 @@ mod tests {
         assert!(PATCHABLE_KEYS.contains(&"model_bridge_enabled"));
         assert_eq!(default_public_settings()["model_bridge_enabled"], json!(false));
         assert_eq!(with_dev_labs(&default_public_settings(), true)["model_bridge_enabled"], json!(true));
+    }
+}
+
+#[cfg(test)]
+mod spaces_labs_tests {
+    use super::{default_public_settings, DEV_LABS_KEYS, PATCHABLE_KEYS};
+
+    #[test]
+    fn dev_labs_keys_include_spaces_enabled() {
+        assert!(DEV_LABS_KEYS.contains(&"spaces_enabled"));
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "spaces_enabled").count(), 1);
+    }
+
+    #[test]
+    fn spaces_enabled_is_patchable_and_off_by_default() {
+        assert!(PATCHABLE_KEYS.contains(&"spaces_enabled"));
+        assert_eq!(default_public_settings()["spaces_enabled"], serde_json::json!(false));
     }
 }

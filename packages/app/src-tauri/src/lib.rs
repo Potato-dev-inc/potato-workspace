@@ -108,10 +108,16 @@ mod settings_patch;
 mod shell_env;
 mod startup_timing;
 mod review_desk;
+mod spaces;
+mod secure_core;
 mod tamper;
 pub mod shell_exec;
 mod standby;
 mod team;
+#[allow(dead_code)]
+mod keys;
+#[allow(dead_code)]
+mod p2p;
 mod terminal_chat;
 pub mod tool_registry;
 mod toolbelt;
@@ -455,6 +461,7 @@ pub fn run() {
             commands::accounts_add,
             commands::accounts_rename,
             commands::accounts_remove,
+            commands::accounts_set_helper_login,
             commands::standby_get_status,
             commands::standby_set_config,
             commands::get_ui_mode,

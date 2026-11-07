@@ -9,7 +9,10 @@
 use crate::tui::{AccountScheme, LaunchEnv};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+pub mod helper;
 
 const STORE_VERSION: u32 = 1;
 const MAX_LABEL: usize = 40;
@@ -32,6 +35,37 @@ struct StoreFile {
     version: u32,
     #[serde(default)]
     accounts: Vec<Account>,
+    /// Per agent id: which login a helper that agent starts uses. `main` or an account id; no entry means "Ask me".
+    /// Older files have no such field (it reads as empty).
+    #[serde(default)]
+    helper_logins: BTreeMap<String, String>,
+}
+
+/// The value stored for "Main login" (no account).
+pub const HELPER_MAIN: &str = "main";
+/// The value shown for "Ask me" (nothing stored).
+pub const HELPER_ASK: &str = "ask";
+
+/// Which login a helper an agent starts gets, when the caller did not name one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HelperLogin {
+    /// Show a card and wait for the person.
+    Ask,
+    /// The agent's own login (no account).
+    Main,
+    /// This account id.
+    Account(String),
+}
+
+impl HelperLogin {
+    /// `ask`, `main` or the account id.
+    pub fn as_value(&self) -> String {
+        match self {
+            HelperLogin::Ask => HELPER_ASK.into(),
+            HelperLogin::Main => HELPER_MAIN.into(),
+            HelperLogin::Account(id) => id.clone(),
+        }
+    }
 }
 
 /// Where the accounts live; tests point it at a temp dir.
@@ -62,7 +96,11 @@ impl Store {
         if let Some(parent) = self.file.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("could not create {}: {e}", parent.display()))?;
         }
-        let text = serde_json::to_string_pretty(&StoreFile { version: STORE_VERSION, accounts: file.accounts.clone() })
+        let text = serde_json::to_string_pretty(&StoreFile {
+            version: STORE_VERSION,
+            accounts: file.accounts.clone(),
+            helper_logins: file.helper_logins.clone(),
+        })
             .map_err(|e| e.to_string())?;
         let tmp = self.file.with_extension("json.tmp");
         std::fs::write(&tmp, text).map_err(|e| format!("could not write {}: {e}", tmp.display()))?;
@@ -137,6 +175,7 @@ impl Store {
         let mut file = self.read();
         let index = file.accounts.iter().position(|a| a.id == id).ok_or_else(|| unknown(id))?;
         let account = file.accounts.remove(index);
+        file.helper_logins.retain(|_, value| value != id);
         self.write(&file)?;
         if !delete_home {
             return Ok(false);
@@ -147,6 +186,48 @@ impl Store {
             return Ok(true);
         }
         Ok(false)
+    }
+
+    /// The saved choice for helpers of `agent_id`, as written. A saved account that is gone still shows up here;
+    /// [`Store::effective_helper_login`] is the one to act on.
+    pub fn helper_login(&self, agent_id: &str) -> HelperLogin {
+        match self.read().helper_logins.get(&agent_id.trim().to_ascii_lowercase()).map(String::as_str) {
+            None => HelperLogin::Ask,
+            Some(HELPER_MAIN) => HelperLogin::Main,
+            Some(id) => HelperLogin::Account(id.to_string()),
+        }
+    }
+
+    /// The choice to act on: a saved account that no longer exists for this agent falls back to "Ask me".
+    pub fn effective_helper_login(&self, agent_id: &str) -> HelperLogin {
+        match self.helper_login(agent_id) {
+            HelperLogin::Account(id) if self.resolve(agent_id, &id).is_err() => HelperLogin::Ask,
+            other => other,
+        }
+    }
+
+    /// Save the choice for helpers of `agent_id`: `ask`, `main` or the id of one of its accounts.
+    pub fn set_helper_login(&self, agent_id: &str, value: &str) -> Result<HelperLogin, String> {
+        let agent_id = agent_id.trim().to_ascii_lowercase();
+        scheme_for(&agent_id)?;
+        let value = value.trim();
+        let choice = match value {
+            "" | HELPER_ASK => HelperLogin::Ask,
+            HELPER_MAIN => HelperLogin::Main,
+            id => HelperLogin::Account(self.resolve(&agent_id, id)?.id),
+        };
+        let _guard = WRITE_LOCK.lock();
+        let mut file = self.read();
+        match &choice {
+            HelperLogin::Ask => {
+                file.helper_logins.remove(&agent_id);
+            }
+            other => {
+                file.helper_logins.insert(agent_id, other.as_value());
+            }
+        }
+        self.write(&file)?;
+        Ok(choice)
     }
 
     /// The account `id`, which must belong to `agent_id`.
@@ -246,7 +327,14 @@ pub fn validate_for_run(agent_id: &str, id: &str) -> Result<String, String> {
 
 /// Everything the Settings screen shows: agents that support accounts, and the accounts.
 pub fn overview(store: &Store) -> serde_json::Value {
-    serde_json::json!({ "agents": supporting_agents(), "accounts": store.list() })
+    let helper_logins: BTreeMap<String, String> = supporting_agents()
+        .into_iter()
+        .map(|agent| {
+            let value = store.effective_helper_login(&agent.agent_id).as_value();
+            (agent.agent_id, value)
+        })
+        .collect();
+    serde_json::json!({ "agents": supporting_agents(), "accounts": store.list(), "helper_logins": helper_logins })
 }
 
 /// Shared by the Tauri commands and the bridge routes.

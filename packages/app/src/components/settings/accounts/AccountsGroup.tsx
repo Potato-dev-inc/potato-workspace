@@ -109,6 +109,29 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
                   </li>
                 ))}
               </ul>
+              <div className="mt-3 flex items-center gap-2" data-testid={`helper-login-${agent.agent_id}`}>
+                <label htmlFor={`helper-login-${agent.agent_id}`} className="text-xs text-pm-muted">
+                  Helpers use
+                </label>
+                <select
+                  id={`helper-login-${agent.agent_id}`}
+                  value={helperValue(data.helper_logins?.[agent.agent_id], mine)}
+                  disabled={busy}
+                  onChange={(e) => void run(() => api.setHelperLogin(agent.agent_id, e.target.value))}
+                  className="rounded-lg border border-pm-border bg-pm-bg px-2 py-1.5 text-xs outline-none"
+                >
+                  <option value="ask">Ask me</option>
+                  <option value="main">Main login</option>
+                  {mine.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="mt-1 text-xs text-pm-muted">
+                The login for a helper an agent starts without picking one. Ask me shows a card each time.
+              </p>
               <form
                 className="mt-2 flex items-center gap-2"
                 onSubmit={(e) => {
@@ -140,4 +163,10 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
       </div>
     </SettingBlock>
   );
+}
+
+/** The saved choice, or "ask" when it is missing or names an account that is no longer in the list. */
+function helperValue(saved: string | undefined, mine: { id: string }[]): string {
+  if (saved === 'main') return 'main';
+  return saved && mine.some((a) => a.id === saved) ? saved : 'ask';
 }

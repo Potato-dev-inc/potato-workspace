@@ -59,6 +59,58 @@ function type(input: HTMLInputElement, value: string) {
   });
 }
 
+const helperCard: Question = {
+  ...base,
+  id: 'h1',
+  agent: undefined,
+  kind: 'helper_login',
+  question: 'Which login should this Claude helper use?',
+  choices: [
+    { id: 'once:main', label: 'Main login' },
+    { id: 'always:main', label: 'Always use Main login' },
+    { id: 'once:acc_1', label: 'Work' },
+    { id: 'always:acc_1', label: 'Always use Work' },
+  ],
+};
+
+describe('QuestionCard: which login should a helper use', () => {
+  it('shows each login once, an "Always use this" box, and a way to add another login', () => {
+    const onAddLogin = vi.fn();
+    const onAnswer = vi.fn();
+    act(() => {
+      root.render(<QuestionCard q={helperCard} now={90_000} onAnswer={onAnswer} onDismiss={vi.fn()} onAddLogin={onAddLogin} />);
+    });
+    expect(host.querySelector('.ib-title')?.textContent).toBe('Which login should this Claude helper use?');
+    expect(buttons().map((b) => b.textContent)).toEqual(['Main login', 'Work', 'Add another login', 'Dismiss']);
+    expect(host.querySelector('[data-testid="helper-always"]')?.textContent).toBe('Always use this');
+    act(() => byText('Add another login').click());
+    expect(onAddLogin).toHaveBeenCalledOnce();
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it('answers once:<login> by default and always:<login> once the box is ticked', () => {
+    const { onAnswer } = render(helperCard);
+    act(() => byText('Work').click());
+    expect(onAnswer).toHaveBeenLastCalledWith({ choice_id: 'once:acc_1' });
+    act(() => (host.querySelector('[data-testid="helper-always"] input') as HTMLInputElement).click());
+    act(() => byText('Main login').click());
+    expect(onAnswer).toHaveBeenLastCalledWith({ choice_id: 'always:main' });
+    expect(onAnswer).toHaveBeenCalledTimes(2);
+  });
+
+  it('with no other login it still offers Main login', () => {
+    render({ ...helperCard, choices: helperCard.choices.slice(0, 2) });
+    expect(buttons().map((b) => b.textContent)).toEqual(['Main login', 'Dismiss']);
+  });
+
+  it('dismiss leaves the helper unstarted', () => {
+    const { onDismiss, onAnswer } = render(helperCard);
+    act(() => byText('Dismiss').click());
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+});
+
 describe('QuestionCard', () => {
   it('shows who asks, the question and its choices', () => {
     render(base);

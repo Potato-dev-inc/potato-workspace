@@ -80,6 +80,13 @@ pub fn handle_request_as(
             {
                 request.project_path = query_value(query, "project_path");
             }
+            // An agent starting a helper without naming an account: the person's choice decides, or a card asks.
+            super::helper_login::for_run(
+                &mut request,
+                session_id,
+                &crate::accounts::Store::default_location(),
+                &|| crate::questions::routes::publish_changed(app),
+            )?;
             runtime::run_agent(
                 request,
                 registry.clone(),

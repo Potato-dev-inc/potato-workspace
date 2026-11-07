@@ -7,6 +7,7 @@ const LABEL: Record<string, string> = {
   night_shift_enabled: 'Night shift',
   acp_chat_enabled: 'Chat',
   model_bridge_enabled: 'Model Bridge',
+  spaces_enabled: 'Spaces',
 };
 
 export function checkLabs(ctx: SetupCheckContext): CheckRow[] {

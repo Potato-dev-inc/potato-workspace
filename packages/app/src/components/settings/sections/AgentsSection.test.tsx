@@ -38,6 +38,7 @@ vi.mock('../../../lib/accounts', async (importOriginal) => {
       { agent_id: 'codex', home_env: 'CODEX_HOME', login_hint: 'Run `codex` and sign in, then close it.' },
     ],
     accounts: [{ id: 'acc_9', agent_id: 'claude', label: 'Work', home: 'C:/data/accounts/work' }],
+    helper_logins: { claude: 'ask', codex: 'main' } as Record<string, string>,
   };
   return {
     ...real,
@@ -47,6 +48,7 @@ vi.mock('../../../lib/accounts', async (importOriginal) => {
       rename: vi.fn(async (id: string, label: string) => ({ id, agent_id: 'claude', label, home: 'C:/data/accounts/work' })),
       remove: vi.fn(async () => false),
       openLoginPane: vi.fn(async () => 'pane-1'),
+      setHelperLogin: vi.fn(async (_agentId: string, value: string) => value),
     },
   };
 });
@@ -237,6 +239,20 @@ describe('Agents: each control saves through its own command', () => {
     await click(buttonByText(m.host, 'Open login pane'));
     await settle();
     expect(tauriAccountsApi.openLoginPane).toHaveBeenCalledExactlyOnceWith('claude', 'acc_9');
+  });
+
+  it('Accounts: the Agents screen shows "Helpers use" per agent and saves the pick through the accounts command', async () => {
+    await mount();
+    const claude = m.host.querySelector<HTMLSelectElement>('select#helper-login-claude')!;
+    const codex = m.host.querySelector<HTMLSelectElement>('select#helper-login-codex')!;
+    expect(claude, 'the Claude row is in the screen').toBeTruthy();
+    expect(claude.closest('[data-row="accounts"]'), 'it sits inside the Accounts row').toBeTruthy();
+    expect(claude.value).toBe('ask');
+    expect(codex.value).toBe('main');
+    expect(Array.from(claude.options).map((o) => o.textContent)).toEqual(['Ask me', 'Main login', 'Work']);
+    await pickOption(claude, 'acc_9');
+    await settle();
+    expect(tauriAccountsApi.setHelperLogin).toHaveBeenCalledExactlyOnceWith('claude', 'acc_9');
   });
 
   it('Preload: the master switch saves through the standby command, not settings.json', async () => {

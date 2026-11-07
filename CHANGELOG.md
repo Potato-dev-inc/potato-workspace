@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2
+
+- Agents installed while the app is open now work without restarting the app.
+- Helpers can use a different login: choose it in Settings, or pick it on a card.
+
 ## 1.0.1
 
 - Update test release: no changes to the app.

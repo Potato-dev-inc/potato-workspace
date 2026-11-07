@@ -10,7 +10,7 @@
 //! (`mcp_sessions::authorize` refuses routes that are not a catalog tool): an agent cannot
 //! answer its own question. A paired phone passes the normal bearer-token gate in `router.rs`.
 
-use super::{now_ms, store, Choice, NewQuestion, Question, QuestionError, ACP_KIND_PERMISSION, CI_KIND_FIX, CI_KIND_PUSH, ISSUE_KIND_PUSH, ISSUE_KIND_START};
+use super::{now_ms, store, Choice, NewQuestion, Question, QuestionError, ACP_KIND_PERMISSION, HELPER_LOGIN_KIND, CI_KIND_FIX, CI_KIND_PUSH, ISSUE_KIND_PUSH, ISSUE_KIND_START};
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -78,6 +78,9 @@ fn check_person_only(id: &str) -> Result<(), (u16, Value)> {
     if kind == ACP_KIND_PERMISSION {
         return Err(acp_refusal());
     }
+    if kind == HELPER_LOGIN_KIND {
+        return Err(helper_login_refusal());
+    }
     Ok(())
 }
 
@@ -107,6 +110,17 @@ fn acp_refusal() -> (u16, Value) {
     )
 }
 
+fn helper_login_refusal() -> (u16, Value) {
+    (
+        403,
+        json!({
+            "code": "HELPER_LOGIN_NEEDS_PERSON",
+            "error": "this card asks the person which login a helper should use; answer it in the Puppet Master window or from a paired phone",
+            "recoverable": false,
+        }),
+    )
+}
+
 fn is_ci_kind(kind: &str) -> bool {
     kind == CI_KIND_FIX || kind == CI_KIND_PUSH
 }
@@ -130,6 +144,7 @@ fn dismiss(id: &str, via_phone: bool) -> RouteReply {
             Some(kind) if is_issue_kind(&kind) => return Err(issue_refusal()),
             Some(kind) if is_ci_kind(&kind) => return Err(ci_refusal()),
             Some(kind) if kind == ACP_KIND_PERMISSION => return Err(acp_refusal()),
+            Some(kind) if kind == HELPER_LOGIN_KIND => return Err(helper_login_refusal()),
             _ => {}
         }
     }

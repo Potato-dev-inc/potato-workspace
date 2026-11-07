@@ -180,6 +180,13 @@
 .cockpit .ib-field input::placeholder {
   color: var(--label-3);
 }
+.cockpit .ib-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--label-2);
+}
 .cockpit .ib-code {
   font: 12px var(--font-mono);
   padding: 0 4px;

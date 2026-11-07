@@ -7,6 +7,7 @@ pub(crate) mod checks;
 pub(crate) mod completion;
 pub(crate) mod delivery;
 pub(crate) mod headless;
+pub(crate) mod helper_login;
 mod messaging;
 mod native;
 pub(crate) mod pane_close;

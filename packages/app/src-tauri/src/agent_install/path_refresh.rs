@@ -94,9 +94,9 @@ pub struct Refresh {
     pub added: Vec<String>,
 }
 
-/// `Path` from one registry key, expanded. Windows only; elsewhere there is nothing to read.
+/// The `Path` value of one registry key, unexpanded. Windows only; elsewhere there is nothing to read.
 #[cfg(windows)]
-fn read_registry_path(key: &str) -> Option<String> {
+pub(crate) fn read_registry_path(key: &str) -> Option<String> {
     let out = crate::proc_util::hidden_command("reg")
         .args(["query", key, "/v", "Path"])
         .stdin(std::process::Stdio::null())
@@ -109,20 +109,29 @@ fn read_registry_path(key: &str) -> Option<String> {
 }
 
 #[cfg(not(windows))]
-fn read_registry_path(_key: &str) -> Option<String> {
+pub(crate) fn read_registry_path(_key: &str) -> Option<String> {
     None
+}
+
+/// The machine folders then the user folders from the registry, with `%VAR%` references expanded
+/// from this process's environment. Empty when neither key has a `Path` value.
+pub(crate) fn registry_folders() -> Vec<String> {
+    let env: HashMap<String, String> =
+        std::env::vars().map(|(k, v)| (k.to_ascii_uppercase(), v)).collect();
+    let lookup = |name: &str| env.get(name).cloned();
+    [MACHINE_KEY, USER_KEY]
+        .iter()
+        .filter_map(|key| read_registry_path(key))
+        .map(|value| expand_vars(&value, &lookup))
+        .collect()
 }
 
 /// Re-reads the registry PATH and adds what is missing to this process's PATH. Panes spawned
 /// afterwards inherit it, and `PATH` lookups (the doctor's installed check) see it at once.
 pub fn refresh_process_path() -> Refresh {
-    let env: HashMap<String, String> =
-        std::env::vars().map(|(k, v)| (k.to_ascii_uppercase(), v)).collect();
-    let lookup = |name: &str| env.get(name).cloned();
-    let machine = read_registry_path(MACHINE_KEY).map(|v| expand_vars(&v, &lookup));
-    let user = read_registry_path(USER_KEY).map(|v| expand_vars(&v, &lookup));
     let current = std::env::var("PATH").unwrap_or_default();
-    let fresh: Vec<&str> = [machine.as_deref(), user.as_deref()].into_iter().flatten().collect();
+    let fresh = registry_folders();
+    let fresh: Vec<&str> = fresh.iter().map(String::as_str).collect();
     let (merged, added) = merge_path(&current, &fresh);
     if !added.is_empty() {
         std::env::set_var("PATH", &merged);

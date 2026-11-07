@@ -20,10 +20,15 @@ const AGENTS = [
   { agent_id: 'codex', home_env: 'CODEX_HOME', login_hint: 'Run `codex` and sign in, then close it.' },
 ];
 
-function fakeApi(initial: Account[] = []) {
+function fakeApi(initial: Account[] = [], savedHelperLogins: Record<string, string> = {}) {
   let accounts = [...initial];
+  let helperLogins: Record<string, string> = { ...savedHelperLogins };
   const api = {
-    list: vi.fn(async (): Promise<AccountsOverview> => ({ agents: AGENTS, accounts })),
+    list: vi.fn(async (): Promise<AccountsOverview> => ({ agents: AGENTS, accounts, helper_logins: helperLogins })),
+    setHelperLogin: vi.fn(async (agentId: string, value: string) => {
+      helperLogins = { ...helperLogins, [agentId]: value };
+      return value;
+    }),
     add: vi.fn(async (agentId: string, label: string) => {
       const a = { id: `acc_${accounts.length + 1}`, agent_id: agentId, label, home: `C:/data/accounts/${accounts.length + 1}` };
       accounts = [...accounts, a];
@@ -123,6 +128,40 @@ describe('AccountsGroup', () => {
       button(host, 'Remove')!.click();
     });
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('unknown account');
+  });
+
+  it('Helpers use: shows Ask me by default, with Main login and each account of that agent only', async () => {
+    await render(
+      fakeApi([
+        { id: 'acc_1', agent_id: 'claude', label: 'Work', home: 'C:/a' },
+        { id: 'acc_2', agent_id: 'codex', label: 'Personal', home: 'C:/b' },
+      ]),
+    );
+    const select = host.querySelector('#helper-login-claude') as HTMLSelectElement;
+    expect(select.value).toBe('ask');
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Ask me', 'Main login', 'Work']);
+    expect(host.querySelector('label[for="helper-login-claude"]')?.textContent).toBe('Helpers use');
+    const codex = host.querySelector('#helper-login-codex') as HTMLSelectElement;
+    expect(Array.from(codex.options).map((o) => o.textContent)).toEqual(['Ask me', 'Main login', 'Personal']);
+  });
+
+  it('Helpers use: picking a login saves it for that agent and the row shows it', async () => {
+    const api = fakeApi([{ id: 'acc_1', agent_id: 'claude', label: 'Work', home: 'C:/a' }]);
+    await render(api);
+    const select = host.querySelector('#helper-login-claude') as HTMLSelectElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, 'acc_1');
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(api.setHelperLogin).toHaveBeenCalledExactlyOnceWith('claude', 'acc_1');
+    expect((host.querySelector('#helper-login-claude') as HTMLSelectElement).value).toBe('acc_1');
+    expect((host.querySelector('#helper-login-codex') as HTMLSelectElement).value).toBe('ask');
+  });
+
+  it('Helpers use: a saved account that is no longer listed shows Ask me', async () => {
+    await render(fakeApi([], { claude: 'acc_gone', codex: 'main' }));
+    expect((host.querySelector('#helper-login-claude') as HTMLSelectElement).value).toBe('ask');
+    expect((host.querySelector('#helper-login-codex') as HTMLSelectElement).value).toBe('main');
   });
 
   it('renders nothing without a backend', async () => {

@@ -27,6 +27,13 @@ struct RemoveBody {
     delete_home: bool,
 }
 
+#[derive(Deserialize)]
+struct HelperLoginBody {
+    agent_id: String,
+    /// `ask`, `main` or an account id.
+    value: String,
+}
+
 fn bad(message: String) -> (u16, Value) {
     (400, json!({"code": "INVALID_ARGUMENT", "error": message.clone(), "message": message}))
 }
@@ -55,6 +62,12 @@ pub(in crate::bridge) fn respond(method: &str, segments: &[&str], request: &Valu
             store
                 .remove(&b.id, b.delete_home)
                 .map(|deleted| (200, json!({"removed": true, "home_deleted": deleted})))
+                .map_err(bad)
+        })),
+        ("POST", ["accounts", "helper-login"]) => Some(body::<HelperLoginBody>(request).and_then(|b| {
+            store
+                .set_helper_login(&b.agent_id, &b.value)
+                .map(|choice| (200, json!({"agent_id": b.agent_id.trim().to_ascii_lowercase(), "value": choice.as_value()})))
                 .map_err(bad)
         })),
         _ => None,
@@ -114,6 +127,17 @@ mod tests {
         assert!(std::path::Path::new(&home).is_dir(), "the folder survives a plain remove");
         let (status, _) = call(&store, "POST", "/accounts/remove", json!({"id": id}));
         assert_eq!(status, 400, "already removed");
+
+        let (_, claude) = call(&store, "POST", "/accounts", json!({"agent_id": "claude", "label": "Home"}));
+        let (status, saved) = call(&store, "POST", "/accounts/helper-login", json!({"agent_id": "claude", "value": claude["id"]}));
+        println!("POST /accounts/helper-login -> {status} {saved}");
+        assert_eq!((status, saved["value"].clone()), (200, claude["id"].clone()));
+        let (_, overview) = call(&store, "GET", "/accounts", json!({}));
+        assert_eq!(overview["helper_logins"]["claude"], claude["id"]);
+        let (status, _) = call(&store, "POST", "/accounts/helper-login", json!({"agent_id": "claude", "value": "acc_nope"}));
+        assert_eq!(status, 400);
+        let (status, saved) = call(&store, "POST", "/accounts/helper-login", json!({"agent_id": "claude", "value": "ask"}));
+        assert_eq!((status, saved["value"].as_str()), (200, Some("ask")));
 
         assert!(respond("GET", &["accounts", "nope"], &json!({}), &store).is_none());
         let _ = std::fs::remove_dir_all(root);

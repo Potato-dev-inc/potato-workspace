@@ -135,9 +135,9 @@ fn code_profiles_command_unchanged() {
         assert_eq!(argv_of(&cmd), argv, "{id}: argv");
         assert_eq!(cmd.get_cwd().map(|c| c.to_string_lossy().into_owned()), Some(cwd.clone()), "{id}: cwd");
         let path = crate::shell_env::path_for_spawn();
-        assert_eq!(cmd.get_env("PATH").and_then(|v| v.to_str()), Some(path), "{id}: PATH");
+        assert_eq!(cmd.get_env("PATH").and_then(|v| v.to_str()), Some(path.as_str()), "{id}: PATH");
         #[cfg(windows)]
-        assert_eq!(cmd.get_env("Path").and_then(|v| v.to_str()), Some(path), "{id}: Path");
+        assert_eq!(cmd.get_env("Path").and_then(|v| v.to_str()), Some(path.as_str()), "{id}: Path");
         assert_eq!(cmd.get_env("TERM").and_then(|v| v.to_str()), Some("xterm-256color"), "{id}: TERM");
         assert_eq!(cmd.get_env("COLORTERM").and_then(|v| v.to_str()), Some("truecolor"), "{id}: COLORTERM");
     }

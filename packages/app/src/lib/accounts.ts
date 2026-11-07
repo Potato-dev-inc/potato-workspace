@@ -18,6 +18,8 @@ export interface AccountAgent {
 export interface AccountsOverview {
   agents: AccountAgent[];
   accounts: Account[];
+  /** Per agent id: which login a helper that agent starts uses. `ask`, `main` or an account id. Absent on an old backend. */
+  helper_logins?: Record<string, string>;
 }
 
 export interface AccountsApi {
@@ -27,6 +29,8 @@ export interface AccountsApi {
   remove: (id: string, deleteHome?: boolean) => Promise<boolean>;
   /** Start the agent under the account in a new pane (the one-time login). */
   openLoginPane: (agentId: string, accountId: string) => Promise<string>;
+  /** Which login a helper this agent starts uses: `ask`, `main` or an account id. Returns the saved value. */
+  setHelperLogin: (agentId: string, value: string) => Promise<string>;
 }
 
 const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -42,6 +46,7 @@ export const tauriAccountsApi: AccountsApi = {
   rename: (id, label) => call<Account>('accounts_rename', { id, label }),
   remove: (id, deleteHome = false) => call<boolean>('accounts_remove', { id, deleteHome }),
   openLoginPane: (agentId, accountId) => call<string>('new_pane', { agentId, accountId }),
+  setHelperLogin: (agentId, value) => call<string>('accounts_set_helper_login', { agentId, value }),
 };
 
 export function accountsFor(accounts: Account[], agentId: string): Account[] {

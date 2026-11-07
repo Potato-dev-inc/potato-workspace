@@ -23,3 +23,9 @@ pub fn accounts_rename(id: String, label: String) -> Result<Account, String> {
 pub fn accounts_remove(id: String, delete_home: Option<bool>) -> Result<bool, String> {
     Store::default_location().remove(&id, delete_home.unwrap_or(false))
 }
+
+/// Which login a helper an agent starts uses when the agent names none: `ask`, `main` or an account id.
+#[tauri::command]
+pub fn accounts_set_helper_login(agent_id: String, value: String) -> Result<String, String> {
+    Store::default_location().set_helper_login(&agent_id, &value).map(|choice| choice.as_value())
+}

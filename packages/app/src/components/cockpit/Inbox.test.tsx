@@ -8,6 +8,7 @@ import type { PaneInfo } from '@puppet-master/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { PanePrompt } from '../../lib/cockpit-api';
 import type { Question } from '../../lib/questions';
+import { registerSettingsOpener } from '../../lib/openSettingsAt';
 import { Inbox } from './Inbox';
 
 const settings = vi.hoisted(() => ({ patchSettings: vi.fn(() => Promise.resolve({})) }));
@@ -446,5 +447,39 @@ describe('Collision alert cards in the Inbox', () => {
     expect(host.querySelector('h1')?.textContent).toBe('Nothing needs you');
     expect(host.querySelector('.ck-doto')?.textContent).toBe('00');
     expect(host.querySelectorAll('[data-ib-card]')).toHaveLength(0);
+  });
+});
+
+describe('Which login should a helper use, in the Inbox', () => {
+  it('draws the card with an Always box, answers with the pick, and Add another login opens Settings on the accounts', () => {
+    const helper = question({
+      id: 'hl-1',
+      agent: undefined,
+      kind: 'helper_login',
+      question: 'Which login should this Claude helper use?',
+      choices: [
+        { id: 'once:main', label: 'Main login' },
+        { id: 'always:main', label: 'Always use Main login' },
+        { id: 'once:acc_1', label: 'Work' },
+        { id: 'always:acc_1', label: 'Always use Work' },
+      ],
+    });
+    const opened = vi.fn();
+    registerSettingsOpener(opened);
+    try {
+      const { api, answerQuestion } = fixture({ questions: [helper] });
+      mount(api);
+      const card = cards().find((c) => c.dataset.kind === 'question')!;
+      expect(card.querySelector('.ib-title')?.textContent).toBe('Which login should this Claude helper use?');
+      expect(card.querySelector('[data-testid="helper-always"]')).toBeTruthy();
+      const button = (text: string) => Array.from(card.querySelectorAll('button')).find((b) => b.textContent === text)!;
+      act(() => (card.querySelector('[data-testid="helper-always"] input') as HTMLInputElement).click());
+      act(() => button('Work').click());
+      expect(answerQuestion).toHaveBeenCalledWith('hl-1', { choice_id: 'always:acc_1' });
+      act(() => button('Add another login').click());
+      expect(opened).toHaveBeenCalledWith('accounts');
+    } finally {
+      registerSettingsOpener(null);
+    }
   });
 });

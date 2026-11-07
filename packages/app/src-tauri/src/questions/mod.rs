@@ -32,10 +32,15 @@ pub const CI_KIND_PUSH: &str = "ci_push";
 /// Kind of the card for an agent's own permission request in a chat session over ACP (`acp::chat::cards`): its choices
 /// are the options the agent offered ("allow once", "allow for session", "reject"...). Only the person answers it.
 pub const ACP_KIND_PERMISSION: &str = "acp_permission";
+/// Kind of the card that asks which login a helper an agent is starting should use (`accounts::helper`). Only the
+/// person answers it: an agent must not be able to pick its own login.
+pub const HELPER_LOGIN_KIND: &str = "helper_login";
+/// A helper-login card lists every login twice ("once" and "always"), so it may carry more choices than `MAX_CHOICES`.
+pub const HELPER_LOGIN_MAX_CHOICES: usize = 24;
 /// Cards only the person can answer: never an agent, never a companion, never a chat channel. A plain
 /// loopback request may not answer or dismiss them (`routes.rs`), and a chat answer is refused in
 /// `attention::answer`. Answered from the desktop window (Tauri command) or a paired phone only.
-pub const PERSON_ONLY_KINDS: &[&str] = &["budget", ISSUE_KIND_START, ISSUE_KIND_PUSH, CI_KIND_FIX, CI_KIND_PUSH, ACP_KIND_PERMISSION];
+pub const PERSON_ONLY_KINDS: &[&str] = &["budget", ISSUE_KIND_START, ISSUE_KIND_PUSH, CI_KIND_FIX, CI_KIND_PUSH, ACP_KIND_PERMISSION, HELPER_LOGIN_KIND];
 /// A usage-limit card (raised by Puppet Master, never through `ask_user`) outlives an hour: a limit
 /// can last a working day.
 pub const MAX_LIMIT_TIMEOUT_S: u64 = 24 * 3600;
@@ -273,8 +278,9 @@ impl QuestionStore {
                 format!("question is longer than {MAX_QUESTION_CHARS} characters"),
             ));
         }
-        if new.choices.len() > MAX_CHOICES {
-            return Err(QuestionError::new("INVALID_ARGUMENT", format!("at most {MAX_CHOICES} choices")));
+        let max_choices = if new.kind.as_deref() == Some(HELPER_LOGIN_KIND) { HELPER_LOGIN_MAX_CHOICES } else { MAX_CHOICES };
+        if new.choices.len() > max_choices {
+            return Err(QuestionError::new("INVALID_ARGUMENT", format!("at most {max_choices} choices")));
         }
         let mut choices: Vec<Choice> = Vec::with_capacity(new.choices.len());
         for choice in &new.choices {

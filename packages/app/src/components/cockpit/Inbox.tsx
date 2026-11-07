@@ -16,6 +16,7 @@ import { BudgetCard } from './BudgetCard';
 import { ConsentCard } from './ConsentCard';
 import { LimitCard } from './LimitCard';
 import { QuestionCard } from './QuestionCard';
+import { openSettingsAt } from '../../lib/openSettingsAt';
 import { IssueCard } from './IssueCard';
 import { CiFixCard } from './CiFixCard';
 import { PaneErrorCard } from './InboxError';
@@ -156,7 +157,7 @@ export function Inbox({
           since: q.created_at_ms,
           quick: q.choices.length > 0,
           render: () => (
-            <QuestionCard q={q} paneName={paneName} now={c.now} onAnswer={answer(q.id)} onDismiss={() => void c.asked.dismissQuestion(q.id)} onOpenPane={open(q.pane_id)} />
+            <QuestionCard q={q} paneName={paneName} now={c.now} onAnswer={answer(q.id)} onDismiss={() => void c.asked.dismissQuestion(q.id)} onOpenPane={open(q.pane_id)} onAddLogin={() => openSettingsAt('agents', 'accounts')} />
           ),
         });
       }

@@ -493,6 +493,22 @@ export const generalRows: RowDef[] = [
       />
     ),
   },
+  {
+    id: 'spaces-labs',
+    label: 'Spaces',
+    hint: 'Chat with friends in small groups, computer to computer. No server keeps your messages.',
+    keywords: 'spaces chat friends groups small group computer to computer labs early',
+    group: 'Labs',
+    labs: { name: 'Spaces', about: 'Chat with friends in small groups, computer to computer.' },
+    render: (env) => (
+      <SettingToggle
+        label="Spaces"
+        description="Chat with friends in small groups, computer to computer. No server keeps your messages."
+        checked={env.settings.spaces_enabled ?? false}
+        onChange={(value) => void env.patch({ spaces_enabled: value })}
+      />
+    ),
+  },
   { id: 'team', label: 'Team', hint: 'Tell teammates when your agent pushes; get a card when theirs does.', keywords: 'team heads-up co-work teammates push pull merge labs shared folder', group: 'Labs', labs: { name: 'Team', about: 'Tell teammates when your agent pushes, and see when theirs does.' }, render: (env) => <TeamSettings onSaved={env.markSaved} /> },
   { id: 'live-room', label: 'Live Room', hint: 'Let people with a link watch a chat. Pick the relay address, how long and how many.', keywords: 'live room share stream watch link relay viewers broadcast default length', group: 'Live Room', render: (env) => <LiveRoomRow onSaved={env.markSaved} /> },
   { id: 'version', label: 'Version', hint: 'Check for updates and download the installer.', keywords: 'app version update release download install', group: 'About', render: () => <VersionRow /> },

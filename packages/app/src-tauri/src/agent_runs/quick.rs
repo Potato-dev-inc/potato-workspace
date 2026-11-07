@@ -140,7 +140,14 @@ pub fn quick_ask(
     let backend = select_backend(request.backend.as_deref(), &|id| {
         crate::tui::profile_for(id).is_installed()
     })?;
-    let run = build_run_request(&request, &backend)?;
+    let mut run = build_run_request(&request, &backend)?;
+    // Same rule as run_agent: an agent's helper takes the person's login choice (or a card asks).
+    super::helper_login::for_run(
+        &mut run,
+        session_id.as_deref(),
+        &crate::accounts::Store::default_location(),
+        &|| crate::questions::routes::publish_changed(&app),
+    )?;
     let view = super::runtime::run_agent(run, registry, app, session_id)?;
     project(&view)
 }

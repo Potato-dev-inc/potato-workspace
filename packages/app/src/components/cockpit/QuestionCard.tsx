@@ -1,7 +1,15 @@
 // One `ask_user` question in the Inbox: the agent's question, its choices as buttons, a text field
 // when free text is allowed, and Dismiss. It is an InboxCard like every other card.
 import { useState } from 'react';
-import { askerName, waitCaption, type Question, type QuestionAnswer } from '../../lib/questions';
+import {
+  askerName,
+  helperLoginChoice,
+  helperLoginOptions,
+  isHelperLogin,
+  waitCaption,
+  type Question,
+  type QuestionAnswer,
+} from '../../lib/questions';
 import '../../styles/cockpit-questions.css';
 import { CardButton, InboxCard } from './InboxCard';
 
@@ -12,8 +20,11 @@ export function QuestionCard({
   onAnswer,
   onDismiss,
   onOpenPane,
+  onAddLogin,
 }: {
   q: Question;
+  /** A helper-login card: opens Settings on the accounts, where another login can be added. */
+  onAddLogin?: () => void;
   /** Name of the pane the question belongs to, when it names one. */
   paneName?: string;
   now: number;
@@ -22,6 +33,8 @@ export function QuestionCard({
   onOpenPane?: () => void;
 }) {
   const [text, setText] = useState('');
+  const [always, setAlways] = useState(false);
+  const helper = isHelperLogin(q);
   const send = () => {
     const value = text.trim();
     if (!value) return;
@@ -40,7 +53,12 @@ export function QuestionCard({
       note={<span data-testid="question-wait">{waitCaption(q, now, paneName)}</span>}
       data={{ 'data-question-id': q.id, 'data-urgent': q.urgency === 'high' ? '' : undefined }}
       body={
-        q.allow_free_text ? (
+        helper ? (
+          <label className="ib-check" data-testid="helper-always">
+            <input type="checkbox" checked={always} onChange={(e) => setAlways(e.target.checked)} />
+            <span>Always use this</span>
+          </label>
+        ) : q.allow_free_text ? (
           <form
             className="ib-field"
             onSubmit={(e) => {
@@ -62,7 +80,15 @@ export function QuestionCard({
         ) : null
       }
       actions={
-        q.choices.length > 0 ? (
+        helper ? (
+          <>
+            {helperLoginOptions(q).map((o) => (
+              <CardButton key={o.id} tone="secondary" role="answer" onClick={() => onAnswer({ choice_id: helperLoginChoice(o.id, always) })}>
+                {o.label}
+              </CardButton>
+            ))}
+          </>
+        ) : q.choices.length > 0 ? (
           // Equal weight on purpose: the agent wrote the choices, so none is made the easy default.
           <>
             {q.choices.map((c) => (
@@ -75,6 +101,11 @@ export function QuestionCard({
       }
       more={
         <>
+          {helper && onAddLogin && (
+            <CardButton tone="plain" onClick={onAddLogin}>
+              Add another login
+            </CardButton>
+          )}
           <CardButton tone="plain" role="dismiss" onClick={onDismiss}>
             Dismiss
           </CardButton>
