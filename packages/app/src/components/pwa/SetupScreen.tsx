@@ -243,7 +243,7 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
         type="url"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
-        placeholder={shouldUseSameOriginBridgeProxy(window.location) ? 'https://your.domain.com/bridge' : 'http://127.0.0.1:17321'}
+        placeholder={shouldUseSameOriginBridgeProxy(window.location) ? 'https://your.domain.com/bridge' : 'http://127.0.0.1:17421'}
         className="w-full max-w-xs bg-pm-bg border border-pm-border rounded px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-pm-accent"
       />
       {err && <p className="text-pm-err text-xs">{err}</p>}

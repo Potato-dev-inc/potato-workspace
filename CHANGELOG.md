@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.5
+
+- Chat messages show added files as chips instead of pasting file text into the message. Paste images with Ctrl+V. Type @ to add a project file.
+- Files reach the agent as real attachments: images as images when the agent supports them, other files as file links or file contents.
+- Fixed: 1.0.4 did not bring over data from 1.0.3. On first start, 1.0.5 copies your 1.0.3 data once. It only fills in missing files and never changes the old folders.
+- Fixed: Potato Workspace now uses its own ports (17421-17499) so it does not clash with Puppet Master.
+- Security fixes for the local bridge, the proxy marker and checkpoint restore.
+
 ## 1.0.4
 
 - Potato Workspace is fully separate from Puppet Master: its own tool server, skill pack, ports, data folders, companion folders and release uploads.
@@ -34,72 +42,6 @@
 - First release of Potato Workspace: agents, panes, terminal and chat in one app.
 - Installer includes Node.js, npm, Git and cloudflared.
 - One-click updates from GitHub Releases.
-
-## 1.0.4
-
-- New setting **Allow hidden helpers** (Settings > Agents, off by default). While it is off, an agent that asks for a hidden
-  helper (`headless: true`) gets a visible pane instead, and the result says the request was ignored. A helper that does
-  run hidden is listed in the Inbox ("Claude helper ran with no window"), with its task and how it ended.
-
-- A helper started with a model, a reasoning effort or read-only now really gets them: the asked model and effort go on the
-  agent's own command line (hidden and in a pane) instead of the agent's settings file winning, and a read-only helper can
-  be a visible pane for agents that can start one read-only. The receipt shows the model that actually ran and says plainly
-  when it is not the one asked for, or when the agent cannot be told a model.
-
-- Potato Bot sandbox OSes: Linux Mint (Cinnamon) joins Ubuntu, the Zorin look and the light desktop in the setup wizard. The
-  Sandbox row now lists the OSes installed in the sandbox, switches the active one in one click, and has **Add OS…** to install
-  another later without losing the sandbox's files. Mint and Zorin are desktops on the shared Ubuntu base, not separate distros.
-
-- Pick for me: the first row of the "+" menu suggests one agent (and its saved login) for the project, from your own
-  Scores for that project (last 90 days), and says why in one plain sentence. With little history it says it is too
-  early and suggests your usual agent. Nothing starts until you press Start; nothing you type is read or sent, and
-  nothing is stored. Desktop app only. Built and unit-tested; no live run with real agents yet. See
-  `docs/features/pick-for-me.md`.
-
-- Agent Store (preview, Windows only): a "More agents" grid of 19 terminal agents, opened from the "+" menu, Set up agents,
-  Settings > Agents or the palette. Each card shows the vendor, the license, how to sign in and a tier: "Tested" (Kilo Code
-  has captures from a Windows run) or "Basic support" (runs in a pane; not tested on Windows yet). Install shows the vendor's own
-  command and runs it in a visible window after you confirm. Add, Check it works, Remove and Uninstall the program are separate
-  steps, each with its own confirm. Sign in happens in the agent's own pane. Not run live yet; Amp, Grok CLI, Codebuff and
-  Antigravity are not in the list. See `docs/features/agent-store.md`.
-
-- Night Shift (Preview, off by default: Settings > General > Labs): write up to 10 tasks in Tonight, pick the plans and a stop
-  time, and Puppet Master works through them while you sleep, each in its own separate copy, checking your declared tests
-  after every turn. It never answers a trust, permission or sign-in screen, never merges anything, and sends one push in the
-  morning with counts only. The Morning page shows what each task did; Keep merges a copy, Throw away deletes it. Tested end to
-  end with fake agents (green tasks, a usage limit that moves to the other plan, a trust screen left alone, a stop time that cuts
-  a task off, Keep, Throw away and a conflict); no live night with real agents yet. See `docs/features/night-shift.md`.
-
-- Bring my old chats: an opt-in way to add the chats you had in Claude Code, Codex, OpenCode and any agent with a
-  `[session_chat.history]` table to Ctrl+Shift+F search. Nothing is read until you press "Find my chats"; the chats stay on
-  this PC, are redacted before they are saved, and "Remove imported chats" deletes them. Phone search can still show them
-  (known gap, see `docs/features/bring-all-my-chats.md`).
-
-- The Approve dialog for your own agents now shows the whole command: the program that will run (its path, with
-  your user folder shown as `~`) and then the arguments, for the headless command and the visible pane command.
-  A program that is not installed shows its name and "not found on this PC". The Agent Wizard's review screen
-  shows the program path too. Nothing about approvals changed: a different program behind the same name was
-  already caught by the pinned program path ("Changed since you approved it").
-- Agent Wizard ("Finish without me"): a permission question that sits under the list of tool calls an agent
-  printed (`Edited 1 file`, `Explored 1 file`) is read from its real options again, so the wizard answers it
-  with the one-time yes instead of stopping. When a question really is yours to answer, the agent's pane now
-  stays open: "Show the pane" opens it and Retry goes on from there (before, the stop closed the pane and
-  the message told you to answer in a pane that was gone). If the agent quit by itself the message says so.
-- Agent updates are now visible. When Claude Code, Codex, Cursor or OpenCode update, Settings > Agents and the Inbox say how it went
-  ("Claude Code 2.3.0 to 2.4.0: checked, all good." or "...: screens changed. Puppet Master will ask you before acting."). A check that
-  passes on this computer clears the "Untested version" label for that exact version only; the next update starts again. A run that
-  cannot find an agent's input box, a screen Puppet Master cannot read, or a turn that goes quiet without saying it finished now starts
-  one check (at most one per agent and version, never faster than every 10 minutes, and only while "Check agents after they update" is
-  on). Before a run starts, a changed program file makes Puppet Master read the version right away instead of waiting up to 15 minutes.
-- Windows: no more console windows flashing on screen while an agent runs. Starting the Cursor agent
-  (whose launcher is PowerShell) or stopping a run used to open and close a PowerShell/`taskkill`
-  window each time. Every helper process now starts hidden through one place (`proc_util`), a test
-  fails if new code starts one any other way, and checking whether an MCP connection is still alive
-  no longer starts `tasklist` at all.
-- The "+" menu starts an agent in the folder you selected. **Separate copy** now starts off (it used to start
-  on for a Git project); turn it on per agent, and your own choice for a project is still remembered.
-  "+" starts in the last folder you used, Recent projects never list a separate copy, and the pane header
-  says "separate copy of <folder>" when it is one.
 
 ## 0.1.5 - security patch
 

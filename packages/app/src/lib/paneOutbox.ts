@@ -4,6 +4,7 @@
 // and the pure rules the view uses; nothing else.
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { ChatAttachment } from './attachFiles';
 
 export type OutboxState = 'queued' | 'sending' | 'sent' | 'failed' | 'cancelled';
 
@@ -38,8 +39,15 @@ async function call<T>(command: string, args: Record<string, unknown>): Promise<
   return invoke<T>(command, args);
 }
 
-/** Adds a message to the pane's list. Rejects with one plain sentence when the backend refuses it. */
-export function sendPaneMessage(paneId: string, text: string): Promise<OutboxMessage> {
+/** The most files one message carries (the backend refuses more). */
+export const MAX_MESSAGE_ATTACHMENTS = 20;
+
+/**
+ * Adds a message to the pane's list. `attachments` is left out when there are none. Rejects with one plain sentence
+ * when the backend refuses it.
+ */
+export function sendPaneMessage(paneId: string, text: string, attachments?: readonly ChatAttachment[]): Promise<OutboxMessage> {
+  if (attachments && attachments.length > 0) return call<OutboxMessage>('pane_message_send', { paneId, text, attachments: [...attachments] });
   return call<OutboxMessage>('pane_message_send', { paneId, text });
 }
 
@@ -122,7 +130,7 @@ export function withSent(list: readonly OutboxMessage[], sent: OutboxMessage): O
  * (`paneOutbox-bridge.ts`). ChatComposer, PendingMessages and usePaneOutbox only ever talk to this shape.
  */
 export interface OutboxTransport {
-  send(paneId: string, text: string): Promise<OutboxMessage>;
+  send(paneId: string, text: string, attachments?: readonly ChatAttachment[]): Promise<OutboxMessage>;
   cancel(paneId: string, messageId: string): Promise<OutboxMessage>;
   list(paneId: string): Promise<OutboxMessage[]>;
   /** Calls `cb` with the pane's whole list on every change. Returns the stop function. */

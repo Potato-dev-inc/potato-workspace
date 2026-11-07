@@ -1,7 +1,7 @@
 use super::*;
 
 fn user(id: &str, text: &str) -> ChatItem {
-    ChatItem::User { id: id.into(), at: None, text: text.into() }
+    ChatItem::User { id: id.into(), at: None, text: text.into(), attachments: Vec::new() }
 }
 
 fn ids(delta: &Delta) -> Vec<&str> {

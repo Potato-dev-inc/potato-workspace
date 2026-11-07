@@ -34,7 +34,7 @@ export const bridgeRows: RowDef[] = [
     id: 'bridge-endpoint',
     label: 'Bridge address',
     hint: 'Where other tools reach Potato Workspace on this computer. Found automatically.',
-    keywords: 'bridge endpoint port ports url local http address 17321 17399',
+    keywords: 'bridge endpoint port ports url local http address 17421 17499',
     group: 'Bridge',
     render: (env) => (
       <InfoRow

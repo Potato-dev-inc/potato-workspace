@@ -39,7 +39,7 @@ pub(crate) fn map_messages(messages: &[Value], window: &dyn Fn(&str, &str) -> Op
                     sent.push((id, created));
                 }
                 if let Some(text) = user_text(message) {
-                    out.push(ChatItem::User { id: format!("oc:{id}:user"), at: iso(&info["time"]["created"]), text });
+                    out.push(ChatItem::User { id: format!("oc:{id}:user"), at: iso(&info["time"]["created"]), text, attachments: Vec::new() });
                 }
             }
             Some("assistant") => assistant(message, id, &sent, window, &mut out),

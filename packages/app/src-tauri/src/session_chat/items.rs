@@ -20,7 +20,7 @@ mod tests {
                 Some(text) => vec![ChatItem::User {
                     id: format!("{offset}:0"),
                     at: None,
-                    text: text.to_string(),
+                    text: text.to_string(), attachments: Vec::new()
                 }],
                 None => Vec::new(),
             }
@@ -40,7 +40,7 @@ mod tests {
         assert_eq!(ids, vec!["0:0", "16:0", "22:0"]);
         assert_eq!(
             items[1],
-            ChatItem::User { id: "16:0".into(), at: None, text: "again".into() }
+            ChatItem::User { id: "16:0".into(), at: None, text: "again".into(), attachments: Vec::new() }
         );
     }
 

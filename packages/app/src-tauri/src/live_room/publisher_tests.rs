@@ -594,7 +594,7 @@ fn end_row(ms: Option<u64>) -> ChatItem {
 }
 
 fn user(text: &str) -> ChatItem {
-    ChatItem::User { id: "u".into(), at: None, text: text.into() }
+    ChatItem::User { id: "u".into(), at: None, text: text.into(), attachments: Vec::new() }
 }
 
 /// The `t` tag of every row in a frame.

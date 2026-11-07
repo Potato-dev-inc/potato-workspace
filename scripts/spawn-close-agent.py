@@ -33,8 +33,8 @@ import uuid
 from pathlib import Path
 
 DEFAULT_HOST = "127.0.0.1"
-PORT_MIN = 17321
-PORT_MAX = 17399
+PORT_MIN = 17421
+PORT_MAX = 17499
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENT_TYPES = ["opencode_native", "opencode", "claude", "codex", "cursor_agent"]
 PANE_TYPES = AGENT_TYPES + ["powershell", "cmd", "bash"]  # --mode pane also takes plain shells
@@ -71,7 +71,7 @@ def discover_bridge(explicit: str | None) -> str:
             continue
         if isinstance(health, dict) and health.get("ok"):
             return base
-    raise SystemExit("No Potato Workspace bridge found on 127.0.0.1:17321-17399. Start the app first.")
+    raise SystemExit("No Potato Workspace bridge found on 127.0.0.1:17421-17499. Start the app first.")
 
 
 def kill_pane(base: str, pane_id: str) -> None:

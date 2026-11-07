@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 const APP_ID: &str = "com.potatodev.workspace";
 /// Run a second, separate Potato Workspace on the same computer: `POTATO_WORKSPACE_PROFILE=<name>`.
 /// Unset, empty or `default` is today's app, unchanged (same paths, ports and app id).
-/// The old `POTATO_WORKSPACE_*` variables are never read: they belong to the other app.
+/// The other product's environment variables (the ones with its own `..._PROFILE` / `..._BRIDGE_...` names) are
+/// never read: they belong to the other app, so a Puppet Master set-up can never steer this one.
 pub const PROFILE_ENV: &str = "POTATO_WORKSPACE_PROFILE";
 pub const BRIDGE_PORT_FILE_NAME: &str = "potato-workspace.bridge.port";
 pub const PAIRING_FILE_NAME: &str = "potato-workspace.pairing.json";
@@ -17,10 +18,21 @@ pub const PROJECT_DIR_NAME: &str = ".potato-workspace";
 pub const HOME_DIR_NAME: &str = ".potato-workspace";
 /// The companion root folder (`~/PotatoWorkspace/companions`).
 pub const COMPANION_HOME_DIR_NAME: &str = "PotatoWorkspace";
-/// Names the other product uses. They are only read to copy old data, never written.
-pub const LEGACY_PROJECT_DIR_NAME: &str = ".potato-workspace";
-pub const LEGACY_HOME_DIR_NAME: &str = ".potato-workspace";
-pub const LEGACY_COMPANION_HOME_DIR_NAME: &str = "PotatoWorkspace";
+/// The names release 1.0.3 (and the Puppet Master it was forked from) used. They are only read, to
+/// copy old data once, and never written.
+pub const LEGACY_PROJECT_DIR_NAME: &str = ".puppet-master";
+pub const LEGACY_HOME_DIR_NAME: &str = ".puppet-master";
+pub const LEGACY_COMPANION_HOME_DIR_NAME: &str = "PuppetMaster";
+/// Files inside the app data folder (`com.potatodev.workspace`, unchanged between 1.0.3 and now) whose
+/// names changed. Their contents are copied under the new names. The bridge port file and the bridge
+/// secret are not: both are rewritten on every start, and a copied port would point at the old range.
+pub const LEGACY_PAIRING_FILE_NAME: &str = "puppet-master.pairing.json";
+pub const LEGACY_TUNNEL_FILE_NAME: &str = "puppet-master.tunnel.json";
+pub const LEGACY_PUSH_FILE_NAME: &str = "puppet-master.push.json";
+pub const LEGACY_PUSH_VAPID_FILE_NAME: &str = "puppet-master.push-vapid.json";
+/// Dropped into a folder once the old data has been brought over. While it exists, nothing is ever
+/// copied into that folder again, so data the person later deletes or changes here stays that way.
+pub const IMPORT_MARKER_NAME: &str = ".imported-from-previous-version";
 
 /// A non-default profile name: `[a-z0-9-]`, 1..=32 chars, lowercased. Anything else (unset, empty,
 /// `default`, or a name with other characters) means the default profile, so a typo never lands a
@@ -161,23 +173,47 @@ pub fn companion_home_dir() -> PathBuf {
         .join("companions")
 }
 
-/// Copy the other product's old folder into this app's own folder, once, without ever
-/// changing or deleting the original. Best effort: a failed copy leaves the new folder
-/// empty and the app starts fresh, while the old data stays untouched.
+/// How deep a copy goes. Real data is a few levels deep; this only stops a folder loop.
+const MAX_COPY_DEPTH: usize = 24;
+
+/// Bring the old folder `old` into `new`, once, without ever changing or deleting anything in `old`
+/// and without ever overwriting a file that is already in `new`: only files `new` does not have are
+/// copied, so data this app wrote into `new` since the update stays as it is. A failed copy leaves what
+/// was copied in place, writes no marker and is tried again (it only fills in what is missing) at
+/// the next start. Once the marker is in `new`, this does nothing.
 pub fn copy_legacy_data_once(old: &Path, new: &Path) {
-    if new.exists() || !old.is_dir() {
+    import_tree_once(old, new, &[]);
+}
+
+fn import_tree_once(old: &Path, new: &Path, skip: &[&str]) {
+    let marker = new.join(IMPORT_MARKER_NAME);
+    if old == new || marker.exists() {
         return;
     }
-    if copy_tree_missing(old, new).is_err() {
-        let _ = fs::remove_dir_all(new);
+    if !old.is_dir() {
+        // Nothing to bring over. Once our own folder exists, close the door, so data another product
+        // writes into the old folder later is never pulled in.
+        if new.is_dir() {
+            write_marker(&marker);
+        }
+        return;
+    }
+    if copy_tree_missing_excluding(old, new, skip, 0).is_ok() {
+        write_marker(&marker);
     }
 }
 
-fn copy_tree_missing(from: &Path, to: &Path) -> std::io::Result<()> {
-    copy_tree_missing_excluding(from, to, &[])
+fn write_marker(marker: &Path) {
+    let _ = fs::write(
+        marker,
+        "Data from the previous version of this app was copied here once. Nothing was moved or deleted there.\n",
+    );
 }
 
-fn copy_tree_missing_excluding(from: &Path, to: &Path, skip: &[&str]) -> std::io::Result<()> {
+fn copy_tree_missing_excluding(from: &Path, to: &Path, skip: &[&str], depth: usize) -> std::io::Result<()> {
+    if depth > MAX_COPY_DEPTH {
+        return Ok(());
+    }
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
         let entry = entry?;
@@ -192,37 +228,82 @@ fn copy_tree_missing_excluding(from: &Path, to: &Path, skip: &[&str]) -> std::io
             continue;
         }
         if kind.is_dir() {
-            copy_tree_missing_excluding(&source, &target, skip)?;
+            copy_tree_missing_excluding(&source, &target, skip, depth + 1)?;
         } else if kind.is_file() && !target.exists() {
-            fs::copy(&source, &target)?;
+            copy_file_whole(&source, &target)?;
         }
     }
     Ok(())
 }
 
-/// Copy the other product's project data into this app's own folder, once.
+/// Copy through a side file and rename, so a crash never leaves a half-written file that would later
+/// count as "already there".
+fn copy_file_whole(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut side = to.as_os_str().to_owned();
+    side.push(".importing");
+    let side = PathBuf::from(side);
+    fs::copy(from, &side)?;
+    if let Err(err) = fs::rename(&side, to) {
+        let _ = fs::remove_file(&side);
+        return Err(err);
+    }
+    Ok(())
+}
+
+/// Copy the old project folder into this app's own folder, once.
 /// Worktrees are deliberately NOT copied: a copied git worktree is a broken worktree, and
 /// existing runs keep working in the old folder until they finish. New runs create theirs
 /// under the new folder.
 pub fn migrate_legacy_project_data(project: &Path) {
-    let old = project.join(LEGACY_PROJECT_DIR_NAME);
-    let new = project.join(PROJECT_DIR_NAME);
-    if new.exists() || !old.is_dir() {
-        return;
-    }
-    if copy_tree_missing_excluding(&old, &new, &["worktrees"]).is_err() {
-        let _ = fs::remove_dir_all(&new);
-    }
+    import_tree_once(&project.join(LEGACY_PROJECT_DIR_NAME), &project.join(PROJECT_DIR_NAME), &["worktrees"]);
 }
 
-/// Copy the old home folder and companion folder into this app's own folders, once.
+/// Copy the old home folder and the old companion folder into this app's own folders, once.
 pub fn migrate_legacy_home_data() {
     let Some(home) = crate::project_path::home_dir() else { return };
+    migrate_legacy_home_data_in(&home);
+}
+
+pub(crate) fn migrate_legacy_home_data_in(home: &Path) {
     copy_legacy_data_once(&home.join(LEGACY_HOME_DIR_NAME), &home.join(HOME_DIR_NAME));
     copy_legacy_data_once(
         &home.join(LEGACY_COMPANION_HOME_DIR_NAME).join("companions"),
         &home.join(COMPANION_HOME_DIR_NAME).join("companions"),
     );
+}
+
+/// The files inside the app data folder whose names changed: (old name, new name).
+fn renamed_app_data_files() -> [(&'static str, &'static str); 4] {
+    [
+        (LEGACY_PAIRING_FILE_NAME, PAIRING_FILE_NAME),
+        (LEGACY_TUNNEL_FILE_NAME, crate::tunnel_config::TUNNEL_FILE_NAME),
+        (LEGACY_PUSH_FILE_NAME, crate::push::SUBSCRIPTIONS_FILE_NAME),
+        (LEGACY_PUSH_VAPID_FILE_NAME, crate::push::VAPID_FILE_NAME),
+    ]
+}
+
+/// Copy the paired phones, tunnel set-up and push subscriptions saved under the old file names into the
+/// new file names, once, in this app's data folder (which kept its name). Never overwrites a new
+/// file and never touches the old one.
+pub fn migrate_legacy_app_data() {
+    import_files_once(&app_data_dir(), &renamed_app_data_files());
+}
+
+fn import_files_once(dir: &Path, renamed: &[(&str, &str)]) {
+    let marker = dir.join(IMPORT_MARKER_NAME);
+    if !dir.is_dir() || marker.exists() {
+        return;
+    }
+    let mut complete = true;
+    for (old, new) in renamed {
+        let (from, to) = (dir.join(old), dir.join(new));
+        if from.is_file() && !to.exists() && copy_file_whole(&from, &to).is_err() {
+            complete = false;
+        }
+    }
+    if complete {
+        write_marker(&marker);
+    }
 }
 
 pub fn ensure_app_data_dir() -> Result<PathBuf, String> {
@@ -261,6 +342,10 @@ pub fn path_for_host_config(path: impl AsRef<std::path::Path>) -> String {
 }
 
 #[cfg(test)]
+#[path = "app_paths_import_tests.rs"]
+mod import_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -293,6 +378,20 @@ mod tests {
             assert_eq!(app_id(), "com.potatodev.workspace");
             assert_eq!(app_data_dir(), legacy_app_data_dir());
             assert_eq!(bridge_port_file(), legacy_app_data_dir().join(BRIDGE_PORT_FILE_NAME));
+        }
+    }
+
+    /// Potato Workspace owns 17421..=17499 and never the other product's 17321..=17399; every
+    /// profile's slice stays inside it and clear of the shim's no-port-file probe ports.
+    #[test]
+    fn the_bridge_range_is_ours_and_never_the_other_products() {
+        let (lo, hi) = bridge_port_range_for(None);
+        assert_eq!((lo, hi), (17421, 17499));
+        assert!(lo > 17399, "no overlap with 17321..=17399");
+        for profile in [Some("a"), Some("e2e"), Some("leo-2")] {
+            let (plo, phi) = bridge_port_range_for(profile);
+            assert!(plo >= lo && phi <= hi && plo <= phi, "{profile:?}: {plo}-{phi}");
+            assert!(plo > 17430, "{profile:?} stays out of the shim's probe ports");
         }
     }
 

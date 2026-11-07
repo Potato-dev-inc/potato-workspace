@@ -217,7 +217,7 @@ mod tests {
     /// A finished turn: the request, one `Read` call with its ok result, and the end when `end` is set.
     fn turn_items(start: u64, request: &str, end: Option<(TurnOutcome, u64)>) -> Vec<ChatItem> {
         let mut items = vec![
-            ChatItem::User { id: "u1".into(), at: Some(iso(start)), text: request.into() },
+            ChatItem::User { id: "u1".into(), at: Some(iso(start)), text: request.into(), attachments: Vec::new() },
             ChatItem::ToolCall {
                 id: "c1".into(),
                 at: Some(iso(start + 200)),
@@ -396,7 +396,7 @@ mod tests {
     fn a_turn_with_nothing_to_show_has_no_replay() {
         // Timed items and no summary, no ring, no tool calls: the window is the items' own times.
         let items = vec![
-            ChatItem::User { id: "u1".into(), at: Some(iso(START)), text: "Hello".into() },
+            ChatItem::User { id: "u1".into(), at: Some(iso(START)), text: "Hello".into(), attachments: Vec::new() },
             ChatItem::TurnEnd { id: "e1".into(), at: Some(iso(START + 500)), outcome: TurnOutcome::Completed, duration_ms: None },
         ];
         let plan = build(input(items, Vec::new(), None)).expect("builds");
@@ -420,7 +420,7 @@ mod tests {
         assert_eq!(build(input(failed, Vec::new(), None)).expect("builds").outcome, "failed");
         // A later message ends a turn that has no end item: it was cut short.
         let mut cut = turn_items(START, "Run it", None);
-        cut.push(ChatItem::User { id: "u2".into(), at: Some(iso(START + 4_000)), text: "Stop".into() });
+        cut.push(ChatItem::User { id: "u2".into(), at: Some(iso(START + 4_000)), text: "Stop".into(), attachments: Vec::new() });
         let plan_input = PlanInput { user_item_id: Some("u1".into()), ..input(cut, Vec::new(), None) };
         let plan = build_from(&plan_input, None, MAX_PLAN_BYTES).expect("builds");
         assert_eq!(plan.outcome, "interrupted");

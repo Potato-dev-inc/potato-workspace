@@ -151,7 +151,7 @@ mod tests {
     }
 
     fn user(text: &str) -> ChatItem {
-        ChatItem::User { id: "u1".into(), at: None, text: text.into() }
+        ChatItem::User { id: "u1".into(), at: None, text: text.into(), attachments: Vec::new() }
     }
 
     fn call(n: usize, name: &str, summary: &str, detail: ToolDetail) -> ChatItem {

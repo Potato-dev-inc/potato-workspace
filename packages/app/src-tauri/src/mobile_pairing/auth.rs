@@ -47,6 +47,9 @@ pub fn bearer_token(headers: &str) -> Option<String> {
 const REMOTE_INDICATOR_HEADERS: &[&str] = &[
     // our own PWA proxy and the Vite dev proxy
     "X-Potato-Workspace-Proxied",
+    // the marker name of the older build: never sent by this app, but a client sending it through a
+    // forwarder is still a remote caller, so it fails closed like the rest
+    "x-pm-proxied",
     // Cloudflare (cloudflared tunnels)
     "Cf-Connecting-Ip",
     "Cf-Connecting-Ipv6",

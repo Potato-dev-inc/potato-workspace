@@ -5,13 +5,16 @@
 //! S4). The host is checked as typed. A URL parser's normalising is not trusted: `0x7f.1` or
 //! `localhost.` are refused, never rewritten to a loopback address.
 
-use crate::app_paths::bridge_port_range_for;
+use crate::app_paths::{bridge_port_range_for, pwa_port_for};
 use crate::pane_preview::PreviewUrl;
 
 /// The loopback host names a preview may use (lower case).
 const LOOPBACK_HOSTS: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
 /// The WebView2 remote-debugging port the founder's app uses (never previewed).
 const CDP_PORT: u16 = 9333;
+/// The other product's bridge range (Puppet Master, 17321..=17399). It is not ours, but a preview
+/// must never open another app's bridge either, so it stays refused next to our own range.
+const OTHER_PRODUCT_BRIDGE_RANGE: (u16, u16) = (17321, 17399);
 
 /// One local origin: `scheme://host:port`. `host` is `localhost`, `127.0.0.1` or `[::1]`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,14 +47,19 @@ impl OwnPorts {
     /// The ports this app uses now: the phone server (1420 or the bound port), the bridge range,
     /// the WebView2 debugging port (from the environment, and 9333), and the dev server port.
     pub fn current(dev_url_port: Option<u16>) -> Self {
-        let mut ports = vec![crate::pwa_server::PWA_PORT, crate::pwa_server::pwa_port(), CDP_PORT];
+        let mut ports = vec![
+            crate::pwa_server::PWA_PORT,
+            crate::pwa_server::pwa_port(),
+            pwa_port_for(None),
+            CDP_PORT,
+        ];
         if let Ok(args) = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS") {
             ports.extend(cdp_port_in(&args));
         }
         ports.extend(dev_url_port);
         ports.sort_unstable();
         ports.dedup();
-        OwnPorts { ports, ranges: vec![bridge_port_range_for(None)] }
+        OwnPorts { ports, ranges: vec![bridge_port_range_for(None), OTHER_PRODUCT_BRIDGE_RANGE] }
     }
 
     pub fn contains(&self, port: u16) -> bool {

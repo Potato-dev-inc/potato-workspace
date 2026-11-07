@@ -1,5 +1,6 @@
 //! The loop of one pane's worker, and the one decision it makes per look.
 
+use crate::attach::ChatAttachment;
 use super::host::{Attempt, Look};
 use super::model::*;
 use super::{Inner, PaneQueue, Timing};
@@ -100,8 +101,8 @@ enum Housekeeping {
     Empty,
     /// Only finished messages are listed (they leave when their time is up).
     Idle,
-    /// The first waiting message: its id and text.
-    Head(String, String),
+    /// The first waiting message: its id, text and files.
+    Head(String, String, Vec<ChatAttachment>),
 }
 
 /// Finished messages leave after `keep`; a message that waited too long fails. Publishes when the list changed.
@@ -124,24 +125,24 @@ fn housekeeping(inner: &Inner, pane_id: &str) -> Housekeeping {
         }
         return Housekeeping::Empty;
     }
-    let head = queue.entries.iter().find(|e| e.message.state.active()).map(|e| (e.message.id.clone(), e.message.text.clone()));
+    let head = queue.entries.iter().find(|e| e.message.state.active()).map(|e| (e.message.id.clone(), e.message.text.clone(), e.message.attachments.clone()));
     let list = changed.then(|| snapshot(queue));
     drop(panes);
     if let Some(list) = list {
         inner.host.publish(pane_id, &list);
     }
     match head {
-        Some((id, text)) => Housekeeping::Head(id, text),
+        Some((id, text, attachments)) => Housekeeping::Head(id, text, attachments),
         None => Housekeeping::Idle,
     }
 }
 
 /// One pass. `false` when the queue is empty and the worker is done.
 fn tick(inner: &Arc<Inner>, pane_id: &str) -> bool {
-    let (head_id, head_text) = match housekeeping(inner, pane_id) {
+    let (head_id, head_text, head_attachments) = match housekeeping(inner, pane_id) {
         Housekeeping::Empty => return false,
         Housekeeping::Idle => return true,
-        Housekeeping::Head(id, text) => (id, text),
+        Housekeeping::Head(id, text, attachments) => (id, text, attachments),
     };
     let step = match inner.host.look(pane_id) {
         // The pane is gone.
@@ -178,7 +179,7 @@ fn tick(inner: &Arc<Inner>, pane_id: &str) -> bool {
     match step {
         Step::Fail(why) => settle_waiting(inner, pane_id, |entry, _| entry.finish(State::Failed, Some(why))),
         Step::Wait(why) => settle_waiting(inner, pane_id, |entry, is_head| entry.wait(if is_head { why } else { WAIT_TURN })),
-        Step::Deliver => deliver(inner, pane_id, &head_id, &head_text),
+        Step::Deliver => deliver(inner, pane_id, &head_id, &head_text, &head_attachments),
     }
     true
 }
@@ -203,7 +204,7 @@ fn settle_waiting(inner: &Inner, pane_id: &str, change: impl Fn(&mut Entry, bool
 
 /// Types the first waiting message. Marks it `sending` first (so a cancel that comes now is refused), and
 /// settles it from what the attempt found.
-fn deliver(inner: &Inner, pane_id: &str, id: &str, text: &str) {
+fn deliver(inner: &Inner, pane_id: &str, id: &str, text: &str, attachments: &[ChatAttachment]) {
     {
         let mut panes = inner.panes.lock();
         let Some(queue) = panes.get_mut(pane_id) else { return };
@@ -218,7 +219,7 @@ fn deliver(inner: &Inner, pane_id: &str, id: &str, text: &str) {
         drop(panes);
         inner.host.publish(pane_id, &list);
     }
-    let attempt = inner.host.type_message(pane_id, text);
+    let attempt = inner.host.type_message_with(pane_id, text, attachments);
     let mut panes = inner.panes.lock();
     let Some(queue) = panes.get_mut(pane_id) else { return };
     if matches!(attempt, Attempt::Sent) {

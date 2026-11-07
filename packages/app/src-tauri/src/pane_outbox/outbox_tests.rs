@@ -188,6 +188,24 @@ fn only_a_ready_idle_agent_with_an_empty_box_gets_the_message() {
 // ---- the state machine -----------------------------------------------------------------------------------------
 
 #[test]
+fn a_message_may_have_no_text_when_it_has_files() {
+    use crate::attach::{AttachKind, ChatAttachment};
+    let file = ChatAttachment { name: "a.png".into(), path: "/p/a.png".into(), kind: AttachKind::Image, size: 1, mime: None };
+    let host = Fake::new(ready());
+    let outbox = outbox(&host);
+    assert_eq!(outbox.send_with("p", "  ", &[]).unwrap_err(), EMPTY);
+    assert_eq!(outbox.send_with("p", "", &vec![file.clone(); 21]).unwrap_err(), TOO_MANY_FILES);
+    let message = outbox.send_with("p", "", &[file.clone()]).unwrap();
+    assert_eq!((message.text.as_str(), message.attachments.clone()), ("", vec![file.clone()]));
+    until_state(&outbox, &message.id, State::Sent);
+    // A terminal agent only takes text: the path follows it.
+    assert_eq!(host.typed(), ["[attached: /p/a.png]"]);
+    // The 8,000 limit is for the text only.
+    assert_eq!(outbox.send_with("p", &"x".repeat(MAX_CHARS + 1), &[file.clone()]).unwrap_err(), TOO_LONG);
+    assert!(outbox.send_with("p", "ok", &vec![file; 20]).is_ok());
+}
+
+#[test]
 fn a_message_for_a_ready_agent_is_sent_once() {
     let host = Fake::new(ready());
     let outbox = outbox(&host);

@@ -29,6 +29,7 @@ use crate::acp::chat::ending::{self, EndReason, TurnFacts};
 use crate::acp::state::{ExitKind, ExitSummary, TurnSummary};
 use crate::acp::types::{ContentChunk, SessionUpdate, ToolCall, ToolCallUpdate, ToolStatus};
 use crate::session_chat::detail::{bound_input, cut_to, paths_from_input, PlanItem, PlanStatus, ToolDetail};
+use crate::attach::ChatAttachment;
 use crate::session_chat::model::{cut, ChatItem, TurnOutcome};
 
 /// Longest assistant message kept, in characters. A runaway message is cut, not allowed to grow forever.
@@ -288,6 +289,8 @@ pub struct Mapper {
     /// The last assistant message of the turn, for its `final_answer` mark.
     last_assistant: Option<(ChatItem, u32)>,
     user: Option<Segment>,
+    /// Files and pictures of the replayed user message that is being built.
+    user_attachments: Vec<ChatAttachment>,
     tools: HashMap<String, Tool>,
     tool_order: Vec<String>,
     notice_n: u64,
@@ -328,6 +331,7 @@ impl Mapper {
             assistant: None,
             last_assistant: None,
             user: None,
+            user_attachments: Vec::new(),
             tools: HashMap::new(),
             tool_order: Vec::new(),
             notice_n: 0,
@@ -449,6 +453,11 @@ impl Mapper {
 
     /// A turn starts. `user_text`: what the person sent, shown as their message.
     pub fn turn_started(&mut self, turn: u64, user_text: Option<&str>, now: Instant, at: &str) -> Vec<ChatItem> {
+        self.turn_started_with(turn, user_text, &[], now, at)
+    }
+
+    /// `turn_started` with the files and pictures sent with the message.
+    pub fn turn_started_with(&mut self, turn: u64, user_text: Option<&str>, attachments: &[ChatAttachment], now: Instant, at: &str) -> Vec<ChatItem> {
         let mut out = Vec::new();
         if self.turn.is_some() {
             // The last turn never reported its end: close it so the items stay consistent.
@@ -463,19 +472,25 @@ impl Mapper {
         self.last_assistant = None;
         self.turn_files.clear();
         self.turn_visible = false;
-        if let Some(text) = user_text.filter(|t| !t.is_empty()) {
-            out.push(ChatItem::User { id: format!("u{turn}"), at: Some(at.to_string()), text: text.to_string() });
+        let text = user_text.unwrap_or_default();
+        if !text.is_empty() || !attachments.is_empty() {
+            out.push(ChatItem::User { id: format!("u{turn}"), at: Some(at.to_string()), text: text.to_string(), attachments: attachments.to_vec() });
         }
         self.note(out)
     }
 
     /// Text sent into the turn that runs (steering): shown as another message of the person, in the turn.
     pub fn steered(&mut self, text: &str, at: &str) -> Vec<ChatItem> {
+        self.steered_with(text, &[], at)
+    }
+
+    /// `steered` with the files and pictures sent with the message.
+    pub fn steered_with(&mut self, text: &str, attachments: &[ChatAttachment], at: &str) -> Vec<ChatItem> {
         let turn = self.turn.as_ref().map(|t| t.n).unwrap_or(self.turn_no);
         self.steer_n += 1;
         // What the agent says next is a new message after the person's.
         self.assistant = None;
-        self.note(vec![ChatItem::User { id: format!("u{turn}.s{}", self.steer_n), at: Some(at.to_string()), text: text.to_string() }])
+        self.note(vec![ChatItem::User { id: format!("u{turn}.s{}", self.steer_n), at: Some(at.to_string()), text: text.to_string(), attachments: attachments.to_vec() }])
     }
 
     // ---- permission asks -----------------------------------------------------------------------------------
@@ -607,9 +622,15 @@ impl Mapper {
     }
 
     fn user_chunk(&mut self, chunk: &ContentChunk, at: &str) -> Vec<ChatItem> {
-        let Some(words) = chunk_words(chunk) else { return Vec::new() };
+        let attachment = crate::attach::blocks::attachment_of_block(&chunk.content);
+        let words = match &attachment {
+            Some(_) => Some(String::new()),
+            None => chunk_words(chunk),
+        };
+        let Some(words) = words else { return Vec::new() };
         // A replayed user message after the agent's reply is a new turn of the history.
         if self.user.is_none() {
+            self.user_attachments.clear();
             self.replay_turn += 1;
             self.seg_n = 0;
             self.assistant = None;
@@ -617,7 +638,8 @@ impl Mapper {
         }
         let Some(seg) = self.user.as_mut() else { return Vec::new() };
         push_text(seg, &words);
-        vec![ChatItem::User { id: seg.id.clone(), at: Some(at.to_string()), text: seg.text.clone() }]
+        self.user_attachments.extend(attachment);
+        vec![ChatItem::User { id: seg.id.clone(), at: Some(at.to_string()), text: seg.text.clone(), attachments: self.user_attachments.clone() }]
     }
 
     fn agent_chunk(&mut self, chunk: &ContentChunk, replay: bool, at: &str) -> Vec<ChatItem> {

@@ -57,7 +57,7 @@ fn fixture_gives_the_exact_chat_sequence() {
     let (o, items) = parse_text(&fixture());
     let want = vec![
         session(&o, 0),
-        ChatItem::User { id: id(&o, 0, 1), at: ts(0), text: "list the files".into() },
+        ChatItem::User { id: id(&o, 0, 1), at: ts(0), text: "list the files".into(), attachments: Vec::new() },
         session(&o, 1),
         session(&o, 2),
         ChatItem::Assistant {
@@ -122,7 +122,7 @@ fn fixture_gives_the_exact_chat_sequence() {
         // line 10: the `system` `turn_duration` line gives the turn's real length
         ChatItem::TurnEnd { id: id(&o, 10, 0), at: ts(10), outcome: TurnOutcome::Completed, duration_ms: Some(7000) },
         session(&o, 12),
-        ChatItem::User { id: id(&o, 12, 1), at: ts(12), text: "thanks, that is all".into() },
+        ChatItem::User { id: id(&o, 12, 1), at: ts(12), text: "thanks, that is all".into(), attachments: Vec::new() },
         session(&o, 13),
         session(&o, 14),
     ];
@@ -158,7 +158,7 @@ fn a_user_line_without_a_version_gives_no_session_item() {
     let line = r#"{"type":"user","message":{"content":"hi"}}"#;
     assert_eq!(
         ClaudeSessionFile.parse_line(line, 7),
-        vec![ChatItem::User { id: "7:0".into(), at: None, text: "hi".into() }]
+        vec![ChatItem::User { id: "7:0".into(), at: None, text: "hi".into(), attachments: Vec::new() }]
     );
 }
 
@@ -329,7 +329,7 @@ fn bash_items() -> (Vec<u64>, Vec<ChatItem>) {
 fn bash_mode_commands_are_shell_calls_and_their_output_the_matching_results() {
     let (o, items) = bash_items();
     let want = vec![
-        ChatItem::User { id: id(&o, 0, 1), at: ts(0), text: "run two shell commands".into() },
+        ChatItem::User { id: id(&o, 0, 1), at: ts(0), text: "run two shell commands".into(), attachments: Vec::new() },
         ChatItem::ToolCall {
             id: id(&o, 2, 1),
             at: ts(2),

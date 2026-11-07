@@ -52,7 +52,7 @@ export default function TerminalApp() {
 
   const panes = registry.paneList;
   const selectedPane = selectedPaneId ? registry.panes.get(selectedPaneId) ?? null : null;
-  const apiBaseUrl = bridge.client?.baseUrl ?? 'http://127.0.0.1:17321';
+  const apiBaseUrl = bridge.client?.baseUrl ?? 'http://127.0.0.1:17421';
   const registryListing = useAgentRegistry();
   const presets = useMemo(() => launchMenuEntries(registryListing), [registryListing]);
 

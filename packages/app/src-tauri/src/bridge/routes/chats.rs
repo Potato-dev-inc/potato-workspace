@@ -89,7 +89,7 @@ mod tests {
         index.observe(
             "pane-7",
             &[
-                ChatItem::User { id: "1:0".into(), at: None, text: "the license check lives in checks.rs".into() },
+                ChatItem::User { id: "1:0".into(), at: None, text: "the license check lives in checks.rs".into(), attachments: Vec::new() },
                 ChatItem::Assistant { id: "2:0".into(), at: None, text: "Found the license key in checks.rs".into(), model: None, final_answer: true },
             ],
         );

@@ -23,8 +23,8 @@ from pathlib import Path
 
 
 DEFAULT_HOST = "127.0.0.1"
-PORT_MIN = 17321
-PORT_MAX = 17399
+PORT_MIN = 17421
+PORT_MAX = 17499
 
 
 def request_json(method: str, url: str, payload: dict | None = None, timeout: float = 3.0) -> dict | list:
@@ -122,7 +122,7 @@ def launch_standalone_worker(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Launch a standalone Potato Workspace worker terminal.")
-    parser.add_argument("--bridge-url", help="Bridge URL, e.g. http://127.0.0.1:17321")
+    parser.add_argument("--bridge-url", help="Bridge URL, e.g. http://127.0.0.1:17421")
     parser.add_argument("--pane-id", help="Open an existing pane id instead of spawning/reusing one")
     parser.add_argument(
         "--agent-type",

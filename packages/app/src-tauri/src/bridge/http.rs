@@ -536,7 +536,7 @@ fn spawn_test_listener(real_poll: bool) -> std::net::SocketAddr {
                                 .headers_raw
                                 .lines()
                                 .filter_map(|line| line.split_once(':'))
-                                .filter(|(key, _)| key.trim().eq_ignore_ascii_case("x-pm-proxied"))
+                                .filter(|(key, _)| key.trim().eq_ignore_ascii_case("x-potato-workspace-proxied"))
                                 .map(|(_, value)| value.trim().to_string())
                                 .collect::<Vec<_>>(),
                             "local_app": super::routes::definitions::is_local_app(

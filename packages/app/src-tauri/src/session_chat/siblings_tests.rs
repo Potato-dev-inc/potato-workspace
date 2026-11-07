@@ -21,7 +21,7 @@ struct LineFormat;
 impl SessionFormat for LineFormat {
     fn parse_line(&self, line: &str, offset: u64) -> Vec<ChatItem> {
         match line.strip_prefix("u:") {
-            Some(text) => vec![ChatItem::User { id: format!("{offset}:0"), at: None, text: text.to_string() }],
+            Some(text) => vec![ChatItem::User { id: format!("{offset}:0"), at: None, text: text.to_string(), attachments: Vec::new() }],
             None => Vec::new(),
         }
     }

@@ -62,6 +62,7 @@ mod panic;
 mod askbar;
 mod hidden_runs;
 mod side_question;
+mod attach;
 mod attention;
 mod second_opinion;
 pub mod pane_outbox;
@@ -282,6 +283,9 @@ pub fn run() {
             commands::pane_message_cancel,
             commands::pane_messages_list,
             commands::attachments::attachment_prepare,
+            commands::attachments::attachment_save_pasted,
+            commands::attachments::attachment_preview,
+            commands::attachments::project_files_search,
             commands::point_open_preview,
             commands::point_state,
             commands::point_arm,
@@ -721,9 +725,11 @@ pub fn run() {
         ])
         .setup(|app| {
             commands::startup_probe(app.handle().clone());
-            // Copy (never move) the other product's old home data once, so existing companions and
-            // settings still show up while its own folders stay untouched.
+            // Copy (never move) the data release 1.0.3 left under the old names once: the home and
+            // companion folders, and the paired phones / tunnel / push files in the app data folder.
+            // The old files stay untouched and nothing already saved under the new names is overwritten.
             app_paths::migrate_legacy_home_data();
+            app_paths::migrate_legacy_app_data();
             // First, so a panic anywhere below leaves a file behind (the console and the in-memory
             // log tail die with the process).
             crash::install(app_paths::app_data_dir());

@@ -264,7 +264,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'get_mcp_status':
           return {
             bridgeReachable: true,
-            bridgeUrl: 'http://127.0.0.1:17321',
+            bridgeUrl: 'http://127.0.0.1:17421',
             bridgeVersion: '0.1.4',
             portFileExists: true,
             portFilePath: 'C:\Users\dev\.potato-workspace\bridge.port',

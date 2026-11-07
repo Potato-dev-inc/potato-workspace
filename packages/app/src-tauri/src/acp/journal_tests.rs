@@ -8,7 +8,7 @@ fn dir() -> PathBuf {
 }
 
 fn user(n: u64, text: &str) -> ChatItem {
-    ChatItem::User { id: format!("u{n}"), at: None, text: text.into() }
+    ChatItem::User { id: format!("u{n}"), at: None, text: text.into(), attachments: Vec::new() }
 }
 
 fn assistant(id: &str, text: &str) -> ChatItem {
@@ -156,4 +156,33 @@ fn a_reset_keeps_the_old_words_until_the_new_chat_has_some() {
     journal.append(&user(1, "rebuilt"));
     journal.flush();
     assert_eq!(texts(&Journal::at(&path).load_or_previous().items), vec!["rebuilt"]);
+}
+
+#[test]
+fn attachments_survive_a_restart_and_an_old_record_still_loads() {
+    use crate::attach::{AttachKind, ChatAttachment};
+    let d = dir();
+    let path = d.join("c.jsonl");
+    let journal = Journal::at(&path);
+    let file = ChatAttachment { name: "a.png".into(), path: "C:/p/a.png".into(), kind: AttachKind::Image, size: 3, mime: Some("image/png".into()) };
+    journal.append(&ChatItem::User { id: "u1".into(), at: None, text: String::new(), attachments: vec![file.clone()] });
+    journal.flush();
+    // A record written before attachments existed has no such field.
+    let mut old = std::fs::read_to_string(&path).unwrap();
+    old.push_str("{\"v\":1,\"at\":1,\"item\":{\"kind\":\"user\",\"id\":\"u0\",\"at\":null,\"text\":\"old words\"}}\n");
+    std::fs::write(&path, old).unwrap();
+    let back = load(&path);
+    assert_eq!(back.skipped, 0);
+    let mut seen: Vec<(String, Vec<ChatAttachment>)> = back
+        .items
+        .iter()
+        .map(|i| match i {
+            ChatItem::User { id, attachments, .. } => (id.clone(), attachments.clone()),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    seen.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(seen, vec![("u0".to_string(), vec![]), ("u1".to_string(), vec![file])]);
+    // An item without any is written without the field.
+    assert!(!serde_json::to_string(&user(2, "x")).unwrap().contains("attachments"));
 }

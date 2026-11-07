@@ -107,7 +107,7 @@ fn user_text(text: &str, value: &Value, out: &mut Line) {
         shell_result(text, value, out);
     } else if !text.is_empty() && !INJECTED.iter().any(|prefix| text.starts_with(*prefix)) {
         let text = text.to_string();
-        out.push(|id, at| ChatItem::User { id, at, text });
+        out.push(|id, at| ChatItem::User { id, at, text, attachments: Vec::new() });
     }
 }
 

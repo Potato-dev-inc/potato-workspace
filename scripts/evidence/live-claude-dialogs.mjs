@@ -14,7 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const project = process.argv[2];
-const bridge = process.argv[3] ?? 'http://127.0.0.1:17321';
+const bridge = process.argv[3] ?? 'http://127.0.0.1:17421';
 if (!project) throw new Error('usage: live-claude-dialogs.mjs <trusted demo project> [bridge url]');
 const headers = { 'content-type': 'application/json', 'x-potato-workspace-session': 'live-claude-dialogs' };
 const call = async (method, route, body) => {

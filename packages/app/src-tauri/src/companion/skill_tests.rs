@@ -331,7 +331,8 @@ fn the_brief_lists_titles_and_paths_but_never_the_steps() {
     // After the notes, before the house rules.
     let at = |needle: &str| text.find(needle).unwrap();
     assert!(at("## Your notes from past chats") < at("## Skills your person") && at("## Skills your person") < at("## House rules from Potato Workspace"));
-    assert!(text.ends_with("and you must not try.\n"));
+    // The house rules end with the sandbox rule now, so check the helper rule's text, not the last line.
+    assert!(text.contains("and you must not try.\n"));
 }
 
 #[test]

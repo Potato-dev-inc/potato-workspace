@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::attach::ChatAttachment;
 use super::detail::{cut_to, PlanItem, ToolDetail};
 
 /// Longest tool output kept in a `ToolResult`, in characters.
@@ -12,7 +13,14 @@ pub const MAX_OUTPUT_CHARS: usize = 4000;
 #[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum ChatItem {
     /// What the person typed (never injected context).
-    User { id: String, at: Option<String>, text: String },
+    User {
+        id: String,
+        at: Option<String>,
+        text: String,
+        /// Files, images and pasted pictures sent with the message (old records have none).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        attachments: Vec<ChatAttachment>,
+    },
     /// Agent text. `final_answer` is true for the last message of a turn when the format says so.
     Assistant {
         id: String,
@@ -243,7 +251,7 @@ mod tests {
 
     #[test]
     fn id_returns_the_id_of_every_variant() {
-        let user = ChatItem::User { id: "5:1".into(), at: None, text: "hi".into() };
+        let user = ChatItem::User { id: "5:1".into(), at: None, text: "hi".into(), attachments: Vec::new() };
         assert_eq!(user.id(), "5:1");
         let session = ChatItem::Session { id: "0:0".into(), at: None, model: None, cli_version: None };
         assert_eq!(session.id(), "0:0");

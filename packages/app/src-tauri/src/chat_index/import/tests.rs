@@ -301,7 +301,7 @@ impl ContextLookup for LiveSession {
 fn a_chat_that_is_already_live_is_skipped() {
     let switch = Arc::new(std::sync::atomic::AtomicBool::new(true));
     let index = ChatIndex::start_switched(Store::open_memory(1000).unwrap(), Arc::new(LiveSession("sess-0001")), switch);
-    index.observe("pane-1", &[ChatItem::User { id: "5:0".into(), at: None, text: "live words here".into() }]);
+    index.observe("pane-1", &[ChatItem::User { id: "5:0".into(), at: None, text: "live words here".into(), attachments: Vec::new() }]);
     wait_until("the live row", || index.count() == 1);
     let fake = store_of(3, "oldwords");
     let (importer, _) = importer(vec![source("agent-a", false, fake)], &index);
@@ -337,7 +337,7 @@ fn the_worker_yields_so_the_live_writer_still_gets_rows_in() {
     let (importer, _) = importer(vec![source("agent-a", false, fake)], &index);
     importer.start(request(&["agent-a"]), env()).unwrap();
     wait_until("the reading phase", || is_reading(&importer) && importer.progress().chats_done >= 2);
-    index.observe("pane-live", &[ChatItem::User { id: "9:0".into(), at: None, text: "livewords arrive meanwhile".into() }]);
+    index.observe("pane-live", &[ChatItem::User { id: "9:0".into(), at: None, text: "livewords arrive meanwhile".into(), attachments: Vec::new() }]);
     wait_until("the live row", || index.count() >= 1 + index.status().unwrap().imported_items);
     assert!(is_reading(&importer), "the live row was written while the import was still running");
     importer.cancel();
@@ -486,7 +486,7 @@ fn an_imported_chat_is_dated_by_its_own_last_item_and_the_file_time_only_without
     let chat = HistoryChat { session: "sess-dated".into(), cwd: None, updated_ms: NOW_MS, bytes: 10, stamp: "1:2".into() };
     let mut draft = ChatDraft::new("agent-x", &chat);
     draft.push(&[
-        ChatItem::User { id: "1:0".into(), at: Some("2026-08-14T10:00:00Z".into()), text: "first question".into() },
+        ChatItem::User { id: "1:0".into(), at: Some("2026-08-14T10:00:00Z".into()), text: "first question".into(), attachments: Vec::new() },
         ChatItem::Assistant { id: "2:0".into(), at: Some("2026-08-20T09:30:00Z".into()), text: "last answer".into(), model: None, final_answer: true },
         ChatItem::Assistant { id: "3:0".into(), at: None, text: "an answer with no time".into(), model: None, final_answer: true },
     ]);
@@ -495,7 +495,7 @@ fn an_imported_chat_is_dated_by_its_own_last_item_and_the_file_time_only_without
     assert_eq!(row.updated_ms, last, "the banner and the search hit show the same day");
 
     let mut bare = ChatDraft::new("agent-x", &chat);
-    bare.push(&[ChatItem::User { id: "1:0".into(), at: None, text: "no time at all".into() }]);
+    bare.push(&[ChatItem::User { id: "1:0".into(), at: None, text: "no time at all".into(), attachments: Vec::new() }]);
     let (bare_row, _) = bare.finish(false, 5);
     assert_eq!(bare_row.updated_ms, NOW_MS, "a chat with no readable time keeps the file's time");
 }

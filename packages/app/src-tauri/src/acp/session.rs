@@ -35,6 +35,7 @@ use super::state::{
     ExitKind, ExitSummary, HistoryLost, PermissionWait, Phase, SessionState, Snapshot, TurnOutcome, TurnSummary,
     MAX_PERMISSION_WAITS,
 };
+use crate::attach::ChatAttachment;
 use super::timers::{self, TurnClock, Verdict};
 use super::types::{RequestPermissionRequest, SessionNotification, SessionUpdate, StopReason};
 
@@ -725,6 +726,23 @@ impl AcpSession {
 
     pub fn prompt_text(&self, text: &str) -> Result<u64, AcpError> {
         self.prompt(vec![json!({ "type": "text", "text": text })])
+    }
+
+    /// The content blocks of a message with files and pictures, by what the agent takes (`AgentCaps`).
+    fn message_blocks(&self, text: &str, attachments: &[ChatAttachment]) -> Vec<Value> {
+        let caps = self.caps();
+        let (images, embedded) = caps.as_ref().map_or((false, false), |c| (c.image_prompts, c.embedded_context));
+        crate::attach::blocks::prompt_blocks(text, attachments, images, embedded)
+    }
+
+    /// `prompt_text` with files and pictures.
+    pub fn prompt_message(&self, text: &str, attachments: &[ChatAttachment]) -> Result<u64, AcpError> {
+        self.prompt(self.message_blocks(text, attachments))
+    }
+
+    /// `steer` with files and pictures.
+    pub fn steer_message(&self, text: &str, attachments: &[ChatAttachment]) -> Result<SteerOutcome, AcpError> {
+        self.steer(self.message_blocks(text, attachments))
     }
 
     fn on_prompt_done(&self, epoch: u64, turn_id: u64, outcome: Result<Value, AcpError>) {

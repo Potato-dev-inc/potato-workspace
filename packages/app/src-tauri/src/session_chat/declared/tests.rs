@@ -183,7 +183,7 @@ turn_end = ["end_turn", "stop"]
 fn user_and_assistant_text_become_items_with_ids_and_times() {
     let f = format_of(FLAT);
     let items = parse(&f, r#"{"role":"Human","content":"  hello  ","ts":"2026-10-28T09:00:00Z"}"#);
-    assert_eq!(items, vec![ChatItem::User { id: "40:0".into(), at: Some("2026-10-28T09:00:00Z".into()), text: "hello".into() }]);
+    assert_eq!(items, vec![ChatItem::User { id: "40:0".into(), at: Some("2026-10-28T09:00:00Z".into()), text: "hello".into(), attachments: Vec::new() }]);
     let items = parse(&f, r#"{"role":"assistant","message":{"content":"hi"},"model":"m-1"}"#);
     assert_eq!(items, vec![ChatItem::Assistant { id: "40:0".into(), at: None, text: "hi".into(), model: Some("m-1".into()), final_answer: false }]);
 }

@@ -30,7 +30,7 @@ impl SessionFormat for LineFormat {
         };
         let id = format!("{offset}:0");
         match value.get("type").and_then(|kind| kind.as_str()) {
-            Some("user") if !text.is_empty() => vec![ChatItem::User { id, at: None, text }],
+            Some("user") if !text.is_empty() => vec![ChatItem::User { id, at: None, text, attachments: Vec::new() }],
             Some("assistant") if !text.is_empty() => {
                 vec![ChatItem::Assistant { id, at: None, text, model: None, final_answer: false }]
             }

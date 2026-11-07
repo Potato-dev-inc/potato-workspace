@@ -118,7 +118,7 @@ mod tests {
     use super::*;
 
     fn user(text: &str) -> ChatItem {
-        ChatItem::User { id: "0:0".into(), at: None, text: text.into() }
+        ChatItem::User { id: "0:0".into(), at: None, text: text.into(), attachments: Vec::new() }
     }
     fn reply(text: &str) -> ChatItem {
         ChatItem::Assistant { id: "1:0".into(), at: None, text: text.into(), model: None, final_answer: false }

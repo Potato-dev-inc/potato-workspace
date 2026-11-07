@@ -60,7 +60,7 @@ fn old_items(session: &str, count: usize, at_ms: i64) -> Vec<Entry> {
 }
 
 fn live_user(id: &str, text: &str) -> ChatItem {
-    ChatItem::User { id: id.into(), at: None, text: text.into() }
+    ChatItem::User { id: id.into(), at: None, text: text.into(), attachments: Vec::new() }
 }
 
 fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
@@ -170,7 +170,7 @@ fn an_old_chat_text_goes_through_the_strict_entry_before_it_is_written() {
     let switch = Arc::new(AtomicBool::new(true));
     let index = index_with(&switch);
     let ctx = PaneContext::of(AGENT, r"C:\Users\you\projects\shop", Some("s1"));
-    let item = ChatItem::User { id: "1:0".into(), at: None, text: "mail someone@example.com about it".into() };
+    let item = ChatItem::User { id: "1:0".into(), at: None, text: "mail someone@example.com about it".into(), attachments: Vec::new() };
     let entry = entry_of_with(&import_pane_id(AGENT), &ctx, &item, 1, Strength::Strict, true, MAX_IMPORTED_TEXT_CHARS).expect("kept");
     index.import_chat(&chat("s1", "a", 1), &[entry]).unwrap();
     let hits = index.search("someone", 5).unwrap();

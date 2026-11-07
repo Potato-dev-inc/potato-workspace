@@ -7,7 +7,7 @@ import { PANE_CODEX } from './fixtures';
 import { PHONE_TEAM_JOB, PHONE_TEAM_OFF, phoneTeamReply } from './phone-team-fixtures';
 import type { HarnessScenario } from './types';
 
-export const MOCK_BRIDGE_URL = 'http://127.0.0.1:17321/bridge';
+export const MOCK_BRIDGE_URL = 'http://127.0.0.1:17421/bridge';
 
 function b64(bytes: Uint8Array): string {
   let s = '';

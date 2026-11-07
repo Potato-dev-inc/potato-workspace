@@ -1,6 +1,6 @@
-// HTTP client for the Potato Workspace bridge (Rust side, default 127.0.0.1:17321): URL discovery and
+// HTTP client for the Potato Workspace bridge (Rust side, default 127.0.0.1:17421): URL discovery and
 // the typed BridgeClient. Wire types live in ./bridge-types, SSE subscription in ./bridge-sse.
-import type { AgentContextProfile } from '@potato-workspace/shared';
+import { BRIDGE_HTTP_PORT_RANGE, type AgentContextProfile } from '@potato-workspace/shared';
 import { invoke } from '@tauri-apps/api/core';
 import { ngrokRequestHeaders } from './bridge-ngrok';
 import { decodeBase64, streamOffset } from './bridge-sse';
@@ -17,6 +17,9 @@ import { AttentionAnswerError, type AttentionAnswerOutcome, type AttentionSnapsh
 export type * from './bridge-types';
 export { subscribeBridgeEvents } from './bridge-sse';
 
+/** The ports the bridge scans (Potato Workspace's own range, not the other product's 17321-17399). */
+const BRIDGE_PORT_MIN = BRIDGE_HTTP_PORT_RANGE.min;
+const BRIDGE_PORT_MAX = BRIDGE_HTTP_PORT_RANGE.max;
 const DEFAULT_POLL_HOST = '127.0.0.1';
 const DEFAULT_POLL_INTERVAL_MS = 200;
 
@@ -255,7 +258,7 @@ export function makeBridgeClient(baseUrl: string): BridgeClient {
  * discover the bridge URL (the GUI writes the port file, the bridge
  * listens — we just need to find it).
  *
- * This walks the default port range (17321–17399) trying GET /health on
+ * This walks Potato Workspace's own port range (17421–17499) trying GET /health on
  * each port. Returns the first responding base URL.
  */
 export async function findBridgeUrl(): Promise<string | null> {
@@ -263,7 +266,7 @@ export async function findBridgeUrl(): Promise<string | null> {
   // never the first one that answers. The default profile gets null and scans as before.
   const own = await profileBridgeUrl();
   if (own) return own;
-  for (let p = 17321; p <= 17399; p++) {
+  for (let p = BRIDGE_PORT_MIN; p <= BRIDGE_PORT_MAX; p++) {
     try {
       const res = await fetch(`http://${DEFAULT_POLL_HOST}:${p}/health`, {
         signal: AbortSignal.timeout(200),

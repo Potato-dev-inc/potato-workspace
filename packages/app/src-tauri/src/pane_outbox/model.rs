@@ -1,5 +1,6 @@
 //! What the outbox keeps and shows: one message a person wrote for a pane's agent, and where it stands.
 
+use crate::attach::ChatAttachment;
 use serde::Serialize;
 
 /// Most messages waiting (queued or being sent) in one pane.
@@ -9,6 +10,7 @@ pub const MAX_CHARS: usize = 8_000;
 
 pub const TOO_MANY: &str = "Too many waiting messages.";
 pub const EMPTY: &str = "Write a message first.";
+pub const TOO_MANY_FILES: &str = "Too many files. The most is 20.";
 pub const TOO_LONG: &str = "The message is too long. The most is 8000 characters.";
 pub const NOT_AN_AGENT: &str = "Chat replies need an agent pane.";
 pub const NO_SUCH_PANE: &str = "This pane is not open any more.";
@@ -66,6 +68,9 @@ pub struct OutboxMessage {
     pub waiting_for: Option<String>,
     /// When failed: one plain sentence.
     pub error: Option<String>,
+    /// Files and pictures sent with the message.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<ChatAttachment>,
 }
 
 /// A message with the clock readings the outbox itself needs (not shown).

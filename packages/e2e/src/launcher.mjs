@@ -1,7 +1,7 @@
 // Starts ONE isolated copy of the real app for a run, and tears down only the process tree it started.
 //
 // Isolation (checked by guards.mjs and by the launcher itself):
-//  - its own profile (POTATO_WORKSPACE_PROFILE=e2e): another app id, its own bridge port, never 17321/17322
+//  - its own profile (POTATO_WORKSPACE_PROFILE=e2e): another app id, its own bridge port, never 17321/17322 (Puppet Master) or 17421/17422 (a default Potato Workspace)
 //  - APPDATA, HOME and USERPROFILE point into a temp folder per run, so settings, agent definitions and chats are
 //    fresh and nothing is read from or written to the real user folders
 //  - a random free WebView2 debugging port (never 9333)

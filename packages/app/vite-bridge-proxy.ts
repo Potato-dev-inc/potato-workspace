@@ -10,7 +10,7 @@ const APP_ID = 'com.potatodev.workspace';
 const PORT_FILE_NAME = 'potato-workspace.bridge.port';
 const PORT_FILE_ENV = 'POTATO_WORKSPACE_BRIDGE_PORT_FILE';
 const PROFILE_ENV = 'POTATO_WORKSPACE_PROFILE';
-const DEFAULT_TARGET = 'http://127.0.0.1:17321';
+const DEFAULT_TARGET = 'http://127.0.0.1:17421';
 
 /** Same rule as `app_paths::profile_from`: `[a-z0-9-]`, 1..=32, not leading `-`, not `default`. */
 function profileFrom(raw: string | undefined): string | null {

@@ -1,0 +1,133 @@
+/* Project file @ picker: monochrome, floats above the composer. */
+.ck-pfp {
+  --ck-pfp-bg: rgba(255, 255, 255, 0.92);
+  --ck-pfp-border: rgba(0, 0, 0, 0.08);
+  --ck-pfp-text: #1c1c1e;
+  --ck-pfp-muted: #8e8e93;
+  --ck-pfp-hover: rgba(0, 0, 0, 0.06);
+  --ck-pfp-active: rgba(0, 0, 0, 0.09);
+  --ck-pfp-row-h: 44px;
+
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  box-sizing: border-box;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--ck-pfp-border);
+  background: var(--ck-pfp-bg);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
+  color: var(--ck-pfp-text);
+  font-size: 13px;
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ck-pfp--fixed {
+  position: fixed;
+}
+
+.ck-pfp-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: calc(8 * var(--ck-pfp-row-h));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ck-pfp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--ck-pfp-row-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: default;
+  user-select: none;
+}
+
+.ck-pfp-row[aria-selected='true'] {
+  background: var(--ck-pfp-active);
+}
+
+.ck-pfp-icon {
+  flex: none;
+  color: var(--ck-pfp-muted);
+}
+
+.ck-pfp-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.ck-pfp-name,
+.ck-pfp-dir {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ck-pfp-name {
+  font-weight: 400;
+  color: var(--ck-pfp-text);
+}
+
+.ck-pfp-name strong {
+  font-weight: 650;
+}
+
+.ck-pfp-dir {
+  font-size: 11px;
+  color: var(--ck-pfp-muted);
+}
+
+.ck-pfp-status {
+  padding: 10px;
+  color: var(--ck-pfp-muted);
+  text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ck-pfp {
+    --ck-pfp-bg: rgba(40, 40, 44, 0.92);
+    --ck-pfp-border: rgba(255, 255, 255, 0.1);
+    --ck-pfp-text: #f2f2f7;
+    --ck-pfp-muted: #98989f;
+    --ck-pfp-hover: rgba(255, 255, 255, 0.07);
+    --ck-pfp-active: rgba(255, 255, 255, 0.12);
+  }
+}
+
+:root[data-theme='dark'] .ck-pfp {
+  --ck-pfp-bg: rgba(40, 40, 44, 0.92);
+  --ck-pfp-border: rgba(255, 255, 255, 0.1);
+  --ck-pfp-text: #f2f2f7;
+  --ck-pfp-muted: #98989f;
+  --ck-pfp-hover: rgba(255, 255, 255, 0.07);
+  --ck-pfp-active: rgba(255, 255, 255, 0.12);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ck-pfp {
+    animation: ck-pfp-in 120ms ease-out;
+  }
+}
+
+@keyframes ck-pfp-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -499,7 +499,7 @@ fn stale_port_file_falls_back_to_a_live_bridge_port() {
     let live_port = live.local_addr().unwrap().port();
     let ok = live_endpoint_or_probe(BridgeEndpoint { host: "127.0.0.1".into(), port: live_port });
     assert_eq!(ok.port, live_port, "a live port is kept as is");
-    // A closed port with nothing in 17321..17330 listening returns the original endpoint.
+    // A closed port with nothing in 17421..=17430 listening returns the original endpoint.
     let dead = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let dead_port = dead.local_addr().unwrap().port();
     drop(dead);

@@ -236,7 +236,7 @@ impl ScreenChat {
             let ended = n < shown
                 || (turn.has_body() && (self.idle_polls >= ENDED_AFTER_IDLE_POLLS || self.ended_last.as_ref() == Some(turn)));
             if let Some(user) = &turn.user {
-                items.push(ChatItem::User { id: format!("screen:{n}:user"), at: None, text: user.clone() });
+                items.push(ChatItem::User { id: format!("screen:{n}:user"), at: None, text: user.clone(), attachments: Vec::new() });
             }
             for (k, tool) in turn.tools.iter().enumerate() {
                 let id = format!("screen:{n}:tool:{k}");

@@ -131,7 +131,7 @@ pub(super) fn chat(session: &str, stamp: &str, updated_ms: i64) -> HistoryChat {
 /// A user question, an assistant answer, a tool call (kept) and its result (not kept), about `words`.
 pub(super) fn conversation(words: &str) -> Vec<ChatItem> {
     vec![
-        ChatItem::User { id: "0:0".into(), at: Some("2026-08-14T10:00:00Z".into()), text: format!("question about {words}") },
+        ChatItem::User { id: "0:0".into(), at: Some("2026-08-14T10:00:00Z".into()), text: format!("question about {words}"), attachments: Vec::new() },
         ChatItem::Assistant {
             id: "10:0".into(),
             at: Some("2026-08-14T10:00:01Z".into()),

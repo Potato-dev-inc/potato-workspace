@@ -137,7 +137,7 @@ mod tests {
     use crate::turn_summary::model::EndState;
 
     fn user(id: &str, at: Option<&str>) -> ChatItem {
-        ChatItem::User { id: id.into(), at: at.map(Into::into), text: "do it".into() }
+        ChatItem::User { id: id.into(), at: at.map(Into::into), text: "do it".into(), attachments: Vec::new() }
     }
 
     fn reply(id: &str, at: Option<&str>) -> ChatItem {
@@ -325,14 +325,14 @@ mod tests {
 
     #[test]
     fn item_times_parse_with_z_offsets_and_fractions() {
-        let utc = ChatItem::User { id: "u".into(), at: Some("2026-10-28T10:00:00Z".into()), text: String::new() };
-        let offset = ChatItem::User { id: "u".into(), at: Some("2026-10-28T12:00:00+02:00".into()), text: String::new() };
-        let fraction = ChatItem::User { id: "u".into(), at: Some("2026-10-28T10:00:00.250Z".into()), text: String::new() };
-        let bad = ChatItem::User { id: "u".into(), at: Some("yesterday".into()), text: String::new() };
+        let utc = ChatItem::User { id: "u".into(), at: Some("2026-10-28T10:00:00Z".into()), text: String::new(), attachments: Vec::new() };
+        let offset = ChatItem::User { id: "u".into(), at: Some("2026-10-28T12:00:00+02:00".into()), text: String::new(), attachments: Vec::new() };
+        let fraction = ChatItem::User { id: "u".into(), at: Some("2026-10-28T10:00:00.250Z".into()), text: String::new(), attachments: Vec::new() };
+        let bad = ChatItem::User { id: "u".into(), at: Some("yesterday".into()), text: String::new(), attachments: Vec::new() };
         assert_eq!(item_ms(&utc), item_ms(&offset));
         assert_eq!(item_ms(&fraction), item_ms(&utc).map(|t| t + 250));
         assert_eq!(item_ms(&bad), None);
-        assert_eq!(item_ms(&ChatItem::User { id: "u".into(), at: None, text: String::new() }), None);
+        assert_eq!(item_ms(&ChatItem::User { id: "u".into(), at: None, text: String::new(), attachments: Vec::new() }), None);
     }
 
     #[test]

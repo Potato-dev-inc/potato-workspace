@@ -22,7 +22,7 @@ The **desktop app** (built with Tauri + React) is the main control surface:
 
 - **Terminal grid** — live xterm.js panes for each agent, with status LEDs (`running`, `waiting_input`, `idle`, `error`)
 - **Potato Workspace sidebar** — built-in LLM orchestrator, MCP activity log, tasks, locks, and context packs
-- **Embedded HTTP bridge** — a local API on `127.0.0.1` (ports `17321`–`17399`) that owns pane lifecycle and coordination state
+- **Embedded HTTP bridge** — a local API on `127.0.0.1` (ports `17421`–`17499`) that owns pane lifecycle and coordination state
 - **Mobile PWA** — optional mirror mode to steer panes from your phone over the same bridge
 
 Download installers from [GitHub Releases](https://github.com/Potato-dev-inc/potato-workspace/releases), or launch from source with `npm run tauri dev` in the main repo.

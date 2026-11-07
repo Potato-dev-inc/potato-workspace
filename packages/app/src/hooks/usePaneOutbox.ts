@@ -3,11 +3,12 @@
 // desktop's Tauri commands or the phone's bridge (lib/paneOutbox.ts, lib/paneOutbox-bridge.ts).
 import { useCallback, useEffect, useState } from 'react';
 import { errorText, withSent, type OutboxMessage, type OutboxTransport } from '../lib/paneOutbox';
+import type { ChatAttachment } from '../lib/attachFiles';
 
 export interface PaneOutboxHook {
   messages: OutboxMessage[];
   /** Sends a message. Resolves to null, or to one plain sentence saying why it was not accepted. */
-  send: (text: string) => Promise<string | null>;
+  send: (text: string, attachments?: readonly ChatAttachment[]) => Promise<string | null>;
   /** Cancels a waiting message. Resolves to null, or to the reason it could not be cancelled. */
   cancel: (messageId: string) => Promise<string | null>;
 }
@@ -39,10 +40,10 @@ export function usePaneOutbox(transport: OutboxTransport | null, paneId: string,
   }, [transport, paneId, enabled]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, attachments?: readonly ChatAttachment[]) => {
       if (!transport) return NOT_CONNECTED;
       try {
-        const sent = await transport.send(paneId, text);
+        const sent = await transport.send(paneId, text, attachments);
         setMessages((prev) => withSent(prev, sent));
         return null;
       } catch (error) {

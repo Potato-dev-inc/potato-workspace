@@ -4,6 +4,7 @@
 //! (`bridge/routes/panes.rs`), which share the same outbox.
 
 use super::AppState;
+use crate::attach::ChatAttachment;
 use crate::pane_outbox::{self, OutboxMessage};
 use tauri::{AppHandle, State};
 
@@ -13,9 +14,11 @@ pub async fn pane_message_send(
     state: State<'_, AppState>,
     pane_id: String,
     text: String,
+    attachments: Option<Vec<ChatAttachment>>,
 ) -> Result<OutboxMessage, String> {
     let registry = state.registry.clone();
-    tauri::async_runtime::spawn_blocking(move || pane_outbox::global(&registry, &app).send(&pane_id, &text))
+    let attachments = attachments.unwrap_or_default();
+    tauri::async_runtime::spawn_blocking(move || pane_outbox::global(&registry, &app).send_with(&pane_id, &text, &attachments))
         .await
         .map_err(|e| format!("INTERNAL: {e}"))?
 }

@@ -8,6 +8,7 @@ import { clearChatJump, turnWithItem, type ChatJump } from '../../lib/chatJump';
 import type { ChatSource, ChatTurn, SessionChatState, TurnStep } from '../../lib/sessionChatModel';
 import '../../styles/cockpit-chat.css';
 import { ActivityLine } from './ActivityLine';
+import { AttachmentChips } from './AttachmentChips';
 import { segmentSteps } from './chatActivity';
 import { formatDuration } from './chatFormat';
 import { useChatViewMode, type ChatViewMode } from './chatViewMode';
@@ -156,10 +157,13 @@ function TurnView({ turn, fromScreen, markdown, mode, clip, branch, helpers, onO
   return (
     <section className="space-y-1.5 ck-chat-turn" data-turn-id={turn.id}>
       {turn.user && (
-        <div className="flex justify-end">
-          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded bg-pm-raised px-2 py-1 text-pm-text ck-chat-bubble">
-            {turn.user.text}
-          </div>
+        <div className="flex flex-col items-end gap-1.5">
+          {turn.user.attachments && turn.user.attachments.length > 0 && <AttachmentChips attachments={turn.user.attachments} className="ck-chat-user-files" />}
+          {turn.user.text.trim() !== '' && (
+            <div className="max-w-[85%] whitespace-pre-wrap break-words rounded bg-pm-raised px-2 py-1 text-pm-text ck-chat-bubble">
+              {turn.user.text}
+            </div>
+          )}
         </div>
       )}
       {segmentSteps(turn.steps).map((segment) => {

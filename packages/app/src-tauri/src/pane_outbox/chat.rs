@@ -4,6 +4,7 @@
 //! the running turn instead (`steer`). Nothing here types into anything.
 
 use super::host::{Attempt, Look};
+use crate::attach::ChatAttachment;
 use crate::acp::chat::{AcpChat, Readiness as ChatReadiness, SendError};
 use crate::agent_runs::readiness::Readiness;
 use crate::tui::ComposerState;
@@ -20,7 +21,12 @@ pub fn look(chat: &AcpChat) -> Option<Look> {
 
 /// Sends the message as a prompt.
 pub fn type_message(chat: &AcpChat, text: &str) -> Attempt {
-    match chat.send(text) {
+    type_message_with(chat, text, &[])
+}
+
+/// Sends the message with its files and pictures as prompt blocks.
+pub fn type_message_with(chat: &AcpChat, text: &str, attachments: &[ChatAttachment]) -> Attempt {
+    match chat.send_with(text, attachments) {
         Ok(_) => Attempt::Sent,
         Err(SendError::Busy) => Attempt::NotTyped,
         Err(SendError::Gone) => Attempt::Gone,

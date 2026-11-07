@@ -1,4 +1,4 @@
-// Delegation latency measurement against the running app (bridge on 127.0.0.1:17321 by default).
+// Delegation latency measurement against the running app (bridge on 127.0.0.1:17421 by default).
 //
 //   node scripts/perf-latency.mjs --out <dir> [--scenarios a,b] [--cold 3] [--followups 2] [--label before]
 //
@@ -21,7 +21,7 @@ if (!out) { console.error('--out <dir> required'); process.exit(2); }
 const label = opt('label', 'run');
 const COLD = Number(opt('cold', 3));
 const FOLLOWUPS = Number(opt('followups', 2));
-const BRIDGE = opt('bridge', 'http://127.0.0.1:17321');
+const BRIDGE = opt('bridge', 'http://127.0.0.1:17421');
 // --task / --allowed let an experiment run something longer than PONG (frames are still recorded).
 const TASK = opt('task', PONG);
 // --fixed-dir reuses one (already trusted) project folder for every cold run instead of a fresh sandbox, and

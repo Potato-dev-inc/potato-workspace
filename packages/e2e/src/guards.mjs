@@ -1,7 +1,7 @@
 // Safety rails: the founder's running app must never be touched by a test run.
 import path from 'node:path';
 
-export const FORBIDDEN_PORTS = [17321, 17322, 9333];
+export const FORBIDDEN_PORTS = [17321, 17322, 17421, 17422, 9333];
 
 export function assertSafePort(port, what) {
   if (!Number.isInteger(port) || port <= 0 || port > 65535) throw new Error(`${what}: bad port ${port}`);

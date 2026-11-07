@@ -1,6 +1,6 @@
 export const BRIDGE_PROXY_PREFIX = '/bridge';
 export const LS_BRIDGE_URL = 'pm-bridge-url';
-const DEFAULT_LOCAL_BRIDGE = 'http://127.0.0.1:17321';
+const DEFAULT_LOCAL_BRIDGE = 'http://127.0.0.1:17421';
 
 export type BridgeLocation = Pick<Location, 'origin' | 'protocol' | 'hostname'>;
 

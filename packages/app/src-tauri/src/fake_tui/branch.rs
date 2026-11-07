@@ -41,7 +41,7 @@ impl Chat {
         for (index, (you, reply)) in turns.iter().enumerate() {
             let (start, end) = windows.get(index).copied().unwrap_or((0, 0));
             let n = index + 1;
-            items.push(ChatItem::User { id: format!("u{n}"), at: iso(start), text: (*you).to_string() });
+            items.push(ChatItem::User { id: format!("u{n}"), at: iso(start), text: (*you).to_string(), attachments: Vec::new() });
             items.push(ChatItem::Assistant {
                 id: format!("a{n}"),
                 at: iso(end),

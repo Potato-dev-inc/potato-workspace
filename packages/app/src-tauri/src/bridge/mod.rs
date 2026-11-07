@@ -84,7 +84,7 @@ pub(crate) fn install_for_e2e(registry: Arc<Mutex<PaneRegistry>>, app: AppHandle
 
 /// Dev only (`dev-fake-tui`): the bridge's own connection handler (gate, brain routes, router) on a free
 /// port the OS picks, for an end-to-end test. It writes no port file and never binds the
-/// app's own range (17321 and up), so a running Potato Workspace is never touched.
+/// app's own range (17421 and up), so a running Potato Workspace is never touched.
 #[cfg(feature = "dev-fake-tui")]
 #[allow(dead_code)] // dev seam for a future end-to-end test; no caller yet
 pub(crate) fn serve_for_e2e(registry: Arc<Mutex<PaneRegistry>>, app: AppHandle) -> Result<u16, String> {
@@ -142,8 +142,6 @@ pub fn notify_pty_resized_by_lease(pane_id: &str, cols: u16, rows: u16) {
 }
 
 const HOST: &str = "127.0.0.1";
-const PORT_MIN: u16 = 17321;
-const PORT_MAX: u16 = 17399;
 
 pub struct BridgeHandle {
     pub url: String,
@@ -156,11 +154,9 @@ impl BridgeHandle {
 }
 
 fn bind_listener() -> Result<(TcpListener, u16), String> {
-    // A non-default profile (`POTATO_WORKSPACE_PROFILE`) scans its own slice of the range.
-    let (min, max) = match crate::app_paths::profile() {
-        None => (PORT_MIN, PORT_MAX),
-        Some(name) => crate::app_paths::bridge_port_range_for(Some(&name)),
-    };
+    // The default profile scans Potato Workspace's own range (17421..=17499); a non-default profile
+    // (`POTATO_WORKSPACE_PROFILE`) scans its own slice of it. Never the other product's 17321..=17399.
+    let (min, max) = crate::app_paths::bridge_port_range_for(crate::app_paths::profile().as_deref());
     for port in min..=max {
         match TcpListener::bind((HOST, port)) {
             Ok(listener) => return Ok((listener, port)),

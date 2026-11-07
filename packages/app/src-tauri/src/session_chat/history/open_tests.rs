@@ -71,7 +71,7 @@ fn secret_user_item() -> ChatItem {
     ChatItem::User {
         id: "1:0".into(),
         at: None,
-        text: format!("use {PLANTED_KEY} and mail you@example.com from C:\\Users\\you\\proj\\.env"),
+        text: format!("use {PLANTED_KEY} and mail you@example.com from C:\\Users\\you\\proj\\.env"), attachments: Vec::new()
     }
 }
 

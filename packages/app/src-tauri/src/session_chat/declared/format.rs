@@ -122,7 +122,7 @@ impl SessionFormat for DeclaredSessionFile {
                 Some(call_id) => self.tool_result(&value, call_id, text, &mut out),
                 None => {
                     if let Some(text) = text {
-                        out.push(|id, at| ChatItem::User { id, at, text });
+                        out.push(|id, at| ChatItem::User { id, at, text, attachments: Vec::new() });
                     }
                 }
             },

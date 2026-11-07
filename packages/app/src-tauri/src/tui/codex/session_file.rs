@@ -167,7 +167,7 @@ fn item_completed(out: &mut Emit, item: &Value) {
     match item["type"].as_str() {
         Some("UserMessage") => {
             let text = content_text(item);
-            out.push(|id, at| ChatItem::User { id, at, text });
+            out.push(|id, at| ChatItem::User { id, at, text, attachments: Vec::new() });
         }
         Some("AgentMessage") => {
             let text = content_text(item);
@@ -373,7 +373,7 @@ mod tests {
         let expected = vec![
             ChatItem::Session { id: id(0, 0), at: at(0), model: None, cli_version: Some("0.162.1".into()) },
             ChatItem::Session { id: id(1, 0), at: at(1), model: Some("gpt-test-1".into()), cli_version: None },
-            ChatItem::User { id: id(3, 0), at: at(3), text: "Add a retry to the upload step.".into() },
+            ChatItem::User { id: id(3, 0), at: at(3), text: "Add a retry to the upload step.".into(), attachments: Vec::new() },
             ChatItem::Assistant {
                 id: id(4, 0),
                 at: at(4),

@@ -123,6 +123,9 @@ fn refuses_own_ports() {
         "http://localhost:17322",
         "http://localhost:17350/",
         "http://localhost:17399/",
+        "http://127.0.0.1:17421/",
+        "http://localhost:17450/",
+        "http://localhost:17499/",
         "http://localhost:9333/",
         "http://localhost:5173/",
     ] {
@@ -132,7 +135,7 @@ fn refuses_own_ports() {
 
 #[test]
 fn allows_ports_just_outside_our_ranges() {
-    for port in [17320, 17400, 4000, 3000, 80, 65535] {
+    for port in [17320, 17400, 17420, 17500, 4000, 3000, 80, 65535] {
         let url = format!("http://localhost:{port}/");
         assert!(allowed(&url, &own()).is_ok(), "should allow {url}");
     }
@@ -150,7 +153,11 @@ fn own_ports_include_the_debugging_port_from_args() {
     let ports = OwnPorts::current(None);
     assert!(ports.contains(1420));
     assert!(ports.contains(9333));
-    assert!(ports.contains(17321));
+    assert!(ports.contains(17421), "our own bridge range starts at 17421");
+    assert!(ports.contains(17499));
+    assert!(ports.contains(17321), "the other product's bridge range stays refused");
+    assert!(ports.contains(17399));
+    assert!(!ports.contains(17400) && !ports.contains(17420) && !ports.contains(17500));
     assert!(!ports.contains(4000));
 }
 

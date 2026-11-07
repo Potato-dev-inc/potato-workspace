@@ -298,6 +298,7 @@ mod tests {
                     state: crate::pane_outbox::State::Queued,
                     waiting_for: None,
                     error: None,
+                    attachments: Vec::new(),
                 }),
             }
         }
@@ -389,7 +390,7 @@ mod tests {
         assert_eq!(sent_note(&target), "Sent to Codex \u{b7} fix-pricing. It waits until the agent is free.");
     }
     fn message(state: crate::pane_outbox::State, error: Option<&str>) -> OutboxMessage {
-        OutboxMessage { id: "m1".into(), text: "x".into(), created_at: 0, state, waiting_for: None, error: error.map(str::to_string) }
+        OutboxMessage { id: "m1".into(), text: "x".into(), created_at: 0, state, waiting_for: None, error: error.map(str::to_string), attachments: Vec::new() }
     }
 
     fn target(not_ready: Option<&str>) -> TargetFacts {

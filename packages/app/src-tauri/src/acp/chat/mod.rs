@@ -39,6 +39,7 @@ mod tests;
 #[cfg(test)]
 mod workspace_tests;
 
+use crate::attach::ChatAttachment;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -145,9 +146,9 @@ pub struct AcpChat {
     handles: Mutex<Option<VirtualPaneHandles>>,
     cards: Mutex<BTreeMap<u64, Card>>,
     /// What the person sent, until the turn it starts is reported (the user item is made from it).
-    pending_user: Mutex<Option<String>>,
+    pending_user: Mutex<Option<(String, Vec<ChatAttachment>)>>,
     /// The message the agent refused because it needs a sign-in, kept to send again once the person has signed in.
-    sign_in_held: Mutex<Option<String>>,
+    sign_in_held: Mutex<Option<(String, Vec<ChatAttachment>)>>,
     closed: AtomicBool,
     /// One `send` at a time: a second message while the first is still bringing the adapter up is `Busy` at once, so
     /// it can neither replace the first message's text in the chat nor take it away when it fails.
@@ -473,9 +474,9 @@ impl AcpChat {
             }
             SessionEvent::TurnStarted { turn } => {
                 self.interrupted.store(false, Ordering::SeqCst);
-                let text = self.pending_user.lock().take();
+                let (text, attachments) = self.pending_user.lock().take().unwrap_or_default();
                 let mut mapper = self.mapper.lock();
-                let items = mapper.turn_started(*turn, text.as_deref(), now, &at);
+                let items = mapper.turn_started_with(*turn, Some(text.as_str()), &attachments, now, &at);
                 self.push(items);
             }
             SessionEvent::PermissionRequested(wait) => {
@@ -683,16 +684,22 @@ impl AcpChat {
 
     /// Starts a turn with `text`. `Busy` while a turn runs.
     pub fn send(&self, text: &str) -> Result<Sent, SendError> {
+        self.send_with(text, &[])
+    }
+
+    /// `send` with files and pictures: the text may be empty when there are any. They go in as content blocks
+    /// (`attach::blocks`), by what the agent says it takes.
+    pub fn send_with(&self, text: &str, attachments: &[ChatAttachment]) -> Result<Sent, SendError> {
         let text = text.trim();
-        if text.is_empty() {
+        if text.is_empty() && attachments.is_empty() {
             return Err(SendError::Refused("Write a message first.".into()));
         }
         if self.is_closed() {
             return Err(SendError::Gone);
         }
         let Some(_gate) = self.send_gate.try_lock() else { return Err(SendError::Busy) };
-        *self.pending_user.lock() = Some(text.to_string());
-        match self.session.prompt_text(text) {
+        *self.pending_user.lock() = Some((text.to_string(), attachments.to_vec()));
+        match self.session.prompt_message(text, attachments) {
             Ok(_) => {
                 self.sign_in_held.lock().take();
                 Ok(Sent::Started)
@@ -701,7 +708,7 @@ impl AcpChat {
                 self.pending_user.lock().take();
                 if needs_sign_in(&error) {
                     // The sign-in card shows; the text waits for "I'm signed in — try again".
-                    *self.sign_in_held.lock() = Some(text.to_string());
+                    *self.sign_in_held.lock() = Some((text.to_string(), attachments.to_vec()));
                     self.host.state_changed(&self.pane_id, &self.state());
                 }
                 Err(send_error(&error))
@@ -727,11 +734,11 @@ impl AcpChat {
     /// a sign-in the card stays.
     pub fn retry_after_sign_in(&self) -> Result<Sent, SendError> {
         let held = self.sign_in_held.lock().take();
-        let Some(text) = held else { return Err(SendError::Refused("Nothing is waiting to be sent.".into())) };
-        let result = self.send(&text);
+        let Some((text, attachments)) = held else { return Err(SendError::Refused("Nothing is waiting to be sent.".into())) };
+        let result = self.send_with(&text, &attachments);
         if result.is_err() && !self.sign_in_needed() {
             // Another reason it did not go: keep the text so the person can try again.
-            *self.sign_in_held.lock() = Some(text);
+            *self.sign_in_held.lock() = Some((text, attachments));
         }
         self.host.state_changed(&self.pane_id, &self.state());
         result
@@ -740,17 +747,22 @@ impl AcpChat {
     /// Sends `text` into the turn that runs, when the agent takes that. `None`: it does not (or no turn runs); the
     /// caller queues the text instead. The text shows in the chat as the person's message.
     pub fn steer(&self, text: &str) -> Option<Result<(), String>> {
+        self.steer_with(text, &[])
+    }
+
+    /// `steer` with files and pictures.
+    pub fn steer_with(&self, text: &str, attachments: &[ChatAttachment]) -> Option<Result<(), String>> {
         let text = text.trim();
-        if text.is_empty() || self.is_closed() || !self.can_steer() || self.readiness() != Readiness::Busy {
+        if (text.is_empty() && attachments.is_empty()) || self.is_closed() || !self.can_steer() || self.readiness() != Readiness::Busy {
             return None;
         }
         if !self.session.snapshot().turn_in_flight() {
             return None;
         }
-        match self.session.steer(vec![json!({ "type": "text", "text": text })]) {
+        match self.session.steer_message(text, attachments) {
             Ok(SteerOutcome::Injected) => {
                 let mut mapper = self.mapper.lock();
-                let items = mapper.steered(text, &now_iso());
+                let items = mapper.steered_with(text, attachments, &now_iso());
                 self.push(items);
                 Some(Ok(()))
             }

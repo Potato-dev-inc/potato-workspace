@@ -1184,3 +1184,14 @@ mod pane_parent {
         let _ = parent;
     }
 }
+
+#[test]
+fn the_default_bridge_binds_our_own_port_range_never_the_other_products() {
+    if crate::app_paths::profile().is_some() {
+        return;
+    }
+    let (listener, port) = super::bind_listener().expect("a free port in our range");
+    assert!((17421..=17499).contains(&port), "bound {port}, outside 17421..=17499");
+    assert!(!(17321..=17399).contains(&port));
+    drop(listener);
+}

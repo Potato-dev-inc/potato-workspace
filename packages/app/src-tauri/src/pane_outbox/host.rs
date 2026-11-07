@@ -3,6 +3,7 @@
 //! the state machine runs without a terminal.
 
 use super::model::OutboxMessage;
+use crate::attach::{blocks::text_with_paths, ChatAttachment};
 use crate::agent_runs::readiness::{Readiness, Verdict};
 use crate::tui::{ComposerState, Kind};
 
@@ -81,6 +82,11 @@ pub trait Host: Send + Sync + 'static {
     fn look(&self, pane_id: &str) -> Option<Look>;
     /// Types the text and presses Enter, under the typing permit, without clearing what the person typed.
     fn type_message(&self, pane_id: &str, text: &str) -> Attempt;
+    /// The same with files and pictures. A terminal agent only takes text: the paths follow it. A chat session
+    /// sends them as content blocks.
+    fn type_message_with(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Attempt {
+        self.type_message(pane_id, &text_with_paths(text, attachments))
+    }
     /// Tells the windows and phones the pane's messages changed (the whole list, newest last).
     fn publish(&self, pane_id: &str, messages: &[OutboxMessage]);
     /// Hands the text to a running turn at once, for a chat session whose agent takes text while it works.
@@ -88,5 +94,9 @@ pub trait Host: Send + Sync + 'static {
     /// `Some(Err)`: the agent was asked and the sentence says what went wrong.
     fn steer(&self, _pane_id: &str, _text: &str) -> Option<Result<(), String>> {
         None
+    }
+    /// `steer` with files and pictures.
+    fn steer_with(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Option<Result<(), String>> {
+        self.steer(pane_id, &text_with_paths(text, attachments))
     }
 }

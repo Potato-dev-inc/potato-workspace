@@ -4,11 +4,14 @@
 // `voice` adds the mic (phone only): speech turned into text on the device, see hooks/useVoiceInput.ts.
 // `draftKey` (the pane) keeps the unsent text across pane switches and reloads, see lib/composerDraft.ts.
 // `draft` is a message from the Point and Fix box ("Edit in Chat"): it goes into the box once, see useComposerDraft.
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
-import { clearDraft, DRAFT_SAVE_MS, readDraft, writeDraft, type ComposerDraft } from '../../lib/composerDraft';
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
+import { clearDraft, DRAFT_SAVE_MS, readDraftState, writeDraft, type ComposerDraft } from '../../lib/composerDraft';
 import { insertAtCursor } from '../../lib/voice';
-import { withAttachments, withPaths, prepareAttachments } from '../../lib/attachFiles';
+import { prepareAttachments, savePastedImage, type ChatAttachment } from '../../lib/attachFiles';
+import { AttachmentChips } from './AttachmentChips';
+import { ProjectFilePicker, findMentionQuery, removeMention, type ProjectFilePickerHandle } from './ProjectFilePicker';
+import type { ProjectFileHit } from '../../lib/projectFiles';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { commandHint, commandText, filterCommands, type AcpCommand } from '../../lib/acpChat';
 import '../../styles/cockpit-acp.css';
@@ -21,8 +24,11 @@ const COUNT_FROM = 7000;
 export const TOO_LONG_TEXT = `The message is too long. The most is ${MAX_MESSAGE_CHARS} characters.`;
 
 export interface ChatComposerProps {
-  /** Sends the text. Resolves to null when it was accepted, else one plain sentence saying why not. */
-  onSend: (text: string) => Promise<string | null>;
+  /**
+   * Sends the text, with the attached files (chips) when there are any. Resolves to null when it was accepted, else one
+   * plain sentence saying why not.
+   */
+  onSend: (text: string, attachments?: ChatAttachment[]) => Promise<string | null>;
   /** Why the box is switched off (shown instead of a hint), or null. */
   blockedReason: string | null;
   /** Show the mic (voice typing on the device). Off for the desktop box. */
@@ -80,10 +86,16 @@ export function ChatComposer(props: ChatComposerProps) {
 
 function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, attachFiles }: ChatComposerProps) {
   const stoppable = running && !!onStop;
-  const [text, setText] = useState(() => (draftKey ? readDraft(draftKey) : ''));
+  const [restored] = useState(() => (draftKey ? readDraftState(draftKey) : { text: '', attachments: [] as ChatAttachment[] }));
+  const [text, setText] = useState(restored.text);
+  /** Files attached to the message, as chips inside the box. */
+  const [attachments, setAttachments] = useState<ChatAttachment[]>(restored.attachments);
+  /** Files being prepared (copied, or a pasted image being saved): each one shows a spinner chip. */
+  const [preparing, setPreparing] = useState(0);
+  /** Pasted images so far in this box, for the names `Pasted image 1.png`, `Pasted image 2.png`... */
+  const pastedCount = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [attaching, setAttaching] = useState(false);
   const [dropping, setDropping] = useState(false);
   /** Words heard but not final yet, and where in the text they would go. */
   const [interim, setInterim] = useState('');
@@ -99,6 +111,13 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   const [menuShut, setMenuShut] = useState(false);
   const menuItems = slashCommands && !blocked && !menuShut ? filterCommands(slashCommands, text) : [];
   const menuOpen = menuItems.length > 0;
+  // The `@` mention: typing "@word" at the caret opens the project file picker. Needs the same pane as the + button.
+  const mentionsOn = !!attachFiles && !!draftKey && !blocked;
+  const [mention, setMention] = useState<{ start: number; query: string; rect: DOMRect | null } | null>(null);
+  /** Esc closes the picker until the text changes again. */
+  const [mentionShut, setMentionShut] = useState(false);
+  const pickerRef = useRef<ProjectFilePickerHandle>(null);
+  const mentionOpen = mention !== null;
   const menuIx = Math.min(menuAt, Math.max(menuItems.length - 1, 0));
   const hint = slashCommands ? commandHint(slashCommands, text) : null;
   const count = [...text].length;
@@ -126,12 +145,12 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
 
   // The draft: written DRAFT_SAVE_MS after the last change, and at once when the box goes away or the page closes.
   // Only the text in the box is kept: words still being heard (interim) are not in `text` and never saved.
-  const draft = useRef({ key: draftKey ?? '', text });
+  const draft = useRef({ key: draftKey ?? '', text, attachments });
   const unsaved = useRef(false);
   const firstRun = useRef(true);
   useEffect(() => {
     if (!draftKey) return;
-    draft.current = { key: draftKey, text };
+    draft.current = { key: draftKey, text, attachments };
     // The text loaded on mount is already saved: opening the box does not restart the 7 days.
     if (firstRun.current) {
       firstRun.current = false;
@@ -140,15 +159,15 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     unsaved.current = true;
     const timer = window.setTimeout(() => {
       unsaved.current = false;
-      writeDraft(draftKey, text);
+      writeDraft(draftKey, text, Date.now(), attachments);
     }, DRAFT_SAVE_MS);
     return () => window.clearTimeout(timer);
-  }, [text, draftKey]);
+  }, [text, attachments, draftKey]);
   useEffect(() => {
     const flush = () => {
       if (!unsaved.current) return;
       unsaved.current = false;
-      writeDraft(draft.current.key, draft.current.text);
+      writeDraft(draft.current.key, draft.current.text, Date.now(), draft.current.attachments);
     };
     const onHidden = () => {
       if (document.visibilityState === 'hidden') flush();
@@ -192,43 +211,131 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     field.current?.focus();
   }, [pointDraft, text]);
 
+  /** Looks for an `@word` at the caret and opens or closes the picker to match. */
+  const syncMention = (value: string, caret: number) => {
+    const found = mentionsOn && !mentionShut ? findMentionQuery(value, caret) : null;
+    if (!found) {
+      setMention(null);
+      return;
+    }
+    setMention({ start: found.start, query: found.query, rect: field.current?.getBoundingClientRect() ?? null });
+  };
+
+  /** A file picked from the `@` list: the `@word` text goes, and the file becomes a chip (same as +). */
+  const pickProjectFile = (file: ProjectFileHit) => {
+    if (!mention) return;
+    const el = field.current;
+    const caret = el ? el.selectionStart : mention.start + mention.query.length + 1;
+    const next = removeMention(text, mention.start, caret);
+    setMention(null);
+    caretAfter.current = mention.start;
+    setText(next);
+    setError(null);
+    void addPaths([file.absPath]);
+  };
+
+  const closeMention = () => {
+    setMention(null);
+    setMentionShut(true);
+  };
+
+  /** Adds chips. A file already in the list (same path) is ignored; a message carries MAX_MESSAGE_ATTACHMENTS at most. */
+  const addAttachments = (list: readonly ChatAttachment[]) => {
+    if (list.length === 0) return;
+    if (attachments.length + list.length > MAX_MESSAGE_ATTACHMENTS) setError(`A message can carry ${MAX_MESSAGE_ATTACHMENTS} files at most.`);
+    setAttachments((current) => {
+      const seen = new Set(current.map((a) => a.path));
+      const fresh: ChatAttachment[] = [];
+      for (const file of list) {
+        if (seen.has(file.path)) continue;
+        seen.add(file.path);
+        fresh.push(file);
+      }
+      const room = Math.max(0, MAX_MESSAGE_ATTACHMENTS - current.length);
+      return fresh.length === 0 ? current : [...current, ...fresh.slice(0, room)];
+    });
+  };
+
+  const removeAttachment = (file: ChatAttachment) => {
+    setAttachments((current) => current.filter((a) => a.path !== file.path));
+    setError(null);
+  };
+
   const submit = async () => {
-    if (blocked || busy || empty || tooLong) return;
+    if (blocked || busy || preparing > 0 || tooLong || (empty && attachments.length === 0)) return;
+    setMention(null);
     mic.halt();
     setBusy(true);
     setError(null);
-    const refused = await onSend(text.trim());
+    // The attachments travel only when there are some: a plain message is sent exactly as before.
+    const refused = attachments.length > 0 ? await onSend(text.trim(), attachments) : await onSend(text.trim());
     setBusy(false);
     if (refused) setError(refused);
     else {
       setText('');
+      setAttachments([]);
       if (draftKey) clearDraft(draftKey);
     }
     field.current?.focus();
   };
 
+  /** Copies the picked paths for this pane and adds them as chips. A spinner chip shows while they are copied. */
   const addPaths = async (paths: readonly string[]) => {
     if (paths.length === 0) return;
-    setAttaching(true);
+    if (!draftKey) {
+      setError('Could not read the chosen files.');
+      return;
+    }
+    setPreparing((n) => n + 1);
     try {
-      const files = draftKey ? await prepareAttachments(draftKey, paths) : [];
-      setText((current) => (files.length > 0 ? withAttachments(current, files) : withPaths(current, paths)));
-      setError(null);
+      addAttachments(await prepareAttachments(draftKey, paths));
     } catch {
       setError('Could not read the chosen files.');
     } finally {
-      setAttaching(false);
+      setPreparing((n) => n - 1);
       field.current?.focus();
     }
   };
 
   const addFiles = async () => {
-    if (!attachFiles || blocked || busy || attaching) return;
+    if (!attachFiles || blocked || busy || preparing > 0) return;
     try {
       await addPaths(await attachFiles());
     } catch {
       setError('Could not open the file dialog.');
     }
+  };
+
+  /** Saves one pasted image for this pane and adds it as a chip. */
+  const savePasted = async (file: File) => {
+    if (!draftKey) return;
+    pastedCount.current += 1;
+    const sub = file.type.split('/')[1] ?? '';
+    const ext = sub === 'jpeg' ? 'jpg' : /^[a-z0-9]{1,8}$/i.test(sub) ? sub.toLowerCase() : 'png';
+    setPreparing((n) => n + 1);
+    try {
+      addAttachments([await savePastedImage(draftKey, file, `Pasted image ${pastedCount.current}.${ext}`)]);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : typeof error === 'string' ? error : 'Could not save the pasted image.');
+    } finally {
+      setPreparing((n) => n - 1);
+    }
+  };
+
+  // Pasting an image makes a chip (the image is saved for this pane). A file with a path on this PC makes a chip too.
+  // Anything else, plain text included, pastes as it always did: the default is left alone.
+  const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!draftKey || blocked || !attachFiles) return;
+    const files = Array.from(event.clipboardData?.files ?? []);
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    const paths = files
+      .filter((file) => !file.type.startsWith('image/'))
+      .map((file) => (file as File & { path?: string }).path)
+      .filter((path): path is string => typeof path === 'string' && path !== '');
+    if (images.length === 0 && paths.length === 0) return;
+    event.preventDefault();
+    if (paths.length > 0) void addPaths(paths);
+    for (const image of images) void savePasted(image);
   };
 
   // Files dropped on the box become paths in the message. The desktop app reports the drop in window coordinates,
@@ -282,6 +389,15 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // The `@` picker first: Enter picks, arrows move, Esc closes. While it is open Enter never sends.
+    if (mentionOpen && !event.nativeEvent.isComposing) {
+      if (pickerRef.current?.handleKey(event)) {
+        if (event.key === 'Escape') closeMention();
+        return;
+      }
+      // Enter with no file to pick (no matches, or still loading): close the picker and let Enter work as normal.
+      if (event.key === 'Enter' && !event.shiftKey) closeMention();
+    }
     if (menuOpen && !event.nativeEvent.isComposing) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
@@ -350,9 +466,16 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         setText(event.target.value);
         setMenuAt(0);
         setMenuShut(false);
+        setMentionShut(false);
+        syncMention(event.target.value, event.target.selectionStart);
         if (error) setError(null);
       }}
+      onSelect={(event) => {
+        // The caret moved (arrows, click): the picker follows the `@word` under it.
+        syncMention(event.currentTarget.value, event.currentTarget.selectionStart);
+      }}
       onKeyDown={onKeyDown}
+      onPaste={onPaste}
       onScroll={(event) => {
         if (mirror.current) mirror.current.scrollTop = event.currentTarget.scrollTop;
       }}
@@ -370,6 +493,17 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         void submit();
       }}
     >
+      {mentionsOn && mention && (
+        <ProjectFilePicker
+          ref={pickerRef}
+          paneId={draftKey!}
+          query={mention.query}
+          open={mentionOpen}
+          anchorRect={mention.rect}
+          onPick={pickProjectFile}
+          onClose={closeMention}
+        />
+      )}
       {menuOpen && (
         <div className="ck-slash-anchor">
           <ul className="ck-slash-menu" id="ck-slash-menu" role="listbox" aria-label="Commands" data-testid="slash-menu">
@@ -398,13 +532,14 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
             className="ck-chat-attach"
             data-testid="chat-composer-attach"
             aria-label="Add files"
-            title="Add files (or drop them here)"
-            aria-disabled={blocked || busy || attaching || undefined}
+            title="Add files (or drop them here, or type @ to add a project file)"
+            aria-disabled={blocked || busy || preparing > 0 || undefined}
             onClick={() => void addFiles()}
           >
             <AttachIcon />
           </button>
         )}
+        <AttachmentChips attachments={attachments} preparing={preparing} onRemove={removeAttachment} className="ck-chat-composer-chips" />
         {voice ? (
           <div className="ck-chat-composer-field-wrap">
             {showMirror && (
@@ -445,7 +580,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
             <span className="ck-chat-send-label">Stop</span>
           </button>
         ) : (
-          <button type="submit" className="ck-btn ck-btn--primary ck-chat-send" disabled={blocked || busy || empty || tooLong}>
+          <button type="submit" className="ck-btn ck-btn--primary ck-chat-send" disabled={blocked || busy || preparing > 0 || (empty && attachments.length === 0) || tooLong}>
             <svg className="ck-chat-send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 19V5" />
               <path d="m5 12 7-7 7 7" />

@@ -11,7 +11,7 @@ use crate::session_chat::{ChatItem, ItemObserver, ToolDetail};
 use serde_json::json;
 
 fn user(id: &str, at: Option<&str>, text: &str) -> ChatItem {
-    ChatItem::User { id: id.into(), at: at.map(String::from), text: text.into() }
+    ChatItem::User { id: id.into(), at: at.map(String::from), text: text.into(), attachments: Vec::new() }
 }
 
 fn assistant(id: &str, at: Option<&str>, text: &str) -> ChatItem {
@@ -669,7 +669,7 @@ mod imported_tests {
         let token = "sk-ant-api03-FakeFakeFakeFake0123456789abcdef";
         let hex = "0123456789abcdef0123456789abcdef01234567";
         let text = format!("key {token} mail someone@example.com hash {hex} file C:\\Users\\you\\proj\\.env");
-        let item = ChatItem::User { id: "1:0".into(), at: None, text };
+        let item = ChatItem::User { id: "1:0".into(), at: None, text, attachments: Vec::new() };
         let e = entry_of_with("import:agent-x", &ctx, &item, 1, Strength::Strict, true, MAX_IMPORTED_TEXT_CHARS).expect("kept");
         for secret in ["FakeFake", "someone@example.com", hex, "Users\\you"] {
             assert!(!e.text.contains(secret), "{}", e.text);

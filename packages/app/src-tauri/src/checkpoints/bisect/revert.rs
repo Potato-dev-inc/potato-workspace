@@ -151,10 +151,12 @@ pub fn decide(a: Option<&[u8]>, b: Option<&[u8]>, c: Option<&[u8]>) -> Action {
 
 /// The git path as a path under the folder, or `None` when it is not a plain relative name. Refuses
 /// `..`, absolute and drive paths, `:` (Windows streams), `\` (Windows would split it into folders),
-/// and the app's own save point folder.
+/// the app's own save point folder, and the older build's folder (`LEGACY_PROJECT_DIR_NAME`), which a restore
+/// must never write into.
 pub fn check_path(path: &str) -> Option<PathBuf> {
     let first = path.split('/').next().unwrap_or("");
-    if path.contains('\\') || path.contains(':') || first.eq_ignore_ascii_case(".potato-workspace") {
+    let reserved = [crate::app_paths::PROJECT_DIR_NAME, crate::app_paths::LEGACY_PROJECT_DIR_NAME];
+    if path.contains('\\') || path.contains(':') || reserved.iter().any(|name| first.eq_ignore_ascii_case(name)) {
         return None;
     }
     engine::safe_relative(path)

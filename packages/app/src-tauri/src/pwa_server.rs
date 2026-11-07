@@ -260,6 +260,8 @@ fn is_websocket_upgrade(headers_raw: &str) -> bool {
 /// Header the bridge reads as "this request came through the PWA proxy, so it is a remote caller":
 /// it then demands a paired-device bearer token (`mobile_pairing::requires_pairing_token`).
 const PROXY_MARKER: &str = "X-Potato-Workspace-Proxied";
+/// The older build's marker name. A client's copy is dropped too, so the bridge only ever sees the proxy's own marker.
+const LEGACY_PROXY_MARKER: &str = "x-pm-proxied";
 
 /// True for a request-head line that names `name` (case-insensitive, and tolerant of leading
 /// whitespace the way the bridge's own header lookup is, so an obs-fold trick cannot slip one by).
@@ -292,7 +294,7 @@ fn proxy_upgrade(
 
     let mut request = format!("{method} {path} HTTP/1.1\r\n");
     for line in headers_raw.lines().skip(1) {
-        if is_header_line(line, PROXY_MARKER) {
+        if is_header_line(line, PROXY_MARKER) || is_header_line(line, LEGACY_PROXY_MARKER) {
             continue;
         }
         request.push_str(line);
@@ -351,6 +353,7 @@ fn proxy_bridge(
             || lower.starts_with("proxy-connection:")
             || lower.starts_with("content-length:")
             || is_header_line(line, PROXY_MARKER)
+            || is_header_line(line, LEGACY_PROXY_MARKER)
         {
             continue;
         }
@@ -404,7 +407,7 @@ fn connect_bridge(
     }
 }
 
-/// `host:port` of the embedded bridge from its port file (`127.0.0.1:17321`, or just the port).
+/// `host:port` of the embedded bridge from its port file (`127.0.0.1:17421`, or just the port).
 /// Bare, not a URL: it goes to `TcpStream::connect` and the upstream `Host` header (it used to be
 /// `http://host:port`, which `connect` cannot resolve, so the proxy never reached the bridge).
 fn read_bridge_addr(bridge_port_file: &Path) -> String {
@@ -416,11 +419,17 @@ fn read_bridge_addr(bridge_port_file: &Path) -> String {
             } else if !trimmed.is_empty() {
                 format!("127.0.0.1:{trimmed}")
             } else {
-                "127.0.0.1:17321".into()
+                default_bridge_addr()
             }
         }
-        Err(_) => "127.0.0.1:17321".into(),
+        Err(_) => default_bridge_addr(),
     }
+}
+
+/// Where the bridge is when there is no port file: the first port of Potato Workspace's own range,
+/// never the other product's 17321.
+fn default_bridge_addr() -> String {
+    format!("127.0.0.1:{}", crate::app_paths::bridge_port_range_for(None).0)
 }
 
 fn find_header_end(buf: &[u8]) -> Option<usize> {
@@ -539,8 +548,12 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("pm-pwa-test-{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let file = dir.join("port");
-        fs::write(&file, "127.0.0.1:17355\n").unwrap();
-        assert_eq!(read_bridge_addr(&file), "127.0.0.1:17355");
+        fs::write(&file, "127.0.0.1:17455\n").unwrap();
+        assert_eq!(read_bridge_addr(&file), "127.0.0.1:17455");
+        // Empty or missing file: the first port of our own range, never the other product's 17321.
+        fs::write(&file, "\n").unwrap();
+        assert_eq!(read_bridge_addr(&file), "127.0.0.1:17421");
+        assert_eq!(read_bridge_addr(&dir.join("missing")), "127.0.0.1:17421");
         let _ = fs::remove_dir_all(dir);
     }
 

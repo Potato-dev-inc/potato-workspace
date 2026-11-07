@@ -203,7 +203,8 @@ fn cancel(shared: &Arc<Shared>, session: Option<&str>) {
     }
 }
 
-/// The text of a prompt: its text blocks, in order. Other block kinds are not offered in `initialize`.
+/// The text of a prompt: its text blocks, in order, and a line with the path for each file block (`resource_link`
+/// is baseline, `resource` may come anyway). Images are not offered in `initialize` and are left out.
 fn prompt_text(params: &Value) -> String {
     params
         .get("prompt")
@@ -211,8 +212,13 @@ fn prompt_text(params: &Value) -> String {
         .map(|blocks| {
             blocks
                 .iter()
-                .filter(|b| b.get("type").and_then(Value::as_str) == Some("text"))
-                .filter_map(|b| b.get("text").and_then(Value::as_str))
+                .filter_map(|b| match b.get("type").and_then(Value::as_str) {
+                    Some("text") => b.get("text").and_then(Value::as_str).map(str::to_string),
+                    Some("resource_link" | "resource") => crate::attach::blocks::attachment_of_block(b)
+                        .filter(|a| a.kind != crate::attach::AttachKind::Image)
+                        .map(|a| format!("[attached file: {}]", a.path)),
+                    _ => None,
+                })
                 .collect::<Vec<_>>()
                 .join("\n\n")
         })
@@ -279,4 +285,21 @@ fn start_prompt(shared: &Arc<Shared>, id: Value, params: &Value) -> Option<std::
             }
         })
         .ok()
+}
+
+#[cfg(test)]
+mod prompt_tests {
+    use super::*;
+
+    #[test]
+    fn file_blocks_become_a_line_with_the_path_and_images_stay_refused() {
+        let link = json!({"type": "resource_link", "uri": "file:///C:/my%20files/a.txt", "name": "a.txt"});
+        let embedded = json!({"type": "resource", "resource": {"uri": "file:///h/b.rs", "text": "fn main() {}"}});
+        let image = json!({"type": "image", "data": "AQID", "mimeType": "image/png"});
+        let only_link = json!({"prompt": [link.clone()]});
+        assert_eq!(prompt_text(&only_link), "[attached file: C:/my files/a.txt]");
+        let all = json!({"prompt": [{"type": "text", "text": "read"}, link, embedded, image.clone()]});
+        assert_eq!(prompt_text(&all), "read\n\n[attached file: C:/my files/a.txt]\n\n[attached file: /h/b.rs]");
+        assert_eq!(prompt_text(&json!({"prompt": [image]})), "", "an image alone is still refused");
+    }
 }

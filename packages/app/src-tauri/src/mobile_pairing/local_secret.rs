@@ -222,7 +222,7 @@ mod tests {
         assert_eq!(check_against("Host: 127.0.0.1", Some("abc123")), Check::Missing);
         assert_eq!(check_against(headers, None), Check::NotMinted);
         // header names are case-insensitive
-        assert_eq!(check_against("x-pm-local-secret: abc123", Some("abc123")), Check::Valid);
+        assert_eq!(check_against("x-potato-workspace-local-secret: abc123", Some("abc123")), Check::Valid);
     }
 
     const KEY: Option<&str> = Some("abc123");

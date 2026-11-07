@@ -541,3 +541,42 @@ fn a_runaway_message_is_cut_not_allowed_to_grow_without_end() {
 fn turn_outcomes_serialise_as_the_views_know_them() {
     assert_eq!(serde_json::to_value(TurnOutcome::Interrupted).unwrap(), "interrupted");
 }
+
+#[test]
+fn replayed_file_blocks_become_attachments_on_the_user_item_not_text() {
+    let mut run = Run::new();
+    run.started(StartKind::Loaded);
+    run.updates(
+        &[
+            json!({"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "look at these"}}),
+            json!({"sessionUpdate": "user_message_chunk", "content": {"type": "resource_link", "uri": "file:///C:/p/a%20b.pdf", "name": "a b.pdf", "mimeType": "application/pdf", "size": 7}}),
+            json!({"sessionUpdate": "user_message_chunk", "content": {"type": "image", "mimeType": "image/png", "data": "AQID"}}),
+            json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "seen"}}),
+        ],
+        true,
+    );
+    let items = run.json();
+    let user = items.as_array().unwrap().iter().find(|i| i["kind"] == "user").unwrap();
+    assert_eq!(user["text"], "look at these", "no [image] or file names in the text");
+    let files = user["attachments"].as_array().unwrap();
+    assert_eq!(files.len(), 2);
+    assert_eq!((files[0]["path"].as_str(), files[0]["kind"].as_str(), files[0]["size"].as_u64()), (Some("C:/p/a b.pdf"), Some("file"), Some(7)));
+    assert_eq!(files[1]["kind"], "image");
+}
+
+#[test]
+fn a_live_message_keeps_its_attachments_and_may_have_no_text() {
+    use crate::attach::{AttachKind, ChatAttachment};
+    let file = ChatAttachment { name: "a.png".into(), path: "C:/p/a.png".into(), kind: AttachKind::Image, size: 3, mime: None };
+    let mut run = Run::new();
+    let now = run.now();
+    let items = run.mapper.turn_started_with(1, Some(""), &[file.clone()], now, AT);
+    run.put(items);
+    let items = run.mapper.steered_with("and this", &[file], AT);
+    run.put(items);
+    let json = run.json();
+    let users: Vec<&Value> = json.as_array().unwrap().iter().filter(|i| i["kind"] == "user").collect();
+    assert_eq!(users.len(), 2);
+    assert!(users.iter().all(|u| u["attachments"][0]["name"] == "a.png"));
+    assert_eq!(users[0]["text"], "");
+}

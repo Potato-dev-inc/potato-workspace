@@ -255,7 +255,7 @@ export function createScenarios(ctx) {
     async reconnect(backend, extra) {
       if (backend !== 'opencode_native') return; // fast backend is enough to prove ownership recovery
       let base = null;
-      for (let port = 17321; port <= 17335 && !base; port += 1) {
+      for (let port = 17421; port <= 17435 && !base; port += 1) {
         try {
           const health = await (await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(500) })).json();
           if (health.ok) base = `http://127.0.0.1:${port}`;

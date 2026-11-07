@@ -98,7 +98,7 @@ impl Source for FakeSource {
 }
 
 fn user(text: &str) -> ChatItem {
-    ChatItem::User { id: "u".into(), at: None, text: text.into() }
+    ChatItem::User { id: "u".into(), at: None, text: text.into(), attachments: Vec::new() }
 }
 
 /// A hang detector, not a time limit: the room ticks and talks to a relay on its own threads, and a machine running

@@ -3,6 +3,8 @@
 // sessionChat.ts (which re-exports all of this); the phone reads the same items over the bridge (PhoneChatView).
 // Agent text and tool output are data: the views show them as plain text only.
 
+import type { ChatAttachment } from './attachFiles';
+
 export type TurnOutcome = 'completed' | 'interrupted' | 'failed';
 
 /** A task's state in the agent's list. */
@@ -28,7 +30,7 @@ export interface PlanItem {
 
 /** One parsed line of the session file. Mirrors `ChatItem` in src-tauri/src/session_chat (camelCase). */
 export type ChatItem =
-  | { kind: 'user'; id: string; at: string | null; text: string }
+  | { kind: 'user'; id: string; at: string | null; text: string; attachments?: ChatAttachment[] }
   | { kind: 'assistant'; id: string; at: string | null; text: string; model: string | null; finalAnswer: boolean }
   | {
       kind: 'toolCall';

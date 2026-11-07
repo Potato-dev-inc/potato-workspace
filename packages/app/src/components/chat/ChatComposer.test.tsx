@@ -147,26 +147,46 @@ describe('ChatComposer', () => {
 
 describe('ChatComposer add files', () => {
   const attachButton = () => host.querySelector('[data-testid="chat-composer-attach"]') as HTMLButtonElement | null;
+  const chipNames = () => Array.from(host.querySelectorAll('[data-testid="attachment-chip"]')).map((el) => el.getAttribute('data-name'));
+
+  beforeEach(() => {
+    localStorage.clear();
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === 'attachment_prepare') {
+        const paths = (args as { paths: string[] }).paths;
+        return paths.map((path) => ({ name: path.split(/[\\/]/).pop(), path, kind: path.endsWith('.png') ? 'image' : 'text', size: 2048 }));
+      }
+      return null;
+    });
+  });
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  });
 
   function renderWithFiles(attachFiles: () => Promise<string[]>) {
-    act(() => root.render(<ChatComposer onSend={vi.fn(async () => null)} blockedReason={null} attachFiles={attachFiles} />));
+    act(() => root.render(<ChatComposer onSend={vi.fn(async () => null)} blockedReason={null} draftKey="pane-1" attachFiles={attachFiles} />));
   }
 
-  it('puts every chosen path in the message, quoting ones with a space', async () => {
+  it('adds a chip for every chosen file and leaves the text alone', async () => {
     const attachFiles = vi.fn(async () => ['/a/notes.md', 'C:\\My Docs\\x.txt']);
     renderWithFiles(attachFiles);
     type('Read these');
     act(() => attachButton()!.click());
     await flush();
     expect(attachFiles).toHaveBeenCalledTimes(1);
-    expect(field().value).toBe('Read these\n/a/notes.md\n"C:\\My Docs\\x.txt"\n');
+    expect(invoke).toHaveBeenCalledWith('attachment_prepare', { paneId: 'pane-1', paths: ['/a/notes.md', 'C:\\My Docs\\x.txt'] });
+    expect(chipNames()).toEqual(['notes.md', 'x.txt']);
+    expect(field().value).toBe('Read these');
   });
 
   it('adds several files at once in one go', async () => {
     renderWithFiles(async () => ['/a/one.txt', '/a/two.txt', '/a/three.txt']);
     act(() => attachButton()!.click());
     await flush();
-    expect(field().value).toBe('/a/one.txt\n/a/two.txt\n/a/three.txt\n');
+    expect(chipNames()).toEqual(['one.txt', 'two.txt', 'three.txt']);
+    expect(field().value).toBe('');
   });
 
   it('says so when the file dialog cannot open', async () => {
@@ -178,51 +198,18 @@ describe('ChatComposer add files', () => {
     expect(note()).toContain('Could not open the file dialog.');
   });
 
+  it('says so when the files cannot be read, and adds no chip', async () => {
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockRejectedValue(new Error('nope'));
+    renderWithFiles(async () => ['/a/notes.md']);
+    act(() => attachButton()!.click());
+    await flush();
+    expect(note()).toContain('Could not read the chosen files.');
+    expect(chipNames()).toEqual([]);
+  });
+
   it('has no add-files button when the box cannot take paths (the phone)', () => {
     render(vi.fn(async () => null));
     expect(attachButton()).toBeNull();
-  });
-});
-
-describe('ChatComposer attachments', () => {
-  const attachButton = () => host.querySelector('[data-testid="chat-composer-attach"]') as HTMLButtonElement;
-
-  beforeEach(() => {
-    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
-    vi.mocked(invoke).mockReset();
-  });
-  afterEach(() => {
-    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
-  });
-
-  function renderAttach() {
-    act(() =>
-      root.render(
-        <ChatComposer onSend={vi.fn(async () => null)} blockedReason={null} draftKey="pane-1" attachFiles={async () => ['/a/notes.md', '/a/shot.png']} />,
-      ),
-    );
-  }
-
-  it('puts text file contents inline and a copied file path for images', async () => {
-    vi.mocked(invoke).mockResolvedValue([
-      { name: 'notes.md', path: '/a/notes.md', kind: 'text', text: 'hello\n', size: 6, truncated: false },
-      { name: 'shot.png', path: '/proj/.potato-workspace/attachments/1-shot.png', kind: 'file', size: 4, truncated: false },
-    ]);
-    renderAttach();
-    type('Look at these');
-    act(() => attachButton().click());
-    await flush();
-    expect(invoke).toHaveBeenCalledWith('attachment_prepare', { paneId: 'pane-1', paths: ['/a/notes.md', '/a/shot.png'] });
-    expect(field().value).toContain('hello');
-    expect(field().value).not.toContain('/a/notes.md');
-    expect(field().value).toContain('/proj/.potato-workspace/attachments/1-shot.png');
-  });
-
-  it('says so when the files cannot be read', async () => {
-    vi.mocked(invoke).mockRejectedValue(new Error('nope'));
-    renderAttach();
-    act(() => attachButton().click());
-    await flush();
-    expect(note()).toContain('Could not read the chosen files.');
   });
 });

@@ -2,6 +2,7 @@
 //! `pane-outbox` for the desktop windows and the SSE event of the same name for paired phones.
 
 use super::confirm;
+use crate::attach::{blocks::text_with_paths, ChatAttachment};
 use super::draft_guard::{DraftGuard, DRAFT_PREFIX};
 use super::host::{Attempt, Host, Look, PaneKind};
 use super::model::{OutboxMessage, FAIL_IN_BOX, FAIL_NOT_TAKEN, FAIL_STUCK, FAIL_WRITE};
@@ -122,8 +123,19 @@ impl Host for LiveHost {
         attempt
     }
 
+    fn type_message_with(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Attempt {
+        if let Some(chat) = crate::acp::chat::get(pane_id) {
+            return super::chat::type_message_with(&chat, text, attachments);
+        }
+        self.type_message(pane_id, &text_with_paths(text, attachments))
+    }
+
     fn steer(&self, pane_id: &str, text: &str) -> Option<Result<(), String>> {
         crate::acp::chat::get(pane_id)?.steer(text)
+    }
+
+    fn steer_with(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Option<Result<(), String>> {
+        crate::acp::chat::get(pane_id)?.steer_with(text, attachments)
     }
 
     fn publish(&self, pane_id: &str, messages: &[OutboxMessage]) {

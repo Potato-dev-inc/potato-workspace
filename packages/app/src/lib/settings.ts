@@ -19,7 +19,7 @@ import { tauri } from './tauri';
 
 /** Canonical on-disk settings file (app config dir). */
 export const SETTINGS_STORE_FILENAME = 'settings.json';
-const LEGACY_STORE_FILENAME = 'potato-workspace.settings.json';
+const LEGACY_STORE_FILENAME = 'puppet-master.settings.json';
 const SETTINGS_KEY = 'settings';
 const LEGACY_SIDEBAR_WIDTH_KEY = 'pm-sidebar-width';
 
