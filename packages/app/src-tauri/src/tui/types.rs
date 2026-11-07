@@ -169,7 +169,7 @@ pub struct StartupGate {
     /// One plain sentence for what the user would see.
     pub summary: &'static str,
     /// Keys that close the screen WITHOUT choosing anything that changes the machine or grants
-    /// trust (a "skip" for a notice). `None` means only the user may move past it: Puppet Master
+    /// trust (a "skip" for a notice). `None` means only the user may move past it: Potato Workspace
     /// parks the run and shows the screen instead of answering for them.
     pub dismiss: Option<&'static str>,
 }
@@ -196,7 +196,7 @@ impl StartupGate {
 pub struct InstructionFile {
     /// Relative to the project root, forward slashes (`AGENTS.md`, `.cursor/rules/x.mdc`).
     pub path: String,
-    /// Text written once at the top when Puppet Master creates the file (for formats that need
+    /// Text written once at the top when Potato Workspace creates the file (for formats that need
     /// front-matter). Never added to a file that already exists.
     pub header: Option<String>,
 }
@@ -547,7 +547,7 @@ pub fn resolve_model(known: Option<&str>, readings: &[ModelReading]) -> Option<S
 pub enum LaunchSession {
     /// The agent picks its own id (or the launch arguments leave it open): found by hooks or by the files it writes.
     Unmanaged,
-    /// A fresh id Puppet Master chose; `args` make the agent use it.
+    /// A fresh id Potato Workspace chose; `args` make the agent use it.
     Chosen { id: String, args: Vec<String> },
     /// The launch arguments already name the session; nothing is added.
     Named(String),

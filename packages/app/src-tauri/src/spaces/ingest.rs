@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 
 use rusqlite::{params, OptionalExtension};
 
+use super::files::FileOffer;
 use super::ids::{to_hex, DeviceKey, EntryId, MemberKey};
 use super::log::{self, Body, Entry, Verdict, KIND_DELETE};
 use super::ratelimit::{author_over_limit, Over};
@@ -54,6 +55,10 @@ pub fn ingest_entry(store: &SpaceStore, roster: &Roster, keys: &EpochKeys, bytes
     let key = keys.0.get(&e.header.epoch);
     let body = key.and_then(|k| e.open(k).ok());
     if key.is_some() && body.is_none() { return Ingest::Rejected("cannot open"); }
+    // A file offer that breaks the size, chunk or name rules is refused like any other bad entry.
+    if let Some(Body::File(raw)) = &body {
+        if let Err(why) = FileOffer::from_body(raw) { return Ingest::Rejected(why); }
+    }
     // One transaction: the entry (replacing a gone placeholder), the lamport clock, then the body.
     let stored = store.in_tx(|s| {
         s.insert_entry(&e, &id, bytes, now_ms)?;
@@ -81,7 +86,16 @@ fn apply_body(s: &SpaceStore, roster: &Roster, e: &Entry, id: &EntryId, member: 
     match body {
         Body::Text { text, .. } => put_message(s, roster, e, id, member, text, None, now_ms),
         Body::BotText { text, .. } => put_message(s, roster, e, id, member, text, None, now_ms),
-        Body::File(raw) => put_message(s, roster, e, id, member, "", Some(to_hex(raw)), now_ms),
+        Body::File(raw) => {
+            // The offer was checked on the way in. The row is how `Get file` finds the offer; no bytes yet (have = 0).
+            if let Ok(offer) = FileOffer::from_body(raw) {
+                s.conn.execute(
+                    "INSERT OR IGNORE INTO files (sha, name, size, have, offer, cached_ms) VALUES (?1, ?2, ?3, 0, ?4, NULL)",
+                    params![offer.sha.to_vec(), offer.name, offer.size as i64, id.0.to_vec()],
+                )?;
+            }
+            put_message(s, roster, e, id, member, "", Some(to_hex(raw)), now_ms)
+        }
         Body::React { code, on } => {
             let Some(target) = h.refers else { return Ok(false) };
             s.conn.execute(

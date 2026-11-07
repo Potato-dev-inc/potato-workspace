@@ -26,6 +26,6 @@ export async function run(t) {
 
   await t.step('No new agent, no copy folder');
   t.expect.equal((await t.panes()).length, panes);
-  t.expect.ok(!fs.existsSync(path.join(cwd, '.puppet-master', 'worktrees')), 'no copy folder was made');
+  t.expect.ok(!fs.existsSync(path.join(cwd, '.potato-workspace', 'worktrees')), 'no copy folder was made');
   await t.expect.noText('1 helper');
 }

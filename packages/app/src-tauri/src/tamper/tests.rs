@@ -38,10 +38,10 @@ fn copy_side(src: &Path, dst: &Path) {
     }
 }
 
-/// Remove everything except `.puppet-master`, so the folder can be refilled with the "after" side.
+/// Remove everything except `.potato-workspace`, so the folder can be refilled with the "after" side.
 fn clear(dir: &Path) {
     for entry in fs::read_dir(dir).unwrap().flatten() {
-        if entry.file_name() == ".puppet-master" {
+        if entry.file_name() == ".potato-workspace" {
             continue;
         }
         let path = entry.path();
@@ -308,8 +308,8 @@ fn snapshots_survive_a_save_and_load_and_reject_bad_ids() {
 #[test]
 fn a_corrupt_snapshot_is_an_error_not_a_panic() {
     let dir = scratch("corrupt");
-    fs::create_dir_all(dir.join(".puppet-master").join("tamper")).unwrap();
-    fs::write(dir.join(".puppet-master").join("tamper").join("bad.json"), "{not json").unwrap();
+    fs::create_dir_all(dir.join(".potato-workspace").join("tamper")).unwrap();
+    fs::write(dir.join(".potato-workspace").join("tamper").join("bad.json"), "{not json").unwrap();
     assert!(matches!(load(&dir, "bad"), Err(TamperError::Corrupt(_))));
     let _ = fs::remove_dir_all(&dir);
 }
@@ -317,8 +317,8 @@ fn a_corrupt_snapshot_is_an_error_not_a_panic() {
 #[test]
 fn project_toml_can_protect_and_ignore() {
     let dir = scratch("project-toml");
-    fs::create_dir_all(dir.join(".puppet-master")).unwrap();
-    fs::write(dir.join(".puppet-master").join("project.toml"), "[tamper]\nprotect = [\"checks/**/*.js\"]\nignore = [\"**/gen/**\"]\n").unwrap();
+    fs::create_dir_all(dir.join(".potato-workspace")).unwrap();
+    fs::write(dir.join(".potato-workspace").join("project.toml"), "[tamper]\nprotect = [\"checks/**/*.js\"]\nignore = [\"**/gen/**\"]\n").unwrap();
     fs::create_dir_all(dir.join("checks")).unwrap();
     fs::create_dir_all(dir.join("gen")).unwrap();
     fs::write(dir.join("checks").join("money.js"), "it('a', () => { expect(1).toBe(1); });\n").unwrap();

@@ -18,7 +18,7 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
 }
 
 /// True only for the desktop app itself: a loopback peer that is neither proxied (the tunnel, the
-/// PWA server and the Vite proxy add `X-PM-Proxied`; any forwarding header counts, see
+/// PWA server and the Vite proxy add `X-Potato-Workspace-Proxied`; any forwarding header counts, see
 /// `requires_pairing_token`) nor carries a paired-device bearer token. A paired remote device (PWA
 /// over the tunnel) is therefore never the "app session" (APR-7).
 pub(in crate::bridge) fn is_local_app(headers: &str, peer_loopback: bool) -> bool {

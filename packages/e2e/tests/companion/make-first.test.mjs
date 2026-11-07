@@ -33,7 +33,7 @@ export const run = guarded(async (t) => {
   t.expect.equal(c.agentType, 'nimbus');
   t.expect.match(c.id, /^mochi(-[0-9]+)?$/, 'its id comes from its name');
   t.expect.equal(c.paneId, 'companion-' + c.id);
-  t.expect.ok(c.folder.split(path.sep).join('/').toLowerCase().endsWith('puppetmaster/companions/' + c.id), 'the default home is PuppetMaster/companions/<id>');
+  t.expect.ok(c.folder.split(path.sep).join('/').toLowerCase().endsWith('potatoworkspace/companions/' + c.id), 'the default home is PotatoWorkspace/companions/<id>');
   for (const f of ['SOUL.md', 'USER.md', 'MEMORY.md']) t.expect.ok(fs.existsSync(path.join(c.folder, f)), `${f} was made`);
   t.expect.ok(fs.readFileSync(path.join(c.folder, 'SOUL.md'), 'utf8').includes('cheerful'), 'the cheerful voice is in SOUL.md');
 

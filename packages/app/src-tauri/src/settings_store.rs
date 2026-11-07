@@ -106,7 +106,7 @@ pub fn default_public_settings() -> Value {
         // Hook Lane (founder decision 2026-10-14): watch-only hooks for agents that declare them.
         "agent_hooks_mode": "shadow",
         "agent_hooks_agents": {},
-        // Puppet Master's helper tools ready inside every agent pane (on unless the person turns it off).
+        // Potato Workspace's helper tools ready inside every agent pane (on unless the person turns it off).
         "pane_mcp_enabled": true,
         // Missions (Preview): off until the person turns them on in Settings › General › Labs.
         "missions_enabled": false,

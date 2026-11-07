@@ -39,16 +39,16 @@ where
 {
     let args: Vec<String> = args.into_iter().collect();
     let worker_mode = args.iter().any(|arg| arg == "--worker")
-        || std::env::var("PUPPET_MASTER_WORKER")
+        || std::env::var("POTATO_WORKSPACE_WORKER")
             .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
     if !worker_mode {
         return None;
     }
 
-    let mut agent_type = std::env::var("PUPPET_MASTER_WORKER_AGENT").ok();
-    let mut cwd = std::env::var("PUPPET_MASTER_WORKER_CWD").ok();
-    let mut pane_id = std::env::var("PUPPET_MASTER_WORKER_PANE_ID").ok();
+    let mut agent_type = std::env::var("POTATO_WORKSPACE_WORKER_AGENT").ok();
+    let mut cwd = std::env::var("POTATO_WORKSPACE_WORKER_CWD").ok();
+    let mut pane_id = std::env::var("POTATO_WORKSPACE_WORKER_PANE_ID").ok();
     let mut cols: u16 = 120;
     let mut rows: u16 = 32;
     let mut force_new = false;

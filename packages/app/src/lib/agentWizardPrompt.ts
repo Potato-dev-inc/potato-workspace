@@ -256,8 +256,8 @@ export function nimbusExample(): string {
   ].join('\n');
 }
 
-const RULES = `You are helping Puppet Master (a desktop app that runs AI coding agents) learn a new command-line agent.
-Your job: write ONE agent definition file in TOML. It tells Puppet Master how to run the agent "headless": one command per turn, with output a program can read, so Puppet Master gets the answer and a session id for follow-up turns.
+const RULES = `You are helping Potato Workspace (a desktop app that runs AI coding agents) learn a new command-line agent.
+Your job: write ONE agent definition file in TOML. It tells Potato Workspace how to run the agent "headless": one command per turn, with output a program can read, so Potato Workspace gets the answer and a session id for follow-up turns.
 
 How to answer
 - Reply with exactly one fenced block that starts with ${FENCE}toml and ends with ${FENCE}. Put the whole file in it. Text outside the block is ignored.
@@ -276,14 +276,14 @@ const TASK = `What to decide
 3. [headless] argv: the subcommand and flags that run ONE task and print output a program can read (a JSON or JSON-lines mode is best; if the help shows one, use it). Put the task last after task_separator = "--" if the program accepts it; otherwise use task_flag or stdin as the guide explains.
 4. [[headless.optional]] segments for "model" (the flag that picks a model) and "resume" (the flag that continues a conversation by session id), only if the help shows them.
 5. [headless.output]: the format, and selectors for result (the final answer text), session (the id used to resume), done (the event that ends a turn), error (an error message) and model (which model ran), where the output has them.
-If the output says which model ran (an event or field that holds a model name, for example part.model.modelID), also add an optional [headless.output.model] selector for it: it is how Puppet Master shows which model answered.
+If the output says which model ran (an event or field that holds a model name, for example part.model.modelID), also add an optional [headless.output.model] selector for it: it is how Potato Workspace shows which model answered.
 If the program has no machine-readable mode, use format = "plain_text" and anchor result.regex, so garbage or an error message never becomes an answer.
 
 What happens after your answer
 The checker validates the file and runs its rules. Then a live test runs the program a few times with tiny messages. You are not told the exact words, so a file built around fixed words fails: (1) a one-word answer, (2) a short sentence with spaces and punctuation, (3) a follow-up turn that resumes the same conversation with the session id from the first turn, (4) a turn with a wrong model name (it must be reported as an error, never as an answer). Your selectors must read whatever answer the program prints, by event type and field path. If the live test fails, the real output of those runs is shown to you in the next round, so you can fix the selectors then.`;
 
-const VISIBLE_RULES = `You are helping Puppet Master (a desktop app that runs AI coding agents) learn a new command-line agent.
-Your job: write ONE agent definition file in TOML that tells Puppet Master how to run the agent in a terminal pane ("visible mode"): how to start it, how to tell from its screen that it is ready for a task, that it is working, what is the reply and what is chrome (banners, boxes, footers), and how its questions (trust, permission) look. You are shown screens captured from the real program in a real terminal pane.
+const VISIBLE_RULES = `You are helping Potato Workspace (a desktop app that runs AI coding agents) learn a new command-line agent.
+Your job: write ONE agent definition file in TOML that tells Potato Workspace how to run the agent in a terminal pane ("visible mode"): how to start it, how to tell from its screen that it is ready for a task, that it is working, what is the reply and what is chrome (banners, boxes, footers), and how its questions (trust, permission) look. You are shown screens captured from the real program in a real terminal pane.
 
 How to answer
 - Reply with one fenced block that starts with ${FENCE}toml and ends with ${FENCE}. Put the whole file in it. This block comes first.
@@ -295,7 +295,7 @@ How to answer
 - Base every pattern on the captures. A regex that is not supported by a capture is a guess; leave the table out instead. Do not add flags that skip permission checks (--yolo, --dangerously-..., --trust-all-tools).
 - Make every pattern hold on ALL the captures it applies to: [tui.ready] must match the idle and the reply screens and not the working, trust or permission screens; [tui.busy] working_regex must match the working screen and neither the idle nor the reply screen; a [[tui.prompt]] must match its capture; [tui.chrome] lines must be the banner, boxes and footers but never the reply row.
 - Regexes are Rust regexes (no look-around, no backreferences). Put them in single-quoted TOML strings. Rows that [tui.chrome], [tui.thinking] and [tui.tool_activity] see are trimmed and LOWERCASE.
-- The reply Puppet Master reads from the finished screen must be EXACTLY the answer row and nothing else. Everything else on the screen after the task's echo must be named in a table: banner, box and footer rows in [tui.chrome]; rows the agent prints while it thinks or works (a "Thinking..." row, a status spinner, a "Thought for 4s" row that stays above the answer) in [tui.thinking]; tool-call rows in [tui.tool_activity]; a row it prints ONCE AFTER the turn ends (a "Thought for 3s, 298 tokens" or "Worked for 9s" line, a cost or elapsed-time line) in [tui.summary], where a bullet or arrow glyph at the start of the row does not matter. Take every one of them from the screens of the task that made the agent think and use a tool (tui_work_working and tui_work_reply): the plain one-word reply is too simple to show them. A reply with an extra row fails the visible test, and the row is named to you.
+- The reply Potato Workspace reads from the finished screen must be EXACTLY the answer row and nothing else. Everything else on the screen after the task's echo must be named in a table: banner, box and footer rows in [tui.chrome]; rows the agent prints while it thinks or works (a "Thinking..." row, a status spinner, a "Thought for 4s" row that stays above the answer) in [tui.thinking]; tool-call rows in [tui.tool_activity]; a row it prints ONCE AFTER the turn ends (a "Thought for 3s, 298 tokens" or "Worked for 9s" line, a cost or elapsed-time line) in [tui.summary], where a bullet or arrow glyph at the start of the row does not matter. Take every one of them from the screens of the task that made the agent think and use a tool (tui_work_working and tui_work_reply): the plain one-word reply is too simple to show them. A reply with an extra row fails the visible test, and the row is named to you.
 - Each of those tables must hold on every capture: a pattern for one of them must never match the answer row, and tui_work_reply must come out as exactly its answer row once the tables have dropped everything else after the task's echo.
 - [tui.footer_model]: read the model from a row that STAYS on screen in a long session (a status line or a footer), not from the startup banner alone: the banner scrolls away, and the visible test runs a reply taller than the pane and fails a regex that then reads no model. A regex that matches both the banner and the status row is best. A status row can be clipped at the window's edge, so match the name without requiring a closing delimiter after it, and do not capture the settings that follow it. Never let the group named model take in a clipped, partial name when a longer one stands elsewhere.
 - Do not write [features] reprints_on_resize: the wizard resizes the pane after the reply, measures whether the agent reprints its conversation, and writes that key itself.
@@ -317,8 +317,8 @@ If a capture is missing or partial (the facts say so), do not write tables for w
 What happens after your answer
 The checker validates the file and holds each capture against it: the idle and reply screens must read as ready and not busy, the working screen as busy, the questions as prompts, the reply row must not read as chrome, and the reply of the thinking-and-tool task must come out as exactly its answer row. Then a visible test starts your profile in a new pane and does the same live: it waits for the input box, types a new test message, watches for the work, reads the reply, asks the thinking-and-tool task again and reads that reply (it must be exactly the one answer row), asks for a reply taller than the pane (it must be read whole, and the model must still be read once the banner has scrolled away), and checks that a startup question (trust) and a permission question each become an approval card. The test never answers a permission question itself; a startup question in its pane is answered by the person, or by the wizard when it is a plain "yes, I trust this folder" and the person allowed that. If a check fails, the screen at that moment is shown to you in the next round.`;
 
-const ADD_HEADLESS_RULES = `You are helping Puppet Master (a desktop app that runs AI coding agents) learn a new command-line agent.
-The visible part of its definition is already written and tested. Your job now: add the one-task mode ("headless"): one command per turn, with output a program can read, so Puppet Master gets the answer and a session id for follow-up turns.
+const ADD_HEADLESS_RULES = `You are helping Potato Workspace (a desktop app that runs AI coding agents) learn a new command-line agent.
+The visible part of its definition is already written and tested. Your job now: add the one-task mode ("headless"): one command per turn, with output a program can read, so Potato Workspace gets the answer and a session id for follow-up turns.
 
 How to answer
 - Reply with exactly one fenced block that starts with ${FENCE}toml and ends with ${FENCE}. Put the whole file in it: the file below, UNCHANGED (every line of its [agent], [binary], [tui] and [standby] parts as it is), plus the [headless] tables.
@@ -371,7 +371,7 @@ function factsBlock(f: PromptFacts): string {
     `- Suggested id: ${f.idSuggestion}`,
     `- Version: ${f.version ?? 'unknown'}`,
     f.programKind === 'shim'
-      ? '- The program is an npm script wrapper (.cmd). Puppet Master needs the real .exe: set shim_native_globs.'
+      ? '- The program is an npm script wrapper (.cmd). Potato Workspace needs the real .exe: set shim_native_globs.'
       : '- The program is a native executable.',
   ];
   if (f.programKind === 'shim') {

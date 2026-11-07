@@ -1,4 +1,4 @@
-// Helper panes nested under the pane of the agent that started them (Puppet Master's run_agent,
+// Helper panes nested under the pane of the agent that started them (Potato Workspace's run_agent,
 // delegate_work, spawn_agent). The backend records `parent_pane_id` once, display-only; this file
 // turns the flat pane list into the sidebar's tree. Pure, no React.
 

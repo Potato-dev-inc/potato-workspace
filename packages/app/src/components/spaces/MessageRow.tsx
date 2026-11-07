@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { SpaceMessage } from '../../lib/spaces';
+import { FileCard } from './FileCard';
 
 export const REACTION_PICTURE: Record<string, string> = {
   thumbs_up: '\u{1F44D}', heart: '\u{2764}\u{FE0F}', laugh: '\u{1F602}', wow: '\u{1F62E}',
@@ -19,9 +20,14 @@ export interface MessageRowProps {
   onReact?: (m: SpaceMessage, code: string, on: boolean) => void;
   revealBlocked?: boolean;
   onRevealBlocked?: () => void;
+  /** Files: what to show under a file card and what its two buttons do. */
+  fileError?: string | null;
+  fileSavedAs?: string | null;
+  onGetFile?: (m: SpaceMessage) => void;
+  onSaveFile?: (m: SpaceMessage) => void;
 }
 
-export function MessageRow({ message: m, onReply, menu, onReact, revealBlocked, onRevealBlocked }: MessageRowProps) {
+export function MessageRow({ message: m, onReply, menu, onReact, revealBlocked, onRevealBlocked, fileError, fileSavedAs, onGetFile, onSaveFile }: MessageRowProps) {
   const cls = ['ck-spaces-msg', m.isMine && 'is-mine', m.isFish && 'is-fish', m.deleted && 'is-deleted',
     m.blocked && !revealBlocked && 'is-blocked'].filter(Boolean).join(' ');
   if (m.blocked && !revealBlocked) {
@@ -50,6 +56,9 @@ export function MessageRow({ message: m, onReply, menu, onReact, revealBlocked, 
           {m.isMine && !m.deleted.byOwner ? 'You deleted this message.'
             : m.deleted.byOwner ? 'Deleted by the owner.' : `${m.deleted.byName} deleted this message.`}
         </p>
+      ) : m.file ? (
+        <FileCard file={m.file} error={fileError ?? null} savedAs={fileSavedAs ?? null}
+          onGet={() => onGetFile?.(m)} onSave={() => onSaveFile?.(m)} />
       ) : (
         <p className="ck-spaces-msg-text">{m.text}</p>
       )}

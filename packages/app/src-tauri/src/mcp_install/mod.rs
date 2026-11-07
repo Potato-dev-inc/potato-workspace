@@ -1,4 +1,4 @@
-//! Install / verify Puppet Master MCP registration for CLI orchestrator backends.
+//! Install / verify Potato Workspace MCP registration for CLI orchestrator backends.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -14,7 +14,7 @@ use claude::*;
 use codex::*;
 use opencode::*;
 
-pub const MCP_SERVER_NAME: &str = "puppet-master";
+pub const MCP_SERVER_NAME: &str = "potato-workspace";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum McpLaunchSource {

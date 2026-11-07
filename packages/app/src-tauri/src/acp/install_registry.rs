@@ -67,7 +67,7 @@ fn package_json(name: &str, version: &str, dependency: Option<(&str, &str)>) -> 
         "name": name,
         "version": version,
         "private": true,
-        "description": "Installed by Puppet Master from the official ACP registry. Safe to remove from the app's settings.",
+        "description": "Installed by Potato Workspace from the official ACP registry. Safe to remove from the app's settings.",
     });
     if let Some((package, exact)) = dependency {
         json["dependencies"] = serde_json::json!({ package: exact });

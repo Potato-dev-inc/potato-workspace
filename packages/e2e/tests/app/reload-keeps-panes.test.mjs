@@ -32,7 +32,7 @@ export async function run(t) {
 
   await t.step('Reload the window');
   await t.page.reload();
-  await t.expect.text('Puppet Master');
+  await t.expect.text('Potato Workspace');
 
   await t.step('Both panes are listed again, with their names');
   await t.expect.eventually(async () => (await sidebarTitles(t)).length === 2, { message: 'two rows', timeout: 15000 });

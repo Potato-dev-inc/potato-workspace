@@ -1,4 +1,4 @@
-//! Puppet Master's MCP server for one Codex launch: `-c mcp_servers.<name>.<key>=<toml>` overrides.
+//! Potato Workspace's MCP server for one Codex launch: `-c mcp_servers.<name>.<key>=<toml>` overrides.
 //!
 //! Checked live on 0.162.1 (`codex -c ... mcp list --json`): the overrides add the server for this
 //! run only, next to the servers in the person's own `config.toml`, which is never written. Codex
@@ -66,12 +66,12 @@ mod tests {
 
     fn server() -> PaneMcpServer {
         PaneMcpServer {
-            name: "puppet-master".into(),
-            command: "C:/Program Files/Puppet Master/bin/puppet-master-mcp.exe".into(),
+            name: "potato-workspace".into(),
+            command: "C:/Program Files/Potato Workspace/bin/puppet-master-mcp.exe".into(),
             args: vec![],
             env: vec![
-                ("PUPPET_MASTER_BRIDGE_PORT_FILE".into(), "C:/Users/a b/puppet-master.bridge.port".into()),
-                ("PUPPET_MASTER_PANE_ID".into(), "pane-7".into()),
+                ("POTATO_WORKSPACE_BRIDGE_PORT_FILE".into(), "C:/Users/a b/potato-workspace.bridge.port".into()),
+                ("POTATO_WORKSPACE_PANE_ID".into(), "pane-7".into()),
             ],
         }
     }
@@ -89,11 +89,11 @@ mod tests {
             launch.args,
             vec![
                 "-c",
-                "mcp_servers.puppet-master.command='C:/Program Files/Puppet Master/bin/puppet-master-mcp.exe'",
+                "mcp_servers.potato-workspace.command='C:/Program Files/Potato Workspace/bin/puppet-master-mcp.exe'",
                 "-c",
-                "mcp_servers.puppet-master.args=[]",
+                "mcp_servers.potato-workspace.args=[]",
                 "-c",
-                "mcp_servers.puppet-master.env={PUPPET_MASTER_BRIDGE_PORT_FILE='C:/Users/a b/puppet-master.bridge.port', PUPPET_MASTER_PANE_ID='pane-7'}",
+                "mcp_servers.potato-workspace.env={POTATO_WORKSPACE_BRIDGE_PORT_FILE='C:/Users/a b/potato-workspace.bridge.port', POTATO_WORKSPACE_PANE_ID='pane-7'}",
             ]
         );
     }
@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn a_server_the_person_already_named_on_the_command_line_is_left_alone() {
         let s = server();
-        let mine = vec!["-c".to_string(), "mcp_servers.puppet-master.command=\"x\"".to_string()];
+        let mine = vec!["-c".to_string(), "mcp_servers.potato-workspace.command=\"x\"".to_string()];
         assert_eq!(launch(&request(&s, &mine)), PaneMcpLaunch::default());
     }
 

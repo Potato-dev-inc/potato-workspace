@@ -1,11 +1,11 @@
-//! One brain: one project memory (`<project>/.puppet-master/memory.md`) rendered into the file each
+//! One brain: one project memory (`<project>/.potato-workspace/memory.md`) rendered into the file each
 //! agent reads its instructions from, inside a managed marker block (see `block`).
 //!
 //! Which files exist is declared per agent (`TuiProfile::instruction_files`, TOML `[instructions]`);
 //! nothing here knows an agent by name. A sync runs before a pane or run spawns in a project and
 //! when the memory is saved from the UI. Content outside the block is never modified.
 //!
-//! The feature is off for a project when `.puppet-master/memory.off` exists, and off everywhere
+//! The feature is off for a project when `.potato-workspace/memory.off` exists, and off everywhere
 //! when the app-wide switch (`one_brain.json` in the app data dir) is off. Turning it off removes
 //! the blocks the next time a sync runs in that project.
 
@@ -26,8 +26,8 @@ use serde::Serialize;
 use crate::tui::TuiProfile;
 pub use block::{block_state, block_state_between, render, render_between, BlockState, Outcome, END, START};
 
-pub const MEMORY_REL: &str = ".puppet-master/memory.md";
-const OFF_REL: &str = ".puppet-master/memory.off";
+pub const MEMORY_REL: &str = ".potato-workspace/memory.md";
+const OFF_REL: &str = ".potato-workspace/memory.off";
 
 /// One file to keep in sync, with the agents that read it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -166,7 +166,7 @@ fn read_existing(path: &Path) -> Result<Option<Vec<u8>>, String> {
 
 /// True when the file holds text outside the managed block that is not the file's own header.
 ///
-/// The header (a rule's front matter) is written by Puppet Master when it creates the file, so
+/// The header (a rule's front matter) is written by Potato Workspace when it creates the file, so
 /// text that equals it is not the user's. Anything else outside the block is.
 fn has_user_content(bytes: &[u8], header: Option<&str>) -> bool {
     let text = String::from_utf8_lossy(bytes);
@@ -256,8 +256,8 @@ fn sync_target(project: &Path, t: &Target, memory: &str, report: &mut SyncReport
         // block, but someone committed it): deleting it dirtied the project and made the worktree
         // Merge refuse (VERIFY-R13 #4). It stays as it is.
         Outcome::Delete if crate::worktrees::is_git_tracked(project, &t.path) => {}
-        // Inside a separate copy (`<project>/.puppet-master/worktrees/<copy>`) the project's memory is
-        // not there (`.puppet-master/` is not in git), so a sync would strip the block out of a tracked
+        // Inside a separate copy (`<project>/.potato-workspace/worktrees/<copy>`) the project's memory is
+        // not there (`.potato-workspace/` is not in git), so a sync would strip the block out of a tracked
         // file the user also wrote in. That edit would show up in Changes as the agent's work and Merge
         // would carry it into the user's branch. A tracked file in a copy stays exactly as committed.
         Outcome::Write(_) if crate::worktrees::origin_of_cwd(&project.to_string_lossy()).is_some() && crate::worktrees::is_git_tracked(project, &t.path) => {}

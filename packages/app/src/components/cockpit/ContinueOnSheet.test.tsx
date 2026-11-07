@@ -87,7 +87,7 @@ describe('ContinueOnSheet: the picker', () => {
   it('says what the agent gets and which agent is stopped, in plain words', async () => {
     await open();
     expect(host.textContent).toContain('The agent gets a short brief. Claude in this pane is stopped first.');
-    expect(host.textContent).toContain('Puppet Master never answers its questions for you.');
+    expect(host.textContent).toContain('Potato Workspace never answers its questions for you.');
   });
 });
 

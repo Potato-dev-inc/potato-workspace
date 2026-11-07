@@ -1,12 +1,12 @@
 //! The Inbox cards for a usage limit and for Keep going, and what answering them asks for.
 //!
 //! The limit card offers `Continue on <agent>` when another agent can take over (the first choice),
-//! then "Remind me" and "Stop here". Neither choice presses a key in the pane: Puppet Master never
+//! then "Remind me" and "Stop here". Neither choice presses a key in the pane: Potato Workspace never
 //! answers the vendor's own menu and never presses what the agent itself would use to continue
 //! (its "esc to cancel" wait, its "press enter to continue"). A `continue:` answer only asks for a
 //! hand-over; `keep_going::live` does the work and refuses anything it cannot do.
 //!
-//! The cards are questions Puppet Master raised (`Question.limit`), like a consent card: they arrive
+//! The cards are questions Potato Workspace raised (`Question.limit`), like a consent card: they arrive
 //! through the same list and the same answer path, and plain loopback HTTP may not answer them
 //! (`questions::routes`).
 

@@ -1,11 +1,11 @@
 ---
 name: pm-delegate
-description: Hand a task to another AI agent through Puppet Master, isolated in its own git worktree, and report what was verified. The text after the command is the task.
+description: Hand a task to another AI agent through Potato Workspace, isolated in its own git worktree, and report what was verified. The text after the command is the task.
 disable-model-invocation: true
 ---
-<!-- puppet-master-pack: 1 -->
+<!-- potato-workspace-pack: 1 -->
 
-Delegate the user's task to another agent with the Puppet Master MCP tools. If they are missing, say the PM app is not running and stop.
+Delegate the user's task to another agent with the Potato Workspace MCP tools. If they are missing, say the Potato Workspace app is not running and stop.
 
 1. Restate the task in one sentence a fresh agent can act on alone: the goal, the files or area, and what "done" means. If the user named an agent, use it; otherwise call `list_agents` and choose an installed agent that suits the task.
 2. Decide how success is measured. Use the project's own test or build command as a `command_exits` check (for example `["npm","test"]`). If you cannot tell, call `ask_user` once.

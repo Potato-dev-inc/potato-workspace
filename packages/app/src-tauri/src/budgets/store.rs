@@ -1,4 +1,4 @@
-//! Budget records, one small JSON file per project (`<project>/.puppet-master/budgets.json`),
+//! Budget records, one small JSON file per project (`<project>/.potato-workspace/budgets.json`),
 //! cached in memory and written through on every change.
 
 use super::model::BudgetRecord;
@@ -16,7 +16,7 @@ fn key(project: &str) -> String {
 }
 
 fn file_for(project: &str) -> PathBuf {
-    Path::new(project).join(".puppet-master").join("budgets.json")
+    Path::new(project).join(".potato-workspace").join("budgets.json")
 }
 
 fn load(project: &str) -> Records {

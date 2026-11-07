@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Starting tool mode requested through `--mode` or `PUPPET_MASTER_MODE`.
+/// Starting tool mode requested through `--mode` or `POTATO_WORKSPACE_MODE`.
 pub(crate) static INITIAL_MODE: std::sync::OnceLock<tool_registry::McpMode> =
     std::sync::OnceLock::new();
 /// True once the bridge knows this connection's mode (either the starting mode or a `set_mode` call).
@@ -10,11 +10,11 @@ pub(crate) static INITIAL_MODE_SYNCED: AtomicBool = AtomicBool::new(false);
 
 /// Opt-in stable identity: a reconnecting MCP process that sets the same value reuses its session
 /// id, so runs it started stay owned without take_over. Left unset, every process gets a fresh id.
-pub(crate) const CLIENT_ID_ENV: &str = "PUPPET_MASTER_CLIENT_ID";
+pub(crate) const CLIENT_ID_ENV: &str = "POTATO_WORKSPACE_CLIENT_ID";
 
-/// Set by Puppet Master on an agent it runs under a budget: that run's handle. `run_agent` forwards
+/// Set by Potato Workspace on an agent it runs under a budget: that run's handle. `run_agent` forwards
 /// it as `budget_parent` so a helper draws from the run's budget (same name as `budgets::PARENT_ENV`).
-pub(crate) const PARENT_RUN_ENV: &str = "PUPPET_MASTER_PARENT_RUN";
+pub(crate) const PARENT_RUN_ENV: &str = "POTATO_WORKSPACE_PARENT_RUN";
 
 /// Names the run this process belongs to as `budget_parent`, unless the caller already did.
 pub(crate) fn inject_budget_parent(body: &mut Value, run: Option<String>) {
@@ -56,17 +56,17 @@ pub(crate) fn set_client_name(name: &str) {
 
 /// The identity headers on every bridge request from this connection.
 pub(crate) fn session_headers(id: &str) -> String {
-    let mut headers = format!("X-Puppet-Master-Session: {id}\r\nX-Puppet-Master-Pid: {}\r\n", std::process::id());
+    let mut headers = format!("X-Potato-Workspace-Session: {id}\r\nX-Potato-Workspace-Pid: {}\r\n", std::process::id());
     if let Some(name) = CLIENT_NAME.get() {
-        headers.push_str(&format!("X-Puppet-Master-Client: {name}\r\n"));
+        headers.push_str(&format!("X-Potato-Workspace-Client: {name}\r\n"));
     }
     if let Some(pane) = pane_header(std::env::var(mcp_sessions::PANE_ID_ENV).ok()) {
-        headers.push_str(&format!("X-Puppet-Master-Pane: {pane}\r\n"));
+        headers.push_str(&format!("X-Potato-Workspace-Pane: {pane}\r\n"));
     }
     headers
 }
 
-/// The pane Puppet Master launched this agent in (`PUPPET_MASTER_PANE_ID`), cut down to plain
+/// The pane Potato Workspace launched this agent in (`POTATO_WORKSPACE_PANE_ID`), cut down to plain
 /// characters so it can never inject a header line. Sent as a hint for sidebar nesting only.
 pub(crate) fn pane_header(env_value: Option<String>) -> Option<String> {
     mcp_sessions::clean_pane_hint(&env_value?)
@@ -81,7 +81,7 @@ pub(crate) fn current_mcp_session_id() -> Option<String> {
 }
 
 /// Reads the starting tool mode from `--mode <mode>` / `--mode=<mode>` (wins) or the
-/// `PUPPET_MASTER_MODE` value. Hosts that read the tool list once and ignore
+/// `POTATO_WORKSPACE_MODE` value. Hosts that read the tool list once and ignore
 /// `notifications/tools/list_changed` use this to launch in the catalog they need.
 /// Returns `Ok(None)` when nothing was requested.
 pub(crate) fn initial_mode_from(

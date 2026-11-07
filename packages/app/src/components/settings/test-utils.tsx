@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi } from 'vitest';
-import type { Settings } from '@puppet-master/shared';
+import type { Settings } from '@potato-workspace/shared';
 import type { SettingsPatch } from '../../lib/settings';
 import { rowMatches, type RowDef, type SettingsEnv } from './model';
 import { SectionRows } from './SectionView';

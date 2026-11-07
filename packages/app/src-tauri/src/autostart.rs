@@ -1,4 +1,4 @@
-//! "Start Puppet Master when I sign in" (OFF by default). The OS keeps the switch (a Run entry on
+//! "Start Potato Workspace when I sign in" (OFF by default). The OS keeps the switch (a Run entry on
 //! Windows, a Launch Agent on macOS) through `tauri-plugin-autostart`. This module only maps that
 //! switch to a trait, so the decisions are unit tested with a fake and never touch the real
 //! registry.

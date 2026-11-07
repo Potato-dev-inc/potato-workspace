@@ -215,9 +215,9 @@ pub fn decide(m: &Mission, sig: &Signals) -> Decision {
         };
         return line(Action::Green, all);
     }
-    // The turn ended because Puppet Master restarted: its pane is gone, a new one continues.
+    // The turn ended because Potato Workspace restarted: its pane is gone, a new one continues.
     if end.code_is(RESTART_CODES) {
-        return line(Action::Resume { after_restart: true }, "Resumed after Puppet Master restarted".into());
+        return line(Action::Resume { after_restart: true }, "Resumed after Potato Workspace restarted".into());
     }
     let prev = m.rounds.iter().rev().nth(1).and_then(|r| r.verdict.as_ref()).or(m.baseline.as_ref());
     // 8: worse than the best files so far: go back to them.

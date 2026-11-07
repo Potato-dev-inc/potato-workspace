@@ -65,7 +65,7 @@ describe('CanaryNotices', () => {
     await act(async () => root.render(<CanaryNotices api={api} />));
     await flush();
     expect(host.querySelector('[data-testid="canary-notice"]')?.textContent).toContain(
-      'Codex 0.159.3 \u2192 0.162.1: screens changed. Puppet Master will ask you before acting.',
+      'Codex 0.159.3 \u2192 0.162.1: screens changed. Potato Workspace will ask you before acting.',
     );
     const button = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Dismiss')!;
     await act(async () => button.click());
@@ -107,7 +107,7 @@ describe('AgentVersions (Settings > Agents)', () => {
     await flush();
     const row = host.querySelector('[data-testid="agent-version-change-codex"]')!;
     expect(row.getAttribute('data-verdict')).toBe('changed');
-    expect(row.textContent).toContain('Codex 0.159.3 \u2192 0.162.1: screens changed. Puppet Master will ask you before acting.');
+    expect(row.textContent).toContain('Codex 0.159.3 \u2192 0.162.1: screens changed. Potato Workspace will ask you before acting.');
     // An agent with no update to report shows no such line.
     expect(host.querySelector('[data-testid="agent-version-change-claude"]')).toBeNull();
   });

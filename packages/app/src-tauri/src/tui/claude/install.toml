@@ -6,7 +6,7 @@
 #  - npm: `npm install -g @anthropic-ai/claude-code` (needs Node.js 22 or newer; installs the same
 #    native binary).
 #  - script: the vendor's `irm https://claude.ai/install.ps1 | iex`. Kept as the last resort because
-#    Puppet Master's own risk rules call "download and run a script" high risk.
+#    Potato Workspace's own risk rules call "download and run a script" high risk.
 [install.windows]
 source = "https://code.claude.com/docs/en/setup"
 order = ["winget", "npm", "script"]

@@ -15,7 +15,7 @@ export async function run(t) {
   await t.page.reload();
   await t.step('Open the Inbox before any agent ever ran');
   await openInbox(t);
-  await t.expect.text('Welcome to Puppet Master');
+  await t.expect.text('Welcome to Potato Workspace');
   await t.expect.visible('exact=Set up your agents');
   await t.expect.visible('exact=Use Simple mode');
   await t.expect.noText('Nothing needs you');

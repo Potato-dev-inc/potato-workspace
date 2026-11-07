@@ -7,7 +7,7 @@ import {
   type LlmModel,
   type LlmProvider,
   type Settings,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import { clampAwayMinutes, clampCheckpointsKeep, clampMobileInputDelayMs, toPublicSettings } from './bridge-settings';
 import { probeDevLabs, withDevLabs } from './dev-labs';
 import {
@@ -19,7 +19,7 @@ import { tauri } from './tauri';
 
 /** Canonical on-disk settings file (app config dir). */
 export const SETTINGS_STORE_FILENAME = 'settings.json';
-const LEGACY_STORE_FILENAME = 'puppet-master.settings.json';
+const LEGACY_STORE_FILENAME = 'potato-workspace.settings.json';
 const SETTINGS_KEY = 'settings';
 const LEGACY_SIDEBAR_WIDTH_KEY = 'pm-sidebar-width';
 

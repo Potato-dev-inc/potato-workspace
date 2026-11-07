@@ -161,7 +161,7 @@ describe('drawFrame scenes', () => {
     const r = render(plan(), 500);
     expect(r.strings).toContain('Test Agent');
     expect(r.strings).toContain('Fix the login page');
-    expect(r.strings).toContain('Puppet Master');
+    expect(r.strings).toContain('Potato Workspace');
   });
 
   it('draws the request from the timeline override only', () => {
@@ -298,7 +298,7 @@ describe('drawFrame scenes', () => {
     const p = plan();
     const tl = buildTimeline(p);
     const end = tl.scenes.find((s) => s.kind === 'end')!;
-    expect(render(p, end.startMs + 100, tl).strings.filter((s) => s === 'Made with Puppet Master')).toHaveLength(1);
+    expect(render(p, end.startMs + 100, tl).strings.filter((s) => s === 'Made with Potato Workspace')).toHaveLength(1);
   });
 
   it('fades the end card to dark over the last half second', () => {
@@ -312,7 +312,7 @@ describe('drawFrame scenes', () => {
   it('draws the end card for any time past the end', () => {
     const p = plan();
     const tl = buildTimeline(p);
-    expect(render(p, tl.totalMs + 99_999, tl).strings).toContain('Made with Puppet Master');
+    expect(render(p, tl.totalMs + 99_999, tl).strings).toContain('Made with Potato Workspace');
   });
 });
 
@@ -371,7 +371,7 @@ describe('every fillText string comes from the plan, the captions or a fixed lab
       ...rowTable.flatMap((row) => row.map((run) => run.t)),
       ...tl.captions.map((c) => c.text),
     ];
-    const fixed = new Set(['Puppet Master', 'Made with Puppet Master', 'failed', '']);
+    const fixed = new Set(['Potato Workspace', 'Made with Potato Workspace', 'failed', '']);
     const numbers = [/^[+-]\d+$/, /^\d+ files? changed$/, /^Sped up \d+x$/];
 
     const seen = new Set<string>();
@@ -384,7 +384,7 @@ describe('every fillText string comes from the plan, the captions or a fixed lab
         expect(ok, `unexpected text "${s}"`).toBe(true);
       }
     }
-    expect(seen.has('Made with Puppet Master')).toBe(true);
+    expect(seen.has('Made with Potato Workspace')).toBe(true);
     expect(seen.has('Sped up 40x')).toBe(true);
   });
 });

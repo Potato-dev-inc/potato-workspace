@@ -1,11 +1,11 @@
 ---
 name: pm-review
-description: Get a second opinion on the current changes from a different AI agent through Puppet Master. Optional text after the command names the agent or the focus.
+description: Get a second opinion on the current changes from a different AI agent through Potato Workspace. Optional text after the command names the agent or the focus.
 disable-model-invocation: true
 ---
-<!-- puppet-master-pack: 1 -->
+<!-- potato-workspace-pack: 1 -->
 
-Get a second opinion on the work in this repository from a **different** agent than yourself, using the Puppet Master MCP tools. If they are missing, say the PM app is not running and stop.
+Get a second opinion on the work in this repository from a **different** agent than yourself, using the Potato Workspace MCP tools. If they are missing, say the Potato Workspace app is not running and stop.
 
 1. Find what changed: `git status --short` and `git diff` (staged and unstaged). If nothing changed, review the last commit. Note the repository root.
 2. Choose the reviewer. If the user named an agent after the command, use it. Otherwise call `list_agents`, and pick an installed agent that is not you (`claude`, `codex`, `cursor_agent`, `opencode_native`).

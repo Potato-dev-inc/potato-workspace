@@ -1,4 +1,4 @@
-//! Push subscriptions, one per paired device, in their own file (`puppet-master.push.json`).
+//! Push subscriptions, one per paired device, in their own file (`potato-workspace.push.json`).
 //! Kept apart from the pairing store so a push problem can never corrupt pairing.
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -42,7 +42,7 @@ pub struct SubscriptionStore {
 /// so a paired phone cannot make this computer call an arbitrary or internal host.
 /// Chrome/Android: FCM. Firefox: Mozilla autopush. Safari/iOS: Apple. Edge: WNS.
 /// Not verified against live subscriptions in this build (Apple and Edge are from memory);
-/// `PUPPET_MASTER_PUSH_HOSTS` (comma separated suffixes) adds more without a rebuild.
+/// `POTATO_WORKSPACE_PUSH_HOSTS` (comma separated suffixes) adds more without a rebuild.
 pub const PUSH_HOST_SUFFIXES: &[&str] = &[
     "fcm.googleapis.com",
     "push.apple.com",
@@ -53,7 +53,7 @@ pub const PUSH_HOST_SUFFIXES: &[&str] = &[
 
 fn allowed_suffixes() -> Vec<String> {
     let mut all: Vec<String> = PUSH_HOST_SUFFIXES.iter().map(|s| s.to_string()).collect();
-    if let Ok(extra) = std::env::var("PUPPET_MASTER_PUSH_HOSTS") {
+    if let Ok(extra) = std::env::var("POTATO_WORKSPACE_PUSH_HOSTS") {
         all.extend(extra.split(',').map(|s| s.trim().trim_start_matches("*.").to_ascii_lowercase()).filter(|s| s.contains('.')));
     }
     all

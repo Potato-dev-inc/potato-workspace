@@ -11,6 +11,9 @@ pub const MAX_CHANNELS_EVER: usize = 100;
 pub const KEEP_MS: u64 = 90 * 24 * 60 * 60 * 1000;
 pub const KEEP_BYTES: u64 = 200 * 1024 * 1024;
 pub const TRIM_TO_BYTES: u64 = 180 * 1024 * 1024;
+/// No one author may hold more than this in a space. Over it, their own oldest entries go first, whatever
+/// timestamps they put on them. Member count is capped at 50, so 60 MB each cannot all be reached together.
+pub const AUTHOR_KEEP_BYTES: u64 = 60 * 1024 * 1024;
 pub const INVITE_TTL_MS: u64 = 24 * 60 * 60 * 1000;
 pub const INVITE_MAX_STRIKES: u32 = 5;
 /// After a wrong try on an invite, the next try on that invite is refused (Busy) for this long, whoever sends it.

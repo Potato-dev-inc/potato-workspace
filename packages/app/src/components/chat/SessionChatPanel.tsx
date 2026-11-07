@@ -7,6 +7,7 @@ import { openSettingsAt, SETUP_CHECK_ROW_ID } from '../../lib/openSettingsAt';
 import { usePaneOutbox } from '../../hooks/usePaneOutbox';
 import { tauriOutboxTransport } from '../../lib/paneOutbox';
 import { useComposerDraft } from '../../lib/composerDraft';
+import { pickFiles } from '../../lib/attachFiles';
 import { usePendingBubbles } from '../../hooks/usePendingBubbles';
 import { useSessionChat } from '../../hooks/useSessionChat';
 import { BranchSheet } from '../cockpit/BranchSheet';
@@ -99,7 +100,7 @@ export interface ScreenAsk {
   answerable?: string | null;
 }
 
-export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOpenPane, screenAsk, helpers, slashCommands, composerTop }: { paneId: string; dock?: ReactNode; reply?: ChatReply; emptyNote?: ReactNode; clipApi?: ClipApi; onOpenPane?: (paneId: string) => void; screenAsk?: ScreenAsk; /** The helpers this pane started through Puppet Master (rows in the turn they began in). */ helpers?: readonly ChatHelper[]; /** A chat session over ACP: the agent's slash commands for the message box (typing "/" opens a menu). */ slashCommands?: readonly AcpCommand[]; /** Drawn right above the message box (a chat session's settings chips). */ composerTop?: ReactNode }) {
+export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOpenPane, screenAsk, helpers, slashCommands, composerTop }: { paneId: string; dock?: ReactNode; reply?: ChatReply; emptyNote?: ReactNode; clipApi?: ClipApi; onOpenPane?: (paneId: string) => void; screenAsk?: ScreenAsk; /** The helpers this pane started through Potato Workspace (rows in the turn they began in). */ helpers?: readonly ChatHelper[]; /** A chat session over ACP: the agent's slash commands for the message box (typing "/" opens a menu). */ slashCommands?: readonly AcpCommand[]; /** Drawn right above the message box (a chat session's settings chips). */ composerTop?: ReactNode }) {
   const chat = useSessionChat(paneId, true);
   const outbox = usePaneOutbox(tauriOutboxTransport, paneId, !!reply);
   const userTexts = useMemo(() => chat.turns.flatMap((turn) => (turn.user ? [turn.user.text] : [])), [chat.turns]);
@@ -176,7 +177,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOp
         }
         pending={reply ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHide={hide} onSendNow={reply.onInterrupt} /> : undefined}
         composer={reply ? (
-          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} />
+          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} attachFiles={pickFiles} />
         ) : undefined}
       />
       {clipFor !== null && <ClipSheet paneId={paneId} userItemId={clipFor} api={clipApi} onClose={() => setClipFor(null)} />}

@@ -1,7 +1,7 @@
 import type { PaneInfo } from './protocol.js';
 
 /** Stable id prefix for the dedicated CLI orchestrator pane (sidebar / mobile). */
-export const ORCHESTRATOR_PANE_PREFIX = 'puppet-master-orchestrator-';
+export const ORCHESTRATOR_PANE_PREFIX = 'potato-workspace-orchestrator-';
 
 export function isOrchestratorPaneId(paneId: string): boolean {
   return paneId.startsWith(ORCHESTRATOR_PANE_PREFIX);
@@ -46,7 +46,7 @@ export function assertWorkerPaneTarget(paneId: string): void {
   if (isOrchestratorPaneId(paneId)) {
     throw new Error(
       `pane ${paneId} is the dedicated orchestrator — do not control it via MCP. ` +
-        'Spawn or reuse a worker pane (id does not start with puppet-master-orchestrator-).',
+        'Spawn or reuse a worker pane (id does not start with potato-workspace-orchestrator-).',
     );
   }
 }

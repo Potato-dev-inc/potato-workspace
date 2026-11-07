@@ -50,8 +50,8 @@ fn done(id: &str, run: &str, pane: &str, start: u64, end: u64) -> OperationSnaps
 
 fn with_copy(mut o: OperationSnapshot, closed: Option<&str>) -> OperationSnapshot {
     o.worker.worktree = Some(crate::worktrees::WorktreeRef {
-        path: "C:/Users/you/shop/.puppet-master/worktrees/run-1".into(),
-        cwd: "C:/Users/you/shop/.puppet-master/worktrees/run-1".into(),
+        path: "C:/Users/you/shop/.potato-workspace/worktrees/run-1".into(),
+        cwd: "C:/Users/you/shop/.potato-workspace/worktrees/run-1".into(),
         branch: "pm/run-1".into(),
         base: "main".into(),
         base_commit: "abc".into(),
@@ -702,7 +702,7 @@ fn a_run_belongs_to_the_agent_and_account_of_its_latest_turn() {
 
 #[test]
 fn a_summary_from_a_copy_belongs_to_the_origin_project() {
-    let s = ProjectSummary { project: format!("{ORIGIN}/.puppet-master/worktrees/run-1"), summary: assemble(facts("p1", 1, T0, T0 + SEC, None)) };
+    let s = ProjectSummary { project: format!("{ORIGIN}/.potato-workspace/worktrees/run-1"), summary: assemble(facts("p1", 1, T0, T0 + SEC, None)) };
     let (turns, _) = run_join(&[], &[s]);
     assert_eq!(turns[0].project, proj(ORIGIN));
 }
@@ -710,7 +710,7 @@ fn a_summary_from_a_copy_belongs_to_the_origin_project() {
 #[test]
 fn a_record_that_names_a_copy_belongs_to_the_origin_project() {
     let mut o = done("o1", "run-a", "p1", T0, T0 + SEC);
-    o.project_path = format!("{ORIGIN}/.puppet-master/worktrees/run-1");
+    o.project_path = format!("{ORIGIN}/.potato-workspace/worktrees/run-1");
     let (turns, runs) = run_join(&[o], &[]);
     assert_eq!((turns[0].project.as_str(), runs[0].project.as_str()), (proj(ORIGIN).as_str(), proj(ORIGIN).as_str()));
 }

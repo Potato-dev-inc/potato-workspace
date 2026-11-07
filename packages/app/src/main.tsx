@@ -28,7 +28,7 @@ void setupServiceWorker({
 const params = new URLSearchParams(window.location.search);
 const isTerminalApp = params.has('terminal') || params.has('cmd') || window.location.hash === '#terminal';
 const isStandaloneWorker =
-  params.has('worker') || import.meta.env.VITE_PUPPET_MASTER_WORKER === '1';
+  params.has('worker') || import.meta.env.VITE_POTATO_WORKSPACE_WORKER === '1';
 /** Backup of the old orchestrator-centric mobile UI. */
 const isLegacyPwa = params.get('pwa') === 'legacy';
 const isMobileOrPwa =

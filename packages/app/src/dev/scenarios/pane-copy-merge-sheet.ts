@@ -7,7 +7,7 @@ const s: HarnessScenario = {
   route: 'cockpit',
   select: PANE_CLAUDE,
   panes: EXAMPLE_PANES.map((p) =>
-    p.id === PANE_CLAUDE ? { ...p, cwd: 'C:\\Users\\dev\\work\\shop\\.puppet-master\\worktrees\\7d4cb2b3-2-209c' } : p,
+    p.id === PANE_CLAUDE ? { ...p, cwd: 'C:\\Users\\dev\\work\\shop\\.potato-workspace\\worktrees\\7d4cb2b3-2-209c' } : p,
   ),
   after: async (dom) => {
     await dom.clickText('[role="tab"]', 'Changes');

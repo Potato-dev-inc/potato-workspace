@@ -17,7 +17,7 @@ const FORWARDER_HEADERS = {
   'Cf-Connecting-Ip': '203.0.113.9',
   'Cdn-Loop': 'cloudflare',
   'Forwarded': 'for=203.0.113.9',
-  'X-PM-Proxied': '1',
+  'X-Potato-Workspace-Proxied': '1',
 };
 
 export async function run(t) {

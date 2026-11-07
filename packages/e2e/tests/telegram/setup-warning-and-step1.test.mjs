@@ -32,7 +32,7 @@ export async function run(t) {
   t.expect.equal(await t.page.eval(`[...document.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Check').disabled`), true);
 
   await t.step('The footer says when the bot is silent and where the actions are logged');
-  await t.expect.text('When your PC sleeps or Puppet Master is closed, the bot is silent.');
+  await t.expect.text('When your PC sleeps or Potato Workspace is closed, the bot is silent.');
   await t.expect.text('See Telegram actions in Security > Audit.');
 }
 

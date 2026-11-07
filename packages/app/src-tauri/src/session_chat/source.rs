@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use super::model::SessionFormat;
 
-/// What Puppet Master knows about a pane that helps to find its session file.
+/// What Potato Workspace knows about a pane that helps to find its session file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaneFacts {
     /// The folder the agent was started in.
@@ -15,7 +15,7 @@ pub struct PaneFacts {
     pub started_at: SystemTime,
     /// The agent's own session id, once a hook has reported it.
     pub provider_session_id: Option<String>,
-    /// The agent's config folder when the pane runs under a Puppet Master account; `None` = the CLI's own.
+    /// The agent's config folder when the pane runs under a Potato Workspace account; `None` = the CLI's own.
     pub home: Option<PathBuf>,
     /// How `provider_session_id` came to be known, and who else writes in the folder.
     pub launch: LaunchFacts,

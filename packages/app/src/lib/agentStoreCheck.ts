@@ -16,7 +16,7 @@ import type { RunStoreCheck, StoreCheckResult } from '../components/store/StoreC
 export const NO_DRAFTER = 'NO_DRAFTER';
 
 export const NO_DRAFTER_MESSAGE =
-  'The definition that comes with Puppet Master did not pass on this PC, and neither Claude nor Codex is installed to repair it. Nothing was changed.';
+  'The definition that comes with Potato Workspace did not pass on this PC, and neither Claude nor Codex is installed to repair it. Nothing was changed.';
 
 const FENCE = '`'.repeat(3);
 
@@ -37,7 +37,7 @@ export function catalogReply(catalogToml: string, expects: Record<string, string
   for (const name of Object.keys(expects).sort()) {
     blocks.push(`${FENCE}toml\n# expect: ${name}\n${expects[name].trim()}\n${FENCE}`);
   }
-  return `The definition that ships with Puppet Master.\n\n${blocks.join('\n\n')}`;
+  return `The definition that ships with Potato Workspace.\n\n${blocks.join('\n\n')}`;
 }
 
 /**

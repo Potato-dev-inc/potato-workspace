@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const cargo = join(process.env.USERPROFILE ?? '', '.cargo', 'bin', process.platform === 'win32' ? 'cargo.exe' : 'cargo');
-const binary = process.env.PUPPET_MASTER_TEST_MCP_BINARY ?? join(root, 'packages', 'app', 'src-tauri', 'target', 'debug', process.platform === 'win32' ? 'puppet-master-mcp.exe' : 'puppet-master-mcp');
+const binary = process.env.POTATO_WORKSPACE_TEST_MCP_BINARY ?? join(root, 'packages', 'app', 'src-tauri', 'target', 'debug', process.platform === 'win32' ? 'puppet-master-mcp.exe' : 'puppet-master-mcp');
 const temp = mkdtempSync(join(tmpdir(), 'pm-operation-smoke-'));
 const portFile = join(temp, 'bridge.port');
 const project = join(temp, 'project');
@@ -23,7 +23,7 @@ let server;
 let client;
 
 function buildBinary() {
-  if (process.env.PUPPET_MASTER_TEST_MCP_BINARY) {
+  if (process.env.POTATO_WORKSPACE_TEST_MCP_BINARY) {
     assert.ok(existsSync(binary), 'explicit test MCP binary missing');
     return;
   }
@@ -54,8 +54,8 @@ async function main() {
     let raw = '';
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : undefined;
-    requests.push({ method: req.method, url: req.url, body, session: req.headers['x-puppet-master-session'] });
-    assert.ok(req.headers['x-puppet-master-session'], 'bridge requests need a connection session');
+    requests.push({ method: req.method, url: req.url, body, session: req.headers['x-potato-workspace-session'] });
+    assert.ok(req.headers['x-potato-workspace-session'], 'bridge requests need a connection session');
     if (req.method === 'POST' && req.url === '/mcp/mode') {
       const payload = JSON.stringify({ mode: body.mode, tool_count: body.mode === 'agent' ? 9 : 55 });
       res.writeHead(200, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) });
@@ -124,7 +124,7 @@ async function main() {
   assert.ok(address && typeof address !== 'string');
   writeFileSync(portFile, `127.0.0.1:${address.port}\n`);
 
-  client = spawn(binary, [], { cwd: root, env: { ...process.env, PUPPET_MASTER_BRIDGE_PORT_FILE: portFile }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  client = spawn(binary, [], { cwd: root, env: { ...process.env, POTATO_WORKSPACE_BRIDGE_PORT_FILE: portFile }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let pending = Buffer.alloc(0);
   let stderr = '';
   const messages = [];

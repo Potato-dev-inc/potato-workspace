@@ -66,7 +66,7 @@ describe('CollisionSettings', () => {
   it('the footer says the feature only warns and never pauses or stops an agent', async () => {
     await mount(fakeApi());
     expect(COLLISION_FOOTER).toBe(
-      'Puppet Master reads the list of changed files, and the changed lines when both agents changed the same file. It never pauses or stops an agent.',
+      'Potato Workspace reads the list of changed files, and the changed lines when both agents changed the same file. It never pauses or stops an agent.',
     );
     expect(host.querySelector('[role="alert"]')).toBeNull();
   });

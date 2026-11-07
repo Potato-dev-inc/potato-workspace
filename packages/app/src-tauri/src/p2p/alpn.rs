@@ -1,4 +1,4 @@
-//! The protocol names (ALPNs) a Puppet Master endpoint speaks. One name per capability: the name is how a connection
+//! The protocol names (ALPNs) a Potato Workspace endpoint speaks. One name per capability: the name is how a connection
 //! is routed to a capability handler, and how a peer that does not speak it is refused during the handshake.
 //!
 //! A name is `pm/<what>/<version>`. A new version is a new name, so two builds never guess at each other's bytes.

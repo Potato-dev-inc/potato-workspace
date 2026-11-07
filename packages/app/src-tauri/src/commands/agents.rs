@@ -122,7 +122,7 @@ pub fn agents_extra_dir(action: String, path: String) -> Result<Value, String> {
         .map_err(command_error)
 }
 
-/// Consent banner (P5-3): the definition file names found in `<project>/.puppet-master/agents`
+/// Consent banner (P5-3): the definition file names found in `<project>/.potato-workspace/agents`
 /// and whether this canonical path is consented. Reads names only, never the files.
 #[tauri::command]
 pub fn agents_project_scan(project: String) -> Value {

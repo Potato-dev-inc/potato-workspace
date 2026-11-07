@@ -13,7 +13,7 @@ const PAGES = [
   ['General', 'Project, appearance, safety, early features and updates.', 'Default project folder'],
   ['Agents', 'Logins, keeping agents ready, versions and your own agents.', 'Preload agents'],
   ['Orchestrator & Models', 'Choose the AI that coordinates your other agents, and which models it can use.', 'Default orchestrator'],
-  ['Bridge & MCP', 'How other tools and agents connect to Puppet Master.', 'Bridge address'],
+  ['Bridge & MCP', 'How other tools and agents connect to Potato Workspace.', 'Bridge address'],
   ['Phone', 'Pair a phone to watch and steer your agents.', 'Paired phones'],
 ];
 

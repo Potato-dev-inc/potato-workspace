@@ -83,7 +83,7 @@ describe('groups inside the sections', () => {
     expect(section('bridge').rows.some((r) => r.pointer)).toBe(false);
   });
 
-  it('Bridge & MCP starts with the one-step "Add Puppet Master to your agents"', () => {
+  it('Bridge & MCP starts with the one-step "Add Potato Workspace to your agents"', () => {
     expect(section('bridge').rows[0].id).toBe('agent-pack');
   });
 });

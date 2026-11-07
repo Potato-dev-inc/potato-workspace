@@ -21,7 +21,7 @@ export async function run(t) {
 
   await t.step('Search for a row on another page: "bridge address"');
   await t.fill('aria=Search settings', 'bridge address');
-  await t.expect.text('Where other tools reach Puppet Master on this computer.');
+  await t.expect.text('Where other tools reach Potato Workspace on this computer.');
   await t.expect.noText('Dark or light.');
 
   await t.step('Search for something that does not exist');

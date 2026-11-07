@@ -32,8 +32,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use triggers::{Kind, PromptInfo, Verdict};
 
-pub const VAPID_FILE_NAME: &str = "puppet-master.push-vapid.json";
-pub const SUBSCRIPTIONS_FILE_NAME: &str = "puppet-master.push.json";
+pub const VAPID_FILE_NAME: &str = "potato-workspace.push-vapid.json";
+pub const SUBSCRIPTIONS_FILE_NAME: &str = "potato-workspace.push.json";
 
 struct Ctx {
     hub: Arc<PushHub>,
@@ -380,7 +380,7 @@ pub fn notify_question(question: &crate::questions::Question) {
         (None, Some(given)) => triggers::truncate_chars(given, 40),
         (None, None) => String::new(),
     };
-    // Puppet Master's own cards (consent, a spent budget, a usage limit) each say what they are.
+    // Potato Workspace's own cards (consent, a spent budget, a usage limit) each say what they are.
     let (kind, label, detail) = classify_question(question, label);
     let candidate = Candidate {
         kind,

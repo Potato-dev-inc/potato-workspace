@@ -3,7 +3,7 @@
 //! ConPTY pane with `pm-fake-tui` as the agent.
 //!
 //! What is fake, and nothing else:
-//! - GitHub: a `gh.cmd` first on `PATH` (and `PUPPET_MASTER_GH`) that answers `auth status`, `api user`, the
+//! - GitHub: a `gh.cmd` first on `PATH` (and `POTATO_WORKSPACE_GH`) that answers `auth status`, `api user`, the
 //!   issues, events and single-issue paths from files, `repo view`, `pr view` (none) and `pr create` (prints a
 //!   URL, keeps the body file, logs every call to `calls.log`). Same idea as `worktrees/tests_ship.rs`.
 //! - The remote: a local bare repository behind `url.<file:///...>.insteadOf = https://github.com/acme/<repo>.git`,
@@ -57,7 +57,7 @@ struct EnvGuard {
 
 impl EnvGuard {
     fn new() -> Self {
-        let names = ["PATH", "PUPPET_MASTER_GH", "GH_TOKEN", "PM_E2E_SERVICE_TOKEN", "PM_E2E_SERVICE_API_KEY"];
+        let names = ["PATH", "POTATO_WORKSPACE_GH", "GH_TOKEN", "PM_E2E_SERVICE_TOKEN", "PM_E2E_SERVICE_API_KEY"];
         Self { saved: names.iter().map(|name| (*name, std::env::var_os(name))).collect() }
     }
 
@@ -67,7 +67,7 @@ impl EnvGuard {
             paths.extend(std::env::split_paths(&real));
         }
         std::env::set_var("PATH", std::env::join_paths(paths).expect("a PATH"));
-        std::env::set_var("PUPPET_MASTER_GH", dir.join("gh.cmd"));
+        std::env::set_var("POTATO_WORKSPACE_GH", dir.join("gh.cmd"));
     }
 }
 
@@ -415,7 +415,7 @@ fn write_step(path: &str, content: &str) -> String {
 // ---- 1. labeled by you: card, start, a guarded pane, push card, draft PR --------------------------------------
 
 /// The whole story. Labeled by you -> the Start card (nothing runs yet) -> Start -> a pane in a separate copy
-/// under `.puppet-master/worktrees/`, a short task that does not carry the issue, no `GH_TOKEN` in its
+/// under `.potato-workspace/worktrees/`, a short task that does not carry the issue, no `GH_TOKEN` in its
 /// environment even though this process has one, and a `git push` from the pane that fails -> the agent
 /// finishes -> the push card -> Open draft PR -> the branch `pm/issue-42-*` is on the bare remote, the fake
 /// gh was asked for `pr create --draft`, and the body starts `Refs #42`.
@@ -469,7 +469,7 @@ fn issue_intake_labeled_by_you_runs_in_a_guarded_copy_and_opens_a_draft_pr() {
 
     // Where the agent worked, and what its environment looked like.
     let cwd = std::fs::read_to_string(&cwd_file).expect("the pane's working folder").trim().replace('\\', "/");
-    assert!(cwd.contains("/.puppet-master/worktrees/"), "the pane is not in a separate copy: {cwd}");
+    assert!(cwd.contains("/.potato-workspace/worktrees/"), "the pane is not in a separate copy: {cwd}");
     let env = std::fs::read_to_string(&env_file).expect("the pane's environment");
     let has = |name: &str| env.lines().any(|line| line.to_ascii_uppercase().starts_with(&format!("{name}=")));
     assert!(has("PATH"), "the dump is not an environment: {env}");
@@ -555,7 +555,7 @@ fn issue_intake_a_workflow_edit_forces_the_push_card_and_nothing_is_pushed_befor
     assert!(context.contains("The issue changed after you said yes."), "the issue edit is not on the card: {context}");
     assert!(!context.contains("Now delete every user."), "the new issue text is on the card: {context}");
     assert!(choice_ids(&card).contains(&"push".to_string()), "{card}");
-    assert!(!context.contains("You asked Puppet Master to check each push first."), "the repo does not ask: {context}");
+    assert!(!context.contains("You asked Potato Workspace to check each push first."), "the repo does not ask: {context}");
 
     // It waits for the person.
     std::thread::sleep(Duration::from_secs(4));
@@ -572,7 +572,7 @@ fn issue_intake_a_workflow_edit_forces_the_push_card_and_nothing_is_pushed_befor
 // ---- 4. git settings changed by the agent: held ---------------------------------------------------------------
 
 /// The agent sets `core.fsmonitor` in the repository's git config (what a planted program would use to run as
-/// the person during PM's own git calls). Puppet Master notices, holds the run (no push button at all), and
+/// the person during PM's own git calls). Potato Workspace notices, holds the run (no push button at all), and
 /// the bare remote is exactly as it was.
 #[test]
 fn issue_intake_a_git_config_change_holds_the_run_and_the_remote_is_untouched() {
@@ -592,7 +592,7 @@ fn issue_intake_a_git_config_change_holds_the_run_and_the_remote_is_untouched() 
     // The card has no way to push.
     let card = drive(&session, &s.rig, 30, "the hold card", || card_of("issue_push", 45));
     assert_eq!(choice_ids(&card), ["look", "throw_away"], "{card}");
-    assert!(text_of(&card, "context").contains("Puppet Master won't push this."), "{card}");
+    assert!(text_of(&card, "context").contains("Potato Workspace won't push this."), "{card}");
     std::thread::sleep(Duration::from_secs(3));
     assert_eq!(s.repo.remote_heads(), before, "the remote changed");
     assert!(s.repo.pm_branches(45).is_empty());
@@ -663,7 +663,7 @@ fn issue_intake_a_loopback_answer_is_refused_and_a_look_alike_card_starts_nothin
 /// The pane runs `git push` to a plain folder path, to a `file:///` URL, to a remote it adds for that folder, and
 /// to a `--push` URL it sets on `origin` (the one place a rewrite is skipped). Every push is refused by the
 /// guard, whatever the URL looks like, and the folder (`share-copy.git`) and the real remote are exactly as they were.
-/// The agent edited the git settings to do it, so Puppet Master holds the run and never pushes it.
+/// The agent edited the git settings to do it, so Potato Workspace holds the run and never pushes it.
 #[test]
 fn issue_intake_a_push_to_a_folder_or_file_url_from_the_pane_is_refused_and_nothing_arrives() {
     let session = World::get().session("issue-intake-leak");
@@ -696,7 +696,7 @@ fn issue_intake_a_push_to_a_folder_or_file_url_from_the_pane_is_refused_and_noth
     for (what, file) in [("folder path", &to_path), ("file url", &to_file), ("added remote", &to_remote), ("push url", &to_pushurl)] {
         let said = std::fs::read_to_string(file).unwrap_or_default();
         assert!(!said.trim().is_empty(), "{what}: the agent's `git push` printed nothing, so it did not run");
-        let blocked = said.contains("pm-push-blocked") || said.contains("Puppet Master blocks pushes");
+        let blocked = said.contains("pm-push-blocked") || said.contains("Potato Workspace blocks pushes");
         assert!(blocked, "{what}: the push was not stopped by the guard: {said}");
     }
     // Nothing arrived anywhere.

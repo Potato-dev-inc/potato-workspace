@@ -3,14 +3,14 @@
     "mine": {
       "command": "my-server"
     },
-    "puppet-master": {
+    "potato-workspace": {
       "args": [
         "-y",
-        "@puppet-master/mcp"
+        "@potato-workspace/mcp"
       ],
       "command": "npx",
       "env": {
-        "PUPPET_MASTER_BRIDGE_PORT_FILE": "C:/pm/puppet-master.bridge.port"
+        "POTATO_WORKSPACE_BRIDGE_PORT_FILE": "C:/pm/potato-workspace.bridge.port"
       }
     }
   }

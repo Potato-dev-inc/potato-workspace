@@ -92,7 +92,7 @@ fn default_off_a_run_gets_no_budget_and_is_never_paused() {
         check_next_turn_at(&project, &handle, T0 + 10_000_000_000).expect("no budget: never paused");
     }
     assert!(pending_card_of(&project, &handle).is_none());
-    assert!(!std::path::Path::new(&project).join(".puppet-master").join("budgets.json").exists(), "nothing written");
+    assert!(!std::path::Path::new(&project).join(".potato-workspace").join("budgets.json").exists(), "nothing written");
     assert!(view(&project, &handle).is_none(), "no chip");
 }
 

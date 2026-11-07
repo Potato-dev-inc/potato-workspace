@@ -15,7 +15,7 @@ export interface WslScenario {
 export const EXAMPLE_PLACES: AgentPlaceRow[] = [
   { agentId: 'claude', label: 'Claude', distro: 'Ubuntu-Test', found: null, whyNot: null },
   { agentId: 'codex', label: 'Codex', distro: null, found: null, whyNot: null },
-  { agentId: 'opencode', label: 'OpenCode', distro: null, found: null, whyNot: "OpenCode can't run in Linux from Puppet Master yet." },
+  { agentId: 'opencode', label: 'OpenCode', distro: null, found: null, whyNot: "OpenCode can't run in Linux from Potato Workspace yet." },
 ];
 
 export const EXAMPLE_CHECK: DistroView = {

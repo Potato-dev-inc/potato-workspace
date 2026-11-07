@@ -13,11 +13,11 @@ use super::{personas, store};
 
 pub const PENDING_REL: &str = "memory/pending.md";
 pub const JOURNAL_REL: &str = "memory/journal";
-pub const MARKER_REL: &str = ".puppet-master/companion.json";
+pub const MARKER_REL: &str = ".potato-workspace/companion.json";
 
-/// The default home for a companion: `<user home>\PuppetMaster\companions\<id>`.
+/// The default home for a companion: `<user home>\PotatoWorkspace\companions\<id>`.
 pub fn default_folder(user_home: &Path, id: &str) -> PathBuf {
-    user_home.join("PuppetMaster").join("companions").join(id)
+    user_home.join("PotatoWorkspace").join("companions").join(id)
 }
 
 /// The person's home folder from the environment (`USERPROFILE`, then `HOME`).
@@ -48,9 +48,13 @@ pub fn ensure_home(root: &Path, profile: &CompanionProfile) -> CompanionResult<(
     }
     crate::path_limit::check(home).map_err(|_| folder_error("That folder path is too long for Windows."))?;
     fs::create_dir_all(home).map_err(|e| folder_error(&format!("Could not create the folder: {e}.")))?;
+    crate::app_paths::copy_legacy_data_once(
+        &home.join(crate::app_paths::LEGACY_PROJECT_DIR_NAME),
+        &home.join(crate::app_paths::PROJECT_DIR_NAME),
+    );
 
     check_marker(home, &profile.id)?;
-    create_if_missing(&home.join(".puppet-master").join("companion.json"), &marker_text(&profile.id))?;
+    create_if_missing(&home.join(".potato-workspace").join("companion.json"), &marker_text(&profile.id))?;
     fs::create_dir_all(home.join(JOURNAL_REL)).map_err(|e| folder_error(&format!("Could not create memory/journal: {e}.")))?;
     fs::create_dir_all(super::skills::skills_dir(home)).map_err(|e| folder_error(&format!("Could not create skills: {e}.")))?;
 
@@ -195,6 +199,6 @@ mod tests {
     #[test]
     fn default_folder_sits_under_puppet_master() {
         let f = default_folder(Path::new("C:\\Users\\you"), "bit");
-        assert_eq!(f, Path::new("C:\\Users\\you").join("PuppetMaster").join("companions").join("bit"));
+        assert_eq!(f, Path::new("C:\\Users\\you").join("PotatoWorkspace").join("companions").join("bit"));
     }
 }

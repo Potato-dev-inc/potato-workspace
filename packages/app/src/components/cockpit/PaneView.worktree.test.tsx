@@ -42,7 +42,7 @@ const ITEM: WorktreeItem = {
   branch: 'pm/run-1',
   base: 'main',
   repo: 'C:/proj',
-  path: 'C:/proj/.puppet-master/worktrees/run-1-ab12',
+  path: 'C:/proj/.potato-workspace/worktrees/run-1-ab12',
   exists: true,
   state: 'unreviewed',
   summary: { files_changed: 1, additions: 2, deletions: 0 },
@@ -120,7 +120,7 @@ describe('the pane header says where the agent works', () => {
   });
 
   it('says "separate copy of <folder>" when it works in a copy, and never shows the copy’s own folder', async () => {
-    const copy = 'C:\\work\\shop\\.puppet-master\\worktrees\\pane-1a2b3c4d';
+    const copy = 'C:\\work\\shop\\.potato-workspace\\worktrees\\pane-1a2b3c4d';
     await act(async () => root.render(<PaneView c={withCwd(copy)} paneId="iso" />));
     await flush();
     expect(headerLine().textContent).toContain('separate copy of shop');

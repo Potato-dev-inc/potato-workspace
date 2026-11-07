@@ -1,6 +1,6 @@
 //! Red to Green: the short texts (the task, the cards, the notices and the row text). Plain English.
 //! Agent names never appear here: the agent's label comes in as a parameter. The task carries only
-//! values Puppet Master checked (the pull request number, `owner/repo`, the `pm/` branch and the log
+//! values Potato Workspace checked (the pull request number, `owner/repo`, the `pm/` branch and the log
 //! file name). No log bytes and no check names go into the task (S1).
 
 use super::model::{FailedCheck, FixFacts, FixRun, FixState, Watch, WatchState};
@@ -24,7 +24,7 @@ pub fn task(owner_repo: &str, pr: u64, branch: &str, file: &str) -> String {
          workflow files (.github/), change git settings or remotes, install tools, open websites, or touch other \
          folders or repositories. Find the cause and make the smallest change that fixes it. Do not skip, delete or \
          weaken tests to make them pass. Run the failing check here if you can. Commit your work on this branch. Do \
-         not push and do not switch branches: Puppet Master pushes after you finish and the person agrees. End with \
+         not push and do not switch branches: Potato Workspace pushes after you finish and the person agrees. End with \
          two or three sentences: what was wrong and what you changed.",
         repo = one_line(owner_repo),
         branch = one_line(branch),
@@ -59,7 +59,7 @@ pub fn card_context(w: &Watch, fix: &FixRun, route_same_pane: bool, tries: u32) 
         ),
     ];
     if notes.jobs_without_log > 0 {
-        parts.push(format!("No log Puppet Master can read for {}.", count(notes.jobs_without_log, "check", "checks")));
+        parts.push(format!("No log Potato Workspace can read for {}.", count(notes.jobs_without_log, "check", "checks")));
     }
     let names = clean_names(fix.checks.iter().map(|c| c.name.as_str()));
     if !names.is_empty() {
@@ -126,7 +126,7 @@ fn fix_row(fix: &FixRun) -> String {
         FixState::Green { .. } => format!("CI passed after {}", count(fix.try_no, "fix", "fixes")),
         FixState::StillRed { .. } => "CI still fails after the fix.".to_string(),
         FixState::NoChanges { .. } => "The agent made no change.".to_string(),
-        FixState::Held { .. } => "Puppet Master won't push this. Check the copy yourself.".to_string(),
+        FixState::Held { .. } => "Potato Workspace won't push this. Check the copy yourself.".to_string(),
         FixState::NotPushed => "Fix not pushed. The commits stay in the copy.".to_string(),
         FixState::Failed { .. } => "The fix failed.".to_string(),
     }
@@ -292,20 +292,20 @@ mod tests {
 
     #[test]
     fn task_matches_the_golden_text() {
-        let got = task("acme/billing", 61, "pm/issue-42-a1b2", ".puppet-master/ci-61-try1.md");
+        let got = task("acme/billing", 61, "pm/issue-42-a1b2", ".potato-workspace/ci-61-try1.md");
         assert_eq!(got, TASK_GOLDEN.trim_end());
     }
 
     #[test]
     fn task_is_one_paragraph_under_the_cap() {
-        let got = task("acme/billing", 61, "pm/issue-42-a1b2", ".puppet-master/ci-61-try1.md");
+        let got = task("acme/billing", 61, "pm/issue-42-a1b2", ".potato-workspace/ci-61-try1.md");
         assert!(!got.contains('\n') && !got.contains('\r'));
         assert!(got.chars().count() <= 1100, "task is {} chars", got.chars().count());
     }
 
     #[test]
     fn task_has_no_log_bytes_and_no_check_names() {
-        let got = task("acme/billing", 61, "pm/issue-42-a1b2", ".puppet-master/ci-61-try1.md");
+        let got = task("acme/billing", 61, "pm/issue-42-a1b2", ".potato-workspace/ci-61-try1.md");
         // Plain printable ASCII only: no hidden or control characters from a log can be in it.
         assert!(got.chars().all(|c| c.is_ascii() && !c.is_control()));
         for line in HOSTILE {
@@ -437,7 +437,7 @@ mod tests {
             (FixState::NoChanges { message: "No change".to_string() }, "The agent made no change."),
             (
                 FixState::Held { code: "CI_FIX_CI_FILES".to_string(), message: "held".to_string() },
-                "Puppet Master won't push this. Check the copy yourself.",
+                "Potato Workspace won't push this. Check the copy yourself.",
             ),
             (FixState::NotPushed, "Fix not pushed. The commits stay in the copy."),
             (FixState::Failed { code: "CI_FIX_PUSH_FAILED".to_string(), message: "failed".to_string() }, "The fix failed."),
@@ -451,7 +451,7 @@ mod tests {
     #[test]
     fn copy_has_no_auto_merge_rerun_or_force() {
         let mut all: Vec<String> = vec![
-            task("acme/billing", 61, "pm/issue-42-a1b2", ".puppet-master/ci-61-try1.md"),
+            task("acme/billing", 61, "pm/issue-42-a1b2", ".potato-workspace/ci-61-try1.md"),
             card_question(61, &checks(12), "Fake agent"),
             card_context(&watch(WatchState::Watching), &fix(FixState::Starting, checks(3), hostile_log()), true, 2),
             push_question(61),

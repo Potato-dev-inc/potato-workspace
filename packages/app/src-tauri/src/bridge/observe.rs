@@ -144,7 +144,7 @@ const SETTLE_STEP: std::time::Duration = std::time::Duration::from_millis(100);
 /// What one look at a waiting pane found.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Look {
-    /// A prompt Puppet Master recognises (its id and options).
+    /// A prompt Potato Workspace recognises (its id and options).
     Prompt(serde_json::Value),
     /// The pane still waits and nothing on it is recognised.
     Nothing,
@@ -153,7 +153,7 @@ pub(super) enum Look {
 }
 
 /// Look until a prompt shows, the pane stops waiting, or `looks` looks have found nothing (then `Nothing`: the prompt is
-/// not one Puppet Master reads and a person has to).
+/// not one Potato Workspace reads and a person has to).
 pub(super) fn settle(mut look: impl FnMut() -> Look, looks: u32, mut pause: impl FnMut()) -> Look {
     for n in 0..looks.max(1) {
         if n > 0 {

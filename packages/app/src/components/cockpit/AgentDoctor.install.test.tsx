@@ -225,12 +225,12 @@ describe('Install: running in a visible window, then checking again', () => {
     expect(a.installApi.finish).toHaveBeenCalledWith('tool');
     expect(host.textContent).toContain('Installed. Sign in next.');
     expect(host.textContent).toContain('1.0.0');
-    expect(host.textContent).not.toContain('Puppet Master never sees your password');
+    expect(host.textContent).not.toContain('Potato Workspace never sees your password');
     const help = button('?')!;
     expect(help.getAttribute('aria-expanded')).toBe('false');
     await click('?');
     expect(button('?')!.getAttribute('aria-expanded')).toBe('true');
-    expect(host.textContent).toContain('Puppet Master never sees your password');
+    expect(host.textContent).toContain('Potato Workspace never sees your password');
     expect(button('Sign in')).toBeDefined();
     expect(button('Install')).toBeUndefined();
   });
@@ -279,7 +279,7 @@ describe('Install: running in a visible window, then checking again', () => {
     await tick();
     expect(a.installApi.finish).toHaveBeenCalledTimes(2);
     expect(host.textContent).toContain('cannot find it yet');
-    expect(host.textContent).toContain('Close Puppet Master and open it again.');
+    expect(host.textContent).toContain('Close Potato Workspace and open it again.');
   });
 
   it('Check again finds the agent after a restart-free re-check: says it is installed', async () => {

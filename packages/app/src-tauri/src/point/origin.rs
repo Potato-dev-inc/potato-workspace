@@ -1,7 +1,7 @@
 //! Preview origins: which local URLs the preview may open, and the navigation guard (PF-1).
 //!
 //! A URL is allowed only when it is plain `http` or `https` to exactly `localhost`, `127.0.0.1`
-//! or `[::1]`, with no user info, and its port is not one of Puppet Master's own (SPEC n32 S1, S2,
+//! or `[::1]`, with no user info, and its port is not one of Potato Workspace's own (SPEC n32 S1, S2,
 //! S4). The host is checked as typed. A URL parser's normalising is not trusted: `0x7f.1` or
 //! `localhost.` are refused, never rewritten to a loopback address.
 
@@ -33,7 +33,7 @@ impl PreviewOrigin {
     }
 }
 
-/// The ports Puppet Master uses itself. Previews never open these.
+/// The ports Potato Workspace uses itself. Previews never open these.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OwnPorts {
     pub ports: Vec<u16>,
@@ -73,7 +73,7 @@ impl Refusal {
         match self {
             Refusal::NotRunning => "That server is not running any more.",
             Refusal::NotLocal => "Point and Fix only opens pages on this computer (localhost).",
-            Refusal::OwnPort => "That port belongs to Puppet Master, so it cannot be previewed.",
+            Refusal::OwnPort => "That port belongs to Potato Workspace, so it cannot be previewed.",
             Refusal::BadUrl => "That is not a web address Point and Fix can open.",
         }
     }

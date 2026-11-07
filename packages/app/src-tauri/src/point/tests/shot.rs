@@ -161,7 +161,7 @@ fn save_writes_one_named_file_under_the_shots_folder() {
     let (abs, rel) = save(&project, &bytes, 1_800_000_000_000, 7).unwrap();
 
     assert_eq!(abs.parent().unwrap(), shots_dir(&project));
-    let name = rel.strip_prefix(".puppet-master/shots/").expect("relative path");
+    let name = rel.strip_prefix(".potato-workspace/shots/").expect("relative path");
     assert!(name.starts_with("pick-"), "{name}");
     assert!(name.ends_with("-7.png"), "{name}");
     // pick-yyyymmdd-hhmmss-7.png: 5 + 8 + 1 + 6 + 2 + 4 characters.

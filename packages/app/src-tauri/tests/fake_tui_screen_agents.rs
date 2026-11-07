@@ -1,4 +1,4 @@
-//! Agents Puppet Master drives by READING THEIR SCREEN (a declarative `[tui]` definition, no native protocol),
+//! Agents Potato Workspace drives by READING THEIR SCREEN (a declarative `[tui]` definition, no native protocol),
 //! on a real ConPTY with `pm-fake-tui` as a made-up agent ("zeta", drawn with the nimbus layout). Zero tokens.
 //!
 //! Three generic problems found when a lead drove a wizard-made screen-read agent over MCP and compared it with

@@ -231,7 +231,7 @@ impl<I: Io + 'static> Engine<I> {
             w.last_push_ms = self.io.now_ms();
         });
         if saved.is_none() {
-            return Err(err("CI_FIX_WATCH_FAILED", "Puppet Master could not watch this pull request again. Stop another watch first."));
+            return Err(err("CI_FIX_WATCH_FAILED", "Potato Workspace could not watch this pull request again. Stop another watch first."));
         }
         self.state.lock().polls.remove(&watch.id);
         self.io.audit("watched", who, &format!("Watching #{} again", watch.pr_number), serde_json::json!({ "watch": watch.id }));
@@ -258,7 +258,7 @@ impl<I: Io + 'static> Engine<I> {
             return Err(err("CI_FIX_OFF", "Turn on Red to Green in Settings > Labs."));
         }
         if !matches!(watch.state, WatchState::Watching) {
-            return Err(err("INVALID_ARGUMENT", "Puppet Master is not watching this pull request. Use Watch again first."));
+            return Err(err("INVALID_ARGUMENT", "Potato Workspace is not watching this pull request. Use Watch again first."));
         }
         let gh = self.gh_status();
         match gh.state.as_str() {
@@ -434,7 +434,7 @@ impl<I: Io + 'static> Engine<I> {
 }
 
 fn busy() -> OperationError {
-    OperationError::new("CI_FIX_BUSY", "Puppet Master is working on this. Try again in a moment.", true)
+    OperationError::new("CI_FIX_BUSY", "Potato Workspace is working on this. Try again in a moment.", true)
 }
 
 /// The log view of a fix from the store (a bad id finds nothing).

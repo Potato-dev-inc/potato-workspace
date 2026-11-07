@@ -580,7 +580,7 @@ pub(super) fn park_on_startup_dialog(
         // id, kind and options now, so the caller can answer_prompt it.
         classified
     } else if let Some(gate) = crate::tui::profile_for(agent_type).startup_gate(screen) {
-        json!({"kind":"manual_approval_required","pane_id":pane_id,"startup_gate":gate.id,"detail":format!("{}. Resolve it in the pane; Puppet Master will not answer it for you.", gate.summary)})
+        json!({"kind":"manual_approval_required","pane_id":pane_id,"startup_gate":gate.id,"detail":format!("{}. Resolve it in the pane; Potato Workspace will not answer it for you.", gate.summary)})
     } else {
         json!({"kind":"manual_approval_required","pane_id":pane_id,"detail":"Resolve the displayed permission prompt manually; the bridge will not approve it."})
     };
@@ -640,7 +640,7 @@ pub(super) fn park_on_startup_dialog(
             break;
         }
         let again = crate::pane_prompt::required_action(registry, pane_id).unwrap_or_else(|| {
-            json!({"kind":"manual_approval_required","pane_id":pane_id,"detail":"Resolve the displayed prompt in the pane; Puppet Master will not answer it for you."})
+            json!({"kind":"manual_approval_required","pane_id":pane_id,"detail":"Resolve the displayed prompt in the pane; Potato Workspace will not answer it for you."})
         });
         *operation = crate::operations::mark_operation_startup_wait(
             &operation.project_path,

@@ -37,6 +37,12 @@ if (process.env.PM_SKIP_GIT === '1') {
   process.exit(0);
 }
 
+// MinGit is Windows-only. macOS and Linux use the system git (Xcode Command Line Tools on macOS).
+if (process.platform !== 'win32') {
+  console.error(`[fetch-git] ${process.platform}: using the system git, nothing to stage`);
+  process.exit(0);
+}
+
 const cacheRoot = process.env.PM_BUILD_CACHE || join(process.env.LOCALAPPDATA || join(homedir(), '.cache'), 'potato-workspace-build-cache');
 const cache = join(cacheRoot, `mingit-${GIT_VERSION}`);
 const sha = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');

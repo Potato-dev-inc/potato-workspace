@@ -70,7 +70,7 @@ export function FixSheet({ item, api = reviewDeskApi, onDone, onCancel }: FixShe
       <h2 className="ck-section" id={TITLE_ID}>
         Ask to fix
       </h2>
-      <p className="ck-sub">Puppet Master writes these lines in the agent&apos;s chat box.</p>
+      <p className="ck-sub">Potato Workspace writes these lines in the agent&apos;s chat box.</p>
       <pre className="ck-rd-fix-preview" aria-label="What goes in the chat box">
         {fixPreviewLines(item, note).join('\n')}
       </pre>

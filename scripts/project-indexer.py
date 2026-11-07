@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Puppet Master librarian — project IR for orchestrator context packs.
+"""Potato Workspace librarian — project IR for orchestrator context packs.
 
 Static mode: wiki-style sections (packages, MCP tools, docs) — not a raw tree dump.
 LLM mode (--llm): DeepWiki-style narrative via Anthropic/OpenAI (needs API key in env).
 
 Writes:
-  .puppet-master/project-ir.json   — overview (+ optional sections)
-  .puppet-master/project-ir.meta.json — git_sha, generator, generated_at_ms
+  .potato-workspace/project-ir.json   — overview (+ optional sections)
+  .potato-workspace/project-ir.meta.json — git_sha, generator, generated_at_ms
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from pathlib import Path
 
 SKIP_DIRS = {
     ".git",
-    ".puppet-master",
+    ".potato-workspace",
     ".cursor",
     ".vscode",
     "__pycache__",
@@ -211,7 +211,7 @@ def format_static_overview(ctx: dict) -> str:
         "- **MCP server** (`packages/mcp-server`): stdio launcher → Rust MCP binary → bridge HTTP."
     )
     parts.append(
-        "- **Coordination state**: project-local `.puppet-master/` (tasks, locks, audit, this index)."
+        "- **Coordination state**: project-local `.potato-workspace/` (tasks, locks, audit, this index)."
     )
     parts.append(
         "- **Workers**: real PTY panes (Claude, Codex, OpenCode, bash) driven via `write_terminal_input` / `press_key`."
@@ -334,7 +334,7 @@ def emit_librarian_prompt(root: Path) -> str:
 
 
 def validate_project_ir(root: Path) -> tuple[bool, str]:
-    storage = root / ".puppet-master"
+    storage = root / ".potato-workspace"
     ir_path = storage / "project-ir.json"
     meta_path = storage / "project-ir.meta.json"
     if not ir_path.is_file():
@@ -355,7 +355,7 @@ def validate_project_ir(root: Path) -> tuple[bool, str]:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build Puppet Master project IR")
+    parser = argparse.ArgumentParser(description="Build Potato Workspace project IR")
     parser.add_argument("root", nargs="?", default=".", help="Project root directory")
     parser.add_argument(
         "--emit-prompt",
@@ -365,7 +365,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--validate",
         action="store_true",
-        help="Validate .puppet-master/project-ir.json and exit",
+        help="Validate .potato-workspace/project-ir.json and exit",
     )
     parser.add_argument(
         "--llm",
@@ -375,7 +375,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--provider",
         choices=("anthropic", "openai"),
-        default=os.environ.get("PUPPET_MASTER_LIBRARIAN_PROVIDER", "anthropic"),
+        default=os.environ.get("POTATO_WORKSPACE_LIBRARIAN_PROVIDER", "anthropic"),
     )
     parser.add_argument("--model", default=None, help="Override LLM model id")
     return parser.parse_args(argv)
@@ -404,7 +404,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {message}", file=sys.stderr)
         return 1
 
-    storage = root / ".puppet-master"
+    storage = root / ".potato-workspace"
     storage.mkdir(parents=True, exist_ok=True)
 
     ctx = build_static_context(root)

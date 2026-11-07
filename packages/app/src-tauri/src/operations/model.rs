@@ -62,11 +62,11 @@ pub struct DelegateWorkRequest {
     /// MCP client session that owns this run, when supplied by the host.
     #[serde(default)]
     pub owner_session_id: Option<String>,
-    /// The pane of the agent that asked for this run, when it asked from a Puppet Master pane. Never read from a
+    /// The pane of the agent that asked for this run, when it asked from a Potato Workspace pane. Never read from a
     /// request body: the bridge fills it from the connection's own process (`pty::pane_parent::request_caller`).
     #[serde(skip)]
     pub parent_pane_id: Option<String>,
-    /// Whether the worker prompt explicitly enables Puppet Master tool access.
+    /// Whether the worker prompt explicitly enables Potato Workspace tool access.
     #[serde(default)]
     pub worker_has_mcp_tools: bool,
     /// Optional stable conversation handle for subsequent turns.
@@ -201,7 +201,7 @@ mod io_at_tests {
     fn io_at_names_step_and_path() {
         let error = OperationError::io_at(
             "create operations dir",
-            std::path::Path::new("C:/x/Roaming/ws/.puppet-master/operations"),
+            std::path::Path::new("C:/x/Roaming/ws/.potato-workspace/operations"),
             "The system cannot find the path specified. (os error 3)",
         );
         assert_eq!(error.code, "STORAGE_ERROR");
@@ -267,7 +267,7 @@ pub struct OperationSnapshot {
     pub placement: Option<String>,
     #[serde(default)]
     pub owner_session_id: Option<String>,
-    /// The pane of the agent that asked for this run, when it asked from a Puppet Master pane (the helper pane is
+    /// The pane of the agent that asked for this run, when it asked from a Potato Workspace pane (the helper pane is
     /// nested under it). Recorded once at creation, from the connection's own process; display-only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_pane_id: Option<String>,

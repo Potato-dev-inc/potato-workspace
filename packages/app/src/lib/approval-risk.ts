@@ -23,7 +23,7 @@ export const LEVEL_WORD: Record<RiskLevel, string> = {
 
 export const CAUTION = 'Read this before you allow it. It may be hard to undo.';
 
-/** What a button says, in Puppet Master's words and not the agent's own menu text. */
+/** What a button says, in Potato Workspace's words and not the agent's own menu text. */
 export interface ChoiceWords {
   text: string;
   /** A command or scope named inside the words ("npm test"), shown as inline code, never in backticks. */
@@ -53,7 +53,7 @@ const unquote = (text: string): string => text.replace(HOTKEY_HINT, '').replace(
 export const isStartupGate = (kind: string | null | undefined): boolean => /trust/i.test(kind ?? '');
 
 /**
- * A prompt Puppet Master could not classify (a menu read by its shape) or the agent's own question: the buttons keep
+ * A prompt Potato Workspace could not classify (a menu read by its shape) or the agent's own question: the buttons keep
  * the agent's own words, because "Allow once" would say something the screen does not.
  */
 export const keepsOwnWords = (kind: string | null | undefined): boolean => isStartupGate(kind) || kind === 'question' || kind === 'unknown_question';

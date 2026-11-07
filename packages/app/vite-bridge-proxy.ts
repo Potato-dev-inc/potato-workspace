@@ -7,9 +7,9 @@ import type { ProxyOptions } from 'vite';
 // Where the desktop app writes its bridge port file. Mirrors src-tauri/src/app_paths.rs
 // (`bridge_port_file()`): the file lives in the app's data folder, named per profile.
 const APP_ID = 'com.potatodev.workspace';
-const PORT_FILE_NAME = 'puppet-master.bridge.port';
-const PORT_FILE_ENV = 'PUPPET_MASTER_BRIDGE_PORT_FILE';
-const PROFILE_ENV = 'PUPPET_MASTER_PROFILE';
+const PORT_FILE_NAME = 'potato-workspace.bridge.port';
+const PORT_FILE_ENV = 'POTATO_WORKSPACE_BRIDGE_PORT_FILE';
+const PROFILE_ENV = 'POTATO_WORKSPACE_PROFILE';
 const DEFAULT_TARGET = 'http://127.0.0.1:17321';
 
 /** Same rule as `app_paths::profile_from`: `[a-z0-9-]`, 1..=32, not leading `-`, not `default`. */
@@ -20,8 +20,8 @@ function profileFrom(raw: string | undefined): string | null {
 }
 
 /**
- * The port file the running app writes: `PUPPET_MASTER_BRIDGE_PORT_FILE` when set, else
- * `<app data>/com.potatodev.workspace[.profile-<name>]/puppet-master.bridge.port`.
+ * The port file the running app writes: `POTATO_WORKSPACE_BRIDGE_PORT_FILE` when set, else
+ * `<app data>/com.potatodev.workspace[.profile-<name>]/potato-workspace.bridge.port`.
  * (Nothing writes a port file in the repo root any more, so there is no fallback to one.)
  */
 export function resolveBridgePortFile(
@@ -113,19 +113,19 @@ function configureProxy(proxy: ProxyServer): void {
         ? {
             code: 'BRIDGE_UNREACHABLE',
             // No file path here: dev runs can sit behind a public tunnel, and the path holds the Windows user name.
-            message: `The Puppet Master app's bridge is not running on port ${port}. Start or restart the app.`,
+            message: `The Potato Workspace app's bridge is not running on port ${port}. Start or restart the app.`,
           }
-        : { code: 'BRIDGE_PROXY_ERROR', message: `The Puppet Master bridge proxy failed: ${err.message}` },
+        : { code: 'BRIDGE_PROXY_ERROR', message: `The Potato Workspace bridge proxy failed: ${err.message}` },
     );
     reply.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     reply.end?.(body);
   });
 
   proxy.on('proxyReq', (proxyReq) => {
-    proxyReq.setHeader('X-PM-Proxied', '1');
+    proxyReq.setHeader('X-Potato-Workspace-Proxied', '1');
   });
   proxy.on('proxyReqWs', (proxyReq) => {
-    proxyReq.setHeader('X-PM-Proxied', '1');
+    proxyReq.setHeader('X-Potato-Workspace-Proxied', '1');
   });
 }
 

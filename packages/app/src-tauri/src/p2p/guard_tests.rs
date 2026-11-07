@@ -100,8 +100,12 @@ fn p2p_is_not_reachable_from_the_bridge_mcp_or_the_phone() {
 /// each of which must add itself to the allowed list here, on purpose).
 #[test]
 fn only_known_files_use_the_p2p_module() {
-    // Spaces: only these three may name p2p (spaces/guard_tests.rs checks the rest)
-    let allowed = ["lib.rs", "pairing_commands.rs", "desk_soak.rs", "spaces/net.rs", "spaces/net_tests.rs", "spaces/spike.rs"];
+    // Spaces: only these may name p2p (spaces/guard_tests.rs checks the rest). local_net_tests.rs is the ignored
+    // real-network proof and is not shipped.
+    let allowed = [
+        "lib.rs", "pairing_commands.rs", "desk_soak.rs", "spaces/net.rs", "spaces/net_tests.rs", "spaces/local_net_tests.rs",
+        "spaces/spike.rs",
+    ];
     let pattern = Regex::new(r"\bp2p::|crate::p2p\b|\bmod p2p\b").unwrap();
     for file in files(&tauri_src(), &["rs"]) {
         let rel = file.strip_prefix(tauri_src()).unwrap().to_string_lossy().replace('\\', "/");

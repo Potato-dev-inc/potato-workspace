@@ -44,11 +44,11 @@ describe('version notes in the Inbox', () => {
   });
 
   it('is the same card as every other: the calm glyph, the text as the title, one Dismiss in the action row, no number', async () => {
-    const api = fakeApi(status(['Codex 0.162.1 changed its screens. Puppet Master will ask you before acting.']));
+    const api = fakeApi(status(['Codex 0.162.1 changed its screens. Potato Workspace will ask you before acting.']));
     await act(async () => root.render(<CanaryNotices api={api} />));
     const card = host.querySelector('[data-testid="canary-notice"]')!;
     expect(card.matches('[data-ib-card][data-kind="note"]')).toBe(true);
-    expect(card.querySelector('.ib-title')?.textContent).toBe('Codex 0.162.1 changed its screens. Puppet Master will ask you before acting.');
+    expect(card.querySelector('.ib-title')?.textContent).toBe('Codex 0.162.1 changed its screens. Potato Workspace will ask you before acting.');
     // the calm glyph (idle corners), hidden from screen readers; never the X of an error
     expect(card.querySelector('.ib-glyph [role="img"]')?.getAttribute('aria-label')).toBe('Idle');
     expect(card.querySelector('.ib-age')).toBeNull();

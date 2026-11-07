@@ -188,7 +188,7 @@ fn question_reply(cx: &Ctx, pane_id: &str) -> RouteResult {
 }
 
 /// Who sent a reply through the bridge (`AnsweredBy::for_bridge`): a phone, a local program or an
-/// agent, never "desktop" (the bridge cannot tell the Puppet Master window from any other local caller).
+/// agent, never "desktop" (the bridge cannot tell the Potato Workspace window from any other local caller).
 fn answered_by(cx: &Ctx) -> crate::agent_authority::gate::AnsweredBy {
     crate::agent_authority::gate::AnsweredBy::for_bridge(cx.session, crate::mobile_pairing::requires_pairing_token(cx.headers, cx.peer_loopback))
 }

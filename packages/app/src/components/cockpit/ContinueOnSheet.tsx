@@ -1,5 +1,5 @@
 // "Other agent…": the sheet a usage-limit card opens for a pane that is not a companion's. The person picks another
-// agent; Puppet Master stops this pane's agent first, then starts the picked one in the same folder with a short
+// agent; Potato Workspace stops this pane's agent first, then starts the picked one in the same folder with a short
 // brief (src/lib/keep-going.ts). Only the rows the server marks ok can be picked; the others say why not.
 import { useEffect, useState } from 'react';
 import { keepGoingContinue, keepGoingSettingsGet, keepGoingTargetKey, keepGoingTargets, type KeepGoingOffer, type KeepGoingSettings } from '../../lib/keep-going';
@@ -119,7 +119,7 @@ export function ContinueOnSheet({
         </label>
       )}
       <p className="ck-sub ck-keep-going-copy">
-        The agent gets a short brief. {fromLabel} in this pane is stopped first. Puppet Master never answers its questions for you.
+        The agent gets a short brief. {fromLabel} in this pane is stopped first. Potato Workspace never answers its questions for you.
       </p>
       {loadError && (
         <p className="ck-memory-msg ck-memory-err" role="alert">

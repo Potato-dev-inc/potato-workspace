@@ -245,7 +245,7 @@ fn approval_without_the_answer_cap_has_no_buttons() {
         .expect("sent");
     assert!(note.out.keyboard.is_empty());
     assert!(
-        text_of(&note).ends_with("Open Puppet Master to answer."),
+        text_of(&note).ends_with("Open Potato Workspace to answer."),
         "{}",
         text_of(&note)
     );
@@ -264,7 +264,7 @@ fn high_risk_approval_has_no_buttons() {
     let c = candidate(Kind::WaitingInput, Some(p), Some(item()));
     let note = n.offer(&c, None, &cfg(), world.links(), 1).expect("sent");
     assert!(note.out.keyboard.is_empty());
-    assert!(text_of(&note).ends_with("Open Puppet Master to answer."));
+    assert!(text_of(&note).ends_with("Open Potato Workspace to answer."));
 }
 
 #[test]
@@ -400,7 +400,7 @@ fn question_without_its_card_has_no_buttons() {
         .offer(&c, Some(&q), &cfg(), world.links(), 1)
         .expect("sent");
     assert!(note.out.keyboard.is_empty());
-    assert!(text_of(&note).ends_with("Open Puppet Master to answer."));
+    assert!(text_of(&note).ends_with("Open Potato Workspace to answer."));
 }
 
 #[test]
@@ -549,7 +549,7 @@ fn companion_reply_in_short_mode_has_no_agent_text_and_no_watch_means_nothing() 
         .expect("short");
     assert_eq!(
         text_of(&note),
-        "Mochi replied. Open Puppet Master to read it."
+        "Mochi replied. Open Potato Workspace to read it."
     );
     let no_watch = TelegramConfig {
         caps: Caps::none().with(Cap::Answer, true),
@@ -1035,7 +1035,7 @@ fn focus_note_in_short_mode_is_the_fixed_sentence_and_no_counts() {
     let note = Notifier::default()
         .focus_note(FOCUS_LINE, &short, world.links(), 1)
         .expect("sent");
-    assert_eq!(text_of(&note), "Focus is over. Open Puppet Master.");
+    assert_eq!(text_of(&note), "Focus is over. Open Potato Workspace.");
 }
 
 #[test]

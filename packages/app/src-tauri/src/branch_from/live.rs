@@ -479,10 +479,10 @@ fn run_name(io: &dyn LiveIo, message: &str) -> String {
     format!("Branch: {cut}")
 }
 
-/// "Puppet Master: start from save point (after turn 5, 14:02)": one plain line, at most 120 characters.
+/// "Potato Workspace: start from save point (after turn 5, 14:02)": one plain line, at most 120 characters.
 fn commit_message(resolved: &Resolved) -> String {
     let time = brief::hhmm_of_ms(resolved.point.at_ms).map(|t| format!(", {t}")).unwrap_or_default();
-    let text = format!("Puppet Master: start from save point ({}{time})", point_text(&resolved.point.label));
+    let text = format!("Potato Workspace: start from save point ({}{time})", point_text(&resolved.point.label));
     text.chars().filter(|c| !c.is_control()).take(120).collect()
 }
 
@@ -496,7 +496,7 @@ fn save_failed(reason: &str) -> OperationError {
     tracing::warn!(reason, "a branch could not be saved");
     OperationError::new(
         ERR_BRANCH_COPY_FAILED,
-        copy_failed_text("Puppet Master couldn't save its notes"),
+        copy_failed_text("Potato Workspace couldn't save its notes"),
         true,
     )
 }

@@ -5,7 +5,7 @@ import { chatCount, chatImportClear, chatImportState, requestBringChats } from '
 import type { SettingsEnv } from '../model';
 import { Btn, SettingRow } from '../settings-ui';
 
-export const BRING_CHATS_REMOVE_BODY = "This removes the old chats Puppet Master added to search. Your agents' own chat files are not touched.";
+export const BRING_CHATS_REMOVE_BODY = "This removes the old chats Potato Workspace added to search. Your agents' own chat files are not touched.";
 
 /** "Not added" for none, otherwise "538 chats" (or "1 chat"). */
 export function bringChatsStatusText(chats: number): string {

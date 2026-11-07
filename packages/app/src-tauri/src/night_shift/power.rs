@@ -5,23 +5,23 @@
 //! - Windows: a thread that sets `ES_CONTINUOUS | ES_SYSTEM_REQUIRED` on itself and waits. The flag
 //!   lasts only as long as that thread. Drop wakes the thread, it clears the flag and exits.
 //! - macOS: `caffeinate -i -s -w <our pid>`. Drop kills that child by the pid we spawned. `-w` ends
-//!   it by itself if Puppet Master crashes.
+//!   it by itself if Potato Workspace crashes.
 //! - Linux: `systemd-inhibit ... sleep infinity`, killed the same way.
 //!
 //! No process is ever found or stopped by its name. The lid and the power button still sleep the
 //! computer; that is the system's own rule.
 
 use std::collections::HashMap;
-use std::process::{Child};
-#[cfg(test)]
-use std::process::{Stdio};
+use std::process::Child;
+#[cfg(any(test, not(windows)))]
+use std::process::Stdio;
 use std::sync::mpsc::{self, Sender};
 use std::thread::JoinHandle;
 
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
-#[cfg(test)]
+#[cfg(any(test, not(windows)))]
 use crate::proc_util::hidden_command;
 
 /// The keep-awake hold. Dropping it releases the computer.
@@ -126,7 +126,7 @@ pub fn command_for(os: &str, pid: u32, reason: &str) -> Option<Vec<String>> {
         "linux" => Some(vec![
             "systemd-inhibit".into(),
             "--what=idle:sleep".into(),
-            "--who=Puppet Master".into(),
+            "--who=Potato Workspace".into(),
             format!("--why={reason}"),
             "--mode=block".into(),
             "sleep".into(),
@@ -208,7 +208,7 @@ mod tests {
             Some(vec![
                 "systemd-inhibit".into(),
                 "--what=idle:sleep".into(),
-                "--who=Puppet Master".into(),
+                "--who=Potato Workspace".into(),
                 "--why=Night Shift".into(),
                 "--mode=block".into(),
                 "sleep".into(),

@@ -1,5 +1,5 @@
 // A companion's home must be a folder of its own: its brief is read by every agent working below it. The app refuses the
-// Desktop, Documents, Downloads, the user home, the top of a drive and the Puppet Master folder, with COMPANION_FOLDER_BROAD.
+// Desktop, Documents, Downloads, the user home, the top of a drive and the Potato Workspace folder, with COMPANION_FOLDER_BROAD.
 import fs from 'node:fs';
 import path from 'node:path';
 import { noCompanions, invoke, draft, companionList, guarded } from './_area.mjs';
@@ -20,7 +20,7 @@ export const run = guarded(async (t) => {
     'the Desktop': path.join(home, 'Desktop'),
     'Documents': path.join(home, 'Documents'),
     'Downloads': path.join(home, 'Downloads'),
-    'the Puppet Master folder': path.join(home, 'PuppetMaster', 'companions'),
+    'the Potato Workspace folder': path.join(home, 'PotatoWorkspace', 'companions'),
     'the top of a drive': path.parse(home).root,
   };
   for (const dir of Object.values(broad)) if (dir !== path.parse(home).root) fs.mkdirSync(dir, { recursive: true });
@@ -38,6 +38,6 @@ export const run = guarded(async (t) => {
   for (const dir of Object.values(broad)) {
     if (dir === path.parse(home).root) continue;
     t.expect.ok(!fs.existsSync(path.join(dir, 'SOUL.md')), `no SOUL.md in ${path.basename(dir)}`);
-    t.expect.ok(!fs.existsSync(path.join(dir, '.puppet-master')), `no marker in ${path.basename(dir)}`);
+    t.expect.ok(!fs.existsSync(path.join(dir, '.potato-workspace')), `no marker in ${path.basename(dir)}`);
   }
 });

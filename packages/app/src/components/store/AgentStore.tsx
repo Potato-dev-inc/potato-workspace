@@ -45,7 +45,7 @@ export function AgentStore({ api = agentStoreApi, onOpenAgent, onBack, revision 
       <header className="ck-store-head">
         <div>
           <h1 className="ck-title">Agent Store</h1>
-          <p className="ck-sub">Agents you can add to Puppet Master. Each card says how well we have tested it.</p>
+          <p className="ck-sub">Agents you can add to Potato Workspace. Each card says how well we have tested it.</p>
         </div>
         <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={onBack}>
           Back

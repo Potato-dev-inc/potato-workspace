@@ -1,5 +1,5 @@
 // The Tests chip of a task (SPEC n32 3.10): the commands that prove the work, each one a single editable line with
-// Remove. Puppet Master's suggestions are shown with Use and are never used until the person presses Use. Every save
+// Remove. Potato Workspace's suggestions are shown with Use and are never used until the person presses Use. Every save
 // goes through `night_checks_set`, and the popover reads the project's checks again after it.
 import { useState } from 'react';
 import {
@@ -18,7 +18,7 @@ export function commandText(argv: string[]): string {
 }
 
 const RELATIVE_NOTE =
-  "This runs a script inside the project. If an agent edits it, Puppet Master can't tell.";
+  "This runs a script inside the project. If an agent edits it, Potato Workspace can't tell.";
 
 export function TestsPopover({
   project,

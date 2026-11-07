@@ -64,7 +64,7 @@ pub fn start_pwa_server(
     }
 
     let join = thread::Builder::new()
-        .name("puppet-master-pwa-server".into())
+        .name("potato-workspace-pwa-server".into())
         .spawn(move || {
             for stream in listener.incoming() {
                 match stream {
@@ -259,7 +259,7 @@ fn is_websocket_upgrade(headers_raw: &str) -> bool {
 
 /// Header the bridge reads as "this request came through the PWA proxy, so it is a remote caller":
 /// it then demands a paired-device bearer token (`mobile_pairing::requires_pairing_token`).
-const PROXY_MARKER: &str = "X-PM-Proxied";
+const PROXY_MARKER: &str = "X-Potato-Workspace-Proxied";
 
 /// True for a request-head line that names `name` (case-insensitive, and tolerant of leading
 /// whitespace the way the bridge's own header lookup is, so an obs-fold trick cannot slip one by).
@@ -276,7 +276,7 @@ fn push_proxy_marker(request: &mut String) {
 }
 
 /// Pass a WebSocket upgrade through: the request head goes upstream as the client sent it
-/// (Connection/Upgrade/Sec-WebSocket-* included) except that any client `X-PM-Proxied` is dropped
+/// (Connection/Upgrade/Sec-WebSocket-* included) except that any client `X-Potato-Workspace-Proxied` is dropped
 /// and ours is added, then bytes are copied both ways until either side closes.
 fn proxy_upgrade(
     stream: &mut TcpStream,
@@ -396,7 +396,7 @@ fn connect_bridge(
             let port = bridge_addr.rsplit(':').next().unwrap_or("?");
             let body = serde_json::json!({
                 "code": "BRIDGE_UNREACHABLE",
-                "message": format!("The Puppet Master app's bridge is not running on port {port}."),
+                "message": format!("The Potato Workspace app's bridge is not running on port {port}."),
             });
             write_json(stream, 502, &body)?;
             Ok(None)

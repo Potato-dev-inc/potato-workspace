@@ -75,7 +75,7 @@ pub(crate) fn press_once(io: &mut dyn GateIo, profile: &dyn TuiProfile) -> Press
     let before = verdict.screen().to_string();
     let Some(permit) = verdict.gate_permit() else { return Press::Person(gate) };
     match io.write(&permit) {
-        // Audit: Puppet Master pressed keys on the person's behalf. Only after the write
+        // Audit: Potato Workspace pressed keys on the person's behalf. Only after the write
         // succeeded, the way delivery does it (`agent_runs/delivery.rs`): a refused or stale
         // write pressed nothing.
         Ok(()) => crate::audit::note_gate_dismissal(gate.id, gate.summary, permit.keys()),

@@ -1,4 +1,4 @@
-//! Snapshots on disk: one JSON file per snapshot under `<project>/.puppet-master/tamper/`.
+//! Snapshots on disk: one JSON file per snapshot under `<project>/.potato-workspace/tamper/`.
 //!
 //! The checkpoints shadow repository is keyed by pane and pruned as turns go by, and its git needs
 //! the shadow repo to exist. A tamper snapshot has to outlive both and carry its own bytes, so it
@@ -40,7 +40,7 @@ pub fn valid_id(id: &str) -> bool {
 }
 
 pub fn dir(root: &Path) -> PathBuf {
-    root.join(".puppet-master").join("tamper")
+    root.join(".potato-workspace").join("tamper")
 }
 
 fn file(root: &Path, id: &str) -> Result<PathBuf, TamperError> {

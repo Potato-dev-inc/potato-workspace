@@ -37,7 +37,7 @@ export function toggleView(state: ToggleState): ToggleView {
       return {
         checked: false,
         disabled: true,
-        hint: 'On iPhone, add Puppet Master to your Home Screen first (Share, then Add to Home Screen), then open it from there.',
+        hint: 'On iPhone, add Potato Workspace to your Home Screen first (Share, then Add to Home Screen), then open it from there.',
       };
     case 'blocked':
       return { checked: false, disabled: true, hint: 'Notifications are blocked for this app. Allow them in your phone settings.' };

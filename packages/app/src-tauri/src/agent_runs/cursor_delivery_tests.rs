@@ -275,7 +275,7 @@ fn a_turn_whose_delivery_was_verified_never_gets_a_blind_second_enter() {
     // Live (2026-10-04): three visible-Cursor turns showed "Composing 36-41 tokens" and then went
     // idle with no reply painted. The supervisor re-pressed Enter after 3s of idle ticks with no
     // busy tick; for a pane whose delivery protocol already verified submit that Enter lands on
-    // an empty composer while the turn is starting, the only input Puppet Master could have sent
+    // an empty composer while the turn is starting, the only input Potato Workspace could have sent
     // mid-turn. Redelivery (clear, retype, verify) stays as the recovery.
     let mut watch = TuiTurnWatch::from_baseline(after_first_turn())
         .with_task(SECOND)

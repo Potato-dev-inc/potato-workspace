@@ -94,6 +94,12 @@
   background: transparent;
 }
 
+/* A file in a message. The text under it is the safety line; there is no Open button, ever. */
+.cockpit .ck-spaces-file { margin-top: 4px; padding: 6px 8px; border: 1px solid var(--sep); border-radius: 6px; max-width: 360px; }
+.cockpit .ck-spaces-file-name { margin: 0 0 4px; font-weight: 600; }
+.cockpit .ck-spaces-attach { align-self: flex-start; }
+.cockpit .ck-spaces-check { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+
 /* Spaces page layout, rail, channels, feed, people. Same tokens as the rest of the cockpit. */
 .cockpit .ck-spaces-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); height: 100%; color: var(--label); }
 .cockpit .ck-spaces-rail { border-right: 1px solid var(--sep); display: flex; flex-direction: column; overflow: auto; }

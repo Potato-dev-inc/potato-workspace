@@ -1,6 +1,6 @@
 // "Branch from here": the sheet a chat turn's Branch button or a History row opens. It shows the save point, lets the
 // person pick Before or After this turn (chat only), pick an agent and say what it should do. Nothing is written
-// until Start: then Puppet Master makes a separate copy from the save point and starts the agent in it
+// until Start: then Potato Workspace makes a separate copy from the save point and starts the agent in it
 // (src/lib/branch-from.ts). Only the agents the server marks ok can be picked; the others say why not.
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
@@ -259,7 +259,7 @@ export function BranchSheet({
         </div>
       )}
       <p className="ck-sub ck-branch-copy">
-        Puppet Master makes a separate copy of your files from this save point. Your folder and this chat stay as they are. Not in the copy:
+        Potato Workspace makes a separate copy of your files from this save point. Your folder and this chat stay as they are. Not in the copy:
         files Git ignores (like node_modules) and files over 20 MB.
       </p>
       {loadError && (

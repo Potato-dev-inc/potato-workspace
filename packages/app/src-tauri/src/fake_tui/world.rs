@@ -248,7 +248,7 @@ impl Session {
         self.agents_as(None, method, path, body)
     }
 
-    /// The same as an MCP connection: `session` is the id its `X-Puppet-Master-Session` header carries,
+    /// The same as an MCP connection: `session` is the id its `X-Potato-Workspace-Session` header carries,
     /// so the run's pane belongs to that connection.
     pub fn agents_as(&self, session: Option<&str>, method: &str, path: &str, body: Value) -> Result<Value, Value> {
         let segments: Vec<&str> = path.trim_matches('/').split('/').collect();

@@ -1,5 +1,5 @@
-//! "Add Puppet Master to your agents": installs the skill pack (`integrations/skills`) and Puppet
-//! Master's own MCP entry into each detected agent, with a preview, an apply and an undo.
+//! "Add Potato Workspace to your agents": installs the skill pack (`integrations/skills`) and Potato
+//! Workspace's own MCP entry into each detected agent, with a preview, an apply and an undo.
 //!
 //! - `assets`   the pack files, embedded at build time (the same bytes the plugins ship)
 //! - `host`     `SkillsHostTable`: where an agent reads skills, declared by the agent's profile
@@ -24,4 +24,4 @@ mod tests;
 pub use host::{skills_host_from_toml, SkillsHostTable};
 
 /// Marker line every pack file carries, so an update can tell "ours" from a file the user wrote.
-pub const MARKER_PREFIX: &str = "puppet-master-pack:";
+pub const MARKER_PREFIX: &str = "potato-workspace-pack:";

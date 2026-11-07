@@ -57,7 +57,7 @@ export function TelegramPairing({
         {pairing ? (
           <Note role="status">This code ran out. Codes last 10 minutes and work once.</Note>
         ) : (
-          <Note>Puppet Master makes a code that works once, for 10 minutes.</Note>
+          <Note>Potato Workspace makes a code that works once, for 10 minutes.</Note>
         )}
         <div>
           <Btn primary small disabled={busy || !status.tokenSet} onClick={onMakeCode}>

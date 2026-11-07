@@ -1,6 +1,6 @@
-// Settings > Agents > Agent versions: is each agent a version Puppet Master has been tested with, did
+// Settings > Agents > Agent versions: is each agent a version Potato Workspace has been tested with, did
 // its start-up screens still read fine the last time they were checked, and which screens did
-// Puppet Master fail to recognise. Backed by the `canary_*` commands (src-tauri/src/canary).
+// Potato Workspace fail to recognise. Backed by the `canary_*` commands (src-tauri/src/canary).
 //
 // Copy follows UX-PHASE1 §0: "Untested version" is the only chip, no code names or raw ids.
 import { useCallback, useState } from 'react';
@@ -38,7 +38,7 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now() }: 
     <>
       <SettingBlock
         label="Agent versions"
-        description="Agents update often, and an update can change what Puppet Master sees on screen. Checking starts the agent in an empty folder, waits for its input box, then closes it. Nothing is sent to it, so it costs no tokens."
+        description="Agents update often, and an update can change what Potato Workspace sees on screen. Checking starts the agent in an empty folder, waits for its input box, then closes it. Nothing is sent to it, so it costs no tokens."
       >
         <ul className="st-ver-list" aria-label="Agent versions" data-testid="agent-versions">
           {installed.map((agent) => {
@@ -91,7 +91,7 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now() }: 
         label="Screens I didn't recognise"
         description={
           status.captures === 0
-            ? 'When an agent stays on a screen Puppet Master cannot read, the screen is saved here with secrets removed. Nothing has been saved yet.'
+            ? 'When an agent stays on a screen Potato Workspace cannot read, the screen is saved here with secrets removed. Nothing has been saved yet.'
             : `${status.captures} ${status.captures === 1 ? 'screen' : 'screens'} saved on this computer, with secrets removed. Nothing is sent anywhere.`
         }
       >

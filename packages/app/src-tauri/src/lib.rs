@@ -50,6 +50,7 @@ mod companion;
 mod crews;
 mod opencode;
 pub mod operations;
+pub mod wait_reasons;
 #[cfg(test)]
 mod operations_contract_tests;
 mod pane_activity;
@@ -163,7 +164,7 @@ pub fn run() {
         .with_writer(flight::applog::Tee)
         .init();
 
-    // `PUPPET_MASTER_PROFILE=<name>`: a separate app (own identifier, so its own settings store,
+    // `POTATO_WORKSPACE_PROFILE=<name>`: a separate app (own identifier, so its own settings store,
     // webview data and single-instance lock). The default profile keeps the configured identifier.
     let mut context = tauri::generate_context!();
     if app_paths::profile().is_some() {
@@ -221,6 +222,11 @@ pub fn run() {
             spaces::commands::space_block,
             spaces::commands::space_react,
             spaces::commands::space_delete,
+            spaces::commands::space_file_offer,
+            spaces::commands::space_file_get,
+            spaces::commands::space_file_save,
+            spaces::commands::space_presence,
+            spaces::commands::space_show_online,
             commands::session_chat_open,
             commands::session_chat_close,
             commands::chat_search,
@@ -275,6 +281,7 @@ pub fn run() {
             commands::pane_message_send,
             commands::pane_message_cancel,
             commands::pane_messages_list,
+            commands::attachments::attachment_prepare,
             commands::point_open_preview,
             commands::point_state,
             commands::point_arm,
@@ -714,6 +721,9 @@ pub fn run() {
         ])
         .setup(|app| {
             commands::startup_probe(app.handle().clone());
+            // Copy (never move) the other product's old home data once, so existing companions and
+            // settings still show up while its own folders stay untouched.
+            app_paths::migrate_legacy_home_data();
             // First, so a panic anywhere below leaves a file behind (the console and the in-memory
             // log tail die with the process).
             crash::install(app_paths::app_data_dir());
@@ -872,7 +882,7 @@ pub fn run() {
             }
             // A normal start opens the primary window (same as a tray click: always the cockpit, in
             // either UI mode; Individual mode still puts Settings in its own window). A sign-in start,
-            // a worker host and a headless start (`--no-window` / `PUPPET_MASTER_NO_WINDOW`) leave only
+            // a worker host and a headless start (`--no-window` / `POTATO_WORKSPACE_NO_WINDOW`) leave only
             // the tray.
             let args = std::env::args().collect::<Vec<_>>();
             let no_window_env = std::env::var(cockpit::NO_WINDOW_ENV).ok();

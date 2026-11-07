@@ -148,7 +148,7 @@ export function ToolbeltGroup({ api = toolbeltApi, projectPath }: { api?: Toolbe
         <div className="min-w-0">
           <h3 className="text-sm font-semibold">Toolbelt</h3>
           <p className="mt-1 max-w-xl text-sm leading-6 text-pm-muted">
-            Add an MCP server once. Puppet Master writes it into every agent&apos;s own config, so each agent can use it.
+            Add an MCP server once. Potato Workspace writes it into every agent&apos;s own config, so each agent can use it.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -166,7 +166,7 @@ export function ToolbeltGroup({ api = toolbeltApi, projectPath }: { api?: Toolbe
 
       <p className="mt-3 text-xs leading-5 text-pm-muted">
         Keys, tokens and passwords are kept in your system's secure storage and hidden here. Each agent&apos;s config file needs the real
-        value, so Puppet Master writes it there as plain text.
+        value, so Potato Workspace writes it there as plain text.
       </p>
 
       {error && (

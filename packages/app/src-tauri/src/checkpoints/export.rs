@@ -1,8 +1,8 @@
 //! Write one save point's files into another folder (the copy made by "Branch from here").
 //!
 //! The source folder is only read. Its shadow repository gets no new refs, its per-pane index is
-//! not touched and no safety snapshot is taken. The target must be a Puppet Master copy folder of
-//! the source's origin project (`<origin>/.puppet-master/worktrees/<name>`, or the project's own
+//! not touched and no safety snapshot is taken. The target must be a Potato Workspace copy folder of
+//! the source's origin project (`<origin>/.potato-workspace/worktrees/<name>`, or the project's own
 //! sub-folder inside such a copy); files are written and removed only inside it.
 
 use std::path::{Path, PathBuf};
@@ -28,7 +28,7 @@ pub struct ExportReport {
 /// `project` is the folder whose save points are read: the original folder, or a copy the pane works
 /// in (a branch of a branch). Copies are always made under the ORIGIN project's worktrees folder, so
 /// `dest` must be a copy folder of that origin once links are resolved:
-/// `<origin>/.puppet-master/worktrees/<name>`, or a sub-folder of it when the origin is a sub-folder
+/// `<origin>/.potato-workspace/worktrees/<name>`, or a sub-folder of it when the origin is a sub-folder
 /// of a git repo (the copy's own `cwd`; the copy folder then holds a `.git`). Refused before a file is
 /// touched: the source folder, a folder above it, the copy the source lives in, the origin, a folder
 /// anywhere else and a link to any of them. Paths that would go through a link inside the copy are
@@ -90,13 +90,13 @@ pub fn export_into(project: &Path, pane: &str, id: &str, dest: &Path, limits: &L
 }
 
 /// Split `canon_project` (canonical) into its origin project and the copy folder it lives in.
-/// A copy folder (or a folder inside one) is `<origin>/.puppet-master/worktrees/<name>[/...]`; any
+/// A copy folder (or a folder inside one) is `<origin>/.potato-workspace/worktrees/<name>[/...]`; any
 /// other folder is its own origin and lives in no copy.
 fn origin_of(canon_project: &Path) -> (PathBuf, Option<PathBuf>) {
     let parts: Vec<_> = canon_project.components().collect();
     for i in 0..parts.len().saturating_sub(2) {
         let is = |at: usize, name: &str| parts[at].as_os_str().to_string_lossy().eq_ignore_ascii_case(name);
-        if is(i, ".puppet-master") && is(i + 1, "worktrees") {
+        if is(i, ".potato-workspace") && is(i + 1, "worktrees") {
             let origin: PathBuf = parts[..i].iter().collect();
             let copy: PathBuf = parts[..=i + 2].iter().collect();
             return (origin, Some(copy));
@@ -106,7 +106,7 @@ fn origin_of(canon_project: &Path) -> (PathBuf, Option<PathBuf>) {
 }
 
 /// Resolve `dest` and check it is a copy folder of the origin of `project`: a direct child of
-/// `<origin>/.puppet-master/worktrees`, or a folder inside such a child that holds a `.git` (a copy's
+/// `<origin>/.potato-workspace/worktrees`, or a folder inside such a child that holds a `.git` (a copy's
 /// prefixed `cwd`), with links resolved. Never the source, a folder above it, or the copy the source
 /// works in. Anything else is refused.
 fn copy_folder(project: &Path, dest: &Path) -> Result<PathBuf, CheckpointError> {
@@ -115,7 +115,7 @@ fn copy_folder(project: &Path, dest: &Path) -> Result<PathBuf, CheckpointError> 
     let (origin, source_copy) = origin_of(&canon_project);
     let canon_origin = std::fs::canonicalize(&origin).map_err(|_| refused())?;
     let worktrees =
-        std::fs::canonicalize(canon_origin.join(".puppet-master").join("worktrees")).map_err(|_| refused())?;
+        std::fs::canonicalize(canon_origin.join(".potato-workspace").join("worktrees")).map_err(|_| refused())?;
     let canon_dest = std::fs::canonicalize(dest).map_err(|_| refused())?;
     if !worktrees.starts_with(&canon_origin) {
         return Err(refused());

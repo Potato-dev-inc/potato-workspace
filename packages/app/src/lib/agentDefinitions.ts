@@ -381,7 +381,7 @@ export function argvDiff(approved: string[], current: string[]): DiffLine[] {
 
 /** Warnings shown before approving (APR-3, P5-4): the fixed notice plus the backend's flags. */
 export function approvalWarnings(row: DefinitionRow, preview: DefinitionPreview | null): string[] {
-  const warnings = ['Approving lets Puppet Master run this program with your permissions.'];
+  const warnings = ['Approving lets Potato Workspace run this program with your permissions.'];
   for (const warning of preview?.warnings ?? []) warnings.push(warning);
   if (row.binary_changed || preview?.binary_changed) {
     warnings.push('The program now resolves to a different file than the one you approved. Approve again only if you expect that.');

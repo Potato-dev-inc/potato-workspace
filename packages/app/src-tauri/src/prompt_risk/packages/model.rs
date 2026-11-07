@@ -356,7 +356,7 @@ mod tests {
             spec: None,
             lookalike: None,
             lookup: false,
-            first: "Not checked: Puppet Master can't look up winget packages yet".into(),
+            first: "Not checked: Potato Workspace can't look up winget packages yet".into(),
             look: false,
             ecosystem: Ecosystem::Winget,
             tool: "winget".into(),

@@ -1,7 +1,7 @@
 //! Making a pairing code, and writing it down once.
 //!
 //! A pairing code is made from two places: Settings > Phone (`create_mobile_pairing_session`) and a
-//! program on this computer (`POST /pair/invite`, used by `puppet-master pair-link`). There is one
+//! program on this computer (`POST /pair/invite`, used by `potato-workspace pair-link`). There is one
 //! pending code at a time, so a new one replaces the one a person may still be showing as a QR code.
 //! Both places go through [`mint`], which makes the code and records exactly one line in the app's
 //! log, saying so when it replaced a code that was still good.

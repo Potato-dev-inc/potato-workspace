@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getDefaultTerminalAgentType, type AgentType } from '@puppet-master/shared';
+import { getDefaultTerminalAgentType, type AgentType } from '@potato-workspace/shared';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { usePaneRegistry } from './hooks/usePaneRegistry';
 import {
@@ -76,7 +76,7 @@ async function launchDetachedWorker(
 }
 
 /**
- * Hidden host for `puppet-master worker`: spawns a pane and pops it out with the
+ * Hidden host for `potato-workspace worker`: spawns a pane and pops it out with the
  * same detached TerminalApp window used by the main grid's ↗ control.
  */
 export default function WorkerHostBootstrap() {
@@ -121,7 +121,7 @@ export default function WorkerHostBootstrap() {
         const config = await tauri.getWorkerLaunch();
         if (cancelled) return;
         if (!config) {
-          setError('Worker host requires puppet-master worker launch flags or env.');
+          setError('Worker host requires potato-workspace worker launch flags or env.');
           return;
         }
         await launchDetachedWorker(config, spawnPaneRef.current, defaultAgent);

@@ -1,4 +1,4 @@
-import { parsePairingInvitePath } from '@puppet-master/shared';
+import { parsePairingInvitePath } from '@potato-workspace/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LS_BRIDGE_URL } from '../lib/bridge-url';
 import { pairFromInviteCode } from '../lib/mobile-pairing';
@@ -65,7 +65,7 @@ export function PairInviteScreen({ pairingCode, onConnected, onGiveUp }: Props) 
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-6 gap-4 text-sm text-center">
-      <img src="/app-icon.svg" alt="Puppet Master" className="w-16 h-16 rounded-xl" />
+      <img src="/app-icon.svg" alt="Potato Workspace" className="w-16 h-16 rounded-xl" />
       <h1 className="text-lg font-semibold">Pairing with desktop</h1>
       {busy ? (
         <>

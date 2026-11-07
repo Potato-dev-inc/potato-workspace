@@ -46,7 +46,7 @@ pub struct AgentHealth {
     pub login_hint: Option<String>,
     /// A deep check is possible (headless, read-only capable, installed).
     pub can_test: bool,
-    /// Hook Lane: whether this agent reports to Puppet Master directly, in one plain sentence.
+    /// Hook Lane: whether this agent reports to Potato Workspace directly, in one plain sentence.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hooks: Option<crate::agent_hooks::health::HookHealth>,
 }
@@ -341,7 +341,7 @@ pub fn test_agent(
             "This agent cannot be tested automatically. Open it and say hello instead.".into();
         return health;
     }
-    let dir = std::env::temp_dir().join("puppet-master-doctor");
+    let dir = std::env::temp_dir().join("potato-workspace-doctor");
     let _ = std::fs::create_dir_all(&dir);
     let request = crate::agent_runs::quick::QuickAskRequest {
         task: TEST_PROMPT.into(),
@@ -366,7 +366,7 @@ fn unknown_agent(id: &str) -> AgentHealth {
         state: HealthState::Error,
         installed: false,
         version: None,
-        reason: "Puppet Master does not know this agent.".into(),
+        reason: "Potato Workspace does not know this agent.".into(),
         install_hint: None,
         install_fallback: None,
         login_hint: None,

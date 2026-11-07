@@ -226,7 +226,7 @@ if (!plan.sharedChanged && plan.otherAppFiles.length) {
 if (needTsc) {
   steps.push({ label: 'js    tsc app + service worker', kind: 'tsc' });
 }
-if (plan.cliChanged) steps.push({ label: 'js    cli tests', kind: 'root', cmd: npm, args: ['test', '--workspace=@puppet-master/cli'] });
+if (plan.cliChanged) steps.push({ label: 'js    cli tests', kind: 'root', cmd: npm, args: ['test', '--workspace=@potato-workspace/cli'] });
 
 console.log(`changed: ${plan.rustModules.size} Rust module(s), ${plan.tsFiles.length} TS file(s), ${plan.otherAppFiles.length} other app file(s)${plan.sharedChanged ? ', shared/tooling' : ''}`);
 for (const n of plan.notes) console.log(`  note: ${n}`);

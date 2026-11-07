@@ -1,6 +1,6 @@
 //! Recipes: "plug a model service into an app", as TOML data (`recipes/*.toml`). A recipe names the app's settings
 //! file and the tables to write. This generic writer then: shows a preview, BACKS UP the file, adds only
-//! Puppet Master's own table(s) with a TOML-preserving editor (every other byte stays), and can undo.
+//! Potato Workspace's own table(s) with a TOML-preserving editor (every other byte stays), and can undo.
 //!
 //! No key is ever written here. The settings file gets the NAME of the variable that holds the key.
 
@@ -190,7 +190,7 @@ fn quote(v: &str) -> String {
     toml_edit::value(v).to_string().trim().to_string()
 }
 
-/// A line to copy for an app Puppet Master did not start. It never holds the key.
+/// A line to copy for an app Potato Workspace did not start. It never holds the key.
 pub fn env_line(var: &str, windows: bool) -> String {
     if windows {
         format!("$env:{var} = \"<paste your key here>\"")
@@ -437,7 +437,7 @@ pub fn undo(state: &State, state_path: &Path) -> Result<String, String> {
             remove_child(&mut doc, t, &state.provider_id);
         }
         write_atomic(&state.config_path, doc.to_string().as_bytes())?;
-        "Removed what Puppet Master added. The file had changed since, so the rest was left alone.".to_string()
+        "Removed what Potato Workspace added. The file had changed since, so the rest was left alone.".to_string()
     };
     let _ = std::fs::remove_file(state_path);
     Ok(message)

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PUPPET_MASTER_MCP_COMMAND,
-  PUPPET_MASTER_MCP_NAME,
+  POTATO_WORKSPACE_MCP_COMMAND,
+  POTATO_WORKSPACE_MCP_NAME,
   isOrchestratorMcpBackend,
 } from './mcp-config';
 
 describe('mcp-config', () => {
-  it('defines the puppet-master MCP server identity', () => {
-    expect(PUPPET_MASTER_MCP_NAME).toBe('puppet-master');
-    expect(PUPPET_MASTER_MCP_COMMAND.command).toBe('npx');
-    expect(PUPPET_MASTER_MCP_COMMAND.args).toContain('@puppet-master/mcp');
+  it('defines the potato-workspace MCP server identity', () => {
+    expect(POTATO_WORKSPACE_MCP_NAME).toBe('potato-workspace');
+    expect(POTATO_WORKSPACE_MCP_COMMAND.command).toBe('npx');
+    expect(POTATO_WORKSPACE_MCP_COMMAND.args).toContain('@potato-workspace/mcp');
   });
 
   it('only treats CLI orchestrator backends as MCP install targets', () => {

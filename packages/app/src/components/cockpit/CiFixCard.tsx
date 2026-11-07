@@ -30,7 +30,7 @@ const LINE_MAX = 300;
 /** A button label: at most this many characters. */
 const LABEL_MAX = 60;
 
-const HELD = "Puppet Master won't push this fix. Check the copy yourself.";
+const HELD = "Potato Workspace won't push this fix. Check the copy yourself.";
 
 /** "CI failed on #61 (lint, test). Ask Codex to fix it?" (Rust `ci_fix::text::card_question`). */
 const FIX_QUESTION = /^CI failed on #(\d+)(?: \(([\s\S]*)\))?\. (Ask [\s\S]*)$/;

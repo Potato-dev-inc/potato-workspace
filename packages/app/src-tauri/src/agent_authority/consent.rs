@@ -1,4 +1,4 @@
-//! The consent card: a question Puppet Master asks the person on behalf of an agent that wants to
+//! The consent card: a question Potato Workspace asks the person on behalf of an agent that wants to
 //! control a pane it did not start, or to answer a risky prompt in one.
 //!
 //! It is stored as an ordinary question (`questions::Question` with `consent` set), so the Inbox,

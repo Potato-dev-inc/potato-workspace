@@ -62,7 +62,7 @@ pub fn sweep_expired_runs(
         let stop_error = stop_worker(&current).err().map(|error| error.message);
         let mut error = OperationError::new(
             "TIMEOUT",
-            "the run passed its deadline and nothing was supervising it, so Puppet Master ended it",
+            "the run passed its deadline and nothing was supervising it, so Potato Workspace ended it",
             true,
         );
         error.context = serde_json::json!({

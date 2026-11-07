@@ -16,7 +16,7 @@ SKIP_DIRS = {
     ".git",
     ".claude",
     ".orphan-check",
-    ".puppet-master",
+    ".potato-workspace",
     "node_modules",
     "dist",
     "dev-dist",

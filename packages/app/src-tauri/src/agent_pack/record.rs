@@ -1,6 +1,6 @@
 //! What `apply` changed, kept in `<app data>/agent-pack.json`, so `undo` can put every file back.
 //!
-//! An entry is written the first time Puppet Master touches a path and keeps the ORIGINAL state
+//! An entry is written the first time Potato Workspace touches a path and keeps the ORIGINAL state
 //! (created, or backed up) across later updates of the pack, so undo always returns to what the
 //! user had before.
 
@@ -16,20 +16,20 @@ pub enum Entry {
     /// A pack file (`<skills dir>/<skill>/SKILL.md`).
     File {
         path: String,
-        /// The file did not exist before Puppet Master wrote it.
+        /// The file did not exist before Potato Workspace wrote it.
         created: bool,
-        /// Copy of the file Puppet Master replaced (when `created` is false and it was not ours).
+        /// Copy of the file Potato Workspace replaced (when `created` is false and it was not ours).
         backup: Option<String>,
         /// Directories apply created for this file, shallowest first.
         created_dirs: Vec<String>,
         /// Hash of what apply last wrote; undo leaves the file alone if it changed since.
         written_sha: String,
     },
-    /// Puppet Master's own entry in an agent's MCP config.
+    /// Potato Workspace's own entry in an agent's MCP config.
     Mcp {
         path: String,
         format: String,
-        /// Dotted key path, e.g. `mcpServers.puppet-master`.
+        /// Dotted key path, e.g. `mcpServers.potato-workspace`.
         key_path: String,
         file_created: bool,
         created_dirs: Vec<String>,

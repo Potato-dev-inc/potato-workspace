@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { GitState, RecentProject, ShipApi } from '../../lib/ship-api';
 import { tauri } from '../../lib/tauri';
@@ -31,7 +31,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const COPY_CWD = 'C:\\work\\shop\\.puppet-master\\worktrees\\7d4cb2b3-2-209c';
+const COPY_CWD = 'C:\\work\\shop\\.potato-workspace\\worktrees\\7d4cb2b3-2-209c';
 
 function fakeApi(over: Record<string, unknown> = {}, cwd = 'C:\\work\\shop') {
   const info = { id: 'p1', agent_type: 'codex', pid: 1, status: 'idle', created_at: 1, last_output_at: null, cwd, cols: 80, rows: 24, title: null } as unknown as PaneInfo;

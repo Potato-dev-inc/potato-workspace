@@ -1,5 +1,5 @@
 //! Detect-only hand-off: the patterns (with negatives), reset parsing, the state machine, the card,
-//! and the guards that keep Puppet Master's hands off the agent's pane.
+//! and the guards that keep Potato Workspace's hands off the agent's pane.
 //!
 //! Every screen here is SYNTHETIC (built from the vendor texts quoted in the design; see the `#!`
 //! headers of `tui/<agent>/fixtures/limits/*`). Nothing in this file has seen a live limit yet.
@@ -872,7 +872,7 @@ fn stop_here_ends_the_run_keeps_the_pane_and_writes_the_receipt_line() {
     assert_eq!(limit.window.as_deref(), Some("session limit"));
 }
 
-/// A run in a separate copy (`<project>/.puppet-master/worktrees/<id>`) is stored in the project the copy came
+/// A run in a separate copy (`<project>/.potato-workspace/worktrees/<id>`) is stored in the project the copy came
 /// from, so the limit must look it up there: it parks, its card offers "Stop here", and "Stop here" ends it.
 #[test]
 fn a_run_in_a_separate_copy_parks_at_its_limit_and_stop_here_ends_it() {
@@ -881,7 +881,7 @@ fn a_run_in_a_separate_copy_parks_at_its_limit_and_stop_here_ends_it() {
     let origin = env.project.clone();
     let run = running_run(&env);
     // The pane works in its copy now; the run it started above is still stored under the origin.
-    env.project = origin.join(".puppet-master").join("worktrees").join("copy-1");
+    env.project = origin.join(".potato-workspace").join("worktrees").join("copy-1");
     hit_the_limit(&env, &mut engine, &claude_screen("usage_session_window"));
 
     let parked = stored(&run);
@@ -1209,7 +1209,7 @@ fn the_same_limit_has_one_identity_whichever_line_shows_it() {
 
 #[test]
 fn claudes_armed_wait_is_detected_but_nothing_in_the_detect_path_can_cancel_it() {
-    // The armed line is how Puppet Master knows Claude will continue by itself. It is read, never
+    // The armed line is how Potato Workspace knows Claude will continue by itself. It is read, never
     // pressed: the `self_resume_armed` flag is the only thing that leaves the detector.
     let f = fixture("claude", "usage_armed_own_wait");
     let hit = profile_for("claude").detect_limit(&render(&f.text, 120), &clock_of(&f)).unwrap();

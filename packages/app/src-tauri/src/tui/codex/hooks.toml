@@ -1,11 +1,11 @@
-# Codex reports its lifecycle to Puppet Master (Hook Lane, docs/specs/hook-lane/PROBES.md).
+# Codex reports its lifecycle to Potato Workspace (Hook Lane, docs/specs/hook-lane/PROBES.md).
 # Installed as a managed entry in the project's `.codex/hooks.json`; the user trusts it once per
 # project path in Codex (`/hooks`). Probes on 0.162.1: trust covers the hook DEFINITION only (P-C1)
 # and is keyed by the file's absolute path and the entry's position (P-C2); `%VAR%` is not expanded
 # (P-C4); SessionStart fires with the first prompt, not at startup.
 #
 # EVERY BYTE of the rendered entries is pinned by `agent_hooks/tests/golden/codex-hooks.json`:
-# changing this file makes every user re-trust Puppet Master's Codex hooks.
+# changing this file makes every user re-trust Potato Workspace's Codex hooks.
 [hooks]
 schema = 1
 install = "project_file"
@@ -16,7 +16,7 @@ trust = "vendor_review"
 # Opt-in (coordinator decision 2026-10-15): the entry makes plain `codex` in the user's own terminal
 # show "Hooks need review" at every start until trusted, and each folder (worktree) asks again.
 default_mode = "off"
-opt_in_note = "Puppet Master adds a small file to .codex in each project; Codex asks you to review it once per folder."
+opt_in_note = "Potato Workspace adds a small file to .codex in each project; Codex asks you to review it once per folder."
 tested = ">=0.162.1, <=0.162.1"
 
 [hooks.project_file]
@@ -33,7 +33,7 @@ timeout = 3
 
 [hooks.trust_screen]
 pending_phrases = ["hooks need review", "continue without trusting"]
-how_to = "In a Codex pane in this project, type /hooks and trust the Puppet Master entries. Once per project."
+how_to = "In a Codex pane in this project, type /hooks and trust the Potato Workspace entries. Once per project."
 
 [[hooks.events]]
 vendor = "SessionStart"

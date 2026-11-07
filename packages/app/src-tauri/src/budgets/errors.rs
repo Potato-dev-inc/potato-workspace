@@ -20,11 +20,11 @@ pub fn run_exhausted(handle: &str, reason: Reason, standing: &Standing) -> Opera
             "The person chose Stop here for {handle}: it has reached its budget and will not get more turns. Do not send it another turn; use what it already produced."
         ),
         Reason::Turns => format!(
-            "Budget used up for {handle}: {used} of {} turns. The run is paused, not killed, and no turn was cut short. Puppet Master has put a card in the person's Inbox (Add turns / Stop here). Do not retry in a loop: tell the person you are waiting for them, or finish with what you have. Once they add turns, call followup_task again.",
+            "Budget used up for {handle}: {used} of {} turns. The run is paused, not killed, and no turn was cut short. Potato Workspace has put a card in the person's Inbox (Add turns / Stop here). Do not retry in a loop: tell the person you are waiting for them, or finish with what you have. Once they add turns, call followup_task again.",
             standing.turns_limit.unwrap_or(used)
         ),
         Reason::Time => format!(
-            "Time budget used up for {handle}: {} of {} minutes. The run is paused, not killed, and no turn was cut short. Puppet Master has put a card in the person's Inbox (Add time / Stop here). Do not retry in a loop: tell the person you are waiting for them, or finish with what you have.",
+            "Time budget used up for {handle}: {} of {} minutes. The run is paused, not killed, and no turn was cut short. Potato Workspace has put a card in the person's Inbox (Add time / Stop here). Do not retry in a loop: tell the person you are waiting for them, or finish with what you have.",
             standing.elapsed_ms / 60_000,
             standing.minutes_limit.unwrap_or(0)
         ),

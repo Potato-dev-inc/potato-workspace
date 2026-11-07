@@ -2,7 +2,7 @@
 // Routine permission prompts are auto-approved; everything else is queued as a "wake" for the orchestrator,
 // delivered once it is idle.
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
-import { isOrchestratorPaneId } from '@puppet-master/shared';
+import { isOrchestratorPaneId } from '@potato-workspace/shared';
 import type { PaneRegistryApi } from '../../hooks/usePaneRegistry';
 import { makeTauriExecutor } from '../../lib/mcp-executor';
 import { classifyPaneAttention, compactPaneText, hashPaneText, type PaneAttention } from '../../lib/pane-attention';

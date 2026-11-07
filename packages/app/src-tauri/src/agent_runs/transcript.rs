@@ -46,7 +46,7 @@ fn buffers() -> &'static Mutex<HashMap<String, Buffer>> {
 
 fn transcript_path(project: &str, operation_id: &str) -> PathBuf {
     PathBuf::from(project)
-        .join(".puppet-master")
+        .join(".potato-workspace")
         .join("operations")
         .join(format!("{operation_id}.transcript.jsonl"))
 }

@@ -608,7 +608,7 @@ mod tests {
 
         let winget = PackageItem { ecosystem: Ecosystem::Winget, tool: "winget".into(), lookup: false, ..npm("Git.Git") };
         let r = row(&winget, None, false, false, NOW);
-        assert_eq!(r.summary, "Not checked: Puppet Master can't look up winget packages yet");
+        assert_eq!(r.summary, "Not checked: Potato Workspace can't look up winget packages yet");
         assert_eq!(r.page_url, None);
     }
 
@@ -627,8 +627,8 @@ mod tests {
             (FetchError::NotAllowed, "Could not check: npm could not be reached"),
             (FetchError::Timeout, "Could not check: npm did not answer in time"),
             (FetchError::TooMany, "Could not check: too many lookups right now. Try again in a minute."),
-            (FetchError::Unreadable, "Could not check: npm sent an answer Puppet Master can't read"),
-            (FetchError::TooBig, "Could not check: npm sent an answer Puppet Master can't read"),
+            (FetchError::Unreadable, "Could not check: npm sent an answer Potato Workspace can't read"),
+            (FetchError::TooBig, "Could not check: npm sent an answer Potato Workspace can't read"),
             (FetchError::Refused, "Could not check: npm refused the request"),
         ];
         for (err, text) in cases {
@@ -722,7 +722,7 @@ mod tests {
         let v = view("p1", &list(1, 2), vec![npm_ok, npm_missing, pypi, other], false, Some(NOW), NOW);
         assert_eq!(
             v.footer,
-            "Facts from the public npm and PyPI registry. Only the package names were sent. Puppet Master never answers for you.\n1 more package was not checked\n2 names looked like a secret, so they were not shown or checked"
+            "Facts from the public npm and PyPI registry. Only the package names were sent. Potato Workspace never answers for you.\n1 more package was not checked\n2 names looked like a secret, so they were not shown or checked"
         );
         assert_eq!((v.more, v.hidden), (1, 2));
         assert_eq!(v.prompt_id, "p1");

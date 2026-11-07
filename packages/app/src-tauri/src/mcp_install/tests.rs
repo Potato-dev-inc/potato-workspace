@@ -104,7 +104,7 @@ fn npm_install_rewrites_all_backends_to_npx_package() {
 
     let codex = fs::read_to_string(cwd.join(".codex").join("config.toml")).expect("codex");
     assert!(codex.contains("command = \"npx\""));
-    assert!(codex.contains("@puppet-master/mcp"));
+    assert!(codex.contains("@potato-workspace/mcp"));
     assert!(!codex.contains("mcp-stdio.bundle.cjs"));
 
     let opencode = read_json_safe(&cwd.join("opencode.json")).expect("opencode");
@@ -125,7 +125,7 @@ fn rust_preference_writes_auto_runtime_when_available() {
     assert!(results.iter().all(|result| result.installed));
 
     let codex = fs::read_to_string(cwd.join(".codex").join("config.toml")).expect("codex");
-    assert!(codex.contains("[mcp_servers.puppet-master]"));
+    assert!(codex.contains("[mcp_servers.potato-workspace]"));
     assert!(codex.contains(crate::app_paths::BRIDGE_PORT_FILE_ENV));
 }
 
@@ -165,10 +165,10 @@ fn global_uninstall_removes_home_mcp_json() {
 #[test]
 fn claude_mcp_remove_not_found_matches_cli_errors() {
     assert!(claude_mcp_remove_not_found(
-        "No user-scoped MCP server found with name: puppet-master"
+        "No user-scoped MCP server found with name: potato-workspace"
     ));
     assert!(claude_mcp_remove_not_found(
-        "No project-local MCP server found with name: puppet-master"
+        "No project-local MCP server found with name: potato-workspace"
     ));
     assert!(!claude_mcp_remove_not_found(
         "could not run claude: No such file"
@@ -222,29 +222,29 @@ mod declarative {
 
         // JSON: other keys kept, nested key path created, args array substituted.
         fs::write(h.join("host.json"), "{\"other\": 1, \"mcpServers\": {\"a\": {\"x\": 1}}}").unwrap();
-        let t = table("~/host.json", "json", "mcpServers.puppet-master");
+        let t = table("~/host.json", "json", "mcpServers.potato-workspace");
         let r = write_host_entry(&t, &launch(), &h, p, true).expect("json");
         assert!(r.changed && r.backup.is_some());
         let doc: Value = serde_json::from_str(&fs::read_to_string(h.join("host.json")).unwrap()).unwrap();
         assert_eq!(doc["other"], 1);
         assert_eq!(doc["mcpServers"]["a"]["x"], 1);
-        assert_eq!(doc["mcpServers"]["puppet-master"]["command"], "pm-mcp");
-        assert_eq!(doc["mcpServers"]["puppet-master"]["args"], json!(["--serve", "--x"]));
-        assert_eq!(doc["mcpServers"]["puppet-master"]["enabled"], true);
+        assert_eq!(doc["mcpServers"]["potato-workspace"]["command"], "pm-mcp");
+        assert_eq!(doc["mcpServers"]["potato-workspace"]["args"], json!(["--serve", "--x"]));
+        assert_eq!(doc["mcpServers"]["potato-workspace"]["enabled"], true);
 
         // TOML: comments and other tables kept, old sub-table replaced.
         fs::write(
             h.join("host.toml"),
-            "# keep me\n[general]\nname = \"x\"\n\n[mcp_servers.puppet-master]\ncommand = \"old\"\n\n[mcp_servers.puppet-master.env]\nOLD = \"1\"\n\n[mcp_servers.other]\ncommand = \"o\"\n",
+            "# keep me\n[general]\nname = \"x\"\n\n[mcp_servers.potato-workspace]\ncommand = \"old\"\n\n[mcp_servers.potato-workspace.env]\nOLD = \"1\"\n\n[mcp_servers.other]\ncommand = \"o\"\n",
         )
         .unwrap();
-        let t = table("~/host.toml", "toml", "mcp_servers.puppet-master");
+        let t = table("~/host.toml", "toml", "mcp_servers.potato-workspace");
         let r = write_host_entry(&t, &launch(), &h, p, true).expect("toml");
         assert!(r.changed);
         let text = fs::read_to_string(h.join("host.toml")).unwrap();
         assert!(text.contains("# keep me") && text.contains("[mcp_servers.other]"), "{text}");
         let doc: toml::Table = text.parse().unwrap();
-        let pm = &doc["mcp_servers"]["puppet-master"];
+        let pm = &doc["mcp_servers"]["potato-workspace"];
         assert_eq!(pm["command"].as_str(), Some("pm-mcp"));
         assert_eq!(pm["args"].as_array().unwrap().len(), 2);
         assert!(pm["env"].get("OLD").is_none());
@@ -252,11 +252,11 @@ mod declarative {
 
         // YAML: existing parent gets the key; comments and siblings kept.
         fs::write(h.join("host.yaml"), "# top\nname: demo\nservers:\n  other:\n    a: 1\nlast: 2\n").unwrap();
-        let t = table("~/host.yaml", "yaml", "servers.puppet-master");
+        let t = table("~/host.yaml", "yaml", "servers.potato-workspace");
         let r = write_host_entry(&t, &launch(), &h, p, true).expect("yaml");
         assert!(r.changed);
         let text = fs::read_to_string(h.join("host.yaml")).unwrap();
-        assert!(text.starts_with("# top\nname: demo\nservers:\n  other:\n    a: 1\n  puppet-master: {"), "{text}");
+        assert!(text.starts_with("# top\nname: demo\nservers:\n  other:\n    a: 1\n  potato-workspace: {"), "{text}");
         assert!(text.trim_end().ends_with("last: 2"), "{text}");
         assert!(text.contains("\"command\":\"pm-mcp\""));
 
@@ -270,8 +270,8 @@ mod declarative {
     #[test]
     fn yaml_replaces_existing_entry_in_place() {
         let h = home("decl-yaml-replace");
-        fs::write(h.join("c.yml"), "servers:\n  puppet-master: {\"command\":\"old\"}\n  zed: 1\n").unwrap();
-        let t = table("~/c.yml", "yaml", "servers.puppet-master");
+        fs::write(h.join("c.yml"), "servers:\n  potato-workspace: {\"command\":\"old\"}\n  zed: 1\n").unwrap();
+        let t = table("~/c.yml", "yaml", "servers.potato-workspace");
         write_host_entry(&t, &launch(), &h, Some(h.as_path()), true).unwrap();
         let text = fs::read_to_string(h.join("c.yml")).unwrap();
         assert!(text.contains("\"command\":\"pm-mcp\"") && !text.contains("old") && text.contains("  zed: 1"), "{text}");
@@ -283,13 +283,13 @@ mod declarative {
         let outside = home("decl-outside");
         let abs = outside.join("evil.json").to_string_lossy().to_string();
         for path in [abs.as_str(), "~/../evil.json", "../evil.json"] {
-            let t = table(path, "json", "mcpServers.puppet-master");
+            let t = table(path, "json", "mcpServers.potato-workspace");
             let err = write_host_entry(&t, &launch(), &h, Some(h.as_path()), true).unwrap_err();
             assert!(err.contains("HST-3") || err.contains("outside"), "{path}: {err}");
         }
         assert!(!outside.join("evil.json").exists());
         // The project directory is allowed even when it is not under home.
-        let t = table(&abs, "json", "mcpServers.puppet-master");
+        let t = table(&abs, "json", "mcpServers.potato-workspace");
         write_host_entry(&t, &launch(), &h, Some(outside.as_path()), true).expect("project ok");
         assert!(outside.join("evil.json").is_file());
         // Unapproved definitions never write.
@@ -337,7 +337,7 @@ not_dispatchable_reason = "test"
 [mcp_host]
 config_path = "~/.fakehost/mcp.json"
 format = "json"
-key_path = "mcpServers.puppet-master"
+key_path = "mcpServers.potato-workspace"
 [mcp_host.entry]
 command = "{command}"
 args = "{args}"
@@ -352,7 +352,7 @@ args = "{args}"
     #[test]
     fn validates_mcp_host_table() {
         assert!(codes(FAKE).iter().all(|(_, p)| !p.starts_with("mcp_host")), "{:?}", codes(FAKE));
-        let bad = FAKE.replace("mcpServers.puppet-master", "bad key");
+        let bad = FAKE.replace("mcpServers.potato-workspace", "bad key");
         assert!(codes(&bad).iter().any(|(_, p)| p == "mcp_host.key_path"));
         let bad = FAKE.replace("~/.fakehost/mcp.json", "~/../x.json");
         assert!(codes(&bad).iter().any(|(_, p)| p == "mcp_host.config_path"));
@@ -378,7 +378,7 @@ not_dispatchable_reason = "test"
 [mcp_host]
 config_path = "~/.fakehost/mcp.json"
 format = "json"
-key_path = "mcpServers.puppet-master"
+key_path = "mcpServers.potato-workspace"
 project_config_path = ".fakehost/mcp.json"
 [mcp_host.entry]
 command = "{command}"

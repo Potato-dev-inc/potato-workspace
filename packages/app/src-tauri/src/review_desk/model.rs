@@ -160,7 +160,7 @@ pub struct CheckFacts {
 /// Every recorded fact the order is made from. No opinions in here.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Facts {
-    /// `None` = Puppet Master could not see the changes.
+    /// `None` = Potato Workspace could not see the changes.
     pub files: Option<Vec<FileRow>>,
     pub files_total: u32,
     pub added: u32,

@@ -8,7 +8,7 @@ import {
   setPaneTunnelPane,
   subscribePaneTunnelData,
 } from './pane-tunnel';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 
 describe('pane-tunnel', () => {
   it('makePaneTunnelTransport writes through the bridge and ignores resize', async () => {

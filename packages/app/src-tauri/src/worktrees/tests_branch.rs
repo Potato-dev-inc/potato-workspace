@@ -7,7 +7,7 @@ use super::harden::git_env;
 use super::*;
 
 #[cfg(test)]
-const MESSAGE: &str = "Puppet Master: start from save point (after turn 5, 14:02)";
+const MESSAGE: &str = "Potato Workspace: start from save point (after turn 5, 14:02)";
 
 // ------------------------------------------------------------------------------------ helpers
 
@@ -120,14 +120,14 @@ fn the_start_commit_never_takes_in_puppet_masters_own_data() {
     let (_guard, root) = repo();
     let copy = copy_of(&root, "start-data-1");
     let cwd = PathBuf::from(&copy.path);
-    write(&cwd, ".puppet-master/checkpoints/secret.txt", "private\n");
+    write(&cwd, ".potato-workspace/checkpoints/secret.txt", "private\n");
     write(&cwd, "agent.txt", "work\n");
     let empty = Dir(temp_dir("empty-hooks"));
     assert!(commit_start(&copy, MESSAGE, &git_env(&empty.0)).unwrap().is_some());
     let files = git(&cwd, &["show", "--name-only", "--format=", "HEAD"]);
     assert!(files.lines().any(|line| line == "agent.txt"), "{files}");
-    assert!(!files.contains(".puppet-master"), "{files}");
-    assert!(cwd.join(".puppet-master/checkpoints/secret.txt").is_file(), "the data stays on disk");
+    assert!(!files.contains(".potato-workspace"), "{files}");
+    assert!(cwd.join(".potato-workspace/checkpoints/secret.txt").is_file(), "the data stays on disk");
 }
 
 #[test]
@@ -137,8 +137,8 @@ fn nothing_staged_gives_none_and_leaves_head_alone() {
     let cwd = PathBuf::from(&copy.path);
     let head = git(&cwd, &["rev-parse", "HEAD"]);
     assert_eq!(commit_start(&copy, MESSAGE, &[]).unwrap(), None);
-    // Only Puppet Master's own data changed: still nothing to commit.
-    write(&cwd, ".puppet-master/notes.txt", "x\n");
+    // Only Potato Workspace's own data changed: still nothing to commit.
+    write(&cwd, ".potato-workspace/notes.txt", "x\n");
     assert_eq!(commit_start(&copy, MESSAGE, &[]).unwrap(), None);
     assert_eq!(git(&cwd, &["rev-parse", "HEAD"]), head);
 }
@@ -159,8 +159,8 @@ fn without_a_user_email_the_start_commit_still_lands_with_a_fallback_identity() 
     let global = git_run(&cwd, &["config", "--global", "--get", "user.email"]);
     let global_email = String::from_utf8_lossy(&global.stdout).trim().to_string();
     if global_email.is_empty() {
-        assert_eq!(author_email, "puppet-master@localhost");
-        assert_eq!(git(&cwd, &["log", "-1", "--format=%an"]), "Puppet Master");
+        assert_eq!(author_email, "potato-workspace@localhost");
+        assert_eq!(git(&cwd, &["log", "-1", "--format=%an"]), "Potato Workspace");
     } else {
         assert_eq!(author_email, global_email, "the global identity is kept");
     }

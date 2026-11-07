@@ -21,6 +21,6 @@ export async function run(t) {
   await t.step('Choose it: the sheet opens with its test command box');
   await t.click('Find what broke the tests');
   await t.waitFor('Test command');
-  await t.expect.text('Puppet Master runs your test command on older save points');
+  await t.expect.text('Potato Workspace runs your test command on older save points');
   await t.expect.text('None yet');
 }

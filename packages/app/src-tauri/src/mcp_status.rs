@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use crate::mcp_install::{self, EnsureMcpResult};
 
-const NPM_PACKAGE: &str = "@puppet-master/mcp";
+const NPM_PACKAGE: &str = "@potato-workspace/mcp";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -107,12 +107,12 @@ fn inspect_claude_status(cwd: &Path, source: mcp_install::McpLaunchSource) -> Mc
         config_path: crate::app_paths::path_for_host_config(&config_path),
         message: if installed {
             if uses_npm {
-                "Configured via npx @puppet-master/mcp".into()
+                "Configured via npx @potato-workspace/mcp".into()
             } else {
                 "Configured with a local/bundled MCP runtime".into()
             }
         } else {
-            "Missing .mcp.json approval or puppet-master entry".into()
+            "Missing .mcp.json approval or potato-workspace entry".into()
         },
     }
 }
@@ -131,7 +131,7 @@ fn inspect_codex_status(cwd: &Path, source: mcp_install::McpLaunchSource) -> Mcp
         config_path: crate::app_paths::path_for_host_config(&config_path),
         message: if installed {
             if uses_npm {
-                "Configured via npx @puppet-master/mcp".into()
+                "Configured via npx @potato-workspace/mcp".into()
             } else {
                 "Configured with a local/bundled MCP runtime".into()
             }
@@ -154,7 +154,7 @@ fn inspect_opencode_status(cwd: &Path, source: mcp_install::McpLaunchSource) -> 
         config_path: crate::app_paths::path_for_host_config(&config_path),
         message: if installed {
             if uses_npm {
-                "Configured via npx @puppet-master/mcp".into()
+                "Configured via npx @potato-workspace/mcp".into()
             } else {
                 "Configured with a local/bundled MCP runtime".into()
             }

@@ -286,7 +286,7 @@ class GuiTests(unittest.TestCase):
              "status": "idle", "cwd": "C:/one"},
             {"id": "bbbb2222-2222-2222-2222-222222222222", "agent_type": "powershell",
              "status": "waiting_input", "cwd": "C:/two"},
-            {"id": "puppet-master-orchestrator-1", "agent_type": "codex",
+            {"id": "potato-workspace-orchestrator-1", "agent_type": "codex",
              "status": "idle", "cwd": "C:/orch"},
         ]
         self.window._on_result(1, "list_panes", {

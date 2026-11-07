@@ -69,7 +69,7 @@ const closeRefusals = new Map();
 /**
  * Forget what an earlier test left in the app's own stores. They live in the app's data folder and in its memory, not in
  * the page, so reloading the cockpit does not clear them: a Night Shift run and its history (the sidebar chip, the
- * Inbox card), a Focus summary, the cards agents or Puppet Master raised (a usage limit, a spent budget). Each step is
+ * Inbox card), a Focus summary, the cards agents or Potato Workspace raised (a usage limit, a spent budget). Each step is
  * best effort and safe to repeat.
  */
 async function clearLeftovers(app, conn) {
@@ -128,7 +128,7 @@ export async function resetApp(app, conn, test, baseline = []) {
   const base = target ? target.url.split('?')[0] : 'http://tauri.localhost/index.html';
   await conn.evalJs('try{localStorage.clear();sessionStorage.clear()}catch(e){}').catch(() => {});
   await conn.send('Page.navigate', { url: base + '?cockpit=1' });
-  await waitUntil(async () => (await conn.evalJs('document.readyState === "complete" && document.body && document.body.innerText.includes("Puppet Master")').catch(() => false)), 20000, 'the cockpit to load');
+  await waitUntil(async () => (await conn.evalJs('document.readyState === "complete" && document.body && document.body.innerText.includes("Potato Workspace")').catch(() => false)), 20000, 'the cockpit to load');
   await sleep(400);
 }
 

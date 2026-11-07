@@ -39,7 +39,7 @@ pub struct Draft {
     pub repo: String,
     pub created_at_ms: u64,
     /// Set when an agent drafted it through the MCP tool `team_notify` (the label it gave, or
-    /// "An agent"). `None`: Puppet Master saw my own push. Either way only my click sends it.
+    /// "An agent"). `None`: Potato Workspace saw my own push. Either way only my click sends it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drafted_by: Option<String>,
 }

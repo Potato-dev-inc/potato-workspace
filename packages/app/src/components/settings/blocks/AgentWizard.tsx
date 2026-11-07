@@ -540,7 +540,7 @@ export function AgentWizard({
       >
         <h3 className="text-sm font-semibold">Add an agent with the wizard</h3>
         <p className="mt-1 text-xs text-pm-muted">
-          Type the command you use to start the agent. Puppet Master runs it in a pane and watches how it looks, writes a
+          Type the command you use to start the agent. Potato Workspace runs it in a pane and watches how it looks, writes a
           profile, tests it on the real program and hands it to you to approve. Everything runs in an isolated temporary
           folder, never in your project.
         </p>
@@ -1190,7 +1190,7 @@ function Review({
     <div className="mt-4" data-testid="wizard-review">
       <p className="text-sm font-semibold">Ready for your approval</p>
       <div className="mt-2">
-        <div className="text-xs font-medium text-pm-muted">The command Puppet Master will run</div>
+        <div className="text-xs font-medium text-pm-muted">The command Potato Workspace will run</div>
         <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-pm-bg p-2 text-xs">{line}</pre>
       </div>
       <div className="mt-3">
@@ -1203,7 +1203,7 @@ function Review({
             <AnsweredList items={answeredForYou} command={found.start.command} heading="Answered for you" />
             {writesWithoutAsking && (
               <p data-testid="review-writes-without-asking" className="mt-1 text-pm-muted">
-                This agent writes files without asking first. Puppet Master saw it create a file with no question.
+                This agent writes files without asking first. Potato Workspace saw it create a file with no question.
               </p>
             )}
             <ul className="mt-1 space-y-1">
@@ -1281,7 +1281,7 @@ function Review({
         <div data-testid="one-task-offer" className="mt-3 rounded-lg border border-pm-border p-3 text-xs">
           <p className="font-semibold">Also add a one-task mode (optional)</p>
           <p className="mt-1 text-pm-muted">
-            {found.start.command} can also run one task and print the answer. With it, Puppet Master can run it without a pane.
+            {found.start.command} can also run one task and print the answer. With it, Potato Workspace can run it without a pane.
             This writes the extra part and tests it, and runs the visible test again on the new file (about two more small
             messages). The visible part you have now is kept if it does not work out.
           </p>

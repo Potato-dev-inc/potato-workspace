@@ -3,9 +3,9 @@
 //! Everything works on raw bytes so that content outside the managed block
 //! (user text, BOM, line endings) is preserved exactly.
 
-pub const START: &str = "<!-- puppet-master:memory:start -->";
-pub const END: &str = "<!-- puppet-master:memory:end -->";
-pub const NOTE: &str = "<!-- Managed by Puppet Master from .puppet-master/memory.md. Edits inside this block are overwritten. -->";
+pub const START: &str = "<!-- potato-workspace:memory:start -->";
+pub const END: &str = "<!-- potato-workspace:memory:end -->";
+pub const NOTE: &str = "<!-- Managed by Potato Workspace from .potato-workspace/memory.md. Edits inside this block are overwritten. -->";
 
 const BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 const CRLF: &[u8] = b"\r\n";

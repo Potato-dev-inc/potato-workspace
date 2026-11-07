@@ -24,7 +24,7 @@ pub(super) fn opencode_entry_uses_npm_package(entry: &Value) -> bool {
             command
                 .iter()
                 .filter_map(Value::as_str)
-                .eq(["npx", "-y", "@puppet-master/mcp"])
+                .eq(["npx", "-y", "@potato-workspace/mcp"])
         })
 }
 
@@ -56,7 +56,7 @@ pub(super) fn opencode_mcp_needs_refresh_path(path: &Path, source: McpLaunchSour
     }
     if source == McpLaunchSource::NpmPackage {
         return entry
-            .pointer("/environment/PUPPET_MASTER_BRIDGE_PORT_FILE")
+            .pointer("/environment/POTATO_WORKSPACE_BRIDGE_PORT_FILE")
             .is_none();
     }
     if entry
@@ -68,7 +68,7 @@ pub(super) fn opencode_mcp_needs_refresh_path(path: &Path, source: McpLaunchSour
                     arg.contains("//?/")
                         || arg.contains(r"\\?\")
                         || (crate::mcp_runtime::using_bundled_mcp()
-                            && arg.contains("@puppet-master/mcp"))
+                            && arg.contains("@potato-workspace/mcp"))
                 })
             })
         })
@@ -76,7 +76,7 @@ pub(super) fn opencode_mcp_needs_refresh_path(path: &Path, source: McpLaunchSour
         return true;
     }
     entry
-        .pointer("/environment/PUPPET_MASTER_BRIDGE_PORT_FILE")
+        .pointer("/environment/POTATO_WORKSPACE_BRIDGE_PORT_FILE")
         .is_none()
 }
 
@@ -145,7 +145,7 @@ pub(super) fn ensure_opencode_mcp_at(
         changed,
         backend: backend.into(),
         message: if installed {
-            "OpenCode MCP configured for puppet-master".into()
+            "OpenCode MCP configured for potato-workspace".into()
         } else {
             "OpenCode MCP install incomplete".into()
         },
@@ -167,7 +167,7 @@ pub(super) fn uninstall_opencode_at(path: &Path, backend: &str) -> Result<Ensure
             changed: false,
             backend: backend.into(),
             message: format!(
-                "puppet-master was not in {}",
+                "potato-workspace was not in {}",
                 crate::app_paths::path_for_host_config(path)
             ),
         });
@@ -182,7 +182,7 @@ pub(super) fn uninstall_opencode_at(path: &Path, backend: &str) -> Result<Ensure
             changed: false,
             backend: backend.into(),
             message: format!(
-                "puppet-master was not in {}",
+                "potato-workspace was not in {}",
                 crate::app_paths::path_for_host_config(path)
             ),
         });
@@ -210,7 +210,7 @@ pub(super) fn uninstall_opencode_at(path: &Path, backend: &str) -> Result<Ensure
         changed: true,
         backend: backend.into(),
         message: format!(
-            "Removed puppet-master from {}",
+            "Removed potato-workspace from {}",
             crate::app_paths::path_for_host_config(path)
         ),
     })

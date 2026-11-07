@@ -13,7 +13,7 @@ import { errText, useInstallChain, type ChainOutcome } from './useInstallChain';
 
 const TITLE_ID = 'ck-store-detail-t';
 const COPY_FAILED = 'Could not copy. Select the command and copy it by hand.';
-/** States where Puppet Master's file for the agent is on the list. */
+/** States where Potato Workspace's file for the agent is on the list. */
 const ON_LIST = ['ready', 'added_no_program', 'needs_review'];
 
 type View = 'detail' | 'install' | 'remove' | 'uninstall';
@@ -100,7 +100,7 @@ export function AgentDetail({
           {run.verb} {detail?.label ?? id}
         </h2>
         <p className="ck-sub">
-          Step {run.step} of {run.of}: {run.label}. A window opened. Wait until it finishes. Puppet Master checks when
+          Step {run.step} of {run.of}: {run.label}. A window opened. Wait until it finishes. Potato Workspace checks when
           its command ends.
         </p>
       </Sheet>
@@ -177,7 +177,7 @@ export function AgentDetail({
       .remove(id)
       .then(() => {
         setBusy(false);
-        changed({ tone: 'ok', text: `Removed ${name} from Puppet Master. Settings > Agents can put it back for a while.` });
+        changed({ tone: 'ok', text: `Removed ${name} from Potato Workspace. Settings > Agents can put it back for a while.` });
       })
       .catch(fail);
   };
@@ -243,7 +243,7 @@ export function AgentDetail({
         </Fact>
       )}
       <Fact label="Sign in">
-        {detail.sign_in.summary} Sign-in happens in the agent's own pane. Puppet Master never sees your password or key.
+        {detail.sign_in.summary} Sign-in happens in the agent's own pane. Potato Workspace never sees your password or key.
       </Fact>
       <Fact label="Chat">{chatWords(detail)}</Fact>
       {detail.modes.length > 0 && <Fact label="Modes">{detail.modes.join(', ')}</Fact>}
@@ -260,7 +260,7 @@ export function AgentDetail({
       )}
       {detail.run_preview && (
         <>
-          <p className="ck-sub">When you open {name}, Puppet Master starts it with this command:</p>
+          <p className="ck-sub">When you open {name}, Potato Workspace starts it with this command:</p>
           <code className="ck-doctor-cmd" data-testid="run-command">
             {detail.run_preview.join(' ')}
           </code>
@@ -270,7 +270,7 @@ export function AgentDetail({
       {view === 'remove' && (
         <>
           <p className="ck-sub">
-            Remove from Puppet Master deletes Puppet Master's file for {name} in your agents folder. The program stays on
+            Remove from Potato Workspace deletes Potato Workspace's file for {name} in your agents folder. The program stays on
             this PC. You can put the file back from Settings &gt; Agents for a while.
           </p>
           <div className="ck-sheet-actions">
@@ -278,7 +278,7 @@ export function AgentDetail({
               Cancel
             </button>
             <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={removeFromList}>
-              Remove from Puppet Master
+              Remove from Potato Workspace
             </button>
           </div>
         </>
@@ -286,12 +286,12 @@ export function AgentDetail({
 
       {view === 'uninstall' && uninstallPlan && (
         <>
-          <p className="ck-sub">Puppet Master runs this command in a window you can watch:</p>
+          <p className="ck-sub">Potato Workspace runs this command in a window you can watch:</p>
           <code className="ck-doctor-cmd" data-testid="uninstall-command">
             {uninstallPlan.steps[0]?.command}
           </code>
           <p className="ck-sub">
-            This removes the {name} program only. Sign-in data and sessions it kept are not removed. Puppet Master's file
+            This removes the {name} program only. Sign-in data and sessions it kept are not removed. Potato Workspace's file
             for {name} stays until you remove it.
           </p>
           <div className="ck-sheet-actions">
@@ -318,8 +318,8 @@ export function AgentDetail({
             <>
               <p className="ck-sub">
                 {detail.ambiguous_name
-                  ? 'Install runs the command in a window you can watch. Then you confirm the program it finds, and Puppet Master adds it.'
-                  : `Install runs the command in a window you can watch. Then Puppet Master adds ${name} to your list. This is a file in your agents folder.`}
+                  ? 'Install runs the command in a window you can watch. Then you confirm the program it finds, and Potato Workspace adds it.'
+                  : `Install runs the command in a window you can watch. Then Potato Workspace adds ${name} to your list. This is a file in your agents folder.`}
               </p>
               <div className="ck-sheet-actions">
                 <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => setView('install')}>
@@ -332,7 +332,7 @@ export function AgentDetail({
           {button.kind === 'add' && detail.ambiguous_name && (
             <>
               <p className="ck-sub">
-                Puppet Master found a program at {detail.found_path_display ?? 'this PC'}. Is it {name}? Press the button
+                Potato Workspace found a program at {detail.found_path_display ?? 'this PC'}. Is it {name}? Press the button
                 only if it is.
               </p>
               <div className="ck-sheet-actions">
@@ -350,7 +350,7 @@ export function AgentDetail({
               </p>
               <div className="ck-sheet-actions">
                 <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={addToList}>
-                  Add to Puppet Master
+                  Add to Potato Workspace
                 </button>
               </div>
             </>
@@ -369,7 +369,7 @@ export function AgentDetail({
 
           {button.kind === 'howto' && (
             <p className="ck-sub">
-              Puppet Master cannot install {name} from here. The vendor's page has the install steps:{' '}
+              Potato Workspace cannot install {name} from here. The vendor's page has the install steps:{' '}
               <LinkButton url={detail.vendor.homepage} onOpen={openLink} />
             </p>
           )}
@@ -383,18 +383,18 @@ export function AgentDetail({
           )}
 
           {onList && (
-            <p className="ck-sub">Remove from Puppet Master deletes Puppet Master's file for {name}. The program stays on this PC.</p>
+            <p className="ck-sub">Remove from Potato Workspace deletes Potato Workspace's file for {name}. The program stays on this PC.</p>
           )}
           {detail.uninstall.available && (
             <p className="ck-sub">
-              Uninstall the program removes {name} from this PC. Puppet Master's file stays until you remove it.
+              Uninstall the program removes {name} from this PC. Potato Workspace's file stays until you remove it.
             </p>
           )}
           {(onList || detail.uninstall.available) && (
             <div className="ck-sheet-actions">
               {onList && (
                 <button type="button" className="ck-btn ck-btn--secondary" disabled={busy} onClick={() => setView('remove')}>
-                  Remove from Puppet Master
+                  Remove from Potato Workspace
                 </button>
               )}
               {detail.uninstall.available && (
@@ -406,7 +406,7 @@ export function AgentDetail({
           )}
           {onList && !detail.uninstall.available && (
             <p className="ck-sub" data-testid="uninstall-unavailable">
-              {detail.uninstall.reason || 'Puppet Master cannot remove this program from here.'}
+              {detail.uninstall.reason || 'Potato Workspace cannot remove this program from here.'}
             </p>
           )}
           {onList && !detail.uninstall.available && detail.uninstall.note && (

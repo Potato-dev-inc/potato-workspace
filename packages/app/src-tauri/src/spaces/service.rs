@@ -33,6 +33,11 @@ use super::words::{self, SECRET_BYTES};
 use crate::secure_core::crypto::random_bytes;
 use crate::team::keystore::KeyStore;
 
+mod files;
+mod presence;
+use files::{file_value, FileJobs};
+use super::presence::Presence;
+
 pub type Notifier = Arc<dyn Fn(&Value) + Send + Sync>;
 pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 
@@ -154,6 +159,16 @@ pub struct SpacesService {
     stored_since_prune: AtomicUsize,
     /// `Push` frames written to any stream (tests count them to prove an entry is forwarded once).
     pushes_written: Arc<AtomicUsize>,
+    /// Files being fetched (or whose fetch failed), by (space, file hash).
+    file_jobs: Mutex<FileJobs>,
+    /// Fresh presence reports per space. Memory only.
+    presence: Mutex<BTreeMap<SpaceId, super::presence::PresenceTable>>,
+    my_presence: Mutex<Presence>,
+    show_online: AtomicBool,
+    /// `Presence` frames written to any stream (tests count them to prove a hidden PC sends none).
+    presence_written: Arc<AtomicUsize>,
+    uploads: Arc<tokio::sync::Semaphore>,
+    downloads: Arc<tokio::sync::Semaphore>,
 }
 
 fn space_of(hex: &str) -> Result<SpaceId, String> { SpaceId::from_hex(hex).ok_or_else(|| "That space is not known.".to_string()) }
@@ -164,6 +179,7 @@ impl SpacesService {
     pub fn new(net: Arc<dyn SpaceNet>, perms: Arc<SpacePermissions>, keystore: KeyStore, dir: PathBuf, clock: Clock)
         -> Arc<Self>
     {
+        let show_online = presence::load_show_online(&dir);
         Arc::new(Self {
             net,
             perms,
@@ -186,6 +202,13 @@ impl SpacesService {
             last_prune_ms: AtomicU64::new(0),
             stored_since_prune: AtomicUsize::new(0),
             pushes_written: Arc::new(AtomicUsize::new(0)),
+            show_online: AtomicBool::new(show_online),
+            presence: Mutex::new(BTreeMap::new()),
+            my_presence: Mutex::new(Presence::Online),
+            presence_written: Arc::new(AtomicUsize::new(0)),
+            file_jobs: Mutex::new(BTreeMap::new()),
+            uploads: Arc::new(tokio::sync::Semaphore::new(super::files::MAX_UPLOADS)),
+            downloads: Arc::new(tokio::sync::Semaphore::new(super::files::MAX_DOWNLOADS)),
         })
     }
 
@@ -222,6 +245,7 @@ impl SpacesService {
         if loops {
             tasks.push(tokio::spawn(self.clone().dial_loop()));
             tasks.push(tokio::spawn(self.clone().housekeeping_loop()));
+            tasks.push(tokio::spawn(self.clone().presence_loop()));
         }
         lock(&self.tasks).extend(tasks);
         self.changed();
@@ -267,6 +291,7 @@ impl SpacesService {
 
     pub fn link_count(&self) -> usize { lock(&self.links).len() }
     pub fn pushes_written(&self) -> usize { self.pushes_written.load(Ordering::SeqCst) }
+    pub fn presence_written(&self) -> usize { self.presence_written.load(Ordering::SeqCst) }
 
     /// `SpacesView` JSON, camelCase.
     pub fn view(&self) -> Value {
@@ -310,6 +335,7 @@ impl SpacesService {
         json!({
             "spaces": spaces, "requests": requests, "joining": joining, "invites": invites,
             "online": self.started.load(Ordering::SeqCst), "relayed": lock(&self.links).all_relayed(),
+            "showOnline": self.show_online(),
         })
     }
 
@@ -706,6 +732,15 @@ impl SpacesService {
                     None => link.close(2, "not allowed"),
                 }
             }
+            super::files::FILE_WANT => {
+                let wanted = super::files::parse_want(&first.body).ok().filter(|(space, ..)| {
+                    self.with_open(space, |sp| sp.roster.device_by_node(&peer).is_some() && dialable(sp, now)).unwrap_or(false)
+                });
+                match wanted {
+                    Some((space, sha, from)) => self.serve_file_stream(stream, space, sha, from).await,
+                    None => link.close(2, "not allowed"),
+                }
+            }
             _ => link.close(2, "not allowed"),
         }
     }
@@ -725,9 +760,11 @@ impl SpacesService {
         let SpaceStream { mut send, mut recv } = stream;
         let (tx, mut rx) = mpsc::unbounded_channel::<Outgoing>();
         let pushes = self.pushes_written.clone();
+        let presence_written = self.presence_written.clone();
         let writer = tokio::spawn(async move {
             while let Some((kind, body)) = rx.recv().await {
                 if kind == sync::PUSH { pushes.fetch_add(1, Ordering::SeqCst); }
+                if kind == sync::PRESENCE { presence_written.fetch_add(1, Ordering::SeqCst); }
                 if write_frame(&mut send, kind, &body).await.is_err() { break; }
             }
             let _ = send.shutdown().await;
@@ -738,6 +775,8 @@ impl SpacesService {
         let Some(start) = self.drive(&space, |v| session.start(v)) else { return };
         self.exec(&space, peer, &tx, start);
         lock(&self.links).add_writer(space, peer, writer_id, tx.clone());
+        // A new link hears my state at once instead of after the next 30 s tick.
+        self.presence_tick();
         let mut pending = first;
         let mut told = false;
         let mut meter = LinkMeter::new();
@@ -758,6 +797,10 @@ impl SpacesService {
             if !self.with_open(&space, |sp| sp.roster.device_by_node(&peer).is_some()).unwrap_or(false) {
                 let _ = tx.send((sync::BYE, vec![3]));
                 break;
+            }
+            if frame.kind == sync::PRESENCE {
+                self.on_presence(&space, peer, &frame.body);
+                continue;
             }
             let Some(outs) = self.drive(&space, |v| session.on_frame(v, &frame)) else { break };
             if self.exec(&space, peer, &tx, outs).is_some() { break; }
@@ -1037,7 +1080,7 @@ impl SpacesService {
                 json!({
                     "member": m.member.to_hex(), "name": m.name,
                     "role": match m.role { Role::Owner => "owner", Role::Member => "member" },
-                    "presence": if is_me { "online" } else { "offline" },
+                    "presence": if is_me { "online" } else { self.presence_of(&id, &m.member, now) },
                     "blocked": !is_me && sp.store.is_blocked(&m.member), "isMe": is_me, "short": format!("{}-{}", &h[0..4], &h[4..8]),
                 })
             }).collect();
@@ -1064,6 +1107,7 @@ impl SpacesService {
         let ch = channel_of(channel)?;
         let limit = limit.clamp(1, 100) as usize;
         let before = before.map(|b| EntryId::from_hex(b).ok_or("That message is not known.")).transpose()?;
+        let jobs = lock(&self.file_jobs).clone();
         self.with_open(&id, |sp| -> Result<Value, String> {
             if sp.roster.channel(&ch).is_none() { return Err("That channel is not known.".into()); }
             let cursor = match before {
@@ -1077,7 +1121,7 @@ impl SpacesService {
             let me = sp.me.member_key();
             let ids: Vec<EntryId> = rows.iter().map(|r| r.id).collect();
             let reacts = sp.store.reactions_for(&ids).map_err(db)?;
-            Ok(Value::Array(rows.iter().map(|r| message_json(sp, r, &reacts, &me)).collect()))
+            Ok(Value::Array(rows.iter().map(|r| message_json(sp, r, &reacts, &me, &jobs, &self.dir.join(id.to_hex()))).collect()))
         })
         .unwrap_or_else(|| Err("That space is not known.".to_string()))
     }
@@ -1111,10 +1155,11 @@ impl SpacesService {
         })
         .ok_or_else(|| "That space is not known.".to_string())??;
         let entry = self.send(&id, &ch, Body::Text { text: cleaned, mentions }, refers).await?;
+        let jobs = lock(&self.file_jobs).clone();
         self.with_open(&id, |sp| {
             let row = sp.store.message(&entry).ok().flatten()?;
             let reacts = sp.store.reactions_for(&[entry]).unwrap_or_default();
-            Some(message_json(sp, &row, &reacts, &sp.me.member_key()))
+            Some(message_json(sp, &row, &reacts, &sp.me.member_key(), &jobs, &self.dir.join(id.to_hex())))
         })
         .flatten()
         .ok_or_else(|| "That message was not saved.".to_string())
@@ -1122,10 +1167,11 @@ impl SpacesService {
 
     /// `SpaceMessage` JSON for one stored message.
     fn message_value(&self, id: &SpaceId, entry: EntryId) -> Result<Value, String> {
+        let jobs = lock(&self.file_jobs).clone();
         self.with_open(id, |sp| {
             let row = sp.store.message(&entry).ok().flatten()?;
             let reacts = sp.store.reactions_for(&[entry]).unwrap_or_default();
-            Some(message_json(sp, &row, &reacts, &sp.me.member_key()))
+            Some(message_json(sp, &row, &reacts, &sp.me.member_key(), &jobs, &self.dir.join(id.to_hex())))
         })
         .flatten()
         .ok_or_else(|| "That message is gone.".to_string())
@@ -1499,9 +1545,9 @@ fn member_name(sp: &OpenSpace, m: &MemberKey) -> String {
     sp.roster.members.get(m).map(|x| x.name.clone()).unwrap_or_else(|| "Someone".to_string())
 }
 
-/// One `SpaceMessage` as the chat UI shows it. A deleted message has empty text. Files are not shown yet (D8).
-fn message_json(sp: &OpenSpace, row: &MessageRow, reacts: &[(EntryId, String, u32, Vec<MemberKey>)], me: &MemberKey)
-    -> Value
+/// One `SpaceMessage` as the chat UI shows it. A deleted message has empty text. A file message carries `file` and its text is the file name.
+fn message_json(sp: &OpenSpace, row: &MessageRow, reacts: &[(EntryId, String, u32, Vec<MemberKey>)], me: &MemberKey,
+                jobs: &FileJobs, space_dir: &std::path::Path) -> Value
 {
     let is_fish = row.kind == KIND_BOT;
     let author = member_name(sp, &row.member);
@@ -1519,13 +1565,21 @@ fn message_json(sp: &OpenSpace, row: &MessageRow, reacts: &[(EntryId, String, u3
         .filter(|(t, ..)| *t == row.id)
         .map(|(_, code, count, who)| json!({ "code": code, "count": count, "mine": who.contains(me) }))
         .collect();
+    let file = file_value(space_dir, sp, row, jobs);
+    let text = if row.deleted_by.is_some() {
+        String::new()
+    } else if let Some(name) = file["name"].as_str() {
+        name.to_string()
+    } else {
+        row.text.clone()
+    };
     json!({
         "id": row.id.to_hex(), "channel": row.channel.to_hex(), "member": row.member.to_hex(),
         "authorName": author_name, "isFish": is_fish, "isMine": row.member == *me,
         "createdAtMs": row.created_ms,
-        "text": if row.deleted_by.is_some() { String::new() } else { row.text.clone() },
+        "text": text,
         "replyTo": row.reply_to.map(|r| r.to_hex()), "replyPreview": reply_preview,
-        "deleted": deleted, "reactions": reactions, "file": Value::Null,
+        "deleted": deleted, "reactions": reactions, "file": file,
         "blocked": row.member != *me && sp.store.is_blocked(&row.member),
     })
 }

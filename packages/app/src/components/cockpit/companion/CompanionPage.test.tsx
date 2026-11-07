@@ -109,7 +109,7 @@ describe('CompanionPage', () => {
   });
 
   it('a companion whose home is too broad shows the card, and the button moves it', async () => {
-    const problem = { place: 'your Desktop', suggestedFolder: 'C:/Users/you/PuppetMaster/companions/mochi' };
+    const problem = { place: 'your Desktop', suggestedFolder: 'C:/Users/you/PotatoWorkspace/companions/mochi' };
     const { transport, props } = await render(view({ homeProblem: problem }));
     expect(host.textContent).toContain("Mochi's home is your Desktop, so other agents there think they are Mochi.");
     expect(transport.calls.some((c) => c.method === 'rehome')).toBe(false);

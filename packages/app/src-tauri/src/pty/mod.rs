@@ -23,9 +23,9 @@ pub mod write_origin;
 
 pub use write_origin::WriteOrigin;
 
-/// Env var Puppet Master sets on every pane it launches: that pane's id. The MCP shim an agent starts
+/// Env var Potato Workspace sets on every pane it launches: that pane's id. The MCP shim an agent starts
 /// forwards it, so the bridge can tell which pane's agent made a call (a hint, see `pane_parent`).
-pub const PANE_ID_ENV: &str = "PUPPET_MASTER_PANE_ID";
+pub const PANE_ID_ENV: &str = "POTATO_WORKSPACE_PANE_ID";
 
 pub use registry::{
     get_project_path as registry_get_project_path, kill_all as registry_kill_all,

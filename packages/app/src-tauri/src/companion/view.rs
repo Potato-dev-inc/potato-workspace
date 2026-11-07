@@ -104,7 +104,7 @@ mod tests {
             agent_type: "claude".into(),
             launch_args: vec![],
             account: None,
-            folder: "C:\\Users\\you\\PuppetMaster\\companions\\mochi".into(),
+            folder: "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi".into(),
             auto_start: true,
             memory_review: true,
             push_replies: true,
@@ -122,9 +122,9 @@ mod tests {
     fn live() -> Live {
         Live {
             state: CompanionState::NeedsYou,
-            state_line: "Needs you: Trust C:\\Users\\you\\PuppetMaster\\companions\\mochi?".into(),
+            state_line: "Needs you: Trust C:\\Users\\you\\PotatoWorkspace\\companions\\mochi?".into(),
             pane_id: Some("companion-mochi".into()),
-            needs: Some(NeedsRef { item_id: "i1".into(), title: "Trust C:\\Users\\you\\PuppetMaster\\companions\\mochi?".into() }),
+            needs: Some(NeedsRef { item_id: "i1".into(), title: "Trust C:\\Users\\you\\PotatoWorkspace\\companions\\mochi?".into() }),
             pending_memory: 2,
             next_checkin: Some(NextCheckIn { id: "0a0a0a0a".into(), label: "Morning".into(), at_ms: 5 }),
             restarts: 1,
@@ -138,7 +138,7 @@ mod tests {
     #[test]
     fn the_desktop_view_has_the_folder_and_its_last_segment() {
         let view = build(&profile(), &live());
-        assert_eq!(view.folder.as_deref(), Some("C:\\Users\\you\\PuppetMaster\\companions\\mochi"));
+        assert_eq!(view.folder.as_deref(), Some("C:\\Users\\you\\PotatoWorkspace\\companions\\mochi"));
         assert_eq!(view.folder_name, "mochi");
         assert_eq!(view.checkins, Some(vec![]), "the desktop view carries the check-in list");
         assert_eq!(view.pane_id.as_deref(), Some("companion-mochi"));
@@ -153,7 +153,7 @@ mod tests {
         let json = serde_json::to_string(&phone).unwrap();
         assert!(!json.contains("\"folder\""), "the folder key is not sent: {json}");
         assert!(!json.contains("C:\\\\Users"), "no folder path in any sentence: {json}");
-        assert!(!json.contains("PuppetMaster"), "{json}");
+        assert!(!json.contains("PotatoWorkspace"), "{json}");
         assert!(phone.state_line.contains("its folder"));
         assert_eq!(phone.needs.unwrap().title, "Trust its folder?");
         assert_eq!(phone.folder_name, "mochi", "the last segment alone may go");

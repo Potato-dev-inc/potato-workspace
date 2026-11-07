@@ -155,7 +155,7 @@ impl InviteLink {
         }
         let field = |k: &str| get.get(k).cloned().filter(|v| !v.is_empty());
         if field("v").as_deref() != Some("1") {
-            return Err("This invite is from a newer Puppet Master. Update first.".into());
+            return Err("This invite is from a newer Potato Workspace. Update first.".into());
         }
         let link = InviteLink {
             team: field("t").ok_or("The invite link is incomplete.")?,

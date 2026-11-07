@@ -46,7 +46,7 @@ pub fn bearer_token(headers: &str) -> Option<String> {
 /// loopback connection means a remote client reached us through a forwarder on this machine.
 const REMOTE_INDICATOR_HEADERS: &[&str] = &[
     // our own PWA proxy and the Vite dev proxy
-    "X-PM-Proxied",
+    "X-Potato-Workspace-Proxied",
     // Cloudflare (cloudflared tunnels)
     "Cf-Connecting-Ip",
     "Cf-Connecting-Ipv6",

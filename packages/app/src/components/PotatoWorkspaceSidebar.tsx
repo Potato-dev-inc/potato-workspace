@@ -1,7 +1,7 @@
-// Desktop right-hand sidebar: the Puppet Master orchestrator (API chat or a CLI agent pane) plus the
+// Desktop right-hand sidebar: the Potato Workspace orchestrator (API chat or a CLI agent pane) plus the
 // coordination/MCP-log tools tab. State and side effects live in ./sidebar/* hooks; this wires them to views.
 import { useState } from 'react';
-import type { McpLogEntry } from '@puppet-master/shared';
+import type { McpLogEntry } from '@potato-workspace/shared';
 import type { BridgeClient } from '../lib/bridge';
 import type { PaneRegistryApi } from '../hooks/usePaneRegistry';
 import { AgentView } from './sidebar/AgentView';
@@ -26,7 +26,7 @@ interface Props {
   settingsRevision?: number;
 }
 
-export function PuppetMasterSidebar({
+export function PotatoWorkspaceSidebar({
   width,
   bridge,
   bridgeReady,

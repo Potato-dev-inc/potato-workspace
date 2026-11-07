@@ -2,7 +2,7 @@
 //!
 //! The agent's own entry template (`[mcp_host.entry]` / `entry_http`) is run backwards: a template
 //! value `{command}` says where the command sits in the agent's entry, `{args}`, `{env}`, `{url}`
-//! and `{headers}` likewise. Entries the toolbelt wrote (`pm-toolbelt-*`) and Puppet Master's own
+//! and `{headers}` likewise. Entries the toolbelt wrote (`pm-toolbelt-*`) and Potato Workspace's own
 //! entry are not offered. Secrets are masked in what the UI sees; the apply step reads the real
 //! values itself, so they never travel to the UI.
 

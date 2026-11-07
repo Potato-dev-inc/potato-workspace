@@ -1,6 +1,6 @@
 // Settings > Agents > Accounts: run one agent under several logins. Per agent that supports
 // accounts: its accounts, "Add account", and "Open login pane" (starts the agent under that
-// account so the user logs in once). Puppet Master only points the CLI at a folder the user
+// account so the user logs in once). Potato Workspace only points the CLI at a folder the user
 // controls; it never reads or shares the credentials inside.
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -55,7 +55,7 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
   return (
     <SettingBlock
       label="Accounts"
-      description="Use the same agent with more than one login, and pick one per pane. Each account is a folder you control; Puppet Master only points the agent at it and never reads or shares what is inside. Check your provider's terms before using several accounts."
+      description="Use the same agent with more than one login, and pick one per pane. Each account is a folder you control; Potato Workspace only points the agent at it and never reads or shares what is inside. Check your provider's terms before using several accounts."
     >
       {error && (
         <p role="alert" className="mb-3 text-sm text-pm-muted">

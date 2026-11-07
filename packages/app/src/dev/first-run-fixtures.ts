@@ -47,7 +47,7 @@ const RECEIPT = {
   not_verified: [],
   outcome: 'completed_unchecked',
   build_id: 'harness',
-  worktree: { path: 'D:\\code\\shop\\.puppet-master\\worktrees\\a1b2', branch: 'pm/task-1', base: 'main', state: 'discarded', files_changed: 0, additions: 0, deletions: 0 },
+  worktree: { path: 'D:\\code\\shop\\.potato-workspace\\worktrees\\a1b2', branch: 'pm/task-1', base: 'main', state: 'discarded', files_changed: 0, additions: 0, deletions: 0 },
 };
 
 /** The settings the mocked store starts with, besides the theme. */

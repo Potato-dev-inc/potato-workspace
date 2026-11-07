@@ -257,7 +257,7 @@ impl Service {
         let label = &due.label;
         if due.call == schedule::Call::Missed {
             let at = schedule::clock_text(due.slot_ms, offset);
-            self.feed(profile, FeedKind::Missed, now, &format!("Missed \"{label}\" at {at}. Puppet Master was closed."));
+            self.feed(profile, FeedKind::Missed, now, &format!("Missed \"{label}\" at {at}. Potato Workspace was closed."));
             return;
         }
         let today = schedule::today_key(now, offset);

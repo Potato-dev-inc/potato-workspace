@@ -12,7 +12,7 @@ use crate::checkpoints::{test_snapshot, TestKind, TestLimits};
 use crate::worktrees::{self, CreateOptions};
 
 const PANE: &str = "pane-1";
-const MESSAGE: &str = "Puppet Master: start from save point (after turn 1, 11:02)";
+const MESSAGE: &str = "Potato Workspace: start from save point (after turn 1, 11:02)";
 /// Numbering of a pane's save points: the first one is "1", the next "2" (engine `n = max + 1`).
 const FIRST: &str = "1";
 const SECOND: &str = "2";
@@ -109,7 +109,7 @@ fn make_from(root: &Path, handle: &str, id: &str) -> Result<Made, crate::operati
     make(&root.to_string_lossy(), None, handle, root, PANE, id, MESSAGE, &[])
 }
 
-/// Sha-256 of every file under `root`, by relative path. `.git` and `.puppet-master` (git's and PM's
+/// Sha-256 of every file under `root`, by relative path. `.git` and `.potato-workspace` (git's and PM's
 /// own data) are left out: the test is about the files a person sees.
 fn file_hashes(root: &Path) -> BTreeMap<String, String> {
     fn walk(dir: &Path, root: &Path, out: &mut BTreeMap<String, String>) {
@@ -117,7 +117,7 @@ fn file_hashes(root: &Path) -> BTreeMap<String, String> {
         for entry in entries.flatten() {
             let path = entry.path();
             let name = entry.file_name();
-            if name == ".git" || name == ".puppet-master" {
+            if name == ".git" || name == ".potato-workspace" {
                 continue;
             }
             if path.is_dir() {
@@ -164,7 +164,7 @@ fn the_copy_has_the_save_point_files_and_one_start_commit() {
     assert_eq!(made.start_commit.as_deref(), Some(head.as_str()));
     let files = git(&cwd, &["show", "--name-only", "--format=", "HEAD"]);
     assert!(files.lines().any(|line| line == "a.txt"), "{files}");
-    assert!(!files.contains(".puppet-master"), "{files}");
+    assert!(!files.contains(".potato-workspace"), "{files}");
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn an_export_failure_discards_the_copy_and_its_branch_and_leaves_the_original_al
     assert_eq!(git(&root, &["branch", "--list", "pm/*"]), "", "the copy's branch is gone");
     let listed = git(&root, &["worktree", "list", "--porcelain"]);
     assert_eq!(listed.lines().filter(|l| l.starts_with("worktree ")).count(), 1, "{listed}");
-    let copies = root.join(".puppet-master").join("worktrees");
+    let copies = root.join(".potato-workspace").join("worktrees");
     let left = std::fs::read_dir(&copies).map(|rd| rd.count()).unwrap_or(0);
     assert_eq!(left, 0, "nothing is left in the worktrees folder");
 
@@ -311,7 +311,7 @@ fn a_branch_of_a_branch_reads_the_source_copys_own_save_points_and_writes_a_new_
         .expect("a branch of a branch is made");
     let cwd = PathBuf::from(&made.worktree.cwd);
     // A new copy under the ORIGIN's worktrees folder, next to copy 1, not inside it.
-    let worktrees_dir = root.join(".puppet-master").join("worktrees");
+    let worktrees_dir = root.join(".potato-workspace").join("worktrees");
     assert_eq!(cwd.parent().map(Path::to_path_buf), Some(worktrees_dir.clone()), "{}", cwd.display());
     assert_ne!(cwd, source_cwd);
     // It holds save point 1 of copy 1 on top of copy 1's own commit.

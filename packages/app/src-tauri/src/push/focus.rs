@@ -13,7 +13,7 @@ pub const SUMMARY_TITLE: &str = "Focus is over";
 /// The title of the one reminder (a quiet card still open 20 minutes after Focus saw it).
 pub const REMINDER_TITLE: &str = "Waiting for you";
 /// What a phone with "Hide details on lock screen" reads instead of the counts.
-pub const HIDDEN_BODY: &str = "Open Puppet Master to see what happened.";
+pub const HIDDEN_BODY: &str = "Open Potato Workspace to see what happened.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Message {
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn a_hidden_phone_gets_the_fixed_sentence_and_no_counts() {
         let body = Message::summary(COUNTS).body(true);
-        assert_eq!(body, "Open Puppet Master to see what happened.");
+        assert_eq!(body, "Open Potato Workspace to see what happened.");
         assert!(!body.chars().any(|c| c.is_ascii_digit()), "no counts for a hidden phone");
     }
 
@@ -154,7 +154,7 @@ mod tests {
     fn a_hidden_phone_gets_the_fixed_body_and_the_others_the_counts() {
         let hub = focus_hub("focus_push_hidden");
         let deliveries = hub.focus_deliveries(&Message::summary(COUNTS), 1_000);
-        assert_eq!(payload(&deliveries, "dev-h")["body"], "Open Puppet Master to see what happened.");
+        assert_eq!(payload(&deliveries, "dev-h")["body"], "Open Potato Workspace to see what happened.");
         assert_eq!(payload(&deliveries, "dev-a")["body"], COUNTS);
     }
 

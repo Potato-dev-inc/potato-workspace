@@ -1,6 +1,6 @@
-## Puppet Master (delegate to other agents)
+## Potato Workspace (delegate to other agents)
 
-You can hand work to other coding agents with the Puppet Master MCP tools. If they are missing, its desktop app is not running: tell the user, do not guess.
+You can hand work to other coding agents with the Potato Workspace MCP tools. If they are missing, its desktop app is not running: tell the user, do not guess.
 
 - `quick_ask(task)` for a tiny question. Read `answer`; `receipt.not_verified` says what was not checked. If `status` is `running`, call `wait_agents` with the `handle`.
 - `run_agent(agent_type, project_path, task)` for real work. `agent_type` is `claude`, `codex`, `cursor_agent` or `opencode_native`. Use a different agent than yourself for a review. It returns `status`, `result`, `receipt` and a `handle`.

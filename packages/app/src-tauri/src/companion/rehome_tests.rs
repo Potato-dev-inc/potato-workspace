@@ -145,7 +145,7 @@ fn moving_copies_its_files_cuts_only_its_block_and_starts_it_in_the_new_folder()
     assert!(!leak.desk.join("USER.md").exists());
     assert!(!leak.desk.join("memory").exists());
     assert!(!leak.desk.join("skills").exists());
-    assert!(!leak.desk.join(".puppet-master").exists());
+    assert!(!leak.desk.join(".potato-workspace").exists());
     assert_eq!(read(&leak.desk.join("AGENTS.md")), "My own rules.\n");
     assert_eq!(read(&leak.desk.join("notes.txt")), "the person's own file");
     assert_eq!(read(&leak.desk.join("work2").join("shop").join("a.txt")), "project");

@@ -192,7 +192,7 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
       {step?.kind === 'done' && (
         <div className="st-mb-card" role="status">
           <p>{step.message}</p>
-          <p>Panes that Puppet Master starts get the key by themselves. In a Codex you start yourself, set the variable first.</p>
+          <p>Panes that Potato Workspace starts get the key by themselves. In a Codex you start yourself, set the variable first.</p>
           <div className="st-mb-actions">
             <Btn
               small
@@ -271,7 +271,7 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
               value={key}
               onChange={(e) => setKey(e.target.value)}
             />
-            <Note>It is kept in {data.storageLabel}. Puppet Master never shows it again.</Note>
+            <Note>It is kept in {data.storageLabel}. Potato Workspace never shows it again.</Note>
           </div>
           <div className="st-mb-actions">
             <Btn primary disabled={!canSave} onClick={() => void saveKey()}>

@@ -96,9 +96,9 @@ fn repo_in(t: &Tmp) -> PathBuf {
     repo
 }
 
-/// A copy folder in the place Puppet Master makes copies: `<project>/.puppet-master/worktrees/<name>`.
+/// A copy folder in the place Potato Workspace makes copies: `<project>/.potato-workspace/worktrees/<name>`.
 fn copy_in(repo: &Path, name: &str) -> PathBuf {
-    let copy = repo.join(".puppet-master").join("worktrees").join(name);
+    let copy = repo.join(".potato-workspace").join("worktrees").join(name);
     std::fs::create_dir_all(&copy).unwrap();
     copy
 }
@@ -117,7 +117,7 @@ fn assert_refused(result: Result<ExportReport, CheckpointError>) {
     }
 }
 
-/// Sha-256 of every file under `root`, by relative path. The `.puppet-master` store is left out: it is
+/// Sha-256 of every file under `root`, by relative path. The `.potato-workspace` store is left out: it is
 /// the app's own data, and its refs and index have their own test.
 fn tree_hashes(root: &Path) -> BTreeMap<String, String> {
     fn walk(dir: &Path, root: &Path, out: &mut BTreeMap<String, String>) {
@@ -125,7 +125,7 @@ fn tree_hashes(root: &Path) -> BTreeMap<String, String> {
         for entry in entries.flatten() {
             let path = entry.path();
             let rel = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
-            if rel == ".puppet-master" {
+            if rel == ".potato-workspace" {
                 continue;
             }
             if path.is_dir() {
@@ -240,7 +240,7 @@ fn refuses_an_ancestor_of_the_original_folder() {
     let save = snap(&repo, "p1", Kind::Before, 1_000, &lim);
     put(&repo, "a.txt", "2");
     assert_refused(export_into(&repo, "p1", &save.id, t.p(), &lim));
-    assert_refused(export_into(&repo, "p1", &save.id, &repo.join(".puppet-master"), &lim));
+    assert_refused(export_into(&repo, "p1", &save.id, &repo.join(".potato-workspace"), &lim));
     assert_eq!(get(&repo, "a.txt").as_deref(), Some("2"));
 }
 
@@ -255,15 +255,15 @@ fn refuses_a_folder_without_the_worktrees_part() {
     put(&repo, "a.txt", "1");
     let save = snap(&repo, "p1", Kind::Before, 1_000, &lim);
     put(&repo, "elsewhere/keep.txt", "keep");
-    put(&repo, ".puppet-master/x/keep.txt", "keep");
+    put(&repo, ".potato-workspace/x/keep.txt", "keep");
     put(&t.p().join("other"), "keep.txt", "keep");
 
     assert_refused(export_into(&repo, "p1", &save.id, &repo.join("elsewhere"), &lim));
-    assert_refused(export_into(&repo, "p1", &save.id, &repo.join(".puppet-master").join("x"), &lim));
-    assert_refused(export_into(&repo, "p1", &save.id, &repo.join(".puppet-master").join("checkpoints.git"), &lim));
+    assert_refused(export_into(&repo, "p1", &save.id, &repo.join(".potato-workspace").join("x"), &lim));
+    assert_refused(export_into(&repo, "p1", &save.id, &repo.join(".potato-workspace").join("checkpoints.git"), &lim));
     assert_refused(export_into(&repo, "p1", &save.id, &t.p().join("other"), &lim));
     assert_eq!(get(&repo, "elsewhere/keep.txt").as_deref(), Some("keep"));
-    assert_eq!(get(&repo, ".puppet-master/x/keep.txt").as_deref(), Some("keep"));
+    assert_eq!(get(&repo, ".potato-workspace/x/keep.txt").as_deref(), Some("keep"));
     assert_eq!(get(&t.p().join("other"), "keep.txt").as_deref(), Some("keep"));
 }
 
@@ -278,7 +278,7 @@ fn refuses_a_link_to_the_original_folder() {
     put(&repo, "a.txt", "1");
     let save = snap(&repo, "p1", Kind::Before, 1_000, &lim);
     put(&repo, "a.txt", "2");
-    let worktrees = repo.join(".puppet-master").join("worktrees");
+    let worktrees = repo.join(".potato-workspace").join("worktrees");
     std::fs::create_dir_all(&worktrees).unwrap();
     let _link = link_dir(&repo, &worktrees.join("link"));
     assert_refused(export_into(&repo, "p1", &save.id, &worktrees.join("link"), &lim));
@@ -324,7 +324,7 @@ fn refs_and_the_per_pane_index_of_the_source_are_unchanged() {
     put(&repo, "a.txt", "3");
     snap(&repo, "p1", Kind::After, 3_000, &lim);
 
-    let store = repo.join(".puppet-master").join("checkpoints.git");
+    let store = repo.join(".potato-workspace").join("checkpoints.git");
     let refs_before = git_out(&store, &["for-each-ref", "refs/pm"]);
     let index_before = std::fs::read(store.join("pm-index-p1")).expect("the per-pane index");
     assert!(!refs_before.is_empty());
@@ -345,7 +345,7 @@ fn the_temp_index_is_removed_on_success_and_on_error() {
     let lim = Limits::default();
     put(&repo, "a.txt", "1");
     let save = snap(&repo, "p1", Kind::Before, 1_000, &lim);
-    let store = repo.join(".puppet-master").join("checkpoints.git");
+    let store = repo.join(".potato-workspace").join("checkpoints.git");
 
     let copy = copy_in(&repo, "x");
     put(&copy, "a.txt", "2");
@@ -438,7 +438,7 @@ fn a_copy_of_a_copy_reads_the_source_copys_save_points_and_writes_a_new_copy_und
     put(&b, "later.txt", "later");
     let origin_before = tree_hashes(&repo);
     let source_before = tree_hashes(&a);
-    let store = a.join(".puppet-master").join("checkpoints.git");
+    let store = a.join(".potato-workspace").join("checkpoints.git");
     let refs_before = git_out(&store, &["for-each-ref", "refs/pm"]);
 
     let report = export_into(&a, "p1", &first.id, &b, &lim).expect("export into a sibling copy");
@@ -451,7 +451,7 @@ fn a_copy_of_a_copy_reads_the_source_copys_save_points_and_writes_a_new_copy_und
     assert_eq!(git_out(&store, &["for-each-ref", "refs/pm"]), refs_before);
     assert!(no_temp_index(&store));
     let mut origin_after = tree_hashes(&repo);
-    // The new copy's files are inside the origin's `.puppet-master`, which the hash skips.
+    // The new copy's files are inside the origin's `.potato-workspace`, which the hash skips.
     assert_eq!(origin_after.remove("origin.txt"), origin_before.get("origin.txt").cloned());
     assert_eq!(origin_after, origin_before.into_iter().filter(|(k, _)| k != "origin.txt").collect());
 }
@@ -464,10 +464,10 @@ fn a_copy_of_a_copy_still_refuses_the_source_the_origin_and_the_worktrees_folder
     let t = Tmp::new("copy-of-copy-refuse");
     let lim = Limits::default();
     let (repo, a, first) = source_copy_with_save_point(&t, &lim);
-    let worktrees = repo.join(".puppet-master").join("worktrees");
+    let worktrees = repo.join(".potato-workspace").join("worktrees");
     put(&a, "inner/keep.txt", "keep");
     put(&repo, "elsewhere/keep.txt", "keep");
-    let other = t.p().join("other").join(".puppet-master").join("worktrees").join("c");
+    let other = t.p().join("other").join(".potato-workspace").join("worktrees").join("c");
     std::fs::create_dir_all(&other).unwrap();
 
     refused_because(export_into(&a, "p1", &first.id, &a, &lim), "the source copy itself");

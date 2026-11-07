@@ -126,7 +126,7 @@ export async function calm(t) {
   await t.page.eval(`window.__TAURI_INTERNALS__ ? window.__TAURI_INTERNALS__.invoke('settings_patch', { patch: { away_minutes: 0 } }).then(() => true, () => false) : false`).catch(() => false);
   await t.page.eval(`try { localStorage.setItem('pm.cockpit.everSpawned', '1'); } catch (e) {}`);
   await t.page.reload();
-  await t.expect.text('Puppet Master');
+  await t.expect.text('Potato Workspace');
   await t.expect.text('Inbox');
   try {
     if (/While you were away/.test(await t.page.text())) await t.click('exact=Got it');
@@ -174,7 +174,7 @@ export async function resizeWindow(t, width, height) {
  * new app's own. (Call it in `finally`; the running app does not need the file.)
  */
 export function forgetBridgePort(t) {
-  try { fs.unlinkSync(path.join(t.app.dataDir, 'puppet-master.bridge.port')); } catch { /* none */ }
+  try { fs.unlinkSync(path.join(t.app.dataDir, 'potato-workspace.bridge.port')); } catch { /* none */ }
 }
 
 /**
@@ -185,7 +185,7 @@ export function launchAgain(t, args = []) {
   const d = t.app.dirs;
   const env = {
     ...process.env,
-    PUPPET_MASTER_PROFILE: t.app.profile,
+    POTATO_WORKSPACE_PROFILE: t.app.profile,
     APPDATA: d.appdata,
     LOCALAPPDATA: d.local,
     HOME: d.home,

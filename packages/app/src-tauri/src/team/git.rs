@@ -56,10 +56,10 @@ pub fn with_identity<'a>(dir: &Path, args: &[&'a str]) -> Vec<&'a str> {
     let has = |key: &str| run(dir, &["config", "--get", key]).map(|v| !v.is_empty()).unwrap_or(false);
     let mut full = Vec::new();
     if !has("user.name") {
-        full.extend(["-c", "user.name=Puppet Master"]);
+        full.extend(["-c", "user.name=Potato Workspace"]);
     }
     if !has("user.email") {
-        full.extend(["-c", "user.email=puppet-master@localhost"]);
+        full.extend(["-c", "user.email=potato-workspace@localhost"]);
     }
     full.extend_from_slice(args);
     full
@@ -70,12 +70,12 @@ pub fn current_branch(dir: &Path) -> Option<String> {
     run(dir, &["symbolic-ref", "-q", "--short", "HEAD"]).ok().filter(|b| !b.is_empty())
 }
 
-/// Uncommitted changes, ignoring Puppet Master's own folder.
+/// Uncommitted changes, ignoring Potato Workspace's own folder.
 pub fn is_dirty(dir: &Path) -> bool {
     match run(dir, &["status", "--porcelain=v1", "--untracked-files=normal"]) {
         Ok(text) => text.lines().any(|line| {
             let path = line.get(3..).unwrap_or("").trim_matches('"');
-            !(path == ".puppet-master" || path.starts_with(".puppet-master/"))
+            !(path == ".potato-workspace" || path.starts_with(".potato-workspace/"))
         }),
         Err(_) => true,
     }

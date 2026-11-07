@@ -132,7 +132,7 @@ fn confirm_setting(app: &AppHandle) -> bool {
         .unwrap_or(true)
 }
 
-/// Tray "Quit Puppet Master": quits at once, or asks first when any agent is still working.
+/// Tray "Quit Potato Workspace": quits at once, or asks first when any agent is still working.
 #[cfg(test)]
 pub fn request_quit(_app: &AppHandle) {}
 
@@ -156,7 +156,7 @@ pub fn request_quit(app: &AppHandle) {
     let handle = app.clone();
     app.dialog()
         .message(message)
-        .title("Quit Puppet Master?")
+        .title("Quit Potato Workspace?")
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom("Stop and quit".to_string(), "Keep open".to_string()))
         .show(move |stop| {

@@ -305,14 +305,14 @@ fn mcp_tools() -> Vec<Value> {
     mcp_tools_for_pane(pane_header(env::var(mcp_sessions::PANE_ID_ENV).ok()))
 }
 
-/// The tool list for this connection; `pane` is the pane Puppet Master started this agent in.
+/// The tool list for this connection; `pane` is the pane Potato Workspace started this agent in.
 fn mcp_tools_for_pane(pane: Option<String>) -> Vec<Value> {
     let session = current_mcp_session_id();
     let mut tools = session
         .as_deref()
         .map(mcp_sessions::tools_for_session)
         .unwrap_or_else(tool_registry::tools);
-    // An agent that Puppet Master started in a companion's pane also gets `companion_recall` in its list.
+    // An agent that Potato Workspace started in a companion's pane also gets `companion_recall` in its list.
     let mode = session.as_deref().map(mcp_sessions::mode_for).unwrap_or(tool_registry::McpMode::All);
     if let Some(recall) = tool_registry::companion_recall_for_pane(pane.as_deref(), mode, &tools) {
         tools.push(recall);

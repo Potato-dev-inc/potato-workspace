@@ -264,7 +264,7 @@ impl Io for LiveIo {
     }
 
     fn write_issue_file(&self, copy: &WorktreeRef, number: u64, text: &str) -> Result<(), String> {
-        let dir = Path::new(&copy.cwd).join(".puppet-master");
+        let dir = Path::new(&copy.cwd).join(".potato-workspace");
         std::fs::create_dir_all(&dir).map_err(|error| format!("could not make {}: {error}", dir.display()))?;
         crate::secure_file::write_private(&dir.join(format!("issue-{number}.md")), text)
     }
@@ -398,7 +398,7 @@ pub fn on_resolved(question: &Question) {
 }
 
 fn not_ready() -> OperationError {
-    OperationError::new("APP_NOT_READY", "Puppet Master is still starting", true)
+    OperationError::new("APP_NOT_READY", "Potato Workspace is still starting", true)
 }
 
 /// One of the Settings buttons on a run: `start`, `ask_again`, `push`, `throw_away` or `unignore`.

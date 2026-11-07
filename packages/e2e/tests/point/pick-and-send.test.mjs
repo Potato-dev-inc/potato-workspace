@@ -52,7 +52,7 @@ export async function run(t) {
     t.expect.ok(lines.some((l) => l.includes('Page: http://localhost:' + site.port)), 'the page address');
 
     await t.step('The picture of the element was saved in the project, ready for the agent to open');
-    const shotName = (lines.join(' ').match(/Screenshot: (\.puppet-master\/shots\/[^\s]+\.png)/) || [])[1];
+    const shotName = (lines.join(' ').match(/Screenshot: (\.potato-workspace\/shots\/[^\s]+\.png)/) || [])[1];
     t.expect.ok(shotName, 'the message names a screenshot file');
     await t.expect.eventually(() => fs.existsSync(path.join(cwd, shotName)), { message: 'the screenshot file exists' });
 

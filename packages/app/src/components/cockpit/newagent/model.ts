@@ -140,18 +140,7 @@ export function sendBlock(input: { prompt: string; choice: AgentChoice | null; r
   return null;
 }
 
-/** A path as it is put in the message: quoted when it has a space. */
-export function pathForMessage(path: string): string {
-  return /\s/.test(path) ? `"${path}"` : path;
-}
-
-/** `text` with `paths` added, one per line after what is already written. */
-export function withPaths(text: string, paths: readonly string[]): string {
-  if (paths.length === 0) return text;
-  const lines = paths.map(pathForMessage).join('\n');
-  if (!text.trim()) return `${lines}\n`;
-  return `${text.replace(/\s+$/, '')}\n${lines}\n`;
-}
+export { pathForMessage, withPaths } from '../../../lib/attachFiles';
 
 // ---------- home cards ----------
 

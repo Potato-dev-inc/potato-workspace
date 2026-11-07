@@ -55,7 +55,7 @@ vi.mock('../../../lib/accounts', async (importOriginal) => {
 
 vi.mock('../../../lib/agent-health', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/agent-health')>();
-  const note = 'Puppet Master adds a small file to .codex in each project; Codex asks you to review it once per folder.';
+  const note = 'Potato Workspace adds a small file to .codex in each project; Codex asks you to review it once per folder.';
   return {
     ...real,
     agentHealthApi: {
@@ -150,15 +150,15 @@ describe('Agents: helper tools inside agent panes', () => {
   it('is on by default and saves only {pane_mcp_enabled} when switched', async () => {
     await mount();
     expect(rowOf('helper-tools')).toBeTruthy();
-    expect(switchFor('Puppet Master helpers inside agents')!.getAttribute('aria-checked')).toBe('true');
-    await click(switchFor('Puppet Master helpers inside agents'));
+    expect(switchFor('Potato Workspace helpers inside agents')!.getAttribute('aria-checked')).toBe('true');
+    await click(switchFor('Potato Workspace helpers inside agents'));
     expect(m.env.patches).toEqual([{ pane_mcp_enabled: false }]);
   });
 
   it('reads a saved off as off', async () => {
     m = await mountRows(agentsRows, { settings: { ...BASE_SETTINGS, pane_mcp_enabled: false } });
     await settle(10);
-    expect(switchFor('Puppet Master helpers inside agents')!.getAttribute('aria-checked')).toBe('false');
+    expect(switchFor('Potato Workspace helpers inside agents')!.getAttribute('aria-checked')).toBe('false');
   });
 });
 
@@ -336,7 +336,7 @@ describe('Agents: Live updates', () => {
       ['shadow', 'Watch only'],
       ['off', 'Off'],
     ]);
-    expect(hasText(m.host, 'Claude and Codex tell Puppet Master when they start, ask and finish.')).toBe(true);
+    expect(hasText(m.host, 'Claude and Codex tell Potato Workspace when they start, ask and finish.')).toBe(true);
   });
 
   it('choosing Off saves agent_hooks_mode off', async () => {
@@ -366,7 +366,7 @@ describe('Agents: Live updates for opt-in agents', () => {
     await settle(10);
     expect(codexSwitch()).toBeTruthy();
     expect(codexSwitch()!.getAttribute('aria-checked')).toBe('false');
-    expect(hasText(m.host, 'Puppet Master adds a small file to .codex in each project; Codex asks you to review it once per folder.')).toBe(true);
+    expect(hasText(m.host, 'Potato Workspace adds a small file to .codex in each project; Codex asks you to review it once per folder.')).toBe(true);
     expect(byLabel(m.host, 'Live updates from Claude')).toBeNull();
   });
 
@@ -403,7 +403,7 @@ describe('Agents: search finds the rows', () => {
   });
 
   it('"work" finds Accounts', () => {
-    expect(idsFor('work')).toEqual(['accounts']);
+    expect(idsFor('work')).toEqual(['helper-tools', 'accounts']);
   });
 
   it('"keep going" finds Keep going, and "runs out" finds it too', () => {

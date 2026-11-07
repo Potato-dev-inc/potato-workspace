@@ -26,6 +26,7 @@
 
 pub mod api;
 pub mod cards;
+mod choice;
 pub mod ending;
 pub mod mapper;
 mod start;
@@ -50,7 +51,7 @@ use serde_json::{json, Value};
 use super::conversations::Conversations;
 use super::error::AcpError;
 use super::journal::Journal;
-use super::session::{AcpSession, Resolution, SessionEvent, SteerOutcome};
+use super::session::{AcpSession, AnswerSource, PromptEndReason, Resolution, SessionEvent, SteerOutcome};
 use super::state::{Phase, Snapshot};
 use super::writers::Writer;
 use crate::pty::registry::VirtualPaneHandles;
@@ -60,6 +61,7 @@ use crate::session_chat::{Feed, PushedChanges, PushedPos, PushedSource};
 use cards::Card;
 use mapper::Mapper;
 
+pub use choice::{Applied, ChoiceError};
 pub use start::{restore_panes, start_gated, StartDeps, StartError, StartRequest};
 
 /// `PaneInfo.lane` of a chat session.
@@ -167,6 +169,19 @@ pub struct AcpChat {
     journal: Option<Journal>,
     /// The app closed during a turn (found in the journal at start); cleared when a new turn starts. The view offers "Continue".
     interrupted: AtomicBool,
+    /// What the last model/reasoning request could not give exactly (the tool's reply reports them).
+    choice_warnings: Mutex<Vec<String>>,
+    /// The last permission prompt this chat had, and why it ended (reported by the tools).
+    last_prompt_end: Mutex<Option<EndedPrompt>>,
+}
+
+/// A permission prompt that is no longer open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EndedPrompt {
+    pub prompt_id: String,
+    pub ask_id: u64,
+    pub reason: &'static str,
+    pub at_ms: u64,
 }
 
 static CHATS: Lazy<Mutex<HashMap<String, Arc<AcpChat>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -279,6 +294,8 @@ impl AcpChat {
             started_by: Mutex::new(None),
             journal,
             interrupted: AtomicBool::new(false),
+            choice_warnings: Mutex::new(Vec::new()),
+            last_prompt_end: Mutex::new(None),
         });
         chat.restore_from_journal();
         chat
@@ -310,6 +327,36 @@ impl AcpChat {
         *self.started_by.lock() = session.map(str::to_string);
     }
 
+    /// Saves the helper-of link (the starting agent's session and the pane the chat is nested under) with the
+    /// conversation, so a restart brings it back.
+    pub(crate) fn persist_link(&self, started_by: Option<&str>, parent: Option<&str>) {
+        let Some(conversations) = &self.conversations else { return };
+        conversations.update(&self.pane_id, |r| {
+            r.started_by = started_by.map(str::to_string);
+            r.parent_pane_id = parent.map(str::to_string);
+        });
+    }
+
+    /// Warnings from the last model/reasoning request (shown in the tools' reply).
+    pub fn choice_warnings(&self) -> Vec<String> {
+        self.choice_warnings.lock().clone()
+    }
+
+    pub(crate) fn set_choice_warnings(&self, warnings: Vec<String>) {
+        *self.choice_warnings.lock() = warnings;
+    }
+
+    /// The last prompt that ended, if any (its id, why, and when).
+    pub fn last_prompt_end(&self) -> Option<EndedPrompt> {
+        self.last_prompt_end.lock().clone()
+    }
+
+    /// Apply the model and reasoning a caller asked for, before any message is sent. A request the
+    /// agent cannot honour is an error; nothing is quietly run on a different model.
+    pub fn apply_choices(&self, model: Option<&str>, reasoning: Option<&str>) -> Result<Applied, ChoiceError> {
+        choice::apply(self, model, reasoning)
+    }
+
     pub fn session(&self) -> &Arc<AcpSession> {
         &self.session
     }
@@ -317,6 +364,11 @@ impl AcpChat {
     /// The items so far (what the pane's chat shows).
     pub fn items(&self) -> Vec<crate::session_chat::ChatItem> {
         self.feed.all()
+    }
+
+    /// How many items the chat shows: cheap enough for a wait to notice a reply that is still streaming in.
+    pub fn item_count(&self) -> usize {
+        self.feed.len()
     }
 
     pub fn is_closed(&self) -> bool {
@@ -435,7 +487,12 @@ impl AcpChat {
                 }
                 self.reconcile_cards();
             }
-            SessionEvent::PermissionResolved { ask_id, how } => self.on_resolved(*ask_id, how, &at),
+            SessionEvent::PermissionResolved { ask_id, how, reason } => self.on_resolved(*ask_id, how, *reason, &at),
+            SessionEvent::PermissionRefused { reason } => {
+                let mut mapper = self.mapper.lock();
+                let items = mapper.permission_refused(reason, &at);
+                self.push(items);
+            }
             other => {
                 let mut mapper = self.mapper.lock();
                 let items = mapper.on_event(other, now, &at);
@@ -547,8 +604,12 @@ impl AcpChat {
                 QuestionState::Pending | QuestionState::TimedOut => Send::Nothing,
             }
         };
+        let by = match question.answer.as_ref().map(|a| a.answered_by.as_str()) {
+            Some("agent") => AnswerSource::Agent,
+            _ => AnswerSource::Person,
+        };
         let result = match plan {
-            Send::Option(ask_id, option_id) => self.session.answer_permission(ask_id, &option_id),
+            Send::Option(ask_id, option_id) => self.session.answer_permission(ask_id, &option_id, by),
             Send::Cancel => self.session.cancel().map(|_| ()),
             Send::Nothing => Ok(()),
         };
@@ -560,7 +621,7 @@ impl AcpChat {
 
     /// The session closed one of its questions (answered, cancelled, or the agent went away): the chat says how,
     /// and a card still on screen is taken down.
-    fn on_resolved(&self, ask_id: u64, how: &Resolution, at: &str) {
+    fn on_resolved(&self, ask_id: u64, how: &Resolution, reason: PromptEndReason, at: &str) {
         let card = self.cards.lock().remove(&ask_id);
         let name_of = |option_id: &str| {
             card.as_ref()
@@ -570,8 +631,13 @@ impl AcpChat {
         let text = match how {
             Resolution::Selected(option_id) => format!("Answered: {}", name_of(option_id)),
             Resolution::Cancelled => "Cancelled.".to_string(),
-            Resolution::AgentGone => "The agent stopped asking.".to_string(),
+            Resolution::AgentGone => match reason {
+                PromptEndReason::TurnEnded => "The turn ended before the answer; the question went away.".to_string(),
+                _ => "The agent stopped asking.".to_string(),
+            },
         };
+        let prompt_id = card.as_ref().map(|c| c.question_id.clone()).unwrap_or_else(|| ask_id.to_string());
+        *self.last_prompt_end.lock() = Some(EndedPrompt { prompt_id, ask_id, reason: reason.as_str(), at_ms: questions::now_ms() });
         {
             let mut mapper = self.mapper.lock();
             let items = mapper.permission_notice(ask_id, text, at);

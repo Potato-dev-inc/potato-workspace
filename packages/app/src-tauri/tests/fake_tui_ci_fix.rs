@@ -4,7 +4,7 @@
 //! engine learns about it from the app's own hook.
 //!
 //! What is fake, and nothing else:
-//! - GitHub: a `gh.cmd` first on `PATH` (and `PUPPET_MASTER_GH`) that answers `auth status`, `api user`, the pull
+//! - GitHub: a `gh.cmd` first on `PATH` (and `POTATO_WORKSPACE_GH`) that answers `auth status`, `api user`, the pull
 //!   request, the check runs of a commit (a file per commit: failed for one, passed for the next), a job's log
 //!   (a hostile fixture), `repo view`, `pr view` (none) and `pr create` (prints a URL). Every call is logged to
 //!   `calls.log`. Same idea as `fake_tui_issue_intake.rs`.
@@ -81,7 +81,7 @@ struct EnvGuard {
 
 impl EnvGuard {
     fn new() -> Self {
-        let names = ["PATH", "PUPPET_MASTER_GH", "GH_TOKEN", "GIT_TRACE"];
+        let names = ["PATH", "POTATO_WORKSPACE_GH", "GH_TOKEN", "GIT_TRACE"];
         Self { saved: names.iter().map(|name| (*name, std::env::var_os(name))).collect() }
     }
 
@@ -91,7 +91,7 @@ impl EnvGuard {
             paths.extend(std::env::split_paths(&real));
         }
         std::env::set_var("PATH", std::env::join_paths(paths).expect("a PATH"));
-        std::env::set_var("PUPPET_MASTER_GH", dir.join("gh.cmd"));
+        std::env::set_var("POTATO_WORKSPACE_GH", dir.join("gh.cmd"));
     }
 }
 
@@ -671,7 +671,7 @@ fn ci_fix_red_to_green_from_card_to_fast_forward_push() {
     // The new pane got the short task, not the log.
     let prompt = drive(&session, &s, 90, "the fix task typed into the pane", || fix_prompts(&session, 7).first().cloned());
     assert!(prompt.starts_with("GitHub checks failed on pull request #7"), "{prompt}");
-    assert!(prompt.contains(".puppet-master/ci-7-try1.md"), "{prompt}");
+    assert!(prompt.contains(".potato-workspace/ci-7-try1.md"), "{prompt}");
     assert!(!prompt.contains('\n'), "the task is one paragraph: {prompt}");
     for hidden in ["ghp_", "IGNORE", "Ignore previous", "curl", "evil.example", "sum(2, 2)", "pm-notes", CHECK, "Process completed"] {
         assert!(!prompt.contains(hidden), "the task carries `{hidden}`: {prompt}");
@@ -689,7 +689,7 @@ fn ci_fix_red_to_green_from_card_to_fast_forward_push() {
 
     // Where the agent worked, and what its environment looked like.
     let cwd = std::fs::read_to_string(&cwd_file).expect("the pane's working folder").trim().replace('\\', "/");
-    assert!(cwd.contains("/.puppet-master/worktrees/"), "the pane is not in the same separate copy: {cwd}");
+    assert!(cwd.contains("/.potato-workspace/worktrees/"), "the pane is not in the same separate copy: {cwd}");
     let env = std::fs::read_to_string(&env_file).expect("the pane's environment");
     let has = |name: &str| env.lines().any(|line| line.to_ascii_uppercase().starts_with(&format!("{name}=")));
     assert!(has("PATH"), "the dump is not an environment: {env}");
@@ -704,7 +704,7 @@ fn ci_fix_red_to_green_from_card_to_fast_forward_push() {
     assert_eq!(s.repo.received().len(), 1, "the agent pushed");
 
     // The log file: one fence, the token masked, the injected line only as text inside the JSON.
-    let file = std::fs::read_to_string(format!("{cwd}/.puppet-master/ci-7-try1.md")).expect("the log file in the copy");
+    let file = std::fs::read_to_string(format!("{cwd}/.potato-workspace/ci-7-try1.md")).expect("the log file in the copy");
     assert!(file.starts_with("# CI log for pull request #7 (commit "), "{file}");
     assert_eq!(file.matches("<<<pm-notes").count(), 1, "one fence: {file}");
     assert_eq!(file.matches(">>>pm-notes").count(), 1, "one fence end: {file}");
@@ -723,7 +723,7 @@ fn ci_fix_red_to_green_from_card_to_fast_forward_push() {
     assert_eq!(s.watch().expect("a watch")["pushed_shas"], json!([first_head, second_head]));
     // The pushed commit holds the agent's work and not the log file.
     assert_eq!(git(&s.repo.bare, &["show", &format!("refs/heads/{}:src/sum.txt", s.branch)]).replace("\r\n", "\n"), "buggy\nfixed");
-    assert!(!git(&s.repo.bare, &["ls-tree", "-r", "--name-only", &format!("refs/heads/{}", s.branch)]).contains(".puppet-master"));
+    assert!(!git(&s.repo.bare, &["ls-tree", "-r", "--name-only", &format!("refs/heads/{}", s.branch)]).contains(".potato-workspace"));
 
     // GitHub runs the checks on the new commit and they pass.
     s.gh.set_head(&second_head);
@@ -789,7 +789,7 @@ fn ci_fix_a_workflow_edit_is_held_and_nothing_is_pushed() {
     let hold_card = drive(&session, &s, 30, "the hold card", || card_of("ci_push", 9));
     assert_eq!(choice_ids(&hold_card), ["look", "dont_push"], "no way to push: {hold_card}");
     assert!(text_of(&hold_card, "question").contains("on hold"), "{hold_card}");
-    assert!(text_of(&hold_card, "context").contains("Puppet Master won't push this."), "{hold_card}");
+    assert!(text_of(&hold_card, "context").contains("Potato Workspace won't push this."), "{hold_card}");
     assert!(text_of(&hold_card, "context").contains(".github/workflows/ci.yml"), "the reason names the file: {hold_card}");
     std::thread::sleep(Duration::from_secs(4));
     assert_eq!(s.repo.remote_heads(), before, "the remote changed");

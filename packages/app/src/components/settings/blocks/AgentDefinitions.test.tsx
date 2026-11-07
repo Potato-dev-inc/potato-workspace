@@ -200,7 +200,7 @@ describe('AgentDefinitions', () => {
     await click(button('Approve'));
     const toast = host.querySelector('[data-testid="agent-toast"]');
     expect(toast?.textContent).toMatch(/kilo is approved - no restart needed/);
-    expect(host.textContent).not.toMatch(/restart Puppet Master/i);
+    expect(host.textContent).not.toMatch(/restart Potato Workspace/i);
   });
 
   it('shows an experimental badge on experimental rows only', async () => {
@@ -674,7 +674,7 @@ ${F}`),
 });
 
 describe('AgentDefinitions: Remove, Undo and Recently removed', () => {
-  const PROJECT_FILE = 'D:/repo/.puppet-master/agents/teamy.toml';
+  const PROJECT_FILE = 'D:/repo/.potato-workspace/agents/teamy.toml';
   const EXTRA_FILE = 'E:/team-agents/shared.toml';
 
   function listingWithOthers(): DefinitionsListing {
@@ -716,7 +716,7 @@ describe('AgentDefinitions: Remove, Undo and Recently removed', () => {
     await render(removeApi());
     const rows = host.querySelectorAll('[data-testid="definition-row"]');
     expect(rows[2].querySelector('[data-testid="comes-from"]')?.textContent).toBe(
-      'This agent comes from D:/repo/.puppet-master/agents. Remove it there, or turn it off with Revoke.',
+      'This agent comes from D:/repo/.potato-workspace/agents. Remove it there, or turn it off with Revoke.',
     );
     expect(rows[3].querySelector('[data-testid="comes-from"]')?.textContent).toContain('This agent comes from E:/team-agents.');
     expect(rows[0].querySelector('[data-testid="comes-from"]')).toBeNull();

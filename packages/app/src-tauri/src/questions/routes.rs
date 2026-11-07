@@ -64,7 +64,7 @@ fn check_person_only(id: &str) -> Result<(), (u16, Value)> {
             403,
             json!({
                 "code": "BUDGET_NEEDS_PERSON",
-                "error": "this card asks the person whether an agent may keep going past its budget; answer it in the Puppet Master window or from a paired phone",
+                "error": "this card asks the person whether an agent may keep going past its budget; answer it in the Potato Workspace window or from a paired phone",
                 "recoverable": false,
             }),
         ));
@@ -93,7 +93,7 @@ fn issue_refusal() -> (u16, Value) {
         403,
         json!({
             "code": "ISSUE_NEEDS_PERSON",
-            "error": "this card starts or publishes work on a GitHub issue; answer it in the Puppet Master window or from a paired phone",
+            "error": "this card starts or publishes work on a GitHub issue; answer it in the Potato Workspace window or from a paired phone",
             "recoverable": false,
         }),
     )
@@ -104,7 +104,7 @@ fn acp_refusal() -> (u16, Value) {
         403,
         json!({
             "code": "ACP_PERMISSION_NEEDS_PERSON",
-            "error": "this card is an agent's own permission request (to run a tool or change a file); answer it in the Puppet Master window or from a paired phone",
+            "error": "this card is an agent's own permission request (to run a tool or change a file); answer it in the Potato Workspace window or from a paired phone",
             "recoverable": false,
         }),
     )
@@ -115,7 +115,7 @@ fn helper_login_refusal() -> (u16, Value) {
         403,
         json!({
             "code": "HELPER_LOGIN_NEEDS_PERSON",
-            "error": "this card asks the person which login a helper should use; answer it in the Puppet Master window or from a paired phone",
+            "error": "this card asks the person which login a helper should use; answer it in the Potato Workspace window or from a paired phone",
             "recoverable": false,
         }),
     )
@@ -130,7 +130,7 @@ fn ci_refusal() -> (u16, Value) {
         403,
         json!({
             "code": "CI_FIX_NEEDS_PERSON",
-            "error": "this card lets an agent fix or push work on a pull request; answer it in the Puppet Master window or from a paired phone",
+            "error": "this card lets an agent fix or push work on a pull request; answer it in the Potato Workspace window or from a paired phone",
             "recoverable": false,
         }),
     )
@@ -161,7 +161,7 @@ fn answer(id: &str, body: &Value, via_phone: bool) -> RouteReply {
             403,
             json!({
                 "code": "CONSENT_NEEDS_PERSON",
-                "error": "this card is a decision for the person (whether an agent may control something, or what happens at a usage limit); answer it in the Puppet Master window or from a paired phone",
+                "error": "this card is a decision for the person (whether an agent may control something, or what happens at a usage limit); answer it in the Potato Workspace window or from a paired phone",
                 "recoverable": false,
             }),
         ));
@@ -223,7 +223,7 @@ fn ask(body: &Value, session: Option<&str>) -> RouteReply {
                     context: string_field(body, "context"),
                     timeout_s: body.get("timeout_s").and_then(Value::as_u64),
                     urgency: string_field(body, "urgency"),
-                    // Only Puppet Master raises consent and usage-limit cards; the tool cannot ask for one.
+                    // Only Potato Workspace raises consent and usage-limit cards; the tool cannot ask for one.
                     consent: None,
                     // Likewise the budget pause card: an agent cannot ask for a kind.
                     kind: None,

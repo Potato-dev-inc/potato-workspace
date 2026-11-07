@@ -37,7 +37,7 @@ fn stop_ends_only_the_marked_process() {
             "--exec",
             "/bin/sh",
             "-c",
-            r#"PUPPET_MASTER_PANE_ID="$1"; export PUPPET_MASTER_PANE_ID; exec sleep 300"#,
+            r#"POTATO_WORKSPACE_PANE_ID="$1"; export POTATO_WORKSPACE_PANE_ID; exec sleep 300"#,
             "live-marker",
             pane.as_str(),
         ])

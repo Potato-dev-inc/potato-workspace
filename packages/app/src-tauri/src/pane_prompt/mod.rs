@@ -226,7 +226,7 @@ pub(crate) fn detect_in_screen(agent_type: &str, screen: &str, allow_broad: bool
 
 /// A startup gate only the user may pass (`TuiProfile::startup_gate` without `dismiss`: folder
 /// trust, sign-in, onboarding) shown as a prompt card, for a profile that has no answerable prompt
-/// of its own for it. The card has no choices (Puppet Master does not know the keys); the user
+/// of its own for it. The card has no choices (Potato Workspace does not know the keys); the user
 /// answers in the pane, and the run waits. A profile that does detect the dialog (Claude, Cursor,
 /// Codex: trust / deny with keys) wins over this.
 fn gate_prompt(agent_type: &str, screen: &str) -> Option<Value> {

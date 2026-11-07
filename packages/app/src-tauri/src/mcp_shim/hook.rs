@@ -74,7 +74,7 @@ fn app_data_dir() -> PathBuf {
 }
 
 fn hooks_dir() -> PathBuf {
-    std::env::var_os("PUPPET_MASTER_HOOKS_DIR").map(PathBuf::from).unwrap_or_else(|| app_data_dir().join("hooks"))
+    std::env::var_os("POTATO_WORKSPACE_HOOKS_DIR").map(PathBuf::from).unwrap_or_else(|| app_data_dir().join("hooks"))
 }
 
 fn valid_agent(agent: &str) -> bool {
@@ -195,7 +195,7 @@ pub fn post(bridge: &str, token: &str, pane: &str, agent: &str, body: &[u8]) -> 
     let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
     let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
     let head = format!(
-        "POST /hooks/event HTTP/1.1\r\nHost: {addr}\r\nX-PM-Hook-Token: {token}\r\nX-PM-Hook-Pane: {pane}\r\nX-PM-Hook-Agent: {agent}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "POST /hooks/event HTTP/1.1\r\nHost: {addr}\r\nX-Potato-Workspace-Hook-Token: {token}\r\nX-Potato-Workspace-Hook-Pane: {pane}\r\nX-Potato-Workspace-Hook-Agent: {agent}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );
     stream.write_all(head.as_bytes()).and_then(|_| stream.write_all(body)).map_err(|e| format!("write: {}", e.kind()))?;
@@ -206,7 +206,7 @@ pub fn post(bridge: &str, token: &str, pane: &str, agent: &str, body: &[u8]) -> 
 
 /// One line per error, no payload content; the file is restarted at 1 MB.
 fn log_error(error: &str) {
-    let dir = match std::env::var_os("PUPPET_MASTER_HOOKS_DIR") {
+    let dir = match std::env::var_os("POTATO_WORKSPACE_HOOKS_DIR") {
         Some(hooks) => PathBuf::from(hooks),
         None => app_data_dir().join("logs"),
     };

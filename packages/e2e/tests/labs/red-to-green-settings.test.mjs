@@ -17,7 +17,7 @@ export async function run(t) {
 
   await t.step('The switch is off and explains what it would do');
   t.expect.equal(await t.page.eval(`document.querySelector('${SWITCH}').getAttribute('aria-checked')`), 'false');
-  await t.expect.text('When CI fails on a pull request Puppet Master opened, you get a card to have the same agent fix it.');
+  await t.expect.text('When CI fails on a pull request Potato Workspace opened, you get a card to have the same agent fix it.');
 
   await t.step('The four limits are listed with their ranges');
   for (const [label, range] of [['Tries per pull request', '1 to 3'], ['Turns per try', '1 to 50'], ['Minutes per try', '5 to 60'], ['Fixes a day', '1 to 20']]) {
@@ -26,11 +26,11 @@ export async function run(t) {
   }
 
   await t.step('Nothing is watched yet');
-  await t.expect.text('No pull requests yet. Puppet Master watches one once it opens it.');
+  await t.expect.text('No pull requests yet. Potato Workspace watches one once it opens it.');
 
   await t.step('The promises about pushing, merging and re-running CI are stated');
   await t.expect.text('The agent can\'t push during a fix.');
-  await t.expect.text('Puppet Master never re-runs CI, merges or force-pushes.');
+  await t.expect.text('Potato Workspace never re-runs CI, merges or force-pushes.');
 }
 
 export const setup = labsOff;

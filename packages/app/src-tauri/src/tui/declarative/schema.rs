@@ -58,9 +58,9 @@ pub struct Definition {
     /// Extra risk patterns for approval cards (can only raise a result).
     pub risk: Option<RiskTable>,
     /// What this agent's screen says when its plan runs out (`[limits]`, `crate::handoff`). Absent =
-    /// Puppet Master cannot tell when this agent hits a limit and never reacts to one.
+    /// Potato Workspace cannot tell when this agent hits a limit and never reacts to one.
     pub limits: Option<crate::handoff::LimitsTable>,
-    /// Project files this agent reads its instructions from; Puppet Master keeps its shared
+    /// Project files this agent reads its instructions from; Potato Workspace keeps its shared
     /// project memory in a managed block of each (`crate::one_brain`).
     pub instructions: Option<InstructionsTable>,
     /// How the CLI is installed (`[install.windows]`); the agent doctor's Install button uses it.
@@ -68,11 +68,11 @@ pub struct Definition {
     /// What this definition has been checked against (`[profile]`).
     #[serde(default)]
     pub profile: ProfileTable,
-    /// How this agent reports its lifecycle to Puppet Master (Hook Lane); absent = no hooks.
+    /// How this agent reports its lifecycle to Potato Workspace (Hook Lane); absent = no hooks.
     pub hooks: Option<super::hooks::HooksTable>,
     /// Where this agent writes a JSONL transcript the Chat tab reads (`[session_chat]`); absent = the screen is read.
     pub session_chat: Option<crate::session_chat::SessionChatTable>,
-    /// How this agent takes Puppet Master's own MCP server for one launch (`[pane_mcp]`); absent = it is not added.
+    /// How this agent takes Potato Workspace's own MCP server for one launch (`[pane_mcp]`); absent = it is not added.
     pub pane_mcp: Option<crate::tui::pane_mcp::PaneMcpTable>,
     /// How this agent runs as a chat over the Agent Client Protocol (`[acp]`, `crate::acp::config`); absent = terminal only.
     pub acp: Option<crate::acp::config::AgentConfig>,

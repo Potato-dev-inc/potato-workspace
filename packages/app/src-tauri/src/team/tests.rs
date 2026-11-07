@@ -593,7 +593,7 @@ fn a_teammates_words_reach_the_agent_only_as_quoted_untrusted_context() {
 ").unwrap();
     assert!(instructions.contains("A merge of a teammate's branch (commit 0123456) into feat/billing stopped with 2 conflicted files."));
     assert!(instructions.contains("Do not push"));
-    assert!(instructions.contains("Puppet Master commits the merge"));
+    assert!(instructions.contains("Potato Workspace commits the merge"));
     assert!(!instructions.to_lowercase().contains("ignore previous"), "teammate text stays out of the instructions");
     assert!(!instructions.contains("src/auth.ts"), "file names come from the teammate's commit: data only");
     assert_eq!(context.lines().count(), 1, "one JSON line");

@@ -1,6 +1,6 @@
 //! Automatic checkpoints and one-click undo, for every agent, in any folder.
 //!
-//! A *shadow repository* (`<project>/.puppet-master/checkpoints.git`, work tree = the project)
+//! A *shadow repository* (`<project>/.potato-workspace/checkpoints.git`, work tree = the project)
 //! snapshots the files at each turn boundary. The user's own `.git`, if any, is never touched.
 //! See `docs/features/checkpoints.md`.
 

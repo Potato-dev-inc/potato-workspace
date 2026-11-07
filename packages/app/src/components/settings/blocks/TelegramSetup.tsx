@@ -19,9 +19,9 @@ import { Btn, FieldInput, Note, SettingBlock, SettingRow, SettingToggle } from '
 import { nameOf, TelegramPairing } from './TelegramPairing';
 
 export const TELEGRAM_WARNING =
-  "Telegram is a third party. Everything this bot sends and receives is stored on Telegram's servers and is not end-to-end encrypted. Puppet Master hides secrets, emails and folder names, but agent questions and replies are sent as text. Don't use this for work you must keep private.";
+  "Telegram is a third party. Everything this bot sends and receives is stored on Telegram's servers and is not end-to-end encrypted. Potato Workspace hides secrets, emails and folder names, but agent questions and replies are sent as text. Don't use this for work you must keep private.";
 
-export const TELEGRAM_FOOTER = 'When your PC sleeps or Puppet Master is closed, the bot is silent.';
+export const TELEGRAM_FOOTER = 'When your PC sleeps or Potato Workspace is closed, the bot is silent.';
 export const TELEGRAM_AUDIT = 'See Telegram actions in Security > Audit.';
 export const NO_STORE = "This computer has no safe place for the token, so Telegram can't be used.";
 export const DISCONNECT_BODY = 'Forget the bot token and the chat? You can connect again later.';
@@ -42,9 +42,9 @@ export const TELEGRAM_CAPS: { cap: TelegramCap; label: string }[] = [
 export const ERROR_TEXT: Record<NonNullable<TelegramStatus['error']>, string> = {
   token_rejected: 'Telegram no longer accepts this token. Paste a new one.',
   conflict: 'Another program is using this bot. Make a new token in BotFather (/revoke) and paste it here.',
-  webhook_set: 'This bot already sends its messages to a website. Make a new bot for Puppet Master.',
+  webhook_set: 'This bot already sends its messages to a website. Make a new bot for Potato Workspace.',
   blocked: "The bot can't write to you. Did you block it?",
-  network: "Can't reach Telegram right now. Puppet Master keeps trying.",
+  network: "Can't reach Telegram right now. Potato Workspace keeps trying.",
 };
 
 /** "12 s" or "3 min": how long ago the last check was. */
@@ -208,7 +208,7 @@ export function TelegramSetup({ env, api = telegramApi }: { env: SettingsEnv; ap
           {s.tokenSet && (
             <SettingBlock
               label="Step 2 · Connect your chat"
-              description={s.paired ? 'Only this chat can talk to Puppet Master.' : 'Make a code and send it to your bot. Only that chat can talk to Puppet Master.'}
+              description={s.paired ? 'Only this chat can talk to Potato Workspace.' : 'Make a code and send it to your bot. Only that chat can talk to Potato Workspace.'}
             >
               {s.paired ? (
                 <Note role="status">{`Connected to ${nameOf(s.paired)}.`}</Note>

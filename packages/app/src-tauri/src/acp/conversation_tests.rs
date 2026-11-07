@@ -519,7 +519,7 @@ fn a_restored_chat_keeps_its_settings_before_and_after_it_starts_even_when_the_a
     let rig = Rig::new("");
     let id = rig.new_started();
     assert_eq!(model_of(&rig.conversations.session(&id).unwrap()), Some(serde_json::json!("a")));
-    assert_eq!(rig.conversations.record(&id).unwrap().config_options.len(), 1, "the settings are saved with the conversation");
+    assert_eq!(rig.conversations.record(&id).unwrap().config_options.len(), 2, "the settings are saved with the conversation");
     rig.conversations.session(&id).unwrap().close();
 
     let app = conversations_in(&rig.dir, "bare_restore=1");

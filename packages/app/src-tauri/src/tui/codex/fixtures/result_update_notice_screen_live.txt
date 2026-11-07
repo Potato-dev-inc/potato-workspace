@@ -10,7 +10,7 @@
 • Explored
   └ Read README.md
     + Show details                                                                                                       
-• README.md describes a tiny Node project for demonstrating Puppet Master, with sum.js adding numbers and npm test        checking it.                                                                                                           
+• README.md describes a tiny Node project for demonstrating Potato Workspace, with sum.js adding numbers and npm test        checking it.                                                                                                           
   Worked for 6s • 12:49 PM                                                                                              
 
 

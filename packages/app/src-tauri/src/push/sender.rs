@@ -15,12 +15,12 @@ use web_push_native::{p256::PublicKey, Auth, WebPushBuilder};
 /// A stale "needs you" is worse than none: let the push service drop it after an hour.
 const TTL: Duration = Duration::from_secs(3600);
 
-/// The VAPID `sub` claim. Push services want a contact; override with PUPPET_MASTER_VAPID_SUBJECT.
+/// The VAPID `sub` claim. Push services want a contact; override with POTATO_WORKSPACE_VAPID_SUBJECT.
 pub fn vapid_subject() -> String {
-    std::env::var("PUPPET_MASTER_VAPID_SUBJECT")
+    std::env::var("POTATO_WORKSPACE_VAPID_SUBJECT")
         .ok()
         .filter(|s| s.starts_with("mailto:") || s.starts_with("https://"))
-        .unwrap_or_else(|| "mailto:admin@puppet-master.example".to_string())
+        .unwrap_or_else(|| "mailto:admin@potato-workspace.example".to_string())
 }
 
 /// The body of a push message. The two texts a person reads (title and body) are `Redacted` by

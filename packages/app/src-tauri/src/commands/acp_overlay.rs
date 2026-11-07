@@ -99,9 +99,9 @@ pub(crate) fn bridge_option_from(info: Result<acp::bridge::BridgeInfo, String>) 
     match info {
         Ok(info) => json!({
             "kind": "bridge",
-            "label": "Chat made by Puppet Master",
+            "label": "Chat made by Potato Workspace",
             "summary": format!(
-                "Puppet Master will make a chat adapter for {} from its non-interactive mode; text only, no tool cards; {}.",
+                "Potato Workspace will make a chat adapter for {} from its non-interactive mode; text only, no tool cards; {}.",
                 registry::display_text(&info.label, 60),
                 if info.has_memory { "it remembers the conversation" } else { "it does not remember earlier messages" }
             ),
@@ -110,8 +110,8 @@ pub(crate) fn bridge_option_from(info: Result<acp::bridge::BridgeInfo, String>) 
         }),
         Err(reason) => json!({
             "kind": "bridge",
-            "label": "Chat made by Puppet Master",
-            "summary": "Puppet Master makes a chat adapter from the agent's non-interactive mode.",
+            "label": "Chat made by Potato Workspace",
+            "summary": "Potato Workspace makes a chat adapter from the agent's non-interactive mode.",
             "available": false,
             "reason": registry::display_text(&reason, 240),
         }),
@@ -601,7 +601,7 @@ mod tests {
         assert_eq!(full["label"], "Chat (terminal)");
         assert_eq!(
             full["summary"],
-            "Puppet Master runs Xagent in a terminal and shows it as a chat. You get its tool cards and history, and you can answer its questions here. It can continue the conversation later."
+            "Potato Workspace runs Xagent in a terminal and shows it as a chat. You get its tool cards and history, and you can answer its questions here. It can continue the conversation later."
         );
         let no_resume = terminal_chat_option_from(tc_info(false, true)).unwrap();
         assert!(no_resume["summary"].as_str().unwrap().ends_with("It cannot resume old sessions."));

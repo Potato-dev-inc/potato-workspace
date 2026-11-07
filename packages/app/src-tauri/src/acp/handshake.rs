@@ -16,7 +16,14 @@ pub fn initialize_params(client_name: &str, client_version: &str) -> Value {
         "protocolVersion": PROTOCOL_VERSION,
         "clientCapabilities": {
             "fs": { "readTextFile": false, "writeTextFile": false },
-            "terminal": false
+            "terminal": false,
+            // The Claude adapter reports background (async) tasks only to a client that advertises
+            // the Air extension. Codex ignores this. Nothing else changes for agents that do.
+            "_meta": {
+                "jetbrains": {
+                    "air": { "version": 1, "capabilities": ["asyncTasks"] }
+                }
+            }
         },
         "clientInfo": { "name": client_name, "version": client_version }
     })
@@ -51,6 +58,9 @@ pub struct AgentCaps {
     pub auth_methods: Vec<AuthMethodInfo>,
     /// The agent says it accepts text sent into a running turn (`_meta.steering.supported`, used by A2+).
     pub steering: bool,
+    /// The agent reports background work that outlives a turn (`_meta.jetbrains.air.capabilities`
+    /// includes `asyncTasks`). False: the app must not guess about background work.
+    pub background_tasks: bool,
 }
 
 pub fn parse_initialize(result: &Value) -> Result<AgentCaps, AcpError> {
@@ -102,6 +112,10 @@ pub fn parse_initialize(result: &Value) -> Result<AgentCaps, AcpError> {
         mcp_sse: flag("/mcpCapabilities/sse"),
         auth_methods,
         steering: result.pointer("/_meta/steering/supported").and_then(Value::as_bool).unwrap_or(false),
+        background_tasks: result
+            .pointer("/_meta/jetbrains/air/capabilities")
+            .and_then(Value::as_array)
+            .is_some_and(|list| list.iter().any(|v| v.as_str() == Some("asyncTasks"))),
     })
 }
 
@@ -137,11 +151,12 @@ mod tests {
 
     #[test]
     fn we_offer_no_file_or_terminal_access_and_speak_v1() {
-        let params = initialize_params("puppet-master", "0.2.1");
+        let params = initialize_params("potato-workspace", "0.2.1");
         assert_eq!(params["protocolVersion"], json!(1));
         assert_eq!(params["clientCapabilities"]["fs"]["readTextFile"], json!(false));
         assert_eq!(params["clientCapabilities"]["fs"]["writeTextFile"], json!(false));
         assert_eq!(params["clientCapabilities"]["terminal"], json!(false));
+        assert_eq!(params["clientCapabilities"]["_meta"]["jetbrains"]["air"]["capabilities"], json!(["asyncTasks"]));
     }
 
     #[test]
@@ -153,6 +168,7 @@ mod tests {
         assert!(caps.image_prompts && caps.embedded_context);
         assert!(caps.mcp_http && !caps.mcp_sse);
         assert!(!caps.steering);
+        assert!(!caps.background_tasks, "Codex does not report background work");
         let ids: Vec<&str> = caps.auth_methods.iter().map(|m| m.id.as_str()).collect();
         assert_eq!(ids, vec!["api-key", "chat-gpt"]);
         assert_eq!(caps.auth_methods[1].name, "ChatGPT");
@@ -165,6 +181,7 @@ mod tests {
         assert_eq!(caps.agent_title.as_deref(), Some("Claude Agent"));
         assert!(caps.load_session && caps.resume);
         assert!(caps.steering);
+        assert!(caps.background_tasks, "Claude's Air extension reports async tasks");
         assert!(caps.auth_methods.is_empty());
         assert!(caps.mcp_sse);
     }

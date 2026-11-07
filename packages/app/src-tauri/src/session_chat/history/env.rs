@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// When set, that folder is the only home and no other environment variable is read (live checks use it).
-pub const HOME_OVERRIDE_VAR: &str = "PUPPET_MASTER_HISTORY_HOME";
+pub const HOME_OVERRIDE_VAR: &str = "POTATO_WORKSPACE_HISTORY_HOME";
 
 /// Reads one environment variable by name.
 type Lookup = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
@@ -51,7 +51,7 @@ impl HistoryEnv {
     }
 
     /// Builds the environment from a lookup of the process variables and the process home folder. With
-    /// `PUPPET_MASTER_HISTORY_HOME` set, that folder is the home and every other variable answers `None`.
+    /// `POTATO_WORKSPACE_HISTORY_HOME` set, that folder is the home and every other variable answers `None`.
     pub(crate) fn from_lookup(process: Lookup, process_home: Option<PathBuf>) -> Self {
         match (process)(HOME_OVERRIDE_VAR).filter(|folder| !folder.trim().is_empty()) {
             Some(folder) => {

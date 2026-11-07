@@ -236,14 +236,14 @@ mod tests {
         let store_file = dir.join("opencode-key-profiles.json");
         let auth_file = dir.join("auth.json");
         fs::create_dir_all(&dir).expect("tempdir");
-        std::env::set_var("PUPPET_MASTER_TEST_OPENCODE_KEYS_STORE", &store_file);
-        std::env::set_var("PUPPET_MASTER_TEST_OPENCODE_AUTH", &auth_file);
+        std::env::set_var("POTATO_WORKSPACE_TEST_OPENCODE_KEYS_STORE", &store_file);
+        std::env::set_var("POTATO_WORKSPACE_TEST_OPENCODE_AUTH", &auth_file);
 
         f();
 
         let _ = fs::remove_dir_all(&dir);
-        std::env::remove_var("PUPPET_MASTER_TEST_OPENCODE_KEYS_STORE");
-        std::env::remove_var("PUPPET_MASTER_TEST_OPENCODE_AUTH");
+        std::env::remove_var("POTATO_WORKSPACE_TEST_OPENCODE_KEYS_STORE");
+        std::env::remove_var("POTATO_WORKSPACE_TEST_OPENCODE_AUTH");
     }
 
     #[test]

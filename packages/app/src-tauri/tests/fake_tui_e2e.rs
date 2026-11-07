@@ -320,7 +320,7 @@ after_ms = 100
 steps = [{ do = "think", ms = 300 }, { do = "say", text = "Hello from a trusted folder." }]
 "#;
 
-/// Folder trust is the user's call, never Puppet Master's. The run parks with the trust card (the task is
+/// Folder trust is the user's call, never Potato Workspace's. The run parks with the trust card (the task is
 /// not typed); declining it from the card makes the agent exit to its host shell, and the run fails with
 /// `WORKSPACE_TRUST_DECLINED` instead of typing the task into PowerShell or waiting out its timeout.
 #[test]
@@ -568,7 +568,7 @@ steps = [{ do = "think", ms = 300 }, { do = "say", text = "Hello after one trust
     }
     let pane = parked["pane_id"].as_str().expect("pane").to_string();
     assert_eq!(parked["prompt"]["kind"], "workspace_trust", "{}", parked["prompt"]);
-    assert!(session.screen(&pane).contains(".puppet-master"), "the pane runs in the run's worktree:\n{}", session.screen(&pane));
+    assert!(session.screen(&pane).contains(".potato-workspace"), "the pane runs in the run's worktree:\n{}", session.screen(&pane));
     assert_ne!(other, session.project());
     let prompt_id = parked["prompt"]["id"].as_str().expect("prompt id").to_string();
 
@@ -655,7 +655,7 @@ fn assert_reply_is_only_the_agents(session: &Session, done: &Value) {
     let result = done["result"].as_str().unwrap_or_default();
     let folder = session.project().to_string_lossy().into_owned();
     assert!(
-        !result.contains("OpenAI Codex") && !result.contains(&folder) && !result.contains(".puppet-master"),
+        !result.contains("OpenAI Codex") && !result.contains(&folder) && !result.contains(".potato-workspace"),
         "the result carries the agent's start-up screen: {result:?}\n{}",
         transcript_of(session, done)
     );

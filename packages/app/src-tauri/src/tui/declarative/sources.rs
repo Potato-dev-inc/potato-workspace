@@ -50,10 +50,10 @@ pub fn source_name(source: Source) -> &'static str {
     }
 }
 
-/// `<project>/.puppet-master/agents` (SRC-3). The caller only scans it for a run or pane of that
+/// `<project>/.potato-workspace/agents` (SRC-3). The caller only scans it for a run or pane of that
 /// very project (SRC-7).
 pub fn project_agents_dir(project: &Path) -> PathBuf {
-    project.join(".puppet-master").join("agents")
+    project.join(".potato-workspace").join("agents")
 }
 
 /// A file that could not be turned into text for the loader (never echoes file content).
@@ -314,7 +314,7 @@ impl SourceSettings {
 }
 
 /// What the consent banner shows for a project: the `*.toml` file names that sit in
-/// `<project>/.puppet-master/agents`, listed without reading or parsing any of them.
+/// `<project>/.potato-workspace/agents`, listed without reading or parsing any of them.
 pub fn project_candidates(project: &Path) -> Vec<String> {
     let dir = project_agents_dir(project);
     let Ok(entries) = fs::read_dir(&dir) else { return Vec::new() };

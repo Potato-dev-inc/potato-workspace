@@ -1,4 +1,4 @@
-// Settings > MCP & bridge > "Add Puppet Master to your agents": install the skills and the connection into
+// Settings > MCP & bridge > "Add Potato Workspace to your agents": install the skills and the connection into
 // each agent that is on this computer. Review first, then install; Undo puts every file back.
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -37,8 +37,8 @@ function mcpLine(row: PackRow): string {
   if (!m) return '';
   if (m.status === 'skipped') return m.reason ?? 'Skipped';
   if (m.status === 'error') return m.reason ?? 'Something went wrong';
-  if (m.status === 'unchanged') return 'Already connected to Puppet Master';
-  return 'Connection to Puppet Master will be added';
+  if (m.status === 'unchanged') return 'Already connected to Potato Workspace';
+  return 'Connection to Potato Workspace will be added';
 }
 
 export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose: () => void; onDone: (text: string, report: PackReport) => void }) {
@@ -73,7 +73,7 @@ export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose
       const where = written.map(names).join(', ');
       const text =
         written.length === 0
-          ? 'Every agent already has Puppet Master.'
+          ? 'Every agent already has Potato Workspace.'
           : `Added to ${where}.${failed.length > 0 ? ` ${failed.length} could not be written.` : ''} Restart open agents to pick it up.`;
       onDone(text, done);
     } catch (e) {
@@ -84,9 +84,9 @@ export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose
 
   return (
     <div className={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label="Add Puppet Master to your agents" className={sheet}>
+      <div role="dialog" aria-modal="true" aria-label="Add Potato Workspace to your agents" className={sheet}>
         <div className="border-b border-pm-border px-4 py-3">
-          <h4 className="text-sm font-semibold">Add Puppet Master to your agents</h4>
+          <h4 className="text-sm font-semibold">Add Potato Workspace to your agents</h4>
           <p className="mt-1 text-xs leading-5 text-pm-muted">
             Skills are short guides that teach an agent when and how to hand work to other agents. Nothing runs at install time. An
             existing connection is never changed, and Undo puts every file back.
@@ -218,12 +218,12 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
   };
 
   return (
-    <section aria-label="Add Puppet Master to your agents" className="rounded-xl border border-pm-border bg-pm-panel p-4">
+    <section aria-label="Add Potato Workspace to your agents" className="rounded-xl border border-pm-border bg-pm-panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Add Puppet Master to your agents</h3>
+          <h3 className="text-sm font-semibold">Add Potato Workspace to your agents</h3>
           <p className="mt-1 max-w-xl text-sm leading-6 text-pm-muted">
-            Teach each agent you use when to ask another agent for help, and connect it to Puppet Master. You review every file first.
+            Teach each agent you use when to ask another agent for help, and connect it to Potato Workspace. You review every file first.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -114,7 +114,7 @@ describe('parseScreenQuestion', () => {
       'Worked for 17s · 04:16',
       '> get it to do something',
       "• I'll ask it to inspect the project and suggest one useful improvement.",
-      '• Called puppet-master.read_agent_context',
+      '• Called potato-workspace.read_agent_context',
       '+ Show details',
       'C:\\Users\\me\\project\\src\\AdminLayoutProvider.tsx',
     ].join('\n');

@@ -1,4 +1,4 @@
-// "Untested version" chip for a pane header. Shown only while Puppet Master is being careful with
+// "Untested version" chip for a pane header. Shown only while Potato Workspace is being careful with
 // this agent (its version is outside the tested range, or a check found screens it no longer reads).
 import { tauriCanaryApi, useCanary, type CanaryApi } from '../../lib/canary';
 import '../../styles/canary.css';

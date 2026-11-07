@@ -1,5 +1,5 @@
 //! The `[hooks]` table (Hook Lane, DESIGN-HOOK-LANE §2): how an agent CLI reports its own
-//! lifecycle to Puppet Master through PM's one fixed hook command.
+//! lifecycle to Potato Workspace through PM's one fixed hook command.
 //!
 //! Declarative definitions carry it as `[hooks]`; code profiles embed the same TOML (see
 //! `tui/claude/hooks.toml`, `tui/codex/hooks.toml`) and parse it with [`parse_hooks_toml`]. Generic
@@ -59,7 +59,7 @@ pub struct HooksTable {
     #[serde(default)]
     pub tested: String,
     /// This agent's mode when the user set none for it: `shadow`, or `off` for an agent whose hooks
-    /// change things outside Puppet Master (a project file the vendor asks to review). Absent: the
+    /// change things outside Potato Workspace (a project file the vendor asks to review). Absent: the
     /// global setting. A global `off` always wins.
     #[serde(default)]
     pub default_mode: Option<String>,
@@ -199,7 +199,7 @@ pub fn validate_hooks(h: &HooksTable) -> Vec<DefError> {
         other => add(
             "AGENT_DEF_HOOKS_GLOBAL_CONFIG",
             "hooks.install",
-            format!("`{other}` is not allowed: Puppet Master installs hooks only by a launch flag or a project file, never in a user or global config"),
+            format!("`{other}` is not allowed: Potato Workspace installs hooks only by a launch flag or a project file, never in a user or global config"),
         ),
     }
     if let Some(launch) = &h.launch {
@@ -221,7 +221,7 @@ pub fn validate_hooks(h: &HooksTable) -> Vec<DefError> {
             add(
                 "AGENT_DEF_HOOKS_SHARED_FILE",
                 "hooks.project_file.path",
-                format!("`{}` is read by other agents too, so Puppet Master never writes hooks into it", file.path),
+                format!("`{}` is read by other agents too, so Potato Workspace never writes hooks into it", file.path),
             );
         }
         if !valid_key(&file.root_key) {
@@ -312,7 +312,7 @@ fn check_entry(entry: &toml::Table, add: &mut impl FnMut(&'static str, &str, Str
                 _ => true,
             };
             if blocks {
-                add("AGENT_DEF_HOOKS_FAIL_CLOSED", &format!("hooks.entry.{key}"), "a hook that blocks the agent when Puppet Master is down is not allowed".into());
+                add("AGENT_DEF_HOOKS_FAIL_CLOSED", &format!("hooks.entry.{key}"), "a hook that blocks the agent when Potato Workspace is down is not allowed".into());
             }
         }
     }

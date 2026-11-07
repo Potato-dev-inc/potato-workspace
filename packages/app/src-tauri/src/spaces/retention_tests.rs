@@ -5,7 +5,7 @@ use rusqlite::params;
 use super::identity::SpaceIdentity;
 use super::ids::{ChannelId, SpaceId};
 use super::ingest::{ingest_entry, EpochKeys, Ingest};
-use super::limits::{KEEP_BYTES, KEEP_MS, TRIM_TO_BYTES};
+use super::limits::{AUTHOR_KEEP_BYTES, KEEP_BYTES, KEEP_MS, TRIM_TO_BYTES};
 use super::log::*;
 use super::retention::*;
 use super::roster::{epoch_info, OpBody, Roster};
@@ -84,6 +84,32 @@ fn sized_row(s: &SpaceStore, seq: u64, created_ms: u64, size: i64) {
         .unwrap();
 }
 
+/// Like `sized_row`, for any author.
+fn sized_row_by(s: &SpaceStore, who: &SpaceIdentity, seq: u64, created_ms: u64, size: i64) {
+    let device = who.device_key();
+    let mut id = [0u8; 32];
+    id[..8].copy_from_slice(&seq.to_be_bytes());
+    id[8..16].copy_from_slice(&device.0[..8]);
+    s.conn
+        .execute(
+            "INSERT INTO entries (id, device, seq, channel, lamport, created_ms, received_ms, kind, ref_id, epoch, bytes, size, gone)              VALUES (?1, ?2, ?3, ?4, ?3, ?5, 0, 1, NULL, 1, x'', ?6, 0)",
+            params![id.to_vec(), device.0.to_vec(), seq as i64, CH.0.to_vec(), created_ms as i64, size],
+        )
+        .unwrap();
+    s.conn
+        .execute(
+            "INSERT INTO authors (device, floor, high) VALUES (?1, 0, ?2) ON CONFLICT(device) DO UPDATE SET high = MAX(high, excluded.high)",
+            params![device.0.to_vec(), seq as i64],
+        )
+        .unwrap();
+}
+
+fn rows_of(s: &SpaceStore, who: &SpaceIdentity) -> i64 {
+    s.conn
+        .query_row("SELECT COUNT(*) FROM entries WHERE device = ?1", params![who.device_key().0.to_vec()], |r| r.get(0))
+        .unwrap()
+}
+
 fn cached_file(s: &SpaceStore, n: u8, size: i64) {
     s.conn
         .execute(
@@ -122,17 +148,58 @@ fn messages_cascade_with_entries() {
 #[test]
 fn size_rule_trims_to_180_mb() {
     let s = SpaceStore::open_memory().unwrap();
-    for seq in 1..=250u64 { sized_row(&s, seq, NOW - DAY + seq, MB); }
+    // Five authors, 50 MB each: the biggest are cut to an equal share, each from its own oldest end.
+    let who: Vec<SpaceIdentity> = (2..=6).map(SpaceIdentity::for_test).collect();
+    for w in &who {
+        for seq in 1..=50u64 { sized_row_by(&s, w, seq, NOW - DAY + seq, MB); }
+    }
     assert!(used_bytes(&s).unwrap() > KEEP_BYTES);
     let r = prune(&s, NOW, &nothing).unwrap();
     assert!(used_bytes(&s).unwrap() <= TRIM_TO_BYTES);
     assert_eq!(r.size_entries, 70);
     assert_eq!(count(&s, "entries"), 180);
-    // The oldest went first, and the floor says so.
-    let lowest: i64 = s.conn.query_row("SELECT MIN(seq) FROM entries", [], |r| r.get(0)).unwrap();
-    assert_eq!(lowest, 71);
-    assert_eq!(s.author_floor(&sam().device_key()).unwrap(), 70);
+    for w in &who {
+        assert_eq!(rows_of(&s, w), 36);
+        assert_eq!(s.author_floor(&w.device_key()).unwrap(), 14);
+    }
     assert_eq!(r.bytes_after, used_bytes(&s).unwrap());
+}
+
+/// Review finding: ratelimit counts by the author's own created_ms, so one member could post ~230 MB of
+/// backdated entries in a day. Oldest-first eviction then threw out everyone else's older messages.
+#[test]
+fn one_member_cannot_push_out_everyone_elses_history() {
+    let s = SpaceStore::open_memory().unwrap();
+    let flooder = sam();
+    let quiet = SpaceIdentity::for_test(3);
+    for seq in 1..=20u64 { sized_row_by(&s, &quiet, seq, NOW - 60 * DAY + seq, MB / 10); }
+    // 230 MB, all stamped older than the quiet member's messages.
+    for seq in 1..=230u64 { sized_row_by(&s, &flooder, seq, NOW - 80 * DAY + seq, MB); }
+    assert!(used_bytes(&s).unwrap() > KEEP_BYTES);
+    prune(&s, NOW, &nothing).unwrap();
+    assert_eq!(rows_of(&s, &quiet), 20, "other members' history must survive");
+    assert_eq!(s.author_floor(&quiet.device_key()).unwrap(), 0);
+    assert!(rows_of(&s, &flooder) as u64 * MB as u64 <= AUTHOR_KEEP_BYTES);
+    // The flooder loses their own oldest first.
+    let lowest: i64 = s
+        .conn
+        .query_row("SELECT MIN(seq) FROM entries WHERE device = ?1", params![flooder.device_key().0.to_vec()], |r| r.get(0))
+        .unwrap();
+    assert!(lowest > 100);
+}
+
+#[test]
+fn tombstones_and_placeholders_survive_eviction() {
+    let s = SpaceStore::open_memory().unwrap();
+    let flooder = sam();
+    for seq in 1..=230u64 { sized_row_by(&s, &flooder, seq, NOW - DAY + seq, MB); }
+    // A delete entry (kind 4) and a gone placeholder, both from the flooder.
+    s.conn.execute("UPDATE entries SET kind = 4, size = 100 WHERE seq = 3", []).unwrap();
+    s.insert_gone_placeholder(&flooder.device_key(), 231).unwrap();
+    prune(&s, NOW, &nothing).unwrap();
+    let kept: i64 = s.conn.query_row("SELECT COUNT(*) FROM entries WHERE seq = 3 AND kind = 4", [], |r| r.get(0)).unwrap();
+    assert_eq!(kept, 1);
+    assert!(s.is_gone(&flooder.device_key(), 231).unwrap());
 }
 
 #[test]

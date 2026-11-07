@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "createUpdaterArtifacts": false,
+    "resources": {
+      "resources/mcp-stdio.bundle.cjs": "mcp-stdio.bundle.cjs",
+      "resources/puppet-master-cli.bundle.mjs": "puppet-master-cli.bundle.mjs",
+      "resources/bin/*": "bin/",
+      "resources/pwa-dist/": "pwa-dist/",
+      "resources/adapters/": "adapters/",
+      "resources/definitions/*.toml": "definitions/",
+      "resources/node/": "node/",
+      "resources/legal/": "legal/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
+    }
+  }
+}

@@ -1,6 +1,6 @@
-//! Puppet Master's helper tools, ready inside every agent pane with no setup.
+//! Potato Workspace's helper tools, ready inside every agent pane with no setup.
 //!
-//! An agent that runs in a pane gets Puppet Master's own MCP server (`run_agent`, `wait_agents`, ...)
+//! An agent that runs in a pane gets Potato Workspace's own MCP server (`run_agent`, `wait_agents`, ...)
 //! for that one launch, pointed at THIS app's bridge (the port file of this profile, the way the
 //! shim reads it) and naming the pane it runs in, so a helper it starts nests under it. How an agent
 //! takes a server without touching the person's config is that agent's own knowledge
@@ -22,7 +22,7 @@ pub const SERVER_NAME: &str = crate::mcp_install::MCP_SERVER_NAME;
 
 /// One or two sentences for the agent, for the agents that can take one without replacing the
 /// person's own instructions.
-pub const NOTE: &str = "Puppet Master helpers: when you are asked to use or spawn Puppet Master helpers, agents or workers (not your own built-in subagents), call the run_agent tool of the puppet-master MCP server to start one with a task, then wait_agents to collect the answers. Do not look for its command line or HTTP bridge.";
+pub const NOTE: &str = "Potato Workspace helpers: when you are asked to use or spawn Potato Workspace helpers, agents or workers (not your own built-in subagents), call the run_agent tool of the potato-workspace MCP server to start one with a task, then wait_agents to collect the answers. Do not look for its command line or HTTP bridge.";
 
 /// `*.mcp.json` files older than this are removed when a new launch writes its own.
 const STALE_AFTER: Duration = Duration::from_secs(3 * 24 * 3600);

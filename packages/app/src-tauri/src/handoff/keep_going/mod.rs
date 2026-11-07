@@ -20,7 +20,7 @@
 //! - S3: briefs stay in the private store. No bridge route, push, team or phone code reads them.
 //! - S4: one writer per folder. The old run ends first, the old agent is stopped by PID, and nothing
 //!   new starts unless the old agent exited.
-//! - S5: Puppet Master never answers an agent's own menu, trust, permission or login prompt. This
+//! - S5: Potato Workspace never answers an agent's own menu, trust, permission or login prompt. This
 //!   module has no write path into a pane.
 //! - S6: only a person's answer on a limit card (desktop or a paired phone) or the desktop command
 //!   can start a hand-over. No agent, companion, loopback or MCP caller.

@@ -18,7 +18,7 @@ pub struct SnapshotOptions {
     pub checks: Vec<CheckKind>,
     pub check_argvs: Vec<Vec<String>>,
     pub counts: Option<RunCounts>,
-    /// Extra globs to protect, besides `[tamper] protect` in `.puppet-master/project.toml`.
+    /// Extra globs to protect, besides `[tamper] protect` in `.potato-workspace/project.toml`.
     pub protect: Vec<String>,
     /// Globs to leave alone (generated tests), besides `[tamper] ignore`.
     pub ignore: Vec<String>,

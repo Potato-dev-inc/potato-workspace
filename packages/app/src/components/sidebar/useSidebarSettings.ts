@@ -1,7 +1,7 @@
 // Sidebar-facing view of persisted settings: orchestrator backend, model list/selection and theme,
 // kept in sync with the settings store and the "settings changed" desktop event.
 import { useCallback, useEffect, useState } from 'react';
-import { DEFAULT_LLM_MODELS, type LlmModel, type OrchestratorBackend } from '@puppet-master/shared';
+import { DEFAULT_LLM_MODELS, type LlmModel, type OrchestratorBackend } from '@potato-workspace/shared';
 import { findModel, invalidateSettingsCache, listModels, loadSettings, patchSettings } from '../../lib/settings';
 import { tauri } from '../../lib/tauri';
 

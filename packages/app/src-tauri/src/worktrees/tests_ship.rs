@@ -90,7 +90,7 @@ fn project_str(root: &Path) -> String {
 }
 
 fn write_project_toml(root: &Path, text: &str) {
-    write(root, ".puppet-master/project.toml", text);
+    write(root, ".potato-workspace/project.toml", text);
 }
 
 // ---------------------------------------------------------------------------------- fake gh
@@ -252,7 +252,7 @@ fn saving_the_preset_keeps_the_other_tables_of_the_file() {
     assert_eq!(view.setup, vec!["npm ci"]);
     assert_eq!(view.copy, vec![".env"]);
     assert_eq!(view.run, "npm run dev");
-    let text = std::fs::read_to_string(root.join(".puppet-master/project.toml")).unwrap();
+    let text = std::fs::read_to_string(root.join(".potato-workspace/project.toml")).unwrap();
     assert!(text.contains("[team]") && text.contains("name = \"core\""), "{text}");
     assert_eq!(preset::load(&root).unwrap().setup, vec![vec!["npm".to_string(), "ci".into()]]);
     // A command that needs a shell is refused and nothing is written.
@@ -363,7 +363,7 @@ fn env_files_are_copied_in_and_never_committed() {
     git(cwd, &["add", "-A"]);
     assert!(!git(cwd, &["diff", "--cached", "--name-only"]).contains(".env"));
     git(cwd, &["reset", "-q"]);
-    // ...nor does Puppet Master's own commit, the changes list, or the pushed branch.
+    // ...nor does Potato Workspace's own commit, the changes list, or the pushed branch.
     assert!(commit_pending(&worktree).unwrap());
     let tree = git(cwd, &["ls-tree", "-r", "--name-only", &worktree.branch]);
     assert!(tree.contains("src/new.rs") && !tree.contains(".env"), "{tree}");
@@ -392,7 +392,7 @@ fn files_that_cannot_or_should_not_be_copied_say_why() {
     let (_guard, root) = repo();
     write_project_toml(
         &root,
-        "[worktree]\ncopy = [\"a.txt\", \"nope.env\", \"../outside\", \".git/config\", \".puppet-master/x\"]\n",
+        "[worktree]\ncopy = [\"a.txt\", \"nope.env\", \"../outside\", \".git/config\", \".potato-workspace/x\"]\n",
     );
     let worktree = create(&project_str(&root), "env-3").unwrap();
     let setup = worktree.setup.unwrap();
@@ -400,7 +400,7 @@ fn files_that_cannot_or_should_not_be_copied_say_why() {
     let reason = |path: &str| setup.not_copied.iter().find(|n| n.path == path).map(|n| n.reason.clone()).unwrap_or_default();
     assert!(reason("a.txt").contains("already in the project's history"), "{setup:?}");
     assert!(reason("nope.env").contains("not in the project folder"));
-    for bad in ["../outside", ".git/config", ".puppet-master/x"] {
+    for bad in ["../outside", ".git/config", ".potato-workspace/x"] {
         assert!(reason(bad).contains("not a path inside the project"), "{bad}: {setup:?}");
     }
 }
@@ -686,7 +686,7 @@ fn recent_projects_are_most_recent_first_without_duplicates() {
     folder::remember(&store, &project_str(&a));
     let gone = store.join("deleted-project");
     folder::remember(&store, &gone.to_string_lossy());
-    let others = vec![project_str(&b), "".to_string(), format!("{}/.puppet-master/worktrees/h", project_str(&b))];
+    let others = vec![project_str(&b), "".to_string(), format!("{}/.potato-workspace/worktrees/h", project_str(&b))];
     let listed = folder::recent(&store, &others, 8);
     let paths: Vec<&str> = listed.iter().map(|p| p.path.as_str()).collect();
     assert_eq!(paths, vec![gone.to_string_lossy().as_ref(), a.to_string_lossy().as_ref(), b.to_string_lossy().as_ref()]);
@@ -701,7 +701,7 @@ fn a_separate_copy_is_mapped_back_to_its_project_in_the_recents() {
     let store = temp_dir("store-copy");
     let _store_guard = Dir(store.clone());
     let (_g, project) = repo();
-    let copy = project.join(".puppet-master").join("worktrees").join("pane-1a2b3c4d");
+    let copy = project.join(".potato-workspace").join("worktrees").join("pane-1a2b3c4d");
     std::fs::create_dir_all(&copy).unwrap();
     // The copy's own folder reaches `remember` (an old caller, a pane's cwd)…
     folder::remember(&store, &copy.to_string_lossy());
@@ -727,7 +727,7 @@ fn a_copy_of_a_project_that_is_already_listed_does_not_move_or_duplicate_it() {
     let (_g2, b) = repo();
     folder::remember(&store, &project_str(&a));
     folder::remember(&store, &project_str(&b));
-    let copy_of_a = format!("{}/.puppet-master/worktrees/h-1", project_str(&a));
+    let copy_of_a = format!("{}/.potato-workspace/worktrees/h-1", project_str(&a));
     let listed = folder::recent(&store, &[copy_of_a], 8);
     let paths: Vec<&str> = listed.iter().map(|p| p.path.as_str()).collect();
     assert_eq!(paths, vec![b.to_string_lossy().as_ref(), a.to_string_lossy().as_ref()]);
@@ -738,7 +738,7 @@ fn other_puppet_master_folders_are_still_not_projects() {
     let store = temp_dir("store-pm");
     let _store_guard = Dir(store.clone());
     let (_g, project) = repo();
-    let operations = project.join(".puppet-master").join("operations");
+    let operations = project.join(".potato-workspace").join("operations");
     std::fs::create_dir_all(&operations).unwrap();
     folder::remember(&store, &operations.to_string_lossy());
     assert!(folder::recent(&store, &[operations.to_string_lossy().into_owned()], 8).is_empty());
@@ -746,8 +746,8 @@ fn other_puppet_master_folders_are_still_not_projects() {
 
 #[test]
 fn real_folder_maps_a_copy_and_leaves_a_project_alone() {
-    assert_eq!(folder::real_folder(r"C:\code\shop\.puppet-master\worktrees\pane-1a2b\src"), r"C:\code\shop");
-    assert_eq!(folder::real_folder("/home/me/shop/.puppet-master/worktrees/h-1"), "/home/me/shop");
+    assert_eq!(folder::real_folder(r"C:\code\shop\.potato-workspace\worktrees\pane-1a2b\src"), r"C:\code\shop");
+    assert_eq!(folder::real_folder("/home/me/shop/.potato-workspace/worktrees/h-1"), "/home/me/shop");
     assert_eq!(folder::real_folder("  /home/me/shop  "), "/home/me/shop");
     assert_eq!(folder::real_folder(r"C:\code\shop"), r"C:\code\shop");
 }
@@ -829,7 +829,7 @@ fn the_preset_type_round_trips() {
 fn live_demo_a_preset_a_copy_and_a_draft_pr_through_a_fake_gh() {
     let Ok(project) = std::env::var("PM_LIVE_PROJECT") else { return };
     let project_dir = PathBuf::from(&project);
-    let toml_path = project_dir.join(".puppet-master/project.toml");
+    let toml_path = project_dir.join(".potato-workspace/project.toml");
     let before_toml = std::fs::read_to_string(&toml_path).ok();
     let env_path = project_dir.join(".env");
     assert!(!env_path.exists(), "the live project already has a .env; refusing to overwrite it");
@@ -901,7 +901,7 @@ fn live_demo_a_preset_a_copy_and_a_draft_pr_through_a_fake_gh() {
     if let Ok(text) = std::fs::read_to_string(&exclude) {
         let kept: Vec<&str> = text
             .lines()
-            .filter(|l| l.trim() != "/.env" && l.trim() != "# Puppet Master: files copied into separate copies (never committed)")
+            .filter(|l| l.trim() != "/.env" && l.trim() != "# Potato Workspace: files copied into separate copies (never committed)")
             .collect();
         let _ = std::fs::write(&exclude, kept.join("\n") + "\n");
     }

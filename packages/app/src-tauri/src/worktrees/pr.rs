@@ -1,7 +1,7 @@
 //! Create a pull request from a separate copy, and bring the result of its checks back.
 //!
 //! Everything goes through the GitHub command line (`gh`), which developers already have and are
-//! signed in to. Puppet Master never holds a GitHub token.
+//! signed in to. Potato Workspace never holds a GitHub token.
 //!
 //! - [`status`]: is `gh` installed and signed in, is there a GitHub remote, is there already a PR.
 //! - [`create`]: commit the agent's loose edits to its branch, push `pm/<handle>` (never forced,
@@ -303,7 +303,7 @@ fn capital(text: &str) -> String {
 
 // ------------------------------------------------------------------------------------ create
 
-/// The refusal for a branch that must never be pushed by Puppet Master.
+/// The refusal for a branch that must never be pushed by Potato Workspace.
 fn guard_branch(worktree: &WorktreeRef, base: &str) -> Result<(), OperationError> {
     let branch = worktree.branch.as_str();
     let protected = ["main", "master", "trunk", "develop"];
@@ -315,7 +315,7 @@ fn guard_branch(worktree: &WorktreeRef, base: &str) -> Result<(), OperationError
     {
         return Err(err(
             "PR_BRANCH_REFUSED",
-            format!("Puppet Master only pushes its own pm/ branches, never {branch}."),
+            format!("Potato Workspace only pushes its own pm/ branches, never {branch}."),
         ));
     }
     Ok(())
@@ -364,7 +364,7 @@ pub(super) fn push_branch(
     let lower = text.to_lowercase();
     let message = if lower.contains("non-fast-forward") || lower.contains("fetch first") || lower.contains("rejected") {
         format!(
-            "GitHub already has a different {} branch, so nothing was pushed. Puppet Master never overwrites it; rename or delete that branch on GitHub first.",
+            "GitHub already has a different {} branch, so nothing was pushed. Potato Workspace never overwrites it; rename or delete that branch on GitHub first.",
             worktree.branch
         )
     } else if lower.contains("authentication") || lower.contains("could not read username") || lower.contains("permission denied") {
@@ -392,7 +392,7 @@ pub fn push_update(
     if default_branch.is_some_and(|d| d.eq_ignore_ascii_case(&worktree.branch)) {
         return Err(err(
             "PR_BRANCH_REFUSED",
-            format!("Puppet Master never pushes the repository's default branch ({}).", worktree.branch),
+            format!("Potato Workspace never pushes the repository's default branch ({}).", worktree.branch),
         ));
     }
     if !super::harden::is_sha(expected_remote) {

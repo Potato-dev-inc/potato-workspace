@@ -10,7 +10,7 @@
 //! the production path with only the agent replaced.
 //!
 //! No bridge port is bound, no port file is written, and the process runs as the app profile
-//! `fake-tui-e2e` (its own app-data folder), so a running Puppet Master is never touched.
+//! `fake-tui-e2e` (its own app-data folder), so a running Potato Workspace is never touched.
 
 mod branch;
 mod canary_rig;

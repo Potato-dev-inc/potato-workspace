@@ -40,7 +40,7 @@ export interface NotificationPlan {
 
 const FALLBACK: PushPayload = {
   kind: 'unknown',
-  title: 'Puppet Master',
+  title: 'Potato Workspace',
   body: 'Open to see what changed',
   tag: 'pm-generic',
 };

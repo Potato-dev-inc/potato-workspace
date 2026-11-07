@@ -223,7 +223,7 @@ describe('CiFixCard: the push card', () => {
       onOpenPane: () => {},
     });
     expect(host.querySelector('[data-held]')).not.toBeNull();
-    expect(host.querySelector('.ib-caution')?.textContent).toBe("Puppet Master won't push this fix. Check the copy yourself.");
+    expect(host.querySelector('.ib-caution')?.textContent).toBe("Potato Workspace won't push this fix. Check the copy yourself.");
     expect(byText('Push fix')).toBeUndefined();
     expect(actionTexts()).toEqual(['Look first', "Don't push"]);
     expect(byText('Look first').classList.contains('ck-btn--primary')).toBe(true);

@@ -34,7 +34,7 @@ pub struct StoreRecord {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AgentRecord {
-    /// `YYYY-MM-DD` when the Store added the agent to Puppet Master; empty = not added.
+    /// `YYYY-MM-DD` when the Store added the agent to Potato Workspace; empty = not added.
     pub added: String,
     /// The catalog version (8 hex) the added definition came from; empty when not added.
     pub catalog: String,
@@ -71,7 +71,7 @@ pub struct CheckRecord {
 }
 
 impl StoreRecord {
-    /// The Store added this agent to Puppet Master, from the catalog version `catalog` (8 hex).
+    /// The Store added this agent to Potato Workspace, from the catalog version `catalog` (8 hex).
     pub fn mark_added(&mut self, id: &str, date: &str, catalog: &str) -> Result<(), String> {
         check_id(id)?;
         check_date(date)?;
@@ -100,7 +100,7 @@ impl StoreRecord {
         Ok(())
     }
 
-    /// The Store removed the agent from Puppet Master. The install record stays, so an uninstall
+    /// The Store removed the agent from Potato Workspace. The install record stays, so an uninstall
     /// still knows how the program was put on this PC. An entry with nothing left is dropped.
     pub fn mark_removed(&mut self, id: &str) {
         let Some(rec) = self.agents.get_mut(id) else {

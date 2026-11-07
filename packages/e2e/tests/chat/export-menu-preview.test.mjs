@@ -24,7 +24,7 @@ export async function run(t) {
   await t.expect.text('**You**');
   await t.expect.text('Explain the plan');
   await t.expect.text('The **plan** is simple.');
-  await t.expect.text('_Saved from Puppet Master_');
+  await t.expect.text('_Saved from Potato Workspace_');
   await t.expect.visible('exact=Save as Markdown…');
 
   await t.step('Switch to the page format and back');

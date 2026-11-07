@@ -60,8 +60,8 @@ fn spaces_files() -> Vec<(String, String)> {
     out
 }
 
-const MAY_NAME_P2P: [&str; 3] = ["net.rs", "net_tests.rs", "spike.rs"];
-const NOT_SHIPPED: [&str; 4] = ["guard_tests.rs", "spike.rs", "net_tests.rs", "memnet.rs"];
+const MAY_NAME_P2P: [&str; 4] = ["net.rs", "net_tests.rs", "local_net_tests.rs", "spike.rs"];
+const NOT_SHIPPED: [&str; 5] = ["guard_tests.rs", "spike.rs", "net_tests.rs", "local_net_tests.rs", "memnet.rs"];
 const PURE: [&str; 9] = [
     "ids.rs", "wire.rs", "words.rs", "identity.rs", "roster.rs", "invite.rs", "log.rs", "sync.rs", "limits.rs",
 ];

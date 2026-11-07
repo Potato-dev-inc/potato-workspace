@@ -81,7 +81,7 @@ describe('setupLine', () => {
 
 describe('projects', () => {
   it('maps a separate copy back to its project', () => {
-    expect(projectOfCwd('C:\\code\\shop\\.puppet-master\\worktrees\\run-1-ab12')).toEqual({ path: 'C:\\code\\shop', name: 'shop' });
+    expect(projectOfCwd('C:\\code\\shop\\.potato-workspace\\worktrees\\run-1-ab12')).toEqual({ path: 'C:\\code\\shop', name: 'shop' });
     expect(projectOfCwd('/home/me/shop')).toEqual({ path: '/home/me/shop', name: 'shop' });
     expect(projectOfCwd(undefined)).toBeNull();
   });
@@ -130,12 +130,12 @@ describe('projects', () => {
   });
   describe('recent projects never name a separate copy', () => {
     const at = (path: string, last_used_ms = 1, state: 'repo' | 'missing' = 'repo') => ({ path, name: path.split(/[\\/]/).pop()!, state, last_used_ms });
-    const COPY = 'C:\\code\\shop\\.puppet-master\\worktrees\\pane-1a2b';
+    const COPY = 'C:\\code\\shop\\.potato-workspace\\worktrees\\pane-1a2b';
     it('maps a copy back to its project and lists each folder once', () => {
       const listed = realRecents([at(COPY, 5), at('C:\\code\\shop', 4), at('C:\\code\\site', 3)]);
       expect(listed.map((p) => p.path)).toEqual(['C:\\code\\shop', 'C:\\code\\site']);
       expect(listed[0].name).toBe('shop');
-      expect(JSON.stringify(listed)).not.toContain('.puppet-master');
+      expect(JSON.stringify(listed)).not.toContain('.potato-workspace');
     });
     it('"+" defaults to the last real folder: the newest one the person used, never a copy or a missing folder', () => {
       expect(lastRealFolder([])).toBeNull();

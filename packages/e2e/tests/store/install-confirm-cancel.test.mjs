@@ -22,11 +22,11 @@ export async function run(t) {
   await t.waitFor(`exact=${name}`, { within: 'css=.ck-sheet' });
   await t.expect.text('Not on this PC yet. Install it from here, or add it once it is installed.');
   await t.expect.text('Install runs the command in a window you can watch.');
-  await t.expect.text('Puppet Master never sees your password or key.');
+  await t.expect.text('Potato Workspace never sees your password or key.');
 
   await t.step('Press the big Install button: it only asks first');
   await t.click(`exact=Install ${name}`, { within: 'css=.ck-sheet' });
-  await t.expect.text('Puppet Master will run this in a window you can watch:');
+  await t.expect.text('Potato Workspace will run this in a window you can watch:');
   await t.expect.visible('exact=Copy command');
   await t.expect.visible('exact=Run');
 

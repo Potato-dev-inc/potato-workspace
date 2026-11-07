@@ -94,7 +94,7 @@ describe('MemoryCard', () => {
 
   it('shows a file that changed outside the app, and keeps or undoes it', async () => {
     const { transport } = await render(memory({ outsideChanges: [{ file: 'memory' }] }));
-    expect(host.textContent).toContain('MEMORY.md changed outside Puppet Master.');
+    expect(host.textContent).toContain('MEMORY.md changed outside Potato Workspace.');
     await act(async () => button('Keep the change').click());
     expect(transport.calls.find((c) => c.method === 'decideOutsideChange')?.args).toEqual(['mochi', 'memory', 'keep']);
   });

@@ -13,9 +13,11 @@ const state = vi.hoisted(() => ({
   create: vi.fn(async () => 's9'),
   messages: [] as unknown[],
   invoke: vi.fn(async (_cmd: string, _args?: unknown) => null as unknown),
+  pick: vi.fn(async (_opts?: unknown) => null as unknown),
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: state.invoke }));
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: state.pick }));
 
 vi.mock('../../lib/spaces', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../../lib/spaces')>();
@@ -55,6 +57,8 @@ beforeEach(() => {
   state.detail = null;
   state.invite = null;
   state.messages = [];
+  state.pick.mockReset();
+  state.pick.mockImplementation(async () => null);
   state.invoke.mockReset();
   state.invoke.mockImplementation(async () => null);
   state.answer.mockReset();
@@ -82,6 +86,7 @@ const view = (over: Partial<SpacesView> = {}): SpacesView => ({
   invites: [],
   online: true,
   relayed: false,
+  showOnline: true,
   ...over,
 });
 const detail = (over: Partial<SpaceDetail> = {}): SpaceDetail => ({
@@ -248,6 +253,28 @@ describe('Spaces page', () => {
     );
   });
 
+  it('show online checkbox calls the command and follows the answer', async () => {
+    state.view = view({ spaces: [summary()], showOnline: true });
+    state.detail = detail();
+    state.invoke.mockImplementation(async (cmd: string) => (cmd === 'space_show_online' ? view({ spaces: [summary()], showOnline: false }) : null));
+    await render();
+    await act(async () => button('Space info')!.click());
+    await act(async () => {});
+    const box = host.querySelector('.ck-spaces-sheet input[type="checkbox"]') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(text()).toContain("Show when I'm online");
+    await click(box);
+    expect(state.invoke).toHaveBeenCalledWith('space_show_online', { on: false });
+    expect((host.querySelector('.ck-spaces-sheet input[type="checkbox"]') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('the page reports that this window is online', async () => {
+    state.view = view({ spaces: [summary()] });
+    state.detail = detail();
+    await render();
+    expect(state.invoke).toHaveBeenCalledWith('space_presence', { state: 'online' });
+  });
+
   // ---- D5.4: menus, leave and the removed state, all through the page ----------------------------------------
 
   const sam: SpaceMember = {
@@ -370,10 +397,87 @@ describe('Spaces page', () => {
   it('a failed action shows its plain sentence', async () => {
     state.view = view({ spaces: [summary({ isOwner: false })] });
     state.detail = detail({ isOwner: false });
-    state.invoke.mockRejectedValueOnce('You are not in this space any more.');
+    state.invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'space_leave') throw 'You are not in this space any more.';
+      return null;
+    });
     await render();
     await click(button('Leave space'));
     await click(button('Leave'));
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('You are not in this space any more.');
+  });
+
+  // ---- D8.2: files, through the page ---------------------------------------------------------------------------
+
+  const fileMessage = (file: Partial<NonNullable<SpaceMessage['file']>> = {}): SpaceMessage => ({
+    ...samMessage, id: 'msg-f', text: 'notes.txt',
+    file: { sha: 'ab12', name: 'notes.txt', size: 2048, have: false, state: 'idle', percent: 0, ...file },
+  });
+
+  it('a file message shows a card with Get file, and the click asks the backend', async () => {
+    state.view = view({ spaces: [summary()] });
+    state.detail = detail({ channels: general, members: [ren, sam] });
+    state.messages = [fileMessage()];
+    await render();
+    expect(host.querySelector('.ck-spaces-file')?.textContent).toContain('notes.txt · 2 KB');
+    expect(text()).toContain('Files from other people can be harmful. Only open files you expect.');
+    await click(button('Get file'));
+    expect(state.invoke).toHaveBeenCalledWith('space_file_get', { space: 's1', sha: 'ab12' });
+  });
+
+  it('a failed Get file shows the plain sentence on the card', async () => {
+    state.view = view({ spaces: [summary()] });
+    state.detail = detail({ channels: general, members: [ren, sam] });
+    state.messages = [fileMessage()];
+    state.invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'space_file_get') throw 'No one online has this file right now. Try again later.';
+      return null;
+    });
+    await render();
+    await click(button('Get file'));
+    expect(host.querySelector('.ck-spaces-file [role="alert"]')?.textContent).toBe(
+      'No one online has this file right now. Try again later.',
+    );
+  });
+
+  it('a file that is here saves to Downloads and says where', async () => {
+    state.view = view({ spaces: [summary()] });
+    state.detail = detail({ channels: general, members: [ren, sam] });
+    state.messages = [fileMessage({ have: true })];
+    state.invoke.mockImplementation(async (cmd: string) => (cmd === 'space_file_save' ? { name: 'notes (1).txt' } : null));
+    await render();
+    await click(button('Save to Downloads'));
+    expect(state.invoke).toHaveBeenCalledWith('space_file_save', { space: 's1', sha: 'ab12' });
+    expect(text()).toContain('Saved to Downloads as notes (1).txt.');
+  });
+
+  it('Attach file picks a file and offers it to the channel', async () => {
+    state.view = view({ spaces: [summary()] });
+    state.detail = detail({ channels: general, members: [ren, sam] });
+    state.pick.mockImplementation(async () => 'C:\Users\you\notes.txt');
+    await render();
+    await click(button('Attach file'));
+    expect(state.pick).toHaveBeenCalledWith({ multiple: false, directory: false });
+    expect(state.invoke).toHaveBeenCalledWith('space_file_offer', { space: 's1', channel: 'c1', path: 'C:\Users\you\notes.txt' });
+  });
+
+  it('a file that is too big shows the limit under the composer', async () => {
+    state.view = view({ spaces: [summary()] });
+    state.detail = detail({ channels: general, members: [ren, sam] });
+    state.pick.mockImplementation(async () => '/big.bin');
+    state.invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'space_file_offer') throw 'Files can be up to 25 MB.';
+      return null;
+    });
+    await render();
+    await click(button('Attach file'));
+    expect(host.querySelector('.ck-spaces-composer [role="alert"]')?.textContent).toBe('Files can be up to 25 MB.');
+  });
+
+  it('a space I left has no Attach file button', async () => {
+    state.view = view({ spaces: [summary()] });
+    state.detail = detail({ channels: general, members: [ren, sam], state: 'left' });
+    await render();
+    expect(button('Attach file')).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import { QUEUE_PANES, ITEM_NO_PROMPT } from '../attention-fixtures';
 import { PANE_CODEX } from '../fixtures';
 import type { HarnessScenario } from '../types';
 
-// Phone: a prompt Puppet Master could not read. Open the pane.
+// Phone: a prompt Potato Workspace could not read. Open the pane.
 const s: HarnessScenario = {
   name: 'phone-approval-no-prompt',
   route: 'phone',

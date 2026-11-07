@@ -21,7 +21,7 @@ pub(crate) use http::{spawn_device_gate_listener, spawn_gate_listener};
 pub(crate) use routes::team_mcp::{handle_request as team_agent_request, LiveTeam};
 mod locks;
 mod observe;
-mod pane_util;
+pub(crate) mod pane_util;
 mod projects;
 mod router;
 mod routes;
@@ -84,7 +84,7 @@ pub(crate) fn install_for_e2e(registry: Arc<Mutex<PaneRegistry>>, app: AppHandle
 
 /// Dev only (`dev-fake-tui`): the bridge's own connection handler (gate, brain routes, router) on a free
 /// port the OS picks, for an end-to-end test. It writes no port file and never binds the
-/// app's own range (17321 and up), so a running Puppet Master is never touched.
+/// app's own range (17321 and up), so a running Potato Workspace is never touched.
 #[cfg(feature = "dev-fake-tui")]
 #[allow(dead_code)] // dev seam for a future end-to-end test; no caller yet
 pub(crate) fn serve_for_e2e(registry: Arc<Mutex<PaneRegistry>>, app: AppHandle) -> Result<u16, String> {
@@ -156,7 +156,7 @@ impl BridgeHandle {
 }
 
 fn bind_listener() -> Result<(TcpListener, u16), String> {
-    // A non-default profile (`PUPPET_MASTER_PROFILE`) scans its own slice of the range.
+    // A non-default profile (`POTATO_WORKSPACE_PROFILE`) scans its own slice of the range.
     let (min, max) = match crate::app_paths::profile() {
         None => (PORT_MIN, PORT_MAX),
         Some(name) => crate::app_paths::bridge_port_range_for(Some(&name)),
@@ -222,7 +222,7 @@ pub fn start_embedded_bridge(
         .map_err(|err| format!("write bridge port file {}: {err}", port_file.display()))?;
 
     thread::Builder::new()
-        .name("puppet-master-http-bridge".into())
+        .name("potato-workspace-http-bridge".into())
         .spawn(move || {
             for stream in listener.incoming() {
                 match stream {

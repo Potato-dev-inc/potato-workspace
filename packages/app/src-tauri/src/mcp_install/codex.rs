@@ -1,4 +1,4 @@
-//! Codex target: the `[mcp_servers.puppet-master]` block in project and global `config.toml`.
+//! Codex target: the `[mcp_servers.potato-workspace]` block in project and global `config.toml`.
 
 use super::*;
 
@@ -29,12 +29,12 @@ pub(super) fn codex_needs_refresh(content: &str, source: McpLaunchSource) -> boo
     if source == McpLaunchSource::NpmPackage {
         return !content.contains(&format!("[mcp_servers.{MCP_SERVER_NAME}]"))
             || !content.contains("command = \"npx\"")
-            || !content.contains("@puppet-master/mcp");
+            || !content.contains("@potato-workspace/mcp");
     }
     if content.contains("//?/") || content.contains(r"\\?\") {
         return true;
     }
-    if crate::mcp_runtime::using_bundled_mcp() && content.contains("@puppet-master/mcp") {
+    if crate::mcp_runtime::using_bundled_mcp() && content.contains("@potato-workspace/mcp") {
         return true;
     }
     false
@@ -132,7 +132,7 @@ pub(super) fn ensure_codex_mcp_at(
         changed,
         backend: backend.into(),
         message: if installed {
-            "Codex MCP configured for puppet-master".into()
+            "Codex MCP configured for potato-workspace".into()
         } else {
             "Codex MCP install incomplete".into()
         },
@@ -157,7 +157,7 @@ pub(super) fn uninstall_codex_at(path: &Path, backend: &str) -> Result<EnsureMcp
             changed: false,
             backend: backend.into(),
             message: format!(
-                "puppet-master was not in {}",
+                "potato-workspace was not in {}",
                 crate::app_paths::path_for_host_config(path)
             ),
         });
@@ -177,7 +177,7 @@ pub(super) fn uninstall_codex_at(path: &Path, backend: &str) -> Result<EnsureMcp
         changed: true,
         backend: backend.into(),
         message: format!(
-            "Removed puppet-master from {}",
+            "Removed potato-workspace from {}",
             crate::app_paths::path_for_host_config(path)
         ),
     })

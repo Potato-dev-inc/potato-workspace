@@ -9,11 +9,11 @@
 //! where an agent CLI is, and it is exactly what the developer would run by hand.
 //!
 //! Layout, per origin project `P`:
-//! - `P/.puppet-master/worktrees/<short>/`      the worktree (short paths: Windows MAX_PATH)
-//! - `P/.puppet-master/worktrees/<short>.json`  its [`WorktreeRef`] (survives restarts)
+//! - `P/.potato-workspace/worktrees/<short>/`      the worktree (short paths: Windows MAX_PATH)
+//! - `P/.potato-workspace/worktrees/<short>.json`  its [`WorktreeRef`] (survives restarts)
 //! - branch `pm/<handle>`, based on the origin's HEAD at creation time
 //!
-//! `.puppet-master/worktrees/` is added to the repo's `.git/info/exclude`, never to the user's
+//! `.potato-workspace/worktrees/` is added to the repo's `.git/info/exclude`, never to the user's
 //! `.gitignore`.
 //!
 //! Safety rules this module enforces:
@@ -48,7 +48,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 /// Relative to the origin project.
-pub const WORKTREES_DIR: &str = ".puppet-master/worktrees";
+pub const WORKTREES_DIR: &str = ".potato-workspace/worktrees";
 /// Cap of the unified patch returned to a viewer.
 pub const MAX_PATCH_BYTES: usize = 256 * 1024;
 /// Cap of files listed in a [`Changes`].
@@ -215,7 +215,7 @@ fn fnv16(input: &str) -> u16 {
 }
 
 fn worktrees_root(project: &Path) -> PathBuf {
-    project.join(".puppet-master").join("worktrees")
+    project.join(".potato-workspace").join("worktrees")
 }
 
 fn meta_path(project: &Path, dir_name: &str) -> PathBuf {
@@ -280,7 +280,7 @@ fn repo_info(project: &Path) -> Result<RepoInfo, OperationError> {
 /// Ignore the worktrees folder for this repo only (`.git/info/exclude`), never the user's
 /// `.gitignore`. Best effort: failing to write only makes `git status` noisier.
 fn ensure_excluded(info: &RepoInfo) {
-    let line = ".puppet-master/worktrees/";
+    let line = ".potato-workspace/worktrees/";
     let existing = std::fs::read_to_string(&info.exclude_file).unwrap_or_default();
     if existing.lines().any(|l| l.trim() == line) {
         return;
@@ -295,7 +295,7 @@ fn ensure_excluded(info: &RepoInfo) {
     next.push_str(line);
     next.push('\n');
     if let Err(error) = std::fs::write(&info.exclude_file, next) {
-        tracing::warn!(%error, file = %info.exclude_file.display(), "could not exclude .puppet-master/worktrees");
+        tracing::warn!(%error, file = %info.exclude_file.display(), "could not exclude .potato-workspace/worktrees");
     }
 }
 
@@ -370,7 +370,7 @@ impl Default for CreateOptions {
     }
 }
 
-/// Create `<project>/.puppet-master/worktrees/<short>` on a new branch `pm/<handle>` from the
+/// Create `<project>/.potato-workspace/worktrees/<short>` on a new branch `pm/<handle>` from the
 /// origin's current HEAD. Idempotent per handle: a retry gets the same worktree back.
 ///
 /// Uncommitted changes in the origin are not in the new worktree (it starts from `HEAD`).
@@ -506,7 +506,7 @@ pub fn create_with(
                 write_meta(&project_path, &dir_name, &reference)?;
             }
         }
-        Err(error) => tracing::warn!(%error, project, "ignoring an unreadable .puppet-master/project.toml"),
+        Err(error) => tracing::warn!(%error, project, "ignoring an unreadable .potato-workspace/project.toml"),
     }
     Ok(reference)
 }
@@ -546,18 +546,18 @@ fn require_checkout(reference: &WorktreeRef) -> Result<PathBuf, OperationError> 
     Ok(path)
 }
 
-/// Pathspec that keeps Puppet Master's own data (`.puppet-master/`: the checkpoint store, turn
+/// Pathspec that keeps Potato Workspace's own data (`.potato-workspace/`: the checkpoint store, turn
 /// summaries, operation records) out of everything a worktree stages, whether or not the repo
 /// ignores it.
 ///
-/// Not `:(exclude).puppet-master`: git's `add` treats an exclude pathspec that NAMES an ignored
+/// Not `:(exclude).potato-workspace`: git's `add` treats an exclude pathspec that NAMES an ignored
 /// directory as if the caller had asked to add it, and fails with "The following paths are ignored
-/// by one of your .gitignore files: .puppet-master" (live: every isolated run lost its file list,
+/// by one of your .gitignore files: .potato-workspace" (live: every isolated run lost its file list,
 /// Merge and Discard). Only a pattern that does not name the directory itself is left alone, so
-/// this one matches what is inside it, in any `.puppet-master` folder.
-const INTERNAL_PATHSPEC: &str = ":(exclude,glob)**/.puppet-master/**";
+/// this one matches what is inside it, in any `.potato-workspace` folder.
+const INTERNAL_PATHSPEC: &str = ":(exclude,glob)**/.potato-workspace/**";
 
-/// `git add -A` of the worktree except Puppet Master's own data, into the index `env` selects (the
+/// `git add -A` of the worktree except Potato Workspace's own data, into the index `env` selects (the
 /// worktree's real one when empty).
 fn stage_all_but_internal(wt: &Path, env: &[(&str, &std::ffi::OsStr)]) -> Result<(), OperationError> {
     let add = git_raw(wt, &["add", "-A", "--", ".", INTERNAL_PATHSPEC], env)?;
@@ -712,7 +712,7 @@ fn porcelain_paths(status_z: &str) -> BTreeSet<String> {
 }
 
 fn is_internal(path: &str) -> bool {
-    path == ".puppet-master" || path.starts_with(".puppet-master/")
+    path == ".potato-workspace" || path.starts_with(".potato-workspace/")
 }
 
 /// Merge the worktree's branch into the origin's current branch with `--no-ff`.
@@ -786,10 +786,10 @@ pub fn merge_keep(reference: &WorktreeRef) -> Result<MergeOutcome, OperationErro
         return Err(error);
     }
     // Record the agent's work on its branch (it normally leaves it uncommitted).
-    commit_all(&wt, &format!("Puppet Master: changes from {}", reference.handle), &[])?;
+    commit_all(&wt, &format!("Potato Workspace: changes from {}", reference.handle), &[])?;
     let head_before = git_ok(&origin, &["rev-parse", "HEAD"], "GIT_FAILED")?;
     // The person's git history uses the app's words: a "separate copy", never an "isolated run".
-    let message = format!("Merge separate copy {} (Puppet Master, {})", reference.branch, reference.handle);
+    let message = format!("Merge separate copy {} (Potato Workspace, {})", reference.branch, reference.handle);
     let merged = git_raw(
         &origin,
         &identity_args(&origin, &["merge", "--no-ff", "--no-edit", "-m", &message, &reference.branch]),
@@ -858,10 +858,10 @@ fn identity_args<'a>(dir: &Path, args: &[&'a str]) -> Vec<&'a str> {
     };
     let mut full: Vec<&'a str> = Vec::new();
     if !has("user.name") {
-        full.extend(["-c", "user.name=Puppet Master"]);
+        full.extend(["-c", "user.name=Potato Workspace"]);
     }
     if !has("user.email") {
-        full.extend(["-c", "user.email=puppet-master@localhost"]);
+        full.extend(["-c", "user.email=potato-workspace@localhost"]);
     }
     full.extend(args);
     full
@@ -885,7 +885,7 @@ fn commit_all(wt: &Path, message: &str, env: &[(String, String)]) -> Result<(), 
 
 #[cfg(test)]
 /// Record the agent's loose edits as one commit on the worktree's branch (the same commit a merge
-/// makes first). `true` when something was committed. `.puppet-master/` is never included.
+/// makes first). `true` when something was committed. `.potato-workspace/` is never included.
 pub(crate) fn commit_pending(reference: &WorktreeRef) -> Result<bool, OperationError> {
     commit_pending_with(reference, &[])
 }
@@ -895,7 +895,7 @@ pub(crate) fn commit_pending(reference: &WorktreeRef) -> Result<bool, OperationE
 pub fn commit_pending_with(reference: &WorktreeRef, env: &[(String, String)]) -> Result<bool, OperationError> {
     let wt = require_checkout(reference)?;
     let before = git_ok(&wt, &["rev-parse", "HEAD"], "GIT_FAILED")?;
-    commit_all(&wt, &format!("Puppet Master: changes from {}", reference.handle), env)?;
+    commit_all(&wt, &format!("Potato Workspace: changes from {}", reference.handle), env)?;
     let after = git_ok(&wt, &["rev-parse", "HEAD"], "GIT_FAILED")?;
     Ok(before != after)
 }
@@ -903,7 +903,7 @@ pub fn commit_pending_with(reference: &WorktreeRef, env: &[(String, String)]) ->
 /// The one start commit of a branch copy (spec n33 §3.2, flow B): the copy's files as they were at
 /// the save point, before the new agent does anything. Same staging and hardening as
 /// [`commit_pending_with`], with the given one-line `message` (at most 120 characters, no control
-/// characters). `.puppet-master/` is never included. Returns the new HEAD, or `None` when nothing
+/// characters). `.potato-workspace/` is never included. Returns the new HEAD, or `None` when nothing
 /// differs from HEAD.
 pub fn commit_start(
     reference: &WorktreeRef,
@@ -923,7 +923,7 @@ pub fn commit_start(
     Ok((before != after).then_some(after))
 }
 
-/// The worktree has changes that are not committed yet (`.puppet-master/` aside).
+/// The worktree has changes that are not committed yet (`.potato-workspace/` aside).
 pub(crate) fn has_uncommitted(reference: &WorktreeRef) -> Result<bool, OperationError> {
     let wt = require_checkout(reference)?;
     let out = git_ok_raw(&wt, &["status", "--porcelain=v1", "-z", "--untracked-files=all"])?;
@@ -941,10 +941,10 @@ pub fn cleanup_merged(reference: &WorktreeRef) -> Result<(), OperationError> {
 }
 
 /// The origin project a working directory belongs to, when it lies inside
-/// `<project>/.puppet-master/worktrees/<name>/...`.
+/// `<project>/.potato-workspace/worktrees/<name>/...`.
 pub fn origin_of_cwd(cwd: &str) -> Option<String> {
     let normalized = cwd.replace('\\', "/");
-    let marker = "/.puppet-master/worktrees/";
+    let marker = "/.potato-workspace/worktrees/";
     let at = normalized.find(marker)?;
     let origin = &normalized[..at];
     if origin.is_empty() {

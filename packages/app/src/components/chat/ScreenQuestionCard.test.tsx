@@ -82,7 +82,7 @@ describe('ScreenQuestionCard', () => {
         "It's running in pane aae09e5b. No task has been assigned yet.",
         'Worked for 17s · 04:16',
         '> get it to do something',
-        '• Called puppet-master.read_agent_context',
+        '• Called potato-workspace.read_agent_context',
         '+ Show details',
         'C:\\Users\\me\\project\\src\\AdminLayoutProvider.tsx',
       ].join('\n'),

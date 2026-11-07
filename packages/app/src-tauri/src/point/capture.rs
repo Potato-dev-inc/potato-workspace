@@ -1,6 +1,6 @@
 //! Native screenshot of a preview window (WebView2 on Windows) (PF-9).
 //!
-//! The page never takes the picture: Puppet Master asks WebView2 for the viewport as a PNG
+//! The page never takes the picture: Potato Workspace asks WebView2 for the viewport as a PNG
 //! (`CapturePreview`). That shows only the preview's own page, never other windows or the desktop.
 //! The PNG has device pixels (CSS size x device ratio x zoom); `shot::crop` divides by the viewport
 //! width the picker reported, so DPI scaling is handled there and not here.

@@ -22,6 +22,7 @@ fn multi_line_prompts_go_through_the_api_but_keys_and_escapes_do_not() {
     assert!(is_pty_control_input("\x15"));
 }
 
+#[cfg(windows)]
 #[test]
 fn cursor_agent_launches_through_interactive_powershell() {
     assert!(windows_powershell_host_agent(AgentType::CursorAgent));

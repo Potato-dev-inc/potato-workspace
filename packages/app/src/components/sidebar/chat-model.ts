@@ -1,4 +1,4 @@
-// Message/log shapes of the Puppet Master sidebar plus the small pure reducers shared by its chat flows.
+// Message/log shapes of the Potato Workspace sidebar plus the small pure reducers shared by its chat flows.
 
 export interface UiLogEntry {
   id: string;

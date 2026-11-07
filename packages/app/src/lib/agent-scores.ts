@@ -78,7 +78,7 @@ const inTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNA
 
 export const scoresApi: ScoresApi = {
   report: async (project, days) => {
-    if (!inTauri()) throw new Error('Open Puppet Master on your computer to see your scores.');
+    if (!inTauri()) throw new Error('Open Potato Workspace on your computer to see your scores.');
     return invoke<ScoresReport>('agent_scores', { project: project ?? null, days: days ?? null });
   },
 };

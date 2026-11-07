@@ -279,7 +279,7 @@ pub struct PushFacts {
     /// (path, line)
     pub secret_lines: Vec<(String, u32)>,
     pub home_path_lines: Vec<(String, u32)>,
-    /// Files under `.puppet-master/`.
+    /// Files under `.potato-workspace/`.
     pub internal_files: Vec<String>,
     pub git_changed: bool,
     pub remote_branch_exists: bool,

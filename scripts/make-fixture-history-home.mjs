@@ -21,7 +21,7 @@
  * - Never reads the real home: only the repo fixtures and the files you name.
  * - Errors print no chat text. The copied files are verbatim, so the folder is private: keep it out of git.
  *
- * Prints the folder (last stdout line), so a live check can pass it as PUPPET_MASTER_HISTORY_HOME.
+ * Prints the folder (last stdout line), so a live check can pass it as POTATO_WORKSPACE_HISTORY_HOME.
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';

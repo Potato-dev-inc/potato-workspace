@@ -22,7 +22,7 @@ pub const POLL_TIMEOUT_S: u32 = 50;
 
 const API_BASE: &str = "https://api.telegram.org";
 /// Debug builds only: may point the API at a loopback fake (see `pick_base`).
-const BASE_OVERRIDE_ENV: &str = "PUPPET_MASTER_TELEGRAM_API_BASE";
+const BASE_OVERRIDE_ENV: &str = "POTATO_WORKSPACE_TELEGRAM_API_BASE";
 const ALLOWED_UPDATES: [&str; 2] = ["message", "callback_query"];
 const DEFAULT_RETRY_AFTER_S: u64 = 30;
 const MAX_RETRY_AFTER_S: u64 = 3600;
@@ -202,7 +202,7 @@ impl std::fmt::Debug for HttpApi {
 
 impl HttpApi {
     /// The client for `token`. The base is Telegram's, except a debug build may point it at
-    /// `http://127.0.0.1:<port>` through `PUPPET_MASTER_TELEGRAM_API_BASE`.
+    /// `http://127.0.0.1:<port>` through `POTATO_WORKSPACE_TELEGRAM_API_BASE`.
     pub fn new(token: &str) -> Self {
         let raw = std::env::var(BASE_OVERRIDE_ENV).ok();
         Self::with_base(token, pick_base(cfg!(debug_assertions), raw.as_deref()))

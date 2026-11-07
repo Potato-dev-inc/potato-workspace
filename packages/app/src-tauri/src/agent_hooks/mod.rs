@@ -113,7 +113,7 @@ pub fn turn_off_what_is_off(dir: &Path, background: bool) {
             |agent| scheme_for(agent).and_then(|s| s.project_file.as_ref().map(|f| f.root_key.clone())),
         );
         if removed > 0 {
-            tracing::info!(removed, "live updates turned off: removed Puppet Master's project hook entries");
+            tracing::info!(removed, "live updates turned off: removed Potato Workspace's project hook entries");
         }
     };
     if background {
@@ -163,14 +163,14 @@ fn bridge_addr() -> Option<String> {
     }
 }
 
-/// `<app data>/hooks` (override: `PUPPET_MASTER_HOOKS_DIR`, for dev runs that must not touch the
+/// `<app data>/hooks` (override: `POTATO_WORKSPACE_HOOKS_DIR`, for dev runs that must not touch the
 /// installed app's folder).
 pub fn hooks_dir() -> PathBuf {
     if cfg!(test) {
         // Unit tests never touch the installed app's folder.
         return std::env::temp_dir().join(format!("pm-hooks-unit-tests-{}", std::process::id()));
     }
-    std::env::var_os("PUPPET_MASTER_HOOKS_DIR")
+    std::env::var_os("POTATO_WORKSPACE_HOOKS_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| crate::app_paths::app_data_dir().join("hooks"))
 }

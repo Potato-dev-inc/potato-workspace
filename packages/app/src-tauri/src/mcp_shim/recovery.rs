@@ -156,7 +156,7 @@ pub(crate) fn wait_timeout_recovery(path: &str, args: &Value, error: String) -> 
         let project = args.get("project_path").and_then(Value::as_str);
         match lookup_operation_by_key(project, key) {
             Ok(snapshot) => return format_operation_timeout_recovery(path, args, &snapshot),
-            Err(lookup_error) if lookup_error.contains("bridge_down") => {
+            Err(lookup_error) if is_connect_failure(&lookup_error) => {
                 return json!({
                     "code": "WAIT_TIMEOUT",
                     "outcome": "unknown",
@@ -233,7 +233,7 @@ pub(crate) fn steer_timeout_recovery(args: &Value, error: String) -> String {
             })
             .to_string()
         }
-        Err(lookup_error) if lookup_error.contains("bridge_down") => json!({
+        Err(lookup_error) if is_connect_failure(&lookup_error) => json!({
             "code": "WAIT_TIMEOUT",
             "outcome": "unknown",
             "message": "bridge unreachable; retry send_message with the same idempotency_key",

@@ -117,8 +117,8 @@ describe('StoreHost', () => {
     const { api } = await mount();
     await click(button('Open Qwen Code'));
     await flush();
-    await click(inSheet('Remove from Puppet Master'));
-    await click(inSheet('Remove from Puppet Master'));
+    await click(inSheet('Remove from Potato Workspace'));
+    await click(inSheet('Remove from Potato Workspace'));
     await flush();
     expect(api.remove).toHaveBeenCalledWith('qwen');
     expect(api.list).toHaveBeenCalledTimes(2);

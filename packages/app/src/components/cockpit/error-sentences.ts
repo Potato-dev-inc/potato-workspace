@@ -34,7 +34,7 @@ function explanation(title: string, sentence: string, fix: ErrorFix, glyph: Erro
 export function explainError(code: string | null | undefined, agent: string): ErrorExplanation | null {
   switch (code) {
     case 'WORKSPACE_TRUST_DECLINED':
-      // Starting again asks about the folder again; Puppet Master never answers that question for you.
+      // Starting again asks about the folder again; Potato Workspace never answers that question for you.
       return explanation(
         `${agent} didn't start`,
         "You chose not to trust this folder, so the task wasn't sent. Start again to be asked once more.",
@@ -46,7 +46,7 @@ export function explainError(code: string | null | undefined, agent: string): Er
     case 'AGENT_NOT_INSTALLED':
       return explanation(`${agent} isn't installed`, "It isn't on this PC yet, so nothing ran.", 'install');
     case 'PANE_NOT_READY':
-      return explanation(`${agent} wasn't ready`, "It didn't reach a ready screen, so Puppet Master typed nothing.", 'open_pane');
+      return explanation(`${agent} wasn't ready`, "It didn't reach a ready screen, so Potato Workspace typed nothing.", 'open_pane');
     case 'PROMPT_NOT_SUBMITTED':
       return explanation(`${agent} didn't start the task`, "The task was typed, but it didn't start on it.", 'open_pane');
     default:

@@ -1,6 +1,6 @@
 // "Orchestrator" tab of the mobile PWA: the CLI orchestrator terminal, or the API-backend chat.
 import { useMemo } from 'react';
-import type { OrchestratorBackend, OrchestratorChatEvent } from '@puppet-master/shared';
+import type { OrchestratorBackend, OrchestratorChatEvent } from '@potato-workspace/shared';
 import type { useBridgePaneRegistry } from '../../hooks/useBridgePaneRegistry';
 import type { PaneTunnelApi } from '../../hooks/usePaneTunnel';
 import type { BridgeClient } from '../../lib/bridge';

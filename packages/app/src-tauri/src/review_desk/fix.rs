@@ -2,7 +2,7 @@
 //! layer puts the draft in the pane's Chat box (`commands::point::put_chat_draft`); nothing is sent and no
 //! terminal is written to (S7).
 //!
-//! The draft holds only the fixed reason sentences of the risk table (built by Puppet Master from recorded
+//! The draft holds only the fixed reason sentences of the risk table (built by Potato Workspace from recorded
 //! facts) and the person's own note. No title, no diff, no agent or tool text.
 
 use super::model::{strip_controls, Item, NOTE_MAX};

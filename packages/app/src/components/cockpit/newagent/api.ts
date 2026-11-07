@@ -2,7 +2,7 @@
 // calls the same commands the "+" menu, Settings and the chat tab already use; it adds no command of its own.
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
+import { pickFiles } from '../../../lib/attachFiles';
 import { tauriAccountsApi, type Account } from '../../../lib/accounts';
 import { loadSettings, patchSettings } from '../../../lib/settings';
 import { shipApi, type RecentProject } from '../../../lib/ship-api';
@@ -59,12 +59,7 @@ export function laneViewFromWire(wire: LaneWire | null | undefined): LaneView | 
 export const tauriNewAgentApi: NewAgentApi = {
   recent: async () => realRecents(await shipApi.recent()),
   pickFolder: () => shipApi.pickFolder(),
-  pickPaths: async () => {
-    if (!inTauri()) return [];
-    const picked = await open({ multiple: true, directory: false, title: 'Add files to your message' });
-    if (Array.isArray(picked)) return picked.filter((p): p is string => typeof p === 'string');
-    return typeof picked === 'string' ? [picked] : [];
-  },
+  pickPaths: async () => pickFiles(),
   defaultFolder: async () => {
     const path = await tauri.getProjectPath();
     return isValidProjectPath(path) ? path : null;

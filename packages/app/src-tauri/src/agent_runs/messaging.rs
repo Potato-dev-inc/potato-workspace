@@ -377,7 +377,7 @@ fn store_key(project: &str, handle: &str) -> String {
 
 fn path_for(project: &str, handle: &str) -> PathBuf {
     PathBuf::from(project)
-        .join(".puppet-master")
+        .join(".potato-workspace")
         .join("messages")
         .join(format!("{handle}.json"))
 }

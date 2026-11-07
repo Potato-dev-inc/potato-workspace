@@ -86,7 +86,7 @@ fn fixed_env_without_home_finds_nothing() {
 #[test]
 fn override_home_is_the_only_home_and_blocks_other_variables() {
     static VARS: &[(&str, &str)] = &[
-        ("PUPPET_MASTER_HISTORY_HOME", "D:\\pm-night\\bc-fixture-home"),
+        ("POTATO_WORKSPACE_HISTORY_HOME", "D:\\pm-night\\bc-fixture-home"),
         ("CLAUDE_CONFIG_DIR", "C:\\Users\\you\\.claude"),
         ("CODEX_HOME", "C:\\Users\\you\\.codex"),
         ("XDG_DATA_HOME", "C:\\Users\\you\\.local\\share"),
@@ -108,7 +108,7 @@ fn process_env_without_override_reads_variables_and_process_home() {
 
 #[test]
 fn blank_override_is_ignored() {
-    static VARS: &[(&str, &str)] = &[("PUPPET_MASTER_HISTORY_HOME", "   ")];
+    static VARS: &[(&str, &str)] = &[("POTATO_WORKSPACE_HISTORY_HOME", "   ")];
     let env = HistoryEnv::from_lookup(fake_process(VARS), Some(PathBuf::from("C:\\Users\\you")));
     assert_eq!(env.home(), Some(Path::new("C:\\Users\\you")));
 }

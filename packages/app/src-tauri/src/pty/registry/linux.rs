@@ -53,7 +53,7 @@ pub(super) fn pane_command(
     linux_command(&exe, profile, request, env, place)
 }
 
-/// `wsl.exe -d <distro> --cd <folder> --exec /bin/sh -c <launcher> puppet-master <program> <args...>`,
+/// `wsl.exe -d <distro> --cd <folder> --exec /bin/sh -c <launcher> potato-workspace <program> <args...>`,
 /// in the pane's Windows folder. Only the names in `env` cross, and `WSLENV` is always set.
 pub(super) fn linux_command(
     wsl_exe: &Path,
@@ -73,7 +73,7 @@ pub(super) fn linux_command(
         refusal(OperationError::new(
             WSL_START_FAILED,
             format!(
-                "{} can't run in Linux from Puppet Master yet.",
+                "{} can't run in Linux from Potato Workspace yet.",
                 crate::tui::descriptor_for(profile.id()).map(|d| d.label).unwrap_or_else(|| profile.id().to_string())
             ),
             false,

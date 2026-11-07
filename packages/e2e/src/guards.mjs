@@ -11,7 +11,7 @@ export function assertSafePort(port, what) {
 /** True for the data folder of the real app (the default profile), which a test run must never use. */
 export function isFoundersDataDir(dir) {
   const norm = path.resolve(dir).split(path.sep).join('/').toLowerCase();
-  return /\/com\.puppetmaster\.app$/.test(norm);
+  return /\/com\.potatoworkspace\.app$/.test(norm);
 }
 
 export function assertSafeProfile(profile) {

@@ -251,7 +251,7 @@ impl Engine {
         let source = (self.deps.sources)()
             .into_iter()
             .find(|s| s.facts.id.eq_ignore_ascii_case(&agent))
-            .ok_or_else(|| format!("{agent} is not an agent Puppet Master knows"))?;
+            .ok_or_else(|| format!("{agent} is not an agent Potato Workspace knows"))?;
         if !source.facts.installed {
             return Err(format!("{} is not installed on this computer", source.facts.label));
         }

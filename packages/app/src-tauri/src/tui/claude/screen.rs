@@ -4,7 +4,7 @@ use crate::tui::{ComposerState, StandbyScreen};
 
 /// Ctrl+U, sixteen times: each press erases ONE visual line of the input box backwards (live,
 /// Claude 2.1.300: two wrapped copies of a follow-up needed two presses; presses on an empty
-/// box do nothing). Used only on text Puppet Master typed (`TuiProfile::retype_clear_sequence`),
+/// box do nothing). Used only on text Potato Workspace typed (`TuiProfile::retype_clear_sequence`),
 /// never on a person's draft.
 pub(super) const CLEAR_TYPED_TEXT: &str =
     "\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}\u{15}";

@@ -249,7 +249,7 @@ mod tests {
         assert!(other.recoverable);
     }
 
-    /// Puppet Master's own generated folder names stay short, so a long-ish project does not turn
+    /// Potato Workspace's own generated folder names stay short, so a long-ish project does not turn
     /// into an unusable path the moment a separate copy or a wizard folder is added under it.
     #[test]
     fn folders_puppet_master_makes_for_itself_have_short_names() {

@@ -1,12 +1,12 @@
 // Messages POSTed from the mobile PWA through the Rust bridge: run them on the active orchestrator
 // backend and stream text / tool results / completion back to the phone as chat events.
 import { useEffect } from 'react';
-import type { LlmModel, OrchestratorChatEvent } from '@puppet-master/shared';
+import type { LlmModel, OrchestratorChatEvent } from '@potato-workspace/shared';
 import type { BridgeClient } from '../../lib/bridge';
 import { makeBridgeExecutor, makeTauriExecutor } from '../../lib/mcp-executor';
 import { isCliOrchestratorBackend } from '../../lib/orchestrator-panes';
-import { runPuppetMasterLoop } from '../../lib/puppet-master';
-import { runPuppetMasterCliLoop } from '../../lib/puppet-master-cli';
+import { runPotatoWorkspaceLoop } from '../../lib/potato-workspace';
+import { runPotatoWorkspaceCliLoop } from '../../lib/potato-workspace-cli';
 import { loadSettings } from '../../lib/settings';
 import { resolveApiKey } from '../../lib/secrets';
 import { tauri } from '../../lib/tauri';
@@ -57,7 +57,7 @@ export function useRemoteOrchestratorMessages(
         const controller = new AbortController();
         abortRef.current = controller;
 
-        await runPuppetMasterLoop(
+        await runPotatoWorkspaceLoop(
           model,
           apiKey,
           bridge ? makeBridgeExecutor(bridge) : makeTauriExecutor(),
@@ -103,7 +103,7 @@ export function useRemoteOrchestratorMessages(
         const controller = new AbortController();
         abortRef.current = controller;
 
-        await runPuppetMasterCliLoop(activeBackend, bridge, msg.text, {
+        await runPotatoWorkspaceCliLoop(activeBackend, bridge, msg.text, {
           onAssistantText: (t) => {
             setMessages((m) => appendStreamedText(m, streamId, t));
             pushChat({ type: 'text', message_id: msg.message_id, text: t });

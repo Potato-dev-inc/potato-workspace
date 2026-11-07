@@ -17,7 +17,7 @@ pub enum Opening {
     /// The agent's session file once it has something to show, and the terminal's text until then (a file that may
     /// never be found). Holds the agent type.
     FileOrScreen(&'static dyn SessionSource, String),
-    /// The terminal's text, for an agent whose file Puppet Master cannot read. Holds the agent type.
+    /// The terminal's text, for an agent whose file Potato Workspace cannot read. Holds the agent type.
     Screen(String),
     /// The agent's local session API, and the terminal's text while the API does not answer. Holds the agent type.
     Api(&'static dyn SessionApi, String),

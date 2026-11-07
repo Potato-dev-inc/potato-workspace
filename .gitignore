@@ -34,9 +34,14 @@ npm-debug.log*
 
 # runtime artifacts
 .runtime/
+.potato-workspace/
+# the other product's folder is never written to; keep it out of commits if it happens to exist
 .puppet-master/
 *.pid
 *.sock
+potato-workspace.bridge.port
+potato-workspace.dev.json
+potato-workspace.pairing.json
 puppet-master.bridge.port
 puppet-master.dev.json
 puppet-master.pairing.json

@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use super::service::SpacesService;
 
@@ -151,4 +151,36 @@ pub async fn space_react(app: AppHandle, space: String, target: String, code: St
 #[tauri::command]
 pub async fn space_delete(app: AppHandle, space: String, target: String) -> Result<Value, String> {
     ready(&app)?.delete(&space, &target).await
+}
+
+#[tauri::command]
+pub async fn space_file_offer(app: AppHandle, space: String, channel: String, path: String) -> Result<Value, String> {
+    ready(&app)?.offer_file(&space, &channel, &path).await
+}
+
+/// Starts a fetch when a person clicks `Get file`. Returns when the file is here (or says why it is not).
+#[tauri::command]
+pub async fn space_file_get(app: AppHandle, space: String, sha: String) -> Result<Value, String> {
+    ready(&app)?.get_file(&space, &sha).await?;
+    Ok(json!({ "have": true }))
+}
+
+#[tauri::command]
+pub async fn space_file_save(app: AppHandle, space: String, sha: String) -> Result<Value, String> {
+    let svc = ready(&app)?;
+    let downloads = app.path().download_dir().map_err(|_| "Can't find your Downloads folder.".to_string())?;
+    svc.save_file(&space, &sha, &downloads)
+}
+
+/// The window reports `online` or `away`. Nothing is stored; peers see it for 90 seconds.
+#[tauri::command]
+pub async fn space_presence(app: AppHandle, state: String) -> Result<(), String> {
+    ready(&app)?.set_my_presence(&state)
+}
+
+#[tauri::command]
+pub async fn space_show_online(app: AppHandle, on: bool) -> Result<Value, String> {
+    let svc = ready(&app)?;
+    svc.set_show_online(on)?;
+    Ok(svc.view())
 }

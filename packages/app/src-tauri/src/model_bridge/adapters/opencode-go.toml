@@ -1,4 +1,4 @@
-# A model service Puppet Master can plug into an app. Generic code reads only this data.
+# A model service Potato Workspace can plug into an app. Generic code reads only this data.
 id = "opencode-go"
 display_name = "OpenCode Go"
 base_url = "https://opencode.ai/inference/go/openai/v1"

@@ -128,6 +128,8 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
         }
         None => {
             let pane_id = uuid::Uuid::new_v4().to_string();
+            let mut cfg = cfg;
+            crate::acp::config::add_pane_id(&mut cfg, &pane_id);
             let session = AcpSession::new(Arc::new(cfg), deps.env.clone(), SessionParams { key: pane_id.clone(), cwd: folder.clone(), resume_session_id: None });
             supervisor::global().insert(session.clone());
             (session, pane_id)
@@ -155,7 +157,13 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
     };
     let handles = insert_virtual_pane(
         &deps.registry,
-        VirtualPaneSpec { pane_id: pane_id.clone(), agent_type: agent_id, cwd: folder.to_string_lossy().into_owned(), lane: LANE.to_string() },
+        VirtualPaneSpec {
+            pane_id: pane_id.clone(),
+            agent_type: agent_id,
+            cwd: folder.to_string_lossy().into_owned(),
+            lane: LANE.to_string(),
+            pid: session.connection().map(|conn| conn.pid()).unwrap_or(0),
+        },
         on_close,
     );
     chat.set_handles(handles);
@@ -185,6 +193,7 @@ pub fn start_failure_sentence(label: &str, error: &crate::acp::error::AcpError) 
 pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
     let Some(conversations) = &deps.conversations else { return Vec::new() };
     let mut restored = Vec::new();
+    let mut links: Vec<(String, String)> = Vec::new();
     for id in conversations.open_ids() {
         if CHATS.lock().contains_key(&id) {
             continue;
@@ -202,11 +211,29 @@ pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
         };
         let handles = insert_virtual_pane(
             &deps.registry,
-            VirtualPaneSpec { pane_id: id.clone(), agent_type: record.agent.clone(), cwd: record.cwd.clone(), lane: LANE.to_string() },
+            VirtualPaneSpec {
+                pane_id: id.clone(),
+                agent_type: record.agent.clone(),
+                cwd: record.cwd.clone(),
+                lane: LANE.to_string(),
+                pid: chat.session().connection().map(|conn| conn.pid()).unwrap_or(0),
+            },
             on_close,
         );
         chat.set_handles(handles);
+        chat.set_started_by(record.started_by.as_deref());
+        if let Some(parent) = record.parent_pane_id.clone() {
+            links.push((id.clone(), parent));
+        }
         restored.push(id);
+    }
+    // The helper-of link goes back once every restored pane is listed (a parent may be a chat restored in this
+    // loop). Only a parent that is live now counts: a terminal that did not survive is not a parent.
+    for (child, parent) in links {
+        let live = crate::pty::pane_parent::claimed_pane(&deps.registry, &parent).is_some_and(|pane| !pane.exited);
+        if live {
+            crate::pty::pane_parent::set_parent(&deps.registry, &child, &parent);
+        }
     }
     if !restored.is_empty() {
         deps.host.panes_changed();

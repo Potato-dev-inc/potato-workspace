@@ -11,7 +11,7 @@ import { Sidebar } from './Sidebar';
 
 vi.mock('../../lib/spaces', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../../lib/spaces')>();
-  const empty: SpacesView = { spaces: [], requests: [], joining: [], invites: [], online: true, relayed: false };
+  const empty: SpacesView = { spaces: [], requests: [], joining: [], invites: [], online: true, relayed: false, showOnline: true };
   return {
     ...orig,
     useSpaces: () => ({

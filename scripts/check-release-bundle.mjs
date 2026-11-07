@@ -41,20 +41,22 @@ const need = (rel) => {
 const walk = (dir) =>
   readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
 
+const win = process.platform === 'win32';
+const exe = win ? '.exe' : '';
 // Node.js and npm, so nobody has to install them (fetch-node.mjs). The ACP installer runs npm from the node folder.
-need('resources/node/node.exe');
-need('resources/node/npm.cmd');
-need('resources/node/npx.cmd');
+need(`resources/node/node${exe}`);
+need(`resources/node/npm${win ? '.cmd' : ''}`);
+need(`resources/node/npx${win ? '.cmd' : ''}`);
 need('resources/node/node_modules/npm/package.json');
-// MinGit, so nobody has to install Git (fetch-git.mjs).
-need('resources/git/cmd/git.exe');
+// MinGit, so nobody has to install Git on Windows (fetch-git.mjs). macOS and Linux use the system git.
+if (win) need('resources/git/cmd/git.exe');
 // cloudflared, for the phone's away-from-home tunnel (fetch-cloudflared.mjs).
-need('resources/bin/cloudflared.exe');
+need(`resources/bin/cloudflared${exe}`);
 // The Rust MCP server, in release form (bundle-mcp.mjs runs build-rust-mcp.mjs, which builds --release).
-need('resources/bin/puppet-master-mcp.exe');
+need(`resources/bin/puppet-master-mcp${exe}`);
 {
-  const mcp = join(res, 'bin/puppet-master-mcp.exe');
-  if (existsSync(mcp) && statSync(mcp).size < 1024 * 1024) problems.push('resources/bin/puppet-master-mcp.exe is too small to be a real build');
+  const mcp = join(res, `bin/puppet-master-mcp${exe}`);
+  if (existsSync(mcp) && statSync(mcp).size < 1024 * 1024) problems.push(`resources/bin/puppet-master-mcp${exe} is too small to be a real build`);
 }
 // The bundled bridges the app loads at run time.
 need('resources/mcp-stdio.bundle.cjs');
@@ -63,7 +65,8 @@ need('resources/puppet-master-cli.bundle.mjs');
 if (!existsSync(join(res, 'adapters')) || walk(join(res, 'adapters')).length === 0) problems.push('no agent adapters staged under resources/adapters');
 for (const f of walk(join(res, 'adapters'))) need(relative(tauri, f).split(sep).join('/'));
 // The licences travel with the app.
-for (const f of ['LICENSES/Node.txt', 'LICENSES/Git.txt', 'LICENSES/cloudflared.txt']) need(`resources/legal/${f}`);
+for (const f of ['LICENSES/Node.txt', 'LICENSES/cloudflared.txt']) need(`resources/legal/${f}`);
+if (win) need('resources/legal/LICENSES/Git.txt');
 
 if (problems.length) {
   console.error('[check-release-bundle] the installer would be missing files:\n  ' + problems.join('\n  '));

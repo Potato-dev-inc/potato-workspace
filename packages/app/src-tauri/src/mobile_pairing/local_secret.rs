@@ -5,12 +5,12 @@
 //! fix is a secret only the app's own clients know:
 //!
 //! - At bridge start, 32 random bytes are minted (hex) and written to
-//!   `puppet-master.bridge.secret` next to the port file, through `secure_file::write_private`
+//!   `potato-workspace.bridge.secret` next to the port file, through `secure_file::write_private`
 //!   (atomic; 0600 on Unix; `%APPDATA%` is per-user on Windows). The port file itself is unchanged,
 //!   so older readers of it keep working.
 //! - The app's webview gets it over Tauri IPC (`bridge_local_secret`), never over HTTP.
 //! - The MCP shim reads it from beside the port file it found.
-//! - Every client sends it as `X-PM-Local-Secret`.
+//! - Every client sends it as `X-Potato-Workspace-Local-Secret`.
 //!
 //! This release only LOGS a local caller without it (`LOCAL_SECRET_MISSING`) and counts it for the
 //! health panel; the request is still allowed. Enforcing comes once every client sends it
@@ -30,8 +30,8 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-pub const HEADER: &str = "X-PM-Local-Secret";
-pub const FILE_NAME: &str = "puppet-master.bridge.secret";
+pub const HEADER: &str = "X-Potato-Workspace-Local-Secret";
+pub const FILE_NAME: &str = "potato-workspace.bridge.secret";
 /// The same route class is logged at most this often (the counter still counts every request).
 const LOG_EVERY: Duration = Duration::from_secs(10 * 60);
 
@@ -130,7 +130,7 @@ fn route_class(method: &str, path: &str) -> String {
     format!("{method} /{}", route.join("/"))
 }
 
-/// `puppet-master.bridge.secret` beside the given port file.
+/// `potato-workspace.bridge.secret` beside the given port file.
 pub fn file_beside(port_file: &Path) -> PathBuf {
     port_file.with_file_name(FILE_NAME)
 }
@@ -163,7 +163,7 @@ pub enum Check {
     NotMinted,
 }
 
-/// Compare the request's `X-PM-Local-Secret` with `expected` in constant time.
+/// Compare the request's `X-Potato-Workspace-Local-Secret` with `expected` in constant time.
 pub fn check_against(headers: &str, expected: Option<&str>) -> Check {
     let Some(expected) = expected else { return Check::NotMinted };
     match super::header_value(headers, HEADER) {
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn the_secret_is_compared_exactly() {
-        let headers = "Host: 127.0.0.1\r\nX-PM-Local-Secret: abc123";
+        let headers = "Host: 127.0.0.1\r\nX-Potato-Workspace-Local-Secret: abc123";
         assert_eq!(check_against(headers, Some("abc123")), Check::Valid);
         assert_eq!(check_against(headers, Some("abc124")), Check::Wrong);
         assert_eq!(check_against("Host: 127.0.0.1", Some("abc123")), Check::Missing);
@@ -243,24 +243,24 @@ mod tests {
         assert_eq!(t.status.last_route.as_deref(), Some("POST /shell/exec"));
         assert!(t.status.log_only);
         // a request that has the key is not counted
-        let valid = format!("{LOCAL}\r\nX-PM-Local-Secret: abc123");
+        let valid = format!("{LOCAL}\r\nX-Potato-Workspace-Local-Secret: abc123");
         assert_eq!(note(&mut t, &valid, "GET", "/panes", now), Noted::Ignored);
         assert_eq!(t.status.missing_count, 2);
         // a wrong key is counted and says so
-        let wrong = format!("{LOCAL}\r\nX-PM-Local-Secret: nope");
+        let wrong = format!("{LOCAL}\r\nX-Potato-Workspace-Local-Secret: nope");
         assert!(matches!(note(&mut t, &wrong, "GET", "/settings", now), Noted::Log { wrong: true, .. }));
     }
 
     /// Round 13 #1: every phone request proxied by `pwa_server` (`/bridge/*`) logged
-    /// `LOCAL_SECRET_MISSING`. The proxy always adds `X-PM-Proxied`, so those are Device or Public
+    /// `LOCAL_SECRET_MISSING`. The proxy always adds `X-Potato-Workspace-Proxied`, so those are Device or Public
     /// callers, never "local without the key".
     #[test]
     fn proxied_and_tunnelled_requests_are_not_local_callers_without_the_key() {
         let mut t = Tally::new();
         let now = Instant::now();
         for forwarded in [
-            "X-PM-Proxied: 1\r\nAuthorization: Bearer phone-token",
-            "X-PM-Proxied: 1",
+            "X-Potato-Workspace-Proxied: 1\r\nAuthorization: Bearer phone-token",
+            "X-Potato-Workspace-Proxied: 1",
             "Cf-Connecting-Ip: 203.0.113.9",
             "X-Forwarded-For: 203.0.113.9",
             "Origin: https://evil.example",
@@ -320,7 +320,7 @@ mod tests {
     #[test]
     fn init_writes_a_private_file_beside_the_port_file() {
         let dir = std::env::temp_dir().join(format!("pm-local-secret-{}", std::process::id()));
-        let port_file = dir.join("puppet-master.bridge.port");
+        let port_file = dir.join("potato-workspace.bridge.port");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(&port_file, "127.0.0.1:17321\n").unwrap();
         let secret = init(&port_file).unwrap();

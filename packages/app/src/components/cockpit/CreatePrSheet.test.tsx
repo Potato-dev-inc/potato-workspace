@@ -13,7 +13,7 @@ const ITEM = {
   branch: 'pm/cart-1',
   base: 'main',
   repo: 'D:/code/shop',
-  path: 'D:/code/shop/.puppet-master/worktrees/cart-1-ab12',
+  path: 'D:/code/shop/.potato-workspace/worktrees/cart-1-ab12',
   exists: true,
   state: 'unreviewed',
   summary: null,

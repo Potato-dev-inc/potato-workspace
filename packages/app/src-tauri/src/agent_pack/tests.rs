@@ -24,8 +24,8 @@ fn temp(name: &str) -> PathBuf {
 fn launch() -> HostLaunch {
     HostLaunch {
         command: "npx".into(),
-        args: vec!["-y".into(), "@puppet-master/mcp".into()],
-        env: vec![("PUPPET_MASTER_BRIDGE_PORT_FILE".into(), "C:/pm/puppet-master.bridge.port".into())],
+        args: vec!["-y".into(), "@potato-workspace/mcp".into()],
+        env: vec![("POTATO_WORKSPACE_BRIDGE_PORT_FILE".into(), "C:/pm/potato-workspace.bridge.port".into())],
         ..Default::default()
     }
 }
@@ -163,14 +163,14 @@ fn undo_restores_the_originals_byte_for_byte() {
         seed(&home, rel, user_text);
     }
     // A skill of the user's own at one of our paths: replaced on apply, restored on undo.
-    seed(&home, ".claude/skills/puppet-master/SKILL.md", "---\nname: puppet-master\ndescription: mine\n---\nMy own notes.\n");
+    seed(&home, ".claude/skills/potato-workspace/SKILL.md", "---\nname: potato-workspace\ndescription: mine\n---\nMy own notes.\n");
     let agents: Vec<AgentSpec> = ["claude", "codex", "cursor_agent", "opencode", "opencode_native"].iter().map(|id| spec(id, true)).collect();
     let e = env(agents, &home);
     let original = tree(&home);
 
     let v = service::call(&e, "apply").unwrap();
     let claude = v["agents"].as_array().unwrap().iter().find(|a| a["id"] == "claude").unwrap();
-    let replaced = claude["skills"]["files"].as_array().unwrap().iter().find(|f| f["name"] == "puppet-master/SKILL.md").unwrap();
+    let replaced = claude["skills"]["files"].as_array().unwrap().iter().find(|f| f["name"] == "potato-workspace/SKILL.md").unwrap();
     assert_eq!(replaced["kind"], "replace", "a file that is not ours is replaced (and backed up)");
     assert_ne!(tree(&home), original);
     assert!(v["recorded"].as_u64().unwrap() >= 8);
@@ -186,7 +186,7 @@ fn undo_restores_the_originals_byte_for_byte() {
 fn an_entry_that_is_already_there_is_never_rewritten() {
     let _serial = crate::tui::registry::test_serial();
     let home = temp("existing");
-    let user = "{\n  \"mcpServers\": {\n    \"puppet-master\": {\n      \"command\": \"C:/mine/pm-mcp.exe\"\n    }\n  }\n}\n";
+    let user = "{\n  \"mcpServers\": {\n    \"potato-workspace\": {\n      \"command\": \"C:/mine/pm-mcp.exe\"\n    }\n  }\n}\n";
     seed(&home, ".cursor/mcp.json", user);
     let e = env(vec![spec("cursor_agent", true)], &home);
     let v = service::call(&e, "apply").unwrap();
@@ -227,7 +227,7 @@ fn undo_says_so_when_the_user_broke_the_config_since_and_keeps_the_record() {
     let u = service::call(&e, "undo").unwrap();
     let skipped = u["skipped"].as_array().unwrap();
     assert!(skipped.iter().any(|s| s["path"].as_str().unwrap().ends_with("config.toml")), "the broken config is reported, not forgotten: {u}");
-    assert!(read(&cfg).contains("puppet-master"), "nothing was guessed at in a file that cannot be parsed");
+    assert!(read(&cfg).contains("potato-workspace"), "nothing was guessed at in a file that cannot be parsed");
     assert!(u["recorded"].as_u64().unwrap() >= 1, "the record stays so Undo can be pressed again: {u}");
 }
 
@@ -298,7 +298,7 @@ fn an_older_copy_of_the_pack_is_updated_and_a_foreign_file_is_replaced() {
     let kind = |n: &str| files.iter().find(|f| f.name == n).unwrap().kind;
     assert_eq!(kind("pm-status/SKILL.md"), FileKind::Update);
     assert_eq!(kind("pm-review/SKILL.md"), FileKind::Replace);
-    assert_eq!(kind("puppet-master/SKILL.md"), FileKind::Add);
+    assert_eq!(kind("potato-workspace/SKILL.md"), FileKind::Add);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -323,7 +323,7 @@ fn pack_files_match_canonical() {
             assert_eq!(copy, text, "{plugin} plugin copy of {name} drifted: run `node scripts/sync-skill-pack.mjs`");
         }
     }
-    assert_eq!(lf(&root.join("cursor/rules/puppet-master.mdc")), lf(&root.join("cursor/plugin/rules/puppet-master.mdc")));
+    assert_eq!(lf(&root.join("cursor/rules/potato-workspace.mdc")), lf(&root.join("cursor/plugin/rules/potato-workspace.mdc")));
     assert_eq!(lf(&root.join("cursor/mcp.json")), lf(&root.join("cursor/plugin/mcp.json")));
 }
 
@@ -349,7 +349,7 @@ fn pack_texts() -> Vec<(String, String)> {
     let root = repo_root().join("integrations");
     let mut out: Vec<(String, String)> = assets::files();
     for rel in [
-        "cursor/rules/puppet-master.mdc",
+        "cursor/rules/potato-workspace.mdc",
         "codex/AGENTS.snippet.md",
         "opencode/agents/pm-delegator.md",
         "opencode/commands/pm-review.md",
@@ -397,7 +397,7 @@ fn the_pack_teaches_real_tools_and_real_parameters() {
         }
     }
     // The five-tool happy path is in the main skill.
-    let main = assets::files().into_iter().find(|(n, _)| n == "puppet-master/SKILL.md").unwrap().1;
+    let main = assets::files().into_iter().find(|(n, _)| n == "potato-workspace/SKILL.md").unwrap().1;
     for tool in ["quick_ask", "run_agent", "wait_agents", "followup_task", "list_agents", "review_worktree", "ask_user"] {
         assert!(main.contains(tool), "the main skill teaches {tool}");
     }
@@ -440,8 +440,8 @@ fn manifests_are_consistent() {
     let manifest = json(&format!("{}/.claude-plugin/plugin.json", src.trim_start_matches("./")));
     assert_eq!(manifest["name"], entry["name"], "entry name and manifest name must match");
     let mcp = json(&format!("{}/.mcp.json", src.trim_start_matches("./")));
-    assert_eq!(mcp["mcpServers"]["puppet-master"]["command"], "npx");
-    assert_eq!(mcp["mcpServers"]["puppet-master"]["args"][1], "@puppet-master/mcp");
+    assert_eq!(mcp["mcpServers"]["potato-workspace"]["command"], "npx");
+    assert_eq!(mcp["mcpServers"]["potato-workspace"]["args"][1], "@potato-workspace/mcp");
 
     let codex = json(".agents/plugins/marketplace.json");
     let path = codex["plugins"][0]["source"]["path"].as_str().unwrap();
@@ -462,13 +462,13 @@ fn manifests_are_consistent() {
     assert_eq!(pkg["version"], pkg_json["version"]);
 
     let oc = json("integrations/opencode/opencode.json");
-    assert_eq!(oc["mcp"]["puppet-master"]["type"], "local");
-    assert!(oc["mcp"]["puppet-master"]["command"].is_array());
+    assert_eq!(oc["mcp"]["potato-workspace"]["type"], "local");
+    assert!(oc["mcp"]["potato-workspace"]["command"].is_array());
     let cursor = json("integrations/cursor/mcp.json");
-    assert_eq!(cursor["mcpServers"]["puppet-master"]["command"], "npx");
+    assert_eq!(cursor["mcpServers"]["potato-workspace"]["command"], "npx");
     let toml: toml::Table = lf(&root.join("integrations/codex/config.toml")).parse().unwrap();
-    assert_eq!(toml["mcp_servers"]["puppet-master"]["command"].as_str(), Some("npx"));
-    assert!(toml["mcp_servers"]["puppet-master"]["tool_timeout_sec"].as_integer().unwrap() > 300, "run_agent may wait 300 s");
+    assert_eq!(toml["mcp_servers"]["potato-workspace"]["command"].as_str(), Some("npx"));
+    assert!(toml["mcp_servers"]["potato-workspace"]["tool_timeout_sec"].as_integer().unwrap() > 300, "run_agent may wait 300 s");
 }
 
 #[test]

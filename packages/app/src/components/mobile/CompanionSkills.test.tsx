@@ -30,7 +30,7 @@ describe('CompanionSkills', () => {
     act(() => root.render(<CompanionSkills name="Mochi" skills={skills} />));
     expect(host.querySelector('h2')?.textContent).toBe('Skills Mochi has learned');
     expect([...host.querySelectorAll('li p:first-child')].map((p) => p.textContent)).toEqual(['Weekly report', 'Standup']);
-    expect(host.textContent).toContain('Changed outside Puppet Master');
+    expect(host.textContent).toContain('Changed outside Potato Workspace');
     expect(host.querySelectorAll('button, input, textarea')).toHaveLength(0);
   });
 

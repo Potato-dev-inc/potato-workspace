@@ -1,5 +1,5 @@
 // "Let agents answer these questions": off by default. Off, only the person can answer the agent's permission questions;
-// on, an agent that started this chat through Puppet Master (or any agent tool) may answer them too.
+// on, an agent that started this chat through Potato Workspace (or any agent tool) may answer them too.
 import { useEffect, useState } from 'react';
 import { errorSentence, tauriAcpChatApi, type AcpChatApi, type AcpChatState } from '../../lib/acpChat';
 import '../../styles/cockpit-acp.css';

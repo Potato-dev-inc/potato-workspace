@@ -21,7 +21,7 @@ import '../../styles/history.css';
 
 export const BRING_CHATS_TITLE_ID = 'bc-panel-title';
 /** The text of the "Remove imported chats" question. The Settings row uses the same words. */
-export const BRING_REMOVE_BODY = "This removes the old chats Puppet Master added to search. Your agents' own chat files are not touched.";
+export const BRING_REMOVE_BODY = "This removes the old chats Potato Workspace added to search. Your agents' own chat files are not touched.";
 
 type View = 'intro' | 'off' | 'looking' | 'found' | 'reading' | 'result';
 

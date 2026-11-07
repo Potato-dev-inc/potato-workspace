@@ -2,7 +2,7 @@
 //!
 //! Why not the official `agent-client-protocol-schema` crate: it forces `serde_json`'s `preserve_order`
 //! feature on, and Cargo unifies features across the whole app. Turning that on makes every JSON object
-//! in Puppet Master keep insertion order instead of sorted order. That changed 7 existing tests the day it
+//! in Potato Workspace keep insertion order instead of sorted order. That changed 7 existing tests the day it
 //! was tried (golden files, the pinned tool-catalog version) and would silently change any signed or
 //! hashed JSON. A message type is not worth that. These types cover what the state machine needs; the
 //! rest of a message stays a raw `serde_json::Value` for A2's chat mapper to read.
@@ -194,6 +194,39 @@ pub struct Plan {
     pub entries: Vec<Value>,
 }
 
+/// A background task the agent started (`async_task_spawned`, a Claude adapter Air extension).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AsyncTaskSpawned {
+    pub async_task_id: String,
+    pub name: Option<String>,
+    pub task_type: Option<String>,
+    pub description: Option<String>,
+    pub tool_call_id: Option<String>,
+    pub output_file_path: Option<String>,
+}
+
+/// A change to a background task's state (`async_task_state_update`). `state` is `running`,
+/// `paused`, `completed`, `failed` or `stopped`.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AsyncTaskStateUpdate {
+    pub async_task_id: String,
+    pub state: String,
+    pub summary: Option<String>,
+    pub tool_call_id: Option<String>,
+    pub output_file_path: Option<String>,
+}
+
+/// Progress from a background task (`async_task_progress`): no state, only metadata.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AsyncTaskProgress {
+    pub async_task_id: String,
+    pub tool_call_id: Option<String>,
+    pub output_file_path: Option<String>,
+}
+
 /// The payload of `session/update`, tagged by `sessionUpdate`. A kind not listed here does not parse.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "sessionUpdate", rename_all = "snake_case")]
@@ -214,6 +247,10 @@ pub enum SessionUpdate {
     /// Context compaction progress (kept raw).
     CompactionUpdate(Value),
     CompactionSummaryChunk(Value),
+    /// Background work that outlives the turn (Claude adapter Air extension).
+    AsyncTaskSpawned(AsyncTaskSpawned),
+    AsyncTaskProgress(AsyncTaskProgress),
+    AsyncTaskStateUpdate(AsyncTaskStateUpdate),
 }
 
 impl SessionUpdate {
@@ -234,6 +271,9 @@ impl SessionUpdate {
             SessionUpdate::Notice(_) => "notice",
             SessionUpdate::CompactionUpdate(_) => "compaction_update",
             SessionUpdate::CompactionSummaryChunk(_) => "compaction_summary_chunk",
+            SessionUpdate::AsyncTaskSpawned(_) => "async_task_spawned",
+            SessionUpdate::AsyncTaskProgress(_) => "async_task_progress",
+            SessionUpdate::AsyncTaskStateUpdate(_) => "async_task_state_update",
         }
     }
 }
@@ -297,6 +337,9 @@ mod tests {
             json!({"sessionUpdate":"plan","entries":[{"content":"x","priority":"high","status":"pending"}]}),
             json!({"sessionUpdate":"config_option_update","configOptions":[{"id":"model"}]}),
             json!({"sessionUpdate":"notice","level":"warning","text":"careful"}),
+            json!({"sessionUpdate":"async_task_spawned","asyncTaskId":"bg1","name":"npm test","taskType":"local_bash"}),
+            json!({"sessionUpdate":"async_task_progress","asyncTaskId":"bg1","outputFilePath":"/tmp/bg.log"}),
+            json!({"sessionUpdate":"async_task_state_update","asyncTaskId":"bg1","state":"completed","summary":"ok"}),
         ];
         for case in cases {
             let parsed: Result<SessionUpdate, _> = serde_json::from_value(case.clone());

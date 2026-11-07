@@ -8,7 +8,7 @@ pub(super) fn tools() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
             name: "read_librarian_prompt",
-            description: "Render the OpenCode librarian prompt (DeepWiki-style index task). Send the returned prompt to opencode_native via write_terminal_input; worker writes .puppet-master/project-ir.json.",
+            description: "Render the OpenCode librarian prompt (DeepWiki-style index task). Send the returned prompt to opencode_native via write_terminal_input; worker writes .potato-workspace/project-ir.json.",
             input_schema: object_schema(json!({}), vec![]),
             output_schema: None,
             safety: ToolSafety::ReadOnly,

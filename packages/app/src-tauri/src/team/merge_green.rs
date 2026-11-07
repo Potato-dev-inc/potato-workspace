@@ -1,6 +1,6 @@
 //! "Merge when green" (COWORK-PLAN §5.1, founder decision Q8 → b): one click, after a confirm
 //! sheet, arms **GitHub's own** auto-merge with `gh pr merge <n> --auto --<method>`. GitHub then
-//! merges when the required checks pass and branch protection allows it; Puppet Master never merges
+//! merges when the required checks pass and branch protection allows it; Potato Workspace never merges
 //! by itself, never schedules a merge, and never runs this without the person's click.
 //!
 //! What the sheet shows comes from GitHub, never from a card (security review M2):

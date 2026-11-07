@@ -736,7 +736,7 @@ function ConsentBanner({
         ))}
       </ul>
       <p className="mt-2 text-xs text-pm-muted">
-        A definition tells Puppet Master which program to run. Nothing is loaded until you allow this project, and
+        A definition tells Potato Workspace which program to run. Nothing is loaded until you allow this project, and
         each file still needs your approval. A copy of the project in another folder asks again.
       </p>
       <div className="mt-3 flex gap-2">

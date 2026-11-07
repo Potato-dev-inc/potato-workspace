@@ -66,7 +66,7 @@ pub fn initialize_line() -> String {
         "params": {
             "protocolVersion": 1,
             "clientCapabilities": {},
-            "clientInfo": {"name": "puppet-master", "title": "Puppet Master", "version": env!("CARGO_PKG_VERSION")},
+            "clientInfo": {"name": "potato-workspace", "title": "Potato Workspace", "version": env!("CARGO_PKG_VERSION")},
         },
     });
     format!("{request}\n")

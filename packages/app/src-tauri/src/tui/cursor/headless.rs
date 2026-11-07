@@ -96,7 +96,7 @@ pub(super) fn detect_trust(agent_type: &str, output: &str) -> Option<Value> {
             "effect": "answer_prompt(handle, prompt_id, choice=\"trust_workspace\") re-runs this task on the same handle with trust_workspace=true, equivalent to run_agent(..., trust_workspace=true). Only choose it for a folder the user named; Cursor can then run code and read files there."
         }],
         "headless": true,
-        "resolution": "Resolve in one call: answer_prompt(handle, prompt_id, choice=\"trust_workspace\"), or retry with run_agent(..., trust_workspace=true). Alternatively trust the folder yourself in an interactive Cursor Agent (run `agent` in the project and accept the trust prompt), then retry with send_agent. Puppet Master only passes --trust when the run was started with trust_workspace=true, and passes --force only when the run was started with allow_shell=true."
+        "resolution": "Resolve in one call: answer_prompt(handle, prompt_id, choice=\"trust_workspace\"), or retry with run_agent(..., trust_workspace=true). Alternatively trust the folder yourself in an interactive Cursor Agent (run `agent` in the project and accept the trust prompt), then retry with send_agent. Potato Workspace only passes --trust when the run was started with trust_workspace=true, and passes --force only when the run was started with allow_shell=true."
     }))
 }
 

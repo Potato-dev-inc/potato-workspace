@@ -34,9 +34,9 @@ export async function openBranchSheet(t, title, row = 0) {
 }
 
 /** The names of files in a folder, without the app's own and git's folders. */
-export const folderFiles = (dir) => fs.readdirSync(dir).filter((n) => n !== '.git' && n !== '.puppet-master').sort();
+export const folderFiles = (dir) => fs.readdirSync(dir).filter((n) => n !== '.git' && n !== '.potato-workspace').sort();
 
-/** The branch copy pane the app started (its folder is a "bf-" copy under the project's .puppet-master). */
+/** The branch copy pane the app started (its folder is a "bf-" copy under the project's .potato-workspace). */
 export async function copyPane(t) {
   return t.expect.eventually(async () => (await t.panes()).find((p) => /worktrees[\\/]bf-/.test(p.cwd)), { timeout: 30000, message: 'expected a pane in a branch copy' });
 }

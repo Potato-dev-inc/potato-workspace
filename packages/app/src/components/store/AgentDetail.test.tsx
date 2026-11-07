@@ -175,7 +175,7 @@ describe('AgentDetail facts', () => {
     expect(text()).toContain('Basic support');
     expect(text()).toContain('Open source');
     expect(text()).toContain('Open it and type /auth, then follow the screen.');
-    expect(text()).toContain('Puppet Master never sees your password or key.');
+    expect(text()).toContain('Potato Workspace never sees your password or key.');
     expect(host.querySelector('[data-testid="run-command"]')?.textContent).toBe('qwen --acp');
   });
 
@@ -267,7 +267,7 @@ describe('AgentDetail install', () => {
 
   it('says what the install does in plain words on the card', async () => {
     await mount({ store: fakeStore(detailFor()) }).render();
-    expect(text()).toContain('Install runs the command in a window you can watch. Then Puppet Master adds Qwen Code to your list.');
+    expect(text()).toContain('Install runs the command in a window you can watch. Then Potato Workspace adds Qwen Code to your list.');
   });
 });
 
@@ -278,7 +278,7 @@ describe('AgentDetail add', () => {
     const store = fakeStore(found);
     const m = mount({ store });
     await m.render();
-    await click(button('Add to Puppet Master'));
+    await click(button('Add to Potato Workspace'));
     expect(store.add).toHaveBeenCalledWith('qwen', true);
     expect(m.onChanged).toHaveBeenCalled();
   });
@@ -307,10 +307,10 @@ describe('AgentDetail open, remove and uninstall', () => {
     const store = fakeStore(ready);
     const m = mount({ store });
     await m.render();
-    await click(button('Remove from Puppet Master'));
+    await click(button('Remove from Potato Workspace'));
     expect(store.remove).not.toHaveBeenCalled();
     expect(text()).toContain('The program stays on this PC.');
-    await click(button('Remove from Puppet Master'));
+    await click(button('Remove from Potato Workspace'));
     expect(store.remove).toHaveBeenCalledWith('qwen');
     expect(m.onChanged).toHaveBeenCalled();
   });
@@ -358,7 +358,7 @@ describe('AgentDetail open, remove and uninstall', () => {
     const d = { ...ready, uninstall: { available: false, steps: [], reason: null, note: '' } };
     await mount({ store: fakeStore(d) }).render();
     expect(host.querySelector('[data-testid="uninstall-unavailable"]')?.textContent).toBe(
-      'Puppet Master cannot remove this program from here.',
+      'Potato Workspace cannot remove this program from here.',
     );
   });
 
@@ -375,13 +375,13 @@ describe('AgentDetail states with no action', () => {
     await mount({ store: fakeStore(d) }).render();
     expect(text()).toContain('You have your own qwen definition.');
     expect(button('Install Qwen Code')).toBeUndefined();
-    expect(button('Add to Puppet Master')).toBeUndefined();
+    expect(button('Add to Potato Workspace')).toBeUndefined();
   });
 
   it('offers the vendor page when there is no Windows install command', async () => {
     const d = detailFor({ can_install: false, install_plan: { agent_id: 'qwen', label: 'Qwen Code', available: false, reason: 'No install here.', hint: null, steps: [] } });
     await mount({ store: fakeStore(d) }).render();
-    expect(text()).toContain("Puppet Master cannot install Qwen Code from here. The vendor's page has the install steps:");
+    expect(text()).toContain("Potato Workspace cannot install Qwen Code from here. The vendor's page has the install steps:");
     expect(button('Install Qwen Code')).toBeUndefined();
   });
 

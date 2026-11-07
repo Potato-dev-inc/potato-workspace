@@ -16,7 +16,7 @@ async function body(t) {
 
   await t.step('Reload the window');
   await t.page.reload();
-  await t.expect.text('Puppet Master');
+  await t.expect.text('Potato Workspace');
 
   await t.step('It is still Individual mode');
   await t.expect.text('Panes are in their own windows.');

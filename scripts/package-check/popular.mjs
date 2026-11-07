@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(here, '..', '..', 'packages', 'app', 'src-tauri', 'src', 'prompt_risk', 'packages', 'popular');
-const USER_AGENT = 'PuppetMaster-PackageCheck-dev';
+const USER_AGENT = 'PotatoWorkspace-PackageCheck-dev';
 const PAGE_DELAY_MS = 1000;
 
 // Same shapes and length caps as Ecosystem::valid_name (model.rs).

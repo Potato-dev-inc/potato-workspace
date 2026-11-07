@@ -141,7 +141,7 @@ mod tests {
         assert_eq!(list["v"], 1);
         let text = list.to_string();
         assert!(!text.contains("\"folder\""), "{text}");
-        assert!(!text.contains("PuppetMaster"), "{text}");
+        assert!(!text.contains("PotatoWorkspace"), "{text}");
         assert_eq!(list["companions"][0]["id"], "mochi");
         assert_eq!(list["companions"][0]["folderName"], "mochi");
         let (_, one) = get(&service, "/companions/mochi", None).unwrap();

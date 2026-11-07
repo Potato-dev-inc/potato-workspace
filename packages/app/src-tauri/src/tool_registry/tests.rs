@@ -389,7 +389,7 @@ fn registry_contains_wait_tools() {
 fn resources_include_session() {
     assert!(resources()
         .iter()
-        .any(|resource| resource.uri == "puppet-master://session"));
+        .any(|resource| resource.uri == "potato-workspace://session"));
 }
 
 #[test]
@@ -401,7 +401,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "73-cfaf699897d075ff");
+    assert_eq!(catalog_version(), "73-b1ab605f02637c3e");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one

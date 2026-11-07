@@ -107,8 +107,8 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-6 gap-4 text-sm">
-      <img src="/app-icon.svg" alt="Puppet Master" className="w-16 h-16 rounded-xl" />
-      <h1 className="text-lg font-semibold">Puppet Master</h1>
+      <img src="/app-icon.svg" alt="Potato Workspace" className="w-16 h-16 rounded-xl" />
+      <h1 className="text-lg font-semibold">Potato Workspace</h1>
       <p className="text-pm-muted text-center text-xs max-w-xs">
         {shouldUseSameOriginBridgeProxy(window.location)
           ? 'On desktop: Settings → Mobile pairing. Scan the QR with your phone camera — it opens this app and signs you in.'
@@ -187,7 +187,7 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
           <div className="rounded border border-pm-border bg-pm-raised/30 p-3 text-xs text-pm-muted space-y-1">
             <p>1. Open <strong className="text-zinc-200">Settings → Mobile pairing</strong> on desktop.</p>
             <p>2. Scan the QR with your phone <strong className="text-zinc-200">Camera</strong> app.</p>
-            <p>3. Tap the link — Puppet Master opens and connects.</p>
+            <p>3. Tap the link — Potato Workspace opens and connects.</p>
           </div>
           {err && <p className="text-pm-err text-xs">{err}</p>}
           {pairing && (

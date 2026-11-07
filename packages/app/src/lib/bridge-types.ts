@@ -1,4 +1,4 @@
-// Wire types of the Puppet Master HTTP bridge: projections returned by the Rust side, request/response
+// Wire types of the Potato Workspace HTTP bridge: projections returned by the Rust side, request/response
 // shapes, the BridgeClient interface and the SSE event union. Pure types; no runtime code.
 import type {
   AgentContextProfile,
@@ -6,7 +6,7 @@ import type {
   McpLogEntry,
   OrchestratorChatEvent,
   PaneInfo,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import type { PublicSettings } from './bridge-settings';
 import type { PreviewUrl } from './pane-preview';
 import type { PhoneFocus } from './focus';

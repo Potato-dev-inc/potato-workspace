@@ -139,8 +139,8 @@ fn only_the_pane_id_and_the_path_marker_cross_and_wslenv_is_always_ours() {
         &place_for("codex"),
     )
     .unwrap();
-    assert_eq!(value_of(&cmd, "WSLENV").as_deref(), Some("PM_WSL_PATH/u:PUPPET_MASTER_PANE_ID"));
-    assert_eq!(value_of(&cmd, "PUPPET_MASTER_PANE_ID").as_deref(), Some("pane-7"));
+    assert_eq!(value_of(&cmd, "WSLENV").as_deref(), Some("PM_WSL_PATH/u:POTATO_WORKSPACE_PANE_ID"));
+    assert_eq!(value_of(&cmd, "POTATO_WORKSPACE_PANE_ID").as_deref(), Some("pane-7"));
     assert_eq!(value_of(&cmd, "PM_WSL_PATH").as_deref(), Some("/usr/local/bin:/usr/bin:/bin"));
     // The agent's own Linux flags come from the profile, after the program.
     let argv = argv_of(&cmd);
@@ -175,7 +175,7 @@ fn an_agent_with_no_linux_launch_cannot_get_a_linux_command() {
         &place_for("cmd"),
     )
     .unwrap_err();
-    assert!(err.ends_with("can't run in Linux from Puppet Master yet."), "{err}");
+    assert!(err.ends_with("can't run in Linux from Potato Workspace yet."), "{err}");
 }
 
 // ---- the decision ----

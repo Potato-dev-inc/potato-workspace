@@ -79,9 +79,9 @@ fn facts(title: &str, component: Option<&str>) -> PickFacts {
 fn shot(n: u32) -> Shot {
     Shot {
         abs_path: PathBuf::from(format!(
-            r"C:\Users\you\work\app\.puppet-master\shots\pick-20261028-223104-{n}.png"
+            r"C:\Users\you\work\app\.potato-workspace\shots\pick-20261028-223104-{n}.png"
         )),
-        rel_path: format!(".puppet-master/shots/pick-20261028-223104-{n}.png"),
+        rel_path: format!(".potato-workspace/shots/pick-20261028-223104-{n}.png"),
         width: 240,
         height: 120,
     }
@@ -238,7 +238,7 @@ fn absolute_paths_and_user_folders_never_reach_the_message() {
     let folder = Folder::new("privacy", &[]);
     let p = first_pick();
     let text = compose(&[&p], "x", &folder.root).unwrap();
-    assert!(text.contains(".puppet-master/shots/pick-20261028-223104-1.png"));
+    assert!(text.contains(".potato-workspace/shots/pick-20261028-223104-1.png"));
     assert!(!text.contains("C:\\"));
     assert!(!text.contains("Users"));
     assert!(!text.contains(&folder.root.display().to_string()));

@@ -30,7 +30,7 @@ export function InstallSheet({
         <h2 className="ck-section" id="ck-install-t">
           Install {plan.label}
         </h2>
-        <p className="ck-sub">{plan.reason ?? 'Puppet Master cannot install this one from here.'}</p>
+        <p className="ck-sub">{plan.reason ?? 'Potato Workspace cannot install this one from here.'}</p>
         {plan.hint && <code className="ck-doctor-cmd">{plan.hint}</code>}
         <div className="ck-sheet-actions">
           {plan.hint && (
@@ -59,7 +59,7 @@ export function InstallSheet({
           {plan.label} needs {step.label} first. This is step 1 of {plan.steps.length}.
         </p>
       )}
-      <p className="ck-sub">Puppet Master will run this in a window you can watch:</p>
+      <p className="ck-sub">Potato Workspace will run this in a window you can watch:</p>
       <code className="ck-doctor-cmd" data-testid="install-command">
         {step.command}
       </code>

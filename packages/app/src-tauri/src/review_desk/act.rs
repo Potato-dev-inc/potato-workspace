@@ -139,7 +139,7 @@ pub fn keep(io: &dyn DeskIo, raw_key: &str, fingerprint: &str) -> Result<ActView
         }
         Keep::IssuePush { run_id, .. } => {
             io.issue_act(run_id, "push")?;
-            "Pushing it as a draft pull request. Puppet Master never merges it.".to_string()
+            "Pushing it as a draft pull request. Potato Workspace never merges it.".to_string()
         }
         Keep::Mark { pane_id, through_ms } => {
             set_mark(io, pane_id, *through_ms, How::Kept)?;
@@ -246,7 +246,7 @@ pub fn detail(io: &dyn DeskIo, raw_key: &str) -> Result<DetailView, OperationErr
             (patch, cut || over)
         }
         None => {
-            extra.push("Puppet Master could not read the changes.".to_string());
+            extra.push("Potato Workspace could not read the changes.".to_string());
             (String::new(), false)
         }
     };

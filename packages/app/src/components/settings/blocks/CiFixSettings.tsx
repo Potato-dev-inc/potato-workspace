@@ -1,5 +1,5 @@
 // Settings > General > Labs > Red to Green. Off by default. Shows the GitHub sign-in, the four caps (tries per
-// pull request, turns and minutes per try, fixes a day) and the pull requests Puppet Master watches, with their
+// pull request, turns and minutes per try, fixes a day) and the pull requests Potato Workspace watches, with their
 // buttons. Every change is one `ciFixSaveSettings` or one `ciFixAct`; the backend clamps the numbers again.
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -27,7 +27,7 @@ export const CAPS = {
 
 /** What the block promises. Shown as the footer; the only place "merge", "re-run" and "force" may appear. */
 export const FOOTER =
-  "Puppet Master only watches pull requests it opened. It asks before the agent reads the log, and again before anything is pushed. The agent can't push during a fix. Puppet Master never re-runs CI, merges or force-pushes.";
+  "Potato Workspace only watches pull requests it opened. It asks before the agent reads the log, and again before anything is pushed. The agent can't push during a fix. Potato Workspace never re-runs CI, merges or force-pushes.";
 
 const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
@@ -138,7 +138,7 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
       {error && <Note role="alert">{error}</Note>}
       <SettingToggle
         label="Offer to fix failed CI"
-        description="When CI fails on a pull request Puppet Master opened, you get a card to have the same agent fix it."
+        description="When CI fails on a pull request Potato Workspace opened, you get a card to have the same agent fix it."
         checked={settings.enabled}
         disabled={busy}
         onChange={(on) => void save({ ...settings, enabled: on })}
@@ -174,7 +174,7 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
           onCommit={(next) => save({ ...settings, minutes_per_try: next })}
         />
       </SettingRow>
-      <SettingRow label="Fixes a day" description="How many fixes Puppet Master starts in one day, across all pull requests, 1 to 20.">
+      <SettingRow label="Fixes a day" description="How many fixes Potato Workspace starts in one day, across all pull requests, 1 to 20.">
         <NumberControl
           aria-label="Fixes a day"
           min={CAPS.fixes.min}
@@ -185,9 +185,9 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
         />
       </SettingRow>
 
-      <SettingBlock label="Watched pull requests" description="Pull requests Puppet Master watches, with the state of each one.">
+      <SettingBlock label="Watched pull requests" description="Pull requests Potato Workspace watches, with the state of each one.">
         {watches.length === 0 ? (
-          <Note>No pull requests yet. Puppet Master watches one once it opens it.</Note>
+          <Note>No pull requests yet. Potato Workspace watches one once it opens it.</Note>
         ) : (
           <ul className="st-devices" aria-label="Watched pull requests">
             {watches.map((w) => (

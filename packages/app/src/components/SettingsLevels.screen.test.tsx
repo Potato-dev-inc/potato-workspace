@@ -4,7 +4,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Settings } from '@puppet-master/shared';
+import type { Settings } from '@potato-workspace/shared';
 import { BASE_SETTINGS, click, settle, type as typeInto } from './settings/test-utils';
 import { SECTIONS } from './settings/catalog';
 import { rowLevel } from './settings/model';

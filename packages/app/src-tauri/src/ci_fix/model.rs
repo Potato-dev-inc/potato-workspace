@@ -119,14 +119,14 @@ pub enum WatchState {
     Merged,
 }
 
-/// One pull request Puppet Master opened from one of its own copies.
+/// One pull request Potato Workspace opened from one of its own copies.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Watch {
     /// `cw-` + 8 lowercase hex.
     pub id: String,
     /// The folder (git top level) the copy belongs to.
     pub project: String,
-    /// The copy's handle (the run handle for runs Puppet Master started).
+    /// The copy's handle (the run handle for runs Potato Workspace started).
     pub handle: String,
     /// `owner/repo`.
     pub owner_repo: String,

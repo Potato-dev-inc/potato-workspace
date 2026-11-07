@@ -1,6 +1,6 @@
 //! No console window flashes while a lead runs the Cursor agent (zero tokens, a fake launcher).
 //!
-//! On Windows the Cursor agent's CLI is a PowerShell script behind `agent.cmd`. Puppet Master is a
+//! On Windows the Cursor agent's CLI is a PowerShell script behind `agent.cmd`. Potato Workspace is a
 //! GUI program, so every helper process it starts without `CREATE_NO_WINDOW` (the headless
 //! `powershell.exe`, the `about` model probe, `tasklist` and `taskkill`, `git`) opens a console
 //! window for as long as it lives. The fix is one door, `proc_util`; this test runs a real headless

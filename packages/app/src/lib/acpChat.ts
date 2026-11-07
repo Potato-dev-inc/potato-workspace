@@ -55,7 +55,7 @@ export interface AcpChatState {
   conversation?: string | null;
   /** The conversation was handed to a terminal pane: this chat is paused. `paneId` is that terminal, when known. */
   inTerminal?: { paneId: string | null } | null;
-  /** An agent (one that started this chat through Puppet Master, or any agent tool) may answer the permission cards. Off by default. */
+  /** An agent (one that started this chat through Potato Workspace, or any agent tool) may answer the permission cards. Off by default. */
   agentAnswering?: boolean;
   /** The app closed during a turn (found in the chat journal). The chat says so and offers "Continue" until a new turn starts. */
   interruptedTurn?: boolean;
@@ -245,7 +245,7 @@ export interface OverlayOption {
   /** `native`: the exact program and arguments to save. */
   acp?: OverlayAcp;
   registry?: RegistryInfo;
-  /** `bridge`: what the made-by-Puppet-Master chat will be like. */
+  /** `bridge`: what the made-by-Potato-Workspace chat will be like. */
   bridge?: BridgeInfo;
   /** `terminal_chat`: what Chat (terminal) gives this agent. */
   terminal_chat?: { reads_file: boolean; can_resume: boolean; can_answer_prompts: boolean; note: string };
@@ -269,7 +269,7 @@ export type OverlayInstallOption =
 
 /** The confirm text for the built-in bridge. */
 export function bridgeSentence(label: string, hasMemory: boolean): string {
-  return `${label} has no chat support of its own, so Puppet Master will make one. It talks to ${label} one message at a time: text only, no tool cards, ${hasMemory ? 'it remembers the conversation' : 'it does not remember earlier messages'}.`;
+  return `${label} has no chat support of its own, so Potato Workspace will make one. It talks to ${label} one message at a time: text only, no tool cards, ${hasMemory ? 'it remembers the conversation' : 'it does not remember earlier messages'}.`;
 }
 
 /** Progress of a download, from the `acp-addon-changed` event. */
@@ -304,7 +304,7 @@ export function registrySentence(info: RegistryInfo): string {
   const by = authorsText(info.authors);
   const license = info.license?.trim() ? ` (${info.license.trim()})` : '';
   const size = info.size_hint?.trim() ? ` About ${info.size_hint.trim()}.` : '';
-  return `Puppet Master will download ${info.name} ${info.version}${by ? ` by ${by}` : ''}${license} from the official ACP registry and run it for chat.${size}`;
+  return `Potato Workspace will download ${info.name} ${info.version}${by ? ` by ${by}` : ''}${license} from the official ACP registry and run it for chat.${size}`;
 }
 
 /** The `[acp]` table the person confirmed. */

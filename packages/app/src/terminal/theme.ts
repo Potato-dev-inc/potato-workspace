@@ -5,7 +5,7 @@ function cssRgb(name: string, fallback: string): string {
   return value ? `rgb(${value})` : fallback;
 }
 
-/** Monochrome ANSI palette aligned with Puppet Master CSS tokens. */
+/** Monochrome ANSI palette aligned with Potato Workspace CSS tokens. */
 export function terminalThemeFromCss(): TerminalTheme {
   const background = cssRgb('--pm-bg', '#1b1a19');
   const foreground = cssRgb('--pm-text', '#f4f2ef');

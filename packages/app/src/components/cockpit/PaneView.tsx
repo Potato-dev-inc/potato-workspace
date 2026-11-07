@@ -292,7 +292,7 @@ export function PaneView({
   const name = c.names.get(paneId) ?? info.agent_type;
   const heading = paneHeading(info, name);
   const projectLine = [heading.secondary, projectWithCopy(info.cwd)].filter(Boolean).join(' · ');
-  // A pane an agent started through Puppet Master: names its parent and opens it.
+  // A pane an agent started through Potato Workspace: names its parent and opens it.
   const helperOf = helperOfLabel(c.registry.paneList, paneId, (p) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary);
   const waiting = pane.status === 'waiting_input';
   const elapsed = waiting && since ? formatElapsed(c.now - since) : null;

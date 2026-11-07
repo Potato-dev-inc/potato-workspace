@@ -1,4 +1,4 @@
-import { readBridgePort, readLocalSecretHeaders } from '@puppet-master/shared/bridge-port';
+import { readBridgePort, readLocalSecretHeaders } from '@potato-workspace/shared/bridge-port';
 
 /** Where the desktop app serves its dev/production tunnel info (Vite in dev, PWA server otherwise). */
 export const PWA_INFO_URL = 'http://127.0.0.1:1420/__puppet_master_dev__.json';
@@ -65,12 +65,12 @@ async function fetchTunnelInfo(): Promise<TunnelInfo | null> {
 
 /** Env override, then the running desktop app's tunnel info. Throws when neither gives a public URL. */
 export async function resolvePublicOrigin(env: NodeJS.ProcessEnv = process.env): Promise<string> {
-  const override = env.PUPPET_MASTER_PUBLIC_URL?.trim();
+  const override = env.POTATO_WORKSPACE_PUBLIC_URL?.trim();
   if (override) return publicOriginForPublicUrl(override);
   const fromApp = publicOriginFromTunnelInfo(await fetchTunnelInfo());
   if (fromApp) return fromApp;
   throw new Error(
-    'no public tunnel URL. Start the desktop app with its tunnel enabled, or set PUPPET_MASTER_PUBLIC_URL.',
+    'no public tunnel URL. Start the desktop app with its tunnel enabled, or set POTATO_WORKSPACE_PUBLIC_URL.',
   );
 }
 
@@ -80,7 +80,7 @@ async function postInvite(bridgeUrl: string): Promise<PairingSessionResponse> {
   try {
     ({ host, port } = await readBridgePort());
   } catch {
-    throw new Error('Puppet Master is not running (no bridge port file). Start the desktop app first.');
+    throw new Error('Potato Workspace is not running (no bridge port file). Start the desktop app first.');
   }
   let res: Response;
   try {
@@ -91,7 +91,7 @@ async function postInvite(bridgeUrl: string): Promise<PairingSessionResponse> {
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
-    throw new Error('Puppet Master is not reachable on its bridge. Is the desktop app running?');
+    throw new Error('Potato Workspace is not reachable on its bridge. Is the desktop app running?');
   }
   const text = await res.text();
   if (!res.ok) {
@@ -106,7 +106,7 @@ export async function runPairLink(): Promise<number> {
   try {
     publicOrigin = await resolvePublicOrigin();
   } catch (err) {
-    console.error(`puppet-master pair-link: ${(err as Error).message}`);
+    console.error(`potato-workspace pair-link: ${(err as Error).message}`);
     return 4;
   }
   try {
@@ -115,7 +115,7 @@ export async function runPairLink(): Promise<number> {
     console.error(`expires ${new Date(session.expires_at * 1000).toLocaleTimeString()} (single use, 10 minutes)`);
     return 0;
   } catch (err) {
-    console.error(`puppet-master pair-link: ${(err as Error).message}`);
+    console.error(`potato-workspace pair-link: ${(err as Error).message}`);
     return 4;
   }
 }

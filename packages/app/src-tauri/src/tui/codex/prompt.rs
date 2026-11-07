@@ -13,7 +13,7 @@
 //!
 //! Answering moves the `›` pointer with arrow keys; `write_input` then adds the Enter. A number key
 //! would select and submit on its own, and the Enter after it could answer the next screen.
-//! Puppet Master never answers this dialog by itself: only a person's choice on the card does.
+//! Potato Workspace never answers this dialog by itself: only a person's choice on the card does.
 
 use once_cell::sync::Lazy;
 use regex::Regex;

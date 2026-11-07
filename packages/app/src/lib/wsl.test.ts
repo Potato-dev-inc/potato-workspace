@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
-import { PaneInfoSchema, PanePlaceSchema } from '@puppet-master/shared';
+import { PaneInfoSchema, PanePlaceSchema } from '@potato-workspace/shared';
 import {
   spawnPaneInLinux,
   tauriWslApi,

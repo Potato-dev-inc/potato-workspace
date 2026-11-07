@@ -24,6 +24,10 @@
 //! | `garbage` | a line of bytes that are not UTF-8, a line of plain text, broken JSON, then real chunks and `end_turn` |
 //! | `bigdiff N` | one edit call that carries N diffs of 20 KB each, then `end_turn` |
 //! | `permcrash` | a tool that needs permission, then the process exits (the question is left open) |
+//! | `permend` | a permission request, then `end_turn` while it is still open (reason: turn_ended) |
+//! | `bg` | starts a background task, ends the turn, then reports the task finished ~0.8 s later |
+//! | `bgreply` | like `bg`, then (after the task ends) sends the real follow-up reply `pong` |
+//! | `badperm` | a malformed permission request (the app must refuse it, not park it) |
 //! | `empty` | `end_turn` with no output |
 //! | `weird` | an update of a kind nobody knows, then text |
 //! | anything else | echoes the text |
@@ -107,6 +111,9 @@ struct Shared {
     next_request: AtomicU64,
     opts: Opts,
     store: PathBuf,
+    /// The settings this session currently has (the config options a real agent reports back).
+    model: Mutex<String>,
+    effort: Mutex<String>,
 }
 
 impl Shared {
@@ -150,11 +157,17 @@ impl Shared {
     }
 }
 
-fn config_options(current: &str) -> Value {
-    json!([{
-        "id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": current,
-        "options": [{"value": "a", "name": "A"}, {"value": "b", "name": "B"}]
-    }])
+fn config_options(model: &str, effort: &str) -> Value {
+    json!([
+        {
+            "id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": model,
+            "options": [{"value": "a", "name": "A"}, {"value": "b", "name": "B"}]
+        },
+        {
+            "id": "effort", "name": "Effort", "category": "thought_level", "type": "select", "currentValue": effort,
+            "options": [{"value": "low", "name": "Low"}, {"value": "medium", "name": "Medium"}, {"value": "high", "name": "High"}]
+        }
+    ])
 }
 
 /// The agent loop. Returns when stdin closes.
@@ -169,6 +182,8 @@ pub fn run_agent() {
         next_request: AtomicU64::new(1000),
         opts,
         store,
+        model: Mutex::new("a".to_string()),
+        effort: Mutex::new("medium".to_string()),
     });
     // The test harness leaves "test ... " unterminated on stdout; start on a fresh line.
     {
@@ -228,7 +243,13 @@ fn handle_request(shared: &Arc<Shared>, method: &str, id: &Value, params: Value)
                         "mcpCapabilities": {"http": true, "sse": false}
                     },
                     "authMethods": [{"id": "login", "name": "Sign in"}],
-                    "_meta": {"steering": {"supported": opts.flag("steer", false)}}
+                    "_meta": {
+                        "steering": {"supported": opts.flag("steer", false)},
+                        "jetbrains": {"air": {
+                            "version": 1,
+                            "capabilities": if opts.flag("background_tasks", true) { vec!["asyncTasks"] } else { Vec::new() }
+                        }}
+                    }
                 }),
             );
             let deaf = opts.number("deaf_ms");
@@ -247,7 +268,8 @@ fn handle_request(shared: &Arc<Shared>, method: &str, id: &Value, params: Value)
             if shared.opts.flag("grandchild", false) {
                 spawn_grandchild(&shared.store);
             }
-            shared.reply(id, json!({"sessionId": session_id, "configOptions": config_options("a")}));
+            let options = config_options(&shared.model.lock(), &shared.effort.lock());
+            shared.reply(id, json!({"sessionId": session_id, "configOptions": options}));
             shared.update(
                 &session_id,
                 json!({"sessionUpdate": "available_commands_update", "availableCommands": [{"name": "review", "description": "Review changes", "input": {"hint": "branch"}}]}),
@@ -276,12 +298,20 @@ fn handle_request(shared: &Arc<Shared>, method: &str, id: &Value, params: Value)
             if shared.opts.flag("bare_restore", false) {
                 shared.reply(id, json!({}));
             } else {
-                shared.reply(id, json!({"configOptions": config_options("a")}));
+                let options = config_options(&shared.model.lock(), &shared.effort.lock());
+                shared.reply(id, json!({"configOptions": options}));
             }
         }
         "session/set_config_option" => {
+            let id_of = params.get("configId").and_then(Value::as_str).unwrap_or("model");
             let value = params.get("value").and_then(Value::as_str).unwrap_or("a").to_string();
-            shared.reply(id, json!({"configOptions": config_options(&value)}));
+            if id_of == "effort" {
+                *shared.effort.lock() = value;
+            } else {
+                *shared.model.lock() = value;
+            }
+            let options = config_options(&shared.model.lock(), &shared.effort.lock());
+            shared.reply(id, json!({"configOptions": options}));
         }
         "_session/steering" => {
             let session_id = params.get("sessionId").and_then(Value::as_str).unwrap_or_default().to_string();
@@ -444,6 +474,57 @@ fn run_prompt_inner(shared: &Arc<Shared>, id: &Value, params: &Value) {
             }
             shared.chunk(&session_id, "after");
             done("end_turn");
+        }
+        "bg" => {
+            shared.update(
+                &session_id,
+                json!({"sessionUpdate": "async_task_spawned", "asyncTaskId": "bg1", "name": "npm test", "taskType": "local_bash"}),
+            );
+            shared.chunk(&session_id, "started in the background");
+            done("end_turn");
+            let shared = shared.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(800));
+                shared.update(&session_id, json!({"sessionUpdate": "async_task_state_update", "asyncTaskId": "bg1", "state": "completed"}));
+            });
+        }
+        "bgreply" => {
+            shared.update(
+                &session_id,
+                json!({"sessionUpdate": "async_task_spawned", "asyncTaskId": "bg1", "name": "sleep 60", "taskType": "local_bash"}),
+            );
+            shared.chunk(&session_id, "waiting in the background");
+            done("end_turn");
+            let shared = shared.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(400));
+                shared.update(&session_id, json!({"sessionUpdate": "async_task_state_update", "asyncTaskId": "bg1", "state": "completed"}));
+                std::thread::sleep(Duration::from_millis(400));
+                shared.chunk(&session_id, "pong");
+            });
+        }
+        "permend" => {
+            shared.update(&session_id, json!({"sessionUpdate": "tool_call", "toolCallId": "w1", "title": "Write notes.txt", "kind": "edit", "status": "pending"}));
+            let ask_id = shared.next_request.fetch_add(1, Ordering::SeqCst);
+            let _rx = shared.ask(
+                ask_id,
+                "session/request_permission",
+                json!({
+                    "sessionId": session_id,
+                    "toolCall": {"toolCallId": "w1", "kind": "edit", "status": "pending", "title": "Write notes.txt"},
+                    "options": [{"optionId": "allow_once", "name": "Allow Once", "kind": "allow_once"}]
+                }),
+            );
+            // Let the client park the request before the turn ends (the reported case: a turn that
+            // ends with the prompt still open).
+            std::thread::sleep(Duration::from_millis(60));
+            done("end_turn");
+        }
+        "badperm" => {
+            let ask_id = shared.next_request.fetch_add(1, Ordering::SeqCst);
+            let rx = shared.ask(ask_id, "session/request_permission", json!({"sessionId": session_id}));
+            let _ = rx.recv();
+            done("cancelled");
         }
         "bigdiff" => {
             let diffs: Vec<Value> = (0..count).map(|n| json!({"type": "diff", "path": format!("C:\\work\\file{n}.txt"), "oldText": "o".repeat(10_000), "newText": "n".repeat(10_000)})).collect();

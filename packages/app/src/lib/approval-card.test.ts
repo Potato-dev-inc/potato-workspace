@@ -50,7 +50,7 @@ describe('the open card', () => {
     expect(v.buttons[0]).toMatchObject({ role: 'primary', focus: true });
     // A decision about a folder, not a risk reading: no risk word or glyph, and the sentence is not a command.
     expect(v).toMatchObject({ riskWord: null, riskLevel: null, summaryIsCommand: false, details: false, caution: null });
-    expect(v.summary).toContain('wants to work in puppet-master');
+    expect(v.summary).toContain('wants to work in potato-workspace');
   });
 
   it('the details never hold more than six reasons', () => {
@@ -66,15 +66,15 @@ describe('cards that cannot be answered here', () => {
     expect(v.state).toBe('signin');
     expect(v.buttons).toEqual([]);
     expect(v.title).toBe('Claude needs you on your PC.');
-    expect(v.status).toBe("It's showing a sign-in screen. Puppet Master won't answer it for you.");
+    expect(v.status).toBe("It's showing a sign-in screen. Potato Workspace won't answer it for you.");
     expect(v.openPane).toBe(true);
   });
 
-  it('a prompt Puppet Master could not read offers the pane', () => {
+  it('a prompt Potato Workspace could not read offers the pane', () => {
     const v = view(ITEM_NO_PROMPT);
     expect(v.state).toBe('no_prompt');
     expect(v.title).toBe('Codex is waiting for you');
-    expect(v.status).toBe("Puppet Master can't read this question. Open the pane to answer it.");
+    expect(v.status).toBe("Potato Workspace can't read this question. Open the pane to answer it.");
     expect(v.buttons).toEqual([]);
     expect(v.openPane).toBe(true);
   });

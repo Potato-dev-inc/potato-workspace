@@ -37,7 +37,7 @@ export const QUIZ_REPO = 'C:\\Users\\Ana\\Documents\\PM\\Plants quiz';
 export const TIMER_REPO = 'C:\\Users\\Ana\\Documents\\PM\\Class timer';
 export const ORDERS_REPO = 'C:\\Users\\Ana\\Documents\\PM\\Order form';
 
-export const copyPath = (repo: string) => `${repo}\\.puppet-master\\worktrees\\a1b2`;
+export const copyPath = (repo: string) => `${repo}\\.potato-workspace\\worktrees\\a1b2`;
 
 export function simplePaneInfo(p: SimplePaneFixture): PaneInfo {
   return {

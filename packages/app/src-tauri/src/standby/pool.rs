@@ -952,7 +952,7 @@ fn lift_agents(inner: &mut Inner, agent_type: Option<&str>) {
 fn reason_text(reason: &str) -> String {
     match reason {
         "dialog" => "it stops at a trust or approval prompt (open it once yourself first)".into(),
-        "untested_version" => "this version of it has not been tested with Puppet Master yet".into(),
+        "untested_version" => "this version of it has not been tested with Potato Workspace yet".into(),
         "needs_attention" => "it stops at a login or update screen (finish that once yourself)".into(),
         "dead" => "it exited right after starting".into(),
         "exited_after_ready" => "it started fine, then exited by itself".into(),

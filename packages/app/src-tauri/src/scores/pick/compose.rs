@@ -15,7 +15,7 @@ use crate::scores::model::Sample;
 fn notes() -> Vec<String> {
     vec![
         format!("Counted from your own turns in this project, last {PICK_DAYS} days."),
-        "Puppet Master only knows about limits it has seen.".to_string(),
+        "Potato Workspace only knows about limits it has seen.".to_string(),
         "It looks at the whole project, not at what you type.".to_string(),
     ]
 }
@@ -388,7 +388,7 @@ mod tests {
             p.notes,
             [
                 "Counted from your own turns in this project, last 90 days.",
-                "Puppet Master only knows about limits it has seen.",
+                "Potato Workspace only knows about limits it has seen.",
                 "It looks at the whole project, not at what you type.",
             ]
         );

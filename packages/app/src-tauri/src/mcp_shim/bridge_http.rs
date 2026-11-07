@@ -1,6 +1,28 @@
 //! Minimal HTTP client for the loopback bridge, plus bridge error normalisation.
 
 use super::*;
+use std::net::TcpStream;
+
+/// A loopback connection could not be opened. The app may well still be running: a local port shortage or a
+/// transient refusal is not proof that the bridge is down, so it gets its own word (see `is_connect_failure`).
+pub(crate) const BRIDGE_UNREACHABLE: &str = "bridge_unreachable";
+
+/// The port file is missing: no app has written one (or it was removed).
+pub(crate) const BRIDGE_DOWN: &str = "bridge_down";
+
+/// Whether an error means "try again shortly": either no port file yet, or a connection that failed locally.
+pub(crate) fn is_connect_failure(error: &str) -> bool {
+    error.starts_with(BRIDGE_UNREACHABLE) || error.starts_with(BRIDGE_DOWN)
+}
+
+fn bridge_stream(endpoint: &BridgeEndpoint) -> Result<TcpStream, String> {
+    TcpStream::connect((endpoint.host.as_str(), endpoint.port)).map_err(|err| {
+        format!(
+            "{BRIDGE_UNREACHABLE}: {} ({err}). The bridge may still be running; this was a local connection problem. Retry, or read the agent's transcript or pane before saying you got no reply.",
+            endpoint.base_url()
+        )
+    })
+}
 
 /// Compares this MCP binary's tool catalog with the running app's (from a `/health` body). A
 /// mismatch means the client was given an older or newer schema than the bridge enforces, which
@@ -18,7 +40,7 @@ pub(crate) fn schema_drift_from_health(health: &Value) -> Option<Value> {
         .map(|id| format!(", build {id}"))
         .unwrap_or_default();
     let message = format!(
-        "This Puppet Master MCP exe (tool catalog {shim}) is not the same build as the running app (tool catalog {bridge}{build}). Some tools may be missing or renamed, and calls may be rejected for unknown or missing arguments. Fix: {SCHEMA_DRIFT_FIX} If the app is the older of the two, update the app instead."
+        "This Potato Workspace MCP exe (tool catalog {shim}) is not the same build as the running app (tool catalog {bridge}{build}). Some tools may be missing or renamed, and calls may be rejected for unknown or missing arguments. Fix: {SCHEMA_DRIFT_FIX} If the app is the older of the two, update the app instead."
     );
     Some(json!({
         "code": "SCHEMA_DRIFT",
@@ -43,8 +65,7 @@ pub(crate) fn bridge_request(
         .map(|value| value.to_string())
         .unwrap_or_default();
     let read_timeout_secs = bridge_read_timeout_secs(method, path, body.as_ref());
-    let mut stream = TcpStream::connect((endpoint.host.as_str(), endpoint.port))
-        .map_err(|err| format!("bridge_down: {} ({err})", endpoint.base_url()))?;
+    let mut stream = bridge_stream(&endpoint)?;
     let _ = stream.set_read_timeout(Some(Duration::from_secs(read_timeout_secs)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
 
@@ -86,8 +107,7 @@ pub(crate) fn bridge_request_wait(
 ) -> Result<String, String> {
     let endpoint = read_bridge_endpoint()?;
     let body_text = body.to_string();
-    let mut stream = TcpStream::connect((endpoint.host.as_str(), endpoint.port))
-        .map_err(|err| format!("bridge_down: {} ({err})", endpoint.base_url()))?;
+    let mut stream = bridge_stream(&endpoint)?;
     let _ = stream.set_read_timeout(Some(Duration::from_millis(250)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
     let session_header = current_mcp_session_id()
@@ -136,8 +156,7 @@ pub(crate) fn bridge_request_wait_agents(
         .get("timeout_ms")
         .and_then(Value::as_u64)
         .unwrap_or(DEFAULT_AGENT_WAIT_MS);
-    let mut stream = TcpStream::connect((endpoint.host.as_str(), endpoint.port))
-        .map_err(|err| format!("bridge_down: {} ({err})", endpoint.base_url()))?;
+    let mut stream = bridge_stream(&endpoint)?;
     let _ = stream.set_read_timeout(Some(Duration::from_millis(250)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
     let session_header = current_mcp_session_id()
@@ -270,4 +289,29 @@ pub(crate) fn legacy_http_error(status: u16, body: &str) -> Value {
         .and_then(|v| v.get("error").and_then(Value::as_str).map(str::to_owned))
         .unwrap_or_else(|| body.to_owned());
     json!({"code":code,"message":message,"recoverable":recoverable,"retry_after_ms":retry_after_ms,"context":{"http_status":status}})
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_local_connection_failure_is_not_called_bridge_down() {
+        // Bind a port, then close it: nothing is listening on it when the connection is tried.
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let error = bridge_stream(&BridgeEndpoint { host: "127.0.0.1".into(), port }).unwrap_err();
+        assert!(error.starts_with(BRIDGE_UNREACHABLE), "{error}");
+        assert!(!error.starts_with(BRIDGE_DOWN), "{error}");
+        assert!(error.contains("may still be running"), "{error}");
+        assert!(is_connect_failure(&error));
+    }
+
+    #[test]
+    fn a_missing_port_file_still_counts_as_a_connection_failure() {
+        assert!(is_connect_failure("bridge_down: no port file"));
+        assert!(is_connect_failure("bridge_unreachable: refused"));
+        assert!(!is_connect_failure("bridge read failed: reset"));
+    }
 }

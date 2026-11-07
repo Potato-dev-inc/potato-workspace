@@ -71,7 +71,7 @@ fn the_non_workspace_menu_gets_the_deny_row_not_yes() {
 fn a_command_that_names_a_path_outside_the_folder_gets_the_no_row() {
     for command in [
         r#"Get-ChildItem -Path "C:\Users\user\x""#,
-        r#"Get-ChildItem -Path "C:\Users\user\Desktop\work2\puppet-master" -Recurse -Filter "*wizard*""#,
+        r#"Get-ChildItem -Path "C:\Users\user\Desktop\work2\potato-workspace" -Recurse -Filter "*wizard*""#,
         r"Get-Content D:\secrets\keys.txt",
         r"Get-ChildItem -Path ..\..\",
         r"Get-Content ..\..\..\notes.txt",
@@ -110,7 +110,7 @@ fn a_command_with_no_path_or_a_path_inside_the_folder_is_still_answered_yes_once
     for command in [
         "Get-ChildItem",
         "Get-ChildItem -Force",
-        "Get-ChildItem -Recurse -Force .puppet-master",
+        "Get-ChildItem -Recurse -Force .potato-workspace",
         r"Get-ChildItem -Path .\sub",
         r"Get-ChildItem sub\..\other",
         "echo hello",
@@ -128,7 +128,7 @@ fn a_command_with_no_path_or_a_path_inside_the_folder_is_still_answered_yes_once
 fn a_path_in_the_transcript_above_the_question_does_not_deny_a_harmless_one() {
     let screen = command_question("Get-ChildItem").replace(
         "\u{25cf} Ran (Get-ChildItem) (ctrl+o to expand)",
-        "\u{25cf} Ran 3 commands (Select-String -Path \"C:\\Users\\user\\Desktop\\work2\\puppet-master\\x\") (ctrl+o to expand)",
+        "\u{25cf} Ran 3 commands (Select-String -Path \"C:\\Users\\user\\Desktop\\work2\\potato-workspace\\x\") (ctrl+o to expand)",
     );
     assert_eq!(verdict(&mut answerer(), &screen), Ok("1".to_string()));
 }

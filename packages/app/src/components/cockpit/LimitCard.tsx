@@ -1,4 +1,4 @@
-// A usage-limit card in the Inbox: an agent ran out of usage. It is a question Puppet Master raised (see
+// A usage-limit card in the Inbox: an agent ran out of usage. It is a question Potato Workspace raised (see
 // src-tauri/src/handoff), so it arrives through the same list as `ask_user` questions and is answered the same way.
 //
 // The backend's choices come first (the first one is primary, e.g. "Continue on Codex"). "Other agent…" opens the

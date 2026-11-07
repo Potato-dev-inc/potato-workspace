@@ -413,9 +413,9 @@ pub fn record_setting(name: &str, label: &str, from: bool, to: bool) {
     record(Kind::Setting, Who::Desktop, &summary, json!({ "setting": name, "from": from, "to": to }));
 }
 
-/// Puppet Master closed a startup screen with the keys its profile declares (an update notice, for
+/// Potato Workspace closed a startup screen with the keys its profile declares (an update notice, for
 /// example). The screens only a person may pass are never dismissed, so this is the whole list of
-/// times Puppet Master pressed a key on its own to get past a dialog.
+/// times Potato Workspace pressed a key on its own to get past a dialog.
 pub fn note_gate_dismissal(gate_id: &str, what: &str, keys: &str) {
     let shown: Vec<String> = keys
         .chars()
@@ -430,7 +430,7 @@ pub fn note_gate_dismissal(gate_id: &str, what: &str, keys: &str) {
     record(
         Kind::GateDismissal,
         Who::Local,
-        &format!("Puppet Master closed a start-up screen on its own: {what}"),
+        &format!("Potato Workspace closed a start-up screen on its own: {what}"),
         json!({ "gate": gate_id, "keys": shown.join(" ") }),
     );
 }

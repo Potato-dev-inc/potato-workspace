@@ -1,4 +1,4 @@
-//! The Chat tab of an agent that writes no session file Puppet Master can read: the chat is read off the pane's
+//! The Chat tab of an agent that writes no session file Potato Workspace can read: the chat is read off the pane's
 //! screen (`session_chat::screen`), on a real ConPTY with `pm-fake-tui` as a made-up agent ("chat", drawn with the
 //! nimbus layout). Zero tokens. The person types in the terminal; the chat has to follow.
 //!

@@ -234,7 +234,7 @@ mod tests {
             return;
         }
         let origin = repo("pm");
-        let copy_dir = origin.path().join(".puppet-master").join("worktrees").join("x");
+        let copy_dir = origin.path().join(".potato-workspace").join("worktrees").join("x");
         std::fs::create_dir_all(copy_dir.parent().unwrap()).unwrap();
         git(origin.path(), &["worktree", "add", "-q", "--detach", &copy_dir.to_string_lossy()]);
         let copy_fact = repo_of(&copy_dir).expect("the copy is a repo");

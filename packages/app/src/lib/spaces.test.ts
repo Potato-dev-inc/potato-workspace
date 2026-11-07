@@ -13,11 +13,14 @@ import {
   spaceDelete,
   spaceForget,
   spaceLeave,
+  spacePresence,
   spaceReact,
   spaceRemoveMember,
   spacesEnabled,
   spacesErrorText,
+  AWAY_AFTER_MS,
   useChannel,
+  usePresenceReporter,
   useSpaces,
   type JoinState,
   type SpaceMessage,
@@ -30,7 +33,7 @@ vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(() => Promise.resolve(()
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const VIEW: SpacesView = { spaces: [], requests: [], joining: [], invites: [], online: true, relayed: false };
+const VIEW: SpacesView = { spaces: [], requests: [], joining: [], invites: [], online: true, relayed: false, showOnline: true };
 
 let host: HTMLDivElement;
 let root: Root | undefined;
@@ -199,6 +202,76 @@ describe('limits shared with Rust', () => {
     expect(m).not.toBeNull();
     expect(MAX_TEXT_CHARS).toBe(Number(m![1]));
     expect(MAX_TEXT_CHARS).toBe(4000);
+  });
+});
+
+function Reporter({ enabled }: { enabled: boolean }) {
+  usePresenceReporter(enabled);
+  return null;
+}
+
+describe('usePresenceReporter', () => {
+  const calls = () => vi.mocked(invoke).mock.calls.filter((c) => c[0] === 'space_presence').map((c) => (c[1] as { state: string }).state);
+  const mount = (enabled = true) => {
+    host = document.createElement('div');
+    root = createRoot(host);
+    act(() => root!.render(createElement(Reporter, { enabled })));
+  };
+  const press = () => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' })); });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockResolvedValue(null);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('wrapper calls the command', async () => {
+    await spacePresence('away');
+    expect(vi.mocked(invoke).mock.calls).toEqual([['space_presence', { state: 'away' }]]);
+  });
+
+  it('reporter sends online at start', () => {
+    mount();
+    expect(calls()).toEqual(['online']);
+  });
+
+  it('reporter sends nothing when disabled', () => {
+    mount(false);
+    expect(calls()).toEqual([]);
+  });
+
+  it('reporter goes away after ten minutes', () => {
+    mount();
+    act(() => { vi.advanceTimersByTime(AWAY_AFTER_MS - 1); });
+    expect(calls()).toEqual(['online']);
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(calls()).toEqual(['online', 'away']);
+  });
+
+  it('activity brings it back online', () => {
+    mount();
+    act(() => { vi.advanceTimersByTime(AWAY_AFTER_MS); });
+    press();
+    expect(calls()).toEqual(['online', 'away', 'online']);
+  });
+
+  it('reporter does not spam', () => {
+    mount();
+    for (let i = 0; i < 20; i++) press();
+    expect(calls()).toEqual(['online']);
+  });
+
+  it('stops listening when it unmounts', () => {
+    mount();
+    act(() => root!.unmount());
+    root = undefined;
+    vi.mocked(invoke).mockClear();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+    act(() => { vi.advanceTimersByTime(AWAY_AFTER_MS * 2); });
+    expect(calls()).toEqual([]);
   });
 });
 

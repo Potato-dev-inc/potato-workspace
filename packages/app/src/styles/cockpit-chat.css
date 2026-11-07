@@ -204,6 +204,30 @@
   border-color: var(--accent-line);
   box-shadow: 0 0 0 3px var(--fill-active, rgba(255, 255, 255, 0.05));
 }
+.cockpit .ck-chat-composer--drop .ck-chat-composer-row {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--fill-active, rgba(255, 255, 255, 0.05));
+}
+.cockpit .ck-chat-attach {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  color: var(--label-2);
+  background: transparent;
+}
+.cockpit .ck-chat-attach:hover:not([aria-disabled='true']) {
+  color: var(--label);
+  background: var(--fill-active, rgba(255, 255, 255, 0.05));
+}
+.cockpit .ck-chat-attach[aria-disabled='true'] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
 .cockpit .ck-chat-composer-field {
   flex: 1 1 100%;
   min-width: 0;

@@ -19,7 +19,7 @@ export async function run(t) {
 
   await t.step('Ask to remove them, then change your mind');
   await t.click('exact=Remove imported chats');
-  await t.expect.text("This removes the old chats Puppet Master added to search. Your agents' own chat files are not touched.");
+  await t.expect.text("This removes the old chats Potato Workspace added to search. Your agents' own chat files are not touched.");
   await t.click('exact=Cancel');
   await t.expect.noText('This removes the old chats');
 

@@ -18,7 +18,7 @@ use crate::pty::PaneRegistry;
 use crate::tui::install::InstallSpec;
 
 /// Plain words for "the Store did not install this, so it has no removal here".
-const NOT_STORE_INSTALL: &str = "The Store did not install this program, so Puppet Master cannot remove it. Remove it where you installed it.";
+const NOT_STORE_INSTALL: &str = "The Store did not install this program, so Potato Workspace cannot remove it. Remove it where you installed it.";
 
 /// `agent_store_uninstall_plan`: the removal the Store would run. Runs nothing.
 pub fn plan(id: &str) -> Result<Value, String> {
@@ -66,7 +66,7 @@ pub fn uninstall_plan(
 }
 
 fn entry_for(id: &str) -> Result<&'static CatalogEntry, String> {
-    catalog::get(id).ok_or_else(|| format!("INSTALL_UNKNOWN_AGENT: {id} is not an agent Puppet Master knows"))
+    catalog::get(id).ok_or_else(|| format!("INSTALL_UNKNOWN_AGENT: {id} is not an agent Potato Workspace knows"))
 }
 
 /// The Store's install record for `id`, read from the record file now (`None` when there is none).

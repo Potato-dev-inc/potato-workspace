@@ -60,11 +60,11 @@ const LINE_CHARS: usize = 220;
 /// The most characters of a reply that are cleaned at once, before the lines are cut (more than any reply holds).
 const WHOLE_CHARS: usize = 20_000;
 
-pub const NOT_ALLOWED: &str = "Telegram is not allowed to do that. Change it in Puppet Master on your PC.";
+pub const NOT_ALLOWED: &str = "Telegram is not allowed to do that. Change it in Potato Workspace on your PC.";
 const TOO_MANY: &str = "Too many messages. Wait a minute.";
 const UNKNOWN_COMMAND: &str = "I don't know that. Send /help.";
 const TOO_LONG: &str = "Too long (1000 characters at most).";
-const STOPPED: &str = "Telegram is off. Turn it on again in Puppet Master on your PC.";
+const STOPPED: &str = "Telegram is off. Turn it on again in Potato Workspace on your PC.";
 
 /// The bot's command menu, for `setMyCommands` right after pairing.
 pub const COMMAND_MENU: [(&str, &str); 6] = [
@@ -287,7 +287,7 @@ fn is_stale(cfg: &TelegramConfig, date_s: i64, now: u64) -> bool {
 
 fn stale_note(n: u32) -> String {
     let (count, verb) = if n == 1 { ("1 message came".to_string(), "It was") } else { (format!("{n} messages came"), "They were") };
-    format!("{count} while your PC was asleep or Puppet Master was off. {verb} not sent. Send them again if you still want them.")
+    format!("{count} while your PC was asleep or Potato Workspace was off. {verb} not sent. Send them again if you still want them.")
 }
 
 // ---------------------------------------------------------------------------------------------

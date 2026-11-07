@@ -670,7 +670,7 @@ fn check_mcp_host(def: &Definition, e: &mut Errors) {
         e.add("AGENT_DEF_INCONSISTENT", "mcp_host.config_path", "must be a non-empty path under home or the project, without `..` (HST-3)");
     }
     if crate::mcp_install::declarative::key_segments(&m.key_path).is_err() {
-        e.add("AGENT_DEF_INCONSISTENT", "mcp_host.key_path", "must be dotted segments of [A-Za-z0-9_-], for example mcpServers.puppet-master");
+        e.add("AGENT_DEF_INCONSISTENT", "mcp_host.key_path", "must be dotted segments of [A-Za-z0-9_-], for example mcpServers.potato-workspace");
     }
     if m.entry.is_empty() {
         e.add("AGENT_DEF_INCONSISTENT", "mcp_host.entry", "must not be empty");

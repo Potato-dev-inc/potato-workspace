@@ -68,7 +68,7 @@ fn creating_starts_one_pane_with_the_brief_and_keeps_only_that_one() {
 
     // The brief is in AGENTS.md (this fake agent declares no instruction file), between the markers.
     let brief = std::fs::read_to_string(root.join("mochi").join("AGENTS.md")).unwrap();
-    assert!(brief.contains("puppet-master:companion:start") && brief.contains("# You are Mochi"));
+    assert!(brief.contains("potato-workspace:companion:start") && brief.contains("# You are Mochi"));
     assert!(brief.contains("memory/pending.md"));
     // ...and the generic agent gets the primer, through the outbox.
     let primer = host.sent.lock().clone();
@@ -478,7 +478,7 @@ fn a_check_in_wakes_a_sleeping_companion_and_goes_in_after_the_primer() {
 
 #[test]
 fn closed_for_less_than_two_hours_runs_once_and_longer_is_reported_missed() {
-    // Puppet Master was closed at 08:30; it opens again at 09:30.
+    // Potato Workspace was closed at 08:30; it opens again at 09:30.
     let (service, host, root) = service_with_one();
     boot(&service, &host);
     service.checkins_set("mochi", vec![checkin("0a0a0a0a", "Morning brief", When::Daily { at: at(8, 30) })]).unwrap();
@@ -492,7 +492,7 @@ fn closed_for_less_than_two_hours_runs_once_and_longer_is_reported_missed() {
     service.checkins_set("mochi", vec![checkin("0a0a0a0a", "Morning brief", When::Daily { at: at(8, 30) })]).unwrap();
     tick_after(&service, &host, 5 * HOUR);
     assert!(!host.sent_texts().iter().any(|t| t.starts_with("[Check-in:")));
-    assert_eq!(texts(&root, FeedKind::Missed), vec!["Missed \"Morning brief\" at 8:30. Puppet Master was closed."]);
+    assert_eq!(texts(&root, FeedKind::Missed), vec!["Missed \"Morning brief\" at 8:30. Potato Workspace was closed."]);
 }
 
 // ---- nap ----------------------------------------------------------------------------------------
@@ -705,7 +705,7 @@ fn memory_edits_keep_the_caps_and_the_phone_view_hides_outside_changes() {
     let err = service.memory_save("mochi", super::model::MemoryFile::Memory, &long).unwrap_err();
     assert_eq!(err.code, "COMPANION_FILE_TOO_LONG");
     service.memory_save("mochi", super::model::MemoryFile::User, "Works at night.").unwrap();
-    // An edit made outside Puppet Master shows on the desktop only.
+    // An edit made outside Potato Workspace shows on the desktop only.
     std::fs::write(root.join("mochi").join("SOUL.md"), "I am someone else.").unwrap();
     assert_eq!(service.memory_view("mochi", false).unwrap().outside_changes.len(), 1);
     assert!(service.memory_view("mochi", true).unwrap().outside_changes.is_empty());

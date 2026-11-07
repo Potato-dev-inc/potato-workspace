@@ -80,7 +80,7 @@ pub fn flags(facts: &Facts, role: &dyn Fn(&str) -> Option<Role>) -> Vec<Reason> 
         }
     }
 
-    // Tier 6: a big change, or Puppet Master could not see the files.
+    // Tier 6: a big change, or Potato Workspace could not see the files.
     let lines = u64::from(facts.added) + u64::from(facts.deleted);
     if facts.files_total >= BIG_FILES || lines >= u64::from(BIG_LINES) {
         out.push(reason(
@@ -94,7 +94,7 @@ pub fn flags(facts: &Facts, role: &dyn Fn(&str) -> Option<Role>) -> Vec<Reason> 
         ));
     }
     if facts.files.is_none() {
-        out.push(reason(Flag::Unknown, "Puppet Master could not see which files changed".to_string()));
+        out.push(reason(Flag::Unknown, "Potato Workspace could not see which files changed".to_string()));
     }
 
     out
@@ -386,7 +386,7 @@ mod tests {
         assert_eq!(found.tier, 6);
         assert_eq!(found.level, Level::Check);
         assert_eq!(found.reasons[0].flag, Flag::Unknown);
-        assert_eq!(sentences(&found), ["Puppet Master could not see which files changed"]);
+        assert_eq!(sentences(&found), ["Potato Workspace could not see which files changed"]);
     }
 
     #[test]

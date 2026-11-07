@@ -183,7 +183,7 @@ fn ticked_plans(input: &StartInput, env: &Env) -> Result<Vec<PlanChoice>, Operat
             {
                 return Err(blocked(
                     "PLAN_SAME_COMPANY",
-                    "Puppet Master won't switch between two logins of one company. Untick one.",
+                    "Potato Workspace won't switch between two logins of one company. Untick one.",
                 ));
             }
         }
@@ -547,7 +547,7 @@ mod tests {
         assert_eq!(code, "PLAN_SAME_COMPANY");
         assert_eq!(
             sentence,
-            "Puppet Master won't switch between two logins of one company. Untick one."
+            "Potato Workspace won't switch between two logins of one company. Untick one."
         );
     }
 

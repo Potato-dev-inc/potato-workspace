@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * puppet-master — entry point for the Puppet Master CLI.
+ * potato-workspace — entry point for the Potato Workspace CLI.
  *
  * Usage:
- *   npx puppet-master                 # launch GUI
- *   npx puppet-master --project PATH  # open with cwd preset
- *   npx puppet-master mcp             # run stdio MCP only (GUI must be running)
- *   npx puppet-master version         # print version
- *   npx puppet-master --help          # help
+ *   npx potato-workspace                 # launch GUI
+ *   npx potato-workspace --project PATH  # open with cwd preset
+ *   npx potato-workspace mcp             # run stdio MCP only (GUI must be running)
+ *   npx potato-workspace version         # print version
+ *   npx potato-workspace --help          # help
  */
 
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { getDefaultTerminalAgentType } from '@puppet-master/shared';
+import { getDefaultTerminalAgentType } from '@potato-workspace/shared';
 import { launchWorkerTerminal } from './launch-worker.js';
 import { runWatch } from './watch.js';
 import { WATCH_USAGE, validateWatchFlags } from './watch-args.js';
@@ -60,26 +60,26 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 function printHelp(): void {
   const defaultAgent = getDefaultTerminalAgentType();
-  console.log(`puppet-master — multi-agent terminal orchestrator
+  console.log(`potato-workspace — multi-agent terminal orchestrator
 
 Usage:
-  puppet-master                 Launch the desktop GUI
-  puppet-master --project PATH  Open with a preset cwd
-  puppet-master worker [AGENT]  Open a standalone worker terminal (no main grid UI)
-  puppet-master mcp             Run stdio MCP server (GUI or worker host must be running)
-  puppet-master watch ID        Block until an operation is terminal or needs input; prints one JSON result.
+  potato-workspace                 Launch the desktop GUI
+  potato-workspace --project PATH  Open with a preset cwd
+  potato-workspace worker [AGENT]  Open a standalone worker terminal (no main grid UI)
+  potato-workspace mcp             Run stdio MCP server (GUI or worker host must be running)
+  potato-workspace watch ID        Block until an operation is terminal or needs input; prints one JSON result.
                                 Exit codes: 0 completed, 1 failed/cancelled, 2 needs input, 3 timeout, 4 error.
                                 Waits out bridge restarts; --timeout-ms N sets the deadline (default 3600000).
-  puppet-master pair-link       Print a fresh phone pairing link (needs the running app and its public tunnel).
+  potato-workspace pair-link       Print a fresh phone pairing link (needs the running app and its public tunnel).
                                 Prints the link on stdout; the expiry goes to stderr.
-  puppet-master version         Print version
-  puppet-master --help          Show this help
+  potato-workspace version         Print version
+  potato-workspace --help          Show this help
 
 Worker examples:
-  puppet-master worker                    # default shell (${defaultAgent})
-  puppet-master worker powershell         # standalone PowerShell pane
-  puppet-master worker powershell --new        # extra pane on the running host
-  puppet-master worker powershell --force-new  # same as --new
+  potato-workspace worker                    # default shell (${defaultAgent})
+  potato-workspace worker powershell         # standalone PowerShell pane
+  potato-workspace worker powershell --new        # extra pane on the running host
+  potato-workspace worker powershell --force-new  # same as --new
 `);
 }
 
@@ -94,16 +94,16 @@ function printVersion(): void {
 }
 
 /**
- * Launch the Tauri desktop app. We spawn `npm run tauri --workspace=@puppet-master/app dev`
+ * Launch the Tauri desktop app. We spawn `npm run tauri --workspace=@potato-workspace/app dev`
  * with the workspace root as cwd. The app will write a bridge port file we can read later.
  */
 async function launchGui(projectPath?: string): Promise<void> {
   const repoRoot = resolve(__dirname, '..', '..', '..');
-  const args = ['run', 'tauri', '--workspace=@puppet-master/app', 'dev'];
+  const args = ['run', 'tauri', '--workspace=@potato-workspace/app', 'dev'];
   if (projectPath) {
     args.push('--', '--project', projectPath);
   }
-  console.error(`[puppet-master] launching GUI: npm ${args.join(' ')}`);
+  console.error(`[potato-workspace] launching GUI: npm ${args.join(' ')}`);
   const child = spawn('npm', args, {
     cwd: repoRoot,
     stdio: 'inherit',
@@ -115,7 +115,7 @@ async function launchGui(projectPath?: string): Promise<void> {
 }
 
 /**
- * Run the MCP stdio server. Re-execs the @puppet-master/mcp package.
+ * Run the MCP stdio server. Re-execs the @potato-workspace/mcp package.
  */
 async function runMcp(): Promise<void> {
   const candidates = [
@@ -125,7 +125,7 @@ async function runMcp(): Promise<void> {
   const target = candidates.find((p) => existsSync(p));
   if (!target) {
     console.error(
-      '[puppet-master] @puppet-master/mcp is not built yet. Run: npm run build --workspace=@puppet-master/mcp',
+      '[potato-workspace] @potato-workspace/mcp is not built yet. Run: npm run build --workspace=@potato-workspace/mcp',
     );
     process.exit(1);
   }
@@ -155,7 +155,7 @@ async function main(): Promise<void> {
     const ids = positional.length > 0 ? positional : [];
     const problem = validateWatchFlags(flags);
     if (problem) {
-      console.error(`puppet-master watch: ${problem}`);
+      console.error(`potato-workspace watch: ${problem}`);
       console.error(WATCH_USAGE);
       process.exit(4);
     }
@@ -203,6 +203,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error('[puppet-master] fatal:', err);
+  console.error('[potato-workspace] fatal:', err);
   process.exit(1);
 });

@@ -10,7 +10,7 @@
 //! 2. The same in a separate copy (`isolation: worktree`): the old run parks at its limit too (the limit looks its run
 //!    up in the project the copy came from), the new pane works in the very same copy, and closing the old pane keeps it.
 //! 3. The target shows its folder-trust screen: the new run parks, the trust card is up for the person, and
-//!    Puppet Master answers nothing (no `gate_answer`, no typed text) until the person does.
+//!    Potato Workspace answers nothing (no `gate_answer`, no typed text) until the person does.
 //! 4. A plain loopback answer of the limit card is refused and nothing starts; a forged choice is refused; a paired
 //!    phone's answer starts the hand-over.
 //! 5. `auto_continue`: Claude's own "continuing automatically ... esc to cancel" wait is never answered (no key,
@@ -352,7 +352,7 @@ fn a_hand_over_from_a_separate_copy_keeps_working_in_that_copy_and_closing_the_o
     let old = run_to_the_limit(&session, &claude_script(false, ""), json!({ "isolation": "worktree" }), true);
     assert_offer(&old);
     let copy = session.pane_cwd(&old.pane).expect("old pane folder");
-    assert!(copy.contains(".puppet-master"), "the old pane runs in its own copy: {copy}");
+    assert!(copy.contains(".potato-workspace"), "the old pane runs in its own copy: {copy}");
     assert_eq!(session.worktree_open(&copy), Some(true), "the copy exists and is open");
 
     let record = continue_on_codex(&session, &old, CODEX_OK, "desktop");
@@ -403,7 +403,7 @@ fn the_new_agents_trust_screen_parks_the_run_and_puppet_master_answers_nothing()
     std::thread::sleep(Duration::from_millis(3000));
     let events = session.events_of("new.jsonl");
     for ev in ["gate_answer", "typed_at_gate", "key", "prompt"] {
-        assert!(events_named(&events, ev).is_empty(), "Puppet Master touched the trust screen (`{ev}`): {events:#?}");
+        assert!(events_named(&events, ev).is_empty(), "Potato Workspace touched the trust screen (`{ev}`): {events:#?}");
     }
     assert!(session.approvals_for(&new_pane).is_empty(), "no answer in the audit log: {:#?}", session.approvals_for(&new_pane));
     assert_eq!(session.view(&new_handle)["status"], "needs_input", "still waiting for the person");
@@ -470,7 +470,7 @@ fn only_a_person_can_answer_the_limit_card_and_a_loopback_answer_starts_nothing(
 
 // ---- 5. the agent's own wait ------------------------------------------------------------------------------------------------
 
-/// The agent armed its own wait ("Usage limit reached · continuing automatically at ... · esc to cancel"). Puppet Master never
+/// The agent armed its own wait ("Usage limit reached · continuing automatically at ... · esc to cancel"). Potato Workspace never
 /// answers it: no key, Esc included. The hand-over still stops the agent by pid and starts the other one.
 #[test]
 fn an_agents_own_continue_automatically_wait_is_never_answered_but_a_hand_over_still_stops_it() {

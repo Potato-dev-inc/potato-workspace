@@ -962,14 +962,14 @@ mod tests {
 
     #[test]
     fn a_copys_start_is_its_recorded_base_commit() {
-        let copies = vec![copy(r"C:\Users\you\demo\.puppet-master\worktrees\a1", "abc123"), copy("/home/you/x/b2", "def456")];
+        let copies = vec![copy(r"C:\Users\you\demo\.potato-workspace\worktrees\a1", "abc123"), copy("/home/you/x/b2", "def456")];
         // Slash style, a trailing slash and (on Windows) letter case do not matter.
         assert_eq!(
-            start_from(&copies, "C:/Users/you/demo/.puppet-master/worktrees/a1/").as_deref(),
+            start_from(&copies, "C:/Users/you/demo/.potato-workspace/worktrees/a1/").as_deref(),
             Some("abc123")
         );
         assert_eq!(start_from(&copies, "/home/you/x/b2").as_deref(), Some("def456"));
-        assert_eq!(start_from(&copies, r"C:\Users\you\demo\.puppet-master\worktrees\zz"), None);
+        assert_eq!(start_from(&copies, r"C:\Users\you\demo\.potato-workspace\worktrees\zz"), None);
         let blank = vec![copy("/p/c", "  ")];
         assert_eq!(start_from(&blank, "/p/c"), None, "an empty base commit is no start");
         let mut closed = copy("/p/d", "abc123");

@@ -1,5 +1,5 @@
 # capture: kilo 7.8.8 home screen, pane 121x36, prompt typed but not submitted, 'Move your opencode configuration' notice;
-# reconstructed row by row from the live delivery trace of a failed run (Puppet Master screen snapshot, user name scrubbed)
+# reconstructed row by row from the live delivery trace of a failed run (Potato Workspace screen snapshot, user name scrubbed)
                                                                                                                          
                                                                                                                          
                                                                                                                          
@@ -12,7 +12,7 @@
                                                                                                                          
                                                                                                                          
                        ┃                                                                                                 
-                       ┃  Demo for a video: in two short sentences, say what Puppet Master is                            
+                       ┃  Demo for a video: in two short sentences, say what Potato Workspace is                            
                        ┃  based on the README in this folder. Do not edit any files.                                     
                        ┃                                                                                                 
                        ┃  Code  · Auto Free Kilo Gateway                                                                 
@@ -35,4 +35,4 @@
                                                                                                                          
                                                                                                                          
                                                                                                                          
-~\Desktop\work2\puppet-master:refactor/tui-profiles                                                                      7.8.8
+~\Desktop\work2\potato-workspace:refactor/tui-profiles                                                                      7.8.8

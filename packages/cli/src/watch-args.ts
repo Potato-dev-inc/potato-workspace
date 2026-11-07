@@ -1,7 +1,7 @@
-/** Flag validation for `puppet-master watch`. */
+/** Flag validation for `potato-workspace watch`. */
 
 export const WATCH_USAGE =
-  'usage: puppet-master watch <operation_id|handle> [--project-path P] [--timeout-ms N] [--stream]';
+  'usage: potato-workspace watch <operation_id|handle> [--project-path P] [--timeout-ms N] [--stream]';
 
 const WATCH_FLAGS = new Set(['project-path', 'project', 'timeout-ms', 'stream', 'help', 'h']);
 

@@ -1,4 +1,4 @@
-//! Is this MCP connection a companion's? The companion's agent calls Puppet Master tools through the
+//! Is this MCP connection a companion's? The companion's agent calls Potato Workspace tools through the
 //! same stdio shim as any other agent, so the app has to tell the callers apart by where they run.
 //!
 //! Two answers, for two different questions:
@@ -7,7 +7,7 @@
 //!   (`pty::pane_parent::descends_from`), for the process id `decide` is given. From an MCP session that id is
 //!   a header the caller writes, so `verified` there is not proof: a call is let through only on the id of the
 //!   real TCP owner (`peer::recall_caller_pane`). Where the process table cannot be read it is `None`.
-//! - `suspected`: `verified`, or the pane the connection CLAIMS to run in (`X-Puppet-Master-Pane`) is a
+//! - `suspected`: `verified`, or the pane the connection CLAIMS to run in (`X-Potato-Workspace-Pane`) is a
 //!   companion pane. This is what keeps a call out (answering a helper's card, the default budget): a
 //!   forged claim can only refuse the forger more, never let it do more.
 //!
@@ -120,7 +120,7 @@ fn companion_above(pane: &str, parent_of: impl Fn(&str) -> Option<String>) -> Op
 }
 
 /// The verdict for an MCP connection, from the live registry and the process table. The process id is the one the
-/// caller SENT (`X-Puppet-Master-Pid`): good enough for `suspected` (a forged claim only refuses the forger more),
+/// caller SENT (`X-Potato-Workspace-Pid`): good enough for `suspected` (a forged claim only refuses the forger more),
 /// never for letting a call through. `companion_recall` uses the real TCP owner instead (`peer::recall_caller_pane`).
 pub fn of_session(registry: &Arc<Mutex<PaneRegistry>>, session: &str) -> Verdict {
     let hint = crate::mcp_sessions::claimed_session_pane(session);

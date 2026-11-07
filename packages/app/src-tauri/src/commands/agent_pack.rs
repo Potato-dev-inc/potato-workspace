@@ -1,4 +1,4 @@
-//! Tauri commands for "Add Puppet Master to your agents" (skills + MCP entry per detected agent).
+//! Tauri commands for "Add Potato Workspace to your agents" (skills + MCP entry per detected agent).
 //! Thin wrappers over `crate::agent_pack::service`.
 
 use serde_json::Value;

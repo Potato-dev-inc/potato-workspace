@@ -1,4 +1,4 @@
-// Typed wrappers for "Red to Green" (`ci_fix/`): Puppet Master watches the CI of a pull request it opened,
+// Typed wrappers for "Red to Green" (`ci_fix/`): Potato Workspace watches the CI of a pull request it opened,
 // asks the person before an agent reads the failed log, and asks again before anything is pushed.
 // Desktop only. Rust structs keep their snake_case names here; the watch and fix views are camelCase.
 import { invoke } from '@tauri-apps/api/core';

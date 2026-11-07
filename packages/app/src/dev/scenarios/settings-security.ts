@@ -15,7 +15,7 @@ const s: HarnessScenario = {
     { seq: 6, ts_ms: now - 41 * min, kind: 'approval', who: 'device', summary: 'A phone answered from its lock screen: Allowed once' },
     { seq: 5, ts_ms: now - 95 * min, kind: 'merge', who: 'agent', summary: 'An agent tried to merge a separate copy; it was not allowed' },
     { seq: 4, ts_ms: now - 3 * 60 * min, kind: 'shell_exec', who: 'agent', summary: 'Ran a command in a shell pane' },
-    { seq: 3, ts_ms: now - 5 * 60 * min, kind: 'gate_dismissal', who: 'local', summary: 'Puppet Master closed a start-up screen on its own: An update notice' },
+    { seq: 3, ts_ms: now - 5 * 60 * min, kind: 'gate_dismissal', who: 'local', summary: 'Potato Workspace closed a start-up screen on its own: An update notice' },
     { seq: 2, ts_ms: now - 26 * 60 * min, kind: 'pairing', who: 'desktop', summary: 'You made a pairing code for a phone' },
     { seq: 1, ts_ms: now - 27 * 60 * min, kind: 'setting', who: 'desktop', summary: "Ask me before an agent controls a pane it didn't start: turned on" },
   ],

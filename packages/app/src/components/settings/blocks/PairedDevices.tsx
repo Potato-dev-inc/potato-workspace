@@ -1,6 +1,6 @@
 // Settings › Phone › Devices: every paired phone, what it may do (one switch per ability), when it
 // signs out if unused, and Revoke. The bridge enforces the abilities on every request.
-import { DEVICE_CAPS, type DeviceCap, type PairedDeviceInfo } from '@puppet-master/shared';
+import { DEVICE_CAPS, type DeviceCap, type PairedDeviceInfo } from '@potato-workspace/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../../../lib/tauri';
 import { DEVICES_CHANGED_EVENT } from '../../MobilePairingPanel';

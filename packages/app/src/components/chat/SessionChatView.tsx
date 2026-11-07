@@ -74,7 +74,7 @@ export interface SessionChatViewProps {
   canBranch?: boolean;
   /** `Branch` was pressed on the turn that the message with this id starts. */
   onBranch?: (userItemId: string) => void;
-  /** The helpers this pane's agent started through Puppet Master: compact rows in the turn they were started in. */
+  /** The helpers this pane's agent started through Potato Workspace: compact rows in the turn they were started in. */
   helpers?: readonly ChatHelper[];
   /** A helper row was pressed: open that pane. */
   onOpenPane?: (paneId: string) => void;

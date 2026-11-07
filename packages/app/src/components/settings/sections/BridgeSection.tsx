@@ -1,7 +1,7 @@
 // Settings > Bridge & MCP: the Toolbelt, the local bridge, the MCP runtime status, install and uninstall of
 // the MCP configs for orchestrator hosts, and copyable snippets. Each block owns its state; installs and
 // uninstalls announce themselves with the `pm-mcp-changed` event so the status re-checks.
-import { PUPPET_MASTER_MCP_COMMAND } from '../../../lib/mcp-config';
+import { POTATO_WORKSPACE_MCP_COMMAND } from '../../../lib/mcp-config';
 import type { RowDef } from '../model';
 import { CodeBlock, InfoRow, SettingToggle } from '../settings-ui';
 import { AgentPackGroup } from '../pack/AgentPackGroup';
@@ -12,20 +12,20 @@ import { McpUninstallBlock } from './bridge/McpUninstall';
 import { securityRows } from './bridge/Security';
 import { installPathOf } from './bridge/shared';
 
-const CLAUDE_DESKTOP_MCP = JSON.stringify({ mcpServers: { 'puppet-master': PUPPET_MASTER_MCP_COMMAND } }, null, 2);
-const CODEX_MCP = '[mcp_servers.puppet-master]\ncommand = "npx"\nargs = ["-y","@puppet-master/mcp"]';
+const CLAUDE_DESKTOP_MCP = JSON.stringify({ mcpServers: { 'potato-workspace': POTATO_WORKSPACE_MCP_COMMAND } }, null, 2);
+const CODEX_MCP = '[mcp_servers.potato-workspace]\ncommand = "npx"\nargs = ["-y","@potato-workspace/mcp"]';
 
 export const bridgeRows: RowDef[] = [
   {
     id: 'toolbelt',
     label: 'Toolbelt',
-    hint: "Add an MCP server once; Puppet Master writes it into every agent's own config.",
+    hint: "Add an MCP server once; Potato Workspace writes it into every agent's own config.",
     keywords: 'mcp servers apply to all agents import secrets scope',
     render: (env) => <ToolbeltGroup projectPath={installPathOf(env) || null} />,
   },
   {
     id: 'agent-pack',
-    label: 'Add Puppet Master to your agents',
+    label: 'Add Potato Workspace to your agents',
     hint: 'Teach each agent when to ask another for help. Review first; Undo puts it back.',
     keywords: 'skills skill plugin install teach delegate second opinion claude code codex cursor opencode add agents undo',
     render: () => <AgentPackGroup />,
@@ -33,13 +33,13 @@ export const bridgeRows: RowDef[] = [
   {
     id: 'bridge-endpoint',
     label: 'Bridge address',
-    hint: 'Where other tools reach Puppet Master on this computer. Found automatically.',
+    hint: 'Where other tools reach Potato Workspace on this computer. Found automatically.',
     keywords: 'bridge endpoint port ports url local http address 17321 17399',
     group: 'Bridge',
     render: (env) => (
       <InfoRow
         label="Bridge address"
-        description="Where other tools reach Puppet Master on this computer. Found automatically."
+        description="Where other tools reach Potato Workspace on this computer. Found automatically."
         value={env.bridgeUrl ?? 'Not found yet'}
       />
     ),
@@ -78,7 +78,7 @@ export const bridgeRows: RowDef[] = [
   {
     id: 'snippet-claude-desktop',
     label: 'Claude Desktop config',
-    hint: "Add this to Claude Desktop's MCP settings by hand. Puppet Master won't write it.",
+    hint: "Add this to Claude Desktop's MCP settings by hand. Potato Workspace won't write it.",
     keywords: 'claude desktop config json mcp.json cursor npx manual copy',
     group: 'Install',
     render: () => <CodeBlock title="Claude Desktop config" code={CLAUDE_DESKTOP_MCP} />,
@@ -95,7 +95,7 @@ export const bridgeRows: RowDef[] = [
   {
     id: 'mcp-uninstall',
     label: 'Uninstall MCP',
-    hint: 'Removes puppet-master from agent configs. The app and npm package stay. Restart MCP hosts.',
+    hint: 'Removes the app from agent configs. The app and package stay. Restart MCP hosts.',
     keywords: 'remove delete uninstall mcp.json codex opencode claude code cursor claude desktop global project config npx node',
     group: 'Uninstall',
     danger: true,

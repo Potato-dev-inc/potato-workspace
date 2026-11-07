@@ -11,7 +11,7 @@ interface Props {
 export function SidebarHeader({ bridgeReady, busy, theme, onNewChat, onToggleTheme, onShowSettings }: Props) {
   return (
     <div className="px-3 py-2 border-b border-pm-border text-sm font-semibold flex items-center gap-2">
-      <span>Puppet Master</span>
+      <span>Potato Workspace</span>
       <span
         className={`w-1.5 h-1.5 rounded-full ${bridgeReady ? 'bg-pm-ok' : 'bg-pm-warn'}`}
         title={bridgeReady ? 'Bridge connected' : 'Bridge not reachable'}

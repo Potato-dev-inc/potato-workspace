@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Terminal } from '@xterm/xterm';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import { makeBridgeClient, type BridgeEvent } from '../lib/bridge';
 import { subscribeBridgeEventsHandle, subscribeBridgeEventsViaPoll } from '../lib/bridge-sse';
 import { useBridgePaneRegistry, type BridgePaneRegistryApi } from './useBridgePaneRegistry';

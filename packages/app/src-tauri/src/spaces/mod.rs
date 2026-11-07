@@ -9,7 +9,13 @@ pub mod limits;
 pub mod ids;
 
 #[allow(dead_code)]
+pub mod files;
+
+#[allow(dead_code)]
 pub mod frame;
+
+#[allow(dead_code)]
+pub mod presence;
 
 #[allow(dead_code)]
 pub mod identity;
@@ -112,3 +118,12 @@ mod moderation_tests;
 
 #[cfg(test)]
 mod ratelimit_tests;
+
+#[cfg(test)]
+mod files_tests;
+
+#[cfg(test)]
+mod presence_tests;
+
+#[cfg(test)]
+mod local_net_tests;

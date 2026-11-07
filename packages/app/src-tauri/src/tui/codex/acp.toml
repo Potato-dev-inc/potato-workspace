@@ -1,4 +1,4 @@
-# Codex as a chat over ACP: the official adapter, started by Puppet Master. This file is the `[acp]` table of
+# Codex as a chat over ACP: the official adapter, started by Potato Workspace. This file is the `[acp]` table of
 # the Codex profile (the same table a declarative definition carries, docs/specs/agent-definitions).
 # Facts below are checked: adapter 1.1.4 + Codex CLI 0.162.1 on Windows 11, 2026-11-01 (see mcp_config).
 command = "node"

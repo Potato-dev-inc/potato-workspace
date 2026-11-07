@@ -59,7 +59,7 @@ export function keepGoingSaveError(err: unknown): string {
 
 const HEADING = {
   label: 'When an agent runs out of usage',
-  description: 'Puppet Master offers these agents, in this order, when the agent a task runs on hits its usage limit. You pick one each time.',
+  description: 'Potato Workspace offers these agents, in this order, when the agent a task runs on hits its usage limit. You pick one each time.',
 };
 
 export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
@@ -125,7 +125,7 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
         <div className="space-y-3">
           <p className="text-sm font-medium">Offer to continue on, in order</p>
           {settings.order.length === 0 ? (
-            <p className="text-sm text-pm-muted">Nothing listed. Puppet Master then offers every other installed agent, in its usual order.</p>
+            <p className="text-sm text-pm-muted">Nothing listed. Potato Workspace then offers every other installed agent, in its usual order.</p>
           ) : (
             <ol className="space-y-2 text-sm" aria-label="Offer order">
               {settings.order.map((target, i) => {
@@ -172,7 +172,7 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
             </Btn>
             {full && <span className="text-xs text-pm-muted">You can list up to {KEEP_GOING_ORDER_CAP} agents.</span>}
           </div>
-          <p className="text-xs text-pm-muted">Puppet Master asks every time. It never moves a task to another login of the same company.</p>
+          <p className="text-xs text-pm-muted">Potato Workspace asks every time. It never moves a task to another login of the same company.</p>
           {error && <Note role="alert">{error}</Note>}
         </div>
       </SettingBlock>

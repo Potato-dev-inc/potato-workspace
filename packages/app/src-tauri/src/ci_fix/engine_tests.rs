@@ -790,7 +790,7 @@ fn yes_on_a_guarded_idle_pane_continues_in_that_pane_with_the_exact_task() {
     let eng = fx.engine();
     fx.set(|s| s.run = Some(idle_run(true)));
     let fix = fx.started(&eng);
-    let task = text::task(REPO, 61, BRANCH, ".puppet-master/ci-61-try1.md");
+    let task = text::task(REPO, 61, BRANCH, ".potato-workspace/ci-61-try1.md");
     let s = fx.0.s.lock();
     assert_eq!(s.followups, vec![(task, format!("cifix:{}", fix.id))]);
     assert!(s.started.is_empty());
@@ -828,7 +828,7 @@ fn yes_on_an_unguarded_run_starts_a_new_guarded_pane_with_exactly_these_fields()
     assert_eq!(request.name.as_deref(), Some("Fix CI #61"));
     assert!(request.handle.as_deref().unwrap_or_default().starts_with("cifix-61-"), "{:?}", request.handle);
     assert_eq!(serde_json::to_value(request.context_policy).unwrap(), json!("fresh"));
-    assert_eq!(request.task, text::task(REPO, 61, BRANCH, ".puppet-master/ci-61-try1.md"));
+    assert_eq!(request.task, text::task(REPO, 61, BRANCH, ".potato-workspace/ci-61-try1.md"));
     // No log line and no check name in the task (S1).
     for planted in [TOKEN, "IGNORE", "sum(2, 2)", "FAILED", LINT, PYTEST, "pm-notes"] {
         assert!(!request.task.contains(planted), "the task holds {planted:?}");
@@ -1805,8 +1805,8 @@ fn settings_are_clamped_audited_and_returned() {
 #[test]
 fn reasons_are_stored_in_the_form_the_row_text_expects() {
     assert_eq!(reason("Someone else pushed to this branch."), "someone else pushed to this branch");
-    assert_eq!(reason("This pull request comes from a fork. Puppet Master won't fix it."), "this pull request comes from a fork. Puppet Master won't fix it");
-    assert_eq!(reason("GitHub didn't let Puppet Master read this pull request"), "GitHub didn't let Puppet Master read this pull request");
+    assert_eq!(reason("This pull request comes from a fork. Potato Workspace won't fix it."), "this pull request comes from a fork. Potato Workspace won't fix it");
+    assert_eq!(reason("GitHub didn't let Potato Workspace read this pull request"), "GitHub didn't let Potato Workspace read this pull request");
     assert_eq!(reason("You stopped watching"), "you stopped watching");
     assert_eq!(reason("  The copy is gone \n"), "the copy is gone");
     assert_eq!(reason(""), "");
@@ -1848,7 +1848,7 @@ fn sources() -> Vec<(&'static str, String)> {
 
 #[test]
 fn s9_no_ci_rerun_workflow_dispatch_merge_or_comment_call_exists() {
-    // Every path or command Puppet Master builds for GitHub is a string literal: look at those.
+    // Every path or command Potato Workspace builds for GitHub is a string literal: look at those.
     let literal = regex::Regex::new(r#""((?:[^"\\]|\\.)*)""#).expect("regex");
     let forbidden_words = super::github::WRITE_PATHS_NEVER;
     for (file, code) in sources() {

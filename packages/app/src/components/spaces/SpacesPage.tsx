@@ -9,7 +9,9 @@ import {
   spaceLeave,
   spaceReact,
   spaceRemoveMember,
+  spaceShowOnline,
   spacesErrorText,
+  usePresenceReporter,
   useSpace,
   useSpaces,
   type ReactionCode,
@@ -47,6 +49,10 @@ export function SpacesPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const { detail } = useSpace(selected);
+  usePresenceReporter(true);
+  // The checkbox follows the backend; after a click it shows the view the backend answered with.
+  const [showOnlineSet, setShowOnlineSet] = useState<boolean | null>(null);
+  const showOnline = showOnlineSet ?? view?.showOnline ?? true;
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
@@ -252,6 +258,21 @@ export function SpacesPage() {
               Until the owner's computer is online, people who left can still read new messages.
             </p>
           )}
+          <label className="ck-spaces-check">
+            <input
+              type="checkbox"
+              checked={showOnline}
+              onChange={(e) => {
+                const on = e.target.checked;
+                spaceShowOnline(on).then(
+                  (v) => setShowOnlineSet(v.showOnline),
+                  (err: unknown) => setActionError(spacesErrorText(err)),
+                );
+              }}
+            />{' '}
+            Show when I'm online
+          </label>
+          <p className="ck-spaces-note">This applies to all spaces on this computer. When it is off, others see you as offline.</p>
           <div className="ck-spaces-actions">
             <button type="button" className="ck-spaces-btn" onClick={() => setInfoOpen(false)}>
               Close

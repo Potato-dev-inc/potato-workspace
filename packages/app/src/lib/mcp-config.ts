@@ -1,12 +1,12 @@
-import type { OrchestratorBackend } from '@puppet-master/shared';
+import type { OrchestratorBackend } from '@potato-workspace/shared';
 import { tauri } from './tauri';
 import { type CliOrchestratorBackend, isCliOrchestratorBackend } from './orchestrator-panes';
 
-export const PUPPET_MASTER_MCP_NAME = 'puppet-master';
+export const POTATO_WORKSPACE_MCP_NAME = 'potato-workspace';
 
-export const PUPPET_MASTER_MCP_COMMAND = {
+export const POTATO_WORKSPACE_MCP_COMMAND = {
   command: 'npx',
-  args: ['-y', '@puppet-master/mcp'],
+  args: ['-y', '@potato-workspace/mcp'],
 } as const;
 
 export interface EnsureMcpResult {

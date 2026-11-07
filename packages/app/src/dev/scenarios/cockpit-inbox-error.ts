@@ -18,7 +18,7 @@ const stopped = (id: string, agent: string, cwd: string) => ({
 const s: HarnessScenario = {
   name: 'cockpit-inbox-error',
   route: 'cockpit',
-  panes: [stopped(PANE_CLAUDE, 'claude', 'C:/Users/dev/work/puppet-master'), stopped(PANE_CODEX, 'codex', 'C:/Users/dev/work/billing-service')],
+  panes: [stopped(PANE_CLAUDE, 'claude', 'C:/Users/dev/work/potato-workspace'), stopped(PANE_CODEX, 'codex', 'C:/Users/dev/work/billing-service')],
   runs: {
     [PANE_CLAUDE]: { handle: 'run_1', status: 'failed', receipt: null, error: { code: 'WORKSPACE_TRUST_DECLINED' } },
     [PANE_CODEX]: { handle: 'run_2', status: 'failed', receipt: null, error: { code: 'AGENT_EXITED' } },

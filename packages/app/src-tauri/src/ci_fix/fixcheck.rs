@@ -13,7 +13,7 @@ use crate::issue_intake::pushcheck;
 
 /// The sentence the intake check ends a held push with. Reused word for word; the tests check that
 /// the intake check still says it.
-const HELD_LINE: &str = "Puppet Master won't push this. Check the copy yourself.";
+const HELD_LINE: &str = "Potato Workspace won't push this. Check the copy yourself.";
 /// How many names or places a sentence shows before "and N more".
 const SHOWN: usize = 3;
 /// Folders that hold tests.

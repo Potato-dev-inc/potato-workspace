@@ -15,7 +15,7 @@ use std::time::Duration;
 pub struct LiveIo;
 
 fn no_app() -> OperationError {
-    OperationError::new("APP_NOT_READY", "Puppet Master is still starting", true)
+    OperationError::new("APP_NOT_READY", "Potato Workspace is still starting", true)
 }
 
 fn started(view: &AgentRunView) -> Started {

@@ -23,7 +23,7 @@ const PICK: PickView = {
   component: 'PricingCard',
   source: { relPath: 'src/components/PricingCard.tsx', line: 42 },
   thumb: 'data:image/png;base64,AAAA',
-  shotPath: '.puppet-master/shots/pick-1.png',
+  shotPath: '.potato-workspace/shots/pick-1.png',
 };
 
 const TARGETS: Target[] = [

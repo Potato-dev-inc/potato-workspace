@@ -25,14 +25,14 @@ function formatCode(text: string): string {
 }
 
 /** Where people learn to host their own relay (Cloudflare in a few clicks, or Docker). */
-export const RELAY_HELP_URL = 'https://github.com/Potato-dev-inc/puppet-master/blob/main/relay/README.md';
+export const RELAY_HELP_URL = 'https://github.com/Potato-dev-inc/potato-workspace/blob/main/relay/README.md';
 
 function RelayHelp() {
   return (
     <div className="st-team-row">
       <span />
       <p className="st-note st-team-relay-help">
-        Host your own relay on Cloudflare or with Docker. A hosted relay from Puppet Master is coming.{' '}
+        Host your own relay on Cloudflare or with Docker. A hosted relay from Potato Workspace is coming.{' '}
         <a
           className="st-link"
           href={RELAY_HELP_URL}
@@ -239,7 +239,7 @@ export function TeamSettings({ api = teamApi, onSaved }: { api?: TeamApi; onSave
             Save
           </Btn>
         </div>
-        {view.profile && <Note>This is the “{view.profile}” profile, a separate Puppet Master on this computer.</Note>}
+        {view.profile && <Note>This is the “{view.profile}” profile, a separate Potato Workspace on this computer.</Note>}
         <div>
           <Btn disabled={busy} onClick={() => setLeaving(true)}>
             Leave this team

@@ -1,4 +1,4 @@
-# capture: kilo 7.8.8, pane 121x36, puppet-master screen snapshot (vt100 contents), 2026-10-09; user name scrubbed
+# capture: kilo 7.8.8, pane 121x36, potato-workspace screen snapshot (vt100 contents), 2026-10-09; user name scrubbed
                                                                                                                            ┃                                                                              New session - 2026-10-08T20:28:39.        ┃  Use your read tool to read the file .env in the current directory and       938Z                                    
   ┃  tell me the variable name inside it.                                                                                
   ┃                                                                                                                      

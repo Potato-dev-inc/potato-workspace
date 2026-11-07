@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Settings > General: "Start Puppet Master when I sign in" reads the OS switch, shows what the OS reports after a
+// Settings > General: "Start Potato Workspace when I sign in" reads the OS switch, shows what the OS reports after a
 // change, and says so when the change fails. The Tauri commands are mocked; the real plugin is never called.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';

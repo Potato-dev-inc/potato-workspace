@@ -77,6 +77,12 @@ pub struct ConversationRecord {
     /// The settings (model, mode, effort) the agent last offered, so a restored chat shows them before it starts.
     #[serde(default)]
     pub config_options: Vec<serde_json::Value>,
+    /// The MCP session of the agent that started this chat (its owner-only control). `None`: the person started it.
+    #[serde(default)]
+    pub started_by: Option<String>,
+    /// The pane that started this chat (its helper-of link). Restored on start when that pane is live.
+    #[serde(default)]
+    pub parent_pane_id: Option<String>,
     pub created_ms: u64,
     pub updated_ms: u64,
 }
@@ -180,6 +186,8 @@ mod tests {
             terminal_pane: None,
             notices: Vec::new(),
             config_options: Vec::new(),
+            started_by: None,
+            parent_pane_id: None,
             created_ms: 1,
             updated_ms: 1,
         }
@@ -199,6 +207,37 @@ mod tests {
         store.save(&[a.clone(), record("b")]).unwrap();
         let back = RecordStore::at(dir.join(FILE)).load();
         assert_eq!(back, vec![a, record("b")]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_helper_link_survives_a_save_and_a_load() {
+        let (store, dir) = temp_store();
+        let mut helper = record("helper");
+        helper.started_by = Some("session-A".into());
+        helper.parent_pane_id = Some("pane-parent".into());
+        store.save(&[helper.clone()]).unwrap();
+        let back = RecordStore::at(dir.join(FILE)).load();
+        assert_eq!(back[0].started_by.as_deref(), Some("session-A"));
+        assert_eq!(back[0].parent_pane_id.as_deref(), Some("pane-parent"));
+        assert_eq!(back, vec![helper]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn an_old_record_without_the_helper_link_still_loads() {
+        let (store, dir) = temp_store();
+        std::fs::create_dir_all(&dir).unwrap();
+        // Written by a build before the link fields existed: no `started_by`, no `parent_pane_id`.
+        let mut old = serde_json::to_value(record("old")).unwrap();
+        old.as_object_mut().unwrap().remove("started_by");
+        old.as_object_mut().unwrap().remove("parent_pane_id");
+        std::fs::write(dir.join(FILE), serde_json::json!({ "version": 1, "conversations": [old] }).to_string()).unwrap();
+        let back = store.load();
+        assert_eq!(back.len(), 1, "the old record is kept");
+        assert_eq!(back[0].id, "old");
+        assert_eq!(back[0].started_by, None);
+        assert_eq!(back[0].parent_pane_id, None);
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -243,7 +282,7 @@ mod journal_sweep_tests {
     fn rec(id: &str, state: LastState) -> ConversationRecord {
         ConversationRecord {
             id: id.into(), agent: "codex".into(), session_id: None, cwd: "D:/w".into(), lane: RunLane::Acp,
-            last_known_state: state, terminal_pane: None, notices: Vec::new(), config_options: Vec::new(), created_ms: 1, updated_ms: 1,
+            last_known_state: state, terminal_pane: None, notices: Vec::new(), config_options: Vec::new(), started_by: None, parent_pane_id: None, created_ms: 1, updated_ms: 1,
         }
     }
 

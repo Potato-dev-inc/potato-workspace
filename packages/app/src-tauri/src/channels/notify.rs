@@ -36,9 +36,9 @@ use parking_lot::Mutex;
 const MAX_QUESTION_CHARS: usize = 600;
 /// Shown under a card the chat cannot answer. The same words as `policy` for an approval that is not
 /// low risk; a test keeps them equal.
-const OPEN_TO_ANSWER: &str = "Open Puppet Master to answer.";
+const OPEN_TO_ANSWER: &str = "Open Potato Workspace to answer.";
 /// What the chat reads for the end of Focus in short mode: no counts, no agent text.
-const SHORT_FOCUS: &str = "Focus is over. Open Puppet Master.";
+const SHORT_FOCUS: &str = "Focus is over. Open Potato Workspace.";
 
 /// One message for the chat. The engine turns it into a send and, after the send, records the new
 /// message id against `remember` (so a reply to that message means that pane or companion).
@@ -164,7 +164,7 @@ impl Notifier {
             return None;
         }
         let lines = if cfg.short_mode {
-            vec![format!("{name} replied. Open Puppet Master to read it.")]
+            vec![format!("{name} replied. Open Potato Workspace to read it.")]
         } else {
             vec![format!("{name} replied:"), text.to_string()]
         };

@@ -160,7 +160,7 @@ const FALLBACK: Record<RunStateTag, string> = {
   pushing: 'Opening the draft PR',
   pr_open: 'Draft PR open',
   no_changes: 'No changes',
-  held: "Puppet Master won't push this. Check the copy yourself.",
+  held: "Potato Workspace won't push this. Check the copy yourself.",
   thrown_away: 'Thrown away',
   failed: 'Failed',
 };

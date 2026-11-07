@@ -86,7 +86,7 @@ impl Shadow {
         // "unknown error occurred while reading the configuration files", so no save point would
         // ever be taken. A folder that went through `canonicalize` has that spelling.
         let work_tree = without_verbatim_prefix(work_tree);
-        Self { git_dir: work_tree.join(".puppet-master").join("checkpoints.git"), work_tree }
+        Self { git_dir: work_tree.join(".potato-workspace").join("checkpoints.git"), work_tree }
     }
 
     /// The same shadow repository (same `git_dir`) with another work tree. Used by the
@@ -163,8 +163,8 @@ impl Shadow {
             self.run(&["init", "--quiet", "--template="], None, None, &[])?;
             for (k, v) in [
                 ("core.bare", "false"),
-                ("user.name", "Puppet Master"),
-                ("user.email", "checkpoints@puppet-master.invalid"),
+                ("user.name", "Potato Workspace"),
+                ("user.email", "checkpoints@potato-workspace.invalid"),
                 ("gc.pruneExpire", "1.day.ago"),
                 ("commit.gpgsign", "false"),
             ] {
@@ -179,7 +179,7 @@ impl Shadow {
     /// `info/exclude`: our defaults, then the user's own `.git/info/exclude` when present.
     /// `.gitignore` files in the work tree are honoured by git itself.
     fn write_excludes(&self, extra: &[String]) -> Result<(), GitError> {
-        let mut text = String::from("# managed by Puppet Master\n.git/\n.puppet-master/\n");
+        let mut text = String::from("# managed by Potato Workspace\n.git/\n.potato-workspace/\n");
         for line in DEFAULT_EXCLUDES {
             text.push_str(line);
             text.push('\n');

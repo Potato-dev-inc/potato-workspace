@@ -1,4 +1,4 @@
-//! The bridge port file (`puppet-master.bridge.port`) is how MCP clients find the running app.
+//! The bridge port file (`potato-workspace.bridge.port`) is how MCP clients find the running app.
 //! Only the process that owns the bridge writes it, and on exit it removes the file only if the
 //! file still names this process's port (a later instance may have replaced it).
 

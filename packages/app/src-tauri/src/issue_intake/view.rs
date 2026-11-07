@@ -77,7 +77,7 @@ pub fn state_text(state: &RunState) -> String {
         RunState::PrOpen { number, .. } => format!("Draft PR #{number}"),
         RunState::NoChanges { .. } => "No changes".to_string(),
         RunState::Held { message, .. } if !message.is_empty() => message.clone(),
-        RunState::Held { .. } => "Puppet Master won't push this. Check the copy yourself.".to_string(),
+        RunState::Held { .. } => "Potato Workspace won't push this. Check the copy yourself.".to_string(),
         RunState::ThrownAway => "Thrown away".to_string(),
         RunState::Failed { message, .. } if !message.is_empty() => format!("Failed: {message}"),
         RunState::Failed { .. } => "Failed".to_string(),

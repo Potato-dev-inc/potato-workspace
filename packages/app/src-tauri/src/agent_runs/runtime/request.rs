@@ -150,7 +150,7 @@ pub struct AgentRunRequest {
     #[serde(default)]
     pub budget_minutes: Option<u32>,
     /// The run that is starting this one as a helper, so the new run draws from its budget. The
-    /// MCP shim fills it from `PUPPET_MASTER_PARENT_RUN`; an agent may pass it itself.
+    /// MCP shim fills it from `POTATO_WORKSPACE_PARENT_RUN`; an agent may pass it itself.
     #[serde(default)]
     pub budget_parent: Option<String>,
     /// Keep working in rounds until every check passes: the run becomes a mission

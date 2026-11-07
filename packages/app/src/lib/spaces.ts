@@ -76,6 +76,8 @@ export interface SpacesView {
   invites: SpaceInvite[];
   online: boolean;
   relayed: boolean;
+  /** "Show when I'm online" (all spaces on this computer). */
+  showOnline: boolean;
 }
 
 export const spacesView = () => invoke<SpacesView>('spaces_view');
@@ -227,6 +229,8 @@ export interface SpaceFile {
   size: number;
   have: boolean;
   state: 'idle' | 'getting' | 'failed';
+  /** 0 to 100 while `state` is `getting`. */
+  percent: number;
 }
 export interface SpaceMessage {
   id: string;
@@ -269,6 +273,60 @@ export const spaceBlock = (space: string, member: string, on: boolean) =>
 export const spaceReact = (space: string, target: string, code: ReactionCode, on: boolean) =>
   invoke<SpaceMessage>('space_react', { space, target, code, on });
 export const spaceDelete = (space: string, target: string) => invoke<SpaceMessage>('space_delete', { space, target });
+
+// Presence (D8.3/D8.4). The window reports online or away; the checkbox hides me from everyone.
+export const spacePresence = (state: 'online' | 'away') => invoke<void>('space_presence', { state });
+export const spaceShowOnline = (on: boolean) => invoke<SpacesView>('space_show_online', { on });
+
+export const AWAY_AFTER_MS = 10 * 60 * 1000;
+const REPORT_GAP_MS = 30_000;
+
+/**
+ * Reports Online on activity in this window and Away after ten minutes without any. Looks only at this window
+ * (pointer, keys, focus), never at the operating system. At most one call per 30 s for the same state.
+ */
+export function usePresenceReporter(enabled: boolean): void {
+  useEffect(() => {
+    if (!enabled) return;
+    let state: 'online' | 'away' | null = null;
+    let last = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const report = (s: 'online' | 'away') => {
+      const now = Date.now();
+      if (s === state && now - last < REPORT_GAP_MS) return;
+      state = s;
+      last = now;
+      void spacePresence(s).catch(() => undefined);
+    };
+    const active = () => {
+      report('online');
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => report('away'), AWAY_AFTER_MS);
+    };
+    active();
+    window.addEventListener('pointerdown', active);
+    window.addEventListener('keydown', active);
+    window.addEventListener('focus', active);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('pointerdown', active);
+      window.removeEventListener('keydown', active);
+      window.removeEventListener('focus', active);
+    };
+  }, [enabled]);
+}
+
+// Files (D8). The backend reads the file at `path`; the bytes never pass through the page.
+export const spaceFileOffer = (space: string, channel: string, path: string) =>
+  invoke<SpaceMessage>('space_file_offer', { space, channel, path });
+export const spaceFileGet = (space: string, sha: string) => invoke<{ have: boolean }>('space_file_get', { space, sha });
+export const spaceFileSave = (space: string, sha: string) => invoke<{ name: string }>('space_file_save', { space, sha });
+
+export function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export const REACTION_LABEL: Record<ReactionCode, string> = {
   thumbs_up: 'Thumbs up', heart: 'Heart', laugh: 'Laugh', wow: 'Wow',

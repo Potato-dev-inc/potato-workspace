@@ -210,7 +210,7 @@ fn every_held_cause_holds_the_push_and_the_intake_sentence_comes_last() {
         ("git", FixFacts { push: PushFacts { git_changed: true, ..push() }, ..facts() }),
         (
             "internal",
-            FixFacts { push: PushFacts { internal_files: owned(&[".puppet-master/ci-61-try1.md"]), ..push() }, ..facts() },
+            FixFacts { push: PushFacts { internal_files: owned(&[".potato-workspace/ci-61-try1.md"]), ..push() }, ..facts() },
         ),
         ("remote", FixFacts { remote_moved: true, ..facts() }),
         ("history", FixFacts { history_rewritten: true, ..facts() }),
@@ -307,7 +307,7 @@ fn golden_wording_for_the_fix_card() {
             "Someone pushed to the branch on GitHub since the failure.",
             "The branch history was rewritten.",
             "The copy is on another branch.",
-            "Puppet Master won't push this. Check the copy yourself.",
+            "Potato Workspace won't push this. Check the copy yourself.",
         ])
     );
 }

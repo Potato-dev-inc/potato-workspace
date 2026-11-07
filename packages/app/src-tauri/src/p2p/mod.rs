@@ -1,4 +1,4 @@
-//! The PC link: one peer-to-peer layer for everything that talks between Puppet Master installs. My computers
+//! The PC link: one peer-to-peer layer for everything that talks between Potato Workspace installs. My computers
 //! (DevHop) is its first client; Spaces (teams, voice, shared folders) and later "agents", "panes", "workspace"
 //! are others. DL-5 in PLAN-R17-DESKTOPLAB, D-0 in PLAN-R17-TEAM-SOCIAL.
 //!

@@ -162,7 +162,7 @@ pub fn verdict(path: &str, known: &KnownDirs) -> Verdict {
 /// A folder with more than this many files, or bytes, is not copied (§5.3).
 pub const MAX_FILES: usize = 5_000;
 pub const MAX_BYTES: u64 = 500 * 1024 * 1024;
-const SKIP_DIRS: &[&str] = &["node_modules", ".git", ".puppet-master"];
+const SKIP_DIRS: &[&str] = &["node_modules", ".git", ".potato-workspace"];
 
 /// Whether `dir` is small enough to work on a copy of. Skips `node_modules` and `.git`.
 pub fn small_enough(dir: &Path) -> bool {

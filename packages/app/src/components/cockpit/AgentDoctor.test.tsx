@@ -105,13 +105,13 @@ describe('AgentDoctor', () => {
             state: 'waiting_vendor_review',
             mode: 'shadow',
             sentence: 'Needs your OK in Codex.',
-            how_to: 'In a Codex pane in this project, type /hooks and trust the Puppet Master entries. Once per project.',
+            how_to: 'In a Codex pane in this project, type /hooks and trust the Potato Workspace entries. Once per project.',
           },
         }),
         row({
           id: 'b',
           label: 'Agent B',
-          hooks: { state: 'not_supported', mode: 'shadow', sentence: "This agent can't report to Puppet Master directly." },
+          hooks: { state: 'not_supported', mode: 'shadow', sentence: "This agent can't report to Potato Workspace directly." },
         }),
       ],
       test: vi.fn(),
@@ -236,7 +236,7 @@ describe('Inbox first-run hint', () => {
   it('invites first-time users to set up agents', () => {
     const open = vi.fn();
     act(() => root.render(<Inbox c={cockpit(0)} onOpenDoctor={open} />));
-    expect(host.textContent).toContain('Welcome to Puppet Master');
+    expect(host.textContent).toContain('Welcome to Potato Workspace');
     act(() => button(host, 'Set up your agents')!.click());
     expect(open).toHaveBeenCalled();
   });

@@ -508,7 +508,7 @@ fn the_same_turn_replaces_its_entry() {
 #[test]
 fn a_damaged_ring_file_is_an_empty_ring_and_is_rewritten() {
     let tmp = Tmp::new("damaged");
-    std::fs::create_dir_all(tmp.p().join(".puppet-master")).unwrap();
+    std::fs::create_dir_all(tmp.p().join(".potato-workspace")).unwrap();
     std::fs::write(ring_path(tmp.p()), "{ not json").unwrap();
     let mut store = Store::default();
     store.ensure_loaded(tmp.p());
@@ -706,7 +706,7 @@ fn digest_route_needs_a_paired_device_when_called_remotely() {
     // loopback tooling is let through.
     let denied = authorize_bridge_request("Host: example.com\r\n", false, &["digest"], "GET").unwrap_err();
     assert_eq!((denied.0, denied.1["error"].as_str()), (401, Some("pairing_required")));
-    let proxied = authorize_bridge_request("X-PM-Proxied: 1\r\n", true, &["digest"], "GET").unwrap_err();
+    let proxied = authorize_bridge_request("X-Potato-Workspace-Proxied: 1\r\n", true, &["digest"], "GET").unwrap_err();
     assert_eq!(proxied.0, 401, "the PWA proxy does not get the loopback bypass");
     assert!(authorize_bridge_request("Host: 127.0.0.1\r\n", true, &["digest"], "GET").is_ok());
 

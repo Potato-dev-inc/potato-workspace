@@ -12,7 +12,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('findBridgeUrl with PUPPET_MASTER_PROFILE', () => {
+describe('findBridgeUrl with POTATO_WORKSPACE_PROFILE', () => {
   it("a profile's window uses its own bridge, never the first one that answers", async () => {
     (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
     invoke.mockResolvedValue('http://127.0.0.1:17361');

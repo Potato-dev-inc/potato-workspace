@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "puppet-master": {
+    "potato-workspace": {
       "command": "npx",
-      "args": ["-y", "@puppet-master/mcp"]
+      "args": ["-y", "@potato-workspace/mcp"]
     }
   }
 }

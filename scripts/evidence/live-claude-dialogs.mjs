@@ -1,4 +1,4 @@
-// Live repro for docs/features/fix-live-claude.md. Needs a RUNNING Puppet Master build that contains
+// Live repro for docs/features/fix-live-claude.md. Needs a RUNNING Potato Workspace build that contains
 // the fix and a trusted demo project. It spawns real Claude Code panes (uses the subscription), so
 // it is manual: `node scripts/evidence/live-claude-dialogs.mjs <demo-project> [bridge-url]`.
 //
@@ -16,7 +16,7 @@ import path from 'node:path';
 const project = process.argv[2];
 const bridge = process.argv[3] ?? 'http://127.0.0.1:17321';
 if (!project) throw new Error('usage: live-claude-dialogs.mjs <trusted demo project> [bridge url]');
-const headers = { 'content-type': 'application/json', 'x-puppet-master-session': 'live-claude-dialogs' };
+const headers = { 'content-type': 'application/json', 'x-potato-workspace-session': 'live-claude-dialogs' };
 const call = async (method, route, body) => {
   const response = await fetch(bridge + route, { method, headers, body: body ? JSON.stringify(body) : undefined });
   return { status: response.status, body: await response.json().catch(() => null) };

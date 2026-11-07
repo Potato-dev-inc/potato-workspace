@@ -1,8 +1,8 @@
-// Project view, "Copies" tab: what Puppet Master does so a separate copy starts ready.
+// Project view, "Copies" tab: what Potato Workspace does so a separate copy starts ready.
 //   Set up with       commands run in the new copy (one per line, never through a shell)
 //   Copy these files  files copied in from the project, never committed
 //   Start with        the command that starts the project (kept for later)
-// The settings live in the project, in `.puppet-master/project.toml`. A `conductor.json` can be imported.
+// The settings live in the project, in `.potato-workspace/project.toml`. A `conductor.json` can be imported.
 import { useEffect, useState } from 'react';
 import { shipApi, type PresetView, type ShipApi } from '../../lib/ship-api';
 import '../../styles/cockpit-ship.css';
@@ -74,7 +74,7 @@ export function ProjectCopies({ project, ship = shipApi }: { project: string | u
 
   return (
     <div className="ck-copies">
-      <h2 className="ck-section">When Puppet Master makes a separate copy</h2>
+      <h2 className="ck-section">When Potato Workspace makes a separate copy</h2>
 
       <label className="ck-copies-row">
         <span className="ck-copies-label">Set up with</span>
@@ -117,7 +117,7 @@ export function ProjectCopies({ project, ship = shipApi }: { project: string | u
           onChange={(e) => setRun(e.target.value)}
           disabled={view === null}
         />
-        <span className="ck-copies-fine">Kept with the project. Puppet Master does not start it for you yet.</span>
+        <span className="ck-copies-fine">Kept with the project. Potato Workspace does not start it for you yet.</span>
       </label>
 
       {conductor && (

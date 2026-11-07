@@ -93,7 +93,7 @@ export function prepare({ install = false } = {}) {
     did.push('npm ci');
     if (runLoud(npm, ['ci']) !== 0) throw new Error('npm ci failed');
   }
-  // @puppet-master/app imports @puppet-master/shared through its dist/ output (rebuilt when its sources are newer).
+  // @potato-workspace/app imports @potato-workspace/shared through its dist/ output (rebuilt when its sources are newer).
   ensureWorkspaceBuilt(repoRoot);
   // tauri::generate_context! embeds packages/app/dist (frontendDist). Any build of it will do for the tests.
   if (!existsSync(join(appDir, 'dist', 'index.html'))) {

@@ -140,7 +140,7 @@ export function StoreCheck({ id, label, installedVersion, runCheck, onOpenAgent,
       {view.phase === 'ready' && (
         <>
           <p className="ck-sub">
-            Puppet Master starts {label} in its own pane, in a new temporary folder kept apart from your projects. It reads
+            Potato Workspace starts {label} in its own pane, in a new temporary folder kept apart from your projects. It reads
             the answers from the screen.
           </p>
           <p className="ck-sub">What will run:</p>
@@ -161,7 +161,7 @@ export function StoreCheck({ id, label, installedVersion, runCheck, onOpenAgent,
 
       {busy && (
         <p className="ck-sub">
-          <DotSpinner status="running" label={`Checking ${label}`} /> Checking {label}. Puppet Master works in its own pane.
+          <DotSpinner status="running" label={`Checking ${label}`} /> Checking {label}. Potato Workspace works in its own pane.
         </p>
       )}
 

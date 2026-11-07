@@ -20,7 +20,7 @@ import { Btn, Note, SettingBlock } from '../settings-ui';
 export const WINDOWS_VALUE = '';
 
 const FOOTER =
-  'In Linux an agent has its own sign-in. Puppet Master never copies your Windows logins or keys into Linux. ' +
+  'In Linux an agent has its own sign-in. Potato Workspace never copies your Windows logins or keys into Linux. ' +
   'Linux is not a sandbox: Linux programs can still read your Windows drives. Helpers you talk to on your phone always run on Windows.';
 
 /** The text a failed call shows: the server's plain sentence, without its `CODE:` prefix. */
@@ -158,7 +158,7 @@ export function LinuxRows({ onSaved }: { onSaved?: () => void }) {
             <p>
               WSL is not installed. To use Linux, open PowerShell as administrator and run: <code className="font-mono">{status.command}</code>
             </p>
-            <p className="text-xs text-pm-muted">Puppet Master does not install it for you.</p>
+            <p className="text-xs text-pm-muted">Potato Workspace does not install it for you.</p>
           </>
         }
         onCopy={() => copyText(status.command)}

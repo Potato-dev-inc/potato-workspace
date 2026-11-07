@@ -150,7 +150,7 @@ describe('AHEAD_TITLE', () => {
 
 describe('scoresApi.report', () => {
   it('refuses outside Tauri with a plain sentence', async () => {
-    await expect(scoresApi.report()).rejects.toThrow('Open Puppet Master on your computer to see your scores.');
+    await expect(scoresApi.report()).rejects.toThrow('Open Potato Workspace on your computer to see your scores.');
     expect(invoke).not.toHaveBeenCalled();
   });
 

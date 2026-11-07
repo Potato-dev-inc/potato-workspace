@@ -3,7 +3,7 @@
 import { unsearchableLabels } from '../test-utils';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LlmModel, Settings } from '@puppet-master/shared';
+import type { LlmModel, Settings } from '@potato-workspace/shared';
 import { rowMatches, searchSections, type SectionDef } from '../model';
 import { BASE_SETTINGS, blur, buttonByText, byLabel, click, hasText, mountRows, pickOption, settle, type as typeInto, type Mounted } from '../test-utils';
 import { modelsRows } from './ModelsSection';

@@ -146,7 +146,7 @@ fn a_mission_goes_red_to_green_over_three_turns() {
     assert_eq!(copy_file(&view, "cart.js"), cart(ALL));
     assert_eq!(std::fs::read_to_string(session.project().join("cart.js")).unwrap().replace('\r', ""), cart(&[]));
     assert!(view["result"].as_str().unwrap_or_default().contains("Nothing was merged."));
-    assert!(copy_file(&view, ".puppet-master/MISSION.md").contains("## Progress (Puppet Master)"));
+    assert!(copy_file(&view, ".potato-workspace/MISSION.md").contains("## Progress (Potato Workspace)"));
 }
 
 // ---- regress -------------------------------------------------------------------------------------

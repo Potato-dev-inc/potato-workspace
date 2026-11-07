@@ -29,7 +29,7 @@ static SERIAL: Mutex<()> = Mutex::new(());
 pub(super) fn mock(path: &str, head: &str, body: &Value) -> (u16, Value) {
     let session = head
         .lines()
-        .find_map(|l| l.split_once(':').filter(|(k, _)| k.eq_ignore_ascii_case("x-puppet-master-session")).map(|(_, v)| v.trim().to_string()));
+        .find_map(|l| l.split_once(':').filter(|(k, _)| k.eq_ignore_ascii_case("x-potato-workspace-session")).map(|(_, v)| v.trim().to_string()));
     let mut mock = MOCK.lock().unwrap();
     mock.log.push(Logged { path: path.to_string(), body: body.clone(), session });
     if let Some(next) = mock.script.pop_front() {

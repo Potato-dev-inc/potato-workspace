@@ -1,6 +1,6 @@
 //! Missions v0 (Preview): a goal plus checks plus a budget (DESIGN-MISSIONS).
 //!
-//! Puppet Master makes one separate copy of the project, asks one agent at a time to work towards
+//! Potato Workspace makes one separate copy of the project, asks one agent at a time to work towards
 //! the goal, and runs the checks after every turn. Not green yet: the agent gets the failures and
 //! continues. No progress: the next backup agent takes over from a brief. Worse: the copy's files
 //! go back to the best turn. Green: the test-change guard compares the tests with the start, and
@@ -171,7 +171,7 @@ pub fn validate(req: &StartRequest) -> Result<(), OperationError> {
     let known: Vec<String> = crate::tui::descriptors().into_iter().map(|d| d.id.to_string()).collect();
     for agent in &req.agents {
         if !known.iter().any(|k| *k == agent.agent_type) {
-            return Err(err("UNKNOWN_AGENT_TYPE", &format!("{} is not an agent Puppet Master knows.", agent.agent_type)));
+            return Err(err("UNKNOWN_AGENT_TYPE", &format!("{} is not an agent Potato Workspace knows.", agent.agent_type)));
         }
     }
     if !std::path::Path::new(&req.project).is_dir() || !git_project(&req.project) {
@@ -288,7 +288,7 @@ pub fn is_quiet(project: &str, handle: &str) -> bool {
 /// The mission behind an id or a `mission-<id>` handle.
 pub fn find(id_or_handle: &str) -> Option<Mission> {
     let id = id_or_handle.strip_prefix(HANDLE_PREFIX).unwrap_or(id_or_handle);
-    // The index first; else any project Puppet Master knows that holds this mission's record.
+    // The index first; else any project Potato Workspace knows that holds this mission's record.
     let project = store::project_of(id).or_else(|| {
         crate::operations::indexed_project_paths().into_iter().find(|p| store::dir(p, id).join("mission.json").is_file())
     })?;

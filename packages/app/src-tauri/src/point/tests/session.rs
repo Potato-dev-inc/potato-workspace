@@ -35,7 +35,7 @@ fn pick(session: &mut Session, with_shot: bool) -> Pick {
         source: Some(SourceRef { rel_path: "src/Card.tsx".into(), line: Some(12) }),
         shot: with_shot.then(|| Shot {
             abs_path: PathBuf::from(format!("shots/pick-{n}.png")),
-            rel_path: format!(".puppet-master/shots/pick-{n}.png"),
+            rel_path: format!(".potato-workspace/shots/pick-{n}.png"),
             width: 10,
             height: 10,
         }),
@@ -213,7 +213,7 @@ fn state_carries_the_pick_fields_the_box_shows() {
     assert_eq!(first.component.as_deref(), Some("PricingCard"));
     assert_eq!(first.source, Some(SourceRef { rel_path: "src/Card.tsx".into(), line: Some(12) }));
     assert_eq!(first.thumb.as_deref(), Some("data:image/png;base64,10"));
-    assert_eq!(first.shot_path.as_deref(), Some(".puppet-master/shots/pick-1.png"));
+    assert_eq!(first.shot_path.as_deref(), Some(".potato-workspace/shots/pick-1.png"));
     assert_eq!(first.no_shot_reason, None);
     let second = &state.picks[1];
     assert_eq!(second.thumb, None);
@@ -248,7 +248,7 @@ fn the_state_json_uses_camel_case_names() {
     assert_eq!(json["defaultTarget"], "pane-a");
     assert_eq!(json["targets"][0]["paneId"], "pane-a");
     assert_eq!(json["targets"][0]["canSend"], true);
-    assert_eq!(json["picks"][0]["shotPath"], ".puppet-master/shots/pick-1.png");
+    assert_eq!(json["picks"][0]["shotPath"], ".potato-workspace/shots/pick-1.png");
     assert!(json["picks"][0].get("noShotReason").is_some());
 }
 

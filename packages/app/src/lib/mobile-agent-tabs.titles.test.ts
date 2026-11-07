@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import { tabLabels } from './mobile-agent-tabs';
 
 function pane(id: string, agent_type: string, created_at: number, title?: string | null): PaneInfo {

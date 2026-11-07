@@ -162,7 +162,7 @@ pub(super) fn cors_lines(headers: &str) -> String {
         "Access-Control-Allow-Origin: {origin}\r\n\
          Vary: Origin\r\n\
          Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS\r\n\
-         Access-Control-Allow-Headers: Content-Type, Authorization, X-PM-Proxied, {}, X-Puppet-Master-Session\r\n",
+         Access-Control-Allow-Headers: Content-Type, Authorization, X-Potato-Workspace-Proxied, {}, X-Potato-Workspace-Session\r\n",
         mobile_pairing::local_secret::HEADER
     )
 }
@@ -448,13 +448,13 @@ fn write_json_with(
 pub(super) fn request_session(headers: &str) -> Option<&str> {
     let session = headers.lines().find_map(|line| {
         let (key, value) = line.split_once(':')?;
-        (key.eq_ignore_ascii_case("x-puppet-master-session") && !value.trim().is_empty())
+        (key.eq_ignore_ascii_case("x-potato-workspace-session") && !value.trim().is_empty())
             .then_some(value.trim())
     })?;
     // The MCP process also names itself so a dead one can be told apart from a live one.
     let pid = headers.lines().find_map(|line| {
         let (key, value) = line.split_once(':')?;
-        key.eq_ignore_ascii_case("x-puppet-master-pid")
+        key.eq_ignore_ascii_case("x-potato-workspace-pid")
             .then(|| value.trim().parse::<u32>().ok())
             .flatten()
     });
@@ -472,7 +472,7 @@ pub(super) fn request_session(headers: &str) -> Option<&str> {
     // The pane the agent runs in, only ever a hint for nesting helper panes in the sidebar.
     let pane = headers.lines().find_map(|line| {
         let (key, value) = line.split_once(':')?;
-        key.eq_ignore_ascii_case("x-puppet-master-pane").then(|| value.trim())
+        key.eq_ignore_ascii_case("x-potato-workspace-pane").then(|| value.trim())
     });
     if let Some(pane) = pane {
         crate::mcp_sessions::note_session_pane(session, pane);

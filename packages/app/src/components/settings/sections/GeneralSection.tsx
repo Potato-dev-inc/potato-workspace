@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import type { Settings } from '@puppet-master/shared';
+import type { Settings } from '@potato-workspace/shared';
 import { clampAwayMinutes, clampCheckpointsKeep } from '../../../lib/bridge-settings';
 import { redactSettings } from '../../../lib/secrets';
 import { resolveSettingsFilePath } from '../../../lib/settings';
@@ -135,7 +135,7 @@ function exportSettings(settings: Settings) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = 'puppet-master-settings.json';
+  anchor.download = 'potato-workspace-settings.json';
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -158,8 +158,8 @@ function UninstallRow({ env }: { env: SettingsEnv }) {
   const run = async () => {
     env.setError(null);
     const ok = await env.confirm({
-      title: 'Uninstall Puppet Master?',
-      body: 'Puppet Master will close and be removed from this computer. Your app data folder may remain until you delete it yourself.',
+      title: 'Uninstall Potato Workspace?',
+      body: 'Potato Workspace will close and be removed from this computer. Your app data folder may remain until you delete it yourself.',
       confirmLabel: 'Uninstall',
     });
     if (!ok) return;
@@ -177,7 +177,7 @@ function UninstallRow({ env }: { env: SettingsEnv }) {
       : 'Only available in an installed build. For a dev build, stop the app and delete the project folder.'
     : 'Loading…';
   return (
-    <SettingRow label="Uninstall Puppet Master" description={description}>
+    <SettingRow label="Uninstall Potato Workspace" description={description}>
       <Btn disabled={busy || !info?.uninstallAvailable} onClick={() => void run()}>
         {busy ? 'Uninstalling…' : 'Uninstall…'}
       </Btn>
@@ -383,7 +383,7 @@ export const generalRows: RowDef[] = [
     id: 'shared-memory',
     label: 'Shared project memory',
     hint: 'Every agent in a project reads one memory file. Off removes it from agent files.',
-    keywords: 'memory claude.md agents.md puppet-master memory.md file',
+    keywords: 'memory claude.md agents.md potato-workspace memory.md file',
     group: 'Undo and memory',
     render: (env) => <SharedMemoryToggle onSaved={env.markSaved} />,
   },
@@ -455,7 +455,7 @@ export const generalRows: RowDef[] = [
   {
     id: 'red-to-green',
     label: 'Red to Green',
-    hint: 'When CI fails on a pull request Puppet Master opened, the same agent can fix it.',
+    hint: 'When CI fails on a pull request Potato Workspace opened, the same agent can fix it.',
     keywords: 'ci github checks failed fix pull request',
     group: 'Labs',
     labs: { name: 'Red to Green', about: 'The same agent fixes failed CI on its pull request, after you say yes.' },
@@ -537,5 +537,5 @@ export const generalRows: RowDef[] = [
       />
     ),
   },
-  { id: 'uninstall', label: 'Uninstall Puppet Master', hint: 'Remove the app from this computer.', keywords: 'remove delete', danger: true, render: (env) => <UninstallRow env={env} /> },
+  { id: 'uninstall', label: 'Uninstall Potato Workspace', hint: 'Remove the app from this computer.', keywords: 'remove delete', danger: true, render: (env) => <UninstallRow env={env} /> },
 ];

@@ -210,7 +210,7 @@ pub fn install_for_agent_in(
 /// reason. `None` when no reviewed adapter is shipped for this program.
 pub fn adapter_option_from(program: &str, entry: Option<&AdapterEntry>, python: Option<PathBuf>) -> Option<Value> {
     let entry = entry?;
-    let summary = format!("Puppet Master runs a reviewed adapter script with the Python that {program} was installed with. Tested with {program} {}.", entry.meta.tested_version);
+    let summary = format!("Potato Workspace runs a reviewed adapter script with the Python that {program} was installed with. Tested with {program} {}.", entry.meta.tested_version);
     // The names the person approves on install. Names, labels and plain defaults only.
     let keys: Vec<Value> = entry.meta.env_keys.iter().map(|k| json!({ "env": k.env, "label": k.label })).collect();
     let settings: Vec<Value> = entry

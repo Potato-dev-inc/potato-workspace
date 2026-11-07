@@ -32,7 +32,7 @@ const READY: WslStatus = {
 const PLACES: AgentPlaceRow[] = [
   { agentId: 'fake_a', label: 'Agent A', distro: null, found: null, whyNot: null },
   { agentId: 'fake_b', label: 'Agent B', distro: 'Ubuntu-Test', found: null, whyNot: null },
-  { agentId: 'fake_c', label: 'Agent C', distro: null, found: null, whyNot: "Agent C can't run in Linux from Puppet Master yet." },
+  { agentId: 'fake_c', label: 'Agent C', distro: null, found: null, whyNot: "Agent C can't run in Linux from Potato Workspace yet." },
 ];
 
 const VIEW: DistroView = {
@@ -89,7 +89,7 @@ describe('Run agents in Linux: the WSL states', () => {
   it('not installed: says the install command, and Copy puts that exact command on the clipboard', async () => {
     await mount({ state: 'not_installed', command: 'wsl --install' });
     expect(hasText(m.host, 'WSL is not installed. To use Linux, open PowerShell as administrator and run: wsl --install')).toBe(true);
-    expect(hasText(m.host, 'Puppet Master does not install it for you.')).toBe(true);
+    expect(hasText(m.host, 'Potato Workspace does not install it for you.')).toBe(true);
     await click(buttonByText(m.host, 'Copy'));
     expect(navigator.clipboard.writeText).toHaveBeenCalledExactlyOnceWith('wsl --install');
   });
@@ -200,11 +200,11 @@ describe('Run agents in Linux: Runs on per agent', () => {
     await mount(READY);
     expect(isLockedToWindows(PLACES[2])).toBe(true);
     expect(runsOn('Agent C').disabled).toBe(true);
-    expect(hasText(m.host, "Agent C can't run in Linux from Puppet Master yet.")).toBe(true);
+    expect(hasText(m.host, "Agent C can't run in Linux from Potato Workspace yet.")).toBe(true);
   });
 
   it('an agent that is on Linux with a reason can still be set back to Windows', async () => {
-    const onLinux: AgentPlaceRow = { agentId: 'fake_d', label: 'Agent D', distro: 'Ubuntu-Test', found: null, whyNot: "Agent D can't run in Linux from Puppet Master yet." };
+    const onLinux: AgentPlaceRow = { agentId: 'fake_d', label: 'Agent D', distro: 'Ubuntu-Test', found: null, whyNot: "Agent D can't run in Linux from Potato Workspace yet." };
     await mount(READY, [onLinux]);
     expect(isLockedToWindows(onLinux)).toBe(false);
     expect(runsOn('Agent D').disabled).toBe(false);
@@ -229,7 +229,7 @@ describe('Run agents in Linux: Runs on per agent', () => {
 
   it('the footer says Linux is not a sandbox and keeps Windows logins out', async () => {
     await mount(READY);
-    expect(hasText(m.host, 'In Linux an agent has its own sign-in. Puppet Master never copies your Windows logins or keys into Linux.')).toBe(true);
+    expect(hasText(m.host, 'In Linux an agent has its own sign-in. Potato Workspace never copies your Windows logins or keys into Linux.')).toBe(true);
     expect(hasText(m.host, 'Linux is not a sandbox')).toBe(true);
   });
 });

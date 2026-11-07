@@ -231,7 +231,7 @@ fn every_answer_path_is_known_and_presses_its_key_through_answer_once() {
 }
 
 /// The startup gates' keys are never declared as dismiss keys: a trust dialog is never closed by
-/// Puppet Master itself (the gate-dismissal path is the only other place keys go into a gate).
+/// Potato Workspace itself (the gate-dismissal path is the only other place keys go into a gate).
 #[test]
 fn no_profile_dismisses_a_trust_gate_on_its_own() {
     let trust_screens = [

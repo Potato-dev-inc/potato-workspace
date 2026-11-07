@@ -20,11 +20,11 @@
     <!-- Horizontal Split -->
     <line x1="54" y1="125" x2="166" y2="125" stroke="#A1A1AA" stroke-width="1" />
 
-    <!-- Puppet Master Controller Node (The Origin) -->
+    <!-- Potato Workspace Controller Node (The Origin) -->
     <circle cx="110" cy="40" r="3" fill="none" stroke="#18181B" stroke-width="1.5" />
     <circle cx="110" cy="40" r="1" fill="#18181B" />
 
-    <!-- Control Lines (Puppet Strings) -->
+    <!-- Control Lines (Agent Strings) -->
     <!-- Path to Pane 1 (Top Left) -->
     <path d="M 110,43 L 82,75 L 82,90" fill="none" stroke="#A1A1AA" stroke-width="1" stroke-dasharray="2,2" />
     

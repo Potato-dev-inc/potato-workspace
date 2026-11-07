@@ -25,5 +25,5 @@ export async function run(t) {
   const before = (await t.panes()).length;
   launchAgain(t, ['--new-pane', 'no-such-agent']);
   await t.expect.eventually(async () => (await t.panes()).length === before, { message: 'no pane was added' });
-  await t.expect.text('Puppet Master');
+  await t.expect.text('Potato Workspace');
 }

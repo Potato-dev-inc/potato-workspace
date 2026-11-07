@@ -1,6 +1,6 @@
 //! The one door for starting a helper child process (NOT a pane).
 //!
-//! Puppet Master is a GUI program with no console. On Windows a console program started from such a
+//! Potato Workspace is a GUI program with no console. On Windows a console program started from such a
 //! process (`powershell.exe`, `cmd.exe`, `git.exe`, `taskkill.exe`, `tasklist.exe`, `where.exe`, a
 //! `.cmd` launcher) gets a console window of its own, even when its stdout is piped, so every
 //! spawn that forgets `CREATE_NO_WINDOW` flashes a window on screen for as long as the child lives.

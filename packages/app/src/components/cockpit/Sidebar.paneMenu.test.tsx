@@ -4,7 +4,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { GitState, ShipApi } from '../../lib/ship-api';
 import { subscribePaneActions, takePendingPaneAction } from '../../lib/pane-actions';

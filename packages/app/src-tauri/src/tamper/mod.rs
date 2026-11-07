@@ -54,7 +54,7 @@ pub fn take(root: &Path, opts: &SnapshotOptions) -> Result<Snapshot, TamperError
     snapshot::take(root, opts)
 }
 
-/// Take a snapshot and save it under `<root>/.puppet-master/tamper/<id>.json`.
+/// Take a snapshot and save it under `<root>/.potato-workspace/tamper/<id>.json`.
 pub fn take_and_save(root: &Path, opts: &SnapshotOptions) -> Result<Snapshot, TamperError> {
     let snap = snapshot::take(root, opts)?;
     store::save(root, &snap)?;

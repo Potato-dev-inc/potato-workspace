@@ -93,7 +93,7 @@ pub fn card_state(entry: &CatalogEntry, inputs: &Inputs) -> (CardState, String) 
         _ if found => (CardState::Ready, "Added and ready. The program is on this PC.".into()),
         _ => (
             CardState::AddedNoProgram,
-            "Added to Puppet Master, but the program is not on this PC any more.".into(),
+            "Added to Potato Workspace, but the program is not on this PC any more.".into(),
         ),
     }
 }
@@ -172,7 +172,7 @@ fn found_reason(entry: &CatalogEntry) -> String {
         "The program is on this PC. Its short name is shared with other programs, so confirm it before you add it."
             .into()
     } else {
-        "The program is on this PC. Add it to Puppet Master to use it.".into()
+        "The program is on this PC. Add it to Potato Workspace to use it.".into()
     }
 }
 
@@ -314,7 +314,7 @@ windows_tested = false
         let inputs = Inputs { found_path: program(), ..bare() };
         let (state, reason) = card_state(&entry, &inputs);
         assert_eq!(state, CardState::FoundOnPc);
-        assert_eq!(reason, "The program is on this PC. Add it to Puppet Master to use it.");
+        assert_eq!(reason, "The program is on this PC. Add it to Potato Workspace to use it.");
     }
 
     #[test]

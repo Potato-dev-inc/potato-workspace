@@ -209,7 +209,7 @@ mod tests {
         let cases = [
             ("forwarded", format!("{LOCAL}X-Forwarded-For: 203.0.113.9\r\n"), true),
             ("cloudflare", format!("{LOCAL}Cf-Connecting-Ip: 203.0.113.9\r\n"), true),
-            ("pwa proxy", format!("{LOCAL}X-PM-Proxied: 1\r\n"), true),
+            ("pwa proxy", format!("{LOCAL}X-Potato-Workspace-Proxied: 1\r\n"), true),
             ("web page", format!("{LOCAL}Origin: https://evil.example\r\n"), true),
             ("null origin", format!("{LOCAL}Origin: null\r\n"), true),
             ("foreign host", "Host: team.example.com\r\n".to_string(), true),
@@ -253,7 +253,7 @@ mod tests {
             format!("Host: tunnel.example\r\nAuthorization: Bearer {token}\r\n"),
             format!("{LOCAL}Authorization: Bearer {token}\r\nX-Forwarded-For: 203.0.113.9\r\n"),
             format!("{LOCAL}Authorization: Bearer {token}\r\nCf-Connecting-Ip: 203.0.113.9\r\n"),
-            format!("{LOCAL}Authorization: Bearer {token}\r\nX-PM-Proxied: 1\r\n"),
+            format!("{LOCAL}Authorization: Bearer {token}\r\nX-Potato-Workspace-Proxied: 1\r\n"),
             format!("{LOCAL}Authorization: Bearer {token}\r\nOrigin: https://evil.example\r\n"),
         ] {
             // The gate itself knows this caller as a device that may do everything (`loopback` is

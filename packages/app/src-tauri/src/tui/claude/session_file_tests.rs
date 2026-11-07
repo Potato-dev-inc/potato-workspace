@@ -232,7 +232,7 @@ fn tool_summary_is_cut_to_200_characters() {
 
 #[test]
 fn encode_cwd_replaces_every_non_alphanumeric_character_with_a_dash() {
-    assert_eq!(encode_cwd(r"C:\Users\x\Desktop\work2\puppet-master"), "C--Users-x-Desktop-work2-puppet-master");
+    assert_eq!(encode_cwd(r"C:\Users\x\Desktop\work2\potato-workspace"), "C--Users-x-Desktop-work2-potato-workspace");
     assert_eq!(encode_cwd("/home/a.b_c/é"), "-home-a-b-c--");
 }
 

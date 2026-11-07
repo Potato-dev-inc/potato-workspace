@@ -2,7 +2,7 @@
 //!
 //! Each pane keeps the last ~2 MB of what its PTY printed and what was typed into it, with
 //! timestamps and with who wrote each input (`InputTag`). When a run ends with a failure code the
-//! ring is frozen to `<project>/.puppet-master/operations/<op>/flight.cast` (asciicast v2, so any
+//! ring is frozen to `<project>/.potato-workspace/operations/<op>/flight.cast` (asciicast v2, so any
 //! asciinema player opens it), and on demand it can be exported. Everything that leaves the ring is
 //! redacted first (`cast`): the live terminal is never touched.
 //!
@@ -61,13 +61,13 @@ pub enum InputTag {
     User = 0,
     /// A keystroke from a paired phone.
     Phone = 1,
-    /// The text of a task Puppet Master typed for a run.
+    /// The text of a task Potato Workspace typed for a run.
     RunTask = 2,
     /// Keys that dismiss a startup screen or dialog.
     GateDismiss = 3,
     /// An answer to an agent's question or permission prompt.
     Answer = 4,
-    /// Puppet Master's own Enter or clear-input to get a stuck pane moving.
+    /// Potato Workspace's own Enter or clear-input to get a stuck pane moving.
     Nudge = 5,
     /// An agent typing into a pane through the MCP tools.
     Agent = 6,

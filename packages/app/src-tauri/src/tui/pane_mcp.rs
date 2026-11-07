@@ -1,6 +1,6 @@
-//! Puppet Master's own MCP server, handed to an agent for ONE launch (`TuiProfile::pane_mcp`).
+//! Potato Workspace's own MCP server, handed to an agent for ONE launch (`TuiProfile::pane_mcp`).
 //!
-//! An agent that runs in a Puppet Master pane should have `run_agent` / `wait_agents` ready with no
+//! An agent that runs in a Potato Workspace pane should have `run_agent` / `wait_agents` ready with no
 //! setup. Each agent has its own way to take an MCP server for one launch without touching the
 //! person's config files (a flag, an env var holding config text). That knowledge lives in the
 //! agent's folder (`tui/<agent>/`) or in a TOML definition's `[pane_mcp]` table; the generic
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 /// The MCP server as this app wants every pane's agent to start it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaneMcpServer {
-    /// The name the agent shows its tools under (`puppet-master`).
+    /// The name the agent shows its tools under (`potato-workspace`).
     pub name: String,
     pub command: String,
     pub args: Vec<String>,
@@ -267,12 +267,12 @@ mod tests {
 
     fn server() -> PaneMcpServer {
         PaneMcpServer {
-            name: "puppet-master".into(),
+            name: "potato-workspace".into(),
             command: "C:/app/bin/puppet-master-mcp.exe".into(),
             args: vec![],
             env: vec![
-                ("PUPPET_MASTER_BRIDGE_PORT_FILE".into(), "C:/data/puppet-master.bridge.port".into()),
-                ("PUPPET_MASTER_PANE_ID".into(), "pane-7".into()),
+                ("POTATO_WORKSPACE_BRIDGE_PORT_FILE".into(), "C:/data/potato-workspace.bridge.port".into()),
+                ("POTATO_WORKSPACE_PANE_ID".into(), "pane-7".into()),
             ],
         }
     }
@@ -290,10 +290,10 @@ mod tests {
     #[test]
     fn the_file_shape_names_the_server_command_and_this_panes_env() {
         let config = config_value(ConfigShape::McpServers, &server(), None);
-        let entry = &config["mcpServers"]["puppet-master"];
+        let entry = &config["mcpServers"]["potato-workspace"];
         assert_eq!(entry["command"], "C:/app/bin/puppet-master-mcp.exe");
-        assert_eq!(entry["env"]["PUPPET_MASTER_PANE_ID"], "pane-7");
-        assert_eq!(entry["env"]["PUPPET_MASTER_BRIDGE_PORT_FILE"], "C:/data/puppet-master.bridge.port");
+        assert_eq!(entry["env"]["POTATO_WORKSPACE_PANE_ID"], "pane-7");
+        assert_eq!(entry["env"]["POTATO_WORKSPACE_BRIDGE_PORT_FILE"], "C:/data/potato-workspace.bridge.port");
     }
 
     #[test]
@@ -301,9 +301,9 @@ mod tests {
         let mut s = server();
         s.args = vec!["--x".into()];
         let config = config_value(ConfigShape::Opencode, &s, Some("C:/data/pane-mcp/helpers-note.md"));
-        assert_eq!(config["mcp"]["puppet-master"]["command"], json!(["C:/app/bin/puppet-master-mcp.exe", "--x"]));
-        assert_eq!(config["mcp"]["puppet-master"]["type"], "local");
-        assert_eq!(config["mcp"]["puppet-master"]["environment"]["PUPPET_MASTER_PANE_ID"], "pane-7");
+        assert_eq!(config["mcp"]["potato-workspace"]["command"], json!(["C:/app/bin/puppet-master-mcp.exe", "--x"]));
+        assert_eq!(config["mcp"]["potato-workspace"]["type"], "local");
+        assert_eq!(config["mcp"]["potato-workspace"]["environment"]["POTATO_WORKSPACE_PANE_ID"], "pane-7");
         assert_eq!(config["instructions"], json!(["C:/data/pane-mcp/helpers-note.md"]));
         assert!(config_value(ConfigShape::Opencode, &s, None).get("instructions").is_none());
     }

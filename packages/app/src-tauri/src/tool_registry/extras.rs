@@ -5,37 +5,37 @@ use super::types::{PromptArgument, PromptDefinition, ResourceDefinition};
 pub fn resources() -> Vec<ResourceDefinition> {
     vec![
         ResourceDefinition {
-            uri: "puppet-master://session",
+            uri: "potato-workspace://session",
             name: "Current session",
-            description: "Current Puppet Master session state and orchestration context.",
+            description: "Current Potato Workspace session state and orchestration context.",
             mime_type: "application/json",
         },
         ResourceDefinition {
-            uri: "puppet-master://panes",
+            uri: "potato-workspace://panes",
             name: "Live panes",
             description: "Live terminal panes known to the Rust bridge.",
             mime_type: "application/json",
         },
         ResourceDefinition {
-            uri: "puppet-master://panes/{id}/digest",
+            uri: "potato-workspace://panes/{id}/digest",
             name: "Pane digest",
             description: "Latest pane digest supplied through the Rust session context event log.",
             mime_type: "application/json",
         },
         ResourceDefinition {
-            uri: "puppet-master://tasks",
+            uri: "potato-workspace://tasks",
             name: "Tasks",
             description: "Task board projection rebuilt from the Rust event log.",
             mime_type: "application/json",
         },
         ResourceDefinition {
-            uri: "puppet-master://locks",
+            uri: "potato-workspace://locks",
             name: "Locks",
             description: "Resource lock projection rebuilt from the Rust event log.",
             mime_type: "application/json",
         },
         ResourceDefinition {
-            uri: "puppet-master://audit",
+            uri: "potato-workspace://audit",
             name: "Audit",
             description: "Recent coordination and MCP audit entries.",
             mime_type: "application/json",

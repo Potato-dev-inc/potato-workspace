@@ -39,7 +39,7 @@ const MAX_MINUTES = 240;
 
 /** The words of the keep-awake confirm (SPEC n32 3.9). Shown once; `awakeAsked` is saved after it. */
 const AWAKE_WORDS =
-  'Puppet Master will stop this computer from sleeping until Night Shift ends, then let it sleep again. Closing the lid or pressing the power button still sleeps it. Keep it plugged in.';
+  'Potato Workspace will stop this computer from sleeping until Night Shift ends, then let it sleep again. Closing the lid or pressing the power button still sleeps it. Keep it plugged in.';
 
 /** One task row as the sheet edits it. `who` is `any` or one plan key. */
 interface Draft {
@@ -302,7 +302,7 @@ export function TonightSheet({
     const clash = ticked.filter((k) => k !== key && agentOf(k) === agent);
     setTicked((list) => [...list.filter((k) => agentOf(k) !== agent), key]);
     if (clash.length > 0) {
-      setNotice("Puppet Master won't switch between two logins of one company.");
+      setNotice("Potato Workspace won't switch between two logins of one company.");
       setTasks((cur) => cur.map((t) => (clash.includes(t.who) ? { ...t, who: 'any' } : t)));
     }
   };
@@ -390,7 +390,7 @@ export function TonightSheet({
         </button>
       </div>
       <p className="ck-night-intro">
-        Puppet Master works through these while you sleep. Each task has its own separate copy. Nothing is merged until you
+        Potato Workspace works through these while you sleep. Each task has its own separate copy. Nothing is merged until you
         press Keep.
       </p>
 

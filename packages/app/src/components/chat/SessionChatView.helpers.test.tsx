@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The helpers an agent started through Puppet Master: compact rows in the turn they began in, a click opens the pane.
+// The helpers an agent started through Potato Workspace: compact rows in the turn they began in, a click opens the pane.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,7 +40,7 @@ function render(helpers: ChatHelper[], onOpenPane = vi.fn()) {
 const sections = () => [...host.querySelectorAll<HTMLElement>('[data-turn-id]')];
 const rowsIn = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>('[data-testid="pane-helper-row"]')];
 
-describe('Puppet Master helpers in the chat', () => {
+describe('Potato Workspace helpers in the chat', () => {
   it('shows "Helper: <task>" with the agent and a live status, in the turn it was started in', () => {
     render([helper('h1', 'Map app frontend', 'working', '2026-10-30T10:01:00Z'), helper('h2', 'Run the tests', 'needs-you', '2026-10-30T11:02:00Z')]);
     const [first, second] = sections();

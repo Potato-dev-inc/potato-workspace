@@ -1,6 +1,6 @@
 //! The pause card: an Inbox card that says an agent used its budget and offers "Add 10 turns /
 //! Stop here". It rides on the existing questions plumbing (the Inbox list, the paired phone, the
-//! push), as a question of kind `budget` that only Puppet Master can raise.
+//! push), as a question of kind `budget` that only Potato Workspace can raise.
 
 use super::accounting::{Reason, Standing};
 use super::adjust;
@@ -96,7 +96,7 @@ pub fn raise(record: &BudgetRecord, standing: &Standing, reason: Reason) -> Opti
     let created = questions::store()
         .create(
             NewQuestion {
-                asker: Some("puppet-master".into()),
+                asker: Some("potato-workspace".into()),
                 agent: Some(agent.clone()),
                 pane_id,
                 question: headline(&agent, record, reason),

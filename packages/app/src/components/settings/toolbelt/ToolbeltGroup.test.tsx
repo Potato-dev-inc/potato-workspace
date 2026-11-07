@@ -195,11 +195,11 @@ describe('Apply preview sheet', () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it('re-previews when Puppet Master itself is included', async () => {
+  it('re-previews when Potato Workspace itself is included', async () => {
     const api = mockApi();
     await render(api);
     await click(button('Apply to all agents'));
-    await click(labelled('Also register Puppet Master'));
+    await click(labelled('Also register Potato Workspace'));
     expect(api.syncPreview).toHaveBeenLastCalledWith({ project: 'C:/work/app', includePm: true });
   });
 });

@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def default_command() -> tuple[str, list[str]]:
     binary_name = "puppet-master-mcp.exe" if os.name == "nt" else "puppet-master-mcp"
-    updated_name = "puppet-master-mcp-updated.exe" if os.name == "nt" else "puppet-master-mcp-updated"
+    updated_name = "potato-workspace-mcp-updated.exe" if os.name == "nt" else "potato-workspace-mcp-updated"
     debug_dir = REPO_ROOT / "packages/app/src-tauri/target/debug"
     available = [path for path in (debug_dir / binary_name, debug_dir / updated_name) if path.is_file()]
     if available:
@@ -149,7 +149,7 @@ def extract_panes(value: Any) -> list[dict[str, Any]]:
             visited.add(identity)
             if is_pane(current):
                 pane_id = pane_id_of(current)
-                if pane_id.startswith("puppet-master-orchestrator-"):
+                if pane_id.startswith("potato-workspace-orchestrator-"):
                     continue
                 if pane_id and pane_id not in seen:
                     seen.add(pane_id)

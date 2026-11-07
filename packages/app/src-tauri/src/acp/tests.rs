@@ -163,7 +163,7 @@ fn the_handshake_opens_a_session_and_reads_what_the_agent_can_do() {
     assert_eq!(snap.phase, Phase::Idle);
     assert_eq!(snap.epoch, 1);
     assert!(snap.session_id.as_deref().is_some_and(|id| id.starts_with("fake-")));
-    assert_eq!(snap.config_options.len(), 1);
+    assert_eq!(snap.config_options.len(), 2);
     let caps = rig.session.caps().unwrap();
     assert!(caps.load_session && caps.resume);
     assert_eq!(caps.agent_version.as_deref(), Some("0.0.1"));
@@ -308,17 +308,20 @@ fn a_permission_question_is_parked_without_a_timeout_and_never_answered_by_the_a
 
     // An option that was not offered is refused and nothing changes.
     let ask_id = wait.ask_id;
-    assert!(matches!(rig.session.answer_permission(ask_id, "allow_forever"), Err(AcpError::BadOption(_))));
-    assert!(matches!(rig.session.answer_permission(ask_id + 100, "allow_once"), Err(AcpError::NoSuchAsk)));
+    assert!(matches!(rig.session.answer_permission(ask_id, "allow_forever", super::session::AnswerSource::Person), Err(AcpError::BadOption(_))));
+    assert!(matches!(rig.session.answer_permission(ask_id + 100, "allow_once", super::session::AnswerSource::Person), Err(AcpError::NoSuchAsk)));
     assert_eq!(rig.session.snapshot().phase, Phase::NeedsInput);
 
-    rig.session.answer_permission(ask_id, "allow_once").unwrap();
+    rig.session.answer_permission(ask_id, "allow_once", super::session::AnswerSource::Person).unwrap();
     let summary = rig.wait_turn_end(from);
     assert_eq!(summary.stop, StopKind::EndTurn);
     assert_eq!(rig.text_since(from), "chose:allow_once");
-    assert!(rig.events().iter().any(|e| matches!(e, SessionEvent::PermissionResolved { how: Resolution::Selected(id), .. } if id == "allow_once")));
+    assert!(rig.events().iter().any(|e| matches!(
+        e,
+        SessionEvent::PermissionResolved { how: Resolution::Selected(id), reason: super::session::PromptEndReason::AnsweredByPerson, .. } if id == "allow_once"
+    )));
     // Answering again finds nothing.
-    assert!(matches!(rig.session.answer_permission(ask_id, "allow_once"), Err(AcpError::NoSuchAsk)));
+    assert!(matches!(rig.session.answer_permission(ask_id, "allow_once", super::session::AnswerSource::Person), Err(AcpError::NoSuchAsk)));
 }
 
 #[test]
@@ -327,7 +330,7 @@ fn rejecting_is_a_normal_answer_the_agent_continues_from() {
     let from = rig.mark();
     rig.session.prompt_text("perm").unwrap();
     let snap = rig.wait_phase(Phase::NeedsInput);
-    rig.session.answer_permission(snap.permission_waits[0].ask_id, "reject_once").unwrap();
+    rig.session.answer_permission(snap.permission_waits[0].ask_id, "reject_once", super::session::AnswerSource::Person).unwrap();
     let summary = rig.wait_turn_end(from);
     assert_eq!(summary.stop, StopKind::EndTurn);
     assert_eq!(rig.text_since(from), "chose:reject_once");
@@ -343,9 +346,75 @@ fn cancelling_with_a_question_open_answers_it_cancelled() {
     let summary = rig.wait_turn_end(from);
     assert_eq!(summary.stop, StopKind::Cancelled);
     assert!(summary.cancel_requested);
-    assert!(rig.events().iter().any(|e| matches!(e, SessionEvent::PermissionResolved { how: Resolution::Cancelled, .. })));
+    assert!(rig.events().iter().any(|e| matches!(
+        e,
+        SessionEvent::PermissionResolved { how: Resolution::Cancelled, reason: super::session::PromptEndReason::Cancelled, .. }
+    )));
     assert!(rig.session.pending_permissions().is_empty());
     assert_eq!(rig.session.snapshot().phase, Phase::Idle);
+}
+
+#[test]
+fn an_agent_answer_is_marked_answered_by_agent() {
+    let rig = Rig::new("");
+    let from = rig.mark();
+    rig.session.prompt_text("perm").unwrap();
+    let snap = rig.wait_phase(Phase::NeedsInput);
+    rig.session.answer_permission(snap.permission_waits[0].ask_id, "allow_once", super::session::AnswerSource::Agent).unwrap();
+    let _ = rig.wait_turn_end(from);
+    assert!(rig.events().iter().any(|e| matches!(
+        e,
+        SessionEvent::PermissionResolved { reason: super::session::PromptEndReason::AnsweredByAgent, .. }
+    )));
+}
+
+#[test]
+fn a_turn_that_ends_with_a_prompt_open_marks_it_turn_ended() {
+    let rig = Rig::new("");
+    let from = rig.mark();
+    rig.session.prompt_text("permend").unwrap();
+    rig.wait_phase(Phase::NeedsInput);
+    let summary = rig.wait_turn_end(from);
+    assert_eq!(summary.stop, StopKind::EndTurn);
+    assert!(rig.session.pending_permissions().is_empty());
+    assert!(rig.events().iter().any(|e| matches!(
+        e,
+        SessionEvent::PermissionResolved { reason: super::session::PromptEndReason::TurnEnded, .. }
+    )));
+}
+
+#[test]
+fn closing_a_session_with_a_prompt_open_marks_it_session_ended() {
+    let rig = Rig::new("");
+    rig.session.prompt_text("perm").unwrap();
+    rig.wait_phase(Phase::NeedsInput);
+    rig.session.close();
+    assert!(rig.events().iter().any(|e| matches!(
+        e,
+        SessionEvent::PermissionResolved { reason: super::session::PromptEndReason::SessionEnded, .. }
+    )));
+}
+
+#[test]
+fn an_unreadable_permission_request_is_refused_with_a_reason() {
+    let rig = Rig::new("");
+    rig.session.prompt_text("badperm").unwrap();
+    assert!(wait_until(5, || rig.events().iter().any(|e| matches!(e, SessionEvent::PermissionRefused { .. }))), "no refusal event");
+    assert!(rig.session.pending_permissions().is_empty());
+}
+
+#[test]
+fn background_tasks_are_tracked_after_the_turn_ends_and_cleared_when_done() {
+    let rig = Rig::new("");
+    let from = rig.mark();
+    rig.session.prompt_text("bg").unwrap();
+    let summary = rig.wait_turn_end(from);
+    assert_eq!(summary.stop, StopKind::EndTurn);
+    let snap = rig.session.snapshot();
+    assert_eq!(snap.background_tasks.len(), 1, "{:?}", snap.background_tasks);
+    assert_eq!(snap.background_tasks[0].id, "bg1");
+    assert!(snap.background_tasks[0].is_running());
+    assert!(rig.session.wait_for(|s| s.background_tasks.is_empty(), Duration::from_secs(10)).is_some(), "the finished task is cleared");
 }
 
 #[test]

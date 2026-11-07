@@ -5,7 +5,7 @@ import {
   modelKey,
   type LlmModel,
   type OrchestratorBackend,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import type { CliOrchestratorBackend } from '../../lib/orchestrator-panes';
 
 interface Props {

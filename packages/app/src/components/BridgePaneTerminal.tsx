@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import { useDebouncedMirrorLayout } from '../hooks/useDebouncedMirrorLayout';
 import { useTerminalSession, type TerminalTransport } from '../hooks/useTerminalSession';
 import { isMobileInputDevice } from '../terminal/mobile-input-guard';

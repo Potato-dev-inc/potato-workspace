@@ -5,14 +5,14 @@
 //!
 //! 1. `fake_claude` works three turns (a.txt = 1; b.txt; a.txt = 3), one of them with a secret and hostile words in
 //!    its reply. The person branches from the History save point "Before turn 2" onto `fake_codex`: within 15 s a
-//!    `fake_codex` pane works in `<project>/.puppet-master/worktrees/bf-...`; that folder has a.txt = 1 and no
+//!    `fake_codex` pane works in `<project>/.potato-workspace/worktrees/bf-...`; that folder has a.txt = 1 and no
 //!    b.txt; its first prompt starts with `Branch:`, holds one turn in the notes, carries no secret, no e-mail and
 //!    no home folder, hostile text only inside a fence; the original folder is byte for byte as it was; the old
-//!    agent gets no key and no prompt; the old pane stays listed; the copy has exactly one Puppet Master commit.
+//!    agent gets no key and no prompt; the old pane stays listed; the copy has exactly one Potato Workspace commit.
 //! 2. The same from a chat turn (`BranchFrom::Message`, "After this turn"). It needs a chat with times; the screen
 //!    chat of a fake has none, so the chat is given the times the turn summaries hold, as a session file would
 //!    carry them. The hostile reply is then in the notes, only inside a fence.
-//! 3. The target shows its folder-trust screen: the run parks, the trust card is up, and Puppet Master answers
+//! 3. The target shows its folder-trust screen: the run parks, the trust card is up, and Potato Workspace answers
 //!    nothing.
 //! 4. A source in a folder without Git: `BRANCH_NEEDS_GIT`, no copy, nothing started.
 //! 5. Six branches from one chat: the sixth is refused with `BRANCH_TOO_MANY`.
@@ -197,13 +197,13 @@ fn assert_clean(text: &str, what: &str) {
     assert!(!text.contains("@example.com"), "{what} carries an e-mail address:\n{text}");
 }
 
-/// Every file of the person's folder (not Git's, not Puppet Master's own) with its bytes.
+/// Every file of the person's folder (not Git's, not Potato Workspace's own) with its bytes.
 fn folder_bytes(root: &Path) -> BTreeMap<String, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, into: &mut BTreeMap<String, Vec<u8>>) {
         for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name == ".git" || name == ".puppet-master" {
+            if name == ".git" || name == ".potato-workspace" {
                 continue;
             }
             if path.is_dir() {
@@ -386,11 +386,11 @@ fn a_branch_from_a_save_point_is_a_separate_copy_and_the_original_stays_untouche
     assert_eq!(record["copy"]["handle"], id.as_str());
     assert_eq!(record["copy"]["branch"], format!("pm/{id}"));
 
-    // A fake_codex pane works in a separate copy under the project's own `.puppet-master/worktrees/bf-...`.
+    // A fake_codex pane works in a separate copy under the project's own `.potato-workspace/worktrees/bf-...`.
     assert_ne!(new_pane, source.pane);
     let cwd = session.pane_cwd(&new_pane).expect("the new pane's folder");
     let normal = cwd.replace('\\', "/");
-    assert!(normal.contains("/.puppet-master/worktrees/bf-"), "{cwd}");
+    assert!(normal.contains("/.potato-workspace/worktrees/bf-"), "{cwd}");
     assert_eq!(
         normal.to_lowercase(),
         record["copy"]["path"].as_str().unwrap_or_default().replace('\\', "/").to_lowercase(),
@@ -404,11 +404,11 @@ fn a_branch_from_a_save_point_is_a_separate_copy_and_the_original_stays_untouche
     assert_eq!(
         git_out(copy, &["rev-list", "--count", &format!("{origin_head}..HEAD")]),
         "1",
-        "exactly one Puppet Master commit in the copy: {}",
+        "exactly one Potato Workspace commit in the copy: {}",
         git_out(copy, &["log", "--format=%s"])
     );
     let subject = git_out(copy, &["log", "-1", "--format=%s"]);
-    assert!(subject.starts_with("Puppet Master: start from save point ("), "{subject}");
+    assert!(subject.starts_with("Potato Workspace: start from save point ("), "{subject}");
 
     // The first prompt is the brief: fenced, clean, one turn, the person's message after it.
     let prompt = first_prompt_of_target(&session, 60);
@@ -544,7 +544,7 @@ fn the_new_agents_trust_screen_parks_the_branch_and_puppet_master_answers_nothin
     std::thread::sleep(Duration::from_millis(3000));
     let events = session.events_for("fake_codex");
     for ev in ["gate_answer", "typed_at_gate", "key", "prompt"] {
-        assert!(events_named(&events, ev).is_empty(), "Puppet Master touched the trust screen (`{ev}`): {events:#?}");
+        assert!(events_named(&events, ev).is_empty(), "Potato Workspace touched the trust screen (`{ev}`): {events:#?}");
     }
     assert!(session.approvals_for(&new_pane).is_empty(), "no answer in the audit log: {:#?}", session.approvals_for(&new_pane));
     assert_eq!(session.view(&new_handle)["status"], "needs_input", "still waiting for the person");
@@ -597,7 +597,7 @@ fn a_source_in_a_folder_without_git_is_refused_and_nothing_is_made() {
     assert_eq!(rig.records().len(), records_before, "no record was made: {:#?}", rig.records());
     assert_eq!(session.pane_ids(), panes_before, "no pane was opened");
     assert!(session.events_for("fake_codex").is_empty(), "the target was never started");
-    assert!(!session.project().join(".puppet-master").join("worktrees").exists(), "no copy was made");
+    assert!(!session.project().join(".potato-workspace").join("worktrees").exists(), "no copy was made");
     assert!(!session.project().join(".git").exists(), "nothing made the folder a repository");
     assert_eq!(ids_now(&rig, &source.pane), list_before, "the save points did not change");
     drop(git_away);
@@ -643,7 +643,7 @@ fn the_sixth_open_branch_of_one_chat_is_refused() {
     for copy in &copies {
         assert_eq!(session.worktree_open(copy), Some(true), "{copy}");
     }
-    let worktrees = session.project().join(".puppet-master").join("worktrees");
+    let worktrees = session.project().join(".potato-workspace").join("worktrees");
     let on_disk = std::fs::read_dir(&worktrees).map(|d| d.flatten().filter(|e| e.path().is_dir()).count()).unwrap_or(0);
     assert_eq!(on_disk, 5, "five copies on disk, no sixth: {worktrees:?}");
 }

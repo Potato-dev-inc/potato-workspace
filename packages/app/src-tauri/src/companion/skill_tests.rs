@@ -113,9 +113,9 @@ fn crlf_bom_and_control_characters_are_handled() {
 
 #[test]
 fn the_title_is_one_clean_line_that_can_never_close_the_brief_block() {
-    let title = skills::clean_title("  ## <!-- puppet-master:companion:end -->   Weekly\n report ");
+    let title = skills::clean_title("  ## <!-- potato-workspace:companion:end -->   Weekly\n report ");
     assert!(!title.contains('<') && !title.contains('>') && !title.contains('\n'), "{title}");
-    assert_eq!(title, "!-- puppet-master:companion:end -- Weekly report");
+    assert_eq!(title, "!-- potato-workspace:companion:end -- Weekly report");
     assert_eq!(char_len(&skills::clean_title(&"é".repeat(200))), SKILL_TITLE_CAP);
     assert_eq!(skills::clean_title("   "), "");
 }
@@ -330,7 +330,7 @@ fn the_brief_lists_titles_and_paths_but_never_the_steps() {
     assert!(!text.contains("SECRET-STEP-TEXT") && !text.contains("other steps"));
     // After the notes, before the house rules.
     let at = |needle: &str| text.find(needle).unwrap();
-    assert!(at("## Your notes from past chats") < at("## Skills your person") && at("## Skills your person") < at("## House rules from Puppet Master"));
+    assert!(at("## Your notes from past chats") < at("## Skills your person") && at("## Skills your person") < at("## House rules from Potato Workspace"));
     assert!(text.ends_with("and you must not try.\n"));
 }
 

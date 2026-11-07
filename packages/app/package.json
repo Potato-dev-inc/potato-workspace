@@ -1,6 +1,6 @@
 {
-  "name": "@puppet-master/app",
-  "version": "1.0.3",
+  "name": "@potato-workspace/app",
+  "version": "1.0.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,7 +18,7 @@
     "@fontsource/doto": "5.3.0",
     "@fontsource/inter": "5.3.0",
     "@fontsource/jetbrains-mono": "5.3.0",
-    "@puppet-master/shared": "*",
+    "@potato-workspace/shared": "*",
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/plugin-dialog": "^2.0.1",
     "@tauri-apps/plugin-store": "^2.0.1",

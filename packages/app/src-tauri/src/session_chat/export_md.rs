@@ -12,7 +12,7 @@ use super::export_text::{cut_lines, cut_paths, MAX_LINES};
 use super::model::ChatItem;
 use crate::redact::RedactContext;
 
-const FOOTER: &str = "Saved from Puppet Master";
+const FOOTER: &str = "Saved from Potato Workspace";
 
 /// The whole Markdown file: the items in `range`, under a heading and a footer.
 pub fn markdown(items: &[ChatItem], meta: &Meta, range: TurnRange, ctx: &RedactContext) -> String {

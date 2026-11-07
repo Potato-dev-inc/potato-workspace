@@ -1,4 +1,4 @@
-//! The ACP bridge: a small ACP adapter that Puppet Master makes for an agent that has no ACP at all.
+//! The ACP bridge: a small ACP adapter that Potato Workspace makes for an agent that has no ACP at all.
 //!
 //! The app executable itself is the adapter: `<current exe> acp-bridge --agent <id>` speaks ACP (JSON-RPC
 //! lines) on stdio and drives the agent's own non-interactive mode, the one `run_agent` uses for headless

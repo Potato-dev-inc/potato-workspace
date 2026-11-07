@@ -231,7 +231,7 @@ fn a_pane_whose_hooks_never_reported_is_not_compared() {
 // ---- 4.2 the route: token, scope, local only ------------------------------------------------
 
 fn hook_headers(pane: &str, token: &str, agent: &str) -> String {
-    format!("POST /hooks/event HTTP/1.1\r\nHost: 127.0.0.1:17321\r\nX-PM-Hook-Token: {token}\r\nX-PM-Hook-Pane: {pane}\r\nX-PM-Hook-Agent: {agent}\r\nContent-Type: application/json")
+    format!("POST /hooks/event HTTP/1.1\r\nHost: 127.0.0.1:17321\r\nX-Potato-Workspace-Hook-Token: {token}\r\nX-Potato-Workspace-Hook-Pane: {pane}\r\nX-Potato-Workspace-Hook-Agent: {agent}\r\nContent-Type: application/json")
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn the_route_takes_a_live_token_for_its_own_pane_and_agent_only() {
     assert_eq!((mismatch.0, mismatch.1["code"].clone()), (403, json!("HOOK_AGENT_MISMATCH")));
     let mixed = format!("{}\r\nAuthorization: Bearer x", hook_headers(&p, &token, "claude"));
     assert_eq!(route::handle_at(&mixed, &body, true, 5), (400, json!({"code": "HOOK_MIXED_CREDENTIALS"})));
-    let session = format!("{}\r\nX-Puppet-Master-Session: s1", hook_headers(&p, &token, "claude"));
+    let session = format!("{}\r\nX-Potato-Workspace-Session: s1", hook_headers(&p, &token, "claude"));
     assert_eq!(route::handle_at(&session, &body, true, 6).0, 400);
     assert_eq!(route::handle_at(&hook_headers(&p, &token, "claude"), &vec![b' '; route::MAX_BODY + 1], true, 7).0, 413);
 
@@ -267,7 +267,7 @@ fn a_phone_or_tunnel_caller_is_refused_even_with_a_valid_token() {
     // Not a loopback peer (a phone on the LAN).
     assert_eq!(route::handle_at(&hook_headers(&p, &token, "claude"), body, false, 1), (403, json!({"code": "HOOK_LOCAL_ONLY"})));
     // Loopback, but it came through the PWA proxy / a tunnel.
-    let proxied = format!("{}\r\nX-PM-Proxied: 1", hook_headers(&p, &token, "claude"));
+    let proxied = format!("{}\r\nX-Potato-Workspace-Proxied: 1", hook_headers(&p, &token, "claude"));
     assert_eq!(route::handle_at(&proxied, body, true, 2).0, 403);
     let foreign_host = hook_headers(&p, &token, "claude").replace("Host: 127.0.0.1:17321", "Host: my-tunnel.example");
     assert_eq!(route::handle_at(&foreign_host, body, true, 3).0, 403);
@@ -333,7 +333,7 @@ fn the_hook_token_gets_403_on_every_other_route_through_the_real_gate() {
     assert!(routes.len() > 40, "the route table is not vacuous: {}", routes.len());
     for (method, path) in &routes {
         let request = format!(
-            "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-PM-Hook-Token: {token}\r\nX-PM-Hook-Pane: {p}\r\nX-PM-Hook-Agent: claude\r\nContent-Length: 2\r\n\r\n{{}}"
+            "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Potato-Workspace-Hook-Token: {token}\r\nX-Potato-Workspace-Hook-Pane: {p}\r\nX-Potato-Workspace-Hook-Agent: claude\r\nContent-Length: 2\r\n\r\n{{}}"
         );
         let (status, body) = send(addr, &request);
         assert_eq!((status, body["code"].as_str()), (403, Some("HOOK_TOKEN_SCOPE")), "{method} {path}");
@@ -342,7 +342,7 @@ fn the_hook_token_gets_403_on_every_other_route_through_the_real_gate() {
     let body = serde_json::to_string(&fixture("claude", "2.1.299", "SessionStart")).unwrap();
     for path in ["/hooks/event", "/bridge/hooks/event"] {
         let request = format!(
-            "POST {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-PM-Hook-Token: {token}\r\nX-PM-Hook-Pane: {p}\r\nX-PM-Hook-Agent: claude\r\nContent-Length: {}\r\n\r\n{body}",
+            "POST {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Potato-Workspace-Hook-Token: {token}\r\nX-Potato-Workspace-Hook-Pane: {p}\r\nX-Potato-Workspace-Hook-Agent: claude\r\nContent-Length: {}\r\n\r\n{body}",
             body.len()
         );
         assert_eq!(send(addr, &request), (202, json!({})), "{path}");
@@ -373,9 +373,9 @@ fn a_paired_phone_is_refused_on_the_hook_route_through_the_real_gate() {
     let p = pane();
     let token = token::mint(&p, "claude", "D:\\pm-demo");
     let body = "{}";
-    for extra in [format!("Authorization: Bearer {bearer}\r\nX-PM-Proxied: 1\r\n"), "X-PM-Proxied: 1\r\n".to_string()] {
+    for extra in [format!("Authorization: Bearer {bearer}\r\nX-Potato-Workspace-Proxied: 1\r\n"), "X-Potato-Workspace-Proxied: 1\r\n".to_string()] {
         let request = format!(
-            "POST /hooks/event HTTP/1.1\r\nHost: tunnel.example\r\n{extra}X-PM-Hook-Token: {token}\r\nX-PM-Hook-Pane: {p}\r\nX-PM-Hook-Agent: claude\r\nContent-Length: {}\r\n\r\n{body}",
+            "POST /hooks/event HTTP/1.1\r\nHost: tunnel.example\r\n{extra}X-Potato-Workspace-Hook-Token: {token}\r\nX-Potato-Workspace-Hook-Pane: {p}\r\nX-Potato-Workspace-Hook-Agent: claude\r\nContent-Length: {}\r\n\r\n{body}",
             body.len()
         );
         let (status, reply) = send(addr, &request);
@@ -407,7 +407,7 @@ fn codex_entries_are_byte_for_byte_the_golden_file() {
     let golden = std::fs::read_to_string(&path).expect("golden file");
     assert_eq!(
         rendered, golden,
-        "this change makes every user re-trust Puppet Master's Codex hooks: update the golden file AND note it in CHANGELOG.md"
+        "this change makes every user re-trust Potato Workspace's Codex hooks: update the golden file AND note it in CHANGELOG.md"
     );
     assert_eq!(golden_text(), rendered, "rendering is deterministic");
     let entry = render::entry(&scheme("codex"), GOLDEN_EXE, "codex");
@@ -674,7 +674,7 @@ fn codex_is_opt_in_off_by_default_and_writes_no_file_until_turned_on() {
     assert!(note.opt_in && !note.enabled);
     assert_eq!(
         note.opt_in_note.as_deref(),
-        Some("Puppet Master adds a small file to .codex in each project; Codex asks you to review it once per folder.")
+        Some("Potato Workspace adds a small file to .codex in each project; Codex asks you to review it once per folder.")
     );
 
     let project = temp("optin-project");

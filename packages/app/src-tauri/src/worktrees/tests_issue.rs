@@ -172,7 +172,7 @@ fn a_copy_starts_from_the_named_start_point_not_from_the_checkout() {
 fn a_copy_without_its_preset_files_still_runs_the_setup() {
     let (_guard, root, _bare, _bare_path) = repo_with_origin();
     write(&root, ".env", "SECRET=1\n");
-    write(&root, ".puppet-master/project.toml", "[worktree]\ncopy = [\".env\"]\nsetup = [[\"git\", \"config\", \"pm.setup-ran\", \"yes\"]]\n");
+    write(&root, ".potato-workspace/project.toml", "[worktree]\ncopy = [\".env\"]\nsetup = [[\"git\", \"config\", \"pm.setup-ran\", \"yes\"]]\n");
     let opts = CreateOptions { start_point: None, copy_files: false, git_env: Vec::new() };
     let worktree = create_with(&project_str(&root), "files-1", &opts).unwrap();
     let cwd = Path::new(&worktree.cwd);

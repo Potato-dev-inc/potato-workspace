@@ -1,6 +1,6 @@
 //! CLI-update safety: version pins, strict mode, the zero-token canary and unknown-screen capture.
 //!
-//! Every CLI update can change the screens Puppet Master reads through a `TuiProfile`. Tonight's
+//! Every CLI update can change the screens Potato Workspace reads through a `TuiProfile`. Tonight's
 //! Codex update menu is the example: a run typed over it and lost its task. This module makes a
 //! version change visible and safe instead of silent:
 //!
@@ -9,7 +9,7 @@
 //! 2. **Strict mode.** Outside that range, or after a check found screens the profile does not
 //!    recognise, the agent is in strict mode (`strict`): startup notices are no longer dismissed for
 //!    the person, the pane shows an "Untested version" chip, and its warm standbys go cold.
-//!    Strict mode never stops the person; it stops Puppet Master from guessing.
+//!    Strict mode never stops the person; it stops Potato Workspace from guessing.
 //! 3. **The canary** (`run`, `engine`). When a CLI's version changes (or the person asks), the CLI
 //!    is started in a scratch folder and driven to its input box with the profile's own gate rules.
 //!    It sends no prompt, so it spends no tokens. A failure puts the agent in strict mode and raises
@@ -66,7 +66,7 @@ pub(crate) fn save_unrecognised(agent: &str, screen: &str, unreadable_for: Durat
         crate::event_log::now_ms(),
     );
     if let Some(path) = saved {
-        tracing::info!(agent, version = ?version, path = %path.display(), "saved a screen Puppet Master did not recognise");
+        tracing::info!(agent, version = ?version, path = %path.display(), "saved a screen Potato Workspace did not recognise");
     }
 }
 

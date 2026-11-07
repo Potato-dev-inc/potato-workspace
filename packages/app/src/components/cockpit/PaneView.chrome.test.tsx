@@ -24,7 +24,7 @@ class NoopResizeObserver {
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver = NoopResizeObserver;
 Element.prototype.scrollIntoView = () => {};
 
-const COPY_CWD = 'C:\\work\\shop\\.puppet-master\\worktrees\\7d4cb2b3-2-209c';
+const COPY_CWD = 'C:\\work\\shop\\.potato-workspace\\worktrees\\7d4cb2b3-2-209c';
 const prompt = {
   promptId: 'q1',
   kind: 'permission',

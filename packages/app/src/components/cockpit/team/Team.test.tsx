@@ -197,7 +197,7 @@ describe('Merge when green', () => {
     // GitHub's own facts: repository, author, branches and the commit the arm is bound to.
     expect(host.textContent).toContain('Round invoice totals to cents');
     expect(host.textContent).toContain('acme/billing-service · by priya-dev · fix/rounding → main · at commit e04bc01');
-    expect(host.textContent).toContain('GitHub merges it squashed into one commit once the required checks pass and branch protection allows it. If anyone pushes to it first, nothing is merged. Puppet Master never merges by itself.');
+    expect(host.textContent).toContain('GitHub merges it squashed into one commit once the required checks pass and branch protection allows it. If anyone pushes to it first, nothing is merged. Potato Workspace never merges by itself.');
     expect(host.textContent).not.toContain('Auto-merge is off');
     await act(async () => sheetButton('Merge when green')!.click());
     await flush();

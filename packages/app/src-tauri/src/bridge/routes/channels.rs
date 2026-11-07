@@ -88,7 +88,7 @@ mod tests {
         // An agent's MCP session is never a phone, even holding a real token.
         assert_eq!(paired_phone(&bearer, Some("mcp-session-1")), None);
         // A plain loopback program has no bearer; a made-up bearer is not a device.
-        assert_eq!(paired_phone("Host: 127.0.0.1\r\nX-PM-Local-Secret: s\r\n", None), None);
+        assert_eq!(paired_phone("Host: 127.0.0.1\r\nX-Potato-Workspace-Local-Secret: s\r\n", None), None);
         assert_eq!(paired_phone("Authorization: Bearer not-a-device\r\n", None), None);
         assert_eq!(paired_phone("", None), None);
     }

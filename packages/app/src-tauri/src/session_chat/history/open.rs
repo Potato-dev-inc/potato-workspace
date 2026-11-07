@@ -134,7 +134,7 @@ fn read_error_text(err: ReadError) -> String {
         ReadError::Missing => GONE.to_string(),
         ReadError::TooBig => "This chat file is too big to open.".to_string(),
         ReadError::Unreadable => "The chat file could not be read.".to_string(),
-        ReadError::Format => "This chat is in a format Puppet Master cannot read yet.".to_string(),
+        ReadError::Format => "This chat is in a format Potato Workspace cannot read yet.".to_string(),
     }
 }
 

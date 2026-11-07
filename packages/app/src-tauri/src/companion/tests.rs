@@ -248,7 +248,7 @@ fn brief_is_built_from_the_snapshot_in_section_order() {
     let memory_at = text.find("## Your notes from past chats\n- Likes short answers.").expect("memory in brief");
     assert!(text.starts_with("# You are Bit\n"));
     assert!(soul_at < user_at && user_at < memory_at);
-    assert!(text.contains("## House rules from Puppet Master"));
+    assert!(text.contains("## House rules from Potato Workspace"));
     assert!(text.chars().count() < 6_500);
 }
 

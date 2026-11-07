@@ -32,7 +32,7 @@ describe('changeLine', () => {
       'Claude 2.3.0 \u2192 2.4.0: checked, all good. Updated 3 hours ago.',
     );
     expect(changeLine(CODEX_CHANGED, CODEX_CHANGED.change!.at_ms + 5_000)).toBe(
-      'Codex 0.159.3 \u2192 0.162.1: screens changed. Puppet Master will ask you before acting. Updated just now.',
+      'Codex 0.159.3 \u2192 0.162.1: screens changed. Potato Workspace will ask you before acting. Updated just now.',
     );
   });
 

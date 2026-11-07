@@ -12,7 +12,7 @@ export const TASK_PROMPT =
 
 export const T = {
   // Shell
-  title: 'Welcome to Puppet Master',
+  title: 'Welcome to Potato Workspace',
   stepOf: (n: number, total: number) => `Step ${n} of ${total}`,
   skipSetup: 'Skip setup',
   skipStep: 'Skip for now',
@@ -50,7 +50,7 @@ export const T = {
   checking: 'Checking the folder…',
   tooBroad: 'That folder holds too much. Pick the folder of one project instead.',
   tooBig: 'This folder is too big to copy. Pick a smaller one.',
-  missing: 'Puppet Master cannot find that folder. Pick another one.',
+  missing: 'Potato Workspace cannot find that folder. Pick another one.',
   failedFolder: 'That folder did not work. Pick another one.',
   needsGitTitle: 'This folder does not use Git yet.',
   needsGitBody: 'A separate copy and Undo both need it. Nothing is uploaded.',
@@ -64,7 +64,7 @@ export const T = {
   // 4. First task
   taskTitle: 'A first task',
   taskLead: 'Your agent reads the project and tells you what it does. It changes nothing.',
-  taskAsk: 'Puppet Master will ask',
+  taskAsk: 'Potato Workspace will ask',
   taskAgent: 'Agent',
   taskSafe: 'It runs in a separate copy. Your folder is not touched.',
   taskReadOnly: 'It is read-only: the agent cannot change files.',
@@ -92,7 +92,7 @@ export const T = {
   phoneNote: 'Scan the code with your phone camera. You choose what the phone may do.',
 
   // 6. Pack
-  packTitle: 'Add Puppet Master to your agents',
+  packTitle: 'Add Potato Workspace to your agents',
   packLead: 'Teach your agents to hand work to each other. You review every file first.',
   packFound: (names: string[]) => (names.length ? `Found: ${names.join(', ')}.` : 'No agent found yet.'),
   packReview: 'Review and install',
@@ -107,14 +107,14 @@ export const T = {
   tipInboxBody: 'Agents that need you wait here. Answer, and they carry on.',
   tipHistory: 'History',
   tipHistoryBody: 'Every turn is saved. Undo this turn puts your files back.',
-  doneButton: 'Start using Puppet Master',
+  doneButton: 'Start using Potato Workspace',
   stepNames: {
     welcome: 'Welcome',
     agents: 'Your agents',
     project: 'Your first project',
     task: 'A first task',
     phone: 'Use your phone',
-    pack: 'Add Puppet Master to your agents',
+    pack: 'Add Potato Workspace to your agents',
     done: 'Done',
   } satisfies Record<StepId, string>,
 

@@ -5,13 +5,13 @@ use crate::events::SystemEvent;
 
 fn temp_event_log_path(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
-        "puppet-master-{name}-{}.jsonl",
+        "potato-workspace-{name}-{}.jsonl",
         uuid::Uuid::new_v4()
     ))
 }
 
 fn temp_project_dir(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("puppet-master-{name}-{}", uuid::Uuid::new_v4()))
+    std::env::temp_dir().join(format!("potato-workspace-{name}-{}", uuid::Uuid::new_v4()))
 }
 
 #[test]

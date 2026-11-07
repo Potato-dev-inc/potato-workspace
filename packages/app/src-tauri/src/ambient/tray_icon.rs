@@ -16,7 +16,7 @@ use std::time::Duration;
 use tauri::image::Image;
 use tauri::{AppHandle, Manager};
 
-const TRAY_ID: &str = "puppet-master-tray";
+const TRAY_ID: &str = "potato-workspace-tray";
 const ICON_PX: u32 = 32;
 #[cfg(windows)]
 const BADGE_PX: u32 = 32;

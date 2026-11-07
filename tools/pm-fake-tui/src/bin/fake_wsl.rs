@@ -164,7 +164,7 @@ fn launch(distro: &str, cd: Option<&str>, payload: &[String]) -> i32 {
             crossed.push((name, value));
         }
     }
-    let pane = crossed.iter().find(|(name, _)| name == "PUPPET_MASTER_PANE_ID").map(|(_, value)| value.clone());
+    let pane = crossed.iter().find(|(name, _)| name == "POTATO_WORKSPACE_PANE_ID").map(|(_, value)| value.clone());
     log(json!({
         "ev": "launch",
         "pane": pane,

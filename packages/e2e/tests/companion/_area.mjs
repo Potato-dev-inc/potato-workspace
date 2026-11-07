@@ -199,7 +199,7 @@ export function rawBridge(t, { method = 'GET', path: p = '/health', headers = {}
 
 /** An MCP connection to the bridge: every call carries this session id, as the MCP shim does. */
 export function mcp(t, session = '7e57c0de-0000-4000-8000-0000000000a1') {
-  const call = (method, p, body, headers = {}) => rawBridge(t, { method, path: p, body, headers: { 'x-puppet-master-session': session, ...headers } });
+  const call = (method, p, body, headers = {}) => rawBridge(t, { method, path: p, body, headers: { 'x-potato-workspace-session': session, ...headers } });
   return {
     session,
     call,

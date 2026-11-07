@@ -74,7 +74,7 @@ const PRE_PUSH: &str = "pre-push";
 
 /// The hook: refuses every push and says why. Git for Windows runs it with its own `sh`.
 const PRE_PUSH_HOOK: &str = "#!/bin/sh
-echo 'Puppet Master blocks pushes while an agent works here. It pushes after its own checks.' >&2
+echo 'Potato Workspace blocks pushes while an agent works here. It pushes after its own checks.' >&2
 exit 1
 ";
 
@@ -423,7 +423,7 @@ mod tests {
     /// The push was stopped by the guard (the rewrite or the hook), not by something else.
     fn stopped_by_guard(out: &std::process::Output) -> bool {
         let text = String::from_utf8_lossy(&out.stderr).to_string();
-        !out.status.success() && (text.contains("pm-push-blocked") || text.contains("Puppet Master blocks pushes"))
+        !out.status.success() && (text.contains("pm-push-blocked") || text.contains("Potato Workspace blocks pushes"))
     }
 
     #[test]
@@ -479,7 +479,7 @@ mod tests {
         assert!(git(&work, &["remote", "set-url", "--push", "origin", &path], None).status.success());
         let out = git(&work, &["push", "origin", "HEAD:refs/heads/leak"], Some(&guard));
         assert!(stopped_by_guard(&out), "{}", String::from_utf8_lossy(&out.stderr));
-        assert!(String::from_utf8_lossy(&out.stderr).contains("Puppet Master blocks pushes"), "the hook did not run");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("Potato Workspace blocks pushes"), "the hook did not run");
         assert!(remote_refs(&bare).is_empty(), "{}", remote_refs(&bare));
     }
 

@@ -74,7 +74,7 @@ pub fn decide(ask: &Ask, setting: Option<&str>, once: Option<&str>) -> Result<De
     if ask.kind != Kind::Cli || ask.linux_program.is_none() {
         return Err(refuse(
             WSL_AGENT_NOT_SUPPORTED,
-            format!("{} can't run in Linux from Puppet Master yet.", label_for(ask.agent_type)),
+            format!("{} can't run in Linux from Potato Workspace yet.", label_for(ask.agent_type)),
         ));
     }
     if ask.account.is_some() {
@@ -506,7 +506,7 @@ mod tests {
         no_program.linux_program = None;
         assert_eq!(code_of(decide(&no_program, Some("Ubuntu"), None)), WSL_AGENT_NOT_SUPPORTED);
         let err = decide(&no_program, Some("Ubuntu"), None).unwrap_err();
-        assert_eq!(err.message, "fake-cli can't run in Linux from Puppet Master yet.");
+        assert_eq!(err.message, "fake-cli can't run in Linux from Potato Workspace yet.");
     }
 
     #[test]

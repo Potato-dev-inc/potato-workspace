@@ -1,10 +1,10 @@
-//! The launch each agent gets for Puppet Master's own MCP server, from the real profiles.
+//! The launch each agent gets for Potato Workspace's own MCP server, from the real profiles.
 
 use super::*;
 use crate::tui::profile_for;
 use serde_json::json;
 
-const PORT_FILE: &str = "C:/Users/a b/AppData/Roaming/com.potatodev.workspace/puppet-master.bridge.port";
+const PORT_FILE: &str = "C:/Users/a b/AppData/Roaming/com.potatodev.workspace/potato-workspace.bridge.port";
 
 fn dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("pm-pane-mcp-{name}-{}", std::process::id()));
@@ -13,7 +13,7 @@ fn dir(name: &str) -> PathBuf {
 }
 
 fn server(pane_id: &str) -> PaneMcpServer {
-    server_with("C:/Program Files/Puppet Master/bin/puppet-master-mcp.exe".into(), vec![], pane_id, PORT_FILE.into())
+    server_with("C:/Program Files/Potato Workspace/bin/puppet-master-mcp.exe".into(), vec![], pane_id, PORT_FILE.into())
 }
 
 fn arg_after<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
@@ -21,7 +21,7 @@ fn arg_after<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
 }
 
 fn entry_env(entry: &Value) -> (&str, &str) {
-    (entry["PUPPET_MASTER_BRIDGE_PORT_FILE"].as_str().unwrap(), entry["PUPPET_MASTER_PANE_ID"].as_str().unwrap())
+    (entry["POTATO_WORKSPACE_BRIDGE_PORT_FILE"].as_str().unwrap(), entry["POTATO_WORKSPACE_PANE_ID"].as_str().unwrap())
 }
 
 #[test]
@@ -34,8 +34,8 @@ fn claude_gets_a_config_file_for_this_pane_and_the_note_as_added_system_text() {
     assert_eq!(arg_after(&launch.args, "--append-system-prompt"), Some(NOTE));
     let text = std::fs::read_to_string(d.join("pane-1.mcp.json")).expect("file written");
     let written: Value = serde_json::from_str(&text).unwrap();
-    let entry = &written["mcpServers"]["puppet-master"];
-    assert_eq!(entry["command"], "C:/Program Files/Puppet Master/bin/puppet-master-mcp.exe");
+    let entry = &written["mcpServers"]["potato-workspace"];
+    assert_eq!(entry["command"], "C:/Program Files/Potato Workspace/bin/puppet-master-mcp.exe");
     // THIS app's port file (never a hard-coded port) and the pane the agent runs in.
     assert_eq!(entry_env(&entry["env"]), (PORT_FILE, "pane-1"));
     assert!(!text.contains("17321"));
@@ -63,10 +63,10 @@ fn opencode_gets_one_variable_holding_the_config_and_a_note_file_in_it() {
     let (name, text) = &launch.env[0];
     assert_eq!(name, "OPENCODE_CONFIG_CONTENT");
     let config: Value = serde_json::from_str(text).expect("one JSON text");
-    let entry = &config["mcp"]["puppet-master"];
+    let entry = &config["mcp"]["potato-workspace"];
     assert_eq!(entry["type"], "local");
     assert_eq!(entry["enabled"], true);
-    assert_eq!(entry["command"], json!(["C:/Program Files/Puppet Master/bin/puppet-master-mcp.exe"]));
+    assert_eq!(entry["command"], json!(["C:/Program Files/Potato Workspace/bin/puppet-master-mcp.exe"]));
     assert_eq!(entry_env(&entry["environment"]), (PORT_FILE, "pane-3"));
     let note_path = config["instructions"][0].as_str().expect("instructions");
     assert!(note_path.ends_with("/helpers-note.md"), "{note_path}");
@@ -93,8 +93,8 @@ fn codex_gets_command_line_overrides_and_no_file() {
     let launch = prepare_in(profile_for("codex").as_ref(), "pane-5", &[], &server("pane-5"), &d);
     assert!(launch.env.is_empty());
     assert_eq!(launch.args.iter().filter(|a| *a == "-c").count(), 3);
-    assert!(launch.args.iter().any(|a| a.starts_with("mcp_servers.puppet-master.command=")));
-    assert!(launch.args.iter().any(|a| a.contains("PUPPET_MASTER_PANE_ID='pane-5'") && a.contains(PORT_FILE)));
+    assert!(launch.args.iter().any(|a| a.starts_with("mcp_servers.potato-workspace.command=")));
+    assert!(launch.args.iter().any(|a| a.contains("POTATO_WORKSPACE_PANE_ID='pane-5'") && a.contains(PORT_FILE)));
     assert!(!d.exists(), "no folder was made for an agent that needs no file");
 }
 

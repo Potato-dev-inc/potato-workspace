@@ -1,4 +1,4 @@
-//! Hardened git for Puppet Master's own calls on an agent's copy (spec n32 §3.5, threat S7).
+//! Hardened git for Potato Workspace's own calls on an agent's copy (spec n32 §3.5, threat S7).
 //!
 //! The agent runs as the person and can write `.git/config` and `.git/hooks`. A worktree shares
 //! both with its origin repository, so anything the agent plants there would run inside PM's next
@@ -421,7 +421,7 @@ fn read_argv(args: &[&str]) -> Result<Vec<String>, OperationError> {
         return Err(refuse("a read needs a git command".to_string()));
     };
     if !READ_COMMANDS.contains(&command) {
-        return Err(refuse(format!("git {command} is not a read Puppet Master makes")));
+        return Err(refuse(format!("git {command} is not a read Potato Workspace makes")));
     }
     if let Some(arg) = args.iter().find(|arg| arg.contains('\0')) {
         return Err(refuse(format!("a git argument has a NUL byte: {arg:?}")));

@@ -634,7 +634,7 @@ impl<I: Io + 'static> Engine<I> {
                     None => self.fail(
                         &mut run,
                         ERR_START_FAILED,
-                        "Puppet Master lost track of this run. Open the copy to see what it did.",
+                        "Potato Workspace lost track of this run. Open the copy to see what it did.",
                     ),
                 }
             }
@@ -643,7 +643,7 @@ impl<I: Io + 'static> Engine<I> {
             RunState::Starting => {
                 // A start that a restart cut off. Nothing was handed to an agent that we know of.
                 run.started_at_ms = None;
-                self.fail(&mut run, ERR_START_FAILED, "Puppet Master restarted while this was starting. Ask again.");
+                self.fail(&mut run, ERR_START_FAILED, "Potato Workspace restarted while this was starting. Ask again.");
             }
             _ => {}
         }

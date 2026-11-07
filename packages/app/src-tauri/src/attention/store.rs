@@ -429,7 +429,7 @@ fn build_item(d: &Derived, facts: &Facts) -> Item {
                     let project = item.pane.as_ref().and_then(|p| p.project.clone()).unwrap_or_else(|| "this folder".into());
                     if p.choices.is_empty() {
                         item.title = format!("{agent} needs you on your PC");
-                        item.sentence = Some("It's showing a sign-in screen. Puppet Master won't answer it for you.".into());
+                        item.sentence = Some("It's showing a sign-in screen. Potato Workspace won't answer it for you.".into());
                     } else {
                         item.title = "Trust this folder?".into();
                         item.sentence = Some(format!("{agent} wants to work in {project}. It can read and change files there."));

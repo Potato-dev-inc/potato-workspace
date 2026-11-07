@@ -28,7 +28,7 @@ export function keepSheetCopy(item: ReviewItem) {
     return {
       title: 'Push as a draft pull request?',
       primary: 'Push as draft',
-      footer: 'Puppet Master opens a draft. It never merges.',
+      footer: 'Potato Workspace opens a draft. It never merges.',
     };
   }
   const into = item.keep.into || 'your project';
@@ -90,7 +90,7 @@ export function KeepSheet({ item, extra = [], api = reviewDeskApi, onDone, onCan
               ))}
             </ul>
           ) : (
-            <p className="ck-sub">Puppet Master found no push warnings.</p>
+            <p className="ck-sub">Potato Workspace found no push warnings.</p>
           )
         ) : (
           <p className="ck-sub">{copy.body}</p>

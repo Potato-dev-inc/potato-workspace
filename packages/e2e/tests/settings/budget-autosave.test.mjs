@@ -29,7 +29,7 @@ export async function run(t) {
 
     await t.step('Reload the window and come back: still 7');
     await t.page.reload();
-    await t.expect.text('Puppet Master');
+    await t.expect.text('Potato Workspace');
     await openSettings(t, 'General');
     await expectField(t, TURNS, '7');
 

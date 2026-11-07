@@ -3,20 +3,20 @@
 //! Why a separate file: the named-tunnel token is a secret. The public settings mirror
 //! (`settings_store.rs`) is broadcast over SSE to every paired phone and only whitelists
 //! `PATCHABLE_KEYS`, so the tunnel config is owned by Rust, lives in its own file in the app data
-//! dir (`puppet-master.tunnel.json`) and is only ever returned to the UI in a redacted view.
+//! dir (`potato-workspace.tunnel.json`) and is only ever returned to the UI in a redacted view.
 //!
 //! Modes:
 //! - `quick`  (default): bundled cloudflared quick tunnel; the trycloudflare URL changes per launch.
 //! - `named`: `cloudflared tunnel run` with a Cloudflare tunnel token; `hostname` is the stable origin.
-//! - `custom`: the user runs their own proxy or domain; Puppet Master just advertises the URL.
+//! - `custom`: the user runs their own proxy or domain; Potato Workspace just advertises the URL.
 //!
-//! `PUPPET_MASTER_PUBLIC_URL` (env) still wins over everything and skips cloudflared.
+//! `POTATO_WORKSPACE_PUBLIC_URL` (env) still wins over everything and skips cloudflared.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-pub const TUNNEL_FILE_NAME: &str = "puppet-master.tunnel.json";
+pub const TUNNEL_FILE_NAME: &str = "potato-workspace.tunnel.json";
 pub const TUNNEL_TOKEN_ENV: &str = "TUNNEL_TOKEN";
 
 pub fn tunnel_file() -> std::path::PathBuf {
@@ -174,7 +174,7 @@ pub fn save(path: &Path, config: &TunnelConfig) -> Result<(), String> {
 /// Which tunnel actually runs, after the env override is applied.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TunnelPlan {
-    /// `PUPPET_MASTER_PUBLIC_URL` is set: no cloudflared.
+    /// `POTATO_WORKSPACE_PUBLIC_URL` is set: no cloudflared.
     Env { url: String },
     Quick,
     Named { origin: String },

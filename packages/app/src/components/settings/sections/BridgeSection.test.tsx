@@ -11,11 +11,11 @@ const mocks = vi.hoisted(() => ({
     bridgeUrl: 'http://127.0.0.1:17321',
     bridgeVersion: '0.9.0',
     portFileExists: true,
-    portFilePath: 'C:\\work\\demo\\.puppet-master\\port',
+    portFilePath: 'C:\\work\\demo\\.potato-workspace\\port',
     nodeAvailable: true,
     npmAvailable: true,
     npmPackageVersion: '1.2.0',
-    launchCommand: 'npx -y @puppet-master/mcp',
+    launchCommand: 'npx -y @potato-workspace/mcp',
     backends: [
       { backend: 'claude', label: 'Claude', installed: true, usesNpm: true, configPath: 'C:\\work\\demo\\.mcp.json', message: 'Configured.' },
     ],
@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../lib/mcp-config', () => ({
-  PUPPET_MASTER_MCP_COMMAND: { command: 'npx', args: ['-y', '@puppet-master/mcp'] },
+  POTATO_WORKSPACE_MCP_COMMAND: { command: 'npx', args: ['-y', '@potato-workspace/mcp'] },
   getMcpStatus: vi.fn(async () => mocks.status),
   installNpmMcpConfigs: vi.fn(async () => mocks.written),
   installGlobalNpmMcpConfigs: vi.fn(async () => mocks.written),
@@ -167,9 +167,9 @@ describe('Bridge & MCP: controls save and run the right calls', () => {
 
   it('the Claude Desktop and Codex snippets carry the MCP command', async () => {
     await mount();
-    expect(rowText('snippet-claude-desktop')).toContain('"puppet-master"');
-    expect(rowText('snippet-claude-desktop')).toContain('@puppet-master/mcp');
-    expect(rowText('snippet-codex')).toContain('[mcp_servers.puppet-master]');
+    expect(rowText('snippet-claude-desktop')).toContain('"potato-workspace"');
+    expect(rowText('snippet-claude-desktop')).toContain('@potato-workspace/mcp');
+    expect(rowText('snippet-codex')).toContain('[mcp_servers.potato-workspace]');
   });
 });
 

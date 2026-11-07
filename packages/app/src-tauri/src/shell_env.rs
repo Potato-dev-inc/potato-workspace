@@ -158,7 +158,7 @@ mod scrub_tests {
 
 /// Resolve the OpenCode binary for `std::process::Command` / PTY spawn.
 ///
-/// `opencode` is looked up on the PATH Puppet Master gives its panes, the way a command prompt
+/// `opencode` is looked up on the PATH Potato Workspace gives its panes, the way a command prompt
 /// does: the machine's `PATHEXT`, then the npm shim kinds. Windows cannot start a `.cmd` / `.ps1`
 /// shim directly, so a shim is followed to the native `.exe` it names. No install folder is
 /// assumed, so custom npm prefixes, pnpm, bun, Volta, Scoop and winget all resolve.
@@ -321,11 +321,27 @@ fn registry_or_fallback_path() -> String {
 /// The tools the installer puts next to the app: Node.js with npm (`resources/node`) and MinGit
 /// (`resources/git/cmd`). Only the folders that exist, in that order.
 pub(crate) fn bundled_tool_dirs(exe_dir: &std::path::Path) -> Vec<PathBuf> {
+    let resources = bundled_resources_root(exe_dir);
     [["node"].as_slice(), ["git", "cmd"].as_slice()]
         .iter()
-        .map(|parts| parts.iter().fold(exe_dir.join("resources"), |dir, part| dir.join(part)))
+        .map(|parts| parts.iter().fold(resources.clone(), |dir, part| dir.join(part)))
         .filter(|dir| dir.is_dir())
         .collect()
+}
+
+/// Where the bundle resources live. Beside the executable on Windows, but inside
+/// `<App>.app/Contents/Resources` on macOS (the executable is in `Contents/MacOS`).
+pub(crate) fn bundled_resources_root(exe_dir: &std::path::Path) -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(contents) = exe_dir.parent() {
+            let resources = contents.join("Resources");
+            if resources.is_dir() {
+                return resources;
+            }
+        }
+    }
+    exe_dir.join("resources")
 }
 
 /// Dev only (`dev-fake-tui`): the end-to-end runner (`packages/e2e`) puts folders holding fake agent programs

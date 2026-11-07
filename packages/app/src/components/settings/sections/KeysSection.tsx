@@ -17,7 +17,7 @@ const KEYWORDS = 'api key anthropic openai openrouter opencode rotate rate limit
 const OPENCODE_HINT = 'For OpenCode only. Kept in the keychain when there is one. Never sent to the phone.';
 /** The opt-in's name (founder decision 2026-10-15). Off by default; a person's earlier explicit choice is kept by the backend. */
 const AUTOMATION_LABEL = "Switch to another of your keys when one hits its rate limit (check your provider's terms)";
-const AUTOMATION_HINT = 'Off: Puppet Master only says a key needs swapping. Needs a second OpenCode key (B).';
+const AUTOMATION_HINT = 'Off: Potato Workspace only says a key needs swapping. Needs a second OpenCode key (B).';
 const RESTART_HINT = 'Restart the OpenCode pane after a key switch so it picks up the new key.';
 const REMOVE_ALL_HINT = 'Deletes Anthropic, OpenAI and OpenRouter keys here. Agents lose access. OpenCode stays.';
 

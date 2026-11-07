@@ -23,7 +23,7 @@ const appDir = join(repoRoot, 'packages', 'app');
  * src-tauri/src/app_paths.rs): env override, else <app data>/com.potatodev.workspace[.profile-<name>].
  */
 function resolvePortFile() {
-  const override = process.env.PUPPET_MASTER_BRIDGE_PORT_FILE?.trim();
+  const override = process.env.POTATO_WORKSPACE_BRIDGE_PORT_FILE?.trim();
   if (override) return override;
   const home = homedir();
   const root =
@@ -32,10 +32,10 @@ function resolvePortFile() {
       : process.platform === 'darwin'
         ? join(home, 'Library', 'Application Support')
         : join(home, '.local', 'share');
-  const raw = (process.env.PUPPET_MASTER_PROFILE ?? '').trim().toLowerCase();
+  const raw = (process.env.POTATO_WORKSPACE_PROFILE ?? '').trim().toLowerCase();
   const profile =
     raw && raw.length <= 32 && raw !== 'default' && /^[a-z0-9-]+$/.test(raw) && !raw.startsWith('-') ? raw : null;
-  return join(root, profile ? `com.potatodev.workspace.profile-${profile}` : 'com.potatodev.workspace', 'puppet-master.bridge.port');
+  return join(root, profile ? `com.potatodev.workspace.profile-${profile}` : 'com.potatodev.workspace', 'potato-workspace.bridge.port');
 }
 const portFile = resolvePortFile();
 const VITE_PORT = 1420;
@@ -99,7 +99,7 @@ void waitForVite().then(async () => {
       tunnelUrl = devTunnel?.url ?? null;
       tunnelProvider = devTunnel?.provider ?? null;
     } catch (err) {
-      console.error('[puppet-master] tunnel failed:', err instanceof Error ? err.message : err);
+      console.error('[potato-workspace] tunnel failed:', err instanceof Error ? err.message : err);
     }
   }
 
@@ -111,7 +111,7 @@ void waitForVite().then(async () => {
   });
 
   console.error('');
-  console.error('[puppet-master] dev stack ready');
+  console.error('[potato-workspace] dev stack ready');
   console.error(`  vite / PWA:     ${VITE_URL}`);
   console.error(`  bridge proxy:   ${VITE_URL}/bridge  (→ desktop bridge when app is up)`);
   if (bridge) console.error(`  bridge direct:  ${bridge}`);

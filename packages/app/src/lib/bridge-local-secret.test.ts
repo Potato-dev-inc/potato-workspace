@@ -26,7 +26,7 @@ describe('bridge local secret', () => {
   it('adds the header only for a loopback bridge and only once the key is known', () => {
     expect(localSecretHeaders('http://127.0.0.1:17321')).toEqual({});
     setBridgeLocalSecretForTest(KEY);
-    expect(localSecretHeaders('http://127.0.0.1:17321')).toEqual({ 'X-PM-Local-Secret': KEY });
+    expect(localSecretHeaders('http://127.0.0.1:17321')).toEqual({ 'X-Potato-Workspace-Local-Secret': KEY });
     expect(localSecretHeaders('https://pm.example.com/bridge')).toEqual({});
   });
 
@@ -36,7 +36,7 @@ describe('bridge local secret', () => {
     vi.stubGlobal('fetch', fetchMock);
     await makeBridgeClient('http://127.0.0.1:17321').listPanes();
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
-    expect((init.headers as Record<string, string>)['X-PM-Local-Secret']).toBe(KEY);
+    expect((init.headers as Record<string, string>)['X-Potato-Workspace-Local-Secret']).toBe(KEY);
 
     fetchMock.mockClear();
     await makeBridgeClient('https://pm.example.com/bridge').listPanes();

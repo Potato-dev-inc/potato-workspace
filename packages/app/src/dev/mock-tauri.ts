@@ -45,10 +45,10 @@ import { whatBrokeItResultMock } from './what-broke-it-result-fixtures';
 import { collisionMock } from './collision-fixtures';
 
 const DOCTOR_ROWS = [
-  { id: 'claude', label: 'Claude', state: 'unchecked', installed: true, version: '2.1.4 (Claude Code)', reason: 'Installed. Press Test to check it can answer.', install_hint: 'winget install Anthropic.ClaudeCode', install_fallback: 'npm i -g @anthropic-ai/claude-code', login_hint: 'Open Claude and type /login', can_test: true, hooks: { state: 'connected', mode: 'shadow', sentence: 'Connected. Claude tells Puppet Master when it starts, asks and finishes. Watch only: Puppet Master still decides from the screen.' } },
-  { id: 'codex', label: 'Codex', state: 'needs_login', installed: true, version: 'codex-cli 0.162.1', reason: 'It needs you to sign in first.', install_hint: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"', install_fallback: 'npm i -g @openai/codex', login_hint: 'Run: codex login', can_test: true, hooks: { state: 'off', mode: 'off', sentence: 'Live updates are off.', opt_in: true, opt_in_note: 'Puppet Master adds a small file to .codex in each project; Codex asks you to review it once per folder.', enabled: false } },
+  { id: 'claude', label: 'Claude', state: 'unchecked', installed: true, version: '2.1.4 (Claude Code)', reason: 'Installed. Press Test to check it can answer.', install_hint: 'winget install Anthropic.ClaudeCode', install_fallback: 'npm i -g @anthropic-ai/claude-code', login_hint: 'Open Claude and type /login', can_test: true, hooks: { state: 'connected', mode: 'shadow', sentence: 'Connected. Claude tells Potato Workspace when it starts, asks and finishes. Watch only: Potato Workspace still decides from the screen.' } },
+  { id: 'codex', label: 'Codex', state: 'needs_login', installed: true, version: 'codex-cli 0.162.1', reason: 'It needs you to sign in first.', install_hint: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"', install_fallback: 'npm i -g @openai/codex', login_hint: 'Run: codex login', can_test: true, hooks: { state: 'off', mode: 'off', sentence: 'Live updates are off.', opt_in: true, opt_in_note: 'Potato Workspace adds a small file to .codex in each project; Codex asks you to review it once per folder.', enabled: false } },
   { id: 'opencode', label: 'OpenCode', state: 'not_installed', installed: false, version: null, reason: 'Not installed on this computer.', install_hint: 'winget install SST.opencode', login_hint: 'Open OpenCode and type /connect', can_test: false },
-  { id: 'cursor_agent', label: 'Cursor Agent', state: 'error', installed: true, version: null, reason: 'Found it, but it did not start properly: exit code 1', install_hint: null, login_hint: 'Run: agent login', can_test: true, hooks: { state: 'not_supported', mode: 'shadow', sentence: "This agent can't report to Puppet Master directly. Puppet Master reads its screen." } },
+  { id: 'cursor_agent', label: 'Cursor Agent', state: 'error', installed: true, version: null, reason: 'Found it, but it did not start properly: exit code 1', install_hint: null, login_hint: 'Run: agent login', can_test: true, hooks: { state: 'not_supported', mode: 'shadow', sentence: "This agent can't report to Potato Workspace directly. Potato Workspace reads its screen." } },
 ];
 
 export function installTauriMock(scenario: HarnessScenario): void {
@@ -163,7 +163,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'read_pane_snapshot':
           return '';
         case 'get_project_path_cmd':
-          return 'C:\\Users\\dev\\work\\puppet-master';
+          return 'C:\\Users\\dev\\work\\potato-workspace';
         case 'pane_activities':
           return Object.fromEntries(
             panes.map((p) => [
@@ -267,25 +267,25 @@ export function installTauriMock(scenario: HarnessScenario): void {
             bridgeUrl: 'http://127.0.0.1:17321',
             bridgeVersion: '0.1.4',
             portFileExists: true,
-            portFilePath: 'C:\Users\dev\.puppet-master\bridge.port',
+            portFilePath: 'C:\Users\dev\.potato-workspace\bridge.port',
             nodeAvailable: true,
             npmAvailable: true,
             npmPackageVersion: '0.1.4',
-            launchCommand: 'npx -y @puppet-master/mcp',
+            launchCommand: 'npx -y @potato-workspace/mcp',
             backends: [],
             overallReady: true,
             repairResults: [],
           };
         case 'install_npm_mcp_configs':
           return [
-            { backend: 'claude_cli', installed: true, changed: true, message: 'Claude project MCP configured for puppet-master' },
+            { backend: 'claude_cli', installed: true, changed: true, message: 'Claude project MCP configured for potato-workspace' },
             { backend: 'codex_cli', installed: true, changed: false, message: 'Codex project MCP already set' },
-            { backend: 'opencode_cli', installed: true, changed: true, message: 'OpenCode project MCP configured for puppet-master' },
+            { backend: 'opencode_cli', installed: true, changed: true, message: 'OpenCode project MCP configured for potato-workspace' },
           ];
         case 'install_global_npm_mcp_configs':
           return [
-            { backend: 'claude_cli_global', installed: true, changed: true, message: 'Claude user MCP configured for puppet-master' },
-            { backend: 'codex_cli_global', installed: true, changed: true, message: 'Codex global MCP configured for puppet-master' },
+            { backend: 'claude_cli_global', installed: true, changed: true, message: 'Claude user MCP configured for potato-workspace' },
+            { backend: 'codex_cli_global', installed: true, changed: true, message: 'Codex global MCP configured for potato-workspace' },
             { backend: 'opencode_cli_global', installed: true, changed: false, message: 'OpenCode global MCP already set' },
           ];
         case 'list_agent_contexts':
@@ -523,11 +523,11 @@ export function installTauriMock(scenario: HarnessScenario): void {
             ],
           };
         case 'diagnostic_show':
-          return ['{', '  "app": "Puppet Master",', '  "version": "0.9.0",', '  "os": "windows"', '}'].join('\n');
+          return ['{', '  "app": "Potato Workspace",', '  "version": "0.9.0",', '  "os": "windows"', '}'].join('\n');
         case 'diagnostic_save':
           return { path: String(a.path ?? ''), files: 6, bytes: 9_120 };
         case 'plugin:dialog|save':
-          return 'C:\\Users\\dev\\Desktop\\puppet-master-diagnostic.zip';
+          return 'C:\\Users\\dev\\Desktop\\potato-workspace-diagnostic.zip';
         case 'autostart_get':
           return false;
         case 'autostart_set':
@@ -538,15 +538,15 @@ export function installTauriMock(scenario: HarnessScenario): void {
             isPackaged: true,
             platform: 'windows',
             uninstallAvailable: true,
-            uninstallInstructions: 'Removes Puppet Master with the Windows uninstaller.',
+            uninstallInstructions: 'Removes Potato Workspace with the Windows uninstaller.',
             dataDir: 'C:\\Users\\dev\\AppData\\Roaming\\com.potatodev.workspace',
           };
         case 'get_coordination_storage_info':
           return {
             scope: 'project',
-            project_path: 'C:\\Users\\dev\\work\\puppet-master',
-            storage_dir: 'C:\\Users\\dev\\work\\puppet-master\\.puppet-master',
-            event_log_path: 'C:\\Users\\dev\\work\\puppet-master\\.puppet-master\\events.jsonl',
+            project_path: 'C:\\Users\\dev\\work\\potato-workspace',
+            storage_dir: 'C:\\Users\\dev\\work\\potato-workspace\\.potato-workspace',
+            event_log_path: 'C:\\Users\\dev\\work\\potato-workspace\\.potato-workspace\\events.jsonl',
             event_count: 148,
             task_count: 3,
             lock_count: 1,
@@ -582,18 +582,18 @@ export function installTauriMock(scenario: HarnessScenario): void {
 }
 
 const MEMORY_TEXT = [
-  '# puppet-master',
+  '# potato-workspace',
   '',
   'Desktop app: Tauri 2 (Rust) + React. Backend logic stays in Rust.',
   '',
-  '- Run tests: cargo test --lib, npm test --workspace=@puppet-master/app',
+  '- Run tests: cargo test --lib, npm test --workspace=@potato-workspace/app',
   '- UI is monochrome, see mockups/ui-proposal/STYLE.md',
   '- Never push; commit small and revertable',
 ].join('\n');
 
 function memoryView(text?: string) {
   return {
-    project: 'C:\\Users\\dev\\work\\puppet-master',
+    project: 'C:\\Users\\dev\\work\\potato-workspace',
     memory: text ?? MEMORY_TEXT,
     global_enabled: true,
     project_enabled: true,
@@ -601,7 +601,7 @@ function memoryView(text?: string) {
     targets: [
       { path: 'CLAUDE.md', agents: ['claude'], status: 'in_sync', user_content: true },
       { path: 'AGENTS.md', agents: ['codex', 'opencode'], status: 'will_update', user_content: true },
-      { path: '.cursor/rules/puppet-master.mdc', agents: ['cursor_agent'], status: 'will_create', user_content: false },
+      { path: '.cursor/rules/potato-workspace.mdc', agents: ['cursor_agent'], status: 'will_create', user_content: false },
     ],
   };
 }

@@ -1,5 +1,5 @@
 // A consent card in the Inbox: an agent wants to control a pane it did not start, or answer a risky
-// prompt in one. It is a question Puppet Master raised (see src-tauri/src/agent_authority), so it
+// prompt in one. It is a question Potato Workspace raised (see src-tauri/src/agent_authority), so it
 // arrives through the same list as `ask_user` questions and is answered the same way. Deny comes
 // first and is the primary button on purpose: the easy tap is the safe one. No number key answers it,
 // and there is no lock-screen version.

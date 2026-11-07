@@ -3,7 +3,7 @@
 //! Two things are installed per agent, each only when the agent declares where it lives:
 //!
 //! - the skills (`TuiProfile::skills_host`): `<skills dir>/<skill>/SKILL.md`, four small folders;
-//! - Puppet Master's own MCP entry (`TuiProfile::mcp_host`): added ONLY when the agent's config has
+//! - Potato Workspace's own MCP entry (`TuiProfile::mcp_host`): added ONLY when the agent's config has
 //!   no entry under that key yet. An entry that is already there is the user's (or the app's
 //!   earlier registration) and is never rewritten.
 //!
@@ -36,7 +36,7 @@ pub struct Options {
     pub home: PathBuf,
     /// Where the install record and the backups live (the app data folder).
     pub state_dir: PathBuf,
-    /// Launch spec for Puppet Master's own MCP entry.
+    /// Launch spec for Potato Workspace's own MCP entry.
     pub launch: HostLaunch,
 }
 
@@ -629,7 +629,7 @@ fn undo_mcp(
     let members = match edit::members(fmt, &current, parent) {
         Ok(members) => members,
         Err(e) => {
-            skip(report, path, format!("This file can't be read any more ({e}), so the entry Puppet Master added was left in it. Fix the file, then press Undo again."));
+            skip(report, path, format!("This file can't be read any more ({e}), so the entry Potato Workspace added was left in it. Fix the file, then press Undo again."));
             return false;
         }
     };

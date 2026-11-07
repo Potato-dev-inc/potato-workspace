@@ -276,6 +276,29 @@ fn after_a_restart_the_conversation_is_a_chat_pane_that_loads_when_it_is_read() 
 }
 
 #[test]
+fn a_helper_chat_keeps_its_starter_and_its_parent_pane_across_a_restart() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.set_started_by(Some("session-A"));
+    rig.chat.persist_link(Some("session-A"), Some("pane-parent"));
+    rig.chat.retire();
+    rig.conversations.forget_session(&id);
+
+    let app = conversations_in(&rig.dir, &rig.opts);
+    app.restore_lazily(&rig.panes);
+    let deps = deps_for(&rig.dir, &app);
+    // The parent pane is live after the restart (a stub whose process is this test process).
+    let mut parent = PaneRegistry::test_pane_stub("pane-parent");
+    parent.info.pid = std::process::id();
+    deps.registry.lock().panes.insert("pane-parent".to_string(), parent);
+    super::restore_panes(&deps);
+
+    let chat = get(&id).expect("the chat is back");
+    assert_eq!(chat.started_by().as_deref(), Some("session-A"), "the starter keeps its owner-only control");
+    assert_eq!(deps.registry.lock().panes[&id].info().parent_pane_id.as_deref(), Some("pane-parent"), "still nested under its parent");
+}
+
+#[test]
 fn after_a_restart_a_message_sent_before_anyone_reads_the_chat_is_not_doubled_or_lost() {
     let rig = Rig::new("");
     let id = rig.id();
@@ -351,6 +374,7 @@ fn an_agent_cannot_answer_a_permission_question_unless_the_person_allowed_it() {
     let name = rig.chat.answer_for_agent(&question, "reject_once", Who::Agent("session-1".into())).expect("allowed now");
     assert_eq!(name, "Reject");
     assert!(wait_until(30, || rig.of_texts_contain("chose:reject_once")), "the choice reached the agent: {:?}", rig.texts());
+    assert_eq!(rig.chat.last_prompt_end().unwrap().reason, "answered_by_agent");
     // The question is closed; answering twice is not possible.
     assert_eq!(rig.chat.answer_for_agent(&question, "reject_once", Who::Local), Err(AgentAnswerError::NoSuchQuestion));
 }
@@ -379,7 +403,7 @@ fn the_agent_tools_see_a_chat_by_its_handle_and_read_the_chat_not_a_screen() {
     assert!(call(&rig, "POST", "agents/wait", json!({ "handles": ["run-123"] }), None).is_none());
 
     let waited = call(&rig, "POST", "agents/wait", json!({ "handles": [id], "wait_ms": 2000 }), None).unwrap().unwrap();
-    assert_eq!(waited["reason"], "status");
+    assert_eq!(waited["reason"], "matched_state");
     assert_eq!(waited["agents"][0]["status"], "completed");
     let mixed = call(&rig, "POST", "agents/wait", json!({ "handles": [id, "run-123"] }), None).unwrap();
     assert_eq!(mixed.unwrap_err().code, "MIXED_HANDLES");

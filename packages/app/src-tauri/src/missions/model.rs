@@ -86,7 +86,7 @@ pub enum MissionState {
     /// The person took it over ("Hand it to me").
     HandedOff,
     Stopped,
-    /// Something Puppet Master can't recover from (the copy vanished, the record is unreadable).
+    /// Something Potato Workspace can't recover from (the copy vanished, the record is unreadable).
     Failed,
 }
 

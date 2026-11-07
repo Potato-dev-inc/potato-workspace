@@ -1,4 +1,4 @@
-//! Night Shift: a list of tasks that Puppet Master works through while the person sleeps.
+//! Night Shift: a list of tasks that Potato Workspace works through while the person sleeps.
 //!
 //! Each task runs in its own separate copy of its project (the same copies missions use). The
 //! declared checks decide whether it passed. Nothing is merged until the person presses Keep in the

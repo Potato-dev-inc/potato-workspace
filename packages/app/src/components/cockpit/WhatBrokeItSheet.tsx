@@ -285,7 +285,7 @@ export function WhatBrokeItSheet({
         <p className="ck-sub">Loading…</p>
       ) : (
         <>
-          <p className="ck-sub">Puppet Master runs your test command on older save points, in a separate copy. Your folder is not touched.</p>
+          <p className="ck-sub">Potato Workspace runs your test command on older save points, in a separate copy. Your folder is not touched.</p>
           {sharedWith.length > 0 && (
             <p className="ck-wb-muted">
               {sharedWith.length === 1

@@ -3,7 +3,7 @@
 //!
 //! - A tick (every 20 seconds, only while the Labs switch is on) takes each watched pull request that is due:
 //!   it reads the pull request and the checks of its head commit through the person's `gh` login, asks
-//!   `filter` whether Puppet Master owns the pull request and whether a failure may raise a card, and raises
+//!   `filter` whether Potato Workspace owns the pull request and whether a failure may raise a card, and raises
 //!   one card per failing commit. It then picks up fixes that need work (`resume`).
 //! - A card answer (`answers.rs`) or a Settings button changes one saved fix. The work (`flows.rs`: start, finish,
 //!   push) runs on its own thread.
@@ -173,7 +173,7 @@ pub(super) fn in_flight(state: &FixState) -> bool {
 }
 
 /// A read of GitHub that did not work. A transient one waits and tries again; a hard one (GitHub says no, or
-/// says something Puppet Master cannot read) pauses the watch.
+/// says something Potato Workspace cannot read) pauses the watch.
 enum Failure {
     Transient(String),
     Hard(String),
@@ -540,7 +540,7 @@ impl<I: Io + 'static> Engine<I> {
     /// The pull request, read with an ETag. A `304` gives the one read before.
     fn read_pull(&self, watch: &Watch) -> Result<ApiPull, Failure> {
         if !valid_owner_repo(&watch.owner_repo) || watch.pr_number == 0 {
-            return Err(Failure::Hard("Puppet Master can't tell which pull request this is".to_string()));
+            return Err(Failure::Hard("Potato Workspace can't tell which pull request this is".to_string()));
         }
         let etag = self.with_poll(&watch.id, |poll| poll.pull_etag.clone().filter(|_| poll.pull.is_some()));
         let response = self
@@ -560,7 +560,7 @@ impl<I: Io + 'static> Engine<I> {
                 });
                 Ok(pull)
             }
-            401 | 403 | 404 | 410 => Err(Failure::Hard("GitHub didn't let Puppet Master read this pull request".to_string())),
+            401 | 403 | 404 | 410 => Err(Failure::Hard("GitHub didn't let Potato Workspace read this pull request".to_string())),
             other => Err(Failure::Transient(format!("GitHub answered {other}"))),
         }
     }
@@ -568,7 +568,7 @@ impl<I: Io + 'static> Engine<I> {
     /// The check runs of one commit, read with an ETag (kept only for the same commit).
     fn read_checks(&self, watch: &Watch, sha: &str) -> Result<Vec<ApiCheck>, Failure> {
         let path = github::checks_path(&watch.owner_repo, sha)
-            .ok_or_else(|| Failure::Hard("Puppet Master can't tell which commit this is".to_string()))?;
+            .ok_or_else(|| Failure::Hard("Potato Workspace can't tell which commit this is".to_string()))?;
         let etag = self.with_poll(&watch.id, |poll| {
             poll.checks_etag.clone().filter(|_| poll.checks_sha.as_deref() == Some(sha) && poll.checks.is_some())
         });
@@ -587,7 +587,7 @@ impl<I: Io + 'static> Engine<I> {
                 });
                 Ok(checks)
             }
-            401 | 403 | 404 | 410 => Err(Failure::Hard("GitHub didn't let Puppet Master read the checks".to_string())),
+            401 | 403 | 404 | 410 => Err(Failure::Hard("GitHub didn't let Potato Workspace read the checks".to_string())),
             other => Err(Failure::Transient(format!("GitHub answered {other}"))),
         }
     }
@@ -678,7 +678,7 @@ impl<I: Io + 'static> Engine<I> {
 
     // ------------------------------------------------------------------------- C. offer
 
-    /// A failure on a Puppet Master commit: read the logs of the failing jobs (at most three), clean them,
+    /// A failure on a Potato Workspace commit: read the logs of the failing jobs (at most three), clean them,
     /// and raise one card. The fix is stored as `Asking` BEFORE the card can be seen.
     fn raise_offer(&self, watch: &Watch, sha: &str, checks: &[FailedCheck], first_failure_ms: u64, now: u64) -> Option<String> {
         let shown = filter::shown_checks(checks).to_vec();
@@ -923,14 +923,14 @@ impl<I: Io + 'static> Engine<I> {
                 None => self.fail(
                     &mut fix,
                     CI_FIX_START_FAILED,
-                    "Puppet Master lost track of this run. Open the copy to see what it did.",
+                    "Potato Workspace lost track of this run. Open the copy to see what it did.",
                 ),
             },
             FixState::Checking => self.spawn_job(claim, fix_id, Job::Finish),
             FixState::Pushing => self.spawn_job(claim, fix_id, Job::Resolve),
             FixState::Starting => {
                 // A start that a restart cut off. The try stays counted; the fix can be asked again.
-                self.fail(&mut fix, CI_FIX_START_FAILED, "Puppet Master restarted while this was starting. Ask again.");
+                self.fail(&mut fix, CI_FIX_START_FAILED, "Potato Workspace restarted while this was starting. Ask again.");
             }
             _ => {}
         }
@@ -1036,7 +1036,7 @@ impl<I: Io + 'static> Engine<I> {
     pub(super) fn add_watch(&self, project: &str, copy: &crate::worktrees::WorktreeRef, now: u64) -> Result<Watch, crate::operations::OperationError> {
         let pr = copy.pr.as_ref().ok_or_else(|| err("NO_PR", "This copy has no pull request yet."))?;
         if !copy.branch.starts_with("pm/") || copy.branch == pr.base || copy.branch.contains("..") {
-            return Err(err(CI_FIX_NOT_PM_BRANCH, "This branch is not one Puppet Master opened."));
+            return Err(err(CI_FIX_NOT_PM_BRANCH, "This branch is not one Potato Workspace opened."));
         }
         let owner_repo = self
             .io
@@ -1044,12 +1044,12 @@ impl<I: Io + 'static> Engine<I> {
             .filter(|name| valid_owner_repo(name))
             .ok_or_else(|| err(CI_FIX_NOT_YOURS, "This folder doesn't point at a GitHub repository."))?;
         let agent = self.io.agent_of_copy(project, &copy.handle).ok_or_else(|| {
-            err(CI_FIX_START_FAILED, "Puppet Master doesn't know which agent made this copy")
+            err(CI_FIX_START_FAILED, "Potato Workspace doesn't know which agent made this copy")
         })?;
         let env = self.io.git_env()?;
         let head = self.io.head_sha(copy, &env)?;
         if !valid_sha(&head) {
-            return Err(err(CI_FIX_HEAD_MOVED, "Puppet Master can't read the copy's commit."));
+            return Err(err(CI_FIX_HEAD_MOVED, "Potato Workspace can't read the copy's commit."));
         }
         let prefix = format!("https://github.com/{owner_repo}/pull/");
         let pr_url = if pr.url.starts_with(&prefix) && !pr.url.chars().any(char::is_whitespace) {

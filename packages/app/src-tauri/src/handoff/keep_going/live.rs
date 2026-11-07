@@ -12,7 +12,7 @@
 //! (`spawn`), and the thread does the work. Every failure after the first step is recorded
 //! (`State::Failed`) and raised as a card, and the pane's in-flight mark ends on every path.
 //!
-//! Puppet Master never types into a pane here, and never answers the new agent's trust, permission
+//! Potato Workspace never types into a pane here, and never answers the new agent's trust, permission
 //! or login screens: the new run is an ordinary visible run (`trust_workspace: false`, no shell
 //! allowance), so those screens park it and raise the usual cards.
 

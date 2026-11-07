@@ -3,7 +3,7 @@
 //!
 //! Every flow works on a fix its caller has claimed, and ends by saving the fix's new state. None of them
 //! writes to a pane or to GitHub except the one fast-forward push at the end. The log reaches the agent only
-//! through the file written from the stored snapshot (`logs::log_file`); the task is Puppet Master's own
+//! through the file written from the stored snapshot (`logs::log_file`); the task is Potato Workspace's own
 //! paragraph (`text::task`) with no log byte and no check name in it.
 
 use super::engine::{choice, clean_message, err, fix_detail, route_a_ok, CardKind, Engine, CHOICE_GOT_IT, CHOICE_RETRY};
@@ -30,7 +30,7 @@ const NAME_MAX_CHARS: usize = 200;
 /// the task moved to another agent, or the pane is closed. The fix then starts in a new pane (route B).
 const ROUTE_A_REFUSALS: &[&str] = &["HANDED_OFF", "PANE_GONE", "PANE_CLOSED_AFTER_RUN"];
 
-/// A file name from the agent's copy as Puppet Master prints it: one line, no control characters.
+/// A file name from the agent's copy as Potato Workspace prints it: one line, no control characters.
 fn clean_name(name: &str) -> String {
     let flat: String = name.chars().map(|c| if c.is_control() { '?' } else { c }).collect();
     flat.chars().take(NAME_MAX_CHARS).collect()
@@ -147,7 +147,7 @@ impl<I: Io + 'static> Engine<I> {
             return;
         }
         let Some(watch) = self.watch_of(&fix) else {
-            return self.fail(&mut fix, CI_FIX_START_FAILED, "Puppet Master isn't watching this pull request any more.");
+            return self.fail(&mut fix, CI_FIX_START_FAILED, "Potato Workspace isn't watching this pull request any more.");
         };
         if fix.approved_by.is_none() {
             fix.approved_by = Some(by.to_string());
@@ -157,7 +157,7 @@ impl<I: Io + 'static> Engine<I> {
             return self.fail_start(&mut fix, &watch, false, CI_FIX_START_FAILED, "Red to Green is turned off.");
         }
         if !matches!(watch.state, WatchState::Watching) {
-            return self.fail_start(&mut fix, &watch, false, CI_FIX_START_FAILED, "Puppet Master isn't watching this pull request any more.");
+            return self.fail_start(&mut fix, &watch, false, CI_FIX_START_FAILED, "Potato Workspace isn't watching this pull request any more.");
         }
         if watch.tries_used >= settings.tries_per_pr {
             return self.fail_start(&mut fix, &watch, false, CI_FIX_TRIES_USED, &text::tries_used_notice(watch.pr_number, watch.tries_used));
@@ -235,7 +235,7 @@ impl<I: Io + 'static> Engine<I> {
         fix.state = FixState::Starting;
         self.put_fix(&fix);
         self.edit_watch(&watch.id, |w| w.tries_used = try_no);
-        let task = text::task(&watch.owner_repo, watch.pr_number, &watch.branch, &format!(".puppet-master/{file_name}"));
+        let task = text::task(&watch.owner_repo, watch.pr_number, &watch.branch, &format!(".potato-workspace/{file_name}"));
         match self.start_agent(&watch, &fix, &copy, task, &settings) {
             Ok((route, started, pane_id)) => {
                 fix.state = FixState::Running { route: route.to_string(), handle: started.handle, operation_id: started.operation_id, pane_id };
@@ -346,7 +346,7 @@ impl<I: Io + 'static> Engine<I> {
             return;
         }
         let Some(watch) = self.watch_of(&fix) else {
-            return self.fail(&mut fix, CI_FIX_START_FAILED, "Puppet Master isn't watching this pull request any more.");
+            return self.fail(&mut fix, CI_FIX_START_FAILED, "Potato Workspace isn't watching this pull request any more.");
         };
         let snap = io.run_snapshot(&watch.project, &watch.handle);
         if running && snap.as_ref().is_some_and(|snap| !snap.terminal) {
@@ -487,7 +487,7 @@ impl<I: Io + 'static> Engine<I> {
 
     /// A guard stopped the push: save `Held` and raise a card with no push button.
     fn hold(&self, fix: &mut FixRun, watch: &Watch, facts: &FixFacts, reasons: &[String], pane_id: Option<String>) {
-        let held_line = "Puppet Master won't push this. Check the copy yourself.";
+        let held_line = "Potato Workspace won't push this. Check the copy yourself.";
         let message: String = reasons.iter().map(|r| r.as_str()).filter(|r| *r != held_line).collect::<Vec<_>>().join(" ");
         let message: String = message.chars().take(300).collect();
         let message = if message.is_empty() { held_line.to_string() } else { message };
@@ -505,7 +505,7 @@ impl<I: Io + 'static> Engine<I> {
             fix,
             CARD_KIND_PUSH,
             &format!("The fix for #{} is on hold", watch.pr_number),
-            format!("{} · #{}\n{} {}", watch.owner_repo, watch.pr_number, message, "Puppet Master won't push this."),
+            format!("{} · #{}\n{} {}", watch.owner_repo, watch.pr_number, message, "Potato Workspace won't push this."),
             vec![choice(CHOICE_LOOK, "Look first"), choice(CHOICE_KEEP, "Don't push")],
             pane_id.or_else(|| self.pane_of(watch)),
             CardKind::Held,
@@ -544,7 +544,7 @@ impl<I: Io + 'static> Engine<I> {
             return;
         }
         let Some(watch) = self.watch_of(&fix) else {
-            return self.fail(&mut fix, CI_FIX_PUSH_FAILED, "Puppet Master isn't watching this pull request any more.");
+            return self.fail(&mut fix, CI_FIX_PUSH_FAILED, "Potato Workspace isn't watching this pull request any more.");
         };
         if !matches!(watch.state, WatchState::Watching) {
             fix.state = FixState::NotPushed;
@@ -656,7 +656,7 @@ impl<I: Io + 'static> Engine<I> {
             return;
         }
         let Some(watch) = self.watch_of(&fix) else {
-            return self.fail(&mut fix, CI_FIX_PUSH_FAILED, "Puppet Master isn't watching this pull request any more.");
+            return self.fail(&mut fix, CI_FIX_PUSH_FAILED, "Potato Workspace isn't watching this pull request any more.");
         };
         let Some(copy) = io.find_copy(&watch.project, &watch.handle) else {
             return self.fail(&mut fix, CI_FIX_PUSH_FAILED, "The copy is gone.");
@@ -665,7 +665,7 @@ impl<I: Io + 'static> Engine<I> {
         let read = io.git_env().and_then(|env| Ok((io.remote_branch_sha(&copy, &env)?, io.head_sha(&copy, &env)?)));
         match read {
             Ok((Some(remote), head)) if remote == head && head != fix.failing_sha => self.pushed(&mut fix, &watch, &head),
-            Ok(_) => self.push_failed(&mut fix, &watch, "Puppet Master restarted while pushing. Nothing was pushed.", pane_id),
+            Ok(_) => self.push_failed(&mut fix, &watch, "Potato Workspace restarted while pushing. Nothing was pushed.", pane_id),
             Err(error) => self.push_failed(&mut fix, &watch, &error.message, pane_id),
         }
     }

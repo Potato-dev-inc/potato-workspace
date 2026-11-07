@@ -154,7 +154,7 @@ pub fn decide(a: Option<&[u8]>, b: Option<&[u8]>, c: Option<&[u8]>) -> Action {
 /// and the app's own save point folder.
 pub fn check_path(path: &str) -> Option<PathBuf> {
     let first = path.split('/').next().unwrap_or("");
-    if path.contains('\\') || path.contains(':') || first.eq_ignore_ascii_case(".puppet-master") {
+    if path.contains('\\') || path.contains(':') || first.eq_ignore_ascii_case(".potato-workspace") {
         return None;
     }
     engine::safe_relative(path)
@@ -534,7 +534,7 @@ mod tests {
 
     #[test]
     fn check_path_refuses_names_that_escape_or_split() {
-        for bad in ["", "../x", "a/../b", "/abs", "C:x", "a:stream", "a\\b", ".puppet-master/x", ".PUPPET-MASTER/x"] {
+        for bad in ["", "../x", "a/../b", "/abs", "C:x", "a:stream", "a\\b", ".potato-workspace/x", ".PUPPET-MASTER/x"] {
             assert!(check_path(bad).is_none(), "{bad} must be refused");
         }
         assert_eq!(check_path("src/a.txt"), Some(PathBuf::from("src/a.txt")));

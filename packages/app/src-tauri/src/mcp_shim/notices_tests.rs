@@ -5,7 +5,7 @@
 use super::*;
 
 const OLD_CATALOG: &str = "68-e4687e50f1687299";
-const FIX: &str = "Rebuild or reinstall the Puppet Master MCP, then reconnect";
+const FIX: &str = "Rebuild or reinstall the Potato Workspace MCP, then reconnect";
 
 fn start_session(mode: &str) {
     let session = uuid::Uuid::new_v4().to_string();
@@ -168,9 +168,9 @@ fn every_tool_result_carries_the_warning_while_the_versions_differ() {
     let warning = blocks[1]["text"].as_str().unwrap();
     assert!(warning.starts_with("WARNING [SCHEMA_DRIFT]"), "{warning}");
     assert!(warning.contains(FIX), "{warning}");
-    let structured = &result["structuredContent"]["puppet_master_warnings"][0];
+    let structured = &result["structuredContent"]["potato_workspace_warnings"][0];
     assert_eq!(structured["code"], "SCHEMA_DRIFT");
-    assert_eq!(structured["fix"], "Rebuild or reinstall the Puppet Master MCP, then reconnect (Claude: /mcp).");
+    assert_eq!(structured["fix"], "Rebuild or reinstall the Potato Workspace MCP, then reconnect (Claude: /mcp).");
     assert_eq!(structured["bridge_catalog_version"], OLD_CATALOG);
     assert_eq!(structured["shim_catalog_version"], tool_registry::catalog_version());
     // A second, different tool carries it too (not only the first call).
@@ -194,7 +194,7 @@ fn error_results_carry_the_warning_too() {
         .unwrap()
         .to_string();
     assert!(last.contains("SCHEMA_DRIFT") && last.contains(FIX), "{last}");
-    assert_eq!(refused["structuredContent"]["puppet_master_warnings"][0]["code"], "SCHEMA_DRIFT");
+    assert_eq!(refused["structuredContent"]["potato_workspace_warnings"][0]["code"], "SCHEMA_DRIFT");
     end_session();
 }
 
@@ -205,7 +205,7 @@ fn matching_versions_and_an_unreachable_bridge_add_no_warning() {
     set_health(&tool_registry::catalog_version());
     let result = call("list_agents", json!({}));
     assert_eq!(result["content"].as_array().unwrap().len(), 1, "{result}");
-    assert!(result["structuredContent"].get("puppet_master_warnings").is_none());
+    assert!(result["structuredContent"].get("potato_workspace_warnings").is_none());
     // No health answer at all (bridge down): say nothing rather than guess.
     TEST_HEALTH.with(|health| *health.borrow_mut() = None);
     let result = call("list_agents", json!({}));
@@ -224,7 +224,7 @@ fn the_first_thing_a_client_reads_leads_with_the_warning() {
     assert!(text.contains("quick_ask("), "the happy path must still follow");
     set_health(&tool_registry::catalog_version());
     let init = rpc("initialize", json!({"protocolVersion":"2025-06-18"}));
-    assert!(init["result"]["instructions"].as_str().unwrap().starts_with("Puppet Master MCP"));
+    assert!(init["result"]["instructions"].as_str().unwrap().starts_with("Potato Workspace MCP"));
     end_session();
 }
 

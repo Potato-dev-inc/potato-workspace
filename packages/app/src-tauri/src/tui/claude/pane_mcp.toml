@@ -1,4 +1,4 @@
-# Puppet Master's MCP server for one Claude Code launch, with no change to the person's own config.
+# Potato Workspace's MCP server for one Claude Code launch, with no change to the person's own config.
 # Checked live on 2.1.314: `--mcp-config <file>` adds the server next to the person's own servers
 # (it is not `--strict-mcp-config`) and `--append-system-prompt` appends to the default prompt.
 # `--mcp-config` takes several values, so the table's arguments come last, before any other flag.

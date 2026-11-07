@@ -95,7 +95,7 @@ describe('makeBridgeClient session routes', () => {
   });
 
   it('shows the proxy\'s BRIDGE_UNREACHABLE message instead of raw JSON', async () => {
-    const message = "The Puppet Master app's bridge is not running on port 17999 (read from a port file).";
+    const message = "The Potato Workspace app's bridge is not running on port 17999 (read from a port file).";
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 502,

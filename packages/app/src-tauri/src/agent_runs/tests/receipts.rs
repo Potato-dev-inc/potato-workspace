@@ -220,8 +220,8 @@ fn receipt_and_view_carry_the_visible_to_headless_fallback() {
 
 fn sample_worktree(project: &str) -> crate::worktrees::WorktreeRef {
     crate::worktrees::WorktreeRef {
-        path: format!("{project}/.puppet-master/worktrees/h-1a2b"),
-        cwd: format!("{project}/.puppet-master/worktrees/h-1a2b"),
+        path: format!("{project}/.potato-workspace/worktrees/h-1a2b"),
+        cwd: format!("{project}/.potato-workspace/worktrees/h-1a2b"),
         branch: "pm/h".into(),
         base: "main".into(),
         base_commit: "abc".into(),

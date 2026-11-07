@@ -1,4 +1,4 @@
-// The helpers a pane's agent started through Puppet Master, as compact rows under the turn they were started in:
+// The helpers a pane's agent started through Potato Workspace, as compact rows under the turn they were started in:
 // "Helper: <task>", the agent's name, and a live status at the right. A row opens that helper's own pane.
 import { HELPER_STATUS_LABEL, type ChatHelper } from '../../lib/chat-helpers';
 import { DotSpinner } from '../cockpit/DotSpinner';

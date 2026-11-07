@@ -1,4 +1,4 @@
-import type { OrchestratorChatEvent } from '@puppet-master/shared';
+import type { OrchestratorChatEvent } from '@potato-workspace/shared';
 
 export interface ChatLine {
   id: string;

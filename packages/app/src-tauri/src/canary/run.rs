@@ -216,11 +216,11 @@ pub fn summary(outcome: Outcome, gate: Option<&StartupGate>, label: &str) -> Str
             Some(gate) => format!("{label} stopped at a question only you can answer: {}. Its screens still read fine.", gate.summary),
             None => format!("{label} stopped at a question only you can answer. Its screens still read fine."),
         },
-        Outcome::Unrecognised => format!("{label} showed a screen Puppet Master does not recognise."),
+        Outcome::Unrecognised => format!("{label} showed a screen Potato Workspace does not recognise."),
         Outcome::NeverDrew => format!("{label} did not draw anything in time. Try again."),
         Outcome::Exited => format!("{label} closed by itself while starting."),
         Outcome::StartFailed => format!("Could not start {label} for the check."),
-        Outcome::Inconclusive => format!("{label} has no ready screen Puppet Master can check."),
+        Outcome::Inconclusive => format!("{label} has no ready screen Potato Workspace can check."),
     }
 }
 

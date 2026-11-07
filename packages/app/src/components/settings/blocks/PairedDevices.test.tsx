@@ -4,7 +4,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PairedDeviceInfo } from '@puppet-master/shared';
+import type { PairedDeviceInfo } from '@potato-workspace/shared';
 import { PairedDevices } from './PairedDevices';
 import { DEVICES_CHANGED_EVENT } from '../../MobilePairingPanel';
 import { tauri } from '../../../lib/tauri';

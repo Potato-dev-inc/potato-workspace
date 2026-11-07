@@ -100,7 +100,7 @@ export function buttonsFor(item: AttentionItem, disabled: boolean): CardButton[]
   // The desktop card's words ("Allow once", "Deny"), whatever the agent's menu says, counted over the
   // whole menu so the phone and the PC name the same choice the same way.
   // A folder-trust question keeps its own words ("Trust this folder", "Don't trust").
-  // A question Puppet Master could not classify keeps the agent's own words, minus a long "(runs ...)" bracket
+  // A question Potato Workspace could not classify keeps the agent's own words, minus a long "(runs ...)" bracket
   // (the desktop card names the command); a startup gate keeps its words as well.
   const words = item.kind === 'trust_gate' ? new Map<string, { text: string }>() : prompt && keepsOwnWords(prompt.kind) ? ownWords(prompt.choices ?? []) : choiceWords(prompt?.choices ?? []);
   return ordered.map((c) => ({

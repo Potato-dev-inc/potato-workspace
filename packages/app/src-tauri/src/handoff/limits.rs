@@ -75,7 +75,7 @@ pub struct LimitsTable {
     /// "You have less than 25% left".
     #[serde(default)]
     pub warning: Vec<LimitRule>,
-    /// A menu with the vendor's own (possibly paid) choices. Puppet Master never answers it.
+    /// A menu with the vendor's own (possibly paid) choices. Potato Workspace never answers it.
     #[serde(default)]
     pub menu: Vec<LimitRule>,
     pub reset_formats: Option<ResetFormats>,

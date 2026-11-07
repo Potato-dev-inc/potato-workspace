@@ -23,7 +23,7 @@ export async function run(t) {
     await t.expect.text(/Check \S+/);
   } else if (state === 'not_installed') {
     await t.expect.text('WSL is not installed. To use Linux, open PowerShell as administrator and run:');
-    await t.expect.text('Puppet Master does not install it for you.');
+    await t.expect.text('Potato Workspace does not install it for you.');
     await t.expect.visible('exact=Check again');
   } else if (state === 'no_distro') {
     await t.expect.text('WSL has no Linux yet. Run:');

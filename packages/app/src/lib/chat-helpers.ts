@@ -1,4 +1,4 @@
-// The helpers a pane's agent started through Puppet Master (run_agent, delegate_work, spawn_agent), as compact rows
+// The helpers a pane's agent started through Potato Workspace (run_agent, delegate_work, spawn_agent), as compact rows
 // in that pane's chat ("Helper: <task> ... working"). They come from the pane list (`parent_pane_id`), not from the
 // session file, and are placed in the turn during which they were started. Pure, no React.
 import type { ChatTurn } from './sessionChatModel';

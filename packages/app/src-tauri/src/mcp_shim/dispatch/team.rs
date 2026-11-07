@@ -71,7 +71,7 @@ fn wait(args: &Value, cancel_rx: Option<&Receiver<()>>) -> Result<String, String
         let response = match bridge_request("POST", "/team/agent/wait", Some(body)) {
             Ok(text) => text,
             // The app is reconnecting. Once the starting point is fixed, nothing is lost by trying again.
-            Err(error) if since.is_some() && error.starts_with("bridge_down") => {
+            Err(error) if since.is_some() && is_connect_failure(&error) => {
                 std::thread::sleep(Duration::from_millis(500));
                 continue;
             }

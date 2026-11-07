@@ -63,6 +63,38 @@ pub enum Resolution {
     AgentGone,
 }
 
+/// Who chose the answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnswerSource {
+    Person,
+    Agent,
+}
+
+/// Why an open permission prompt ended. Recorded with the resolution so a caller can tell a real
+/// answer from a turn or session that went away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptEndReason {
+    AnsweredByPerson,
+    AnsweredByAgent,
+    Cancelled,
+    TurnEnded,
+    SessionEnded,
+    Refused,
+}
+
+impl PromptEndReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PromptEndReason::AnsweredByPerson => "answered_by_person",
+            PromptEndReason::AnsweredByAgent => "answered_by_agent",
+            PromptEndReason::Cancelled => "cancelled",
+            PromptEndReason::TurnEnded => "turn_ended",
+            PromptEndReason::SessionEnded => "session_ended",
+            PromptEndReason::Refused => "refused",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartKind {
     New,
@@ -111,7 +143,10 @@ pub enum SessionEvent {
     /// A notification that is not `session/update` (the adapters' own `_session/...` messages).
     Extension { method: String, params: Value },
     PermissionRequested(PermissionWait),
-    PermissionResolved { ask_id: u64, how: Resolution },
+    PermissionResolved { ask_id: u64, how: Resolution, reason: PromptEndReason },
+    /// A permission request was turned away before it became a prompt (malformed, foreign, or too
+    /// many open). The agent was answered "cancelled"; nothing was shown to the person.
+    PermissionRefused { reason: String },
     TurnStarted { turn: u64 },
     TurnEnded(TurnSummary),
     HistoryLost(HistoryLost),
@@ -428,8 +463,15 @@ impl AcpSession {
     }
 
     fn start_once(&self) -> Result<StartKind, Box<StartError>> {
-        let (epoch, resume_id) = self.with_core(|core, _| {
+        let (epoch, resume_id) = self.with_core(|core, ev| {
             let resume_id = core.state.session_id().map(str::to_string);
+            // Defensive: a start replaces the adapter, so any prompt parked on the old one can no
+            // longer be answered. Today starts are gated while a prompt is open; record it anyway
+            // so a future caller cannot lose one silently.
+            for ask_id in std::mem::take(&mut core.parked).into_keys() {
+                core.state.on_permission_resolved(ask_id);
+                ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::AgentGone, reason: PromptEndReason::SessionEnded });
+            }
             core.state.begin_epoch(resume_id.is_some());
             core.conn = None;
             core.caps = None;
@@ -477,7 +519,7 @@ impl AcpSession {
         let conn = AcpConnection::spawn(spec, cfg.timeouts.conn_limits(), handler)?;
         self.with_core(|core, _| core.conn = Some(conn.clone()));
 
-        let init = conn.request("initialize", handshake::initialize_params("puppet-master", env!("CARGO_PKG_VERSION")), cfg.timeouts.request())?;
+        let init = conn.request("initialize", handshake::initialize_params("potato-workspace", env!("CARGO_PKG_VERSION")), cfg.timeouts.request())?;
         let caps = handshake::parse_initialize(&init)?;
         self.with_core(|core, _| core.caps = Some(caps.clone()));
 
@@ -710,7 +752,7 @@ impl AcpSession {
             core.parked.clear();
             for ask_id in leftover {
                 core.state.on_permission_resolved(ask_id);
-                ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::AgentGone });
+                ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::AgentGone, reason: PromptEndReason::TurnEnded });
             }
             core.idle_since = Some(Instant::now());
             ev.push(SessionEvent::TurnEnded(summary));
@@ -734,7 +776,7 @@ impl AcpSession {
             core.parked.clear();
             for (ask_id, _) in &open {
                 core.state.on_permission_resolved(*ask_id);
-                ev.push(SessionEvent::PermissionResolved { ask_id: *ask_id, how: Resolution::Cancelled });
+                ev.push(SessionEvent::PermissionResolved { ask_id: *ask_id, how: Resolution::Cancelled, reason: PromptEndReason::Cancelled });
             }
             Some((conn, session_id, open, core.turn.as_ref().map(|t| t.id)?, core.state.epoch()))
         });
@@ -785,7 +827,7 @@ impl AcpSession {
     }
 
     /// Answers an open question with one of the options the agent offered.
-    pub fn answer_permission(&self, ask_id: u64, option_id: &str) -> Result<(), AcpError> {
+    pub fn answer_permission(&self, ask_id: u64, option_id: &str, by: AnswerSource) -> Result<(), AcpError> {
         let (conn, rpc_id) = self.with_core(|core, ev| {
             let parked = core.parked.get(&ask_id).ok_or(AcpError::NoSuchAsk)?;
             if !parked.options.iter().any(|o| o == option_id) {
@@ -799,7 +841,11 @@ impl AcpSession {
                     turn.clock.resume(Instant::now());
                 }
             }
-            ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::Selected(option_id.to_string()) });
+            let reason = match by {
+                AnswerSource::Agent => PromptEndReason::AnsweredByAgent,
+                AnswerSource::Person => PromptEndReason::AnsweredByPerson,
+            };
+            ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::Selected(option_id.to_string()), reason });
             Ok((conn, parked.rpc_id))
         })?;
         conn.respond(&rpc_id, selected_outcome(option_id))
@@ -952,7 +998,7 @@ impl AcpSession {
             }
             for ask_id in std::mem::take(&mut core.parked).into_keys() {
                 core.state.on_permission_resolved(ask_id);
-                ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::AgentGone });
+                ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::AgentGone, reason: PromptEndReason::SessionEnded });
             }
             let summary = ExitSummary { kind: ExitKind::Closed, code: None, stderr_tail: Vec::new(), reason: None };
             core.state.on_exit(summary.clone());
@@ -1015,7 +1061,7 @@ impl AcpSession {
                         ev.push(SessionEvent::TurnEnded(summary));
                         for ask_id in std::mem::take(&mut core.parked).into_keys() {
                             core.state.on_permission_resolved(ask_id);
-                            ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::AgentGone });
+                            ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::AgentGone, reason: PromptEndReason::SessionEnded });
                         }
                         let exit = ExitSummary {
                             kind: ExitKind::Hung,
@@ -1132,11 +1178,18 @@ impl AcpSession {
             let conn = core.conn.clone();
             let Ok(request) = parsed else {
                 core.stats.refused_questions += 1;
+                ev.push(SessionEvent::PermissionRefused { reason: "the request could not be read".into() });
                 return Decision::Refuse(conn);
             };
             let foreign = core.state.session_id().is_some_and(|mine| mine != request.session_id);
             if foreign || core.parked.len() >= MAX_PARKED {
                 core.stats.refused_questions += 1;
+                let reason = if foreign {
+                    "it named another session"
+                } else {
+                    "too many prompts were already open"
+                };
+                ev.push(SessionEvent::PermissionRefused { reason: reason.into() });
                 return Decision::Refuse(conn);
             }
             let ask_id = core.state.on_permission_request(&request, now_ms());
@@ -1185,7 +1238,7 @@ impl AcpSession {
             }
             for ask_id in std::mem::take(&mut core.parked).into_keys() {
                 core.state.on_permission_resolved(ask_id);
-                ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::AgentGone });
+                ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::AgentGone, reason: PromptEndReason::SessionEnded });
             }
             let kind = match info.cause {
                 ExitCause::WriteStalled => ExitKind::WriteStalled,

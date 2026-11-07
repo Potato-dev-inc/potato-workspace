@@ -1,4 +1,4 @@
-// The agent routes need an MCP session. A plain call (no X-Puppet-Master-Session) is refused and starts nothing.
+// The agent routes need an MCP session. A plain call (no X-Potato-Workspace-Session) is refused and starts nothing.
 import { rawBridge, guarded } from '../companion/_area.mjs';
 
 export const meta = {

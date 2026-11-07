@@ -5,7 +5,7 @@
 //! 1. the new folder must be absent or empty, and a folder of its own;
 //! 2. the pane is closed (so nothing writes while the files are copied);
 //! 3. the companion's own files are copied and compared byte for byte: `SOUL.md`, `USER.md`, `MEMORY.md`,
-//!    `memory/pending.md`, `memory/journal/`, `skills/`, `today.md`, `days/` and `.puppet-master/companion.json`.
+//!    `memory/pending.md`, `memory/journal/`, `skills/`, `today.md`, `days/` and `.potato-workspace/companion.json`.
 //!    Nothing else in the old folder is read, copied or touched;
 //! 4. the home is completed and the brief is written in the new folder;
 //! 5. only the companion block is cut out of the old instruction file (the file is removed only when nothing
@@ -177,7 +177,7 @@ pub fn drop_originals(old: &Path, new: &Path, copied: &Copied) -> usize {
     for rel in copied.dirs.iter().rev() {
         let _ = fs::remove_dir(at(old, rel));
     }
-    for rel in ["memory", ".puppet-master"] {
+    for rel in ["memory", ".potato-workspace"] {
         let _ = fs::remove_dir(old.join(rel));
     }
     stayed

@@ -26,7 +26,7 @@ const CI_FILE_NAMES: &[&str] =
     &[".gitlab-ci.yml", "azure-pipelines.yml", "jenkinsfile", "bitbucket-pipelines.yml", ".travis.yml"];
 const CI_FOLDERS: &[&str] = &[".github", ".circleci", ".buildkite"];
 const KEY_EXTENSIONS: &[&str] = &[".pem", ".key", ".p12", ".pfx"];
-const INTERNAL_FOLDER: &str = ".puppet-master";
+const INTERNAL_FOLDER: &str = ".potato-workspace";
 /// The sentence on the push card when the issue moved on after the person said yes (S10).
 pub const ISSUE_CHANGED: &str = "The issue changed after you said yes.";
 
@@ -74,7 +74,7 @@ fn is_secret(path: &str) -> bool {
         || (name.starts_with("credentials") && name.ends_with(".json"))
 }
 
-/// Puppet Master's own files in the copy (`.puppet-master/**`). They are never meant to be pushed.
+/// Potato Workspace's own files in the copy (`.potato-workspace/**`). They are never meant to be pushed.
 pub fn internal_paths(files: &[String]) -> Vec<String> {
     files.iter().filter(|path| parts_of(path).iter().any(|part| part == INTERNAL_FOLDER)).cloned().collect()
 }
@@ -255,7 +255,7 @@ pub fn reasons(facts: &PushFacts, ask_before_push: bool) -> (Vec<String>, bool) 
         out.push(format!("The run did not finish (status: {}).", facts.run_status));
     }
     if !facts.internal_files.is_empty() {
-        out.push(format!("Includes Puppet Master's own files: {}.", names(&facts.internal_files)));
+        out.push(format!("Includes Potato Workspace's own files: {}.", names(&facts.internal_files)));
     }
     if facts.git_changed {
         out.push("The git settings or hooks changed while the agent worked.".to_string());
@@ -267,10 +267,10 @@ pub fn reasons(facts: &PushFacts, ask_before_push: bool) -> (Vec<String>, bool) 
         out.push(ISSUE_CHANGED.to_string());
     }
     if ask_before_push {
-        out.push("You asked Puppet Master to check each push first.".to_string());
+        out.push("You asked Potato Workspace to check each push first.".to_string());
     }
     if held {
-        out.push("Puppet Master won't push this. Check the copy yourself.".to_string());
+        out.push("Potato Workspace won't push this. Check the copy yourself.".to_string());
     }
     (out, held)
 }

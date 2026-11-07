@@ -98,7 +98,7 @@ fn an_update_with_a_changed_input_box_is_not_recognised_and_the_agent_asks_befor
     assert_eq!(notices[0]["kind"], "changed");
     assert_eq!(
         text(&notices[0], "text"),
-        "Fake Codex 1.0.0 \u{2192} 2.0.0: screens changed. Puppet Master will ask you before acting."
+        "Fake Codex 1.0.0 \u{2192} 2.0.0: screens changed. Potato Workspace will ask you before acting."
     );
     assert_eq!(text(&checked, "change.verdict"), "changed");
     // The screen the check could not read is kept with the result, for the person to look at.

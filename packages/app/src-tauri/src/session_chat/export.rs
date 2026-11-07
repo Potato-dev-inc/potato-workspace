@@ -13,7 +13,7 @@ use crate::redact::RedactContext;
 
 pub use super::export_text::folder_of;
 
-const FOOTER: &str = "Saved from Puppet Master";
+const FOOTER: &str = "Saved from Potato Workspace";
 
 /// What the page header says about the chat.
 #[derive(Debug, Clone, PartialEq, Eq)]

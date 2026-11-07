@@ -210,7 +210,7 @@ pub struct LoadInputs<'a> {
     pub user_dir: Option<&'a Path>,
     /// Ids of the compiled-in profiles (VAL-1, REG-7).
     pub code_ids: &'a [&'a str],
-    /// Consented project roots whose `.puppet-master/agents` is scanned (SRC-3). The caller
+    /// Consented project roots whose `.potato-workspace/agents` is scanned (SRC-3). The caller
     /// passes only paths the user consented to; nothing else is ever read.
     pub projects: &'a [PathBuf],
     /// Consented extra directories with their position in the settings list (SRC-4).

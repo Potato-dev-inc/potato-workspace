@@ -141,7 +141,7 @@ fn a_numbered_list_in_the_reply_is_not_a_permission_dialog() {
 
 #[test]
 fn another_wording_of_the_same_structure_still_works() {
-    // The pointer on row two (the user moved it) and a tool Puppet Master has no box for.
+    // The pointer on row two (the user moved it) and a tool Potato Workspace has no box for.
     let screen = "\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\n Fetch\n https://example.com/readme\n\n Do you want to allow Claude to fetch this content?\n   1. Yes\n \u{276f} 2. Yes, and don't ask again for example.com\n   3. No, and tell Claude what to do differently (esc)\n\n Esc to cancel";
     let prompt = detect(screen, true);
     assert_eq!(prompt["kind"], "tool_approval");

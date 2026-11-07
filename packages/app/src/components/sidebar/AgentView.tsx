@@ -55,7 +55,7 @@ export function AgentView({
         <div className="flex-1 min-h-0 overflow-auto p-3 space-y-2">
           {messages.length === 0 && (
             <div className="text-xs text-pm-muted">
-              Ask the Puppet Master to coordinate your panes. Try &quot;spawn a claude pane and ask it to summarize the repo&quot;.
+              Ask the Potato Workspace to coordinate your panes. Try &quot;spawn a claude pane and ask it to summarize the repo&quot;.
               Add custom models in Settings.
             </div>
           )}

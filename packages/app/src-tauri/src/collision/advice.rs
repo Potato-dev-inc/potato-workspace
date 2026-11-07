@@ -6,7 +6,7 @@
 
 use super::model::{Advice, Relation, SideFacts, Why, SMALLER_MIN_GAP, SMALLER_RATIO_PCT};
 
-/// The last line of every card. Puppet Master never pauses, stops or merges anything.
+/// The last line of every card. Potato Workspace never pauses, stops or merges anything.
 pub const FOOTER: &str = "Nothing was paused. You decide.";
 
 /// Which side to finish first: `first` is 0 for `a` and 1 for `b`.

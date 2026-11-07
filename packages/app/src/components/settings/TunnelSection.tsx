@@ -145,7 +145,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
               className="font-mono"
             />
             <p className="mt-1 text-xs text-pm-muted">
-              Point your own proxy or domain at http://127.0.0.1:1420. Puppet Master only advertises this address.
+              Point your own proxy or domain at http://127.0.0.1:1420. Potato Workspace only advertises this address.
             </p>
           </div>
         )}

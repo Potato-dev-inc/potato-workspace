@@ -4,7 +4,7 @@
 //! adds an `[install.windows]` table. Both parse into the same `InstallSpec`, so the generic install
 //! machinery (`crate::agent_install`) never names an agent. A spec holds only closed, validated
 //! fields (a winget package id, an npm package name, a PyPI name for `uv`, an https script URL). It
-//! never holds a command line: Puppet Master builds the argv itself, so a spec cannot smuggle in
+//! never holds a command line: Potato Workspace builds the argv itself, so a spec cannot smuggle in
 //! shell text.
 
 use serde::{Deserialize, Serialize};

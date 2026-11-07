@@ -8,7 +8,7 @@ pub(super) fn tools() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
             name: "list_panes",
-            description: "List live PTY panes (id, agent_type, status, cwd). Use this to find an existing worker window. Agent runs also appear in list_agents with pane_id. Panes with id puppet-master-orchestrator-* are dedicated orchestrators.",
+            description: "List live PTY panes (id, agent_type, status, cwd). Use this to find an existing worker window. Agent runs also appear in list_agents with pane_id. Panes with id potato-workspace-orchestrator-* are dedicated orchestrators.",
             input_schema: object_schema(json!({}), vec![]),
             output_schema: None,
             safety: ToolSafety::ReadOnly,
@@ -18,7 +18,7 @@ pub(super) fn tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "bridge_health",
-            description: "Check whether the Puppet Master HTTP bridge is reachable and return its version metadata. Also returns env: {python, pytest, node, git, cargo} each {present, version, path} from PATH lookups on the MCP host (cached ~60s), so you need not install or probe tools yourself.",
+            description: "Check whether the Potato Workspace HTTP bridge is reachable and return its version metadata. Also returns env: {python, pytest, node, git, cargo} each {present, version, path} from PATH lookups on the MCP host (cached ~60s), so you need not install or probe tools yourself.",
             input_schema: object_schema(json!({}), vec![]),
             output_schema: Some(json!({"type":"object","properties":{"ok":{"type":"boolean"},"version":{"type":"string"},"build_id":{"type":"string"},"catalog_version":{"type":"string"},"tool_count":{"type":"integer"},"shim_catalog_version":{"type":"string"},"schema_drift":{"type":"boolean"},"standby":{"type":"object","description":"Warm standby pool counts only (GET /standby has the detail); absent before the pool starts.","properties":{"enabled":{"type":"boolean"},"total":{"type":"integer"},"ready":{"type":"integer"},"starting":{"type":"integer"}}},"env":{"type":"object","properties":{"python":env_tool_schema(),"pytest":env_tool_schema(),"node":env_tool_schema(),"git":env_tool_schema(),"cargo":env_tool_schema()}}}})),
             safety: ToolSafety::ReadOnly,
@@ -131,7 +131,7 @@ pub(super) fn tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "write_terminal_input",
-            description: "Send keystrokes to a worker pane. Cannot target puppet-master-orchestrator-* panes.",
+            description: "Send keystrokes to a worker pane. Cannot target potato-workspace-orchestrator-* panes.",
             input_schema: object_schema(
                 json!({
                     "pane_id": { "type": "string" },
@@ -156,7 +156,7 @@ pub(super) fn tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "press_key",
-            description: "Send a named key to a worker pane PTY (menus, yes/no, navigation). Cannot target puppet-master-orchestrator-* panes.",
+            description: "Send a named key to a worker pane PTY (menus, yes/no, navigation). Cannot target potato-workspace-orchestrator-* panes.",
             input_schema: object_schema(
                 json!({
                     "pane_id": { "type": "string" },
@@ -175,7 +175,7 @@ pub(super) fn tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "kill_pane_process",
-            description: "Terminate a worker pane. Cannot kill puppet-master-orchestrator-* panes.",
+            description: "Terminate a worker pane. Cannot kill potato-workspace-orchestrator-* panes.",
             input_schema: object_schema(json!({ "pane_id": { "type": "string" } }), vec!["pane_id"]),
             output_schema: None,
             safety: ToolSafety::Destructive,

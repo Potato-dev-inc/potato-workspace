@@ -2,7 +2,7 @@ import type { Question } from '../../lib/questions';
 import { PANE_CODEX } from '../fixtures';
 import type { HarnessScenario } from '../types';
 
-// Red to Green, the push card: the agent made a fix and Puppet Master checked it. The first line is the facts, the
+// Red to Green, the push card: the agent made a fix and Potato Workspace checked it. The first line is the facts, the
 // next lines are the reasons. Nothing is pushed until the person says so. The names are made up.
 const now = Date.now();
 export const PUSH_CARD: Question = {

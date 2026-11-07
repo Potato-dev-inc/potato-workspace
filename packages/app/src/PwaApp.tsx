@@ -6,7 +6,7 @@ import { blockingCount, newerSnapshot, type AttentionItem, type AttentionSnapsho
 import { COPY } from './lib/attention-copy';
 import { PROMPT_KINDS } from './lib/needs-you-queue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentType, PaneInfo } from '@puppet-master/shared';
+import type { AgentType, PaneInfo } from '@potato-workspace/shared';
 import { useBridgePaneRegistry } from './hooks/useBridgePaneRegistry';
 import type { TerminalTransport } from './hooks/useTerminalSession';
 import { usePaneViewportLease, VIEWER_ID } from './hooks/usePaneViewportLease';

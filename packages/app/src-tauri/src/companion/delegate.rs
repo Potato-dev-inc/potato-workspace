@@ -98,11 +98,11 @@ mod tests {
 
     #[test]
     fn the_home_folder_and_what_is_inside_it_are_home() {
-        let home = "C:\\Users\\you\\PuppetMaster\\companions\\mochi";
-        assert!(inside_home(home, "C:\\Users\\you\\PuppetMaster\\companions\\mochi"));
-        assert!(inside_home(home, "C:/Users/you/PuppetMaster/companions/mochi/"));
-        assert!(inside_home(home, "C:\\Users\\you\\PuppetMaster\\companions\\mochi\\memory"));
-        assert!(!inside_home(home, "C:\\Users\\you\\PuppetMaster\\companions\\mochi2"));
+        let home = "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi";
+        assert!(inside_home(home, "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi"));
+        assert!(inside_home(home, "C:/Users/you/PotatoWorkspace/companions/mochi/"));
+        assert!(inside_home(home, "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi\\memory"));
+        assert!(!inside_home(home, "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi2"));
         assert!(!inside_home(home, "C:\\Users\\you\\projects\\demo-a"));
         assert!(!inside_home("", "C:\\anything"));
         assert!(!inside_home("   ", "C:\\anything"));
@@ -111,21 +111,21 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_file_names_do_not_care_about_case() {
-        assert!(inside_home("C:\\Users\\you\\PuppetMaster\\companions\\mochi", "c:/users/YOU/puppetmaster/companions/MOCHI/notes"));
+        assert!(inside_home("C:\\Users\\you\\PotatoWorkspace\\companions\\mochi", "c:/users/YOU/potatoworkspace/companions/MOCHI/notes"));
     }
 
     #[test]
     fn dot_dot_and_dot_segments_cannot_hide_a_home_path() {
-        let home = "C:\\Users\\you\\PuppetMaster\\companions\\mochi";
+        let home = "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi";
         // Into home by way of `..`.
-        assert!(inside_home(home, "C:\\Users\\you\\projects\\..\\PuppetMaster\\companions\\mochi\\memory"));
-        assert!(inside_home(home, "C:\\Users\\you\\PuppetMaster\\companions\\mochi\\.\\notes"));
-        assert!(inside_home(home, "C:/Users/you/PuppetMaster/companions/bit/../mochi"));
+        assert!(inside_home(home, "C:\\Users\\you\\projects\\..\\PotatoWorkspace\\companions\\mochi\\memory"));
+        assert!(inside_home(home, "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi\\.\\notes"));
+        assert!(inside_home(home, "C:/Users/you/PotatoWorkspace/companions/bit/../mochi"));
         // Out of home by way of `..`.
-        assert!(!inside_home(home, "C:\\Users\\you\\PuppetMaster\\companions\\mochi\\..\\bit"));
-        assert!(!inside_home(home, "C:\\Users\\you\\PuppetMaster\\companions\\mochi\\..\\..\\..\\projects"));
+        assert!(!inside_home(home, "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi\\..\\bit"));
+        assert!(!inside_home(home, "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi\\..\\..\\..\\projects"));
         // A home written with `..` itself.
-        assert!(inside_home("C:\\Users\\you\\x\\..\\PuppetMaster\\companions\\mochi", "C:\\Users\\you\\PuppetMaster\\companions\\mochi\\a"));
+        assert!(inside_home("C:\\Users\\you\\x\\..\\PotatoWorkspace\\companions\\mochi", "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi\\a"));
         // `..` at the root does not climb out.
         assert!(!inside_home(home, "C:\\..\\..\\projects"));
     }

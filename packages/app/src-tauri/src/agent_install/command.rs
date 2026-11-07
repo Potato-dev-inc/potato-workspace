@@ -1,4 +1,4 @@
-//! The PowerShell text a visible install pane runs, and how Puppet Master notices it is done.
+//! The PowerShell text a visible install pane runs, and how Potato Workspace notices it is done.
 //!
 //! The pane is `powershell.exe -NoLogo -NoExit -Command <script>`. The script is assembled here
 //! from a `Step` whose tokens already passed the spec validator, and every token is quoted again
@@ -28,7 +28,7 @@ pub fn powershell_script(step: &Step) -> String {
     [
         "$ErrorActionPreference = 'Stop'".to_string(),
         "$global:LASTEXITCODE = $null".to_string(),
-        format!("Write-Host {}", ps_quote("Puppet Master is running this for you:")),
+        format!("Write-Host {}", ps_quote("Potato Workspace is running this for you:")),
         format!("Write-Host {}", ps_quote(&format!("  {}", step.command))),
         "Write-Host ''".to_string(),
         format!(

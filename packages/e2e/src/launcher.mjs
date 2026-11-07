@@ -1,7 +1,7 @@
 // Starts ONE isolated copy of the real app for a run, and tears down only the process tree it started.
 //
 // Isolation (checked by guards.mjs and by the launcher itself):
-//  - its own profile (PUPPET_MASTER_PROFILE=e2e): another app id, its own bridge port, never 17321/17322
+//  - its own profile (POTATO_WORKSPACE_PROFILE=e2e): another app id, its own bridge port, never 17321/17322
 //  - APPDATA, HOME and USERPROFILE point into a temp folder per run, so settings, agent definitions and chats are
 //    fresh and nothing is read from or written to the real user folders
 //  - a random free WebView2 debugging port (never 9333)
@@ -120,7 +120,7 @@ export async function startApp(opts) {
   const pathKey = Object.keys(process.env).find((k) => k.toLowerCase() === 'path') || 'PATH';
   const env = {
     ...process.env,
-    PUPPET_MASTER_PROFILE: profile,
+    POTATO_WORKSPACE_PROFILE: profile,
     APPDATA: dirs.appdata,
     LOCALAPPDATA: dirs.local,
     HOME: dirs.home,
@@ -130,7 +130,7 @@ export async function startApp(opts) {
     PM_WINDOW_ANCHOR: anchor,
     // A normal start now opens the cockpit by itself, but that window is created before the debugging port is
     // usable, so the harness never sees it. Start headless and let ensureCockpit open the window the supported way.
-    PUPPET_MASTER_NO_WINDOW: process.env.E2E_STARTUP_WINDOW === '1' ? '0' : '1',
+    POTATO_WORKSPACE_NO_WINDOW: process.env.E2E_STARTUP_WINDOW === '1' ? '0' : '1',
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${cdpPort}`,
     PM_FAKE_TUI_SCRIPT: scriptPath,
     PM_E2E_PATH_PREPEND: dirs.bin,
@@ -142,7 +142,7 @@ export async function startApp(opts) {
     RUST_LOG: process.env.RUST_LOG || 'info',
   };
   // Never read a bridge port/secret an earlier instance left in this folder: wait for the NEW ones.
-  for (const f of ['puppet-master.bridge.port', 'puppet-master.bridge.secret']) { try { fs.rmSync(path.join(dataDir, f), { force: true }); } catch { /* none */ } }
+  for (const f of ['potato-workspace.bridge.port', 'potato-workspace.bridge.secret']) { try { fs.rmSync(path.join(dataDir, f), { force: true }); } catch { /* none */ } }
   const logFile = path.join(root, 'app.log');
   const logFd = fs.openSync(logFile, 'a');
   const child = spawn(exe, [], { env, stdio: ['ignore', logFd, logFd], windowsHide: false, cwd: dirs.root });
@@ -173,8 +173,8 @@ export async function startApp(opts) {
 
   try {
     // 1. the bridge port and secret files appear when the app is up
-    const portFile = path.join(dataDir, 'puppet-master.bridge.port');
-    const secretFile = path.join(dataDir, 'puppet-master.bridge.secret');
+    const portFile = path.join(dataDir, 'potato-workspace.bridge.port');
+    const secretFile = path.join(dataDir, 'potato-workspace.bridge.secret');
     await waitUntil(() => {
       if (exited) throw new Error(`the app exited at start (code ${exited.code}). See ${logFile}`);
       return exists(portFile) && exists(secretFile);
