@@ -6,6 +6,7 @@
 - Existing data in the old folders is copied once into Potato Workspace's own folders; the originals are left untouched.
 - Chat helpers now apply the requested model and reasoning before the first message, and report the model actually in use instead of silently using another one.
 - Helpers started from a chat are nested under the chat that started them, the same as terminal helpers.
+- **Still open, requires addressing:** the helper-to-parent link is only recorded at the moment a helper starts. It is not persisted, so a chat restored after an app restart has no `parent_pane_id` or `started_by`: it shows top-level and its starter loses owner-only control. Persist the link with the conversation and restore it on start.
 - Chat replies now report background work separately from the turn: `wait_agents` keeps waiting while reported background tasks run, and `background_tracking` says when an agent cannot report them.
 - Every permission prompt now records why it ended (`answered_by_person`, `answered_by_agent`, `cancelled`, `turn_ended`, `session_ended`), and `wait_agents` can confirm that a prompt is stable with `confirm_prompt_ms`.
 - `wait_agents` replies also include how long a prompt has been open and the last prompt that ended.
