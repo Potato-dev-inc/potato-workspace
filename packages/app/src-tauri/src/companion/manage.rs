@@ -542,7 +542,7 @@ impl Service {
         skills::get(&self.root, id, Path::new(&inner.profiles[index].folder), slug)
     }
 
-    /// The desktop edit of a skill. Saving a skill that changed outside Puppet Master is how the person approves it.
+    /// The desktop edit of a skill. Saving a skill that changed outside Potato Workspace is how the person approves it.
     pub fn skill_save(&self, id: &str, slug: &str, title: &str, body: &str) -> CompanionResult<MemoryView> {
         let now = self.host.now_ms();
         let mut inner = self.inner.lock();
@@ -564,7 +564,7 @@ impl Service {
         self.memory_view_of(&profile, false)
     }
 
-    /// `Keep the change` or `Undo` for a file that changed outside Puppet Master.
+    /// `Keep the change` or `Undo` for a file that changed outside Potato Workspace.
     pub fn outside_decide(&self, id: &str, file: MemoryFile, keep: bool) -> CompanionResult<MemoryView> {
         let now = self.host.now_ms();
         let mut inner = self.inner.lock();

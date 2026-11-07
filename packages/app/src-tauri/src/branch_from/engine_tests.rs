@@ -222,7 +222,7 @@ impl LiveIo for FakeIo {
             let text = MSG_BRANCH_COPY_FAILED.replace("<git reason, cleaned>", "no room");
             return Err(OperationError::new(ERR_BRANCH_COPY_FAILED, text, true));
         }
-        let path = format!("{ORIGIN}\\.puppet-master\\worktrees\\{}", request.handle);
+        let path = format!("{ORIGIN}\\.potato-workspace\\worktrees\\{}", request.handle);
         Ok(Made {
             worktree: WorktreeRef {
                 path: path.clone(),
@@ -423,7 +423,7 @@ fn a_branch_makes_the_copy_before_the_agent_starts_and_ends_running() {
     assert_eq!(copy.source_cwd, ORIGIN);
     assert_eq!(copy.pane_id, PANE);
     assert_eq!(copy.checkpoint_id, "3");
-    assert!(copy.commit_message.starts_with("Puppet Master: start from save point (before turn 2"), "{}", copy.commit_message);
+    assert!(copy.commit_message.starts_with("Potato Workspace: start from save point (before turn 2"), "{}", copy.commit_message);
     assert!(copy.commit_message.chars().count() <= 120 && !copy.commit_message.chars().any(char::is_control));
 
     // The run request, field by field.
@@ -606,7 +606,7 @@ fn open_record(n: usize, pane_id: &str) -> Branch {
         copy: Some(CopyFacts {
             handle: format!("bf-{n:012x}"),
             branch: format!("pm/bf-{n:012x}"),
-            path: format!("{ORIGIN}\\.puppet-master\\worktrees\\bf-{n}"),
+            path: format!("{ORIGIN}\\.potato-workspace\\worktrees\\bf-{n}"),
             start_commit: None,
             written: 1,
             removed: 0,

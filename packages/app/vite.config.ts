@@ -24,7 +24,7 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
       manifest: {
-        name: 'Puppet Master',
+        name: 'Potato Workspace',
         short_name: 'PM',
         description: 'Multi-agent terminal orchestrator',
         display: 'standalone',

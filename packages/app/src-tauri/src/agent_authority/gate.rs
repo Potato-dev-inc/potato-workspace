@@ -64,7 +64,7 @@ fn pending(ask: &Ask, id: &str) -> OperationError {
     let mut error = OperationError::new(
         "CONSENT_PENDING",
         format!(
-            "A person has to say yes first. Puppet Master is asking them whether you may {what}; that pane was not started by you, so nothing was done. Do not retry in a loop: wait about {} seconds, then make the same call again, or carry on with other work and check back. If you do not need that pane, start your own agent with run_agent instead.",
+            "A person has to say yes first. Potato Workspace is asking them whether you may {what}; that pane was not started by you, so nothing was done. Do not retry in a loop: wait about {} seconds, then make the same call again, or carry on with other work and check back. If you do not need that pane, start your own agent with run_agent instead.",
             RETRY_AFTER_MS / 1000
         ),
         true,
@@ -75,7 +75,7 @@ fn pending(ask: &Ask, id: &str) -> OperationError {
         "action": ask.action.as_str(),
         "retry_after_ms": RETRY_AFTER_MS,
         "pane_id": ask.pane_id,
-        "answered_where": "the Inbox in the Puppet Master window",
+        "answered_where": "the Inbox in the Potato Workspace window",
     });
     error
 }
@@ -217,7 +217,7 @@ pub fn check_answer(
 /// (live v0.2.0 hunt: five session-less answers read `who: desktop`, which hid who sent them).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnsweredBy {
-    /// The person, in the Puppet Master window (a click came with it).
+    /// The person, in the Potato Workspace window (a click came with it).
     Desktop,
     /// A paired phone through the bridge.
     Device,

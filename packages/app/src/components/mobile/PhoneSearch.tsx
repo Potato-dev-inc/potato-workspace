@@ -2,7 +2,7 @@
 // chat that said it (who said it, the words found marked, agent · folder · time). A hit whose agent is still open
 // opens that chat on the phone. A hit whose agent is closed shows only what was kept, read-only.
 import { useState, type ReactNode } from 'react';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { BridgeClient } from '../../lib/bridge';
 import { kindText, snippetParts, whenText, type ChatHit } from '../../lib/chatSearch';
 import { usePhoneChatSearch } from '../../hooks/usePhoneChatSearch';

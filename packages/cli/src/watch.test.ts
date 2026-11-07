@@ -1,5 +1,5 @@
 /**
- * `puppet-master watch` contract tests against a mock bridge that behaves like the real
+ * `potato-workspace watch` contract tests against a mock bridge that behaves like the real
  * `/operations` routes: GET snapshot, long-poll wait with `after_revision` / `until` /
  * `timeout_ms`, 404 for unknown ids. The mock can be stopped and restarted on another port to
  * model a bridge restart.
@@ -79,7 +79,7 @@ class MockBridge {
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    this.sessionHeaders.push(req.headers['x-puppet-master-session'] as string | undefined);
+    this.sessionHeaders.push(req.headers['x-potato-workspace-session'] as string | undefined);
     this.secretHeaders.push(req.headers['x-pm-local-secret'] as string | undefined);
     const url = new URL(req.url ?? '/', 'http://x');
     const parts = url.pathname.split('/').filter(Boolean);
@@ -131,20 +131,20 @@ class MockBridge {
 
 let dir: string;
 let bridge: MockBridge;
-const savedEnv = process.env.PUPPET_MASTER_BRIDGE_PORT_FILE;
+const savedEnv = process.env.POTATO_WORKSPACE_BRIDGE_PORT_FILE;
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'pm-watch-test-'));
   const portFile = join(dir, 'bridge.port');
-  process.env.PUPPET_MASTER_BRIDGE_PORT_FILE = portFile;
+  process.env.POTATO_WORKSPACE_BRIDGE_PORT_FILE = portFile;
   bridge = new MockBridge(portFile);
   await bridge.start();
 });
 
 afterEach(async () => {
   await bridge.stop();
-  if (savedEnv === undefined) delete process.env.PUPPET_MASTER_BRIDGE_PORT_FILE;
-  else process.env.PUPPET_MASTER_BRIDGE_PORT_FILE = savedEnv;
+  if (savedEnv === undefined) delete process.env.POTATO_WORKSPACE_BRIDGE_PORT_FILE;
+  else process.env.POTATO_WORKSPACE_BRIDGE_PORT_FILE = savedEnv;
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -173,7 +173,7 @@ const later = (ms: number, fn: () => void | Promise<void>) =>
     }, ms),
   );
 
-describe('puppet-master watch', () => {
+describe('potato-workspace watch', () => {
   it('blocks until completed, prints exactly one JSON result and exits 0', async () => {
     bridge.add('op-1');
     const done = later(120, () => bridge.set('op-1', { status: 'completed', result: 'all done' }));
@@ -381,7 +381,7 @@ describe('puppet-master watch', () => {
 
 describe('the local secret', () => {
   it('is sent on every request when the app wrote one beside the port file', async () => {
-    writeFileSync(join(dir, 'puppet-master.bridge.secret'), 'deadbeef0123\n');
+    writeFileSync(join(dir, 'potato-workspace.bridge.secret'), 'deadbeef0123\n');
     bridge.add('op-1', 'completed', { result: 'r' });
     const { code } = await watch(['op-1']);
     assert.equal(code, 0);
@@ -394,7 +394,7 @@ describe('the local secret', () => {
     assert.equal((await watch(['op-1'])).code, 0);
     assert.deepEqual([...new Set(bridge.secretHeaders)], [undefined]);
     bridge.secretHeaders.length = 0;
-    writeFileSync(join(dir, 'puppet-master.bridge.secret'), 'not hex!\r\nX-Evil: 1');
+    writeFileSync(join(dir, 'potato-workspace.bridge.secret'), 'not hex!\r\nX-Evil: 1');
     assert.equal((await watch(['op-1'])).code, 0);
     assert.deepEqual([...new Set(bridge.secretHeaders)], [undefined]);
   });

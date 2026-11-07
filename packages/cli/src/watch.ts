@@ -1,4 +1,4 @@
-import { readBridgePort, readLocalSecretHeaders } from '@puppet-master/shared/bridge-port';
+import { readBridgePort, readLocalSecretHeaders } from '@potato-workspace/shared/bridge-port';
 
 export type WatchTerminalStatus =
   | 'completed'
@@ -47,7 +47,7 @@ function shellQuote(value: string): string {
 }
 
 export function formatWatchCommand(operationId: string, projectPath?: string): string {
-  let cmd = `npx puppet-master watch ${shellQuote(operationId)}`;
+  let cmd = `npx potato-workspace watch ${shellQuote(operationId)}`;
   if (projectPath?.trim()) {
     cmd += ` --project-path ${shellQuote(projectPath.trim())}`;
   }

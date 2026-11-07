@@ -66,7 +66,7 @@ macro_rules! transcript_methods {
 const MCP_HOST: &str = r#"
 config_path = "~/.config/opencode/opencode.json"
 format = "json"
-key_path = "mcp.puppet-master"
+key_path = "mcp.potato-workspace"
 project_config_path = "opencode.json"
 [entry]
 type = "local"
@@ -80,7 +80,7 @@ headers = "{headers}"
 enabled = true
 "#;
 
-/// Where OpenCode reads skills ("Add Puppet Master to your agents").
+/// Where OpenCode reads skills ("Add Potato Workspace to your agents").
 const SKILLS_HOST: &str = r#"
 dir = "~/.agents/skills"
 "#;
@@ -169,7 +169,7 @@ impl TuiProfile for OpenCode {
         screen::looks_like_menu(text)
     }
 
-    /// The TUI is started with `--port`, so it serves its own API on a port Puppet Master knows.
+    /// The TUI is started with `--port`, so it serves its own API on a port Potato Workspace knows.
     fn session_api(&self) -> Option<&'static dyn crate::session_chat::SessionApi> {
         Some(&chat::API)
     }
@@ -225,7 +225,7 @@ impl TuiProfile for OpenCodeNative {
         screen::looks_like_menu(text)
     }
 
-    /// The worker's server (`opencode serve`) is the pane's own and Puppet Master made its session.
+    /// The worker's server (`opencode serve`) is the pane's own and Potato Workspace made its session.
     fn session_api(&self) -> Option<&'static dyn crate::session_chat::SessionApi> {
         Some(&chat::API)
     }

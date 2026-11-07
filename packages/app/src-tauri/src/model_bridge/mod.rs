@@ -8,8 +8,8 @@
 //! - Keys: pasted once, kept ONLY in the OS credential store. Never on disk, in a log, in argv, or in the webview.
 //! - Desktop only: Tauri commands in `commands/model_bridge.rs`. Not a bridge route, not an MCP tool, not a phone
 //!   route (see `guard_tests`).
-//! - A pane Puppet Master starts for the recipe's agent gets the key in the environment variable the recipe
-//!   writes (`launch_env`). Outside Puppet Master the card shows a "set this variable" line without the key.
+//! - A pane Potato Workspace starts for the recipe's agent gets the key in the environment variable the recipe
+//!   writes (`launch_env`). Outside Potato Workspace the card shows a "set this variable" line without the key.
 
 pub mod adapter;
 pub mod recipe;
@@ -253,7 +253,7 @@ pub fn undo(d: &Deps, adapter_id: &str) -> Result<DoneView, String> {
     Ok(DoneView { message, backup_path: None })
 }
 
-/// The variables to put in the environment of a pane Puppet Master starts for `agent_id`: the key, under the name
+/// The variables to put in the environment of a pane Potato Workspace starts for `agent_id`: the key, under the name
 /// the settings file points at. Empty while the switch is off or nothing was added for that agent.
 pub fn launch_env_with(d: &Deps, agent_id: &str) -> Vec<(String, String)> {
     if !enabled() {

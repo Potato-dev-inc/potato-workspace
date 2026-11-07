@@ -31,7 +31,7 @@ function writeDevStubPwaDist() {
   mkdirSync(pwaAssets, { recursive: true });
   writeFileSync(
     join(pwaDist, 'index.html'),
-    '<!doctype html><title>Puppet Master PWA</title><p>Dev stub - run npm run build -w @puppet-master/app for production assets.</p>\n',
+    '<!doctype html><title>Potato Workspace PWA</title><p>Dev stub - run npm run build -w @potato-workspace/app for production assets.</p>\n',
     'utf-8',
   );
   writeFileSync(join(pwaAssets, 'dev-stub.txt'), 'dev\n', 'utf-8');

@@ -15,7 +15,7 @@ pub(crate) fn optional_number(args: &Value, key: &str) -> Option<u64> {
 }
 
 pub(crate) fn assert_worker_pane(pane_id: &str) -> Result<String, String> {
-    if pane_id.starts_with("puppet-master-orchestrator-") {
+    if pane_id.starts_with("potato-workspace-orchestrator-") {
         return Err(format!("refusing to target orchestrator pane: {pane_id}"));
     }
     Ok(pane_id.to_string())

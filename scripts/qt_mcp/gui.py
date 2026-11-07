@@ -1,4 +1,4 @@
-"""Button-first PySide6 dashboard for operating Puppet Master over local MCP.
+"""Button-first PySide6 dashboard for operating Potato Workspace over local MCP.
 
 Window logic only: payload discovery lives in discovery.py, tool-call rules in operations.py,
 dialogs in dialogs.py, the stylesheet in style.py.
@@ -57,7 +57,7 @@ except ImportError:
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Puppet Master · MCP Console")
+        self.setWindowTitle("Potato Workspace · MCP Console")
         self.resize(950, 700)
         self.transport = McpTransport(self)
         self._connected = False
@@ -87,7 +87,7 @@ class MainWindow(QMainWindow):
 
         top = QHBoxLayout()
         brand = QVBoxLayout()
-        title = QLabel("Puppet Master")
+        title = QLabel("Potato Workspace")
         title.setObjectName("title")
         subtitle = QLabel("Local MCP operator")
         subtitle.setObjectName("subtitle")
@@ -593,7 +593,7 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("Puppet Master MCP Console")
+    app.setApplicationName("Potato Workspace MCP Console")
     window = MainWindow()
     window.show()
     return app.exec()

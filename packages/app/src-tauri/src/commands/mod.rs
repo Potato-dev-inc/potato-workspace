@@ -33,6 +33,7 @@ mod coordination;
 mod diagnostics;
 mod loop_guard;
 mod attention;
+pub(crate) mod attachments;
 mod focus;
 mod mcp;
 mod one_brain;

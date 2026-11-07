@@ -1,9 +1,9 @@
 //! Who is writing into a pane, on every write (`registry::write_input`).
 //!
-//! The invariant (`agent_runs::readiness`): Puppet Master types a run's input only with a
+//! The invariant (`agent_runs::readiness`): Potato Workspace types a run's input only with a
 //! [`TypingPermit`] and presses a startup screen's keys only with a [`GatePermit`]. Keystrokes a
 //! person sends (desktop terminal, phone, cockpit buttons) are theirs and pass unchanged; so do
-//! answers to a prompt that was re-detected on screen, control keys Puppet Master sends on its own
+//! answers to a prompt that was re-detected on screen, control keys Potato Workspace sends on its own
 //! (interrupt, exit, a second Enter for text already verified in the box), and raw input an
 //! authorised API caller asked for. The tag is also what the event log and a flight recorder can
 //! name as the writer.
@@ -26,7 +26,7 @@ pub enum WriteOrigin<'a> {
     /// under an `AnswerPermit` for exactly that prompt, refused when the pane printed since it was
     /// re-read or when the permit is used twice. Never a `GatePermit`.
     Decided(&'a AnswerPermit),
-    /// Control keys Puppet Master sends on its own: interrupt, cancel, exit, clearing an unsent
+    /// Control keys Potato Workspace sends on its own: interrupt, cancel, exit, clearing an unsent
     /// prompt, one more Enter for text already verified in the input box.
     Nudge,
     /// Raw input an authorised API caller asked for (`write_terminal_input`, `press_key`).

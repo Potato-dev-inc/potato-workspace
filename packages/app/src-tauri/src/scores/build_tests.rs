@@ -115,7 +115,7 @@ fn choose_a_project_by_folder_path() {
 
 #[test]
 fn a_copy_folder_maps_to_its_origin_project() {
-    let r = report(&inputs(), Some("C:\\Users\\you\\shop\\.puppet-master\\worktrees\\try-1"), None);
+    let r = report(&inputs(), Some("C:\\Users\\you\\shop\\.potato-workspace\\worktrees\\try-1"), None);
     assert_eq!(r.project.as_ref().map(|p| p.label.as_str()), Some("shop"));
     assert_eq!(turns_of(&r), 6);
 }

@@ -361,7 +361,7 @@ fn a_tamper_alert_and_a_setup_step_are_refused_from_a_chat_and_only_decided_on_t
         let request = Request { choice: Some("ok".into()), ..Request::default() };
         let from_chat = answer(&env, &chat(), &id, &request);
         assert_eq!((from_chat.0, from_chat.1["error"].as_str()), (403, Some("not_from_chat")), "{subject}");
-        assert_eq!(from_chat.1["hint"], "Decide this in Puppet Master on the PC.", "{subject}");
+        assert_eq!(from_chat.1["hint"], "Decide this in Potato Workspace on the PC.", "{subject}");
         // The chat guard is what refuses it: the same request from a card is not a chat refusal.
         let from_card = answer(&env, &all(), &id, &request);
         assert_ne!(from_card.1["error"].as_str(), Some("not_from_chat"), "{subject}");
@@ -417,7 +417,7 @@ fn a_chat_answer_is_refused_for_an_issue_card_but_the_phone_and_the_pc_may_answe
         let request = Request { choice: Some("start".into()), ..Request::default() };
         let from_chat = answer(&env, &chat(), "q-i1", &request);
         assert_eq!((from_chat.0, from_chat.1["error"].as_str()), (403, Some("not_from_chat")), "{kind}");
-        assert_eq!(from_chat.1["hint"], "Decide this in Puppet Master on the PC or on a paired phone.", "{kind}");
+        assert_eq!(from_chat.1["hint"], "Decide this in Potato Workspace on the PC or on a paired phone.", "{kind}");
         assert_eq!(env.writes(), 0, "{kind}");
         assert!(env.audits.lock().is_empty(), "{kind}: nothing was answered, so no audit line");
         // The same card answered from a paired phone goes through, like any question.
@@ -438,7 +438,7 @@ fn a_chat_answer_is_refused_for_a_ci_card_but_the_phone_and_the_pc_may_answer_it
         let request = Request { choice: Some("fix".into()), ..Request::default() };
         let from_chat = answer(&env, &chat(), "q-c1", &request);
         assert_eq!((from_chat.0, from_chat.1["error"].as_str()), (403, Some("not_from_chat")), "{kind}");
-        assert_eq!(from_chat.1["hint"], "Decide this in Puppet Master on the PC or on a paired phone.", "{kind}");
+        assert_eq!(from_chat.1["hint"], "Decide this in Potato Workspace on the PC or on a paired phone.", "{kind}");
         assert_eq!(env.writes(), 0, "{kind}");
         assert!(env.audits.lock().is_empty(), "{kind}: nothing was answered, so no audit line");
         *env.question_result.lock() = Some(QuestionResult::Answered { label: Some("Ask Codex to fix".into()) });

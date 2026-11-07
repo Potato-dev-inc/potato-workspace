@@ -121,7 +121,7 @@ export interface SkillRef {
   slug: string;
   title: string;
   chars: number;
-  /** The file changed outside Puppet Master (or was never approved here). The brief does not list it until it is saved. */
+  /** The file changed outside Potato Workspace (or was never approved here). The brief does not list it until it is saved. */
   unreviewed: boolean;
   flagged: string | null;
 }
@@ -146,7 +146,7 @@ export interface MemoryView {
   memory: string;
   caps: { soul: number; user: number; memory: number };
   pending: PendingItem[];
-  /** Desktop only: a file changed outside Puppet Master. The phone gets []. */
+  /** Desktop only: a file changed outside Potato Workspace. The phone gets []. */
   outsideChanges: { file: MemoryFile }[];
   /** The skills it has learned, titles only. Missing on a PC from before skills: none. */
   skills?: SkillRef[];

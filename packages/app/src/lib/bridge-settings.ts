@@ -1,4 +1,4 @@
-import type { Settings } from '@puppet-master/shared';
+import type { Settings } from '@potato-workspace/shared';
 
 export function clampMobileInputDelayMs(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 250;

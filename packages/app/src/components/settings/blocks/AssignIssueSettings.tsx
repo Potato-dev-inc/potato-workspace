@@ -184,7 +184,7 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
       {error && <Note role="alert">{error}</Note>}
       <SettingToggle
         label="Watch GitHub issues"
-        description="Puppet Master checks GitHub about once a minute with your own gh sign-in. Nothing is watched until you add a repository below."
+        description="Potato Workspace checks GitHub about once a minute with your own gh sign-in. Nothing is watched until you add a repository below."
         checked={config.enabled}
         disabled={busy}
         onChange={(on) => void change({ ...config, enabled: on })}
@@ -322,7 +322,7 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
       </SettingBlock>
 
       <Note>
-        Puppet Master works on an issue only after someone on your list adds the label. The agent can't push; Puppet Master opens a
+        Potato Workspace works on an issue only after someone on your list adds the label. The agent can't push; Potato Workspace opens a
         draft pull request and never merges.
       </Note>
 
@@ -342,7 +342,7 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
       {removing && (
         <ConfirmSheet
           title={`Stop watching ${removing.owner_repo}?`}
-          body="Puppet Master stops watching this repository. Your folder and its files are not touched."
+          body="Potato Workspace stops watching this repository. Your folder and its files are not touched."
           confirmLabel="Stop watching"
           onCancel={() => setRemoving(null)}
           onConfirm={() => {

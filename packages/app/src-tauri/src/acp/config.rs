@@ -41,7 +41,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::conn::{ConnLimits, SpawnSpec};
 use super::error::AcpError;
@@ -61,6 +61,10 @@ pub const BASE_ENV_ALLOW: &[&str] = &[
     "HOMEDRIVE",
     "HOMEPATH",
     "HOME",
+    // macOS/Linux login name. Claude Code uses it to find its Keychain item on macOS; without it the
+    // agent reports "Not logged in" even though the person's terminal session is fine.
+    "USER",
+    "LOGNAME",
     "USERNAME",
     "TEMP",
     "TMP",
@@ -792,13 +796,53 @@ pub fn builtin_agents() -> Vec<AgentConfig> {
 /// chat overlay (`acp::overlay`, "Add chat (ACP)").
 pub fn find_builtin(id: &str) -> Option<AgentConfig> {
     let profile = crate::tui::registry::registry().find(id.trim())?;
-    match profile.acp_table() {
+    let mut cfg = match profile.acp_table() {
         Some(table) => Some(table),
         None => {
             let label = crate::tui::descriptor_for(profile.id()).map(|d| d.label);
             super::overlay::resolve_with(&super::overlay::OverlayStore::in_app_data(), profile.id(), None, label)
         }
+    }?;
+    if cfg.mcp_servers.is_empty() {
+        cfg.mcp_servers = default_mcp_servers();
     }
+    Some(cfg)
+}
+
+/// Tell this session's own tool server which pane it runs in, so a helper it starts nests under
+/// it (the pane id is a hint the app verifies against the process tree; it grants no rights).
+pub fn add_pane_id(cfg: &mut AgentConfig, pane_id: &str) {
+    for server in &mut cfg.mcp_servers {
+        if server.get("name").and_then(Value::as_str) != Some(crate::mcp_install::MCP_SERVER_NAME) {
+            continue;
+        }
+        let Some(map) = server.as_object_mut() else { continue };
+        let env = map.entry("env").or_insert_with(|| json!([]));
+        let Some(list) = env.as_array_mut() else { continue };
+        let already = list.iter().any(|e| e.get("name").and_then(Value::as_str) == Some(crate::pty::PANE_ID_ENV));
+        if !already {
+            list.push(json!({ "name": crate::pty::PANE_ID_ENV, "value": pane_id }));
+        }
+    }
+}
+
+/// The tool server every chat session gets with no setup: Potato Workspace's own bundled MCP
+/// program (never `npx`, never the other product's package), pointed at this app's bridge port
+/// file. Empty when this build has no bundled program to start.
+pub fn default_mcp_servers() -> Vec<Value> {
+    if !crate::mcp_runtime::using_bundled_mcp() {
+        return Vec::new();
+    }
+    let launch = crate::mcp_runtime::mcp_launch_spec();
+    vec![json!({
+        "name": crate::mcp_install::MCP_SERVER_NAME,
+        "command": launch.command,
+        "args": launch.args,
+        "env": [{
+            "name": crate::app_paths::BRIDGE_PORT_FILE_ENV,
+            "value": crate::app_paths::bridge_port_file_env_value(),
+        }],
+    })]
 }
 
 /// The Codex table (for tests and tools).
@@ -831,7 +875,7 @@ mod tests {
                 ]),
                 programs: BTreeMap::from([("codex".into(), PathBuf::from("C:\\tools\\codex.exe"))]),
                 root: std::env::temp_dir().join(format!("pm-acp-config-{}", uuid::Uuid::new_v4())),
-                listing: Some(r#"[{"name":"chrome-devtools","enabled":true},{"name":"puppet-master","enabled":true}]"#.into()),
+                listing: Some(r#"[{"name":"chrome-devtools","enabled":true},{"name":"potato-workspace","enabled":true}]"#.into()),
                 asked: std::sync::Mutex::new(Vec::new()),
             }
         }
@@ -869,6 +913,16 @@ mod tests {
         assert!(lookup(&env, "ANTHROPIC_API_KEY").is_none());
         assert!(lookup(&env, "OPENAI_API_KEY").is_none());
         assert!(lookup(&env, "GITHUB_TOKEN").is_none());
+    }
+
+    #[test]
+    fn the_login_name_reaches_the_adapter_so_the_macos_keychain_is_found() {
+        let mut host = Host::new();
+        host.vars.insert("USER".into(), "ren".into());
+        host.vars.insert("LOGNAME".into(), "ren".into());
+        let env = build_env(&codex(), &host, None);
+        assert_eq!(lookup(&env, "USER").as_deref(), Some("ren"));
+        assert_eq!(lookup(&env, "LOGNAME").as_deref(), Some("ren"));
     }
 
     #[test]
@@ -926,7 +980,7 @@ mod tests {
         let setting = lookup(&spec.env, "CODEX_CONFIG").expect("the setting is passed");
         let value: Value = serde_json::from_str(&setting).unwrap();
         assert_eq!(value["mcp_servers"]["chrome-devtools"]["enabled"], false);
-        assert_eq!(value["mcp_servers"]["puppet-master"]["enabled"], false);
+        assert_eq!(value["mcp_servers"]["potato-workspace"]["enabled"], false);
         assert_eq!(value["features"]["plugins"], false);
         assert_eq!(value["mcp_servers"].as_object().unwrap().len(), 2, "only the listed ones");
         let asked = host.asked.lock().unwrap().clone();
@@ -1131,5 +1185,35 @@ mod tests {
     fn builtin_lookup_ignores_case_and_unknown_ids() {
         assert!(find_builtin("Codex").is_some());
         assert!(find_builtin("nope").is_none());
+    }
+}
+
+#[cfg(test)]
+mod pane_id_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_chat_sessions_own_tool_server_is_told_which_pane_it_runs_in() {
+        let mut cfg = AgentConfig {
+            mcp_servers: vec![
+                json!({
+                    "name": crate::mcp_install::MCP_SERVER_NAME,
+                    "command": "own",
+                    "args": [],
+                    "env": [{"name": "EXISTING", "value": "1"}]
+                }),
+                json!({"name": "someone-elses", "command": "x", "args": [], "env": []}),
+            ],
+            ..AgentConfig::default()
+        };
+        add_pane_id(&mut cfg, "acp-123");
+        add_pane_id(&mut cfg, "acp-123");
+        let own = &cfg.mcp_servers[0]["env"].as_array().unwrap();
+        let pane: Vec<_> = own.iter().filter(|e| e["name"] == crate::pty::PANE_ID_ENV).collect();
+        assert_eq!(pane.len(), 1, "added once");
+        assert_eq!(pane[0]["value"], json!("acp-123"));
+        assert!(own.iter().any(|e| e["name"] == "EXISTING"), "the existing variables stay");
+        assert!(cfg.mcp_servers[1]["env"].as_array().unwrap().is_empty(), "another server is not given our pane");
     }
 }

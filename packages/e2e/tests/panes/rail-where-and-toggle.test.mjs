@@ -36,7 +36,7 @@ export async function run(t) {
   await t.press(']');
   await t.expect.notVisible('css=.ck-rail');
   await t.page.reload();
-  await t.expect.text('Puppet Master');
+  await t.expect.text('Potato Workspace');
   await openPane(t, 'Nimbus');
   await t.expect.notVisible('css=.ck-rail');
   await t.press(']');

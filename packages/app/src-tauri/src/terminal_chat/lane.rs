@@ -34,7 +34,7 @@ pub fn info_for_profile(profile: &dyn TuiProfile, label: &str, visible: bool) ->
         return Err(format!("{label} cannot run in a terminal pane"));
     }
     if profile.session_chat().is_none() {
-        return Err(format!("{label} has no session file Puppet Master can read"));
+        return Err(format!("{label} has no session file Potato Workspace can read"));
     }
     let can_resume = profile.session_history().is_some_and(|history| history.resume_args(PROBE_SESSION).is_some());
     let can_answer_prompts = profile.has_prompt_parser();
@@ -73,7 +73,7 @@ pub fn eligible_rows() -> Vec<serde_json::Value> {
 /// The plain sentence on the Add chat screen for the `terminal_chat` option (spec section 3.5).
 pub fn summary_sentence(info: &TerminalChatInfo) -> String {
     format!(
-        "Puppet Master runs {} in a terminal and shows it as a chat. You get its tool cards and history, and you can answer its questions here. {}",
+        "Potato Workspace runs {} in a terminal and shows it as a chat. You get its tool cards and history, and you can answer its questions here. {}",
         info.label,
         if info.can_resume { "It can continue the conversation later." } else { "It cannot resume old sessions." }
     )
@@ -152,7 +152,7 @@ mod tests {
         let with = TerminalChatInfo { label: "Kilo".into(), reads_file: true, can_resume: true, can_answer_prompts: true, note: String::new() };
         assert_eq!(
             summary_sentence(&with),
-            "Puppet Master runs Kilo in a terminal and shows it as a chat. You get its tool cards and history, and you can answer its questions here. It can continue the conversation later."
+            "Potato Workspace runs Kilo in a terminal and shows it as a chat. You get its tool cards and history, and you can answer its questions here. It can continue the conversation later."
         );
         let without = TerminalChatInfo { can_resume: false, ..with };
         assert!(summary_sentence(&without).ends_with("It cannot resume old sessions."));

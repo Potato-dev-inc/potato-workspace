@@ -1,4 +1,4 @@
-# Claude Code reports its lifecycle to Puppet Master (Hook Lane, docs/specs/hook-lane/PROBES.md).
+# Claude Code reports its lifecycle to Potato Workspace (Hook Lane, docs/specs/hook-lane/PROBES.md).
 # Installed with `--settings <file in PM's app data>` at spawn: no user or project file is written.
 # Probes on 2.1.299: `--settings` hooks MERGE with the user's own (P-A1); nothing fires before the
 # folder-trust dialog is accepted (P-A3); async hooks fire on PermissionRequest and Stop (P-A2).

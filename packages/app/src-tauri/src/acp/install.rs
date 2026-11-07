@@ -207,7 +207,7 @@ pub fn package_json(plan: &Plan) -> String {
         "name": format!("pm-acp-addon-{name}"),
         "version": "0.0.0",
         "private": true,
-        "description": "Chat add-on installed by Puppet Master. Safe to remove from the app's settings.",
+        "description": "Chat add-on installed by Potato Workspace. Safe to remove from the app's settings.",
         "dependencies": { plan.package.clone(): plan.version.clone() },
     });
     let mut text = serde_json::to_string_pretty(&json).unwrap_or_default();

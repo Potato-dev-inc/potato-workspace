@@ -74,7 +74,7 @@ async function main() {
 
   const packResult = run(
     npm,
-    ['pack', '--workspace=@puppet-master/mcp', '--pack-destination', tmp, '--json'],
+    ['pack', '--workspace=@potato-workspace/mcp', '--pack-destination', tmp, '--json'],
     { capture: true },
   );
   const [{ filename }] = JSON.parse(packResult.stdout);
@@ -116,7 +116,7 @@ async function main() {
 
   mcp = spawn(process.execPath, [packedEntrypoint], {
     cwd: repoRoot,
-    env: { ...process.env, PUPPET_MASTER_BRIDGE_PORT_FILE: portFile },
+    env: { ...process.env, POTATO_WORKSPACE_BRIDGE_PORT_FILE: portFile },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   let pending = Buffer.alloc(0);

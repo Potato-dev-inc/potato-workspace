@@ -17,10 +17,10 @@ fn tui_turn_evidence_ignores_unchanged_idle_chrome() {
 #[test]
 fn tui_turn_evidence_returns_new_reply_after_idle_baseline() {
     let before = "previous chatter\nAdd follow-up >";
-    let after = "previous chatter\nPUPPET_MASTER_AGENT_MODE_OK\n\nAdd follow-up >";
+    let after = "previous chatter\nPOTATO_WORKSPACE_AGENT_MODE_OK\n\nAdd follow-up >";
     assert_eq!(
         tui_turn_evidence(after, before, AGENT).as_deref(),
-        Some("PUPPET_MASTER_AGENT_MODE_OK")
+        Some("POTATO_WORKSPACE_AGENT_MODE_OK")
     );
 }
 
@@ -119,13 +119,13 @@ fn blank_baseline_turn_completes_once_the_task_echo_is_on_screen() {
 
 #[test]
 fn repeated_identical_answers_still_count_as_a_new_turn_result() {
-    let previous = "PUPPET_MASTER_AGENT_MODE_OK\nAdd follow-up >";
+    let previous = "POTATO_WORKSPACE_AGENT_MODE_OK\nAdd follow-up >";
     let mut watch = TuiTurnWatch::from_baseline(previous);
-    let screen = "PUPPET_MASTER_AGENT_MODE_OK\nPUPPET_MASTER_AGENT_MODE_OK\nAdd follow-up >";
+    let screen = "POTATO_WORKSPACE_AGENT_MODE_OK\nPOTATO_WORKSPACE_AGENT_MODE_OK\nAdd follow-up >";
     let decision = tick_until_idle(&mut watch, "idle", screen, false, 2);
     match decision {
         TuiTurnDecision::Complete { result, capture } => {
-            assert_eq!(result, "PUPPET_MASTER_AGENT_MODE_OK");
+            assert_eq!(result, "POTATO_WORKSPACE_AGENT_MODE_OK");
             assert_eq!(capture, ResultCapture::Inferred);
         }
         other => panic!("expected complete, got {other:?}"),

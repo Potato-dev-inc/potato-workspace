@@ -1,5 +1,5 @@
 //! Point and Fix tests for origin: the local-only URL rule (S1), the navigation guard (S2) and
-//! Puppet Master's own ports (S4).
+//! Potato Workspace's own ports (S4).
 use crate::pane_preview::PreviewUrl;
 use crate::point::origin::{allowed, cdp_port_in, nav, resolve_open, Nav, OwnPorts, Refusal};
 

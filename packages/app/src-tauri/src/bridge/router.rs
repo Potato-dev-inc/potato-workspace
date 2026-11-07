@@ -48,7 +48,7 @@ pub(super) fn route(
         return Ok((
             200,
             json!({
-                "service": "puppet-master-bridge",
+                "service": "potato-workspace-bridge",
                 "hint": "This is the API bridge, not the mobile UI. Tunnel the Vite app (port 1420 or 4173) and use /bridge on that origin.",
                 "health": "/health",
             }),

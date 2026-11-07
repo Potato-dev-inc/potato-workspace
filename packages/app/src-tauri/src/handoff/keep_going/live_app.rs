@@ -150,7 +150,7 @@ impl LiveIo for AppIo {
 
     #[cfg(not(test))]
     fn start(&self, request: &StartRequest) -> Result<Started, OperationError> {
-        let not_ready = || OperationError::new("APP_NOT_READY", "Puppet Master is still starting", true);
+        let not_ready = || OperationError::new("APP_NOT_READY", "Potato Workspace is still starting", true);
         let registry = crate::bridge::live_registry().ok_or_else(not_ready)?;
         let app = crate::bridge::live_app().ok_or_else(not_ready)?;
         let view = crate::agent_runs::run_agent(to_run_request(request)?, registry, app, None)?;

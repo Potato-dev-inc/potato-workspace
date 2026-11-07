@@ -39,7 +39,7 @@ fn scrub(value: &mut Value, words: &TestWords) {
 pub fn document(session: &Session, capture: Option<Value>, reason: &str) -> Value {
     let test_status = session.visible.test_status.lock().clone();
     json!({
-        "what": "Puppet Master's Agent Wizard debug file. Redacted: emails are <email>, secrets are removed, the test words are <word-N>.",
+        "what": "Potato Workspace's Agent Wizard debug file. Redacted: emails are <email>, secrets are removed, the test words are <word-N>.",
         "reason": exec::cut_chars(reason, REASON_CHARS),
         "session": session.id,
         "command": session.command,

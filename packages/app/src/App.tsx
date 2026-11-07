@@ -1,12 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import type { AgentType } from '@puppet-master/shared';
+import type { AgentType } from '@potato-workspace/shared';
 import { SettingsPanel } from './components/SettingsPanel';
 
 // The home and workspace screens load when first shown, so the first paint stays small.
 const HomeDashboard = lazy(() => import('./components/HomeDashboard').then((m) => ({ default: m.HomeDashboard })));
 const WorkspaceHeader = lazy(() => import('./components/WorkspaceHeader').then((m) => ({ default: m.WorkspaceHeader })));
 const TerminalGrid = lazy(() => import('./components/TerminalGrid').then((m) => ({ default: m.TerminalGrid })));
-const PuppetMasterSidebar = lazy(() => import('./components/PuppetMasterSidebar').then((m) => ({ default: m.PuppetMasterSidebar })));
+const PotatoWorkspaceSidebar = lazy(() => import('./components/PotatoWorkspaceSidebar').then((m) => ({ default: m.PotatoWorkspaceSidebar })));
 import { usePaneRegistry } from './hooks/usePaneRegistry';
 import { useProjectPath } from './hooks/useProjectPath';
 import { useBridge } from './hooks/useBridge';
@@ -216,7 +216,7 @@ export default function App() {
                 target.addEventListener('pointercancel', up);
               }}
             />
-            <PuppetMasterSidebar
+            <PotatoWorkspaceSidebar
               width={sidebarWidth}
               bridge={bridgeApi.client}
               bridgeReady={bridgeApi.isReady}

@@ -37,7 +37,7 @@ export function CompanionSetupSheet({
   // Once the person types a name, changing the face keeps their name.
   const [nameTouched, setNameTouched] = useState(false);
   const [persona, setPersona] = useState<Exclude<CompanionPersona, 'custom'>>(DEFAULT_PERSONA);
-  // The folder the person picked to hold it. Null: the default folder, which Puppet Master makes. The home itself is
+  // The folder the person picked to hold it. Null: the default folder, which Potato Workspace makes. The home itself is
   // always a folder of its own inside the picked one (`<picked>\<id>`), never the picked folder: agents that work
   // anywhere below a home read the companion's brief, so a home must not hold other projects.
   const [parent, setParent] = useState<string | null>(null);
@@ -205,7 +205,7 @@ export function CompanionSetupSheet({
           {error}
         </p>
       )}
-      <p className="ck-sub ck-companion-privacy">Its files stay on this computer, in {folder || 'a folder of its own that Puppet Master makes'}. It never posts anything in public.</p>
+      <p className="ck-sub ck-companion-privacy">Its files stay on this computer, in {folder || 'a folder of its own that Potato Workspace makes'}. It never posts anything in public.</p>
 
       <div className="ck-sheet-actions">
         <button type="button" className="ck-btn ck-btn--plain" onClick={onClose} disabled={busy}>

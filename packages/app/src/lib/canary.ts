@@ -1,5 +1,5 @@
-// Version checks: whether each agent is a version Puppet Master has been tested with, what the
-// last zero-token start-up check found, and the screens Puppet Master did not recognise.
+// Version checks: whether each agent is a version Potato Workspace has been tested with, what the
+// last zero-token start-up check found, and the screens Potato Workspace did not recognise.
 // The `canary_*` Tauri commands (src-tauri/src/commands/canary.rs); the status is also pushed as
 // the `canary://changed` event.
 import { useCallback, useEffect, useState } from 'react';
@@ -51,10 +51,10 @@ export interface CanaryAgent {
   installed: boolean;
   /** `0.162.1`. */
   version: string | null;
-  /** The range Puppet Master has tested, `>=0.159, <0.170`. */
+  /** The range Potato Workspace has tested, `>=0.159, <0.170`. */
   tested: string | null;
   standing: CanaryStanding;
-  /** Puppet Master asks before acting for this agent (no start-up notice is closed for you). */
+  /** Potato Workspace asks before acting for this agent (no start-up notice is closed for you). */
   strict: boolean;
   strict_reason: StrictReason | null;
   /** The chip text, `Untested version`; null when there is nothing to flag. */
@@ -63,7 +63,7 @@ export interface CanaryAgent {
   plain: string;
   checking: boolean;
   last: CanaryResultView | null;
-  /** Screens saved for this agent that Puppet Master did not recognise. */
+  /** Screens saved for this agent that Potato Workspace did not recognise. */
   captures: number;
   /** A check passed on exactly this version, on this computer. */
   verified: boolean;

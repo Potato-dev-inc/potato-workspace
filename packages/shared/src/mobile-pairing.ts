@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** HTTP header set by the Vite `/bridge` proxy so the embedded bridge requires pairing tokens. */
-export const PM_PROXIED_HEADER = 'X-PM-Proxied';
+export const PM_PROXIED_HEADER = 'X-Potato-Workspace-Proxied';
 
 /** Bearer token issued after a successful `/pair` exchange. */
 export const PM_AUTH_HEADER = 'Authorization';

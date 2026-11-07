@@ -7,7 +7,7 @@ use super::model::{Mission, RoundKind, Verdict};
 use crate::context_pack::fence;
 use std::path::Path;
 
-const LEDGER: &str = ".puppet-master/MISSION.md";
+const LEDGER: &str = ".potato-workspace/MISSION.md";
 
 fn rules(m: &Mission) -> String {
     let tests = if m.may_change_tests {
@@ -59,7 +59,7 @@ fn nudge(v: &Verdict, may_change_tests: bool) -> Option<String> {
     let lines = v.test_changes.blocking_sentences();
     (!may_change_tests && v.test_changes.blocks && !lines.is_empty()).then(|| {
         format!(
-            "Puppet Master noticed test changes: {}. Put the tests back as they were; make the code pass them.",
+            "Potato Workspace noticed test changes: {}. Put the tests back as they were; make the code pass them.",
             lines.join("; ")
         )
     })
@@ -74,7 +74,7 @@ pub fn first(m: &Mission) -> String {
     // a 12-line first prompt was not taken by Claude's input box; the 6-line brief was).
     let checks: Vec<String> = m.checks.iter().map(|c| format!("{} `{}`", c.name, c.display())).collect();
     format!(
-        "Mission: {}\nChecks (Puppet Master runs them after every turn): {}. {}\n{}\n{}",
+        "Mission: {}\nChecks (Potato Workspace runs them after every turn): {}. {}\n{}\n{}",
         m.objective.trim(),
         checks.join(", "),
         start_line(m),
@@ -105,7 +105,7 @@ pub fn follow_up(m: &Mission, prev: Option<&Verdict>, now: &Verdict, outside_edi
 pub fn after_rollback(m: &Mission, best_short: &str, now_short: &str, to_round: u32) -> String {
     let target = if to_round == 0 { "how they were at the start".to_string() } else { format!("how they were after turn {to_round}") };
     format!(
-        "Your last turn made the checks worse ({best_short} \u{2192} {now_short}), so Puppet Master put the files back to {target}. Your notes are still in {LEDGER}. Try a different approach.\n\n{}",
+        "Your last turn made the checks worse ({best_short} \u{2192} {now_short}), so Potato Workspace put the files back to {target}. Your notes are still in {LEDGER}. Try a different approach.\n\n{}",
         rules(m)
     )
 }
@@ -132,7 +132,7 @@ pub fn brief(m: &Mission, copy: &Path, why: &str) -> String {
     // The first line says what this is, so an agent that reads only the start still knows.
     // "Mission: ..." first: a pane takes its title from the first line of its task.
     let mut out = format!("Mission: {}\nYou're taking over this mission: {why}.\n", m.objective.trim());
-    out.push_str(&format!("Checks (Puppet Master runs them after every turn): {}\n", checks.join(", ")));
+    out.push_str(&format!("Checks (Potato Workspace runs them after every turn): {}\n", checks.join(", ")));
     if !recent.is_empty() {
         out.push_str(&format!("Done so far: {}\n", recent.join("; ")));
     }
@@ -177,7 +177,7 @@ pub fn for_round(m: &Mission, kind: &RoundKind, copy: &Path, outside_edit: bool)
             brief(m, copy, &reason)
         }
         RoundKind::Resume { after_restart } => {
-            let why = if *after_restart { "Puppet Master restarted and the earlier conversation ended" } else { "the earlier conversation ended" };
+            let why = if *after_restart { "Potato Workspace restarted and the earlier conversation ended" } else { "the earlier conversation ended" };
             brief(m, copy, why)
         }
         RoundKind::Retry => brief(m, copy, "the person asked for a few more turns with a fresh start"),

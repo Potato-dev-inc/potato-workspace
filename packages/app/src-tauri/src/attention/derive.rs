@@ -39,7 +39,7 @@ pub fn derive(facts: &Facts) -> Vec<Derived> {
         if q.consent.as_ref().is_some_and(truthy) {
             items.push(Derived { id: format!("consent:{}", q.id), kind: Kind::Consent, pane_id: None, risk: Some(Level::High), since: q.created_at_ms });
         } else if q.kind.as_deref() == Some("budget") {
-            // The pause card of a run that used its budget (`budgets::card`): Puppet Master asks, not the agent.
+            // The pause card of a run that used its budget (`budgets::card`): Potato Workspace asks, not the agent.
             items.push(Derived { id: format!("budget:{}", q.id), kind: Kind::Budget, pane_id, risk: None, since: q.created_at_ms });
         } else if q.limit.as_ref().is_some_and(truthy) {
             // An agent ran out of usage, or the reminder for it (`handoff::card`).

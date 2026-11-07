@@ -10,7 +10,7 @@ tui/
   profile.rs      TuiProfile trait (every per-agent behaviour, with generic defaults)
   types.rs        Kind, Features, LaunchSpec, HeadlessLaunch, Reply, Warning, RunFacts
   generic.rs      default prompt handling + the profile for unregistered agent types
-  pane_mcp.rs     Puppet Master's own MCP server for one launch: types, the `[pane_mcp]` table, `render` (an agent's own way: `pane_mcp.toml` or `pane_mcp.rs` in its folder; the orchestration is `crate::pane_mcp`)
+  pane_mcp.rs     Potato Workspace's own MCP server for one launch: types, the `[pane_mcp]` table, `render` (an agent's own way: `pane_mcp.toml` or `pane_mcp.rs` in its folder; the orchestration is `crate::pane_mcp`)
   conformance.rs  rules every registered profile must pass (runs for new profiles automatically)
   declarative/    agents defined by TOML files (schema, loader, approvals, DeclarativeProfile); see "Adding an agent without code"
   cursor/         Cursor Agent CLI (`agent` alias preferred) + interactive `cursor` alias
@@ -92,7 +92,7 @@ Declared per profile, generic defaults, used by `agent_runs/delivery.rs`, `bridg
 
 If the CLI can be driven by an argument list, a TOML file replaces steps 1-4 above: no Rust, no rebuild.
 
-1. Write `<app data>/agents/foo.toml` (Windows: `%APPDATA%\com.puppetmaster.app\agents\`). Format and examples:
+1. Write `<app data>/agents/foo.toml` (Windows: `%APPDATA%\com.potatoworkspace.app\agents\`). Format and examples:
    `docs/specs/agent-definitions/DEFINITION-FORMAT.md`; the worked example is `kilo.toml` (SPEC 7.2).
 2. Check it without registering anything: `POST /agents/definitions/validate` with `{"toml": "...", "source": "user"}`
    returns `{ok, errors, rendered}` (rendered argv with placeholders). Settings > Agents lists errors with file and line.
@@ -104,9 +104,9 @@ If the CLI can be driven by an argument list, a TOML file replaces steps 1-4 abo
    `agent_definitions_changed`. Runs already in flight keep the argv they started with; the next run is refused
    (`approval_stale`) until the changed file is re-approved. If an active file becomes invalid the previous
    registration is kept.
-6. Project (`<project>/.puppet-master/agents`) and extra folders load only after per-path consent in Settings > Agents
+6. Project (`<project>/.potato-workspace/agents`) and extra folders load only after per-path consent in Settings > Agents
    (consent never replaces approval).
-7a. A definition may carry `[instructions]` (`file`/`files` relative to the project root, optional `header`): the files the agent reads its project instructions from; Puppet Master renders the shared project memory into them (`docs/features/one-brain.md`). Code profiles override `TuiProfile::instruction_files`.
+7a. A definition may carry `[instructions]` (`file`/`files` relative to the project root, optional `header`): the files the agent reads its project instructions from; Potato Workspace renders the shared project memory into them (`docs/features/one-brain.md`). Code profiles override `TuiProfile::instruction_files`.
 7b. A definition may carry `[mcp_host]` (config_path under home/project, format json/toml/yaml, key_path, entry with
    `{command}`/`{args}`/`{env}`); `mcp_install/declarative.rs` writes only that key, makes a `.bak`, and is idempotent.
 8. Share one definition: Settings > Agents > Export (TOML, plus `<name>.fixtures.zip` when `<id>.fixtures/` exists) and
@@ -128,7 +128,7 @@ TuiProfile::startup_gate(screen) -> Option<StartupGate { id, summary, dismiss: O
 | gate | `dismiss` | what generic code does |
 |---|---|---|
 | Dismissible notice (Codex "Update available" menu) | `Some(keys)` (Esc: skip this launch, never Enter, never "update now") | `bridge/startup_gate.rs` closes it with those keys before the task is typed (one gate at a time, waits for the screen to change, at most 4 rounds). It is never a card. If it ignored its keys the run parks until the user deals with it. |
-| Only the user may pass it (folder trust, sign-in, onboarding) | `None` | It becomes a **prompt card** and parks the run (`required_action`): kind `workspace_trust` (the trust question) or `startup_screen` (anything else). The run types the task only after the screen is gone. Puppet Master never answers it. |
+| Only the user may pass it (folder trust, sign-in, onboarding) | `None` | It becomes a **prompt card** and parks the run (`required_action`): kind `workspace_trust` (the trust question) or `startup_screen` (anything else). The run types the task only after the screen is gone. Potato Workspace never answers it. |
 
 How the card is built (`pane_prompt::detect_in_screen`): the profile's own `detect_prompt` wins, so Claude, Cursor and
 Codex (`codex/prompt.rs`) give an answerable `workspace_trust` card with `choices [trust, deny]` and the keys to press
@@ -153,7 +153,7 @@ What happens around a gate, the same for every agent:
   on screen (nothing is cut off). A gate only the user may pass is never touched.
 - Pane status (`pty/registry/spawn.rs` reader + idle watcher, mirrored by `replay/pane.rs`): while `startup_gate`
   reports a gate, the pane never flips to `idle` (and an idle pane a gate draws over leaves `idle`). It reads `running`,
-  not `waiting_input`: a dismissible notice is closed by Puppet Master and must not raise an Inbox card. Gates only
+  not `waiting_input`: a dismissible notice is closed by Potato Workspace and must not raise an Inbox card. Gates only
   the user may pass keep `classify_screen` -> `waiting_input` (the card).
 - `bridge/approvals.rs`: the wait ends when no gate and no prompt is on screen. If the agent exits while a gate
   was showing, the run fails: `WORKSPACE_TRUST_DECLINED` for the trust gate (the user said no), `STARTUP_SCREEN_NOT_COMPLETED`

@@ -17,7 +17,7 @@ pub enum Origin {
     Tray,
     /// The cockpit's own "new pane" button: the cockpit is already on screen.
     CockpitUi,
-    /// A companion's pane (always on, kept by Puppet Master): never a window, never focus, in either mode.
+    /// A companion's pane (always on, kept by Potato Workspace): never a window, never focus, in either mode.
     Background,
 }
 
@@ -102,14 +102,14 @@ pub fn open_primary_window(app: &AppHandle) {
 }
 
 /// The argument that starts the app without its window (scripts, tests, a launch that must stay
-/// off the screen). The env var `PUPPET_MASTER_NO_WINDOW=1` does the same.
+/// off the screen). The env var `POTATO_WORKSPACE_NO_WINDOW=1` does the same.
 pub const NO_WINDOW_ARG: &str = "--no-window";
-pub const NO_WINDOW_ENV: &str = "PUPPET_MASTER_NO_WINDOW";
+pub const NO_WINDOW_ENV: &str = "POTATO_WORKSPACE_NO_WINDOW";
 
 /// Whether a normal start opens the primary window. The app starts like any other app: its window
 /// is on screen and focused. Three starts stay window-free: a sign-in start (`--background`, tray
 /// only), a standalone `--worker` host (it opens its own single-terminal window and nothing else)
-/// and an explicit headless start (`--no-window`, or `PUPPET_MASTER_NO_WINDOW` set to `1`/`true`).
+/// and an explicit headless start (`--no-window`, or `POTATO_WORKSPACE_NO_WINDOW` set to `1`/`true`).
 pub fn startup_window(args: &[String], worker: bool, no_window_env: Option<&str>) -> bool {
     let env_off = no_window_env.is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
     !(worker

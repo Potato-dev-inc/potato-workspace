@@ -1,11 +1,11 @@
 {
-  "name": "@puppet-master/mcp",
+  "name": "@potato-workspace/mcp",
   "version": "0.2.2",
-  "description": "Puppet Master MCP server — stdio JSON-RPC bridge to the local HTTP bridge",
+  "description": "Potato Workspace MCP server — stdio JSON-RPC bridge to the local HTTP bridge",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Potato-dev-inc/puppet-master.git",
+    "url": "git+https://github.com/Potato-dev-inc/potato-workspace.git",
     "directory": "packages/mcp-server"
   },
   "publishConfig": {
@@ -17,7 +17,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "puppet-master-mcp": "dist/index.js"
+    "potato-workspace-mcp": "dist/index.js"
   },
   "files": [
     "dist",

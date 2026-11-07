@@ -213,7 +213,7 @@ fn resolved(item: &Item, caller: &Caller) -> Reply {
     }))
 }
 
-const PERSON_ONLY_HINT: &str = "Decide this in Puppet Master on the PC or on a paired phone.";
+const PERSON_ONLY_HINT: &str = "Decide this in Potato Workspace on the PC or on a paired phone.";
 
 /// The rule for a chat answer (`Via::Telegram`), enforced here as well as in the Telegram layer
 /// (defence in depth: a bug in that layer must not be enough). A trust gate, a consent card, a budget
@@ -223,7 +223,7 @@ fn chat_refusal(item: &Item) -> Option<&'static str> {
     match item.kind {
         Kind::TrustGate => Some("Only the person at this PC can pass this."),
         Kind::Consent => Some("An agent wants more control. Decide on the PC."),
-        Kind::Budget | Kind::Limit | Kind::Tamper | Kind::Setup => Some("Decide this in Puppet Master on the PC."),
+        Kind::Budget | Kind::Limit | Kind::Tamper | Kind::Setup => Some("Decide this in Potato Workspace on the PC."),
         Kind::Approval => match item.risk.as_ref().map(|risk| risk.level) {
             Some(Level::Low) => None,
             _ => Some("Only low-risk approvals can be answered from a chat."),
@@ -279,7 +279,7 @@ pub fn answer(env: &dyn Env, caller: &Caller, item_id: &str, request: &Request) 
 
 fn answer_prompt(env: &dyn Env, caller: &Caller, item: &Item, request: &Request, key: Option<&str>) -> Reply {
     let (Some(prompt), Some(pane)) = (&item.prompt, &item.pane) else {
-        return bad("not_answerable", "Puppet Master cannot read this question; open the pane");
+        return bad("not_answerable", "Potato Workspace cannot read this question; open the pane");
     };
     let Some(choice) = request.choice.as_deref().filter(|c| !c.is_empty()) else {
         return bad("missing_choice", "choice is required");

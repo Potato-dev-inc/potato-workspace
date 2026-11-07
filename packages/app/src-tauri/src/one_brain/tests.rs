@@ -113,12 +113,12 @@ fn nested_target_with_a_header_is_created_once() {
     let dir = project();
     put_memory(&dir, "facts");
     let t = [Target {
-        path: ".cursor/rules/puppet-master.mdc".into(),
+        path: ".cursor/rules/potato-workspace.mdc".into(),
         header: Some("---\nalwaysApply: true\n---".into()),
         agents: vec![],
     }];
     sync(&dir, &t, true);
-    let text = String::from_utf8(read(&dir, ".cursor/rules/puppet-master.mdc")).unwrap();
+    let text = String::from_utf8(read(&dir, ".cursor/rules/potato-workspace.mdc")).unwrap();
     assert!(text.starts_with("---\nalwaysApply: true\n---\n"), "{text}");
     assert!(text.contains(START));
     // an existing file without front-matter does not get the header
@@ -169,7 +169,7 @@ fn backup_is_made_once_before_the_first_write_to_a_user_file() {
     assert!(!dir.join("AGENTS.md.bak").exists());
 }
 
-/// The Cursor rule file exactly as Puppet Master declares it (its front matter is the header).
+/// The Cursor rule file exactly as Potato Workspace declares it (its front matter is the header).
 fn cursor_target() -> Target {
     let file = crate::tui::profile_for("cursor_agent").instruction_files().into_iter().next().unwrap();
     Target { path: file.path, header: file.header, agents: vec!["cursor_agent".into()] }
@@ -183,7 +183,7 @@ fn front_matter_puppet_master_wrote_is_not_user_text() {
     put_memory(&dir, "We use Postgres.");
     sync(&dir, &t, true);
     let created = String::from_utf8(read(&dir, &t[0].path)).unwrap();
-    assert!(created.starts_with("---\ndescription: Shared project memory kept by Puppet Master\nalwaysApply: true\n---\n"), "{created}");
+    assert!(created.starts_with("---\ndescription: Shared project memory kept by Potato Workspace\nalwaysApply: true\n---\n"), "{created}");
     let s = status(&dir, &t, true);
     assert_eq!((s[0].status, s[0].user_content), ("in_sync", false), "{created}");
 
@@ -269,7 +269,7 @@ fn code_profiles_declare_only_verified_files() {
     assert_eq!(by_agent("claude"), ["CLAUDE.md"]);
     assert_eq!(by_agent("codex"), ["AGENTS.md"]);
     assert_eq!(by_agent("opencode"), ["AGENTS.md"]);
-    assert_eq!(by_agent("cursor_agent"), [".cursor/rules/puppet-master.mdc"]);
+    assert_eq!(by_agent("cursor_agent"), [".cursor/rules/potato-workspace.mdc"]);
     for undeclared in ["cmd", "powershell", "bash", "no-such-agent"] {
         assert!(by_agent(undeclared).is_empty(), "{undeclared} reads no declared file");
     }
@@ -319,7 +319,7 @@ fn the_spawn_hook_syncs_every_registered_agents_file_in_the_cwd() {
     put_memory(&dir, "Spawn-time fact.");
     let report = sync_for_spawn(&dir.display().to_string(), true);
     assert!(report.errors.is_empty(), "{:?}", report.errors);
-    for rel in ["CLAUDE.md", "AGENTS.md", ".cursor/rules/puppet-master.mdc"] {
+    for rel in ["CLAUDE.md", "AGENTS.md", ".cursor/rules/potato-workspace.mdc"] {
         assert!(String::from_utf8_lossy(&read(&dir, rel)).contains("Spawn-time fact."), "{rel}");
     }
     // a project without a memory is not touched by a spawn
@@ -346,7 +346,7 @@ fn git(dir: &Path, args: &[&str]) {
 
 #[test]
 fn a_git_tracked_file_holding_only_the_block_is_never_deleted() {
-    // VERIFY-R13 #4: AGENTS.md / CLAUDE.md were committed with only a Puppet Master block and the
+    // VERIFY-R13 #4: AGENTS.md / CLAUDE.md were committed with only a Potato Workspace block and the
     // project had no memory.md, so the first spawn deleted both tracked files and the worktree
     // Merge was refused (ORIGIN_DIRTY_OVERLAP).
     let dir = project();

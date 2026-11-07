@@ -2,7 +2,7 @@ import type { Question } from '../../lib/questions';
 import { PANE_CODEX } from '../fixtures';
 import type { HarnessScenario } from '../types';
 
-// Red to Green, the fix card: CI failed on a pull request Puppet Master opened. The agent may read the cleaned log
+// Red to Green, the fix card: CI failed on a pull request Potato Workspace opened. The agent may read the cleaned log
 // only after the person says yes. The check names, the repo and the numbers are made up.
 const now = Date.now();
 export const FIX_CARD: Question & { fix_id: string } = {

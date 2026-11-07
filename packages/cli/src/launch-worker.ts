@@ -8,8 +8,8 @@ import {
   findReusableWorkerPane,
   getDefaultTerminalAgentType,
   type PaneInfo,
-} from '@puppet-master/shared';
-import { readAllBridgePorts, readLocalSecretHeaders } from '@puppet-master/shared/bridge-port';
+} from '@potato-workspace/shared';
+import { readAllBridgePorts, readLocalSecretHeaders } from '@potato-workspace/shared/bridge-port';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const VITE_DEV_PORT = 1420;
@@ -48,20 +48,20 @@ function portInUse(port: number): Promise<boolean> {
 }
 
 async function resolveWorkerBinary(root: string): Promise<string | null> {
-  const explicitBin = process.env.PUPPET_MASTER_BIN;
+  const explicitBin = process.env.POTATO_WORKSPACE_BIN;
   if (explicitBin && existsSync(explicitBin)) return explicitBin;
 
   // A second `tauri dev` dies on Vite port 1420. Reuse the first worker's dev server.
   if (await portInUse(VITE_DEV_PORT)) {
     const debug = appBinary(root, 'debug');
     if (debug) {
-      console.error('[puppet-master] vite already running; launching another worker against it');
+      console.error('[potato-workspace] vite already running; launching another worker against it');
       return debug;
     }
   }
 
   // ponytail: cargo --release also writes puppet_master_app.exe; that GUI binary
-  // flashes and exits. From source, always use `tauri dev` unless PUPPET_MASTER_BIN is set.
+  // flashes and exits. From source, always use `tauri dev` unless POTATO_WORKSPACE_BIN is set.
   return null;
 }
 
@@ -128,7 +128,7 @@ async function findLiveBridge(): Promise<string | null> {
 async function tryAttachToExistingHost(options: WorkerLaunchOptions): Promise<boolean> {
   const base = await findLiveBridge();
   if (!base) {
-    console.error('[puppet-master] no existing worker host; starting a new process');
+    console.error('[potato-workspace] no existing worker host; starting a new process');
     return false;
   }
 
@@ -170,7 +170,7 @@ async function tryAttachToExistingHost(options: WorkerLaunchOptions): Promise<bo
   }
 
   console.error(
-    `[puppet-master] attached to existing host ${base} pane=${paneId} agent=${agentType} (list_panes now includes this pane)`,
+    `[potato-workspace] attached to existing host ${base} pane=${paneId} agent=${agentType} (list_panes now includes this pane)`,
   );
   return true;
 }
@@ -187,18 +187,18 @@ export async function launchWorkerTerminal(options: WorkerLaunchOptions = {}): P
   const workerArgs = buildWorkerArgs(options);
   const env = {
     ...process.env,
-    PUPPET_MASTER_WORKER: '1',
-    VITE_PUPPET_MASTER_WORKER: '1',
-    PUPPET_MASTER_WORKER_AGENT: options.agentType ?? getDefaultTerminalAgentType(),
-    ...(options.cwd ? { PUPPET_MASTER_WORKER_CWD: options.cwd } : {}),
-    ...(options.paneId ? { PUPPET_MASTER_WORKER_PANE_ID: options.paneId } : {}),
+    POTATO_WORKSPACE_WORKER: '1',
+    VITE_POTATO_WORKSPACE_WORKER: '1',
+    POTATO_WORKSPACE_WORKER_AGENT: options.agentType ?? getDefaultTerminalAgentType(),
+    ...(options.cwd ? { POTATO_WORKSPACE_WORKER_CWD: options.cwd } : {}),
+    ...(options.paneId ? { POTATO_WORKSPACE_WORKER_PANE_ID: options.paneId } : {}),
   };
 
   // ponytail: only the release binary embeds the web UI unless Vite is already serving it.
   const binary = await resolveWorkerBinary(root);
 
   if (binary) {
-    console.error(`[puppet-master] launching standalone worker: ${binary} ${workerArgs.join(' ')}`);
+    console.error(`[potato-workspace] launching standalone worker: ${binary} ${workerArgs.join(' ')}`);
     const child = spawn(binary, workerArgs, {
       cwd: root,
       stdio: 'inherit',
@@ -210,7 +210,7 @@ export async function launchWorkerTerminal(options: WorkerLaunchOptions = {}): P
   }
 
   const npmArgs = ['run', 'tauri', '--', 'dev'];
-  console.error(`[puppet-master] launching standalone worker (dev): npm ${npmArgs.join(' ')}`);
+  console.error(`[potato-workspace] launching standalone worker (dev): npm ${npmArgs.join(' ')}`);
   const child = spawn('npm', npmArgs, {
     cwd: root,
     stdio: 'inherit',

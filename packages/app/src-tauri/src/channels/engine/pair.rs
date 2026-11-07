@@ -12,7 +12,7 @@ use crate::channels::telegram::api::InMessage;
 use serde_json::json;
 
 const WRONG_CODE: &str = "That code is not right.";
-const CODE_CLOSED: &str = "This code does not work any more. Make a new code in Puppet Master.";
+const CODE_CLOSED: &str = "This code does not work any more. Make a new code in Potato Workspace.";
 const WAITING: &str = "Waiting for you to confirm on your PC.";
 const CONNECTED: &str = "Connected. Telegram can read what this bot sends. Send /help to see what I can do.";
 

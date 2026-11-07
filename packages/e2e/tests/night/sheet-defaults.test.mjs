@@ -16,7 +16,7 @@ export async function run(t) {
   await openTonight(t);
 
   await t.step('One empty task, on the project of the open pane');
-  await t.expect.text('Puppet Master works through these while you sleep.');
+  await t.expect.text('Potato Workspace works through these while you sleep.');
   await t.expect.text('+ Add a task (1 of 10)');
   await t.expect.value('aria=Task 1', '');
   await t.expect.text('night-app');

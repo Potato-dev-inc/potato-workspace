@@ -13,10 +13,10 @@ use std::path::Path;
 pub const LAUNCHER: &str =
     r#"PATH="${PM_WSL_PATH:-$PATH}"; export PATH; unset PM_WSL_PATH; exec "$@""#;
 /// `$0` of the launcher shell. A label only; the launcher never runs it.
-pub const ARGV0: &str = "puppet-master";
+pub const ARGV0: &str = "potato-workspace";
 /// Names that cross in both directions (a Windows program started from Linux through interop sees them too).
 pub const BOTH_WAYS: &[&str] = &[
-    "PUPPET_MASTER_PANE_ID",
+    "POTATO_WORKSPACE_PANE_ID",
     "PM_HOOK_TOKEN",
     "PM_HOOK_PANE",
     "PM_HOOK_BRIDGE",
@@ -48,7 +48,7 @@ pub enum LaunchError {
     NotAbsolute,
 }
 
-/// The `wsl.exe` launch for an agent: `-d <distro> --cd <linux cwd> --exec /bin/sh -c LAUNCHER puppet-master
+/// The `wsl.exe` launch for an agent: `-d <distro> --cd <linux cwd> --exec /bin/sh -c LAUNCHER potato-workspace
 /// <program> <args...>`. The environment is the crossing set plus `WSLENV`; nothing else of PM's env is set
 /// here, and `env.remove` is dropped (nothing else crosses).
 pub fn wrap(t: &Target, args: &[String], env: &LaunchEnv) -> Result<LaunchSpec, LaunchError> {
@@ -106,7 +106,7 @@ pub fn crossing(env: &LaunchEnv, place: &LinuxPlace) -> Result<LaunchEnv, Launch
     })
 }
 
-/// `"A/u:B/u:PUPPET_MASTER_PANE_ID"`: sorted, deduplicated. `BOTH_WAYS` names get no flag; the rest get
+/// `"A/u:B/u:POTATO_WORKSPACE_PANE_ID"`: sorted, deduplicated. `BOTH_WAYS` names get no flag; the rest get
 /// `/u` (Windows to Linux only). A name that is not a valid variable name is left out, never passed on.
 pub fn wslenv(names: &[String]) -> String {
     let unique: BTreeSet<&str> = names
@@ -218,7 +218,7 @@ mod tests {
         let spec = wrap_with(
             &place(),
             &args,
-            &env_of(&[("PUPPET_MASTER_PANE_ID", "pane-1")]),
+            &env_of(&[("POTATO_WORKSPACE_PANE_ID", "pane-1")]),
         )
         .unwrap();
         assert_eq!(spec.program, WSL_EXE);
@@ -234,7 +234,7 @@ mod tests {
                 "/bin/sh",
                 "-c",
                 LAUNCHER,
-                "puppet-master",
+                "potato-workspace",
                 "/usr/local/bin/claude",
                 "--model",
                 "opus",
@@ -246,24 +246,24 @@ mod tests {
 
     #[test]
     fn wrap_sets_the_exact_wslenv_and_the_allowed_names_only() {
-        let env = env_of(&[("PUPPET_MASTER_PANE_ID", "pane-1")]);
+        let env = env_of(&[("POTATO_WORKSPACE_PANE_ID", "pane-1")]);
         let spec = wrap_with(&place(), &[], &env).unwrap();
         assert_eq!(
             spec.env,
             vec![
-                ("PUPPET_MASTER_PANE_ID".to_string(), "pane-1".to_string()),
+                ("POTATO_WORKSPACE_PANE_ID".to_string(), "pane-1".to_string()),
                 (
                     PATH_ENV.to_string(),
                     "/usr/local/bin:/usr/bin:/bin".to_string()
                 ),
                 (
                     WSLENV.to_string(),
-                    "PM_WSL_PATH/u:PUPPET_MASTER_PANE_ID".to_string()
+                    "PM_WSL_PATH/u:POTATO_WORKSPACE_PANE_ID".to_string()
                 ),
             ]
         );
         // Only the names PM listed (plus its own PATH marker and WSLENV) are in the spec env.
-        let allowed = ["PUPPET_MASTER_PANE_ID", PATH_ENV, WSLENV];
+        let allowed = ["POTATO_WORKSPACE_PANE_ID", PATH_ENV, WSLENV];
         assert!(spec.env.iter().all(|(k, _)| allowed.contains(&k.as_str())));
         assert_eq!(
             spec.env.iter().filter(|(k, _)| k == WSLENV).count(),
@@ -288,11 +288,11 @@ mod tests {
 
     #[test]
     fn wslenv_string_is_exact_sorted_and_deduplicated() {
-        let names: Vec<String> = ["B", "A", "PUPPET_MASTER_PANE_ID", "A"]
+        let names: Vec<String> = ["B", "A", "POTATO_WORKSPACE_PANE_ID", "A"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        assert_eq!(wslenv(&names), "A/u:B/u:PUPPET_MASTER_PANE_ID");
+        assert_eq!(wslenv(&names), "A/u:B/u:POTATO_WORKSPACE_PANE_ID");
         let hooks: Vec<String> = ["PM_HOOK_TOKEN", "PM_HOOK_PANE"]
             .iter()
             .map(|s| s.to_string())
@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn crossing_drops_remove_and_adds_the_path_marker() {
         let env = LaunchEnv {
-            set: vec![("PUPPET_MASTER_PANE_ID".into(), "pane-1".into())],
+            set: vec![("POTATO_WORKSPACE_PANE_ID".into(), "pane-1".into())],
             remove: vec!["GITHUB_TOKEN".into()],
         };
         let crossed = crossing(&env, &place()).unwrap();
@@ -378,7 +378,7 @@ mod tests {
         assert_eq!(
             crossed.set,
             vec![
-                ("PUPPET_MASTER_PANE_ID".to_string(), "pane-1".to_string()),
+                ("POTATO_WORKSPACE_PANE_ID".to_string(), "pane-1".to_string()),
                 (
                     PATH_ENV.to_string(),
                     "/usr/local/bin:/usr/bin:/bin".to_string()
@@ -512,7 +512,7 @@ mod tests {
         let spec = wrap_with(
             &place(),
             &args,
-            &env_of(&[("PUPPET_MASTER_PANE_ID", "pane-1")]),
+            &env_of(&[("POTATO_WORKSPACE_PANE_ID", "pane-1")]),
         )
         .unwrap();
         // The PTY layer builds its CommandBuilder from these fields (`build_launch_spec_command` is pub(super)

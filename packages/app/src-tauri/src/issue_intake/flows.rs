@@ -25,7 +25,7 @@ const FACT_LIST_CAP: usize = 50;
 const NAME_MAX_CHARS: usize = 200;
 const RUN_NAME_TITLE_CHARS: usize = 40;
 const OVER_CAP: &str = "The change is too big to check every line (over 256 KiB).";
-const ASKED_YOU: &str = "You asked Puppet Master to check each push first.";
+const ASKED_YOU: &str = "You asked Potato Workspace to check each push first.";
 
 /// What one look at a finished copy found.
 pub(super) struct Checked {
@@ -320,7 +320,7 @@ impl<I: Io + 'static> Engine<I> {
             _ => return,
         };
         let (Some(repo), Some(handle)) = (self.repo_of(&run), run.handle.clone()) else {
-            return self.fail(&mut run, ERR_PUSH_FAILED, "Puppet Master cannot find this run's copy.");
+            return self.fail(&mut run, ERR_PUSH_FAILED, "Potato Workspace cannot find this run's copy.");
         };
         let snap = io.run_snapshot(&repo.folder, &handle);
         if snap.as_ref().is_some_and(|snap| !snap.terminal) {
@@ -515,7 +515,7 @@ impl<I: Io + 'static> Engine<I> {
             return;
         }
         let (Some(repo), Some(handle), Some(base)) = (self.repo_of(&run), run.handle.clone(), run.base.clone()) else {
-            return self.fail(&mut run, ERR_PUSH_FAILED, "Puppet Master cannot find this run's copy.");
+            return self.fail(&mut run, ERR_PUSH_FAILED, "Potato Workspace cannot find this run's copy.");
         };
         let Some(copy) = io.find_copy(&repo.folder, &handle) else {
             return self.fail(&mut run, ERR_PUSH_FAILED, "The copy is gone, so there is nothing to push.");

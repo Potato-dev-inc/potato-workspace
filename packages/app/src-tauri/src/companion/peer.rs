@@ -246,7 +246,7 @@ fn run_panes(registry: &Arc<Mutex<PaneRegistry>>, handle: &str, project: Option<
 
 /// The companion pane whose own agent is on the other end of this connection, for `companion_recall`. Decided only
 /// by the OS: the process that owns the client socket must sit in a live companion pane's own process tree (not a
-/// helper's: a helper is not the companion). The `X-Puppet-Master-Pid` header, which the caller writes, plays no part.
+/// helper's: a helper is not the companion). The `X-Potato-Workspace-Pid` header, which the caller writes, plays no part.
 /// Where the owner or the process table is unknown, the answer is `None`: fail closed.
 pub fn recall_caller_pane(
     registry: &Arc<Mutex<PaneRegistry>>,

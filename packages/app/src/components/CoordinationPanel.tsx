@@ -10,7 +10,7 @@ import type {
   TaskProjection,
   WorkspaceStateProjection,
 } from '../lib/bridge';
-import type { AgentContextProfile } from '@puppet-master/shared';
+import type { AgentContextProfile } from '@potato-workspace/shared';
 import {
   buildDelegationPreviewRequest,
   latestTimelineItems,

@@ -165,7 +165,7 @@ fn find_live_pane(
     panes
         .into_iter()
         .find(|pane| pane.id == resolved)
-        .filter(|pane| !pane.id.starts_with("puppet-master-orchestrator-"))
+        .filter(|pane| !pane.id.starts_with("potato-workspace-orchestrator-"))
 }
 
 #[cfg(test)]

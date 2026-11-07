@@ -2,7 +2,7 @@ import type { HarnessScenario } from '../types';
 import { EXAMPLE_PANES, PANE_PWSH } from '../fixtures';
 
 // A pane that works in a separate copy: the sidebar names its project ("shop"), never the id of the copy's folder.
-const COPY = 'C:\\Users\\dev\\work\\shop\\.puppet-master\\worktrees\\7d4cb2b3-2-209c';
+const COPY = 'C:\\Users\\dev\\work\\shop\\.potato-workspace\\worktrees\\7d4cb2b3-2-209c';
 const s: HarnessScenario = {
   name: 'shell-copy-pane',
   route: 'cockpit',

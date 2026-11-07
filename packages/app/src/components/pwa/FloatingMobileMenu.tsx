@@ -6,7 +6,7 @@ import {
   type AgentType,
   type OrchestratorBackend,
   type PaneInfo,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import { launchMenuEntries, useAgentRegistry } from '../../lib/agentRegistry';
 import type { PublicSettings } from '../../lib/bridge-settings';
 
@@ -70,7 +70,7 @@ export function FloatingMobileMenu({
               className={`w-2 h-2 rounded-full ${bridgeReady ? 'bg-pm-ok' : 'bg-pm-warn'}`}
               title={bridgeReady ? 'Connected' : 'Connecting'}
             />
-            <span className="font-semibold text-zinc-100 flex-1">Puppet Master</span>
+            <span className="font-semibold text-zinc-100 flex-1">Potato Workspace</span>
             <button
               type="button"
               onClick={onEditConnection}

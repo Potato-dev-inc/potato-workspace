@@ -1,6 +1,6 @@
-// The short steps of the welcome: How do you work, Use your phone, Add Puppet Master to your agents, Done.
+// The short steps of the welcome: How do you work, Use your phone, Add Potato Workspace to your agents, Done.
 import { useEffect, useState } from 'react';
-import type { Settings } from '@puppet-master/shared';
+import type { Settings } from '@potato-workspace/shared';
 import { agentPackApi, groupAgents, visibleRows, type AgentPackApi } from '../../lib/agent-pack';
 import type { loadSettings, patchSettings } from '../../lib/settings';
 import { parseDevServerPort } from '../../lib/public-bridge-url';

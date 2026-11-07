@@ -128,7 +128,7 @@ export function CreatePrSheet({
             </>
           )}
           <p className="ck-sub ck-pr-fine">
-            Puppet Master pushes this copy&apos;s changes to GitHub as the branch <code>{prepared.branch}</code>. It never changes{' '}
+            Potato Workspace pushes this copy&apos;s changes to GitHub as the branch <code>{prepared.branch}</code>. It never changes{' '}
             {base || 'main'} and never overwrites a branch.
             {prepared.has_uncommitted && ` It saves ${agentName ?? 'the agent'}'s changes as one commit first.`}
           </p>

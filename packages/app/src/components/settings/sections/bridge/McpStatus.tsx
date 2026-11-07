@@ -14,13 +14,13 @@ function bridgeDetail(status: McpStatusReport, fallbackUrl: string | null): stri
     return `${status.bridgeUrl ?? fallbackUrl ?? 'local'}${status.bridgeVersion ? ` · v${status.bridgeVersion}` : ''}`;
   }
   if (status.portFileExists) return `Port file exists but bridge is not responding (${status.portFilePath})`;
-  return 'Start Puppet Master and ensure the bridge port file is written';
+  return 'Start Potato Workspace and ensure the bridge port file is written';
 }
 
 function runtimeDetail(status: McpStatusReport, rust: boolean): string {
   if (rust) return `Using ${status.launchCommand}`;
-  if (status.npmPackageVersion) return `@puppet-master/mcp@${status.npmPackageVersion} via ${status.launchCommand}`;
-  if (status.npmAvailable) return 'npm is available but @puppet-master/mcp could not be resolved';
+  if (status.npmPackageVersion) return `@potato-workspace/mcp@${status.npmPackageVersion} via ${status.launchCommand}`;
+  if (status.npmAvailable) return 'npm is available but @potato-workspace/mcp could not be resolved';
   return 'Install Node.js/npm and ensure network access to the npm registry';
 }
 

@@ -45,7 +45,7 @@ pub const CACHE_CAP: usize = 500;
 /// GETs per minute, whole app.
 pub const RATE_PER_MIN: u32 = 60;
 pub const MAX_VERSIONS_KEPT: usize = 5_000;
-pub const USER_AGENT_PREFIX: &str = "PuppetMaster-PackageCheck/";
+pub const USER_AGENT_PREFIX: &str = "PotatoWorkspace-PackageCheck/";
 
 /// The public registries the lookups may call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

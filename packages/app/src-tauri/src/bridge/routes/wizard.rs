@@ -55,7 +55,7 @@ mod tests {
     use crate::tui::declarative::wizard::tests::support::Tree;
 
     const LOCAL: &str = "POST /agents/wizard/start HTTP/1.1\r\nHost: 127.0.0.1:17321\r\n";
-    const TUNNEL: &str = "POST /agents/wizard/start HTTP/1.1\r\nX-PM-Proxied: 1\r\nAuthorization: Bearer tok\r\n";
+    const TUNNEL: &str = "POST /agents/wizard/start HTTP/1.1\r\nX-Potato-Workspace-Proxied: 1\r\nAuthorization: Bearer tok\r\n";
     const PHONE: &str = "POST /agents/wizard/start HTTP/1.1\r\nAuthorization: Bearer tok\r\n";
     const FORWARDED: &str = "POST /agents/wizard/start HTTP/1.1\r\nCF-Connecting-IP: 1.2.3.4\r\n";
 

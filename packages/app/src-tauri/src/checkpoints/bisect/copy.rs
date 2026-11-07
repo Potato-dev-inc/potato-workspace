@@ -116,7 +116,7 @@ pub struct Copy {
 
 impl Copy {
     /// A new, empty copy under `root`. `project_key` is the project folder, `shadow_git_dir` its shadow
-    /// repository (`.puppet-master/checkpoints.git`). Nothing is created inside the project folder.
+    /// repository (`.potato-workspace/checkpoints.git`). Nothing is created inside the project folder.
     pub fn create(project_key: &Path, shadow_git_dir: &Path, root: &Path) -> Result<Copy, CopyError> {
         if !git_available() {
             return Err(CopyError::GitMissing);
@@ -623,7 +623,7 @@ mod tests {
         fn walk(base: &Path, dir: &Path, out: &mut BTreeMap<String, Vec<u8>>) {
             for entry in fs::read_dir(dir).unwrap().flatten() {
                 let path = entry.path();
-                if path.file_name().is_some_and(|n| n == ".puppet-master") {
+                if path.file_name().is_some_and(|n| n == ".potato-workspace") {
                     continue;
                 }
                 if path.is_dir() {

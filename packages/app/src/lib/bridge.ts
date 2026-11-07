@@ -1,6 +1,6 @@
-// HTTP client for the Puppet Master bridge (Rust side, default 127.0.0.1:17321): URL discovery and
+// HTTP client for the Potato Workspace bridge (Rust side, default 127.0.0.1:17321): URL discovery and
 // the typed BridgeClient. Wire types live in ./bridge-types, SSE subscription in ./bridge-sse.
-import type { AgentContextProfile } from '@puppet-master/shared';
+import type { AgentContextProfile } from '@potato-workspace/shared';
 import { invoke } from '@tauri-apps/api/core';
 import { ngrokRequestHeaders } from './bridge-ngrok';
 import { decodeBase64, streamOffset } from './bridge-sse';
@@ -259,7 +259,7 @@ export function makeBridgeClient(baseUrl: string): BridgeClient {
  * each port. Returns the first responding base URL.
  */
 export async function findBridgeUrl(): Promise<string | null> {
-  // A second Puppet Master on this computer (PUPPET_MASTER_PROFILE) must reach its own bridge,
+  // A second Potato Workspace on this computer (POTATO_WORKSPACE_PROFILE) must reach its own bridge,
   // never the first one that answers. The default profile gets null and scans as before.
   const own = await profileBridgeUrl();
   if (own) return own;

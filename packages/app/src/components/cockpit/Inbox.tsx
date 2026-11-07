@@ -142,7 +142,7 @@ export function Inbox({
           render: () => <IssueCard q={q} now={c.now} onAnswer={answer(q.id)} onOpenPane={open(q.pane_id)} />,
         });
       } else if (isCiCard(q)) {
-        // Red to Green: a fix card or a push card for a PR Puppet Master opened. Like the issue cards, a number key never answers it.
+        // Red to Green: a fix card or a push card for a PR Potato Workspace opened. Like the issue cards, a number key never answers it.
         out.push({
           key: `ci:${q.id}`,
           kind: 'question',
@@ -239,7 +239,7 @@ export function Inbox({
   }, [visit, entries.length]);
 
   const quick = entries.some((e) => e.quick);
-  const title = firstRun ? 'Welcome to Puppet Master' : count === 0 ? 'Nothing needs you' : count === 1 ? 'One thing needs you' : `${count} things need you`;
+  const title = firstRun ? 'Welcome to Potato Workspace' : count === 0 ? 'Nothing needs you' : count === 1 ? 'One thing needs you' : `${count} things need you`;
 
   return (
     <div

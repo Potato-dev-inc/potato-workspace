@@ -1,11 +1,11 @@
 ---
 name: pm-status
-description: Show which agents Puppet Master is running, what each is doing, and which need your answer.
+description: Show which agents Potato Workspace is running, what each is doing, and which need your answer.
 disable-model-invocation: true
 ---
-<!-- puppet-master-pack: 1 -->
+<!-- potato-workspace-pack: 1 -->
 
-Summarise the agents running in Puppet Master with its MCP tools. If they are missing, say the PM app is not running and stop.
+Summarise the agents running in Potato Workspace with its MCP tools. If they are missing, say the Potato Workspace app is not running and stop.
 
 1. Call `list_agents` with `active_only: true`. If it is empty, say so.
 2. For handles that are still running, call `wait_agents` with a short `timeout_ms` (for example 2000) to refresh their state.

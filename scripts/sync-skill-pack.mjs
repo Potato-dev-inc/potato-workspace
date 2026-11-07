@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'integrations');
 const source = join(root, 'skills');
 const targets = [join(root, 'claude-code/plugin/skills'), join(root, 'codex/plugin/skills'), join(root, 'cursor/plugin/skills')];
-const rules = [[join(root, 'cursor/rules/puppet-master.mdc'), join(root, 'cursor/plugin/rules/puppet-master.mdc')]];
+const rules = [[join(root, 'cursor/rules/potato-workspace.mdc'), join(root, 'cursor/plugin/rules/potato-workspace.mdc')]];
 const check = process.argv.includes('--check');
 
 function files(dir, base = dir) {

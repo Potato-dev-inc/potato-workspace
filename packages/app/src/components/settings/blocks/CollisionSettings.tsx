@@ -6,7 +6,7 @@ import { Note, SettingToggle } from '../settings-ui';
 
 export const COLLISION_LABEL = 'Warn me when two agents change the same file';
 export const COLLISION_FOOTER =
-  'Puppet Master reads the list of changed files, and the changed lines when both agents changed the same file. It never pauses or stops an agent.';
+  'Potato Workspace reads the list of changed files, and the changed lines when both agents changed the same file. It never pauses or stops an agent.';
 export const COLLISION_SAVE_FAILED = 'Could not save. Try again.';
 
 export function CollisionSettings({ api = tauriCollisionApi, onSaved }: { api?: CollisionApi; onSaved?: () => void }) {

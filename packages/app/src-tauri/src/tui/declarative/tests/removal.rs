@@ -296,7 +296,7 @@ fn a_link_out_of_the_agents_folder_is_refused() {
 #[test]
 fn a_project_or_extra_directory_definition_is_never_moved() {
     let t = Tree::new();
-    let project = t.write("proj/.puppet-master/agents/p.toml", &def("rml_p"));
+    let project = t.write("proj/.potato-workspace/agents/p.toml", &def("rml_p"));
     let extra = t.write("team/e.toml", &def("rml_e"));
     for file in [&project, &extra] {
         let denied = t.remove(&file.to_string_lossy()).unwrap_err();

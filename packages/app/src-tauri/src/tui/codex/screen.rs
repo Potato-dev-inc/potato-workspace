@@ -167,7 +167,7 @@ pub(super) fn startup_gate(screen: &str) -> Option<StartupGate> {
         });
     }
     // "Hooks need review" (live 0.162.1, `fixtures/hooks_need_review.txt`): shown at start when the
-    // project's `.codex/hooks.json` has entries the user has not trusted yet, e.g. Puppet Master's
+    // project's `.codex/hooks.json` has entries the user has not trusted yet, e.g. Potato Workspace's
     // Hook Lane entries. Esc is the screen's own "esc skip": it continues WITHOUT trusting, for this
     // launch only (checked live: nothing is saved and the screen returns at the next start). It
     // never picks "Trust all": trusting stays the user's own step in `/hooks`.

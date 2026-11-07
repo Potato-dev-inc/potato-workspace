@@ -23,7 +23,7 @@ const now = Date.now();
 
 export const RECENT: RecentProject[] = [
   { path: 'D:\\code\\shop', name: 'shop', state: 'repo', last_used_ms: now - 60_000 },
-  { path: 'D:\\code\\puppet-master', name: 'puppet-master', state: 'repo', last_used_ms: now - 3_600_000 },
+  { path: 'D:\\code\\potato-workspace', name: 'potato-workspace', state: 'repo', last_used_ms: now - 3_600_000 },
   { path: 'D:\\code\\landing-page', name: 'landing-page', state: 'folder', last_used_ms: now - 86_400_000 },
   { path: 'D:\\code\\old-experiment', name: 'old-experiment', state: 'missing', last_used_ms: now - 9 * 86_400_000 },
 ];

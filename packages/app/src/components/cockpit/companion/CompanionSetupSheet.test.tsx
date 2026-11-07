@@ -116,10 +116,10 @@ describe('CompanionSetupSheet', () => {
     expect(button('Wake up Mochi').disabled).toBe(true);
   });
 
-  it('starts with a folder of its own that Puppet Master makes, not the open project', async () => {
+  it('starts with a folder of its own that Potato Workspace makes, not the open project', async () => {
     await render();
     expect(host.querySelector('.ck-companion-folder-name')?.textContent).toBe('A folder of its own, made for it');
-    expect(host.textContent).toContain('a folder of its own that Puppet Master makes');
+    expect(host.textContent).toContain('a folder of its own that Potato Workspace makes');
   });
 
   it('a folder the person picks holds a folder of its own for the companion, never the picked folder itself', async () => {

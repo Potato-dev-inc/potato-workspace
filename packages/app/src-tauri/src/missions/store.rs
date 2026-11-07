@@ -1,14 +1,14 @@
 //! Missions on disk (DESIGN-MISSIONS 2.6).
 //!
 //! ```text
-//! <origin>/.puppet-master/missions/<id>/mission.json   the Mission (atomic write, rev bumped)
-//! <origin>/.puppet-master/missions/<id>/rounds.jsonl   one line per event; append-only
-//! <origin>/.puppet-master/missions/<id>/baseline.json  the test snapshot taken at the start
+//! <origin>/.potato-workspace/missions/<id>/mission.json   the Mission (atomic write, rev bumped)
+//! <origin>/.potato-workspace/missions/<id>/rounds.jsonl   one line per event; append-only
+//! <origin>/.potato-workspace/missions/<id>/baseline.json  the test snapshot taken at the start
 //! <app data>/missions-index.json                       id -> project, for startup recovery
 //! ```
 //!
 //! The store lives under the origin project, not the copy, so discarding the copy keeps the
-//! mission's history. `.puppet-master/` is git-excluded, so none of it is ever merged.
+//! mission's history. `.potato-workspace/` is git-excluded, so none of it is ever merged.
 
 use super::model::{Mission, MissionState};
 use once_cell::sync::Lazy;
@@ -25,7 +25,7 @@ pub fn now_ms() -> u64 {
 }
 
 pub fn root(project: &str) -> PathBuf {
-    Path::new(project).join(".puppet-master").join("missions")
+    Path::new(project).join(".potato-workspace").join("missions")
 }
 
 pub fn dir(project: &str, id: &str) -> PathBuf {

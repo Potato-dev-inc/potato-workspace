@@ -194,7 +194,7 @@ fn open_other_read_errors_give_plain_sentences_and_no_path() {
     let format = open_chat(&failing(ReadError::Format), &env, &chat, SESSION).expect_err("refused");
     assert_eq!(too_big, "This chat file is too big to open.");
     assert_eq!(unreadable, "The chat file could not be read.");
-    assert_eq!(format, "This chat is in a format Puppet Master cannot read yet.");
+    assert_eq!(format, "This chat is in a format Potato Workspace cannot read yet.");
     for text in [&too_big, &unreadable, &format] {
         assert!(!text.contains('\\') && !text.contains('/'), "no path in: {text}");
     }

@@ -67,7 +67,7 @@ fn key(path: &str) -> String {
 }
 
 /// The folder a person would call the project: a path inside a separate copy
-/// (`<project>/.puppet-master/worktrees/<id>`) maps back to the project it came from; anything
+/// (`<project>/.potato-workspace/worktrees/<id>`) maps back to the project it came from; anything
 /// else is returned as it is (trimmed). A copy is never a project, so no list of projects holds one.
 pub fn real_folder(text: &str) -> String {
     let text = text.trim();
@@ -166,8 +166,8 @@ fn recent_with(store: &Path, others: &[String], limit: usize, state_of: impl Fn(
         if path.is_empty() || out.iter().any(|seen| key(&seen.path) == key(path)) {
             return;
         }
-        // Anything else inside `.puppet-master/` (operations, storage) is not a project either.
-        if path.replace('\\', "/").contains("/.puppet-master/") {
+        // Anything else inside `.potato-workspace/` (operations, storage) is not a project either.
+        if path.replace('\\', "/").contains("/.potato-workspace/") {
             return;
         }
         out.push(RecentProject {
@@ -200,7 +200,7 @@ pub struct InitPlan {
     pub commands: Vec<String>,
     /// Files the first snapshot will include (counted up to [`MAX_SNAPSHOT_FILES`]).
     pub files: usize,
-    /// More than [`MAX_SNAPSHOT_FILES`]: Puppet Master will not snapshot this folder.
+    /// More than [`MAX_SNAPSHOT_FILES`]: Potato Workspace will not snapshot this folder.
     pub too_big: bool,
     /// Lines of a `.gitignore` that will be written (empty when the folder has one).
     pub gitignore: Vec<String>,
@@ -215,7 +215,7 @@ fn count_files(root: &Path, skip_default_ignored: bool) -> usize {
         for entry in read.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             let Ok(kind) = entry.file_type() else { continue };
-            if kind.is_symlink() || name == ".git" || name == ".puppet-master" {
+            if kind.is_symlink() || name == ".git" || name == ".potato-workspace" {
                 continue;
             }
             if kind.is_dir() {
@@ -283,7 +283,7 @@ fn must(dir: &Path, args: &[&str], what: &str) -> Result<String, OperationError>
 }
 
 /// Run the plan: `git init` (when the folder has no Git), a `.gitignore` when it has none, then
-/// one commit of everything (`.puppet-master/` aside). Refuses a folder that is too big.
+/// one commit of everything (`.potato-workspace/` aside). Refuses a folder that is too big.
 pub fn init(path: &Path) -> Result<InitOutcome, OperationError> {
     let plan = init_plan(path)?;
     if plan.too_big {
@@ -304,9 +304,9 @@ pub fn init(path: &Path) -> Result<InitOutcome, OperationError> {
         std::fs::write(path.join(".gitignore"), text)
             .map_err(|error| err("GIT_INIT_FAILED", format!("could not write .gitignore: {error}")))?;
     }
-    // Keep Puppet Master's own folder out of the snapshot and out of `git status`.
+    // Keep Potato Workspace's own folder out of the snapshot and out of `git status`.
     crate::git_exclude::ensure_project_storage_excluded(path);
-    must(path, &["add", "-A", "--", ".", ":(exclude).puppet-master"], "git add")?;
+    must(path, &["add", "-A", "--", ".", ":(exclude).potato-workspace"], "git add")?;
     must(
         path,
         &identity_args(path, &["commit", "--allow-empty", "--no-verify", "-q", "-m", "First snapshot"]),

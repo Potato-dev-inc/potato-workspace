@@ -5,7 +5,7 @@
 // `patch()` that saves one control, and a few helpers. Nothing in a row ever writes the whole settings
 // object back.
 import type { ReactNode } from 'react';
-import type { Settings } from '@puppet-master/shared';
+import type { Settings } from '@potato-workspace/shared';
 import type { SettingsPatch } from '../../lib/settings';
 
 export const SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone'] as const;

@@ -1065,7 +1065,7 @@ fn summary(pane: &str, turn: u32, agent: &str, end: u64) -> TurnSummary {
     }
 }
 
-/// Every file under `dir` outside `.puppet-master` as `(relative path, bytes)`.
+/// Every file under `dir` outside `.potato-workspace` as `(relative path, bytes)`.
 fn hash_folder(dir: &Path) -> Vec<(String, Vec<u8>)> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, Vec<u8>)>) {
         let mut entries: Vec<_> = fs::read_dir(dir).unwrap().flatten().collect();
@@ -1073,7 +1073,7 @@ fn hash_folder(dir: &Path) -> Vec<(String, Vec<u8>)> {
         for entry in entries {
             let path = entry.path();
             let rel = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
-            if rel.starts_with(".puppet-master") {
+            if rel.starts_with(".potato-workspace") {
                 continue;
             }
             if path.is_dir() {

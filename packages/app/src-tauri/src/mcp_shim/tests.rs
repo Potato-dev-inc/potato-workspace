@@ -12,7 +12,7 @@ fn shell_hint_is_stripped_from_the_request_and_rewrites_watch_commands() {
     );
     let response = json!({
         "operation_id": "op-1",
-        "watch_command": "npx puppet-master watch op-1 --project-path 'C:/a b'"
+        "watch_command": "npx potato-workspace watch op-1 --project-path 'C:/a b'"
     })
     .to_string();
     let rewritten: Value =
@@ -72,7 +72,7 @@ fn parses_port_only() {
 
 #[test]
 fn missing_port_file_returns_bridge_down_error() {
-    let missing = PathBuf::from("definitely-missing-puppet-master-port-file");
+    let missing = PathBuf::from("definitely-missing-potato-workspace-port-file");
     let err = read_bridge_endpoint_from_candidates(&[missing]).unwrap_err();
     assert!(err.contains("bridge_down"));
 }
@@ -174,7 +174,7 @@ fn resources_list_contains_session() {
         .and_then(Value::as_array)
         .unwrap();
     assert!(resources.iter().any(|resource| {
-        resource.get("uri").and_then(Value::as_str) == Some("puppet-master://session")
+        resource.get("uri").and_then(Value::as_str) == Some("potato-workspace://session")
     }));
 }
 
@@ -281,6 +281,13 @@ fn wait_timeout_keeps_the_followup_handle() {
 }
 
 #[test]
+fn a_local_connection_failure_is_not_rewritten_as_a_bridge_down_timeout() {
+    let error = "bridge_unreachable: http://127.0.0.1:17321 (Can't assign requested address (os error 49)). The bridge may still be running; this was a local connection problem. Retry, or read the agent's transcript or pane before saying you got no reply.";
+    let out = wait_timeout_recovery("/agents/followup", &json!({"handle": "investigator"}), error.to_string());
+    assert_eq!(out, error, "the connection message reaches the agent as it is");
+}
+
+#[test]
 fn maps_legacy_http_errors_to_nonrecoverable_or_retryable_codes() {
     let missing = super::legacy_http_error(404, r#"{"error":"unknown pane"}"#);
     assert_eq!(
@@ -336,7 +343,7 @@ fn typed_tool_errors_copy_error_field_into_message() {
 
 #[test]
 fn rejects_orchestrator_pane_targets() {
-    assert!(assert_worker_pane("puppet-master-orchestrator-123").is_err());
+    assert!(assert_worker_pane("potato-workspace-orchestrator-123").is_err());
     assert!(assert_worker_pane("codex-123").is_ok());
 }
 
@@ -497,7 +504,7 @@ fn stale_port_file_falls_back_to_a_live_bridge_port() {
     let dead_port = dead.local_addr().unwrap().port();
     drop(dead);
     let got = live_endpoint_or_probe(BridgeEndpoint { host: "127.0.0.1".into(), port: dead_port });
-    assert!(got.port == dead_port || (17321..=17330).contains(&got.port));
+    assert!(got.port == dead_port || (17421..=17430).contains(&got.port));
 }
 
 // ---- ask_user: the real shim against an in-process bridge that serves the questions routes ----
@@ -668,17 +675,17 @@ fn the_local_secret_beside_the_port_file_is_sent_with_every_request() {
     let dir = std::env::temp_dir().join(format!("pm-shim-secret-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    let port_file = dir.join("puppet-master.bridge.port");
+    let port_file = dir.join("potato-workspace.bridge.port");
     fs::write(&port_file, "127.0.0.1:17321\n").unwrap();
     // An older app writes no secret file: no header (the bridge only logs that, for now).
     assert_eq!(local_secret_header_from_candidates(&[port_file.clone()]), "");
-    fs::write(dir.join("puppet-master.bridge.secret"), "ab12cd34\n").unwrap();
+    fs::write(dir.join("potato-workspace.bridge.secret"), "ab12cd34\n").unwrap();
     assert_eq!(
         local_secret_header_from_candidates(&[dir.join("missing.port"), port_file.clone()]),
-        "X-PM-Local-Secret: ab12cd34\r\n"
+        "X-Potato-Workspace-Local-Secret: ab12cd34\r\n"
     );
     // Anything that is not hex is not sent (it would be a header injection).
-    fs::write(dir.join("puppet-master.bridge.secret"), "ab\r\nX-Evil: 1").unwrap();
+    fs::write(dir.join("potato-workspace.bridge.secret"), "ab\r\nX-Evil: 1").unwrap();
     assert_eq!(local_secret_header_from_candidates(&[port_file]), "");
     let _ = fs::remove_dir_all(dir);
 }
@@ -708,7 +715,7 @@ fn a_run_under_a_budget_names_itself_as_the_parent_of_the_helpers_it_starts() {
 #[test]
 fn the_pane_header_is_the_launch_pane_id_cleaned_of_anything_that_could_split_a_header() {
     assert_eq!(pane_header(Some("57c03490-a9bd-4e4e-bde8".to_string())).as_deref(), Some("57c03490-a9bd-4e4e-bde8"));
-    assert_eq!(pane_header(Some("p1\r\nX-Puppet-Master-Session: stolen".to_string())).as_deref(), Some("p1X-Puppet-Master-Sessionstolen"));
+    assert_eq!(pane_header(Some("p1\r\nX-Potato-Workspace-Session: stolen".to_string())).as_deref(), Some("p1X-Potato-Workspace-Sessionstolen"));
     assert_eq!(pane_header(Some("  ".to_string())), None);
     assert_eq!(pane_header(None), None);
 }

@@ -13,7 +13,7 @@ const s: HarnessScenario = {
           place: {
             kind: 'linux',
             distro: 'Ubuntu-Test',
-            cwd: '/mnt/c/work/puppet-master',
+            cwd: '/mnt/c/work/potato-workspace',
             mount_root: '/mnt/',
             unc_root: '\\wsl.localhost\Ubuntu-Test',
             warnings: ['Line endings may differ between Windows and Linux.'],

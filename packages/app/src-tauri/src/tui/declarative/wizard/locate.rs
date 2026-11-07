@@ -96,7 +96,7 @@ pub fn locate(command: &str, dirs: &[PathBuf]) -> Result<Located, WizardError> {
         Err(e @ ResolveError::NotFound { .. }) => Err(WizardError::new(
             404,
             e.code(),
-            format!("`{command}` was not found on PATH. Install it, or start Puppet Master from a terminal where `{command}` works, then try again"),
+            format!("`{command}` was not found on PATH. Install it, or start Potato Workspace from a terminal where `{command}` works, then try again"),
         )),
     }
 }

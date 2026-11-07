@@ -1,21 +1,21 @@
-//! Keep `<project>/.puppet-master/` out of the user's git status.
+//! Keep `<project>/.potato-workspace/` out of the user's git status.
 //!
-//! Puppet Master stores checkpoints, isolated worktrees, the operations store, turn summaries and
-//! the event log under `<project>/.puppet-master/`. In a git repository that would show up as
+//! Potato Workspace stores checkpoints, isolated worktrees, the operations store, turn summaries and
+//! the event log under `<project>/.potato-workspace/`. In a git repository that would show up as
 //! untracked files and could be committed by accident (`events.jsonl` would leak to GitHub). The
-//! `.puppet-master/` also holds files meant to be shared through git: `memory.md` (project memory)
+//! `.potato-workspace/` also holds files meant to be shared through git: `memory.md` (project memory)
 //! and `agents/*.toml` (agent definitions). So the first time PM creates that folder inside a git
 //! work tree, this writes a managed block to the repository's `info/exclude` that hides everything
 //! except those:
 //!
 //! ```text
-//! # Puppet Master runtime data (local, added automatically)
-//! .puppet-master/*
-//! !.puppet-master/memory.md
-//! !.puppet-master/agents/
+//! # Potato Workspace runtime data (local, added automatically)
+//! .potato-workspace/*
+//! !.potato-workspace/memory.md
+//! !.potato-workspace/agents/
 //! ```
 //!
-//! An older version wrote the plain line `.puppet-master/`; that line is replaced by the block. No
+//! An older version wrote the plain line `.potato-workspace/`; that line is replaced by the block. No
 //! other line of the file is touched.
 //!
 //! - local only: `info/exclude` is never committed, and the user's `.gitignore` is never touched;
@@ -32,16 +32,16 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 /// The comment line that starts the managed block in `info/exclude`.
-pub const BLOCK_HEADER: &str = "# Puppet Master runtime data (local, added automatically)";
+pub const BLOCK_HEADER: &str = "# Potato Workspace runtime data (local, added automatically)";
 
 /// The managed block written to `info/exclude`, for a project at `rel` below the repository root
 /// (`rel` uses `/`, and is empty when the project IS the root). Runtime data is hidden; the
 /// team-shared files are re-included. Negations only work because the directory is matched by
-/// `.puppet-master/*`, not by `.puppet-master/` (git cannot re-include a file inside an excluded
+/// `.potato-workspace/*`, not by `.potato-workspace/` (git cannot re-include a file inside an excluded
 /// directory). A pattern with a slash in it is anchored to the root, so a nested project gets its
 /// own path prefix. At the root the block is exactly the three lines of the spec.
 fn block_lines(rel: &str) -> [String; 4] {
-    let dir = if rel.is_empty() { ".puppet-master".to_string() } else { format!("{rel}/.puppet-master") };
+    let dir = if rel.is_empty() { ".potato-workspace".to_string() } else { format!("{rel}/.potato-workspace") };
     [
         BLOCK_HEADER.to_string(),
         format!("{dir}/*"),
@@ -51,7 +51,7 @@ fn block_lines(rel: &str) -> [String; 4] {
 }
 
 /// The plain line an earlier version wrote. It hides the shared files too, so it is migrated.
-const LEGACY_LINE: &str = ".puppet-master/";
+const LEGACY_LINE: &str = ".potato-workspace/";
 
 /// What `ensure_in` did, for tests and logs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,7 +66,7 @@ pub enum Outcome {
     Failed(String),
 }
 
-/// Call this right before PM first writes under `<project>/.puppet-master/`. Cheap after the first
+/// Call this right before PM first writes under `<project>/.potato-workspace/`. Cheap after the first
 /// call for a project (one set lookup). Never fails and never panics.
 pub fn ensure_project_storage_excluded(project: &Path) {
     static DONE: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
@@ -78,11 +78,11 @@ pub fn ensure_project_storage_excluded(project: &Path) {
         }
     }
     if let Outcome::Failed(error) = ensure_in(project) {
-        tracing::warn!(%error, project = %project.display(), "could not exclude .puppet-master from git");
+        tracing::warn!(%error, project = %project.display(), "could not exclude .potato-workspace from git");
     }
 }
 
-/// The uncached work. `project` is the folder that holds (or will hold) `.puppet-master/`.
+/// The uncached work. `project` is the folder that holds (or will hold) `.potato-workspace/`.
 pub fn ensure_in(project: &Path) -> Outcome {
     let Some(repo) = find_repo(project) else { return Outcome::NotARepo };
     let exclude_file = repo.common_dir.join("info").join("exclude");
@@ -127,7 +127,7 @@ fn has_block(exclude: &str, block: &[String]) -> bool {
     lines.windows(block.len()).any(|window| window.iter().zip(block).all(|(a, b)| *a == b.as_str()))
 }
 
-/// Is the old plain `.puppet-master/` line present (at least once)?
+/// Is the old plain `.potato-workspace/` line present (at least once)?
 fn has_legacy_line(exclude: &str) -> bool {
     exclude.lines().any(|line| line.trim() == LEGACY_LINE)
 }
@@ -163,12 +163,12 @@ fn with_block(existing: &str, block: &[String]) -> String {
     out
 }
 
-/// Does an ignore file already ignore `.puppet-master` wherever PM puts it? An anchored pattern
-/// (`/.puppet-master`) only counts when the project is the repository root.
+/// Does an ignore file already ignore `.potato-workspace` wherever PM puts it? An anchored pattern
+/// (`/.potato-workspace`) only counts when the project is the repository root.
 fn covers(ignore_file: &str, project_is_root: bool) -> bool {
     ignore_file.lines().map(str::trim).any(|line| match line {
-        ".puppet-master" | ".puppet-master/" | "**/.puppet-master" | "**/.puppet-master/" => true,
-        "/.puppet-master" | "/.puppet-master/" => project_is_root,
+        ".potato-workspace" | ".potato-workspace/" | "**/.potato-workspace" | "**/.potato-workspace/" => true,
+        "/.potato-workspace" | "/.potato-workspace/" => project_is_root,
         _ => false,
     })
 }
@@ -229,7 +229,7 @@ fn file_line(project: &Path, repo: &Repo, rel_file: &str) -> String {
     if base.is_empty() { format!("/{file}") } else { format!("/{base}/{file}") }
 }
 
-/// Hide ONE file Puppet Master created (Hook Lane: `.codex/hooks.json`) in `info/exclude`. Only
+/// Hide ONE file Potato Workspace created (Hook Lane: `.codex/hooks.json`) in `info/exclude`. Only
 /// ever called for a file PM created, never for a file the user had. Best effort, like the block.
 pub fn exclude_file(project: &Path, rel_file: &str) -> bool {
     let Some(repo) = find_repo(project) else { return false };
@@ -241,7 +241,7 @@ pub fn exclude_file(project: &Path, rel_file: &str) -> bool {
     }
     let _ = std::fs::create_dir_all(exclude.parent().unwrap_or(&repo.common_dir));
     let sep = if existing.is_empty() || existing.ends_with('\n') { "" } else { "\n" };
-    std::fs::write(&exclude, format!("{existing}{sep}# Puppet Master hook file (local, added automatically)\n{line}\n")).is_ok()
+    std::fs::write(&exclude, format!("{existing}{sep}# Potato Workspace hook file (local, added automatically)\n{line}\n")).is_ok()
 }
 
 /// Undo [`exclude_file`]: its two lines go, every other line stays byte for byte.
@@ -255,7 +255,7 @@ pub fn unexclude_file(project: &Path, rel_file: &str) {
     let mut i = 0;
     while i < lines.len() {
         let here = lines[i].trim_end();
-        if here == "# Puppet Master hook file (local, added automatically)" && lines.get(i + 1).map(|l| l.trim_end()) == Some(line.as_str()) {
+        if here == "# Potato Workspace hook file (local, added automatically)" && lines.get(i + 1).map(|l| l.trim_end()) == Some(line.as_str()) {
             i += 2;
             continue;
         }
@@ -304,7 +304,7 @@ mod tests {
     }
 
     fn fake_pm_storage(project: &Path) {
-        let storage = project.join(".puppet-master");
+        let storage = project.join(".potato-workspace");
         std::fs::create_dir_all(storage.join("worktrees/h-1")).unwrap();
         std::fs::write(storage.join("events.jsonl"), "{}\n").unwrap();
         std::fs::write(storage.join("worktrees/h-1/file"), "x").unwrap();
@@ -314,18 +314,18 @@ mod tests {
     fn a_repo_shows_untracked_puppet_master_before_and_nothing_after() {
         let dir = repo("untracked");
         fake_pm_storage(&dir);
-        assert!(git(&dir, &["status", "--porcelain"]).contains(".puppet-master"), "control: it is visible first");
+        assert!(git(&dir, &["status", "--porcelain"]).contains(".potato-workspace"), "control: it is visible first");
         assert!(matches!(ensure_in(&dir), Outcome::Added(_)));
         assert_eq!(git(&dir, &["status", "--porcelain"]).trim(), "", "nothing untracked after");
         let exclude = std::fs::read_to_string(dir.join(".git/info/exclude")).unwrap();
-        assert!(exclude.lines().any(|l| l == ".puppet-master/*"), "{exclude}");
+        assert!(exclude.lines().any(|l| l == ".potato-workspace/*"), "{exclude}");
         std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn status_lists_memory_and_agents_but_not_runtime_data() {
         let dir = repo("shareable");
-        let pm = dir.join(".puppet-master");
+        let pm = dir.join(".potato-workspace");
         std::fs::create_dir_all(pm.join("checkpoints.git")).unwrap();
         std::fs::create_dir_all(pm.join("agents")).unwrap();
         std::fs::write(pm.join("events.jsonl"), "{}\n").unwrap();
@@ -333,12 +333,12 @@ mod tests {
         std::fs::write(pm.join("memory.md"), "# memory\n").unwrap();
         std::fs::write(pm.join("agents/a.toml"), "name = \"a\"\n").unwrap();
         let status = || git(&dir, &["status", "--porcelain", "--untracked-files=all"]);
-        assert!(status().contains(".puppet-master/events.jsonl"), "control: visible first");
+        assert!(status().contains(".potato-workspace/events.jsonl"), "control: visible first");
 
         assert!(matches!(ensure_in(&dir), Outcome::Added(_)));
         let after = status();
-        assert!(after.contains("?? .puppet-master/memory.md"), "{after}");
-        assert!(after.contains("?? .puppet-master/agents/a.toml"), "{after}");
+        assert!(after.contains("?? .potato-workspace/memory.md"), "{after}");
+        assert!(after.contains("?? .potato-workspace/agents/a.toml"), "{after}");
         assert!(!after.contains("events.jsonl"), "{after}");
         assert!(!after.contains("checkpoints.git"), "{after}");
         std::fs::remove_dir_all(&dir).ok();
@@ -349,12 +349,12 @@ mod tests {
         let dir = repo("migrate");
         let exclude_file = dir.join(".git/info/exclude");
         std::fs::create_dir_all(exclude_file.parent().unwrap()).unwrap();
-        std::fs::write(&exclude_file, "*.log\n.puppet-master/\n# mine\nbuild/\n").unwrap();
+        std::fs::write(&exclude_file, "*.log\n.potato-workspace/\n# mine\nbuild/\n").unwrap();
         assert!(matches!(ensure_in(&dir), Outcome::Added(_)));
         let text = std::fs::read_to_string(&exclude_file).unwrap();
         let expected = format!("*.log\n{}\n# mine\nbuild/\n", block_lines("").join("\n"));
         assert_eq!(text, expected);
-        assert!(!text.lines().any(|l| l == ".puppet-master/"), "legacy line gone");
+        assert!(!text.lines().any(|l| l == ".potato-workspace/"), "legacy line gone");
         assert_eq!(ensure_in(&dir), Outcome::AlreadyCovered, "migration is done once");
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -364,7 +364,7 @@ mod tests {
         let dir = repo("migrate-eof");
         let exclude_file = dir.join(".git/info/exclude");
         std::fs::create_dir_all(exclude_file.parent().unwrap()).unwrap();
-        std::fs::write(&exclude_file, "*.log\n.puppet-master/").unwrap();
+        std::fs::write(&exclude_file, "*.log\n.potato-workspace/").unwrap();
         assert!(matches!(ensure_in(&dir), Outcome::Added(_)));
         assert_eq!(
             std::fs::read_to_string(&exclude_file).unwrap(),
@@ -394,7 +394,7 @@ mod tests {
         let dir = repo("crlf");
         let exclude_file = dir.join(".git/info/exclude");
         std::fs::create_dir_all(exclude_file.parent().unwrap()).unwrap();
-        std::fs::write(&exclude_file, "*.log\r\n.puppet-master/\r\n").unwrap();
+        std::fs::write(&exclude_file, "*.log\r\n.potato-workspace/\r\n").unwrap();
         assert!(matches!(ensure_in(&dir), Outcome::Added(_)));
         let text = std::fs::read_to_string(&exclude_file).unwrap();
         assert_eq!(text, format!("*.log\r\n{}\r\n", block_lines("").join("\r\n")));
@@ -410,7 +410,7 @@ mod tests {
         assert_eq!(std::fs::read_to_string(dir.join(".gitignore")).unwrap(), "node_modules/\n", "untouched");
 
         let covered = repo("gitignore-covered");
-        std::fs::write(covered.join(".gitignore"), "# mine\n.puppet-master\n").unwrap();
+        std::fs::write(covered.join(".gitignore"), "# mine\n.potato-workspace\n").unwrap();
         let before = std::fs::read_to_string(covered.join(".git/info/exclude")).unwrap_or_default();
         assert_eq!(ensure_in(&covered), Outcome::AlreadyCovered);
         assert_eq!(std::fs::read_to_string(covered.join(".git/info/exclude")).unwrap_or_default(), before);
@@ -444,14 +444,14 @@ mod tests {
         let sub = dir.join("packages").join("app");
         std::fs::create_dir_all(&sub).unwrap();
         fake_pm_storage(&sub);
-        std::fs::write(sub.join(".puppet-master/memory.md"), "# memory\n").unwrap();
+        std::fs::write(sub.join(".potato-workspace/memory.md"), "# memory\n").unwrap();
         assert!(matches!(ensure_in(&sub), Outcome::Added(_)));
         let status = git(&dir, &["status", "--porcelain", "--untracked-files=all"]);
-        assert!(status.contains("?? packages/app/.puppet-master/memory.md"), "{status}");
+        assert!(status.contains("?? packages/app/.potato-workspace/memory.md"), "{status}");
         assert!(!status.contains("events.jsonl") && !status.contains("worktrees"), "{status}");
         // The block is anchored to the nested project, so it does not hide other folders' storage.
         let exclude = std::fs::read_to_string(dir.join(".git/info/exclude")).unwrap();
-        assert!(exclude.lines().any(|l| l == "packages/app/.puppet-master/*"), "{exclude}");
+        assert!(exclude.lines().any(|l| l == "packages/app/.potato-workspace/*"), "{exclude}");
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -465,7 +465,7 @@ mod tests {
         assert!(matches!(ensure_in(&linked), Outcome::Added(_)));
         assert_eq!(git(&linked, &["status", "--porcelain"]).trim(), "", "clean in the worktree");
         let exclude = std::fs::read_to_string(main.join(".git/info/exclude")).unwrap();
-        assert!(exclude.lines().any(|l| l == ".puppet-master/*"), "{exclude}");
+        assert!(exclude.lines().any(|l| l == ".potato-workspace/*"), "{exclude}");
         assert_eq!(ensure_in(&linked), Outcome::AlreadyCovered);
         std::fs::remove_dir_all(&main).ok();
         std::fs::remove_dir_all(linked.parent().unwrap()).ok();
@@ -476,7 +476,7 @@ mod tests {
         let dir = repo("anchored");
         let exclude_file = dir.join(".git/info/exclude");
         std::fs::create_dir_all(exclude_file.parent().unwrap()).unwrap();
-        std::fs::write(&exclude_file, "/.puppet-master/\n").unwrap();
+        std::fs::write(&exclude_file, "/.potato-workspace/\n").unwrap();
         assert_eq!(ensure_in(&dir), Outcome::AlreadyCovered, "at the root it is enough");
         let sub = dir.join("pkg");
         std::fs::create_dir_all(&sub).unwrap();

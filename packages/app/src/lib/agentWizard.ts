@@ -490,7 +490,7 @@ export function provenanceOf(drafter: Drafter, rounds: number): Provenance {
   };
 }
 
-const OPENROUTER_SYSTEM = 'You write agent definition files for Puppet Master. Follow the instructions in the user message exactly.';
+const OPENROUTER_SYSTEM = 'You write agent definition files for Potato Workspace. Follow the instructions in the user message exactly.';
 
 type StreamFn = typeof streamLlm;
 

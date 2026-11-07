@@ -285,7 +285,7 @@ fn expect_for(
 /// `# capture:` header of a screen fixture.
 pub fn header(command: &str, version: Option<&str>, grid: (u16, u16)) -> String {
     format!(
-        "# capture: {command} {}, pane {}x{}, puppet-master wizard capture, {}; user name scrubbed\n",
+        "# capture: {command} {}, pane {}x{}, potato-workspace wizard capture, {}; user name scrubbed\n",
         version.unwrap_or("(version unknown)"),
         grid.0,
         grid.1,

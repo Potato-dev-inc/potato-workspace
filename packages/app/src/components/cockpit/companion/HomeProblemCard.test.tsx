@@ -37,7 +37,7 @@ const view: CompanionView = {
   nextCheckin: null,
   restarts: 0,
   autoStart: true,
-  homeProblem: { place: 'your Desktop', suggestedFolder: 'C:\Users\you\PuppetMaster\companions\pipi' },
+  homeProblem: { place: 'your Desktop', suggestedFolder: 'C:\Users\you\PotatoWorkspace\companions\pipi' },
 };
 const button = () => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('to its own folder'));
 
@@ -45,7 +45,7 @@ describe('HomeProblemCard', () => {
   it('says where the home is and what that does, and names the new folder', async () => {
     await act(async () => root.render(<HomeProblemCard companion={view} onMove={() => {}} />));
     expect(host.textContent).toContain("Pipi's home is your Desktop, so other agents there think they are Pipi.");
-    expect(host.textContent).toContain('C:\Users\you\PuppetMaster\companions\pipi');
+    expect(host.textContent).toContain('C:\Users\you\PotatoWorkspace\companions\pipi');
     expect(button()?.textContent).toBe('Move Pipi to its own folder');
   });
 

@@ -3,7 +3,7 @@
 //! Every case runs the built binary as a child process, exactly as Claude Code / Codex would:
 //! event JSON on stdin, env from the pane. Whatever the bridge does (absent, black hole, errors),
 //! the emitter must exit 0 with empty stdout and stderr within its 300 ms budget, so the agent
-//! never notices Puppet Master. Wall times include process start-up on this machine.
+//! never notices Potato Workspace. Wall times include process start-up on this machine.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -42,7 +42,7 @@ fn run(env: &[(&str, &str)], stdin: &[u8]) -> Outcome {
         .env_remove("PM_HOOK_PANE")
         .env_remove("PM_HOOK_BRIDGE")
         .env_remove("PM_HOOKS_OFF")
-        .env("PUPPET_MASTER_HOOKS_DIR", &dir)
+        .env("POTATO_WORKSPACE_HOOKS_DIR", &dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -168,12 +168,12 @@ fn the_payload_and_only_the_hook_headers_reach_the_bridge() {
     let raw = rx.recv_timeout(Duration::from_secs(2)).expect("request");
     let (head, body) = raw.split_once("\r\n\r\n").unwrap();
     assert!(head.starts_with("POST /hooks/event HTTP/1.1\r\n"), "{head}");
-    assert!(head.contains("X-PM-Hook-Token: ttttttttttttttttttttttttttttttttttttttttttt\r\n"));
-    assert!(head.contains("X-PM-Hook-Pane: pane-1\r\n"));
-    assert!(head.contains("X-PM-Hook-Agent: claude\r\n"));
+    assert!(head.contains("X-Potato-Workspace-Hook-Token: ttttttttttttttttttttttttttttttttttttttttttt\r\n"));
+    assert!(head.contains("X-Potato-Workspace-Hook-Pane: pane-1\r\n"));
+    assert!(head.contains("X-Potato-Workspace-Hook-Agent: claude\r\n"));
     assert!(!head.contains("Authorization"), "never a bearer");
-    assert!(!head.contains("X-Puppet-Master-Session"), "never an MCP session");
-    assert!(!head.contains("X-PM-Local-Secret"), "the local secret never reaches a hook");
+    assert!(!head.contains("X-Potato-Workspace-Session"), "never an MCP session");
+    assert!(!head.contains("X-Potato-Workspace-Local-Secret"), "the local secret never reaches a hook");
     let sent: serde_json::Value = serde_json::from_str(body).unwrap();
     let fixture: serde_json::Value = serde_json::from_str(FIXTURE).unwrap();
     assert_eq!(sent, fixture);
@@ -262,7 +262,7 @@ fn a_complete_event_is_posted_even_while_the_agent_keeps_stdin_open() {
         .env("PM_HOOK_TOKEN", "t".repeat(43))
         .env("PM_HOOK_PANE", "pane-1")
         .env("PM_HOOK_BRIDGE", &addr)
-        .env("PUPPET_MASTER_HOOKS_DIR", &dir)
+        .env("POTATO_WORKSPACE_HOOKS_DIR", &dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

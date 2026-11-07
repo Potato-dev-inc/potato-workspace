@@ -8,7 +8,7 @@
 //! - every caller without an MCP session, and
 //! - every connection whose process is not inside a live companion pane. The check is the process that owns
 //!   the TCP connection, walked up the process tree (`companion::peer::recall_caller_pane`), not a header the
-//!   caller writes: neither `X-Puppet-Master-Pane` nor `X-Puppet-Master-Pid` gets you anything. Where the
+//!   caller writes: neither `X-Potato-Workspace-Pane` nor `X-Potato-Workspace-Pid` gets you anything. Where the
 //!   connection's owner or the process table cannot be read (another OS today) the answer is no.
 //!
 //! The pane that passes the check is the only thing handed to the search: a caller cannot name another

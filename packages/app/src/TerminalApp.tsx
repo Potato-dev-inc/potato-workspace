@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getDefaultTerminalAgentType,
   type AgentType,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import { useBridge } from './hooks/useBridge';
 import { usePaneRegistry } from './hooks/usePaneRegistry';
 import { useProjectPath } from './hooks/useProjectPath';

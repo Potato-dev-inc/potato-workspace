@@ -29,13 +29,20 @@ use crate::acp::state::{ExitKind, Phase, Snapshot, StopKind};
 use crate::audit::Who;
 use crate::operations::OperationError;
 use crate::session_chat::ChatItem;
+use crate::wait_reasons;
 
 type Reply = Result<Value, OperationError>;
 
 const DEFAULT_WAIT_MS: u64 = 120_000;
 const MAX_WAIT_MS: u64 = 300_000;
+/// Longest stability window `wait_agents` accepts for `confirm_prompt_ms`.
+const MAX_CONFIRM_PROMPT_MS: u64 = 60_000;
 /// Longest wait `run_agent` and `followup_task` do before they answer "still running".
 const POLL: Duration = Duration::from_millis(100);
+/// After the agent's background work drains, how long its last turn must stay finished with no visible change
+/// before a wait calls it done. The adapter may start the follow-up turn that carries the real answer a moment
+/// later; this window keeps the wait from returning the earlier, partial answer.
+const BACKGROUND_SETTLE: Duration = Duration::from_millis(2_000);
 /// Items `inspect_agent` shows of the chat.
 const RECENT_ITEMS: usize = 16;
 const ITEM_TEXT_CHARS: usize = 600;
@@ -127,6 +134,7 @@ fn item_line(item: &ChatItem) -> Option<Value> {
 /// The question the agent waits on, in the shape `answer_prompt` takes: `prompt_id` and one of the option ids.
 fn prompt_of(state: &Value) -> Value {
     let Some(first) = state.get("permissions").and_then(Value::as_array).and_then(|list| list.first()) else { return Value::Null };
+    let since = first.get("sinceMs").and_then(Value::as_u64);
     let options: Vec<Value> = first
         .get("options")
         .and_then(Value::as_array)
@@ -138,6 +146,8 @@ fn prompt_of(state: &Value) -> Value {
         "title": first.get("title"),
         "tool_kind": first.get("toolKind"),
         "options": options,
+        "since_ms": since.map(Value::from).unwrap_or(Value::Null),
+        "open_ms": since.map(|ms| Value::from(crate::questions::now_ms().saturating_sub(ms))).unwrap_or(Value::Null),
         "answerable_by_agent": state.get("agentAnswering").and_then(Value::as_bool).unwrap_or(false),
         "hint": if state.get("agentAnswering").and_then(Value::as_bool).unwrap_or(false) {
             "answer_prompt with prompt_id and the id of one option"
@@ -155,6 +165,19 @@ pub fn view(chat: &AcpChat) -> Value {
     let status = status_of(&snapshot);
     let (reply, problem) = last_turn(&items);
     let in_terminal = !state.get("inTerminal").map(Value::is_null).unwrap_or(true);
+    let (model, reasoning) = super::choice::in_use(chat);
+    let running: Vec<&crate::acp::state::BackgroundTask> = snapshot.background_tasks.iter().filter(|t| t.is_running()).collect();
+    let tracking = match chat.session().caps() {
+        Some(caps) if caps.background_tasks => "reported",
+        Some(_) => "not_reported_by_adapter",
+        None => "unknown_until_started",
+    };
+    let last_prompt = chat.last_prompt_end().map(|end| json!({
+        "prompt_id": end.prompt_id,
+        "ask_id": end.ask_id,
+        "reason": end.reason,
+        "at_ms": end.at_ms,
+    })).unwrap_or(Value::Null);
     json!({
         "handle": chat.pane_id(),
         "pane_id": chat.pane_id(),
@@ -172,11 +195,20 @@ pub fn view(chat: &AcpChat) -> Value {
             Value::Null
         },
         "pane_open": !chat.is_closed(),
+        "pane_policy": "stays_open_until_you_close_it",
         "in_terminal": in_terminal,
+        "model": model.map(Value::String).unwrap_or(Value::Null),
+        "reasoning": reasoning.map(Value::String).unwrap_or(Value::Null),
+        "background_running": !running.is_empty(),
+        "background_task_count": running.len(),
+        "background_tasks": running.iter().map(|t| json!({ "id": t.id, "name": t.name, "state": t.state })).collect::<Vec<_>>(),
+        "background_tracking": tracking,
+        "background_note": if tracking == "reported" { Value::Null } else { json!("completed covers the turn only; this agent does not report background work that outlives it.") },
+        "last_prompt": last_prompt,
         "turn": snapshot.turn,
         "revision": snapshot.revision,
         "next_cursor": snapshot.revision,
-        "warnings": [],
+        "warnings": chat.choice_warnings(),
     })
 }
 
@@ -268,6 +300,16 @@ fn until_of(value: &Value) -> Vec<String> {
     }
 }
 
+/// How long the same prompt must stay open before `wait_agents` calls a chat blocked. `0` (the
+/// default) keeps the old behaviour: one `waiting_input` reading is enough.
+fn confirm_prompt_ms_of(value: &Value) -> Result<u64, OperationError> {
+    let ms = value.get("confirm_prompt_ms").and_then(Value::as_u64).unwrap_or(0);
+    if ms > MAX_CONFIRM_PROMPT_MS {
+        return Err(err("INVALID_TIMEOUT", format!("confirm_prompt_ms must be between 0 and {MAX_CONFIRM_PROMPT_MS}"), false));
+    }
+    Ok(ms)
+}
+
 fn wait_ms_of(value: &Value, default: u64) -> Result<u64, OperationError> {
     let ms = value.get("wait_ms").or_else(|| value.get("timeout_ms")).and_then(Value::as_u64).unwrap_or(default);
     if ms > MAX_WAIT_MS {
@@ -328,6 +370,15 @@ pub fn intercept(method: &str, segments: &[&str], query: &str, body: &[u8], deps
     }
 }
 
+/// A chat that could not take the requested settings is closed and its unused conversation dropped.
+fn abandon_chat(deps: &StartDeps, chat: &AcpChat) {
+    let _ = crate::pty::registry_kill_pane_and_wait(&deps.registry, chat.pane_id(), Some("the requested model could not be used"));
+    if let Some(conversations) = &deps.conversations {
+        conversations.discard(chat.pane_id());
+    }
+    deps.host.panes_changed();
+}
+
 fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> Option<Reply> {
     let value = body_json(body)?;
     let task = text_of(&value, "task");
@@ -370,6 +421,31 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> Opt
         }
     };
     chat.set_started_by(session);
+    // The model and effort the caller asked for, applied before the first message. A request the
+    // agent cannot honour is an error (explicit lane) or the terminal way (the saved choice); it
+    // never quietly runs on another model.
+    let model = text_of(&value, "model");
+    let reasoning = text_of(&value, "reasoning");
+    if model.is_some() || reasoning.is_some() {
+        if let Err(choice) = chat.apply_choices(model.as_deref(), reasoning.as_deref()) {
+            abandon_chat(deps, &chat);
+            if fallback {
+                return None;
+            }
+            let mut e = err(choice.code, choice.message, true);
+            e.context = json!({ "fallback": "terminal", "hint": "The terminal way can run a requested model. Retry with lane: \"terminal\"." });
+            return Some(Err(e));
+        }
+    }
+    // Nested under the pane of the agent that asked for it, exactly like a terminal helper. The
+    // pane id the session's tool server sends is a hint; the process tree confirms it.
+    crate::bridge::pane_util::note_pane_parent(
+        &deps.registry,
+        session,
+        crate::pty::pane_parent::request_caller().as_deref(),
+        chat.pane_id(),
+    );
+    deps.host.panes_changed();
     deps.host.state_changed(chat.pane_id(), &chat.state());
     if let Err(error) = chat.send(&task) {
         return Some(Err(send_failure(error)));
@@ -409,16 +485,89 @@ fn wait(body: &[u8]) -> Option<Reply> {
         Ok(ms) => ms,
         Err(e) => return Some(Err(e)),
     };
+    let confirm_ms = match confirm_prompt_ms_of(&value) {
+        Ok(ms) => ms,
+        Err(e) => return Some(Err(e)),
+    };
+    // A completed turn does not mean the work is done when the adapter reports background tasks
+    // still running. Callers that want the old turn-only answer pass wait_for_background: false.
+    let wait_for_background = value.get("wait_for_background").and_then(Value::as_bool).unwrap_or(true);
+    #[derive(Clone, Default)]
+    struct PromptClock {
+        key: Option<(u64, u64)>,
+        since: Option<Instant>,
+    }
+    let mut clocks = vec![PromptClock::default(); chats.len()];
+    // Background work that just drained: wait a short, quiet window before calling the chat done, so a follow-up
+    // turn the adapter is about to start is not missed.
+    let mut settle: Vec<Option<Instant>> = vec![None; chats.len()];
+    let mut settle_items: Vec<usize> = chats.iter().map(|c| c.item_count()).collect();
+    let mut saw_background = vec![false; chats.len()];
     let started = Instant::now();
     let deadline = started + Duration::from_millis(wait_ms);
-    let mut reason = "timeout";
+    let mut reason = wait_reasons::TIMEOUT;
     loop {
-        let hits = chats.iter().filter(|c| until.iter().any(|u| u == status_of(&c.session().snapshot())) || c.is_closed()).count();
+        let now = Instant::now();
+        let mut hits = 0usize;
+        for (i, chat) in chats.iter().enumerate() {
+            let snapshot = chat.session().snapshot();
+            let status = status_of(&snapshot);
+            let closed = chat.is_closed();
+            let background_running = snapshot.background_tasks.iter().any(|t| t.is_running());
+            if background_running {
+                saw_background[i] = true;
+                settle[i] = None;
+            } else if saw_background[i] {
+                // A reply (or a notice) that is still arriving restarts the quiet window, so a streamed answer is
+                // not cut in half.
+                let items = chat.item_count();
+                if settle[i].is_none() || settle_items[i] != items {
+                    settle[i] = Some(now);
+                    settle_items[i] = items;
+                }
+            } else {
+                settle[i] = None;
+            }
+            let mut hit = closed || until.iter().any(|u| u == status);
+            if hit && !closed && status == "waiting_input" && confirm_ms > 0 {
+                let key = snapshot.permission_waits.first().map(|p| (p.ask_id, p.since_ms));
+                match key {
+                    Some(key) => {
+                        if clocks[i].key != Some(key) {
+                            clocks[i] = PromptClock { key: Some(key), since: Some(now) };
+                        }
+                        let stable = clocks[i].since.is_some_and(|since| now.duration_since(since) >= Duration::from_millis(confirm_ms));
+                        hit = stable;
+                    }
+                    None => {
+                        clocks[i] = PromptClock::default();
+                        hit = false;
+                    }
+                }
+            } else if !closed {
+                clocks[i] = PromptClock::default();
+            }
+            if hit && !closed && is_final(status) && wait_for_background {
+                if background_running {
+                    hit = false;
+                } else if settle[i].is_some_and(|since| now.duration_since(since) < BACKGROUND_SETTLE) {
+                    hit = false;
+                }
+            }
+            if hit {
+                hits += 1;
+            }
+        }
         if (wait_all && hits == chats.len()) || (!wait_all && hits > 0) {
-            reason = "status";
+            reason = wait_reasons::MATCHED_STATE;
             break;
         }
-        if Instant::now() >= deadline {
+        if now >= deadline {
+            reason = if chats.iter().any(|c| c.session().snapshot().background_tasks.iter().any(|t| t.is_running())) {
+                wait_reasons::BACKGROUND
+            } else {
+                wait_reasons::TIMEOUT
+            };
             break;
         }
         std::thread::sleep(POLL);
@@ -440,6 +589,11 @@ fn followup(chat: &AcpChat, value: &Value, session: Option<&str>, next_turn: boo
     let task = text_of(value, "task").or_else(|| text_of(value, "message")).ok_or_else(|| err("INVALID_TASK", "task is required", false))?;
     if chat.is_closed() {
         return Err(err("AGENT_CLOSED", "That chat session was closed.", false));
+    }
+    let model = text_of(value, "model");
+    let reasoning = text_of(value, "reasoning");
+    if model.is_some() || reasoning.is_some() {
+        chat.apply_choices(model.as_deref(), reasoning.as_deref()).map_err(|choice| err(choice.code, choice.message, true))?;
     }
     if next_turn {
         match chat.send(&task) {

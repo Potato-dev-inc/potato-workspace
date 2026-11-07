@@ -1,4 +1,4 @@
-//! Resolve how CLI hosts should launch the Puppet Master MCP stdio server.
+//! Resolve how CLI hosts should launch the Potato Workspace MCP stdio server.
 
 use once_cell::sync::OnceCell;
 use std::path::{Path, PathBuf};
@@ -63,7 +63,7 @@ pub struct McpLaunchSpec {
 pub fn npm_mcp_launch_spec() -> McpLaunchSpec {
     McpLaunchSpec {
         command: "npx".into(),
-        args: vec!["-y".into(), "@puppet-master/mcp".into()],
+        args: vec!["-y".into(), "@potato-workspace/mcp".into()],
     }
 }
 
@@ -140,7 +140,7 @@ mod tests {
     fn fallback_uses_npx_when_no_bundle() {
         let spec = mcp_launch_spec();
         assert_eq!(spec.command, "npx");
-        assert!(spec.args.contains(&"@puppet-master/mcp".to_string()));
+        assert!(spec.args.contains(&"@potato-workspace/mcp".to_string()));
     }
 }
 

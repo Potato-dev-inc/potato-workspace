@@ -1,4 +1,4 @@
-//! Strict mode: the set of agents Puppet Master must not guess for.
+//! Strict mode: the set of agents Potato Workspace must not guess for.
 //!
 //! The set is replaced as a whole whenever a version probe or a check changes the picture
 //! (`canary::refresh_strict`). Reads are cheap (a read lock on a small set) because the gate

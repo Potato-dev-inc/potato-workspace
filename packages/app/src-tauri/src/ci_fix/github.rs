@@ -17,7 +17,7 @@ use serde::Deserialize;
 const NAME_MAX_CHARS: usize = 80;
 /// Shown when a check has no usable name.
 const UNNAMED: &str = "Unnamed check";
-/// The only link prefix Puppet Master keeps.
+/// The only link prefix Potato Workspace keeps.
 const GITHUB_PREFIX: &str = "https://github.com/";
 /// The app that runs GitHub Actions jobs. Only its checks have a job log.
 const ACTIONS_APP: &str = "github-actions";
@@ -27,7 +27,7 @@ const FAILED_CONCLUSIONS: &[&str] = &["failure", "timed_out", "startup_failure"]
 const WAITING_APPROVAL: &str = "Waiting for approval on GitHub";
 
 /// Words no path built here may contain (SPEC S9): reruns, dispatches, approvals, deployment
-/// approvals, merges, reviews, comments and labels all write to GitHub. Puppet Master only reads.
+/// approvals, merges, reviews, comments and labels all write to GitHub. Potato Workspace only reads.
 // Reason: only the no-write tests read this list. The check is a test, not a runtime path.
 #[allow(dead_code)]
 pub const WRITE_PATHS_NEVER: &[&str] =
@@ -193,7 +193,7 @@ pub enum CiRead {
     Passed,
     /// At least one check failed. `still_running`: another check has not finished yet.
     Failed { checks: Vec<FailedCheck>, still_running: bool },
-    /// GitHub waits for a person to approve a run. Puppet Master never approves.
+    /// GitHub waits for a person to approve a run. Potato Workspace never approves.
     Waiting { why: String },
 }
 
@@ -246,7 +246,7 @@ fn check_name(raw: &str) -> String {
     }
 }
 
-/// A link Puppet Master keeps: `https://github.com/...` only, with no spaces or control characters.
+/// A link Potato Workspace keeps: `https://github.com/...` only, with no spaces or control characters.
 /// Anything else becomes empty.
 fn github_link(url: &str) -> String {
     let ok = url.starts_with(GITHUB_PREFIX)
@@ -286,7 +286,7 @@ pub fn job_log_path(owner_repo: &str, job: u64) -> String {
 #[allow(dead_code)]
 pub fn read_pull(gh: &dyn Gh, owner_repo: &str, number: u64) -> Result<ApiPull, String> {
     if !valid_owner_repo(owner_repo) || number == 0 {
-        return Err("Puppet Master can't tell which pull request this is".to_string());
+        return Err("Potato Workspace can't tell which pull request this is".to_string());
     }
     let response = gh.api(&pull_path(owner_repo, number), None)?;
     if response.status != 200 {
@@ -299,7 +299,7 @@ pub fn read_pull(gh: &dyn Gh, owner_repo: &str, number: u64) -> Result<ApiPull, 
 // Reason: only the tests call this helper. The engine reads through its own `read_checks` method.
 #[allow(dead_code)]
 pub fn read_checks(gh: &dyn Gh, owner_repo: &str, sha: &str) -> Result<Vec<ApiCheck>, String> {
-    let path = checks_path(owner_repo, sha).ok_or_else(|| "Puppet Master can't tell which commit this is".to_string())?;
+    let path = checks_path(owner_repo, sha).ok_or_else(|| "Potato Workspace can't tell which commit this is".to_string())?;
     let response = gh.api(&path, None)?;
     if response.status != 200 {
         return Err(format!("GitHub answered {}", response.status));

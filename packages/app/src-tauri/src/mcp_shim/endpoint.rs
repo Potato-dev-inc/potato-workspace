@@ -20,9 +20,9 @@ pub(crate) fn read_bridge_endpoint() -> Result<BridgeEndpoint, String> {
 }
 
 /// The app writes its per-launch local secret here, beside the port file (S3).
-const LOCAL_SECRET_FILE: &str = "puppet-master.bridge.secret";
+const LOCAL_SECRET_FILE: &str = "potato-workspace.bridge.secret";
 
-/// `X-PM-Local-Secret: <hex>\r\n` for every bridge request, or "" when there is no secret file
+/// `X-Potato-Workspace-Local-Secret: <hex>\r\n` for every bridge request, or "" when there is no secret file
 /// (an older app). Read from beside the same port file `read_bridge_endpoint` uses, each request,
 /// so a restarted app's new secret is picked up. The bridge only logs a missing secret for now.
 pub(crate) fn local_secret_header() -> String {
@@ -36,7 +36,7 @@ pub(crate) fn local_secret_header_from_candidates(candidates: &[PathBuf]) -> Str
         .and_then(|path| fs::read_to_string(path.with_file_name(LOCAL_SECRET_FILE)).ok())
         .map(|raw| raw.trim().to_string())
         .filter(|secret| !secret.is_empty() && secret.bytes().all(|b| b.is_ascii_hexdigit()))
-        .map(|secret| format!("X-PM-Local-Secret: {secret}\r\n"))
+        .map(|secret| format!("X-Potato-Workspace-Local-Secret: {secret}\r\n"))
         .unwrap_or_default()
 }
 
@@ -54,7 +54,7 @@ pub(crate) fn read_bridge_endpoint_from_candidates(
         }
     }
     Err(format!(
-        "bridge_down: Puppet Master bridge port file not found (tried: {}). Last error: {last_error}",
+        "bridge_down: Potato Workspace bridge port file not found (tried: {}). Last error: {last_error}",
         candidates
             .iter()
             .map(|path| path.display().to_string())
@@ -74,7 +74,7 @@ pub(crate) fn live_endpoint_or_probe(endpoint: BridgeEndpoint) -> BridgeEndpoint
     if accepts(&endpoint.host, endpoint.port) {
         return endpoint;
     }
-    for port in 17321..=17330 {
+    for port in 17421..=17430 {
         if accepts(&endpoint.host, port) {
             return BridgeEndpoint { host: endpoint.host, port };
         }

@@ -15,7 +15,7 @@ export interface PackageCheckScenario {
   lookups?: boolean;
 }
 
-const NPM_FOOTER = 'Facts from the public npm registry. Only the package names were sent. Puppet Master never answers for you.';
+const NPM_FOOTER = 'Facts from the public npm registry. Only the package names were sent. Potato Workspace never answers for you.';
 
 function item(over: Pick<PackageItem, 'ecosystem' | 'tool' | 'name' | 'first'> & Partial<PackageItem>): PackageItem {
   return { source: { kind: 'registry' }, global: false, runsNow: false, popular: false, cut: false, lookup: false, look: false, ...over };
@@ -132,7 +132,7 @@ export const MANY_LIST: PackageList = {
     item({ ecosystem: 'crates', tool: 'cargo', name: 'tidewarp-rs', lookup: true, first: 'Checking…' }),
     item({ ecosystem: 'npm', tool: 'npm', name: 'gridmint', lookup: true, first: 'Checking…' }),
     item({ ecosystem: 'gems', tool: 'gem', name: 'pinecase', lookup: true, first: 'Checking…' }),
-    item({ ecosystem: 'winget', tool: 'winget', name: 'Wintool.Extra', first: "Not checked: Puppet Master can't look up winget packages yet" }),
+    item({ ecosystem: 'winget', tool: 'winget', name: 'Wintool.Extra', first: "Not checked: Potato Workspace can't look up winget packages yet" }),
     item({ ecosystem: 'npm', tool: 'npm', name: 'local-pkg', source: { kind: 'local' }, first: 'Installs from a folder or file on this computer. Not checked.' }),
   ],
   more: 2,
@@ -150,7 +150,7 @@ export const MANY_VIEW: PackageCheckView = {
     row({ name: 'tidewarp-rs', ecosystem: 'crates', registryLabel: 'crates.io', state: 'failed', summary: 'Could not check: crates.io did not answer in time', lines: [fact('Could not check: crates.io did not answer in time')], pageUrl: 'https://crates.io/crates/tidewarp-rs' }),
     row({ name: 'gridmint', ecosystem: 'npm', registryLabel: 'npm', state: 'checked', look: true, summary: 'Runs a script when installed · First published 5 days ago', lines: [fact('Runs a script when installed', true), fact('First published 5 days ago', true)], pageUrl: 'https://www.npmjs.com/package/gridmint' }),
     row({ name: 'pinecase', ecosystem: 'gems', registryLabel: 'RubyGems', state: 'checked', summary: 'Few downloads: 800 in total', lines: [fact('Few downloads: 800 in total', true)], pageUrl: 'https://rubygems.org/gems/pinecase' }),
-    row({ name: 'Wintool.Extra', ecosystem: 'winget', registryLabel: 'winget', state: 'not_checked', summary: "Not checked: Puppet Master can't look up winget packages yet", lines: [fact("Not checked: Puppet Master can't look up winget packages yet")] }),
+    row({ name: 'Wintool.Extra', ecosystem: 'winget', registryLabel: 'winget', state: 'not_checked', summary: "Not checked: Potato Workspace can't look up winget packages yet", lines: [fact("Not checked: Potato Workspace can't look up winget packages yet")] }),
     row({ name: 'local-pkg', ecosystem: 'npm', registryLabel: 'npm', state: 'not_checked', summary: 'Installs from a folder or file on this computer. Not checked.', lines: [fact('Installs from a folder or file on this computer. Not checked.')] }),
   ],
   more: 2,

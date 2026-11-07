@@ -11,7 +11,7 @@ use std::time::Instant;
 
 /// The fix, in the words every warning uses.
 pub(crate) const SCHEMA_DRIFT_FIX: &str =
-    "Rebuild or reinstall the Puppet Master MCP, then reconnect (Claude: /mcp).";
+    "Rebuild or reinstall the Potato Workspace MCP, then reconnect (Claude: /mcp).";
 
 /// How long a health answer is trusted before the next tool call asks the bridge again.
 const DRIFT_TTL: Duration = Duration::from_secs(60);
@@ -90,7 +90,7 @@ pub(crate) fn notice_line(notice: &Value) -> String {
 }
 
 /// Adds `notices` to a tool result: a final text block (so every host shows it) and a
-/// `puppet_master_warnings` array in `structuredContent`. The first content block, which holds
+/// `potato_workspace_warnings` array in `structuredContent`. The first content block, which holds
 /// the tool's own JSON, is left untouched.
 pub(crate) fn apply_notices(result: &mut Value, notices: &[Value]) {
     if notices.is_empty() {
@@ -106,7 +106,7 @@ pub(crate) fn apply_notices(result: &mut Value, notices: &[Value]) {
         .and_then(Value::as_object_mut)
     {
         let slot = structured
-            .entry("puppet_master_warnings")
+            .entry("potato_workspace_warnings")
             .or_insert_with(|| json!([]));
         if let Some(list) = slot.as_array_mut() {
             list.extend(notices.iter().cloned());

@@ -1,6 +1,6 @@
 // Provider-agnostic streaming LLM client for the built-in orchestrator (Anthropic, OpenAI, OpenRouter): shared chat
 // types plus per-provider SSE streaming behind streamLlm.
-import type { LlmProvider } from '@puppet-master/shared';
+import type { LlmProvider } from '@potato-workspace/shared';
 
 export type ChatRole = 'user' | 'assistant' | 'system';
 export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence';
@@ -232,8 +232,8 @@ const OPENROUTER_OPTIONS: OpenAICompatibleOptions = {
   url: OPENROUTER_URL,
   providerLabel: 'openrouter',
   extraHeaders: {
-    'HTTP-Referer': 'https://github.com/tmux-puppet-master',
-    'X-Title': 'Puppet Master',
+    'HTTP-Referer': 'https://github.com/tmux-potato-workspace',
+    'X-Title': 'Potato Workspace',
   },
 };
 

@@ -14,7 +14,7 @@ const NOISE_FOLDERS: &[&str] = &[
     "dist",
     "build",
     ".next",
-    ".puppet-master",
+    ".potato-workspace",
     ".git",
     "__pycache__",
     ".venv",
@@ -144,7 +144,7 @@ mod tests {
         assert!(is_noise("dist/bundle.js"));
         assert!(is_noise("build/out.txt"));
         assert!(is_noise(".next/cache/x"));
-        assert!(is_noise(".puppet-master/worktrees/x/src/a.rs"));
+        assert!(is_noise(".potato-workspace/worktrees/x/src/a.rs"));
         assert!(is_noise(".git/config"));
         assert!(is_noise("pkg/__pycache__/m.pyc"));
         assert!(is_noise(".venv/lib/x.py"));

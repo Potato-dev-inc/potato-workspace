@@ -147,9 +147,9 @@ fn visit(out: &mut Walk, rules: &Rules, protect: &GlobSet, silence: Option<&[Che
     out.protected.insert(rel.to_string(), Loaded { role, eco, size, sha256: sha256_hex(&bytes), text, config_checks });
 }
 
-/// `[tamper] protect = [...]` and `ignore = [...]` from `.puppet-master/project.toml`.
+/// `[tamper] protect = [...]` and `ignore = [...]` from `.potato-workspace/project.toml`.
 pub fn project_globs(root: &Path) -> (Vec<String>, Vec<String>) {
-    let Ok(text) = fs::read_to_string(root.join(".puppet-master").join("project.toml")) else {
+    let Ok(text) = fs::read_to_string(root.join(".potato-workspace").join("project.toml")) else {
         return (Vec::new(), Vec::new());
     };
     let Ok(table) = text.parse::<toml::Table>() else { return (Vec::new(), Vec::new()) };

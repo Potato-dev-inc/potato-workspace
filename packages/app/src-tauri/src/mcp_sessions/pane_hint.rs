@@ -1,7 +1,7 @@
 //! The pane each MCP connection says its agent runs in, and the connection's process id.
 //!
-//! The MCP shim reads `PUPPET_MASTER_PANE_ID` (set on every pane Puppet Master launches) and sends it
-//! as `X-Puppet-Master-Pane`. It is a caller-supplied claim, kept in memory only and used for one
+//! The MCP shim reads `POTATO_WORKSPACE_PANE_ID` (set on every pane Potato Workspace launches) and sends it
+//! as `X-Potato-Workspace-Pane`. It is a caller-supplied claim, kept in memory only and used for one
 //! thing: nesting a helper pane under its parent in the sidebar (`pty::pane_parent` checks the claim
 //! against the live registry and the process tree first). It never feeds `authorize`, leases or
 //! `agent_authority`: no right depends on it.
@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-/// The variable Puppet Master sets on every pane it launches, and the cleaning the shim applies
+/// The variable Potato Workspace sets on every pane it launches, and the cleaning the shim applies
 /// before sending it (re-exported here because the shim reaches the app library through this module).
 pub use crate::pty::pane_parent::clean_hint as clean_pane_hint;
 pub use crate::pty::PANE_ID_ENV;

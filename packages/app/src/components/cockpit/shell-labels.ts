@@ -3,8 +3,8 @@
 import { projectName } from '../../lib/mobile-agent-tabs';
 import { projectOfCwd } from '../../lib/ship-model';
 
-/** Where Puppet Master keeps a separate copy: `<project>/.puppet-master/worktrees/<id>`. */
-const COPY_MARK = '/.puppet-master/worktrees/';
+/** Where Potato Workspace keeps a separate copy: `<project>/.potato-workspace/worktrees/<id>`. */
+const COPY_MARK = '/.potato-workspace/worktrees/';
 
 /** True when `cwd` is the folder of a separate copy (its last part is an id, not a project name). */
 export function isSeparateCopyCwd(cwd: string | undefined | null): boolean {

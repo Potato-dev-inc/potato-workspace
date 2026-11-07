@@ -1,6 +1,6 @@
 // The Project view: the project's name as a constant title, then Memory and Copies tabs.
 // Memory is the one text every agent in a project reads. It is saved to
-// `<project>/.puppet-master/memory.md` and rendered into each agent's own instruction file.
+// `<project>/.potato-workspace/memory.md` and rendered into each agent's own instruction file.
 import { useCallback, useEffect, useState } from 'react';
 import { memoryApi, type MemoryApi, type MemoryTargetStatus, type MemoryView } from '../../lib/memory-api';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
@@ -164,7 +164,7 @@ export function ProjectMemory({
             </li>
           ))}
         </ul>
-        <p className="ck-sub ck-memory-fine">Only the block between the Puppet Master markers is ever changed.</p>
+        <p className="ck-sub ck-memory-fine">Only the block between the Potato Workspace markers is ever changed.</p>
       </section>
 
       <div className="ck-memory-switch">

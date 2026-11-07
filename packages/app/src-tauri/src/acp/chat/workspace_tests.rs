@@ -351,6 +351,7 @@ fn an_agent_cannot_answer_a_permission_question_unless_the_person_allowed_it() {
     let name = rig.chat.answer_for_agent(&question, "reject_once", Who::Agent("session-1".into())).expect("allowed now");
     assert_eq!(name, "Reject");
     assert!(wait_until(30, || rig.of_texts_contain("chose:reject_once")), "the choice reached the agent: {:?}", rig.texts());
+    assert_eq!(rig.chat.last_prompt_end().unwrap().reason, "answered_by_agent");
     // The question is closed; answering twice is not possible.
     assert_eq!(rig.chat.answer_for_agent(&question, "reject_once", Who::Local), Err(AgentAnswerError::NoSuchQuestion));
 }
@@ -379,7 +380,7 @@ fn the_agent_tools_see_a_chat_by_its_handle_and_read_the_chat_not_a_screen() {
     assert!(call(&rig, "POST", "agents/wait", json!({ "handles": ["run-123"] }), None).is_none());
 
     let waited = call(&rig, "POST", "agents/wait", json!({ "handles": [id], "wait_ms": 2000 }), None).unwrap().unwrap();
-    assert_eq!(waited["reason"], "status");
+    assert_eq!(waited["reason"], "matched_state");
     assert_eq!(waited["agents"][0]["status"], "completed");
     let mixed = call(&rig, "POST", "agents/wait", json!({ "handles": [id, "run-123"] }), None).unwrap();
     assert_eq!(mixed.unwrap_err().code, "MIXED_HANDLES");

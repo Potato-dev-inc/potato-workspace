@@ -9,7 +9,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const crateDir = join(repoRoot, 'packages', 'app', 'src-tauri');
 const outDir = join(repoRoot, 'packages', 'mcp-server', 'dist');
 const binaryName = process.platform === 'win32' ? 'puppet-master-mcp.exe' : 'puppet-master-mcp';
-const profile = process.env.PUPPET_MASTER_RUST_MCP_PROFILE === 'debug' ? 'debug' : 'release';
+const profile = process.env.POTATO_WORKSPACE_RUST_MCP_PROFILE === 'debug' ? 'debug' : 'release';
 const cargoBin = join(homedir(), '.cargo', 'bin');
 const cargoExe = join(cargoBin, process.platform === 'win32' ? 'cargo.exe' : 'cargo');
 const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';

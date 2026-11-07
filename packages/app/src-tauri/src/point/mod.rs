@@ -2,11 +2,11 @@
 //! send that to any agent pane. Decisions (SPEC n32 section 3.1):
 //! 1. The preview is its own window (`preview-<n>`) that loads the app's loopback URL directly.
 //! 2. The picker script is injected only into `preview-*` windows, and only at the top frame of its own origin.
-//! 3. The page cannot call Puppet Master. Picks come back because Rust pulls them (`eval_with_callback`).
+//! 3. The page cannot call Potato Workspace. Picks come back because Rust pulls them (`eval_with_callback`).
 //! 4. The screenshot is taken natively (WebView2 on Windows), never by the page.
-//! 5. Typing happens in Puppet Master's own Point box window, never in the page.
+//! 5. Typing happens in Potato Workspace's own Point box window, never in the page.
 //! 6. Sending goes only through the pane outbox. Nothing sends by itself.
-//! 7. Screenshots live in the target pane's `.puppet-master/shots/` folder, newest 50 kept.
+//! 7. Screenshots live in the target pane's `.potato-workspace/shots/` folder, newest 50 kept.
 //! 8. A source file is named only when it resolves to a real file inside a pane folder.
 //! 9. Point and Fix is on by default. It has no setting in v1.
 //! This file holds the shared data types (plain structs, no logic). Each submodule adds its own logic.
@@ -39,7 +39,7 @@ pub const MAX_TEXT: usize = 160;
 pub const MAX_SELECTOR: usize = 300;
 pub const MAX_HTML: usize = 300;
 pub const MAX_TITLE: usize = 120;
-/// Screenshots kept per project `.puppet-master/shots/` folder.
+/// Screenshots kept per project `.potato-workspace/shots/` folder.
 pub const KEEP_SHOTS: usize = 50;
 
 /// A rectangle in CSS pixels, viewport coordinates.
@@ -133,7 +133,7 @@ pub struct Pick {
 #[serde(rename_all = "camelCase")]
 pub struct Shot {
     pub abs_path: PathBuf,
-    /// Relative to the agent's folder, e.g. ".puppet-master/shots/pick-20261028-223104-1.png".
+    /// Relative to the agent's folder, e.g. ".potato-workspace/shots/pick-20261028-223104-1.png".
     pub rel_path: String,
     pub width: u32,
     pub height: u32,

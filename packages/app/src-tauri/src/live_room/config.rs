@@ -1,6 +1,6 @@
 //! Live Room settings: the relay address, the default room length and the default viewer limit.
 //!
-//! The file is `live_room.json` in the app data folder. Only Puppet Master's own commands write it, through
+//! The file is `live_room.json` in the app data folder. Only Potato Workspace's own commands write it, through
 //! `secure_file::write_private`, like the Telegram settings. It is not in `settings.json`, so the settings
 //! mirror and the bridge never touch it. The room key and the read token never go in this file.
 

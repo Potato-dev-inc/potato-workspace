@@ -20,7 +20,7 @@ export async function run(t) {
 
     await t.step('Reload the window: Light is still on');
     await t.page.reload();
-    await t.expect.text('Puppet Master');
+    await t.expect.text('Potato Workspace');
     await t.expect.eventually(async () => (await themeNow(t)) === 'light', { message: 'light after the reload' });
 
     await t.step('The sidebar button switches back, Settings shows Dark');

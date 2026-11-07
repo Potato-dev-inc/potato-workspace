@@ -5,7 +5,7 @@ import {
   PairingQrPayloadSchema,
   type DeviceCap,
   type PairingSession,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { tauri } from '../lib/tauri';

@@ -15,7 +15,7 @@ pub const NEARLY_PERCENT: u32 = 80;
 
 /// Environment variable a budgeted run's agent process gets, naming the run (its handle). The MCP
 /// shim forwards it as `budget_parent` on `run_agent`, so helpers draw from the run's budget.
-pub const PARENT_ENV: &str = "PUPPET_MASTER_PARENT_RUN";
+pub const PARENT_ENV: &str = "POTATO_WORKSPACE_PARENT_RUN";
 
 /// Settings keys. `0` (or no value) means off, which is the default and today's behaviour.
 pub const SETTING_TURNS: &str = "budget_default_turns";

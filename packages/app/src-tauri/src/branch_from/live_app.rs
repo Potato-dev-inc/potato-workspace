@@ -135,7 +135,7 @@ impl LiveIo for AppIo {
         let hooks = self.store.empty_hooks_dir().map_err(|_| {
             OperationError::new(
                 ERR_BRANCH_COPY_FAILED,
-                MSG_BRANCH_COPY_FAILED.replace("<git reason, cleaned>", "Puppet Master couldn't prepare its private folder"),
+                MSG_BRANCH_COPY_FAILED.replace("<git reason, cleaned>", "Potato Workspace couldn't prepare its private folder"),
                 true,
             )
         })?;
@@ -156,7 +156,7 @@ impl LiveIo for AppIo {
 
     #[cfg(not(test))]
     fn start(&self, request: &StartRequest) -> Result<Started, OperationError> {
-        let not_ready = || OperationError::new("APP_NOT_READY", "Puppet Master is still starting", true);
+        let not_ready = || OperationError::new("APP_NOT_READY", "Potato Workspace is still starting", true);
         let registry = crate::bridge::live_registry().ok_or_else(not_ready)?;
         let app = crate::bridge::live_app().ok_or_else(not_ready)?;
         let view = crate::agent_runs::run_agent(to_run_request(request)?, registry, app, None)?;
@@ -293,8 +293,8 @@ mod tests {
 
     fn copy() -> WorktreeRef {
         WorktreeRef {
-            path: "C:\\Users\\you\\proj\\.puppet-master\\worktrees\\bf-0123456789ab".into(),
-            cwd: "C:\\Users\\you\\proj\\.puppet-master\\worktrees\\bf-0123456789ab".into(),
+            path: "C:\\Users\\you\\proj\\.potato-workspace\\worktrees\\bf-0123456789ab".into(),
+            cwd: "C:\\Users\\you\\proj\\.potato-workspace\\worktrees\\bf-0123456789ab".into(),
             branch: "pm/bf-0123456789ab".into(),
             base: "main".into(),
             base_commit: "abc".into(),

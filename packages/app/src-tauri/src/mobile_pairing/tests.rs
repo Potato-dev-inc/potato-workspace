@@ -15,7 +15,7 @@ fn public_paths_accept_bridge_prefix() {
 #[test]
 fn proxied_bridge_prefix_does_not_bypass_pairing() {
     let segments = ["bridge", "panes"];
-    let err = authorize_bridge_request("X-PM-Proxied: 1\r\n", true, &segments, "GET")
+    let err = authorize_bridge_request("X-Potato-Workspace-Proxied: 1\r\n", true, &segments, "GET")
         .expect_err("panes should require auth");
     assert_eq!(err.0, 401);
 }
@@ -23,7 +23,7 @@ fn proxied_bridge_prefix_does_not_bypass_pairing() {
 #[test]
 fn local_only_caller_requires_loopback_and_no_proxy_header() {
     assert!(is_local_only_caller("Host: 127.0.0.1\r\n", true));
-    assert!(!is_local_only_caller("X-PM-Proxied: 1\r\n", true));
+    assert!(!is_local_only_caller("X-Potato-Workspace-Proxied: 1\r\n", true));
     assert!(!is_local_only_caller("Host: example.com\r\n", false));
 }
 
@@ -40,7 +40,7 @@ fn push_act_is_public_but_every_other_push_route_needs_a_bearer() {
     assert!(is_public_bridge_path(&["bridge", "push", "act"], "POST"));
     assert!(!is_public_bridge_path(&["push", "act"], "GET"));
     for (method, path) in [("GET", "key"), ("POST", "subscribe"), ("DELETE", "subscribe"), ("POST", "presence")] {
-        let err = authorize_bridge_request("X-PM-Proxied: 1\r\n", true, &["push", path], method)
+        let err = authorize_bridge_request("X-Potato-Workspace-Proxied: 1\r\n", true, &["push", path], method)
             .expect_err("push routes require a paired device");
         assert_eq!(err.0, 401, "{method} /push/{path}");
     }
@@ -50,7 +50,7 @@ fn push_act_is_public_but_every_other_push_route_needs_a_bearer() {
 
 fn any_forwarding_header_on_a_loopback_peer_requires_a_token() {
     for header in [
-        "X-PM-Proxied: 1",
+        "X-Potato-Workspace-Proxied: 1",
         "x-pm-proxied: 0",
         "Cf-Connecting-Ip: 203.0.113.9",
         "CF-RAY: 8a1b2c3d-AMS",
@@ -76,7 +76,7 @@ fn local_tooling_without_forwarding_headers_stays_trusted() {
         "GET /panes HTTP/1.1\r\nHost: localhost:17321\r\nOrigin: http://tauri.localhost\r\n",
         "GET /panes HTTP/1.1\r\nHost: [::1]:17321\r\n",
         "GET /panes HTTP/1.1\r\nHost: ::1\r\n",
-        "GET /panes HTTP/1.1\r\nHost: app.localhost\r\nX-Puppet-Master-Session: s1\r\n",
+        "GET /panes HTTP/1.1\r\nHost: app.localhost\r\nX-Potato-Workspace-Session: s1\r\n",
         // HTTP/1.0-style client with no Host at all
         "GET /panes HTTP/1.0\r\nAccept: */*\r\n",
     ] {

@@ -87,7 +87,7 @@ export const supportsCopies = (state: GitState | undefined): boolean => state ==
 export function projectOfCwd(cwd: string | undefined | null): { path: string; name: string } | null {
   if (!cwd) return null;
   const slashed = cwd.replace(/\\/g, '/');
-  const at = slashed.indexOf('/.puppet-master/worktrees/');
+  const at = slashed.indexOf('/.potato-workspace/worktrees/');
   const path = at > 0 ? cwd.slice(0, at) : cwd;
   const name = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
   return { path, name };
@@ -124,8 +124,8 @@ export function copyDefault(remembered: boolean | undefined): boolean {
   return remembered ?? false;
 }
 
-/** True when `path` is the folder of a separate copy (`<project>/.puppet-master/worktrees/<id>`). */
-const isCopyPath = (path: string): boolean => path.replace(/\\/g, '/').indexOf('/.puppet-master/worktrees/') > 0;
+/** True when `path` is the folder of a separate copy (`<project>/.potato-workspace/worktrees/<id>`). */
+const isCopyPath = (path: string): boolean => path.replace(/\\/g, '/').indexOf('/.potato-workspace/worktrees/') > 0;
 
 /**
  * The recent-projects list as the person should see it: a separate copy's folder is mapped back to the

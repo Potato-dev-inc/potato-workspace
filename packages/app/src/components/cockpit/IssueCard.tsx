@@ -22,7 +22,7 @@ const CONTEXT_MAX = 1000;
 /** One muted line: at most this many characters. */
 const LINE_MAX = 300;
 
-const HELD = "Puppet Master won't push this. Check the copy yourself.";
+const HELD = "Potato Workspace won't push this. Check the copy yourself.";
 /** Context lines the backend writes: the repo, who labeled and wrote it, and the text the agent reads. */
 const REPO = /^Repo: (.+) \(issue #\d+\)$/;
 const WHO = /^Labeled by (.+)\. Written by (.+)\.$/;

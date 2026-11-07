@@ -8,9 +8,9 @@ use serde_json::Value;
 use std::time::Duration;
 
 /// The tooltip when nothing is going on, and the prefix of every tooltip.
-const TOOLTIP_NAME: &str = "Puppet Master";
+const TOOLTIP_NAME: &str = "Potato Workspace";
 
-/// Tray tooltip: `Puppet Master · 2 need you · 1 error · 3 working · 1 server running`. `need_you` is
+/// Tray tooltip: `Potato Workspace · 2 need you · 1 error · 3 working · 1 server running`. `need_you` is
 /// the attention count (`attention::counts().blocking`), the same number the Inbox shows; the other
 /// parts come from pane statuses and background jobs (a job that listens on a port is a server).
 /// Parts with 0 are left out. Only the words, no agent names. Standby (hidden) panes must be left
@@ -39,7 +39,7 @@ pub fn summary_line(statuses: &[&str], jobs: &[Job], need_you: u32) -> String {
 }
 
 /// The tooltip while a Live Room is on (paused too): the person must always see that a link is open.
-pub const LIVE_TOOLTIP: &str = "Puppet Master \u{b7} LIVE";
+pub const LIVE_TOOLTIP: &str = "Potato Workspace \u{b7} LIVE";
 
 /// The tray tooltip: `LIVE_TOOLTIP` while a Live Room is on, else `summary`.
 pub fn tooltip_for(live: bool, summary: String) -> String {
@@ -308,7 +308,7 @@ pub fn focus_items(left_min: Option<u32>) -> Vec<Item> {
     items
 }
 
-/// The tooltip while Focus is on: `Puppet Master · Focus 31 min left · 1 needs you`. Focus comes first; the
+/// The tooltip while Focus is on: `Potato Workspace · Focus 31 min left · 1 needs you`. Focus comes first; the
 /// usual parts of `base` (the blocking count included) follow unchanged. `None` returns `base` as it is.
 pub fn summary_line_with_focus(base: String, left_min: Option<u32>) -> String {
     let Some(left) = left_min else { return base };
@@ -377,7 +377,7 @@ pub fn build_model(agents: &[Value], panes: &[PaneRow], ready: &[String], mode: 
         Item::Submenu { label: "Focus".into(), items: focus_items(focus_left_min) },
         Item::Action { id: ID_STOP_ALL.into(), label: "Stop all agents".into(), enabled: true },
         Item::Action { id: ID_SETTINGS.into(), label: "Settings\u{2026}".into(), enabled: true },
-        Item::Action { id: ID_QUIT.into(), label: "Quit Puppet Master".into(), enabled: true },
+        Item::Action { id: ID_QUIT.into(), label: "Quit Potato Workspace".into(), enabled: true },
     ]
 }
 
@@ -391,7 +391,7 @@ mod runtime {
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
     use tauri::{AppHandle, Listener, Manager, Wry};
 
-    const TRAY_ID: &str = "puppet-master-tray";
+    const TRAY_ID: &str = "potato-workspace-tray";
 
     fn render_items(app: &AppHandle, items: &[Item]) -> tauri::Result<Vec<Box<dyn IsMenuItem<Wry>>>> {
         let mut out: Vec<Box<dyn IsMenuItem<Wry>>> = Vec::new();
@@ -644,7 +644,7 @@ mod runtime {
         let started = std::time::Instant::now();
         let state = app.state::<AppState>();
         // The folder the person selected, exactly (canonical; a separate copy's folder maps back to its
-        // project). Without a copy the agent starts here, and nowhere under `.puppet-master`.
+        // project). Without a copy the agent starts here, and nowhere under `.potato-workspace`.
         let chosen = crate::project_path::resolve_selected_folder(chosen_project)?;
         let default_project = crate::standby::default_project(&state.registry);
         // The cockpit always names the project its chip shows; naming the default project is not
@@ -779,7 +779,7 @@ mod runtime {
         let _ = APP.set(app.clone());
         let menu = build_menu(app)?;
         let mut builder = TrayIconBuilder::with_id(TRAY_ID)
-            .tooltip("Puppet Master")
+            .tooltip("Potato Workspace")
             .menu(&menu)
             .show_menu_on_left_click(false)
             .on_menu_event(|app, event| handle(app, event.id().as_ref()))
@@ -797,7 +797,7 @@ mod runtime {
             builder = builder.icon(icon.clone());
         }
         builder.build(app)?;
-        tracing::info!("tray icon created (tooltip \"Puppet Master\")");
+        tracing::info!("tray icon created (tooltip \"Potato Workspace\")");
         for event in ["pty://panes-changed", "pty://status", "agent_definitions_changed", crate::standby::READY_EVENT, "ui://mode-changed", "focus://changed"] {
             let handle = app.clone();
             app.listen(event, move |_| refresh(&handle));
@@ -911,7 +911,7 @@ mod tests {
         assert!(matches!(&model[5], Item::Submenu { label, items } if label == "Focus" && items == &focus_items(None)));
         assert!(matches!(&model[6], Item::Action { id, label, .. } if id == "stop-all" && label == "Stop all agents"));
         assert!(matches!(&model[7], Item::Action { id, .. } if id == "settings"));
-        assert!(matches!(&model[8], Item::Action { id, label, .. } if id == "quit" && label == "Quit Puppet Master"));
+        assert!(matches!(&model[8], Item::Action { id, label, .. } if id == "quit" && label == "Quit Potato Workspace"));
     }
 
     #[test]
@@ -1000,9 +1000,9 @@ mod tests {
 
     #[test]
     fn zero_panes_say_nothing_is_running() {
-        assert_eq!(summary_line(&[], &[], 0), "Puppet Master \u{b7} nothing running");
+        assert_eq!(summary_line(&[], &[], 0), "Potato Workspace \u{b7} nothing running");
         // Open panes that are idle are not running either.
-        assert_eq!(summary_line(&["idle", "idle"], &[], 0), "Puppet Master \u{b7} nothing running");
+        assert_eq!(summary_line(&["idle", "idle"], &[], 0), "Potato Workspace \u{b7} nothing running");
     }
 
     #[test]
@@ -1010,7 +1010,7 @@ mod tests {
         let statuses = ["waiting_input", "error", "running", "running", "running", "idle"];
         assert_eq!(
             summary_line(&statuses, &[job(&[8765])], 2),
-            "Puppet Master \u{b7} 2 need you \u{b7} 1 error \u{b7} 3 working \u{b7} 1 server running"
+            "Potato Workspace \u{b7} 2 need you \u{b7} 1 error \u{b7} 3 working \u{b7} 1 server running"
         );
     }
 
@@ -1018,30 +1018,30 @@ mod tests {
     fn need_you_is_the_attention_count_not_the_waiting_panes() {
         // The Inbox counts a question, a stuck pane and a consent card too: the tooltip shows that
         // number, and the one waiting pane does not change it.
-        assert_eq!(summary_line(&["waiting_input"], &[], 6), "Puppet Master \u{b7} 6 need you");
-        assert_eq!(summary_line(&["waiting_input"], &[], 0), "Puppet Master \u{b7} nothing running");
+        assert_eq!(summary_line(&["waiting_input"], &[], 6), "Potato Workspace \u{b7} 6 need you");
+        assert_eq!(summary_line(&["waiting_input"], &[], 0), "Potato Workspace \u{b7} nothing running");
     }
 
     #[test]
     fn plural_words_follow_the_count() {
-        assert_eq!(summary_line(&[], &[], 1), "Puppet Master \u{b7} 1 needs you");
-        assert_eq!(summary_line(&["error"], &[], 0), "Puppet Master \u{b7} 1 error");
-        assert_eq!(summary_line(&["error", "error"], &[], 0), "Puppet Master \u{b7} 2 errors");
-        assert_eq!(summary_line(&["running"], &[], 0), "Puppet Master \u{b7} 1 working");
-        assert_eq!(summary_line(&[], &[job(&[3000])], 0), "Puppet Master \u{b7} 1 server running");
+        assert_eq!(summary_line(&[], &[], 1), "Potato Workspace \u{b7} 1 needs you");
+        assert_eq!(summary_line(&["error"], &[], 0), "Potato Workspace \u{b7} 1 error");
+        assert_eq!(summary_line(&["error", "error"], &[], 0), "Potato Workspace \u{b7} 2 errors");
+        assert_eq!(summary_line(&["running"], &[], 0), "Potato Workspace \u{b7} 1 working");
+        assert_eq!(summary_line(&[], &[job(&[3000])], 0), "Potato Workspace \u{b7} 1 server running");
         assert_eq!(
             summary_line(&[], &[job(&[3000]), job(&[5173, 5174])], 0),
-            "Puppet Master \u{b7} 2 servers running"
+            "Potato Workspace \u{b7} 2 servers running"
         );
     }
 
     #[test]
     fn a_background_job_without_a_port_is_not_a_server() {
         // A test runner or watcher is a job, but it does not count as a server.
-        assert_eq!(summary_line(&[], &[job(&[])], 0), "Puppet Master \u{b7} nothing running");
+        assert_eq!(summary_line(&[], &[job(&[])], 0), "Potato Workspace \u{b7} nothing running");
         assert_eq!(
             summary_line(&["running"], &[job(&[]), job(&[8000])], 0),
-            "Puppet Master \u{b7} 1 working \u{b7} 1 server running"
+            "Potato Workspace \u{b7} 1 working \u{b7} 1 server running"
         );
     }
 
@@ -1118,15 +1118,15 @@ mod tests {
     fn tooltip_with_focus_puts_focus_first_and_keeps_the_blocking_count() {
         assert_eq!(
             summary_line_with_focus(summary_line(&[], &[], 1), Some(31)),
-            "Puppet Master \u{b7} Focus 31 min left \u{b7} 1 needs you"
+            "Potato Workspace \u{b7} Focus 31 min left \u{b7} 1 needs you"
         );
         assert_eq!(
             summary_line_with_focus(summary_line(&["waiting_input", "error", "running"], &[job(&[8765])], 2), Some(45)),
-            "Puppet Master \u{b7} Focus 45 min left \u{b7} 2 need you \u{b7} 1 error \u{b7} 1 working \u{b7} 1 server running"
+            "Potato Workspace \u{b7} Focus 45 min left \u{b7} 2 need you \u{b7} 1 error \u{b7} 1 working \u{b7} 1 server running"
         );
         assert_eq!(
             summary_line_with_focus(summary_line(&[], &[], 0), Some(25)),
-            "Puppet Master \u{b7} Focus 25 min left \u{b7} nothing running"
+            "Potato Workspace \u{b7} Focus 25 min left \u{b7} nothing running"
         );
     }
 

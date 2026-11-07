@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { listLaunchPresets, presetFor, type AgentType } from '@puppet-master/shared';
+import { listLaunchPresets, presetFor, type AgentType } from '@potato-workspace/shared';
 
 export type AgentKind = 'cli' | 'native_protocol' | 'shell' | 'unknown';
 

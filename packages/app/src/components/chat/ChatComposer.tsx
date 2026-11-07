@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import { MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
 import { clearDraft, DRAFT_SAVE_MS, readDraft, writeDraft, type ComposerDraft } from '../../lib/composerDraft';
 import { insertAtCursor } from '../../lib/voice';
+import { withAttachments, withPaths, prepareAttachments } from '../../lib/attachFiles';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { commandHint, commandText, filterCommands, type AcpCommand } from '../../lib/acpChat';
 import '../../styles/cockpit-acp.css';
@@ -38,6 +39,11 @@ export interface ChatComposerProps {
   running?: boolean;
   /** Stops the agent (the pane's Interrupt). Without it the button stays Send. */
   onStop?: () => void;
+  /**
+   * Desktop only: shows the add-files button and turns files dropped on the box into paths. Several files at once.
+   * Without it the box has no paperclip (the phone cannot hand the agent a path on the PC).
+   */
+  attachFiles?: () => Promise<string[]>;
 }
 
 function StopIcon() {
@@ -58,20 +64,32 @@ function MicIcon() {
   );
 }
 
+function AttachIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
 /** One box per pane: switching panes remounts it, so each pane shows its own draft. */
 export function ChatComposer(props: ChatComposerProps) {
   return <ChatComposerBox key={props.draftKey ?? ''} {...props} />;
 }
 
-function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop }: ChatComposerProps) {
+function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, attachFiles }: ChatComposerProps) {
   const stoppable = running && !!onStop;
   const [text, setText] = useState(() => (draftKey ? readDraft(draftKey) : ''));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [attaching, setAttaching] = useState(false);
+  const [dropping, setDropping] = useState(false);
   /** Words heard but not final yet, and where in the text they would go. */
   const [interim, setInterim] = useState('');
   const [interimAt, setInterimAt] = useState(0);
   const field = useRef<HTMLTextAreaElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   const mirror = useRef<HTMLDivElement>(null);
   /** Where the cursor goes after the next render (set after inserting recognized words). */
   const caretAfter = useRef<number | null>(null);
@@ -189,6 +207,72 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     field.current?.focus();
   };
 
+  const addPaths = async (paths: readonly string[]) => {
+    if (paths.length === 0) return;
+    setAttaching(true);
+    try {
+      const files = draftKey ? await prepareAttachments(draftKey, paths) : [];
+      setText((current) => (files.length > 0 ? withAttachments(current, files) : withPaths(current, paths)));
+      setError(null);
+    } catch {
+      setError('Could not read the chosen files.');
+    } finally {
+      setAttaching(false);
+      field.current?.focus();
+    }
+  };
+
+  const addFiles = async () => {
+    if (!attachFiles || blocked || busy || attaching) return;
+    try {
+      await addPaths(await attachFiles());
+    } catch {
+      setError('Could not open the file dialog.');
+    }
+  };
+
+  // Files dropped on the box become paths in the message. The desktop app reports the drop in window coordinates,
+  // so each mounted box answers only for its own rectangle (split view has more than one).
+  useEffect(() => {
+    if (!attachFiles || typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+    let live = true;
+    let stop: (() => void) | null = null;
+    const inside = (x: number, y: number): boolean => {
+      const rect = form.current?.getBoundingClientRect();
+      if (!rect) return false;
+      const scale = window.devicePixelRatio || 1;
+      const px = x / scale;
+      const py = y / scale;
+      return px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom;
+    };
+    import('@tauri-apps/api/webview')
+      .then(({ getCurrentWebview }) => {
+        if (!live) return;
+        getCurrentWebview()
+          .onDragDropEvent((event) => {
+            const payload = event.payload;
+            if (payload.type === 'drop') {
+              setDropping(false);
+              if (inside(payload.position.x, payload.position.y)) addPaths(payload.paths);
+              return;
+            }
+            if (payload.type === 'over') setDropping(inside(payload.position.x, payload.position.y));
+            if (payload.type === 'leave') setDropping(false);
+          })
+          .then((unlisten) => {
+            if (live) stop = unlisten;
+            else unlisten();
+          })
+          .catch(() => undefined);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+      stop?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- addPaths only touches setters and refs
+  }, [attachFiles]);
+
   const pickCommand = (command: AcpCommand) => {
     const next = commandText(command);
     caretAfter.current = next.length;
@@ -278,7 +362,8 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
 
   return (
     <form
-      className="ck-chat-composer"
+      ref={form}
+      className={dropping ? 'ck-chat-composer ck-chat-composer--drop' : 'ck-chat-composer'}
       data-testid="chat-composer"
       onSubmit={(event) => {
         event.preventDefault();
@@ -307,6 +392,19 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         </div>
       )}
       <div className="ck-chat-composer-row">
+        {attachFiles && (
+          <button
+            type="button"
+            className="ck-chat-attach"
+            data-testid="chat-composer-attach"
+            aria-label="Add files"
+            title="Add files (or drop them here)"
+            aria-disabled={blocked || busy || attaching || undefined}
+            onClick={() => void addFiles()}
+          >
+            <AttachIcon />
+          </button>
+        )}
         {voice ? (
           <div className="ck-chat-composer-field-wrap">
             {showMirror && (

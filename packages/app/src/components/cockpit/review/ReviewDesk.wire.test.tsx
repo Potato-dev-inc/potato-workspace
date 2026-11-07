@@ -95,7 +95,7 @@ describe('Review Desk wired by the cockpit', () => {
     expect(document.body.textContent).toContain('Push as a draft pull request?');
     expect(api.detail).toHaveBeenCalledWith(KEY_ISSUE);
     expect(document.body.textContent).toContain('A file may hold a secret: .env');
-    expect(document.body.textContent).toContain('Puppet Master opens a draft. It never merges.');
+    expect(document.body.textContent).toContain('Potato Workspace opens a draft. It never merges.');
     expect(api.keep).not.toHaveBeenCalled();
   });
 

@@ -486,6 +486,13 @@ impl Mapper {
         self.note(vec![ChatItem::Notice { id: format!("perm:{ask_id}"), at: Some(at.to_string()), notice_kind: "permission".into(), text, url: None }])
     }
 
+    /// A permission request the app had to refuse before it could become a prompt.
+    pub fn permission_refused(&mut self, reason: &str, at: &str) -> Vec<ChatItem> {
+        self.assistant = None;
+        let text = format!("A permission request was refused: {reason}.");
+        self.note(vec![ChatItem::Notice { id: "perm:refused".into(), at: Some(at.to_string()), notice_kind: "permission_refused".into(), text, url: None }])
+    }
+
     // ---- events --------------------------------------------------------------------------------------------
 
     pub fn on_event(&mut self, event: &SessionEvent, now: Instant, at: &str) -> Vec<ChatItem> {
@@ -519,6 +526,7 @@ impl Mapper {
             | SessionEvent::Extension { .. }
             | SessionEvent::PermissionRequested(_)
             | SessionEvent::PermissionResolved { .. }
+            | SessionEvent::PermissionRefused { .. }
             | SessionEvent::TurnStarted { .. }
             | SessionEvent::Slept => Vec::new(),
         }
@@ -566,6 +574,7 @@ impl Mapper {
                 vec![ChatItem::Notice { id: "n:compacted".into(), at: Some(at.to_string()), notice_kind: "compacted".into(), text: "The conversation was compacted to save room.".into(), url: None }]
             }
             SessionUpdate::CompactionSummaryChunk(_) => Vec::new(),
+            SessionUpdate::AsyncTaskSpawned(_) | SessionUpdate::AsyncTaskProgress(_) | SessionUpdate::AsyncTaskStateUpdate(_) => Vec::new(),
         }
     }
 

@@ -22,7 +22,7 @@ pub fn config_content() -> String {
         "agent": {
             READ_ONLY_AGENT: {
                 "mode": "primary",
-                "description": "Puppet Master read-only worker: read, search and ask only",
+                "description": "Potato Workspace read-only worker: read, search and ask only",
                 "permission": {
                     "*": "deny",
                     "read": "allow",

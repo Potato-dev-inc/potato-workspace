@@ -32,7 +32,7 @@ export function buildDelegationPreviewRequest(
   locks: LockProjection[],
   currentGoal?: string | null,
 ): DelegateTaskRequest {
-  const intent = task?.title || currentGoal || 'Coordinate the selected Puppet Master task';
+  const intent = task?.title || currentGoal || 'Coordinate the selected Potato Workspace task';
   return {
     task_id: task?.id,
     intent,

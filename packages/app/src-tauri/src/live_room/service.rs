@@ -36,7 +36,7 @@ pub use super::source::WatchSource;
 pub const STATE_EVENT: &str = "live://state";
 
 /// The sentence a window gets when a command is not allowed from it.
-pub const LIVE_ROOM_WINDOW_ONLY: &str = "Live Room can only be used from the Puppet Master window.";
+pub const LIVE_ROOM_WINDOW_ONLY: &str = "Live Room can only be used from the Potato Workspace window.";
 pub const NO_RELAY: &str = "Live Room needs a relay address. Set it in Settings \u{203a} General \u{203a} Live Room.";
 const NOT_RUNNING: &str = "There is no Live Room running.";
 const ALREADY_RUNNING: &str = "A Live Room is already running. Stop it before you start another.";

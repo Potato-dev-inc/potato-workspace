@@ -1,4 +1,4 @@
-//! The typing permit: Puppet Master types run input into a pane only while holding a permit.
+//! The typing permit: Potato Workspace types run input into a pane only while holding a permit.
 //!
 //! A run's task text (with its clear sequence and Enter) is written only with a [`TypingPermit`], and
 //! a startup screen's dismiss keys only with a [`GatePermit`]. Both are issued here and nowhere else:
@@ -257,7 +257,7 @@ impl Decider {
 }
 
 /// Permission to type ONE answer to ONE prompt a person decided on. It is never a [`GatePermit`]: a
-/// gate permit is Puppet Master pressing a profile-declared dismiss key on a notice; this is a human
+/// gate permit is Potato Workspace pressing a profile-declared dismiss key on a notice; this is a human
 /// choosing on a screen they were shown. It names the pane, the prompt id and the fingerprint of what
 /// the card showed, and the stream position the prompt was re-read at, so the write path refuses it
 /// when the pane printed anything since (the prompt may have changed under the finger) and when it is
@@ -510,7 +510,7 @@ pub fn assess(profile: &dyn TuiProfile, observation: Observation) -> Verdict {
             Readiness::Unknown,
             Basis::Recognised,
             ComposerState::HasText,
-            "the agent's input box already holds text that Puppet Master did not type",
+            "the agent's input box already holds text that Potato Workspace did not type",
         ),
         Some(ComposerState::Working) => {
             verdict(Readiness::Busy, Basis::Recognised, ComposerState::Working, "the agent is still working on a turn")
@@ -696,7 +696,7 @@ pub fn not_ready_error(agent: &str, why: &str, screen: &str, pane_id: &str) -> c
     let mut error = crate::operations::OperationError::new(
         SCREEN_NOT_READY,
         format!(
-            "Puppet Master did not type the task: {why}. Nothing was typed into the pane and the run did not switch to a background run. Get the agent to its input box, then start the run again."
+            "Potato Workspace did not type the task: {why}. Nothing was typed into the pane and the run did not switch to a background run. Get the agent to its input box, then start the run again."
         ),
         true,
     );

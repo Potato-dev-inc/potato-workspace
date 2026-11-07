@@ -23,8 +23,8 @@ export async function run(t) {
   await t.step('Press the Preview chip');
   await t.click('exact=Preview');
 
-  await t.step('The cockpit says that port belongs to Puppet Master, and no preview window opened');
-  await t.expect.text('That port belongs to Puppet Master, so it cannot be previewed.');
+  await t.step('The cockpit says that port belongs to Potato Workspace, and no preview window opened');
+  await t.expect.text('That port belongs to Potato Workspace, so it cannot be previewed.');
   const open = (await fetch(`http://127.0.0.1:${t.app.cdpPort}/json/list`).then((r) => r.json())).filter((x) => x.type === 'page' && !/cockpit=1|pointbox=1/.test(x.url));
   t.expect.equal(open.length, 0, 'no preview window');
 }

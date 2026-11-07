@@ -2,6 +2,6 @@
 • Explored
 └ Read README.md
 + Show details
-• README.md describes a tiny Node.js demo for Puppet Master, where sum.js adds numbers and test.js checks it with npm test.
+• README.md describes a tiny Node.js demo for Potato Workspace, where sum.js adds numbers and test.js checks it with npm test.
 Worked for 5s • 11:29 AM
 GPT-6-Luna medium · D:\pm-demo · Summarize README.md

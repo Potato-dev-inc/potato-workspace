@@ -1,5 +1,5 @@
 // Inbox info cards from the version check: the result of an update, good or not ("Codex 0.159.3 ->
-// 0.162.1: checked, all good." / "...: screens changed. Puppet Master will ask you before acting.").
+// 0.162.1: checked, all good." / "...: screens changed. Potato Workspace will ask you before acting.").
 // They block nothing, so they do not count toward "things need you". They use the same card as
 // everything else, with the calm glyph and no number.
 import { tauriCanaryApi, useCanary, type CanaryApi } from '../../lib/canary';

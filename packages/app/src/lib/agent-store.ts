@@ -92,7 +92,7 @@ export interface StoreUninstall {
 /** The detail sheet: the card plus the install plan, the run command and the uninstall summary. */
 export interface StoreDetail extends StoreCard {
   install_plan: InstallPlan;
-  /** The argv Puppet Master runs for this agent, or null when there is no definition. */
+  /** The argv Potato Workspace runs for this agent, or null when there is no definition. */
   run_preview: string[] | null;
   fixtures: { count: number };
   uninstall: StoreUninstall;

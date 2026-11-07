@@ -175,8 +175,8 @@ const registryOpt = (over: Partial<OverlayOption> = {}): OverlayOption => ({
   available: true,
   ...over,
 });
-const bridgeOpt = (): OverlayOption => ({ kind: 'bridge', label: 'Chat made by Puppet Master', summary: 'Puppet Master makes a chat adapter.', available: false, reason: 'Fake has no non-interactive mode, so a chat adapter cannot be made' });
-const bridgeOn = (hasMemory: boolean): OverlayOption => ({ kind: 'bridge', label: 'Chat made by Puppet Master', summary: 'Puppet Master will make a chat adapter for Fake.', bridge: { has_memory: hasMemory }, available: true });
+const bridgeOpt = (): OverlayOption => ({ kind: 'bridge', label: 'Chat made by Potato Workspace', summary: 'Potato Workspace makes a chat adapter.', available: false, reason: 'Fake has no non-interactive mode, so a chat adapter cannot be made' });
+const bridgeOn = (hasMemory: boolean): OverlayOption => ({ kind: 'bridge', label: 'Chat made by Potato Workspace', summary: 'Potato Workspace will make a chat adapter for Fake.', bridge: { has_memory: hasMemory }, available: true });
 const resolved = (...options: OverlayOption[]) => vi.fn(async () => ({ ok: true, options }));
 
 describe('AddChatDialog with the app resolving the best way (native, registry, bridge)', () => {
@@ -225,7 +225,7 @@ describe('AddChatDialog with the app resolving the best way (native, registry, b
     const overlaySet = vi.fn();
     const { onAdded } = await open({ overlayResolve, overlayDetect: vi.fn(), overlaySet, overlayInstall, overlayProgress });
     const text = q('[data-testid="add-chat-summary"]')?.textContent;
-    expect(text).toBe('Puppet Master will download Fake Adapter 1.2.3 by Alice, Bob (MIT) from the official ACP registry and run it for chat. About 40 MB.');
+    expect(text).toBe('Potato Workspace will download Fake Adapter 1.2.3 by Alice, Bob (MIT) from the official ACP registry and run it for chat. About 40 MB.');
     expect(q('[data-testid="add-chat-registry-about"]')?.textContent).toBe('An adapter that speaks ACP.');
     expect(overlayInstall).not.toHaveBeenCalled();
     await click(byText('Add chat'));
@@ -274,7 +274,7 @@ describe('AddChatDialog with the app resolving the best way (native, registry, b
     const { onAdded } = await open({ overlayResolve: resolved(nativeOpt({ available: false, reason: 'no' }), bridgeOn(true)), overlaySet, overlayInstall });
     expect(q('[data-testid="add-chat-options"]')).toBeNull();
     expect(q('[data-testid="add-chat-summary"]')?.textContent).toBe(
-      'Fake has no chat support of its own, so Puppet Master will make one. It talks to Fake one message at a time: text only, no tool cards, it remembers the conversation.',
+      'Fake has no chat support of its own, so Potato Workspace will make one. It talks to Fake one message at a time: text only, no tool cards, it remembers the conversation.',
     );
     await click(byText('Add chat'));
     await flush();
@@ -300,7 +300,7 @@ describe('AddChatDialog with the app resolving the best way (native, registry, b
     const radios = [...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
     expect(radios.map((r) => r.checked)).toEqual([true, false]);
     await click(radios[1]);
-    expect(q('[data-testid="add-chat-summary"]')?.textContent).toContain('so Puppet Master will make one');
+    expect(q('[data-testid="add-chat-summary"]')?.textContent).toContain('so Potato Workspace will make one');
     await click(byText('Add chat'));
     await flush();
     expect(overlayInstall).toHaveBeenCalledWith('fake', { kind: 'bridge' }, true);
@@ -372,8 +372,8 @@ describe('AddChatDialog with the app resolving the best way (native, registry, b
 describe('overlay option helpers', () => {
   it('writes the confirm sentence with and without optional parts', () => {
     const info = registryOpt().registry!;
-    expect(registrySentence(info)).toBe('Puppet Master will download Fake Adapter 1.2.3 by Alice, Bob (MIT) from the official ACP registry and run it for chat. About 40 MB.');
-    expect(registrySentence({ ...info, authors: [], license: '', size_hint: null })).toBe('Puppet Master will download Fake Adapter 1.2.3 from the official ACP registry and run it for chat.');
+    expect(registrySentence(info)).toBe('Potato Workspace will download Fake Adapter 1.2.3 by Alice, Bob (MIT) from the official ACP registry and run it for chat. About 40 MB.');
+    expect(registrySentence({ ...info, authors: [], license: '', size_hint: null })).toBe('Potato Workspace will download Fake Adapter 1.2.3 from the official ACP registry and run it for chat.');
     expect(authorsText(['A', 'B', 'C', 'D'])).toBe('A, B, C and others');
   });
 
@@ -471,7 +471,7 @@ describe('the + menu hint', () => {
 });
 
 describe('AddChatDialog with Chat (terminal)', () => {
-  const termSummary = 'Puppet Master runs Fake in a terminal and shows it as a chat. You get its tool cards and history, and you can answer its questions here. It cannot resume old sessions.';
+  const termSummary = 'Potato Workspace runs Fake in a terminal and shows it as a chat. You get its tool cards and history, and you can answer its questions here. It cannot resume old sessions.';
   const termOpt = (over: Partial<OverlayOption> = {}): OverlayOption => ({
     kind: 'terminal_chat',
     label: 'Chat (terminal)',
@@ -552,7 +552,7 @@ const adapterOption = (over: Record<string, unknown> = {}): OverlayOption =>
   ({
     kind: 'adapter',
     label: 'Reviewed adapter',
-    summary: 'Puppet Master runs a reviewed adapter script.',
+    summary: 'Potato Workspace runs a reviewed adapter script.',
     available: true,
     adapter: { id: 'fakeagent', tested_version: '1.0.0' },
     env_keys: [{ env: 'FAKEAGENT_TOKEN', label: 'Token' }],
@@ -705,7 +705,7 @@ const realResolve = (adapterAvailable: boolean) => ({
     {
       kind: 'adapter',
       label: 'Reviewed adapter',
-      summary: 'Puppet Master runs a reviewed adapter script with the Python that fakeagent was installed with. Tested with fakeagent 1.0.0.',
+      summary: 'Potato Workspace runs a reviewed adapter script with the Python that fakeagent was installed with. Tested with fakeagent 1.0.0.',
       adapter: { id: 'fakeagent', tested_version: '1.0.0' },
       env_keys: [{ env: 'FAKEAGENT_TOKEN', label: 'Token' }],
       env_settings: [{ env: 'FAKEAGENT_MODEL', label: 'Model', default: 'fake/model-small', options: [{ value: 'fake/model-small', label: 'Small', needs_key: 'FAKEAGENT_TOKEN' }] }],
@@ -715,7 +715,7 @@ const realResolve = (adapterAvailable: boolean) => ({
       ...(adapterAvailable ? {} : { reason: 'Could not find the Python that fakeagent was installed with, so the adapter cannot run.' }),
     },
     { kind: 'native', label: 'fakeagent on this computer', summary: 'The program you already have starts chat itself.', available: false, reason: 'Its help does not show a chat (ACP) command.' },
-    { kind: 'bridge', label: 'Chat made by Puppet Master', summary: "Puppet Master makes a chat adapter from the agent's non-interactive mode.", available: false, reason: 'fakeagent has no non-interactive mode, so a chat adapter cannot be made' },
+    { kind: 'bridge', label: 'Chat made by Potato Workspace', summary: "Potato Workspace makes a chat adapter from the agent's non-interactive mode.", available: false, reason: 'fakeagent has no non-interactive mode, so a chat adapter cannot be made' },
   ],
 });
 

@@ -21,8 +21,8 @@ pub fn install(data_dir: PathBuf) {
     std::panic::set_hook(Box::new(move |info| {
         let report = report(info);
         match write_report(&data_dir, "panic", &report) {
-            Some(path) => eprintln!("Puppet Master panic written to {}", path.display()),
-            None => eprintln!("Puppet Master panic: the crash file could not be written"),
+            Some(path) => eprintln!("Potato Workspace panic written to {}", path.display()),
+            None => eprintln!("Potato Workspace panic: the crash file could not be written"),
         }
         previous(info);
     }));
@@ -60,7 +60,7 @@ fn report(info: &std::panic::PanicHookInfo<'_>) -> String {
         .unwrap_or_else(|| "unknown".to_string());
     let message = payload_message(info);
     let mut text = format!(
-        "Puppet Master panic\nwhen_ms: {when}\npid: {}\nthread: {thread}\nlocation: {location}\nmessage: {message}\n\nbacktrace:\n{}",
+        "Potato Workspace panic\nwhen_ms: {when}\npid: {}\nthread: {thread}\nlocation: {location}\nmessage: {message}\n\nbacktrace:\n{}",
         std::process::id(),
         Backtrace::force_capture()
     );

@@ -89,12 +89,12 @@ fn create_makes_a_worktree_on_its_own_branch_and_hides_it_from_git() {
     assert_eq!(wt.base_commit, repo.head());
     assert_eq!(wt.cwd, wt.path, "project at the repo root: cwd is the worktree root");
     assert!(repo.branches().lines().any(|b| b == "pm/run-1"));
-    assert!(Path::new(&wt.path).starts_with(repo.root.join(".puppet-master").join("worktrees")));
+    assert!(Path::new(&wt.path).starts_with(repo.root.join(".potato-workspace").join("worktrees")));
     // short names keep Windows paths well under MAX_PATH
     assert!(dir_name_of(&wt).len() <= 20, "{}", dir_name_of(&wt));
     // ignored through .git/info/exclude, the user's .gitignore is untouched
     let exclude = std::fs::read_to_string(repo.root.join(".git/info/exclude")).unwrap();
-    assert!(exclude.lines().any(|l| l == ".puppet-master/worktrees/"), "{exclude}");
+    assert!(exclude.lines().any(|l| l == ".potato-workspace/worktrees/"), "{exclude}");
     assert!(!repo.root.join(".gitignore").exists());
     assert_eq!(repo.git(&["status", "--porcelain", "--untracked-files=all"]), "", "origin stays clean");
     // retry for the same handle returns the same worktree
@@ -203,7 +203,7 @@ fn merge_brings_the_changes_in_with_a_merge_commit_and_closes_the_worktree() {
     assert_eq!(parents.split_whitespace().count(), 3, "a --no-ff merge commit has two parents: {parents}");
     assert_eq!(outcome.merge_commit.as_deref(), Some(repo.head().as_str()));
     let subject = repo.git(&["log", "-1", "--format=%s"]);
-    assert_eq!(subject.trim(), "Merge separate copy pm/run-3 (Puppet Master, run-3)");
+    assert_eq!(subject.trim(), "Merge separate copy pm/run-3 (Potato Workspace, run-3)");
     assert!(!subject.contains("isolated"), "the merge commit uses the app's words: {subject}");
     assert!(!work.exists(), "worktree removed after merging");
     assert!(!repo.branches().lines().any(|b| b == "pm/run-3"));
@@ -319,7 +319,7 @@ fn a_non_git_project_is_refused_with_a_clear_code() {
     let error = create(&dir.to_string_lossy(), "x").unwrap_err();
     assert_eq!(error.code, "NOT_A_GIT_REPO", "{error:?}");
     assert!(error.message.contains("git init"), "{}", error.message);
-    assert!(!dir.join(".puppet-master").exists(), "nothing was created");
+    assert!(!dir.join(".potato-workspace").exists(), "nothing was created");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -338,7 +338,7 @@ fn a_project_inside_a_repo_gets_its_offset_as_the_working_directory() {
     let wt = create(&sub.to_string_lossy(), "sub").unwrap();
     assert!(Path::new(&wt.cwd).ends_with("src"), "{}", wt.cwd);
     assert!(Path::new(&wt.cwd).join("lib.rs").is_file());
-    assert!(Path::new(&wt.path).starts_with(sub.join(".puppet-master")));
+    assert!(Path::new(&wt.path).starts_with(sub.join(".potato-workspace")));
     assert!(wt.active_cwd().is_some());
 }
 
@@ -353,7 +353,7 @@ fn the_startup_sweep_removes_leftovers_but_never_unmerged_work() {
     clear_readonly(Path::new(&gone.path));
     std::fs::remove_dir_all(&gone.path).unwrap();
     // 3. a half-created folder nobody knows
-    let stray = repo.root.join(".puppet-master/worktrees/stray-dir");
+    let stray = repo.root.join(".potato-workspace/worktrees/stray-dir");
     std::fs::create_dir_all(&stray).unwrap();
     std::fs::write(stray.join("junk"), "x").unwrap();
 
@@ -462,10 +462,10 @@ fn route_transcript_list_diff_conflict_merge_discard() {
 #[test]
 fn origin_of_cwd_finds_the_project_above_a_worktree() {
     assert_eq!(
-        origin_of_cwd(r"C:\work\proj\.puppet-master\worktrees\a-1\src").as_deref(),
+        origin_of_cwd(r"C:\work\proj\.potato-workspace\worktrees\a-1\src").as_deref(),
         Some(r"C:\work\proj")
     );
-    assert_eq!(origin_of_cwd("/home/u/p/.puppet-master/worktrees/x").as_deref(), None.or(Some("/home/u/p")));
+    assert_eq!(origin_of_cwd("/home/u/p/.potato-workspace/worktrees/x").as_deref(), None.or(Some("/home/u/p")));
     assert_eq!(origin_of_cwd("/home/u/p"), None);
 }
 
@@ -490,11 +490,11 @@ fn a_pane_working_in_a_worktree_finds_its_changes() {
     assert_eq!(found.summary.map(|s| s.files_changed), Some(1));
 }
 
-// ---- Puppet Master's own data inside an isolated run's worktree (VERIFY-R7 finding A) ----------
+// ---- Potato Workspace's own data inside an isolated run's worktree (VERIFY-R7 finding A) ----------
 //
-// Round 7 made the run's pane checkpoint in its worktree, so `<worktree>/.puppet-master/` now exists
+// Round 7 made the run's pane checkpoint in its worktree, so `<worktree>/.potato-workspace/` now exists
 // (checkpoint store, turn summaries). Whether the repo ignores it depends on the user's setup, and
-// `git add -- . :(exclude).puppet-master` fails when it does ("The following paths are ignored").
+// `git add -- . :(exclude).potato-workspace` fails when it does ("The following paths are ignored").
 
 /// An isolated run's worktree with a REAL checkpoint taken in it (what the run's pane does at
 /// dispatch) and the agent's edit, then the repo's ignore rules replaced by `exclude`.
@@ -503,8 +503,8 @@ fn worktree_with_pm_data(repo: &Repo, handle: &str, exclude: &str) -> (WorktreeR
     let work = PathBuf::from(&wt.path);
     let limits = crate::checkpoints::TestLimits::default();
     crate::checkpoints::test_snapshot(&work, "pane-1", crate::checkpoints::TestKind::Before, None, 1_000, &limits).unwrap();
-    std::fs::write(work.join(".puppet-master").join("turn-summaries.json"), "{}").unwrap();
-    assert!(work.join(".puppet-master").join("checkpoints.git").is_dir(), "the store is inside the worktree");
+    std::fs::write(work.join(".potato-workspace").join("turn-summaries.json"), "{}").unwrap();
+    assert!(work.join(".potato-workspace").join("checkpoints.git").is_dir(), "the store is inside the worktree");
     std::fs::write(work.join("a.txt"), "alpha
 agent line
 ").unwrap();
@@ -515,17 +515,17 @@ agent line
     (wt, work)
 }
 
-/// The ways a repo can treat `.puppet-master`: ignored as a folder (the old Puppet Master line, or
-/// a user's own `.gitignore` entry), ignored by Puppet Master's current block, or not ignored.
+/// The ways a repo can treat `.potato-workspace`: ignored as a folder (the old Potato Workspace line, or
+/// a user's own `.gitignore` entry), ignored by Potato Workspace's current block, or not ignored.
 const IGNORE_SETUPS: [(&str, &str); 3] = [
-    ("folder ignored", ".puppet-master/
+    ("folder ignored", ".potato-workspace/
 "),
-    ("block", "# Puppet Master runtime data (local, added automatically)
-.puppet-master/*
-!.puppet-master/memory.md
-!.puppet-master/agents/
+    ("block", "# Potato Workspace runtime data (local, added automatically)
+.potato-workspace/*
+!.potato-workspace/memory.md
+!.potato-workspace/agents/
 "),
-    ("not ignored", ".puppet-master/worktrees/
+    ("not ignored", ".potato-workspace/worktrees/
 "),
 ];
 
@@ -537,7 +537,7 @@ fn the_diff_of_an_isolated_run_ignores_puppet_masters_own_data_however_the_repo_
         let view = diff(&wt, None).unwrap_or_else(|e| panic!("[{name}] the diff failed: {} {}", e.code, e.message));
         let paths: Vec<&str> = view.changes.files.iter().map(|f| f.path.as_str()).collect();
         assert_eq!(paths, ["a.txt", "wt-note.txt"], "[{name}]");
-        assert!(!view.patch.contains(".puppet-master"), "[{name}] {}", view.patch);
+        assert!(!view.patch.contains(".potato-workspace"), "[{name}] {}", view.patch);
         let listed = changes(&wt).unwrap_or_else(|e| panic!("[{name}] changes failed: {} {}", e.code, e.message));
         assert_eq!(listed.files_changed, 2, "[{name}]");
     }
@@ -555,7 +555,7 @@ fn merging_an_isolated_run_never_brings_puppet_masters_data_into_the_users_branc
 agent line
 ", "[{name}]");
         let tracked = repo.git(&["ls-tree", "-r", "--name-only", "HEAD"]);
-        assert!(!tracked.contains(".puppet-master"), "[{name}] tracked in the user's branch: {tracked}");
+        assert!(!tracked.contains(".potato-workspace"), "[{name}] tracked in the user's branch: {tracked}");
         let branch_files = repo.git(&["diff", "--name-only", &wt.base_commit, "HEAD"]);
         assert_eq!(branch_files.lines().collect::<Vec<_>>(), ["a.txt", "wt-note.txt"], "[{name}]");
         assert!(!work.exists(), "[{name}] worktree removed after the merge");
@@ -580,16 +580,16 @@ fn discarding_an_isolated_run_removes_its_worktree_with_puppet_masters_data_insi
 
 #[test]
 fn an_edit_to_the_shared_project_memory_in_a_worktree_is_not_merged_either() {
-    // `.puppet-master/memory.md` is meant to be shared through git, but a run's worktree edit of it
+    // `.potato-workspace/memory.md` is meant to be shared through git, but a run's worktree edit of it
     // is not the user's work: the diff and the merge leave the whole folder alone.
     let repo = repo();
-    repo.write(".puppet-master/memory.md", "remember
+    repo.write(".potato-workspace/memory.md", "remember
 ");
-    repo.git(&["add", "-f", ".puppet-master/memory.md"]);
+    repo.git(&["add", "-f", ".potato-workspace/memory.md"]);
     repo.git(&["commit", "-q", "-m", "memory"]);
     let wt = create(&repo.path(), "run-mem").unwrap();
     let work = PathBuf::from(&wt.path);
-    std::fs::write(work.join(".puppet-master/memory.md"), "remember
+    std::fs::write(work.join(".potato-workspace/memory.md"), "remember
 more
 ").unwrap();
     std::fs::write(work.join("a.txt"), "alpha
@@ -599,7 +599,7 @@ agent line
     assert_eq!(view.changes.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), ["a.txt"]);
     let outcome = merge(&wt).unwrap();
     assert!(outcome.merged);
-    assert_eq!(repo.read(".puppet-master/memory.md"), "remember
+    assert_eq!(repo.read(".potato-workspace/memory.md"), "remember
 ");
 }
 
@@ -677,11 +677,11 @@ fn brain_targets() -> Vec<crate::one_brain::Target> {
         .collect()
 }
 
-/// A project whose AGENTS.md / CLAUDE.md are committed holding only Puppet Master's block (the R13
+/// A project whose AGENTS.md / CLAUDE.md are committed holding only Potato Workspace's block (the R13
 /// fixture), with the memory kept out of git like a normal project.
 fn repo_with_committed_blocks() -> Repo {
     let repo = repo();
-    repo.write(".git/info/exclude", ".puppet-master/\n");
+    repo.write(".git/info/exclude", ".potato-workspace/\n");
     crate::one_brain::write_memory(&repo.root, "We use Postgres.").unwrap();
     let report = crate::one_brain::sync(&repo.root, &brain_targets(), true);
     assert_eq!(report.written.len(), 2, "{report:?}");
@@ -726,11 +726,11 @@ fn a_separate_copy_of_a_project_with_committed_memory_blocks_never_shows_them_as
 
 #[test]
 fn a_separate_copy_keeps_the_projects_memory_block_in_a_tracked_file_the_user_also_wrote_in() {
-    // CLAUDE.md is the user's own file with Puppet Master's block inside; the memory itself is not in
+    // CLAUDE.md is the user's own file with Potato Workspace's block inside; the memory itself is not in
     // git. The copy has no memory.md, so a naive sync would strip the block there, and Merge would
     // then strip it from the user's tracked file.
     let repo = repo();
-    repo.write(".git/info/exclude", ".puppet-master/\n");
+    repo.write(".git/info/exclude", ".potato-workspace/\n");
     repo.write("CLAUDE.md", "# My rules\n\nUse tabs.\n");
     crate::one_brain::write_memory(&repo.root, "We use Postgres.").unwrap();
     crate::one_brain::sync(&repo.root, &brain_targets(), true);

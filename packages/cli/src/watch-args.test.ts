@@ -1,5 +1,5 @@
 /**
- * `puppet-master watch` flag validation. An unknown flag (for example `--timeout 5`, where the
+ * `potato-workspace watch` flag validation. An unknown flag (for example `--timeout 5`, where the
  * documented flag is `--timeout-ms`) used to be ignored silently and the watch ran with the
  * 1 hour default.
  */
@@ -34,7 +34,7 @@ describe('validateWatchFlags', () => {
   });
 });
 
-describe('puppet-master watch (CLI process)', () => {
+describe('potato-workspace watch (CLI process)', () => {
   const entry = join(dirname(fileURLToPath(import.meta.url)), 'index.ts');
   const run = (...args: string[]) =>
     spawnSync(process.execPath, ['--import', 'tsx', entry, 'watch', ...args], {

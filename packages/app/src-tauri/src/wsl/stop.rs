@@ -2,20 +2,20 @@
 //! stop script is a fixed constant, and the pane id reaches it only as a positional argument.
 //!
 //! Only processes that this pane started are signalled: the script looks for the exact line
-//! `PUPPET_MASTER_PANE_ID=<pane>` in each process environment and only for processes that the same
+//! `POTATO_WORKSPACE_PANE_ID=<pane>` in each process environment and only for processes that the same
 //! Linux user owns. It never matches by name and never shuts WSL down.
 
 use super::model::DistroName;
 
 /// `$0` of the stop script (shown in `ps` only).
-pub const STOP_ARGV0: &str = "puppet-master-stop";
+pub const STOP_ARGV0: &str = "potato-workspace-stop";
 
 /// POSIX sh. `$1` = pane id. Signals (TERM, then KILL after 2 s) every process of this Linux user
-/// whose environment has the exact line `PUPPET_MASTER_PANE_ID=$1`, skips its own shell and its
+/// whose environment has the exact line `POTATO_WORKSPACE_PANE_ID=$1`, skips its own shell and its
 /// parent, and prints `pm-stopped=<n>` (the number of processes it sent TERM to).
 /// Note: `-O` tests that the process directory is owned by the effective user (same as `id -u`).
 /// A process that has already exited, or is a zombie, has no environment left and is not counted.
-pub const STOP_SCRIPT: &str = r##"want="PUPPET_MASTER_PANE_ID=$1"
+pub const STOP_SCRIPT: &str = r##"want="POTATO_WORKSPACE_PANE_ID=$1"
 me=$$
 up=$PPID
 marked() {
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn script_matches_the_exact_marker_and_the_same_user() {
         for needle in [
-            "PUPPET_MASTER_PANE_ID=$1",
+            "POTATO_WORKSPACE_PANE_ID=$1",
             "grep -qxF",
             "[ -O \"/proc/$1\" ]",
             "kill -TERM",

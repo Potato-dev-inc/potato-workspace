@@ -1,7 +1,7 @@
 //! Preview windows, their guards, the pick pull loop and the after-pick pipeline (PF-10).
 //!
 //! A preview is a Tauri window labelled `preview-<n>` that loads the app's loopback URL directly. It is in
-//! no capability, so the page has no way to call Puppet Master (SPEC n32 S3). Rust pulls picks out of the
+//! no capability, so the page has no way to call Potato Workspace (SPEC n32 S3). Rust pulls picks out of the
 //! page: a thread asks the picker for its queue every 250 ms while the window is focused or armed, else
 //! every 2 s. The picker sits under a random, hidden property name, injected only into these windows.
 //!
@@ -38,7 +38,7 @@ const SLOW_POLL: Duration = Duration::from_secs(2);
 const TAKE_TIMEOUT: Duration = Duration::from_secs(2);
 /// How long the native screenshot may take.
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(3);
-/// "Point" armed from Puppet Master keeps the fast poll for this long.
+/// "Point" armed from Potato Workspace keeps the fast poll for this long.
 const ARMED_FAST_MS: u64 = 60_000;
 /// The page's answer is cut off beyond this many bytes (a page cannot flood the app).
 const MAX_TAKE_BYTES: usize = 200_000;
@@ -68,7 +68,7 @@ struct Preview {
     /// The pane that runs the dev server (the "opener") and its folder.
     opener: String,
     cwd: String,
-    /// Fast polling until this time (ms), set when the person arms Point from Puppet Master.
+    /// Fast polling until this time (ms), set when the person arms Point from Potato Workspace.
     armed_until: Arc<AtomicU64>,
     gone: Arc<AtomicBool>,
     warned: Arc<AtomicBool>,
@@ -159,12 +159,12 @@ pub fn preview_bounds(work: Rect4, cockpit: Rect4, slot: usize, frame: (u32, u32
     (x, y, w.saturating_sub(frame.0), h.saturating_sub(frame.1))
 }
 
-/// True for a file the pipeline made itself: `.../.puppet-master/shots/pick-*.png`. Only these are
+/// True for a file the pipeline made itself: `.../.potato-workspace/shots/pick-*.png`. Only these are
 /// ever deleted when a pick is dropped.
 pub fn is_own_shot(path: &Path) -> bool {
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let in_shots = path.parent().is_some_and(|dir| {
-        dir.file_name().is_some_and(|n| n == "shots") && dir.parent().and_then(|p| p.file_name()).is_some_and(|n| n == ".puppet-master")
+        dir.file_name().is_some_and(|n| n == "shots") && dir.parent().and_then(|p| p.file_name()).is_some_and(|n| n == ".potato-workspace")
     });
     in_shots && name.starts_with("pick-") && name.ends_with(".png")
 }
@@ -206,7 +206,7 @@ fn now_ms() -> u64 {
 
 /// Opens the app at `port` of pane `pane_id` in a preview window (or focuses the one for the same
 /// origin). The address comes only from what the pane printed or from its background jobs, and only
-/// loopback addresses on ports that are not Puppet Master's own are allowed (S1, S4).
+/// loopback addresses on ports that are not Potato Workspace's own are allowed (S1, S4).
 pub fn open(app: &AppHandle, pane_id: &str, port: u16, armed: bool) -> Result<PreviewInfo, String> {
     let pane = pane_infos(app).into_iter().find(|p| p.id == pane_id).ok_or("That pane is not open any more.")?;
     let (url, origin) = resolve(app, &pane, port)?;
@@ -243,7 +243,7 @@ pub fn open(app: &AppHandle, pane_id: &str, port: u16, armed: bool) -> Result<Pr
         .title(&title)
         .visible(false)
         .initialization_script(picker_script(&origin, &key))
-        // Its own cookies and storage, apart from Puppet Master's pages (S13).
+        // Its own cookies and storage, apart from Potato Workspace's pages (S13).
         .data_directory(crate::app_paths::app_data_dir().join("preview-web"))
         .on_navigation(move |next| match origin::nav(&nav_origin, next.as_str()) {
             Nav::Allow => true,
@@ -826,7 +826,7 @@ mod tests {
 
     #[test]
     fn only_our_own_shot_files_are_ever_deleted() {
-        let shots = Path::new("work").join("app").join(".puppet-master").join("shots");
+        let shots = Path::new("work").join("app").join(".potato-workspace").join("shots");
         assert!(is_own_shot(&shots.join("pick-20261028-223104-1.png")));
         assert!(!is_own_shot(&shots.join("notes.png")));
         assert!(!is_own_shot(&shots.join("pick-1.txt")));

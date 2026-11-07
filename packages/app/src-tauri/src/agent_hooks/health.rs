@@ -52,7 +52,7 @@ pub fn for_agent(agent: &str, label: &str, version: Option<&str>) -> Option<Hook
     let Some(scheme) = scheme else {
         return row(
             HookHealthState::NotSupported,
-            "This agent can't report to Puppet Master directly. Puppet Master reads its screen.".into(),
+            "This agent can't report to Potato Workspace directly. Potato Workspace reads its screen.".into(),
             None,
         );
     };
@@ -72,7 +72,7 @@ pub fn for_agent(agent: &str, label: &str, version: Option<&str>) -> Option<Hook
     if super::ledger::agent_ever_connected(agent) {
         return row(
             HookHealthState::Connected,
-            format!("Connected. {label} tells Puppet Master when it starts, asks and finishes. Watch only: Puppet Master still decides from the screen."),
+            format!("Connected. {label} tells Potato Workspace when it starts, asks and finishes. Watch only: Potato Workspace still decides from the screen."),
             None,
         );
     }
@@ -87,13 +87,13 @@ pub fn for_agent(agent: &str, label: &str, version: Option<&str>) -> Option<Hook
         ),
         Some(InstallState::BlockedTracked) => row(
             HookHealthState::BlockedSharedFile,
-            format!("This project shares its {label} settings in git, so Puppet Master doesn't change them."),
+            format!("This project shares its {label} settings in git, so Potato Workspace doesn't change them."),
             None,
         ),
         Some(InstallState::Off) => row(HookHealthState::Off, "Live updates are off.".into(), None),
         Some(InstallState::NotSupported) => row(
             HookHealthState::NotSupported,
-            "This agent can't report to Puppet Master directly. Puppet Master reads its screen.".into(),
+            "This agent can't report to Potato Workspace directly. Potato Workspace reads its screen.".into(),
             None,
         ),
         Some(_) => match scheme.trust.as_str() {

@@ -1,5 +1,5 @@
 //! A read-only chat view of a terminal pane, built from the session file the agent CLI writes, or, for an agent
-//! that writes none Puppet Master can read, from the pane's own text (`screen`).
+//! that writes none Potato Workspace can read, from the pane's own text (`screen`).
 //! Approvals are not in those files; they stay with the screen reader. An agent that serves its session over a
 //! local HTTP API is read from there (`api`), and from its screen while the API cannot be reached.
 //! A chat an agent pushes to us over a protocol (`pushed`, the ACP lane) has no file and no screen.

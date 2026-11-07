@@ -77,7 +77,7 @@ impl McpError {
             "PROJECT_UNKNOWN",
             404,
             false,
-            format!("Puppet Master doesn't know a project called {:?}. Pass the folder of a repository that has an agent pane open (or is listed in Settings > Team), or its short name.", clean_text(arg, 80)),
+            format!("Potato Workspace doesn't know a project called {:?}. Pass the folder of a repository that has an agent pane open (or is listed in Settings > Team), or its short name.", clean_text(arg, 80)),
         )
     }
 
@@ -90,7 +90,7 @@ impl McpError {
             "DRAFT_LIMIT",
             429,
             true,
-            format!("{MAX_AGENT_DRAFTS} drafts from agents are already waiting for the person. They decide in Puppet Master (Inbox > Team > Unsent) before you draft more."),
+            format!("{MAX_AGENT_DRAFTS} drafts from agents are already waiting for the person. They decide in Potato Workspace (Inbox > Team > Unsent) before you draft more."),
         )
     }
 
@@ -478,7 +478,7 @@ impl NotifyPlan {
         let branch = optional_string(&refs, "branch")?;
         if let Some(b) = &branch {
             if !event::is_valid_branch(b) {
-                return Err(McpError::invalid("refs.branch is not a branch name Puppet Master can pass on."));
+                return Err(McpError::invalid("refs.branch is not a branch name Potato Workspace can pass on."));
             }
         }
         let commit = optional_string(&refs, "commit")?.map(|c| c.to_ascii_lowercase());
@@ -604,7 +604,7 @@ pub fn notify_reply(added: &Added) -> Value {
         "sent": false,
         "draft_id": added.draft.id,
         "created_new_draft": added.created,
-        "next": "Nothing was sent. The person reads this draft in Puppet Master (the Tell the team? card, or Inbox > Team > Unsent) and sends it, or not, with a click. You cannot send it yourself.",
+        "next": "Nothing was sent. The person reads this draft in Potato Workspace (the Tell the team? card, or Inbox > Team > Unsent) and sends it, or not, with a click. You cannot send it yourself.",
         "draft": {
             "kind": e.kind.as_str(),
             "project": { "key": e.project.key, "name": e.project.name },

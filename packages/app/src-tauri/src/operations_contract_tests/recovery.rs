@@ -25,7 +25,7 @@ fn interrupted_starting_operation_is_not_mistaken_for_task_completion() {
     // A different runtime id models a persisted record from the previous app process.
     let record_path = project
         .0
-        .join(".puppet-master")
+        .join(".potato-workspace")
         .join("operations")
         .join(format!("{}.json", queued.operation_id));
     let mut record: serde_json::Value =
@@ -56,7 +56,7 @@ fn interrupted_queued_operation_from_previous_runtime_is_failed_durably() {
         .0;
     let record_path = project
         .0
-        .join(".puppet-master")
+        .join(".potato-workspace")
         .join("operations")
         .join(format!("{}.json", queued.operation_id));
     let mut record: serde_json::Value =
@@ -99,7 +99,7 @@ fn startup_recovery_releases_locks_held_by_interrupted_operations() {
     .unwrap();
     let record_path = project
         .0
-        .join(".puppet-master")
+        .join(".potato-workspace")
         .join("operations")
         .join(format!("{}.json", held.operation_id));
     let mut record: serde_json::Value =

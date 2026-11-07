@@ -353,7 +353,7 @@ fn a_failed_check_after_a_bump_raises_the_inbox_card_and_a_later_pass_clears_it(
     assert_eq!(status.notices.len(), 1);
     assert_eq!(
         status.notices[0].text,
-        "Codex 0.159.3 \u{2192} 0.162.1: screens changed. Puppet Master will ask you before acting."
+        "Codex 0.159.3 \u{2192} 0.162.1: screens changed. Potato Workspace will ask you before acting."
     );
     assert_eq!(status.notices[0].kind, NoticeKind::Changed);
     assert_eq!(machine.checks.lock().len(), 1);
@@ -451,7 +451,7 @@ fn same_screens_after_the_update_is_all_good_and_changed_screens_is_not() {
     assert_eq!(view.strict_reason, Some(StrictReason::ChangedScreens));
     assert_eq!(
         engine.status().notices[0].text,
-        "Codex 0.159.3 \u{2192} 0.170.0: screens changed. Puppet Master will ask you before acting."
+        "Codex 0.159.3 \u{2192} 0.170.0: screens changed. Potato Workspace will ask you before acting."
     );
     assert!(strict::is_strict("codex"));
     strict::replace(Vec::<String>::new());
@@ -538,7 +538,7 @@ fn a_signal_check_that_finds_unreadable_screens_marks_the_agent_and_ends_the_sig
     assert!(engine.note_signal("codex", Signal::UnreadableScreen));
     let view = engine.check("codex").unwrap();
     assert_eq!(view.strict_reason, Some(StrictReason::ChangedScreens));
-    assert_eq!(engine.status().notices[0].text, "Codex 0.162.1 changed its screens. Puppet Master will ask you before acting.");
+    assert_eq!(engine.status().notices[0].text, "Codex 0.162.1 changed its screens. Potato Workspace will ask you before acting.");
     *machine.clock.lock() += state::SIGNAL_GAP_MS * 5;
     assert!(!engine.note_signal("codex", Signal::UnreadableScreen), "the answer is known");
     strict::replace(Vec::<String>::new());

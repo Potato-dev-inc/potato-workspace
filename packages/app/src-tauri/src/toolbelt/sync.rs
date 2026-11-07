@@ -1,7 +1,7 @@
 //! The sync engine: make every agent's MCP config match the toolbelt.
 //!
 //! For each agent that declares an MCP config (`TuiProfile::mcp_host`) the engine computes the
-//! entries it should own (Puppet Master itself when asked, plus every enabled toolbelt server in
+//! entries it should own (Potato Workspace itself when asked, plus every enabled toolbelt server in
 //! that scope), compares them with what the file has under `pm-toolbelt-*` and adds, updates or
 //! removes exactly those keys. The user's own entries are never read for change or touched.
 //! `preview` computes the same plan without writing; `apply` writes it.
@@ -44,7 +44,7 @@ pub struct Unsupported {
 pub struct SyncOptions {
     pub home: PathBuf,
     pub project: Option<PathBuf>,
-    /// Also keep Puppet Master's own entry (under the key the agent declares) in the global config.
+    /// Also keep Potato Workspace's own entry (under the key the agent declares) in the global config.
     pub pm_launch: Option<HostLaunch>,
 }
 
@@ -61,7 +61,7 @@ pub enum ChangeKind {
 pub struct Change {
     /// The key in the agent's file.
     pub key: String,
-    /// Toolbelt server name (or "Puppet Master").
+    /// Toolbelt server name (or "Potato Workspace").
     pub name: String,
     pub kind: ChangeKind,
 }
@@ -104,7 +104,7 @@ pub fn collect_hosts() -> (Vec<HostSpec>, Vec<Unsupported>) {
             None => unsupported.push(Unsupported {
                 id: d.id.to_string(),
                 label: d.label.clone(),
-                reason: "This agent doesn't declare where it keeps MCP servers, so Puppet Master can't write to it.".into(),
+                reason: "This agent doesn't declare where it keeps MCP servers, so Potato Workspace can't write to it.".into(),
             }),
         }
     }
@@ -303,7 +303,7 @@ fn plan_group(g: &Group, servers: &[ToolServer], opts: &SyncOptions, apply: bool
     let mut desired: Vec<(String, String, Value)> = Vec::new();
     if g.scope == Scope::Global {
         if let Some(launch) = &opts.pm_launch {
-            desired.push((pm_key.to_string(), "Puppet Master".into(), crate::mcp_install::declarative::render_entry(table, launch).unwrap_or(Value::Null)));
+            desired.push((pm_key.to_string(), "Potato Workspace".into(), crate::mcp_install::declarative::render_entry(table, launch).unwrap_or(Value::Null)));
         }
     }
     for s in servers.iter().filter(|s| s.enabled && s.scope == g.scope) {

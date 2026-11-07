@@ -1,7 +1,7 @@
 // Settings > Orchestrator & Models: which brain steers the agents, the librarian and OpenCode defaults,
 // the API orchestrator's provider and model, and the custom models the picker offers. Every control autosaves.
 import { useState } from 'react';
-import { modelKey, ORCHESTRATOR_BACKEND_LABELS, type LlmModel, type LlmProvider, type OrchestratorBackend } from '@puppet-master/shared';
+import { modelKey, ORCHESTRATOR_BACKEND_LABELS, type LlmModel, type LlmProvider, type OrchestratorBackend } from '@potato-workspace/shared';
 import { listModels } from '../../../lib/settings';
 import { TextControl } from '../controls';
 import type { RowDef, SettingsEnv } from '../model';

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Puppet Master MCP server (Node fallback; the Rust binary is the primary server).
+ * Potato Workspace MCP server (Node fallback; the Rust binary is the primary server).
  *
  * Speaks stdio JSON-RPC using the `@modelcontextprotocol/sdk`. Each tool
  * call proxies to the local HTTP bridge (which fronts the Rust PTY manager
@@ -26,7 +26,7 @@ import type { BridgeClient, ClientRef } from './types.js';
 import { isRecord, log, tryJson } from './util.js';
 
 const MCP_INSTRUCTIONS =
-  'Puppet Master MCP (agent mode). Sequence: list_agents → run_agent(worker_id or pane_id, task) → handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup.';
+  'Potato Workspace MCP (agent mode). Sequence: list_agents → run_agent(worker_id or pane_id, task) → handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup.';
 
 const SET_MODE_NOTE =
   'Sent notifications/tools/list_changed. Hosts that read tools/list only once at startup ignore it and keep the old tool list; if tool_count differs from what you can see, restart the MCP server with --mode <mode> or reconnect.';
@@ -41,9 +41,9 @@ Note: ${SET_MODE_NOTE}`;
 
 type StartMode = 'agent' | 'shell' | 'both';
 
-/** Starting tool mode from `--mode <mode>` / `--mode=<mode>` (wins) or `PUPPET_MASTER_MODE`. */
+/** Starting tool mode from `--mode <mode>` / `--mode=<mode>` (wins) or `POTATO_WORKSPACE_MODE`. */
 function initialModeFrom(env: NodeJS.ProcessEnv, argv: string[]): StartMode | undefined {
-  let raw = env.PUPPET_MASTER_MODE;
+  let raw = env.POTATO_WORKSPACE_MODE;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] ?? '';
     if (arg === '--mode') raw = argv[i + 1];
@@ -99,7 +99,7 @@ async function main(): Promise<void> {
   await applyInitialMode();
 
   const server = new Server(
-    { name: 'puppet-master', version: '0.1.3' },
+    { name: 'potato-workspace', version: '0.1.3' },
     { capabilities: { tools: { listChanged: true } } },
   );
 

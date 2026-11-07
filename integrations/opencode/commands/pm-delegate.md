@@ -1,8 +1,8 @@
 ---
-description: Hand a task to another agent in an isolated worktree (Puppet Master)
+description: Hand a task to another agent in an isolated worktree (Potato Workspace)
 ---
 
-Delegate this task to another agent with the Puppet Master MCP tools: $ARGUMENTS
+Delegate this task to another agent with the Potato Workspace MCP tools: $ARGUMENTS
 
 1. Restate the task so a fresh agent can act on it alone. Choose an installed agent with `list_agents`.
 2. Use the project's own test or build command as a `command_exits` check; ask the user once if you cannot tell.

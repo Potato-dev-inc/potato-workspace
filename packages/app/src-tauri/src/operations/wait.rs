@@ -4,6 +4,7 @@
 use super::model::*;
 use super::store::change;
 use super::get_operation;
+use crate::wait_reasons;
 use std::time::{Duration, Instant};
 
 /// Statuses that mean the coordinator can act on a turn (answer, follow up, or handle failure).
@@ -24,12 +25,12 @@ fn operation_wait_ready(
 ) -> (bool, &'static str) {
     if wake_on_progress {
         if snapshot.revision > cursor.after_revision {
-            return (true, "revision_changed");
+            return (true, wait_reasons::REVISION_CHANGED);
         }
         if snapshot.status.terminal() {
-            return (true, "terminal");
+            return (true, wait_reasons::TERMINAL);
         }
-        return (false, "timeout");
+        return (false, wait_reasons::TIMEOUT);
     }
     let states = until
         .as_ref()
@@ -39,9 +40,9 @@ fn operation_wait_ready(
     if status_matched
         && (snapshot.revision > cursor.after_revision || snapshot.status.terminal())
     {
-        return (true, "matched_state");
+        return (true, wait_reasons::MATCHED_STATE);
     }
-    (false, "timeout")
+    (false, wait_reasons::TIMEOUT)
 }
 
 pub fn wait_for_operation(
@@ -78,25 +79,21 @@ pub fn wait_for_operation_with_stage(
         {
             return Ok(OperationWaitResult {
                 snapshot,
-                reason: if matched {
-                    "matched_state"
-                } else {
-                    "revision_changed"
-                }
+                reason: if matched { wait_reasons::MATCHED_STATE } else { wait_reasons::REVISION_CHANGED }
                 .into(),
             });
         }
         if snapshot.status.terminal() {
             return Ok(OperationWaitResult {
                 snapshot,
-                reason: "terminal".into(),
+                reason: wait_reasons::TERMINAL.into(),
             });
         }
         let now = Instant::now();
         if now >= deadline {
             return Ok(OperationWaitResult {
                 snapshot,
-                reason: "timeout".into(),
+                reason: wait_reasons::TIMEOUT.into(),
             });
         }
         guard = lock.lock();
@@ -149,11 +146,11 @@ pub fn wait_for_operations(
             let reason = if any_ready {
                 wake_reasons
                     .iter()
-                    .find(|value| *value != "timeout")
+                    .find(|value| *value != wait_reasons::TIMEOUT)
                     .cloned()
-                    .unwrap_or_else(|| "matched_state".into())
+                    .unwrap_or_else(|| wait_reasons::MATCHED_STATE.into())
             } else {
-                "timeout".into()
+                wait_reasons::TIMEOUT.into()
             };
             return Ok(MultiOperationWaitResult {
                 snapshots,
@@ -165,7 +162,7 @@ pub fn wait_for_operations(
         if now >= deadline {
             return Ok(MultiOperationWaitResult {
                 snapshots,
-                reason: "timeout".into(),
+                reason: wait_reasons::TIMEOUT.into(),
                 wake_reasons,
             });
         }

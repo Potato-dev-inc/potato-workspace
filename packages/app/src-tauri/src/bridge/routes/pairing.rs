@@ -1,5 +1,5 @@
 //! Mobile device pairing routes: `POST /pair`, `GET /pair/session/<code>` and the local-only
-//! `POST /pair/invite` that lets `puppet-master pair-link` mint a pairing link.
+//! `POST /pair/invite` that lets `potato-workspace pair-link` mint a pairing link.
 
 use serde_json::json;
 

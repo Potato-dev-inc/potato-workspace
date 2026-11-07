@@ -14,7 +14,7 @@ pub struct Env {
     pub hosts: Vec<HostSpec>,
     pub unsupported: Vec<Unsupported>,
     pub home: PathBuf,
-    /// Launch spec for Puppet Master's own entry when a sync asks for it.
+    /// Launch spec for Potato Workspace's own entry when a sync asks for it.
     pub pm_launch: Option<HostLaunch>,
 }
 

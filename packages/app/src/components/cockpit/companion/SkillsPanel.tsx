@@ -63,7 +63,7 @@ export function SkillsPanel({
       <div className="ck-skills" data-testid="skill-open">
         {open.unreviewed && (
           <div className="ck-companion-notice" role="status">
-            <span>This skill changed outside Puppet Master. {name} will not list it until you keep it.</span>
+            <span>This skill changed outside Potato Workspace. {name} will not list it until you keep it.</span>
             <button
               type="button"
               className="ck-btn ck-btn--sm ck-btn--secondary"
@@ -167,7 +167,7 @@ export function SkillsPanel({
                 <span className="ck-skills-name">{skill.title}</span>
                 <span className="ck-sub">{formatCount(skill.chars)} characters</span>
               </button>
-              {skill.unreviewed && <span className="ck-memory-tag">Changed outside Puppet Master</span>}
+              {skill.unreviewed && <span className="ck-memory-tag">Changed outside Potato Workspace</span>}
               {skill.flagged && <span className="ck-memory-tag">{skill.flagged}</span>}
             </li>
           ))}

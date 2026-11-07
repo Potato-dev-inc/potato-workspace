@@ -80,9 +80,9 @@ fn secret_names_are_flagged_and_ordinary_names_are_not() {
 
 #[test]
 fn puppet_master_folder_is_internal_at_any_depth_with_either_separator() {
-    let internal = paths(&[".puppet-master/issue-42.md", ".puppet-master\\issue-42.md", "sub/.puppet-master/x"]);
+    let internal = paths(&[".potato-workspace/issue-42.md", ".potato-workspace\\issue-42.md", "sub/.potato-workspace/x"]);
     assert_eq!(internal_paths(&internal), internal);
-    let other = paths(&["puppet-master/x.md", ".puppet-masterx/x", "src/a.rs"]);
+    let other = paths(&["potato-workspace/x.md", ".potato-workspacex/x", "src/a.rs"]);
     assert!(internal_paths(&other).is_empty());
 }
 
@@ -223,7 +223,7 @@ fn a_clean_run_with_asking_off_needs_no_card() {
 #[test]
 fn asking_before_each_push_gives_one_sentence_and_is_not_held() {
     let (lines, held) = reasons(&clean(), true);
-    assert_eq!(lines, vec!["You asked Puppet Master to check each push first."]);
+    assert_eq!(lines, vec!["You asked Potato Workspace to check each push first."]);
     assert!(!held);
 }
 
@@ -236,7 +236,7 @@ fn an_issue_that_changed_after_the_yes_is_a_reason_but_not_a_hold() {
     assert!(!held, "the person may still push");
     // Asking is on too: both lines, the change first.
     let (lines, held) = reasons(&facts, true);
-    assert_eq!(lines, ["The issue changed after you said yes.", "You asked Puppet Master to check each push first."]);
+    assert_eq!(lines, ["The issue changed after you said yes.", "You asked Potato Workspace to check each push first."]);
     assert!(!held);
     // An old saved record without the field reads as not changed.
     let mut value = serde_json::to_value(clean()).unwrap();
@@ -287,7 +287,7 @@ fn long_lists_show_three_names_then_how_many_more() {
 
 #[test]
 fn git_changed_remote_branch_and_internal_files_are_held_with_the_sentence() {
-    let held_line = "Puppet Master won't push this. Check the copy yourself.";
+    let held_line = "Potato Workspace won't push this. Check the copy yourself.";
 
     let mut git = clean();
     git.git_changed = true;
@@ -303,9 +303,9 @@ fn git_changed_remote_branch_and_internal_files_are_held_with_the_sentence() {
     assert!(lines.contains(&"A branch with this name already exists on GitHub.".to_string()));
 
     let mut internal = clean();
-    internal.internal_files = paths(&[".puppet-master/issue-42.md"]);
+    internal.internal_files = paths(&[".potato-workspace/issue-42.md"]);
     let (lines, held) = reasons(&internal, false);
     assert!(held);
-    assert!(lines.contains(&"Includes Puppet Master's own files: .puppet-master/issue-42.md.".to_string()));
+    assert!(lines.contains(&"Includes Potato Workspace's own files: .potato-workspace/issue-42.md.".to_string()));
     assert_eq!(lines.last().map(String::as_str), Some(held_line));
 }

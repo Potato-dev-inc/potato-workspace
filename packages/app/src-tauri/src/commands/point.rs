@@ -364,7 +364,7 @@ mod tests {
         // The source file does not exist, so the copy fails; the pick stays, without its shot.
         let missing = Shot {
             abs_path: PathBuf::from("point-pf13-missing/pick-20261028-000000-1.png"),
-            rel_path: ".puppet-master/shots/pick-20261028-000000-1.png".into(),
+            rel_path: ".potato-workspace/shots/pick-20261028-000000-1.png".into(),
             width: 10,
             height: 10,
         };

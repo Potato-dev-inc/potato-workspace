@@ -79,7 +79,7 @@ pub struct CanaryResult {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NoticeKind {
-    /// The screens changed; Puppet Master asks before acting. (Every card from before this field.)
+    /// The screens changed; Potato Workspace asks before acting. (Every card from before this field.)
     #[default]
     Changed,
     /// The update was checked on this computer and everything read fine.
@@ -216,7 +216,7 @@ pub struct AgentView {
     pub plain: String,
     pub checking: bool,
     pub last: Option<ResultView>,
-    /// Screens saved for this agent that Puppet Master did not recognise.
+    /// Screens saved for this agent that Potato Workspace did not recognise.
     pub captures: usize,
     /// A check passed on exactly this version, on this computer.
     pub verified: bool,
@@ -241,7 +241,7 @@ pub struct ChangeView {
 pub enum Verdict {
     /// A check passed on this version.
     Good,
-    /// The screens changed; Puppet Master asks before acting.
+    /// The screens changed; Potato Workspace asks before acting.
     Changed,
     /// No check has judged it (not run yet, switched off, or not possible for this agent).
     Unchecked,

@@ -1,8 +1,8 @@
-// Settings > General: "Start Puppet Master when I sign in" (OS entry, off by default). Saves itself.
+// Settings > General: "Start Potato Workspace when I sign in" (OS entry, off by default). Saves itself.
 import { useStartAtSignIn } from '../../../hooks/useStartAtSignIn';
 import { Note, SettingToggle } from '../settings-ui';
 
-export const START_AT_SIGN_IN_LABEL = 'Start Puppet Master when I sign in';
+export const START_AT_SIGN_IN_LABEL = 'Start Potato Workspace when I sign in';
 export const START_AT_SIGN_IN_HINT = 'It starts quietly in the tray. Your companion wakes up too.';
 
 export function StartAtSignInSettings({ onSaved }: { onSaved?: () => void }) {

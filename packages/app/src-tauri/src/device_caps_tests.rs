@@ -311,12 +311,12 @@ fn a_device_without_watch_gets_operation_status_but_no_pane_content_on_the_long_
 #[test]
 fn websocket_input_frames_need_type() {
     let r = rig();
-    let headers = |label: &str| format!("X-PM-Proxied: 1\r\nAuthorization: Bearer {}", r.tokens[label]);
+    let headers = |label: &str| format!("X-Potato-Workspace-Proxied: 1\r\nAuthorization: Bearer {}", r.tokens[label]);
     assert!(crate::mobile_pairing::caller_may(&headers("full"), true, Cap::Type));
     assert!(crate::mobile_pairing::caller_may(&headers("type"), true, Cap::Type));
     assert!(!crate::mobile_pairing::caller_may(&headers("watch_answer"), true, Cap::Type));
     assert!(!crate::mobile_pairing::caller_may(&headers("watch"), true, Cap::Type));
-    assert!(!crate::mobile_pairing::caller_may("X-PM-Proxied: 1", true, Cap::Type), "no token");
+    assert!(!crate::mobile_pairing::caller_may("X-Potato-Workspace-Proxied: 1", true, Cap::Type), "no token");
     assert!(crate::mobile_pairing::caller_may("Host: 127.0.0.1", true, Cap::Type), "the local app");
 }
 
@@ -514,7 +514,7 @@ fn the_apps_own_origins_get_their_origin_back_never_a_wildcard() {
         let pre = request("OPTIONS", "/panes", &["Host: 127.0.0.1:17321", &o, "Access-Control-Request-Method: POST"]);
         let (_, head, _) = send(r.bridge, &pre);
         assert_eq!(header(&head, "Access-Control-Allow-Origin"), Some(origin), "{head}");
-        assert!(header(&head, "Access-Control-Allow-Headers").unwrap().contains("X-PM-Local-Secret"));
+        assert!(header(&head, "Access-Control-Allow-Headers").unwrap().contains("X-Potato-Workspace-Local-Secret"));
         let (status, head, _) = send(r.bridge, &request("GET", "/panes", &["Host: 127.0.0.1:17321", &o]));
         assert_eq!(status, 200);
         assert_eq!(header(&head, "Access-Control-Allow-Origin"), Some(origin));
@@ -542,7 +542,7 @@ fn a_local_caller_without_the_secret_is_logged_but_still_served() {
     assert!(local_secret::status().missing_count > before, "counted as LOCAL_SECRET_MISSING");
     assert!(local_secret::status().log_only);
     // With the secret the request is the app's own (checked exactly by local_secret's unit tests).
-    let with = format!("X-PM-Local-Secret: {secret}");
+    let with = format!("X-Potato-Workspace-Local-Secret: {secret}");
     let (status, _, _) = send(r.bridge, &request("POST", "/shell/exec", &["Host: 127.0.0.1", &with]));
     assert_eq!(status, 200);
     // A device through the tunnel is never asked for the local secret.

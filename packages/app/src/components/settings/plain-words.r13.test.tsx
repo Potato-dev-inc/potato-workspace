@@ -44,7 +44,7 @@ function visible(host: HTMLElement): string {
   return [host.textContent ?? '', ...attrs].join('\n');
 }
 
-const DEVELOPER_WORDS = /PWA|dev tunnel|Dev CLI|dev server|PUPPET_MASTER|tap target|input buffer|Vite|worktree/i;
+const DEVELOPER_WORDS = /PWA|dev tunnel|Dev CLI|dev server|POTATO_WORKSPACE|PUPPET_MASTER|tap target|input buffer|Vite|worktree/i;
 const SNAKE_CASE = /\b[a-z]+_[a-z]+(_[a-z]+)*\b/;
 
 let host: HTMLDivElement;

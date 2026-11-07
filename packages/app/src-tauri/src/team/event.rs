@@ -1,5 +1,5 @@
 //! The `TeamEvent` schema (COWORK-PLAN §2.3): one thing that happened, as it travels between
-//! teammates' Puppet Masters. Agent-agnostic and forge-agnostic.
+//! teammates' Potato Workspaces. Agent-agnostic and forge-agnostic.
 //!
 //! The sender fills in facts; the recipient renders the copy. A teammate's event is UNTRUSTED
 //! data: [`validate_inbound`] checks every field before anything is stored, and the only free text

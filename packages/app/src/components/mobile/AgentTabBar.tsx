@@ -3,7 +3,7 @@
 // tabs do not fit. Monochrome: the state glyph is the unified dot glyph; the open tab is a filled pill. A companion's
 // own pane (`companion-<id>`) has no tab of its own: its companion tab stands for it.
 import { useEffect, useRef } from 'react';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { CompanionView } from '../../lib/companion';
 import { stateWord } from '../../lib/companion';
 import { ALL_TAB, companionTab, glyphStatus, isCompanionPane, statusMeta } from '../../lib/mobile-agent-tabs';

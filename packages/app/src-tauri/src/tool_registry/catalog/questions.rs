@@ -7,7 +7,7 @@ use serde_json::json;
 pub(super) fn tools() -> Vec<ToolDefinition> {
     vec![ToolDefinition {
         name: "ask_user",
-        description: "Ask the HUMAN a question and wait for the answer. Use it when you need a decision, a missing fact or a go-ahead that only the person can give, instead of stopping at a terminal prompt nobody sees. The question shows in the Puppet Master Inbox (and on a paired phone). Blocks until answered, dismissed or timed out (default 600 s, max 3600 s). Offer up to 6 choices for quick answers; free text is on by default when there are no choices. Returns {answered:true, choice_id?|text?, answered_by:\"desktop\"|\"phone\"} or {answered:false, reason:\"timeout\"|\"cancelled\"}. Do not ask what you can find out yourself.",
+        description: "Ask the HUMAN a question and wait for the answer. Use it when you need a decision, a missing fact or a go-ahead that only the person can give, instead of stopping at a terminal prompt nobody sees. The question shows in the Potato Workspace Inbox (and on a paired phone). Blocks until answered, dismissed or timed out (default 600 s, max 3600 s). Offer up to 6 choices for quick answers; free text is on by default when there are no choices. Returns {answered:true, choice_id?|text?, answered_by:\"desktop\"|\"phone\"} or {answered:false, reason:\"timeout\"|\"cancelled\"}. Do not ask what you can find out yourself.",
         input_schema: object_schema(
             json!({
                 "question": { "type": "string", "maxLength": 2000, "description": "The question, short and self-contained." },

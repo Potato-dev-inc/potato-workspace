@@ -16,7 +16,7 @@ export async function run(t) {
   await t.page.reload();
 
   await t.step('The welcome is on screen');
-  await t.expect.text('Welcome to Puppet Master');
+  await t.expect.text('Welcome to Potato Workspace');
   await t.expect.text('How do you work?');
   await t.expect.visible('Skip setup');
 

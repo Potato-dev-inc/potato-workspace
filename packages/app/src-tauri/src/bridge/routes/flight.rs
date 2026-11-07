@@ -1,7 +1,7 @@
 //! `/panes/{id}/flight`: the pane's flight recording (see `crate::flight`).
 //!
 //! - `GET`: the recording as a redacted asciicast v2 file, inside JSON (`cast`), for an export.
-//! - `POST`: freeze it to `<project>/.puppet-master/operations/<operation_id>/flight.cast`
+//! - `POST`: freeze it to `<project>/.potato-workspace/operations/<operation_id>/flight.cast`
 //!   (`operation_id` in the body, or a generated `manual-...` name).
 //!
 //! Neither is part of the MCP tool catalog, so an agent session cannot call them; the app and paired

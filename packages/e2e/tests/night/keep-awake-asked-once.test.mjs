@@ -10,7 +10,7 @@ export const meta = {
 };
 
 const SWITCH = 'aria=Keep this computer awake until it is done';
-const WORDS = 'Puppet Master will stop this computer from sleeping until Night Shift ends';
+const WORDS = 'Potato Workspace will stop this computer from sleeping until Night Shift ends';
 
 export async function run(t) {
   await t.spawnPane('nimbus', { cwd: gitProject(t, 'night-app') });

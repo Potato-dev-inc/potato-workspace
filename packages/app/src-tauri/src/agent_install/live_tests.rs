@@ -106,7 +106,7 @@ fn a_harmless_winget_show_runs_in_a_pty_pane_and_reports_its_exit_code() {
     let text = crate::pty::ansi::strip_ansi(&String::from_utf8_lossy(&raw));
     println!("---- what the pane showed ----\n{text}\n---- end ----");
     let _ = child.kill(); // closes the window
-    assert!(text.contains("Puppet Master is running this for you"), "the banner names what runs");
+    assert!(text.contains("Potato Workspace is running this for you"), "the banner names what runs");
     assert!(text.contains("winget show --id Anthropic.ClaudeCode"), "the shown command is printed");
     assert!(text.contains("Anthropic"), "winget answered");
     assert_eq!(code, Some(0), "the done marker carries winget's exit code");

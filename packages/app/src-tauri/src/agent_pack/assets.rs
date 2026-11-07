@@ -3,7 +3,7 @@
 
 /// `(skill name, SKILL.md)`. The installer writes `<skills dir>/<name>/SKILL.md`.
 pub const SKILLS: &[(&str, &str)] = &[
-    ("puppet-master", include_str!("../../../../../integrations/skills/puppet-master/SKILL.md")),
+    ("potato-workspace", include_str!("../../../../../integrations/skills/potato-workspace/SKILL.md")),
     ("pm-review", include_str!("../../../../../integrations/skills/pm-review/SKILL.md")),
     ("pm-delegate", include_str!("../../../../../integrations/skills/pm-delegate/SKILL.md")),
     ("pm-status", include_str!("../../../../../integrations/skills/pm-status/SKILL.md")),

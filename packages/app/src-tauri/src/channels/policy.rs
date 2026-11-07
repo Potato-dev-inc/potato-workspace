@@ -9,9 +9,9 @@ use crate::channels::commands::Command;
 use crate::mobile_pairing::{Cap, Need};
 
 /// Shown under a card the chat cannot answer, when the answer must be made on the PC or in the app.
-const OPEN_TO_ANSWER: &str = "Open Puppet Master to answer.";
-const OPEN_TO_DECIDE: &str = "Open Puppet Master to decide.";
-const OPEN_TO_ACT: &str = "Open Puppet Master to act on this.";
+const OPEN_TO_ANSWER: &str = "Open Potato Workspace to answer.";
+const OPEN_TO_DECIDE: &str = "Open Potato Workspace to decide.";
+const OPEN_TO_ACT: &str = "Open Potato Workspace to act on this.";
 const ONLY_YOU_ON_PC: &str = "Only you can pass this, on your PC.";
 const DECIDE_ON_PC: &str = "An agent wants more control. Decide on your PC.";
 

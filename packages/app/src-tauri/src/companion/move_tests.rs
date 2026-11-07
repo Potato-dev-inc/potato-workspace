@@ -119,8 +119,8 @@ fn the_brief_is_rewritten_for_the_new_agent_and_the_memory_files_are_not_touched
     assert_eq!(pending_before, read(home.join("memory").join("pending.md")), "the pending list too");
     assert!(home.join("CLAUDE.md").exists(), "the first agent's file was written before the move");
     let new_brief = std::fs::read_to_string(home.join("OTHER.md")).unwrap();
-    assert!(new_brief.contains("puppet-master:companion:start"), "{new_brief}");
-    // The files were edited outside Puppet Master, so the brief keeps using the approved copies (as at any start).
+    assert!(new_brief.contains("potato-workspace:companion:start"), "{new_brief}");
+    // The files were edited outside Potato Workspace, so the brief keeps using the approved copies (as at any start).
     assert!(new_brief.contains("# You are Mochi") && new_brief.contains("calm, steady helper"), "{new_brief}");
     assert!(new_brief.contains("memory/pending.md"), "the house rules are there for the new agent");
 }

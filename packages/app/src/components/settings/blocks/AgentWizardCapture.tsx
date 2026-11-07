@@ -256,7 +256,7 @@ export function AgentWizardCapture({
       <div className="mt-4" data-testid="capture-plan">
         <p className="text-xs font-semibold">Watch it work once</p>
         <p className="mt-1 text-xs text-pm-muted">
-          Puppet Master starts {start.command} in a pane, in an isolated temporary folder (never your project). You answer
+          Potato Workspace starts {start.command} in a pane, in an isolated temporary folder (never your project). You answer
           its questions in the pane yourself: the wizard presses nothing for you. It types a few small test messages (one asks it
           to list the folder, so the wizard sees how it thinks and uses a tool) and writes down what the screen looks like. This uses a little of your {start.command} plan.
         </p>

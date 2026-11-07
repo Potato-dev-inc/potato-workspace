@@ -63,7 +63,7 @@ const nativeOption = (available: boolean) => ({ kind: 'native', label: 'On this 
 const adapterOption = (available: boolean) => ({
   kind: 'adapter',
   label: 'Reviewed adapter',
-  summary: 'Puppet Master runs a reviewed adapter.',
+  summary: 'Potato Workspace runs a reviewed adapter.',
   available,
   adapter: { id: 'fakeagent', tested_version: '1.0.0' },
   env_keys: [],
@@ -72,7 +72,7 @@ const adapterOption = (available: boolean) => ({
   installed_version: '1.0.0',
   ...(available ? {} : { reason: 'No adapter for it.' }),
 });
-const bridgeOption = (available: boolean) => ({ kind: 'bridge', label: 'Chat made by Puppet Master', summary: 'Puppet Master makes a chat.', ...(available ? { bridge: { has_memory: false } } : { reason: 'It has no one-message mode.' }), available });
+const bridgeOption = (available: boolean) => ({ kind: 'bridge', label: 'Chat made by Potato Workspace', summary: 'Potato Workspace makes a chat.', ...(available ? { bridge: { has_memory: false } } : { reason: 'It has no one-message mode.' }), available });
 
 interface Shell {
   lanes: Record<string, unknown>;

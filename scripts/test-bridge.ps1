@@ -2,7 +2,7 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $pf = "$env:TEMP\pm-bridge-test.port"
 Remove-Item $pf -ErrorAction SilentlyContinue
-$env:PUPPET_MASTER_BRIDGE_PORT_FILE = $pf
+$env:POTATO_WORKSPACE_BRIDGE_PORT_FILE = $pf
 $errLog = "$env:TEMP\pm-bridge.err"
 Remove-Item $errLog -ErrorAction SilentlyContinue
 

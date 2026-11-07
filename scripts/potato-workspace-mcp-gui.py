@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the Qt6 Puppet Master MCP client."""
+"""Launch the Qt6 Potato Workspace MCP client."""
 
 from pathlib import Path
 import sys
@@ -21,8 +21,8 @@ def main() -> int:
             return 1
         raise
     app = QApplication(sys.argv)
-    app.setApplicationName("Puppet Master MCP Console")
-    app.setOrganizationName("Puppet Master")
+    app.setApplicationName("Potato Workspace MCP Console")
+    app.setOrganizationName("Potato Workspace")
     window = MainWindow()
     window.show()
     return app.exec()

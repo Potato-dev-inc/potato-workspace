@@ -6,7 +6,7 @@
 //! The agent never writes one. It proposes it in `memory/pending.md` (`- skill: <title>` and an indented
 //! body, parsed by `memory.rs`), and only the person's Approve (or an Edit and Save) creates the file.
 //! Every skill the person approves or saves also gets an approved copy in app data. A file that has no
-//! approved copy, or differs from it, was changed outside Puppet Master: it is shown with a warning and
+//! approved copy, or differs from it, was changed outside Potato Workspace: it is shown with a warning and
 //! the brief does not list it until the person has looked at it and saved it.
 //!
 //! Removing a skill moves the file into `skills/.removed/`. Nothing here deletes a file.
@@ -37,7 +37,7 @@ pub struct SkillRef {
     pub title: String,
     /// Characters in the file.
     pub chars: usize,
-    /// No approved copy, or the file differs from it: it changed outside Puppet Master.
+    /// No approved copy, or the file differs from it: it changed outside Potato Workspace.
     pub unreviewed: bool,
     /// "Has a link" | "Sounds like an instruction" | None. Flags never block.
     pub flagged: Option<String>,
@@ -246,7 +246,7 @@ pub fn remove(home: &Path, slug: &str) -> CompanionResult<()> {
     fs::rename(&from, &to).map_err(|e| folder_error(&from, &e))
 }
 
-/// The approved skills for the brief: title and path, no body. A skill that changed outside Puppet Master
+/// The approved skills for the brief: title and path, no body. A skill that changed outside Potato Workspace
 /// (or was never approved) is left out until the person has looked at it.
 pub fn brief_lines(root: &Path, id: &str, home: &Path) -> CompanionResult<Vec<SkillLine>> {
     Ok(list(root, id, home)?

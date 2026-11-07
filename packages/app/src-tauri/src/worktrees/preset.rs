@@ -1,6 +1,6 @@
-//! Worktree presets: what Puppet Master does so a separate copy starts READY.
+//! Worktree presets: what Potato Workspace does so a separate copy starts READY.
 //!
-//! The config lives in the project, in `<project>/.puppet-master/project.toml`:
+//! The config lives in the project, in `<project>/.potato-workspace/project.toml`:
 //!
 //! ```toml
 //! [worktree]
@@ -21,7 +21,7 @@
 //! Copied files are untracked secrets by definition. They are skipped when the file is tracked
 //! (the copy already has the committed version), and otherwise written to the repository's
 //! `info/exclude` unless an ignore rule already covers them, so neither `git add -A` by an agent
-//! nor Puppet Master's own commit can put them in a branch.
+//! nor Potato Workspace's own commit can put them in a branch.
 //!
 //! Conductor's `conductor.json` (`{"scripts": {"setup": "...", "run": "..."}}`) can be imported.
 
@@ -33,7 +33,7 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 /// Relative to the project.
-pub const PROJECT_TOML: &str = ".puppet-master/project.toml";
+pub const PROJECT_TOML: &str = ".potato-workspace/project.toml";
 /// How long one setup step may run before it is stopped.
 pub const DEFAULT_STEP_TIMEOUT_SECS: u64 = 600;
 const MAX_COPY_FILE_BYTES: u64 = 8 * 1024 * 1024;
@@ -316,7 +316,7 @@ pub fn read_conductor(project: &Path) -> Option<Result<WorktreePreset, String>> 
 // ------------------------------------------------------------------------------------- applying
 
 /// `path` as a clean relative path inside the project, or `None` when it could escape it or touch
-/// git's or Puppet Master's own folders.
+/// git's or Potato Workspace's own folders.
 pub fn safe_relative(path: &str) -> Option<PathBuf> {
     let trimmed = path.trim().trim_start_matches("./");
     if trimmed.is_empty() {
@@ -338,7 +338,7 @@ pub fn safe_relative(path: &str) -> Option<PathBuf> {
         }
     }
     let first = clean.components().next()?.as_os_str().to_string_lossy().into_owned();
-    if first.eq_ignore_ascii_case(".puppet-master") {
+    if first.eq_ignore_ascii_case(".potato-workspace") {
         return None;
     }
     Some(clean)
@@ -370,7 +370,7 @@ fn copy_tree(from: &Path, to: &Path, budget: &mut usize) -> std::io::Result<Vec<
         for entry in std::fs::read_dir(from)? {
             let entry = entry?;
             let name = entry.file_name();
-            if name == ".git" || name == "node_modules" || name == ".puppet-master" {
+            if name == ".git" || name == "node_modules" || name == ".potato-workspace" {
                 continue;
             }
             let file_type = entry.file_type()?;
@@ -398,7 +398,7 @@ fn is_ignored(cwd: &Path, rel: &str) -> bool {
     git_raw(cwd, &["check-ignore", "-q", "--", rel], &[]).map(|out| out.ok).unwrap_or(false)
 }
 
-const EXCLUDE_HEADER: &str = "# Puppet Master: files copied into separate copies (never committed)";
+const EXCLUDE_HEADER: &str = "# Potato Workspace: files copied into separate copies (never committed)";
 
 fn append_exclude(file: &Path, lines: &[String]) {
     let existing = std::fs::read_to_string(file).unwrap_or_default();

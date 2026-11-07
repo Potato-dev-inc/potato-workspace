@@ -53,7 +53,7 @@ pub struct RealHttp;
 
 impl RealHttp {
     fn open(&self, url: &str, timeout: Duration) -> Result<Box<dyn Read + Send + Sync>, String> {
-        let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout(timeout).user_agent("puppet-master").build();
+        let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout(timeout).user_agent("potato-workspace").build();
         let mut current = url.to_string();
         for _ in 0..=MAX_REDIRECTS {
             if !https_ok(&current) {

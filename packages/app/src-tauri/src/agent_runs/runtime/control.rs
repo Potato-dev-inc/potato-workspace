@@ -113,7 +113,7 @@ pub(in crate::agent_runs) fn settle_native_abort(
                 operation_id,
                 OPENCODE_SERVER_UNREACHABLE,
                 &format!(
-                    "the OpenCode server could not be reached, so the abort was not delivered; the run was stopped on the Puppet Master side only ({error})"
+                    "the OpenCode server could not be reached, so the abort was not delivered; the run was stopped on the Potato Workspace side only ({error})"
                 ),
             );
             Ok(())

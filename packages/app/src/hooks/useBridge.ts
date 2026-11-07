@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { findBridgeUrl, makeBridgeClient, subscribeBridgeEvents, type BridgeClient } from '../lib/bridge';
 import { loadBridgeLocalSecret } from '../lib/bridge-local-secret';
-import type { McpLogEntry, OrchestratorChatEvent, OrchestratorUserMessage, PaneInfo } from '@puppet-master/shared';
+import type { McpLogEntry, OrchestratorChatEvent, OrchestratorUserMessage, PaneInfo } from '@potato-workspace/shared';
 import type { MobileOrchestratorViewport } from './useTerminalAuthorityCss';
 
 const MOBILE_VIEWPORT_STALE_MS = 15_000;
@@ -59,7 +59,7 @@ export function useBridge(bridgeUrl?: string): BridgeApi {
       await loadBridgeLocalSecret();
       if (cancelled) return;
       if (!url) {
-        setError('Bridge not reachable. Is the Puppet Master GUI running?');
+        setError('Bridge not reachable. Is the Potato Workspace GUI running?');
         pollTimer = setTimeout(tryConnect, 2000);
         return;
       }

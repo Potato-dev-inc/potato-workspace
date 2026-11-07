@@ -2,7 +2,7 @@
 //
 // Rust injects this file into each `preview-*` window with initialization_script,
 // after it replaces the two placeholders below with JSON string literals. The page
-// never calls Puppet Master. Rust pulls picks back with `take()` (point/window.rs).
+// never calls Potato Workspace. Rust pulls picks back with `take()` (point/window.rs).
 //
 // Guard (S5): the script does nothing unless it runs in the top document, on the
 // exact origin it was built for. Page text is data: it is read, never run.

@@ -56,7 +56,7 @@ fn record(id: &str, from_pane: &str) -> Branch {
         copy: Some(CopyFacts {
             handle: format!("{id}-handle"),
             branch: format!("pm/{id}"),
-            path: format!("C:\\Users\\you\\work\\demo\\.puppet-master\\worktrees\\{id}"),
+            path: format!("C:\\Users\\you\\work\\demo\\.potato-workspace\\worktrees\\{id}"),
             start_commit: Some("abc1234".to_string()),
             written: 2,
             removed: 1,

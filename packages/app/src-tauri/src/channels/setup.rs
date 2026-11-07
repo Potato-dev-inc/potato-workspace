@@ -20,7 +20,7 @@ use serde_json::json;
 pub const CONTROL_NOT_ALLOWED: &str = "TELEGRAM_CONTROL_NOT_ALLOWED";
 const NOT_ACCEPTED: &str = "Telegram did not accept this token.";
 const UNREACHABLE: &str = "Could not reach Telegram. Check your internet and try again.";
-const HAS_WEBHOOK: &str = "This bot already sends its messages to a website. Make a new bot for Puppet Master.";
+const HAS_WEBHOOK: &str = "This bot already sends its messages to a website. Make a new bot for Potato Workspace.";
 const NEED_TOKEN: &str = "Check your bot token first.";
 const ALREADY_PAIRED: &str = "A chat is already connected. Disconnect first to connect another.";
 const NEED_PAIRED: &str = "Connect your chat first.";

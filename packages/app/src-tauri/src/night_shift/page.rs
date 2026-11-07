@@ -31,7 +31,7 @@ ul{margin:6px 0 0;padding-left:18px;font-size:13px}
 li{overflow-wrap:anywhere;padding:1px 0}
 .foot{margin-top:18px;font-size:11px;color:var(--muted)}"#;
 
-const FOOTER: &str = "Saved from Puppet Master";
+const FOOTER: &str = "Saved from Potato Workspace";
 
 /// The saved morning page for a run.
 pub fn page(run: &NightRun, ctx: &RedactContext) -> String {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import { glyphStatus, groupPanes, waitingCount } from './mobile-agent-tabs';
 
 const pane = (id: string, status: string, created_at = 0) =>

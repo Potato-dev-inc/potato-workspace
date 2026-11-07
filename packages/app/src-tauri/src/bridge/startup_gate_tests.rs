@@ -281,7 +281,7 @@ fn every_agents_non_dismissible_gate_is_a_prompt_card_that_parks_the_run() {
     // Codex sign-in: a startup_screen card.
     let login = detect_in_screen("codex", CODEX_LOGIN, false).expect("codex login card");
     assert_eq!(login["kind"], "startup_screen");
-    assert_eq!(login["choices"], serde_json::json!([]), "Puppet Master does not know the sign-in keys");
+    assert_eq!(login["choices"], serde_json::json!([]), "Potato Workspace does not know the sign-in keys");
     // Every one of them parks a run and refuses a typed task, whatever the pane status says.
     for (agent, screen) in [("claude", TRUST), ("codex", CODEX_TRUST), ("codex", CODEX_LOGIN)] {
         for status in [None, Some("running"), Some("idle")] {

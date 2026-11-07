@@ -11,7 +11,6 @@ use std::cell::RefCell;
 use std::env;
 use std::fs;
 use std::io::{self, BufRead, Read, Write};
-use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -41,12 +40,12 @@ pub(crate) use session::*;
 pub(crate) use shell_hint::*;
 pub(crate) use stdio::run;
 
-const SERVER_NAME: &str = "puppet-master";
+const SERVER_NAME: &str = "potato-workspace";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
-const BRIDGE_PORT_FILE_ENV: &str = "PUPPET_MASTER_BRIDGE_PORT_FILE";
-const DEFAULT_BRIDGE_PORT_FILE: &str = "puppet-master.bridge.port";
+const BRIDGE_PORT_FILE_ENV: &str = "POTATO_WORKSPACE_BRIDGE_PORT_FILE";
+const DEFAULT_BRIDGE_PORT_FILE: &str = "potato-workspace.bridge.port";
 const APP_ID: &str = "com.potatodev.workspace";
-const MODE_ENV: &str = "PUPPET_MASTER_MODE";
+const MODE_ENV: &str = "POTATO_WORKSPACE_MODE";
 /// Default foreground wait for run_agent, followup_task, and wait_agents (matches bridge routes).
 const DEFAULT_AGENT_WAIT_MS: u64 = 120_000;
 

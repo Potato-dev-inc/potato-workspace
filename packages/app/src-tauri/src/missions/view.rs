@@ -179,7 +179,7 @@ pub fn state_text(m: &Mission) -> String {
                 "Stopped by you".into()
             }
         }
-        MissionState::Failed => format!("Ended · {}", m.sentence.clone().unwrap_or_else(|| "Puppet Master couldn't go on.".into())),
+        MissionState::Failed => format!("Ended · {}", m.sentence.clone().unwrap_or_else(|| "Potato Workspace couldn't go on.".into())),
     }
 }
 
@@ -228,7 +228,7 @@ fn turn_phrase(m: &Mission, r: &Round, live: bool) -> String {
             return format!("stopped after {} min", m.round_timeout_ms / 60_000);
         }
         if end.code_is(super::decide::RESTART_CODES) {
-            return "ended when Puppet Master restarted".into();
+            return "ended when Potato Workspace restarted".into();
         }
         if end.status == "not_started" {
             return "didn't start".into();

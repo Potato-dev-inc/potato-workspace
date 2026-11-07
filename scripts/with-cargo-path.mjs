@@ -44,7 +44,7 @@ if (args[0] === 'dev') {
   const localConfig = join(repoRoot, 'packages', 'app', 'src-tauri', 'tauri.dev.local.json');
   if (existsSync(localConfig) && !args.includes('--config') && !args.includes('-c')) {
     args.push('--config', localConfig);
-    console.error(`[puppet-master] using ${localConfig}`);
+    console.error(`[potato-workspace] using ${localConfig}`);
   }
   // Panes-first has no main window to anchor pop-outs to: the dev anchor (logical x/y of the
   // secondary monitor) comes from a gitignored per-machine file and reaches Rust as PM_WINDOW_ANCHOR.
@@ -54,16 +54,16 @@ if (args[0] === 'dev') {
       const anchor = JSON.parse(readFileSync(anchorFile, 'utf8')).window_anchor;
       if (Number.isFinite(anchor?.x) && Number.isFinite(anchor?.y)) {
         env.PM_WINDOW_ANCHOR = `${anchor.x},${anchor.y}`;
-        console.error(`[puppet-master] window anchor ${env.PM_WINDOW_ANCHOR} (pm-dev.local.json)`);
+        console.error(`[potato-workspace] window anchor ${env.PM_WINDOW_ANCHOR} (pm-dev.local.json)`);
       }
     } catch (err) {
-      console.error(`[puppet-master] ignoring ${anchorFile}: ${err.message}`);
+      console.error(`[potato-workspace] ignoring ${anchorFile}: ${err.message}`);
     }
   }
-  console.error('[puppet-master] starting dev stack (vite + tauri + embedded bridge)…');
+  console.error('[potato-workspace] starting dev stack (vite + tauri + embedded bridge)…');
 }
 
-const result = spawnSync(npm, ['run', 'tauri', '--workspace=@puppet-master/app', '--', ...args], {
+const result = spawnSync(npm, ['run', 'tauri', '--workspace=@potato-workspace/app', '--', ...args], {
   stdio: 'inherit',
   env,
   cwd: repoRoot,
@@ -71,16 +71,5 @@ const result = spawnSync(npm, ['run', 'tauri', '--workspace=@puppet-master/app',
 });
 
 const exitCode = result.status === null ? 1 : result.status;
-
-if (args[0] === 'build' && exitCode === 0) {
-  const upload = spawnSync(process.execPath, [join(repoRoot, 'scripts', 'publish-github-release-assets.mjs')], {
-    stdio: 'inherit',
-    env,
-    cwd: repoRoot,
-    shell: false,
-  });
-  const uploadCode = upload.status === null ? 1 : upload.status;
-  process.exit(uploadCode);
-}
 
 process.exit(exitCode);

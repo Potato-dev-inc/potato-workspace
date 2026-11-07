@@ -1,7 +1,7 @@
 // Bottom sheets of the mobile PWA: "New agent" (opens a pane on the PC) and the "⋯" menu
 // (connection, close the current agent, input box settings, classic view link).
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { AgentType } from '@puppet-master/shared';
+import type { AgentType } from '@potato-workspace/shared';
 import type { LaunchEntry } from '../../lib/agentRegistry';
 import type { PublicSettings } from '../../lib/bridge-settings';
 import type { BridgeLinkStats } from '../../lib/bridge-sse';
@@ -263,7 +263,7 @@ export function MenuSheet({
   const [confirm, setConfirm] = useState<'stop' | 'close' | null>(null);
   return (
     <>
-      <Sheet title="Puppet Master" onClose={onClose}>
+      <Sheet title="Potato Workspace" onClose={onClose}>
         <h2 className="ph-sec">Connection</h2>
         <div className="ph-group">
           <div className="ph-row">

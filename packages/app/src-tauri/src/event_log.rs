@@ -17,7 +17,7 @@ mod recent;
 pub use recent::*;
 
 const EVENT_LOG_FILE_NAME: &str = "events.jsonl";
-const PROJECT_STORAGE_DIR_NAME: &str = ".puppet-master";
+const PROJECT_STORAGE_DIR_NAME: &str = ".potato-workspace";
 
 static EVENT_LOG: OnceCell<Arc<EventLogManager>> = OnceCell::new();
 

@@ -1,7 +1,7 @@
-//! Shell command line for background operation watching (pm-watch / `puppet-master watch`).
+//! Shell command line for background operation watching (pm-watch / `potato-workspace watch`).
 //!
 //! The command must work from any directory, so it names the CLI by absolute path instead of
-//! relying on `npx puppet-master`, which only resolves inside the repo.
+//! relying on `npx potato-workspace`, which only resolves inside the repo.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -18,7 +18,7 @@ const BUNDLE_NAME: &str = "puppet-master-cli.bundle.mjs";
 /// Candidate locations for a standalone watcher script, most specific first.
 fn candidates() -> Vec<PathBuf> {
     let mut out = Vec::new();
-    if let Some(explicit) = std::env::var_os("PUPPET_MASTER_CLI") {
+    if let Some(explicit) = std::env::var_os("POTATO_WORKSPACE_CLI") {
         out.push(PathBuf::from(explicit));
     }
     if let Some(dir) = RESOURCE_DIR.get() {
@@ -71,9 +71,9 @@ impl ShellHint {
         }
     }
 
-    /// Hint from the `PUPPET_MASTER_WATCH_SHELL` environment variable, when set and valid.
+    /// Hint from the `POTATO_WORKSPACE_WATCH_SHELL` environment variable, when set and valid.
     pub fn from_env() -> Self {
-        std::env::var("PUPPET_MASTER_WATCH_SHELL")
+        std::env::var("POTATO_WORKSPACE_WATCH_SHELL")
             .ok()
             .and_then(|value| Self::parse(&value))
             .unwrap_or_default()
@@ -184,7 +184,7 @@ fn format_with_entry(
                 .to_string();
             format!("node {} watch {id}", shell_quote(&portable_path(&script), shell))
         }
-        None => format!("npx puppet-master watch {id}"),
+        None => format!("npx potato-workspace watch {id}"),
     };
     if let Some(path) = project_path.filter(|p| !p.trim().is_empty()) {
         cmd.push_str(&format!(
@@ -242,7 +242,7 @@ mod tests {
             Some(r"C:\Users\me\Desktop\pm-trial"),
             ShellHint::Default,
         );
-        assert!(cmd.contains("npx puppet-master watch"));
+        assert!(cmd.contains("npx potato-workspace watch"));
         assert!(cmd.contains("op-1"));
         assert!(cmd.contains("--project-path"));
         assert!(cmd.contains("pm-trial"));
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn plain_values_stay_unquoted_and_posix_backslashes_are_preserved() {
         let cmd = format_with_entry(None, "op-1", Some("/home/me/proj"), ShellHint::Bash);
-        assert_eq!(cmd, "npx puppet-master watch op-1 --project-path /home/me/proj");
+        assert_eq!(cmd, "npx potato-workspace watch op-1 --project-path /home/me/proj");
         let odd = format_with_entry(None, "op-1", Some(r"/tmp/a\b c"), ShellHint::Bash);
         assert!(odd.ends_with(r"--project-path '/tmp/a\b c'"), "{odd}");
     }
@@ -307,10 +307,10 @@ mod tests {
         let project = existing_project_path(&original).expect("project path");
         assert_eq!(project, "C:/a b/it's");
         let bash = format_with_entry(None, "op-9", Some(&project), ShellHint::Bash);
-        assert_eq!(bash, r"npx puppet-master watch op-9 --project-path 'C:/a b/it'\''s'");
+        assert_eq!(bash, r"npx potato-workspace watch op-9 --project-path 'C:/a b/it'\''s'");
         let cmd = format_with_entry(None, "op-9", Some(&project), ShellHint::Cmd);
         assert!(cmd.ends_with("--project-path \"C:/a b/it's\""), "{cmd}");
-        assert_eq!(existing_project_path("npx puppet-master watch op-9"), None);
+        assert_eq!(existing_project_path("npx potato-workspace watch op-9"), None);
         let pwsh_quoted = format_with_entry(None, "op-9", Some("D:/x y"), ShellHint::PowerShell);
         assert_eq!(existing_project_path(&pwsh_quoted).as_deref(), Some("D:/x y"));
     }
@@ -325,7 +325,7 @@ mod tests {
             existing_entry(spaced),
             Some(PathBuf::from("C:/Users/You Pc/cli/x.mjs"))
         );
-        assert_eq!(existing_entry("npx puppet-master watch op-3"), None);
+        assert_eq!(existing_entry("npx potato-workspace watch op-3"), None);
         let out = reformat_for_shell(&original, "op-3", None, ShellHint::Bash);
         assert!(out.starts_with(&format!("node {bundle} watch op-3")), "{out}");
         assert!(!out.contains("dist/index.js"), "{out}");

@@ -54,7 +54,7 @@ describe('StartAtSignInHint', () => {
   it('shows one line and a "Turn on" button while the sign-in start is off', async () => {
     vi.mocked(tauri.autostartGet).mockResolvedValue(false);
     await mount();
-    expect(host.textContent).toContain('After a restart, your companion waits until you open Puppet Master.');
+    expect(host.textContent).toContain('After a restart, your companion waits until you open Potato Workspace.');
     expect(turnOn()).toBeDefined();
   });
 

@@ -21,11 +21,11 @@ export async function run(t) {
 
   await t.step('The palette closed and Settings opened on Bridge & MCP');
   await t.expect.notVisible('aria=Search commands');
-  await t.expect.text('How other tools and agents connect to Puppet Master.');
-  await t.expect.text('Where other tools reach Puppet Master on this computer.');
+  await t.expect.text('How other tools and agents connect to Potato Workspace.');
+  await t.expect.text('Where other tools reach Potato Workspace on this computer.');
 
   await t.step('Esc leaves Settings (keyboard only)');
   await t.press('Escape');
-  await t.expect.noText('How other tools and agents connect to Puppet Master.');
+  await t.expect.noText('How other tools and agents connect to Potato Workspace.');
   await t.expect.text('Nothing needs you');
 }

@@ -18088,10 +18088,10 @@ var McpLogEntrySchema = external_exports.object({
   error: external_exports.string().optional(),
   duration_ms: external_exports.number().optional()
 });
-var BRIDGE_PORT_FILE_ENV = "PUPPET_MASTER_BRIDGE_PORT_FILE";
-var DEFAULT_BRIDGE_PORT_FILE = "puppet-master.bridge.port";
-var BRIDGE_LOCAL_SECRET_FILE = "puppet-master.bridge.secret";
-var BRIDGE_LOCAL_SECRET_HEADER = "X-PM-Local-Secret";
+var BRIDGE_PORT_FILE_ENV = "POTATO_WORKSPACE_BRIDGE_PORT_FILE";
+var DEFAULT_BRIDGE_PORT_FILE = "potato-workspace.bridge.port";
+var BRIDGE_LOCAL_SECRET_FILE = "potato-workspace.bridge.secret";
+var BRIDGE_LOCAL_SECRET_HEADER = "X-Potato-Workspace-Local-Secret";
 var OrchestratorUserMessageSchema = external_exports.object({
   text: external_exports.string(),
   message_id: external_exports.string()
@@ -18159,7 +18159,7 @@ async function readBridgePort(filePath) {
   if (found[0])
     return found[0];
   const candidates = [...new Set(bridgePortCandidates(filePath))];
-  throw new Error(`Puppet Master bridge port file not found (tried: ${candidates.map((p) => `"${p}"`).join(", ")}). Start Puppet Master first (\`npx puppet-master\`).`);
+  throw new Error(`Potato Workspace bridge port file not found (tried: ${candidates.map((p) => `"${p}"`).join(", ")}). Start Potato Workspace first (\`npx potato-workspace\`).`);
 }
 async function readLocalSecretHeaders(filePath) {
   for (const candidate of [...new Set(bridgePortCandidates(filePath))]) {
@@ -18245,7 +18245,7 @@ async function call(client, method, path, body) {
   try {
     res = await fetch(url, {
       method,
-      headers: { ...await readLocalSecretHeaders(), "X-Puppet-Master-Session": client.sessionId, ...body ? { "Content-Type": "application/json" } : {} },
+      headers: { ...await readLocalSecretHeaders(), "X-Potato-Workspace-Session": client.sessionId, ...body ? { "Content-Type": "application/json" } : {} },
       body: body ? JSON.stringify(body) : void 0
     });
   } catch (err) {
@@ -18279,7 +18279,7 @@ async function callWithTimeout(client, method, path, body, timeoutMs, externalSi
   try {
     const res = await fetch(url, {
       method,
-      headers: { ...await readLocalSecretHeaders(), "X-Puppet-Master-Session": client.sessionId, ...body ? { "Content-Type": "application/json" } : {} },
+      headers: { ...await readLocalSecretHeaders(), "X-Potato-Workspace-Session": client.sessionId, ...body ? { "Content-Type": "application/json" } : {} },
       body: body ? JSON.stringify(body) : void 0,
       signal: controller.signal
     });
@@ -18309,7 +18309,7 @@ var FALLBACK_AGENT_TOOLS = [
   { name: "set_mode", description: "Choose agent, shell, or both for this MCP connection.", inputSchema: { type: "object", properties: { mode: { type: "string", enum: ["agent", "shell", "both"] } }, required: ["mode"] }, method: "POST", path: "/mcp/mode", visibility: { external_mcp: true } },
   { name: "quick_ask", description: "Ask a tiny one-shot question; runs a fresh headless read-only worker and returns {answer, receipt}. Still running after wait_ms: returns {status, handle}; call wait_agents.", inputSchema: { type: "object", properties: { task: { type: "string" }, project_path: { type: "string" }, backend: AGENT_TYPE_SCHEMA, model: { type: "string" }, wait_ms: { type: "integer" } }, required: ["task"] }, method: "POST", path: "/agents/quick", visibility: { external_mcp: true } },
   { name: "run_agent", description: "Start or adopt a worker with a task and return a stable handle. Pass worker_id from list_workers to adopt a UI pane; the pane directory is used automatically. Runs are visible by default (a pane in its own pop-out window); headless: true opts out, and a run falls back to headless automatically (reported as fallback) when the agent has no visible mode or the pane fails before the turn starts.", inputSchema: { type: "object", properties: { task: { type: "string" }, headless: { type: "boolean", default: false }, placement: { type: "string", enum: ["auto", "grid", "window"], default: "window" }, lane: { type: "string", enum: ["acp", "terminal"], description: "How the worker runs: 'acp' = a chat session (Labs: Chat (ACP)); 'terminal' = today's way; omit to follow the agent's own setting." }, name: { type: "string" }, handle: { type: "string" }, worker_id: { type: "string" }, project_path: { type: "string" }, context_mode: { type: "string" }, model: { type: "string" }, agent_type: AGENT_TYPE_SCHEMA, background: { type: "boolean" }, wait_ms: { type: "integer" } }, required: ["task"] }, method: "POST", path: "/agents/run", visibility: { external_mcp: true } },
-  { name: "wait_agents", description: "Wait for worker handles to report a meaningful change and return the turn result.", inputSchema: { type: "object", properties: { handles: { type: "array", items: { type: "string" } }, after_cursor: { type: "integer" }, timeout_ms: { type: "integer" } }, required: ["handles"] }, method: "POST", path: "/agents/wait", visibility: { external_mcp: true } },
+  { name: "wait_agents", description: "Wait for worker handles to report a meaningful change and return the turn result. A completed turn with background_running true is not finished work: the call keeps waiting unless wait_for_background is false. Pass confirm_prompt_ms to require the same prompt_id to stay open before reporting waiting_input. If the call fails with bridge_unreachable, the app may still be running and the helper may already have replied: retry, then read agent_transcript or the pane before saying you got no reply.", inputSchema: { type: "object", properties: { handles: { type: "array", items: { type: "string" } }, after_cursor: { type: "integer" }, timeout_ms: { type: "integer" }, wait_for_background: { type: "boolean", default: true }, confirm_prompt_ms: { type: "integer", minimum: 0, maximum: 6e4, default: 0 } }, required: ["handles"] }, method: "POST", path: "/agents/wait", visibility: { external_mcp: true } },
   { name: "send_message", description: "Deliver a correction or steering message to a worker.", inputSchema: { type: "object", properties: { handle: { type: "string" }, message: { type: "string" } }, required: ["handle"] }, method: "POST", path: "/agents/send", visibility: { external_mcp: true } },
   { name: "followup_task", description: "Give the same worker a new task as the next turn. Waits up to 120 seconds and returns status/result; call wait_agents only if still queued or running.", inputSchema: { type: "object", properties: { handle: { type: "string" }, task: { type: "string" } }, required: ["handle", "task"] }, method: "POST", path: "/agents/followup", visibility: { external_mcp: true } },
   { name: "interrupt_agent", description: "Stop the current turn without disposing the worker.", inputSchema: { type: "object", properties: { handle: { type: "string" } }, required: ["handle"] }, method: "POST", path: "/agents/cancel", visibility: { external_mcp: true } },
@@ -18444,7 +18444,7 @@ var SettingsSchema = external_exports.object({
   agent_hooks_mode: external_exports.enum(["off", "shadow", "evidence"]).optional(),
   /** Per-agent override of agent_hooks_mode, keyed by agent id. */
   agent_hooks_agents: external_exports.record(external_exports.string(), external_exports.enum(["off", "shadow", "evidence"])).optional(),
-  /** Puppet Master's helper tools (run_agent, wait_agents) given to every agent pane for its launch. On unless false. Rust: pane_mcp. */
+  /** Potato Workspace's helper tools (run_agent, wait_agents) given to every agent pane for its launch. On unless false. Rust: pane_mcp. */
   pane_mcp_enabled: external_exports.boolean().optional(),
   /** Missions (Preview, Settings › General › Labs): goal + checks + budget, worked on in rounds. Off unless chosen. Rust: missions. */
   missions_enabled: external_exports.boolean().optional(),
@@ -18456,6 +18456,8 @@ var SettingsSchema = external_exports.object({
   new_agent_start: external_exports.enum(["chat", "terminal"]).optional(),
   /** Model Bridge (Settings › General › Labs): connect a model service with a key and add it to Codex. Off unless chosen. Rust: model_bridge. */
   model_bridge_enabled: external_exports.boolean().optional(),
+  /** Spaces (Settings › General › Labs): chat with friends in small groups, computer to computer. Off unless chosen. Rust: spaces. */
+  spaces_enabled: external_exports.boolean().optional(),
   /** Simple mode: the cockpit with fewer buttons and plain words, for people who do not write code. Off unless chosen. */
   simple_mode: external_exports.boolean().optional(),
   /** Shows the developer rows in Settings (bridge, MCP, storage, file paths). Off unless chosen. Read by the app only. */
@@ -18535,7 +18537,7 @@ var PairingSessionInfoSchema = external_exports.object({
 });
 
 // ../shared/dist/orchestrator-panes.js
-var ORCHESTRATOR_PANE_PREFIX = "puppet-master-orchestrator-";
+var ORCHESTRATOR_PANE_PREFIX = "potato-workspace-orchestrator-";
 function isOrchestratorPaneId(paneId) {
   return paneId.startsWith(ORCHESTRATOR_PANE_PREFIX);
 }
@@ -18564,7 +18566,7 @@ function formatPaneListForOrchestrator(panes) {
 }
 function assertWorkerPaneTarget(paneId) {
   if (isOrchestratorPaneId(paneId)) {
-    throw new Error(`pane ${paneId} is the dedicated orchestrator \u2014 do not control it via MCP. Spawn or reuse a worker pane (id does not start with puppet-master-orchestrator-).`);
+    throw new Error(`pane ${paneId} is the dedicated orchestrator \u2014 do not control it via MCP. Spawn or reuse a worker pane (id does not start with potato-workspace-orchestrator-).`);
   }
 }
 
@@ -19012,7 +19014,7 @@ async function routeToolCall(clientRef, name, args, extra) {
 }
 
 // ../mcp-server/src/index.ts
-var MCP_INSTRUCTIONS = "Puppet Master MCP (agent mode). Sequence: list_agents \u2192 run_agent(worker_id or pane_id, task) \u2192 handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup.";
+var MCP_INSTRUCTIONS = "Potato Workspace MCP (agent mode). Sequence: list_agents \u2192 run_agent(worker_id or pane_id, task) \u2192 handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup.";
 var SET_MODE_NOTE = "Sent notifications/tools/list_changed. Hosts that read tools/list only once at startup ignore it and keep the old tool list; if tool_count differs from what you can see, restart the MCP server with --mode <mode> or reconnect.";
 function withSetModeNote(text) {
   const parsed = tryJson(text);
@@ -19022,7 +19024,7 @@ Note: ${SET_MODE_NOTE}`;
   return JSON.stringify({ ...parsed, tools_list_changed_sent: true, note: SET_MODE_NOTE }, null, 2);
 }
 function initialModeFrom(env, argv) {
-  let raw = env.PUPPET_MASTER_MODE;
+  let raw = env.POTATO_WORKSPACE_MODE;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] ?? "";
     if (arg === "--mode") raw = argv[i + 1];
@@ -19072,7 +19074,7 @@ async function main() {
   };
   await applyInitialMode();
   const server = new Server(
-    { name: "puppet-master", version: "0.1.3" },
+    { name: "potato-workspace", version: "0.1.3" },
     { capabilities: { tools: { listChanged: true } } }
   );
   log(

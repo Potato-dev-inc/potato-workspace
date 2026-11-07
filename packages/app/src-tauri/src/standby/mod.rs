@@ -216,7 +216,7 @@ mod project_tests {
 
     #[test]
     fn a_saved_separate_copy_folder_reads_as_its_project() {
-        let file = serde_json::json!({"settings": {"project_path": "C:/work/app/.puppet-master/worktrees/pane-1a2b"}});
+        let file = serde_json::json!({"settings": {"project_path": "C:/work/app/.potato-workspace/worktrees/pane-1a2b"}});
         assert_eq!(project_from_settings(&file).as_deref(), Some("C:/work/app"));
     }
 }

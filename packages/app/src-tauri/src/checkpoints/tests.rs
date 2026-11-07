@@ -182,11 +182,11 @@ fn users_git_repo_is_byte_identical_after_snapshot_and_restore() {
     assert_eq!(user_git(t.p(), &["rev-parse", "HEAD"]), head_before);
     assert_eq!(user_git(t.p(), &["branch", "-a", "--format=%(refname) %(objectname)"]), branches_before);
     assert_eq!(user_git(t.p(), &["for-each-ref"]), refs_before, "no pm refs leak into the user's repo");
-    // `.puppet-master/` (also home of the operations store) shows as untracked in the user's
+    // `.potato-workspace/` (also home of the operations store) shows as untracked in the user's
     // status, as it already does today; everything else must be exactly as before.
     let status_after: Vec<String> = user_git(t.p(), &["status", "--porcelain"])
         .lines()
-        .filter(|l| !l.contains(".puppet-master/"))
+        .filter(|l| !l.contains(".potato-workspace/"))
         .map(String::from)
         .collect();
     assert_eq!(status_after.join("
@@ -370,7 +370,7 @@ fn off_switch_and_profile_opt_out_skip_snapshots() {
     env.enabled.store(true, Ordering::SeqCst);
     env.opted_out.lock().push("claude".into());
     assert!(matches!(rt.capture("p1", Kind::Before, None), Outcome::Skipped("agent opted out")));
-    assert!(!t.p().join(".puppet-master").exists(), "nothing was created");
+    assert!(!t.p().join(".potato-workspace").exists(), "nothing was created");
 }
 
 #[test]
@@ -759,7 +759,7 @@ fn an_isolated_runs_pane_is_checkpointed_in_its_worktree() {
     t.write("a.txt", "one");
     user_git(t.p(), &["add", "-A"]);
     user_git(t.p(), &["commit", "-q", "-m", "init"]);
-    let wt = t.p().join(".puppet-master").join("worktrees").join("w1");
+    let wt = t.p().join(".potato-workspace").join("worktrees").join("w1");
     std::fs::create_dir_all(wt.parent().unwrap()).unwrap();
     user_git(t.p(), &["worktree", "add", "-q", "-b", "pm/w1", wt.to_str().unwrap()]);
 
@@ -778,7 +778,7 @@ fn an_isolated_runs_pane_is_checkpointed_in_its_worktree() {
     assert_eq!(items.iter().map(|c| c.kind.as_str()).collect::<Vec<_>>(), ["before", "after"]);
     let changed = rt.turn_changes("pw", items[0].at_ms).unwrap().expect("a baseline");
     assert_eq!(changed.iter().map(|c| c.path.as_str()).collect::<Vec<_>>(), ["wt-note.txt"]);
-    assert!(wt.join(".puppet-master").join("checkpoints.git").is_dir(), "rooted at the worktree");
+    assert!(wt.join(".potato-workspace").join("checkpoints.git").is_dir(), "rooted at the worktree");
     assert!(
         engine::list(t.p(), "pw").unwrap().is_empty(),
         "the main folder keeps no checkpoints of the isolated pane"
@@ -830,7 +830,7 @@ impl Env for SpyEnv {
 #[test]
 fn gc_runs_on_its_own_thread_never_inside_the_snapshot() {
     let t = Tmp::new("gc");
-    let git_dir = t.p().join(".puppet-master").join("checkpoints.git");
+    let git_dir = t.p().join(".potato-workspace").join("checkpoints.git");
     let dir = t.p().to_path_buf();
     let caller = std::thread::Builder::new()
         .name("snapshot-caller".into())

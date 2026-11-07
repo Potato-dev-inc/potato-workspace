@@ -24,7 +24,7 @@ const VIEW: MemoryView = {
   targets: [
     { path: 'CLAUDE.md', agents: ['claude'], status: 'will_add', user_content: true },
     { path: 'AGENTS.md', agents: ['codex', 'opencode'], status: 'will_create', user_content: false },
-    { path: '.cursor/rules/puppet-master.mdc', agents: ['cursor_agent'], status: 'in_sync', user_content: false },
+    { path: '.cursor/rules/potato-workspace.mdc', agents: ['cursor_agent'], status: 'in_sync', user_content: false },
   ],
 };
 
@@ -146,7 +146,7 @@ describe('ProjectMemory', () => {
   });
 
   it('never shows the folder id of a separate copy as the project name', async () => {
-    const copy = 'C:\\work\\shop\\.puppet-master\\worktrees\\7d4cb2b3-2-209c';
+    const copy = 'C:\\work\\shop\\.potato-workspace\\worktrees\\7d4cb2b3-2-209c';
     const api = fakeApi({ get: vi.fn().mockResolvedValue({ ...VIEW, project: copy }) });
     await mount(api, copy);
     expect(host.querySelector('h1')!.textContent).toBe('shop');

@@ -1,4 +1,4 @@
-// Uninstall MCP: remove puppet-master from agent config files, for this project or globally. Always confirmed first.
+// Uninstall MCP: remove potato-workspace from agent config files, for this project or globally. Always confirmed first.
 import { uninstallGlobalNpmMcpConfigs, uninstallNpmMcpConfigs } from '../../../../lib/mcp-config';
 import type { SettingsEnv } from '../../model';
 import { Btn, Note, SettingBlock } from '../../settings-ui';
@@ -12,7 +12,7 @@ export function McpUninstallBlock({ env }: { env: SettingsEnv }) {
     if (busy !== null || !installPath) return;
     const ok = await env.confirm({
       title: 'Uninstall MCP from project?',
-      body: 'Remove puppet-master from this project’s .mcp.json, .codex/config.toml, and opencode.json?',
+      body: 'Remove potato-workspace from this project’s .mcp.json, .codex/config.toml, and opencode.json?',
       confirmLabel: 'Uninstall',
     });
     if (!ok) return;
@@ -23,7 +23,7 @@ export function McpUninstallBlock({ env }: { env: SettingsEnv }) {
     if (busy !== null) return;
     const ok = await env.confirm({
       title: 'Uninstall global MCP?',
-      body: 'Remove puppet-master from global Claude, Codex, and OpenCode MCP configs?',
+      body: 'Remove potato-workspace from global Claude, Codex, and OpenCode MCP configs?',
       confirmLabel: 'Uninstall',
     });
     if (!ok) return;
@@ -33,7 +33,7 @@ export function McpUninstallBlock({ env }: { env: SettingsEnv }) {
   return (
     <SettingBlock
       label="Uninstall MCP"
-      description="Remove puppet-master from agent config files. Does not remove the app or the npm package. Restart MCP hosts afterwards."
+      description="Remove potato-workspace from agent config files. Does not remove the app or the npm package. Restart MCP hosts afterwards."
     >
       <div className="flex flex-wrap items-center gap-2">
         <Btn disabled={!installPath || busy !== null} onClick={() => void uninstallProject()}>

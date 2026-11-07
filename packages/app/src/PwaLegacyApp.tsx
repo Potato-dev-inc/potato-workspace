@@ -2,7 +2,7 @@
 // Orchestrator chat / Panes tabs (components/pwa/*). Open it with `?pwa=legacy`; the default mobile
 // UI is PwaApp.tsx (agent tabs, no orchestrator control).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentType, OrchestratorChatEvent, PaneInfo } from '@puppet-master/shared';
+import type { AgentType, OrchestratorChatEvent, PaneInfo } from '@potato-workspace/shared';
 import { useBridgePaneRegistry } from './hooks/useBridgePaneRegistry';
 import { useOrchestratorViewportReporter } from './hooks/useOrchestratorViewportReporter';
 import { usePaneTunnel } from './hooks/usePaneTunnel';
@@ -252,7 +252,7 @@ export default function PwaLegacyApp() {
 
   return (
     <div className="pwa-shell bg-pm-bg text-zinc-100">
-      <main className="pwa-main" aria-label="Puppet Master mobile workspace">
+      <main className="pwa-main" aria-label="Potato Workspace mobile workspace">
         {bridge && tab === 'chat' && (
           <section className="pwa-stage" aria-label="Orchestrator">
             <OrchestratorTab

@@ -25,13 +25,13 @@ function mockPane(id: string, agentType: string, createdAt: number): PaneInfo {
 
 describe('orchestrator-panes', () => {
   it('identifies orchestrator pane ids by prefix', () => {
-    expect(isOrchestratorPaneId('puppet-master-orchestrator-opencode')).toBe(true);
+    expect(isOrchestratorPaneId('potato-workspace-orchestrator-opencode')).toBe(true);
     expect(isOrchestratorPaneId('worker-pane-1')).toBe(false);
   });
 
   it('maps cli backends to stable pane ids and agents', () => {
     expect(orchestratorPaneIdForBackend('opencode_cli')).toBe(
-      'puppet-master-orchestrator-opencode',
+      'potato-workspace-orchestrator-opencode',
     );
     expect(BACKEND_AGENT.opencode_cli).toBe('opencode');
   });
@@ -58,6 +58,6 @@ describe('orchestrator-panes', () => {
     panes[0]!.cwd = '/old/project';
 
     expect(findOrchestratorPane(panes, 'opencode_cli')?.cwd).toBe('/old/project');
-    expect(stableId.startsWith('puppet-master-orchestrator-')).toBe(true);
+    expect(stableId.startsWith('potato-workspace-orchestrator-')).toBe(true);
   });
 });

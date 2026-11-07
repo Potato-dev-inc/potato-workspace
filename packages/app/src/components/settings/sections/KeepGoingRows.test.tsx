@@ -85,7 +85,7 @@ describe('Keep going: the saved list', () => {
   it('says what an empty list means', async () => {
     await mount({ order: [], ask_back: true });
     expect(listItems()).toEqual([]);
-    expect(hasText(m.host, 'Nothing listed. Puppet Master then offers every other installed agent, in its usual order.')).toBe(true);
+    expect(hasText(m.host, 'Nothing listed. Potato Workspace then offers every other installed agent, in its usual order.')).toBe(true);
   });
 
   it('keeps the same-company rule in plain words', async () => {

@@ -30,8 +30,8 @@ export function ensureWorkspaceBuilt(repoRoot) {
 
   if (!needsBuild(sharedDist, sharedSrc)) return;
 
-  console.error('[dev] building @puppet-master/shared…');
-  const result = spawnSync(npm, ['run', 'build', '-w', '@puppet-master/shared'], {
+  console.error('[dev] building @potato-workspace/shared…');
+  const result = spawnSync(npm, ['run', 'build', '-w', '@potato-workspace/shared'], {
     cwd: repoRoot,
     stdio: 'inherit',
     shell: true,

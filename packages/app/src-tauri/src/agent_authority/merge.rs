@@ -30,7 +30,7 @@ pub fn check_agent_merge(session: Option<&str>, handle: &str) -> Result<(), Oper
     let mut error = OperationError::new(
         "MERGE_NOT_ALLOWED",
         format!(
-            "Agents may not merge separate copies on this computer, so nothing was merged. Only the person can: in Puppet Master, open this agent's pane, go to Changes and choose Merge. To let agents merge, the person can switch on \"{SETTING_LABEL}\" in Settings. You can still call review_worktree with action=diff to show them what changed, and tell them the copy is ready to review."
+            "Agents may not merge separate copies on this computer, so nothing was merged. Only the person can: in Potato Workspace, open this agent's pane, go to Changes and choose Merge. To let agents merge, the person can switch on \"{SETTING_LABEL}\" in Settings. You can still call review_worktree with action=diff to show them what changed, and tell them the copy is ready to review."
         ),
         false,
     );

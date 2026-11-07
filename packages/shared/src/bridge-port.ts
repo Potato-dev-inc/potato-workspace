@@ -68,13 +68,13 @@ export async function readBridgePort(filePath?: string): Promise<{ port: number;
   if (found[0]) return found[0];
   const candidates = [...new Set(bridgePortCandidates(filePath))];
   throw new Error(
-    `Puppet Master bridge port file not found (tried: ${candidates.map((p) => `"${p}"`).join(', ')}). ` +
-    `Start Puppet Master first (\`npx puppet-master\`).`
+    `Potato Workspace bridge port file not found (tried: ${candidates.map((p) => `"${p}"`).join(', ')}). ` +
+    `Start Potato Workspace first (\`npx potato-workspace\`).`
   );
 }
 
 /**
- * The `X-PM-Local-Secret` header for a request to the local bridge, or `{}` when there is no secret
+ * The `X-Potato-Workspace-Local-Secret` header for a request to the local bridge, or `{}` when there is no secret
  * file (an older app). The secret is read from beside the same port file `readBridgePort` uses, on
  * every call, so a restarted app's new secret is picked up. Same lookup as the Rust MCP shim
  * (`mcp_shim/endpoint.rs::local_secret_header`). The bridge only logs a missing secret

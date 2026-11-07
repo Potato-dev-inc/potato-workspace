@@ -163,7 +163,7 @@ class McpTransport(QObject):
             self._send(request(init_id, "initialize", {
                 "protocolVersion": self.PROTOCOL_VERSION,
                 "capabilities": {"tools": {"listChanged": True}},
-                "clientInfo": {"name": "puppet-master-qt", "version": "0.1.0"},
+                "clientInfo": {"name": "potato-workspace-qt", "version": "0.1.0"},
             }))
         except RuntimeError as exc:
             self._take_pending(init_id)

@@ -239,7 +239,7 @@ pub fn rotate(target: RotateTarget) -> Result<OpenCodeKeyStatus, String> {
     };
     if !profile_configured(&store, &next) {
         return Err(format!(
-            "OpenCode key profile '{next}' is not configured — set it in Puppet Master settings (desktop only)"
+            "OpenCode key profile '{next}' is not configured — set it in Potato Workspace settings (desktop only)"
         ));
     }
     store.active = next;
@@ -475,11 +475,11 @@ mod test_paths {
     use std::path::PathBuf;
 
     pub fn store_path_override() -> Option<PathBuf> {
-        std::env::var_os("PUPPET_MASTER_TEST_OPENCODE_KEYS_STORE").map(PathBuf::from)
+        std::env::var_os("POTATO_WORKSPACE_TEST_OPENCODE_KEYS_STORE").map(PathBuf::from)
     }
 
     pub fn auth_json_path_override() -> Option<PathBuf> {
-        std::env::var_os("PUPPET_MASTER_TEST_OPENCODE_AUTH").map(PathBuf::from)
+        std::env::var_os("POTATO_WORKSPACE_TEST_OPENCODE_AUTH").map(PathBuf::from)
     }
 }
 
@@ -527,8 +527,8 @@ mod tests {
         let auth_file = dir.join("auth.json");
         fs::create_dir_all(&dir).expect("tempdir");
 
-        std::env::set_var("PUPPET_MASTER_TEST_OPENCODE_KEYS_STORE", &store_file);
-        std::env::set_var("PUPPET_MASTER_TEST_OPENCODE_AUTH", &auth_file);
+        std::env::set_var("POTATO_WORKSPACE_TEST_OPENCODE_KEYS_STORE", &store_file);
+        std::env::set_var("POTATO_WORKSPACE_TEST_OPENCODE_AUTH", &auth_file);
 
         let mut store = default_store();
         store.profiles.get_mut(PROFILE_A).unwrap().auth = auth_json_for_key("key-a");
@@ -542,8 +542,8 @@ mod tests {
         assert_eq!(written[DEFAULT_PROVIDER]["key"].as_str(), Some("key-b"));
 
         let _ = fs::remove_dir_all(&dir);
-        std::env::remove_var("PUPPET_MASTER_TEST_OPENCODE_KEYS_STORE");
-        std::env::remove_var("PUPPET_MASTER_TEST_OPENCODE_AUTH");
+        std::env::remove_var("POTATO_WORKSPACE_TEST_OPENCODE_KEYS_STORE");
+        std::env::remove_var("POTATO_WORKSPACE_TEST_OPENCODE_AUTH");
     }
 
     #[test]
@@ -552,7 +552,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("pm-opencode-keys-secret-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).expect("tempdir");
         let store_file = dir.join("opencode-key-profiles.json");
-        std::env::set_var("PUPPET_MASTER_TEST_OPENCODE_KEYS_STORE", &store_file);
+        std::env::set_var("POTATO_WORKSPACE_TEST_OPENCODE_KEYS_STORE", &store_file);
 
         set_profile_api_key("a", "oc-secret-key-AAAA1111", None).expect("set");
         let on_disk = fs::read_to_string(&store_file).unwrap();
@@ -563,7 +563,7 @@ mod tests {
         assert!(load_store().unwrap().profiles[PROFILE_A].auth.to_string().contains("oc-secret-key-AAAA1111"));
 
         let _ = fs::remove_dir_all(&dir);
-        std::env::remove_var("PUPPET_MASTER_TEST_OPENCODE_KEYS_STORE");
+        std::env::remove_var("POTATO_WORKSPACE_TEST_OPENCODE_KEYS_STORE");
     }
 
     /// Point the store at a private file holding `contents`, run `f`, clean up.
@@ -575,10 +575,10 @@ mod tests {
         if let Some(contents) = contents {
             fs::write(&store_file, contents).expect("write");
         }
-        std::env::set_var("PUPPET_MASTER_TEST_OPENCODE_KEYS_STORE", &store_file);
+        std::env::set_var("POTATO_WORKSPACE_TEST_OPENCODE_KEYS_STORE", &store_file);
         f(&store_file);
         let _ = fs::remove_dir_all(&dir);
-        std::env::remove_var("PUPPET_MASTER_TEST_OPENCODE_KEYS_STORE");
+        std::env::remove_var("POTATO_WORKSPACE_TEST_OPENCODE_KEYS_STORE");
     }
 
     fn stored_json(version: u32, mode: Option<&str>) -> String {

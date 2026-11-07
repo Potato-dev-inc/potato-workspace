@@ -8,7 +8,7 @@ import { generalRows } from './GeneralSection';
 
 const mocks = vi.hoisted(() => ({
   install: { version: '0.9.0', isPackaged: true, platform: 'windows', uninstallAvailable: true, uninstallInstructions: 'Removes the app.', dataDir: 'C:\\data' },
-  storage: { scope: 'project', project_path: 'C:\\work\\demo', storage_dir: 'C:\\work\\demo\\.puppet-master', event_log_path: 'C:\\work\\demo\\.puppet-master\\events.jsonl', event_count: 12, task_count: 3, lock_count: 1, exists: true },
+  storage: { scope: 'project', project_path: 'C:\\work\\demo', storage_dir: 'C:\\work\\demo\\.potato-workspace', event_log_path: 'C:\\work\\demo\\.potato-workspace\\events.jsonl', event_count: 12, task_count: 3, lock_count: 1, exists: true },
   loop: { enabled: true, turns: 4, stalled_minutes: 20, panic_shortcut: false },
 }));
 
@@ -104,7 +104,7 @@ describe('General: every control renders', () => {
       'Event log',
       'Version',
       'Settings file',
-      'Uninstall Puppet Master',
+      'Uninstall Potato Workspace',
     ]) {
       expect(hasText(m.host, label), `missing: ${label}`).toBe(true);
     }
@@ -127,8 +127,8 @@ describe('General: every control renders', () => {
     const lists = [...m.host.querySelectorAll('section.st-group')];
     const last = lists[lists.length - 1];
     expect(last.getAttribute('data-danger')).toBe('true');
-    expect(last.textContent).toContain('Uninstall Puppet Master');
-    expect(lists.slice(0, -1).some((s) => s.textContent?.includes('Uninstall Puppet Master'))).toBe(false);
+    expect(last.textContent).toContain('Uninstall Potato Workspace');
+    expect(lists.slice(0, -1).some((s) => s.textContent?.includes('Uninstall Potato Workspace'))).toBe(false);
   });
 });
 
@@ -292,7 +292,7 @@ describe('General: updates, export, uninstall', () => {
     m.env.confirm.mockResolvedValueOnce(false);
     await click(buttonByText(m.host, 'Uninstall…'));
     await settle();
-    expect(m.env.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Uninstall Puppet Master?', confirmLabel: 'Uninstall' }));
+    expect(m.env.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Uninstall Potato Workspace?', confirmLabel: 'Uninstall' }));
     expect(tauri.launchUninstall).not.toHaveBeenCalled();
     await click(buttonByText(m.host, 'Uninstall…'));
     await settle();

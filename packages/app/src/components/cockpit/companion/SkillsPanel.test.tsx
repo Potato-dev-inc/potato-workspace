@@ -72,7 +72,7 @@ describe('SkillsPanel', () => {
     expect(rows[0].textContent).toContain('120 characters');
     expect(rows[1].textContent).toContain('1,200 characters');
     expect([...rows[1].querySelectorAll('.ck-memory-tag')].map((t) => t.textContent)).toEqual([
-      'Changed outside Puppet Master',
+      'Changed outside Potato Workspace',
       'Has a link',
     ]);
     expect(host.textContent).toContain('2 / 30 skills');

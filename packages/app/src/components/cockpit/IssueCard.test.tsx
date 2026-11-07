@@ -149,7 +149,7 @@ describe('IssueCard', () => {
   it('holds a push card that has no Open draft PR choice', () => {
     render(push({ choices: [{ id: 'look', label: 'Look first' }, { id: 'throw_away', label: 'Throw away' }] }), { onOpenPane: () => {} });
     expect(host.querySelector('[data-held]')).not.toBeNull();
-    expect(host.querySelector('.ib-caution')?.textContent).toBe("Puppet Master won't push this. Check the copy yourself.");
+    expect(host.querySelector('.ib-caution')?.textContent).toBe("Potato Workspace won't push this. Check the copy yourself.");
     expect(byText('Open draft PR')).toBeUndefined();
     expect(actionTexts()).toEqual(['Look first', 'Throw away', 'Show issue text']);
     // Look first comes first, so it is the primary button; Throw away is plain

@@ -1,5 +1,5 @@
 // The pause card in the Inbox: an agent used its budget and waits before its next turn. It is a
-// question Puppet Master raised (src-tauri/src/budgets), so it arrives through the same list as
+// question Potato Workspace raised (src-tauri/src/budgets), so it arrives through the same list as
 // `ask_user` questions. The agent is not killed and nothing is lost; the person adds turns or
 // stops it here. Only the person can answer it (the bridge refuses a plain loopback answer).
 import type { Question, QuestionAnswer } from '../../lib/questions';

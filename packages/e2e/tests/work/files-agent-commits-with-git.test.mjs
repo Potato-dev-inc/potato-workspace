@@ -26,7 +26,7 @@ export async function run(t) {
   t.expect.equal(git(cwd, 'rev-list', '--count', 'HEAD').trim(), String(Number(before) + 1));
   t.expect.equal(git(cwd, 'log', '-1', '--format=%s').trim(), 'add feature');
   t.expect.ok(!fs.existsSync(path.join(cwd, '.git', 'index.lock')), 'no .git/index.lock');
-  t.expect.equal(git(cwd, 'status', '--porcelain').split('\n').filter((l) => l.trim() && !l.includes('.puppet-master')).length, 0, 'the working tree is clean apart from the app\'s own folder');
+  t.expect.equal(git(cwd, 'status', '--porcelain').split('\n').filter((l) => l.trim() && !l.includes('.potato-workspace')).length, 0, 'the working tree is clean apart from the app\'s own folder');
 
   await t.step('History lists feature.txt for the turn');
   await openHistoryPoint(t, 'do the work', 'After turn 1');

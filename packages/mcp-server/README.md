@@ -1,8 +1,8 @@
-# @puppet-master/mcp
+# @potato-workspace/mcp
 
-MCP server for [Puppet Master](https://github.com/Potato-dev-inc/puppet-master) — connect Cursor, Claude Desktop, Codex CLI, and other MCP hosts to orchestrate real terminal agents on your machine.
+MCP server for [Potato Workspace](https://github.com/Potato-dev-inc/potato-workspace) — connect Cursor, Claude Desktop, Codex CLI, and other MCP hosts to orchestrate real terminal agents on your machine.
 
-## What is Puppet Master?
+## What is Potato Workspace?
 
 New MCP connections default to **agent mode** with worker tools: `run_agent`,
 `wait_agents`, `send_message`, `followup_task`, `interrupt_agent`, `inspect_agent`,
@@ -10,35 +10,35 @@ New MCP connections default to **agent mode** with worker tools: `run_agent`,
 `answer_prompt`, `list_agents`, `take_over`, and `set_mode`. `run_agent` performs
 dispatch plus a bounded wait; `background: true` returns an immediate handle. Use
 `set_mode({"mode":"shell"})` for terminal tools or `both` for the full catalog.
-Catalog changes emit `notifications/tools/list_changed`. Hosts that ignore it can start in a chosen mode with `--mode <agent|shell|both>` or `PUPPET_MASTER_MODE`. See the
+Catalog changes emit `notifications/tools/list_changed`. Hosts that ignore it can start in a chosen mode with `--mode <agent|shell|both>` or `POTATO_WORKSPACE_MODE`. See the
 [agent and shell contract](../../docs/orchestrator/agent-shell-modes.md) and
 [button GUI guide](../../docs/orchestrator/mcp-gui.md).
 
-**Puppet Master** is a multi-agent terminal orchestrator. It spawns real PTY sessions for Claude Code, Codex CLI, OpenCode, Cursor, PowerShell, and Bash, then coordinates them like a senior engineer at the keyboard: breaking work into tasks, assigning worker panes, enforcing resource locks, handing off context packs, and watching for prompts or blockers.
+**Potato Workspace** is a multi-agent terminal orchestrator. It spawns real PTY sessions for Claude Code, Codex CLI, OpenCode, Cursor, PowerShell, and Bash, then coordinates them like a senior engineer at the keyboard: breaking work into tasks, assigning worker panes, enforcing resource locks, handing off context packs, and watching for prompts or blockers.
 
-### Puppet Master Desktop
+### Potato Workspace Desktop
 
 The **desktop app** (built with Tauri + React) is the main control surface:
 
 - **Terminal grid** — live xterm.js panes for each agent, with status LEDs (`running`, `waiting_input`, `idle`, `error`)
-- **Puppet Master sidebar** — built-in LLM orchestrator, MCP activity log, tasks, locks, and context packs
+- **Potato Workspace sidebar** — built-in LLM orchestrator, MCP activity log, tasks, locks, and context packs
 - **Embedded HTTP bridge** — a local API on `127.0.0.1` (ports `17321`–`17399`) that owns pane lifecycle and coordination state
 - **Mobile PWA** — optional mirror mode to steer panes from your phone over the same bridge
 
-Download installers from [GitHub Releases](https://github.com/Potato-dev-inc/puppet-master/releases), or launch from source with `npm run tauri dev` in the main repo.
+Download installers from [GitHub Releases](https://github.com/Potato-dev-inc/potato-workspace/releases), or launch from source with `npm run tauri dev` in the main repo.
 
 ### What this package does
 
-`@puppet-master/mcp` is the **stdio bridge** between external MCP hosts and the running desktop app. Your AI client speaks JSON-RPC over stdio; this package launches the Rust `puppet-master-mcp` binary, which translates tool calls into HTTP requests against the local bridge. The bridge then drives the Rust PTY manager inside Puppet Master Desktop. A legacy TypeScript wrapper is still shipped as a one-release fallback, but it reads the tool registry from the Rust bridge instead of carrying a separate tool list.
+`@potato-workspace/mcp` is the **stdio bridge** between external MCP hosts and the running desktop app. Your AI client speaks JSON-RPC over stdio; this package launches the Rust `puppet-master-mcp` binary, which translates tool calls into HTTP requests against the local bridge. The bridge then drives the Rust PTY manager inside Potato Workspace Desktop. A legacy TypeScript wrapper is still shipped as a one-release fallback, but it reads the tool registry from the Rust bridge instead of carrying a separate tool list.
 
 ```
 Cursor / Claude Desktop / Codex CLI
         │  stdio JSON-RPC (MCP)
         ▼
-@puppet-master/mcp  ← npm shim + Rust stdio MCP binary
+@potato-workspace/mcp  ← npm shim + Rust stdio MCP binary
         │  HTTP on 127.0.0.1
         ▼
-Puppet Master Desktop (embedded bridge + Rust PTY manager)
+Potato Workspace Desktop (embedded bridge + Rust PTY manager)
         │
         ▼
 Real terminal panes (Claude, Codex, Bash, …)
@@ -48,10 +48,10 @@ Every orchestration path — desktop sidebar, mobile PWA, CLI orchestrator panes
 
 ## Prerequisites
 
-1. **Puppet Master Desktop must be running.** The desktop app starts the bridge and writes a port file on launch. Without it, this package exits immediately with a clear error instead of hanging.
+1. **Potato Workspace Desktop must be running.** The desktop app starts the bridge and writes a port file on launch. Without it, this package exits immediately with a clear error instead of hanging.
 
-   - Install from [releases](https://github.com/Potato-dev-inc/puppet-master/releases), or run from the repo: `npm run tauri dev`
-   - The CLI launcher (`npx puppet-master` from the main repo) also starts the GUI
+   - Install from [releases](https://github.com/Potato-dev-inc/potato-workspace/releases), or run from the repo: `npm run tauri dev`
+   - The CLI launcher (`npx potato-workspace` from the main repo) also starts the GUI
 
 2. **Node.js 22+** — required for the npm/npx launcher. The MCP protocol server itself is the bundled Rust binary.
 
@@ -59,9 +59,9 @@ Every orchestration path — desktop sidebar, mobile PWA, CLI orchestrator panes
 
    | OS      | Path |
    |---------|------|
-   | Windows | `%APPDATA%\com.puppetmaster.app\puppet-master.bridge.port` |
-   | macOS   | `~/Library/Application Support/com.puppetmaster.app/puppet-master.bridge.port` |
-   | Linux   | `~/.local/share/com.puppetmaster.app/puppet-master.bridge.port` |
+   | Windows | `%APPDATA%\com.potatoworkspace.app\potato-workspace.bridge.port` |
+   | macOS   | `~/Library/Application Support/com.potatoworkspace.app/potato-workspace.bridge.port` |
+   | Linux   | `~/.local/share/com.potatoworkspace.app/potato-workspace.bridge.port` |
 
 ## Install & register
 
@@ -72,9 +72,9 @@ Every orchestration path — desktop sidebar, mobile PWA, CLI orchestrator panes
 ```json
 {
   "mcpServers": {
-    "puppet-master": {
+    "potato-workspace": {
       "command": "npx",
-      "args": ["-y", "@puppet-master/mcp"]
+      "args": ["-y", "@potato-workspace/mcp"]
     }
   }
 }
@@ -85,11 +85,11 @@ Every orchestration path — desktop sidebar, mobile PWA, CLI orchestrator panes
 ```json
 {
   "mcpServers": {
-    "puppet-master": {
+    "potato-workspace": {
       "command": "C:/Program Files/nodejs/node.exe",
-      "args": ["-y", "@puppet-master/mcp"],
+      "args": ["-y", "@potato-workspace/mcp"],
       "env": {
-        "PUPPET_MASTER_BRIDGE_PORT_FILE": "C:/Users/YOU/AppData/Roaming/com.puppetmaster.app/puppet-master.bridge.port"
+        "POTATO_WORKSPACE_BRIDGE_PORT_FILE": "C:/Users/YOU/AppData/Roaming/com.potatoworkspace.app/potato-workspace.bridge.port"
       }
     }
   }
@@ -103,28 +103,28 @@ Every orchestration path — desktop sidebar, mobile PWA, CLI orchestrator panes
 ```json
 {
   "mcpServers": {
-    "puppet-master": {
+    "potato-workspace": {
       "command": "npx",
-      "args": ["-y", "@puppet-master/mcp"]
+      "args": ["-y", "@potato-workspace/mcp"]
     }
   }
 }
 ```
 
-Restart Claude Desktop. Tools appear as `mcp__puppet-master__*`.
+Restart Claude Desktop. Tools appear as `mcp__potato-workspace__*`.
 
 ### Codex CLI
 
 ```bash
-codex mcp add puppet-master -- npx -y @puppet-master/mcp
+codex mcp add potato-workspace -- npx -y @potato-workspace/mcp
 ```
 
-Verify: `codex mcp list` · Remove: `codex mcp remove puppet-master`
+Verify: `codex mcp list` · Remove: `codex mcp remove potato-workspace`
 
 ### Run standalone (debug)
 
 ```bash
-npx @puppet-master/mcp
+npx @potato-workspace/mcp
 ```
 
 Or from the monorepo: `npm run mcp`
@@ -133,7 +133,7 @@ Or from the monorepo: `npm run mcp`
 
 Whether you orchestrate from Cursor, Claude Desktop, or the built-in sidebar, the tool surface is identical. A typical external flow:
 
-1. `bridge_health` — confirm Puppet Master is running
+1. `bridge_health` — confirm Potato Workspace is running
 2. `delegate_work` — submit a task with an absolute `project_path` and caller-generated `idempotency_key`
 3. `wait_for_operation` — wait from the returned `operation_id` and `revision`; continue waiting when the result is nonterminal
 4. `get_operation` — inspect the latest durable snapshot when needed; `cancel_operation` requests cancellation and uses worker control for dispatched work.
@@ -152,16 +152,16 @@ This is the preferred simple flow. It does not require scraping terminal output.
 
 Pass the same idempotency key when retrying the same request. It returns the existing operation instead of dispatching duplicate work; reusing the key with different work returns an idempotency conflict. Use a new key for a distinct request. `acceptance_criteria` is required and must include at least one non-empty criterion.
 
-Operation snapshots include `operation_id`, `status`, monotonically increasing `revision`, `source` (`native` or `inferred`), `stage`, `pane_state`, `required_action`, `progress_pct`, `result`, and structured `error` when present (`code`, `message`, `recoverable`, optional `retry_after_ms`, `context`). Status is one of `queued`, `starting`, `running`, `waiting_input`, `cancelling`, `completed`, `failed`, or `cancelled`. `pane_state` and `required_action` provide structured observations when an agent is blocked. Progress is `null` unless the worker provides authoritative progress. A pane becoming idle or disappearing is not completion; `completed` requires explicit result evidence. If the worker presents an approval prompt during startup, `delegate_work` has already returned its operation ID and the operation moves to `waiting_input` while retaining the pane. Resolve the prompt manually; Puppet Master never approves it. The bridge watches for the prompt to clear, records the observed pane state, and resumes dispatch. `cancel_operation` requests cancellation of queued or running operations. For dispatched work, the adapter aborts a native session, terminates a process created for that operation, or sends Ctrl+C to a reused pane; adapter failures are returned as typed errors.
+Operation snapshots include `operation_id`, `status`, monotonically increasing `revision`, `source` (`native` or `inferred`), `stage`, `pane_state`, `required_action`, `progress_pct`, `result`, and structured `error` when present (`code`, `message`, `recoverable`, optional `retry_after_ms`, `context`). Status is one of `queued`, `starting`, `running`, `waiting_input`, `cancelling`, `completed`, `failed`, or `cancelled`. `pane_state` and `required_action` provide structured observations when an agent is blocked. Progress is `null` unless the worker provides authoritative progress. A pane becoming idle or disappearing is not completion; `completed` requires explicit result evidence. If the worker presents an approval prompt during startup, `delegate_work` has already returned its operation ID and the operation moves to `waiting_input` while retaining the pane. Resolve the prompt manually; Potato Workspace never approves it. The bridge watches for the prompt to clear, records the observed pane state, and resumes dispatch. `cancel_operation` requests cancellation of queued or running operations. For dispatched work, the adapter aborts a native session, terminates a process created for that operation, or sends Ctrl+C to a reused pane; adapter failures are returned as typed errors.
 
 `wait_for_operation` accepts `project_path`, `operation_id`, optional `after_revision`, optional `until` statuses, and optional `timeout_ms`. Its `reason` is `matched_state`, `revision_changed`, `terminal`, or `timeout`; a timeout or revision change does not mean success. Re-check the snapshot and wait again while the operation remains nonterminal. When the MCP host supplies a progress token, revision changes produce progress notifications containing the current operation snapshot. Request cancellation (`notifications/cancelled`) wakes the waiting tool call and returns a typed cancellation error. To follow startup approval handling, wait for `waiting_input`, then wait again from that revision; the same operation continues after the prompt is cleared.
 
-**Pane rules:** panes with id `puppet-master-orchestrator-*` are dedicated orchestrators. Never `write_terminal_input` or `kill_pane_process` on them — delegate only to worker panes.
+**Pane rules:** panes with id `potato-workspace-orchestrator-*` are dedicated orchestrators. Never `write_terminal_input` or `kill_pane_process` on them — delegate only to worker panes.
 
 Paste this into a Cursor rule or project prompt:
 
 ```text
-When using the puppet-master MCP server, first call bridge_health, then list_panes.
+When using the potato-workspace MCP server, first call bridge_health, then list_panes.
 Reuse existing panes. Before delegating, inspect the target pane with read_agent_context
 and inspect_agent_model when choosing between agents. Only spawn a new agent if no
 suitable pane exists. Send prompts with write_terminal_input append_newline=true,
@@ -202,13 +202,13 @@ then read_terminal_buffer once to confirm receipt.
 | `read_orchestrator_state` | Read Rust-owned orchestration runtime state |
 | `update_orchestrator_state` | Update standby polling policy |
 
-Coordination state (tasks, locks, audit log) is scoped per project and stored in `<project>/.puppet-master/events.jsonl`.
+Coordination state (tasks, locks, audit log) is scoped per project and stored in `<project>/.potato-workspace/events.jsonl`.
 
 ## Troubleshooting
 
-**`Puppet Master bridge port file not found`**
+**`Potato Workspace bridge port file not found`**
 
-Start Puppet Master Desktop first, then retry. The MCP server fails fast when the GUI is not running.
+Start Potato Workspace Desktop first, then retry. The MCP server fails fast when the GUI is not running.
 
 **Tools return errors or empty panes**
 
@@ -218,13 +218,13 @@ Start Puppet Master Desktop first, then retry. The MCP server fails fast when th
 
 **MCP host cannot connect (Windows)**
 
-Use the full `node.exe` path and `PUPPET_MASTER_BRIDGE_PORT_FILE` env var in your MCP config (see Cursor section above).
+Use the full `node.exe` path and `POTATO_WORKSPACE_BRIDGE_PORT_FILE` env var in your MCP config (see Cursor section above).
 
 ## Further reading
 
-- [MCP_HOSTS.md](https://github.com/Potato-dev-inc/puppet-master/blob/main/MCP_HOSTS.md) — detailed host setup and tool reference
-- [ROUTING.md](https://github.com/Potato-dev-inc/puppet-master/blob/main/ROUTING.md) — sidebar orchestration (API vs CLI backends)
-- [Main README](https://github.com/Potato-dev-inc/puppet-master#readme) — architecture, coordination model, and release builds
+- [MCP_HOSTS.md](https://github.com/Potato-dev-inc/potato-workspace/blob/main/MCP_HOSTS.md) — detailed host setup and tool reference
+- [ROUTING.md](https://github.com/Potato-dev-inc/potato-workspace/blob/main/ROUTING.md) — sidebar orchestration (API vs CLI backends)
+- [Main README](https://github.com/Potato-dev-inc/potato-workspace#readme) — architecture, coordination model, and release builds
 
 ## License
 

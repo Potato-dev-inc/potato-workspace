@@ -1,6 +1,6 @@
 //! `companion_recall`: the companion finds what its person said before.
 //!
-//! The tool is an MCP tool of the Puppet Master pack, so a companion's agent calls it like any other. The
+//! The tool is an MCP tool of the Potato Workspace pack, so a companion's agent calls it like any other. The
 //! bridge route (`bridge/routes/companion_mcp.rs`) lets it through only for a caller that runs inside a
 //! companion's own pane (`caller::Verdict::verified`) and then asks this file, with that pane id.
 //!

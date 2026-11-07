@@ -101,7 +101,7 @@ export function AcpStep({
       <p className="text-sm font-semibold">How does the chat start?</p>
       <p className="mt-1 text-xs text-pm-muted">
         {intro ??
-          'Chat agents talk to Puppet Master through a small helper program (the Agent Client Protocol). Pick what looks right, or type it yourself. Nothing is run to find this: the wizard only read the help text.'}
+          'Chat agents talk to Potato Workspace through a small helper program (the Agent Client Protocol). Pick what looks right, or type it yourself. Nothing is run to find this: the wizard only read the help text.'}
       </p>
       {!draft.loaded ? (
         <p role="status" className="mt-2 text-xs text-pm-muted">

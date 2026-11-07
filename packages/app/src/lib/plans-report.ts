@@ -66,7 +66,7 @@ export interface PlansApi {
 
 export const plansApi: PlansApi = {
   report: async (month) => {
-    if (!inTauri()) throw new Error('Open Puppet Master on your computer to see your plans.');
+    if (!inTauri()) throw new Error('Open Potato Workspace on your computer to see your plans.');
     return invoke<PlansReport>('plans_report', { month: month ?? null });
   },
 };

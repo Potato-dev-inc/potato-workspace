@@ -145,7 +145,7 @@ fn start_pair(session: &Session, a: &str, b: &str, isolation: bool) -> (String, 
     if isolation {
         for pane in [&pa, &pb] {
             let cwd = session.pane_cwd(pane).expect("pane folder");
-            assert!(cwd.contains(".puppet-master"), "the pane works in its own copy: {cwd}");
+            assert!(cwd.contains(".potato-workspace"), "the pane works in its own copy: {cwd}");
         }
         assert_ne!(session.pane_cwd(&pa), session.pane_cwd(&pb), "two separate copies");
     }
@@ -237,7 +237,7 @@ fn assert_private(session: &Session, alert: &Value, item: Option<&Value>) {
         let flat = text.replace("\\\\", "/").replace('\\', "/").to_lowercase();
         assert!(!flat.contains(&project), "a folder of the project is in {text}");
         assert!(home.is_empty() || !flat.contains(&home), "the home folder is in {text}");
-        assert!(!flat.contains(".puppet-master"), "the copy's folder is in {text}");
+        assert!(!flat.contains(".potato-workspace"), "the copy's folder is in {text}");
     }
 }
 

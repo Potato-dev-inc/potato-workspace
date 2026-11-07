@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Thin launcher for the Rust Puppet Master MCP server.
+ * Thin launcher for the Rust Potato Workspace MCP server.
  *
  * Keep this file intentionally boring: MCP JSON-RPC belongs to the Rust
  * binary. This shim only makes npm/npx distribution work across platforms.

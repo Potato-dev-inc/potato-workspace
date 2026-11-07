@@ -1,4 +1,4 @@
-//! Freezing a pane's ring to disk: `<project>/.puppet-master/operations/<op>/flight.cast`, and the
+//! Freezing a pane's ring to disk: `<project>/.potato-workspace/operations/<op>/flight.cast`, and the
 //! hook that does it when a run fails.
 
 use super::{cast, get};
@@ -21,7 +21,7 @@ fn safe_id(id: &str) -> bool {
 }
 
 pub fn operations_dir(project: &str) -> PathBuf {
-    Path::new(project).join(".puppet-master").join("operations")
+    Path::new(project).join(".potato-workspace").join("operations")
 }
 
 pub fn cast_path(project: &str, operation_id: &str) -> Result<PathBuf, String> {

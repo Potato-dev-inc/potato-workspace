@@ -164,7 +164,7 @@ fn clean_nonempty(values: Vec<String>) -> Vec<String> {
 
 pub fn render_codex_delegation_prompt(request: &DelegateTaskRequest) -> String {
     let mut sections = vec![
-        "You are a worker agent in a Puppet Master session.".to_string(),
+        "You are a worker agent in a Potato Workspace session.".to_string(),
         format!("Task intent: {}", request.intent),
     ];
     if let Some(task_id) = &request.task_id {

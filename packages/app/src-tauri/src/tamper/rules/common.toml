@@ -2,7 +2,7 @@
 
 # Folders that are never protected and never scanned: dependencies, build output, caches, our own storage.
 never_dirs = [
-  "node_modules", "target", "dist", ".git", ".puppet-master", ".next", ".nuxt", ".turbo", ".venv", "venv",
+  "node_modules", "target", "dist", ".git", ".potato-workspace", ".next", ".nuxt", ".turbo", ".venv", "venv",
   "__pycache__", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache", "coverage", ".gradle", ".idea",
 ]
 

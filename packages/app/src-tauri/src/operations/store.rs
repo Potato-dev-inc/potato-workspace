@@ -52,7 +52,7 @@ pub(super) fn root(project: &str) -> Result<PathBuf, OperationError> {
             false,
         ));
     }
-    Ok(path.join(".puppet-master").join("operations"))
+    Ok(path.join(".potato-workspace").join("operations"))
 }
 pub(super) fn path_for(project: &str, id: &str) -> Result<PathBuf, OperationError> {
     if id.is_empty()
@@ -228,7 +228,7 @@ fn index_dir() -> Result<PathBuf, OperationError> {
         let dir = TEST_INDEX_DIR
             .get_or_init(|| {
                 std::env::temp_dir().join(format!(
-                    "puppet-master-operation-index-{}",
+                    "potato-workspace-operation-index-{}",
                     std::process::id()
                 ))
             })
@@ -301,14 +301,14 @@ mod replace_tests {
     use super::*;
     use std::os::windows::fs::OpenOptionsExt;
 
-    /// A project path of ~200 chars puts `.puppet-master/operations/<uuid>.<uuid>.tmp` past
+    /// A project path of ~200 chars puts `.potato-workspace/operations/<uuid>.<uuid>.tmp` past
     /// MAX_PATH (260); the replace must still work (B3: raw "os error 3" from MoveFileExW).
     fn long_dir() -> std::path::PathBuf {
         let mut dir = std::env::temp_dir().join(format!("pm-long-{}", uuid::Uuid::new_v4()));
         while dir.as_os_str().len() < 200 {
             dir = dir.join("segment-of-a-long-project-path");
         }
-        dir.join(".puppet-master").join("operations")
+        dir.join(".potato-workspace").join("operations")
     }
 
     #[test]

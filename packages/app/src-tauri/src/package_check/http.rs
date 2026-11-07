@@ -415,7 +415,7 @@ mod tests {
         assert_eq!(header(request, "accept-encoding"), "gzip");
         assert_eq!(
             header(request, "user-agent"),
-            format!("PuppetMaster-PackageCheck/{}", env!("CARGO_PKG_VERSION"))
+            format!("PotatoWorkspace-PackageCheck/{}", env!("CARGO_PKG_VERSION"))
         );
         assert_eq!(header(request, "accept"), ACCEPT);
         assert_eq!(header(request, "host"), server.base.trim_start_matches("http://"));

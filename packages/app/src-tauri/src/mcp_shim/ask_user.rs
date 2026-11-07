@@ -61,7 +61,7 @@ pub(crate) fn run(
         };
         let response = match bridge_request("POST", "/questions/ask", Some(body)) {
             Ok(text) => text,
-            Err(error) if question_id.is_some() && error.starts_with("bridge_down") => {
+            Err(error) if question_id.is_some() && is_connect_failure(&error) => {
                 // The app is reconnecting; keep the question and try again.
                 std::thread::sleep(Duration::from_millis(500));
                 continue;

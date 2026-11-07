@@ -104,7 +104,7 @@ pub struct NightCheckView {
     pub timeout_min: u32,
 }
 
-/// A check Puppet Master found in the project. Only offered: nothing is used until the person saves it.
+/// A check Potato Workspace found in the project. Only offered: nothing is used until the person saves it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NightSuggestionView {

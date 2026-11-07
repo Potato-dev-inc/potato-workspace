@@ -32,7 +32,7 @@ pub(crate) const TESTED_VERSIONS: &str = ">=2.1.299, <2.2";
 const MCP_HOST: &str = r#"
 config_path = "~/.claude.json"
 format = "json"
-key_path = "mcpServers.puppet-master"
+key_path = "mcpServers.potato-workspace"
 project_config_path = ".mcp.json"
 [entry]
 command = "{command}"
@@ -44,7 +44,7 @@ url = "{url}"
 headers = "{headers}"
 "#;
 
-/// Where Claude reads skills ("Add Puppet Master to your agents").
+/// Where Claude reads skills ("Add Potato Workspace to your agents").
 const SKILLS_HOST: &str = r#"
 dir = "~/.claude/skills"
 "#;
@@ -291,9 +291,9 @@ impl TuiProfile for Claude {
         true
     }
 
-    /// Ctrl+U, one press per visual line, erases the text Puppet Master typed (live, 2.1.300: two
+    /// Ctrl+U, one press per visual line, erases the text Potato Workspace typed (live, 2.1.300: two
     /// wrapped copies of a follow-up left in the box). Not the readiness clear sequence: a
-    /// person's draft is not Puppet Master's to erase.
+    /// person's draft is not Potato Workspace's to erase.
     fn retype_clear_sequence(&self) -> Option<&'static str> {
         Some(screen::CLEAR_TYPED_TEXT)
     }

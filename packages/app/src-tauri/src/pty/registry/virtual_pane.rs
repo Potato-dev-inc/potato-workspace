@@ -23,6 +23,9 @@ pub struct VirtualPaneSpec {
     pub cwd: String,
     /// `PaneInfo.lane` (`"acp"`).
     pub lane: String,
+    /// The adapter process behind this pane, when it is running. The pane has no terminal of its
+    /// own, but this process is what places the agent that runs in it (and so records helper nesting).
+    pub pid: u32,
 }
 
 /// What the owner of a virtual pane updates as the session changes.
@@ -109,7 +112,7 @@ pub fn insert_virtual_pane(registry: &Mutex<PaneRegistry>, spec: VirtualPaneSpec
     let info = PaneInfo {
         id: spec.pane_id.clone(),
         agent_type: spec.agent_type,
-        pid: 0,
+        pid: spec.pid,
         status: PaneStatus::Idle.as_str().to_string(),
         created_at: chrono_now_ms(),
         last_output_at: None,
@@ -147,7 +150,7 @@ mod tests {
     use super::*;
 
     fn spec(id: &str) -> VirtualPaneSpec {
-        VirtualPaneSpec { pane_id: id.into(), agent_type: "codex".into(), cwd: "C:\\work".into(), lane: "acp".into() }
+        VirtualPaneSpec { pane_id: id.into(), agent_type: "codex".into(), cwd: "C:\\work".into(), lane: "acp".into(), pid: 0 }
     }
 
     #[test]

@@ -14,7 +14,7 @@ export async function run(t) {
 
   await t.step('The bridge address is shown');
   const address = `http://127.0.0.1:${t.app.bridgePort}`;
-  await t.expect.text('Where other tools reach Puppet Master on this computer.');
+  await t.expect.text('Where other tools reach Potato Workspace on this computer.');
   await t.expect.text(address);
 
   await t.step('It answers on that address');
@@ -24,6 +24,6 @@ export async function run(t) {
 
   await t.step('The by-hand setup shows the MCP config to copy');
   await t.expect.text('Claude Desktop config');
-  await t.expect.text('"puppet-master"');
+  await t.expect.text('"potato-workspace"');
   await t.expect.text('Codex config');
 }

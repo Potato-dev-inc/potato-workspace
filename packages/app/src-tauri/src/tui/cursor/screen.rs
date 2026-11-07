@@ -439,7 +439,7 @@ mod tests {
         assert!(cursor.prompt_reply(&prompt, "allow_once", false).is_err());
     }
 
-    // Real capture from a pane started by Puppet Master (Cursor 2026.10.14): the frame rows around the
+    // Real capture from a pane started by Potato Workspace (Cursor 2026.10.14): the frame rows around the
     // arrow row are blank in the screen text.
     const UNFRAMED_LIVE: &str = include_str!("fixtures/input_box_unframed_live.txt");
 

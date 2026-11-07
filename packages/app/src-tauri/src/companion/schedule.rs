@@ -1,4 +1,4 @@
-//! Check-in times (spec section 5): which check-ins are due, when the next one is, the "Puppet Master
+//! Check-in times (spec section 5): which check-ins are due, when the next one is, the "Potato Workspace
 //! was closed" rule and the daily cap. Pure: the clock and the local zone come in as values, so the
 //! tests pin both. The zone is a fixed offset in seconds (`chrono::Local` gives it to the live code
 //! on every tick, so a change of daylight time shows up one tick later).
@@ -10,7 +10,7 @@ use chrono::{Datelike, Duration, FixedOffset, NaiveDate, TimeZone, Utc};
 use super::model::{CheckIn, HhMm, NextCheckIn, When, MAX_SCHEDULED_SENDS_PER_DAY, MIN_EVERY_MINUTES};
 use super::store::SentToday;
 
-/// A check-in whose time passed less than this long ago still runs (Puppet Master may have been busy
+/// A check-in whose time passed less than this long ago still runs (Potato Workspace may have been busy
 /// or just opened). A timed check-in that passed longer ago becomes a "missed" line in the feed.
 pub const LATE_RUN_MS: i64 = 2 * 60 * 60 * 1000;
 

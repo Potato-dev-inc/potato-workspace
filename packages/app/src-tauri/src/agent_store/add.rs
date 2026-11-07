@@ -77,7 +77,7 @@ pub fn add_in(
         return Err(format!("ADD_AMBIGUOUS_NOT_CONFIRMED: a program named {label} was found, but the name is shared. Confirm it is the agent first."));
     }
     if taken(agents_dir, id) {
-        return Err(format!("AGENT_DEF_DUPLICATE_ID: {id} is already in your agents folder. Puppet Master never overwrites a file."));
+        return Err(format!("AGENT_DEF_DUPLICATE_ID: {id} is already in your agents folder. Potato Workspace never overwrites a file."));
     }
     let fixtures = fixtures_of(entry)?;
 
@@ -156,7 +156,7 @@ fn shipped<'a>(catalog: &'a [CatalogEntry], id: &str) -> Result<(&'a CatalogEntr
         .ok_or_else(|| format!("STORE_UNKNOWN_ID: no agent named {id} is in the Agent Store."))?;
     match entry.definition_text.as_deref() {
         Some(text) if !entry.entry.store.builtin => Ok((entry, text)),
-        _ => Err(format!("STORE_BUILTIN: {id} is built into Puppet Master. It has no file to add or remove.")),
+        _ => Err(format!("STORE_BUILTIN: {id} is built into Potato Workspace. It has no file to add or remove.")),
     }
 }
 

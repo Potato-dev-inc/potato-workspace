@@ -1,13 +1,13 @@
 // Chat/run state of the built-in orchestrator: message list, MCP log, busy/standby flags, interrupt/new-chat,
 // and the "wake" run that the attention tracker triggers when a worker pane needs help.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { LlmModel, McpLogEntry, OrchestratorBackend } from '@puppet-master/shared';
+import type { LlmModel, McpLogEntry, OrchestratorBackend } from '@potato-workspace/shared';
 import type { BridgeClient } from '../../lib/bridge';
 import type { ChatMessage } from '../../lib/llm';
 import { makeBridgeExecutor, makeTauriExecutor } from '../../lib/mcp-executor';
 import { isCliOrchestratorBackend } from '../../lib/orchestrator-panes';
-import { runPuppetMasterLoop } from '../../lib/puppet-master';
-import { runPuppetMasterCliLoop } from '../../lib/puppet-master-cli';
+import { runPotatoWorkspaceLoop } from '../../lib/potato-workspace';
+import { runPotatoWorkspaceCliLoop } from '../../lib/potato-workspace-cli';
 import { loadSettings } from '../../lib/settings';
 import { resolveApiKey } from '../../lib/secrets';
 import {
@@ -85,7 +85,7 @@ export function useOrchestratorSession({ bridge, backend, model, externalLogs }:
             : { role: 'assistant', content: [{ type: 'text', text: m.text }] },
         );
 
-      await runPuppetMasterLoop(
+      await runPotatoWorkspaceLoop(
         activeModel,
         apiKey,
         bridgeRef.current ? makeBridgeExecutor(bridgeRef.current) : makeTauriExecutor(),
@@ -128,7 +128,7 @@ export function useOrchestratorSession({ bridge, backend, model, externalLogs }:
       const controller = new AbortController();
       abortRef.current = controller;
 
-      await runPuppetMasterCliLoop(activeBackend, bridgeRef.current, text, {
+      await runPotatoWorkspaceCliLoop(activeBackend, bridgeRef.current, text, {
         onAssistantText: (t) => setMessages((m) => appendStreamedText(m, streamId, t)),
         onToolCall: (tool, args, result, error) => {
           setLogs((prev) => prependLogs(prev, [builtinToolLog(tool, args, result, error)]));

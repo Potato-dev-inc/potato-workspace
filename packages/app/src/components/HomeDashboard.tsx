@@ -5,7 +5,7 @@ import {
   ORCHESTRATOR_BACKEND_LABELS,
   type OrchestratorBackend,
   type Settings,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import type { PaneRegistryApi } from '../hooks/usePaneRegistry';
 import { loadSettings, resolveSettingsFilePath } from '../lib/settings';
 import { AgentsOverviewCard } from './AgentsOverviewCard';

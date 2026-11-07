@@ -18,7 +18,7 @@ export const EXAMPLE_PANES: PaneInfo[] = [
     status: 'waiting_input',
     created_at: now - 14 * 60_000,
     last_output_at: now - 130_000,
-    cwd: 'C:\\Users\\dev\\work\\puppet-master',
+    cwd: 'C:\\Users\\dev\\work\\potato-workspace',
     cols: 120,
     rows: 32,
   },
@@ -51,7 +51,7 @@ export const EXAMPLE_PANES: PaneInfo[] = [
     status: 'error',
     created_at: now - 22 * 60_000,
     last_output_at: now - 3 * 60_000,
-    cwd: 'C:\\Users\\dev\\work\\puppet-master',
+    cwd: 'C:\\Users\\dev\\work\\potato-workspace',
     cols: 120,
     rows: 32,
   },
@@ -60,7 +60,7 @@ export const EXAMPLE_PANES: PaneInfo[] = [
 export const EXAMPLE_PROMPT: PanePrompt = {
   promptId: 'prompt-1',
   kind: 'permission',
-  text: 'Do you want to run this command?\n  npm test --workspace=@puppet-master/app',
+  text: 'Do you want to run this command?\n  npm test --workspace=@potato-workspace/app',
   summary: 'Run npm test in the app workspace',
   choices: [
     { id: 'yes', label: 'Yes' },
@@ -111,7 +111,7 @@ export const EXAMPLE_RUN: PaneRunInfo = {
     standby_used: true,
     fallback: { from: 'visible', to: 'headless', reason: 'visible_failed' },
     worktree: {
-      path: 'C:\\Users\\dev\\work\\puppet-master\\.puppet-master\\worktrees\\run_8f3a21c4',
+      path: 'C:\\Users\\dev\\work\\potato-workspace\\.potato-workspace\\worktrees\\run_8f3a21c4',
       branch: 'pm/run_8f3a21c4',
       base: 'master',
       state: 'unreviewed',
@@ -127,7 +127,7 @@ export const EXAMPLE_TRANSCRIPT: PaneTranscript = {
   chunks: [
     { stream: 'user_task', text: 'Add retry with backoff to the bridge client.' },
     { stream: 'delivery', text: 'Sent. The agent started.' },
-    { stream: 'assistant_final', text: '● Bash(npm test --workspace=@puppet-master/app)\n  ⎿  41 tests passed' },
+    { stream: 'assistant_final', text: '● Bash(npm test --workspace=@potato-workspace/app)\n  ⎿  41 tests passed' },
     { stream: 'assistant_final', text: 'Done. Retries use 250ms, 500ms, 1s, capped at 4s, with tests.' },
     { stream: 'user_steer', text: 'Also log each retry.' },
     { stream: 'permission', text: 'Allowed once: npm test' },
@@ -138,7 +138,7 @@ export const EXAMPLE_TRANSCRIPT: PaneTranscript = {
 const ESC = '\x1b';
 const SCREEN_LINES = [
   `${ESC}[1m${ESC}[38;5;208m*${ESC}[0m ${ESC}[1mClaude${ESC}[0m ${ESC}[2mv2.1${ESC}[0m`,
-  `${ESC}[2m  C:\\Users\\dev\\work\\puppet-master${ESC}[0m`,
+  `${ESC}[2m  C:\\Users\\dev\\work\\potato-workspace${ESC}[0m`,
   '',
   `${ESC}[38;5;245m> Add retry with backoff to the bridge client${ESC}[0m`,
   '',
@@ -146,7 +146,7 @@ const SCREEN_LINES = [
   `${ESC}[32m*${ESC}[0m Edit packages/app/src/lib/bridge.ts ${ESC}[32m+24${ESC}[0m ${ESC}[31m-3${ESC}[0m`,
   '',
   `${ESC}[1mBash command${ESC}[0m`,
-  '  npm test --workspace=@puppet-master/app',
+  '  npm test --workspace=@potato-workspace/app',
   '',
   'Do you want to proceed?',
   `${ESC}[36m> 1. Yes${ESC}[0m`,
@@ -212,7 +212,7 @@ export function standbyStatus(idleTimeoutSecs = 1200, blocked: unknown[] = []) {
         id: 1,
         state: 'ready',
         agent_type: 'claude',
-        project: 'C:\\Users\\dev\\work\\puppet-master',
+        project: 'C:\\Users\\dev\\work\\potato-workspace',
         headless: false,
         read_only: false,
         model: null,
@@ -247,8 +247,8 @@ export const EXAMPLE_WORKTREE = {
   handle: 'refactor-auth',
   branch: 'pm/refactor-auth',
   base: 'main',
-  repo: 'C:\Users\dev\work\puppet-master',
-  path: 'C:\Users\dev\work\puppet-master\.puppet-master\worktrees\refactor-a-1f2e',
+  repo: 'C:\Users\dev\work\potato-workspace',
+  path: 'C:\Users\dev\work\potato-workspace\.potato-workspace\worktrees\refactor-a-1f2e',
   exists: true,
   state: 'unreviewed',
   summary: { files_changed: 3, additions: 14, deletions: 3 },
@@ -356,7 +356,7 @@ export const TOOLBELT_LISTING: ToolbeltListing = {
     { id: 'cursor_agent', label: 'Cursor Agent', installed: true, supports_url: true },
   ],
   unsupported: [
-    { id: 'kilo', label: 'Kilo', reason: "This agent doesn't declare where it keeps MCP servers, so Puppet Master can't write to it." },
+    { id: 'kilo', label: 'Kilo', reason: "This agent doesn't declare where it keeps MCP servers, so Potato Workspace can't write to it." },
   ],
 };
 
@@ -500,7 +500,7 @@ export const EXAMPLE_DIGEST = {
     },
   ],
   needsYou: [
-    { paneId: PANE_CLAUDE, agent: 'Claude', status: 'waiting_input', prompt: 'Allow `npm test` in puppet-master?' },
+    { paneId: PANE_CLAUDE, agent: 'Claude', status: 'waiting_input', prompt: 'Allow `npm test` in potato-workspace?' },
     { paneId: PANE_PWSH, agent: 'PowerShell', status: 'error' },
   ],
 };
@@ -526,7 +526,7 @@ export const EXAMPLE_REVIEWERS: ReviewerEntry[] = [
 export const EXAMPLE_REVIEW_START: ReviewStart = {
   paneId: PANE_CLAUDE,
   handle: 'review-1',
-  project: 'C:\Users\dev\work\puppet-master',
+  project: 'C:\Users\dev\work\potato-workspace',
   reviewer: 'codex',
   reviewerLabel: 'Codex',
   source: 'worktree',
@@ -572,10 +572,10 @@ export const EXAMPLE_REVIEW_POLL: ReviewPoll = {
   },
 };
 
-// ---- Add Puppet Master to your agents (Settings > MCP & bridge) ----
+// ---- Add Potato Workspace to your agents (Settings > MCP & bridge) ----
 import type { PackReport } from '../lib/agent-pack';
 
-const PACK_FILES = ['puppet-master', 'pm-review', 'pm-delegate', 'pm-status'].map((n) => ({ name: `${n}/SKILL.md`, kind: 'add' as const }));
+const PACK_FILES = ['potato-workspace', 'pm-review', 'pm-delegate', 'pm-status'].map((n) => ({ name: `${n}/SKILL.md`, kind: 'add' as const }));
 
 export const AGENT_PACK_PREVIEW: PackReport = {
   dry_run: true,
@@ -601,7 +601,7 @@ export const AGENT_PACK_PREVIEW: PackReport = {
         shared_with: [],
         change: 'add',
         reason: null,
-        diff: '+ [mcp_servers.puppet-master]\n+ args = ["-y", "@puppet-master/mcp"]\n+ command = "npx"',
+        diff: '+ [mcp_servers.potato-workspace]\n+ args = ["-y", "@potato-workspace/mcp"]\n+ command = "npx"',
         written: false,
         backup: null,
       },

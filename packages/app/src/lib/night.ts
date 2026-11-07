@@ -177,7 +177,7 @@ export interface NightCheckView {
   timeoutMin: number;
 }
 
-/** A check Puppet Master found in the project. Only offered until the person saves it. */
+/** A check Potato Workspace found in the project. Only offered until the person saves it. */
 export interface NightSuggestionView {
   name: string;
   argv: string[];

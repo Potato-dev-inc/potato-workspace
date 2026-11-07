@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import type { AgentType } from '@puppet-master/shared';
+import type { AgentType } from '@potato-workspace/shared';
 import {
   agentLabel,
   launchMenuEntries,

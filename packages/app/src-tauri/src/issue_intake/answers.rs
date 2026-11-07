@@ -177,7 +177,7 @@ impl<I: Io + 'static> Engine<I> {
             return Err(err("INVALID_ARGUMENT", "that is not an issue run id"));
         }
         let claim = self.claim(run_id).ok_or_else(|| {
-            crate::operations::OperationError::new("ISSUE_BUSY", "Puppet Master is working on this run. Try again in a moment.", true)
+            crate::operations::OperationError::new("ISSUE_BUSY", "Potato Workspace is working on this run. Try again in a moment.", true)
         })?;
         let mut run = self.io.store().by_id(run_id).ok_or_else(|| err("ISSUE_RUN_NOT_FOUND", "There is no such run."))?;
         let mut start_queue = false;

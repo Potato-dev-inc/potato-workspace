@@ -64,6 +64,6 @@ describe('mergedText and neighbour', () => {
 
 describe('plansApi', () => {
   it('explains itself outside the desktop app', async () => {
-    await expect(plansApi.report()).rejects.toThrow('Open Puppet Master on your computer');
+    await expect(plansApi.report()).rejects.toThrow('Open Potato Workspace on your computer');
   });
 });

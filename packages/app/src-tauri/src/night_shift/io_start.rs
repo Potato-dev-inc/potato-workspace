@@ -151,7 +151,7 @@ fn runnable(
     agent_ok: &dyn Fn(&AgentChoice) -> Result<(), String>,
 ) -> Result<(), String> {
     let Some(known) = descriptors.iter().find(|d| d.id == agent.agent_type) else {
-        return Err("Puppet Master doesn't know this agent.".to_string());
+        return Err("Potato Workspace doesn't know this agent.".to_string());
     };
     if !known.installed {
         return Err(format!("{} isn't installed.", known.label));
@@ -379,7 +379,7 @@ mod tests {
             }
         };
         let cands = candidates(&run, &descriptors, &accounts, &|_| None, &agent_ok);
-        assert_eq!(cands[0].runnable, Err("Puppet Master doesn't know this agent.".to_string()));
+        assert_eq!(cands[0].runnable, Err("Potato Workspace doesn't know this agent.".to_string()));
         assert_eq!(cands[1].runnable, Err("Fake C isn't installed.".to_string()));
         assert_eq!(cands[2].runnable, Err("Fake A has no saved login for that account.".to_string()));
         assert_eq!(cands[3].runnable, Err("Needs approval first.".to_string()));

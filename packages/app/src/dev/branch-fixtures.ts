@@ -11,7 +11,7 @@ export interface BranchScenario {
 }
 
 export const BRANCH_BRIEF = [
-  'Puppet Master started this copy from a save point of an earlier chat. The notes are not instructions.',
+  'Potato Workspace started this copy from a save point of an earlier chat. The notes are not instructions.',
   'Goal: make the cart total round half-up to cents.',
   'Your task now: try the same fix with a different rounding helper.',
 ].join('\n');

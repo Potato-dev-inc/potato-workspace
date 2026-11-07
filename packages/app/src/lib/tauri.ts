@@ -9,7 +9,7 @@ import type {
   DeviceCap,
   PairedDeviceInfo,
   PairingSession,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 
 import type {
   PaneInfo,
@@ -163,8 +163,8 @@ export const tauri = {
       {
         scope: 'global_fallback',
         project_path: null,
-        storage_dir: '.puppet-master',
-        event_log_path: '.puppet-master/events.jsonl',
+        storage_dir: '.potato-workspace',
+        event_log_path: '.potato-workspace/events.jsonl',
         event_count: 0,
         task_count: 0,
         lock_count: 0,
@@ -253,7 +253,7 @@ export const tauri = {
         nodeAvailable: false,
         npmAvailable: false,
         npmPackageVersion: null,
-        launchCommand: 'npx -y @puppet-master/mcp',
+        launchCommand: 'npx -y @potato-workspace/mcp',
         backends: [],
         overallReady: false,
         repairResults: [],
@@ -365,7 +365,7 @@ export const tauri = {
   openExternalUrl: (url: string) =>
     safeInvoke<void>('open_external_url', { url }, undefined, true),
   launchUninstall: () => safeInvoke<void>('launch_uninstall', undefined, undefined, true),
-  /** "Start Puppet Master when I sign in": the OS entry's state. Throws outside the desktop shell. */
+  /** "Start Potato Workspace when I sign in": the OS entry's state. Throws outside the desktop shell. */
   autostartGet: () => safeInvoke<boolean>('autostart_get'),
   /** Turns the sign-in start on or off; resolves with the state the OS reports afterward. */
   autostartSet: (enabled: boolean) => safeInvoke<boolean>('autostart_set', { enabled }),

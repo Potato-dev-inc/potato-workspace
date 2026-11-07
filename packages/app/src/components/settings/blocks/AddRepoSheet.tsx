@@ -220,7 +220,7 @@ export function AddRepoSheet({
     >
       <div className="st-sheet" role="dialog" aria-modal="true" aria-labelledby="st-repo-title">
         <h2 id="st-repo-title">{editing ? 'Edit repository' : 'Add a repository'}</h2>
-        <p>Puppet Master starts an agent on an issue only when an allowed person adds the label to it on GitHub.</p>
+        <p>Potato Workspace starts an agent on an issue only when an allowed person adds the label to it on GitHub.</p>
 
         <SettingRow label="Folder on this PC" description="A clone of the repository. Its GitHub remote must be exactly this repository.">
           <div className="st-number">

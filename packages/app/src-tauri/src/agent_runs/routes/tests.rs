@@ -22,7 +22,7 @@ fn pane_worker_entry_exposes_adoption_fields() {
         status: "running".into(),
         created_at: 0,
         last_output_at: None,
-        cwd: "C:/work/puppet-master/packages/app/src-tauri".into(),
+        cwd: "C:/work/potato-workspace/packages/app/src-tauri".into(),
         cols: 80,
         rows: 24,
         viewer_held: false,
@@ -209,7 +209,7 @@ fn unreadable_foreign_project_does_not_fail_handle_or_name_lookup() {
     named_run(&foreign, "run-foreign", &format!("foreign-{uniq}"), 0);
     named_run(&project, &run_luna, &luna, 0);
     // Make every record of the foreign project unreadable: replace each with a directory.
-    let records = std::path::Path::new(&foreign).join(".puppet-master").join("operations");
+    let records = std::path::Path::new(&foreign).join(".potato-workspace").join("operations");
     for entry in std::fs::read_dir(&records).unwrap() {
         let path = entry.unwrap().path();
         if path.extension().is_some_and(|ext| ext == "json") {

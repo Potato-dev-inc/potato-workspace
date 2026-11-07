@@ -59,9 +59,9 @@ pub struct SaveReport {
     pub bytes: u64,
 }
 
-const README: &str = "Puppet Master diagnostic file\n\
+const README: &str = "Potato Workspace diagnostic file\n\
 \n\
-This file was saved on request. Puppet Master did not send it anywhere.\n\
+This file was saved on request. Potato Workspace did not send it anywhere.\n\
 \n\
 What is inside:\n\
 - version.json: app and system versions\n\
@@ -212,7 +212,7 @@ pub fn collect_casts(projects: &[String]) -> Vec<CastFile> {
 pub fn gather(project: &str, settings: Value) -> Inputs {
     let info = crate::app_lifecycle::get_app_install_info();
     let version = json!({
-        "app": "Puppet Master",
+        "app": "Potato Workspace",
         "version": info.version,
         "packaged": info.is_packaged,
         "os": info.platform,

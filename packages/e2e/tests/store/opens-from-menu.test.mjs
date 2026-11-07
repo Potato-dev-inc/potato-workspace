@@ -14,7 +14,7 @@ export async function run(t) {
   await openStore(t);
 
   await t.step('The page explains itself and offers search and filters');
-  await t.expect.text('Agents you can add to Puppet Master. Each card says how well we have tested it.');
+  await t.expect.text('Agents you can add to Potato Workspace. Each card says how well we have tested it.');
   await t.expect.visible('aria=Search agents');
   for (const chip of ['All', 'Ready', 'Open source', 'Needs a key', 'Tested']) await t.expect.visible({ exact: chip, within: 'css=.ck-store-chips' });
 

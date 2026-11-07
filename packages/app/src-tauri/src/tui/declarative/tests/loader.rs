@@ -184,7 +184,7 @@ fn invalid_definition_never_shadows() {
 
 #[test]
 fn project_dir_is_under_dot_puppet_master() {
-    assert!(project_agents_dir(Path::new("proj")).ends_with(Path::new(".puppet-master").join("agents")));
+    assert!(project_agents_dir(Path::new("proj")).ends_with(Path::new(".potato-workspace").join("agents")));
 }
 
 mod fingerprint_cases {

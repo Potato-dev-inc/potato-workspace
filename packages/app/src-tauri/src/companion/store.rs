@@ -99,10 +99,23 @@ pub fn load(root: &Path) -> CompanionResult<Vec<CompanionProfile>> {
     if file.v > STORE_VERSION {
         return Err(CompanionError::new(
             STORE_INVALID,
-            "companions.json was written by a newer Puppet Master.",
+            "companions.json was written by a newer Potato Workspace.",
         ));
     }
-    Ok(file.companions)
+    Ok(file.companions.into_iter().map(remap_legacy_folder).collect())
+}
+
+/// A companion created by the other product points at `~/PuppetMaster/companions/<id>`. When the
+/// startup copy has put the same companion under `~/PotatoWorkspace/companions/<id>`, follow the
+/// new folder so this app never writes to the old one. A person's own folder is left alone.
+fn remap_legacy_folder(mut profile: CompanionProfile) -> CompanionProfile {
+    let old = crate::app_paths::LEGACY_COMPANION_HOME_DIR_NAME;
+    let new = crate::app_paths::COMPANION_HOME_DIR_NAME;
+    let replaced = profile.folder.replace(old, new);
+    if replaced != profile.folder && Path::new(&replaced).is_dir() {
+        profile.folder = replaced;
+    }
+    profile
 }
 
 /// Writes the whole list (version 1), atomically.
@@ -199,7 +212,7 @@ mod tests {
             agent_type: "shell".into(),
             launch_args: vec![],
             account: None,
-            folder: "C:\\Users\\you\\PuppetMaster\\companions\\mochi".into(),
+            folder: "C:\\Users\\you\\PotatoWorkspace\\companions\\mochi".into(),
             auto_start: true,
             memory_review: true,
             push_replies: true,

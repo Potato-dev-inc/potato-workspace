@@ -350,7 +350,7 @@ fn pairing_no_burns_the_code_and_says_nothing() {
     assert!(h.audit_kinds().contains(&AuditKind::ChannelUnpaired));
     // The same code now says it is closed, once; then the bot is quiet again.
     let effects = run(&e, &h, vec![say_to_bot(&format!("/start {code}"))]);
-    assert_eq!(sent(&effects), vec!["This code does not work any more. Make a new code in Puppet Master."]);
+    assert_eq!(sent(&effects), vec!["This code does not work any more. Make a new code in Potato Workspace."]);
     assert!(run(&e, &h, vec![say_to_bot(&format!("/start {code}"))]).is_empty());
 }
 
@@ -463,7 +463,7 @@ fn three_stale_messages_make_one_note_and_the_fresh_one_still_runs() {
     assert_eq!(notes.len(), 1);
     assert_eq!(
         notes[0],
-        "3 messages came while your PC was asleep or Puppet Master was off. They were not sent. Send them again if you still want them."
+        "3 messages came while your PC was asleep or Potato Workspace was off. They were not sent. Send them again if you still want them."
     );
 }
 
@@ -720,8 +720,8 @@ fn plain_text_with_two_companions_asks_which() {
 fn a_sleeping_companion_is_not_woken_from_the_chat() {
     let (e, h) = (engine(), FakeHost::new());
     h.companion("c1", "Mochi", false);
-    assert_eq!(sent(&run(&e, &h, vec![say_to_bot("hi")])), vec!["Mochi is asleep. Wake it in Puppet Master."]);
-    assert_eq!(sent(&run(&e, &h, vec![say_to_bot("/c mochi hi")])), vec!["Mochi is asleep. Wake it in Puppet Master."]);
+    assert_eq!(sent(&run(&e, &h, vec![say_to_bot("hi")])), vec!["Mochi is asleep. Wake it in Potato Workspace."]);
+    assert_eq!(sent(&run(&e, &h, vec![say_to_bot("/c mochi hi")])), vec!["Mochi is asleep. Wake it in Potato Workspace."]);
     assert!(h.pane_texts.lock().is_empty());
 }
 
@@ -743,7 +743,7 @@ fn stop_saves_off_audits_and_ends_the_poller() {
     let effects = run(&e, &h, vec![say_to_bot("/stop")]);
     assert!(!h.config().enabled);
     assert!(!h.saved.lock().last().unwrap().enabled);
-    assert_eq!(sent(&effects), vec!["Telegram is off. Turn it on again in Puppet Master on your PC."]);
+    assert_eq!(sent(&effects), vec!["Telegram is off. Turn it on again in Potato Workspace on your PC."]);
     assert!(matches!(effects.last(), Some(Effect::Stop)));
     let audits = h.audits.lock();
     let (kind, _, detail) = audits.last().unwrap();
@@ -825,7 +825,7 @@ fn panes_with_no_agents_says_so() {
 fn help_says_the_bot_is_silent_when_the_pc_sleeps() {
     let (e, h) = (engine(), FakeHost::new());
     let text = sent(&run(&e, &h, vec![say_to_bot("/help")])).remove(0);
-    assert!(text.contains("When your PC sleeps or Puppet Master is closed, I can't answer."));
+    assert!(text.contains("When your PC sleeps or Potato Workspace is closed, I can't answer."));
     assert!(text.lines().count() > 5, "help is a list, one line each");
 }
 
@@ -1076,19 +1076,19 @@ fn assert_refused_with(sentence: &str, item: Item, choice: &str) {
 
 #[test]
 fn a_high_risk_approval_is_never_answered_from_the_chat() {
-    assert_refused_with("Open Puppet Master to answer.", approval("pane-1", "rm -rf /", Some(Level::High)), "allow_once");
-    assert_refused_with("Open Puppet Master to answer.", approval("pane-1", "rm -rf /", Some(Level::High)), "deny");
+    assert_refused_with("Open Potato Workspace to answer.", approval("pane-1", "rm -rf /", Some(Level::High)), "allow_once");
+    assert_refused_with("Open Potato Workspace to answer.", approval("pane-1", "rm -rf /", Some(Level::High)), "deny");
 }
 
 #[test]
 fn a_medium_risk_approval_is_never_answered_from_the_chat() {
-    assert_refused_with("Open Puppet Master to answer.", approval("pane-1", "git push", Some(Level::Medium)), "allow_once");
-    assert_refused_with("Open Puppet Master to answer.", approval("pane-1", "git push", Some(Level::Medium)), "deny");
+    assert_refused_with("Open Potato Workspace to answer.", approval("pane-1", "git push", Some(Level::Medium)), "allow_once");
+    assert_refused_with("Open Potato Workspace to answer.", approval("pane-1", "git push", Some(Level::Medium)), "deny");
 }
 
 #[test]
 fn an_approval_with_no_risk_read_is_never_answered_from_the_chat() {
-    assert_refused_with("Open Puppet Master to answer.", approval("pane-1", "mystery", None), "allow_once");
+    assert_refused_with("Open Potato Workspace to answer.", approval("pane-1", "mystery", None), "allow_once");
 }
 
 #[test]
@@ -1105,14 +1105,14 @@ fn a_consent_card_is_never_answered_from_the_chat() {
 
 #[test]
 fn budget_and_limit_cards_are_never_answered_from_the_chat() {
-    assert_refused_with("Open Puppet Master to decide.", card(ItemKind::Budget, "Budget used"), "continue");
-    assert_refused_with("Open Puppet Master to decide.", card(ItemKind::Limit, "Limit reached"), "continue");
+    assert_refused_with("Open Potato Workspace to decide.", card(ItemKind::Budget, "Budget used"), "continue");
+    assert_refused_with("Open Potato Workspace to decide.", card(ItemKind::Limit, "Limit reached"), "continue");
 }
 
 #[test]
 fn info_cards_have_nothing_to_answer() {
     for kind in [ItemKind::Error, ItemKind::Stuck, ItemKind::Done, ItemKind::Review] {
-        assert_refused_with("Open Puppet Master to act on this.", card(kind, "Something"), "ok");
+        assert_refused_with("Open Potato Workspace to act on this.", card(kind, "Something"), "ok");
     }
 }
 
@@ -1122,7 +1122,7 @@ fn a_confirm_grant_for_a_risky_or_other_card_does_not_show_a_confirm() {
     let high = approval("pane-1", "rm -rf /", Some(Level::High));
     h.add_item(high.clone());
     let effects = run(&e, &h, vec![tap_token(&confirm_grant(&e, &high))]);
-    assert_eq!(toasts(&effects), vec!["Open Puppet Master to answer."]);
+    assert_eq!(toasts(&effects), vec!["Open Potato Workspace to answer."]);
     assert!(edits(&effects)[0].1.keyboard.is_empty(), "no buttons on a high-risk card");
     let gate = card(ItemKind::TrustGate, "Trust?");
     h.add_item(gate.clone());
@@ -1145,7 +1145,7 @@ fn a_card_that_got_riskier_since_the_message_is_refused_at_the_tap() {
     // The same card is now high risk on the PC.
     h.items.lock()[0].risk = approval("pane-1", "npm test", Some(Level::High)).risk;
     let effects = run(&e, &h, vec![tap_token(&token)]);
-    assert_eq!(toasts(&effects), vec!["Open Puppet Master to answer."]);
+    assert_eq!(toasts(&effects), vec!["Open Potato Workspace to answer."]);
     assert!(h.answers.lock().is_empty());
 }
 
@@ -1300,7 +1300,7 @@ fn the_confirm_step_refuses_a_card_whose_prompt_changed() {
         ANSWER_TTL_MS,
     );
     let effects = run(&e, &h, vec![tap_token(&token)]);
-    assert_eq!(toasts(&effects), vec!["This changed. Open Puppet Master."]);
+    assert_eq!(toasts(&effects), vec!["This changed. Open Potato Workspace."]);
     assert!(edits(&effects)[0].1.keyboard.is_empty());
     assert!(h.answers.lock().is_empty());
 }
@@ -1312,7 +1312,7 @@ fn the_confirm_step_needs_the_card_to_be_open() {
     item.state = State::Resolved;
     h.add_item(item.clone());
     let effects = run(&e, &h, vec![tap_token(&confirm_grant(&e, &item))]);
-    assert_eq!(toasts(&effects), vec!["This changed. Open Puppet Master."]);
+    assert_eq!(toasts(&effects), vec!["This changed. Open Potato Workspace."]);
 }
 
 #[test]
@@ -1323,7 +1323,7 @@ fn no_confirm_is_offered_when_redaction_changes_the_command() {
         h.items.lock().clear();
         h.add_item(item.clone());
         let effects = run(&e, &h, vec![tap_token(&confirm_grant(&e, &item))]);
-        assert_eq!(toasts(&effects), vec!["Open Puppet Master to answer."], "{command}");
+        assert_eq!(toasts(&effects), vec!["Open Potato Workspace to answer."], "{command}");
         assert!(edits(&effects)[0].1.keyboard.is_empty());
     }
     assert!(h.answers.lock().is_empty());
@@ -1347,13 +1347,13 @@ fn answer_outcomes_map_to_the_receipts() {
         ((200, json!({"outcome": "already_answered", "by": "pc"})), "Already answered on your PC"),
         ((200, json!({"outcome": "already_answered", "by": "phone"})), "Already answered on a phone"),
         ((200, json!({"outcome": "already_answered", "by": "you", "choice_label": "Denied"})), "Denied"),
-        ((200, json!({"outcome": "changed"})), "This changed. Open Puppet Master."),
+        ((200, json!({"outcome": "changed"})), "This changed. Open Potato Workspace."),
         ((200, json!({"outcome": "gone", "reason": "moved_on"})), "This button expired."),
-        ((200, json!({"outcome": "failed", "code": "X", "detail": "pane closed"})), "Could not send that. Open Puppet Master."),
-        ((403, json!({"error": "not_from_chat", "hint": "x"})), "Open Puppet Master to answer."),
+        ((200, json!({"outcome": "failed", "code": "X", "detail": "pane closed"})), "Could not send that. Open Potato Workspace."),
+        ((403, json!({"error": "not_from_chat", "hint": "x"})), "Open Potato Workspace to answer."),
         ((403, json!({"error": "not_allowed", "code": "DEVICE_CAP_REQUIRED"})), NOT_ALLOWED),
-        ((400, json!({"error": "bad"})), "That did not work. Open Puppet Master."),
-        ((200, json!({"nonsense": true})), "This changed. Open Puppet Master."),
+        ((400, json!({"error": "bad"})), "That did not work. Open Potato Workspace."),
+        ((200, json!({"nonsense": true})), "This changed. Open Potato Workspace."),
     ];
     for (reply, expected) in cases {
         let (e, h) = with_pane_list();

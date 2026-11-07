@@ -1,6 +1,6 @@
 # Lists every visible top-level window of the dev app (puppet_master_app.exe) with its
 # position, and exits 1 if any of them sits on the primary monitor. Used to prove live
-# tests keep Puppet Master windows on the secondary monitor (see tauri.dev.local.json).
+# tests keep Potato Workspace windows on the secondary monitor (see tauri.dev.local.json).
 Add-Type @'
 using System; using System.Runtime.InteropServices; using System.Text; using System.Collections.Generic;
 public class PmWin {
@@ -33,5 +33,5 @@ foreach ($h in [PmWin]::All()) {
   "{0,-48} left={1,6} top={2,5} size={5}x{6} primary={3} foreground={4}" -f $sb.ToString(), $r.Left, $r.Top, $onPrimary, ($h -eq $fg), ($r.Right - $r.Left), ($r.Bottom - $r.Top)
 }
 if ($pids.Count -eq 0) { 'puppet_master_app is not running'; exit 2 }
-if ($bad -gt 0) { "FAIL: $bad Puppet Master window(s) on the primary monitor"; exit 1 }
-'OK: no Puppet Master window on the primary monitor'
+if ($bad -gt 0) { "FAIL: $bad Potato Workspace window(s) on the primary monitor"; exit 1 }
+'OK: no Potato Workspace window on the primary monitor'

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Bundle @puppet-master/mcp into a single Node script for the Tauri app bundle.
- * Production Codex/Claude/OpenCode configs invoke this file — not `npx @puppet-master/mcp`
+ * Bundle @potato-workspace/mcp into a single Node script for the Tauri app bundle.
+ * Production Codex/Claude/OpenCode configs invoke this file — not `npx @potato-workspace/mcp`
  * (that package is not published to npm).
  */
 import { spawnSync } from 'node:child_process';
@@ -25,17 +25,17 @@ function run(cmd, args) {
   }
 }
 
-run('npm', ['run', 'build', '-w', '@puppet-master/shared']);
+run('npm', ['run', 'build', '-w', '@potato-workspace/shared']);
 
 const mcpDist = resolve(root, 'packages/mcp-server/dist/index.js');
 if (!existsSync(mcpDist)) {
-  const mcpBuild = spawnSync('npm', ['run', 'build', '-w', '@puppet-master/mcp'], {
+  const mcpBuild = spawnSync('npm', ['run', 'build', '-w', '@potato-workspace/mcp'], {
     cwd: root,
     stdio: 'inherit',
     shell: true,
   });
   if (mcpBuild.status !== 0) {
-    console.error('[bundle-mcp] @puppet-master/mcp build failed — bundling from source via esbuild');
+    console.error('[bundle-mcp] @potato-workspace/mcp build failed — bundling from source via esbuild');
   }
 }
 
@@ -59,7 +59,7 @@ if (existsSync(mcpDistBinary)) {
 mkdirSync(dirname(outfile), { recursive: true });
 
 // Standalone watcher for `watch_command`: an absolute-path script works from any directory,
-// unlike `npx puppet-master`. ESM because the CLI uses import.meta.
+// unlike `npx potato-workspace`. ESM because the CLI uses import.meta.
 try {
   await esbuild.build({
     entryPoints: [resolve(root, 'packages/cli/src/index.ts')],

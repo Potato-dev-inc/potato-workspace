@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentType } from '@puppet-master/shared';
+import type { AgentType } from '@potato-workspace/shared';
 import { launchMenuEntries, useAgentRegistry } from '../lib/agentRegistry';
 import { TerminalPane } from './TerminalPane';
 import type { PaneRegistryApi } from '../hooks/usePaneRegistry';

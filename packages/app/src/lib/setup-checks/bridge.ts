@@ -5,6 +5,6 @@ export function checkBridge(ctx: SetupCheckContext): CheckRow[] {
   return [
     ctx.bridgeUrl
       ? { id: 'bridge', status: 'ok', sentence: 'Bridge is running', fix: null }
-      : { id: 'bridge', status: 'fail', sentence: 'Bridge is not running. Close Puppet Master and open it again.', fix: null },
+      : { id: 'bridge', status: 'fail', sentence: 'Bridge is not running. Close Potato Workspace and open it again.', fix: null },
   ];
 }

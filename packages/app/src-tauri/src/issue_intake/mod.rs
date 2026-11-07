@@ -1,7 +1,7 @@
 //! Assign an issue (UI name) / issue intake (code name): a person adds a repo they own, a label
-//! and an agent in Settings. When someone allowed adds the label to a GitHub issue, Puppet Master
+//! and an agent in Settings. When someone allowed adds the label to a GitHub issue, Potato Workspace
 //! sees it through the person's own `gh` login, asks before it starts, and the agent works in a
-//! separate copy on its own branch. The agent cannot push. When it is done, Puppet Master checks
+//! separate copy on its own branch. The agent cannot push. When it is done, Potato Workspace checks
 //! the change and (on a yes) opens a draft pull request. It never merges.
 //!
 //! - `model`: the settings, the repo watch, the runs, the error codes and the id validators.
@@ -22,8 +22,8 @@
 //! - S2: only the person (or the allowed list) can start a run. Labelers are checked on GitHub.
 //! - S3: an explicit allow-list of repos; a folder must match its repo at save, start and push.
 //! - S4: guarded panes get no GitHub or package tokens.
-//! - S5: Puppet Master never answers an agent's own trust, permission or login prompt.
-//! - S6: Puppet Master pushes only a `pm/...` branch, as a draft, after the push check.
+//! - S5: Potato Workspace never answers an agent's own trust, permission or login prompt.
+//! - S6: Potato Workspace pushes only a `pm/...` branch, as a draft, after the push check.
 //! - S9: a required budget per repo, a runs-per-day cap and a parallel cap.
 //! - S11: file names come only from validated ids and numbers.
 //! - S13: generic code never names an agent.

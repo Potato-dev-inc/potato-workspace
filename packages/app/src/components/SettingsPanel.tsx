@@ -5,7 +5,7 @@
 // never write an old copy of the settings over newer values. The window reloads its state whenever the
 // settings change anywhere else, and whenever it is shown again (it is hidden, not destroyed, on close).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Settings } from '@puppet-master/shared';
+import type { Settings } from '@potato-workspace/shared';
 import { findBridgeUrl } from '../lib/bridge';
 import { loadSettings, patchSettings, type SettingsPatch } from '../lib/settings';
 import { subscribeSettingsRefresh, type SettingsRefreshInfo } from '../lib/settings-sync';

@@ -1,6 +1,6 @@
 //! Hand-off at the limit: detect it, tell the person, and keep going on another agent when they tap.
 //!
-//! When an agent's plan runs out, Puppet Master notices from the screen and raises a card. The card
+//! When an agent's plan runs out, Potato Workspace notices from the screen and raises a card. The card
 //! can offer `Continue on <agent>`: a person's tap moves the task to another agent in the same
 //! folder (`keep_going`, which never runs under this engine's lock). Nothing here moves a task by
 //! itself, resumes an agent, or presses a key in an agent's pane.
@@ -18,7 +18,7 @@
 //! What this never does (each is tested):
 //! - type into a pane, or press anything the agent itself would use to continue. Claude's own
 //!   "continue automatically at usage limit" wait is left exactly as it is; the `/rate-limit-options`
-//!   menu is never answered. "Remind me" and "Stop here" are bookkeeping inside Puppet Master; a
+//!   menu is never answered. "Remind me" and "Stop here" are bookkeeping inside Potato Workspace; a
 //!   hand-over ends the old agent's process by its pid and starts a new run.
 //! - treat a transient rate limit as a limit: a retry is a status line, never a card.
 //! - offer another login of the same vendor.
@@ -53,7 +53,7 @@ use std::path::PathBuf;
 use watch::{Cleared, Event, Standing, Tracker};
 
 /// The gate a usage limit puts on a pane: nothing is typed into it. No dismiss keys, ever: the
-/// person (or the agent's own wait) moves past a limit, Puppet Master does not.
+/// person (or the agent's own wait) moves past a limit, Potato Workspace does not.
 pub const USAGE_LIMIT_GATE: StartupGate = StartupGate {
     id: "usage_limit",
     summary: "The agent has stopped at its usage limit",
@@ -79,8 +79,8 @@ pub struct PaneCtx {
 }
 
 impl PaneCtx {
-    /// The folder whose `.puppet-master/operations` holds this pane's runs. A pane that works in a
-    /// separate copy (`<project>/.puppet-master/worktrees/<id>`) keeps its runs in the project the copy
+    /// The folder whose `.potato-workspace/operations` holds this pane's runs. A pane that works in a
+    /// separate copy (`<project>/.potato-workspace/worktrees/<id>`) keeps its runs in the project the copy
     /// came from, so that is where they are looked up (`worktrees::origin_of_cwd`, as keep going does).
     fn runs_folder(&self) -> String {
         crate::worktrees::origin_of_cwd(&self.project).unwrap_or_else(|| self.project.clone())
@@ -426,7 +426,7 @@ pub fn refuse_answer(action: &Value) -> Option<crate::operations::OperationError
     }
     let mut error = crate::operations::OperationError::new(
         "USAGE_LIMIT_NOT_ANSWERABLE",
-        "the agent stopped at its usage limit; there is nothing to answer, and Puppet Master never answers the agent's own limit menu. Nothing was sent",
+        "the agent stopped at its usage limit; there is nothing to answer, and Potato Workspace never answers the agent's own limit menu. Nothing was sent",
         false,
     );
     error.context = json!({ "sent_input": false, "kind": USAGE_LIMIT_KIND });

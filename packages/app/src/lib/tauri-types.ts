@@ -212,7 +212,7 @@ export interface TunnelConfigView {
 }
 
 export interface TunnelStatus {
-  /** Effective mode: `env` when PUPPET_MASTER_PUBLIC_URL overrides the saved setting. */
+  /** Effective mode: `env` when POTATO_WORKSPACE_PUBLIC_URL overrides the saved setting. */
   mode: TunnelMode | 'env';
   public_url: string | null;
   state: 'stopped' | 'starting' | 'running' | 'error';

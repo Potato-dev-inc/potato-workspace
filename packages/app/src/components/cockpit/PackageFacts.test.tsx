@@ -201,7 +201,7 @@ describe('PackageFacts details', () => {
     expect(host.querySelectorAll('.ck-pc-detail')).toHaveLength(7);
     const footer = Array.from(host.querySelectorAll('.ck-pc-foot')).map((p) => p.textContent);
     expect(footer).toEqual([
-      'Facts from the public npm registry. Only the package names were sent. Puppet Master never answers for you.',
+      'Facts from the public npm registry. Only the package names were sent. Potato Workspace never answers for you.',
       '2 more packages were not checked',
       '1 name looked like a secret, so it was not shown or checked',
     ]);

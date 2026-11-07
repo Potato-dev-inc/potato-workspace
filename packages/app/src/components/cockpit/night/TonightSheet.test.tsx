@@ -372,7 +372,7 @@ describe('TonightSheet', () => {
     it('shows the desktop refusal when Start fails, and keeps the sheet open', async () => {
       const refusal = {
         code: 'PLAN_SAME_COMPANY',
-        message: "Puppet Master won't switch between two logins of one company. Untick one.",
+        message: "Potato Workspace won't switch between two logins of one company. Untick one.",
         recoverable: true,
         context: null,
       };
@@ -417,7 +417,7 @@ describe('TonightSheet', () => {
       expect(planBox('Codex').checked).toBe(false);
       expect(planBox('Codex · Work').checked).toBe(true);
       expect(host.querySelector('[role="status"]')?.textContent).toBe(
-        "Puppet Master won't switch between two logins of one company.",
+        "Potato Workspace won't switch between two logins of one company.",
       );
     });
 
@@ -441,7 +441,7 @@ describe('TonightSheet', () => {
   describe('keep awake', () => {
     const awakeSwitch = () =>
       labelled('Keep this computer awake until it is done') as HTMLButtonElement;
-    const WORDS = 'Puppet Master will stop this computer from sleeping until Night Shift ends';
+    const WORDS = 'Potato Workspace will stop this computer from sleeping until Night Shift ends';
 
     it('asks once, saves that it was asked, and turns the switch on for "Keep it awake"', async () => {
       answer();

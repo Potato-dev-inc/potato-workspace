@@ -12,8 +12,8 @@ pub const MAX_COMMAND_CHARS: usize = 200;
 /// A process the agent starts within this long of its own start is part of the agent's startup (its
 /// tool servers, its helpers), not something it left running later.
 pub const STARTUP_GRACE_MS: u64 = 10_000;
-/// Puppet Master's own MCP shim: every agent starts one, it is plumbing and not a job.
-const OWN_HELPERS: [&str; 1] = ["puppet-master-mcp.exe"];
+/// Potato Workspace's own MCP shim: every agent starts one, it is plumbing and not a job.
+const OWN_HELPERS: [&str; 2] = ["puppet-master-mcp.exe", "puppet-master-mcp"];
 
 /// One process under a pane, with what the OS says about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,7 +75,7 @@ fn is_helper(row: &Row, markers: &[&str]) -> bool {
 
 /// Jobs among `rows` (the processes below the pane's process), oldest first.
 ///
-/// - the agent itself, console hosts and prompt tools, Puppet Master's MCP shim, and anything a
+/// - the agent itself, console hosts and prompt tools, Potato Workspace's MCP shim, and anything a
 ///   profile declares as the agent's own helper (with everything under it) are left out;
 /// - a process that started within [`STARTUP_GRACE_MS`] of the agent (tool servers an agent connects
 ///   at launch; a shell profile's helpers) is left out, with everything under it;

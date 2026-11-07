@@ -299,7 +299,7 @@ fn answer_prompt(
             // moved on (someone answered it, or the TUI accepted it), not that nothing changed.
             let status = format!("{:?}", snapshot.status).to_ascii_lowercase();
             let message = if snapshot.status == OperationStatus::WaitingInput {
-                "the agent is waiting, but not on a prompt Puppet Master recognises; read the pane"
+                "the agent is waiting, but not on a prompt Potato Workspace recognises; read the pane"
                     .to_string()
             } else {
                 format!(

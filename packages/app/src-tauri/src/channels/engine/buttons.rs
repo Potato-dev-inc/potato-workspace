@@ -21,9 +21,9 @@ use crate::questions::QuestionState;
 use serde_json::Value;
 
 const EXPIRED: &str = "This button expired.";
-const CHANGED: &str = "This changed. Open Puppet Master.";
+const CHANGED: &str = "This changed. Open Potato Workspace.";
 const ALREADY_PC: &str = "Already answered on your PC";
-const OPEN_TO_ANSWER: &str = "Open Puppet Master to answer.";
+const OPEN_TO_ANSWER: &str = "Open Potato Workspace to answer.";
 const SLOW_DOWN: &str = "Slow down.";
 const CANCELLED: &str = "Cancelled. Nothing was allowed.";
 /// How many confirm tokens are remembered.
@@ -229,14 +229,14 @@ fn receipt_text(reply: &Reply) -> String {
                 _ => ALREADY_PC.to_string(),
             },
             Some("gone") => EXPIRED.to_string(),
-            Some("failed") => "Could not send that. Open Puppet Master.".to_string(),
+            Some("failed") => "Could not send that. Open Potato Workspace.".to_string(),
             _ => CHANGED.to_string(),
         },
         403 => match text("error") {
             Some("not_from_chat") => OPEN_TO_ANSWER.to_string(),
             _ => NOT_ALLOWED.to_string(),
         },
-        _ => "That did not work. Open Puppet Master.".to_string(),
+        _ => "That did not work. Open Potato Workspace.".to_string(),
     }
 }
 

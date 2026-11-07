@@ -178,7 +178,7 @@ impl Host for LiveHost {
         let Some(agent) = self.agent_of(pane_id) else { return false };
         let profile = crate::tui::profile_for(&agent);
         let verdict = readiness::assess(profile.as_ref(), delivery::observe_pane(&self.registry, pane_id));
-        // A startup screen the person must pass (sign-in, onboarding). Puppet Master never passes it.
+        // A startup screen the person must pass (sign-in, onboarding). Potato Workspace never passes it.
         matches!(verdict.readiness(), Readiness::Gate(gate) if gate.dismiss.is_none())
     }
 

@@ -9,7 +9,7 @@ Element 1
 - Component: PricingCard in src/components/PricingCard.tsx:42
 - On screen: 180 x 44 px at x 612, y 380 (window 1280 x 800)
 - Style now: font-size 14px; padding 8px 16px; color rgb(255, 255, 255); background-color rgb(17, 17, 17)
-- Screenshot: .puppet-master/shots/pick-20261028-223104-1.png (open this image file to see it)
+- Screenshot: .potato-workspace/shots/pick-20261028-223104-1.png (open this image file to see it)
 
 Element 2
 - Page: http://localhost:5173/pricing

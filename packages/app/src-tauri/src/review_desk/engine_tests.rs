@@ -302,8 +302,8 @@ fn list_item(handle: &str, pane_id: Option<&str>, summary: Option<ChangeSummary>
     ListItem {
         entry: WorktreeEntry {
             worktree: WorktreeRef {
-                path: format!("/work/.puppet-master/worktrees/{handle}"),
-                cwd: format!("/work/.puppet-master/worktrees/{handle}"),
+                path: format!("/work/.potato-workspace/worktrees/{handle}"),
+                cwd: format!("/work/.potato-workspace/worktrees/{handle}"),
                 branch: format!("pm/{handle}"),
                 base: "main".to_string(),
                 base_commit: "abc1234".to_string(),
@@ -650,7 +650,7 @@ fn turns_in_a_separate_copy_are_not_folder_items() {
     let io = folder_fake();
     io.turns.borrow_mut().clear();
     // The pane's folder is inside a copy checkout.
-    io.panes.borrow_mut()[0].cwd = PathBuf::from("/work/.puppet-master/worktrees/plain-b/sub");
+    io.panes.borrow_mut()[0].cwd = PathBuf::from("/work/.potato-workspace/worktrees/plain-b/sub");
     io.add_copy("plain-b", Some("pane-1"), read(&["src/b.ts"], None, None), "Work");
     io.turns.borrow_mut().push((turn("pane-1", 1, 1_000, 2_000, &["src/b.ts"]), None));
     assert_eq!(keys(&io), vec!["copy:plain-b"]);
@@ -858,7 +858,7 @@ fn the_detail_patch_is_redacted_and_the_extra_lines_come_from_the_runs() {
     // No patch readable: said in plain words.
     io.patches.borrow_mut().clear();
     let detail = act::detail(&io, "night:nt-00000001").unwrap();
-    assert_eq!(detail.extra, vec!["Puppet Master could not read the changes.".to_string()]);
+    assert_eq!(detail.extra, vec!["Potato Workspace could not read the changes.".to_string()]);
     assert_eq!(code(act::detail(&io, "copy:nothing")), "REVIEW_ITEM_NOT_FOUND");
 }
 

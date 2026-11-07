@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Settings } from '@puppet-master/shared';
+import type { Settings } from '@potato-workspace/shared';
 import { clampMobileInputDelayMs, toPublicSettings } from './bridge-settings';
 
 describe('clampMobileInputDelayMs', () => {

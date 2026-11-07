@@ -6,7 +6,7 @@
 //! - the **epoch keys** of each team (32 bytes each, one per epoch);
 //! - the **codes** of my open invites.
 //!
-//! Every name is prefixed with the profile (`PUPPET_MASTER_PROFILE`), so two profiles on one
+//! Every name is prefixed with the profile (`POTATO_WORKSPACE_PROFILE`), so two profiles on one
 //! computer are two separate people. Tests use the in-memory backend.
 
 use super::crypto::{b64, new_signing_key, unb64_32, KemSecret, SigningKey};

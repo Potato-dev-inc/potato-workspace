@@ -58,7 +58,7 @@ fn one_count_everywhere() {
     assert_eq!(tray.attention(), counts.blocking, "tray badge");
     assert_eq!(
         crate::tray::summary_line(&statuses, &[], counts.blocking),
-        "Puppet Master \u{b7} 5 need you \u{b7} 1 error \u{b7} 1 working",
+        "Potato Workspace \u{b7} 5 need you \u{b7} 1 error \u{b7} 1 working",
         "tray tooltip"
     );
 

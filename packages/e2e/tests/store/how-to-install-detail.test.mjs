@@ -1,4 +1,4 @@
-// An agent Puppet Master cannot install shows a "How to install" sheet with the vendor's page; Escape closes it.
+// An agent Potato Workspace cannot install shows a "How to install" sheet with the vendor's page; Escape closes it.
 import { clickCss, openStore, storeCards } from '../night/_area.mjs';
 
 export const meta = {
@@ -22,9 +22,9 @@ export async function run(t) {
   await t.step('The sheet says who makes it, its licence, how to sign in and how it starts');
   await t.expect.text('Vendor:');
   await t.expect.text('License:');
-  await t.expect.text('Sign-in happens in the agent\'s own pane. Puppet Master never sees your password or key.');
-  await t.expect.text(`When you open ${name}, Puppet Master starts it with this command:`);
-  await t.expect.text(`Puppet Master cannot install ${name} from here.`);
+  await t.expect.text('Sign-in happens in the agent\'s own pane. Potato Workspace never sees your password or key.');
+  await t.expect.text(`When you open ${name}, Potato Workspace starts it with this command:`);
+  await t.expect.text(`Potato Workspace cannot install ${name} from here.`);
   await t.expect.text('We have not run this on Windows ourselves.');
 
   await t.step('There is no install button for this one');

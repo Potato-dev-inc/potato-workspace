@@ -47,7 +47,7 @@ async function mount(view: PresetView, over: Partial<ShipApi> = {}, project: str
 describe('Project > Copies', () => {
   it('shows the setup, the files that are copied and the start command', async () => {
     await mount(VIEW);
-    expect(host.textContent).toContain('When Puppet Master makes a separate copy');
+    expect(host.textContent).toContain('When Potato Workspace makes a separate copy');
     expect(field('Set up with').value).toBe('npm ci');
     expect(field('Copy these files').value).toBe('.env\n.env.local');
     expect(field('Start with').value).toBe('npm run dev');

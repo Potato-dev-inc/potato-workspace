@@ -27,7 +27,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const COPY = 'C:\\work\\shop\\.puppet-master\\worktrees\\7d4cb2b3-2-209c';
+const COPY = 'C:\\work\\shop\\.potato-workspace\\worktrees\\7d4cb2b3-2-209c';
 
 function cockpit(extra: Partial<CockpitApi> = {}): CockpitApi {
   const info = { id: 'p1', agent_type: 'codex', status: 'idle', cwd: COPY, title: null };

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Spawn an OpenCode (or other) agent in Puppet Master, then close it again.
+"""Spawn an OpenCode (or other) agent in Potato Workspace, then close it again.
 
 Talks to the HTTP bridge of the running desktop app (or worker host); nothing else to start.
 
@@ -42,7 +42,7 @@ PANE_TYPES = AGENT_TYPES + ["powershell", "cmd", "bash"]  # --mode pane also tak
 # Agent routes need an MCP-style session and only the session that started an agent may close it.
 # A fixed id lets a later run (--close) reach what an earlier --keep run left open; --session
 # overrides it. No pid is sent, so the app never reaps this session as a dead MCP process.
-SESSION_HEADERS = {"X-Puppet-Master-Session": "spawn-close-agent"}
+SESSION_HEADERS = {"X-Potato-Workspace-Session": "spawn-close-agent"}
 
 
 def request_json(method: str, url: str, payload: dict | None = None, timeout: float = 30.0):
@@ -71,7 +71,7 @@ def discover_bridge(explicit: str | None) -> str:
             continue
         if isinstance(health, dict) and health.get("ok"):
             return base
-    raise SystemExit("No Puppet Master bridge found on 127.0.0.1:17321-17399. Start the app first.")
+    raise SystemExit("No Potato Workspace bridge found on 127.0.0.1:17321-17399. Start the app first.")
 
 
 def kill_pane(base: str, pane_id: str) -> None:
@@ -208,7 +208,7 @@ def main() -> int:
     if args.mode == "run" and args.agent_type not in AGENT_TYPES:
         parser.error(f"--mode run needs an agent type ({', '.join(AGENT_TYPES)}); shells work with --mode pane")
     if args.session:
-        SESSION_HEADERS["X-Puppet-Master-Session"] = args.session
+        SESSION_HEADERS["X-Potato-Workspace-Session"] = args.session
     base = discover_bridge(args.bridge)
     started = time.time()
     print(f"bridge: {base}")

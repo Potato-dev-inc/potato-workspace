@@ -1,7 +1,7 @@
 // Lifecycle of the CLI-orchestrator pane (Claude/Codex/OpenCode/... as the sidebar brain):
 // find it in the registry, (re)start it for the current project, and react to the "ensure" event.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { OrchestratorBackend } from '@puppet-master/shared';
+import type { OrchestratorBackend } from '@potato-workspace/shared';
 import type { PaneRegistryApi } from '../../hooks/usePaneRegistry';
 import { usePaneTunnel } from '../../hooks/usePaneTunnel';
 import {
@@ -41,7 +41,7 @@ export function useOrchestratorPane(
     setMcpStatus(null);
     try {
       await ensureOrchestratorPane(activeBackend, cwd);
-      setMcpStatus('Puppet Master MCP configured');
+      setMcpStatus('Potato Workspace MCP configured');
       await registry.refresh();
     } catch (err) {
       setOrchestratorError(err instanceof Error ? err.message : String(err));

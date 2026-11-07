@@ -488,7 +488,7 @@ pub fn extra_dir_at(settings_file: &Path, body: &Value) -> Result<Value, Service
     Ok(json!({"ok": true, "action": action, "path": path}))
 }
 
-/// Consent banner data: the definition files that sit in the project's `.puppet-master/agents`
+/// Consent banner data: the definition files that sit in the project's `.potato-workspace/agents`
 /// (names only, nothing is read or parsed) and whether this path is consented.
 pub fn project_scan_at(settings_file: &Path, project: &str) -> Value {
     let settings = SourceSettings::load(settings_file);

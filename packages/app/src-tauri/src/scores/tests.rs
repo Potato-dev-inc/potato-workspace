@@ -428,7 +428,7 @@ fn build_reads_a_seeded_project_end_to_end() {
     let tmp = Temp::new();
     let folder = tmp.0.clone();
     let project = folder.to_string_lossy().to_string();
-    let ops_dir = folder.join(".puppet-master").join("operations");
+    let ops_dir = folder.join(".potato-workspace").join("operations");
     fs::create_dir_all(&ops_dir).expect("operations folder");
     let write_record = |value: &Value| {
         let id = value["operation_id"].as_str().expect("id").to_string();
@@ -445,8 +445,8 @@ fn build_reads_a_seeded_project_end_to_end() {
     r1t2["worker"] = json!({
         "account": "acct-work",
         "worktree": {
-            "path": format!("{project}/.puppet-master/worktrees/run-merged"),
-            "cwd": format!("{project}/.puppet-master/worktrees/run-merged"),
+            "path": format!("{project}/.potato-workspace/worktrees/run-merged"),
+            "cwd": format!("{project}/.potato-workspace/worktrees/run-merged"),
             "branch": "pm/run-merged", "base": "main", "base_commit": "abc123", "repo": project,
             "handle": "run-merged", "created_at_ms": T, "closed": "merged"
         }
@@ -458,8 +458,8 @@ fn build_reads_a_seeded_project_end_to_end() {
     r2["error"] = json!({ "code": "AGENT_FAILED", "message": "the agent stopped", "recoverable": false });
     r2["worker"] = json!({
         "worktree": {
-            "path": format!("{project}/.puppet-master/worktrees/run-discarded"),
-            "cwd": format!("{project}/.puppet-master/worktrees/run-discarded"),
+            "path": format!("{project}/.potato-workspace/worktrees/run-discarded"),
+            "cwd": format!("{project}/.potato-workspace/worktrees/run-discarded"),
             "branch": "pm/run-discarded", "base": "main", "base_commit": "def456", "repo": project,
             "handle": "run-discarded", "created_at_ms": T, "closed": "discarded"
         }
@@ -471,8 +471,8 @@ fn build_reads_a_seeded_project_end_to_end() {
     r3["worker"] = json!({
         "account": "acct-work",
         "worktree": {
-            "path": format!("{project}/.puppet-master/worktrees/run-waiting"),
-            "cwd": format!("{project}/.puppet-master/worktrees/run-waiting"),
+            "path": format!("{project}/.potato-workspace/worktrees/run-waiting"),
+            "cwd": format!("{project}/.potato-workspace/worktrees/run-waiting"),
             "branch": "pm/run-waiting", "base": "main", "base_commit": "fed987", "repo": project,
             "handle": "run-waiting", "created_at_ms": T, "closed": null
         }

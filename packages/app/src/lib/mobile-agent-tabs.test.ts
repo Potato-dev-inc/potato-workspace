@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { AgentDescriptor } from './agentRegistry';
 import { ago, orderPanes, phoneLaunchEntries, previewLines, projectName, statusMeta, tabLabels, tabOfPane } from './mobile-agent-tabs';
 
@@ -43,7 +43,7 @@ describe('mobile agent tabs', () => {
   });
 
   it('names the project folder', () => {
-    expect(projectName('C:\\Users\\me\\puppet-master\\')).toBe('puppet-master');
+    expect(projectName('C:\\Users\\me\\potato-workspace\\')).toBe('potato-workspace');
     expect(projectName('/home/me/app')).toBe('app');
   });
 

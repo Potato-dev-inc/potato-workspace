@@ -6,7 +6,7 @@ export interface QuestionChoice {
   label: string;
 }
 
-/** What a consent card is about (Rust `questions::ConsentInfo`). Only Puppet Master raises these. */
+/** What a consent card is about (Rust `questions::ConsentInfo`). Only Potato Workspace raises these. */
 export interface ConsentInfo {
   action: 'take_over' | 'answer_prompt';
   /** Who is asking, as a name ("Claude", "Another agent"). */
@@ -19,7 +19,7 @@ export interface ConsentInfo {
 }
 
 /**
- * What a usage-limit card is about (Rust `questions::LimitInfo`). Only Puppet Master raises these, when an
+ * What a usage-limit card is about (Rust `questions::LimitInfo`). Only Potato Workspace raises these, when an
  * agent ran out of usage (`usage_limit`) or when a reminder the person asked for comes due (`reset_reminder`).
  */
 export interface LimitInfo {
@@ -54,7 +54,7 @@ export interface Question {
   state: 'pending' | 'answered' | 'cancelled' | 'timed_out';
   /** Set when this is a consent card (an agent asking to control a pane it did not start). */
   consent?: ConsentInfo;
-  /** `budget` for the pause card of a run that used its budget (only Puppet Master raises one). */
+  /** `budget` for the pause card of a run that used its budget (only Potato Workspace raises one). */
   kind?: string;
   /** Set when this is a usage-limit card (an agent ran out of usage), not a question an agent asked. */
   limit?: LimitInfo;
@@ -75,7 +75,7 @@ export const isIssueStart = (q: Question): boolean => q.kind === 'issue_start';
 /** "Draft PR ready for #42?": the card that asks before a branch is pushed and a draft PR is opened. */
 export const isIssuePush = (q: Question): boolean => q.kind === 'issue_push';
 
-/** Either issue card (Assign an issue). These are raised by Puppet Master only and answered by the person only. */
+/** Either issue card (Assign an issue). These are raised by Potato Workspace only and answered by the person only. */
 export const isIssueCard = (q: Question): boolean => isIssueStart(q) || isIssuePush(q);
 
 /** "CI failed on #61 (lint, test). Ask Codex to fix it?": the card that asks before an agent reads a failed CI log. */
@@ -84,7 +84,7 @@ export const isCiFix = (q: Question): boolean => q.kind === 'ci_fix';
 /** "Push the fix to #61?": the card that asks before a CI fix is pushed. */
 export const isCiPush = (q: Question): boolean => q.kind === 'ci_push';
 
-/** Either Red to Green card. Raised by Puppet Master only and answered by the person only. */
+/** Either Red to Green card. Raised by Potato Workspace only and answered by the person only. */
 export const isCiCard = (q: Question): boolean => isCiFix(q) || isCiPush(q);
 
 /** What the person typed or picked: exactly one of the two. */

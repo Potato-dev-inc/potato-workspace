@@ -25,7 +25,7 @@ pub enum Kind {
     Input,
     /// The PTY grid changed; `aux` is `cols << 16 | rows`.
     Resize,
-    /// A decision or fact written by Puppet Master (UTF-8 text).
+    /// A decision or fact written by Potato Workspace (UTF-8 text).
     Marker,
 }
 

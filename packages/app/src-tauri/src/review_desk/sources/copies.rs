@@ -267,8 +267,8 @@ mod tests {
         ListItem {
             entry: WorktreeEntry {
                 worktree: WorktreeRef {
-                    path: format!("/work/.puppet-master/worktrees/{handle}"),
-                    cwd: format!("/work/.puppet-master/worktrees/{handle}"),
+                    path: format!("/work/.potato-workspace/worktrees/{handle}"),
+                    cwd: format!("/work/.potato-workspace/worktrees/{handle}"),
                     branch: format!("pm/{handle}"),
                     base: "main".to_string(),
                     base_commit: "abc1234".to_string(),

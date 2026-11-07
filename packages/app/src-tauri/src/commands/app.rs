@@ -123,8 +123,8 @@ pub fn exit_app(app: AppHandle) {
     app.exit(0);
 }
 
-/// A non-default profile's own bridge (`PUPPET_MASTER_PROFILE`), so its windows never talk to
-/// another Puppet Master on this computer. `None` for the default profile, which keeps scanning.
+/// A non-default profile's own bridge (`POTATO_WORKSPACE_PROFILE`), so its windows never talk to
+/// another Potato Workspace on this computer. `None` for the default profile, which keeps scanning.
 #[tauri::command]
 pub fn profile_bridge_url() -> Option<String> {
     crate::app_paths::profile()?;

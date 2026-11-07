@@ -255,8 +255,8 @@ mod tests {
         let mut op = operation("claude", None);
         op.agent_run_id = "run-1".into();
         let copy = |handle: &str| crate::worktrees::WorktreeRef {
-            path: "C:/p/.puppet-master/worktrees/m".into(),
-            cwd: "C:/p/.puppet-master/worktrees/m".into(),
+            path: "C:/p/.potato-workspace/worktrees/m".into(),
+            cwd: "C:/p/.potato-workspace/worktrees/m".into(),
             branch: "pm/mission-m1".into(),
             base: "main".into(),
             base_commit: "abc".into(),

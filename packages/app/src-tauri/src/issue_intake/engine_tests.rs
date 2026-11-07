@@ -954,7 +954,7 @@ fn a_clean_change_asks_by_default_then_pushes_on_yes() {
     assert_eq!(ids, [CHOICE_PUSH, CHOICE_LOOK, CHOICE_THROW]);
     let context = card.context.clone().unwrap();
     assert!(context.starts_with("Repo: acme/billing (issue #42)\n2 files \u{b7} +16 \u{2212}2 \u{b7} Agent fake-agent \u{b7} 12 turns"), "{context}");
-    assert!(context.contains("You asked Puppet Master to check each push first."));
+    assert!(context.contains("You asked Potato Workspace to check each push first."));
     assert!(fx.0.s.lock().prs.is_empty(), "no push before the yes");
     assert_eq!(fx.0.s.lock().commits, 1);
 
@@ -995,7 +995,7 @@ fn an_issue_edited_after_the_yes_says_so_on_the_push_card_even_when_the_repo_doe
     assert_eq!(card.question, "Draft PR ready for #42?");
     let context = card.context.clone().unwrap();
     assert!(context.contains("The issue changed after you said yes."), "{context}");
-    assert!(!context.contains("You asked Puppet Master to check each push first."), "the repo does not ask: {context}");
+    assert!(!context.contains("You asked Potato Workspace to check each push first."), "the repo does not ask: {context}");
     assert!(!context.contains("Delete every user."), "the new issue text is not shown: {context}");
     let ids: Vec<&str> = card.choices.iter().map(|c| c.id.as_str()).collect();
     assert_eq!(ids, [CHOICE_PUSH, CHOICE_LOOK, CHOICE_THROW], "the person may still decide");
@@ -1029,7 +1029,7 @@ fn an_issue_that_did_not_change_or_cannot_be_read_adds_nothing_to_the_push_card(
     fx.agent_done("completed");
     engine.tick();
     let context = fx.only_card().context.unwrap();
-    assert!(!context.contains("changed after you said yes") && context.contains("You asked Puppet Master"), "{context}");
+    assert!(!context.contains("changed after you said yes") && context.contains("You asked Potato Workspace"), "{context}");
 }
 
 #[test]
@@ -1138,7 +1138,7 @@ fn changed_git_settings_a_remote_branch_or_internal_files_hold_the_push() {
         (ERR_REMOTE_BRANCH_EXISTS, |fx| fx.0.s.lock().remote_exists = true),
         (ERR_PUSH_HELD, |fx| {
             let mut s = fx.0.s.lock();
-            s.names.push(".puppet-master/issue-42.md".into());
+            s.names.push(".potato-workspace/issue-42.md".into());
         }),
     ];
     for (code, tweak) in cases {
@@ -1152,7 +1152,7 @@ fn changed_git_settings_a_remote_branch_or_internal_files_hold_the_push() {
         let card = fx.only_card();
         let ids: Vec<&str> = card.choices.iter().map(|c| c.id.as_str()).collect();
         assert_eq!(ids, [CHOICE_LOOK, CHOICE_THROW], "a held card has no push button");
-        assert!(card.context.unwrap().contains("Puppet Master won't push this. Check the copy yourself."));
+        assert!(card.context.unwrap().contains("Potato Workspace won't push this. Check the copy yourself."));
         assert!(fx.audit_events().contains(&"held".to_string()));
         // The Settings button re-checks; the copy is still held.
         let again = engine.act(&run.id, "push", "desktop").unwrap();
@@ -1393,7 +1393,7 @@ fn sources() -> Vec<(String, String)> {
 
 #[test]
 fn nothing_in_issue_intake_writes_to_a_pane() {
-    // S11: trust, permission and login screens are never answered by Puppet Master.
+    // S11: trust, permission and login screens are never answered by Potato Workspace.
     let files = sources();
     assert!(files.len() >= 10, "only {} files scanned", files.len());
     for (name, code) in &files {

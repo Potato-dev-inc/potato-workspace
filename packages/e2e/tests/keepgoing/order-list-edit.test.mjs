@@ -13,10 +13,10 @@ export async function run(t) {
   try {
     await t.step('Open Settings > Agents > Keep going');
     await openKeepGoing(t);
-    await t.expect.text('Puppet Master offers these agents, in this order, when the agent a task runs on hits its usage limit. You pick one each time.');
+    await t.expect.text('Potato Workspace offers these agents, in this order, when the agent a task runs on hits its usage limit. You pick one each time.');
 
     await t.step('Nothing is listed yet, and the page says what happens then');
-    await t.expect.text('Nothing listed. Puppet Master then offers every other installed agent, in its usual order.');
+    await t.expect.text('Nothing listed. Potato Workspace then offers every other installed agent, in its usual order.');
     t.expect.equal(await offerOrder(t), []);
 
     await t.step('Add Codex CLI, then OpenCode');

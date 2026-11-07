@@ -128,6 +128,8 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
         }
         None => {
             let pane_id = uuid::Uuid::new_v4().to_string();
+            let mut cfg = cfg;
+            crate::acp::config::add_pane_id(&mut cfg, &pane_id);
             let session = AcpSession::new(Arc::new(cfg), deps.env.clone(), SessionParams { key: pane_id.clone(), cwd: folder.clone(), resume_session_id: None });
             supervisor::global().insert(session.clone());
             (session, pane_id)
@@ -155,7 +157,13 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
     };
     let handles = insert_virtual_pane(
         &deps.registry,
-        VirtualPaneSpec { pane_id: pane_id.clone(), agent_type: agent_id, cwd: folder.to_string_lossy().into_owned(), lane: LANE.to_string() },
+        VirtualPaneSpec {
+            pane_id: pane_id.clone(),
+            agent_type: agent_id,
+            cwd: folder.to_string_lossy().into_owned(),
+            lane: LANE.to_string(),
+            pid: session.connection().map(|conn| conn.pid()).unwrap_or(0),
+        },
         on_close,
     );
     chat.set_handles(handles);
@@ -202,7 +210,13 @@ pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
         };
         let handles = insert_virtual_pane(
             &deps.registry,
-            VirtualPaneSpec { pane_id: id.clone(), agent_type: record.agent.clone(), cwd: record.cwd.clone(), lane: LANE.to_string() },
+            VirtualPaneSpec {
+                pane_id: id.clone(),
+                agent_type: record.agent.clone(),
+                cwd: record.cwd.clone(),
+                lane: LANE.to_string(),
+                pid: chat.session().connection().map(|conn| conn.pid()).unwrap_or(0),
+            },
             on_close,
         );
         chat.set_handles(handles);

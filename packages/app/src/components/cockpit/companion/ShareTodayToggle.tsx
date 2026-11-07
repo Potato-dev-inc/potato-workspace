@@ -1,4 +1,4 @@
-// "Let {name} see what my agents did today" (Setup card). Off by default. When it is on, Puppet Master writes a short
+// "Let {name} see what my agents did today" (Setup card). Off by default. When it is on, Potato Workspace writes a short
 // list of the other agents' finished turns into the companion's own folder (today.md), with secrets hidden. The switch
 // only sends one `update` call; the backend writes the file and tells a running companion once.
 import { useState } from 'react';

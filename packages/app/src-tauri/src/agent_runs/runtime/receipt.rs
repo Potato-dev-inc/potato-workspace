@@ -24,7 +24,7 @@ pub struct RunReceipt {
     /// verified it.
     #[serde(default)]
     pub outcome: String,
-    /// Puppet Master build that produced the run, so a result can be tied to the code under test.
+    /// Potato Workspace build that produced the run, so a result can be tied to the code under test.
     #[serde(default)]
     pub build_id: String,
     /// A warm standby worker (`crate::standby`) ran the turn: no pane spawn or CLI startup was
@@ -62,7 +62,7 @@ pub struct ReceiptLimit {
     pub state: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub window: Option<String>,
-    /// When it can continue (epoch ms), when the screen printed a time Puppet Master could read.
+    /// When it can continue (epoch ms), when the screen printed a time Potato Workspace could read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset_at_ms: Option<u64>,
     /// The time as the screen printed it.

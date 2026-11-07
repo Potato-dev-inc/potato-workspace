@@ -8,7 +8,7 @@ export function StartAtSignInHint() {
   return (
     <>
       <div className="ck-companion-meta">
-        <span className="ck-sub">After a restart, your companion waits until you open Puppet Master.</span>
+        <span className="ck-sub">After a restart, your companion waits until you open Potato Workspace.</span>
         <button type="button" className="ck-btn ck-btn--sm ck-btn--secondary" onClick={() => void start.change(true)}>
           Turn on
         </button>

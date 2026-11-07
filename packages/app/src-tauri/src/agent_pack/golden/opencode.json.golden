@@ -2,15 +2,15 @@
   "$schema": "https://opencode.ai/config.json",
   "theme": "tokyonight",
   "mcp": {
-    "puppet-master": {
+    "potato-workspace": {
       "command": [
         "npx",
         "-y",
-        "@puppet-master/mcp"
+        "@potato-workspace/mcp"
       ],
       "enabled": true,
       "environment": {
-        "PUPPET_MASTER_BRIDGE_PORT_FILE": "C:/pm/puppet-master.bridge.port"
+        "POTATO_WORKSPACE_BRIDGE_PORT_FILE": "C:/pm/potato-workspace.bridge.port"
       },
       "type": "local"
     }

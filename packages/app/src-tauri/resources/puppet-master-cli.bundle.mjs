@@ -4123,11 +4123,11 @@ var McpLogEntrySchema = external_exports.object({
   error: external_exports.string().optional(),
   duration_ms: external_exports.number().optional()
 });
-var BRIDGE_PORT_FILE_ENV = "PUPPET_MASTER_BRIDGE_PORT_FILE";
-var DEFAULT_BRIDGE_PORT_FILE = "puppet-master.bridge.port";
-var BRIDGE_LOCAL_SECRET_FILE = "puppet-master.bridge.secret";
-var BRIDGE_LOCAL_SECRET_HEADER = "X-PM-Local-Secret";
-var BRIDGE_HTTP_PORT_RANGE = { min: 17321, max: 17399 };
+var BRIDGE_PORT_FILE_ENV = "POTATO_WORKSPACE_BRIDGE_PORT_FILE";
+var DEFAULT_BRIDGE_PORT_FILE = "potato-workspace.bridge.port";
+var BRIDGE_LOCAL_SECRET_FILE = "potato-workspace.bridge.secret";
+var BRIDGE_LOCAL_SECRET_HEADER = "X-Potato-Workspace-Local-Secret";
+var BRIDGE_HTTP_PORT_RANGE = { min: 17421, max: 17499 };
 var OrchestratorUserMessageSchema = external_exports.object({
   text: external_exports.string(),
   message_id: external_exports.string()
@@ -4216,7 +4216,7 @@ var SettingsSchema = external_exports.object({
   agent_hooks_mode: external_exports.enum(["off", "shadow", "evidence"]).optional(),
   /** Per-agent override of agent_hooks_mode, keyed by agent id. */
   agent_hooks_agents: external_exports.record(external_exports.string(), external_exports.enum(["off", "shadow", "evidence"])).optional(),
-  /** Puppet Master's helper tools (run_agent, wait_agents) given to every agent pane for its launch. On unless false. Rust: pane_mcp. */
+  /** Potato Workspace's helper tools (run_agent, wait_agents) given to every agent pane for its launch. On unless false. Rust: pane_mcp. */
   pane_mcp_enabled: external_exports.boolean().optional(),
   /** Missions (Preview, Settings › General › Labs): goal + checks + budget, worked on in rounds. Off unless chosen. Rust: missions. */
   missions_enabled: external_exports.boolean().optional(),
@@ -4228,6 +4228,8 @@ var SettingsSchema = external_exports.object({
   new_agent_start: external_exports.enum(["chat", "terminal"]).optional(),
   /** Model Bridge (Settings › General › Labs): connect a model service with a key and add it to Codex. Off unless chosen. Rust: model_bridge. */
   model_bridge_enabled: external_exports.boolean().optional(),
+  /** Spaces (Settings › General › Labs): chat with friends in small groups, computer to computer. Off unless chosen. Rust: spaces. */
+  spaces_enabled: external_exports.boolean().optional(),
   /** Simple mode: the cockpit with fewer buttons and plain words, for people who do not write code. Off unless chosen. */
   simple_mode: external_exports.boolean().optional(),
   /** Shows the developer rows in Settings (bridge, MCP, storage, file paths). Off unless chosen. Read by the app only. */
@@ -4307,7 +4309,7 @@ var PairingSessionInfoSchema = external_exports.object({
 });
 
 // ../shared/dist/orchestrator-panes.js
-var ORCHESTRATOR_PANE_PREFIX = "puppet-master-orchestrator-";
+var ORCHESTRATOR_PANE_PREFIX = "potato-workspace-orchestrator-";
 function isOrchestratorPaneId(paneId) {
   return paneId.startsWith(ORCHESTRATOR_PANE_PREFIX);
 }
@@ -4389,7 +4391,7 @@ async function readBridgePort(filePath) {
   if (found[0])
     return found[0];
   const candidates = [...new Set(bridgePortCandidates(filePath))];
-  throw new Error(`Puppet Master bridge port file not found (tried: ${candidates.map((p) => `"${p}"`).join(", ")}). Start Puppet Master first (\`npx puppet-master\`).`);
+  throw new Error(`Potato Workspace bridge port file not found (tried: ${candidates.map((p) => `"${p}"`).join(", ")}). Start Potato Workspace first (\`npx potato-workspace\`).`);
 }
 async function readLocalSecretHeaders(filePath) {
   for (const candidate of [...new Set(bridgePortCandidates(filePath))]) {
@@ -4434,12 +4436,12 @@ function portInUse(port) {
   });
 }
 async function resolveWorkerBinary(root) {
-  const explicitBin = process.env.PUPPET_MASTER_BIN;
+  const explicitBin = process.env.POTATO_WORKSPACE_BIN;
   if (explicitBin && existsSync(explicitBin)) return explicitBin;
   if (await portInUse(VITE_DEV_PORT)) {
     const debug = appBinary(root, "debug");
     if (debug) {
-      console.error("[puppet-master] vite already running; launching another worker against it");
+      console.error("[potato-workspace] vite already running; launching another worker against it");
       return debug;
     }
   }
@@ -4496,7 +4498,7 @@ async function findLiveBridge() {
 async function tryAttachToExistingHost(options) {
   const base = await findLiveBridge();
   if (!base) {
-    console.error("[puppet-master] no existing worker host; starting a new process");
+    console.error("[potato-workspace] no existing worker host; starting a new process");
     return false;
   }
   const agentType = options.agentType ?? getDefaultTerminalAgentType();
@@ -4534,7 +4536,7 @@ async function tryAttachToExistingHost(options) {
     throw new Error(`existing worker host ${base} refused attach: ${detail}`);
   }
   console.error(
-    `[puppet-master] attached to existing host ${base} pane=${paneId} agent=${agentType} (list_panes now includes this pane)`
+    `[potato-workspace] attached to existing host ${base} pane=${paneId} agent=${agentType} (list_panes now includes this pane)`
   );
   return true;
 }
@@ -4546,15 +4548,15 @@ async function launchWorkerTerminal(options = {}) {
   const workerArgs = buildWorkerArgs(options);
   const env = {
     ...process.env,
-    PUPPET_MASTER_WORKER: "1",
-    VITE_PUPPET_MASTER_WORKER: "1",
-    PUPPET_MASTER_WORKER_AGENT: options.agentType ?? getDefaultTerminalAgentType(),
-    ...options.cwd ? { PUPPET_MASTER_WORKER_CWD: options.cwd } : {},
-    ...options.paneId ? { PUPPET_MASTER_WORKER_PANE_ID: options.paneId } : {}
+    POTATO_WORKSPACE_WORKER: "1",
+    VITE_POTATO_WORKSPACE_WORKER: "1",
+    POTATO_WORKSPACE_WORKER_AGENT: options.agentType ?? getDefaultTerminalAgentType(),
+    ...options.cwd ? { POTATO_WORKSPACE_WORKER_CWD: options.cwd } : {},
+    ...options.paneId ? { POTATO_WORKSPACE_WORKER_PANE_ID: options.paneId } : {}
   };
   const binary = await resolveWorkerBinary(root);
   if (binary) {
-    console.error(`[puppet-master] launching standalone worker: ${binary} ${workerArgs.join(" ")}`);
+    console.error(`[potato-workspace] launching standalone worker: ${binary} ${workerArgs.join(" ")}`);
     const child2 = spawn(binary, workerArgs, {
       cwd: root,
       stdio: "inherit",
@@ -4565,7 +4567,7 @@ async function launchWorkerTerminal(options = {}) {
     return;
   }
   const npmArgs = ["run", "tauri", "--", "dev"];
-  console.error(`[puppet-master] launching standalone worker (dev): npm ${npmArgs.join(" ")}`);
+  console.error(`[potato-workspace] launching standalone worker (dev): npm ${npmArgs.join(" ")}`);
   const child = spawn("npm", npmArgs, {
     cwd: root,
     stdio: "inherit",
@@ -4815,7 +4817,7 @@ async function runWatch(options) {
 }
 
 // ../cli/src/watch-args.ts
-var WATCH_USAGE = "usage: puppet-master watch <operation_id|handle> [--project-path P] [--timeout-ms N] [--stream]";
+var WATCH_USAGE = "usage: potato-workspace watch <operation_id|handle> [--project-path P] [--timeout-ms N] [--stream]";
 var WATCH_FLAGS = /* @__PURE__ */ new Set(["project-path", "project", "timeout-ms", "stream", "help", "h"]);
 function validateWatchFlags(flags) {
   for (const key of Object.keys(flags)) {
@@ -4873,12 +4875,12 @@ async function fetchTunnelInfo() {
   }
 }
 async function resolvePublicOrigin(env = process.env) {
-  const override = env.PUPPET_MASTER_PUBLIC_URL?.trim();
+  const override = env.POTATO_WORKSPACE_PUBLIC_URL?.trim();
   if (override) return publicOriginForPublicUrl(override);
   const fromApp = publicOriginFromTunnelInfo(await fetchTunnelInfo());
   if (fromApp) return fromApp;
   throw new Error(
-    "no public tunnel URL. Start the desktop app with its tunnel enabled, or set PUPPET_MASTER_PUBLIC_URL."
+    "no public tunnel URL. Start the desktop app with its tunnel enabled, or set POTATO_WORKSPACE_PUBLIC_URL."
   );
 }
 async function postInvite(bridgeUrl) {
@@ -4887,7 +4889,7 @@ async function postInvite(bridgeUrl) {
   try {
     ({ host, port } = await readBridgePort());
   } catch {
-    throw new Error("Puppet Master is not running (no bridge port file). Start the desktop app first.");
+    throw new Error("Potato Workspace is not running (no bridge port file). Start the desktop app first.");
   }
   let res;
   try {
@@ -4898,7 +4900,7 @@ async function postInvite(bridgeUrl) {
       signal: AbortSignal.timeout(1e4)
     });
   } catch {
-    throw new Error("Puppet Master is not reachable on its bridge. Is the desktop app running?");
+    throw new Error("Potato Workspace is not reachable on its bridge. Is the desktop app running?");
   }
   const text = await res.text();
   if (!res.ok) {
@@ -4911,7 +4913,7 @@ async function runPairLink() {
   try {
     publicOrigin = await resolvePublicOrigin();
   } catch (err) {
-    console.error(`puppet-master pair-link: ${err.message}`);
+    console.error(`potato-workspace pair-link: ${err.message}`);
     return 4;
   }
   try {
@@ -4920,7 +4922,7 @@ async function runPairLink() {
     console.error(`expires ${new Date(session.expires_at * 1e3).toLocaleTimeString()} (single use, 10 minutes)`);
     return 0;
   } catch (err) {
-    console.error(`puppet-master pair-link: ${err.message}`);
+    console.error(`potato-workspace pair-link: ${err.message}`);
     return 4;
   }
 }
@@ -4957,26 +4959,26 @@ function parseArgs(argv) {
 }
 function printHelp() {
   const defaultAgent = getDefaultTerminalAgentType();
-  console.log(`puppet-master \u2014 multi-agent terminal orchestrator
+  console.log(`potato-workspace \u2014 multi-agent terminal orchestrator
 
 Usage:
-  puppet-master                 Launch the desktop GUI
-  puppet-master --project PATH  Open with a preset cwd
-  puppet-master worker [AGENT]  Open a standalone worker terminal (no main grid UI)
-  puppet-master mcp             Run stdio MCP server (GUI or worker host must be running)
-  puppet-master watch ID        Block until an operation is terminal or needs input; prints one JSON result.
+  potato-workspace                 Launch the desktop GUI
+  potato-workspace --project PATH  Open with a preset cwd
+  potato-workspace worker [AGENT]  Open a standalone worker terminal (no main grid UI)
+  potato-workspace mcp             Run stdio MCP server (GUI or worker host must be running)
+  potato-workspace watch ID        Block until an operation is terminal or needs input; prints one JSON result.
                                 Exit codes: 0 completed, 1 failed/cancelled, 2 needs input, 3 timeout, 4 error.
                                 Waits out bridge restarts; --timeout-ms N sets the deadline (default 3600000).
-  puppet-master pair-link       Print a fresh phone pairing link (needs the running app and its public tunnel).
+  potato-workspace pair-link       Print a fresh phone pairing link (needs the running app and its public tunnel).
                                 Prints the link on stdout; the expiry goes to stderr.
-  puppet-master version         Print version
-  puppet-master --help          Show this help
+  potato-workspace version         Print version
+  potato-workspace --help          Show this help
 
 Worker examples:
-  puppet-master worker                    # default shell (${defaultAgent})
-  puppet-master worker powershell         # standalone PowerShell pane
-  puppet-master worker powershell --new        # extra pane on the running host
-  puppet-master worker powershell --force-new  # same as --new
+  potato-workspace worker                    # default shell (${defaultAgent})
+  potato-workspace worker powershell         # standalone PowerShell pane
+  potato-workspace worker powershell --new        # extra pane on the running host
+  potato-workspace worker powershell --force-new  # same as --new
 `);
 }
 function printVersion() {
@@ -4990,11 +4992,11 @@ function printVersion() {
 }
 async function launchGui(projectPath) {
   const repoRoot2 = resolve2(__dirname2, "..", "..", "..");
-  const args = ["run", "tauri", "--workspace=@puppet-master/app", "dev"];
+  const args = ["run", "tauri", "--workspace=@potato-workspace/app", "dev"];
   if (projectPath) {
     args.push("--", "--project", projectPath);
   }
-  console.error(`[puppet-master] launching GUI: npm ${args.join(" ")}`);
+  console.error(`[potato-workspace] launching GUI: npm ${args.join(" ")}`);
   const child = spawn2("npm", args, {
     cwd: repoRoot2,
     stdio: "inherit",
@@ -5012,7 +5014,7 @@ async function runMcp() {
   const target = candidates.find((p) => existsSync2(p));
   if (!target) {
     console.error(
-      "[puppet-master] @puppet-master/mcp is not built yet. Run: npm run build --workspace=@puppet-master/mcp"
+      "[potato-workspace] @potato-workspace/mcp is not built yet. Run: npm run build --workspace=@potato-workspace/mcp"
     );
     process.exit(1);
   }
@@ -5040,7 +5042,7 @@ async function main() {
     const ids = positional.length > 0 ? positional : [];
     const problem = validateWatchFlags(flags);
     if (problem) {
-      console.error(`puppet-master watch: ${problem}`);
+      console.error(`potato-workspace watch: ${problem}`);
       console.error(WATCH_USAGE);
       process.exit(4);
     }
@@ -5076,6 +5078,6 @@ async function main() {
   await launchGui(project);
 }
 main().catch((err) => {
-  console.error("[puppet-master] fatal:", err);
+  console.error("[potato-workspace] fatal:", err);
   process.exit(1);
 });

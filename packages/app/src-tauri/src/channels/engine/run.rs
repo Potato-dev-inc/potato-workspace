@@ -28,7 +28,7 @@ const HELP: [&str; 9] = [
     "Plain text goes to your companion. Reply to one of my messages to answer that agent.",
     "/stop - turn me off",
     "Buttons on a question or a low-risk approval answer it. Anything riskier waits for you on your PC.",
-    "When your PC sleeps or Puppet Master is closed, I can't answer.",
+    "When your PC sleeps or Potato Workspace is closed, I can't answer.",
 ];
 
 impl Engine {
@@ -158,7 +158,7 @@ impl Engine {
     /// Text to a companion. A sleeping one is not woken from the chat (D-6).
     fn to_companion(&self, host: &dyn Host, now: u64, c: &CompanionLine, raw: &str, out: &mut Out) {
         if !c.awake {
-            out.effects.push(say(&format!("{} is asleep. Wake it in Puppet Master.", c.name)));
+            out.effects.push(say(&format!("{} is asleep. Wake it in Potato Workspace.", c.name)));
             return;
         }
         let text = match prepare_text(raw) {

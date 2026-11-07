@@ -127,7 +127,7 @@ fn a_look_alike_install_shows_the_registry_facts_and_sends_only_the_name() {
     for seen in rig.requests() {
         assert_eq!(seen.header_names(), ["accept", "accept-encoding", "host", "user-agent"], "{seen:?}");
         let agent = seen.headers.iter().find(|(name, _)| name == "user-agent").map(|(_, value)| value.as_str()).unwrap_or_default();
-        assert!(agent.starts_with("PuppetMaster-PackageCheck/"), "{seen:?}");
+        assert!(agent.starts_with("PotatoWorkspace-PackageCheck/"), "{seen:?}");
         assert_eq!(seen.headers.iter().find(|(name, _)| name == "accept").map(|(_, v)| v.as_str()), Some("application/json"), "{seen:?}");
         let sent = format!("{} {:?}", seen.request_line, seen.headers).to_lowercase();
         assert!(!sent.contains(&project) && !sent.contains(&pane.to_lowercase()), "project data in the request: {seen:?}");

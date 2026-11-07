@@ -1,4 +1,4 @@
-# Puppet Master's MCP server for one OpenCode launch, with no change to the person's own config.
+# Potato Workspace's MCP server for one OpenCode launch, with no change to the person's own config.
 # Checked live on 1.19.0 (`opencode debug config`): OPENCODE_CONFIG_CONTENT is merged over the
 # person's global and project config (their own MCP servers stay) and its `instructions` list adds
 # a file next to theirs.

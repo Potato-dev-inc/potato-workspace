@@ -1,5 +1,5 @@
-//! Team ("Heads-up", COWORK-PLAN.md): a quiet channel between teammates' Puppet Masters. When my
-//! agent pushes, Puppet Master offers to tell the team; when a teammate's agent pushes, a card
+//! Team ("Heads-up", COWORK-PLAN.md): a quiet channel between teammates' Potato Workspaces. When my
+//! agent pushes, Potato Workspace offers to tell the team; when a teammate's agent pushes, a card
 //! offers Pull now, Queue my agent or Dismiss. GitHub facts (PRs opened, merged, closed; CI red or
 //! green) arrive as the same cards, and an open pull request offers "Merge when green".
 //!

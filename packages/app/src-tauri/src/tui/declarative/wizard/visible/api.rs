@@ -100,7 +100,7 @@ fn git(dir: &Path, args: &[&str]) -> bool {
 pub fn make_project(dir: &Path) -> Result<bool, WizardError> {
     std::fs::create_dir_all(dir)
         .map_err(|e| WizardError::new(500, "WIZARD_IO", format!("cannot create the isolated folder: {e}")))?;
-    std::fs::write(dir.join("README.md"), "# isolated project\n\nA scratch folder made by the Puppet Master agent wizard.\n")
+    std::fs::write(dir.join("README.md"), "# isolated project\n\nA scratch folder made by the Potato Workspace agent wizard.\n")
         .map_err(|e| WizardError::new(500, "WIZARD_IO", format!("cannot write into the isolated folder: {e}")))?;
     let ok = git(dir, &["init", "-q"])
         && git(dir, &["add", "."])

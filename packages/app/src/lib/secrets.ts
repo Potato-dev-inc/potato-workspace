@@ -2,7 +2,7 @@
 // "is it set" plus the last 4 characters. The one exception is `resolveApiKey`, used by the
 // sidebar's API orchestrator whose LLM loop runs in this webview (documented in docs/features/trust-fixes.md).
 import { invoke } from '@tauri-apps/api/core';
-import type { LlmProvider, Settings } from '@puppet-master/shared';
+import type { LlmProvider, Settings } from '@potato-workspace/shared';
 
 /** The three provider keys, which also have a fallback field in the settings file. */
 export type ProviderSecretName = 'anthropic_api_key' | 'openai_api_key' | 'openrouter_api_key';

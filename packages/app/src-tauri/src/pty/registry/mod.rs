@@ -82,7 +82,7 @@ pub struct PaneInfo {
     /// (`ambient::title`). Filled from the title store by `PaneState::info()`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    /// The pane of the agent that started this one through Puppet Master's MCP (`run_agent`,
+    /// The pane of the agent that started this one through Potato Workspace's MCP (`run_agent`,
     /// `spawn_agent`): this pane is its helper. Display-only lineage (the sidebar nests it); it
     /// grants no rights. Set once when the helper is created, kept for the pane's life, and only
     /// when the pane is proven to hold the caller (`bridge::pane_parent`).

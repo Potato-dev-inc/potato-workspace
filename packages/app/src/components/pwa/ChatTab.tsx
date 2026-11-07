@@ -1,6 +1,6 @@
 // Chat view for the API orchestrator backend (transcript, MCP tool log, composer).
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { OrchestratorChatEvent } from '@puppet-master/shared';
+import type { OrchestratorChatEvent } from '@potato-workspace/shared';
 import type { BridgeClient } from '../../lib/bridge';
 import {
   applyOrchestratorChatEvent,
@@ -80,7 +80,7 @@ export function ChatTab({
         )}
         {lines.length === 0 && bridgeReady && (
           <div className="text-xs text-pm-muted">
-            Ask the Puppet Master to coordinate your panes — same as the desktop sidebar.
+            Ask the Potato Workspace to coordinate your panes — same as the desktop sidebar.
           </div>
         )}
         {lines.map((line) => (
@@ -132,7 +132,7 @@ export function ChatTab({
             }
           }}
           rows={2}
-          placeholder="Ask the Puppet Master… (Ctrl+Enter)"
+          placeholder="Ask the Potato Workspace… (Ctrl+Enter)"
           className="w-full text-xs bg-pm-bg border border-pm-border rounded p-2 resize-none text-zinc-100 focus:outline-none focus:border-pm-accent"
           disabled={sending || !bridgeReady}
         />

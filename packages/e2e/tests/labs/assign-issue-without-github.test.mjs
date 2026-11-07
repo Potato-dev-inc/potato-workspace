@@ -18,7 +18,7 @@ export async function run(t) {
   await scrollToCss(t, SWITCH);
 
   await t.step('The feature explains itself and is off');
-  await t.expect.text('Puppet Master checks GitHub about once a minute with your own gh sign-in. Nothing is watched until you add a repository below.');
+  await t.expect.text('Potato Workspace checks GitHub about once a minute with your own gh sign-in. Nothing is watched until you add a repository below.');
   t.expect.equal(await t.page.eval(`document.querySelector('${SWITCH}').getAttribute('aria-checked')`), 'false');
 
   await t.step('The GitHub row says what is missing');

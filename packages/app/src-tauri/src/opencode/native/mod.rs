@@ -121,7 +121,7 @@ pub fn spawn_native_pane(
         info!(%pane_id, %base_url, session_id = %id, "opencode native worker reattached session");
         id
     } else {
-        match client::create_session(&base_url, &format!("puppet-master {pane_id}")) {
+        match client::create_session(&base_url, &format!("potato-workspace {pane_id}")) {
             Ok(session) => session.id,
             Err(err) => {
                 crate::pty::proc_tree::kill_process_tree(serve_child.id());

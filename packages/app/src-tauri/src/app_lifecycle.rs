@@ -5,7 +5,7 @@ use serde::Serialize;
 #[cfg(target_os = "macos")]
 use std::path::PathBuf;
 
-const PRODUCT_NAME: &str = "Puppet Master";
+const PRODUCT_NAME: &str = "Potato Workspace";
 const BUNDLE_ID: &str = "com.potatodev.workspace";
 
 #[derive(Debug, Clone, Serialize)]
@@ -42,13 +42,13 @@ pub fn open_external_url(url: String) -> Result<(), String> {
     open_url(trimmed)
 }
 
-/// Whether "Start Puppet Master when I sign in" is on. The OS entry is the source of truth.
+/// Whether "Start Potato Workspace when I sign in" is on. The OS entry is the source of truth.
 #[tauri::command]
 pub fn autostart_get(app: tauri::AppHandle) -> Result<bool, String> {
     crate::autostart::get(&app)
 }
 
-/// Turn "Start Puppet Master when I sign in" on or off. Returns the state the OS reports after.
+/// Turn "Start Potato Workspace when I sign in" on or off. Returns the state the OS reports after.
 #[tauri::command]
 pub fn autostart_set(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
     crate::autostart::set(&app, enabled)

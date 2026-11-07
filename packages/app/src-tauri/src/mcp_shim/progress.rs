@@ -1,6 +1,13 @@
 //! Long-poll waits that stream `notifications/progress` while a tool call is blocked.
 
 use super::*;
+use puppet_master_app_lib::wait_reasons;
+
+/// The shortest gap between two wait requests when a slice comes back early. A bridge that answers instantly
+/// with a non-final reason must not turn the tool program into a hot loop.
+const MIN_REQUEST_GAP: Duration = Duration::from_millis(250);
+/// The longest that gap grows to: a normal 4-second long poll is never slowed down.
+const MAX_REQUEST_GAP: Duration = Duration::from_millis(4_000);
 
 pub(crate) fn call_tool_with_progress(
     params: Value,
@@ -102,6 +109,22 @@ pub(crate) fn call_wait_agents_with_progress(
     token: Option<Value>,
     notifications: Option<std::sync::mpsc::Sender<String>>,
 ) -> Result<Value, String> {
+    call_wait_agents_with(params, cancel, token, notifications, |body| {
+        bridge_request("POST", "/agents/wait", Some(body.clone()))
+    })
+}
+
+/// The loop over bridge slices. `request` is a seam so tests can drive it without a real bridge.
+fn call_wait_agents_with<F>(
+    params: Value,
+    cancel: Option<std::sync::mpsc::Receiver<()>>,
+    token: Option<Value>,
+    notifications: Option<std::sync::mpsc::Sender<String>>,
+    mut request: F,
+) -> Result<Value, String>
+where
+    F: FnMut(&Value) -> Result<String, String>,
+{
     let args = params
         .get("arguments")
         .cloned()
@@ -110,6 +133,7 @@ pub(crate) fn call_wait_agents_with_progress(
     let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
     let mut body = args.clone();
     let mut chunk = 0_u64;
+    let mut fast_rounds = 0_u32;
     loop {
         if cancel.as_ref().is_some_and(|rx| rx.try_recv().is_ok()) {
             return Err(r#"{"code":"REQUEST_CANCELLED","message":"agent wait request was cancelled","recoverable":true,"context":{}}"#.into());
@@ -118,7 +142,8 @@ pub(crate) fn call_wait_agents_with_progress(
             .saturating_duration_since(std::time::Instant::now())
             .as_millis() as u64;
         body["timeout_ms"] = json!(remaining.clamp(1, 4_000));
-        let response = bridge_request("POST", "/agents/wait", Some(body.clone()))?;
+        let slice_started = std::time::Instant::now();
+        let response = request(&body)?;
         let value: Value = serde_json::from_str(&response)
             .map_err(|e| format!("invalid wait_agents response: {e}"))?;
         chunk += 1;
@@ -135,8 +160,9 @@ pub(crate) fn call_wait_agents_with_progress(
             .get("reason")
             .and_then(Value::as_str)
             .unwrap_or_default();
-        // A per-chunk "timeout" only means this 4s slice elapsed; the overall deadline decides.
-        let terminal = matches!(reason, "matched_state" | "terminal");
+        // A per-chunk "timeout" only means this 4s slice elapsed; the overall deadline decides. `status` is the
+        // word an older app used for a matched state (see `wait_reasons`), so it still ends the wait.
+        let terminal = wait_reasons::wakes(reason);
         let agents = value.get("agents").and_then(Value::as_array);
         let any_needs_input = agents.is_some_and(|list| {
             list.iter().any(|agent| {
@@ -164,5 +190,118 @@ pub(crate) fn call_wait_agents_with_progress(
                 json!({"content":[{"type":"text","text":serde_json::to_string_pretty(&value).unwrap_or(response)}],"structuredContent":value}),
             );
         }
+        // The slice ended without finishing. If it came back fast, pause before asking again; a normal long poll
+        // (about 4 seconds) leaves the gap at zero.
+        let elapsed = slice_started.elapsed();
+        if elapsed < MIN_REQUEST_GAP {
+            fast_rounds = fast_rounds.saturating_add(1);
+            let gap = MIN_REQUEST_GAP
+                .saturating_mul(1u32 << (fast_rounds - 1).min(4))
+                .min(MAX_REQUEST_GAP);
+            let pause = gap.saturating_sub(elapsed);
+            if pause > Duration::ZERO {
+                std::thread::sleep(pause);
+            }
+        } else {
+            fast_rounds = 0;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Instant;
+
+    fn params(timeout_ms: u64) -> Value {
+        json!({"name": "wait_agents", "arguments": {"handles": ["h1"], "timeout_ms": timeout_ms}})
+    }
+
+    /// Runs the wait against a scripted bridge. `answers` is consumed in order; the last one repeats.
+    fn run(answers: Vec<Value>, timeout_ms: u64) -> (Value, usize, std::time::Duration) {
+        let started = Instant::now();
+        let mut calls = 0usize;
+        let result = call_wait_agents_with(
+            params(timeout_ms),
+            None,
+            None,
+            None,
+            |_body| {
+                let answer = answers.get(calls).or_else(|| answers.last()).expect("an answer");
+                calls += 1;
+                Ok(answer.to_string())
+            },
+        )
+        .expect("the wait succeeds");
+        let structured = result.get("structuredContent").cloned().unwrap_or(Value::Null);
+        (structured, calls, started.elapsed())
+    }
+
+    /// A slice that did not finish.
+    fn unfinished(reason: &str) -> Value {
+        json!({"agents": [{"status": "running"}], "reason": reason})
+    }
+
+    /// A slice that finished.
+    fn finished(reason: &str) -> Value {
+        json!({"agents": [{"status": "completed", "result": "pong"}], "reason": reason})
+    }
+
+    #[test]
+    fn a_finished_chat_helper_returns_on_the_first_request() {
+        for reason in ["matched_state", "status", "terminal"] {
+            let (value, calls, _) = run(vec![finished(reason)], 5_000);
+            assert_eq!(calls, 1, "{reason}");
+            assert_eq!(value["agents"][0]["result"], "pong", "{reason}");
+        }
+    }
+
+    #[test]
+    fn a_progress_wake_returns_to_the_caller_once() {
+        let (value, calls, _) = run(vec![unfinished("revision_changed")], 5_000);
+        assert_eq!(calls, 1);
+        assert_eq!(value["reason"], "revision_changed");
+    }
+
+    #[test]
+    fn timeout_keeps_waiting_but_never_spins_and_the_deadline_ends_it() {
+        let (value, calls, elapsed) = run(vec![unfinished("timeout")], 600);
+        assert_eq!(value["reason"], "timeout");
+        assert!(calls <= 5, "{calls} requests in 600 ms");
+        assert!(elapsed >= Duration::from_millis(550), "{elapsed:?}");
+    }
+
+    #[test]
+    fn background_keeps_waiting_but_never_spins() {
+        let (value, calls, elapsed) = run(vec![unfinished("background")], 600);
+        assert_eq!(value["reason"], "background");
+        assert!(calls <= 5, "{calls} requests in 600 ms");
+        assert!(elapsed >= Duration::from_millis(550), "{elapsed:?}");
+    }
+
+    #[test]
+    fn background_then_the_real_reply_returns_the_reply_once() {
+        let (value, calls, _) = run(vec![unfinished("background"), finished("matched_state")], 5_000);
+        assert_eq!(calls, 2);
+        assert_eq!(value["agents"][0]["result"], "pong");
+        assert_eq!(value["reason"], "matched_state");
+    }
+
+    #[test]
+    fn a_slow_slice_is_not_delayed_further() {
+        // The fake pauses like a real 4-second long poll would; the backoff must not add to it.
+        let started = Instant::now();
+        let mut calls = 0usize;
+        let result = call_wait_agents_with(params(400), None, None, None, |_body| {
+            calls += 1;
+            if calls == 1 {
+                std::thread::sleep(Duration::from_millis(120));
+            }
+            Ok(finished("matched_state").to_string())
+        })
+        .expect("the wait succeeds");
+        assert_eq!(calls, 1);
+        assert!(started.elapsed() < Duration::from_millis(1_000));
+        assert_eq!(result["structuredContent"]["reason"], "matched_state");
     }
 }

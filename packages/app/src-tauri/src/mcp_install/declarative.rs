@@ -1,4 +1,4 @@
-//! Declarative `[mcp_host]` writer (SPEC 5.15, HST-1..3): registers the Puppet Master MCP server in
+//! Declarative `[mcp_host]` writer (SPEC 5.15, HST-1..3): registers the Potato Workspace MCP server in
 //! another host's JSON / TOML / YAML config from a definition's `[mcp_host]` table.
 //!
 //! Only the one key the definition names is touched (HST-2); a `.bak` copy of the existing file

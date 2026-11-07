@@ -114,7 +114,7 @@ pub(super) fn claude_mcp_needs_refresh(cwd: &Path, source: McpLaunchSource) -> b
                     arg.contains("//?/")
                         || arg.contains(r"\\?\")
                         || (crate::mcp_runtime::using_bundled_mcp()
-                            && arg.contains("@puppet-master/mcp"))
+                            && arg.contains("@potato-workspace/mcp"))
                 })
             })
         })
@@ -135,7 +135,7 @@ pub(super) fn json_server_uses_npm_package(server: &Value) -> bool {
             .is_some_and(|args| {
                 args.iter()
                     .filter_map(Value::as_str)
-                    .eq(["-y", "@puppet-master/mcp"])
+                    .eq(["-y", "@potato-workspace/mcp"])
             })
 }
 
@@ -165,7 +165,7 @@ pub(super) fn ensure_claude_mcp(
         changed,
         backend: "claude_cli".into(),
         message: if installed {
-            "Claude MCP configured for puppet-master".into()
+            "Claude MCP configured for potato-workspace".into()
         } else {
             "Claude MCP install incomplete".into()
         },
@@ -199,7 +199,7 @@ pub(super) fn ensure_claude_user_mcp_with_source(source: McpLaunchSource) -> Ens
             installed: true,
             changed: true,
             backend: "claude_cli_global".into(),
-            message: "Claude user MCP configured for puppet-master".into(),
+            message: "Claude user MCP configured for potato-workspace".into(),
         },
         Err(add_err) => EnsureMcpResult {
             installed: false,
@@ -240,7 +240,7 @@ pub(super) fn uninstall_claude_mcp(cwd: &Path) -> Result<EnsureMcpResult, String
             installed: false,
             changed: false,
             backend: "claude_cli".into(),
-            message: "No .mcp.json — puppet-master was not registered".into(),
+            message: "No .mcp.json — potato-workspace was not registered".into(),
         });
     };
     let had_entry = doc
@@ -252,7 +252,7 @@ pub(super) fn uninstall_claude_mcp(cwd: &Path) -> Result<EnsureMcpResult, String
             installed: false,
             changed: false,
             backend: "claude_cli".into(),
-            message: "puppet-master was not in project .mcp.json".into(),
+            message: "potato-workspace was not in project .mcp.json".into(),
         });
     }
     if let Some(servers) = doc.get_mut("mcpServers").and_then(Value::as_object_mut) {
@@ -277,7 +277,7 @@ pub(super) fn uninstall_claude_mcp(cwd: &Path) -> Result<EnsureMcpResult, String
         installed: false,
         changed: true,
         backend: "claude_cli".into(),
-        message: "Removed puppet-master from project .mcp.json".into(),
+        message: "Removed potato-workspace from project .mcp.json".into(),
     })
 }
 
@@ -311,13 +311,13 @@ pub(super) fn uninstall_claude_mcp_scope(scope: &str) -> EnsureMcpResult {
             installed: false,
             changed: true,
             backend,
-            message: format!("Removed puppet-master from Claude {scope} MCP"),
+            message: format!("Removed potato-workspace from Claude {scope} MCP"),
         },
         Err(err) if claude_mcp_remove_not_found(&err) => EnsureMcpResult {
             installed: false,
             changed: false,
             backend,
-            message: format!("puppet-master was not registered in Claude {scope} MCP"),
+            message: format!("potato-workspace was not registered in Claude {scope} MCP"),
         },
         Err(err) => EnsureMcpResult {
             installed: true,

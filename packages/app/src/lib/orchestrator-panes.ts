@@ -1,5 +1,5 @@
-import type { AgentType, OrchestratorBackend } from '@puppet-master/shared';
-import { ORCHESTRATOR_PANE_PREFIX } from '@puppet-master/shared';
+import type { AgentType, OrchestratorBackend } from '@potato-workspace/shared';
+import { ORCHESTRATOR_PANE_PREFIX } from '@potato-workspace/shared';
 import { ensureOrchestratorMcp } from './mcp-config';
 import { projectPathsEqual } from './project-path';
 import { tauri, type PaneInfo } from './tauri';
@@ -55,7 +55,7 @@ async function ensureOrchestratorPaneOnce(
 
   const mcp = await ensureOrchestratorMcp(backend, resolvedCwd);
   if (!mcp.installed) {
-    throw new Error(mcp.message || 'Puppet Master MCP install incomplete');
+    throw new Error(mcp.message || 'Potato Workspace MCP install incomplete');
   }
 
   const agent = BACKEND_AGENT[backend];

@@ -30,7 +30,7 @@ const ITEM: WorktreeItem = {
   branch: 'pm/run-1',
   base: 'main',
   repo: 'C:/proj',
-  path: 'C:/proj/.puppet-master/worktrees/run-1-ab12',
+  path: 'C:/proj/.potato-workspace/worktrees/run-1-ab12',
   exists: true,
   state: 'unreviewed',
   summary: null,

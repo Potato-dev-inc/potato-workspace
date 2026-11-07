@@ -1,26 +1,26 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.Potato-dev-inc/puppet-master",
-  "title": "Puppet Master",
+  "name": "io.github.Potato-dev-inc/potato-workspace",
+  "title": "Potato Workspace",
   "description": "Let your coding agent hand work to Claude Code, Codex, Cursor or OpenCode and get verified results.",
   "repository": {
-    "url": "https://github.com/Potato-dev-inc/puppet-master",
+    "url": "https://github.com/Potato-dev-inc/potato-workspace",
     "source": "github",
     "subfolder": "packages/mcp-server"
   },
-  "websiteUrl": "https://github.com/Potato-dev-inc/puppet-master",
+  "websiteUrl": "https://github.com/Potato-dev-inc/potato-workspace",
   "version": "0.2.2",
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "@puppet-master/mcp",
+      "identifier": "@potato-workspace/mcp",
       "version": "0.2.2",
       "runtimeHint": "npx",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
-          "name": "PUPPET_MASTER_BRIDGE_PORT_FILE",
-          "description": "Optional. Path to the bridge port file written by the Puppet Master desktop app, when it is not in the default app data folder.",
+          "name": "POTATO_WORKSPACE_BRIDGE_PORT_FILE",
+          "description": "Optional. Path to the bridge port file written by the Potato Workspace desktop app, when it is not in the default app data folder.",
           "isRequired": false,
           "format": "filepath"
         }

@@ -1,6 +1,6 @@
 // Pure helpers for the mobile agent tabs (PwaApp.tsx): tab order and labels, status display and the
 // short "what is it doing" preview shown on the All overview.
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import { blockingItems, deriveNeedsYou, type AttentionInput } from './attention';
 import { agentLabel, fallbackListing, type AgentRegistryListing, type LaunchEntry } from './agentRegistry';
 

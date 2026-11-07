@@ -11,15 +11,15 @@ import { bridgeProxyConfig, readBridgeTarget, resolveBridgePortFile } from './vi
 
 describe('resolveBridgePortFile (mirrors src-tauri app_paths.rs)', () => {
   const APP = 'com.potatodev.workspace';
-  const FILE = 'puppet-master.bridge.port';
+  const FILE = 'potato-workspace.bridge.port';
 
-  it('uses PUPPET_MASTER_BRIDGE_PORT_FILE first', () => {
-    const env = { PUPPET_MASTER_BRIDGE_PORT_FILE: '/x/custom.port', PUPPET_MASTER_PROFILE: 'maya', APPDATA: 'C:\\A' };
+  it('uses POTATO_WORKSPACE_BRIDGE_PORT_FILE first', () => {
+    const env = { POTATO_WORKSPACE_BRIDGE_PORT_FILE: '/x/custom.port', POTATO_WORKSPACE_PROFILE: 'maya', APPDATA: 'C:\\A' };
     expect(resolveBridgePortFile(env, 'win32', '/home/u')).toBe('/x/custom.port');
   });
 
   it('ignores an empty override', () => {
-    const env = { PUPPET_MASTER_BRIDGE_PORT_FILE: '  ', APPDATA: join(tmpdir(), 'roaming') };
+    const env = { POTATO_WORKSPACE_BRIDGE_PORT_FILE: '  ', APPDATA: join(tmpdir(), 'roaming') };
     expect(resolveBridgePortFile(env, 'win32', '/home/u')).toBe(join(tmpdir(), 'roaming', APP, FILE));
   });
 
@@ -32,12 +32,12 @@ describe('resolveBridgePortFile (mirrors src-tauri app_paths.rs)', () => {
     const base = { APPDATA: join(tmpdir(), 'r') };
     const want = join(tmpdir(), 'r', APP, FILE);
     for (const p of [undefined, '', '  ', 'default', 'DEFAULT', 'bad name', '-x', 'a/b', 'x'.repeat(33)]) {
-      expect(resolveBridgePortFile({ ...base, PUPPET_MASTER_PROFILE: p }, 'win32', '/h')).toBe(want);
+      expect(resolveBridgePortFile({ ...base, POTATO_WORKSPACE_PROFILE: p }, 'win32', '/h')).toBe(want);
     }
   });
 
   it('named profile: <app id>.profile-<name>, trimmed and lowercased', () => {
-    const env = { APPDATA: join(tmpdir(), 'r'), PUPPET_MASTER_PROFILE: ' Maya-2 ' };
+    const env = { APPDATA: join(tmpdir(), 'r'), POTATO_WORKSPACE_PROFILE: ' Maya-2 ' };
     expect(resolveBridgePortFile(env, 'win32', '/h')).toBe(join(tmpdir(), 'r', `${APP}.profile-maya-2`, FILE));
   });
 
@@ -119,12 +119,12 @@ describe('/bridge proxy through a real Vite dev server', () => {
   let vite: ViteDevServer;
   let vitePort: number;
   const upstreams: Upstream[] = [];
-  const savedEnv = process.env.PUPPET_MASTER_BRIDGE_PORT_FILE;
+  const savedEnv = process.env.POTATO_WORKSPACE_BRIDGE_PORT_FILE;
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'pm-vite-proxy-'));
-    portFile = join(dir, 'puppet-master.bridge.port');
-    process.env.PUPPET_MASTER_BRIDGE_PORT_FILE = portFile;
+    portFile = join(dir, 'potato-workspace.bridge.port');
+    process.env.POTATO_WORKSPACE_BRIDGE_PORT_FILE = portFile;
     vite = await createServer({
       root: dir,
       configFile: false,
@@ -140,8 +140,8 @@ describe('/bridge proxy through a real Vite dev server', () => {
   afterEach(async () => {
     await vite.close();
     for (const u of upstreams.splice(0)) await new Promise((r) => u.server.close(r));
-    if (savedEnv === undefined) delete process.env.PUPPET_MASTER_BRIDGE_PORT_FILE;
-    else process.env.PUPPET_MASTER_BRIDGE_PORT_FILE = savedEnv;
+    if (savedEnv === undefined) delete process.env.POTATO_WORKSPACE_BRIDGE_PORT_FILE;
+    else process.env.POTATO_WORKSPACE_BRIDGE_PORT_FILE = savedEnv;
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -174,11 +174,11 @@ describe('/bridge proxy through a real Vite dev server', () => {
     expect(b.seen).toHaveLength(1);
   });
 
-  it('marks every proxied call with X-PM-Proxied: 1 (remote, never loopback-trusted)', async () => {
+  it('marks every proxied call with X-Potato-Workspace-Proxied: 1 (remote, never loopback-trusted)', async () => {
     const a = await upstream('a');
     writeFileSync(portFile, `127.0.0.1:${a.port}\n`);
     await get(vitePort, '/bridge/health');
-    expect(a.seen[0].headers['x-pm-proxied']).toBe('1');
+    expect(a.seen[0].headers['x-potato-workspace-proxied']).toBe('1');
   });
 
   it('answers 502 BRIDGE_UNREACHABLE (JSON) when nothing listens', async () => {
@@ -210,7 +210,7 @@ describe('/bridge proxy through a real Vite dev server', () => {
     expect(await wsHandshake(vitePort, '/bridge/ws')).toContain('hello-from-a');
     writeFileSync(portFile, `127.0.0.1:${b.port}\n`);
     expect(await wsHandshake(vitePort, '/bridge/ws')).toContain('hello-from-b');
-    expect(a.upgrades[0].headers['x-pm-proxied']).toBe('1');
-    expect(b.upgrades[0].headers['x-pm-proxied']).toBe('1');
+    expect(a.upgrades[0].headers['x-potato-workspace-proxied']).toBe('1');
+    expect(b.upgrades[0].headers['x-potato-workspace-proxied']).toBe('1');
   });
 });

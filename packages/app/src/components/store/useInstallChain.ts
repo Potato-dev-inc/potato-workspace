@@ -112,14 +112,14 @@ export async function runInstallChain(run: InstallRun, deps: ChainDeps): Promise
     if (!finish) return fail('There is nothing to install.');
     if (!finish.health.installed) {
       return finish.needs_restart
-        ? fail('Installed, but Puppet Master cannot find it yet. Close Puppet Master and open it again.')
-        : fail(`The install finished, but Puppet Master cannot find ${run.label} yet. You can try again.`);
+        ? fail('Installed, but Potato Workspace cannot find it yet. Close Potato Workspace and open it again.')
+        : fail(`The install finished, but Potato Workspace cannot find ${run.label} yet. You can try again.`);
     }
     const agent = run.steps.find((s) => s.tool === null) ?? run.steps[run.steps.length - 1];
     await deps.store.recordInstall(run.id, agent.index);
     if (run.alreadyAdded) return { tone: 'ok', text: `Installed. ${run.label} is ready. Open it to sign in.` };
     if (run.ambiguous) {
-      return { tone: 'ok', text: `Installed. Press Add to confirm the program Puppet Master found for ${run.label}.` };
+      return { tone: 'ok', text: `Installed. Press Add to confirm the program Potato Workspace found for ${run.label}.` };
     }
     await deps.store.add(run.id, true);
     return { tone: 'ok', text: `Installed and added. Open ${run.label} to sign in.` };
@@ -128,7 +128,7 @@ export async function runInstallChain(run: InstallRun, deps: ChainDeps): Promise
   }
 }
 
-/** Run the one uninstall step. The program goes; Puppet Master's file for the agent stays. */
+/** Run the one uninstall step. The program goes; Potato Workspace's file for the agent stays. */
 export async function runUninstallChain(run: UninstallRun, deps: ChainDeps): Promise<ChainOutcome> {
   try {
     if (deps.cancelled()) return CANCELLED;

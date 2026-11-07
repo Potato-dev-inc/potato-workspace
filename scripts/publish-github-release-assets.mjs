@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
- * Upload desktop installers to the matching GitHub release.
+ * Upload desktop installers for Potato Workspace to the matching GitHub release.
+ *
+ * This script is run only explicitly via `npm run publish:release-assets`.
+ * Builds never upload on their own.
  *
  * Windows: bundle/nsis/*.exe, bundle/msi/*.msi
- * macOS:   bundle/dmg/*.dmg (e.g. Puppet.Master_0.1.2_aarch64.dmg)
+ * macOS:   bundle/dmg/*.dmg (e.g. Potato.Workspace_1.0.2_aarch64.dmg)
  *
- * Only files whose names contain _{version}_ are uploaded (0.1.2 → _0.1.2_).
- * Tag convention: 0.1.2 → release tag 0-1-2
+ * Only files whose names contain _{version}_ are uploaded (1.0.2 → _1.0.2_).
+ * Tag convention: 1.0.2 → release tag v1.0.2
+ * Releases are created as drafts (see `--draft` below).
  *
  * Requires: GitHub CLI (`gh`) authenticated (`gh auth login`).
  *
@@ -14,7 +18,7 @@
  *   SKIP_RELEASE_UPLOAD=1     skip upload (build still succeeds)
  *   RELEASE_UPLOAD_REQUIRED=1 fail the script when upload cannot run
  *   GITHUB_REPO=owner/repo     default: from root package.json
- *   RELEASE_TAG=0-1-2          override tag (default: derived from version)
+ *   RELEASE_TAG=v1.0.2         override tag (default: derived from version)
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -29,7 +33,7 @@ function readJson(path) {
 }
 
 function releaseTagFromVersion(version) {
-  return String(version).trim().replace(/^v/i, '').split('.').join('-');
+  return `v${String(version).trim().replace(/^v/i, '')}`;
 }
 
 function resolveRepo() {
@@ -39,7 +43,7 @@ function resolveRepo() {
   const pkg = readJson(join(repoRoot, 'package.json'));
   const url = pkg.repository?.url ?? '';
   const match = /github\.com[:/](.+?)(?:\.git)?$/i.exec(url);
-  return match?.[1] ?? 'Potato-dev-inc/puppet-master';
+  return match?.[1] ?? 'Potato-dev-inc/potato-workspace';
 }
 
 function resolveVersion() {
@@ -161,10 +165,11 @@ function main() {
       tag,
       '--repo',
       repo,
+      '--draft',
       '--title',
-      `Puppet Master ${version}`,
+      `Potato Workspace ${version}`,
       '--notes',
-      `Desktop installers for Puppet Master ${version}.`,
+      `Desktop installers for Potato Workspace ${version}.`,
     ]);
     if (!create.ok) {
       if (required) fail(`Could not create release ${tag}.`);

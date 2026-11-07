@@ -30,7 +30,7 @@ const TAIL_MAX_BYTES: usize = 64 * 1024;
 /// kill could keep a pipe open; the run must not hang on it.
 const DRAIN_WAIT: Duration = Duration::from_secs(2);
 /// Environment names always removed from the child: they belong to the app, not to the test.
-const ALWAYS_DROP: &[&str] = &["GIT_", "PUPPET_MASTER", "PM_"];
+const ALWAYS_DROP: &[&str] = &["GIT_", "POTATO_WORKSPACE", "PUPPET_MASTER", "PM_"];
 /// Windows `BELOW_NORMAL_PRIORITY_CLASS`.
 #[cfg(windows)]
 const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
@@ -508,7 +508,7 @@ mod tests {
         let names = [
             "PM_WB_EXEC_TEST_SCRUB",
             "GIT_WB_EXEC_TEST_SCRUB",
-            "PUPPET_MASTER_WB_EXEC_TEST",
+            "POTATO_WORKSPACE_WB_EXEC_TEST",
             "WB_EXEC_TEST_DROP_ME",
             "WB_EXEC_TEST_KEEP",
         ];
@@ -519,7 +519,7 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let mut run = node_spec(
             &sandbox.copy,
-            "for (const n of ['PM_WB_EXEC_TEST_SCRUB', 'GIT_WB_EXEC_TEST_SCRUB', 'PUPPET_MASTER_WB_EXEC_TEST', \
+            "for (const n of ['PM_WB_EXEC_TEST_SCRUB', 'GIT_WB_EXEC_TEST_SCRUB', 'POTATO_WORKSPACE_WB_EXEC_TEST', \
              'WB_EXEC_TEST_DROP_ME', 'WB_EXEC_TEST_KEEP']) { \
              console.log(n + '=' + (process.env[n] === undefined ? 'unset' : process.env[n])); } \
              console.log('CI=' + process.env.CI);",
@@ -534,7 +534,7 @@ mod tests {
         let lines: Vec<&str> = result.output_tail.lines().collect();
         assert!(lines.contains(&"PM_WB_EXEC_TEST_SCRUB=unset"), "{lines:?}");
         assert!(lines.contains(&"GIT_WB_EXEC_TEST_SCRUB=unset"), "{lines:?}");
-        assert!(lines.contains(&"PUPPET_MASTER_WB_EXEC_TEST=unset"), "{lines:?}");
+        assert!(lines.contains(&"POTATO_WORKSPACE_WB_EXEC_TEST=unset"), "{lines:?}");
         assert!(lines.contains(&"WB_EXEC_TEST_DROP_ME=unset"), "{lines:?}");
         assert!(lines.contains(&"WB_EXEC_TEST_KEEP=1"), "{lines:?}");
         assert!(lines.contains(&"CI=1"), "{lines:?}");
@@ -579,7 +579,7 @@ mod tests {
     #[test]
     fn drop_rule_matches_names_without_case() {
         assert!(drops("git_dir", &[]));
-        assert!(drops("PUPPET_MASTER_BRIDGE", &[]));
+        assert!(drops("POTATO_WORKSPACE_BRIDGE", &[]));
         assert!(drops("pm_token", &[]));
         assert!(drops("wb_extra", &["WB_"]));
         assert!(!drops("PATH", &[]));

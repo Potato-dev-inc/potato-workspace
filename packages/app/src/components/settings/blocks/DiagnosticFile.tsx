@@ -13,7 +13,7 @@ function size(bytes: number): string {
 
 function fileName(now = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
-  return `puppet-master-diagnostic-${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.zip`;
+  return `potato-workspace-diagnostic-${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.zip`;
 }
 
 function errorText(error: unknown): string {

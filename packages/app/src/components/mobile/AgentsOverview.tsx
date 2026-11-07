@@ -2,7 +2,7 @@
 // the agent panes grouped Needs you / Working / Idle as an inset list. Each row shows the state glyph,
 // the pane's title, its project and last line, and how long ago it printed. Tapping opens that tab.
 import { useEffect, useState, type ReactNode } from 'react';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { BridgeClient } from '../../lib/bridge';
 import type { LoopSignalInfo } from '../../lib/bridge-types';
 import { ago, glyphStatus, groupPanes, previewLines, projectName, waitingCount } from '../../lib/mobile-agent-tabs';
@@ -162,7 +162,7 @@ export function AgentsOverview({
           <div className="ph-dotgrid" aria-hidden="true" />
           <DotSpinner status="idle" size={5} />
           <b>No agents running</b>
-          <p>Agents you open on the PC, or that another agent starts through Puppet Master, show up here.</p>
+          <p>Agents you open on the PC, or that another agent starts through Potato Workspace, show up here.</p>
           <button type="button" onClick={onNew} className="ph-btn ph-btn--primary">
             Open an agent
           </button>

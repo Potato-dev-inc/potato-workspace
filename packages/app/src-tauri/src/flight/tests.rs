@@ -130,7 +130,7 @@ fn the_write_origin_names_the_writer_and_the_bridge_only_refines_a_person_or_api
         assert_eq!(tag_for(&WriteOrigin::User), InputTag::Phone, "the bridge says a paired phone typed");
         with_tag(InputTag::User, || assert_eq!(tag_for(&WriteOrigin::Api), InputTag::User, "the local app over the bridge"));
         assert_eq!(tag_for(&WriteOrigin::Api), InputTag::Phone, "an inner scope restores the outer one");
-        assert_eq!(tag_for(&WriteOrigin::Nudge), InputTag::Nudge, "the bridge never overrides Puppet Master's own keys");
+        assert_eq!(tag_for(&WriteOrigin::Nudge), InputTag::Nudge, "the bridge never overrides Potato Workspace's own keys");
         assert_eq!(tag_for(&WriteOrigin::Answer), InputTag::Answer);
     });
     assert_eq!(tag_for(&WriteOrigin::User), InputTag::User, "restored after the scope");
@@ -187,7 +187,7 @@ fn freezing_writes_the_cast_to_the_operation_folder() {
     let ring = start(&id, 80, 24);
     ring.output(b"agent output\r\n");
     let frozen = freeze::freeze_now(&project, "op-frz-1", &id, "PROMPT_NOT_SUBMITTED").unwrap();
-    let expected = std::path::Path::new(&project).join(".puppet-master/operations/op-frz-1/flight.cast");
+    let expected = std::path::Path::new(&project).join(".potato-workspace/operations/op-frz-1/flight.cast");
     assert_eq!(std::path::Path::new(&frozen.path), expected);
     let text = std::fs::read_to_string(&expected).unwrap();
     let (header, events) = parse_cast(&text);
@@ -229,7 +229,7 @@ fn a_run_that_fails_gets_its_recording_frozen_next_to_its_record() {
         checks: Vec::new(),
     };
     let created = operations::create_operation(request).unwrap().0;
-    let cast = std::path::Path::new(&project).join(".puppet-master/operations").join(&created.operation_id).join("flight.cast");
+    let cast = std::path::Path::new(&project).join(".potato-workspace/operations").join(&created.operation_id).join("flight.cast");
     // Not failed yet: nothing is written.
     assert!(!cast.exists());
     operations::mark_operation_state(
@@ -300,7 +300,7 @@ fn a_run_the_watchdog_times_out_gets_its_recording_frozen() {
     ring.output(b"the agent went quiet and nobody was watching\r\n");
     let op = operations::delegate_work(run_request(&project, Some(&pane), 1_000), |_| Ok(())).unwrap();
     assert_eq!(op.status, OperationStatus::Running);
-    let cast = std::path::Path::new(&project).join(".puppet-master/operations").join(&op.operation_id).join("flight.cast");
+    let cast = std::path::Path::new(&project).join(".potato-workspace/operations").join(&op.operation_id).join("flight.cast");
     assert!(!cast.exists(), "a run that is still going is not frozen");
     let deadline = op.started_at_ms.unwrap_or(op.created_at_ms) + op.timeout_ms;
     let failed = operations::sweep_expired_runs(deadline + operations::WATCHDOG_GRACE_MS + 5, operations::WATCHDOG_GRACE_MS, Some(&project), &mut |_| Ok(()));
@@ -325,7 +325,7 @@ fn a_run_the_person_cancels_leaves_no_recording_but_a_failed_one_does() {
     start(&failed_pane, 80, 24).output(b"output of the run that failed\r\n");
     let cancelled = operations::delegate_work(run_request(&project, Some(&cancelled_pane), 60_000), |_| Ok(())).unwrap();
     let failed = operations::delegate_work(run_request(&project, Some(&failed_pane), 60_000), |_| Ok(())).unwrap();
-    let cast_of = |id: &str| std::path::Path::new(&project).join(".puppet-master/operations").join(id).join("flight.cast");
+    let cast_of = |id: &str| std::path::Path::new(&project).join(".potato-workspace/operations").join(id).join("flight.cast");
     let after = operations::cancel_operation_with(&project, &cancelled.operation_id, |_| Ok(())).unwrap();
     assert_eq!(after.status, OperationStatus::Cancelled);
     operations::mark_operation_state(
@@ -429,12 +429,12 @@ fn zip_round_trips_with_checksums() {
 
 fn bundle_inputs(casts: Vec<bundle::CastFile>, log: Vec<String>) -> bundle::Inputs {
     bundle::Inputs {
-        version: serde_json::json!({"app":"Puppet Master","version":"9.9.9","os":"windows"}),
+        version: serde_json::json!({"app":"Potato Workspace","version":"9.9.9","os":"windows"}),
         settings: serde_json::json!({
             "theme": "dark",
             "anthropic_api_key": "sk-ant-api03-SettingsPlanted0123456789",
             "nested": {"access_token": "abcdef123456", "away_minutes": 5},
-            "project_path": "C:\\Users\\you-pc\\Desktop\\work2\\puppet-master"
+            "project_path": "C:\\Users\\you-pc\\Desktop\\work2\\potato-workspace"
         }),
         log_lines: log,
         casts,

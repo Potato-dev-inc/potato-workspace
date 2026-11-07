@@ -17,7 +17,7 @@ export interface PickView {
   source?: { relPath: string; line?: number | null } | null;
   /** A data: PNG, only when small enough to send to the box. */
   thumb?: string | null;
-  /** Path relative to the target pane folder, e.g. `.puppet-master/shots/...`. */
+  /** Path relative to the target pane folder, e.g. `.potato-workspace/shots/...`. */
   shotPath?: string | null;
   /** Why there is no screenshot (one plain sentence). */
   noShotReason?: string | null;

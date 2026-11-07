@@ -157,7 +157,7 @@ export function ToolbeltPreview({
           )}
           <label className="flex items-center gap-2 text-xs text-pm-muted">
             <input type="checkbox" checked={includePm} onChange={(e) => setIncludePm(e.target.checked)} />
-            Also register Puppet Master itself in these agents
+            Also register Potato Workspace itself in these agents
           </label>
         </div>
 

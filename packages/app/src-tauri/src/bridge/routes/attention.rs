@@ -99,7 +99,7 @@ mod tests {
         // The same token presented over an agent's MCP session is not a person.
         assert_eq!(person_device(&bearer, Some("mcp-session-1")), None);
         // A plain local program (no token): the agent-authority rules apply on `answer_prompt`, not here.
-        assert_eq!(person_device("Host: 127.0.0.1\r\nX-PM-Local-Secret: s\r\n", None), None);
+        assert_eq!(person_device("Host: 127.0.0.1\r\nX-Potato-Workspace-Local-Secret: s\r\n", None), None);
         assert_eq!(person_device("Authorization: Bearer not-a-device\r\n", None), None);
     }
 }

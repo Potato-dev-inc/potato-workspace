@@ -128,7 +128,7 @@ describe('firstPaintRows', () => {
           lookup: false,
           lookalike: undefined,
           look: false,
-          first: 'Not checked: Puppet Master can\'t look up winget packages yet',
+          first: 'Not checked: Potato Workspace can\'t look up winget packages yet',
         }),
         item({
           name: './local-dir',

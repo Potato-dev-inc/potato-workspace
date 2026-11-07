@@ -208,10 +208,10 @@ pub fn look_count(k: u32, n: u32) -> String {
     format!("Look closer · {k} of {n}")
 }
 
-/// Footer: "Facts from the public npm registry. Only the package names were sent. Puppet Master never answers for you."
+/// Footer: "Facts from the public npm registry. Only the package names were sent. Potato Workspace never answers for you."
 pub fn footer(registries: &str) -> String {
     format!(
-        "Facts from the public {registries} registry. Only the package names were sent. Puppet Master never answers for you."
+        "Facts from the public {registries} registry. Only the package names were sent. Potato Workspace never answers for you."
     )
 }
 
@@ -240,7 +240,7 @@ pub fn more_in_details(n: u32) -> String {
 
 /// Not checked: this ecosystem has no lookup in v1.
 pub fn unsupported_line(tool: &str) -> String {
-    format!("Not checked: Puppet Master can't look up {tool} packages yet")
+    format!("Not checked: Potato Workspace can't look up {tool} packages yet")
 }
 
 /// Not checked: a list file was named (`-r requirements.txt`). `file` is the basename.
@@ -260,7 +260,7 @@ pub fn timeout_line(registry: &str) -> String {
 
 /// Failed: the registry sent an answer that cannot be read.
 pub fn unreadable_line(registry: &str) -> String {
-    format!("Could not check: {registry} sent an answer Puppet Master can't read")
+    format!("Could not check: {registry} sent an answer Potato Workspace can't read")
 }
 
 /// Failed: the registry refused the request.
@@ -392,7 +392,7 @@ mod tests {
             tool: "winget".into(),
             ..sample(Source::Registry, false, false, None)
         };
-        assert_eq!(first_line(&winget).0, "Not checked: Puppet Master can't look up winget packages yet");
+        assert_eq!(first_line(&winget).0, "Not checked: Potato Workspace can't look up winget packages yet");
         let local = sample(Source::Local, false, false, None);
         assert_eq!(first_line(&local), (LOCAL.to_string(), false));
         let link = sample(Source::Link { host: "github.com".into() }, false, false, None);

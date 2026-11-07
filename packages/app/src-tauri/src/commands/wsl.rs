@@ -136,7 +136,7 @@ fn linux_agent(agent_id: &str) -> Result<LinuxAgent, OperationError> {
 
 fn not_supported(agent_id: &str) -> OperationError {
     let label = tui::descriptor_for(agent_id).map(|descriptor| descriptor.label).unwrap_or_else(|| agent_id.to_string());
-    OperationError::new(WSL_AGENT_NOT_SUPPORTED, format!("{label} can't run in Linux from Puppet Master yet."), false)
+    OperationError::new(WSL_AGENT_NOT_SUPPORTED, format!("{label} can't run in Linux from Potato Workspace yet."), false)
 }
 
 /// The listed distro that `distro` names (case-insensitive), when the status allows a Linux pane.

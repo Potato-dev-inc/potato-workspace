@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { BridgeClient } from '../lib/bridge';
 import { useBridgePaneRegistry, type BridgePaneRegistryApi } from './useBridgePaneRegistry';
 

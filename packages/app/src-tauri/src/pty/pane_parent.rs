@@ -2,11 +2,11 @@
 //!
 //! The link is display-only (the sidebar nests a helper under its parent). It never grants control:
 //! `mcp_sessions` still decides who may touch what from the connection's own lineage. So the pane id
-//! an MCP shim sends (`X-Puppet-Master-Pane`, read from `PANE_ID_ENV`) is only a hint, and it is
+//! an MCP shim sends (`X-Potato-Workspace-Pane`, read from `PANE_ID_ENV`) is only a hint, and it is
 //! believed only when it checks out:
 //!
 //! - the pane it names exists and its process has not exited, and
-//! - the shim's process (`X-Puppet-Master-Pid`) is a descendant of that pane's process tree, so an
+//! - the shim's process (`X-Potato-Workspace-Pid`) is a descendant of that pane's process tree, so an
 //!   agent in pane A cannot say it is pane B just by setting the variable (a forged header, a shell
 //!   in another pane, an MCP host outside every pane). Where the process table cannot be read, the
 //!   pane existing is all that can be checked and the link is still only a label.

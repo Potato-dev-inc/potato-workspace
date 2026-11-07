@@ -20,7 +20,7 @@ export async function run(t) {
   for (const agent of ['Claude Code', 'Codex CLI', 'OpenCode']) t.expect.equal(await runsOn(t, agent), '', `${agent} runs on Windows`);
 
   await t.step('The notes explain sign-in and safety');
-  await t.expect.text('In Linux an agent has its own sign-in. Puppet Master never copies your Windows logins or keys into Linux.');
+  await t.expect.text('In Linux an agent has its own sign-in. Potato Workspace never copies your Windows logins or keys into Linux.');
   await t.expect.text('Linux is not a sandbox: Linux programs can still read your Windows drives.');
   await t.expect.text('Helpers you talk to on your phone always run on Windows.');
   t.expect.equal(await linuxState(t), 'ready');

@@ -11,7 +11,7 @@ export function CompanionSkills({ name, skills }: { name: string; skills: SkillR
         {skills.map((skill) => (
           <li key={skill.slug} className="ph-comp-pending">
             <p className="ph-comp-text">{skill.title}</p>
-            {skill.unreviewed && <p className="ph-comp-flag">Changed outside Puppet Master</p>}
+            {skill.unreviewed && <p className="ph-comp-flag">Changed outside Potato Workspace</p>}
           </li>
         ))}
       </ul>

@@ -1,7 +1,7 @@
 //! Night Shift's private files, under `<app data>/night-shift/` (SPEC n32 section 3.2):
 //!
 //! - `run.json`: the current or last run.
-//! - `history/<run id>.json`: finished runs. Puppet Master never deletes these. `history()` lists the newest 14.
+//! - `history/<run id>.json`: finished runs. Potato Workspace never deletes these. `history()` lists the newest 14.
 //! - `settings.json`: the saved Tonight settings.
 //! - `projects.json`: declared checks per project. The value is raw JSON here. `checks.rs` types it.
 //!

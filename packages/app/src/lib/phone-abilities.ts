@@ -1,6 +1,6 @@
 // What THIS phone may do, read from `GET /pair/me` (bridge/routes/pairing.rs). The PC enforces every
 // ability; this only keeps the phone from offering what the PC would refuse (device-caps).
-import type { DeviceCap } from '@puppet-master/shared';
+import type { DeviceCap } from '@potato-workspace/shared';
 
 /** The body of `GET /pair/me`. */
 export interface PairMe {

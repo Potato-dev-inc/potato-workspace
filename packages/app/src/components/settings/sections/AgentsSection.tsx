@@ -50,7 +50,7 @@ function LiveUpdates({ env }: { env: SettingsEnv }) {
     <>
       <SettingRow
         label="Live updates"
-        description="Claude and Codex tell Puppet Master when they start, ask and finish. For now it is only recorded; Puppet Master never acts on it."
+        description="Claude and Codex tell Potato Workspace when they start, ask and finish. For now it is only recorded; Potato Workspace never acts on it."
       >
         <Popup
           aria-label="Live updates"
@@ -109,13 +109,13 @@ export const agentsRows: RowDef[] = [
   },
   {
     id: 'helper-tools',
-    label: 'Puppet Master helpers inside agents',
-    hint: 'Give every agent you open here the Puppet Master helper tools, ready with no setup.',
+    label: 'Potato Workspace helpers inside agents',
+    hint: 'Give every agent you open here the Potato Workspace helper tools, ready with no setup.',
     keywords: 'mcp helpers helper tools run agent wait agents subagent spawn inside pane panes automatic setup bridge claude codex opencode',
     group: 'Helpers',
     render: (env) => (
       <SettingToggle
-        label="Puppet Master helpers inside agents"
+        label="Potato Workspace helpers inside agents"
         description="Panes you open here get the helper tools. Your agent settings files are not changed."
         checked={env.settings.pane_mcp_enabled ?? true}
         onChange={(value) => void env.patch({ pane_mcp_enabled: value })}
@@ -125,7 +125,7 @@ export const agentsRows: RowDef[] = [
   {
     id: 'versions',
     label: 'Agent versions',
-    hint: 'Check that an agent still starts the way Puppet Master expects after it updates.',
+    hint: 'Check that an agent still starts the way Potato Workspace expects after it updates.',
     keywords: 'version update tested untested check canary strict unknown screens recognise capture folder fixture',
     group: 'Updates',
     render: () => <AgentVersions />,
@@ -151,7 +151,7 @@ export const agentsRows: RowDef[] = [
   {
     id: 'live-updates',
     label: 'Live updates',
-    hint: 'Claude and Codex tell Puppet Master when they start, ask and finish.',
+    hint: 'Claude and Codex tell Potato Workspace when they start, ask and finish.',
     keywords: 'hooks hook lane live updates claude codex watch report trust',
     group: 'Live updates',
     labs: { name: 'Live updates', about: 'Claude and Codex report when they start, ask and finish.' },

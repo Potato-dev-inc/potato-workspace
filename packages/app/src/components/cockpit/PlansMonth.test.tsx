@@ -136,9 +136,9 @@ describe('PlansMonth', () => {
   });
 
   it('shows a plain error when the report cannot be read', async () => {
-    const api: PlansApi = { report: vi.fn().mockRejectedValue(new Error('Open Puppet Master on your computer to see your plans.')) };
+    const api: PlansApi = { report: vi.fn().mockRejectedValue(new Error('Open Potato Workspace on your computer to see your plans.')) };
     await mount(api);
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Open Puppet Master');
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Open Potato Workspace');
   });
 
   it('copies the plans as CSV and as text, and says Copied for a moment', async () => {

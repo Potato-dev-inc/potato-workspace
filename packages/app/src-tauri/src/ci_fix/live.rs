@@ -2,7 +2,7 @@
 //! real implementation, and the few functions the rest of the app calls.
 //!
 //! - [`start`]: the `ci-fix` thread (a look every 20 seconds, only while the Labs switch is on).
-//! - [`on_pr_opened`]: a pull request was opened from a Puppet Master copy (`worktrees::service`). Starts
+//! - [`on_pr_opened`]: a pull request was opened from a Potato Workspace copy (`worktrees::service`). Starts
 //!   a watch when the Labs switch is on. Never fails the pull request.
 //! - [`on_resolved`]: a card was answered or dismissed (`questions::QuestionStore`). Maps the card to a
 //!   saved fix by its question id and does the work on its own thread, never inside the question lock.
@@ -119,7 +119,7 @@ pub trait Io: Send + Sync {
         default_branch: Option<&str>,
         env: &[(String, String)],
     ) -> Result<String, OperationError>;
-    /// Write `.puppet-master/<name>` into the copy (a folder that is a link is refused).
+    /// Write `.potato-workspace/<name>` into the copy (a folder that is a link is refused).
     fn write_log_file(&self, copy: &WorktreeRef, name: &str, text: &str) -> Result<(), String>;
 
     // Agents.
@@ -386,9 +386,9 @@ impl Io for LiveIo {
     }
 
     fn write_log_file(&self, copy: &WorktreeRef, name: &str, text: &str) -> Result<(), String> {
-        let dir = Path::new(&copy.cwd).join(".puppet-master");
+        let dir = Path::new(&copy.cwd).join(".potato-workspace");
         if std::fs::symlink_metadata(&dir).is_ok_and(|meta| meta.file_type().is_symlink()) {
-            return Err("the .puppet-master folder in this copy is a link, so the log was not written there".to_string());
+            return Err("the .potato-workspace folder in this copy is a link, so the log was not written there".to_string());
         }
         std::fs::create_dir_all(&dir).map_err(|error| format!("could not make {}: {error}", dir.display()))?;
         crate::secure_file::write_private(&dir.join(name), text)
@@ -541,7 +541,7 @@ pub fn start(registry: Registry, app: tauri::AppHandle) {
     }
 }
 
-/// A pull request was opened from a Puppet Master copy. Watches it when the Labs switch is on. Never fails
+/// A pull request was opened from a Potato Workspace copy. Watches it when the Labs switch is on. Never fails
 /// the pull request: every problem is only logged.
 #[allow(dead_code)] // used only outside `cargo test`; kept for the app build
 pub fn on_pr_opened(project: &str, copy: &WorktreeRef) {
@@ -568,7 +568,7 @@ pub fn on_resolved(question: &Question) {
 }
 
 fn not_ready() -> OperationError {
-    OperationError::new("APP_NOT_READY", "Puppet Master is still starting", true)
+    OperationError::new("APP_NOT_READY", "Potato Workspace is still starting", true)
 }
 
 /// Watch the pull request of this copy (if not watched) and, when its head already failed, raise the fix card now.

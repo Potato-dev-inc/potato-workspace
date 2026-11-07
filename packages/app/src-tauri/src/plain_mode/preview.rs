@@ -11,7 +11,7 @@ fn is_html(path: &Path) -> bool {
 }
 
 /// The page to show: `tool.html`, else `index.html`, else the most recently changed html file at
-/// the top of `dir`. Never looks inside `.git` or `.puppet-master`.
+/// the top of `dir`. Never looks inside `.git` or `.potato-workspace`.
 pub fn find_preview(dir: &Path) -> Option<PathBuf> {
     for name in ["tool.html", "index.html"] {
         let path = dir.join(name);

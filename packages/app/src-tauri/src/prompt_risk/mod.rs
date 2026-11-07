@@ -125,12 +125,12 @@ pub fn assess(input: &RiskInput, extra: &[RiskRule]) -> Risk {
     let _ = base_found;
     if findings.is_empty() {
         if ctx.unknown {
-            return plain(RiskLevel::Medium, "Run a command", "It is not a command Puppet Master recognises, so check it before allowing it.");
+            return plain(RiskLevel::Medium, "Run a command", "It is not a command Potato Workspace recognises, so check it before allowing it.");
         }
         return plain(RiskLevel::Low, "Run a simple command", "It only moves around or prints text.");
     }
     if ctx.unknown {
-        findings.push(Finding { level: RiskLevel::Medium, rank: 1, headline: "Run a command".into(), reason: "Part of it is not a command Puppet Master recognises.".into() });
+        findings.push(Finding { level: RiskLevel::Medium, rank: 1, headline: "Run a command".into(), reason: "Part of it is not a command Potato Workspace recognises.".into() });
     }
     let top = findings.iter().max_by_key(|f| (f.level, f.rank)).cloned().expect("non-empty");
     let mut ordered = findings;
@@ -158,7 +158,7 @@ fn assess_without_command(input: &RiskInput, extra: &[RiskRule]) -> Risk {
         "startup_screen" => plain(
             RiskLevel::Low,
             "Finish the startup screen",
-            "The agent is showing a sign-in or setup screen. Finish it in the terminal; nothing is asked of Puppet Master.",
+            "The agent is showing a sign-in or setup screen. Finish it in the terminal; nothing is asked of Potato Workspace.",
         ),
         "question" => plain(
             RiskLevel::Low,
@@ -204,7 +204,7 @@ fn unclassified(input: &RiskInput, extra: &[RiskRule]) -> Risk {
     }
     match question {
         Some(q) => Risk { level: RiskLevel::Medium, headline: "The agent asks".to_string(), reasons: vec![q] },
-        None => plain(RiskLevel::Medium, "Answer the agent", "The agent is asking something Puppet Master cannot summarise. Read it before answering."),
+        None => plain(RiskLevel::Medium, "Answer the agent", "The agent is asking something Potato Workspace cannot summarise. Read it before answering."),
     }
 }
 
@@ -220,7 +220,7 @@ fn assess_file_edit(path: Option<&str>, workspace: Option<&str>) -> Risk {
     match paths::locate(path, None, workspace) {
         paths::Where::Inside => plain(RiskLevel::Low, "Change a file in this project", "It only changes a file inside the project folder."),
         paths::Where::Outside => plain(RiskLevel::High, "Change a file outside this project", "The file is not in the project folder, so the change affects something else on this computer."),
-        paths::Where::Unknown => plain(RiskLevel::Medium, "Change a file", "Puppet Master cannot tell where this file is, so check it before allowing it."),
+        paths::Where::Unknown => plain(RiskLevel::Medium, "Change a file", "Potato Workspace cannot tell where this file is, so check it before allowing it."),
     }
 }
 

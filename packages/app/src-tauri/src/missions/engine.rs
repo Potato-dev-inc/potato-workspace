@@ -567,7 +567,7 @@ fn act(io: &dyn RoundIo, m: &mut Mission, copy: &Path, action: Action, line: &st
                 io.budget_stop(&m.project, handle);
             }
             if after_restart {
-                m.push_event(now(), "restarted", ":", "Resumed after Puppet Master restarted", Some(last.n));
+                m.push_event(now(), "restarted", ":", "Resumed after Potato Workspace restarted", Some(last.n));
             } else {
                 m.push_event(now(), "note", "v", line, Some(last.n));
             }

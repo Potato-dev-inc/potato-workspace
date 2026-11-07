@@ -304,7 +304,7 @@ pub fn running_note() -> &'static str {
 }
 
 pub fn setup_intro() -> &'static str {
-    "Puppet Master runs your test command on older save points, in a separate copy. Your folder is not touched."
+    "Potato Workspace runs your test command on older save points, in a separate copy. Your folder is not touched."
 }
 
 pub fn safety_note() -> &'static str {

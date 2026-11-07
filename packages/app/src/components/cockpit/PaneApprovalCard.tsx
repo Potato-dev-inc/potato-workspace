@@ -1,6 +1,6 @@
 // The card for a pane that waits on the person: the same card in the Inbox list and docked in the pane's
 // Terminal tab. A rated prompt is an ApprovalPrompt card (Allow once / Always allow / Deny, Deny first on
-// high risk); a menu Puppet Master could not rate keeps the agent's own words, equal weight, no default.
+// high risk); a menu Potato Workspace could not rate keeps the agent's own words, equal weight, no default.
 // Every answer carries the person's click (`lib/user-gesture.ts`): the backend refuses one without it.
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { ApprovalPrompt } from './ApprovalPrompt';

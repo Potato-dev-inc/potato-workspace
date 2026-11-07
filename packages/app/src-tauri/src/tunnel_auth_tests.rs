@@ -5,7 +5,7 @@
 //! would have treated it as the desktop app. The pairing store is the real one.
 //!
 //! Regression for the 2026-10-14 tunnel auth bypass (docs/security/2026-10-14-tunnel-auth-bypass.md):
-//! `pwa_server` forwarded requests without `X-PM-Proxied`, so the bridge saw a loopback peer and
+//! `pwa_server` forwarded requests without `X-Potato-Workspace-Proxied`, so the bridge saw a loopback peer and
 //! trusted every tunnel caller as the local app.
 
 use std::io::{Read, Write};
@@ -106,7 +106,7 @@ fn the_attention_list_needs_a_paired_device_over_the_tunnel() {
 #[test]
 fn tunnel_caller_cannot_forge_or_strip_the_proxied_marker() {
     let r = rig();
-    for header in ["X-PM-Proxied: 0", "x-pm-proxied: 0", "X-PM-Proxied:", " X-PM-Proxied: 0"] {
+    for header in ["X-Potato-Workspace-Proxied: 0", "x-pm-proxied: 0", "X-Potato-Workspace-Proxied:", " X-Potato-Workspace-Proxied: 0"] {
         let (status, body) = send(r.pwa, &get("/bridge/panes", &[header]));
         assert_eq!(status, 401, "forged header {header:?} must not open the bridge: {body}");
     }
@@ -169,7 +169,7 @@ fn direct_loopback_request_with_forwarding_headers_needs_a_bearer() {
         "X-Forwarded-Host: tunnel.example",
         "X-Real-Ip: 203.0.113.9",
         "Forwarded: for=203.0.113.9",
-        "X-PM-Proxied: 1",
+        "X-Potato-Workspace-Proxied: 1",
     ] {
         let request = format!("GET /panes HTTP/1.1\r\nHost: 127.0.0.1\r\n{header}\r\n\r\n");
         let (status, body) = send(r.bridge, &request);
@@ -237,7 +237,7 @@ fn websocket_upgrade_through_the_tunnel_without_a_token_is_rejected() {
     assert_eq!(json(&body)["error"], "pairing_required");
 
     // a forged marker on the upgrade changes nothing
-    let (status, _) = send(r.pwa, &upgrade("/bridge/events/ws", &["X-PM-Proxied: 0"]));
+    let (status, _) = send(r.pwa, &upgrade("/bridge/events/ws", &["X-Potato-Workspace-Proxied: 0"]));
     assert_eq!(status, 401);
 
     // a bad subprotocol token is rejected too
@@ -278,7 +278,7 @@ fn proxy_sends_exactly_one_marker_of_its_own_and_keeps_the_query_string() {
         r.pwa,
         &get(
             "/bridge/events/poll?cursor=5&wait_ms=100",
-            &[&auth, "X-PM-Proxied: 0", "x-pm-proxied: nope"],
+            &[&auth, "X-Potato-Workspace-Proxied: 0", "x-pm-proxied: nope"],
         ),
     );
     assert_eq!(status, 200, "{body}");
@@ -288,7 +288,7 @@ fn proxy_sends_exactly_one_marker_of_its_own_and_keeps_the_query_string() {
 
     // same for the WebSocket upgrade path
     let protocols = format!("Sec-WebSocket-Protocol: pm-events, pm-bearer.{}", r.token);
-    let (_, body) = send(r.pwa, &upgrade("/bridge/events/ws", &[&protocols, "X-PM-Proxied: 0"]));
+    let (_, body) = send(r.pwa, &upgrade("/bridge/events/ws", &[&protocols, "X-Potato-Workspace-Proxied: 0"]));
     assert_eq!(json(&body)["proxied_markers"], serde_json::json!(["1"]));
 }
 
@@ -332,7 +332,7 @@ fn push_act_passes_the_tunnel_gate_without_a_bearer_but_the_other_push_routes_do
 }
 
 /// Round 13 #1: the log flood. Every phone request proxied by `pwa_server` (`/bridge/*`) was said
-/// to log `LOCAL_SECRET_MISSING`. A proxied request always carries `X-PM-Proxied`, so it is a Device
+/// to log `LOCAL_SECRET_MISSING`. A proxied request always carries `X-Potato-Workspace-Proxied`, so it is a Device
 /// or Public caller and never "local without the key"; only a genuine local caller (no forwarder
 /// header) without the key is counted and logged, under its route class (no `/bridge` prefix).
 #[test]

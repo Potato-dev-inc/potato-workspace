@@ -1,4 +1,4 @@
-//! SPEC n32 S3: a preview page must have no way to call Puppet Master. Its window label `preview-<n>` may match
+//! SPEC n32 S3: a preview page must have no way to call Potato Workspace. Its window label `preview-<n>` may match
 //! no capability window, and no capability may carry a `remote` key (that would open IPC to remote origins).
 //! The Point box window `pointbox` is the one new window that does get capabilities. These tests read every
 //! `capabilities/*.json` at test time, so a later edit cannot quietly break the rule.

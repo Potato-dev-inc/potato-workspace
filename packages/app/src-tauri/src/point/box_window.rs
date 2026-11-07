@@ -1,7 +1,7 @@
 //! The Point box window, next to the picked element (PF-10).
 //!
 //! A small local window (the Ask bar pattern): created hidden on first use, always on top, no taskbar
-//! entry. It loads Puppet Master's own page (`index.html?pointbox=1`), so the person types here and never
+//! entry. It loads Potato Workspace's own page (`index.html?pointbox=1`), so the person types here and never
 //! in the previewed page. It is the only Point window with Tauri access (listed in the capabilities).
 
 use super::session::PointState;

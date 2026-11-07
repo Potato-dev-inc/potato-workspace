@@ -121,7 +121,7 @@ fn fingerprint_of(owned: &OwnedInputs, file: &Path) -> String {
 fn matrix() {
     let mut t = Tree::new();
     let project = t.dir("work/app");
-    let evil = t.file("work/app/.puppet-master/agents/evil.toml", &def("evil_x", "[\"run\"]"));
+    let evil = t.file("work/app/.potato-workspace/agents/evil.toml", &def("evil_x", "[\"run\"]"));
     let approvals = t.approvals();
 
     // Nothing consented: the hostile file is not even read.
@@ -152,7 +152,7 @@ fn matrix() {
     // A clone at a new path asks again: the old consent and approval do not carry over.
     consent(&t, "project", &project, true);
     let clone = t.dir("elsewhere/app-clone");
-    let cloned = t.file("elsewhere/app-clone/.puppet-master/agents/evil.toml", &def("evil_x", "[\"run\"]"));
+    let cloned = t.file("elsewhere/app-clone/.potato-workspace/agents/evil.toml", &def("evil_x", "[\"run\"]"));
     let o = owned(&t.settings());
     assert_eq!(states(&o, &approvals).len(), 1, "the unconsented clone is not read");
     consent(&t, "project", &clone, true);
@@ -175,7 +175,7 @@ fn matrix() {
 fn project_definitions_run_only_in_their_project() {
     let mut t = Tree::new();
     let project = t.dir("work/app");
-    let file = t.file("work/app/.puppet-master/agents/mine.toml", &def("mine_x", "[\"run\"]"));
+    let file = t.file("work/app/.potato-workspace/agents/mine.toml", &def("mine_x", "[\"run\"]"));
     let approvals = t.approvals();
     consent(&t, "project", &project, true);
     let o = owned(&t.settings());
@@ -227,9 +227,9 @@ fn extra_directories_need_their_own_consent() {
 fn banner_lists_names_without_reading_files() {
     let mut t = Tree::new();
     let project = t.dir("work/app");
-    t.file("work/app/.puppet-master/agents/b.toml", "this is { not toml and never parsed");
-    t.file("work/app/.puppet-master/agents/a.toml", &def("a_x", "[\"run\"]"));
-    t.file("work/app/.puppet-master/agents/notes.txt", "ignored");
+    t.file("work/app/.potato-workspace/agents/b.toml", "this is { not toml and never parsed");
+    t.file("work/app/.potato-workspace/agents/a.toml", &def("a_x", "[\"run\"]"));
+    t.file("work/app/.potato-workspace/agents/notes.txt", "ignored");
     assert_eq!(project_candidates(&project), ["a.toml", "b.toml"]);
     let scan = project_scan_at(&t.settings(), &project.to_string_lossy());
     assert_eq!(scan["files"], json!(["a.toml", "b.toml"]));

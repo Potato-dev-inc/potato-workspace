@@ -1,6 +1,6 @@
 // Bridge event stream: native EventSource (SSE) for loopback, long-polling `/events/poll` for remote
 // hosts (Cloudflare quick tunnels do not pass SSE through at all).
-import type { McpLogEntry, OrchestratorChatEvent, PaneInfo } from '@puppet-master/shared';
+import type { McpLogEntry, OrchestratorChatEvent, PaneInfo } from '@potato-workspace/shared';
 import type { PublicSettings } from './bridge-settings';
 import { isNgrokHost, ngrokRequestHeaders } from './bridge-ngrok';
 import { mergeBridgeHeaders, mobilePairingAuthHeaders } from './mobile-pairing-auth';

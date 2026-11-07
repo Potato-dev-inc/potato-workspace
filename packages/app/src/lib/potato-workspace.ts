@@ -1,14 +1,14 @@
-import { formatPaneListForOrchestrator, isOrchestratorPaneId, type LlmModel, type PaneStatus } from '@puppet-master/shared';
+import { formatPaneListForOrchestrator, isOrchestratorPaneId, type LlmModel, type PaneStatus } from '@potato-workspace/shared';
 import type { ChatMessage, LlmResponse } from './llm';
 import { streamLlm } from './llm';
-import { executeMcpTool, loadPuppetMasterTools } from './mcp-tools';
+import { executeMcpTool, loadPotatoWorkspaceTools } from './mcp-tools';
 import type { McpToolExecutor } from './mcp-executor';
 import type { WaitForPanesResult } from './bridge';
 import { sleep } from './ansi';
-import { SYSTEM_PROMPT } from './puppet-master-prompt';
+import { SYSTEM_PROMPT } from './potato-workspace-prompt';
 import { approvePermissionIfPresent } from './tui-autopilot';
 
-export interface PuppetMasterCallbacks {
+export interface PotatoWorkspaceCallbacks {
   onAssistantText: (text: string) => void;
   onToolCall: (tool: string, args: unknown, result?: string, error?: string) => void;
   onComplete: () => void;
@@ -239,16 +239,16 @@ export async function standIdleForWorkers(
   }
 }
 
-export async function runPuppetMasterLoop(
+export async function runPotatoWorkspaceLoop(
   model: LlmModel,
   apiKey: string,
   executor: McpToolExecutor,
   history: ChatMessage[],
   userPrompt: string,
-  cb: PuppetMasterCallbacks,
+  cb: PotatoWorkspaceCallbacks,
   signal: AbortSignal,
 ): Promise<void> {
-  const tools = await loadPuppetMasterTools(executor);
+  const tools = await loadPotatoWorkspaceTools(executor);
   const livePanes = await executor.listPanes();
   const paneSnapshot =
     livePanes.length > 0

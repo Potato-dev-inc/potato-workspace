@@ -183,7 +183,7 @@ mod tests {
                 .map(|d| d.as_nanos())
                 .unwrap_or(0)
         ));
-        let storage = dir.join(".puppet-master");
+        let storage = dir.join(".potato-workspace");
         fs::create_dir_all(&storage).expect("mkdir");
         fs::write(
             storage.join(IR_FILE),
@@ -212,7 +212,7 @@ mod tests {
                 .map(|d| d.as_nanos())
                 .unwrap_or(0)
         ));
-        let storage = dir.join(".puppet-master");
+        let storage = dir.join(".potato-workspace");
         fs::create_dir_all(&storage).expect("mkdir");
         let big = "x".repeat(5000);
         fs::write(storage.join(IR_FILE), format!(r#"{{"overview":"{big}"}}"#)).expect("write ir");

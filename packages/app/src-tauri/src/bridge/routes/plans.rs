@@ -131,7 +131,7 @@ mod tests {
     #[test]
     fn a_paired_phone_needs_a_token_and_the_watch_cap() {
         // A phone that comes through the loopback proxy, or a remote peer, has to present a token.
-        let (status, body) = authorize_bridge_request("X-PM-Proxied: 1\r\n", true, &["plans"], "GET").unwrap_err();
+        let (status, body) = authorize_bridge_request("X-Potato-Workspace-Proxied: 1\r\n", true, &["plans"], "GET").unwrap_err();
         assert_eq!((status, body["error"].as_str()), (401, Some("pairing_required")));
         let (status, _) = authorize_bridge_request("", false, &["plans"], "GET").unwrap_err();
         assert_eq!(status, 401);

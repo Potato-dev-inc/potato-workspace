@@ -220,7 +220,7 @@ fn proc(pid: u32, parent: u32) -> ProcEntry {
     ProcEntry { pid, parent, image: "x.exe".into() }
 }
 
-/// Mochi's pane process 100 -> its agent 101 -> its Puppet Master MCP shim 102. The helper it started is a
+/// Mochi's pane process 100 -> its agent 101 -> its Potato Workspace MCP shim 102. The helper it started is a
 /// separate pane: 400 -> 401 -> its own shim 402. An ordinary agent of the person: 300 -> 301.
 fn table() -> Vec<ProcEntry> {
     vec![proc(100, 1), proc(101, 100), proc(102, 101), proc(300, 1), proc(301, 300), proc(400, 1), proc(401, 400), proc(402, 401)]

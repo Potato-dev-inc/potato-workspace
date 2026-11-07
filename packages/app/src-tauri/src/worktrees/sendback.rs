@@ -21,7 +21,7 @@ pub fn pane_if_guarded(
     if guard_env != Some(env_guard::NO_PUSH) {
         return Err(OperationError::new(
             "SEND_BACK_CAN_PUSH",
-            "This agent could push to GitHub, so Puppet Master will not hand it CI output. Fix the checks yourself, or start a new agent in this copy that cannot push.",
+            "This agent could push to GitHub, so Potato Workspace will not hand it CI output. Fix the checks yourself, or start a new agent in this copy that cannot push.",
             false,
         ));
     }

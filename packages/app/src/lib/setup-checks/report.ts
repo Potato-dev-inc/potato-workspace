@@ -11,7 +11,7 @@ export function redactReport(text: string): string {
 }
 
 export function buildReport(rows: CheckRow[], version: string, when: string): string {
-  const lines = [`Puppet Master setup check (${version}, ${when})`, ''];
+  const lines = [`Potato Workspace setup check (${version}, ${when})`, ''];
   for (const r of rows) lines.push(`[${MARK[r.status]}] ${r.sentence}`);
   return redactReport(lines.join('\n'));
 }

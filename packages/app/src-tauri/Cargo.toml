@@ -1,7 +1,7 @@
 [package]
 name = "puppet_master_app"
 version = "0.2.2"
-description = "Puppet Master desktop app"
+description = "Potato Workspace desktop app"
 authors = ["you"]
 edition = "2021"
 rust-version = "1.91"
@@ -24,7 +24,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = "2"
-# "Start Puppet Master when I sign in": Run entry on Windows, Launch Agent on macOS. Official Tauri
+# "Start Potato Workspace when I sign in": Run entry on Windows, Launch Agent on macOS. Official Tauri
 # plugin, MIT OR Apache-2.0 (its auto-launch dependency is MIT). Built against tauri 2.12.
 tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }

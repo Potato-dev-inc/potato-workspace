@@ -20,7 +20,7 @@
     <!-- Horizontal Split -->
     <line x1="136" y1="304" x2="376" y2="304" stroke="#A1A1AA" stroke-width="2" />
 
-    <!-- Puppet Master Controller Node (The Origin) -->
+    <!-- Potato Workspace Controller Node (The Origin) -->
     <circle cx="256" cy="112" r="7" fill="none" stroke="#18181B" stroke-width="3" />
     <circle cx="256" cy="112" r="2.5" fill="#18181B" />
 

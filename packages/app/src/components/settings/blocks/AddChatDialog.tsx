@@ -1,7 +1,7 @@
 // "Add chat (ACP)" for an agent that has no chat yet, with nothing to type and ONE confirm click. It asks the app how the
 // agent can get a chat (`overlayResolve`), best first: (1) the program already on this PC starts chat itself, (2) the
 // official ACP registry lists a ready-made adapter (downloaded and checked by the app after the click), (3) the built-in
-// bridge (Puppet Master makes the chat from the agent's non-interactive mode; the last resort, selectable only when the
+// bridge (Potato Workspace makes the chat from the agent's non-interactive mode; the last resort, selectable only when the
 // agent has one, with no download). The first usable way is pre-selected and shown on one confirm screen; with more
 // than one usable way they are radio choices. "Change details" opens the editable form (the shared `AcpStep`), pre-filled.
 // Nothing found, failed or timed out: it says so and shows the form. Only "Add chat" saves or downloads anything.
@@ -42,7 +42,7 @@ export const RESOLVE_TIMEOUT_MS = 45_000;
 
 /** The sentence on the confirm screen. */
 export const confirmSentence = (label: string): string =>
-  `Puppet Master will start this program when you open a chat with ${label}. It cannot read your other environment variables except the ones you allow.`;
+  `Potato Workspace will start this program when you open a chat with ${label}. It cannot read your other environment variables except the ones you allow.`;
 
 /** The exact command line that will run. */
 export const commandLine = (v: AcpValue): string => [v.command, ...v.args].join(' ');
@@ -310,7 +310,7 @@ export function AddChatDialog({
           <input type="radio" name="add-chat-option" checked={sel === i} disabled={busy} onChange={() => setSel(i)} className="mt-1" />
           <span>
             <span className="block">
-              {o.kind === 'native' ? 'Use the program already on this computer' : o.kind === 'registry' ? 'Download a ready-made one from the official ACP registry' : o.kind === 'terminal_chat' ? o.label : o.kind === 'adapter' ? 'Use a reviewed adapter from Puppet Master' : 'Let Puppet Master make one (text only)'}
+              {o.kind === 'native' ? 'Use the program already on this computer' : o.kind === 'registry' ? 'Download a ready-made one from the official ACP registry' : o.kind === 'terminal_chat' ? o.label : o.kind === 'adapter' ? 'Use a reviewed adapter from Potato Workspace' : 'Let Potato Workspace make one (text only)'}
             </span>
             {o.kind === 'terminal_chat' ? (
               <span className="block text-xs text-pm-muted">
@@ -372,7 +372,7 @@ export function AddChatDialog({
               {option.note}
             </p>
           )}
-          <p className="mt-2 text-xs text-pm-muted">Puppet Master runs it with the Python that {agent.label} was installed with. It is checked before every start.</p>
+          <p className="mt-2 text-xs text-pm-muted">Potato Workspace runs it with the Python that {agent.label} was installed with. It is checked before every start.</p>
           <AdapterPanel
             adapterId={option.adapter.id}
             keys={option.env_keys ?? NO_KEYS}

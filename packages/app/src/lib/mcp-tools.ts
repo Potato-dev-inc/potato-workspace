@@ -5,7 +5,7 @@ import {
   findReusableWorkerPane,
   formatPaneListForOrchestrator,
   type PaneInfo,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import type { ToolDef } from './llm';
 import type {
   ContextPackRequest,
@@ -62,14 +62,14 @@ async function waitForPaneReady(
   return null;
 }
 
-export const PUPPET_MASTER_TOOLS: ToolDef[] = [];
-export async function loadPuppetMasterTools(executor: McpToolExecutor): Promise<ToolDef[]> {
-  if (!executor.listToolDefinitions) return PUPPET_MASTER_TOOLS;
+export const POTATO_WORKSPACE_TOOLS: ToolDef[] = [];
+export async function loadPotatoWorkspaceTools(executor: McpToolExecutor): Promise<ToolDef[]> {
+  if (!executor.listToolDefinitions) return POTATO_WORKSPACE_TOOLS;
   try {
     const tools = await executor.listToolDefinitions();
-    return tools.length > 0 ? tools : PUPPET_MASTER_TOOLS;
+    return tools.length > 0 ? tools : POTATO_WORKSPACE_TOOLS;
   } catch {
-    return PUPPET_MASTER_TOOLS;
+    return POTATO_WORKSPACE_TOOLS;
   }
 }
 

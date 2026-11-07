@@ -124,8 +124,8 @@ pub fn should_check_for_signal(
 /// The Inbox card text for a check that found changed screens, when the old version is not known.
 pub fn notice_text(label: &str, version: Option<&str>) -> String {
     match version {
-        Some(version) => format!("{label} {} changed its screens. Puppet Master will ask you before acting.", version_label(version)),
-        None => format!("{label} changed its screens. Puppet Master will ask you before acting."),
+        Some(version) => format!("{label} {} changed its screens. Potato Workspace will ask you before acting.", version_label(version)),
+        None => format!("{label} changed its screens. Potato Workspace will ask you before acting."),
     }
 }
 
@@ -143,7 +143,7 @@ pub fn change_text(label: &str, from: Option<&str>, to: Option<&str>, verdict: V
     match verdict {
         Verdict::Good => format!("{}: checked, all good.", named(label, from, to)),
         Verdict::Changed if from.is_some() => {
-            format!("{}: screens changed. Puppet Master will ask you before acting.", named(label, from, to))
+            format!("{}: screens changed. Potato Workspace will ask you before acting.", named(label, from, to))
         }
         Verdict::Changed => notice_text(label, to),
         Verdict::Unchecked => format!("{}: not checked yet.", named(label, from, to)),
@@ -225,7 +225,7 @@ pub fn apply_result(record: &mut AgentRecord, facts: &Facts, result: CanaryResul
     record.last_result = Some(result);
 }
 
-/// The chip text. Both reasons say the same thing to the person: Puppet Master is being careful.
+/// The chip text. Both reasons say the same thing to the person: Potato Workspace is being careful.
 pub const CHIP: &str = "Untested version";
 
 /// Plain sentence for the Settings row.
@@ -238,17 +238,17 @@ pub fn plain(facts: &Facts, reason: Option<StrictReason>, standing: Standing, re
     let verified = record.is_some_and(|r| is_verified(r, r.version.as_deref()));
     match reason {
         Some(StrictReason::ChangedScreens) => {
-            format!("{name} changed its screens. Puppet Master will ask you before acting.")
+            format!("{name} changed its screens. Potato Workspace will ask you before acting.")
         }
         Some(StrictReason::UntestedVersion) => format!(
-            "Puppet Master has not been tested with {name} yet. It will ask you before closing a start-up notice, and it will not keep one ready in advance."
+            "Potato Workspace has not been tested with {name} yet. It will ask you before closing a start-up notice, and it will not keep one ready in advance."
         ),
         None if !facts.installed => "Not installed on this computer.".into(),
         None if verified && standing != Standing::Tested => {
             format!("{name} was checked on this computer. Its screens read fine.")
         }
         None => match standing {
-            Standing::Tested => format!("{name} is a version Puppet Master has been tested with."),
+            Standing::Tested => format!("{name} is a version Potato Workspace has been tested with."),
             Standing::Unknown => format!("Could not read the version of {}.", facts.label),
             _ => format!("{name} has no version limit set."),
         },
@@ -269,7 +269,7 @@ fn change_view(label: &str, record: &AgentRecord) -> Option<ChangeView> {
     let cannot_check = verdict == Verdict::Unchecked
         && record.last_result.as_ref().is_some_and(|r| r.outcome == Outcome::Inconclusive && key(r.version.as_deref()) == to);
     let text = if cannot_check {
-        format!("{}: updated. Puppet Master cannot check this agent's screens.", named(label, Some(&from), Some(&to)))
+        format!("{}: updated. Potato Workspace cannot check this agent's screens.", named(label, Some(&from), Some(&to)))
     } else {
         change_text(label, Some(&from), Some(&to), verdict)
     };
@@ -381,7 +381,7 @@ mod tests {
         let mut r = record("0.162.1");
         apply_result(&mut r, &facts(), result("0.162.1", Outcome::Unrecognised));
         let notice = r.notice.clone().expect("card");
-        assert_eq!(notice.text, "Codex 0.162.1 changed its screens. Puppet Master will ask you before acting.");
+        assert_eq!(notice.text, "Codex 0.162.1 changed its screens. Potato Workspace will ask you before acting.");
         assert!(!notice.dismissed);
         apply_result(&mut r, &facts(), result("0.162.1", Outcome::Ready));
         // The failure card is gone; the pass leaves its own "all good" card in its place.
@@ -440,7 +440,7 @@ mod tests {
         apply_result(&mut changed, &facts(), result("0.162.1", Outcome::Unrecognised));
         let view = view_of(&facts(), Some(&changed), false, 2);
         assert_eq!(view.strict_reason, Some(StrictReason::ChangedScreens));
-        assert_eq!(view.plain, "Codex 0.162.1 changed its screens. Puppet Master will ask you before acting.");
+        assert_eq!(view.plain, "Codex 0.162.1 changed its screens. Potato Workspace will ask you before acting.");
         assert_eq!(view.captures, 2);
 
         let fine = view_of(&facts(), Some(&record("0.162.1")), false, 0);
@@ -577,7 +577,7 @@ mod tests {
         assert_eq!(change_text("Claude", Some("2.3.0"), Some("2.4.0"), Verdict::Good), "Claude 2.3.0 \u{2192} 2.4.0: checked, all good.");
         assert_eq!(
             change_text("Claude", Some("2.3.0"), Some("2.4.0"), Verdict::Changed),
-            "Claude 2.3.0 \u{2192} 2.4.0: screens changed. Puppet Master will ask you before acting."
+            "Claude 2.3.0 \u{2192} 2.4.0: screens changed. Potato Workspace will ask you before acting."
         );
         assert_eq!(change_text("Codex", None, Some("0.162.1"), Verdict::Good), "Codex 0.162.1: checked, all good.");
         assert_eq!(change_text("Codex", Some("0.1.0"), Some("0.2.0"), Verdict::Unchecked), "Codex 0.1.0 \u{2192} 0.2.0: not checked yet.");
@@ -612,7 +612,7 @@ mod tests {
         apply_result(&mut r, &f, result("0.160.0", Outcome::Inconclusive));
         let change = view_of(&f, Some(&r), false, 0).change.unwrap();
         assert_eq!(change.verdict, Verdict::Unchecked);
-        assert!(change.text.ends_with("updated. Puppet Master cannot check this agent's screens."), "{}", change.text);
+        assert!(change.text.ends_with("updated. Potato Workspace cannot check this agent's screens."), "{}", change.text);
     }
 
     #[test]
@@ -670,10 +670,10 @@ mod tests {
                 "probed_ms": 5,
                 "last_result": {
                   "agent": "codex", "version": "codex-cli 0.162.1", "at_ms": 9, "duration_ms": 4000,
-                  "outcome": "unrecognised", "passed": false, "summary": "Codex showed a screen Puppet Master does not recognise.",
+                  "outcome": "unrecognised", "passed": false, "summary": "Codex showed a screen Potato Workspace does not recognise.",
                   "gate": null, "dismissed": [], "keys_sent": [], "prompts_sent": 0, "screens": []
                 },
-                "notice": { "id": "canary:codex:0.162.1", "agent": "codex", "text": "Codex 0.162.1 changed its screens. Puppet Master will ask you before acting.", "at_ms": 9, "dismissed": true }
+                "notice": { "id": "canary:codex:0.162.1", "agent": "codex", "text": "Codex 0.162.1 changed its screens. Potato Workspace will ask you before acting.", "at_ms": 9, "dismissed": true }
               }
             }
         }"#;

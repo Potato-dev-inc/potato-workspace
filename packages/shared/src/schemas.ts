@@ -24,7 +24,7 @@ export const LlmModelSchema = z.object({
 });
 export type LlmModel = z.infer<typeof LlmModelSchema>;
 
-/** How the Puppet Master sidebar drives orchestration. */
+/** How the Potato Workspace sidebar drives orchestration. */
 export const OrchestratorBackendSchema = z.enum([
   'api',           // Direct LLM API + in-process MCP tool loop (current)
   'claude_cli',    // Dedicated Claude Code pane with MCP configured
@@ -112,7 +112,7 @@ export const SettingsSchema = z.object({
   agent_hooks_mode: z.enum(['off', 'shadow', 'evidence']).optional(),
   /** Per-agent override of agent_hooks_mode, keyed by agent id. */
   agent_hooks_agents: z.record(z.string(), z.enum(['off', 'shadow', 'evidence'])).optional(),
-  /** Puppet Master's helper tools (run_agent, wait_agents) given to every agent pane for its launch. On unless false. Rust: pane_mcp. */
+  /** Potato Workspace's helper tools (run_agent, wait_agents) given to every agent pane for its launch. On unless false. Rust: pane_mcp. */
   pane_mcp_enabled: z.boolean().optional(),
   /** Missions (Preview, Settings › General › Labs): goal + checks + budget, worked on in rounds. Off unless chosen. Rust: missions. */
   missions_enabled: z.boolean().optional(),

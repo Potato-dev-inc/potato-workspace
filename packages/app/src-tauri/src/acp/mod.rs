@@ -37,7 +37,7 @@
 //!   schema version.
 //! * `agent-client-protocol-schema` (types only) was tried and removed: it requires `serde_json`'s
 //!   `preserve_order` feature, and Cargo unifies features across the whole app, so every JSON object in
-//!   Puppet Master would keep insertion order instead of sorted order. Seven existing tests failed at
+//!   Potato Workspace would keep insertion order instead of sorted order. Seven existing tests failed at
 //!   once (golden files, the pinned tool-catalog version), and any signed or hashed JSON would have
 //!   changed silently. `types.rs` has the dozen message types this lane reads, tolerant of unknown fields,
 //!   checked against real adapter traffic in `fixtures/`; everything else in a message stays a raw

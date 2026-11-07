@@ -2,9 +2,9 @@
 //!
 //! A Windows process keeps the PATH it was born with. After `winget install`, the installer has
 //! written the new folder to the registry (`HKLM\...\Environment` and `HKCU\Environment`), but
-//! Puppet Master, and every pane it spawns from now on, still sees the old list. So the doctor
+//! Potato Workspace, and every pane it spawns from now on, still sees the old list. So the doctor
 //! would report "not installed" until the app restarts. Here we read the registry PATH, add the
-//! folders the process does not have yet, and set them on Puppet Master's own environment; panes
+//! folders the process does not have yet, and set them on Potato Workspace's own environment; panes
 //! and headless runs copy that environment when they start.
 //!
 //! Only additions are made: nothing is reordered or removed, so an existing tool never gets

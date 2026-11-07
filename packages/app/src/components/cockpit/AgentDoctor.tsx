@@ -100,7 +100,7 @@ function SignInHelp({ id }: { id: string }) {
       </button>
       {open && (
         <p id={panel} className="ck-doctor-hint">
-          A window opens where you sign in. Puppet Master never sees your password.
+          A window opens where you sign in. Potato Workspace never sees your password.
         </p>
       )}
     </div>
@@ -252,7 +252,7 @@ export function AgentDoctor({
           setInstall(id, {
             phase: 'result',
             tone: 'problem',
-            text: 'Installed, but Puppet Master cannot find it yet.',
+            text: 'Installed, but Potato Workspace cannot find it yet.',
             again: true,
           });
         } else {
@@ -279,13 +279,13 @@ export function AgentDoctor({
           setInstall(id, {
             phase: 'result',
             tone: 'problem',
-            text: 'Installed, but Puppet Master cannot find it yet.',
+            text: 'Installed, but Potato Workspace cannot find it yet.',
             again: true,
             restart: true,
           });
         }
       })
-      .catch(() => setInstall(id, { phase: 'result', tone: 'problem', text: 'Puppet Master could not check it.', again: true }));
+      .catch(() => setInstall(id, { phase: 'result', tone: 'problem', text: 'Potato Workspace could not check it.', again: true }));
   };
 
   // While an install window is open, ask whether its command has finished.
@@ -397,7 +397,7 @@ export function AgentDoctor({
                               {busy
                                 ? 'Asking it a tiny question. This can take a minute.'
                                 : inst?.phase === 'running'
-                                  ? `Installing ${inst.label} in the window. Puppet Master checks again when it is done.`
+                                  ? `Installing ${inst.label} in the window. Potato Workspace checks again when it is done.`
                                   : inst?.phase === 'finishing'
                                     ? 'Checking that it works.'
                                     : plainReason(r)}
@@ -408,7 +408,7 @@ export function AgentDoctor({
                               <p className="ck-doctor-hint ck-doctor-result" data-tone={inst.tone} role="status">
                                 {inst.text}
                               </p>
-                              {inst.restart && <p className="ck-doctor-hint">Close Puppet Master and open it again.</p>}
+                              {inst.restart && <p className="ck-doctor-hint">Close Potato Workspace and open it again.</p>}
                               {inst.again && (
                                 <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => recheck(r.id)}>
                                   Check again

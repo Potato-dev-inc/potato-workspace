@@ -1,10 +1,10 @@
 // The bridge's per-launch local key (S3). The desktop app gets it over Tauri IPC and sends it as
-// `X-PM-Local-Secret` on its own HTTP calls to the loopback bridge. The bridge only logs a local
+// `X-Potato-Workspace-Local-Secret` on its own HTTP calls to the loopback bridge. The bridge only logs a local
 // caller without it for now (`LOCAL_SECRET_MISSING`). The key is never sent anywhere but loopback:
 // the phone PWA has no Tauri and never sees it.
 import { tauri } from './tauri';
 
-export const LOCAL_SECRET_HEADER = 'X-PM-Local-Secret';
+export const LOCAL_SECRET_HEADER = 'X-Potato-Workspace-Local-Secret';
 
 let secret: string | null = null;
 let loading: Promise<string | null> | null = null;

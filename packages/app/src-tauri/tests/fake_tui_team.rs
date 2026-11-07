@@ -7,7 +7,7 @@
 //! push and reads it; Maya's agent drafts a review request, and it goes out only when Maya clicks;
 //! a phone behind a tunnel and a removed member get nothing.
 //!
-//! What is real: two Puppet Master processes (this test and a second run of this binary, each an
+//! What is real: two Potato Workspace processes (this test and a second run of this binary, each an
 //! isolated world with its own app-data folder, panes and in-memory key store; see
 //! `src/fake_tui/team.rs`), the Team service in each (invite, join, approval, signed roster, sealed
 //! events, the queue runner), a real relay on a loopback port (`pm-relay`), a real git remote (a
@@ -442,7 +442,7 @@ fn two_people_tell_each_other_through_a_relay_and_nothing_lands_without_a_click(
     assert_eq!(parked["conflicts"], json!(["src/auth.ts"]));
     assert!(parked["copyBranch"].as_str().unwrap().starts_with("pm/"), "the work is in a separate copy");
     assert_eq!(git(&leo_clone, &["rev-parse", "HEAD"]), leo_head, "his branch has not moved");
-    assert!(git(&leo_clone, &["status", "--porcelain"]).lines().all(|l| l.contains(".puppet-master")), "and his files are untouched");
+    assert!(git(&leo_clone, &["status", "--porcelain"]).lines().all(|l| l.contains(".potato-workspace")), "and his files are untouched");
     assert!(leo.call("events", json!({})).as_array().unwrap().iter().all(|e| e["ev"] != "prompt"), "no agent has been started: this agent runs commands, so he starts it");
 
     leo.call("start_job", json!({ "job_id": job_id }));
@@ -476,7 +476,7 @@ fn two_people_tell_each_other_through_a_relay_and_nothing_lands_without_a_click(
     assert!(git_ok(&leo_clone, &["merge-base", "--is-ancestor", &maya_head, "HEAD"]), "Maya's commit is in his branch");
     assert!(git_ok(&leo_clone, &["merge-base", "--is-ancestor", &leo_head, "HEAD"]), "and so is his own");
     assert_eq!(git(&leo_clone, &["rev-list", "--parents", "-n", "1", "HEAD"]).split(' ').count(), 3, "a merge commit: it fast-forwarded to the copy's merge");
-    assert!(git(&leo_clone, &["status", "--porcelain"]).lines().all(|l| l.contains(".puppet-master")), "his tree is clean");
+    assert!(git(&leo_clone, &["status", "--porcelain"]).lines().all(|l| l.contains(".potato-workspace")), "his tree is clean");
     assert_eq!(leo.job(&job_id)["state"], "applied");
     // Nothing was pushed or merged by Leo's side: the origin is exactly as Maya left it.
     assert_eq!(origin.refs(), refs_before, "origin's refs are unchanged");

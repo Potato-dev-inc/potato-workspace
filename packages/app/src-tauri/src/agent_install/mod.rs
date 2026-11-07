@@ -12,7 +12,7 @@
 //! 4. `status` reads the pane for the done marker; `finish` refreshes PATH for this process
 //!    (`path_refresh`) and re-runs the health check for that agent.
 //!
-//! Nothing here names an agent: commands come from `TuiProfile::install_spec`. Puppet Master never
+//! Nothing here names an agent: commands come from `TuiProfile::install_spec`. Potato Workspace never
 //! types into the install pane and never sees a password; signing in is a separate visible pane
 //! the agent itself opens.
 
@@ -81,7 +81,7 @@ fn step_view(index: usize, s: &Step) -> Value {
 }
 
 fn unknown_agent(agent_id: &str) -> String {
-    format!("INSTALL_UNKNOWN_AGENT: {agent_id} is not an agent Puppet Master knows")
+    format!("INSTALL_UNKNOWN_AGENT: {agent_id} is not an agent Potato Workspace knows")
 }
 
 /// The current plan for `agent_id`, on this PC, right now. A registered agent uses its profile's
@@ -187,7 +187,7 @@ pub fn start_plan(
     let script = command::powershell_script(&step);
 
     // A neutral folder: an install must not sync project memory into the active project.
-    let dir = std::env::temp_dir().join("puppet-master-doctor");
+    let dir = std::env::temp_dir().join("potato-workspace-doctor");
     let _ = std::fs::create_dir_all(&dir);
     let pane_id = crate::pty::registry_spawn_pane(
         registry,

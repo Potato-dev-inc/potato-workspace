@@ -21,7 +21,7 @@ describe('tonightProjects', () => {
   it('lists pane folders first (a copy maps back to its project), then recents, each once; only repos are git', () => {
     const list = tonightProjects(
       [recent('C:\\work\\shop', 'shop', 'repo'), recent('C:\\work\\notes', 'notes', 'folder'), recent('C:\\work\\gone', 'gone', 'missing')],
-      ['C:\\work\\notes', 'C:\\work\\shop\\.puppet-master\\worktrees\\ab-1', 'C:\\work\\shop', undefined],
+      ['C:\\work\\notes', 'C:\\work\\shop\\.potato-workspace\\worktrees\\ab-1', 'C:\\work\\shop', undefined],
     );
     expect(list).toEqual([
       { path: 'C:\\work\\notes', name: 'notes', git: false },

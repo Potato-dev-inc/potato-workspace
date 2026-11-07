@@ -63,7 +63,7 @@ export function MergeSheet({
           </p>
           <p className="ck-team-meta">
             GitHub merges it {plan.methodWords} once the required checks pass and branch protection allows it. If anyone pushes to it
-            first, nothing is merged. Puppet Master never merges by itself.
+            first, nothing is merged. Potato Workspace never merges by itself.
           </p>
           {plan.autoMergeOff && (
             <p className="ck-team-meta">Auto-merge is off for {plan.repo}. An admin can turn it on in GitHub.</p>

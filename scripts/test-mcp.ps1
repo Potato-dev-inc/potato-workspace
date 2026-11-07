@@ -8,7 +8,7 @@ $mcpErrLog = "$env:TEMP\pm-mcp-mcp.err"
 Remove-Item $mcpErrLog -ErrorAction SilentlyContinue
 
 # Start bridge
-$env:PUPPET_MASTER_BRIDGE_PORT_FILE = $pf
+$env:POTATO_WORKSPACE_BRIDGE_PORT_FILE = $pf
 $bridge = Start-Process -FilePath "node" `
   -ArgumentList "--enable-source-maps", "packages\bridge\dist\server.js" `
   -PassThru -NoNewWindow `

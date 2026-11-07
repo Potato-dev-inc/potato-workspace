@@ -183,7 +183,7 @@ fn a_started_chat_is_a_pane_with_no_terminal_that_says_it_is_a_chat() {
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].id, rig.id());
     assert_eq!(listed[0].lane.as_deref(), Some(LANE));
-    assert_eq!(listed[0].pid, 0);
+    assert!(listed[0].pid > 0, "the adapter process places the chat (helper nesting)");
     assert_eq!(listed[0].status, "idle");
     assert!(rig.host.pane_changes.load(Ordering::SeqCst) >= 1);
     assert!(get(&rig.id()).is_some());
@@ -675,7 +675,7 @@ fn an_adapter_that_dies_mid_turn_leaves_a_consistent_chat_and_the_next_message_b
     assert_eq!(kinds.iter().filter(|k| *k == "toolCall").count(), kinds.iter().filter(|k| *k == "toolResult").count(), "no tool keeps spinning");
     assert_eq!(items.iter().find(|i| i["kind"] == "toolResult").unwrap()["ok"], false);
     assert_eq!(items.iter().find(|i| i["kind"] == "turnEnd").unwrap()["outcome"], "failed");
-    assert!(items.iter().any(|i| i["noticeKind"] == "error"), "{kinds:?}");
+    assert!(items.iter().any(|i| i["noticeKind"] == "ending:failed"), "{kinds:?}");
     assert!(wait_until(10, || rig.pane_status() == "error"), "the pane reads error after a crash");
     assert_eq!(rig.chat.readiness(), Readiness::Ready, "the next message restarts the adapter");
 
@@ -966,4 +966,141 @@ fn an_adapter_that_never_answers_the_start_fails_in_time_and_leaves_no_process()
     assert_eq!(error.code, "ACP_START_FAILED");
     assert!(error.fallback, "the terminal can run the agent instead");
     assert!(registry.lock().list().is_empty(), "no pane is left behind");
+}
+
+// ---- the model and effort a caller asks for ----------------------------------------------------------------------
+
+#[test]
+fn a_chat_helper_gets_the_model_and_effort_it_asked_for() {
+    let rig = Rig::new("");
+    let applied = rig.chat.apply_choices(Some("b"), Some("low")).expect("the fake agent offers both");
+    assert_eq!(applied.model.as_deref(), Some("b"));
+    assert_eq!(applied.reasoning.as_deref(), Some("low"));
+    assert!(applied.warnings.is_empty(), "an exact choice needs no warning: {:?}", applied.warnings);
+    let view = crate::acp::chat::surface::view(&rig.chat);
+    assert_eq!(view["model"], json!("b"));
+    assert_eq!(view["reasoning"], json!("low"));
+    assert!(view["pane_policy"].as_str().unwrap().contains("stays_open"));
+}
+
+#[test]
+fn a_model_the_agent_does_not_offer_is_an_error_not_a_quiet_substitution() {
+    let rig = Rig::new("");
+    let error = rig.chat.apply_choices(Some("claude-haiku-5-5"), None).unwrap_err();
+    assert_eq!(error.code, "ACP_MODEL_NOT_OFFERED");
+    assert!(error.message.contains("a") && error.message.contains("b"), "it lists what the agent offers: {}", error.message);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("a"), "the model did not change");
+}
+
+#[test]
+fn an_effort_the_agent_does_not_offer_is_an_error() {
+    let rig = Rig::new("");
+    let error = rig.chat.apply_choices(None, Some("extreme")).unwrap_err();
+    assert_eq!(error.code, "ACP_REASONING_NOT_OFFERED");
+    assert!(error.message.contains("low"), "it lists what the agent offers: {}", error.message);
+}
+
+// ---- waiting: background work and prompt stability ---------------------------------------------------------------
+
+impl Rig {
+    fn start_deps(&self) -> StartDeps {
+        StartDeps {
+            registry: self.registry.clone(),
+            host: self.host.clone(),
+            env: Arc::new(TestEnv { root: self.dir.clone() }),
+            conversations: None,
+        }
+    }
+
+    fn wait_call(&self, body: Value) -> Value {
+        let reply = super::surface::intercept("POST", &["agents", "wait"], "", body.to_string().as_bytes(), &self.start_deps(), None)
+            .expect("a chat wait is handled")
+            .expect("the chat wait succeeds");
+        reply
+    }
+}
+
+#[test]
+fn wait_agents_keeps_waiting_while_reported_background_work_runs() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.send("bg").unwrap();
+    assert!(wait_until(10, || rig.items().iter().any(|i| i["kind"] == "turnEnd")), "{:#?}", rig.kinds());
+    assert!(rig.chat.session().snapshot().background_tasks.iter().any(|t| t.is_running()));
+
+    let started = Instant::now();
+    let reply = rig.wait_call(json!({"handles": [id], "until": ["completed"], "timeout_ms": 5000}));
+    assert!(started.elapsed() >= Duration::from_millis(600), "did not wait for the background task: {:?}", started.elapsed());
+    assert_eq!(reply["agents"][0]["status"], "completed");
+    assert_eq!(reply["agents"][0]["background_running"], false);
+    assert_eq!(reply["agents"][0]["background_tracking"], "reported");
+}
+
+#[test]
+fn wait_returns_the_later_reply_after_background_work_ends() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.send("bgreply").unwrap();
+    assert!(wait_until(10, || rig.items().iter().any(|i| i["kind"] == "turnEnd")), "{:#?}", rig.kinds());
+    assert!(rig.chat.session().snapshot().background_tasks.iter().any(|t| t.is_running()));
+
+    let reply = rig.wait_call(json!({"handles": [id], "until": ["completed"], "timeout_ms": 10000}));
+    assert_eq!(reply["reason"], "matched_state");
+    assert_eq!(reply["agents"][0]["status"], "completed");
+    assert_eq!(reply["agents"][0]["result"], "pong");
+    assert_eq!(reply["agents"][0]["background_running"], false);
+}
+
+#[test]
+fn an_adapter_that_does_not_report_background_work_says_so() {
+    let rig = Rig::new("background_tasks=0");
+    let view = super::surface::view(&rig.chat);
+    assert_eq!(view["background_tracking"], "not_reported_by_adapter");
+    assert!(view["background_note"].as_str().unwrap().contains("turn only"), "{view}");
+    assert_eq!(view["background_running"], false);
+}
+
+#[test]
+fn wait_for_background_false_returns_the_turn_only_answer() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.send("bg").unwrap();
+    assert!(wait_until(10, || rig.items().iter().any(|i| i["kind"] == "turnEnd")), "{:#?}", rig.kinds());
+
+    let started = Instant::now();
+    let reply = rig.wait_call(json!({"handles": [id], "until": ["completed"], "timeout_ms": 5000, "wait_for_background": false}));
+    assert!(started.elapsed() < Duration::from_millis(900), "opted out but still waited: {:?}", started.elapsed());
+    assert_eq!(reply["agents"][0]["status"], "completed");
+    assert_eq!(reply["agents"][0]["background_running"], true);
+}
+
+#[test]
+fn confirm_prompt_ms_returns_only_a_prompt_that_stays_open() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.send("perm").unwrap();
+    rig.wait_phase(Phase::NeedsInput);
+
+    let started = Instant::now();
+    let reply = rig.wait_call(json!({"handles": [id], "until": ["waiting_input"], "timeout_ms": 5000, "confirm_prompt_ms": 250}));
+    assert!(started.elapsed() >= Duration::from_millis(250), "{:?}", started.elapsed());
+    assert_eq!(reply["reason"], "matched_state");
+    assert_eq!(reply["agents"][0]["status"], "waiting_input");
+    assert!(reply["agents"][0]["prompt"]["prompt_id"].is_string());
+    assert!(reply["agents"][0]["prompt"]["open_ms"].as_u64().unwrap() >= 250);
+}
+
+#[test]
+fn confirm_prompt_ms_does_not_report_a_prompt_that_clears() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.send("permend").unwrap();
+    assert!(wait_until(10, || rig.items().iter().any(|i| i["kind"] == "turnEnd")), "{:#?}", rig.kinds());
+
+    let started = Instant::now();
+    let reply = rig.wait_call(json!({"handles": [id], "until": ["waiting_input"], "timeout_ms": 700, "confirm_prompt_ms": 250}));
+    assert!(started.elapsed() >= Duration::from_millis(600), "{:?}", started.elapsed());
+    assert_eq!(reply["reason"], "timeout");
+    assert!(reply["agents"][0]["prompt"].is_null());
+    assert_eq!(reply["agents"][0]["last_prompt"]["reason"], "turn_ended");
 }

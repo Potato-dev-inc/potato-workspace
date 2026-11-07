@@ -49,7 +49,7 @@ const draft: CompanionDraft = {
   avatar: 'bit',
   persona: 'plain',
   agentType: 'claude',
-  folder: 'C:\\Users\\you\\PuppetMaster\\companions\\bun',
+  folder: 'C:\\Users\\you\\PotatoWorkspace\\companions\\bun',
 };
 
 describe('tauriCompanionTransport', () => {

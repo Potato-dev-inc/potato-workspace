@@ -75,8 +75,8 @@ fn a_linux_pane_opens_with_its_place_and_only_the_listed_names_cross() {
     assert_eq!(args[1].len(), 36, "a session id: {launch}");
 
     // Only the names PM lists cross, and WSLENV is PM's own string, whatever the process had.
-    assert_eq!(launch["wslenv"], "PM_WSL_PATH/u:PUPPET_MASTER_PANE_ID", "{launch}");
-    assert_eq!(launch["env"], json!(["PM_WSL_PATH", "PUPPET_MASTER_PANE_ID"]), "{launch}");
+    assert_eq!(launch["wslenv"], "PM_WSL_PATH/u:POTATO_WORKSPACE_PANE_ID", "{launch}");
+    assert_eq!(launch["env"], json!(["PM_WSL_PATH", "POTATO_WORKSPACE_PANE_ID"]), "{launch}");
     assert!(!launch.to_string().contains("PM_TEST_SECRET_TOKEN") && !launch.to_string().contains("do-not-cross"), "{launch}");
 
     // The probe asked for the agent's program. (The distro list is cached for 30 s in the process, so a call to `--list` is

@@ -235,7 +235,7 @@ describe('the copy', () => {
     expect(text()).toContain(FOOTER);
     expect(FOOTER).toContain('It asks before the agent reads the log, and again before anything is pushed.');
     expect(FOOTER).toContain("The agent can't push during a fix.");
-    expect(FOOTER).toContain('Puppet Master never re-runs CI, merges or force-pushes.');
+    expect(FOOTER).toContain('Potato Workspace never re-runs CI, merges or force-pushes.');
   });
 
   it('the copy never says "auto", and "merge", "re-run" or "force" only in the footer that says PM never does them', async () => {

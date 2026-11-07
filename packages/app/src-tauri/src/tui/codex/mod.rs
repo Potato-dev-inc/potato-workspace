@@ -30,7 +30,7 @@ pub(crate) const TESTED_VERSIONS: &str = ">=0.159, <0.170";
 const MCP_HOST: &str = r#"
 config_path = "~/.codex/config.toml"
 format = "toml"
-key_path = "mcp_servers.puppet-master"
+key_path = "mcp_servers.potato-workspace"
 project_config_path = ".codex/config.toml"
 [entry]
 command = "{command}"
@@ -41,7 +41,7 @@ url = "{url}"
 http_headers = "{headers}"
 "#;
 
-/// Where Codex reads skills ("Add Puppet Master to your agents").
+/// Where Codex reads skills ("Add Potato Workspace to your agents").
 const SKILLS_HOST: &str = r#"
 dir = "~/.agents/skills"
 "#;
@@ -221,7 +221,7 @@ impl TuiProfile for Codex {
     /// for them. The generic heuristic reads Codex's trust screen as idle (it draws no `y/n` text and the
     /// busy marker says "not working"), so the pane stayed `idle`, `deriveNeedsYou` raised no card and
     /// the Trust / Don't trust buttons never reached the Inbox (live, v0.2.0: the run's own
-    /// `required_action` had them, `GET /attention` was empty). Gates Puppet Master dismisses itself
+    /// `required_action` had them, `GET /attention` was empty). Gates Potato Workspace dismisses itself
     /// (update notice, hooks review) are not waits.
     fn classify_screen(&self, visible_tail: &str) -> Option<crate::pty::status::PaneStatus> {
         screen::startup_gate(visible_tail)

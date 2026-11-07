@@ -1,6 +1,6 @@
 //! Red to Green: the ownership rules for a watched pull request and the offer rules (SPEC n33
 //! section 3.3). Pure: no I/O. `owns` runs on every poll and refuses anything that is not a pull
-//! request Puppet Master opened. `should_offer` decides whether one failure raises one card. The
+//! request Potato Workspace opened. `should_offer` decides whether one failure raises one card. The
 //! rest are the day count, the one-at-a-time rule, the poll timing and the 14-day watch limit.
 
 use super::github::{ApiPull, CiRead};
@@ -12,7 +12,7 @@ use super::model::{
 
 const DAY_MS: u64 = 24 * 3600 * 1000;
 
-/// What a failure on a Puppet Master commit leads to.
+/// What a failure on a Potato Workspace commit leads to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Offer {
     /// No card: checks still run, the failure was already offered, or the watch is not active.
@@ -25,7 +25,7 @@ pub enum Offer {
     DayCap,
 }
 
-/// Is this pull request one Puppet Master may watch and fix? Checked on every poll. The error is
+/// Is this pull request one Potato Workspace may watch and fix? Checked on every poll. The error is
 /// the code and a plain English line. Order: closed, fork, author, base repo, branch, head commit.
 pub fn owns(w: &Watch, me: &str, pull: &ApiPull, default_branch: Option<&str>) -> Result<(), (&'static str, String)> {
     if pull.state != "open" || pull.merged {
@@ -33,7 +33,7 @@ pub fn owns(w: &Watch, me: &str, pull: &ApiPull, default_branch: Option<&str>) -
     }
     match pull.head_repo.as_deref() {
         Some(head) if head.eq_ignore_ascii_case(&pull.base_repo) => {}
-        _ => return Err((CI_FIX_FORK, "This pull request comes from a fork. Puppet Master won't fix it.".to_string())),
+        _ => return Err((CI_FIX_FORK, "This pull request comes from a fork. Potato Workspace won't fix it.".to_string())),
     }
     if me.is_empty() || pull.author.is_empty() || !pull.author.eq_ignore_ascii_case(me) {
         return Err((CI_FIX_NOT_YOURS, "Someone else opened this pull request.".to_string()));
@@ -43,10 +43,10 @@ pub fn owns(w: &Watch, me: &str, pull: &ApiPull, default_branch: Option<&str>) -
     }
     let default_is_head = default_branch.is_some_and(|d| d.eq_ignore_ascii_case(&pull.head_ref));
     if pull.head_ref != w.branch || !pm_branch_ok(&pull.head_ref, &pull.base_ref) || default_is_head {
-        return Err((CI_FIX_NOT_PM_BRANCH, "This branch is not one Puppet Master opened.".to_string()));
+        return Err((CI_FIX_NOT_PM_BRANCH, "This branch is not one Potato Workspace opened.".to_string()));
     }
     if !w.pushed_shas.iter().any(|sha| sha == &pull.head_sha) {
-        return Err((CI_FIX_HEAD_MOVED, "Someone pushed to this branch after Puppet Master.".to_string()));
+        return Err((CI_FIX_HEAD_MOVED, "Someone pushed to this branch after Potato Workspace.".to_string()));
     }
     Ok(())
 }
@@ -129,7 +129,7 @@ pub fn due(w: &Watch, last_poll_ms: u64, pending: bool, backoff_s: u64, now_ms: 
     now_ms >= last_poll_ms.saturating_add(wait_s * 1000)
 }
 
-/// Has the watch gone 14 days without a push from Puppet Master?
+/// Has the watch gone 14 days without a push from Potato Workspace?
 pub fn expired(w: &Watch, now_ms: u64) -> bool {
     now_ms.saturating_sub(w.last_push_ms) >= WATCH_IDLE_DAYS * DAY_MS
 }

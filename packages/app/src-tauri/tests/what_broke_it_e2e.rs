@@ -325,8 +325,8 @@ fn build_history(env: &Env, later: Later, bug: bool) -> Vec<String> {
         }));
     }
     let ring = json!({ "version": 1, "panes": summary_rows });
-    let dir = env.project.join(".puppet-master");
-    fs::create_dir_all(&dir).expect("create the .puppet-master folder");
+    let dir = env.project.join(".potato-workspace");
+    fs::create_dir_all(&dir).expect("create the .potato-workspace folder");
     fs::write(dir.join("turn-summaries.json"), ring.to_string()).expect("write the turn summaries");
     ids
 }
@@ -361,13 +361,13 @@ fn snap(project: &Path, pane: &str, kind: Kind, note: &str, at_ms: u64, turn: u3
     }
 }
 
-/// Every file of the folder (except `.puppet-master/`) with its SHA-256. Equal maps mean equal folders.
+/// Every file of the folder (except `.potato-workspace/`) with its SHA-256. Equal maps mean equal folders.
 fn folder_digest(root: &Path) -> BTreeMap<String, String> {
     fn walk(dir: &Path, root: &Path, out: &mut BTreeMap<String, String>) {
         for entry in fs::read_dir(dir).expect("read the folder") {
             let path = entry.expect("read an entry").path();
             let rel = path.strip_prefix(root).expect("inside the folder").to_string_lossy().replace('\\', "/");
-            if rel == ".puppet-master" {
+            if rel == ".potato-workspace" {
                 continue;
             }
             if path.is_dir() {

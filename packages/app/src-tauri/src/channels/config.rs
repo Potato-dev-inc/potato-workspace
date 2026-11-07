@@ -1,6 +1,6 @@
 //! Text Your Agents: the saved Telegram settings (`telegram.json`), their defaults and the phone view.
 //!
-//! The file lives in the app data folder and only Puppet Master's own commands write it. It is not in
+//! The file lives in the app data folder and only Potato Workspace's own commands write it. It is not in
 //! `settings.json`, so the settings mirror and the bridge can never patch it. `Control` is never kept:
 //! it is stripped on load and on save, so a chat can never be given the power to start or stop agents.
 

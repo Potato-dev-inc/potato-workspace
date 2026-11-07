@@ -1,11 +1,11 @@
 {
-  "name": "@puppet-master/cli",
+  "name": "@potato-workspace/cli",
   "version": "0.2.2",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "puppet-master": "./dist/index.js"
+    "potato-workspace": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@puppet-master/shared": "*"
+    "@potato-workspace/shared": "*"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

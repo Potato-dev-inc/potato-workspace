@@ -451,7 +451,7 @@ mod tests {
 
         // Rewrite the persisted snapshot as if it had been written by an agent that is gone now.
         let file = std::path::Path::new(&project)
-            .join(".puppet-master")
+            .join(".potato-workspace")
             .join("operations")
             .join(format!("{}.json", created.operation_id));
         let mut raw: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();

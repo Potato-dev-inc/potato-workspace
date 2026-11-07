@@ -1,7 +1,7 @@
 //! User accounts per agent: the same agent CLI run under different logins, one chosen per pane.
 //!
 //! An account is `{ id, agent_id, label, home }`. `home` is a directory the user controls (by
-//! default one folder per account under `<app data>/accounts/`). Puppet Master only points the
+//! default one folder per account under `<app data>/accounts/`). Potato Workspace only points the
 //! agent CLI at it through the env var the agent's profile declares (`TuiProfile::account_scheme`);
 //! it never reads, copies or pools the credentials inside. Generic code here never matches agent
 //! names: whether an agent supports accounts is the profile's answer.

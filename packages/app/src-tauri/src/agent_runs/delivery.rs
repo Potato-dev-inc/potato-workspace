@@ -533,7 +533,7 @@ fn await_ready(
                 ));
                 let before = verdict.screen().to_string();
                 match io.write(WriteOrigin::Gate(&permit), permit.keys(), false) {
-                    // Audit: Puppet Master pressed keys on the person's behalf (which screen, which keys).
+                    // Audit: Potato Workspace pressed keys on the person's behalf (which screen, which keys).
                     Ok(()) => crate::audit::note_gate_dismissal(gate.id, gate.summary, permit.keys()),
                     Err(error) if is_stale(&error) => continue,
                     Err(_) => return Err(Stop::Blocked(gate)),
@@ -1403,7 +1403,7 @@ working
     // ---- regression: kilo home screen on a 121-column pane (visible run_agent, PROMPT_NOT_SUBMITTED) ----
 
     const KILO_HOME_TYPED: &str = include_str!("fixtures/kilo_home_typed_121.txt");
-    const KILO_TASK: &str = "Demo for a video: in two short sentences, say what Puppet Master is based on the README in this folder. Do not edit any files.";
+    const KILO_TASK: &str = "Demo for a video: in two short sentences, say what Potato Workspace is based on the README in this folder. Do not edit any files.";
 
     /// The fixture painted into a real 121x36 terminal emulator, then read the way the app reads panes.
     fn painted(keep_cols: Option<u16>) -> String {

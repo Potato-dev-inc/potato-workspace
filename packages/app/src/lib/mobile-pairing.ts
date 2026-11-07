@@ -6,7 +6,7 @@ import {
   type PairingQrPayload,
   type PairingSessionInfo,
   type PairResponse,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import { type BridgeLocation, LS_BRIDGE_URL, resolveBridgeBaseUrl } from './bridge-url';
 import { mergeBridgeHeaders } from './mobile-pairing-auth';
 

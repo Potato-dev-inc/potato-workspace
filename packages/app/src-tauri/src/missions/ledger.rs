@@ -1,8 +1,8 @@
 //! `MISSION.md`: the one file any agent or person can pick the mission up from (DESIGN-MISSIONS
-//! 2.6). It lives in the copy at `.puppet-master/MISSION.md`: git-excluded (never merged, never
+//! 2.6). It lives in the copy at `.potato-workspace/MISSION.md`: git-excluded (never merged, never
 //! in a pull request) and outside the checkpoint shadow repo (a rollback never rewinds the notes).
 //!
-//! Puppet Master rewrites every section except "Notes from agents", whose text it keeps (capped at
+//! Potato Workspace rewrites every section except "Notes from agents", whose text it keeps (capped at
 //! 8 KB, oldest lines dropped). The notes are data: they are fenced whenever they go into a prompt.
 
 use super::model::{Mission, Round, RoundKind};
@@ -13,7 +13,7 @@ const NOTES_CAP: usize = 8 * 1024;
 const TRIMMED: &str = "(older notes trimmed)";
 
 pub fn path(copy: &Path) -> PathBuf {
-    copy.join(".puppet-master").join("MISSION.md")
+    copy.join(".potato-workspace").join("MISSION.md")
 }
 
 /// The agents' notes in the file now (empty when there are none).
@@ -65,7 +65,7 @@ fn round_line(m: &Mission, r: &Round, before: Option<String>) -> String {
 pub fn render(m: &Mission, notes: &str) -> String {
     let mut out = String::new();
     out.push_str(&format!("# Mission: {}\n", first_line(&m.objective)));
-    out.push_str("<!-- Written by Puppet Master. Agents: add notes only under \"Notes from agents\". -->\n\n");
+    out.push_str("<!-- Written by Potato Workspace. Agents: add notes only under \"Notes from agents\". -->\n\n");
     out.push_str("## Goal\n");
     out.push_str(m.objective.trim());
     out.push_str("\n\n## How we'll know\n");
@@ -86,7 +86,7 @@ pub fn render(m: &Mission, notes: &str) -> String {
         );
     }
     out.push_str("- You work in a separate copy. Don't merge, push or open pull requests.\n");
-    out.push_str("\n## Progress (Puppet Master)\n| Turn | Agent | Checks | What happened |\n|---|---|---|---|\n");
+    out.push_str("\n## Progress (Potato Workspace)\n| Turn | Agent | Checks | What happened |\n|---|---|---|---|\n");
     let mut before = m.baseline.as_ref().map(|b| b.short());
     for r in &m.rounds {
         out.push_str(&round_line(m, r, before.clone()));
@@ -125,7 +125,7 @@ fn first_line(text: &str) -> String {
     short
 }
 
-/// Rewrites the file in the copy. Returns `true` when Puppet Master's own sections had been
+/// Rewrites the file in the copy. Returns `true` when Potato Workspace's own sections had been
 /// edited by someone (they are put back; the round log notes it).
 pub fn write(m: &Mission) -> bool {
     let Some(copy) = m.worktree.as_ref().filter(|w| w.closed.is_none()).map(|w| PathBuf::from(&w.cwd)).filter(|c| c.is_dir()) else {

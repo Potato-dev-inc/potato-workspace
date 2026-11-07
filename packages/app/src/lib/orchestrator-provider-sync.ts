@@ -1,4 +1,4 @@
-import type { LlmProvider, OrchestratorBackend } from '@puppet-master/shared';
+import type { LlmProvider, OrchestratorBackend } from '@potato-workspace/shared';
 import type { BridgeClient } from './bridge';
 import { loadSettings, patchSettings } from './settings';
 

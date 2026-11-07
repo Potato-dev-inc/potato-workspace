@@ -1,5 +1,5 @@
 // "Panes" tab of the mobile PWA: pane list, or the selected pane's terminal.
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { useBridgePaneRegistry } from '../../hooks/useBridgePaneRegistry';
 import { BridgePaneTerminal, useBridgePaneTransport } from '../BridgePaneTerminal';
 

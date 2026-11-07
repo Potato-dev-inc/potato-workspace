@@ -1,5 +1,5 @@
 //! Declared tests (SPEC n32 section 3.3). The person declares, per project, the command that proves a
-//! task passed. Puppet Master never guesses it: `suggestions` only offers what `missions::detect`
+//! task passed. Potato Workspace never guesses it: `suggestions` only offers what `missions::detect`
 //! found, and nothing runs from it until the person declares it.
 //!
 //! A command is an argv, never a shell string. `parse_command` refuses shell operators, so the check
@@ -29,7 +29,7 @@ pub struct Declared {
     pub declared_ms: u64,
 }
 
-/// A check Puppet Master found in the project. Only a suggestion: it is not used until declared.
+/// A check Potato Workspace found in the project. Only a suggestion: it is not used until declared.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Suggestion {
     pub name: String,
@@ -131,11 +131,11 @@ pub fn declare(store: &Store, project: &str, list: Vec<Declared>) -> Result<(), 
 }
 
 /// Plain-language notes about one declared check. A relative script path (`./test.sh`) can be
-/// edited by an agent, so Puppet Master cannot tell whether the check itself changed.
+/// edited by an agent, so Potato Workspace cannot tell whether the check itself changed.
 pub fn warnings(_project: &Path, declared: &Declared) -> Vec<String> {
     match declared.argv.first() {
         Some(program) if is_relative_path(program) => vec![format!(
-            "This runs {program} from the project. If an agent edits that file, Puppet Master can't tell."
+            "This runs {program} from the project. If an agent edits that file, Potato Workspace can't tell."
         )],
         _ => Vec::new(),
     }

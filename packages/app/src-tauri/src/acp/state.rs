@@ -33,6 +33,7 @@ pub const MAX_RUNNING_TOOLS: usize = 64;
 pub const MAX_COMMANDS: usize = 100;
 pub const MAX_CONFIG_OPTIONS: usize = 64;
 pub const MAX_PERMISSION_WAITS: usize = 32;
+pub const MAX_BACKGROUND_TASKS: usize = 64;
 const MAX_NAME_CHARS: usize = 64;
 const MAX_TEXT_CHARS: usize = 300;
 
@@ -108,6 +109,21 @@ pub struct PermissionWait {
     pub since_ms: u64,
 }
 
+/// A background task the agent reports (`async_task_*`): it can outlive the turn that started it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BackgroundTask {
+    pub id: String,
+    pub name: Option<String>,
+    /// `running`, `paused` (the states the adapter reports while the task is alive).
+    pub state: String,
+}
+
+impl BackgroundTask {
+    pub fn is_running(&self) -> bool {
+        matches!(self.state.as_str(), "running" | "paused")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HistoryLost {
     pub old_session_id: String,
@@ -145,6 +161,8 @@ pub struct Snapshot {
     pub turn: u64,
     pub running_tools: Vec<ToolBrief>,
     pub permission_waits: Vec<PermissionWait>,
+    /// Background work that outlives the turn (only when the adapter reports it).
+    pub background_tasks: Vec<BackgroundTask>,
     pub commands: Vec<CommandInfo>,
     pub config_options: Vec<Value>,
     pub modes: Option<Value>,
@@ -167,6 +185,7 @@ impl Snapshot {
             turn: 0,
             running_tools: Vec::new(),
             permission_waits: Vec::new(),
+            background_tasks: Vec::new(),
             commands: Vec::new(),
             config_options: Vec::new(),
             modes: None,
@@ -311,6 +330,7 @@ impl SessionState {
         w.phase = if resuming { Phase::Resuming } else { Phase::Starting };
         w.running_tools.clear();
         w.permission_waits.clear();
+        w.background_tasks.clear();
         w.commands.clear();
         // A session that comes back keeps the settings it last showed: `session/load` and `session/resume` may
         // answer without them. A brand new session starts without any until `session/new` lists its own.
@@ -355,6 +375,7 @@ impl SessionState {
         w.phase = Phase::Dormant;
         w.running_tools.clear();
         w.permission_waits.clear();
+        w.background_tasks.clear();
         w.exit = None;
         self.turn_active = false;
     }
@@ -365,6 +386,7 @@ impl SessionState {
         w.phase = Phase::Exited;
         w.running_tools.clear();
         w.permission_waits.clear();
+        w.background_tasks.clear();
         w.exit = Some(exit);
         self.turn_active = false;
     }
@@ -487,9 +509,60 @@ impl SessionState {
             SessionUpdate::UsageUpdate(usage) => {
                 self.working.usage = Some(UsageBrief { used: usage.used, size: usage.size });
             }
+            SessionUpdate::AsyncTaskSpawned(task) if !replay => {
+                self.background_started(&task.async_task_id, task.name.clone(), task.description.clone());
+            }
+            SessionUpdate::AsyncTaskProgress(task) if !replay => {
+                self.background_started(&task.async_task_id, None, None);
+            }
+            SessionUpdate::AsyncTaskStateUpdate(task) if !replay => {
+                self.background_state(&task.async_task_id, &task.state, task.summary.as_deref());
+            }
             _ => {}
         }
         UpdateEffect { progress }
+    }
+
+    fn background_started(&mut self, id: &str, name: Option<String>, description: Option<String>) {
+        if id.is_empty() {
+            return;
+        }
+        let tasks = &mut self.working.background_tasks;
+        if let Some(task) = tasks.iter_mut().find(|t| t.id == id) {
+            if name.is_some() {
+                task.name = name;
+            }
+            return;
+        }
+        let label = name.or(description);
+        tasks.push(BackgroundTask { id: id.to_string(), name: label, state: "running".into() });
+        if tasks.len() > MAX_BACKGROUND_TASKS {
+            tasks.remove(0);
+        }
+    }
+
+    fn background_state(&mut self, id: &str, state: &str, _summary: Option<&str>) {
+        if id.is_empty() {
+            return;
+        }
+        let tasks = &mut self.working.background_tasks;
+        match tasks.iter_mut().find(|t| t.id == id) {
+            Some(task) => {
+                task.state = state.to_string();
+                if !task.is_running() {
+                    let id = task.id.clone();
+                    tasks.retain(|t| t.id != id);
+                }
+            }
+            // A terminal edge for a task we never saw start: nothing to keep.
+            None if matches!(state, "completed" | "failed" | "stopped") => {}
+            None => {
+                tasks.push(BackgroundTask { id: id.to_string(), name: None, state: state.to_string() });
+                if tasks.len() > MAX_BACKGROUND_TASKS {
+                    tasks.remove(0);
+                }
+            }
+        }
     }
 
     fn track_tool(&mut self, brief: ToolBrief, finished: bool) {
@@ -570,6 +643,9 @@ pub fn is_progress(update: &SessionUpdate) -> bool {
             | SessionUpdate::SessionInfoUpdate(_)
             | SessionUpdate::UsageUpdate(_)
             | SessionUpdate::Notice(_)
+            | SessionUpdate::AsyncTaskSpawned(_)
+            | SessionUpdate::AsyncTaskProgress(_)
+            | SessionUpdate::AsyncTaskStateUpdate(_)
     )
 }
 

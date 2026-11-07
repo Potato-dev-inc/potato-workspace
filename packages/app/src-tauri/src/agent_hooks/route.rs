@@ -7,7 +7,7 @@
 //!    `HOOK_MIXED_CREDENTIALS`;
 //! 3. the per-pane token must match (constant time), be live and belong to the named agent;
 //! 4. append-only: the reply is `202 {}` and never carries data, there is no GET route;
-//! 5. scope: any request carrying `X-PM-Hook-Token` to any other route gets 403 `HOOK_TOKEN_SCOPE`.
+//! 5. scope: any request carrying `X-Potato-Workspace-Hook-Token` to any other route gets 403 `HOOK_TOKEN_SCOPE`.
 //!
 //! Nothing reachable from here types, answers, approves or unlocks anything.
 
@@ -15,9 +15,9 @@ use serde_json::{json, Value};
 
 use crate::mobile_pairing::{header_value, normalize_bridge_segments, requires_pairing_token};
 
-pub const TOKEN_HEADER: &str = "X-PM-Hook-Token";
-pub const PANE_HEADER: &str = "X-PM-Hook-Pane";
-pub const AGENT_HEADER: &str = "X-PM-Hook-Agent";
+pub const TOKEN_HEADER: &str = "X-Potato-Workspace-Hook-Token";
+pub const PANE_HEADER: &str = "X-Potato-Workspace-Hook-Pane";
+pub const AGENT_HEADER: &str = "X-Potato-Workspace-Hook-Agent";
 /// Largest body the route takes (the emitter shrinks to 512 KiB).
 pub const MAX_BODY: usize = 1024 * 1024;
 
@@ -57,7 +57,7 @@ pub fn handle_at(headers: &str, body: &[u8], peer_loopback: bool, now: u64) -> (
     if requires_pairing_token(headers, peer_loopback) {
         return reject(403, "HOOK_LOCAL_ONLY");
     }
-    if header_value(headers, "Authorization").is_some() || header_value(headers, "X-Puppet-Master-Session").is_some() {
+    if header_value(headers, "Authorization").is_some() || header_value(headers, "X-Potato-Workspace-Session").is_some() {
         return reject(400, "HOOK_MIXED_CREDENTIALS");
     }
     if body.len() > MAX_BODY {

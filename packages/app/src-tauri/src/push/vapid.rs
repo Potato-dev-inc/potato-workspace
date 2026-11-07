@@ -1,4 +1,4 @@
-//! The VAPID P-256 keypair that identifies this Puppet Master to the browsers' push services.
+//! The VAPID P-256 keypair that identifies this Potato Workspace to the browsers' push services.
 //!
 //! It lives in its own file in the app data dir, next to (not inside) the pairing store. The same
 //! key must be used for as long as phones are subscribed: a subscription is bound to the public

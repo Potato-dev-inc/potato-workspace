@@ -1,4 +1,4 @@
-// "Start Puppet Master when I sign in": reads the OS switch once and writes it through the Tauri commands.
+// "Start Potato Workspace when I sign in": reads the OS switch once and writes it through the Tauri commands.
 // `ready` is false outside the desktop shell (or when the read fails), so callers can hide the control.
 import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../lib/tauri';

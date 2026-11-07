@@ -14,7 +14,7 @@ fn ctx() -> RedactContext {
 }
 
 fn meta() -> Meta {
-    Meta { agent: "Test Agent".into(), folder: "puppet-master".into(), date: "2026-10-28".into() }
+    Meta { agent: "Test Agent".into(), folder: "potato-workspace".into(), date: "2026-10-28".into() }
 }
 
 fn user(n: usize, text: &str) -> ChatItem {
@@ -72,7 +72,7 @@ fn a_fake_token_is_masked_everywhere_it_appears() {
 fn absolute_paths_shrink_to_the_last_name() {
     let items = vec![agent(
         1,
-        r"Edited C:\Users\you\Desktop\work\puppet-master\src\main.rs and /home/you/projects/app/lib.rs.",
+        r"Edited C:\Users\you\Desktop\work\potato-workspace\src\main.rs and /home/you/projects/app/lib.rs.",
     )];
     let html = render(&items);
     assert!(html.contains("Edited main.rs and lib.rs."));
@@ -172,9 +172,9 @@ fn the_user_name_is_gone_from_the_whole_page() {
 fn header_names_the_agent_folder_and_date_and_the_footer_names_the_app() {
     let html = render(&[user(1, "hi")]);
     assert!(html.contains("<h1>Test Agent</h1>"));
-    assert!(html.contains("<span>puppet-master</span><span>2026-10-28</span>"));
-    assert!(html.contains("<title>Test Agent · puppet-master</title>"));
-    assert!(html.contains("<footer class=\"foot\">Saved from Puppet Master</footer>"));
+    assert!(html.contains("<span>potato-workspace</span><span>2026-10-28</span>"));
+    assert!(html.contains("<title>Test Agent · potato-workspace</title>"));
+    assert!(html.contains("<footer class=\"foot\">Saved from Potato Workspace</footer>"));
 }
 
 #[test]

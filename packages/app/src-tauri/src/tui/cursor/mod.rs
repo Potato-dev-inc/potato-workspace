@@ -30,9 +30,9 @@ use serde_json::Value;
 /// cursor.com/docs/cli/using).
 fn cursor_rules() -> Vec<InstructionFile> {
     vec![InstructionFile::with_header(
-        ".cursor/rules/puppet-master.mdc",
+        ".cursor/rules/potato-workspace.mdc",
         "---
-description: Shared project memory kept by Puppet Master
+description: Shared project memory kept by Potato Workspace
 alwaysApply: true
 ---",
     )]
@@ -74,7 +74,7 @@ pub struct CursorAgent;
 const MCP_HOST: &str = r#"
 config_path = "~/.cursor/mcp.json"
 format = "json"
-key_path = "mcpServers.puppet-master"
+key_path = "mcpServers.potato-workspace"
 project_config_path = ".cursor/mcp.json"
 [entry]
 command = "{command}"
@@ -85,7 +85,7 @@ url = "{url}"
 headers = "{headers}"
 "#;
 
-/// Where Cursor reads skills ("Add Puppet Master to your agents").
+/// Where Cursor reads skills ("Add Potato Workspace to your agents").
 const SKILLS_HOST: &str = r#"
 dir = "~/.agents/skills"
 "#;

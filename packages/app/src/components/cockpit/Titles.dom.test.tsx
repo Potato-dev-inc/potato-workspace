@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { Palette } from './Palette';
 import { RenameTitle, type RenameTitleProps } from './RenameTitle';
@@ -32,7 +32,7 @@ afterEach(() => {
   host.remove();
 });
 
-const PROJECT_CWD = 'C:\\Users\\me\\puppet-master';
+const PROJECT_CWD = 'C:\\Users\\me\\potato-workspace';
 
 function info(id: string, title?: string | null): PaneInfo {
   return {
@@ -106,7 +106,7 @@ describe('Sidebar pane titles', () => {
     expect(row.querySelector('.ck-row-title')?.textContent).toBe('auth refactor');
     const sub = row.querySelector('.ck-row-sub')?.textContent ?? '';
     expect(sub).toContain('Codex');
-    expect(sub).toContain('puppet-master');
+    expect(sub).toContain('potato-workspace');
   });
 
   it('shows an untitled pane by its agent label, with only the project folder beneath', () => {
@@ -116,7 +116,7 @@ describe('Sidebar pane titles', () => {
     });
     const row = host.querySelector('.ck-row:not(.ck-row--flat)') as HTMLElement;
     expect(row.querySelector('.ck-row-title')?.textContent).toBe('Codex');
-    expect(row.querySelector('.ck-row-sub')?.textContent).toBe('puppet-master');
+    expect(row.querySelector('.ck-row-sub')?.textContent).toBe('potato-workspace');
   });
 });
 
@@ -144,8 +144,8 @@ describe('Sidebar identity on titled rows', () => {
       root.render(<Sidebar c={api} onOpenPalette={() => {}} />);
     });
     const subs = Array.from(host.querySelectorAll('.ck-row:not(.ck-row--flat) .ck-row-sub')).map((e) => e.textContent);
-    expect(subs).toContain('Codex · puppet-master · Work');
-    expect(subs).toContain('puppet-master');
+    expect(subs).toContain('Codex · potato-workspace · Work');
+    expect(subs).toContain('potato-workspace');
   });
 
   it('says Error on an errored row that has no activity line', () => {
@@ -154,7 +154,7 @@ describe('Sidebar identity on titled rows', () => {
       root.render(<Sidebar c={api} onOpenPalette={() => {}} />);
     });
     const row = host.querySelector('.ck-row:not(.ck-row--flat)') as HTMLElement;
-    expect(row.querySelector('.ck-row-sub')?.textContent).toBe('Error · puppet-master');
+    expect(row.querySelector('.ck-row-sub')?.textContent).toBe('Error · potato-workspace');
   });
 });
 

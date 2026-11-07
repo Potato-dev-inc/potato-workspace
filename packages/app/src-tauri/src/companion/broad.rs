@@ -160,11 +160,11 @@ fn standard_place(f: &str, places: &Places) -> Option<Broad> {
             return Some(Broad::Standard(phrase.to_string()));
         }
     }
-    // Puppet Master's own folders: the one that holds every companion home.
+    // Potato Workspace's own folders: the one that holds every companion home.
     if let Some(h) = home {
-        let pm = format!("{h}\\puppetmaster");
+        let pm = format!("{h}\\potatoworkspace");
         if f == pm || f == format!("{pm}\\companions") {
-            return Some(Broad::Standard("the Puppet Master folder".to_string()));
+            return Some(Broad::Standard("the Potato Workspace folder".to_string()));
         }
     }
     None
@@ -295,7 +295,7 @@ mod tests {
         assert_eq!(kind("C:\\Users\\you\\OneDrive - Company"), Some(Broad::Standard("your OneDrive".into())));
         assert_eq!(kind("C:\\Users\\you\\OneDrive\\Desktop"), Some(Broad::Standard("your Desktop".into())));
         assert_eq!(kind("C:\\Users\\you\\OneDrive - Company\\Documents"), Some(Broad::Standard("your Documents folder".into())));
-        assert_eq!(kind("C:\\Users\\you\\PuppetMaster\\companions"), Some(Broad::Standard("the Puppet Master folder".into())));
+        assert_eq!(kind("C:\\Users\\you\\PotatoWorkspace\\companions"), Some(Broad::Standard("the Potato Workspace folder".into())));
     }
 
     #[test]

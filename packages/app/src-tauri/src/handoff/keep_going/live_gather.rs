@@ -104,7 +104,7 @@ fn diff_of(pane: &PaneFacts) -> Option<DiffStat> {
     Some(DiffStat { files: parse_numstat(&numstat.patch), untracked, base: label })
 }
 
-/// A question the pane's agent asked that nobody has answered (not one of Puppet Master's own cards).
+/// A question the pane's agent asked that nobody has answered (not one of Potato Workspace's own cards).
 fn open_question(pane_id: &str) -> Option<String> {
     crate::questions::store()
         .list_pending(crate::questions::now_ms())

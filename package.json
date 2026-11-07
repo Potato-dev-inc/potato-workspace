@@ -1,16 +1,16 @@
 {
-  "name": "puppet-master",
+  "name": "potato-workspace",
   "version": "0.2.2",
   "private": true,
   "description": "Puppet Master — multi-agent terminal orchestrator (Tauri + React + MCP)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Potato-dev-inc/puppet-master.git"
+    "url": "git+https://github.com/Potato-dev-inc/potato-workspace.git"
   },
   "bugs": {
-    "url": "https://github.com/Potato-dev-inc/puppet-master/issues"
+    "url": "https://github.com/Potato-dev-inc/potato-workspace/issues"
   },
-  "homepage": "https://github.com/Potato-dev-inc/puppet-master#readme",
+  "homepage": "https://github.com/Potato-dev-inc/potato-workspace#readme",
   "license": "MIT",
   "type": "module",
   "workspaces": [
@@ -22,22 +22,23 @@
     "build": "npm run build --workspaces --if-present",
     "build:rust": "node scripts/with-cargo-path.mjs build",
     "publish:release-assets": "node scripts/publish-github-release-assets.mjs",
-    "mcp": "npm run start --workspace=@puppet-master/mcp",
-    "worker": "npm run start --workspace=@puppet-master/cli -- worker",
-    "build:mcp": "npm run build --workspace=@puppet-master/mcp",
-    "cli": "npm run start --workspace=@puppet-master/cli",
-    "pair-link": "npm run build --workspace=@puppet-master/cli --silent && node packages/cli/dist/index.js pair-link",
+    "mcp": "npm run start --workspace=@potato-workspace/mcp",
+    "worker": "npm run start --workspace=@potato-workspace/cli -- worker",
+    "build:mcp": "npm run build --workspace=@potato-workspace/mcp",
+    "cli": "npm run start --workspace=@potato-workspace/cli",
+    "pair-link": "npm run build --workspace=@potato-workspace/cli --silent && node packages/cli/dist/index.js pair-link",
     "test": "npm run test --workspaces --if-present",
     "check:privacy": "node scripts/check-no-personal-paths.mjs",
+    "check:separation": "node scripts/check-separation.mjs",
     "check": "node scripts/check.mjs",
     "test:changed": "node scripts/test-changed.mjs",
     "where": "node scripts/where.mjs",
     "test:mcp-package": "node scripts/test-mcp-package.mjs",
     "test:mcp-operations": "node scripts/test-mcp-operations.mjs",
     "test:fake-tui": "cargo test --manifest-path packages/app/src-tauri/Cargo.toml --features dev-fake-tui --test fake_tui_e2e -- --test-threads=1",
-    "e2e": "npm run e2e --workspace=@puppet-master/e2e --",
-    "e2e:dashboard": "npm run dashboard --workspace=@puppet-master/e2e --",
-    "e2e:build": "npm run build --workspace=@puppet-master/e2e --",
+    "e2e": "npm run e2e --workspace=@potato-workspace/e2e --",
+    "e2e:dashboard": "npm run dashboard --workspace=@potato-workspace/e2e --",
+    "e2e:build": "npm run build --workspace=@potato-workspace/e2e --",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "clean": "rimraf \"packages/*/dist\" \"packages/*/.turbo\" \"packages/app/src-tauri/target\"",
     "check:warnings": "node scripts/check-warnings.mjs"

@@ -1,6 +1,6 @@
 //! The "Assign an issue" end-to-end rig (`tests/fake_tui_issue_intake.rs`): the real intake engine
 //! (`issue_intake::live`) running on this world's pane registry and app handle, with the fake agent
-//! as the agent. The test brings its own fake `gh` (first on `PATH`, `PUPPET_MASTER_GH`) and a local
+//! as the agent. The test brings its own fake `gh` (first on `PATH`, `POTATO_WORKSPACE_GH`) and a local
 //! bare repository behind `url.<bare>.insteadOf`, so no network and no GitHub is involved.
 //!
 //! This is the only seam the feature needs: `issue_intake` is a private module, and `live::start` is

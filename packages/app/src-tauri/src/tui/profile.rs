@@ -64,7 +64,7 @@ pub trait TuiProfile: Send + Sync {
     }
 
     /// The CLI versions this profile's fixtures and live checks cover. Outside the range the agent
-    /// runs in strict mode (`crate::canary`): Puppet Master stops dismissing startup notices for
+    /// runs in strict mode (`crate::canary`): Potato Workspace stops dismissing startup notices for
     /// the user, its warm standbys go cold, and the pane shows an "Untested version" chip. `None`
     /// (the default) means no pin: every version is treated as tested.
     fn tested_versions(&self) -> Option<TestedRange> {
@@ -272,7 +272,7 @@ pub trait TuiProfile: Send + Sync {
     }
 
     /// What this agent's screen says when its plan runs out: the compiled `[limits]` table
-    /// (`crate::handoff`). `None` (the default) means no rules yet: Puppet Master cannot tell when
+    /// (`crate::handoff`). `None` (the default) means no rules yet: Potato Workspace cannot tell when
     /// this agent hits a limit, so it never reacts to one. Code profiles embed a `limits.toml`;
     /// TOML agent definitions carry the table inline.
     fn limits(&self) -> Option<&crate::handoff::CompiledLimits> {
@@ -325,7 +325,7 @@ pub trait TuiProfile: Send + Sync {
         None
     }
 
-    /// Keys that erase text Puppet Master itself just typed into the prompt box: sent before the
+    /// Keys that erase text Potato Workspace itself just typed into the prompt box: sent before the
     /// task is typed again and when delivery gives up (`agent_runs::delivery`). Unlike
     /// [`clear_input_sequence`](Self::clear_input_sequence) it is never used on a box holding
     /// someone else's text, so a profile can declare a key that is right for its own one-line
@@ -492,7 +492,7 @@ pub trait TuiProfile: Send + Sync {
         None
     }
 
-    /// Where this agent reads skills (`SKILL.md` folders), for "Add Puppet Master to your agents".
+    /// Where this agent reads skills (`SKILL.md` folders), for "Add Potato Workspace to your agents".
     /// `None` means the pack installer has no skills folder to write for this agent.
     fn skills_host(&self) -> Option<crate::agent_pack::SkillsHostTable> {
         None
@@ -505,7 +505,7 @@ pub trait TuiProfile: Send + Sync {
         None
     }
 
-    /// How this agent takes Puppet Master's own MCP server for ONE launch, without touching the
+    /// How this agent takes Potato Workspace's own MCP server for ONE launch, without touching the
     /// person's config files (a flag, or an env var holding config text). `None` (the default): the
     /// agent has no such way, so its pane starts exactly as before. Only declare it for a way the
     /// agent's own docs or a live check proves. The orchestration is `crate::pane_mcp`.
@@ -530,7 +530,7 @@ pub trait TuiProfile: Send + Sync {
     }
 
     /// Where this agent writes the session file the chat view reads (`crate::session_chat`). `None` (the
-    /// default): the agent has no file Puppet Master can read, and the chat view falls back to reading the
+    /// default): the agent has no file Potato Workspace can read, and the chat view falls back to reading the
     /// screen (`screen_chat`).
     fn session_chat(&self) -> Option<&'static dyn crate::session_chat::SessionSource> {
         None

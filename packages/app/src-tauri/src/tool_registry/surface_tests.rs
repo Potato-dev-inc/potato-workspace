@@ -218,10 +218,10 @@ fn instructions_lead_with_the_five_tool_happy_path_in_order() {
     .map(|name| text.find(name).unwrap_or_else(|| panic!("{name} missing")))
     .collect();
     assert!(positions.windows(2).all(|pair| pair[0] < pair[1]), "{positions:?}");
-    assert!(text.starts_with("Puppet Master MCP"));
+    assert!(text.starts_with("Potato Workspace MCP"));
     assert!(text.contains("Five tools"));
     assert!(text.contains("SCHEMA_DRIFT"));
-    assert!(text.contains("Rebuild or reinstall the Puppet Master MCP"));
+    assert!(text.contains("Rebuild or reinstall the Potato Workspace MCP"));
     for (alias, _) in ALIASES {
         assert!(text.contains(alias), "instructions should name the hidden alias {alias}");
     }

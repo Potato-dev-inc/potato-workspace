@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Live regression suite for Puppet Master agent runs. Unlike test-mcp-operations.mjs (mock
+// Live regression suite for Potato Workspace agent runs. Unlike test-mcp-operations.mjs (mock
 // bridge), this drives the real MCP binary against the RUNNING app and real backends, so it
 // spawns agents and costs a little. Repeat runs catch the intermittent bugs a single pass hides.
 //
@@ -49,7 +49,7 @@ async function main() {
   proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
   const health = await tool('bridge_health', {});
   if (health._error) {
-    console.error(`bridge unreachable (is the Puppet Master app running?): ${health._error}`);
+    console.error(`bridge unreachable (is the Potato Workspace app running?): ${health._error}`);
     process.exit(2);
   }
   console.log(`build ${health.build_id}  catalog ${health.catalog_version}  drift=${health.schema_drift ?? 'n/a'}`);

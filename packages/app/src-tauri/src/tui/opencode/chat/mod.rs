@@ -1,6 +1,6 @@
 //! OpenCode's chat from its local HTTP API (`crate::session_chat::SessionApi`): the conversation's messages, with
 //! each tool call's input, files, output and diff, the task list, token use and turn length. The same API serves the
-//! native worker's pane (`opencode serve`, whose session Puppet Master created) and the plain TUI, which is started
+//! native worker's pane (`opencode serve`, whose session Potato Workspace created) and the plain TUI, which is started
 //! with `--port` so it serves its own (its session is the newest one this pane started).
 //!
 //! `map` turns messages into chat items; this file asks the server.
@@ -53,7 +53,7 @@ pub(super) fn tui_endpoint(pane: &PaneState) -> Option<ApiEndpoint> {
     Some(ApiEndpoint { base_url: format!("http://127.0.0.1:{port}"), session_id: None })
 }
 
-/// Where a native worker's server is, and the session Puppet Master made on it.
+/// Where a native worker's server is, and the session Potato Workspace made on it.
 pub(super) fn native_endpoint(pane: &PaneState) -> Option<ApiEndpoint> {
     let link = pane.opencode.as_ref()?;
     Some(ApiEndpoint { base_url: link.base_url.clone(), session_id: Some(link.session_id.clone()) })
@@ -71,7 +71,7 @@ fn free_port() -> Option<u16> {
     listener.local_addr().ok().map(|addr| addr.port())
 }
 
-/// Launch arguments that make the TUI serve its API on a port Puppet Master knows. Nothing when the person chose
+/// Launch arguments that make the TUI serve its API on a port Potato Workspace knows. Nothing when the person chose
 /// a port or a server themselves.
 pub(super) fn prepare(pane_id: &str, user_args: &[String]) -> Vec<String> {
     let chosen = user_args.iter().any(|arg| arg == "--port" || arg.starts_with("--port=") || arg == "--hostname" || arg.starts_with("--hostname="));

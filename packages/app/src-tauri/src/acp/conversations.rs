@@ -387,7 +387,9 @@ impl Conversations {
     }
 
     pub(super) fn build_session(&self, id: &str, cfg: Arc<AgentConfig>, cwd: &Path, resume: Option<String>, replay: bool) -> Arc<AcpSession> {
-        let session = AcpSession::new(cfg, self.0.host.clone(), SessionParams { key: id.to_string(), cwd: cwd.to_path_buf(), resume_session_id: resume });
+        let mut cfg = (*cfg).clone();
+        super::config::add_pane_id(&mut cfg, id);
+        let session = AcpSession::new(Arc::new(cfg), self.0.host.clone(), SessionParams { key: id.to_string(), cwd: cwd.to_path_buf(), resume_session_id: resume });
         if replay {
             session.replay_on_next_start();
         }

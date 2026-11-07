@@ -205,7 +205,7 @@ pub fn spawn_pane(
     } else {
         crate::agent_hooks::prepare_spawn(profile.id(), &pane_id, &cwd, &user_args)
     };
-    // Puppet Master's own helper tools (`run_agent`, `wait_agents`) for this one launch, where the agent
+    // Potato Workspace's own helper tools (`run_agent`, `wait_agents`) for this one launch, where the agent
     // can take a server that way. Nothing is added for a Linux pane (the app's program is a Windows
     // one) or when the Settings switch is off. The person's own config files are never written.
     let pane_mcp = if linux.is_some() {

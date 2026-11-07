@@ -8,7 +8,7 @@
  *                                       [--search "stripe webhook"] [--no-move]
  *
  * Start the app first, on its own profile, its own CDP port and the fixture home (SPEC-n32 sections 4a and 6):
- *   PUPPET_MASTER_PROFILE=bc-live PUPPET_MASTER_HISTORY_HOME=<folder from make-fixture-history-home.mjs>
+ *   POTATO_WORKSPACE_PROFILE=bc-live POTATO_WORKSPACE_HISTORY_HOME=<folder from make-fixture-history-home.mjs>
  * Use a fresh profile: step 3 expects every chat to be new. Port 9333 (the founder's app) is refused.
  * --expect counts are per agent (keys match the agent's name, case-insensitive). The default is the fixture alone.
  * The live run adds two real chats, so pass the real counts there.

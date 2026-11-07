@@ -1,4 +1,4 @@
-// "Add Puppet Master to your agents": skills + Puppet Master's own MCP entry, written into each agent.
+// "Add Potato Workspace to your agents": skills + Potato Workspace's own MCP entry, written into each agent.
 // Wrappers over the `agent_pack_*` Tauri commands (src-tauri/src/commands/agent_pack.rs).
 import { invoke } from '@tauri-apps/api/core';
 

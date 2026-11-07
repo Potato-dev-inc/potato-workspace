@@ -1,4 +1,4 @@
-# Claude as a chat over ACP: the Agent SDK adapter, started by Puppet Master. This file is the `[acp]` table of
+# Claude as a chat over ACP: the Agent SDK adapter, started by Potato Workspace. This file is the `[acp]` table of
 # the Claude profile. Founder decision 2026-11-01: it uses the person's own subscription login, exactly as
 # their `claude` program has it (their normal ~/.claude, or CLAUDE_CONFIG_DIR); no key is asked for and no
 # credential file is copied, moved or read by this app. Shown to the person as "Claude" or "Claude Agent",

@@ -268,7 +268,7 @@ export function createScenarios(ctx) {
       const call = async (session, method, path, body) => {
         const response = await fetch(`${base}${path}`, {
           method,
-          headers: { 'Content-Type': 'application/json', 'X-Puppet-Master-Session': session },
+          headers: { 'Content-Type': 'application/json', 'X-Potato-Workspace-Session': session },
           body: body === undefined ? undefined : JSON.stringify(body),
           signal: AbortSignal.timeout(120_000),
         });

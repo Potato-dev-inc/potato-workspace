@@ -87,7 +87,7 @@ function watchPane(dir) {
 }
 
 function readOperation(dir, id) {
-  try { return JSON.parse(readFileSync(join(dir, '.puppet-master', 'operations', `${id}.json`), 'utf8')); } catch { return null; }
+  try { return JSON.parse(readFileSync(join(dir, '.potato-workspace', 'operations', `${id}.json`), 'utf8')); } catch { return null; }
 }
 
 import { frameAnalysis } from './perf-frames.mjs';

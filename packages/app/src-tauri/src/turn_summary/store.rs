@@ -1,5 +1,5 @@
 //! Where summaries live: the last `KEEP_PER_PANE` per pane in memory, mirrored to a small JSON
-//! ring file per project (`<project>/.puppet-master/turn-summaries.json`) so they survive a restart.
+//! ring file per project (`<project>/.potato-workspace/turn-summaries.json`) so they survive a restart.
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -21,7 +21,7 @@ struct RingFile {
 }
 
 pub fn ring_path(project: &Path) -> PathBuf {
-    project.join(".puppet-master").join(FILE_NAME)
+    project.join(".potato-workspace").join(FILE_NAME)
 }
 
 /// Reads the ring file; a missing or damaged file is an empty ring (it is rewritten on next save).

@@ -35,5 +35,5 @@ export const run = guarded(async (t) => {
   t.expect.equal(path.normalize(c.folder).toLowerCase(), path.join(desktop, 'mochi').toLowerCase());
   t.expect.ok(fs.existsSync(path.join(desktop, 'mochi', 'SOUL.md')), 'SOUL.md is in the own folder');
   t.expect.ok(!fs.existsSync(path.join(desktop, 'SOUL.md')), 'nothing was written onto the Desktop');
-  t.expect.ok(!fs.existsSync(path.join(desktop, '.puppet-master')), 'no marker on the Desktop');
+  t.expect.ok(!fs.existsSync(path.join(desktop, '.potato-workspace')), 'no marker on the Desktop');
 });

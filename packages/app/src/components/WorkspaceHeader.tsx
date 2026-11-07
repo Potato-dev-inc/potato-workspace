@@ -1,7 +1,7 @@
 import { homeDir } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useCallback, useState } from 'react';
-import type { AgentType } from '@puppet-master/shared';
+import type { AgentType } from '@potato-workspace/shared';
 import { launchMenuEntries, useAgentRegistry } from '../lib/agentRegistry';
 import logoUrl from '../assets/branding/logo.svg';
 
@@ -42,7 +42,7 @@ export function WorkspaceHeader({
     <header className="flex items-center gap-2 px-3 py-2 border-b border-pm-border bg-pm-panel">
       <img
         src={logoUrl}
-        alt="Puppet Master"
+        alt="Potato Workspace"
         className="h-9 w-auto shrink-0 rounded-sm"
         draggable={false}
       />

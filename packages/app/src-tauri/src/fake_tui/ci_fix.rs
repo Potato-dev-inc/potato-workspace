@@ -1,6 +1,6 @@
 //! The "Red to Green" end-to-end rig (`tests/fake_tui_ci_fix.rs`): the real CI fix engine (`ci_fix::live`)
 //! running on this world's pane registry and app handle, with the fake agent as the agent. The test brings
-//! its own fake `gh` (first on `PATH`, `PUPPET_MASTER_GH`) and a local bare repository behind
+//! its own fake `gh` (first on `PATH`, `POTATO_WORKSPACE_GH`) and a local bare repository behind
 //! `url.<bare>.insteadOf`, so no network and no GitHub is involved.
 //!
 //! The seams the feature needs: `ci_fix` is a private module, `live::start` is what `lib.rs` calls in

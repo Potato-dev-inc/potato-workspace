@@ -304,9 +304,9 @@ describe('AgentScores', () => {
   });
 
   it('shows a plain error with role alert when the report cannot be read', async () => {
-    const api: ScoresApi = { report: vi.fn().mockRejectedValue(new Error('Open Puppet Master on your computer to see your scores.')) };
+    const api: ScoresApi = { report: vi.fn().mockRejectedValue(new Error('Open Potato Workspace on your computer to see your scores.')) };
     await mount(api);
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Open Puppet Master');
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Open Potato Workspace');
   });
 
   it('lists the notes from the backend, as plain sentences', async () => {

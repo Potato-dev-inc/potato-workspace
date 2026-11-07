@@ -180,7 +180,7 @@ describe('runInstallChain', () => {
     const store = fakeStore();
     const outcome = await runInstallChain(run({ ambiguous: true }), deps(store, fakeInstall()));
     expect(store.add).not.toHaveBeenCalled();
-    expect(outcome.text).toBe('Installed. Press Add to confirm the program Puppet Master found for Qwen Code.');
+    expect(outcome.text).toBe('Installed. Press Add to confirm the program Potato Workspace found for Qwen Code.');
   });
 
   it('asks for a restart when the program is installed but not found yet', async () => {
@@ -191,7 +191,7 @@ describe('runInstallChain', () => {
     const outcome = await runInstallChain(run(), deps(store, install));
     expect(outcome).toEqual({
       tone: 'problem',
-      text: 'Installed, but Puppet Master cannot find it yet. Close Puppet Master and open it again.',
+      text: 'Installed, but Potato Workspace cannot find it yet. Close Potato Workspace and open it again.',
     });
     expect(store.recordInstall).not.toHaveBeenCalled();
     expect(store.add).not.toHaveBeenCalled();
@@ -202,7 +202,7 @@ describe('runInstallChain', () => {
       finish: vi.fn(async () => ({ path_added: [], health: health(false), needs_restart: false })),
     });
     const outcome = await runInstallChain(run(), deps(fakeStore(), install));
-    expect(outcome.text).toBe('The install finished, but Puppet Master cannot find Qwen Code yet. You can try again.');
+    expect(outcome.text).toBe('The install finished, but Potato Workspace cannot find Qwen Code yet. You can try again.');
   });
 
   it('stops when the window closes before its command ends', async () => {

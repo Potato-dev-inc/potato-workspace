@@ -121,7 +121,7 @@ fn start(app: tauri::AppHandle, registry: Registry, dir: PathBuf, keystore: KeyS
 // ---------------------------------------------------------------------- end-to-end test hooks
 //
 // Dev only (`dev-fake-tui`, `src/fake_tui/team.rs`): the two-person end-to-end test runs two
-// Puppet Master processes, each with its own service. These are the only differences from the app:
+// Potato Workspace processes, each with its own service. These are the only differences from the app:
 // the keys go to an in-memory store (never the OS credential store), there is no `gh`, and a test
 // can look at, and hand the inbound path, what a person's app would not show.
 
@@ -1265,7 +1265,7 @@ pub struct ConfigView {
     pub folder: String,
     pub name: String,
     pub projects: Vec<String>,
-    /// `PUPPET_MASTER_PROFILE`, when this is not the default app.
+    /// `POTATO_WORKSPACE_PROFILE`, when this is not the default app.
     pub profile: Option<String>,
     /// `team.json` is there but could not be read.
     pub read_error: Option<String>,

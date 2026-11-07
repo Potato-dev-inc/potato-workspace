@@ -52,11 +52,11 @@ export const COPY = {
   caution: 'Read this before you allow it. It may be hard to undo.',
   noPrompt: (agent: string) => ({
     title: `${agent} is waiting for you`,
-    body: "Puppet Master can't read this question. Open the pane to answer it.",
+    body: "Potato Workspace can't read this question. Open the pane to answer it.",
   }),
   signIn: (agent: string) => ({
     title: `${agent} needs you on your PC.`,
-    body: "It's showing a sign-in screen. Puppet Master won't answer it for you.",
+    body: "It's showing a sign-in screen. Potato Workspace won't answer it for you.",
   }),
   expired: (agent: string, clock: string) => `${agent} stopped waiting at ${clock}.`,
   queue: (n: number) => (n === 1 ? '1 more waiting' : `${n} more waiting`),

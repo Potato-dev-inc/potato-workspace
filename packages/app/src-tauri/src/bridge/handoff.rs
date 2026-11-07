@@ -108,7 +108,7 @@ pub(super) fn handoff_route(
             }
         }
     };
-    if !pane_id.is_empty() && pane_id.starts_with("puppet-master-orchestrator-") {
+    if !pane_id.is_empty() && pane_id.starts_with("potato-workspace-orchestrator-") {
         return Err(OperationError::new(
             "AUTHORIZATION_DENIED",
             "orchestrator panes cannot be taken over",

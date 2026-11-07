@@ -100,7 +100,7 @@ fn mcp_resources_route_returns_session_resource() {
     assert_eq!(status, 200);
     let resources = value.as_array().unwrap();
     assert!(resources.iter().any(|resource| {
-        resource.get("uri").and_then(serde_json::Value::as_str) == Some("puppet-master://session")
+        resource.get("uri").and_then(serde_json::Value::as_str) == Some("potato-workspace://session")
     }));
 }
 
@@ -432,7 +432,7 @@ fn agents_types_hides_definition_paths_from_callers_without_an_app_session() {
     use super::routes::mcp::{agent_types_for, redact_definition_paths};
     let listing = json!({"agents": [
         {"id": "code", "definition": null},
-        {"id": "kilo", "definition": {"path": "C:/Users/someone/.puppet-master/agents/kilo.toml", "fingerprint": "sha256:x", "state": "approved"}},
+        {"id": "kilo", "definition": {"path": "C:/Users/someone/.potato-workspace/agents/kilo.toml", "fingerprint": "sha256:x", "state": "approved"}},
     ], "dispatchable_ids": []});
     let phone = redact_definition_paths(listing.clone(), false);
     assert!(phone["agents"][1]["definition"].get("path").is_none(), "{phone}");
@@ -441,7 +441,7 @@ fn agents_types_hides_definition_paths_from_callers_without_an_app_session() {
     assert!(phone["agents"][0]["definition"].is_null());
     assert!(!phone.to_string().contains("someone"));
     let app = redact_definition_paths(listing, true);
-    assert_eq!(app["agents"][1]["definition"]["path"], "C:/Users/someone/.puppet-master/agents/kilo.toml");
+    assert_eq!(app["agents"][1]["definition"]["path"], "C:/Users/someone/.potato-workspace/agents/kilo.toml");
     // The real listing keeps its shape either way.
     let _serial = crate::tui::registry::test_serial();
     assert_eq!(
@@ -612,7 +612,7 @@ mod definitions {
     fn remote_device_cannot_mutate_definitions() {
         use crate::bridge::routes::definitions::is_local_app;
         let local = "POST /x HTTP/1.1\r\nHost: 127.0.0.1:17321\r\n";
-        let tunnel = "POST /x HTTP/1.1\r\nX-PM-Proxied: 1\r\nAuthorization: Bearer tok\r\n";
+        let tunnel = "POST /x HTTP/1.1\r\nX-Potato-Workspace-Proxied: 1\r\nAuthorization: Bearer tok\r\n";
         let bearer_only = "POST /x HTTP/1.1\r\nAuthorization: Bearer tok\r\n";
         let fwd = "POST /x HTTP/1.1\r\nCF-Connecting-IP: 1.2.3.4\r\n";
         assert!(is_local_app(local, true));
@@ -680,7 +680,7 @@ mod definitions {
     #[test]
     fn remove_and_restore_are_local_app_only() {
         use crate::bridge::routes::definitions::is_local_app;
-        let tunnel = "POST /x HTTP/1.1\r\nX-PM-Proxied: 1\r\nAuthorization: Bearer tok\r\n";
+        let tunnel = "POST /x HTTP/1.1\r\nX-Potato-Workspace-Proxied: 1\r\nAuthorization: Bearer tok\r\n";
         let phone_direct = "POST /x HTTP/1.1\r\nAuthorization: Bearer tok\r\n";
         let local = "POST /x HTTP/1.1\r\nHost: 127.0.0.1:17321\r\n";
         let body = json!({"file": "zz-none.toml", "removed_id": "zz-none"});
@@ -723,7 +723,7 @@ mod definitions {
         use crate::bridge::routes::definitions::is_local_app;
         // "Delete for good" never reaches the files from a phone, a tunnel or an MCP session. The checks
         // below all stop before the service, so no real folder is touched.
-        let tunnel = "POST /x HTTP/1.1\r\nX-PM-Proxied: 1\r\nAuthorization: Bearer tok\r\n";
+        let tunnel = "POST /x HTTP/1.1\r\nX-Potato-Workspace-Proxied: 1\r\nAuthorization: Bearer tok\r\n";
         let phone_direct = "POST /x HTTP/1.1\r\nAuthorization: Bearer tok\r\n";
         let body = json!({"removed_id": "zz-none-20261016-123456"});
         let routes = [
@@ -857,7 +857,7 @@ fn stop_all_route_is_authorised_like_other_remote_control_routes() {
     let (status, body) = authorize_bridge_request("", false, &segs, "POST").unwrap_err();
     assert_eq!((status, body["error"].as_str()), (401, Some("pairing_required")));
     // The phone PWA arrives through the loopback proxy: the proxy marker still demands a token.
-    let (status, _) = authorize_bridge_request("X-PM-Proxied: 1\r\n", true, &segs, "POST").unwrap_err();
+    let (status, _) = authorize_bridge_request("X-Potato-Workspace-Proxied: 1\r\n", true, &segs, "POST").unwrap_err();
     assert_eq!(status, 401);
     // A wrong token is refused too.
     let (status, _) =
@@ -1087,7 +1087,7 @@ mod pane_parent {
     fn the_headers_the_shim_sends_reach_the_session_table() {
         let session = uuid::Uuid::new_v4().to_string();
         let headers = format!(
-            "POST /agents/run HTTP/1.1\r\nX-Puppet-Master-Session: {session}\r\nX-Puppet-Master-Pid: 4321\r\nX-Puppet-Master-Pane: pane-xyz\r\n"
+            "POST /agents/run HTTP/1.1\r\nX-Potato-Workspace-Session: {session}\r\nX-Potato-Workspace-Pid: 4321\r\nX-Potato-Workspace-Pane: pane-xyz\r\n"
         );
         assert_eq!(request_session(&headers), Some(session.as_str()));
         assert_eq!(crate::mcp_sessions::claimed_session_pane(&session).as_deref(), Some("pane-xyz"));

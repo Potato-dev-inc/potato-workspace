@@ -15,7 +15,7 @@ export async function run(t) {
 
   await t.step('Click Show the welcome');
   await clickControl(t, 'exact=Show the welcome');
-  await t.expect.text('Welcome to Puppet Master');
+  await t.expect.text('Welcome to Potato Workspace');
   await t.expect.text('How do you work?');
 
   await t.step('Skip setup closes it');

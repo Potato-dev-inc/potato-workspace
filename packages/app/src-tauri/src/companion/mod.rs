@@ -1,4 +1,4 @@
-//! Companion: an always-on helper that Puppet Master keeps alive in one agent pane. It runs on an
+//! Companion: an always-on helper that Potato Workspace keeps alive in one agent pane. It runs on an
 //! agent the person already has, so it costs no extra model fees.
 //!
 //! This folder is the data and file side (piece P1 of the spec): what a companion is saved as, where

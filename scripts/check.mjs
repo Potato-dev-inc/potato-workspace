@@ -96,6 +96,7 @@ if (!rustOnly) {
 const guards = [
   ['guard personal paths', 'node', [join(repoRoot, 'scripts', 'check-no-personal-paths.mjs')], 'guard-paths.log'],
   ['guard merge leftovers', 'node', [join(repoRoot, 'scripts', 'check-merge-leftovers.mjs')], 'guard-merge.log'],
+  ['guard product separation', 'node', [join(repoRoot, 'scripts', 'check-separation.mjs')], 'guard-separation.log'],
 ];
 for (const [label, cmd, a, log] of guards) lanes.push(runLogged(label, cmd, a, { cwd: repoRoot, logPath: join(logs, log) }));
 

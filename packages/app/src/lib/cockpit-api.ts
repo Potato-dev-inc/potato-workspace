@@ -264,7 +264,7 @@ export const cockpitApi = {
    *  nothing but a refusal of an ordinary prompt (never a yes, never folder trust). */
   answerPanePrompt: (paneId: string, promptId: string, choice: string, gesture: UserGesture) =>
     call<void>('answer_pane_prompt', { paneId, promptId, choice, gesture }),
-  /** Puppet Master's own No (Simple mode, a high-risk command): a refusal needs no click. */
+  /** Potato Workspace's own No (Simple mode, a high-risk command): a refusal needs no click. */
   declinePanePrompt: (paneId: string, promptId: string, choice: string) =>
     call<void>('answer_pane_prompt', { paneId, promptId, choice, gesture: null }),
   interruptPane: (paneId: string) => call<void>('interrupt_pane', { paneId }),

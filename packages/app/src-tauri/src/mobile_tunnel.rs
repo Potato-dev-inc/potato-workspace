@@ -1,7 +1,7 @@
 //! Production mobile tunnel — bundled cloudflared + loopback PWA server.
 //!
 //! Which tunnel runs is decided by `tunnel_config` (quick | named | custom), with the
-//! `PUPPET_MASTER_PUBLIC_URL` env var winning over the saved setting.
+//! `POTATO_WORKSPACE_PUBLIC_URL` env var winning over the saved setting.
 #![allow(dead_code)]
 
 use parking_lot::Mutex;
@@ -120,14 +120,14 @@ fn tunnel_state() -> Arc<Mutex<TunnelState>> {
 }
 
 pub fn is_tunnel_enabled() -> bool {
-    match std::env::var("PUPPET_MASTER_TUNNEL") {
+    match std::env::var("POTATO_WORKSPACE_TUNNEL") {
         Ok(value) => value.trim() != "0",
         Err(_) => true,
     }
 }
 
 pub fn custom_public_url() -> Option<String> {
-    let raw = std::env::var("PUPPET_MASTER_PUBLIC_URL").ok()?;
+    let raw = std::env::var("POTATO_WORKSPACE_PUBLIC_URL").ok()?;
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return None;
@@ -155,7 +155,7 @@ pub fn tunnel_status() -> TunnelStatus {
 
 pub fn start_mobile_tunnel(app: &AppHandle, bridge_direct_url: String) -> Result<(), String> {
     if !is_tunnel_enabled() {
-        tracing::info!("mobile tunnel disabled (PUPPET_MASTER_TUNNEL=0)");
+        tracing::info!("mobile tunnel disabled (POTATO_WORKSPACE_TUNNEL=0)");
         return Ok(());
     }
 
@@ -176,9 +176,9 @@ pub fn start_mobile_tunnel(app: &AppHandle, bridge_direct_url: String) -> Result
         guard.pwa_server = Some(pwa_server);
     }
 
-    // A second app on this computer (`PUPPET_MASTER_PROFILE`) opens no public address unless asked.
-    if crate::app_paths::profile().is_some() && std::env::var("PUPPET_MASTER_TUNNEL").ok().as_deref() != Some("1") {
-        tracing::info!("profile: public tunnel off (set PUPPET_MASTER_TUNNEL=1 to open one)");
+    // A second app on this computer (`POTATO_WORKSPACE_PROFILE`) opens no public address unless asked.
+    if crate::app_paths::profile().is_some() && std::env::var("POTATO_WORKSPACE_TUNNEL").ok().as_deref() != Some("1") {
+        tracing::info!("profile: public tunnel off (set POTATO_WORKSPACE_TUNNEL=1 to open one)");
         return Ok(());
     }
 
@@ -189,7 +189,7 @@ pub fn start_mobile_tunnel(app: &AppHandle, bridge_direct_url: String) -> Result
 /// The loopback PWA server keeps running; only the public side changes.
 pub fn restart_mobile_tunnel(app: &AppHandle) -> Result<TunnelStatus, String> {
     if !is_tunnel_enabled() {
-        return Err("The mobile tunnel is turned off (PUPPET_MASTER_TUNNEL=0).".into());
+        return Err("The mobile tunnel is turned off (POTATO_WORKSPACE_TUNNEL=0).".into());
     }
     if tunnel_state().lock().pwa_server.is_none() {
         return Err("The tunnel only runs in the installed app, not in a dev build.".into());
@@ -371,19 +371,19 @@ pub fn interpret_health(
             } else {
                 (
                     false,
-                    "The address answered, but it is not Puppet Master. Check the proxy target."
+                    "The address answered, but it is not Potato Workspace. Check the proxy target."
                         .to_string(),
                 )
             }
         }
         (Some(502 | 503 | 504 | 530), None) => (
             false,
-            "The address is up, but it cannot reach Puppet Master. Is the tunnel running?"
+            "The address is up, but it cannot reach Potato Workspace. Is the tunnel running?"
                 .to_string(),
         ),
         (Some(code), None) => (
             false,
-            format!("The address answered with HTTP {code}, not Puppet Master's health check."),
+            format!("The address answered with HTTP {code}, not Potato Workspace's health check."),
         ),
         (None, None) => (false, "No answer.".to_string()),
     };
@@ -471,9 +471,9 @@ mod tests {
 
     #[test]
     fn custom_public_url_strips_bridge_suffix() {
-        std::env::set_var("PUPPET_MASTER_PUBLIC_URL", "https://example.com/bridge/");
+        std::env::set_var("POTATO_WORKSPACE_PUBLIC_URL", "https://example.com/bridge/");
         assert_eq!(custom_public_url().as_deref(), Some("https://example.com"));
-        std::env::remove_var("PUPPET_MASTER_PUBLIC_URL");
+        std::env::remove_var("POTATO_WORKSPACE_PUBLIC_URL");
     }
 
     #[test]

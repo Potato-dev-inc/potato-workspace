@@ -4,7 +4,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PaneInfo } from '@puppet-master/shared';
+import type { PaneInfo } from '@potato-workspace/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { PanePrompt } from '../../lib/cockpit-api';
 import type { Question } from '../../lib/questions';
@@ -182,8 +182,8 @@ describe('one list, one card', () => {
   it('names a separate copy by its project, never by the id of its folder', () => {
     const { api } = fixture({
       panes: [
-        { id: 'lo', agent: 'claude', status: 'waiting_input', cwd: 'C:/work/shop/.puppet-master/worktrees/7d4cb2b3-2-209c' },
-        { id: 'ps', agent: 'powershell', status: 'error', cwd: 'C:/work/shop/.puppet-master/worktrees/7d4cb2b3-2-209c' },
+        { id: 'lo', agent: 'claude', status: 'waiting_input', cwd: 'C:/work/shop/.potato-workspace/worktrees/7d4cb2b3-2-209c' },
+        { id: 'ps', agent: 'powershell', status: 'error', cwd: 'C:/work/shop/.potato-workspace/worktrees/7d4cb2b3-2-209c' },
       ],
     });
     mount(api);
@@ -306,7 +306,7 @@ describe('empty and first-run states', () => {
     const { api } = fixture({ panes: [] });
     const open = vi.fn();
     mount(api, open);
-    expect(host.querySelector('h1')?.textContent).toBe('Welcome to Puppet Master');
+    expect(host.querySelector('h1')?.textContent).toBe('Welcome to Potato Workspace');
     expect(host.querySelector('.ck-sub')?.textContent).toBe('Your AI helpers work here. First, check which ones this PC has.');
     // no "00" counter on a welcome
     expect(host.querySelector('.ck-doto')).toBeNull();
@@ -338,7 +338,7 @@ describe('empty and first-run states', () => {
     window.localStorage.clear();
     const { api } = fixture({ panes: [] });
     act(() => root.render(<Inbox c={api} onOpenDoctor={vi.fn()} onSetUp={null} />));
-    expect(host.querySelector('h1')?.textContent).toBe('Welcome to Puppet Master');
+    expect(host.querySelector('h1')?.textContent).toBe('Welcome to Potato Workspace');
     const labels = Array.from(host.querySelectorAll('button')).map((b) => b.textContent);
     expect(labels).not.toContain('Set up your agents');
     expect(labels).not.toContain('Use Simple mode');

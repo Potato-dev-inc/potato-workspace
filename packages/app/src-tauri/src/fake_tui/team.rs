@@ -1,4 +1,4 @@
-//! The two-person Team end-to-end test (`tests/fake_tui_team.rs`): one Puppet Master per process.
+//! The two-person Team end-to-end test (`tests/fake_tui_team.rs`): one Potato Workspace per process.
 //!
 //! The Team service, the audit log, the pane registry and the app-data folder are process-wide, so
 //! two people are two processes: the test process is the first person, and a child process (this
@@ -44,7 +44,7 @@ fn text<'a>(args: &'a Value, key: &str) -> Result<&'a str, String> {
     args.get(key).and_then(Value::as_str).ok_or_else(|| format!("missing {key}"))
 }
 
-/// One person's Puppet Master, in this process.
+/// One person's Potato Workspace, in this process.
 pub struct Person {
     session: Session,
     keys: KeyStore,
@@ -53,7 +53,7 @@ pub struct Person {
 }
 
 impl Person {
-    /// This process becomes `name`'s Puppet Master: a fake-agent world, and the Team service on it
+    /// This process becomes `name`'s Potato Workspace: a fake-agent world, and the Team service on it
     /// with an in-memory key store.
     pub fn start(name: &str) -> Person {
         let world = World::get();
@@ -301,7 +301,7 @@ pub struct Remote {
 }
 
 impl Remote {
-    /// Start this test binary again as `name`'s Puppet Master, running only the test
+    /// Start this test binary again as `name`'s Potato Workspace, running only the test
     /// `module_path::test_name` (which calls [`Remote::serve_if_child`] first thing).
     pub fn spawn(name: &str, module_path: &str, test_name: &str) -> Remote {
         let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port for the second person");

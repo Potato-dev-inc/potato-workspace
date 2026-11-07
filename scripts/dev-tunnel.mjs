@@ -9,15 +9,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-export const DEV_INFO_FILE = join(repoRoot, 'puppet-master.dev.json');
+export const DEV_INFO_FILE = join(repoRoot, 'potato-workspace.dev.json');
 
 export function isTunnelEnabled() {
-  return process.env.PUPPET_MASTER_TUNNEL !== '0';
+  return process.env.POTATO_WORKSPACE_TUNNEL !== '0';
 }
 
 /** Fixed public URL (your reverse proxy / custom domain). Skips cloudflared/ngrok. */
 export function customPublicUrl() {
-  const raw = process.env.PUPPET_MASTER_PUBLIC_URL?.trim();
+  const raw = process.env.POTATO_WORKSPACE_PUBLIC_URL?.trim();
   if (!raw) return null;
   return raw.replace(/\/+$/, '').replace(/\/bridge$/, '');
 }
@@ -125,5 +125,5 @@ export async function clearDevInfo() {
 }
 
 export function tunnelDisabledHint() {
-  return 'Tunnel disabled (PUPPET_MASTER_TUNNEL=0).';
+  return 'Tunnel disabled (POTATO_WORKSPACE_TUNNEL=0).';
 }

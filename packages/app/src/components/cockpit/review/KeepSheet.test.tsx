@@ -87,7 +87,7 @@ describe('keepSheetCopy', () => {
     const copy = keepSheetCopy({ ...ITEM, keep: { kind: 'issue_push', label: 'Push as draft…', into: null, why: null } });
     expect(copy.title).toBe('Push as a draft pull request?');
     expect(copy.primary).toBe('Push as draft');
-    expect(copy.footer).toBe('Puppet Master opens a draft. It never merges.');
+    expect(copy.footer).toBe('Potato Workspace opens a draft. It never merges.');
   });
 });
 
@@ -165,7 +165,7 @@ describe('KeepSheet', () => {
     );
     const lines = [...host.querySelectorAll('.ck-rd-sheet-list li')].map((li) => li.textContent);
     expect(lines).toEqual(['A file may hold a secret: .env', 'CI files changed: .github/workflows/ci.yml']);
-    expect(host.querySelector('.ck-rd-sheet-foot')?.textContent).toBe('Puppet Master opens a draft. It never merges.');
+    expect(host.querySelector('.ck-rd-sheet-foot')?.textContent).toBe('Potato Workspace opens a draft. It never merges.');
     expect(host.querySelector('h2')?.textContent).toBe('Push as a draft pull request?');
   });
 
@@ -175,7 +175,7 @@ describe('KeepSheet', () => {
     expect(body().textContent).toContain('Checking the push.');
     expect(body().textContent).not.toContain('no push warnings');
     await render(<KeepSheet item={item} extra={[]} api={{ keep: vi.fn() }} onDone={vi.fn()} onCancel={vi.fn()} />);
-    expect(body().textContent).toContain('Puppet Master found no push warnings.');
+    expect(body().textContent).toContain('Potato Workspace found no push warnings.');
   });
 
   it('Cancel closes without calling Keep', async () => {

@@ -242,7 +242,7 @@ pub fn plan_install(agent_id: &str, label: &str, spec: Option<&InstallSpec>, too
         blocked: Some(reason.to_string()),
     };
     let Some(spec) = spec else {
-        return blocked("Puppet Master does not know how to install this one. Use the command below.");
+        return blocked("Potato Workspace does not know how to install this one. Use the command below.");
     };
     let methods = spec.ordered_methods();
     let mut ready_script: Option<Step> = None;

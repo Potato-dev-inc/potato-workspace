@@ -90,7 +90,7 @@ impl PrepareError {
 }
 
 #[cfg(test)]
-/// Absolute, existing project directory with `.puppet-master` storage ready.
+/// Absolute, existing project directory with `.potato-workspace` storage ready.
 pub fn prepare_project_path(path: &Path) -> Result<PathBuf, String> {
     prepare_project_path_coded(path).map_err(|error| error.message())
 }
@@ -126,6 +126,7 @@ pub fn prepare_project_path_coded(path: &Path) -> Result<PathBuf, PrepareError> 
             ))
         })?;
     }
+    crate::app_paths::migrate_legacy_project_data(&absolute);
     let storage = crate::event_log::project_storage_dir(&absolute);
     std::fs::create_dir_all(&storage).map_err(|err| {
         PrepareError::Invalid(format!(
@@ -192,7 +193,7 @@ pub fn selected_folder(path: &Path) -> PathBuf {
 
 /// The working directory for a new agent from the folder the person named (`None` or blank: the
 /// caller's default project). The result is that folder itself, canonical. A path inside a separate
-/// copy (`<project>/.puppet-master/worktrees/<id>`) is mapped back to the project it came from: a
+/// copy (`<project>/.potato-workspace/worktrees/<id>`) is mapped back to the project it came from: a
 /// copy is never a project. `Err("FOLDER_MISSING: ...")` when the folder is gone.
 pub fn resolve_selected_folder(raw: Option<&str>) -> Result<Option<String>, String> {
     let Some(raw) = raw.map(str::trim).filter(|p| !p.is_empty()) else { return Ok(None) };
@@ -363,8 +364,8 @@ mod tests {
         let Some(home) = home_dir() else {
             return;
         };
-        let expanded = expand_user_path(Path::new("~/work/puppet-master"));
-        assert_eq!(expanded, home.join("work/puppet-master"));
+        let expanded = expand_user_path(Path::new("~/work/potato-workspace"));
+        assert_eq!(expanded, home.join("work/potato-workspace"));
     }
 
     #[test]
@@ -451,7 +452,7 @@ mod persist_tests {
     fn making_a_separate_copys_folder_the_project_folder_makes_its_project_the_project_folder() {
         let registry = parking_lot::Mutex::new(crate::pty::PaneRegistry::new());
         let origin = std::env::temp_dir().join(format!("pm-sel-active-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]));
-        let copy = origin.join(".puppet-master").join("worktrees").join("pane-1a2b3c4d");
+        let copy = origin.join(".potato-workspace").join("worktrees").join("pane-1a2b3c4d");
         std::fs::create_dir_all(&copy).unwrap();
         let mut saved = String::new();
         let out = set_active_and_persist(&registry, &copy.to_string_lossy(), |patch| {
@@ -506,7 +507,7 @@ mod persist_tests {
     fn a_selected_folder_is_used_exactly_as_picked() {
         let dir = temp_folder("exact");
         let picked = resolve_selected_folder(Some(&text(&dir))).unwrap().expect("a folder");
-        assert!(!picked.contains(".puppet-master"), "{picked}");
+        assert!(!picked.contains(".potato-workspace"), "{picked}");
         assert!(!picked.starts_with(r"\\?\"), "no extended-length prefix reaches a program's cwd: {picked}");
         assert_eq!(comparable_project_path(Path::new(&picked)), comparable_project_path(&dir));
         let _ = std::fs::remove_dir_all(dir);
@@ -528,7 +529,7 @@ mod persist_tests {
     #[test]
     fn a_separate_copys_folder_is_never_where_a_selected_project_starts() {
         let origin = temp_folder("origin");
-        let copy = origin.join(".puppet-master").join("worktrees").join("pane-1a2b3c4d");
+        let copy = origin.join(".potato-workspace").join("worktrees").join("pane-1a2b3c4d");
         std::fs::create_dir_all(&copy).unwrap();
         let picked = resolve_selected_folder(Some(&text(&copy))).unwrap().unwrap();
         assert!(!picked.contains("worktrees"), "{picked}");

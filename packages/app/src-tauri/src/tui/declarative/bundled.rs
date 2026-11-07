@@ -7,7 +7,10 @@ use std::sync::OnceLock;
 
 /// The folder the shipped definitions live in: beside the app executable (an installed build), else the source tree.
 pub fn root() -> Option<PathBuf> {
-    let beside_exe = std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("resources").join("definitions")));
+    let beside_exe = std::env::current_exe().ok().and_then(|exe| {
+        let dir = exe.parent()?;
+        Some(crate::shell_env::bundled_resources_root(dir).join("definitions"))
+    });
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join("definitions");
     [beside_exe, Some(source)].into_iter().flatten().find(|p| p.is_dir())
 }

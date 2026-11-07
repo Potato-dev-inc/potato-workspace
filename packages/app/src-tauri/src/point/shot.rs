@@ -1,7 +1,7 @@
 //! Element screenshots: crop, outline, save, prune, copy, thumbnail (PF-5).
 //!
 //! Every file name is made here (`pick-<yyyymmdd-hhmmss>-<n>.png`), never taken from the page.
-//! Files go only into `<project>/.puppet-master/shots/`. `prune` touches only `pick-*.png` there.
+//! Files go only into `<project>/.potato-workspace/shots/`. `prune` touches only `pick-*.png` there.
 
 use super::{Rect, Shot, Viewport};
 use base64::Engine;
@@ -141,9 +141,9 @@ fn encode(w: u32, h: u32, rgba: &[u8]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// `<project>/.puppet-master/shots`.
+/// `<project>/.potato-workspace/shots`.
 pub fn shots_dir(project: &Path) -> PathBuf {
-    project.join(".puppet-master").join("shots")
+    project.join(".potato-workspace").join("shots")
 }
 
 /// Write one screenshot into the project's shots folder. Returns (absolute path, relative path).
@@ -234,7 +234,7 @@ fn is_shot_name(name: &str) -> bool {
 }
 
 fn rel_of(name: &str) -> String {
-    format!(".puppet-master/shots/{name}")
+    format!(".potato-workspace/shots/{name}")
 }
 
 /// Local time as `yyyymmdd-hhmmss`. Falls back to zeros if the clock value is out of range.

@@ -877,7 +877,7 @@ fn the_stored_brief_holds_no_secret_path_or_email_and_fences_hostile_text() {
     assert!(!view.contains("Fix the build") && !view.contains(HOME) && !view.contains("brief.md"), "{view}");
     // The brief is only in the private store folder, never in the project.
     assert!(Path::new(&record.brief.file).starts_with(io.store.root()), "{}", record.brief.file);
-    assert!(!Path::new(&io.project).join(".puppet-master").join("keep-going").exists());
+    assert!(!Path::new(&io.project).join(".potato-workspace").join("keep-going").exists());
 }
 
 /// Every non-test source file of the module.

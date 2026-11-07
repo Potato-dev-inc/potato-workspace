@@ -17,8 +17,8 @@ export const ACTIVITY_STEP_MS = 900;
 export const ACTIVITY_MAX_LINES = 14;
 
 /** Fixed labels. Nothing else is drawn except plan strings, captions and numbers. */
-const MARK_LABEL = 'Puppet Master';
-const END_LABEL = 'Made with Puppet Master';
+const MARK_LABEL = 'Potato Workspace';
+const END_LABEL = 'Made with Potato Workspace';
 const FAILED_LABEL = 'failed';
 const NO_FILES_LABEL = 'No files changed';
 

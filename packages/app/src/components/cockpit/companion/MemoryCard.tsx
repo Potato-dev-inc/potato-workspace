@@ -82,7 +82,7 @@ export function MemoryCard({
 
       {memory.outsideChanges.map((change) => (
         <div className="ck-companion-notice" key={change.file} role="status">
-          <span>{fileNameOf(change.file)} changed outside Puppet Master.</span>
+          <span>{fileNameOf(change.file)} changed outside Potato Workspace.</span>
           <span className="ck-companion-notice-actions">
             <button type="button" className="ck-btn ck-btn--sm ck-btn--secondary" onClick={() => void decideOutside(change.file, 'keep')}>
               Keep the change

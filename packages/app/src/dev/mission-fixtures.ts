@@ -69,7 +69,7 @@ const base: MissionView = {
   current_agent: 'Codex',
   current_run: 'run-codex-1',
   current_pane: PANE_CODEX,
-  copy: { path: 'C:\\Users\\dev\\work\\shop\\.puppet-master\\worktrees\\mission-m1', branch: 'pm/mission-m1', base: 'main', base_commit: '3f2a1c0', closed: false },
+  copy: { path: 'C:\\Users\\dev\\work\\shop\\.potato-workspace\\worktrees\\mission-m1', branch: 'pm/mission-m1', base: 'main', base_commit: '3f2a1c0', closed: false },
   checks: [
     { name: 'Tests', passed: false, text: 'npm test' },
     { name: 'Type check', passed: true, text: 'npx tsc --noEmit' },

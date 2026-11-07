@@ -11,7 +11,7 @@ export const meta = {
 export async function run(t) {
   await calm(t);
   await t.step('The cockpit is on screen');
-  await t.expect.text('Puppet Master');
+  await t.expect.text('Potato Workspace');
   await t.expect.visible('Inbox');
 
   await t.step('Nothing is running yet');

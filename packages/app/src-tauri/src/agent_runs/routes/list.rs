@@ -126,7 +126,7 @@ pub(super) fn list_agents(
         .lock()
         .list()
         .into_iter()
-        .filter(|pane| !pane.id.starts_with("puppet-master-orchestrator-"))
+        .filter(|pane| !pane.id.starts_with("potato-workspace-orchestrator-"))
         .map(|pane| (pane.id.clone(), pane))
         .collect();
     let mut claimed = std::collections::BTreeSet::new();

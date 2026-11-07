@@ -17,7 +17,7 @@ use crate::mcp_install::declarative::HostLaunch;
 const JSON_HOST: &str = r#"
 config_path = "~/.alpha/mcp.json"
 format = "json"
-key_path = "mcpServers.puppet-master"
+key_path = "mcpServers.potato-workspace"
 project_config_path = ".alpha/mcp.json"
 [entry]
 command = "{command}"
@@ -32,7 +32,7 @@ headers = "{headers}"
 const TOML_HOST: &str = r#"
 config_path = "~/.beta/config.toml"
 format = "toml"
-key_path = "mcp_servers.puppet-master"
+key_path = "mcp_servers.potato-workspace"
 project_config_path = ".beta/config.toml"
 [entry]
 command = "{command}"
@@ -46,7 +46,7 @@ http_headers = "{headers}"
 const ARRAY_HOST: &str = r#"
 config_path = "~/.gamma/gamma.json"
 format = "json"
-key_path = "mcp.puppet-master"
+key_path = "mcp.potato-workspace"
 [entry]
 type = "local"
 command = ["{command}", "{args}"]
@@ -62,7 +62,7 @@ enabled = true
 const YAML_HOST: &str = r#"
 config_path = "~/.delta/config.yaml"
 format = "yaml"
-key_path = "servers.puppet-master"
+key_path = "servers.potato-workspace"
 [entry]
 command = "{command}"
 args = "{args}"
@@ -297,11 +297,11 @@ fn uninstalled_agent_without_a_config_is_skipped_and_pm_entry_is_optional() {
     let with_pm = SyncOptions { home: h.clone(), project: None, pm_launch: Some(launch) };
     sync::run(&[stdio("a", "A", "npx")], &[host("alpha", JSON_HOST, true)], vec![], &with_pm, true);
     let doc: Value = serde_json::from_str(&read(&h.join(".alpha/mcp.json"))).unwrap();
-    assert_eq!(doc["mcpServers"]["puppet-master"]["command"], "pm-mcp");
+    assert_eq!(doc["mcpServers"]["potato-workspace"]["command"], "pm-mcp");
     // Dropping the PM option never removes PM's entry (it is not a toolbelt-owned key).
     sync::run(&[], &[host("alpha", JSON_HOST, true)], vec![], &opts(&h), true);
     let doc: Value = serde_json::from_str(&read(&h.join(".alpha/mcp.json"))).unwrap();
-    assert!(doc["mcpServers"].get("puppet-master").is_some() && doc["mcpServers"].get("pm-toolbelt-a").is_none());
+    assert!(doc["mcpServers"].get("potato-workspace").is_some() && doc["mcpServers"].get("pm-toolbelt-a").is_none());
 }
 
 #[test]
@@ -321,7 +321,7 @@ fn import_reads_servers_back_through_the_hosts_templates() {
     fs::create_dir_all(h.join(".gamma")).unwrap();
     fs::write(
         h.join(".alpha/mcp.json"),
-        r#"{"mcpServers": {"pg": {"command": "npx", "args": ["-y", "pg-mcp"], "env": {"PG_TOKEN": "tok-123", "PG_HOST": "db"}}, "web": {"type": "http", "url": "https://w.example/mcp", "headers": {"Authorization": "Bearer abc"}}, "puppet-master": {"command": "pm"}, "pm-toolbelt-old": {"command": "x"}}}"#,
+        r#"{"mcpServers": {"pg": {"command": "npx", "args": ["-y", "pg-mcp"], "env": {"PG_TOKEN": "tok-123", "PG_HOST": "db"}}, "web": {"type": "http", "url": "https://w.example/mcp", "headers": {"Authorization": "Bearer abc"}}, "potato-workspace": {"command": "pm"}, "pm-toolbelt-old": {"command": "x"}}}"#,
     )
     .unwrap();
     fs::write(h.join(".gamma/gamma.json"), r#"{"mcp": {"pg2": {"type": "local", "command": ["npx", "-y", "pg-mcp"], "environment": {"PG_TOKEN": "tok-123", "PG_HOST": "db"}}}}"#).unwrap();

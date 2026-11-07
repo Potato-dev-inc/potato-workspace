@@ -26,7 +26,7 @@ pub fn canary_dismiss_notice(id: String) {
     canary::dismiss_notice(&id);
 }
 
-/// Opens the folder of screens Puppet Master did not recognise; returns its path.
+/// Opens the folder of screens Potato Workspace did not recognise; returns its path.
 #[tauri::command]
 pub fn canary_open_captures() -> Result<String, String> {
     canary::open_captures()

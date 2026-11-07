@@ -8,7 +8,7 @@ import {
   SpawnPaneRequestSchema,
   SwitchModelRequestSchema,
   WriteInputRequestSchema,
-} from '@puppet-master/shared';
+} from '@potato-workspace/shared';
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { callWithRefresh, callWithTimeout } from './bridge-client.js';

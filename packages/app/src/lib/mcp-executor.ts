@@ -1,6 +1,6 @@
 // Tool executors for the built-in orchestrator: the McpToolExecutor contract plus its two backings,
 // direct Tauri/PTY calls (desktop sidebar) and the HTTP bridge (external hosts / remote UI).
-import type { AgentContextProfile, AgentModelInspection, PaneInfo } from '@puppet-master/shared';
+import type { AgentContextProfile, AgentModelInspection, PaneInfo } from '@potato-workspace/shared';
 import type {
   BridgeClient,
   ContextPackRequest,
@@ -108,7 +108,7 @@ function bridgeRequiredTool(name: string): never {
   throw new Error(`${name} requires the Rust HTTP bridge executor`);
 }
 
-/** Direct Rust PTY path — used by the built-in Puppet Master sidebar. */
+/** Direct Rust PTY path — used by the built-in Potato Workspace sidebar. */
 export function makeTauriExecutor(): McpToolExecutor {
   return {
     listPanes: () => tauri.listPanes() as Promise<PaneInfo[]>,

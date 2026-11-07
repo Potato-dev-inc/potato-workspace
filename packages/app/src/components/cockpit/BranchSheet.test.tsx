@@ -340,7 +340,7 @@ describe('BranchSheet: what the agent gets', () => {
 
   it('says the copy and the not-copied files in plain words', async () => {
     await open();
-    expect(host.textContent).toContain('Puppet Master makes a separate copy of your files from this save point.');
+    expect(host.textContent).toContain('Potato Workspace makes a separate copy of your files from this save point.');
     expect(host.textContent).toContain('Not in the copy: files Git ignores (like node_modules) and files over 20 MB.');
   });
 });

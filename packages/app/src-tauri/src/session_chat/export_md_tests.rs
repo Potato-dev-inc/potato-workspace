@@ -17,7 +17,7 @@ fn ctx_home(home: &str) -> RedactContext {
 }
 
 fn meta() -> Meta {
-    Meta { agent: "Test Agent".into(), folder: "puppet-master".into(), date: "2026-10-28".into() }
+    Meta { agent: "Test Agent".into(), folder: "potato-workspace".into(), date: "2026-10-28".into() }
 }
 
 fn user(n: usize, text: &str) -> ChatItem {
@@ -43,8 +43,8 @@ fn render(items: &[ChatItem]) -> String {
 #[test]
 fn a_chat_is_one_markdown_file_with_a_heading_and_a_footer() {
     let md = render(&[user(1, "hello"), agent(1, "hi there")]);
-    assert!(md.starts_with("# Test Agent\n\npuppet-master · 2026-10-28\n\n---\n\n**You**\n\nhello\n\n**Test Agent**\n\nhi there"));
-    assert!(md.ends_with("---\n\n_Saved from Puppet Master_\n"));
+    assert!(md.starts_with("# Test Agent\n\npotato-workspace · 2026-10-28\n\n---\n\n**You**\n\nhello\n\n**Test Agent**\n\nhi there"));
+    assert!(md.ends_with("---\n\n_Saved from Potato Workspace_\n"));
 }
 
 #[test]
