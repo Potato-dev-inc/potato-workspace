@@ -50,6 +50,10 @@ fn delegate(cx: &Ctx) -> RouteResult {
     let app = cx.app.clone();
     let mut req: crate::operations::DelegateWorkRequest = parse_json(body)?;
     req.owner_session_id = request_session(headers).map(str::to_string);
+    // "Keep helpers open when they finish": the pane this helper opens is not closed when it ends.
+    if req.pane_id.is_none() && crate::agent_run_mode::apply_keep_open(&mut req.keep_pane) {
+        req.worker.kept_open_note = Some(crate::agent_run_mode::KEPT_OPEN_NOTE.to_string());
+    }
     // An agent delegating work without naming an account: the person's login choice decides, or a card asks.
     let owner = req.owner_session_id.clone();
     crate::agent_runs::helper_login::for_delegate(

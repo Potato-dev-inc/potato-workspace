@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PaneAction } from '../../lib/pane-actions';
-import { IconClose, IconInfo, IconReflow, IconRename, IconStop } from './Icons';
+import { IconClose, IconInfo, IconPin, IconReflow, IconRename, IconStop } from './Icons';
 
 /**
  * The one menu of a pane: opened by a right-click (or the context-menu key, Shift+F10) on its row in the
@@ -16,6 +16,8 @@ export function PaneContextMenu({
   x,
   y,
   onSide,
+  pinned,
+  onPin,
   onAction,
   onInterrupt,
   onClose,
@@ -24,6 +26,10 @@ export function PaneContextMenu({
   y: number;
   /** "Open to the side" (split view). Absent: no such item. */
   onSide?: () => void;
+  /** The pane is pinned: the item says Unpin. */
+  pinned?: boolean;
+  /** Pins or unpins the pane. Absent: no such item. */
+  onPin?: () => void;
   onAction: (action: PaneAction) => void;
   onInterrupt: () => void;
   /** The menu wants to go away (Escape, Tab, a click outside). `refocus` when the keyboard closed it. */
@@ -117,6 +123,7 @@ export function PaneContextMenu({
           <div className="ck-menu-sep" role="separator" />
         </>
       )}
+      {onPin && item(pinned ? 'Unpin' : 'Pin', <IconPin />, onPin)}
       {item('Rename', <IconRename />, () => onAction('rename'))}
       {item('Reflow', <IconReflow />, () => onAction('reflow'))}
       {item('Interrupt', <IconStop />, onInterrupt, '⌃C')}

@@ -428,10 +428,17 @@ pub struct WorkerPersist {
     /// (`agent_run_mode`); absent when the caller chose or the default applied.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_mode: Option<RunModeNote>,
-    /// The agent asked for a hidden run (`headless: true`) while "Allow hidden helpers" was off, so
+    /// The agent asked for a hidden run (`headless: true`) while "Helper agents" kept helpers visible, so
     /// the run was shown in a pane instead. The plain sentence the result and receipt carry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_ignored: Option<String>,
+    /// "Helper agents" is "Always run in the background", so the run has no pane although the agent did not
+    /// ask for that. The plain sentence the result and receipt carry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headless_forced: Option<String>,
+    /// "Keep helpers open when they finish" kept this run's pane open although the agent did not ask for that.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kept_open_note: Option<String>,
     /// Programs pre-authorised for allow-once on Cursor shell prompts (see approval_policy).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_commands: Vec<String>,

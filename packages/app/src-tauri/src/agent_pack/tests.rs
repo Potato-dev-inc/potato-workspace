@@ -628,3 +628,118 @@ command = \"{{nope}}\"
         assert!(crate::agent_store::check::forbidden_in_store(&carrying).is_some());
     }
 }
+
+// ---- the broken npm-package entry written by 1.0.6 ----
+
+fn bundled_launch() -> HostLaunch {
+    HostLaunch {
+        command: "C:/Program Files/Potato Workspace/resources/bin/puppet-master-mcp.exe".into(),
+        args: vec![],
+        env: vec![("POTATO_WORKSPACE_BRIDGE_PORT_FILE".into(), "C:/pm/potato-workspace.bridge.port".into())],
+        ..Default::default()
+    }
+}
+
+fn missing_launch() -> HostLaunch {
+    HostLaunch { program_missing: true, ..launch() }
+}
+
+const BROKEN_CODEX: &str = "model = \"gpt-5\"\n\n[mcp_servers.potato-workspace]\ncommand = \"npx\"\nargs = [\"-y\", \"@potato-workspace/mcp\"]\n\n[mcp_servers.potato-workspace.env]\nPOTATO_WORKSPACE_BRIDGE_PORT_FILE = \"C:/pm/potato-workspace.bridge.port\"\n";
+
+fn env_with(agents: Vec<AgentSpec>, home: &Path, launch: HostLaunch) -> Env {
+    Env::new(agents, home.to_path_buf(), home.join("appdata"), launch)
+}
+
+#[test]
+fn the_unpublished_npm_entry_is_repaired_with_a_backup_and_undo() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("repair");
+    seed(&home, ".codex/config.toml", BROKEN_CODEX);
+    let e = env_with(vec![spec("codex", true)], &home, bundled_launch());
+
+    let v = service::call(&e, "preview").unwrap();
+    assert_eq!(v["agents"][0]["mcp"]["status"], "ready");
+    assert_eq!(v["agents"][0]["mcp"]["change"], "update");
+    assert_eq!(read(&home.join(".codex/config.toml")), BROKEN_CODEX, "preview writes nothing");
+
+    let v = service::call(&e, "apply").unwrap();
+    assert_eq!(v["agents"][0]["mcp"]["written"], true);
+    let fixed = read(&home.join(".codex/config.toml"));
+    assert!(fixed.contains("puppet-master-mcp.exe"), "{fixed}");
+    assert!(!fixed.contains("@potato-workspace/mcp"), "{fixed}");
+    assert!(fixed.contains("model = \"gpt-5\""), "the rest of the file stays");
+    let backup = v["agents"][0]["mcp"]["backup"].as_str().unwrap();
+    assert_eq!(fs::read_to_string(backup).unwrap().replace("\r\n", "\n"), BROKEN_CODEX);
+
+    // A second run has nothing left to fix.
+    let again = service::call(&e, "apply").unwrap();
+    assert_eq!(again["agents"][0]["mcp"]["status"], "unchanged");
+
+    let u = service::call(&e, "undo").unwrap();
+    assert!(u["skipped"].as_array().unwrap().is_empty(), "{u}");
+    assert_eq!(read(&home.join(".codex/config.toml")), BROKEN_CODEX, "Undo puts the old file back");
+}
+
+#[test]
+fn only_the_exact_fallback_shape_counts_as_broken() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("not-broken");
+    // A different package version, an extra argument, a user's own program: all untouched.
+    let variants = [
+        "{\n  \"mcpServers\": {\n    \"potato-workspace\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@potato-workspace/mcp@1.2.3\"]\n    }\n  }\n}\n",
+        "{\n  \"mcpServers\": {\n    \"potato-workspace\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@potato-workspace/mcp\", \"--verbose\"]\n    }\n  }\n}\n",
+        "{\n  \"mcpServers\": {\n    \"potato-workspace\": {\n      \"command\": \"C:/mine/pm-mcp.exe\"\n    }\n  }\n}\n",
+    ];
+    for user in variants {
+        seed(&home, ".cursor/mcp.json", user);
+        let e = env_with(vec![spec("cursor_agent", true)], &home, bundled_launch());
+        let v = service::call(&e, "apply").unwrap();
+        assert_eq!(v["agents"][0]["mcp"]["status"], "unchanged", "{user}");
+        assert_eq!(read(&home.join(".cursor/mcp.json")), user);
+    }
+}
+
+#[test]
+fn the_exact_fallback_in_json_is_repaired_too() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("repair-json");
+    seed(&home, ".cursor/mcp.json", "{\n  \"mcpServers\": {\n    \"potato-workspace\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@potato-workspace/mcp\"],\n      \"env\": {\"POTATO_WORKSPACE_BRIDGE_PORT_FILE\": \"C:/pm/potato-workspace.bridge.port\"}\n    },\n    \"other\": { \"command\": \"x\" }\n  }\n}\n");
+    let e = env_with(vec![spec("cursor_agent", true)], &home, bundled_launch());
+    service::call(&e, "apply").unwrap();
+    let doc: Value = serde_json::from_str(&read(&home.join(".cursor/mcp.json"))).unwrap();
+    assert_eq!(doc["mcpServers"]["potato-workspace"]["command"], bundled_launch().command);
+    assert_eq!(doc["mcpServers"]["other"]["command"], "x");
+}
+
+#[test]
+fn with_no_bundled_program_nothing_is_written_and_the_agent_says_why() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("missing");
+    seed(&home, ".cursor/mcp.json", "{\n  \"theme\": \"dark\"\n}\n");
+    seed(&home, ".codex/config.toml", BROKEN_CODEX);
+    let e = env_with(vec![spec("cursor_agent", true), spec("codex", true)], &home, missing_launch());
+    let before = read(&home.join(".cursor/mcp.json"));
+    let v = service::call(&e, "apply").unwrap();
+    for row in v["agents"].as_array().unwrap() {
+        assert_eq!(row["mcp"]["status"], "skipped", "{row}");
+        assert_eq!(row["mcp"]["reason"], plan::MISSING_PROGRAM);
+        assert_eq!(row["mcp"]["written"], false);
+    }
+    assert_eq!(read(&home.join(".cursor/mcp.json")), before);
+    assert_eq!(read(&home.join(".codex/config.toml")), BROKEN_CODEX, "a broken entry is not swapped for another broken one");
+    assert!(!fs::read_to_string(home.join(".cursor/mcp.json")).unwrap().contains("npx"));
+    // The skills still install.
+    assert_eq!(v["agents"][0]["skills"]["written"], true);
+}
+
+#[test]
+fn a_user_entry_stays_untouched_even_when_the_program_is_missing() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("missing-user");
+    let user = "{\n  \"mcpServers\": {\n    \"potato-workspace\": {\n      \"command\": \"C:/mine/pm-mcp.exe\"\n    }\n  }\n}\n";
+    seed(&home, ".cursor/mcp.json", user);
+    let e = env_with(vec![spec("cursor_agent", true)], &home, missing_launch());
+    let v = service::call(&e, "apply").unwrap();
+    assert_eq!(v["agents"][0]["mcp"]["status"], "unchanged");
+    assert_eq!(read(&home.join(".cursor/mcp.json")), user);
+}

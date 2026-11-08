@@ -171,10 +171,17 @@ pub struct AgentRunRequest {
     /// runs) keeps the mode it names.
     #[serde(skip)]
     pub(crate) headless_unset: bool,
-    /// Crate-internal: the caller (an agent) passed `headless: true` and "Allow hidden helpers" is off,
+    /// Crate-internal: the caller (an agent) passed `headless: true` and "Helper agents" keeps helpers visible,
     /// so the run was made visible. Set by the `/agents/run` route; the receipt says so.
     #[serde(skip)]
     pub(crate) headless_ignored: bool,
+    /// Crate-internal: "Helper agents" is "Always run in the background", so this run was made headless
+    /// although the caller did not ask for it. Set by the `/agents/run` route; the receipt says so.
+    #[serde(skip)]
+    pub(crate) headless_forced: bool,
+    /// Crate-internal: "Keep helpers open when they finish" set `keep_pane` on for this run; the result says so.
+    #[serde(skip)]
+    pub(crate) kept_open_by_setting: bool,
     /// Crate-internal: a `quick_ask` question. Hidden by design, so it is not listed as a hidden run.
     #[serde(skip)]
     pub(crate) quick: bool,

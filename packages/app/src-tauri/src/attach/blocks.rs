@@ -4,7 +4,7 @@
 //! takes embedded context; everything else (and anything that cannot be read) is a `resource_link`, which every
 //! agent must accept.
 
-use super::{AttachKind, ChatAttachment};
+use super::{AttachKind, ChatAttachment, FOLDER_MIME};
 use base64::Engine;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -67,8 +67,11 @@ fn link(attachment: &ChatAttachment) -> Value {
         "type": "resource_link",
         "uri": file_uri(&attachment.path),
         "name": attachment.name,
-        "size": attachment.size,
     });
+    // A folder has no size; its `size` is a file count.
+    if attachment.kind != AttachKind::Folder {
+        block["size"] = json!(attachment.size);
+    }
     if let Some(mime) = &attachment.mime {
         block["mimeType"] = json!(mime);
     }
@@ -107,7 +110,13 @@ pub fn prompt_blocks(text: &str, attachments: &[ChatAttachment], image_prompts: 
     if !text.is_empty() {
         out.push(json!({ "type": "text", "text": text }));
     }
-    out.extend(attachments.iter().map(|a| block(a, image_prompts, embedded_context)));
+    for a in attachments {
+        // A folder is only a link; the line below it is for agents that ignore links.
+        if a.kind == AttachKind::Folder {
+            out.push(json!({ "type": "text", "text": format!("Folder: {}", a.path) }));
+        }
+        out.push(block(a, image_prompts, embedded_context));
+    }
     out
 }
 
@@ -131,6 +140,7 @@ pub fn attachment_of_block(block: &Value) -> Option<ChatAttachment> {
     let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).map(str::to_string);
     let kind_of = |mime: &Option<String>| match mime.as_deref() {
         Some(m) if m.starts_with("image/") => AttachKind::Image,
+        Some(FOLDER_MIME) => AttachKind::Folder,
         Some(m) if m.starts_with("text/") => AttachKind::Text,
         _ => AttachKind::File,
     };

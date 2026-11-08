@@ -25,7 +25,7 @@ use crate::operations::{RunFallback, RunModeNote};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-pub use store::{hidden_helpers_allowed, set_for_agent, set_hidden_helpers_allowed, setting_for};
+pub use store::{helper_visibility, keep_helpers_open, set_for_agent, set_helper_visibility, set_keep_helpers_open, setting_for};
 #[cfg(test)]
 pub use store::{with_test_env, TestEnv};
 #[cfg(feature = "dev-fake-tui")]
@@ -59,6 +59,38 @@ impl RunMode {
         match text.trim() {
             "visible" => Some(RunMode::Visible),
             "one_task" => Some(RunMode::OneTask),
+            _ => None,
+        }
+    }
+}
+
+/// Settings > Agents > "Helper agents": whether the helpers an agent starts are shown in a pane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HelperVisibility {
+    /// Every helper opens in a pane; an agent's `headless: true` is ignored. The default.
+    #[default]
+    AlwaysShow,
+    /// The agent's `headless` argument decides (today's rule without the switch).
+    AgentChooses,
+    /// Every helper the agent starts runs in the background, with no pane.
+    AlwaysBackground,
+}
+
+impl HelperVisibility {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HelperVisibility::AlwaysShow => "always_show",
+            HelperVisibility::AgentChooses => "agent_chooses",
+            HelperVisibility::AlwaysBackground => "always_background",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        match text.trim() {
+            "always_show" => Some(HelperVisibility::AlwaysShow),
+            "agent_chooses" => Some(HelperVisibility::AgentChooses),
+            "always_background" => Some(HelperVisibility::AlwaysBackground),
             _ => None,
         }
     }
@@ -121,27 +153,81 @@ pub(crate) fn apply(request: &mut crate::agent_runs::AgentRunRequest) -> Decisio
 }
 
 /// What a run result says when an agent's `headless: true` was not honoured.
-pub const HEADLESS_IGNORED_NOTE: &str = "headless: true was ignored: \"Allow hidden helpers\" is off in Settings > Agents, so this helper runs in a visible pane the person can see. Leave headless out; there is no need to hide a helper.";
+pub const HEADLESS_IGNORED_NOTE: &str = "shown: the user's setting keeps helpers visible (Settings > Agents > Helper agents), so headless: true was ignored and this helper runs in a visible pane. Leave headless out.";
+
+/// What a run result says when the setting made a helper run in the background.
+pub const HEADLESS_FORCED_NOTE: &str = "background: the user's setting runs helpers in the background (Settings > Agents > Helper agents), so this helper has no pane. It is listed in the person's Inbox.";
 
 /// Added to a read-only refusal when the run could only have worked hidden.
-pub const HIDDEN_HELPERS_HINT: &str = " Hidden runs are off (Settings > Agents > \"Allow hidden helpers\"), so a hidden run is not an option unless the person turns that on.";
+pub const HIDDEN_HELPERS_HINT: &str = " Hidden runs are off (Settings > Agents > Helper agents is \"Always show them\"), so a hidden run is not an option unless the person changes that.";
 
-/// The "Allow hidden helpers" switch, applied to a run an agent started with `headless: true`. While it
-/// is off (the default) the run is shown in a visible pane instead, and the request remembers it so the
-/// result can say so. `quick_ask`, follow-ups, the app's own runs and the automatic fallback never come
-/// here: they keep the mode they name. Returns true when `headless` was set aside.
-pub(crate) fn gate_hidden_helper(request: &mut crate::agent_runs::AgentRunRequest) -> bool {
-    if request.headless_unset
-        || !request.headless
-        || request.turn_index > 0
+/// What "Helper agents" did to one run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VisibilityOutcome {
+    /// Left as the caller asked.
+    Untouched,
+    /// `headless: true` was set aside; the helper is shown.
+    Shown,
+    /// The helper was made to run in the background.
+    Background,
+}
+
+/// The "Helper agents" setting, applied to a new first-turn run from the `/agents/run` route.
+/// Follow-ups, `quick_ask`, the app's own runs, adopted panes, missions and the automatic fallback
+/// never come here: they keep the mode they name. `headless_possible` / `read_only_ok_headless`
+/// say whether the agent can be made to run in the background at all.
+pub(crate) fn apply_helper_visibility(request: &mut crate::agent_runs::AgentRunRequest) -> VisibilityOutcome {
+    let agent = request.agent_type.clone();
+    let possible = crate::tui::run_modes(&agent).headless
+        && (!request.read_only || crate::agent_runs::read_only_supported(&agent, false));
+    apply_helper_visibility_with(request, helper_visibility(), possible)
+}
+
+pub(crate) fn apply_helper_visibility_with(
+    request: &mut crate::agent_runs::AgentRunRequest,
+    setting: HelperVisibility,
+    background_possible: bool,
+) -> VisibilityOutcome {
+    if request.turn_index > 0
         || request.pane_id.is_some()
         || request.worker_id.is_some()
-        || hidden_helpers_allowed()
+        || request.join_worktree.is_some()
+        || request.until_checks_pass
     {
+        return VisibilityOutcome::Untouched;
+    }
+    match setting {
+        HelperVisibility::AgentChooses => VisibilityOutcome::Untouched,
+        HelperVisibility::AlwaysShow if !request.headless_unset && request.headless => {
+            request.headless = false;
+            request.headless_ignored = true;
+            VisibilityOutcome::Shown
+        }
+        HelperVisibility::AlwaysShow => VisibilityOutcome::Untouched,
+        HelperVisibility::AlwaysBackground if background_possible && !request.headless => {
+            request.headless = true;
+            request.headless_forced = true;
+            VisibilityOutcome::Background
+        }
+        HelperVisibility::AlwaysBackground => VisibilityOutcome::Untouched,
+    }
+}
+
+/// What a result says when "Keep helpers open when they finish" kept a pane the agent would have closed.
+pub const KEPT_OPEN_NOTE: &str = "kept open: the user's setting keeps finished helpers open (Settings > Agents > Helper agents), so this pane stays until close_agent; followup_task continues in it.";
+
+/// "Keep helpers open when they finish", applied to a helper an agent starts (`run_agent`, `delegate_work`).
+/// While it is on (the default) a pane the run creates is not closed when the run ends, whatever
+/// `keep_pane` said. Returns true when `keep_pane` was set on by the setting.
+pub fn apply_keep_open(keep_pane: &mut bool) -> bool {
+    apply_keep_open_with(keep_pane, keep_helpers_open())
+}
+
+pub fn apply_keep_open_with(keep_pane: &mut bool, setting_on: bool) -> bool {
+    if !setting_on || *keep_pane {
         return false;
     }
-    request.headless = false;
-    request.headless_ignored = true;
+    *keep_pane = true;
     true
 }
 

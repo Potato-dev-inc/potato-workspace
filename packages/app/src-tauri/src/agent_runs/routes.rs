@@ -73,8 +73,13 @@ pub fn handle_request_as(
         ("POST", ["agents", "run"]) => parse::<AgentRunRequest>(body).and_then(|mut request| {
             // The caller left `headless` out (or null): the agent's run-mode setting may decide.
             request.headless_unset = headless_left_out(body);
-            // An agent's `headless: true` hides a helper only when the person allowed it.
-            crate::agent_run_mode::gate_hidden_helper(&mut request);
+            // "Helper agents": the person's choice decides whether the helper is shown or runs in the background.
+            crate::agent_run_mode::apply_helper_visibility(&mut request);
+            // "Keep helpers open when they finish": a pane this helper opens is not closed when it ends.
+            request.kept_open_by_setting = request.turn_index == 0
+                && request.pane_id.is_none()
+                && request.worker_id.is_none()
+                && crate::agent_run_mode::apply_keep_open(&mut request.keep_pane);
             if request
                 .project_path
                 .as_deref()

@@ -41,9 +41,12 @@ pub struct RunReceipt {
     /// reason: "not_verified"}`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_mode: Option<crate::operations::RunModeNote>,
-    /// Present when `headless: true` was ignored because "Allow hidden helpers" is off.
+    /// Present when `headless: true` was ignored because "Helper agents" keeps helpers visible.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_ignored: Option<String>,
+    /// Present when "Helper agents" made this run a background one the agent did not ask for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headless_forced: Option<String>,
     /// The definition (id, source, fingerprint, pinned binary) a declarative agent ran from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_definition: Option<crate::tui::DefinitionRef>,
@@ -220,6 +223,7 @@ pub(super) fn build_receipt(
         fallback: snapshot.worker.fallback.clone(),
         run_mode: snapshot.worker.run_mode.clone(),
         headless_ignored: snapshot.worker.headless_ignored.clone(),
+        headless_forced: snapshot.worker.headless_forced.clone(),
         agent_definition: snapshot.worker.agent_definition.clone(),
         worktree: snapshot.worker.worktree.as_ref().map(|worktree| ReceiptWorktree {
             path: worktree.path.clone(),

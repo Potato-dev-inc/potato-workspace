@@ -142,9 +142,9 @@ describe('AcpChatDock', () => {
     expect(cancel).not.toHaveBeenCalled();
     await act(async () => button('Stop')!.click());
     expect(cancel).toHaveBeenCalledWith('p1');
-    // Stopping now: the question is gone and the strip reads Stopping.
+    // Stopping now: the question is gone; "Stopping…" is the message box's to say (see AcpRunStop.test.tsx).
     expect(host.querySelector('[data-testid="acp-quiet"]')).toBeNull();
-    expect(host.querySelector('[data-testid="acp-strip"]')?.textContent).toContain('Stopping');
+    expect(host.querySelector('[data-testid="acp-strip"]')).toBeNull();
   });
 
   it('the question goes away when the agent speaks again (the state drops quietSecs)', async () => {
@@ -155,7 +155,8 @@ describe('AcpChatDock', () => {
     expect(host.querySelector('[data-testid="acp-quiet"]')).not.toBeNull();
     await emit(state({ quietSecs: null }));
     expect(host.querySelector('[data-testid="acp-quiet"]')).toBeNull();
-    expect(host.querySelector('[data-testid="acp-strip"]')?.textContent).toContain('Working');
+    expect(host.querySelector('[data-testid="acp-strip"]')).toBeNull();
+    expect(host.querySelector('[data-testid="acp-dock"]')).toBeNull();
   });
 
   it('no quiet question while a permission card waits for the person', async () => {
@@ -192,7 +193,7 @@ describe('AcpChatDock', () => {
     expect(host.querySelectorAll('[aria-label="Agent permission question"]').length).toBe(1);
     expect(['Allow Once', 'Allow for Session', 'Reject'].map((t) => !!button(t))).toEqual([true, true, true]);
     // The strip tells that the agent waits for the answer.
-    expect(host.querySelector('[data-testid="acp-strip"]')?.textContent).toContain('Waiting for your answer');
+    expect(host.querySelector('[data-testid="acp-strip"]')).toBeNull();
     await act(async () => button('Allow for Session')!.click());
     expect(answerQuestion).toHaveBeenCalledWith('q1', { choice_id: 'allow_always' });
   });
@@ -208,40 +209,17 @@ describe('AcpChatDock', () => {
     expect(dismissQuestion).toHaveBeenCalledWith('q1');
   });
 
-  it('Stop asks the session to cancel and reads Stopping… at once, until the turn has ended', async () => {
+  it('a plain running turn draws no strip: Working… and Stop live in the message box', async () => {
     const { c } = cockpit([]);
-    const { api, cancel, emit } = fakeApi(state());
+    const { api, emit } = fakeApi(state());
     await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
     await flush();
-    expect(host.querySelector('[data-testid="acp-strip"]')?.textContent).toContain('Working…');
-    await act(async () => button('Stop')!.click());
-    expect(cancel).toHaveBeenCalledWith('p1');
-    // Before the backend has said anything: already Stopping…, and the button cannot be pressed twice.
-    const strip = host.querySelector('[data-testid="acp-strip"]')!;
-    expect(strip.textContent).toContain('Stopping…');
-    expect(button('Stopping…')?.disabled).toBe(true);
-    // The backend says it is stopping, then that the turn has ended.
-    await emit(state({ phase: 'cancelling', stopping: true }));
-    expect(host.querySelector('[data-testid="acp-strip"]')?.textContent).toContain('Stopping…');
-    await emit(state({ phase: 'idle', status: 'idle', turnInFlight: false }));
+    expect(host.querySelector('[data-testid="acp-strip"]')).toBeNull();
     expect(host.querySelector('[data-testid="acp-dock"]')).toBeNull();
-    // A new turn starts: Stop is available again.
-    await emit(state({ turn: 2 }));
-    expect(button('Stop')?.disabled).toBe(false);
+    await emit(state({ phase: 'cancelling', stopping: true }));
+    expect(host.querySelector('[data-testid="acp-strip"]')).toBeNull();
   });
 
-  it('a Stop that could not be sent gives the button back', async () => {
-    const { c } = cockpit([]);
-    const { api } = fakeApi(state());
-    api.cancel = vi.fn(async () => {
-      throw new Error('no');
-    });
-    await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
-    await flush();
-    await act(async () => button('Stop')!.click());
-    await flush();
-    expect(button('Stop')?.disabled).toBe(false);
-  });
   describe('"Let agents answer these questions"', () => {
     const sw = () => host.querySelector<HTMLButtonElement>('[data-testid="agent-answering"] [role="switch"]');
     const note = () => host.querySelector('[data-testid="agent-answering"] .ck-acp-answering-note')?.textContent;

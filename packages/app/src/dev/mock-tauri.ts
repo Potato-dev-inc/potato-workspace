@@ -20,6 +20,7 @@ import {
   ACCOUNT_AGENTS,
   agentsListing,
   TOOLBELT_IMPORT,
+  AGENT_PACK_INSPECTION,
   AGENT_PACK_PREVIEW,
   TOOLBELT_LISTING,
   TOOLBELT_PREVIEW,
@@ -305,9 +306,14 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'agent_run_mode_set':
           // The dev harness has no custom agents to choose for.
           return { agents: [] };
-        case 'hidden_helpers_get':
-        case 'hidden_helpers_set':
-          return { allowed: Boolean(a.allowed) };
+        case 'helper_visibility_get':
+          return { mode: 'always_show' };
+        case 'helper_visibility_set':
+          return { mode: String(a.mode) };
+        case 'keep_helpers_open_get':
+          return { on: true };
+        case 'keep_helpers_open_set':
+          return { on: Boolean(a.on) };
         case 'hidden_runs_list':
           return [];
         case 'hidden_runs_dismiss':
@@ -370,6 +376,14 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return AGENT_PACK_PREVIEW;
         case 'agent_pack_apply':
           return { ...AGENT_PACK_PREVIEW, dry_run: false, recorded: 9 };
+        case 'agent_pack_inspect':
+          return AGENT_PACK_INSPECTION;
+        case 'agent_pack_custom_save':
+          return { id: String(a.agentId ?? 'custom-agent'), name: String(a.name ?? 'Agent'), config_path: String(a.path ?? ''), format: 'json', key_path: 'mcpServers' };
+        case 'agent_pack_custom_forget':
+          return { removed: true };
+        case 'plugin:dialog|open':
+          return (a.options as { directory?: boolean } | undefined)?.directory ? 'C:\\Users\\dev\\.agy\\skills' : 'C:\\Users\\dev\\.agy\\settings.json';
         case 'agent_pack_undo':
           return { restored: [], removed: ['a', 'b'], skipped: [], recorded: 0 };
         case 'ambient_get_prefs':

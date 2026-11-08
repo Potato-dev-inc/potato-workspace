@@ -1,3 +1,4 @@
+import type { FC } from 'react';
 import { AcpConfigChips } from '../components/chat/AcpConfigChips';
 import { ChatComposer } from '../components/chat/ChatComposer';
 import { PendingMessages } from '../components/chat/PendingMessages';
@@ -92,15 +93,28 @@ const NOOP_API = { setConfig: async () => STATE };
 // 124,000 of 200,000 tokens: 62 percent.
 const CONTEXT = readContext({ kind: 'usage', id: 'u1', at: null, inputTokens: 98_000, outputTokens: 26_000, contextWindow: 200_000 });
 
-export function Preview() {
+export interface PreviewOptions {
+  /** A key with no saved draft gives an empty box. */
+  draftKey?: string;
+  /** The agent works: the button is Stop and the footer says so. */
+  running?: boolean;
+  status?: { text: string; stopping: boolean } | null;
+}
+
+export const EMPTY_DRAFT_KEY = 'preview-composer-empty';
+
+export const Preview: FC<PreviewOptions> = ({ draftKey = COMPOSER_DRAFT_KEY, running = false, status = null }) => {
   return (
     <div className="cockpit" style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'block', background: 'var(--bg)', color: 'var(--label)', overflow: 'auto', padding: 24 }}>
       <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12, minHeight: '100%', justifyContent: 'flex-end' }}>
-        <PendingMessages messages={PENDING} onCancel={async () => null} onHide={() => undefined} onSendNow={() => undefined} />
+        <PendingMessages messages={draftKey === EMPTY_DRAFT_KEY ? [] : PENDING} onCancel={async () => null} onHide={() => undefined} onSendNow={() => undefined} />
         <ChatComposer
           onSend={async () => null}
           blockedReason={null}
-          draftKey={COMPOSER_DRAFT_KEY}
+          draftKey={draftKey}
+          running={running}
+          onStop={running ? () => undefined : undefined}
+          status={status}
           attachFiles={async () => []}
           toolbar={<AcpConfigChips paneId={COMPOSER_DRAFT_KEY} state={STATE} api={NOOP_API} />}
           contextUsage={CONTEXT}
@@ -108,4 +122,4 @@ export function Preview() {
       </div>
     </div>
   );
-}
+};

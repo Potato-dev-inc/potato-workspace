@@ -40,12 +40,13 @@ import { placeLabel, placeTooltip } from '../../lib/wsl-place';
 import { isProseStream, transcriptSpeaker } from '../../lib/transcript-labels';
 import { UntestedChip } from './UntestedChip';
 import { AcpChatDock } from '../chat/AcpChatDock';
-import { ACP_BADGE, ACP_LANE, isTerminalChatLane, tauriAcpChatApi, terminalChatCapable, TERMINAL_CHAT_BADGE, type AcpChatApi } from '../../lib/acpChat';
+import { ACP_BADGE, ACP_LANE, isTerminalChatLane, quietStrip, runStrip, tauriAcpChatApi, terminalChatCapable, TERMINAL_CHAT_BADGE, type AcpChatApi } from '../../lib/acpChat';
 import { useAcpLanes } from '../../hooks/useAcpLanes';
 import { AcpConfigChips } from '../chat/AcpConfigChips';
 import { HandedToTerminal, HANDED_BLOCK } from '../chat/HandedToTerminal';
 import { HandOverSheet } from '../chat/HandOverSheet';
 import { useAcpChatState } from '../../hooks/useAcpChatState';
+import { useAcpStop } from '../../hooks/useAcpStop';
 import { useHandOver } from '../../hooks/useHandOver';
 import { useTerminalConversation } from '../../hooks/useTerminalConversation';
 import '../../styles/cockpit-acp.css';
@@ -188,6 +189,7 @@ export function PaneView({
   // A chat session: its state (settings, commands, "open in a terminal"). An ordinary pane may hold a chat conversation
   // that was handed to it: then it can hand it back.
   const acpState = useAcpChatState(paneId, isAcp, acp);
+  const acpStop = useAcpStop(paneId, !!acpState?.turnInFlight, acp);
   // A Chat (terminal) pane whose agent has a prompt parser answers its questions from the chat (AnswerableQuestionCard).
   const laneView = useAcpLanes(isTerminalChat, acp);
   const answersPrompts = isTerminalChat && terminalChatCapable(laneView).some((a) => a.id === agentType && a.can_answer_prompts);
@@ -343,7 +345,7 @@ export function PaneView({
             onGoToTerminal={(id) => c.select(id)}
           />
         )}
-        {isAcp && <AcpChatDock c={c} paneId={paneId} paneName={name} api={acp} />}
+        {isAcp && <AcpChatDock c={c} paneId={paneId} paneName={name} api={acp} stopper={acpStop} />}
         <HelperQuestions c={c} ids={helperAsks} />
         {dockNow && <DockedCards c={c} paneId={paneId} dock={dock} dockNow={dockNow} onMore={cycleDock} />}
       </>
@@ -523,8 +525,10 @@ export function PaneView({
                 reply={{
                   blockedReason: inTerminal ? HANDED_BLOCK : composerBlock(pane, !chatAllowed, isAcp),
                   // A Chat (terminal) pane: while the agent works, the box shows Stop (the pane menu's Interrupt).
-                  running: isTerminalChat && pane.status === 'running',
-                  onStop: isTerminalChat ? () => void c.interrupt(paneId) : undefined,
+                  // A chat session over ACP: the same Stop the dock's quiet question uses; the words ride in the box footer.
+                  running: isAcp ? !!acpState?.turnInFlight : isTerminalChat && pane.status === 'running',
+                  onStop: isAcp ? acpStop.stop : isTerminalChat ? () => void c.interrupt(paneId) : undefined,
+                  status: isAcp && !quietStrip(acpState, acpStop.asked) ? runStrip(acpState, acpStop.asked) : null,
                   // "Send now" on a waiting message: stop the turn, the message goes when it ends.
                   onInterrupt: isAcp ? () => void acp.cancel(paneId).catch(() => undefined) : isTerminalChat ? () => void c.interrupt(paneId) : undefined,
                 }}

@@ -21,6 +21,25 @@ use crate::mcp_install::declarative::{key_segments, render_entry, resolve_config
 use crate::toolbelt::edit::{self, Op};
 use crate::tui::declarative::schema::McpHostTable;
 
+/// What the app wrote as Potato Workspace's own entry when it found no bundled program (1.0.6): the npm package,
+/// which was never published.
+const FALLBACK_COMMAND: &str = "npx";
+const FALLBACK_PACKAGE: &str = "@potato-workspace/mcp";
+
+/// Shown for an agent when this install has no program to point the connection at.
+pub const MISSING_PROGRAM: &str = "Can't set up: the Potato Workspace tool program is missing from this install.";
+
+/// The entry exactly as the broken fallback wrote it (with or without the port-file setting), and nothing else.
+fn is_broken_fallback(table: &McpHostTable, existing: &Value, launch: &HostLaunch) -> bool {
+    let fallback = |env: Vec<(String, String)>| HostLaunch {
+        command: FALLBACK_COMMAND.into(),
+        args: vec!["-y".into(), FALLBACK_PACKAGE.into()],
+        env,
+        ..Default::default()
+    };
+    [launch.env.clone(), Vec::new()].into_iter().any(|env| render_entry(table, &fallback(env)).map(|v| &v == existing).unwrap_or(false))
+}
+
 /// One agent and what it declares.
 #[derive(Debug, Clone)]
 pub struct AgentSpec {
@@ -266,8 +285,21 @@ fn plan_mcp_group(table: McpHostTable, path: Result<PathBuf, String>, installed:
         Err(e) => return fail(g, format!("{e}; left untouched")),
     };
     g.before = existing_text;
-    if members.iter().any(|(k, _)| k == key[0]) {
-        return g; // already registered: not ours to rewrite
+    let present = members.iter().find(|(k, _)| k == key[0]).map(|(_, v)| v.clone());
+    let repair = match &present {
+        // Only the exact shape 1.0.6 wrote for a package that does not exist is ours to replace.
+        Some(v) => {
+            if !is_broken_fallback(&table, v, launch) {
+                return g; // already registered: not ours to rewrite
+            }
+            true
+        }
+        None => false,
+    };
+    if launch.program_missing {
+        g.status = "skipped";
+        g.reason = Some(MISSING_PROGRAM.into());
+        return g;
     }
     let value = match render_entry(&table, launch) {
         Ok(v) => v,
@@ -280,7 +312,7 @@ fn plan_mcp_group(table: McpHostTable, path: Result<PathBuf, String>, installed:
     if after == before {
         return g;
     }
-    g.change = FileKind::Add;
+    g.change = if repair { FileKind::Update } else { FileKind::Add };
     g.status = "ready";
     g.diff = diff_lines(&before, &after);
     g.after = after;
@@ -426,6 +458,17 @@ fn apply_mcp_group(g: &mut McpGroup, opts: &Options, rec: &mut Record) {
                     g.reason = Some(format!("could not write {}: {e}", bak.display()));
                     return;
                 }
+            }
+        }
+    }
+    if g.change == FileKind::Update {
+        // A repair: the `.bak` of an earlier install may be older than this file, so keep this exact file too.
+        match backup_of(&opts.state_dir, &path) {
+            Ok(b) => g.backup = Some(path_str(&b)),
+            Err(e) => {
+                g.status = "error";
+                g.reason = Some(e);
+                return;
             }
         }
     }

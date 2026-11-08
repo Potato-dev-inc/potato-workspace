@@ -32,8 +32,10 @@ export interface ChatReply {
   blockedReason: string | null;
   /** The agent is working: the box shows Stop instead of Send (see ChatComposer). */
   running?: boolean;
-  /** Stops the agent. Set for a Chat (terminal) pane only: a chat session over ACP has its own Stop (AcpChatDock). */
+  /** Stops the agent (a Chat (terminal) pane's Interrupt, a chat session's cancel). */
   onStop?: () => void;
+  /** What the agent is doing, in words, for the box footer ("Working…", "Waiting for your answer", "Stopping…"). */
+  status?: { text: string; stopping: boolean } | null;
   /**
    * Stops the running turn so a waiting message can go at once ("Send now"). Set for a chat session and a Chat
    * (terminal) pane; without it a waiting message has Cancel only.
@@ -180,7 +182,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOp
         }
         pending={reply ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHide={hide} onSendNow={reply.onInterrupt} /> : undefined}
         composer={reply ? (
-          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} attachFiles={pickFiles} contextUsage={contextReading} />
+          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} status={reply.status} attachFiles={pickFiles} contextUsage={contextReading} />
         ) : undefined}
       />
       {clipFor !== null && <ClipSheet paneId={paneId} userItemId={clipFor} api={clipApi} onClose={() => setClipFor(null)} />}

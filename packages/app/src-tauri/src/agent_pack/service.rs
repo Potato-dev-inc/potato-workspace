@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 #[cfg(test)]
 use std::path::PathBuf;
 
+use super::custom;
 use super::plan::{self, AgentSpec, Options};
 use crate::mcp_install::declarative::HostLaunch;
 
@@ -48,8 +49,13 @@ pub fn live_specs() -> Vec<AgentSpec> {
 pub fn call(env: &Env, action: &str) -> Result<Value, String> {
     match action {
         "preview" | "apply" => {
-            let report = plan::run(&env.agents, &env.options, action == "apply")?;
-            serde_json::to_value(report).map_err(|e| e.to_string())
+            let hosts = custom::load(&env.options.state_dir);
+            let mut agents = env.agents.clone();
+            custom::merge(&mut agents, &hosts);
+            let report = plan::run(&agents, &env.options, action == "apply")?;
+            let mut v = serde_json::to_value(report).map_err(|e| e.to_string())?;
+            v["custom"] = serde_json::to_value(&hosts).map_err(|e| e.to_string())?;
+            Ok(v)
         }
         "undo" => {
             let report = plan::undo(&env.options)?;
@@ -63,4 +69,29 @@ pub fn call(env: &Env, action: &str) -> Result<Value, String> {
 
 pub fn call_live(action: &str) -> Result<Value, String> {
     call(&Env::live()?, action)
+}
+
+/// Read the settings file the user picked and say what would be added where. Writes nothing.
+pub fn inspect(env: &Env, path: &str) -> Result<Value, String> {
+    let found = custom::inspect(path, &env.options.home, &env.options.launch)?;
+    serde_json::to_value(found).map_err(|e| e.to_string())
+}
+
+/// Keep the user's choice for a registered agent (`agent_id`) or an agent called `name`.
+pub fn save_custom(env: &Env, agent_id: Option<&str>, name: &str, path: &str, skills_dir: Option<&str>) -> Result<Value, String> {
+    let agent = match agent_id.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(id) => {
+            let spec = env.agents.iter().find(|a| a.id == id).ok_or_else(|| "Potato Workspace doesn't know this agent.".to_string())?;
+            Some((spec.id.as_str(), spec.label.as_str()))
+        }
+        None => None,
+    };
+    let host = custom::save(&env.options.state_dir, &env.options.home, &env.options.launch, agent, name, path, skills_dir)?;
+    serde_json::to_value(host).map_err(|e| e.to_string())
+}
+
+/// Stop using the saved settings file for `id`. Anything already written stays until Undo.
+pub fn forget_custom(env: &Env, id: &str) -> Result<Value, String> {
+    let removed = custom::forget(&env.options.state_dir, id)?;
+    Ok(json!({ "removed": removed }))
 }

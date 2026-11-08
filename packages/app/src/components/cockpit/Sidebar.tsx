@@ -22,8 +22,9 @@ import { mainPreview, type PreviewUrl } from '../../lib/pane-preview';
 import '../../styles/live-preview.css';
 import '../../styles/cockpit-helpers.css';
 import { DotSpinner } from './DotSpinner';
-import { IconChart, IconGlobe, IconInbox, IconMoon, IconNewAgent, IconNote, IconPlus, IconSearch, IconSettings, IconSun, IconTerminal } from './Icons';
+import { IconChart, IconGlobe, IconInbox, IconMoon, IconNewAgent, IconNote, IconPin, IconPlus, IconSearch, IconSettings, IconSun, IconTerminal } from './Icons';
 import { formatElapsed, spinnerStatus } from './model';
+import { splitPinned, usePinnedPanes } from '../../lib/pinnedPanes';
 import { groupHelperTree, helperChipText, readFoldedParents, writeFoldedParents, type HelperNode } from '../../lib/pane-helpers';
 import { multiLoginAgents, paneHeading, paneSubline } from './titles';
 import { LastTurnContext } from './away-context';
@@ -123,7 +124,15 @@ export function Sidebar({
   // The same list the Inbox badge and the Doto counter use, so the three numbers always agree.
   const needs = useNeedsYou(c);
   const questionPanes = needsYouPaneIds(needs);
-  const groups = groupHelperTree(panes, questionPanes);
+  const grouped = groupHelperTree(panes, questionPanes);
+  // Pinned chats sit in their own group at the top, newest pin first, whatever they are doing.
+  const { pins, setPinned } = usePinnedPanes();
+  const pinSet = new Set(pins);
+  const roots = [...grouped.needs, ...grouped.working, ...grouped.idle].filter((n) => !n.awayFrom);
+  const { pinned: pinnedNodes } = splitPinned(roots, (n) => n.pane.info.id, pins);
+  const pinnedIds = new Set(pinnedNodes.map((n) => n.pane.info.id));
+  const unpinned = (items: typeof grouped.needs) => items.filter((n) => n.awayFrom || !pinnedIds.has(n.pane.info.id));
+  const groups = { needs: unpinned(grouped.needs), working: unpinned(grouped.working), idle: unpinned(grouped.idle) };
   // Parents whose helpers the person folded away (the helpers that need you stay listed in Needs you).
   const [folded, setFolded] = useState<ReadonlySet<string>>(readFoldedParents);
   const toggleFolded = (id: string) =>
@@ -294,6 +303,11 @@ export function Sidebar({
           </span>
         )}
         <span className="ck-row-time">{since ? formatElapsed(c.now - since) : ''}</span>
+        {pinSet.has(id) && (
+          <span className="ck-row-pin" role="img" aria-label="Pinned" title="Pinned">
+            <IconPin />
+          </span>
+        )}
       </button>
     );
   };
@@ -496,6 +510,7 @@ export function Sidebar({
           </span>
           {waiting > 0 && <span className="ck-count">{waiting}</span>}
         </button>
+        {section('Pinned', pinnedNodes)}
         {section('Needs you', groups.needs, waiting, asks)}
         {section('Working', groups.working)}
         {section('Idle', groups.idle)}
@@ -507,6 +522,8 @@ export function Sidebar({
           x={rowMenu.x}
           y={rowMenu.y}
           onSide={onOpenToSide ? () => onOpenToSide(rowMenu.id) : undefined}
+          pinned={pinSet.has(rowMenu.id)}
+          onPin={() => setPinned(rowMenu.id, !pinSet.has(rowMenu.id))}
           onAction={(action) => runPaneAction(rowMenu.id, action)}
           onInterrupt={() => void c.interrupt(rowMenu.id)}
           onClose={closeRowMenu}

@@ -8,14 +8,13 @@ use parking_lot::Mutex;
 use regex::Regex;
 use serde::Serialize;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::sync::Arc;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use once_cell::sync::OnceCell;
-use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
 
 use crate::app_paths;
@@ -427,41 +426,45 @@ pub fn test_connection(public_url: Option<String>) -> Result<ConnectionTest, Str
     })
 }
 
-fn resolve_pwa_dist_root(app: &AppHandle) -> Result<PathBuf, String> {
-    if let Ok(path) = app.path().resolve("pwa-dist", BaseDirectory::Resource) {
-        if path.is_dir() {
-            return Ok(path);
-        }
-    }
+/// The folders an installed copy and a dev run may keep the bundled files in (see `mcp_runtime::installed_resource`:
+/// the installer keeps the `resources/` folder name, so `<resource dir>/pwa-dist` is not where an MSI puts it).
+fn resource_bases(app: &AppHandle) -> (Option<PathBuf>, Option<PathBuf>) {
+    let exe_dir = std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from));
+    (app.path().resource_dir().ok(), exe_dir)
+}
 
-    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist");
+fn resolve_pwa_dist_root(app: &AppHandle) -> Result<PathBuf, String> {
+    let (resource_dir, exe_dir) = resource_bases(app);
+    pwa_dist_root(resource_dir.as_deref(), exe_dir.as_deref(), &PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+}
+
+fn pwa_dist_root(resource_dir: Option<&Path>, exe_dir: Option<&Path>, manifest_dir: &Path) -> Result<PathBuf, String> {
+    if let Some(path) = crate::mcp_runtime::installed_resource_dir(resource_dir, exe_dir, "pwa-dist") {
+        return Ok(path);
+    }
+    let dev = manifest_dir.join("../dist");
     if dev.is_dir() {
         return Ok(dev);
     }
-
     Err("PWA dist not found — rebuild with stage-pwa-dist".into())
 }
 
 fn resolve_cloudflared_bin(app: &AppHandle) -> Result<PathBuf, String> {
-    let bundled_name = if cfg!(target_os = "windows") {
-        "bin/cloudflared.exe"
-    } else {
-        "bin/cloudflared"
-    };
+    let (resource_dir, exe_dir) = resource_bases(app);
+    cloudflared_bin(resource_dir.as_deref(), exe_dir.as_deref(), std::env::var("CLOUDFLARED_BIN").ok().as_deref())
+}
 
-    if let Ok(path) = app.path().resolve(bundled_name, BaseDirectory::Resource) {
-        if path.is_file() {
-            return Ok(path);
-        }
+fn cloudflared_bin(resource_dir: Option<&Path>, exe_dir: Option<&Path>, from_env: Option<&str>) -> Result<PathBuf, String> {
+    let bundled_name = if cfg!(target_os = "windows") { "bin/cloudflared.exe" } else { "bin/cloudflared" };
+    if let Some(path) = crate::mcp_runtime::installed_resource(resource_dir, exe_dir, bundled_name) {
+        return Ok(path);
     }
-
-    if let Ok(from_env) = std::env::var("CLOUDFLARED_BIN") {
+    if let Some(from_env) = from_env {
         let path = PathBuf::from(from_env);
         if path.is_file() {
             return Ok(path);
         }
     }
-
     Err("bundled cloudflared not found — run bundle-cloudflared during build".to_string())
 }
 
@@ -509,5 +512,36 @@ mod tests {
         let result = test_connection(Some(format!("http://127.0.0.1:{port}"))).unwrap();
         assert!(result.ok, "{result:?}");
         assert!(server.join().unwrap().starts_with("GET /bridge/health "));
+    }
+
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("pm-tunnel-{tag}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn an_installed_copy_finds_pwa_dist_under_the_resources_folder() {
+        let install = scratch("pwa");
+        std::fs::create_dir_all(install.join("resources/pwa-dist/assets")).unwrap();
+        let nowhere = install.join("no-such-manifest");
+        assert_eq!(pwa_dist_root(Some(&install), Some(&install), &nowhere), Ok(install.join("resources/pwa-dist")));
+        assert!(pwa_dist_root(None, None, &nowhere).is_err());
+        std::fs::remove_dir_all(&install).ok();
+    }
+
+    #[test]
+    fn an_installed_copy_finds_cloudflared_under_the_resources_folder() {
+        let install = scratch("cf");
+        let name = if cfg!(target_os = "windows") { "cloudflared.exe" } else { "cloudflared" };
+        std::fs::create_dir_all(install.join("resources/bin")).unwrap();
+        std::fs::write(install.join("resources/bin").join(name), "x").unwrap();
+        assert_eq!(cloudflared_bin(Some(&install), Some(&install), None), Ok(install.join("resources/bin").join(name)));
+        assert!(cloudflared_bin(None, None, None).is_err());
+        // The environment override still works when nothing is bundled.
+        let own = install.join("mine.exe");
+        std::fs::write(&own, "x").unwrap();
+        assert_eq!(cloudflared_bin(None, None, own.to_str()), Ok(own.clone()));
+        std::fs::remove_dir_all(&install).ok();
     }
 }

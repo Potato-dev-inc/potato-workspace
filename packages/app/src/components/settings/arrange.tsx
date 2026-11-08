@@ -48,6 +48,7 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
   ],
   agents: [
     { group: 'Logins', rows: ['accounts'] },
+    { group: 'Helpers', rows: ['helper-agents', 'keep-helpers-open'] },
     { group: 'Ready to use', rows: ['preload', 'helper-tools'] },
     { group: 'Chat', rows: ['agent-lane', 'chat-addons'] },
     { group: 'Versions', rows: ['versions'] },

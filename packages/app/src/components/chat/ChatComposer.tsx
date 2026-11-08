@@ -8,7 +8,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type
 import { MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
 import { clearDraft, DRAFT_SAVE_MS, readDraftState, writeDraft, type ComposerDraft } from '../../lib/composerDraft';
 import { insertAtCursor } from '../../lib/voice';
-import { prepareAttachments, savePastedImage, type ChatAttachment } from '../../lib/attachFiles';
+import { pickFolder, pickImages, prepareAttachments, savePastedImage, type ChatAttachment } from '../../lib/attachFiles';
+import { AttachMenu } from './AttachMenu';
 import { AttachmentChips } from './AttachmentChips';
 import { ContextMeter } from './ContextMeter';
 import type { ContextReading } from '../cockpit/rail/railFormat';
@@ -48,6 +49,8 @@ export interface ChatComposerProps {
   running?: boolean;
   /** Stops the agent (the pane's Interrupt). Without it the button stays Send. */
   onStop?: () => void;
+  /** What the agent is doing, quietly in the footer left of the button. `stopping`: a Stop is on its way. */
+  status?: { text: string; stopping: boolean } | null;
   /**
    * Desktop only: shows the add-files button and turns files dropped on the box into paths. Several files at once.
    * Without it the box has no paperclip (the phone cannot hand the agent a path on the PC).
@@ -75,21 +78,12 @@ function MicIcon() {
   );
 }
 
-function AttachIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-    </svg>
-  );
-}
-
 /** One box per pane: switching panes remounts it, so each pane shows its own draft. */
 export function ChatComposer(props: ChatComposerProps) {
   return <ChatComposerBox key={props.draftKey ?? ''} {...props} />;
 }
 
-function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, attachFiles, contextUsage }: ChatComposerProps) {
+function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, status, attachFiles, contextUsage }: ChatComposerProps) {
   const stoppable = running && !!onStop;
   const [restored] = useState(() => (draftKey ? readDraftState(draftKey) : { text: '', attachments: [] as ChatAttachment[] }));
   const [text, setText] = useState(restored.text);
@@ -128,6 +122,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   const count = [...text].length;
   const tooLong = count > MAX_MESSAGE_CHARS;
   const empty = text.trim() === '';
+  const hasContent = !empty || attachments.length > 0;
 
   const mic = useVoiceInput({
     enabled: voice,
@@ -306,6 +301,15 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     if (!attachFiles || blocked || busy || preparing > 0) return;
     try {
       await addPaths(await attachFiles());
+    } catch {
+      setError('Could not open the file dialog.');
+    }
+  };
+
+  const addPicked = async (pick: () => Promise<string[]>) => {
+    if (!attachFiles || blocked || busy || preparing > 0) return;
+    try {
+      await addPaths(await pick());
     } catch {
       setError('Could not open the file dialog.');
     }
@@ -549,17 +553,12 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         )}
         <div className="ck-chat-composer-foot">
           {attachFiles && (
-            <button
-              type="button"
-              className="ck-chat-attach"
-              data-testid="chat-composer-attach"
-              aria-label="Add files"
-              title="Add files (or drop them here, or type @ to add a project file)"
-              aria-disabled={blocked || busy || preparing > 0 || undefined}
-              onClick={() => void addFiles()}
-            >
-              <AttachIcon />
-            </button>
+            <AttachMenu
+              disabled={blocked || busy || preparing > 0}
+              onPickFiles={() => void addFiles()}
+              onPickFolder={() => void addPicked(pickFolder)}
+              onPickImage={() => void addPicked(pickImages)}
+            />
           )}
           {toolbar && <div className="ck-chat-composer-toolbar">{toolbar}</div>}
           {voice && (
@@ -580,20 +579,34 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
               {mic.recording && <span className="ck-chat-mic-dot" aria-hidden="true" data-testid="chat-composer-mic-dot" />}
             </button>
           )}
+          {stoppable && status && (
+            <span className="ck-chat-status" role="status" data-testid="chat-composer-status" data-stopping={status.stopping ? '' : undefined}>
+              {status.text}
+            </span>
+          )}
           {contextUsage && <ContextMeter reading={contextUsage} />}
-          {stoppable ? (
-            <button type="button" className="ck-btn ck-btn--secondary ck-chat-send ck-chat-stop" data-testid="chat-composer-stop" aria-label="Stop the agent" title="Stop the agent (Esc)" onClick={() => onStop?.()}>
+          {stoppable && !hasContent ? (
+            // Nothing typed: the one round button is Stop, filled like the active Send.
+            <button type="button" className="ck-btn ck-btn--primary ck-chat-send ck-chat-stop" data-testid="chat-composer-stop" aria-label="Stop" title="Stop (Esc)" disabled={status?.stopping} onClick={() => onStop?.()}>
               <StopIcon />
               <span className="ck-chat-send-label">Stop</span>
             </button>
           ) : (
-            <button type="submit" className="ck-btn ck-btn--primary ck-chat-send" disabled={blocked || busy || preparing > 0 || (empty && attachments.length === 0) || tooLong}>
-              <svg className="ck-chat-send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 19V5" />
-                <path d="m5 12 7-7 7 7" />
-              </svg>
-              <span className="ck-chat-send-label">Send</span>
-            </button>
+            <>
+              {stoppable && (
+                // Text is typed while the agent works: Send queues it; Stop stays one small button away.
+                <button type="button" className="ck-btn ck-chat-stop-mini" data-testid="chat-composer-stop" aria-label="Stop" title="Stop (Esc)" disabled={status?.stopping} onClick={() => onStop?.()}>
+                  <StopIcon />
+                </button>
+              )}
+              <button type="submit" className="ck-btn ck-btn--primary ck-chat-send" disabled={blocked || busy || preparing > 0 || !hasContent || tooLong}>
+                <svg className="ck-chat-send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 19V5" />
+                  <path d="m5 12 7-7 7 7" />
+                </svg>
+                <span className="ck-chat-send-label">Send</span>
+              </button>
+            </>
           )}
         </div>
       </div>

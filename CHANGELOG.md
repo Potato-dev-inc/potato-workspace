@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.7
+
+- Fix: chats in the installed app now get Potato Workspace's tools (the app looked for its tool program in the wrong folder). A chat says so if the tools can't be added. Same folder fix for phone pairing and agent adapters.
+- Fix: "Add Potato Workspace to your agents" repairs the connection 1.0.6 wrote that pointed at a program that doesn't exist.
+- Helper agents setting: Always show them (default), Let the agent choose, or Always run in the background. "Keep helpers open when they finish" is on by default.
+- Stop is now the send button; the Working bar is gone.
+- Pin chats to the top of the list.
+- + menu: Add files, Add folder, Add image. Folders show as a chip with a file count.
+- Set up any agent by choosing its settings file (and skills folder), including agents Potato Workspace doesn't know.
+
 ## 1.0.6
 
 - New chat look: a decision card for permission asks (Allow or Deny, with "Don't ask again in this chat", hold to allow for deletes and moves, and answered asks fold to one line). Agent thinking is shown and folded. Tool calls show as cards with a status. Terminal output has Copy, change cards have Copy patch, and there is a live step list with a timer, plan progress, code block headers, and Copy and Retry under replies.

@@ -115,6 +115,12 @@ export const IconRename = () => (
   </Icon>
 );
 
+export const IconPin = () => (
+  <Icon>
+    <path d="M9.8 2.8 13.2 6.2l-1.6.6-2 2 .3 3-.8.8-2.3-2.3-3.1 3.1-.7-.7 3.1-3.1L3.8 7.3l.8-.8 3 .3 2-2 .6-1.6Z" />
+  </Icon>
+);
+
 export const IconNote = () => (
   <Icon>
     <path d="M3.5 2.5h7l2 2v9h-9zM10.5 2.5v2h2M5.5 7.5h5M5.5 10h5" />

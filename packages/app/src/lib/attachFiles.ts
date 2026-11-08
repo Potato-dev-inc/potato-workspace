@@ -4,11 +4,11 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 
-/** One attached file, as the backend describes it. `path` is what the agent can open on this PC. */
+/** One attached file or folder, as the backend describes it. `path` is what the agent can open on this PC. For a folder, `size` is the number of files in it. */
 export type ChatAttachment = {
   name: string;
   path: string;
-  kind: 'text' | 'image' | 'file';
+  kind: 'text' | 'image' | 'file' | 'folder';
   size: number;
   mime?: string;
 };
@@ -38,6 +38,24 @@ export async function pickFiles(title = 'Add files to your message'): Promise<st
   const picked = await open({ multiple: true, directory: false, title });
   if (Array.isArray(picked)) return picked.filter((p): p is string => typeof p === 'string');
   return typeof picked === 'string' ? [picked] : [];
+}
+
+/** The picture types the "Add image" dialog lists. */
+export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+
+/** The system file dialog, pictures only. Empty when cancelled or outside the desktop app. */
+export async function pickImages(title = 'Add images to your message'): Promise<string[]> {
+  if (!inDesktop()) return [];
+  const picked = await open({ multiple: true, directory: false, title, filters: [{ name: 'Images', extensions: IMAGE_EXTENSIONS }] });
+  if (Array.isArray(picked)) return picked.filter((p): p is string => typeof p === 'string');
+  return typeof picked === 'string' ? [picked] : [];
+}
+
+/** The system folder dialog: one folder, which goes to the agent by its path. Empty when cancelled or outside the desktop app. */
+export async function pickFolder(title = 'Add a folder to your message'): Promise<string[]> {
+  if (!inDesktop()) return [];
+  const picked = await open({ multiple: false, directory: true, title });
+  return typeof picked === 'string' && picked !== '' ? [picked] : [];
 }
 
 /** Copies the picked files for this pane and describes each one. Empty outside the desktop app. */

@@ -38,6 +38,14 @@ describe('ContextMeter', () => {
     expect(Number(fg.getAttribute('stroke-dashoffset'))).toBeCloseTo(full * 0.75, 3);
   });
 
+  it('is a static gauge: a track and an arc, the percent in the tooltip, nothing animated', () => {
+    act(() => root.render(<ContextMeter reading={reading({ percent: 62 })} />));
+    expect(ring().title).toBe('Context 62% used');
+    expect(host.querySelector('.ck-ctx-bg')).not.toBeNull();
+    expect(host.querySelector('.ck-ctx-fg')).not.toBeNull();
+    expect(host.querySelector('animate, animateTransform')).toBeNull();
+  });
+
   it('opens a popover with the tokens and a thin bar, and Esc closes it and returns the focus', () => {
     act(() => root.render(<ContextMeter reading={reading()} />));
     expect(pop()).toBeNull();

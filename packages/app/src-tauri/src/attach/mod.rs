@@ -19,6 +19,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// The mime type a folder carries.
+pub const FOLDER_MIME: &str = "inode/directory";
 pub const ATTACHMENTS_DIR: &str = "attachments";
 /// A file up to this size may be read as text.
 pub const MAX_TEXT_BYTES: u64 = 256 * 1024;
@@ -26,6 +28,10 @@ pub const MAX_TEXT_BYTES: u64 = 256 * 1024;
 pub const MAX_PASTED_BYTES: usize = 20 * 1024 * 1024;
 /// The biggest picture `preview` turns into a data URL.
 pub const MAX_PREVIEW_BYTES: u64 = 8 * 1024 * 1024;
+/// Folder counts stop here: a folder with more files shows this number.
+pub const MAX_FOLDER_COUNT: u64 = 10_000;
+/// Folders left out of a folder's file count.
+const COUNT_SKIPS: [&str; 3] = [".git", "node_modules", "target"];
 /// Most attachments on one message.
 pub const MAX_ATTACHMENTS: usize = 20;
 
@@ -35,6 +41,8 @@ pub enum AttachKind {
     Text,
     Image,
     File,
+    /// A whole folder, passed by its path only. `size` is the number of files in it (see `MAX_FOLDER_COUNT`).
+    Folder,
 }
 
 /// One attachment of a chat message (camelCase JSON, the same shape in and out).
@@ -122,9 +130,37 @@ fn copy_into_project(path: &Path, cwd: &str) -> Result<PathBuf, String> {
     Ok(target)
 }
 
-/// Reads one picked file: text keeps its path, anything else is copied into the project.
+/// How many files a folder holds, up to `MAX_FOLDER_COUNT`. `.git`, `node_modules` and `target` are not counted, and
+/// links are not followed.
+pub fn count_files(dir: &Path) -> u64 {
+    let mut count = 0;
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&next) else { continue };
+        for entry in entries.flatten() {
+            let Ok(kind) = entry.file_type() else { continue };
+            if kind.is_dir() {
+                if !COUNT_SKIPS.iter().any(|skip| entry.file_name() == *skip) {
+                    pending.push(entry.path());
+                }
+            } else if kind.is_file() {
+                count += 1;
+                if count >= MAX_FOLDER_COUNT {
+                    return MAX_FOLDER_COUNT;
+                }
+            }
+        }
+    }
+    count
+}
+
+/// Reads one picked file or folder: text keeps its path, a folder keeps its path and a file count, anything else is
+/// copied into the project.
 pub fn prepare_one(path: &Path, cwd: &str) -> Result<ChatAttachment, String> {
     let meta = fs::metadata(path).map_err(|e| format!("ATTACHMENT_NOT_FOUND: {}: {e}", path.display()))?;
+    if meta.is_dir() {
+        return Ok(ChatAttachment { name: file_name(path), path: absolute(path.to_path_buf()), kind: AttachKind::Folder, size: count_files(path), mime: Some(FOLDER_MIME.into()) });
+    }
     if !meta.is_file() {
         return Err(format!("ATTACHMENT_NOT_A_FILE: {} is not a file.", path.display()));
     }

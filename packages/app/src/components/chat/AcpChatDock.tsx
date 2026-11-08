@@ -1,8 +1,9 @@
 // What a chat session over ACP adds under its conversation: the agent's permission questions as cards (the Inbox's own
-// decision card, with the agent's real options), and a strip that says what the session is doing with
-// a Stop button that reads "Stopping…" until the agent has ended the turn. While a question is open it also holds the
+// decision card, with the agent's real options), and the strips that carry a real action (stopped, interrupted,
+// quiet). The plain "Working…" and its Stop live in the message box (ChatComposer). While a question is open it also holds the
 // small switch that lets an agent answer these questions (off by default).
 import { useEffect, useState } from 'react';
+import { useAcpStop, type AcpStop } from '../../hooks/useAcpStop';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { useAcpChatState } from '../../hooks/useAcpChatState';
 import { errorSentence, interruptedStrip, permissionCards, quietStrip, runStrip, stoppedStrip, tauriAcpChatApi, type AcpChatApi } from '../../lib/acpChat';
@@ -12,15 +13,12 @@ import { AgentAnsweringSwitch } from './AgentAnsweringSwitch';
 import { SignInCard } from '../acp/SignInCard';
 import '../../styles/cockpit-acp.css';
 
-export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi }: { c: CockpitApi; paneId: string; paneName: string; api?: AcpChatApi }) {
+export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stopper }: { c: CockpitApi; paneId: string; paneName: string; api?: AcpChatApi; /** The Stop the message box shares (PaneView); without it the dock keeps its own. */ stopper?: AcpStop }) {
   const state = useAcpChatState(paneId, true, api);
-  // The person pressed Stop: the strip reads "Stopping…" at once, before the backend's state event comes back.
-  const [asked, setAsked] = useState(false);
   const running = !!state?.turnInFlight;
-  useEffect(() => {
-    if (!running) setAsked(false);
-  }, [running]);
-  useEffect(() => setAsked(false), [paneId]);
+  // The person pressed Stop: the box reads "Stopping…" at once, before the backend's state event comes back.
+  const own = useAcpStop(paneId, running, api);
+  const { asked, stop } = stopper ?? own;
 
   // The adapter stopped by itself: one line with the reason and one button. Restart is the person's call.
   const [restarting, setRestarting] = useState(false);
@@ -76,13 +74,9 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi }: { c:
   const quiet = quietStrip(state, asked);
   const strip = quiet ? null : runStrip(state, asked);
   const signIn = state && !state.closed && state.signIn?.needed ? state : null;
-  if (cards.length === 0 && !strip && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0) return null;
+  if (cards.length === 0 && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0) return null;
   const keepWaiting = () => {
     api.keepWaiting?.(paneId).catch(() => undefined);
-  };
-  const stop = () => {
-    setAsked(true);
-    api.cancel(paneId).catch(() => setAsked(false));
   };
   return (
     <div className="ck-dock ck-acp-dock" data-testid="acp-dock">
@@ -148,16 +142,6 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi }: { c:
               Keep waiting
             </button>
           )}
-        </div>
-      )}
-      {strip && (
-        <div className="ck-acp-strip" data-testid="acp-strip" data-stopping={strip.stopping ? '' : undefined}>
-          <span className="ck-acp-strip-text" role="status">
-            {strip.text}
-          </span>
-          <button type="button" className="ck-btn ck-btn--secondary ck-acp-stop" onClick={stop} disabled={strip.stopping}>
-            {strip.stopping ? 'Stopping…' : 'Stop'}
-          </button>
         </div>
       )}
       {autoAllow.length > 0 && (

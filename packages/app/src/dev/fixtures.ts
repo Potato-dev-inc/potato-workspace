@@ -573,9 +573,20 @@ export const EXAMPLE_REVIEW_POLL: ReviewPoll = {
 };
 
 // ---- Add Potato Workspace to your agents (Settings > MCP & bridge) ----
-import type { PackReport } from '../lib/agent-pack';
+import type { PackInspection, PackReport } from '../lib/agent-pack';
 
 const PACK_FILES = ['potato-workspace', 'pm-review', 'pm-delegate', 'pm-status'].map((n) => ({ name: `${n}/SKILL.md`, kind: 'add' as const }));
+
+/** What the backend finds in a settings file the user picked (a JSON file with a server list and one sibling entry). */
+export const AGENT_PACK_INSPECTION: PackInspection = {
+  path: 'C:/Users/dev/.agy/settings.json',
+  format: 'json',
+  key_path: 'mcpServers',
+  creates_list: false,
+  shape: 'Copied from another entry in the list: a program (command), its arguments (args) and settings (env).',
+  entry: { command: 'npx', args: ['-y', '@potato-workspace/mcp'], env: { POTATO_WORKSPACE_BRIDGE_PORT_FILE: 'C:/Users/dev/AppData/potato-workspace.bridge.port' } },
+  already_present: false,
+};
 
 export const AGENT_PACK_PREVIEW: PackReport = {
   dry_run: true,

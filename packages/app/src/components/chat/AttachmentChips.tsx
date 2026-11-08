@@ -39,6 +39,21 @@ function FileIcon() {
   );
 }
 
+function FolderIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+
+/** What a folder chip says about its size: "12 files", "10,000+ files" (the count stops there), or just "Folder" when the count is not known. */
+export function folderCountText(count: number): string {
+  if (!Number.isFinite(count) || count <= 0) return 'Folder';
+  if (count >= 10_000) return '10,000+ files';
+  return count === 1 ? '1 file' : `${count.toLocaleString('en-US')} files`;
+}
+
 function CloseIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
@@ -86,14 +101,15 @@ function Chip({ attachment, onRemove, onOpen }: { attachment: ChatAttachment; on
     );
   }
 
-  const meta = [extensionOf(attachment.name), formatSize(attachment.size)].filter(Boolean).join(' · ');
+  const folder = attachment.kind === 'folder';
+  const meta = folder ? folderCountText(attachment.size) : [extensionOf(attachment.name), formatSize(attachment.size)].filter(Boolean).join(' · ');
   return (
     <div className="ck-att-chip ck-att-chip--file" data-testid="attachment-chip" data-kind={attachment.kind} data-name={attachment.name}>
       <span className="ck-att-file-icon" aria-hidden="true">
-        <FileIcon />
+        {folder ? <FolderIcon /> : <FileIcon />}
       </span>
       <span className="ck-att-file-text">
-        <span className="ck-att-name" title={attachment.name}>
+        <span className="ck-att-name" title={folder ? attachment.path : attachment.name}>
           {attachment.name}
         </span>
         {meta && <span className="ck-att-meta">{meta}</span>}

@@ -55,6 +55,30 @@ pub fn using_bundled_mcp() -> bool {
     bundled_mcp_binary().is_some() || bundled_mcp_script().is_some()
 }
 
+/// Where an installed copy keeps a bundled file named `rel` (relative to the `resources/` folder of tauri.conf.json),
+/// best first: `<resource dir>/rel`, `<resource dir>/resources/rel` (the installer keeps the folder name, so this is
+/// where a Windows MSI or a Linux package has it), then the same two next to the running exe. The first that is a file.
+pub fn installed_resource(resource_dir: Option<&Path>, exe_dir: Option<&Path>, rel: &str) -> Option<PathBuf> {
+    resource_candidates(resource_dir, exe_dir, rel).into_iter().find(|path| path.is_file())
+}
+
+/// Like [`installed_resource`], for a bundled folder (`pwa-dist`): the first candidate that is a directory.
+pub fn installed_resource_dir(resource_dir: Option<&Path>, exe_dir: Option<&Path>, rel: &str) -> Option<PathBuf> {
+    resource_candidates(resource_dir, exe_dir, rel).into_iter().find(|path| path.is_dir())
+}
+
+fn resource_candidates(resource_dir: Option<&Path>, exe_dir: Option<&Path>, rel: &str) -> Vec<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    for base in [resource_dir, exe_dir].into_iter().flatten() {
+        for path in [base.join(rel), base.join("resources").join(rel)] {
+            if !candidates.contains(&path) {
+                candidates.push(path);
+            }
+        }
+    }
+    candidates
+}
+
 pub struct McpLaunchSpec {
     pub command: String,
     pub args: Vec<String>,
@@ -65,6 +89,18 @@ pub fn npm_mcp_launch_spec() -> McpLaunchSpec {
         command: "npx".into(),
         args: vec!["-y".into(), "@potato-workspace/mcp".into()],
     }
+}
+
+/// The launch spec of a bundled program (the Rust MCP exe, else the Node bundle), or None when this install has
+/// neither. Unlike [`mcp_launch_spec`] it never falls back to the npm package, which is not published.
+pub fn bundled_launch_spec() -> Option<McpLaunchSpec> {
+    if let Some(binary) = bundled_mcp_binary() {
+        return Some(McpLaunchSpec { command: crate::app_paths::path_for_host_config(binary), args: vec![] });
+    }
+    bundled_mcp_script().map(|script| McpLaunchSpec {
+        command: resolve_node_executable(),
+        args: vec![crate::app_paths::path_for_host_config(script)],
+    })
 }
 
 /// Command + args written into Claude / Codex / OpenCode MCP config.
@@ -165,5 +201,52 @@ mod dev_fallback_tests {
         let only_exe = root.join("elsewhere");
         assert_eq!(dev_mcp_binary(&only_exe, Some(&exe_dir)), Some(exe_dir.join("bin").join(mcp_binary_name())));
         std::fs::remove_dir_all(&root).ok();
+    }
+}
+
+#[cfg(test)]
+mod installed_layout_tests {
+    use super::*;
+
+    #[test]
+    fn a_bundled_folder_is_found_under_the_installers_resources_folder() {
+        let install = std::env::temp_dir().join(format!("pm-mcp-folder-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(install.join("resources/pwa-dist/assets")).unwrap();
+        assert_eq!(installed_resource_dir(Some(&install), Some(&install), "pwa-dist"), Some(install.join("resources/pwa-dist")));
+        assert_eq!(installed_resource_dir(Some(&install), None, "nope"), None);
+        // A file is not a folder.
+        std::fs::write(install.join("resources/plain"), "x").unwrap();
+        assert_eq!(installed_resource_dir(Some(&install), None, "plain"), None);
+    }
+
+    /// The 1.0.6 MSI layout: tauri.conf.json lists `resources/bin/*` and `resources/mcp-stdio.bundle.cjs`, and the
+    /// installer keeps that folder name, so the files are under `<install>/resources/`, not next to the exe.
+    #[test]
+    fn an_installed_copy_finds_its_tools_under_the_resources_folder() {
+        let install = std::env::temp_dir().join(format!("pm-mcp-install-{}", uuid::Uuid::new_v4()));
+        let bin = install.join("resources/bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(bin.join(mcp_binary_name()), "x").unwrap();
+        std::fs::write(install.join("resources/mcp-stdio.bundle.cjs"), "x").unwrap();
+        let rel = format!("bin/{}", mcp_binary_name());
+
+        // Tauri's resource dir on Windows is the exe's folder: the old lookup (`<resource dir>/bin/...`) found nothing.
+        assert!(!install.join(&rel).is_file());
+        assert_eq!(installed_resource(Some(&install), Some(&install), &rel), Some(install.join("resources").join(&rel)));
+        assert_eq!(
+            installed_resource(None, Some(&install), "mcp-stdio.bundle.cjs"),
+            Some(install.join("resources/mcp-stdio.bundle.cjs"))
+        );
+        assert_eq!(installed_resource(Some(&install), Some(&install), "missing.bin"), None);
+        std::fs::remove_dir_all(&install).ok();
+    }
+
+    #[test]
+    fn a_resource_dir_that_already_holds_the_file_directly_still_works() {
+        let dir = std::env::temp_dir().join(format!("pm-mcp-flat-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.cjs"), "x").unwrap();
+        assert_eq!(installed_resource(Some(&dir), None, "a.cjs"), Some(dir.join("a.cjs")));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

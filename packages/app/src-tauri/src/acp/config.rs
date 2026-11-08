@@ -845,6 +845,21 @@ pub fn default_mcp_servers() -> Vec<Value> {
     })]
 }
 
+/// Why this chat session will not have Potato Workspace's own tools (`run_agent`, `wait_agents`...), or `None` when it
+/// gets them. The chat shows it as a quiet note, so a missing tool server is never silent. Plain words, no path.
+pub fn workspace_tools_gap(cfg: &AgentConfig) -> Option<String> {
+    let listed = cfg.mcp_servers.iter().any(|s| s.get("name").and_then(Value::as_str) == Some(crate::mcp_install::MCP_SERVER_NAME));
+    if listed {
+        return None;
+    }
+    let reason = if crate::mcp_runtime::using_bundled_mcp() {
+        "this chat lists its own tool servers instead"
+    } else {
+        "this app could not find its bundled tool program"
+    };
+    Some(format!("Potato Workspace tools aren't available in this chat: {reason}."))
+}
+
 /// The Codex table (for tests and tools).
 pub fn codex() -> AgentConfig {
     find_builtin("codex").expect("the codex profile carries an [acp] table")
@@ -1215,5 +1230,31 @@ mod pane_id_tests {
         assert_eq!(pane[0]["value"], json!("acp-123"));
         assert!(own.iter().any(|e| e["name"] == "EXISTING"), "the existing variables stay");
         assert!(cfg.mcp_servers[1]["env"].as_array().unwrap().is_empty(), "another server is not given our pane");
+    }
+}
+
+#[cfg(test)]
+mod tools_gap_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_session_without_the_workspace_tool_server_says_why() {
+        let bare = AgentConfig::default();
+        let note = workspace_tools_gap(&bare).expect("no tool server listed");
+        assert!(note.starts_with("Potato Workspace tools aren't available in this chat: "), "{note}");
+        assert!(!note.contains('\\') &&!note.contains(":/"), "no path in the note: {note}");
+    }
+
+    #[test]
+    fn a_session_that_lists_the_workspace_tool_server_gets_no_note() {
+        let cfg = AgentConfig { mcp_servers: vec![json!({"name": crate::mcp_install::MCP_SERVER_NAME, "command": "x", "args": [], "env": []})], ..AgentConfig::default() };
+        assert_eq!(workspace_tools_gap(&cfg), None);
+    }
+
+    #[test]
+    fn another_servers_name_does_not_count() {
+        let cfg = AgentConfig { mcp_servers: vec![json!({"name": "other", "command": "x", "args": [], "env": []})], ..AgentConfig::default() };
+        assert!(workspace_tools_gap(&cfg).is_some());
     }
 }

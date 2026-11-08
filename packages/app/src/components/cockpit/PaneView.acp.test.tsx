@@ -6,6 +6,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { ChatItem } from '../../lib/sessionChat';
+import type { AcpChatState } from '../../lib/acpChat';
+import { fakeAcpApi } from '../../lib/acpChatFake';
 import { PaneView, forgetRememberedTabs } from './PaneView';
 
 const invoke = vi.fn(async (cmd: string) => (cmd === 'checkpoints_list' ? { state: 'ok', message: '', items: [] } : null) as unknown);
@@ -126,5 +128,77 @@ describe('pane view of a chat session over ACP', () => {
     const box = host.querySelector<HTMLTextAreaElement>('textarea');
     expect(box).not.toBeNull();
     expect(box!.disabled).toBe(false);
+  });
+
+  describe('while the agent works', () => {
+    const running = (over: Partial<AcpChatState> = {}): AcpChatState => ({
+      lane: 'acp', agent: 'codex', label: 'Codex', phase: 'working', status: 'running', turnInFlight: true, stopping: false,
+      canSteer: false, turn: 1, title: null, usage: null, permissions: [], closed: false, ...over,
+    });
+    const fake = (initial: AcpChatState, over: { quietSecs?: number } = {}) => {
+      let push: ((id: string, next: AcpChatState) => void) | null = null;
+      const cancel = vi.fn(async () => true);
+      const api = fakeAcpApi({
+        state: async () => ({ ...initial, ...over }),
+        cancel,
+        watch: async (cb) => {
+          push = cb;
+          return () => undefined;
+        },
+      });
+      return { api, cancel, emit: (next: AcpChatState) => act(async () => push?.('p1', next)) };
+    };
+    const stopButton = () => host.querySelector<HTMLButtonElement>('[data-testid="chat-composer-stop"]');
+    const status = () => host.querySelector('[data-testid="chat-composer-status"]');
+
+    it('the send button is the Stop button, "Working…" sits in the footer, and there is no strip above the box', async () => {
+      const { api, cancel } = fake(running());
+      await act(async () => root.render(<PaneView c={cockpit('acp', 'running')} paneId="p1" acp={api} />));
+      await flush();
+      expect(host.querySelector('[data-testid="acp-strip"]')).toBeNull();
+      expect(status()?.textContent).toBe('Working…');
+      expect(host.querySelector('.ck-chat-composer-foot')!.contains(status())).toBe(true);
+      expect(stopButton()?.getAttribute('aria-label')).toBe('Stop');
+      await act(async () => stopButton()!.click());
+      expect(cancel).toHaveBeenCalledWith('p1');
+      // At once, before the backend answers: Stopping…, button off.
+      expect(status()?.textContent).toBe('Stopping…');
+      expect(stopButton()!.disabled).toBe(true);
+    });
+
+    it('Esc in the box stops the turn', async () => {
+      const { api, cancel } = fake(running());
+      await act(async () => root.render(<PaneView c={cockpit('acp', 'running')} paneId="p1" acp={api} />));
+      await flush();
+      const field = host.querySelector('textarea')!;
+      await act(async () => {
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      });
+      expect(cancel).toHaveBeenCalledWith('p1');
+    });
+
+    it('a question the agent asks reads "Waiting for your answer" in the footer', async () => {
+      const { api } = fake(running({ phase: 'needs_input' }));
+      await act(async () => root.render(<PaneView c={cockpit('acp', 'running')} paneId="p1" acp={api} />));
+      await flush();
+      expect(status()?.textContent).toBe('Waiting for your answer');
+    });
+
+    it('a quiet agent keeps its strip with Stop and Keep waiting (a real action), and the footer stays silent', async () => {
+      const { api } = fake(running({ quietSecs: 300 }));
+      await act(async () => root.render(<PaneView c={cockpit('acp', 'running')} paneId="p1" acp={api} />));
+      await flush();
+      expect(host.querySelector('[data-testid="acp-quiet"]')?.textContent).toContain('No answer for 5 min');
+      expect(status()).toBeNull();
+    });
+
+    it('idle: no Stop, no status', async () => {
+      const { api } = fake(running({ phase: 'idle', status: 'idle', turnInFlight: false }));
+      await act(async () => root.render(<PaneView c={cockpit('acp')} paneId="p1" acp={api} />));
+      await flush();
+      expect(stopButton()).toBeNull();
+      expect(status()).toBeNull();
+      expect(host.querySelector('.ck-chat-composer-foot button[type="submit"]')).not.toBeNull();
+    });
   });
 });

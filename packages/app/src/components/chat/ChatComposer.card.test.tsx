@@ -48,14 +48,67 @@ describe('ChatComposer card', () => {
     expect(host.querySelector('[aria-label="Context 41% used"]')).not.toBeNull();
   });
 
-  it('becomes a Stop button while the agent works, and Stop stops', () => {
+  const typeText = (value: string) => {
+    const field = host.querySelector('textarea')!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(field, value);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  it('becomes a filled Stop button while the agent works, and Stop stops', () => {
     const onStop = vi.fn();
     act(() => root.render(<ChatComposer onSend={onSend} blockedReason={null} running onStop={onStop} />));
     const stop = host.querySelector<HTMLButtonElement>('[data-testid="chat-composer-stop"]')!;
-    expect(stop.getAttribute('aria-label')).toBe('Stop the agent');
+    expect(stop.getAttribute('aria-label')).toBe('Stop');
+    expect(stop.classList.contains('ck-btn--primary')).toBe(true);
+    expect(stop.classList.contains('ck-chat-send')).toBe(true);
     expect(host.querySelector('button[type="submit"]')).toBeNull();
     act(() => stop.click());
     expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('with text typed while the agent works the arrow is back (it queues) and a small Stop stays beside it', () => {
+    const onStop = vi.fn();
+    act(() => root.render(<ChatComposer onSend={onSend} blockedReason={null} running onStop={onStop} />));
+    typeText('then also run the tests');
+    const send = host.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(send.disabled).toBe(false);
+    const stop = host.querySelector<HTMLButtonElement>('[data-testid="chat-composer-stop"]')!;
+    expect(stop.classList.contains('ck-chat-stop-mini')).toBe(true);
+    act(() => stop.click());
+    expect(onStop).toHaveBeenCalledTimes(1);
+    // Emptying the box brings the big Stop back.
+    typeText('');
+    expect(host.querySelector('button[type="submit"]')).toBeNull();
+    expect(host.querySelector('[data-testid="chat-composer-stop"]')!.classList.contains('ck-chat-send')).toBe(true);
+  });
+
+  it('Send while the agent works queues the text (onSend), it does not stop the agent', async () => {
+    const send = vi.fn(async () => null);
+    const onStop = vi.fn();
+    act(() => root.render(<ChatComposer onSend={send} blockedReason={null} running onStop={onStop} />));
+    typeText('queue this');
+    await act(async () => host.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+    expect(send).toHaveBeenCalledWith('queue this');
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it('says what the agent does quietly in the footer, and reads Stopping… with the button off', () => {
+    act(() => root.render(<ChatComposer onSend={onSend} blockedReason={null} running onStop={() => undefined} status={{ text: 'Working…', stopping: false }} />));
+    const status = host.querySelector('[data-testid="chat-composer-status"]')!;
+    expect(status.textContent).toBe('Working…');
+    expect(foot().contains(status)).toBe(true);
+    expect(status.hasAttribute('data-stopping')).toBe(false);
+    act(() => root.render(<ChatComposer onSend={onSend} blockedReason={null} running onStop={() => undefined} status={{ text: 'Stopping…', stopping: true }} />));
+    expect(host.querySelector('[data-testid="chat-composer-status"]')!.textContent).toBe('Stopping…');
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="chat-composer-stop"]')!.disabled).toBe(true);
+  });
+
+  it('idle: the send button is a disabled round button, not missing', () => {
+    act(() => root.render(<ChatComposer onSend={onSend} blockedReason={null} />));
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+    expect(host.querySelector('[data-testid="chat-composer-status"]')).toBeNull();
   });
 
   it('Esc in the box still stops the agent while a settings control sits in the footer', () => {

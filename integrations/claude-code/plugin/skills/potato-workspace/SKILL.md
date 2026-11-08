@@ -20,7 +20,7 @@ Do not delegate what you can do directly in a few steps, and never put secrets i
 ## The five tools
 
 1. **`quick_ask(task)`** for a tiny question. Read `answer`. `receipt.not_verified` lists what was not checked. If it returns `status: "running"`, call `wait_agents` with the `handle`.
-2. **`run_agent(agent_type, project_path, task)`** for real work. `agent_type` is `claude`, `codex`, `cursor_agent` or `opencode_native`. It opens a visible pane the user can watch (`headless: true` hides it), runs the task and returns `status`, `result`, `receipt` and a `handle`. Pick a different agent than yourself for a review.
+2. **`run_agent(agent_type, project_path, task)`** for real work. `agent_type` is `claude`, `codex`, `cursor_agent` or `opencode_native`. It opens a visible pane the user can watch and keeps it open when the run ends (the user decides in Settings whether helpers are shown, run in the background, or stay open; do not pass `headless`), runs the task and returns `status`, `result`, `receipt` and a `handle`. Pick a different agent than yourself for a review.
 3. **`wait_agents(handles)`** collects results. Each call waits at most 120 s, so loop while `status` is `running`. A turn that still runs carries a `watch_command`: run it in your shell tool's background mode.
    - `completed` can mean only that the turn ended. Check `background_running` and `background_tracking`. When the adapter reports background work, `wait_agents` keeps waiting by default; pass `wait_for_background: false` only if you really want the turn-only answer.
    - When `background_tracking` is `not_reported_by_adapter`, the app cannot see work that outlives the turn: say so instead of claiming the agent is done.

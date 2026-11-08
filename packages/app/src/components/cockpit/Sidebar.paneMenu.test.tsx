@@ -100,11 +100,11 @@ describe('the pane row menu', () => {
   it('is one compact menu: view item, the pane actions, then Close last, no duplicates, grouped by separators', async () => {
     await render(fakeApi(), { onOpenToSide: vi.fn() });
     await act(async () => rightClick(rowOf('Codex two')));
-    expect(labels()).toEqual(['Open to the side', 'Rename', 'Reflow', 'Interrupt', 'Details', 'Close']);
+    expect(labels()).toEqual(['Open to the side', 'Pin', 'Rename', 'Reflow', 'Interrupt', 'Details', 'Close']);
     expect(host.querySelectorAll('[role="menu"]')).toHaveLength(1);
     expect(host.querySelector('[role="menu"]')!.classList.contains('ck-menu')).toBe(true);
     const kids = [...host.querySelector('[role="menu"]')!.children].map((n) => n.getAttribute('role'));
-    expect(kids).toEqual(['menuitem', 'separator', 'menuitem', 'menuitem', 'menuitem', 'menuitem', 'separator', 'menuitem']);
+    expect(kids).toEqual(['menuitem', 'separator', 'menuitem', 'menuitem', 'menuitem', 'menuitem', 'menuitem', 'separator', 'menuitem']);
   });
 
   it('runs each action on the right-clicked pane, not the selected one', async () => {
@@ -157,8 +157,8 @@ describe('the pane row menu', () => {
     await act(async () => rightClick(row, 0, 0));
     expect(document.activeElement).toBe(item('Open to the side'));
     await act(async () => item('Open to the side').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
-    expect(document.activeElement).toBe(item('Rename'));
-    await act(async () => item('Rename').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
+    expect(document.activeElement).toBe(item('Pin'));
+    await act(async () => item('Pin').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
     await act(async () => item('Open to the side').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
     expect(document.activeElement).toBe(item('Close'));
     await act(async () => item('Close').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));

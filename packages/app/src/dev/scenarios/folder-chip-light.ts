@@ -1,0 +1,21 @@
+import { createRoot } from 'react-dom/client';
+import { createElement } from 'react';
+import { AttachPreview } from '../attach-menu-preview';
+import type { HarnessScenario } from '../types';
+
+// The message box's "+" menu chips: a folder (with its file count) beside a folder chip and a file chip.
+const s: HarnessScenario = {
+  name: 'folder-chip-light',
+  route: 'cockpit',
+  theme: 'light',
+  window: { width: 700, height: 420 },
+  after: async (dom) => {
+    await dom.sleep(300);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    createRoot(host).render(createElement(AttachPreview));
+    await dom.sleep(300);
+    await dom.sleep(300);
+  },
+};
+export default s;

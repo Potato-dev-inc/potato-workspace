@@ -4,7 +4,7 @@
 //! default: a visible pane. Only agents that were changed are listed, so the file stays tiny and a
 //! newer build's extra values are simply ignored by an older one.
 
-use super::RunMode;
+use super::{HelperVisibility, RunMode};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -19,9 +19,23 @@ pub(super) struct StoreFile {
     /// Agent id (lower case) -> `visible` | `one_task`. Values are kept as text so one unknown
     /// value never discards the others.
     agents: BTreeMap<String, String>,
-    /// "Allow hidden helpers": an agent's `headless: true` hides a helper only when this is on.
-    /// Off (absent) by default: such a run is shown in a pane instead.
+    /// "Helper agents": `always_show` | `agent_chooses` | `always_background`. Kept as text so an
+    /// unknown value from a newer build means the default instead of discarding the file.
+    helper_visibility: String,
+    /// The older on/off switch "Allow hidden helpers" (read only). On means `agent_chooses`; it is
+    /// never written again, and `helper_visibility` wins whenever it is present.
+    #[serde(skip_serializing)]
     allow_hidden_helpers: bool,
+    /// "Keep helpers open when they finish": absent means on (finished helpers stay open).
+    keep_helpers_open: Option<bool>,
+}
+
+fn visibility_in(file: &StoreFile) -> HelperVisibility {
+    HelperVisibility::parse(&file.helper_visibility).unwrap_or(if file.allow_hidden_helpers {
+        HelperVisibility::AgentChooses
+    } else {
+        HelperVisibility::AlwaysShow
+    })
 }
 
 #[cfg(not(test))]
@@ -34,7 +48,12 @@ fn key(id: &str) -> String {
 }
 
 fn parse(text: &str) -> StoreFile {
-    serde_json::from_str(text).unwrap_or_default()
+    let mut file: StoreFile = serde_json::from_str(text).unwrap_or_default();
+    // The older on/off switch carries over once, so saving anything else never drops it.
+    if file.helper_visibility.is_empty() && file.allow_hidden_helpers {
+        file.helper_visibility = HelperVisibility::AgentChooses.as_str().to_string();
+    }
+    file
 }
 
 #[cfg(not(test))]
@@ -53,7 +72,9 @@ thread_local! {
 pub struct TestEnv {
     pub modes: BTreeMap<String, RunMode>,
     pub verified: BTreeMap<String, bool>,
-    pub allow_hidden_helpers: bool,
+    pub helper_visibility: HelperVisibility,
+    /// `None` = the default (on).
+    pub keep_helpers_open: Option<bool>,
 }
 
 #[cfg(test)]
@@ -104,42 +125,94 @@ pub fn setting_for(id: &str) -> RunMode {
     }
 }
 
-/// Whether an agent may hide a helper with `headless: true`. Off unless the person turned it on.
-pub fn hidden_helpers_allowed() -> bool {
+/// The "Helper agents" choice; helpers are always shown unless the person changed it.
+pub fn helper_visibility() -> HelperVisibility {
     #[cfg(test)]
     {
-        TEST_ENV.with(|slot| slot.borrow().as_ref().is_some_and(|env| env.allow_hidden_helpers))
+        TEST_ENV.with(|slot| slot.borrow().as_ref().map(|env| env.helper_visibility).unwrap_or_default())
     }
     #[cfg(not(test))]
     {
-        loaded().allow_hidden_helpers
+        visibility_in(&loaded())
     }
 }
 
-/// Writes "Allow hidden helpers" into the file at `target`; the agents' choices stay as they are.
-pub(super) fn save_hidden_at(target: &Path, allowed: bool) -> Result<StoreFile, String> {
+/// "Keep helpers open when they finish": on unless the person turned it off.
+pub fn keep_helpers_open() -> bool {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| slot.borrow().as_ref().and_then(|env| env.keep_helpers_open).unwrap_or(true))
+    }
+    #[cfg(not(test))]
+    {
+        loaded().keep_helpers_open.unwrap_or(true)
+    }
+}
+
+/// Writes "Keep helpers open" into the file at `target`.
+pub(super) fn save_keep_open_at(target: &Path, on: bool) -> Result<StoreFile, String> {
     let mut file = read_file(target);
     file.version = FILE_VERSION;
-    file.allow_hidden_helpers = allowed;
+    file.keep_helpers_open = Some(on);
     let text = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
     crate::settings_patch::write_atomic(target, &text).map_err(|e| format!("could not save: {e}"))?;
     Ok(file)
 }
 
-/// Saves "Allow hidden helpers".
-pub fn set_hidden_helpers_allowed(allowed: bool) -> Result<(), String> {
+/// The "Keep helpers open" choice of the file at `target` (default on).
+pub(super) fn keep_open_at(target: &Path) -> bool {
+    read_file(target).keep_helpers_open.unwrap_or(true)
+}
+
+/// Saves "Keep helpers open when they finish".
+pub fn set_keep_helpers_open(on: bool) -> Result<(), String> {
     #[cfg(test)]
     {
         TEST_ENV.with(|slot| {
             if let Some(env) = slot.borrow_mut().as_mut() {
-                env.allow_hidden_helpers = allowed;
+                env.keep_helpers_open = Some(on);
             }
         });
         Ok(())
     }
     #[cfg(not(test))]
     {
-        let file = save_hidden_at(&path(), allowed)?;
+        let file = save_keep_open_at(&path(), on)?;
+        *CACHE.write() = Some(file);
+        Ok(())
+    }
+}
+
+/// Writes "Helper agents" into the file at `target`; the agents' choices stay as they are.
+pub(super) fn save_visibility_at(target: &Path, value: HelperVisibility) -> Result<StoreFile, String> {
+    let mut file = read_file(target);
+    file.version = FILE_VERSION;
+    file.helper_visibility = value.as_str().to_string();
+    file.allow_hidden_helpers = false;
+    let text = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
+    crate::settings_patch::write_atomic(target, &text).map_err(|e| format!("could not save: {e}"))?;
+    Ok(file)
+}
+
+/// The "Helper agents" choice of the file at `target` (default `always_show`).
+pub(super) fn visibility_at(target: &Path) -> HelperVisibility {
+    visibility_in(&read_file(target))
+}
+
+/// Saves "Helper agents".
+pub fn set_helper_visibility(value: HelperVisibility) -> Result<(), String> {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| {
+            if let Some(env) = slot.borrow_mut().as_mut() {
+                env.helper_visibility = value;
+            }
+        });
+        Ok(())
+    }
+    #[cfg(not(test))]
+    {
+        let file = save_visibility_at(&path(), value)?;
         *CACHE.write() = Some(file);
         Ok(())
     }

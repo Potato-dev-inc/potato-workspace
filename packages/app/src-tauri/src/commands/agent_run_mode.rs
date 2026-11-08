@@ -21,18 +21,33 @@ pub fn agent_run_mode_set(id: String, mode: String) -> Result<Value, String> {
     Ok(agent_run_mode::settings_view())
 }
 
-/// `{allowed: bool}`: whether an agent's `headless: true` may hide a helper ("Allow hidden helpers", off by default).
+/// `{mode: "always_show" | "agent_chooses" | "always_background"}`: "Helper agents" (default `always_show`).
 #[tauri::command]
-pub fn hidden_helpers_get() -> Value {
-    serde_json::json!({ "allowed": agent_run_mode::hidden_helpers_allowed() })
+pub fn helper_visibility_get() -> Value {
+    serde_json::json!({ "mode": agent_run_mode::helper_visibility().as_str() })
 }
 
-/// Saves "Allow hidden helpers". Like the run-mode choice, only the Settings window writes it: neither an agent
+/// Saves "Helper agents". Like the run-mode choice, only the Settings window writes it: neither an agent
 /// nor a phone has a route to it.
 #[tauri::command]
-pub fn hidden_helpers_set(allowed: bool) -> Result<Value, String> {
-    agent_run_mode::set_hidden_helpers_allowed(allowed)?;
-    Ok(hidden_helpers_get())
+pub fn helper_visibility_set(mode: String) -> Result<Value, String> {
+    let mode = agent_run_mode::HelperVisibility::parse(&mode)
+        .ok_or_else(|| format!("INVALID_ARGUMENT: unknown helper setting {mode}"))?;
+    agent_run_mode::set_helper_visibility(mode)?;
+    Ok(helper_visibility_get())
+}
+
+/// `{on: bool}`: "Keep helpers open when they finish" (default on).
+#[tauri::command]
+pub fn keep_helpers_open_get() -> Value {
+    serde_json::json!({ "on": agent_run_mode::keep_helpers_open() })
+}
+
+/// Saves "Keep helpers open when they finish"; only the Settings window writes it.
+#[tauri::command]
+pub fn keep_helpers_open_set(on: bool) -> Result<Value, String> {
+    agent_run_mode::set_keep_helpers_open(on)?;
+    Ok(keep_helpers_open_get())
 }
 
 /// The helpers that ran hidden (no pane), newest first, for the Inbox.

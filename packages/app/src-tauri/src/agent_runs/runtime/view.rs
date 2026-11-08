@@ -100,10 +100,13 @@ pub struct AgentRunView {
     /// `receipt.run_mode`): `{mode: "one_task" | "visible", source: "agent_setting"}`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_mode: Option<crate::operations::RunModeNote>,
-    /// Present when the agent asked for a hidden run (`headless: true`) and "Allow hidden helpers" is
+    /// Present when the agent asked for a hidden run (`headless: true`) and "Helper agents" is
     /// off, so the run was shown in a pane instead (same as `receipt.headless_ignored`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_ignored: Option<String>,
+    /// Present when "Helper agents" made the run a background one (same as `receipt.headless_forced`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headless_forced: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -300,6 +303,7 @@ impl From<OperationSnapshot> for AgentRunView {
             fallback: snapshot.worker.fallback.clone(),
             run_mode: snapshot.worker.run_mode.clone(),
             headless_ignored: snapshot.worker.headless_ignored.clone(),
+            headless_forced: snapshot.worker.headless_forced.clone(),
         }
     }
 }

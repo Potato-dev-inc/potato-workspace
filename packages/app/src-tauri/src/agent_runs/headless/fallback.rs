@@ -359,4 +359,26 @@ mod tests {
             "a terminal run is never revived"
         );
     }
+
+    /// "Helper agents" = always show: a hidden request is made visible, and that visible run still falls back to
+    /// headless (and reports it) when no pane can open. The setting never fails the task.
+    #[test]
+    fn a_run_the_always_show_setting_made_visible_still_falls_back() {
+        use crate::agent_run_mode::{
+            apply_helper_visibility_with, HelperVisibility, VisibilityOutcome,
+        };
+        let mut request: crate::agent_runs::runtime::AgentRunRequest =
+            serde_json::from_value(serde_json::json!({"task": "t", "agent_type": "claude", "headless": true})).unwrap();
+        assert_eq!(
+            apply_helper_visibility_with(&mut request, HelperVisibility::AlwaysShow, true),
+            VisibilityOutcome::Shown
+        );
+        assert!(!request.headless);
+        let op = operation("claude", None);
+        // The pane fails before the turn: converted to headless, recorded as fallback.
+        assert_eq!(plan(&op, modes(true, true), Some("PANE_SPAWN_FAILED")), Some(VISIBLE_FAILED));
+        // An agent with no visible mode: headless instead, as before.
+        assert!(no_visible_mode(modes(false, true), request.headless, false));
+        assert_eq!(plan(&op, modes(false, true), None), Some(NO_VISIBLE_MODE));
+    }
 }

@@ -139,7 +139,6 @@ mod collision;
 
 use commands::AppState;
 use std::path::{Path, PathBuf};
-use tauri::path::BaseDirectory;
 use tauri::{Listener, Manager};
 
 /// Command-line modes of the app executable that run without a window (`acp-bridge --agent <id>`: a chat
@@ -447,6 +446,9 @@ pub fn run() {
             commands::agent_pack_preview,
             commands::agent_pack_apply,
             commands::agent_pack_undo,
+            commands::agent_pack_inspect,
+            commands::agent_pack_custom_save,
+            commands::agent_pack_custom_forget,
             commands::push_chat_event,
             commands::push_settings_event,
             commands::sync_public_settings,
@@ -694,8 +696,10 @@ pub fn run() {
             commands::acp_conversation_notices_seen,
             commands::agent_run_mode_get,
             commands::agent_run_mode_set,
-            commands::hidden_helpers_get,
-            commands::hidden_helpers_set,
+            commands::helper_visibility_get,
+            commands::helper_visibility_set,
+            commands::keep_helpers_open_get,
+            commands::keep_helpers_open_set,
             commands::hidden_runs_list,
             commands::hidden_runs_dismiss,
             commands::audit_recent,
@@ -739,18 +743,16 @@ pub fn run() {
             // Register approved declarative agent definitions before anything resolves a profile.
             tui::declarative::loader::reload();
             bridge::start_definitions_watcher(app.handle().clone());
-            if let Ok(resource) = app
-                .path()
-                .resolve("mcp-stdio.bundle.cjs", BaseDirectory::Resource)
-            {
-                if resource.is_file() {
-                    mcp_runtime::set_bundled_mcp_script(resource);
-                }
+            // An installed copy keeps these under `<install>/resources/` (Tauri copies the `resources/...`
+            // entries of tauri.conf.json with that folder name); a dev run has them elsewhere.
+            let resource_dir = app.path().resource_dir().ok();
+            let exe_dir = std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from));
+            let find_resource =
+                |rel: &str| mcp_runtime::installed_resource(resource_dir.as_deref(), exe_dir.as_deref(), rel);
+            if let Some(resource) = find_resource("mcp-stdio.bundle.cjs") {
+                mcp_runtime::set_bundled_mcp_script(resource);
             }
-            if let Ok(cli) = app
-                .path()
-                .resolve("puppet-master-cli.bundle.mjs", BaseDirectory::Resource)
-            {
+            if let Some(cli) = find_resource("puppet-master-cli.bundle.mjs") {
                 if let Some(dir) = cli.parent() {
                     crate::watch_command::set_resource_dir(dir.to_path_buf());
                 }
@@ -760,15 +762,12 @@ pub fn run() {
             } else {
                 "bin/puppet-master-mcp"
             };
-            if let Ok(resource) = app.path().resolve(rust_mcp_name, BaseDirectory::Resource) {
-                if resource.is_file() {
-                    mcp_runtime::set_bundled_mcp_binary(resource);
-                }
+            if let Some(resource) = find_resource(rust_mcp_name) {
+                mcp_runtime::set_bundled_mcp_binary(resource);
             }
             if mcp_runtime::bundled_mcp_binary().is_none() {
                 // A dev build has no installed resource folder: look where the binary is built or
                 // staged (the package's dist, the staged `resources/bin`, next to the running exe).
-                let exe_dir = std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from));
                 if let Some(dev) = mcp_runtime::dev_mcp_binary(Path::new(env!("CARGO_MANIFEST_DIR")), exe_dir.as_deref()) {
                     mcp_runtime::set_bundled_mcp_binary(dev);
                 }

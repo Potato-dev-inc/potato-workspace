@@ -137,6 +137,10 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
     };
     let chat = AcpChat::build(&pane_id, &label, session.clone(), deps.host.clone(), deps.conversations.clone());
     chat.attach();
+    if !cfg!(test) {
+        // Test agents are fakes with no tool server by design.
+        chat.note_workspace_tools();
+    }
     CHATS.lock().insert(pane_id.clone(), chat.clone());
     pushed::register(&pane_id, chat.clone());
     SWEEPER.get_or_init(|| supervisor::global().start_thread());
@@ -202,6 +206,10 @@ pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
         let Ok(cfg) = conversations.config_for(&record.agent) else { continue };
         let chat = AcpChat::build(&id, &cfg.label, session, deps.host.clone(), Some(conversations.clone()));
         chat.attach();
+        if !cfg!(test) {
+            // Test agents are fakes with no tool server by design.
+            chat.note_workspace_tools();
+        }
         CHATS.lock().insert(id.clone(), chat.clone());
         pushed::register(&id, chat.clone());
         SWEEPER.get_or_init(|| supervisor::global().start_thread());

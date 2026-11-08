@@ -306,17 +306,86 @@
   outline: none;
   box-shadow: var(--focus);
 }
-.cockpit .ck-chat-send:disabled {
-  opacity: 0.3;
+.cockpit .ck-btn.ck-chat-send:disabled {
+  /* Idle: still a deliberate button, a soft filled circle with a quiet arrow. */
+  background: var(--fill-active);
+  color: var(--label-3);
+  opacity: 1;
   cursor: not-allowed;
 }
 .cockpit .ck-chat-stop .ck-chat-send-icon {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
+}
+.cockpit .ck-btn.ck-chat-send.ck-chat-stop:disabled {
+  background: var(--label-2);
+  color: var(--bg);
+  cursor: default;
+}
+/* Text typed while the agent works: Send queues it; this small Stop sits beside it. */
+.cockpit .ck-btn.ck-chat-stop-mini {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  margin-left: auto;
+  border: none;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fill-active);
+  color: var(--label-2);
+  flex: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.cockpit .ck-btn.ck-chat-stop-mini + .ck-chat-send {
+  margin-left: 0;
+}
+.cockpit .ck-btn.ck-chat-stop-mini .ck-chat-send-icon {
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+.cockpit .ck-btn.ck-chat-stop-mini:hover:not(:disabled) {
+  background: var(--fill-hover, var(--fill-active));
+  color: var(--label);
+}
+.cockpit .ck-btn.ck-chat-stop-mini:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+/* What the agent is doing, quietly: a soft light sweeps across the words. */
+.cockpit .ck-chat-status {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  white-space: nowrap;
+  color: transparent;
+  background: linear-gradient(100deg, var(--label-3) 35%, var(--label) 50%, var(--label-3) 65%) 100% 0 / 250% 100% no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: ck-chat-shimmer 2.2s linear infinite;
+}
+.cockpit .ck-chat-status[data-stopping] {
+  animation: none;
+  background: none;
+  color: var(--label-2);
+}
+@keyframes ck-chat-shimmer {
+  to {
+    background-position: 0 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cockpit .ck-btn.ck-chat-send {
+  .cockpit .ck-btn.ck-chat-send,
+  .cockpit .ck-btn.ck-chat-stop-mini {
     transition: none;
+  }
+  .cockpit .ck-chat-status {
+    animation: none;
+    background: none;
+    color: var(--label-2);
   }
 }
 .cockpit .ck-chat-composer-note {

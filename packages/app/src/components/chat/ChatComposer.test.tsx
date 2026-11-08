@@ -148,6 +148,11 @@ describe('ChatComposer', () => {
 describe('ChatComposer add files', () => {
   const attachButton = () => host.querySelector('[data-testid="chat-composer-attach"]') as HTMLButtonElement | null;
   const chipNames = () => Array.from(host.querySelectorAll('[data-testid="attachment-chip"]')).map((el) => el.getAttribute('data-name'));
+  const addFilesViaMenu = (label = 'Add files…') => {
+    act(() => attachButton()!.click());
+    const item = Array.from(host.querySelectorAll('[role="menuitem"]')).find((el) => el.textContent?.includes(label)) as HTMLElement;
+    act(() => item.click());
+  };
 
   beforeEach(() => {
     localStorage.clear();
@@ -173,7 +178,7 @@ describe('ChatComposer add files', () => {
     const attachFiles = vi.fn(async () => ['/a/notes.md', 'C:\\My Docs\\x.txt']);
     renderWithFiles(attachFiles);
     type('Read these');
-    act(() => attachButton()!.click());
+    addFilesViaMenu();
     await flush();
     expect(attachFiles).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith('attachment_prepare', { paneId: 'pane-1', paths: ['/a/notes.md', 'C:\\My Docs\\x.txt'] });
@@ -183,7 +188,7 @@ describe('ChatComposer add files', () => {
 
   it('adds several files at once in one go', async () => {
     renderWithFiles(async () => ['/a/one.txt', '/a/two.txt', '/a/three.txt']);
-    act(() => attachButton()!.click());
+    addFilesViaMenu();
     await flush();
     expect(chipNames()).toEqual(['one.txt', 'two.txt', 'three.txt']);
     expect(field().value).toBe('');
@@ -193,7 +198,7 @@ describe('ChatComposer add files', () => {
     renderWithFiles(async () => {
       throw new Error('nope');
     });
-    act(() => attachButton()!.click());
+    addFilesViaMenu();
     await flush();
     expect(note()).toContain('Could not open the file dialog.');
   });
@@ -202,7 +207,7 @@ describe('ChatComposer add files', () => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockRejectedValue(new Error('nope'));
     renderWithFiles(async () => ['/a/notes.md']);
-    act(() => attachButton()!.click());
+    addFilesViaMenu();
     await flush();
     expect(note()).toContain('Could not read the chosen files.');
     expect(chipNames()).toEqual([]);

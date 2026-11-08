@@ -23,13 +23,19 @@ pub struct HostLaunch {
     /// Toolbelt URL (http) servers: replaces `{url}` and, as a whole value, `{headers}`.
     pub url: Option<String>,
     pub headers: Vec<(String, String)>,
+    /// This install has no bundled MCP program, so `command`/`args` are only the unpublished npm fallback. The
+    /// agent pack must not write them (see `agent_pack::plan`).
+    pub program_missing: bool,
 }
 
 impl HostLaunch {
     /// The running app's own MCP launch spec.
     pub fn current() -> Self {
-        let spec = crate::mcp_runtime::mcp_launch_spec();
+        let bundled = crate::mcp_runtime::bundled_launch_spec();
+        let program_missing = bundled.is_none();
+        let spec = bundled.unwrap_or_else(crate::mcp_runtime::npm_mcp_launch_spec);
         Self {
+            program_missing,
             command: spec.command,
             args: spec.args,
             env: vec![(

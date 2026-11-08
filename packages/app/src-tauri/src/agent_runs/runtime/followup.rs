@@ -163,6 +163,8 @@ pub fn send_agent(
         // A follow-up continues in the mode of its run; the setting is never read again.
         headless_unset: false,
         headless_ignored: false,
+        headless_forced: false,
+        kept_open_by_setting: false,
         quick: false,
         // The guard is carried by the run's worker record, not by this request.
         guard_env: None,

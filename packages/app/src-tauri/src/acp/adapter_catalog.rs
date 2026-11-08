@@ -226,7 +226,7 @@ pub fn load_dir(root: &Path) -> (Vec<AdapterEntry>, Vec<String>) {
 /// The folders the catalog may live in: next to the app executable (an installed build), then the source tree (a dev
 /// run). The first that exists is used.
 pub fn catalog_root() -> Option<PathBuf> {
-    let beside_exe = std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("resources").join("adapters")));
+    let beside_exe = std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| crate::shell_env::bundled_resources_root(d).join("adapters")));
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join("adapters");
     [beside_exe, Some(source)].into_iter().flatten().find(|p| p.is_dir())
 }

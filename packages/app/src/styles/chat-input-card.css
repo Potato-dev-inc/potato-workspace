@@ -197,21 +197,24 @@
   box-shadow: var(--focus);
 }
 .cockpit .ck-ctx-ring svg {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
   transform: rotate(-90deg);
 }
 .cockpit .ck-ctx-ring circle {
   fill: none;
   stroke-width: 2.5;
 }
+/* Static gauge, never animated: a faint full track and the filled part. */
 .cockpit .ck-ctx-bg {
-  stroke: var(--fill-active);
+  stroke: currentColor;
+  opacity: 0.28;
 }
 .cockpit .ck-ctx-fg {
-  stroke: var(--label);
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.5s var(--ease);
+  stroke: currentColor;
+  stroke-linecap: butt;
+  animation: none;
+  transition: none;
 }
 .cockpit .ck-ctx-pop {
   width: 230px;

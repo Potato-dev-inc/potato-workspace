@@ -1125,3 +1125,16 @@ fn confirm_prompt_ms_does_not_report_a_prompt_that_clears() {
     assert!(reply["agents"][0]["prompt"].is_null());
     assert_eq!(reply["agents"][0]["last_prompt"]["reason"], "turn_ended");
 }
+
+#[test]
+fn a_chat_without_the_workspace_tool_server_says_so_once() {
+    let rig = Rig::new("");
+    let chat = &rig.chat;
+    chat.note_workspace_tools();
+    chat.note_workspace_tools();
+    let notes: Vec<_> = chat.feed.all().into_iter().filter(|i| matches!(i, crate::session_chat::ChatItem::Notice { notice_kind, .. } if notice_kind == "tools_missing")).collect();
+    assert_eq!(notes.len(), 1, "one quiet note, not one per call");
+    if let crate::session_chat::ChatItem::Notice { text, .. } = &notes[0] {
+        assert!(text.starts_with("Potato Workspace tools aren't available in this chat: "), "{text}");
+    }
+}

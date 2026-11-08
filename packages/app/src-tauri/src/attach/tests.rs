@@ -68,10 +68,37 @@ fn images_and_binaries_are_copied_into_the_project_with_their_kind() {
 }
 
 #[test]
-fn a_missing_file_or_a_folder_is_refused() {
+fn a_missing_file_is_refused() {
     let dir = scratch("missing");
     assert!(prepare_one(&dir.join("nope.txt"), cwd(&dir)).unwrap_err().starts_with("ATTACHMENT_NOT_FOUND"));
-    assert!(prepare_one(&dir, cwd(&dir)).unwrap_err().starts_with("ATTACHMENT_NOT_A_FILE"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_folder_keeps_its_path_and_counts_its_files_without_the_noise_folders() {
+    let dir = scratch("folder");
+    let project = dir.join("my project");
+    for rel in ["a.rs", "src/b.rs", "src/deep/c.rs", ".git/HEAD", "node_modules/x/index.js", "target/debug/out.bin", "src/target/d.rs"] {
+        touch(&project, rel);
+    }
+    let got = prepare_one(&project, cwd(&dir)).unwrap();
+    assert_eq!((got.kind, got.name.as_str(), got.mime.as_deref()), (AttachKind::Folder, "my project", Some("inode/directory")));
+    assert!(got.path.ends_with("my project"));
+    // a.rs, src/b.rs and src/deep/c.rs: the three skipped folders hold nothing that counts.
+    assert_eq!(got.size, 3);
+    // Nothing is copied into the project: the folder is passed by its path.
+    assert!(!dir.join(".potato-workspace").exists() && !project.join(".potato-workspace").exists());
+    assert_eq!(serde_json::to_value(&got).unwrap()["kind"], "folder");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_huge_folder_count_stops_at_the_cap() {
+    let dir = scratch("folder-cap");
+    for i in 0..(MAX_FOLDER_COUNT + 5) {
+        fs::write(dir.join(format!("f{i}.txt")), "").unwrap();
+    }
+    assert_eq!(count_files(&dir), MAX_FOLDER_COUNT);
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -263,6 +290,28 @@ fn blocks_follow_what_the_agent_takes() {
     // A file that cannot be read still goes, as a link.
     let gone = ChatAttachment { path: dir.join("gone.png").display().to_string(), ..image };
     assert_eq!(types(&prompt_blocks("", &[gone], true, true)), ["resource_link"]);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_folder_goes_as_a_link_with_a_text_line_and_is_never_inlined() {
+    let dir = scratch("folder-blocks");
+    let folder = ChatAttachment { name: "my project".into(), path: dir.display().to_string(), kind: AttachKind::Folder, size: 3, mime: Some("inode/directory".into()) };
+    // The same whatever the agent takes: no image or embedded context changes a folder.
+    for (images, embedded) in [(true, true), (false, false)] {
+        let blocks = prompt_blocks("look", &[folder.clone()], images, embedded);
+        let types: Vec<_> = blocks.iter().map(|b| b["type"].as_str().unwrap()).collect();
+        assert_eq!(types, ["text", "text", "resource_link"]);
+        assert_eq!(blocks[1]["text"], format!("Folder: {}", folder.path));
+        assert_eq!(blocks[2]["uri"], file_uri(&folder.path));
+        assert!(blocks[2]["uri"].as_str().unwrap().starts_with("file://"));
+        assert_eq!((blocks[2]["name"].as_str(), blocks[2]["mimeType"].as_str()), (Some("my project"), Some("inode/directory")));
+        assert!(blocks[2].get("size").is_none() && blocks[2].get("resource").is_none());
+    }
+    // Replayed, the link is a folder again.
+    let back = attachment_of_block(&prompt_blocks("", &[folder.clone()], false, false)[1]).unwrap();
+    assert_eq!((back.kind, back.name.as_str()), (AttachKind::Folder, "my project"));
+    assert_eq!(text_with_paths("see", &[folder.clone()]), format!("see [attached: {}]", folder.path));
     let _ = fs::remove_dir_all(&dir);
 }
 

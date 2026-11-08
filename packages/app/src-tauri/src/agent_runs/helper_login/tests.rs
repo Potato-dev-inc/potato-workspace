@@ -285,7 +285,7 @@ fn delegate_work_with_ask_me_waits_for_the_card_too() {
 }
 
 /// The helper from the bug report: Claude, a model, low effort, read-only, and `headless: true`, started by an
-/// agent. In the route's order, "Allow hidden helpers" (off) makes it visible, and the person's login choice
+/// agent. In the route's order, "Helper agents" (always show) makes it visible, and the person's login choice
 /// still lands on it, so the visible pane starts under that account.
 #[test]
 fn a_helper_made_visible_still_takes_the_chosen_login() {
@@ -300,7 +300,7 @@ fn a_helper_made_visible_still_takes_the_chosen_login() {
     .unwrap();
     request.headless_unset = false;
     crate::agent_run_mode::with_test_env(Default::default(), || {
-        assert!(crate::agent_run_mode::gate_hidden_helper(&mut request));
+        assert_eq!(crate::agent_run_mode::apply_helper_visibility(&mut request), crate::agent_run_mode::VisibilityOutcome::Shown);
     });
     for_run(&mut request, Some(&s.session), &s.store, &|| {}).unwrap();
     assert!(!request.headless && request.headless_ignored);
@@ -317,7 +317,7 @@ fn a_helper_made_visible_still_raises_the_login_card_when_the_person_said_ask() 
     request.headless = true;
     request.headless_unset = false;
     crate::agent_run_mode::with_test_env(Default::default(), || {
-        crate::agent_run_mode::gate_hidden_helper(&mut request);
+        crate::agent_run_mode::apply_helper_visibility(&mut request);
     });
     let call = s.run_in_thread(request);
     let card = s.wait_for_card(1);

@@ -306,3 +306,82 @@ fn the_decision_is_pure_over_setting_and_verification() {
     let stay = decide(RunMode::OneTask, false, true);
     assert!(!stay.headless && stay.fallback.is_some());
 }
+
+#[test]
+fn helper_agents_defaults_to_always_show_and_survives_a_restart() {
+    let dir = std::env::temp_dir().join(format!("pm-run-mode-{}-helpers", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let target = dir.join(store::file_name());
+    // No file, a broken file and an unknown value all mean the default.
+    assert_eq!(store::visibility_at(&target), HelperVisibility::AlwaysShow);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(&target, "{ not json").unwrap();
+    assert_eq!(store::visibility_at(&target), HelperVisibility::AlwaysShow);
+    std::fs::write(&target, r#"{"helper_visibility":"from_the_future"}"#).unwrap();
+    assert_eq!(store::visibility_at(&target), HelperVisibility::AlwaysShow);
+    for mode in [HelperVisibility::AlwaysBackground, HelperVisibility::AgentChooses, HelperVisibility::AlwaysShow] {
+        store::save_visibility_at(&target, mode).unwrap();
+        assert_eq!(store::visibility_at(&target), mode, "read back from disk");
+    }
+    // Saving the helper choice keeps the per-agent choices, and the other way round.
+    store::save_at(&target, "alpha", RunMode::OneTask).unwrap();
+    store::save_visibility_at(&target, HelperVisibility::AlwaysBackground).unwrap();
+    store::save_at(&target, "beta", RunMode::OneTask).unwrap();
+    let file = store::read_file(&target);
+    assert_eq!(store::mode_in(&file, "alpha"), RunMode::OneTask);
+    assert_eq!(store::visibility_at(&target), HelperVisibility::AlwaysBackground);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_older_allow_hidden_helpers_switch_carries_over_as_agent_chooses() {
+    let dir = std::env::temp_dir().join(format!("pm-run-mode-{}-legacy", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let target = dir.join(store::file_name());
+    std::fs::write(&target, r#"{"version":1,"agents":{},"allow_hidden_helpers":true}"#).unwrap();
+    assert_eq!(store::visibility_at(&target), HelperVisibility::AgentChooses);
+    // Saving something else does not lose it.
+    store::save_at(&target, "alpha", RunMode::OneTask).unwrap();
+    assert_eq!(store::visibility_at(&target), HelperVisibility::AgentChooses);
+    // The new value wins and the old key is not written again.
+    store::save_visibility_at(&target, HelperVisibility::AlwaysShow).unwrap();
+    assert_eq!(store::visibility_at(&target), HelperVisibility::AlwaysShow);
+    assert!(!std::fs::read_to_string(&target).unwrap().contains("allow_hidden_helpers"));
+    // "off" in the older file was already the default.
+    std::fs::write(&target, r#"{"allow_hidden_helpers":false}"#).unwrap();
+    assert_eq!(store::visibility_at(&target), HelperVisibility::AlwaysShow);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn keep_helpers_open_defaults_on_and_survives_a_restart() {
+    let dir = std::env::temp_dir().join(format!("pm-run-mode-{}-keep", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let target = dir.join(store::file_name());
+    assert!(store::keep_open_at(&target), "no file: on");
+    store::save_keep_open_at(&target, false).unwrap();
+    assert!(!store::keep_open_at(&target));
+    store::save_visibility_at(&target, HelperVisibility::AlwaysBackground).unwrap();
+    assert!(!store::keep_open_at(&target), "the other settings do not reset it");
+    store::save_keep_open_at(&target, true).unwrap();
+    assert!(store::keep_open_at(&target));
+    assert_eq!(store::visibility_at(&target), HelperVisibility::AlwaysBackground);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn keep_helpers_open_on_keeps_the_pane_and_off_leaves_the_run_alone() {
+    store::with_test_env(TestEnv::default(), || assert!(keep_helpers_open(), "default on"));
+    store::with_test_env(TestEnv { keep_helpers_open: Some(false), ..TestEnv::default() }, || {
+        assert!(!keep_helpers_open());
+        let mut keep = false;
+        assert!(!apply_keep_open(&mut keep) && !keep, "off: the run's own keep_pane decides (closes when done)");
+    });
+    store::with_test_env(TestEnv::default(), || {
+        let mut keep = false;
+        assert!(apply_keep_open(&mut keep) && keep, "on: kept open although the agent did not ask");
+        let mut asked = true;
+        assert!(!apply_keep_open(&mut asked) && asked, "already asked for: nothing to report");
+    });
+}

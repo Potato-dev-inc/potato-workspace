@@ -403,6 +403,16 @@ impl AcpChat {
         self.apply_status(&self.session.snapshot());
     }
 
+    /// Says once, as a quiet note in the chat, that Potato Workspace's own tools could not be handed to this session.
+    pub(crate) fn note_workspace_tools(&self) {
+        let Some(text) = crate::acp::config::workspace_tools_gap(self.session.config()) else { return };
+        let id = "n:tools_missing";
+        if self.feed.get(id).is_some() {
+            return;
+        }
+        self.push(vec![crate::session_chat::ChatItem::Notice { id: id.into(), at: Some(now_iso()), notice_kind: "tools_missing".into(), text, url: None }]);
+    }
+
     fn push(&self, items: Vec<crate::session_chat::ChatItem>) {
         for item in items {
             if let Some(journal) = &self.journal {

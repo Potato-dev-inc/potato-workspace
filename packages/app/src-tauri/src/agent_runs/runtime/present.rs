@@ -85,7 +85,9 @@ pub(in crate::agent_runs) fn pane_presentation(
         );
     }
     let note = (alive && snapshot.keep_pane && snapshot.status.terminal()).then(|| {
-        "pane stays open (keep_pane=true); call close_agent when you are done with it".into()
+        snapshot.worker.kept_open_note.clone().unwrap_or_else(|| {
+            "pane stays open (keep_pane=true); call close_agent when you are done with it".into()
+        })
     });
     (alive, false, note)
 }

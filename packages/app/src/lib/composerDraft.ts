@@ -38,7 +38,7 @@ function isEntry(value: unknown): value is DraftEntry {
 function isAttachment(value: unknown): value is ChatAttachment {
   if (!value || typeof value !== 'object') return false;
   const a = value as Partial<ChatAttachment>;
-  return typeof a.name === 'string' && typeof a.path === 'string' && typeof a.size === 'number' && (a.kind === 'text' || a.kind === 'image' || a.kind === 'file');
+  return typeof a.name === 'string' && typeof a.path === 'string' && typeof a.size === 'number' && (a.kind === 'text' || a.kind === 'image' || a.kind === 'file' || a.kind === 'folder');
 }
 
 /** The attachments a draft entry holds, checked; [] when there are none or the stored value is not a list. */

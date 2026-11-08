@@ -5,10 +5,12 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { ChatComposer } from './ChatComposer';
 import { DRAFT_SAVE_MS, LS_COMPOSER_DRAFTS } from '../../lib/composerDraft';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
 
 const drag = vi.hoisted(() => ({ handler: null as null | ((event: unknown) => void) }));
 vi.mock('@tauri-apps/api/webview', () => ({
@@ -72,6 +74,11 @@ const settle = async () => {
 const field = () => host.querySelector('textarea') as HTMLTextAreaElement;
 const sendButton = () => host.querySelector('button[type="submit"]') as HTMLButtonElement;
 const attachButton = () => host.querySelector('[data-testid="chat-composer-attach"]') as HTMLButtonElement;
+const addFilesViaMenu = (label = 'Add files…') => {
+  act(() => attachButton()!.click());
+  const item = Array.from(host.querySelectorAll('[role="menuitem"]')).find((el) => el.textContent?.includes(label)) as HTMLElement;
+  act(() => item.click());
+};
 const chips = () => Array.from(host.querySelectorAll('[data-testid="attachment-chip"]'));
 const chipNames = () => Array.from(host.querySelectorAll('[data-testid="attachment-chip"]')).map((el) => el.getAttribute('data-name'));
 const note = () => host.querySelector('[data-testid="chat-composer-note"]')?.textContent ?? '';
@@ -105,10 +112,19 @@ function paste(files: File[], text = '') {
 }
 
 describe('ChatComposer chips from + and drop', () => {
+  it('adds a folder chip from + then Add folder…', async () => {
+    vi.mocked(open).mockResolvedValueOnce('/proj/src' as never);
+    mount();
+    addFilesViaMenu('Add folder…');
+    await settle();
+    expect(open).toHaveBeenCalledWith(expect.objectContaining({ directory: true }));
+    expect(chipNames()).toEqual(['src']);
+  });
+
   it('shows a chip per file after +, and the text is untouched', async () => {
     mount();
     type('Look');
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await settle();
     expect(chipNames()).toEqual(['notes.md', 'shot.png']);
     expect(field().value).toBe('Look');
@@ -126,9 +142,9 @@ describe('ChatComposer chips from + and drop', () => {
 
   it('ignores a file that is already attached', async () => {
     mount({ attachFiles: async () => ['/a/notes.md'] });
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await settle();
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await settle();
     expect(chipNames()).toEqual(['notes.md']);
   });
@@ -139,7 +155,7 @@ describe('ChatComposer chips from + and drop', () => {
       cmd === 'attachment_prepare' ? new Promise((resolve) => (finish = resolve)) : Promise.resolve(backend(cmd)),
     );
     mount();
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await flush();
     expect(host.querySelector('[data-testid="attachment-preparing"]')).not.toBeNull();
     expect(sendButton().disabled).toBe(true);
@@ -153,7 +169,7 @@ describe('ChatComposer chips from + and drop', () => {
 describe('ChatComposer remove and paste', () => {
   it('the x removes one chip and leaves the others', async () => {
     mount();
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await settle();
     const remove = host.querySelector('button[aria-label="Remove notes.md"]') as HTMLButtonElement;
     expect(remove).not.toBeNull();
@@ -189,7 +205,7 @@ describe('ChatComposer send with files', () => {
   it('sends the text with the chips and clears both', async () => {
     const onSend = mount({ onSend: vi.fn(async () => null) });
     type('see these');
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await settle();
     act(() => sendButton().click());
     await settle();
@@ -203,7 +219,7 @@ describe('ChatComposer send with files', () => {
 
   it('sends with only files and no text', async () => {
     const onSend = mount({ onSend: vi.fn(async () => null), attachFiles: async () => ['/a/notes.md'] });
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await settle();
     expect(sendButton().disabled).toBe(false);
     act(() => sendButton().click());
@@ -215,7 +231,7 @@ describe('ChatComposer send with files', () => {
 
   it('keeps the chips when the send is refused', async () => {
     mount({ onSend: vi.fn(async () => 'The pane is busy.') });
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await settle();
     act(() => sendButton().click());
     await settle();
@@ -233,7 +249,7 @@ describe('ChatComposer send with files', () => {
 
   it('the message text never contains "Attached file:"', async () => {
     const onSend = mount({ onSend: vi.fn(async () => null) });
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await settle();
     act(() => sendButton().click());
     await settle();
@@ -245,7 +261,7 @@ describe('ChatComposer draft keeps the chips', () => {
   it('restores the chips and text after the box is closed and opened again', async () => {
     mount();
     type('half a thought');
-    act(() => attachButton().click());
+    addFilesViaMenu();
     await settle();
     await new Promise((r) => setTimeout(r, DRAFT_SAVE_MS + 50));
     expect(localStorage.getItem(LS_COMPOSER_DRAFTS)).toContain('"attachments"');

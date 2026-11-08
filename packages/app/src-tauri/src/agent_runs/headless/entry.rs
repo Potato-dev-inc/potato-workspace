@@ -476,10 +476,17 @@ pub fn run_agent(
             }
         }
     }
-    // `headless: true` was set aside by "Allow hidden helpers"; say so unless the run ended up
+    // `headless: true` was set aside by "Helper agents"; say so unless the run ended up
     // headless anyway (the agent has no visible mode), which the fallback already reports.
     if request.headless_ignored && !request.headless && request.turn_index == 0 {
         worker.headless_ignored = Some(crate::agent_run_mode::HEADLESS_IGNORED_NOTE.to_string());
+    }
+    if request.kept_open_by_setting && !request.headless && request.turn_index == 0 {
+        worker.kept_open_note = Some(crate::agent_run_mode::KEPT_OPEN_NOTE.to_string());
+    }
+    // "Always run in the background" made this run headless.
+    if request.headless_forced && request.headless && request.turn_index == 0 {
+        worker.headless_forced = Some(crate::agent_run_mode::HEADLESS_FORCED_NOTE.to_string());
     }
     let supported = profile.run_options();
     if request.trust_workspace {

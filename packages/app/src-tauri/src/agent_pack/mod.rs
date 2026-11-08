@@ -13,11 +13,14 @@
 //! declarative writer (`mcp_install::declarative`, `toolbelt::edit`).
 
 pub mod assets;
+pub mod custom;
 pub mod host;
 pub mod plan;
 pub mod record;
 pub mod service;
 
+#[cfg(test)]
+mod custom_tests;
 #[cfg(test)]
 mod tests;
 

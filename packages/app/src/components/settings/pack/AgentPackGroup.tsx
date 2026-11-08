@@ -13,6 +13,7 @@ import {
   type UndoReport,
 } from '../../../lib/agent-pack';
 import { errText } from '../../../lib/toolbelt';
+import { ChooseHost } from './ChooseHost';
 import { btn, btnPrimary, overlay, sheet } from '../toolbelt/styles';
 
 const UNSUPPORTED_REASON = "Potato Workspace doesn't know where this agent keeps its settings yet";
@@ -40,18 +41,56 @@ function mcpLine(row: PackRow): string {
   if (m.status === 'skipped') return m.reason ?? 'Skipped';
   if (m.status === 'error') return m.reason ?? 'Something went wrong';
   if (m.status === 'unchanged') return 'Already connected to Potato Workspace';
+  if (m.change === 'update') return "Fix the Potato Workspace connection (it pointed at a program that doesn't exist)";
   return 'Connection to Potato Workspace will be added';
 }
 
-export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose: () => void; onDone: (text: string, report: PackReport) => void }) {
+export function PackSheet({
+  api,
+  onClose,
+  onDone,
+  onChanged,
+}: {
+  api: AgentPackApi;
+  onClose: () => void;
+  onDone: (text: string, report: PackReport) => void;
+  /** The user's own settings files changed (saved or forgotten). */
+  onChanged?: () => void;
+}) {
   const [report, setReport] = useState<PackReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [other, setOther] = useState(false);
+
+  const reload = useCallback(() => {
+    api.preview().then(
+      (r) => {
+        setReport(r);
+        setError(null);
+      },
+      (e) => setError(errText(e)),
+    );
+  }, [api]);
 
   useEffect(() => {
-    api.preview().then(setReport, (e) => setError(errText(e)));
-  }, [api]);
+    reload();
+  }, [reload]);
+
+  const changed = () => {
+    setOther(false);
+    reload();
+    onChanged?.();
+  };
+
+  const forget = async (id: string) => {
+    try {
+      await api.forgetCustom(id);
+      changed();
+    } catch (e) {
+      setError(errText(e));
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -65,6 +104,7 @@ export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose
   const rows = visibleRows(grouped);
   const absent = grouped.filter((r) => !rows.includes(r));
   const unsupported = report?.unsupported ?? [];
+  const chosen = report?.custom ?? [];
   const pending = pendingCount(rows);
 
   const install = async () => {
@@ -92,7 +132,7 @@ export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose
           <h4 className="text-sm font-semibold">Add Potato Workspace to your agents</h4>
           <p className="mt-1 text-xs leading-5 text-pm-muted">
             Skills are short guides that teach an agent when and how to hand work to other agents. Nothing runs at install time. An
-            existing connection is never changed, and Undo puts every file back.
+            existing connection is never changed, except one an earlier version pointed at a program that doesn't exist. Undo puts every file back.
           </p>
         </div>
 
@@ -141,6 +181,18 @@ export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose
                   </div>
                 )}
               </dl>
+              {chosen
+                .filter((c) => row.ids.includes(c.id))
+                .map((c) => (
+                  <div key={c.id} data-testid="pack-chosen" className="flex items-center justify-between gap-2 border-t border-pm-border px-3 py-2 text-xs">
+                    <span className="min-w-0 truncate text-pm-muted" title={c.config_path}>
+                      Settings file you chose: <span className="font-mono text-[11px]">{c.config_path}</span> ({c.format.toUpperCase()}, {c.key_path})
+                    </span>
+                    <button type="button" className="shrink-0 text-xs text-pm-muted underline" onClick={() => void forget(c.id)}>
+                      Forget
+                    </button>
+                  </div>
+                ))}
               <div className="border-t border-pm-border px-3 py-2">
                 <button
                   type="button"
@@ -160,10 +212,24 @@ export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose
             </p>
           )}
           {unsupported.map((u) => (
-            <p key={u.id} className="text-xs leading-5 text-pm-muted" data-testid="pack-unsupported">
-              Can't set up yet: {u.label} — {u.reason?.trim() ? u.reason.trim().replace(/\.$/, '') : UNSUPPORTED_REASON}.
-            </p>
+            <div key={u.id} data-testid="pack-unsupported-row">
+              <p className="text-xs leading-5 text-pm-muted" data-testid="pack-unsupported">
+                Can't set up yet: {u.label} — {u.reason?.trim() ? u.reason.trim().replace(/\.$/, '') : UNSUPPORTED_REASON}.
+              </p>
+              <ChooseHost api={api} target={{ agentId: u.id, label: u.label }} onSaved={changed} />
+            </div>
           ))}
+          {report && (
+            <div data-testid="pack-other">
+              {other ? (
+                <ChooseHost api={api} target={{}} askName onSaved={changed} onCancel={() => setOther(false)} />
+              ) : (
+                <button type="button" className="text-xs text-pm-muted underline" onClick={() => setOther(true)}>
+                  Other agent…
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-pm-border px-4 py-3">
@@ -258,6 +324,7 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
       {reviewing && (
         <PackSheet
           api={api}
+          onChanged={() => void refresh()}
           onClose={() => setReviewing(false)}
           onDone={(text, done) => {
             setReviewing(false);

@@ -69,19 +69,36 @@ export function lapsedNote(agent: RunModeAgent): string {
     : '';
 }
 
-// "Allow hidden helpers": off by default. While it is off, an agent's `headless: true` does not hide a helper:
-// the helper is shown in a pane. Backed by `hidden_helpers_get/set` (the desktop window only).
-export interface HiddenHelpersView {
-  allowed: boolean;
+// "Helper agents": whether the helpers an agent starts are shown in a pane. Backed by `helper_visibility_get/set`
+// (the desktop window only; neither an agent nor a phone has a route to it).
+export type HelperVisibility = 'always_show' | 'agent_chooses' | 'always_background';
+
+export interface HelperVisibilityView {
+  mode: HelperVisibility;
 }
 
-export const tauriHiddenHelpersApi = {
-  get: () => call<HiddenHelpersView>('hidden_helpers_get'),
-  set: (allowed: boolean) => call<HiddenHelpersView>('hidden_helpers_set', { allowed }),
+export interface KeepOpenView {
+  on: boolean;
+}
+
+export const tauriHelperAgentsApi = {
+  get: () => call<HelperVisibilityView>('helper_visibility_get'),
+  set: (mode: HelperVisibility) => call<HelperVisibilityView>('helper_visibility_set', { mode }),
+  getKeepOpen: () => call<KeepOpenView>('keep_helpers_open_get'),
+  setKeepOpen: (on: boolean) => call<KeepOpenView>('keep_helpers_open_set', { on }),
 };
 
-export type HiddenHelpersApi = typeof tauriHiddenHelpersApi;
+export type HelperAgentsApi = typeof tauriHelperAgentsApi;
 
-export const HIDDEN_HELPERS_LABEL = 'Allow hidden helpers';
-export const HIDDEN_HELPERS_HINT =
-  'Off: a helper an agent starts always shows up as a pane you can watch, even if the agent asks to hide it. On: an agent may run a helper with no pane; it then appears in your Inbox.';
+export const HELPER_AGENTS_LABEL = 'Helper agents';
+export const HELPER_AGENTS_HINT =
+  'Always show them: helpers open in their own pane even if the agent asks for background mode. Let the agent choose: the agent decides. Always run in the background: helpers run with no pane and appear in your Inbox.';
+export const HELPER_CHOICES: { value: HelperVisibility; label: string }[] = [
+  { value: 'always_show', label: 'Always show them' },
+  { value: 'agent_chooses', label: 'Let the agent choose' },
+  { value: 'always_background', label: 'Always run in the background' },
+];
+
+export const KEEP_OPEN_LABEL = 'Keep helpers open when they finish';
+export const KEEP_OPEN_HINT =
+  'On: a finished helper stays open so you can read it and ask it more. Off: its pane closes when the work is done unless the agent asks to keep it.';

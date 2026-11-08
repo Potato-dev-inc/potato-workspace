@@ -6,7 +6,7 @@ import { AgentLaneRows } from '../blocks/AgentLaneRows';
 import { AgentVersions } from '../blocks/AgentVersions';
 import { CHAT_ADDONS_LABEL, ChatAddonRows } from '../blocks/ChatAddonRows';
 import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings';
-import { HiddenHelpersToggle } from '../blocks/HiddenHelpers';
+import { HelperAgentsChoice, KeepHelpersOpenToggle } from '../blocks/HelperAgents';
 import { PreloadSettings } from '../blocks/PreloadSettings';
 import { useEffect, useState } from 'react';
 import { agentHealthApi, type AgentHealth } from '../../../lib/agent-health';
@@ -124,12 +124,20 @@ export const agentsRows: RowDef[] = [
     ),
   },
   {
-    id: 'hidden-helpers',
-    label: 'Allow hidden helpers',
-    hint: 'Off: every helper is a pane you can watch. On: an agent may run one with no pane.',
-    keywords: 'hidden helper helpers headless background invisible no window pane subagent sub-agent agent hide show visible watch inbox',
+    id: 'helper-agents',
+    label: 'Helper agents',
+    hint: 'Choose whether helpers an agent starts are shown in a pane or run in the background.',
+    keywords: 'hidden helper helpers headless background invisible no window pane subagent sub-agent agent hide show visible watch inbox always show choose',
     group: 'Helpers',
-    render: (env) => <HiddenHelpersToggle onSaved={env.markSaved} />,
+    render: (env) => <HelperAgentsChoice onSaved={env.markSaved} />,
+  },
+  {
+    id: 'keep-helpers-open',
+    label: 'Keep helpers open when they finish',
+    hint: 'On: a finished helper stays open so you can read it and ask it more.',
+    keywords: 'keep open close closed pane finish finished done helper helpers subagent sub-agent follow-up followup release',
+    group: 'Helpers',
+    render: (env) => <KeepHelpersOpenToggle onSaved={env.markSaved} />,
   },
   {
     id: 'versions',

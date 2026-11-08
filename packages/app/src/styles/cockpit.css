@@ -318,6 +318,18 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.cockpit .ck-row-pin {
+  display: inline-flex;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  color: var(--label-3);
+}
+.cockpit .ck-row-pin svg {
+  width: 12px;
+  height: 12px;
+}
 .cockpit .ck-count {
   min-width: 18px;
   height: 18px;

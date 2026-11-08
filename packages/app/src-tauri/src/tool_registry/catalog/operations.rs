@@ -30,7 +30,7 @@ pub(super) fn tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "delegate_work",
-            description: "Create an asynchronous agent operation in a visible pane (its own pop-out window by default; an agent with no visible mode, or a pane that fails before the turn starts, runs headless instead). Returns an operation_id; use wait_for_operation to wait for revision-based progress, get_operation to inspect state, or cancel_operation to request cancellation. This call creates work and is not automatically retried.",
+            description: "Create an asynchronous agent operation in a visible pane (its own pop-out window by default, kept open when it finishes unless the person turned that off in Settings > Agents > Helper agents; an agent with no visible mode, or a pane that fails before the turn starts, runs headless instead). Returns an operation_id; use wait_for_operation to wait for revision-based progress, get_operation to inspect state, or cancel_operation to request cancellation. This call creates work and is not automatically retried.",
             input_schema: object_schema(json!({
                 "project_path": { "type": "string" },
                 "task": { "type": "string", "description": "Work to delegate" },
