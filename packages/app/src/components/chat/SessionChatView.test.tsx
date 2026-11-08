@@ -137,7 +137,7 @@ describe('SessionChatView ready', () => {
     expect(text()).toContain('List the files');
     expect(text()).toContain('Listing now.');
     expect(text()).toContain('Two entries.');
-    const agentText = [...host.querySelectorAll('div')].find((d) => d.textContent === 'Listing now.');
+    const agentText = [...host.querySelectorAll('div')].filter((d) => d.textContent === 'Listing now.').pop();
     expect(agentText?.className).toContain('whitespace-pre-wrap');
   });
 
@@ -153,7 +153,7 @@ describe('SessionChatView ready', () => {
     const row = host.querySelector<HTMLButtonElement>('.ck-chat-row button')!;
     expect(row.textContent).toContain('Bash');
     expect(row.textContent).toContain('ls -la /work');
-    expect(row.textContent).toContain('ok');
+    expect(row.textContent).toContain('Done');
     expect(text()).not.toContain('README.md');
 
     act(() => row.click());
@@ -178,7 +178,7 @@ describe('SessionChatView ready', () => {
     expect(host.querySelector('[aria-label="Working"]')).not.toBeNull();
     act(() => line.click());
     const row = host.querySelector<HTMLButtonElement>('.ck-chat-row button')!;
-    expect(row.textContent).toContain('running');
+    expect(row.textContent).toContain('Running');
     act(() => row.click());
     expect(host.querySelector('[data-testid="tool-output"]')?.textContent).toBe('No output yet.');
   });

@@ -127,7 +127,7 @@ fn item_line(item: &ChatItem) -> Option<Value> {
         ChatItem::ToolResult { ok, output, .. } => Some(json!({ "kind": "tool_result", "ok": ok, "text": cut(output, 200) })),
         ChatItem::TurnEnd { outcome, duration_ms, .. } => Some(json!({ "kind": "turn_end", "outcome": serde_json::to_value(outcome).unwrap_or(Value::Null), "duration_ms": duration_ms })),
         ChatItem::Notice { text, notice_kind, .. } => Some(json!({ "kind": "notice", "notice_kind": notice_kind, "text": cut(text, 300) })),
-        ChatItem::Plan { .. } | ChatItem::Usage { .. } | ChatItem::Session { .. } => None,
+        ChatItem::Plan { .. } | ChatItem::Usage { .. } | ChatItem::Session { .. } | ChatItem::Thinking { .. } => None,
     }
 }
 

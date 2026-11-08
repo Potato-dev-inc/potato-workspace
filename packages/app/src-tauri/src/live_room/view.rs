@@ -125,7 +125,7 @@ pub fn to_live(item: &ChatItem, pane_key: &str, next_id: &mut u64, ctx: &RedactC
             "pr" => LiveItem::Note { id, pane, text: PR_NOTE.to_string() },
             _ => return None,
         },
-        ChatItem::Usage { .. } | ChatItem::Session { .. } => return None,
+        ChatItem::Usage { .. } | ChatItem::Session { .. } | ChatItem::Thinking { .. } => return None,
     };
     *next_id += 1;
     Some(out)

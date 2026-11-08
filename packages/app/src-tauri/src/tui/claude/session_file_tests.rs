@@ -485,6 +485,7 @@ fn kind_name(item: &ChatItem) -> &'static str {
         ChatItem::Session { .. } => "Session",
         ChatItem::Plan { .. } => "Plan",
         ChatItem::Notice { .. } => "Notice",
+        ChatItem::Thinking { .. } => "Thinking",
     }
 }
 

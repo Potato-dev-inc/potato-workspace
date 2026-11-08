@@ -17,6 +17,9 @@ import { HelperRow } from './HelperRow';
 import { PaneHelperRows } from './PaneHelperRows';
 import { placeHelpers, type ChatHelper } from '../../lib/chat-helpers';
 import { NoticeLine } from './NoticeLine';
+import { PermissionTrace } from './PermissionTrace';
+import { ResponseActions } from './ResponseActions';
+import { ThinkingBlock } from './ThinkingBlock';
 import { RememberSelection } from './RememberSelection';
 import { currentPlan, PlanCard } from './PlanCard';
 import { ToolRow } from './ToolRow';
@@ -111,11 +114,19 @@ const JUMP_WAIT_MS = 10_000;
 
 const SUMMARY_NOTE = 'Summary: your messages, final answers and activity lines.';
 
-function TextStep({ step, markdown, mode }: { step: Extract<TurnStep, { kind: 'text' }>; markdown: boolean; mode: ChatViewMode }) {
+function TextStep({ step, markdown, mode, actions }: { step: Extract<TurnStep, { kind: 'text' }>; markdown: boolean; mode: ChatViewMode; actions?: { onRetry?: () => Promise<string | null> } }) {
+  const bodyRef = useRef<HTMLDivElement>(null);
   // Summary keeps only the agent's final answers; the rest of its talk is folded away with the rows.
   if (mode === 'summary' && !step.item.finalAnswer) return null;
-  if (markdown) return <ChatMarkdown text={step.item.text} />;
-  return <div className="whitespace-pre-wrap break-words ck-chat-text">{step.item.text}</div>;
+  const body = markdown ? <ChatMarkdown text={step.item.text} /> : <div className="whitespace-pre-wrap break-words ck-chat-text">{step.item.text}</div>;
+  if (!actions) return body;
+  // A finished reply: its text, and under it the quiet row (Copy, and Retry on the newest turn).
+  return (
+    <div className="ck-msg">
+      <div ref={bodyRef}>{body}</div>
+      <ResponseActions text={step.item.text} targetRef={bodyRef} onRetry={actions.onRetry} />
+    </div>
+  );
 }
 
 function TurnEndDivider({ turn, clip, branch, endings }: { turn: ChatTurn; clip?: TurnClip; branch?: TurnBranch; endings?: EndingActions }) {
@@ -154,6 +165,10 @@ function TurnView({ turn, fromScreen, markdown, mode, clip, branch, helpers, onO
   const verbose = mode === 'verbose';
   // A turn with no end yet is still running: its rows without a result are live.
   const live = turn.end === null;
+  // What is last in the turn is still being written while the turn runs; everything before it is finished.
+  const lastStepId = turn.steps[turn.steps.length - 1]?.id;
+  let lastTextId: string | null = null;
+  for (const s of turn.steps) if (s.kind === 'text') lastTextId = s.id;
   return (
     <section className="space-y-1.5 ck-chat-turn" data-turn-id={turn.id}>
       {turn.user && (
@@ -179,9 +194,16 @@ function TurnView({ turn, fromScreen, markdown, mode, clip, branch, helpers, onO
           );
         }
         if (step.kind === 'notice') {
-          return mode === 'summary' ? null : <NoticeLine key={step.id} text={step.item.text} kind={step.item.noticeKind} url={step.item.url} />;
+          if (mode === 'summary') return null;
+          if (step.item.noticeKind === 'permission') return <PermissionTrace key={step.id} text={step.item.text} />;
+          return <NoticeLine key={step.id} text={step.item.text} kind={step.item.noticeKind} url={step.item.url} />;
         }
-        return <TextStep key={step.id} step={step} markdown={markdown} mode={mode} />;
+        if (step.kind === 'thinking') {
+          return mode === 'summary' ? null : <ThinkingBlock key={step.id} text={step.item.text} durationMs={step.item.durationMs} streaming={live && step.id === lastStepId} />;
+        }
+        const finished = !fromScreen && (!live || step.id !== lastStepId);
+        const retry = endings?.onRetry && turn.end && step.id === lastTextId ? { onRetry: endings.onRetry } : {};
+        return <TextStep key={step.id} step={step} markdown={markdown} mode={mode} actions={finished ? retry : undefined} />;
       })}
       {helpers && helpers.length > 0 && <PaneHelperRows helpers={helpers} onOpen={onOpenPane} />}
       {turn.end && <TurnEndDivider turn={turn} clip={clip} branch={branch} endings={endings} />}

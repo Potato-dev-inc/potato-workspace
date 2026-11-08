@@ -716,7 +716,11 @@ impl TuiProfile for DeclarativeProfile {
     }
 
     fn mcp_host(&self) -> Option<schema::McpHostTable> {
-        self.def.mcp_host.clone()
+        self.def.mcp_host.clone().or_else(|| super::hosts_overlay::mcp_host_for(&self.def.agent.id))
+    }
+
+    fn skills_host(&self) -> Option<crate::agent_pack::SkillsHostTable> {
+        self.def.skills_host.clone().or_else(|| super::hosts_overlay::skills_host_for(&self.def.agent.id))
     }
 
     fn hook_scheme(&self) -> Option<super::hooks::HooksTable> {

@@ -29,6 +29,7 @@ fn kinds(items: &[ChatItem]) -> Vec<&'static str> {
             Session { .. } => "session",
             Plan { .. } => "plan",
             Notice { .. } => "notice",
+            Thinking { .. } => "thinking",
         })
         .collect()
 }

@@ -10,6 +10,7 @@ pub mod bundled;
 pub mod check;
 pub mod fingerprint;
 pub mod hooks;
+pub mod hosts_overlay;
 pub mod loader;
 pub mod output;
 pub mod removal;

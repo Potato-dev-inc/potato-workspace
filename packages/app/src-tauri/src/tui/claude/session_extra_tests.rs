@@ -34,6 +34,7 @@ fn kinds(items: &[ChatItem]) -> Vec<&'static str> {
             ChatItem::Session { .. } => "session",
             ChatItem::Plan { .. } => "plan",
             ChatItem::Notice { .. } => "notice",
+            ChatItem::Thinking { .. } => "thinking",
         })
         .collect()
 }

@@ -15,6 +15,8 @@ import {
 import { errText } from '../../../lib/toolbelt';
 import { btn, btnPrimary, overlay, sheet } from '../toolbelt/styles';
 
+const UNSUPPORTED_REASON = "Potato Workspace doesn't know where this agent keeps its settings yet";
+
 const FILE_TEXT: Record<FileKind, string> = { add: 'new', update: 'newer version', replace: 'replaces your file (kept for Undo)', unchanged: 'up to date' };
 
 function names(row: PackRow): string {
@@ -62,6 +64,7 @@ export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose
   const grouped = report ? groupAgents(report.agents) : [];
   const rows = visibleRows(grouped);
   const absent = grouped.filter((r) => !rows.includes(r));
+  const unsupported = report?.unsupported ?? [];
   const pending = pendingCount(rows);
 
   const install = async () => {
@@ -156,6 +159,11 @@ export function PackSheet({ api, onClose, onDone }: { api: AgentPackApi; onClose
               Not on this computer: {absent.map(names).join(', ')}.
             </p>
           )}
+          {unsupported.map((u) => (
+            <p key={u.id} className="text-xs leading-5 text-pm-muted" data-testid="pack-unsupported">
+              Can't set up yet: {u.label} — {u.reason?.trim() ? u.reason.trim().replace(/\.$/, '') : UNSUPPORTED_REASON}.
+            </p>
+          ))}
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-pm-border px-4 py-3">
@@ -180,6 +188,7 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
   const [reviewing, setReviewing] = useState(false);
   const [recorded, setRecorded] = useState(0);
   const [found, setFound] = useState<string[] | null>(null);
+  const [cantSetUp, setCantSetUp] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
@@ -189,6 +198,7 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
       const r = await api.preview();
       setRecorded(r.recorded);
       setFound(visibleRows(groupAgents(r.agents)).filter((x) => x.installed).map(names));
+      setCantSetUp((r.unsupported ?? []).filter((u) => u.installed).map((u) => u.label));
       setError(null);
     } catch (e) {
       setError(errText(e));
@@ -238,6 +248,7 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
         </div>
       </div>
       {found && <p className="mt-3 text-xs leading-5 text-pm-muted">{found.length > 0 ? `Found: ${found.join(', ')}.` : 'No supported agents found yet.'}</p>}
+      {cantSetUp.length > 0 && <p className="mt-1 text-xs leading-5 text-pm-muted">Can't set up: {cantSetUp.join(', ')}.</p>}
       {error && (
         <p role="alert" className="mt-3 rounded-lg border border-pm-border bg-pm-bg px-3 py-2 text-xs leading-5 text-pm-text">
           {error}

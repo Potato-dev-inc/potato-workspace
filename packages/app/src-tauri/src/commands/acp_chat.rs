@@ -133,6 +133,15 @@ pub async fn acp_chat_set_agent_answering(pane_id: String, allowed: bool) -> Res
     Ok(session.state())
 }
 
+/// "Don't ask again in this chat" for one kind of tool call (`on`), or "Turn back on". In memory for this chat only.
+/// Kinds that delete or move things, and kinds the agent did not name, are refused.
+#[tauri::command]
+pub async fn acp_chat_set_auto_allow(pane_id: String, kind: String, on: bool) -> Result<Value, String> {
+    let session = chat::get(&pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
+    session.set_auto_allow(&kind, on)?;
+    Ok(session.state())
+}
+
 /// "I'm signed in — try again": sends the message the agent refused for want of a sign-in. Fails with the agent's own
 /// reason (and the sign-in card stays) when it still wants one.
 #[tauri::command]

@@ -1,9 +1,12 @@
-// The open part of a tool row: the files it touched as chips, then an edit's diff, a command, or the input as JSON,
+// The open part of a tool card: the files it touched as chips, then an edit's diff, a command, or the input as JSON,
 // then the output. Agent text and tool output are data: shown as plain text only.
+import { useRef } from 'react';
 import type { ToolCallItem, ToolResultItem, ToolStep } from '../../lib/sessionChatModel';
+import '../../styles/chat-agent-cards.css';
 import { kindOfCall } from './chatActivity';
-import { editPairs, lineDiff, patchLines, patchOf, type DiffLine, type DiffOp } from './chatDiff';
+import { diffHunks, diffStats, editPairs, lineDiff, patchLines, patchOf, patchText, type DiffLine, type DiffOp } from './chatDiff';
 import { baseName } from './chatFormat';
+import { useCopy } from './useCopy';
 
 /** The diff of an edit or write call, or null when its input holds no old or new text. */
 export function diffLinesOf(call: ToolCallItem): DiffLine[] | null {
@@ -35,7 +38,7 @@ export function jsonOf(value: unknown): string {
 const GUTTER: Record<DiffOp, string> = { same: ' ', add: '+', del: '-', head: '' };
 
 export function DetailLabel({ children }: { children: string }) {
-  return <p className="mt-1 text-[10px] uppercase tracking-wide text-pm-muted ck-chat-detail-label">{children}</p>;
+  return <p className="ck-chat-detail-label ck-agc-label">{children}</p>;
 }
 
 /** Paths as chips: the file name shows, the full path is the tooltip. */
@@ -53,18 +56,49 @@ export function PathChips({ paths }: { paths: readonly string[] }) {
   );
 }
 
-/** A unified-style diff: a `+` or `-` gutter, added lines filled and bold, removed lines dimmed and struck through. */
-export function DiffBlock({ lines }: { lines: readonly DiffLine[] }) {
+/** A copy button: "Copy", then "Copied" (the clipboard took it) or "Selected" (the text is selected to copy by hand). */
+function CopyButton({ text, target, label = 'Copy' }: { text: string; target?: () => Element | null; label?: string }) {
+  const { state, copy } = useCopy();
   return (
-    <div className="max-h-64 overflow-auto rounded border border-pm-border bg-pm-panel py-1 font-mono text-[11px] ck-chat-diff" data-testid="tool-diff">
-      {lines.map((line, index) => (
-        <div key={index} className={`flex min-w-max ck-chat-diff-line ck-chat-diff-line--${line.op}`}>
-          <span aria-hidden="true" className="w-4 shrink-0 select-none text-center ck-chat-diff-gutter">
-            {GUTTER[line.op]}
-          </span>
-          <span className="whitespace-pre pr-2 ck-chat-diff-text">{line.text || ' '}</span>
-        </div>
-      ))}
+    <button type="button" className="ck-agc-copy" data-copied={state !== 'idle' || undefined} onClick={() => void copy(text, target?.() ?? null)}>
+      {state === 'copied' ? 'Copied' : state === 'selected' ? 'Selected' : label}
+    </button>
+  );
+}
+
+/**
+ * An edit as a file card: the file with "+12 -3", then the changes by hunk with a `+` or `-` gutter, and Copy patch.
+ * The agent already made the change, so there is nothing to accept or reject here.
+ */
+export function DiffBlock({ lines, path }: { lines: readonly DiffLine[]; path?: string | null }) {
+  const { added, removed } = diffStats(lines);
+  const hunks = diffHunks(lines);
+  return (
+    <div className="ck-agc-diff" data-testid="tool-diff">
+      <div className="ck-agc-diff-head">
+        <span className="ck-agc-diff-path" title={path ?? undefined}>
+          {path ? baseName(path) : 'Changes'}
+        </span>
+        <span className="ck-agc-diff-stat">+{added}</span>
+        <span className="ck-agc-diff-stat">{'−'}{removed}</span>
+        <span className="ck-agc-grow" />
+        <CopyButton text={patchText(lines, path)} label="Copy patch" />
+      </div>
+      <div className="ck-agc-diff-scroll">
+        {hunks.map((hunk, h) => (
+          <div key={h} className="ck-agc-hunk">
+            {hunk.head !== null && <div className="ck-agc-hunk-head ck-chat-diff-line--head">{hunk.head}</div>}
+            {hunk.lines.map((line, index) => (
+              <div key={index} className={`ck-agc-line ck-chat-diff-line--${line.op}`}>
+                <span aria-hidden="true" className="ck-agc-gutter ck-chat-diff-gutter">
+                  {GUTTER[line.op]}
+                </span>
+                <span className="ck-agc-line-text">{line.text || ' '}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -74,47 +108,50 @@ export function CodeBlock({ label, text }: { label: string; text: string }) {
   return (
     <>
       <DetailLabel>{label}</DetailLabel>
-      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded border border-pm-border bg-pm-panel p-1.5 font-mono text-[11px] text-pm-muted ck-chat-output">
-        {text}
-      </pre>
+      <pre className="ck-agc-code max-h-48 overflow-auto whitespace-pre-wrap break-all">{text}</pre>
     </>
   );
 }
 
-/** The tool's output (or that it has none yet), scrollable with a cap. */
-export function OutputBlock({ result }: { result: ToolResultItem | null }) {
+/** The tool's output (or that it has none yet) in a terminal look, scrollable with a cap, with a Copy button. */
+export function OutputBlock({ result, failed = false }: { result: ToolResultItem | null; failed?: boolean }) {
+  const ref = useRef<HTMLPreElement>(null);
   return (
     <>
       <DetailLabel>Output</DetailLabel>
-      <pre
-        data-testid="tool-output"
-        className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded border border-pm-border bg-pm-panel p-1.5 font-mono text-[11px] text-pm-muted ck-chat-output"
-      >
-        {result ? result.output : 'No output yet.'}
-      </pre>
+      <div className="ck-agc-term" data-failed={failed || undefined}>
+        <div className="ck-agc-term-head">
+          <span>{failed ? 'Terminal · failed' : 'Terminal'}</span>
+          <span className="ck-agc-grow" />
+          {result && result.output !== '' && <CopyButton text={result.output} target={() => ref.current} />}
+        </div>
+        <pre ref={ref} data-testid="tool-output" tabIndex={0} className="ck-agc-term-body max-h-48 overflow-auto whitespace-pre-wrap break-all">
+          {result ? result.output : 'No output yet.'}
+        </pre>
+      </div>
     </>
   );
 }
 
-export function ToolDetail({ step }: { step: ToolStep }) {
+export function ToolDetail({ step, failed = false }: { step: ToolStep; failed?: boolean }) {
   const { call, result } = step;
   const paths = [...new Set((call.paths ?? []).filter((path) => typeof path === 'string' && path !== ''))];
   const diff = diffLinesOf(call);
   const command = kindOfCall(call) === 'run' ? commandOf(call.input) : null;
   return (
-    <div className="mt-0.5 space-y-1 pb-1 ck-chat-detail">
+    <div className="space-y-1 ck-chat-detail ck-agc-detail">
       {paths.length > 0 && <PathChips paths={paths} />}
       {diff ? (
         <>
           <DetailLabel>Changes</DetailLabel>
-          <DiffBlock lines={diff} />
+          <DiffBlock lines={diff} path={paths[0] ?? null} />
         </>
       ) : command !== null ? (
         <CodeBlock label="Command" text={command} />
       ) : call.input != null ? (
         <CodeBlock label="Input" text={jsonOf(call.input)} />
       ) : null}
-      <OutputBlock result={result} />
+      <OutputBlock result={result} failed={failed} />
     </div>
   );
 }

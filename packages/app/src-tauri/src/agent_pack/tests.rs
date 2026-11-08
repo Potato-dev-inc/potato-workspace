@@ -482,3 +482,149 @@ fn the_record_survives_a_restart() {
     assert_eq!(u["removed"].as_array().unwrap().len(), 5, "four skills and the created config");
     assert!(tree(&home).is_empty());
 }
+
+mod declarative_agents {
+    use super::*;
+    use crate::tui::declarative::{parse_definition, validate, DeclarativeProfile, Source, ValidationContext};
+    use crate::tui::TuiProfile;
+
+    const DEF: &str = r##"schema_version = 1
+[agent]
+id = "fakehost"
+label = "Fake Host"
+[binary]
+names = ["fakehost"]
+[features]
+dispatchable = false
+not_dispatchable_reason = "test"
+[mcp_host]
+config_path = "~/.fakehost/mcp.json"
+format = "json"
+key_path = "mcpServers.potato-workspace"
+[mcp_host.entry]
+command = "{command}"
+args = "{args}"
+env = "{env}"
+[skills_host]
+dir = "~/.fakehost/skills"
+"##;
+
+    fn errors(text: &str) -> Vec<String> {
+        let def = parse_definition(text).expect("parse");
+        let ctx = ValidationContext { source: Source::User, code_ids: &["claude"], raw_len: text.len() };
+        validate(&def, &ctx).into_iter().map(|e| e.path).collect()
+    }
+
+    #[test]
+    fn skills_host_parses_validates_and_reaches_the_profile() {
+        assert!(errors(DEF).iter().all(|p| !p.starts_with("skills_host")));
+        let def = parse_definition(DEF).unwrap();
+        assert_eq!(def.skills_host.as_ref().unwrap().dir, "~/.fakehost/skills");
+        let profile = DeclarativeProfile::new(def).unwrap();
+        assert_eq!(profile.skills_host().unwrap().dir, "~/.fakehost/skills");
+        assert!(errors(&DEF.replace("~/.fakehost/skills", "~/../x")).contains(&"skills_host.dir".to_string()));
+        assert!(errors(&DEF.replace("~/.fakehost/skills", "/etc/skills")).contains(&"skills_host.dir".to_string()));
+        assert!(parse_definition(&DEF.replace("dir = ", "folder = ")).is_err());
+    }
+
+    #[test]
+    fn a_declarative_agent_with_both_hosts_is_in_the_plan_and_the_unsupported_one_says_why() {
+        let profile = DeclarativeProfile::new(parse_definition(DEF).unwrap()).unwrap();
+        let home = temp("decl");
+        let both = AgentSpec { id: "fakehost".into(), label: "Fake Host".into(), installed: true, mcp: profile.mcp_host(), skills: profile.skills_host() };
+        let bare = AgentSpec { id: "bare".into(), label: "Bare Agent".into(), installed: true, mcp: None, skills: None };
+        let v = service::call(&env(vec![both, bare], &home), "apply").unwrap();
+        assert_eq!(v["agents"][0]["id"], "fakehost");
+        assert_eq!(v["agents"][0]["skills"]["written"], true);
+        assert_eq!(v["agents"][0]["mcp"]["written"], true);
+        assert!(home.join(".fakehost/skills/potato-workspace/SKILL.md").is_file());
+        let cfg = read(&home.join(".fakehost/mcp.json"));
+        assert!(cfg.contains("potato-workspace"), "{cfg}");
+        assert_eq!(v["unsupported"][0]["id"], "bare");
+        assert_eq!(v["unsupported"][0]["label"], "Bare Agent");
+        assert!(!v["unsupported"][0]["reason"].as_str().unwrap().is_empty());
+    }
+
+    #[test]
+    fn store_definitions_may_not_carry_either_host() {
+        let only_skills = parse_definition(&format!("{}[skills_host]\ndir = \"~/.x/skills\"\n", DEF.split("[mcp_host]").next().unwrap())).unwrap();
+        assert!(crate::agent_store::check::forbidden_in_store(&only_skills).is_some_and(|r| r.contains("skills_host")));
+        let both = parse_definition(DEF).unwrap();
+        assert!(crate::agent_store::check::forbidden_in_store(&both).is_some_and(|r| r.contains("mcp_host")));
+    }
+
+    const CATALOG: &str = "catalog/agents";
+
+    fn catalog_text(id: &str) -> Option<String> {
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(CATALOG).join(id).join("definition.toml")).ok()
+    }
+
+    #[test]
+    fn the_trusted_overlay_parses_and_every_entry_validates() {
+        use crate::tui::declarative::hosts_overlay;
+        let text = include_str!("../tui/declarative/agent-hosts.toml");
+        assert_eq!(hosts_overlay::problems(text), Vec::<String>::new());
+        let ids = hosts_overlay::ids();
+        assert!(ids.len() >= 8, "{ids:?}");
+        // Every overlay id is a catalog agent (the overlay is for agents that have a definition).
+        for id in &ids {
+            assert!(catalog_text(id).is_some(), "overlay id {id} has no catalog definition");
+        }
+        // A bad entry is reported, not accepted.
+        let bad = text.replace("~/.gemini/skills", "~/../skills");
+        assert!(!hosts_overlay::problems(&bad).is_empty());
+        let bad = format!("{text}
+[nobody.mcp_host]
+config_path = \"~/x.json\"
+format = \"json\"
+key_path = \"a b\"
+[nobody.mcp_host.entry]
+command = \"{{nope}}\"
+");
+        assert!(!hosts_overlay::problems(&bad).is_empty());
+    }
+
+    #[test]
+    fn a_store_like_agent_without_hosts_gets_them_from_the_overlay_and_is_planned() {
+        use crate::tui::declarative::hosts_overlay;
+        let home = temp("overlay");
+        let mut specs = Vec::new();
+        for id in hosts_overlay::ids() {
+            let def = parse_definition(&catalog_text(&id).unwrap()).unwrap();
+            assert!(def.mcp_host.is_none() && def.skills_host.is_none(), "{id}: the catalog stays host-free");
+            assert!(crate::agent_store::check::forbidden_in_store(&def).is_none());
+            let p = DeclarativeProfile::new(def).unwrap();
+            specs.push(AgentSpec { id: id.clone(), label: id.clone(), installed: true, mcp: p.mcp_host(), skills: p.skills_host() });
+        }
+        let v = service::call(&env(specs, &home), "apply").unwrap();
+        let rows = v["agents"].as_array().unwrap();
+        let un: Vec<_> = v["unsupported"].as_array().unwrap().iter().map(|u| u["id"].as_str().unwrap().to_string()).collect();
+        assert!(un.is_empty(), "{un:?}");
+        assert_eq!(rows.len(), hosts_overlay::ids().len());
+        let cfg: Value = serde_json::from_str(&read(&home.join(".copilot/mcp-config.json"))).unwrap();
+        let entry = &cfg["mcpServers"]["potato-workspace"];
+        assert_eq!(entry["type"], "local");
+        assert_eq!(entry["tools"][0], "*");
+        assert!(entry["command"].is_string() && entry["args"].is_array());
+        assert!(home.join(".gemini/skills/potato-workspace/SKILL.md").is_file());
+        assert!(home.join(".vibe/skills/potato-workspace/SKILL.md").is_file());
+        assert!(!home.join(".vibe/mcp.json").exists());
+        assert!(read(&home.join(".kiro/settings/mcp.json")).contains("potato-workspace"));
+    }
+
+    #[test]
+    fn a_definitions_own_hosts_win_over_the_overlay_and_store_still_refuses_hosts() {
+        // Same id as an overlay agent, but the definition declares its own hosts.
+        let text = DEF.replace("id = \"fakehost\"", "id = \"gemini\"");
+        let p = DeclarativeProfile::new(parse_definition(&text).unwrap()).unwrap();
+        assert_eq!(p.skills_host().unwrap().dir, "~/.fakehost/skills");
+        assert_eq!(p.mcp_host().unwrap().config_path, "~/.fakehost/mcp.json");
+        // A host-less definition for an id the overlay does not know gets nothing.
+        let none = DEF.split("[mcp_host]").next().unwrap().replace("id = \"fakehost\"", "id = \"unlisted\"");
+        let p = DeclarativeProfile::new(parse_definition(&none).unwrap()).unwrap();
+        assert!(p.mcp_host().is_none() && p.skills_host().is_none());
+        // The store check still refuses a definition that carries hosts, whatever the overlay holds.
+        let carrying = parse_definition(&text).unwrap();
+        assert!(crate::agent_store::check::forbidden_in_store(&carrying).is_some());
+    }
+}

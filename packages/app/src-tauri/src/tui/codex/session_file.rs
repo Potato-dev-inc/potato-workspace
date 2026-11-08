@@ -794,6 +794,7 @@ mod tests {
             ChatItem::Usage { .. } => "Usage",
             ChatItem::Session { .. } => "Session",
             ChatItem::Plan { .. } => "Plan",
+            ChatItem::Thinking { .. } => "Thinking",
             ChatItem::Notice { .. } => "Notice",
         }
     }

@@ -115,7 +115,7 @@ describe('pane view of a chat session over ACP', () => {
     };
     await act(async () => root.render(<PaneView c={cockpit('acp', 'waiting_input', [question])} paneId="p1" />));
     await flush();
-    expect(host.textContent).toContain('Codex asks permission: Write notes.txt');
+    expect(host.textContent).toContain('Write notes.txt');
     expect([...host.querySelectorAll('button')].some((b) => b.textContent === 'Allow Once')).toBe(true);
     expect(host.textContent).not.toContain('Looks stuck');
   });

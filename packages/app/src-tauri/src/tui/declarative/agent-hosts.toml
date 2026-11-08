@@ -1,0 +1,86 @@
+# Trusted hosts overlay, compiled into the app (never read from a user or store folder).
+# For an agent id whose own definition declares no [mcp_host] / [skills_host] (catalog agents may not,
+# agent_store/check.rs refuses them there), the registry takes them from here. Same schema as a
+# definition's tables; hosts_overlay.rs validates every entry in a test. Sources: each agent's docs.
+
+[gemini.mcp_host]
+config_path = "~/.gemini/settings.json"
+format = "json"
+key_path = "mcpServers.potato-workspace"
+[gemini.mcp_host.entry]
+command = "{command}"
+args = "{args}"
+env = "{env}"
+[gemini.skills_host]
+dir = "~/.gemini/skills"
+
+[qwen.mcp_host]
+config_path = "~/.qwen/settings.json"
+format = "json"
+key_path = "mcpServers.potato-workspace"
+[qwen.mcp_host.entry]
+command = "{command}"
+args = "{args}"
+env = "{env}"
+[qwen.skills_host]
+dir = "~/.qwen/skills"
+
+[copilot.mcp_host]
+config_path = "~/.copilot/mcp-config.json"
+format = "json"
+key_path = "mcpServers.potato-workspace"
+[copilot.mcp_host.entry]
+type = "local"
+tools = ["*"]
+command = "{command}"
+args = "{args}"
+env = "{env}"
+[copilot.skills_host]
+dir = "~/.copilot/skills"
+
+[droid.mcp_host]
+config_path = "~/.factory/mcp.json"
+format = "json"
+key_path = "mcpServers.potato-workspace"
+[droid.mcp_host.entry]
+command = "{command}"
+args = "{args}"
+env = "{env}"
+[droid.skills_host]
+dir = "~/.factory/skills"
+
+[auggie.mcp_host]
+config_path = "~/.augment/settings.json"
+format = "json"
+key_path = "mcpServers.potato-workspace"
+[auggie.mcp_host.entry]
+command = "{command}"
+args = "{args}"
+env = "{env}"
+[auggie.skills_host]
+dir = "~/.augment/skills"
+
+[kimi.mcp_host]
+config_path = "~/.kimi-code/mcp.json"
+format = "json"
+key_path = "mcpServers.potato-workspace"
+[kimi.mcp_host.entry]
+command = "{command}"
+args = "{args}"
+env = "{env}"
+[kimi.skills_host]
+dir = "~/.kimi-code/skills"
+
+[kiro.mcp_host]
+config_path = "~/.kiro/settings/mcp.json"
+format = "json"
+key_path = "mcpServers.potato-workspace"
+[kiro.mcp_host.entry]
+command = "{command}"
+args = "{args}"
+env = "{env}"
+[kiro.skills_host]
+dir = "~/.kiro/skills"
+
+[mistral_vibe.skills_host]
+dir = "~/.vibe/skills"

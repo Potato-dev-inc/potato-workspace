@@ -667,6 +667,7 @@ pub fn run() {
             commands::acp_chat_state,
             commands::acp_chat_set_config,
             commands::acp_chat_set_agent_answering,
+            commands::acp_chat_set_auto_allow,
             commands::acp_conversation_of_terminal,
             commands::acp_chat_retry_sign_in,
             commands::acp_addon_status,

@@ -99,6 +99,8 @@ pub struct Unsupported {
     pub id: String,
     pub label: String,
     pub installed: bool,
+    /// Plain-English why nothing was set up for this agent.
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -490,7 +492,12 @@ fn report(specs: &[AgentSpec], plan: &Plan, rec: &Record, dry_run: bool) -> Pack
             backup: g.backup.clone(),
         });
         if skills.is_none() && mcp.is_none() {
-            unsupported.push(Unsupported { id: s.id.clone(), label: s.label.clone(), installed: s.installed });
+            unsupported.push(Unsupported {
+                id: s.id.clone(),
+                label: s.label.clone(),
+                installed: s.installed,
+                reason: "No MCP settings location or skills folder is known for this agent yet.".to_string(),
+            });
             continue;
         }
         agents.push(AgentRow { id: s.id.clone(), label: s.label.clone(), installed: s.installed, skills, mcp });

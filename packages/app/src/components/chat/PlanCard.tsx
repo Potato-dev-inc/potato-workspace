@@ -1,6 +1,10 @@
-// The agent's task list, pinned at the top of the chat: "Tasks 2/5", then each task with a dot glyph (empty:
-// to do, ringed with a dot: in progress, filled with a tick: done). Shows only; nothing here is clickable.
+// The agent's task list, pinned at the top of the chat: a collapsible "Plan · 4 steps" with "2 of 4" beside it, then each
+// step with a mark (empty ring: to do, turning ring: in progress, tick: done). Shows only; the head folds the list.
+import { useState } from 'react';
 import type { ChatTurn, PlanItem, PlanStatus } from '../../lib/sessionChatModel';
+import '../../styles/chat-agent-cards.css';
+import { CheckIcon, Chevron, ListIcon, SpinMark } from './chatCardIcons';
+import { plural } from './chatFormat';
 
 /** The task list as it stands now: the list after the newest turn that updated it. Empty when there is none. */
 export function currentPlan(turns: readonly ChatTurn[]): PlanItem[] {
@@ -17,26 +21,50 @@ const GLYPH_LABEL: Record<PlanStatus, string> = {
   completed: 'Done',
 };
 
+function Mark({ status }: { status: PlanStatus }) {
+  return (
+    <span role="img" aria-label={GLYPH_LABEL[status]} className={`ck-agc-plan-mark ck-chat-plan-glyph--${status}`}>
+      {status === 'completed' ? <CheckIcon /> : status === 'in_progress' ? <SpinMark /> : <span className="ck-agc-dot" aria-hidden="true" />}
+    </span>
+  );
+}
+
 export function PlanCard({ items }: { items: readonly PlanItem[] }) {
+  const [open, setOpen] = useState(true);
   if (items.length === 0) return null;
   const done = items.filter((item) => item.status === 'completed').length;
   return (
-    <section aria-label="Tasks" className="shrink-0 border-b border-pm-border bg-pm-panel px-2 py-1.5 ck-chat-plan" data-testid="chat-plan">
-      <h3 className="text-[11px] font-semibold text-pm-muted ck-chat-plan-head">
-        Tasks {done}/{items.length}
-      </h3>
-      <ol className="mt-1 max-h-32 space-y-0.5 overflow-y-auto ck-chat-plan-list">
-        {items.map((item, index) => (
-          <li
-            key={item.taskId ?? `${index}`}
-            data-status={item.status}
-            className={`flex min-w-0 items-start gap-2 text-[12px] ck-chat-plan-item ck-chat-plan-item--${item.status}`}
-          >
-            <span role="img" aria-label={GLYPH_LABEL[item.status]} className={`mt-[5px] flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full ck-chat-plan-glyph ck-chat-plan-glyph--${item.status}`} />
-            <span className={`min-w-0 break-words ${item.status === 'in_progress' ? 'text-pm-text' : ''}`}>{item.text}</span>
-          </li>
-        ))}
-      </ol>
+    <section aria-label="Tasks" className="shrink-0 ck-chat-plan ck-agc-plan" data-testid="chat-plan">
+      <div className="ck-agc-card ck-agc-card--plan">
+        <h3 className="ck-chat-plan-head ck-agc-plan-h">
+          <button type="button" aria-expanded={open} className="ck-agc-head" onClick={() => setOpen(!open)}>
+            <span className="ck-agc-ico">
+              <ListIcon />
+            </span>
+            <span className="ck-agc-title">
+              <b className="ck-agc-name">Plan · {plural(items.length, 'step')}</b>
+            </span>
+            <span className="ck-agc-badge ck-agc-badge--count" data-testid="plan-progress">
+              {done} of {items.length}
+            </span>
+            <Chevron />
+          </button>
+        </h3>
+        {open && (
+          <ol className="ck-agc-tasks ck-chat-plan-list">
+            {items.map((item, index) => (
+              <li
+                key={item.taskId ?? `${index}`}
+                data-status={item.status}
+                className={`ck-agc-task ck-chat-plan-item ck-chat-plan-item--${item.status}`}
+              >
+                <Mark status={item.status} />
+                <span className="ck-agc-task-text">{item.text}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
     </section>
   );
 }

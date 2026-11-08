@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { parseChatMarkdown, type Align, type Block, type Inline, type ListBlock, type ListItem } from '../../lib/chatMarkdown';
 import '../../styles/chat-copy.css';
+import '../../styles/chat-agent-cards.css';
 
 export interface ChatMarkdownProps {
   text: string;
@@ -117,13 +118,16 @@ function CodeBlock({ lang, text }: { lang: string; text: string }) {
   };
 
   return (
-    <div className="ck-chat-md-code-wrap">
-      <pre data-lang={lang || undefined} className="ck-chat-md-pre rounded border border-pm-border bg-pm-panel">
+    <div className="ck-chat-md-code-wrap ck-agc-codeblock">
+      <div className="ck-agc-codehead">
+        <span className="ck-agc-codelang">{lang || 'text'}</span>
+        <button type="button" className="ck-chat-md-copy" data-copied={copied || undefined} onClick={() => void copy()}>
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre data-lang={lang || undefined} className="ck-chat-md-pre ck-agc-codepre">
         <code>{text}</code>
       </pre>
-      <button type="button" className="ck-chat-md-copy" data-copied={copied || undefined} onClick={() => void copy()}>
-        {copied ? 'Copied' : 'Copy'}
-      </button>
     </div>
   );
 }

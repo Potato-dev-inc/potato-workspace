@@ -1,0 +1,354 @@
+/* The message box as one card, and its small parts: the pop-up menus and segmented switch for the agent settings,
+   the context ring, and the queue of messages that wait for the agent. Grayscale, soft 1px edges, cockpit tokens
+   only (both themes). The card itself is in cockpit-chat.css. Motion is CSS only and off for reduced motion. */
+
+/* ---- pills and menus ---- */
+.cockpit .ck-menu-rel {
+  position: relative;
+  min-width: 0;
+}
+.cockpit .ck-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--label-2);
+  font: 12px var(--font-ui);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.cockpit .ck-pill:hover:not(:disabled),
+.cockpit .ck-pill[aria-expanded='true'] {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-pill:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-pill:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.cockpit .ck-pill-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-pill-chev {
+  flex: none;
+  color: var(--label-3);
+  transition: transform 0.15s ease;
+}
+.cockpit .ck-pill[aria-expanded='true'] .ck-pill-chev {
+  transform: rotate(180deg);
+}
+
+/* The list above its pill. */
+.cockpit .ck-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  min-width: 180px;
+  max-width: min(320px, calc(100vw - 32px));
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  background: var(--bg-float);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: var(--float-shadow);
+  transform-origin: bottom left;
+  outline: none;
+  animation: ck-pop-in 0.18s var(--ease);
+}
+.cockpit .ck-pop--right {
+  left: auto;
+  right: 0;
+  transform-origin: bottom right;
+}
+@keyframes ck-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+.cockpit .ck-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--label);
+  cursor: pointer;
+}
+.cockpit .ck-opt--active {
+  background: var(--fill-active);
+}
+.cockpit .ck-opt-text {
+  flex: 1;
+  min-width: 0;
+}
+.cockpit .ck-opt-text small {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--label-3);
+}
+.cockpit .ck-opt-check {
+  flex: none;
+  display: inline-flex;
+  color: var(--label-2);
+  opacity: 0;
+}
+.cockpit .ck-opt[aria-selected='true'] .ck-opt-check {
+  opacity: 1;
+}
+
+/* ---- segmented switch (Low / Medium / High) ---- */
+.cockpit .ck-seg {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(var(--n, 3), 1fr);
+  flex: none;
+  height: 28px;
+  padding: 2px;
+  box-sizing: border-box;
+  border: 1px solid var(--sep);
+  border-radius: 9px;
+  background: var(--fill);
+}
+.cockpit .ck-seg-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--n, 3));
+  border-radius: 7px;
+  background: var(--fill-active);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  transform: translateX(calc(var(--i, 0) * 100%));
+  transition: transform 0.25s var(--ease);
+}
+.cockpit .ck-seg-btn {
+  position: relative;
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--label-3);
+  font: 11.5px var(--font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.cockpit .ck-seg-btn[aria-checked='true'] {
+  color: var(--label);
+}
+.cockpit .ck-seg-btn:hover:not(:disabled) {
+  color: var(--label);
+}
+.cockpit .ck-seg-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-seg-btn:disabled {
+  cursor: default;
+}
+.cockpit .ck-seg[data-disabled] {
+  opacity: 0.5;
+}
+
+/* ---- context ring ---- */
+.cockpit .ck-ctx {
+  flex: none;
+}
+.cockpit .ck-ctx-ring {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--label-2);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.cockpit .ck-ctx-ring:hover,
+.cockpit .ck-ctx-ring[aria-expanded='true'] {
+  background: var(--fill-active);
+}
+.cockpit .ck-ctx-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-ctx-ring svg {
+  width: 18px;
+  height: 18px;
+  transform: rotate(-90deg);
+}
+.cockpit .ck-ctx-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+.cockpit .ck-ctx-bg {
+  stroke: var(--fill-active);
+}
+.cockpit .ck-ctx-fg {
+  stroke: var(--label);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s var(--ease);
+}
+.cockpit .ck-ctx-pop {
+  width: 230px;
+  padding: 12px;
+}
+.cockpit .ck-ctx-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label);
+}
+.cockpit .ck-ctx-pct {
+  font: 500 12px var(--font-mono);
+  color: var(--label-2);
+}
+.cockpit .ck-ctx-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--fill-active);
+}
+.cockpit .ck-ctx-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--label);
+  transition: width 0.4s var(--ease);
+}
+.cockpit .ck-ctx-line {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--label-2);
+}
+
+/* ---- the queue: messages waiting for the agent, stacked above the box ---- */
+.cockpit .ck-chat-pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.cockpit .ck-chat-pending {
+  justify-content: stretch;
+  animation: ck-q-in 0.25s var(--ease);
+}
+@keyframes ck-q-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+.cockpit .ck-chat-pending .ck-chat-pending-body {
+  flex: 1;
+  max-width: none;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--bg-raised);
+}
+.cockpit .ck-chat-pending .ck-chat-bubble--pending {
+  order: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--label);
+}
+.cockpit .ck-q-n {
+  order: 0;
+  flex: none;
+  font: 11px var(--font-mono);
+  color: var(--label-3);
+}
+.cockpit .ck-chat-pending .ck-chat-pending-meta {
+  order: 2;
+  flex: none;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--label-3);
+}
+.cockpit .ck-chat-pending .ck-chat-pending-meta > [aria-hidden='true'] {
+  display: none;
+}
+.cockpit .ck-chat-pending .ck-chat-pending-meta > span {
+  padding: 0 6px;
+}
+.cockpit .ck-chat-pending .ck-chat-link {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: var(--label-2);
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.cockpit .ck-chat-pending .ck-chat-link:hover {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-chat-pending .ck-chat-pending-body--failed {
+  border-color: var(--label-3);
+}
+.cockpit .ck-chat-pending .ck-chat-pending-body--failed .ck-chat-pending-meta {
+  order: 3;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  color: var(--label-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-pop,
+  .cockpit .ck-chat-pending {
+    animation: none;
+  }
+  .cockpit .ck-seg-thumb,
+  .cockpit .ck-ctx-fg,
+  .cockpit .ck-ctx-bar i,
+  .cockpit .ck-pill,
+  .cockpit .ck-pill-chev,
+  .cockpit .ck-seg-btn {
+    transition: none;
+  }
+}

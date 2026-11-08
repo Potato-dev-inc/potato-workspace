@@ -117,9 +117,9 @@ fn a_codex_turn_with_a_failed_edit_becomes_one_message_a_tool_row_and_a_turn_end
     golden("codex_live_turn", &items);
 
     let list = items.as_array().unwrap();
-    // 52+ chunks of the same stream are a few messages, not a few dozen items; thoughts are not shown.
+    // 52+ chunks of the same stream are a few messages, not a few dozen items; the thoughts grow a few items too.
     assert!(list.iter().filter(|i| i["kind"] == "assistant").count() <= 4, "{}", kinds(list).join(","));
-    assert!(list.iter().all(|i| i["kind"] != "thinking"));
+    assert!(list.iter().filter(|i| i["kind"] == "thinking").count() <= 4, "{}", kinds(list).join(","));
     let tool = list.iter().find(|i| i["kind"] == "toolCall").expect("the edit");
     assert_eq!(tool["name"], "edit");
     assert_eq!(tool["writes"], true);
@@ -508,14 +508,13 @@ fn steering_text_is_the_persons_message_inside_the_turn_and_the_next_words_are_a
 }
 
 #[test]
-fn updates_this_build_cannot_type_and_thoughts_add_nothing() {
+fn updates_this_build_cannot_type_add_nothing() {
     let mut run = Run::new();
     run.turn(1, "go");
     let before = run.json();
     run.updates(
         &[
             json!({"sessionUpdate": "future_thing", "x": 1}),
-            json!({"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "hmm"}}),
             json!({"sessionUpdate": "available_commands_update", "availableCommands": []}),
             json!({"sessionUpdate": "current_mode_update", "currentModeId": "read-only"}),
         ],
@@ -579,4 +578,48 @@ fn a_live_message_keeps_its_attachments_and_may_have_no_text() {
     assert_eq!(users.len(), 2);
     assert!(users.iter().all(|u| u["attachments"][0]["name"] == "a.png"));
     assert_eq!(users[0]["text"], "");
+}
+
+fn think(text: &str) -> Value {
+    json!({"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": text}})
+}
+
+#[test]
+fn thought_chunks_grow_one_thinking_item_that_the_next_message_or_tool_closes() {
+    let mut run = Run::new();
+    run.turn(1, "go");
+    run.updates(&[think("Let me "), think("look.")], false);
+    run.updates(&[say("Done.")], false);
+    run.updates(&[think("Again.")], false);
+    let all = run.json();
+    assert_eq!(kinds(all.as_array().unwrap()), ["user", "thinking", "assistant", "thinking"]);
+    assert_eq!(all[1]["text"], "Let me look.");
+    assert_eq!(all[1]["id"], "th1.1");
+    assert!(all[1]["durationMs"].as_u64().is_some());
+    assert_eq!(all[3]["id"], "th1.2");
+}
+
+#[test]
+fn a_runaway_thought_is_cut_and_thoughts_alone_still_end_as_empty() {
+    let mut run = Run::new();
+    run.turn(1, "go");
+    let chunk = think(&"y".repeat(15_000));
+    run.updates(&[chunk.clone(), chunk.clone(), chunk], false);
+    let item = serde_json::to_value(run.feed.get("th1.1").unwrap()).unwrap();
+    let text = item["text"].as_str().unwrap();
+    assert!(text.chars().count() <= 20_005);
+    assert!(text.ends_with('…'));
+}
+
+#[test]
+fn replayed_thoughts_come_back_without_a_duration_and_a_second_replay_adds_nothing() {
+    let mut run = Run::new();
+    run.started(StartKind::Loaded);
+    run.updates(&[json!({"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "hi"}}), think("hmm"), say("hello")], true);
+    let all = run.json();
+    let list = all.as_array().unwrap();
+    let thought = list.iter().find(|i| i["kind"] == "thinking").expect("the replayed thought");
+    assert_eq!(thought["text"], "hmm");
+    assert!(thought["durationMs"].is_null());
+    assert!(thought["id"].as_str().unwrap().starts_with("hth"));
 }

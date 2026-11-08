@@ -48,7 +48,7 @@ export function HelperRow({ step, fromScreen, defaultOpen = false }: HelperRowPr
       {open && (
         <div className="mt-0.5 space-y-1 pb-1 ck-chat-detail">
           {prompt !== null && <CodeBlock label="Prompt" text={prompt} />}
-          {fromScreen ? <p className="text-[11px] text-pm-muted">Tool output is not read from the screen.</p> : <OutputBlock result={step.result} />}
+          {fromScreen ? <p className="text-[11px] text-pm-muted">Tool output is not read from the screen.</p> : <OutputBlock result={step.result} failed={status === 'error'} />}
         </div>
       )}
     </div>

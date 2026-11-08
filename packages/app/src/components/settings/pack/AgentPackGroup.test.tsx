@@ -116,6 +116,37 @@ describe('AgentPackGroup', () => {
     expect(document.body.textContent).toContain('Nothing to add.');
   });
 
+  it('shows the agents it cannot set up yet, with a reason, under the Not on this computer line', async () => {
+    const withAgy = { ...AGENT_PACK_PREVIEW, unsupported: [{ id: 'agy', label: 'Agy', installed: true }] };
+    await render(mockApi({ preview: vi.fn(async () => withAgy) }));
+    expect(host.textContent).toContain("Can't set up: Agy.");
+    await click(button('Review and install'));
+    const line = document.querySelector('[data-testid="pack-unsupported"]');
+    expect(line?.textContent).toBe("Can't set up yet: Agy — Potato Workspace doesn't know where this agent keeps its settings yet.");
+    expect(document.querySelector('[data-testid="pack-absent"]')?.textContent).toBe('Not on this computer: Cursor Agent.');
+  });
+
+  it('shows the backend reason when it sends one', async () => {
+    const withReason = {
+      ...AGENT_PACK_PREVIEW,
+      unsupported: [{ id: 'agy', label: 'Agy', installed: true, reason: 'No MCP settings location or skills folder is known for this agent yet.' }],
+    };
+    await render(mockApi({ preview: vi.fn(async () => withReason) }));
+    await click(button('Review and install'));
+    expect(document.querySelector('[data-testid="pack-unsupported"]')?.textContent).toBe(
+      "Can't set up yet: Agy — No MCP settings location or skills folder is known for this agent yet.",
+    );
+  });
+
+  it('shows nothing for unsupported agents when the list is empty', async () => {
+    const none = { ...AGENT_PACK_PREVIEW, unsupported: [] };
+    await render(mockApi({ preview: vi.fn(async () => none) }));
+    expect(host.textContent).not.toContain("Can't set up");
+    await click(button('Review and install'));
+    expect(document.querySelector('[data-testid="pack-unsupported"]')).toBeNull();
+    expect(document.body.textContent).not.toContain("Can't set up");
+  });
+
   it('shows an error from the backend instead of failing silently', async () => {
     await render(mockApi({ preview: vi.fn(async () => Promise.reject(new Error('no home folder'))) }));
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('no home folder');

@@ -52,8 +52,8 @@ fn item_md(out: &mut Vec<String>, item: &ChatItem, meta: &Meta, ctx: &RedactCont
                 out.push(format!("_{}_", line_text(text, ctx)));
             }
         }
-        // Token counts and the session header are not part of the conversation.
-        ChatItem::Usage { .. } | ChatItem::Session { .. } => {}
+        // Token counts, the session header and the agent's private thoughts are not part of the conversation.
+        ChatItem::Usage { .. } | ChatItem::Session { .. } | ChatItem::Thinking { .. } => {}
     }
 }
 

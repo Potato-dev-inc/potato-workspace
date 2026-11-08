@@ -220,7 +220,7 @@ describe('the task card, notices and modes', () => {
   it('pins the task card with the count and a glyph per task', () => {
     render(PLAN);
     const card = host.querySelector('[data-testid="chat-plan"]')!;
-    expect(card.querySelector('h3')?.textContent).toBe('Tasks 1/3');
+    expect(card.querySelector('h3')?.textContent).toBe('Plan · 3 steps1 of 3');
     const statuses = [...card.querySelectorAll('li')].map((li) => li.getAttribute('data-status'));
     expect(statuses).toEqual(['completed', 'in_progress', 'pending']);
     expect(card.querySelector('[aria-label="In progress"]')).not.toBeNull();

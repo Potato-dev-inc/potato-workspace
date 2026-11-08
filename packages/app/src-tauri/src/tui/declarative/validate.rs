@@ -4,7 +4,7 @@
 
 use regex::RegexBuilder;
 
-use super::schema::{DefError, Definition, Kind, ModelSource, OptionalSegment, Pick, Selector};
+use super::schema::{DefError, Definition, Kind, McpHostTable, ModelSource, OptionalSegment, Pick, Selector};
 
 pub const MAX_DEFINITION_BYTES: usize = 64 * 1024;
 pub const MAX_REGEXES: usize = 200;
@@ -73,7 +73,8 @@ pub fn validate(def: &Definition, ctx: &ValidationContext<'_>) -> Vec<DefError> 
     check_model_and_context(def, &mut e, &mut regexes);
     check_features(def, &mut e);
     check_run_options(def, &mut e);
-    check_mcp_host(def, &mut e);
+    check_mcp_host(def.mcp_host.as_ref(), &mut e);
+    check_skills_host(def.skills_host.as_ref(), &mut e);
     check_risk(def, &mut e, &mut regexes);
     e.0.extend(def.limits.iter().flat_map(crate::handoff::validate_limits));
     check_instructions(def, &mut e);
@@ -663,8 +664,24 @@ fn check_instructions(def: &Definition, e: &mut Errors) {
     }
 }
 
-fn check_mcp_host(def: &Definition, e: &mut Errors) {
-    let Some(m) = &def.mcp_host else { return };
+/// The host tables alone (the trusted overlay is held to the same rules as a definition).
+pub(crate) fn validate_hosts(mcp: Option<&McpHostTable>, skills: Option<&crate::agent_pack::SkillsHostTable>) -> Vec<DefError> {
+    let mut e = Errors(Vec::new());
+    check_mcp_host(mcp, &mut e);
+    check_skills_host(skills, &mut e);
+    e.0
+}
+
+fn check_skills_host(skills: Option<&crate::agent_pack::SkillsHostTable>, e: &mut Errors) {
+    let Some(s) = skills else { return };
+    let d = s.dir.trim();
+    if d.is_empty() || d.contains("..") || !(d.starts_with("~/") || d.starts_with("~\\")) {
+        e.add("AGENT_DEF_INCONSISTENT", "skills_host.dir", "must be a folder under the home folder starting with `~/`, without `..` (HST-3)");
+    }
+}
+
+fn check_mcp_host(mcp: Option<&McpHostTable>, e: &mut Errors) {
+    let Some(m) = mcp else { return };
     check_mcp_host_http(m, e);
     if m.config_path.trim().is_empty() || m.config_path.contains("..") {
         e.add("AGENT_DEF_INCONSISTENT", "mcp_host.config_path", "must be a non-empty path under home or the project, without `..` (HST-3)");

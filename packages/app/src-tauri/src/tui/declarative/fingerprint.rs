@@ -65,6 +65,10 @@ pub fn canonical_value(def: &Definition, source: Source, project: Option<&str>, 
             "entry_http": m.entry_http.as_ref().and_then(|t| serde_json::to_value(t).ok()),
         })),
     });
+    // Writes into the agent's skills folder, so it is approved with the definition; added only when present.
+    if let Some(s) = &def.skills_host {
+        value["skills_host"] = json!({ "dir": s.dir });
+    }
     // Present only when declared, so definitions without `[accounts]` keep their fingerprint.
     if let Some(a) = &def.accounts {
         value["accounts"] = json!({ "home_env": a.home_env, "extra_env": a.extra_env, "login_hint": a.login_hint });

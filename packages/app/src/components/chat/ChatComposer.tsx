@@ -10,11 +10,14 @@ import { clearDraft, DRAFT_SAVE_MS, readDraftState, writeDraft, type ComposerDra
 import { insertAtCursor } from '../../lib/voice';
 import { prepareAttachments, savePastedImage, type ChatAttachment } from '../../lib/attachFiles';
 import { AttachmentChips } from './AttachmentChips';
+import { ContextMeter } from './ContextMeter';
+import type { ContextReading } from '../cockpit/rail/railFormat';
 import { ProjectFilePicker, findMentionQuery, removeMention, type ProjectFilePickerHandle } from './ProjectFilePicker';
 import type { ProjectFileHit } from '../../lib/projectFiles';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { commandHint, commandText, filterCommands, type AcpCommand } from '../../lib/acpChat';
 import '../../styles/cockpit-acp.css';
+import '../../styles/chat-input-card.css';
 
 /** The box grows with the text up to this many lines, then scrolls. */
 const MAX_LINES = 6;
@@ -50,6 +53,8 @@ export interface ChatComposerProps {
    * Without it the box has no paperclip (the phone cannot hand the agent a path on the PC).
    */
   attachFiles?: () => Promise<string[]>;
+  /** How full the conversation window is (the ring in the footer). Without a reading the ring is not drawn. */
+  contextUsage?: ContextReading | null;
 }
 
 function StopIcon() {
@@ -84,7 +89,7 @@ export function ChatComposer(props: ChatComposerProps) {
   return <ChatComposerBox key={props.draftKey ?? ''} {...props} />;
 }
 
-function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, attachFiles }: ChatComposerProps) {
+function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, attachFiles, contextUsage }: ChatComposerProps) {
   const stoppable = running && !!onStop;
   const [restored] = useState(() => (draftKey ? readDraftState(draftKey) : { text: '', attachments: [] as ChatAttachment[] }));
   const [text, setText] = useState(restored.text);
@@ -526,19 +531,6 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         </div>
       )}
       <div className="ck-chat-composer-row">
-        {attachFiles && (
-          <button
-            type="button"
-            className="ck-chat-attach"
-            data-testid="chat-composer-attach"
-            aria-label="Add files"
-            title="Add files (or drop them here, or type @ to add a project file)"
-            aria-disabled={blocked || busy || preparing > 0 || undefined}
-            onClick={() => void addFiles()}
-          >
-            <AttachIcon />
-          </button>
-        )}
         <AttachmentChips attachments={attachments} preparing={preparing} onRemove={removeAttachment} className="ck-chat-composer-chips" />
         {voice ? (
           <div className="ck-chat-composer-field-wrap">
@@ -555,39 +547,55 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         ) : (
           textarea
         )}
-        {voice && (
-          <button
-            type="button"
-            className="ck-chat-mic"
-            data-testid="chat-composer-mic"
-            aria-label={mic.support === 'hint' ? "Voice typing: use your keyboard's mic" : 'Voice typing'}
-            aria-pressed={mic.recording}
-            aria-disabled={micOff || undefined}
-            onPointerDown={onMicDown}
-            onPointerUp={onMicUp}
-            onPointerCancel={onMicUp}
-            onPointerLeave={onMicUp}
-            onKeyDown={onMicKey}
-          >
-            <MicIcon />
-            {mic.recording && <span className="ck-chat-mic-dot" aria-hidden="true" data-testid="chat-composer-mic-dot" />}
-          </button>
-        )}
-        {toolbar && <div className="ck-chat-composer-toolbar">{toolbar}</div>}
-        {stoppable ? (
-          <button type="button" className="ck-btn ck-btn--secondary ck-chat-send ck-chat-stop" data-testid="chat-composer-stop" aria-label="Stop the agent" title="Stop the agent (Esc)" onClick={() => onStop?.()}>
-            <StopIcon />
-            <span className="ck-chat-send-label">Stop</span>
-          </button>
-        ) : (
-          <button type="submit" className="ck-btn ck-btn--primary ck-chat-send" disabled={blocked || busy || preparing > 0 || (empty && attachments.length === 0) || tooLong}>
-            <svg className="ck-chat-send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 19V5" />
-              <path d="m5 12 7-7 7 7" />
-            </svg>
-            <span className="ck-chat-send-label">Send</span>
-          </button>
-        )}
+        <div className="ck-chat-composer-foot">
+          {attachFiles && (
+            <button
+              type="button"
+              className="ck-chat-attach"
+              data-testid="chat-composer-attach"
+              aria-label="Add files"
+              title="Add files (or drop them here, or type @ to add a project file)"
+              aria-disabled={blocked || busy || preparing > 0 || undefined}
+              onClick={() => void addFiles()}
+            >
+              <AttachIcon />
+            </button>
+          )}
+          {toolbar && <div className="ck-chat-composer-toolbar">{toolbar}</div>}
+          {voice && (
+            <button
+              type="button"
+              className="ck-chat-mic"
+              data-testid="chat-composer-mic"
+              aria-label={mic.support === 'hint' ? "Voice typing: use your keyboard's mic" : 'Voice typing'}
+              aria-pressed={mic.recording}
+              aria-disabled={micOff || undefined}
+              onPointerDown={onMicDown}
+              onPointerUp={onMicUp}
+              onPointerCancel={onMicUp}
+              onPointerLeave={onMicUp}
+              onKeyDown={onMicKey}
+            >
+              <MicIcon />
+              {mic.recording && <span className="ck-chat-mic-dot" aria-hidden="true" data-testid="chat-composer-mic-dot" />}
+            </button>
+          )}
+          {contextUsage && <ContextMeter reading={contextUsage} />}
+          {stoppable ? (
+            <button type="button" className="ck-btn ck-btn--secondary ck-chat-send ck-chat-stop" data-testid="chat-composer-stop" aria-label="Stop the agent" title="Stop the agent (Esc)" onClick={() => onStop?.()}>
+              <StopIcon />
+              <span className="ck-chat-send-label">Stop</span>
+            </button>
+          ) : (
+            <button type="submit" className="ck-btn ck-btn--primary ck-chat-send" disabled={blocked || busy || preparing > 0 || (empty && attachments.length === 0) || tooLong}>
+              <svg className="ck-chat-send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 19V5" />
+                <path d="m5 12 7-7 7 7" />
+              </svg>
+              <span className="ck-chat-send-label">Send</span>
+            </button>
+          )}
+        </div>
       </div>
       {voice && mic.note && (
         <p className="ck-chat-composer-note ck-chat-composer-voice" role="status" data-testid="chat-composer-voice">

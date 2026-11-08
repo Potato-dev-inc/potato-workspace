@@ -57,6 +57,8 @@ export interface AcpChatState {
   inTerminal?: { paneId: string | null } | null;
   /** An agent (one that started this chat through Potato Workspace, or any agent tool) may answer the permission cards. Off by default. */
   agentAnswering?: boolean;
+  /** Tool kinds the person said "don't ask again" for in this chat (memory only; ends with the chat). */
+  autoAllow?: string[];
   /** The app closed during a turn (found in the chat journal). The chat says so and offers "Continue" until a new turn starts. */
   interruptedTurn?: boolean;
   /** The agent's own settings (model, mode, effort), as ACP reports them. */
@@ -366,6 +368,8 @@ export interface AcpChatApi {
   setConfig: (paneId: string, optionId: string, value: string) => Promise<AcpChatState>;
   /** Let (or stop letting) an agent answer this chat's permission questions. */
   setAgentAnswering: (paneId: string, allowed: boolean) => Promise<AcpChatState>;
+  /** "Don't ask again in this chat" for one kind of tool call (`on`), or "Turn back on" (off). Refused for deleting and moving. */
+  setAutoAllow?: (paneId: string, kind: string, on: boolean) => Promise<AcpChatState>;
   /** Hand the conversation to a terminal pane. `force` stops the running turn first. */
   openInTerminal: (conversation: string, force?: boolean) => Promise<HandOver<OpenedInTerminal>>;
   /** Hand the conversation back to its chat pane. `force` stops the terminal first. */
@@ -427,6 +431,7 @@ export const tauriAcpChatApi: AcpChatApi = {
   },
   setConfig: (paneId, optionId, value) => call<AcpChatState>('acp_chat_set_config', { paneId, optionId, value }),
   setAgentAnswering: (paneId, allowed) => call<AcpChatState>('acp_chat_set_agent_answering', { paneId, allowed }),
+  setAutoAllow: (paneId, kind, on) => call<AcpChatState>('acp_chat_set_auto_allow', { paneId, kind, on }),
   openInTerminal: (conversation, force) => call<HandOver<OpenedInTerminal>>('acp_open_in_terminal', { conversation, force: force ?? false }),
   backToChat: (conversation, force) => call<HandOver<BackInChat>>('acp_back_to_chat', { conversation, force: force ?? false }),
   conversationOfTerminal: async (paneId) => {

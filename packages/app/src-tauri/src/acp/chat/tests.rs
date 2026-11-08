@@ -254,21 +254,21 @@ fn a_rich_turn_shows_tools_with_their_files_a_diff_a_plan_and_usage() {
     rig.say("rich");
     let items = rig.items();
     let kinds = rig.kinds();
-    assert_eq!(kinds, ["session", "user", "assistant", "toolCall", "toolResult", "plan", "toolCall", "toolResult", "usage", "assistant", "notice", "turnEnd"], "{items:#?}");
-    let edit = &items[3];
+    assert_eq!(kinds, ["session", "user", "assistant", "thinking", "toolCall", "toolResult", "plan", "toolCall", "toolResult", "usage", "assistant", "notice", "turnEnd"], "{items:#?}");
+    let edit = &items[4];
     assert_eq!(edit["name"], "edit");
     assert_eq!(edit["summary"], "Write notes.txt");
     assert_eq!(edit["writes"], true);
     assert!(edit["paths"][0].as_str().unwrap().ends_with("notes.txt"));
     assert_eq!(edit["input"]["new_string"], "hello\n");
-    assert_eq!(items[4]["ok"], true);
-    let run = &items[6];
+    assert_eq!(items[5]["ok"], true);
+    let run = &items[7];
     assert_eq!(run["name"], "run");
-    assert_eq!(items[7]["output"], "3 passed", "the code fence is formatting");
-    assert_eq!(items[5]["items"][1]["status"], "in_progress");
-    assert_eq!(items[8]["contextWindow"], 200000);
-    assert_eq!(items[9]["text"], "All done.");
-    assert!(items.iter().all(|i| i["kind"] != "thinking"), "the thought is not shown");
+    assert_eq!(items[8]["output"], "3 passed", "the code fence is formatting");
+    assert_eq!(items[6]["items"][1]["status"], "in_progress");
+    assert_eq!(items[9]["contextWindow"], 200000);
+    assert_eq!(items[10]["text"], "All done.");
+    assert!(items.iter().any(|i| i["kind"] == "thinking"), "the thought is kept");
 }
 
 #[test]
@@ -368,9 +368,30 @@ fn answering_the_card_sends_that_option_to_the_agent_and_the_turn_goes_on() {
     let result = items.iter().find(|i| i["kind"] == "toolResult").unwrap();
     assert_eq!(result["ok"], true);
     let notice = items.iter().find(|i| i["noticeKind"] == "permission").unwrap();
-    assert_eq!(notice["text"], "Answered: Allow for Session");
+    assert_eq!(notice["text"], "Allowed · Write notes.txt");
     assert!(rig.cards().is_empty());
     assert_eq!(rig.pane_status(), "idle");
+}
+
+#[test]
+fn dont_ask_again_answers_later_asks_of_that_kind_with_allow_once_and_says_so() {
+    let rig = Rig::new("");
+    assert!(rig.chat.set_auto_allow("delete", true).is_err(), "deleting always asks");
+    assert!(rig.chat.set_auto_allow("", true).is_err());
+    rig.chat.set_auto_allow("edit", true).unwrap();
+    assert_eq!(rig.chat.state()["autoAllow"][0], "edit");
+    rig.chat.send("perm").unwrap();
+    rig.wait_phase(Phase::Idle);
+    assert!(rig.cards().is_empty(), "no card was raised");
+    let items = rig.items();
+    assert_eq!(items.iter().find(|i| i["kind"] == "assistant").unwrap()["text"], "chose:allow_once");
+    let notice = items.iter().find(|i| i["noticeKind"] == "permission").unwrap();
+    assert_eq!(notice["text"], "Allowed automatically (you said don't ask again) · Write notes.txt");
+    // Turned back on, it asks again.
+    rig.chat.set_auto_allow("edit", false).unwrap();
+    assert!(rig.chat.state()["autoAllow"].as_array().unwrap().is_empty());
+    rig.chat.send("perm").unwrap();
+    rig.wait_card();
 }
 
 #[test]

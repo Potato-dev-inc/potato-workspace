@@ -142,7 +142,8 @@
   cursor: default;
 }
 
-/* The agent's settings (model, mode, effort), as quiet pills on the footer line of the message box. */
+/* The agent settings (model, mode, effort) on the footer line of the message box; the pills, menus and the
+   segmented switch are in chat-input-card.css. */
 .cockpit .ck-acp-chips {
   min-width: 0;
 }
@@ -151,45 +152,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-}
-
-.cockpit .ck-acp-chip {
-  height: 26px;
-  max-width: 170px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--label-2);
-  color-scheme: dark;
-  font: 12px var(--font-ui);
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-.cockpit .ck-acp-chip:hover:not(:disabled) {
-  background: var(--fill-active);
-  color: var(--label);
-}
-
-.cockpit .ck-acp-chip:focus-visible {
-  outline: none;
-  box-shadow: var(--focus);
-}
-
-/* The open list: the app's own dark surface, not the system's white one. */
-.cockpit .ck-acp-chip option {
-  background: var(--bg-raised);
-  color: var(--label);
-}
-
-:root[data-theme='light'] .cockpit .ck-acp-chip {
-  color-scheme: light;
-}
-
-.cockpit .ck-acp-chip:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .cockpit .ck-acp-chips-note {

@@ -187,59 +187,71 @@
   padding: 8px 20px 16px;
   background: var(--bg);
 }
-/* One rounded card: text on top, the agent's settings and the send button on a footer line. */
+/* One rounded card (see chat-input-card.css for the menus): attached files, the text, then a footer line with the
+   + button, the agent's settings, the context ring and the send button. */
 .cockpit .ck-chat-composer-row {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  padding: 12px 10px 8px 14px;
+  flex-direction: column;
   background: var(--bg-raised);
   border: 1px solid var(--sep);
-  border-radius: 18px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .cockpit .ck-chat-composer-row:focus-within {
-  border-color: var(--accent-line);
-  box-shadow: 0 0 0 3px var(--fill-active, rgba(255, 255, 255, 0.05));
+  border-color: var(--label-3);
 }
 .cockpit .ck-chat-composer--drop .ck-chat-composer-row {
-  border-color: var(--accent-line);
-  box-shadow: 0 0 0 3px var(--fill-active, rgba(255, 255, 255, 0.05));
+  border-color: var(--label-3);
+  box-shadow: 0 0 0 3px var(--fill-active);
+}
+.cockpit .ck-chat-composer-foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 8px 8px 8px;
 }
 .cockpit .ck-chat-attach {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: 8px;
   color: var(--label-2);
   background: transparent;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 .cockpit .ck-chat-attach:hover:not([aria-disabled='true']) {
   color: var(--label);
-  background: var(--fill-active, rgba(255, 255, 255, 0.05));
+  background: var(--fill-active);
+}
+.cockpit .ck-chat-attach:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
 }
 .cockpit .ck-chat-attach[aria-disabled='true'] {
   opacity: 0.35;
   cursor: not-allowed;
 }
 .cockpit .ck-chat-composer-field {
-  flex: 1 1 100%;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
   margin: 0;
-  padding: 0 0 6px;
+  padding: 12px 14px 6px;
   border: none;
   outline: none;
-  min-height: 21px;
+  min-height: 44px;
   resize: none;
   background: transparent;
   color: var(--label);
-  font: 14px/1.5 var(--font-ui);
+  font: 13.5px/1.5 var(--font-ui);
 }
 .cockpit .ck-chat-composer-field::placeholder {
   color: var(--label-3);
@@ -252,7 +264,8 @@
   flex: 1 1 0;
   min-width: 0;
 }
-/* Accent: the send button, a round arrow. The word stays for screen readers. */
+/* The send button: a round arrow in the text colour; while the agent works it is a Stop square. The word stays for
+   screen readers. */
 .ck-chat-send-icon {
   display: none;
 }
@@ -262,12 +275,15 @@
   min-width: 30px;
   padding: 0;
   margin-left: auto;
+  border: none;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
-  color: var(--accent-fg);
+  background: var(--label);
+  color: var(--bg);
+  flex: none;
+  transition: transform 0.2s var(--ease), background 0.15s ease, opacity 0.15s ease;
 }
 .cockpit .ck-chat-send .ck-chat-send-icon {
   display: block;
@@ -281,14 +297,27 @@
   white-space: nowrap;
 }
 .cockpit .ck-btn.ck-chat-send:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--label-2);
 }
 .cockpit .ck-btn.ck-chat-send:active:not(:disabled) {
-  background: var(--accent-press);
+  transform: scale(0.92);
+}
+.cockpit .ck-btn.ck-chat-send:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
 }
 .cockpit .ck-chat-send:disabled {
-  opacity: 0.35;
+  opacity: 0.3;
   cursor: not-allowed;
+}
+.cockpit .ck-chat-stop .ck-chat-send-icon {
+  width: 11px;
+  height: 11px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-btn.ck-chat-send {
+    transition: none;
+  }
 }
 .cockpit .ck-chat-composer-note {
   margin: 6px 4px 0;

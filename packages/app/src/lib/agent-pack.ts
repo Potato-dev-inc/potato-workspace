@@ -34,10 +34,18 @@ export interface PackAgent {
   mcp: McpStep | null;
 }
 
+/** plan.rs `Unsupported`: an agent the backend cannot set up yet. `reason` is the backend's plain-English why; older builds send none, so the UI falls back to a generic one. */
+export interface PackUnsupported {
+  id: string;
+  label: string;
+  installed: boolean;
+  reason?: string;
+}
+
 export interface PackReport {
   dry_run: boolean;
   agents: PackAgent[];
-  unsupported: { id: string; label: string; installed: boolean }[];
+  unsupported: PackUnsupported[];
   /** Files and config entries an Undo would put back. */
   recorded: number;
 }

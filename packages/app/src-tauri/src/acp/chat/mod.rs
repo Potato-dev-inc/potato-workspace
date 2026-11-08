@@ -40,7 +40,7 @@ mod tests;
 mod workspace_tests;
 
 use crate::attach::ChatAttachment;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -145,6 +145,10 @@ pub struct AcpChat {
     host: Arc<dyn ChatHost>,
     handles: Mutex<Option<VirtualPaneHandles>>,
     cards: Mutex<BTreeMap<u64, Card>>,
+    /// Tool kinds the person said "don't ask again" for in this chat. In memory only, for the life of the chat.
+    auto_allow: Mutex<BTreeSet<String>>,
+    /// Asks answered by that rule, by ask number (with the tool's title), until the session reports them closed.
+    auto_asks: Mutex<BTreeMap<u64, Option<String>>>,
     /// What the person sent, until the turn it starts is reported (the user item is made from it).
     pending_user: Mutex<Option<(String, Vec<ChatAttachment>)>>,
     /// The message the agent refused because it needs a sign-in, kept to send again once the person has signed in.
@@ -284,6 +288,8 @@ impl AcpChat {
             host,
             handles: Mutex::new(None),
             cards: Mutex::new(BTreeMap::new()),
+            auto_allow: Mutex::new(BTreeSet::new()),
+            auto_asks: Mutex::new(BTreeMap::new()),
             pending_user: Mutex::new(None),
             sign_in_held: Mutex::new(None),
             closed: AtomicBool::new(false),
@@ -528,6 +534,8 @@ impl AcpChat {
         }
         let now = questions::now_ms();
         let mut raised: Vec<Question> = Vec::new();
+        // Asks the person's "don't ask again" answers: sent after the lock is let go.
+        let mut automatic: Vec<(u64, String)> = Vec::new();
         {
             let mut cards = self.cards.lock();
             for wait in &waits {
@@ -548,11 +556,21 @@ impl AcpChat {
                     let brief = call_id.and_then(|id| mapper.tool_brief(id));
                     (title, wait.tool_kind.clone().or_else(|| brief.as_ref().map(|b| b.0.clone())), brief.map(|b| b.1).unwrap_or_default())
                 };
+                if !cards.contains_key(&wait.ask_id) {
+                    let rule = kind.as_deref().is_some_and(|k| cards::auto_allowable(k) && self.auto_allow.lock().contains(k));
+                    if let (true, Some(option)) = (rule, cards::allow_option(&wait.options)) {
+                        let first = self.auto_asks.lock().insert(wait.ask_id, title.clone()).is_none();
+                        if first {
+                            automatic.push((wait.ask_id, option.id.clone()));
+                        }
+                        continue;
+                    }
+                }
                 let (mut new, options) = cards::new_question(&self.pane_id, &self.label, wait, title.as_deref(), kind.as_deref(), &paths);
                 new.timeout_s = Some(self.card_timeout_s.load(Ordering::SeqCst));
                 match questions::store().create(new, now) {
                     Ok(question) => {
-                        cards.insert(wait.ask_id, Card { question_id: question.id.clone(), options, resolved: false });
+                        cards.insert(wait.ask_id, Card { question_id: question.id.clone(), options, title: title.clone(), resolved: false });
                         raised.push(question);
                     }
                     Err(error) => {
@@ -560,6 +578,12 @@ impl AcpChat {
                         tracing::warn!(pane = %self.pane_id, code = error.code, "acp chat: could not raise a permission card");
                     }
                 }
+            }
+        }
+        for (ask_id, option_id) in automatic {
+            if self.session.answer_permission(ask_id, &option_id, AnswerSource::Person).is_err() {
+                // The agent no longer waits for it (or the answer did not go): the next look decides again.
+                self.auto_asks.lock().remove(&ask_id);
             }
         }
         for question in &raised {
@@ -629,8 +653,14 @@ impl AcpChat {
                 .and_then(|c| c.options.iter().find(|o| o.option_id == option_id).map(|o| o.name.clone()))
                 .unwrap_or_else(|| option_id.to_string())
         };
+        let automatic = self.auto_asks.lock().remove(&ask_id);
+        let kind_of = |option_id: &str| card.as_ref().and_then(|c| c.options.iter().find(|o| o.option_id == option_id).map(|o| o.kind.clone())).unwrap_or_default();
         let text = match how {
-            Resolution::Selected(option_id) => format!("Answered: {}", name_of(option_id)),
+            Resolution::Selected(_) if automatic.is_some() => {
+                let title = automatic.as_ref().and_then(|t| t.as_deref()).map(str::trim).filter(|t| !t.is_empty());
+                format!("{}{}", cards::AUTO_ALLOWED, title.map(|t| format!(" · {t}")).unwrap_or_default())
+            }
+            Resolution::Selected(option_id) => cards::verdict_text(&kind_of(option_id), &name_of(option_id), card.as_ref().and_then(|c| c.title.as_deref())),
             Resolution::Cancelled => "Cancelled.".to_string(),
             Resolution::AgentGone => match reason {
                 PromptEndReason::TurnEnded => "The turn ended before the answer; the question went away.".to_string(),
@@ -903,6 +933,33 @@ impl AcpChat {
         Ok(())
     }
 
+    /// The tool kinds this chat no longer asks about, sorted.
+    pub fn auto_allowed_kinds(&self) -> Vec<String> {
+        self.auto_allow.lock().iter().cloned().collect()
+    }
+
+    /// The person's "Don't ask again in this chat" for one kind of tool call (on), or "turn back on" (off). Only kinds
+    /// `cards::auto_allowable` names can be set. Nothing is saved: it ends with the chat.
+    pub fn set_auto_allow(&self, kind: &str, on: bool) -> Result<(), String> {
+        if on && !cards::auto_allowable(kind) {
+            return Err(format!("INVALID_ARGUMENT: asks about \"{kind}\" always need your answer"));
+        }
+        let changed = if on { self.auto_allow.lock().insert(kind.to_string()) } else { self.auto_allow.lock().remove(kind) };
+        if changed {
+            crate::audit::record(
+                crate::audit::Kind::Approval,
+                crate::audit::Who::Desktop,
+                if on { "You stopped being asked about one kind of action in a chat session" } else { "You turned asking back on for one kind of action in a chat session" },
+                json!({ "pane_id": self.pane_id, "kind": kind, "on": on }),
+            );
+            self.host.state_changed(&self.pane_id, &self.state());
+            if on {
+                self.reconcile_cards();
+            }
+        }
+        Ok(())
+    }
+
     /// Whether agents may answer this chat's permission questions.
     pub fn agent_answering(&self) -> bool {
         self.agent_answering.load(Ordering::SeqCst)
@@ -1007,6 +1064,7 @@ impl AcpChat {
             "conversation": self.conversations.as_ref().map(|_| self.pane_id.clone()),
             "inTerminal": in_terminal,
             "agentAnswering": self.agent_answering(),
+            "autoAllow": self.auto_allowed_kinds(),
             "interruptedTurn": self.interrupted.load(Ordering::SeqCst),
             "signIn": { "needed": self.sign_in_needed(), "hint": self.session.config().addon.signin_hint },
         })

@@ -55,6 +55,8 @@ pub struct Definition {
     #[serde(default)]
     pub context: ContextTable,
     pub mcp_host: Option<McpHostTable>,
+    /// Where this agent reads skills (`[skills_host] dir`); like `[mcp_host]` it is refused in store definitions.
+    pub skills_host: Option<crate::agent_pack::SkillsHostTable>,
     /// Extra risk patterns for approval cards (can only raise a result).
     pub risk: Option<RiskTable>,
     /// What this agent's screen says when its plan runs out (`[limits]`, `crate::handoff`). Absent =

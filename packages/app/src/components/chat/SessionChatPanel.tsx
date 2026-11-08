@@ -25,6 +25,7 @@ import { useSideQuestion } from './useSideQuestion';
 import { useChatJump } from '../../lib/chatJump';
 import type { ChatHelper } from '../../lib/chat-helpers';
 import type { AcpCommand } from '../../lib/acpChat';
+import { readContext } from '../cockpit/rail/railFormat';
 
 export interface ChatReply {
   /** Why the message box is switched off, or null. */
@@ -121,6 +122,8 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOp
   const newest = chat.turns[chat.turns.length - 1];
   const keepGoing = useKeepGoingOffer(paneId, hasChat && !!reply && newest?.ending?.reason === 'usage_limit');
   const newestText = newest?.user?.text;
+  // The ring in the message box: the newest usage the agent reported (nothing when it did not say its window size).
+  const contextReading = useMemo(() => readContext(chat.usage), [chat.usage]);
   const endings: EndingActions | undefined = hasChat
     ? {
         onRetry: reply && newestText ? () => outbox.send(newestText) : undefined,
@@ -177,7 +180,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOp
         }
         pending={reply ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHide={hide} onSendNow={reply.onInterrupt} /> : undefined}
         composer={reply ? (
-          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} attachFiles={pickFiles} />
+          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} attachFiles={pickFiles} contextUsage={contextReading} />
         ) : undefined}
       />
       {clipFor !== null && <ClipSheet paneId={paneId} userItemId={clipFor} api={clipApi} onClose={() => setClipFor(null)} />}

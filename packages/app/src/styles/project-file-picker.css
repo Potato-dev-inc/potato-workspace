@@ -1,11 +1,11 @@
 /* Project file @ picker: monochrome, floats above the composer. */
 .ck-pfp {
-  --ck-pfp-bg: rgba(255, 255, 255, 0.92);
-  --ck-pfp-border: rgba(0, 0, 0, 0.08);
-  --ck-pfp-text: #1c1c1e;
-  --ck-pfp-muted: #8e8e93;
-  --ck-pfp-hover: rgba(0, 0, 0, 0.06);
-  --ck-pfp-active: rgba(0, 0, 0, 0.09);
+  --ck-pfp-bg: var(--bg-float, rgba(255, 255, 255, 0.92));
+  --ck-pfp-border: var(--sep, rgba(0, 0, 0, 0.08));
+  --ck-pfp-text: var(--label, #1c1c1e);
+  --ck-pfp-muted: var(--label-3, #8e8e93);
+  --ck-pfp-hover: var(--fill-hover, rgba(0, 0, 0, 0.06));
+  --ck-pfp-active: var(--fill-active, rgba(0, 0, 0, 0.09));
   --ck-pfp-row-h: 44px;
 
   position: absolute;
@@ -20,7 +20,7 @@
   background: var(--ck-pfp-bg);
   backdrop-filter: blur(20px) saturate(1.2);
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--float-shadow, 0 10px 30px rgba(0, 0, 0, 0.14));
   color: var(--ck-pfp-text);
   font-size: 13px;
   line-height: 1.3;
@@ -93,26 +93,6 @@
   padding: 10px;
   color: var(--ck-pfp-muted);
   text-align: center;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .ck-pfp {
-    --ck-pfp-bg: rgba(40, 40, 44, 0.92);
-    --ck-pfp-border: rgba(255, 255, 255, 0.1);
-    --ck-pfp-text: #f2f2f7;
-    --ck-pfp-muted: #98989f;
-    --ck-pfp-hover: rgba(255, 255, 255, 0.07);
-    --ck-pfp-active: rgba(255, 255, 255, 0.12);
-  }
-}
-
-:root[data-theme='dark'] .ck-pfp {
-  --ck-pfp-bg: rgba(40, 40, 44, 0.92);
-  --ck-pfp-border: rgba(255, 255, 255, 0.1);
-  --ck-pfp-text: #f2f2f7;
-  --ck-pfp-muted: #98989f;
-  --ck-pfp-hover: rgba(255, 255, 255, 0.07);
-  --ck-pfp-active: rgba(255, 255, 255, 0.12);
 }
 
 @media (prefers-reduced-motion: no-preference) {

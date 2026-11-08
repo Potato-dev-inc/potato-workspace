@@ -249,27 +249,32 @@ describe('settings chips and slash commands in a chat session', () => {
     { id: 'mode', name: 'Mode', category: 'mode', type: 'select', currentValue: 'x', options: [{ value: 'x', name: 'Ask' }, { value: 'y', name: 'Auto' }] },
   ];
 
-  it('draws one select per setting above the box and changes it through the backend', async () => {
+  const chipControls = () => [...host.querySelectorAll<HTMLElement>('[data-testid="acp-chips"] [data-chip-id]')];
+  /** Opens the menu of one setting and clicks the choice with this name, as a person would. */
+  const choose = async (control: HTMLElement, name: string) => {
+    await act(async () => control.querySelector('button')!.click());
+    const option = [...host.querySelectorAll<HTMLElement>('[role="option"]')].find((o) => o.textContent === name)!;
+    await act(async () => option.click());
+  };
+
+  it('draws one menu per setting under the text and changes it through the backend', async () => {
     const { c } = cockpit('acp');
     const setConfig = vi.fn(async () => state());
     await mount(c, fakeAcpApi({ state: async () => state({ configOptions: options }), setConfig }));
-    const chips = [...host.querySelectorAll<HTMLSelectElement>('[data-testid="acp-chips"] select')];
-    expect(chips.map((s) => s.getAttribute('aria-label'))).toEqual(['Model', 'Mode']);
-    expect(chips.every((s) => !s.disabled)).toBe(true);
-    await act(async () => {
-      chips[0].value = 'b';
-      chips[0].dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const chips = chipControls();
+    expect(chips.map((s) => s.querySelector('button')!.getAttribute('aria-label'))).toEqual(['Model', 'Mode']);
+    expect(chips.every((s) => !s.hasAttribute('data-disabled'))).toBe(true);
+    await choose(chips[0], 'Deep');
     expect(setConfig).toHaveBeenCalledWith('p1', 'model', 'b');
-    expect(chips[0].value).toBe('b');
+    expect(chips[0].dataset.value).toBe('b');
   });
 
   it('switches the chips off while a turn runs, and draws none when the agent offers none', async () => {
     const a = cockpit('acp');
     await mount(a.c, fakeAcpApi({ state: async () => state({ configOptions: options, turnInFlight: true, phase: 'working', status: 'running' }) }));
-    const chips = [...host.querySelectorAll<HTMLSelectElement>('[data-testid="acp-chips"] select')];
+    const chips = chipControls();
     expect(chips).toHaveLength(2);
-    expect(chips.every((s) => s.disabled)).toBe(true);
+    expect(chips.every((s) => s.hasAttribute('data-disabled'))).toBe(true);
     const b = cockpit('acp');
     await mount(b.c, fakeAcpApi({ state: async () => state() }));
     expect(host.querySelector('[data-testid="acp-chips"]')).toBeNull();
@@ -281,14 +286,10 @@ describe('settings chips and slash commands in a chat session', () => {
       throw 'BUSY: The agent is working. Try again when it is done.';
     });
     await mount(c, fakeAcpApi({ state: async () => state({ configOptions: options }), setConfig }));
-    const chip = host.querySelector<HTMLSelectElement>('[data-testid="acp-chips"] select')!;
-    await act(async () => {
-      chip.value = 'b';
-      chip.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await choose(chipControls()[0], 'Deep');
     await flush();
     expect(host.querySelector('[data-testid="acp-chips"] [role="alert"]')?.textContent).toBe('The agent is working. Try again when it is done.');
-    expect(host.querySelector<HTMLSelectElement>('[data-testid="acp-chips"] select')!.value).toBe('a');
+    expect(chipControls()[0].dataset.value).toBe('a');
   });
 
   it("gives the message box the agent's slash commands", async () => {

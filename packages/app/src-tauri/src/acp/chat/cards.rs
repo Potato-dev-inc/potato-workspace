@@ -31,6 +31,8 @@ pub struct CardOption {
 pub struct Card {
     pub question_id: String,
     pub options: Vec<CardOption>,
+    /// What the tool call is called, for the line the chat keeps once the card is answered.
+    pub title: Option<String>,
     /// The person answered (or dismissed) it and the answer is on its way to the agent.
     pub resolved: bool,
 }
@@ -111,6 +113,33 @@ pub fn new_question(pane_id: &str, label: &str, wait: &PermissionWait, title: Op
     (new, options)
 }
 
+/// Tool kinds a person may stop being asked about in one chat ("Don't ask again"). Deleting, moving, and any kind the
+/// agent did not name (or named something this build does not know) always ask.
+pub fn auto_allowable(kind: &str) -> bool {
+    matches!(kind, "read" | "edit" | "execute" | "search" | "fetch" | "think" | "switch_mode")
+}
+
+/// The option an automatic yes uses: the agent's "allow once", else its "allow always".
+pub fn allow_option(offered: &[OptionBrief]) -> Option<&OptionBrief> {
+    ["allow_once", "allow_always"].iter().find_map(|kind| offered.iter().find(|o| o.kind == *kind))
+}
+
+/// The words the chat keeps for an answered ask: `Allowed · <title>`, `Denied · <title>`, or the agent's own option
+/// name for any other kind of option.
+pub fn verdict_text(option_kind: &str, option_name: &str, title: Option<&str>) -> String {
+    let head = match option_kind {
+        "allow_once" | "allow_always" => "Allowed".to_string(),
+        "reject_once" | "reject_always" => "Denied".to_string(),
+        _ => format!("Answered: {option_name}"),
+    };
+    match title.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(title) => format!("{head} · {}", cut_to(title, 200)),
+        None => head,
+    }
+}
+
+pub const AUTO_ALLOWED: &str = "Allowed automatically (you said don't ask again)";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,10 +207,36 @@ mod tests {
     #[test]
     fn a_dismissed_card_rejects_with_the_agents_reject_option() {
         let (_, options) = new_question("p", "Codex", &wait(offered(&[("a", "Allow", "allow_once"), ("r", "No thanks", "reject_once")])), None, None, &[]);
-        let card = Card { question_id: "q".into(), options, resolved: false };
+        let card = Card { question_id: "q".into(), options, title: None, resolved: false };
         assert_eq!(card.rejection().map(|o| o.option_id.as_str()), Some("r"));
-        let only_yes = Card { question_id: "q".into(), options: options_of(&offered(&[("a", "Allow", "allow_once")])), resolved: false };
+        let only_yes = Card { question_id: "q".into(), options: options_of(&offered(&[("a", "Allow", "allow_once")])), title: None, resolved: false };
         assert!(only_yes.rejection().is_none());
+    }
+
+    #[test]
+    fn only_plain_kinds_can_be_allowed_for_the_rest_of_a_chat() {
+        for kind in ["read", "edit", "execute", "search", "fetch"] {
+            assert!(auto_allowable(kind), "{kind}");
+        }
+        for kind in ["delete", "move", "other", "", "something_new"] {
+            assert!(!auto_allowable(kind), "{kind}");
+        }
+    }
+
+    #[test]
+    fn an_automatic_yes_prefers_allow_once_then_allow_always_and_never_a_reject() {
+        let both = offered(&[("r", "No", "reject_once"), ("s", "Always", "allow_always"), ("o", "Once", "allow_once")]);
+        assert_eq!(allow_option(&both).map(|o| o.id.as_str()), Some("o"));
+        let always = offered(&[("r", "No", "reject_once"), ("s", "Always", "allow_always")]);
+        assert_eq!(allow_option(&always).map(|o| o.id.as_str()), Some("s"));
+        assert!(allow_option(&offered(&[("r", "No", "reject_once"), ("x", "Plan B", "other")])).is_none());
+    }
+
+    #[test]
+    fn the_kept_line_says_allowed_or_denied_with_the_title() {
+        assert_eq!(verdict_text("allow_always", "Allow for Session", Some("Write notes.txt")), "Allowed · Write notes.txt");
+        assert_eq!(verdict_text("reject_once", "Reject", None), "Denied");
+        assert_eq!(verdict_text("other", "Plan B", Some(" ls ")), "Answered: Plan B · ls");
     }
 
     #[test]

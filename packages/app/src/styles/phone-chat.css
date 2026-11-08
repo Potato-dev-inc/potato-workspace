@@ -209,6 +209,10 @@
 .ph .ph-chat .ck-chat-composer-field:disabled {
   color: var(--label-3);
 }
+/* The footer line of the desktop card has no box of its own here: its buttons join the row. */
+.ph .ph-chat .ck-chat-composer-foot {
+  display: contents;
+}
 /* 44px is the smallest touch target; the pill keeps its look, its box grows to reach it. */
 .ph .ph-chat .ck-chat-send {
   flex: none;

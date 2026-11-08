@@ -2,7 +2,7 @@
 // groups a turn's steps and writes that line. Pure code.
 import type { ToolCallItem, ToolStep, TurnStep } from '../../lib/sessionChatModel';
 import { classifyTool, type ToolKind } from '../../lib/chatToolKinds';
-import { plural } from './chatFormat';
+import { formatDuration, plural } from './chatFormat';
 
 /** A run of tool rows (one activity line), or one other step (text, a notice, a helper row). */
 export type Segment = { kind: 'activity'; id: string; steps: ToolStep[] } | { kind: 'step'; step: TurnStep };
@@ -114,4 +114,24 @@ export function activitySpanMs(steps: readonly ToolStep[]): number | null {
   const end = Date.parse(last.result?.at ?? last.call.at ?? '');
   if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
   return end - start;
+}
+
+/** The words of one step in the live list: the tool's name and what it works on ("Edit src/a.ts"). */
+export function stepLabel(step: ToolStep): string {
+  return `${step.call.name} ${step.call.summary}`.trim();
+}
+
+/** Milliseconds one step took, when it has both times; else null. */
+export function stepElapsedMs(step: ToolStep): number | null {
+  const start = Date.parse(step.call.at ?? '');
+  const end = Date.parse(step.result?.at ?? '');
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+  return end - start;
+}
+
+/** The folded line of a finished turn: "Done in 14s · 4 steps" (no time when the rows carry none). */
+export function doneSummary(steps: readonly ToolStep[]): string {
+  const span = activitySpanMs(steps);
+  const count = plural(steps.length, 'step');
+  return span !== null ? `Done in ${formatDuration(span)} · ${count}` : `Done · ${count}`;
 }

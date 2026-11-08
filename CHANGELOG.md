@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6
+
+- New chat look: a decision card for permission asks (Allow or Deny, with "Don't ask again in this chat", hold to allow for deletes and moves, and answered asks fold to one line). Agent thinking is shown and folded. Tool calls show as cards with a status. Terminal output has Copy, change cards have Copy patch, and there is a live step list with a timer, plan progress, code block headers, and Copy and Retry under replies.
+- New message box: one card with model and mode menus, an effort switch, a context ring and stacked queued messages.
+- "Add Potato Workspace to your agents" now also sets up custom agents and store agents (Gemini CLI, Qwen Code, Copilot CLI, Droid, Auggie, Kimi Code, Kiro; Mistral Vibe gets skills only). It lists the agents it cannot set up, with the reason.
+
 ## 1.0.5
 
 - Chat messages show added files as chips instead of pasting file text into the message. Paste images with Ctrl+V. Type @ to add a project file.

@@ -134,8 +134,10 @@ afterEach(() => {
 });
 
 const flush = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))));
-const pickers = () => [...host.querySelectorAll<HTMLSelectElement>('[data-testid="acp-chips"] select')];
-const labels = () => pickers().map((s) => s.getAttribute('aria-label'));
+// Each setting is one control (a menu pill, or a segmented switch for the effort-like one) tagged with its id and value.
+const pickers = () => [...host.querySelectorAll<HTMLElement>('[data-testid="acp-chips"] [data-chip-id]')];
+const labels = () => pickers().map((s) => s.querySelector('[aria-label]')?.getAttribute('aria-label') ?? s.getAttribute('aria-label'));
+const isOff = (el: HTMLElement) => el.hasAttribute('data-disabled');
 async function mount(api: AcpChatApi) {
   await act(async () => root.render(<PaneView c={cockpit()} paneId="p1" acp={api} />));
   await flush();
@@ -149,15 +151,15 @@ describe('model and effort pickers after a restart', () => {
     const { api, push } = fakeBackend(backendState({ phase: 'dormant', epoch: 0, revision: 0 }));
     await mount(api);
     expect(labels()).toEqual(['Model', 'Effort']);
-    expect(pickers().map((s) => s.value)).toEqual(['a', 'low']);
+    expect(pickers().map((s) => s.dataset.value)).toEqual(['a', 'low']);
     await push(backendState({ phase: 'idle', epoch: 1, revision: 2 }));
     expect(labels()).toEqual(['Model', 'Effort']);
     // New replies move the revision; the pickers stay.
     await push(backendState({ phase: 'working', turnInFlight: true, turn: 2, revision: 3 }));
-    expect(pickers().every((s) => s.disabled)).toBe(true);
+    expect(pickers().every(isOff)).toBe(true);
     await push(backendState({ phase: 'idle', turn: 2, revision: 4 }));
     expect(labels()).toEqual(['Model', 'Effort']);
-    expect(pickers().every((s) => !s.disabled)).toBe(true);
+    expect(pickers().every((s) => !isOff(s))).toBe(true);
   });
 
   it('a new session that replaced the lost one shows its own options', async () => {
@@ -166,7 +168,8 @@ describe('model and effort pickers after a restart', () => {
     expect(labels()).toEqual(['Model', 'Effort']);
     await push(backendState({ epoch: 2, revision: 5, historyLost: { reason: 'Session not found' } as never, configOptions: NEW_SESSION_OPTIONS }));
     expect(labels()).toEqual(['Model']);
-    expect(pickers()[0].value).toBe('z');
-    expect([...pickers()[0].options].map((o) => o.value)).toEqual(['y', 'z']);
+    expect(pickers()[0].dataset.value).toBe('z');
+    act(() => pickers()[0].querySelector('button')!.click());
+    expect([...host.querySelectorAll('[role="option"]')].map((o) => o.textContent)).toEqual(['Y', 'Z']);
   });
 });

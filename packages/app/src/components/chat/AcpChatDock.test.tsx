@@ -187,7 +187,8 @@ describe('AcpChatDock', () => {
     const { api } = fakeApi(state({ phase: 'needs_input', status: 'waiting_input' }));
     await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
     await flush();
-    expect(host.textContent).toContain('Codex asks permission: Write notes.txt');
+    expect(host.textContent).toContain('Write notes.txt');
+    expect(host.textContent).toContain('Codex');
     expect(host.querySelectorAll('[aria-label="Agent permission question"]').length).toBe(1);
     expect(['Allow Once', 'Allow for Session', 'Reject'].map((t) => !!button(t))).toEqual([true, true, true]);
     // The strip tells that the agent waits for the answer.
@@ -292,6 +293,136 @@ describe('AcpChatDock', () => {
       await flush();
       expect(sw()!.getAttribute('aria-checked')).toBe('false');
       expect(host.querySelector('[data-testid="agent-answering"] [role="alert"]')?.textContent).toBe('This chat is closed.');
+    });
+  });
+
+  describe('decision card', () => {
+    const permission = (over: Record<string, unknown> = {}) => ({
+      askId: 1,
+      title: 'rm -rf dist',
+      toolKind: 'execute',
+      questionId: 'q1',
+      options: [
+        { id: 'allow_once', name: 'Allow Once', kind: 'allow_once' },
+        { id: 'allow_always', name: 'Allow for Session', kind: 'allow_always' },
+        { id: 'reject_once', name: 'Reject', kind: 'reject_once' },
+      ],
+      sinceMs: 0,
+      ...over,
+    });
+
+    it('shows the kind, the command, the first yes filled, and sends the choice', async () => {
+      const { c, answerQuestion } = cockpit([question()]);
+      const { api } = fakeApi(state({ phase: 'needs_input', permissions: [permission()] }));
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
+      await flush();
+      expect(host.querySelector('[data-testid="decision-kind"]')?.textContent).toBe('Run command');
+      expect(host.querySelector('[data-testid="decision-what"]')?.textContent).toBe('rm -rf dist');
+      expect(button('Allow Once')!.className).toContain('ck-dc-btn--pri');
+      expect(button('Allow for Session')!.className).not.toContain('ck-dc-btn--pri');
+      expect(button('Reject')!.className).toContain('ck-dc-btn--no');
+      await act(async () => button('Allow Once')!.click());
+      expect(answerQuestion).toHaveBeenCalledWith('q1', { choice_id: 'allow_once' });
+    });
+
+    it("'Don't ask again' tells the chat to remember the kind first, then answers", async () => {
+      const { c, answerQuestion } = cockpit([question()]);
+      const order: string[] = [];
+      const setAutoAllow = vi.fn(async () => {
+        order.push('remember');
+        return state();
+      });
+      answerQuestion.mockImplementation(async () => {
+        order.push('answer');
+      });
+      const { api } = fakeApi(state({ phase: 'needs_input', permissions: [permission()] }), { setAutoAllow });
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
+      await flush();
+      const box = host.querySelector<HTMLInputElement>('[data-testid="decision-never"] input')!;
+      await act(async () => box.click());
+      await act(async () => button('Allow Once')!.click());
+      await flush();
+      expect(setAutoAllow).toHaveBeenCalledWith('p1', 'execute', true);
+      expect(order).toEqual(['remember', 'answer']);
+    });
+
+    it('a no never remembers, even with the switch on', async () => {
+      const { c, answerQuestion } = cockpit([question()]);
+      const setAutoAllow = vi.fn(async () => state());
+      const { api } = fakeApi(state({ phase: 'needs_input', permissions: [permission()] }), { setAutoAllow });
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
+      await flush();
+      await act(async () => host.querySelector<HTMLInputElement>('[data-testid="decision-never"] input')!.click());
+      await act(async () => button('Reject')!.click());
+      expect(setAutoAllow).not.toHaveBeenCalled();
+      expect(answerQuestion).toHaveBeenCalledWith('q1', { choice_id: 'reject_once' });
+    });
+
+    it('delete hides the switch and needs a held press for the yes', async () => {
+      const { c, answerQuestion } = cockpit([question()]);
+      const { api } = fakeApi(state({ phase: 'needs_input', permissions: [permission({ toolKind: 'delete', title: 'Delete 3 files' })] }), { setAutoAllow: vi.fn(async () => state()) });
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
+      await flush();
+      expect(host.querySelector('[data-testid="decision-never"]')).toBeNull();
+      expect(host.textContent).toContain('Risky');
+      const hold = buttons().find((b) => (b.getAttribute('aria-label') ?? '').startsWith('Hold to choose: Allow Once'))!;
+      // A plain click does nothing.
+      await act(async () => hold.click());
+      expect(answerQuestion).not.toHaveBeenCalled();
+      const key = (type: 'keydown' | 'keyup') => act(async () => void hold.dispatchEvent(new KeyboardEvent(type, { key: ' ', bubbles: true, cancelable: true })));
+      const wait = (ms: number) => act(async () => new Promise<void>((r) => setTimeout(r, ms)));
+      // Released too early: nothing.
+      await key('keydown');
+      await wait(200);
+      await key('keyup');
+      await wait(900);
+      expect(answerQuestion).not.toHaveBeenCalled();
+      // Held long enough: the yes goes.
+      await key('keydown');
+      await wait(1000);
+      expect(answerQuestion).toHaveBeenCalledWith('q1', { choice_id: 'allow_once' });
+    });
+
+    it('an unknown kind hides the switch', async () => {
+      const { c } = cockpit([question()]);
+      const { api } = fakeApi(state({ phase: 'needs_input', permissions: [permission({ toolKind: null })] }), { setAutoAllow: vi.fn(async () => state()) });
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
+      await flush();
+      expect(host.querySelector('[data-testid="decision-never"]')).toBeNull();
+    });
+
+    it('a long command folds to two lines and Show full opens it', async () => {
+      const { c } = cockpit([question()]);
+      const long = 'Select-String -Path "C:\\Program Files\\App\\resources\\brain.mjs" -Pattern "workspace" -SimpleMatch -CaseSensitive';
+      const { api } = fakeApi(state({ phase: 'needs_input', permissions: [permission({ title: long })] }));
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
+      await flush();
+      const what = host.querySelector('[data-testid="decision-what"]')!;
+      expect(what.hasAttribute('data-open')).toBe(false);
+      await act(async () => buttons().find((b) => b.textContent === 'Show full')!.click());
+      expect(what.hasAttribute('data-open')).toBe(true);
+      expect(buttons().some((b) => b.textContent === 'Show less')).toBe(true);
+    });
+
+    it('lists what is not asked about in this chat, with a way back', async () => {
+      const { c } = cockpit([]);
+      const setAutoAllow = vi.fn(async () => state());
+      const { api } = fakeApi(state({ autoAllow: ['execute'] }), { setAutoAllow });
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
+      await flush();
+      const line = host.querySelector('[data-testid="auto-allow-line"]')!;
+      expect(line.textContent).toContain('Not asking for: Run command');
+      await act(async () => buttons().find((b) => b.textContent === 'Turn back on')!.click());
+      expect(setAutoAllow).toHaveBeenCalledWith('p1', 'execute', false);
+    });
+
+    it('more questions waiting are counted, not stacked', async () => {
+      const { c } = cockpit([question(), question({ id: 'q2' })]);
+      const { api } = fakeApi(state({ phase: 'needs_input', permissions: [permission()] }));
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
+      await flush();
+      expect(host.querySelectorAll('[data-testid="decision-card"]').length).toBe(1);
+      expect(host.textContent).toContain('1 more waiting');
     });
   });
 

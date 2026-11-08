@@ -121,6 +121,7 @@ pub(crate) fn item_ms(item: &ChatItem) -> Option<u64> {
         | ChatItem::ToolCall { at, .. }
         | ChatItem::ToolResult { at, .. }
         | ChatItem::TurnEnd { at, .. }
+        | ChatItem::Thinking { at, .. }
         | ChatItem::Usage { at, .. }
         | ChatItem::Session { at, .. }
         | ChatItem::Plan { at, .. }

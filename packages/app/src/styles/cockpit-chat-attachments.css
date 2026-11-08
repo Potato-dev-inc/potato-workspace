@@ -176,10 +176,10 @@
   background: var(--bg-raised);
   cursor: pointer;
 }
-/* In the composer box: the chips share the first line with the + button and wrap inside it. */
+/* In the composer box: the chips sit on a line above the text and wrap inside the card. */
 .cockpit .ck-chat-composer-chips {
-  flex: 1 1 0;
-  padding: 2px 0;
+  flex: none;
+  padding: 10px 12px 0;
 }
 /* Above the person's message in the transcript: right-aligned, read-only chips. */
 .cockpit .ck-chat-user-files {

@@ -1,12 +1,13 @@
 // What a chat session over ACP adds under its conversation: the agent's permission questions as cards (the Inbox's own
-// question card, with the agent's real options and no default), and a strip that says what the session is doing with
+// decision card, with the agent's real options), and a strip that says what the session is doing with
 // a Stop button that reads "Stopping…" until the agent has ended the turn. While a question is open it also holds the
 // small switch that lets an agent answer these questions (off by default).
 import { useEffect, useState } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { useAcpChatState } from '../../hooks/useAcpChatState';
 import { errorSentence, interruptedStrip, permissionCards, quietStrip, runStrip, stoppedStrip, tauriAcpChatApi, type AcpChatApi } from '../../lib/acpChat';
-import { QuestionCard } from '../cockpit/QuestionCard';
+import { kindWords, permissionOf } from '../../lib/decisionCard';
+import { DecisionCard, type DecisionAnswer } from './DecisionCard';
 import { AgentAnsweringSwitch } from './AgentAnsweringSwitch';
 import { SignInCard } from '../acp/SignInCard';
 import '../../styles/cockpit-acp.css';
@@ -62,10 +63,20 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi }: { c:
   };
 
   const cards = permissionCards(c.asked.questions, paneId);
+  const autoAllow = state && !state.closed ? (state.autoAllow ?? []) : [];
+  // "Don't ask again" first tells the chat to remember the kind, then answers; a refusal still lets the answer go.
+  const answerCard = (id: string, { choiceId, remember }: DecisionAnswer, kind: string | null) => {
+    const send = () => void c.asked.answerQuestion(id, { choice_id: choiceId });
+    if (remember && kind && api.setAutoAllow) api.setAutoAllow(paneId, kind, true).then(send, send);
+    else send();
+  };
+  const turnBackOn = (kind: string) => {
+    api.setAutoAllow?.(paneId, kind, false).catch(() => undefined);
+  };
   const quiet = quietStrip(state, asked);
   const strip = quiet ? null : runStrip(state, asked);
   const signIn = state && !state.closed && state.signIn?.needed ? state : null;
-  if (cards.length === 0 && !strip && !quiet && !signIn && !stopped && !interrupted) return null;
+  if (cards.length === 0 && !strip && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0) return null;
   const keepWaiting = () => {
     api.keepWaiting?.(paneId).catch(() => undefined);
   };
@@ -75,17 +86,21 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi }: { c:
   };
   return (
     <div className="ck-dock ck-acp-dock" data-testid="acp-dock">
-      {cards.map((q) => (
-        <div key={q.id} className="ib-dock" role="group" aria-label="Agent permission question">
-          <QuestionCard
+      {cards.slice(0, 1).map((q) => {
+        const permission = permissionOf(q, state?.permissions);
+        return (
+          <DecisionCard
+            key={q.id}
             q={q}
-            paneName={paneName}
-            now={c.now}
-            onAnswer={(answer) => void c.asked.answerQuestion(q.id, answer)}
+            permission={permission}
+            label={state?.label ?? paneName}
+            waiting={cards.length - 1}
+            canRememberHere={!!api.setAutoAllow}
+            onAnswer={(answer) => answerCard(q.id, answer, permission?.toolKind ?? null)}
             onDismiss={() => void c.asked.dismissQuestion(q.id)}
           />
-        </div>
-      ))}
+        );
+      })}
       {cards.length > 0 && <AgentAnsweringSwitch paneId={paneId} state={state} api={api} />}
       {signIn && (
         <SignInCard
@@ -143,6 +158,17 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi }: { c:
           <button type="button" className="ck-btn ck-btn--secondary ck-acp-stop" onClick={stop} disabled={strip.stopping}>
             {strip.stopping ? 'Stopping…' : 'Stop'}
           </button>
+        </div>
+      )}
+      {autoAllow.length > 0 && (
+        <div className="ck-dc-auto" data-testid="auto-allow-line">
+          <span>Not asking for: {autoAllow.map((k) => kindWords(k) ?? k).join(', ')}</span>
+          <span aria-hidden="true"> · </span>
+          {autoAllow.map((k) => (
+            <button key={k} type="button" className="ck-dc-more" onClick={() => turnBackOn(k)}>
+              {autoAllow.length > 1 ? `Turn back on (${kindWords(k) ?? k})` : 'Turn back on'}
+            </button>
+          ))}
         </div>
       )}
     </div>

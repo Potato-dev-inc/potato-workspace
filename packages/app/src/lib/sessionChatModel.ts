@@ -50,6 +50,8 @@ export type ChatItem =
     }
   | { kind: 'toolResult'; id: string; at: string | null; callId: string; ok: boolean; output: string }
   | { kind: 'turnEnd'; id: string; at: string | null; outcome: TurnOutcome; durationMs: number | null }
+  /** The agent's own reasoning, when it shares it (a chat over ACP). `durationMs`: first words to last, when known. */
+  | { kind: 'thinking'; id: string; at: string | null; text: string; durationMs?: number | null }
   | {
       kind: 'usage';
       id: string;
@@ -68,6 +70,7 @@ export type AssistantItem = Extract<ChatItem, { kind: 'assistant' }>;
 export type ToolCallItem = Extract<ChatItem, { kind: 'toolCall' }>;
 export type ToolResultItem = Extract<ChatItem, { kind: 'toolResult' }>;
 export type TurnEndItem = Extract<ChatItem, { kind: 'turnEnd' }>;
+export type ThinkingItem = Extract<ChatItem, { kind: 'thinking' }>;
 export type UsageItem = Extract<ChatItem, { kind: 'usage' }>;
 export type PlanChatItem = Extract<ChatItem, { kind: 'plan' }>;
 export type NoticeItem = Extract<ChatItem, { kind: 'notice' }>;
@@ -133,7 +136,14 @@ export interface NoticeStep {
   item: NoticeItem;
 }
 
-export type TurnStep = TextStep | ToolStep | NoticeStep;
+/** The agent's thoughts, in the turn they came in. */
+export interface ThinkingStep {
+  kind: 'thinking';
+  id: string;
+  item: ThinkingItem;
+}
+
+export type TurnStep = TextStep | ToolStep | NoticeStep | ThinkingStep;
 
 /** The one grey line a turn of a chat ends with ("Done · 3 files · 2 min"). `reason` is the part after `ending:`. */
 export interface TurnEnding {
@@ -295,6 +305,9 @@ export function groupTurns(items: readonly ChatItem[]): GroupedChat {
         turnFor(item.id).steps.push({ kind: 'text', id: item.id, item });
         // A session item need not name the model (it is on each message); the newest one that does wins.
         model = item.model ?? model;
+        break;
+      case 'thinking':
+        if (typeof item.text === 'string' && item.text.trim() !== '') turnFor(item.id).steps.push({ kind: 'thinking', id: item.id, item });
         break;
       case 'toolCall': {
         for (const path of Array.isArray(item.paths) ? item.paths : []) {

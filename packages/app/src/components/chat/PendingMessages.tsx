@@ -1,8 +1,10 @@
 // Messages the person wrote that the agent has not shown in the conversation yet: waiting, being sent, just sent,
 // or failed. They sit at the bottom of the chat as bubbles; the real message replaces the bubble once the agent's
-// session (or the screen) shows it.
+// session (or the screen) shows it. On the desktop they read as a short stacked queue (one slim row each, in order);
+// the phone keeps its bubbles (phone-chat.css).
 import { useState } from 'react';
 import type { OutboxMessage } from '../../lib/paneOutbox';
+import '../../styles/chat-input-card.css';
 
 export interface PendingMessagesProps {
   messages: readonly OutboxMessage[];
@@ -40,13 +42,18 @@ async function copy(text: string): Promise<boolean> {
   }
 }
 
-function Bubble({ message, onCancel, onHide, onSendNow }: { message: OutboxMessage; onCancel: PendingMessagesProps['onCancel']; onHide: (id: string) => void; onSendNow?: () => void }) {
+function Bubble({ message, index, onCancel, onHide, onSendNow }: { message: OutboxMessage; index: number; onCancel: PendingMessagesProps['onCancel']; onHide: (id: string) => void; onSendNow?: () => void }) {
   const [note, setNote] = useState<string | null>(null);
   const { state } = message;
   return (
     <div className="flex justify-end ck-chat-pending" data-testid="chat-pending" data-state={state}>
       <div className={`max-w-[85%] ck-chat-pending-body${state === 'failed' ? ' ck-chat-pending-body--failed' : ''}`}>
-        <div className="whitespace-pre-wrap break-words ck-chat-bubble ck-chat-bubble--pending">{message.text}</div>
+        <span className="ck-q-n" aria-hidden="true">
+          {index + 1}
+        </span>
+        <div className="whitespace-pre-wrap break-words ck-chat-bubble ck-chat-bubble--pending" title={message.text}>
+          {message.text}
+        </div>
         <div className="ck-chat-pending-meta">
           {state === 'queued' && (
             <>
@@ -103,8 +110,8 @@ export function PendingMessages({ messages, onCancel, onHide, onSendNow }: Pendi
   if (messages.length === 0) return null;
   return (
     <div className="space-y-2 ck-chat-pending-list" aria-live="polite">
-      {messages.map((message) => (
-        <Bubble key={message.id} message={message} onCancel={onCancel} onHide={onHide} onSendNow={onSendNow} />
+      {messages.map((message, index) => (
+        <Bubble key={message.id} message={message} index={index} onCancel={onCancel} onHide={onHide} onSendNow={onSendNow} />
       ))}
     </div>
   );

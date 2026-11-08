@@ -103,8 +103,8 @@ fn item_html(out: &mut String, item: &ChatItem, meta: &Meta, ctx: &RedactContext
                 out.push_str(&format!("<p class=\"notice\">{}</p>\n", clean(text, ctx)));
             }
         }
-        // Token counts and the session header are not part of the conversation.
-        ChatItem::Usage { .. } | ChatItem::Session { .. } => {}
+        // Token counts, the session header and the agent's private thoughts are not part of the conversation.
+        ChatItem::Usage { .. } | ChatItem::Session { .. } | ChatItem::Thinking { .. } => {}
     }
 }
 

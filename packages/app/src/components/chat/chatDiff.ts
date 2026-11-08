@@ -112,3 +112,45 @@ export function patchLines(patch: string): DiffLine[] {
     return { op: 'same', text: line.startsWith(' ') ? line.slice(1) : line };
   });
 }
+
+/** How many lines a diff adds and removes. */
+export function diffStats(lines: readonly DiffLine[]): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const line of lines) {
+    if (line.op === 'add') added += 1;
+    else if (line.op === 'del') removed += 1;
+  }
+  return { added, removed };
+}
+
+/** A diff split into hunks at each header line. The first hunk has no header when the diff does not start with one. */
+export interface DiffHunk {
+  head: string | null;
+  lines: DiffLine[];
+}
+
+export function diffHunks(lines: readonly DiffLine[]): DiffHunk[] {
+  const hunks: DiffHunk[] = [];
+  for (const line of lines) {
+    if (line.op === 'head') {
+      hunks.push({ head: line.text, lines: [] });
+      continue;
+    }
+    let last = hunks[hunks.length - 1];
+    if (!last) {
+      last = { head: null, lines: [] };
+      hunks.push(last);
+    }
+    last.lines.push(line);
+  }
+  return hunks;
+}
+
+const PATCH_PREFIX: Record<DiffOp, string> = { same: ' ', add: '+', del: '-', head: '' };
+
+/** The diff as patch text (a `+`, `-` or space before each line), with `---` / `+++` lines when the path is known. */
+export function patchText(lines: readonly DiffLine[], path?: string | null): string {
+  const body = lines.map((line) => `${PATCH_PREFIX[line.op]}${line.text}`);
+  return (path ? [`--- ${path}`, `+++ ${path}`, ...body] : body).join('\n');
+}

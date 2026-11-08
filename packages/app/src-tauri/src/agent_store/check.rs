@@ -231,6 +231,9 @@ pub fn forbidden_in_store(def: &Definition) -> Option<String> {
     if def.mcp_host.is_some() {
         return Some("[mcp_host] writes into the agent's own settings file".into());
     }
+    if def.skills_host.is_some() {
+        return Some("[skills_host] writes into the agent's own skills folder".into());
+    }
     if def.hooks.is_some() {
         return Some("[hooks] changes how the agent reports its work".into());
     }

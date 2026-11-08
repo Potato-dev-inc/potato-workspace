@@ -4,7 +4,7 @@
 //! | ACP | chat item |
 //! |---|---|
 //! | `agent_message_chunk` | `Assistant`, one per message: chunks of the same message grow one item (same id) |
-//! | `agent_thought_chunk` | nothing: `ChatItem` has no thinking item |
+//! | `agent_thought_chunk` | `Thinking`, one per run of thoughts: chunks grow one item (same id), bounded like the text |
 //! | `tool_call`, `tool_call_update` | `ToolCall` (title, kind, files, diff) and, once finished, `ToolResult` |
 //! | `plan` | `Plan` (the whole list, `replace`), one per turn |
 //! | `usage_update` | `Usage` (context in use / window) |
@@ -286,6 +286,9 @@ pub struct Mapper {
     replay_turn: u64,
     seg_n: u32,
     assistant: Option<Segment>,
+    /// The run of thoughts that is being built, and when it began.
+    thinking: Option<(Segment, Instant)>,
+    think_n: u32,
     /// The last assistant message of the turn, for its `final_answer` mark.
     last_assistant: Option<(ChatItem, u32)>,
     user: Option<Segment>,
@@ -329,6 +332,8 @@ impl Mapper {
             replay_turn: 0,
             seg_n: 0,
             assistant: None,
+            thinking: None,
+            think_n: 0,
             last_assistant: None,
             user: None,
             user_attachments: Vec::new(),
@@ -467,8 +472,10 @@ impl Mapper {
         self.turn = Some(OpenTurn { n: turn, started: now });
         self.turn_no = turn;
         self.seg_n = 0;
+        self.think_n = 0;
         self.steer_n = 0;
         self.assistant = None;
+        self.thinking = None;
         self.last_assistant = None;
         self.turn_files.clear();
         self.turn_visible = false;
@@ -490,6 +497,7 @@ impl Mapper {
         self.steer_n += 1;
         // What the agent says next is a new message after the person's.
         self.assistant = None;
+        self.thinking = None;
         self.note(vec![ChatItem::User { id: format!("u{turn}.s{}", self.steer_n), at: Some(at.to_string()), text: text.to_string(), attachments: attachments.to_vec() }])
     }
 
@@ -498,12 +506,14 @@ impl Mapper {
     /// The notice that stands for a permission question in the chat: waiting, then what was answered.
     pub fn permission_notice(&mut self, ask_id: u64, text: String, at: &str) -> Vec<ChatItem> {
         self.assistant = None;
+        self.thinking = None;
         self.note(vec![ChatItem::Notice { id: format!("perm:{ask_id}"), at: Some(at.to_string()), notice_kind: "permission".into(), text, url: None }])
     }
 
     /// A permission request the app had to refuse before it could become a prompt.
     pub fn permission_refused(&mut self, reason: &str, at: &str) -> Vec<ChatItem> {
         self.assistant = None;
+        self.thinking = None;
         let text = format!("A permission request was refused: {reason}.");
         self.note(vec![ChatItem::Notice { id: "perm:refused".into(), at: Some(at.to_string()), notice_kind: "permission_refused".into(), text, url: None }])
     }
@@ -524,7 +534,7 @@ impl Mapper {
                 self.note(out)
             }
             SessionEvent::Update { update, replay } => {
-                let out = self.update(update, *replay, at);
+                let out = self.update(update, *replay, at, now);
                 self.note(out)
             }
             SessionEvent::TurnEnded(summary) => {
@@ -551,7 +561,7 @@ impl Mapper {
         ChatItem::Session { id: "session".into(), at: Some(at.to_string()), model: self.model.clone(), cli_version: self.agent_version.clone() }
     }
 
-    fn update(&mut self, update: &SessionUpdate, replay: bool, at: &str) -> Vec<ChatItem> {
+    fn update(&mut self, update: &SessionUpdate, replay: bool, at: &str, now: Instant) -> Vec<ChatItem> {
         if replay && self.ignore_replay {
             return Vec::new();
         }
@@ -564,7 +574,7 @@ impl Mapper {
             // A live agent does not echo the person's message; one that does is not shown twice.
             SessionUpdate::UserMessageChunk(_) => Vec::new(),
             SessionUpdate::AgentMessageChunk(chunk) => self.agent_chunk(chunk, replay, at),
-            SessionUpdate::AgentThoughtChunk(_) => Vec::new(),
+            SessionUpdate::AgentThoughtChunk(chunk) => self.thought_chunk(chunk, replay, at, now),
             SessionUpdate::ToolCall(call) => self.tool_call(call, at),
             SessionUpdate::ToolCallUpdate(update) => self.tool_update(update, at),
             SessionUpdate::Plan(plan) => self.plan(&plan.entries, replay, at),
@@ -580,12 +590,14 @@ impl Mapper {
             SessionUpdate::Notice(raw) => match notice_words(raw) {
                 Some(text) => {
                     self.assistant = None;
+        self.thinking = None;
                     vec![self.notice("note", text, at)]
                 }
                 None => Vec::new(),
             },
             SessionUpdate::CompactionUpdate(_) => {
                 self.assistant = None;
+        self.thinking = None;
                 vec![ChatItem::Notice { id: "n:compacted".into(), at: Some(at.to_string()), notice_kind: "compacted".into(), text: "The conversation was compacted to save room.".into(), url: None }]
             }
             SessionUpdate::CompactionSummaryChunk(_) => Vec::new(),
@@ -633,7 +645,9 @@ impl Mapper {
             self.user_attachments.clear();
             self.replay_turn += 1;
             self.seg_n = 0;
+        self.think_n = 0;
             self.assistant = None;
+        self.thinking = None;
             self.user = Some(Segment { id: format!("hu{}", self.replay_turn), text: String::new(), message_id: None, cut: false });
         }
         let Some(seg) = self.user.as_mut() else { return Vec::new() };
@@ -642,11 +656,36 @@ impl Mapper {
         vec![ChatItem::User { id: seg.id.clone(), at: Some(at.to_string()), text: seg.text.clone(), attachments: self.user_attachments.clone() }]
     }
 
+    fn thought_chunk(&mut self, chunk: &ContentChunk, replay: bool, at: &str, now: Instant) -> Vec<ChatItem> {
+        let Some(words) = chunk_words(chunk) else { return Vec::new() };
+        if words.is_empty() {
+            return Vec::new();
+        }
+        if replay {
+            self.user = None;
+        }
+        // Words after the thoughts are a new message, below them.
+        self.assistant = None;
+        let (prefix, n) = self.ctx(replay);
+        if self.thinking.is_none() {
+            self.think_n += 1;
+            self.thinking = Some((Segment { id: format!("{prefix}th{n}.{}", self.think_n), text: String::new(), message_id: None, cut: false }, now));
+        }
+        let Some((seg, began)) = self.thinking.as_mut() else { return Vec::new() };
+        push_thought(seg, &words);
+        if seg.text.trim().is_empty() {
+            return Vec::new();
+        }
+        let duration_ms = if replay { None } else { now.checked_duration_since(*began).map(|d| d.as_millis() as u64) };
+        vec![ChatItem::Thinking { id: seg.id.clone(), at: Some(at.to_string()), text: seg.text.clone(), duration_ms }]
+    }
+
     fn agent_chunk(&mut self, chunk: &ContentChunk, replay: bool, at: &str) -> Vec<ChatItem> {
         let Some(words) = chunk_words(chunk) else { return Vec::new() };
         if words.is_empty() {
             return Vec::new();
         }
+        self.thinking = None;
         if replay {
             // The agent's reply ends the replayed user message.
             self.user = None;
@@ -681,6 +720,7 @@ impl Mapper {
 
     fn tool_call(&mut self, call: &ToolCall, at: &str) -> Vec<ChatItem> {
         self.assistant = None;
+        self.thinking = None;
         let mut tool = self.tools.remove(&call.tool_call_id).unwrap_or_else(|| Tool::new(&call.tool_call_id));
         tool.apply_call(call);
         self.finish_tool_update(tool, at)
@@ -690,6 +730,7 @@ impl Mapper {
         let first_sight = !self.tools.contains_key(&update.tool_call_id);
         if first_sight {
             self.assistant = None;
+        self.thinking = None;
         }
         let mut tool = self.tools.remove(&update.tool_call_id).unwrap_or_else(|| Tool::new(&update.tool_call_id));
         tool.apply_update(update);
@@ -728,6 +769,7 @@ impl Mapper {
 
     fn plan(&mut self, entries: &[Value], replay: bool, at: &str) -> Vec<ChatItem> {
         self.assistant = None;
+        self.thinking = None;
         let (prefix, n) = self.ctx(replay);
         let items = entries
             .iter()
@@ -754,6 +796,7 @@ impl Mapper {
             return Vec::new();
         };
         self.assistant = None;
+        self.thinking = None;
         self.user = None;
         let mut out = Vec::new();
         let duration_ms = now.checked_duration_since(turn.started).map(|d| d.as_millis() as u64);
@@ -829,6 +872,23 @@ fn push_text(seg: &mut Segment, words: &str) {
         let end = seg.text.char_indices().nth(MAX_TEXT_CHARS).map(|(i, _)| i).unwrap_or(seg.text.len());
         seg.text.truncate(end);
         seg.text.push_str(TRUNCATED);
+        seg.cut = true;
+    }
+}
+
+/// Longest run of thoughts kept, in characters.
+pub const MAX_THOUGHT_CHARS: usize = 20_000;
+
+fn push_thought(seg: &mut Segment, words: &str) {
+    if seg.cut {
+        return;
+    }
+    seg.text.push_str(words);
+    if seg.text.chars().count() > MAX_THOUGHT_CHARS {
+        let end = seg.text.char_indices().nth(MAX_THOUGHT_CHARS).map(|(i, _)| i).unwrap_or(seg.text.len());
+        seg.text.truncate(end);
+        seg.text.push_str("
+…");
         seg.cut = true;
     }
 }

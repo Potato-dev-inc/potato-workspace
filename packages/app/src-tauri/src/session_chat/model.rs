@@ -43,6 +43,9 @@ pub enum ChatItem {
     /// A tool result. `output` is cut to MAX_OUTPUT_CHARS (4000) with a trailing "…".
     ToolResult { id: String, at: Option<String>, call_id: String, ok: bool, output: String },
     TurnEnd { id: String, at: Option<String>, outcome: TurnOutcome, duration_ms: Option<u64> },
+    /// The agent's own reasoning, when the agent shares it. `duration_ms`: from its first words to its last, when known.
+    /// Never part of an export, a clip or the live room.
+    Thinking { id: String, at: Option<String>, text: String, duration_ms: Option<u64> },
     Usage {
         id: String,
         at: Option<String>,
@@ -81,6 +84,7 @@ impl ChatItem {
             | ChatItem::ToolCall { id, .. }
             | ChatItem::ToolResult { id, .. }
             | ChatItem::TurnEnd { id, .. }
+            | ChatItem::Thinking { id, .. }
             | ChatItem::Usage { id, .. }
             | ChatItem::Session { id, .. }
             | ChatItem::Plan { id, .. }
