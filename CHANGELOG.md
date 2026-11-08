@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.8
+
+- Fix: agents in a Terminal pane failed to start with "No application is associated with the specified file" when the first matching program on PATH was a broken link (for example during a Codex self-update or after a winget upgrade). Potato Workspace now starts the first program that can actually run, by its full path, and says which files it tried if none can.
+- Fix: the setup check now finds agents installed with winget, and winget's "already installed / no upgrade" answer counts as success instead of an error.
+
 ## 1.0.7
 
 - Fix: chats in the installed app now get Potato Workspace's tools (the app looked for its tool program in the wrong folder). A chat says so if the tools can't be added. Same folder fix for phone pairing and agent adapters.

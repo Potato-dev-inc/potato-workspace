@@ -51,6 +51,29 @@ pub fn parse_done(terminal_text: &str) -> Option<i32> {
         .and_then(|rest| rest.trim().parse::<i32>().ok())
 }
 
+/// winget exit codes that mean "the package is already there", as the signed number a PowerShell
+/// `$LASTEXITCODE` holds (winget's documented return codes):
+/// - 0x8A15002B `UPDATE_NOT_APPLICABLE`: installed, no newer version applies (`install` falls back to upgrade)
+/// - 0x8A150061 `PACKAGE_ALREADY_INSTALLED`
+/// - 0x8A15010D `INSTALL_ALREADY_INSTALLED`: this or another version is already installed
+/// - 0x8A15010E `INSTALL_NEWER_VERSION_INSTALLED`: a newer version is installed
+const WINGET_ALREADY_INSTALLED: [u32; 4] = [0x8A15_002B, 0x8A15_0061, 0x8A15_010D, 0x8A15_010E];
+
+/// Whether `code` is one of winget's "already installed" exit codes.
+pub fn is_already_installed(code: i32) -> bool {
+    WINGET_ALREADY_INSTALLED.contains(&(code as u32))
+}
+
+/// The exit code the app acts on: winget's "already installed" codes become success (0), so the
+/// install flow goes on to the health check, which decides whether the program really works.
+pub fn effective_exit(code: i32) -> i32 {
+    if is_already_installed(code) {
+        0
+    } else {
+        code
+    }
+}
+
 /// Plain words for an exit code, when one is known. Success is decided by the health check, not here.
 pub fn explain_exit(code: i32) -> Option<&'static str> {
     match code {
@@ -140,6 +163,20 @@ mod tests {
     fn the_command_line_never_contains_the_marker_text() {
         let s = powershell_script(&argv_step("winget", &["install"]));
         assert!(!s.contains(DONE_MARKER), "{s}");
+    }
+
+    #[test]
+    fn winget_already_installed_codes_count_as_success() {
+        // 0x8A15002B, the code seen when "Install Codex CLI" met an installed package.
+        assert_eq!(effective_exit(-1978335189), 0);
+        assert_eq!(effective_exit(0x8A15_0061_u32 as i32), 0);
+        assert_eq!(effective_exit(0x8A15_010D_u32 as i32), 0);
+        assert_eq!(effective_exit(0x8A15_010E_u32 as i32), 0);
+        // Everything else is left alone: success, cancel, and other winget failures.
+        assert_eq!(effective_exit(0), 0);
+        assert_eq!(effective_exit(1223), 1223);
+        assert_eq!(effective_exit(0x8A15_0010_u32 as i32), 0x8A15_0010_u32 as i32);
+        assert_eq!(effective_exit(-1), -1);
     }
 
     #[test]

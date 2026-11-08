@@ -43,6 +43,8 @@ export interface InstallStatus {
   exit_code: number | null;
   message: string | null;
   closed?: boolean;
+  /** winget reported the package is already installed; counted as success, the health check decides. */
+  already_installed?: boolean;
 }
 
 export interface InstallFinish {

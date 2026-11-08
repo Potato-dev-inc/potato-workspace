@@ -29,7 +29,17 @@ pub(super) fn build_command(
             let invocation = if agent == AgentType::CursorAgent {
                 powershell_cursor_agent_command(cmd, &base_args, extra_args)
             } else {
-                powershell_agent_command(cmd, &base_args, extra_args)
+                // Start the file that can run, by its full path: the shell's own PATH search takes
+                // the first entry with the name, even a dangling link, and fails to start it.
+                let target = crate::tui::program::launch_target(cmd);
+                let command = powershell_agent_command(&target.program, &base_args, extra_args);
+                match target.warning {
+                    Some(warning) => format!(
+                        "Write-Host {} -ForegroundColor Yellow; {command}",
+                        powershell_single_quote(&warning)
+                    ),
+                    None => command,
+                }
             };
             return powershell_host_command(invocation, cwd, env);
         }

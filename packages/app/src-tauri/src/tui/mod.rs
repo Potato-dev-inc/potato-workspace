@@ -7,6 +7,7 @@
 pub mod activity;
 pub mod faint;
 mod profile;
+pub(crate) mod program;
 mod types;
 
 pub use activity::{Activity, ActivityKind};
@@ -284,9 +285,7 @@ pub fn is_tool_activity_line(lower: &str, agent_type: &str) -> bool {
 /// Whether an executable called `name` is on PATH. On Windows any of the extensions a shell would
 /// run counts (`name.exe`, and the `name.cmd` / `name.ps1` shims npm installs), not only `.exe`.
 pub(crate) fn program_on_path(name: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|paths| {
-        find_program_in(&paths, &runnable_extensions(), name).is_some()
-    })
+    find_program_in(&program::search_path(), &runnable_extensions(), name).is_some()
 }
 
 /// The extensions a program may carry, in the order a shell tries them: the machine's `PATHEXT`
@@ -314,12 +313,10 @@ pub(crate) fn runnable_extensions() -> Vec<String> {
 /// The first file called `name` (plus one of `extensions`, tried in order, per directory) in the
 /// directories of `paths`. Pure: no environment is read, so the lookup is testable on any platform.
 pub(crate) fn find_program_in(paths: &std::ffi::OsStr, extensions: &[String], name: &str) -> Option<PathBuf> {
-    std::env::split_paths(paths).find_map(|dir| {
-        extensions
-            .iter()
-            .map(|ext| dir.join(format!("{name}{ext}")))
-            .find(|candidate| candidate.is_file())
-    })
+    match program::lookup_in(paths, extensions, name) {
+        program::Lookup::Found(path) => Some(path),
+        _ => None,
+    }
 }
 
 pub(crate) fn find_path_file(name: &str) -> Option<PathBuf> {
@@ -336,8 +333,7 @@ pub(crate) fn executable(name: &str) -> Result<String, String> {
     {
         let spawnable: Vec<String> =
             runnable_extensions().into_iter().filter(|ext| ext != ".ps1" && ext != ".com").collect();
-        let paths = std::env::var_os("PATH").unwrap_or_default();
-        find_program_in(&paths, &spawnable, name)
+        find_program_in(&program::search_path(), &spawnable, name)
             .map(|path| path.to_string_lossy().into_owned())
             .ok_or_else(|| format!("{name}.exe was not found on PATH"))
     }

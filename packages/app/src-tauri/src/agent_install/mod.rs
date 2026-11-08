@@ -227,11 +227,14 @@ pub fn status(registry: &Mutex<PaneRegistry>, pane_id: &str) -> Value {
     }
     match crate::pty::registry::read_buffer(registry, pane_id, 400) {
         Ok(text) => {
-            let code = command::parse_done(&text);
+            let raw = command::parse_done(&text);
+            // winget "already installed" counts as done: the health check that follows decides.
+            let code = raw.map(command::effective_exit);
             json!({
                 "known": true,
                 "done": code.is_some(),
                 "exit_code": code,
+                "already_installed": raw.is_some_and(command::is_already_installed),
                 "message": code.and_then(command::explain_exit),
             })
         }
