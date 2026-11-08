@@ -551,7 +551,7 @@ impl AcpSession {
     fn open_session(&self, conn: &AcpConnection, caps: &AgentCaps, resume_id: Option<&str>) -> Result<(String, StartKind, SessionInfo), AcpError> {
         let cwd = self.cwd.to_string_lossy().into_owned();
         let replay = self.with_core(|core, _| std::mem::take(&mut core.replay_next));
-        let new_params = self.session_params(json!({ "cwd": cwd, "mcpServers": self.cfg.mcp_servers }));
+        let new_params = self.session_params(json!({ "cwd": cwd, "mcpServers": config::session_mcp_servers(&self.cfg) }));
         let Some(old_id) = resume_id else {
             let (id, info) = self.session_new(conn, caps, new_params)?;
             return Ok((id, StartKind::New, info));
@@ -560,7 +560,7 @@ impl AcpSession {
         let mut reason = "the agent cannot restore a session".to_string();
         let preference = if replay { ResumePreference::PreferLoad } else { self.cfg.resume };
         for method in restore_order(preference, caps) {
-            let params = self.session_params(json!({ "sessionId": old_id, "cwd": cwd, "mcpServers": self.cfg.mcp_servers }));
+            let params = self.session_params(json!({ "sessionId": old_id, "cwd": cwd, "mcpServers": config::session_mcp_servers(&self.cfg) }));
             match self.restore(conn, method, params) {
                 Ok(info) => return Ok((old_id.to_string(), if method == Restore::Resume { StartKind::Resumed } else { StartKind::Loaded }, info)),
                 // Slow, dead or not yet started: the id is still good, try again later.

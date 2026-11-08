@@ -97,7 +97,16 @@ pub fn plan_for(agent_id: &str, tools: &Tools) -> Result<(Plan, Option<String>),
     };
     let spec = crate::tui::profile_for(descriptor.id).install_spec();
     let plan = plan::plan_install(descriptor.id, &descriptor.label, spec.as_ref(), tools);
-    Ok((plan, descriptor.install_hint))
+    // Started by the installer: links are not followed, so "not found" may be a lie. Say so.
+    let hint = if crate::redirection_trust::enforced() {
+        Some(format!(
+            "Potato Workspace was started by its installer, which stops it following links to installed agents. {}",
+            crate::redirection_trust::RESTART_ADVICE
+        ))
+    } else {
+        descriptor.install_hint
+    };
+    Ok((plan, hint))
 }
 
 /// The install plan for a catalog entry that is not registered. The label is `CatalogEntry::label`

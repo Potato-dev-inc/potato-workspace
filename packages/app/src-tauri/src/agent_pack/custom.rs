@@ -364,6 +364,7 @@ fn host_table(config_path: &str, format: Format, list_key: &str, template: &Valu
         entry,
         project_config_path: None,
         entry_http: None,
+        own_entry_extra: toml::Table::new(),
     })
 }
 

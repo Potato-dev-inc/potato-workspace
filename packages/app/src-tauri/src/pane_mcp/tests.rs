@@ -92,7 +92,9 @@ fn codex_gets_command_line_overrides_and_no_file() {
     let d = dir("codex");
     let launch = prepare_in(profile_for("codex").as_ref(), "pane-5", &[], &server("pane-5"), &d);
     assert!(launch.env.is_empty());
-    assert_eq!(launch.args.iter().filter(|a| *a == "-c").count(), 3);
+    assert_eq!(launch.args.iter().filter(|a| *a == "-c").count(), 4);
+    assert!(launch.args.iter().any(|a| a == "mcp_servers.potato-workspace.default_tools_approval_mode='approve'"), "only our server is pre-approved");
+    assert!(launch.args.iter().filter(|a| a.contains("approval")).count() == 1);
     assert!(launch.args.iter().any(|a| a.starts_with("mcp_servers.potato-workspace.command=")));
     assert!(launch.args.iter().any(|a| a.contains("POTATO_WORKSPACE_PANE_ID='pane-5'") && a.contains(PORT_FILE)));
     assert!(!d.exists(), "no folder was made for an agent that needs no file");

@@ -85,6 +85,7 @@ mod tray;
 mod pane_wait;
 mod pane_wait_notify;
 mod platform;
+pub mod redirection_trust;
 mod project_ir;
 pub mod proc_util;
 mod path_limit;
@@ -150,6 +151,12 @@ pub fn run_cli_subcommand() -> Option<i32> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before anything is spawned and before the single-instance lock: an app the installer started
+    // inherits a policy that stops its panes following links; start a fresh copy and exit.
+    let redirection = redirection_trust::guard_at_startup();
+    if redirection == redirection_trust::Outcome::Exit {
+        std::process::exit(0);
+    }
     worker_launch::init_from_env();
     shell_env::apply_to_process();
 
@@ -163,6 +170,9 @@ pub fn run() {
         // Console as before, plus the last lines kept in memory for the diagnostic file.
         .with_writer(flight::applog::Tee)
         .init();
+    if let redirection_trust::Outcome::Continue(Some(note)) = &redirection {
+        tracing::warn!("{note}");
+    }
 
     // `POTATO_WORKSPACE_PROFILE=<name>`: a separate app (own identifier, so its own settings store,
     // webview data and single-instance lock). The default profile keeps the configured identifier.

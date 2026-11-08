@@ -142,8 +142,27 @@ pub(crate) fn substitute(value: &Value, launch: &HostLaunch) -> Value {
 
 /// The entry with placeholders filled in, as JSON.
 pub fn render_entry(table: &McpHostTable, launch: &HostLaunch) -> Result<Value, String> {
+    let mut entry = render_entry_plain(table, launch)?;
+    if let (Some(map), Some(extra)) = (entry.as_object_mut(), own_entry_extra(table)) {
+        for (k, v) in extra {
+            map.entry(k).or_insert(v);
+        }
+    }
+    Ok(entry)
+}
+
+/// The entry without the own-entry keys (what an older release wrote).
+pub fn render_entry_plain(table: &McpHostTable, launch: &HostLaunch) -> Result<Value, String> {
     let template = serde_json::to_value(&table.entry).map_err(|e| e.to_string())?;
     Ok(substitute(&template, launch))
+}
+
+/// `own_entry_extra` as JSON members.
+pub fn own_entry_extra(table: &McpHostTable) -> Option<serde_json::Map<String, Value>> {
+    match serde_json::to_value(&table.own_entry_extra) {
+        Ok(Value::Object(map)) if !map.is_empty() => Some(map),
+        _ => None,
+    }
 }
 
 /// Write the entry for `table`. `approved` must be true (HST-3); `.bak` is created before any change.

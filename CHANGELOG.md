@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.9
+
+- Fix: after an install or update, Windows started Potato Workspace with a restriction that stops it following links, so agents installed through links (like Codex) failed with "No application is associated with the specified file". Potato Workspace now restarts itself without that restriction, and if it can't, tells you to reopen it from the Start menu.
+- Fix: Codex in the Chat tab now gets Potato Workspace's tools (they were dropped when Codex's own settings had an entry with the same name).
+- Fix: Codex started with "never ask" approvals can now use Potato Workspace's tools; only Potato Workspace's own server is pre-approved. "Add Potato Workspace to your agents" offers to add this to existing Codex settings, with Undo.
+
 ## 1.0.8
 
 - Fix: agents in a Terminal pane failed to start with "No application is associated with the specified file" when the first matching program on PATH was a broken link (for example during a Codex self-update or after a winget upgrade). Potato Workspace now starts the first program that can actually run, by its full path, and says which files it tried if none can.

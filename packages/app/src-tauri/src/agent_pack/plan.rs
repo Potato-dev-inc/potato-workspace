@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use super::host::SkillsHostTable;
 use super::record::{backups_dir, sha_hex, Entry, Record};
 use super::{assets, MARKER_PREFIX};
-use crate::mcp_install::declarative::{key_segments, render_entry, resolve_config_path, HostLaunch};
+use crate::mcp_install::declarative::{key_segments, own_entry_extra, render_entry, render_entry_plain, resolve_config_path, HostLaunch};
 use crate::toolbelt::edit::{self, Op};
 use crate::tui::declarative::schema::McpHostTable;
 
@@ -37,7 +37,14 @@ fn is_broken_fallback(table: &McpHostTable, existing: &Value, launch: &HostLaunc
         env,
         ..Default::default()
     };
-    [launch.env.clone(), Vec::new()].into_iter().any(|env| render_entry(table, &fallback(env)).map(|v| &v == existing).unwrap_or(false))
+    // An entry 1.0.6 wrote has none of the own-entry keys; one that has them (or not) is still that entry.
+    let mut existing = existing.clone();
+    if let (Some(map), Some(extra)) = (existing.as_object_mut(), own_entry_extra(table)) {
+        for k in extra.keys() {
+            map.remove(k);
+        }
+    }
+    [launch.env.clone(), Vec::new()].into_iter().any(|env| render_entry_plain(table, &fallback(env)).map(|v| v == existing).unwrap_or(false))
 }
 
 /// One agent and what it declares.
@@ -179,6 +186,8 @@ struct McpGroup {
     diff: String,
     written: bool,
     backup: Option<String>,
+    /// The entry was the person's own; only keys it lacked are added (Undo restores the backup, never removes it).
+    key_only: bool,
 }
 
 fn is_ours(text: &str) -> bool {
@@ -240,6 +249,34 @@ fn diff_lines(before: &str, after: &str) -> String {
     out.join("\n")
 }
 
+/// TOML only: the missing keys written as lines right under the entry's own header, so everything the person wrote
+/// (order, comments, spacing) stays byte for byte. `None` when the entry is not a plain `[a.b]` section.
+fn missing_lines(format: crate::tui::declarative::schema::McpHostFormat, text: &str, segs: &[&str], merged: &Value, keys: &[String]) -> Option<String> {
+    use crate::tui::declarative::schema::McpHostFormat;
+    if format != McpHostFormat::Toml {
+        return None;
+    }
+    let bare = |s: &&str| s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if !segs.iter().all(|s| bare(s)) {
+        return None;
+    }
+    let header = format!("[{}]", segs.join("."));
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    let at = lines.iter().position(|l| l.trim() == header)?;
+    let obj = merged.as_object()?;
+    let mut add: Vec<String> = Vec::new();
+    for k in keys {
+        let mut one = toml::Table::new();
+        one.insert(k.clone(), serde_json::from_value::<toml::Value>(obj.get(k)?.clone()).ok()?);
+        add.push(toml::to_string(&one).ok()?.trim_end().to_string());
+    }
+    for (n, line) in add.into_iter().enumerate() {
+        lines.insert(at + 1 + n, line);
+    }
+    let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    Some(lines.join(eol) + if text.ends_with('\n') { eol } else { "" })
+}
+
 fn plan_mcp_group(table: McpHostTable, path: Result<PathBuf, String>, installed: bool, agents: Vec<usize>, launch: &HostLaunch) -> McpGroup {
     let mut g = McpGroup {
         agents,
@@ -254,6 +291,7 @@ fn plan_mcp_group(table: McpHostTable, path: Result<PathBuf, String>, installed:
         diff: String::new(),
         written: false,
         backup: None,
+        key_only: false,
     };
     let fail = |mut g: McpGroup, why: String| {
         g.status = "error";
@@ -290,7 +328,36 @@ fn plan_mcp_group(table: McpHostTable, path: Result<PathBuf, String>, installed:
         // Only the exact shape 1.0.6 wrote for a package that does not exist is ours to replace.
         Some(v) => {
             if !is_broken_fallback(&table, v, launch) {
-                return g; // already registered: not ours to rewrite
+                // Otherwise already registered and not ours to rewrite; only the own-entry keys it lacks are added.
+                let missing: Vec<(String, Value)> = own_entry_extra(&table)
+                    .map(|extra| extra.into_iter().filter(|(k, _)| v.get(k).is_none()).collect())
+                    .unwrap_or_default();
+                if missing.is_empty() || !v.is_object() {
+                    return g;
+                }
+                // The whole entry is set again with the missing keys added; every value it had stays.
+                let missing_keys: Vec<String> = missing.iter().map(|(k, _)| k.clone()).collect();
+                let mut merged = v.clone();
+                if let Some(map) = merged.as_object_mut() {
+                    map.extend(missing);
+                }
+                let lines_added = missing_lines(table.format, &before, &segs, &merged, &missing_keys);
+                let after = match lines_added {
+                    Some(t) => t,
+                    None => match edit::apply(table.format, &before, parent, &[Op::Set { key: key[0].to_string(), value: merged }]) {
+                        Ok(t) => t,
+                        Err(e) => return fail(g, e),
+                    },
+                };
+                if after == before {
+                    return g;
+                }
+                g.change = FileKind::Update;
+                g.status = "ready";
+                g.key_only = true;
+                g.diff = diff_lines(&before, &after);
+                g.after = after;
+                return g;
             }
             true
         }
@@ -477,7 +544,8 @@ fn apply_mcp_group(g: &mut McpGroup, opts: &Options, rec: &mut Record) {
         g.reason = Some(e);
         return;
     }
-    let written = render_entry(&g.table, &opts.launch).unwrap_or(Value::Null);
+    // A key added to an entry the person already had: Undo restores the backup, and never removes their entry.
+    let written = if g.key_only { Value::Null } else { render_entry(&g.table, &opts.launch).unwrap_or(Value::Null) };
     rec.upsert(Entry::Mcp {
         path: path_str(&path),
         format: format!("{:?}", g.table.format).to_lowercase(),

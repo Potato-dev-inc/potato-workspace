@@ -42,6 +42,14 @@ name_field = "name"
 disable_path = ["mcp_servers", "{name}"]
 disable_value = { enabled = false }
 base = { features = { plugins = false } }
+# Our own tool server goes in the same setting, after the switches. Left in session/new it was lost two ways
+# (adapter 1.1.4): a requested server whose name is already in the person's config.toml is dropped (an older
+# install wrote a potato-workspace entry there), and any requested server replaces the whole mcp_servers
+# table, switches included. The setting is merged over the person's entry, so ours wins.
+# default_tools_approval_mode: this server's tools run without an approval prompt (codex-rs/config/src/mcp_types.rs,
+# McpServerConfig); with approval policy "never" Codex otherwise refuses every call of a server that is not pre-approved.
+own_server_path = ["mcp_servers", "{name}"]
+own_server_extra = { enabled = true, default_tools_approval_mode = "approve" }
 on_list_failure = "refuse"
 
 # Codex's own state database can be locked for a moment by a previous process that is still closing.

@@ -602,6 +602,11 @@ pub struct McpHostTable {
     /// Absent means this host cannot take URL servers.
     #[serde(default)]
     pub entry_http: Option<toml::Table>,
+    /// Keys added only to Potato Workspace's OWN entry (never to the other servers this host takes, so it is not
+    /// part of `entry`), for example the agent's setting that lets this server's tools run without a prompt.
+    /// An existing entry that lacks one gets just that key (the review dialog shows it).
+    #[serde(default)]
+    pub own_entry_extra: toml::Table,
 }
 
 /// Parse a definition file. Error codes: `AGENT_DEF_INVALID_TOML` (syntax or wrong type, with the

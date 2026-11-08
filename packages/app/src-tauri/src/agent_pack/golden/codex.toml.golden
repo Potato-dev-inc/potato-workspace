@@ -7,6 +7,7 @@ command = "mine"
 [mcp_servers.potato-workspace]
 args = ["-y", "@potato-workspace/mcp"]
 command = "npx"
+default_tools_approval_mode = "approve"
 
 [mcp_servers.potato-workspace.env]
 POTATO_WORKSPACE_BRIDGE_PORT_FILE = "C:/pm/potato-workspace.bridge.port"

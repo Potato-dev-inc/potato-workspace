@@ -743,3 +743,81 @@ fn a_user_entry_stays_untouched_even_when_the_program_is_missing() {
     assert_eq!(v["agents"][0]["mcp"]["status"], "unchanged");
     assert_eq!(read(&home.join(".cursor/mcp.json")), user);
 }
+
+// ---- the approval setting under `--ask-for-approval never` ----
+
+const CODEX_WITHOUT_APPROVAL: &str = "model = \"gpt-5\"\n\n[mcp_servers.potato-workspace]\ncommand = \"C:/Program Files/Potato Workspace/resources/bin/puppet-master-mcp.exe\"\nargs = []\n\n[mcp_servers.potato-workspace.env]\nPOTATO_WORKSPACE_BRIDGE_PORT_FILE = \"C:/pm/potato-workspace.bridge.port\"\n\n[mcp_servers.other]\ncommand = \"x\"\n";
+
+#[test]
+fn a_new_codex_entry_pre_approves_only_our_server() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("approve-new");
+    let e = env_with(vec![spec("codex", true)], &home, bundled_launch());
+    service::call(&e, "apply").unwrap();
+    let doc: toml::Value = toml::from_str(&read(&home.join(".codex/config.toml"))).unwrap();
+    assert_eq!(doc["mcp_servers"]["potato-workspace"]["default_tools_approval_mode"].as_str(), Some("approve"));
+    assert_eq!(doc["mcp_servers"]["potato-workspace"]["command"].as_str(), Some(bundled_launch().command.as_str()));
+}
+
+#[test]
+fn the_other_servers_a_host_takes_are_never_pre_approved() {
+    let _serial = crate::tui::registry::test_serial();
+    let table = spec("codex", true).mcp.unwrap();
+    assert!(!table.entry.contains_key("default_tools_approval_mode"), "the shared template carries no approval");
+    assert_eq!(table.own_entry_extra.get("default_tools_approval_mode").and_then(|v| v.as_str()), Some("approve"));
+}
+
+#[test]
+fn an_entry_without_the_approval_gets_just_that_key_and_undo_puts_the_file_back() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("approve-repair");
+    seed(&home, ".codex/config.toml", CODEX_WITHOUT_APPROVAL);
+    let e = env_with(vec![spec("codex", true)], &home, bundled_launch());
+
+    let v = service::call(&e, "preview").unwrap();
+    assert_eq!(v["agents"][0]["mcp"]["status"], "ready");
+    assert_eq!(v["agents"][0]["mcp"]["change"], "update");
+    let diff = v["agents"][0]["mcp"]["diff"].as_str().unwrap();
+    assert!(diff.contains("default_tools_approval_mode"), "{diff}");
+    assert!(!diff.contains("command"), "only the one key is shown: {diff}");
+    assert_eq!(read(&home.join(".codex/config.toml")), CODEX_WITHOUT_APPROVAL, "preview writes nothing");
+
+    let v = service::call(&e, "apply").unwrap();
+    assert_eq!(v["agents"][0]["mcp"]["written"], true);
+    let doc: toml::Value = toml::from_str(&read(&home.join(".codex/config.toml"))).unwrap();
+    assert_eq!(doc["mcp_servers"]["potato-workspace"]["default_tools_approval_mode"].as_str(), Some("approve"));
+    assert_eq!(doc["mcp_servers"]["potato-workspace"]["command"], toml::from_str::<toml::Value>(CODEX_WITHOUT_APPROVAL).unwrap()["mcp_servers"]["potato-workspace"]["command"]);
+    assert!(doc["mcp_servers"]["other"].get("default_tools_approval_mode").is_none(), "another server is not approved");
+    assert_eq!(doc["model"].as_str(), Some("gpt-5"));
+
+    let again = service::call(&e, "apply").unwrap();
+    assert_eq!(again["agents"][0]["mcp"]["status"], "unchanged");
+
+    let u = service::call(&e, "undo").unwrap();
+    assert!(u["skipped"].as_array().unwrap().is_empty(), "{u}");
+    assert_eq!(read(&home.join(".codex/config.toml")), CODEX_WITHOUT_APPROVAL);
+}
+
+#[test]
+fn the_unpublished_npm_entry_gets_the_approval_with_the_repair() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("approve-broken");
+    seed(&home, ".codex/config.toml", BROKEN_CODEX);
+    let e = env_with(vec![spec("codex", true)], &home, bundled_launch());
+    service::call(&e, "apply").unwrap();
+    let doc: toml::Value = toml::from_str(&read(&home.join(".codex/config.toml"))).unwrap();
+    assert_eq!(doc["mcp_servers"]["potato-workspace"]["default_tools_approval_mode"].as_str(), Some("approve"));
+    assert!(doc["mcp_servers"]["potato-workspace"]["command"].as_str().unwrap().contains("puppet-master-mcp.exe"));
+}
+
+#[test]
+fn an_entry_that_already_has_the_approval_is_left_as_it_is() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("approve-has");
+    let mine = CODEX_WITHOUT_APPROVAL.replace("args = []\n", "args = []\ndefault_tools_approval_mode = \"prompt\"\n");
+    seed(&home, ".codex/config.toml", &mine);
+    let e = env_with(vec![spec("codex", true)], &home, bundled_launch());
+    let v = service::call(&e, "apply").unwrap();
+    assert_eq!(v["agents"][0]["mcp"]["status"], "unchanged");
+    assert_eq!(read(&home.join(".codex/config.toml")), mine, "the person's own choice stands");
+}

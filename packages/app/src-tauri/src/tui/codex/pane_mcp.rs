@@ -50,6 +50,9 @@ pub(super) fn launch(request: &PaneMcpRequest<'_>) -> PaneMcpLaunch {
         format!("mcp_servers.{name}.command={}", toml_value(&server.command)),
         format!("mcp_servers.{name}.args=[{args}]"),
         format!("mcp_servers.{name}.env={{{env}}}"),
+        // Launched with `--ask-for-approval never`, Codex refuses the calls of a server that is not pre-approved.
+        // Only this server (Potato Workspace's own), never a blanket setting.
+        format!("mcp_servers.{name}.default_tools_approval_mode='approve'"),
     ];
     PaneMcpLaunch {
         env: Vec::new(),
@@ -94,6 +97,8 @@ mod tests {
                 "mcp_servers.potato-workspace.args=[]",
                 "-c",
                 "mcp_servers.potato-workspace.env={POTATO_WORKSPACE_BRIDGE_PORT_FILE='C:/Users/a b/potato-workspace.bridge.port', POTATO_WORKSPACE_PANE_ID='pane-7'}",
+                "-c",
+                "mcp_servers.potato-workspace.default_tools_approval_mode='approve'",
             ]
         );
     }

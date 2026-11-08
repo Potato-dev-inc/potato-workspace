@@ -218,6 +218,13 @@ pub struct McpConfig {
     pub disable_path: Vec<String>,
     /// `disable_listed`: the value put there.
     pub disable_value: Value,
+    /// `disable_listed`: where this app's own tool server goes in the JSON (`{name}` is its name). When set, that
+    /// server is handed over here, after the switches, and left out of `mcpServers` in the session calls. Some
+    /// adapters drop a requested server whose name is already in the person's own setup, and replace the whole
+    /// server table (the switches included) whenever one is requested; the setting has neither problem.
+    pub own_server_path: Vec<String>,
+    /// `disable_listed`: JSON merged into the own server's entry (a switch that turns it on, its approval setting).
+    pub own_server_extra: Value,
     pub on_list_failure: ListFailure,
 }
 
@@ -567,7 +574,11 @@ pub fn mcp_isolation(cfg: &AgentConfig, host: &dyn HostEnv, cwd: &Path, env: &[(
             }
         },
     };
-    let json = isolation_json(m, &names).map_err(|e| AcpError::Spawn(format!("tool-server setting for {:?}: {e}", cfg.id)))?;
+    // The server this app passes itself is never switched off by name: the person may have a server of the same
+    // name in their own setup (an older install wrote one), and the switch would take ours down with it.
+    let names: Vec<String> = names.into_iter().filter(|n| !is_own_server_name(n, cfg)).collect();
+    let own: Vec<Value> = handed_over_servers(cfg).iter().filter_map(|s| server_as_table(s)).collect();
+    let json = isolation_json_with(m, &names, &own).map_err(|e| AcpError::Spawn(format!("tool-server setting for {:?}: {e}", cfg.id)))?;
     Ok(Some((OsString::from(&m.env), OsString::from(json))))
 }
 
@@ -600,12 +611,74 @@ pub fn parse_server_names(output: &str, name_field: &str) -> Result<Vec<String>,
 
 /// `base` with one switch per name merged in.
 pub fn isolation_json(m: &McpConfig, names: &[String]) -> Result<String, String> {
+    isolation_json_with(m, names, &[])
+}
+
+/// As `isolation_json`, then each own server (`server_as_table` shape, with its `name`) merged in at
+/// `own_server_path`, so it wins over a switch or an entry of the same name.
+pub fn isolation_json_with(m: &McpConfig, names: &[String], own: &[Value]) -> Result<String, String> {
     let mut root = if m.base.is_object() { m.base.clone() } else { Value::Object(Default::default()) };
     for name in names {
         let path: Vec<String> = m.disable_path.iter().map(|part| part.replace("{name}", name)).collect();
         set_at(&mut root, &path, m.disable_value.clone());
     }
+    if !m.own_server_path.is_empty() {
+        for server in own {
+            let Some(name) = server.get("name").and_then(Value::as_str) else { continue };
+            let path: Vec<String> = m.own_server_path.iter().map(|part| part.replace("{name}", name)).collect();
+            let mut entry = server.clone();
+            if let Some(map) = entry.as_object_mut() {
+                map.remove("name");
+            }
+            set_at(&mut root, &path, entry);
+            if m.own_server_extra.is_object() {
+                set_at(&mut root, &path, m.own_server_extra.clone());
+            }
+        }
+    }
     serde_json::to_string(&root).map_err(|e| e.to_string())
+}
+
+fn is_own_server_name(name: &str, cfg: &AgentConfig) -> bool {
+    name == crate::mcp_install::MCP_SERVER_NAME
+        && cfg.mcp_servers.iter().any(|s| s.get("name").and_then(Value::as_str) == Some(name))
+}
+
+/// A session-call tool server in the shape of a settings table: `{name, command, args, env: {NAME: value}}`.
+/// Only a program the adapter starts (stdio); anything else is `None` and stays in the session call.
+pub fn server_as_table(server: &Value) -> Option<Value> {
+    let ty = server.get("type").and_then(Value::as_str);
+    if !matches!(ty, None | Some("stdio")) {
+        return None;
+    }
+    let name = server.get("name").and_then(Value::as_str)?;
+    let command = server.get("command").and_then(Value::as_str)?;
+    let mut env = serde_json::Map::new();
+    for e in server.get("env").and_then(Value::as_array).into_iter().flatten() {
+        if let (Some(n), Some(v)) = (e.get("name").and_then(Value::as_str), e.get("value").and_then(Value::as_str)) {
+            env.insert(n.to_string(), json!(v));
+        }
+    }
+    Some(json!({ "name": name, "command": command, "args": server.get("args").cloned().unwrap_or_else(|| json!([])), "env": env }))
+}
+
+/// The tool servers this config hands over in the agent's settings (`own_server_path`) instead of the session call:
+/// this app's own server, when the mode has a place for it.
+pub fn handed_over_servers(cfg: &AgentConfig) -> Vec<&Value> {
+    let m = &cfg.mcp_config;
+    if m.mode != McpMode::DisableListed || m.own_server_path.is_empty() {
+        return Vec::new();
+    }
+    cfg.mcp_servers
+        .iter()
+        .filter(|s| s.get("name").and_then(Value::as_str) == Some(crate::mcp_install::MCP_SERVER_NAME) && server_as_table(s).is_some())
+        .collect()
+}
+
+/// `mcpServers` for the session calls: the config's servers except those handed over in the settings.
+pub fn session_mcp_servers(cfg: &AgentConfig) -> Vec<Value> {
+    let handed = handed_over_servers(cfg);
+    cfg.mcp_servers.iter().filter(|s| !handed.iter().any(|h| std::ptr::eq(*h, *s))).cloned().collect()
 }
 
 /// Puts `value` at `path` (objects are made on the way; two objects are merged, not replaced).
@@ -769,6 +842,12 @@ pub fn problems(cfg: &AgentConfig) -> Vec<(String, String)> {
             }
             if !m.base.is_null() && !m.base.is_object() {
                 add("mcp_config.base", "an object".into());
+            }
+            if !m.own_server_path.is_empty() && (m.own_server_path.len() > 8 || !m.own_server_path.iter().any(|p| p.contains("{name}"))) {
+                add("mcp_config.own_server_path", "1 to 8 parts, at least one with {name}".into());
+            }
+            if !m.own_server_extra.is_null() && !m.own_server_extra.is_object() {
+                add("mcp_config.own_server_extra", "an object".into());
             }
             if cfg.env.keys().any(|k| k.eq_ignore_ascii_case(&m.env)) {
                 add("mcp_config.env", "is also set in [acp.env]".into());
@@ -1043,6 +1122,80 @@ mod tests {
         assert_eq!(value["mcp_servers"]["a.b"]["enabled"], false, "the name is a key, not a path");
         assert!(parse_server_names(r#"[{"name":"\u0007"}]"#, "name").is_err());
         assert!(parse_server_names(&format!(r#"[{{"name":"{}"}}]"#, "x".repeat(300)), "name").is_err());
+    }
+
+    fn own_server_cfg() -> AgentConfig {
+        let mut cfg = codex();
+        cfg.mcp_servers = vec![json!({
+            "name": crate::mcp_install::MCP_SERVER_NAME,
+            "command": "C:/Program Files/Potato Workspace/resources/bin/puppet-master-mcp.exe",
+            "args": [],
+            "env": [{"name": "POTATO_WORKSPACE_BRIDGE_PORT_FILE", "value": "C:/pm/port"}, {"name": "POTATO_WORKSPACE_PANE_ID", "value": "p1"}],
+        })];
+        cfg
+    }
+
+    fn spawn_setting(cfg: &AgentConfig) -> Value {
+        let host = Host::new();
+        let spec = resolve_spawn(cfg, &host, Path::new("C:\\work")).unwrap();
+        let value = serde_json::from_str(&lookup(&spec.env, "CODEX_CONFIG").unwrap()).unwrap();
+        let _ = std::fs::remove_dir_all(&host.root);
+        value
+    }
+
+    #[test]
+    fn our_own_server_is_never_switched_off_by_name_and_goes_in_the_setting() {
+        // The listing names potato-workspace too: an older install wrote that entry into the person's config.toml.
+        let value = spawn_setting(&own_server_cfg());
+        let ours = &value["mcp_servers"]["potato-workspace"];
+        assert_eq!(ours["enabled"], true, "on, not off: {value}");
+        assert_eq!(ours["default_tools_approval_mode"], "approve");
+        assert_eq!(ours["command"], "C:/Program Files/Potato Workspace/resources/bin/puppet-master-mcp.exe");
+        assert_eq!(ours["env"]["POTATO_WORKSPACE_PANE_ID"], "p1");
+        assert_eq!(ours["env"]["POTATO_WORKSPACE_BRIDGE_PORT_FILE"], "C:/pm/port");
+        assert_eq!(value["mcp_servers"]["chrome-devtools"]["enabled"], false, "the other servers stay off");
+        assert_eq!(value["features"]["plugins"], false);
+    }
+
+    #[test]
+    fn a_handed_over_server_is_not_also_asked_for_in_the_session_calls() {
+        let cfg = own_server_cfg();
+        assert!(session_mcp_servers(&cfg).is_empty(), "else the adapter drops it as a duplicate or loses the switches");
+        assert_eq!(workspace_tools_gap(&cfg), None);
+        let mut with_other = own_server_cfg();
+        with_other.mcp_servers.push(json!({"name": "other", "command": "x", "args": [], "env": []}));
+        let rest = session_mcp_servers(&with_other);
+        assert_eq!(rest.len(), 1);
+        assert_eq!(rest[0]["name"], "other");
+    }
+
+    #[test]
+    fn an_agent_without_a_setting_place_keeps_the_session_call_and_still_never_switches_it_off() {
+        let mut cfg = own_server_cfg();
+        cfg.mcp_config.own_server_path = Vec::new();
+        assert_eq!(session_mcp_servers(&cfg).len(), 1, "stays in session/new");
+        let value = spawn_setting(&cfg);
+        assert!(value["mcp_servers"].get("potato-workspace").is_none(), "no switch for the server we pass: {value}");
+        assert_eq!(value["mcp_servers"]["chrome-devtools"]["enabled"], false);
+    }
+
+    #[test]
+    fn only_the_server_we_pass_is_exempt_from_the_switches() {
+        let mut cfg = own_server_cfg();
+        cfg.mcp_servers[0]["name"] = json!("someone-else");
+        let value = spawn_setting(&cfg);
+        assert_eq!(value["mcp_servers"]["potato-workspace"]["enabled"], false);
+    }
+
+    #[test]
+    fn the_codex_table_hands_our_server_over_with_its_approval_and_checks_the_path() {
+        let m = codex().mcp_config;
+        assert_eq!(m.own_server_path, vec!["mcp_servers".to_string(), "{name}".to_string()]);
+        assert_eq!(m.own_server_extra["default_tools_approval_mode"], "approve");
+        assert_eq!(m.own_server_extra["enabled"], true);
+        let mut bad = codex();
+        bad.mcp_config.own_server_path = vec!["mcp_servers".into(), "fixed".into()];
+        assert!(problems(&bad).iter().any(|(f, _)| f.contains("own_server_path")), "needs {{name}}");
     }
 
     #[test]

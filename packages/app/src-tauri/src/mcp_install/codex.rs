@@ -6,7 +6,7 @@ pub(super) fn codex_mcp_block(source: McpLaunchSource) -> String {
     let launch = launch_spec(source);
     let port_file = crate::app_paths::bridge_port_file_env_value();
     format!(
-        "\n[mcp_servers.{MCP_SERVER_NAME}]\ncommand = \"{}\"\nargs = {:?}\nenabled = true\n\n[mcp_servers.{MCP_SERVER_NAME}.env]\n{} = \"{}\"\n",
+        "\n[mcp_servers.{MCP_SERVER_NAME}]\ncommand = \"{}\"\nargs = {:?}\nenabled = true\ndefault_tools_approval_mode = \"approve\"\n\n[mcp_servers.{MCP_SERVER_NAME}.env]\n{} = \"{}\"\n",
         launch.command,
         launch.args,
         crate::app_paths::BRIDGE_PORT_FILE_ENV,
@@ -24,6 +24,10 @@ pub(super) fn codex_needs_refresh(content: &str, source: McpLaunchSource) -> boo
         return true;
     }
     if codex_needs_port_env(content) {
+        return true;
+    }
+    // Written by an older release: without it Codex refuses this server's calls under `--ask-for-approval never`.
+    if !content.contains("default_tools_approval_mode") {
         return true;
     }
     if source == McpLaunchSource::NpmPackage {

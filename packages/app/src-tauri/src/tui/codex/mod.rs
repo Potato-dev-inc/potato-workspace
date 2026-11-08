@@ -39,6 +39,11 @@ env = "{env}"
 [entry_http]
 url = "{url}"
 http_headers = "{headers}"
+# Only on Potato Workspace's own entry, never on the other servers the toolbelt writes. With `--ask-for-approval never`
+# Codex refuses ("MCP tool call requires approval, but approval policy is never") the calls of a server that is not
+# pre-approved; this is its per-server setting (codex-rs/config/src/mcp_types.rs, McpServerConfig).
+[own_entry_extra]
+default_tools_approval_mode = "approve"
 "#;
 
 /// Where Codex reads skills ("Add Potato Workspace to your agents").
