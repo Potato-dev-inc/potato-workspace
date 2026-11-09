@@ -11,6 +11,7 @@ import { useAcpAddons } from '../../../hooks/useAcpAddons';
 import { AddonPrompt } from '../../acp/AddonPrompt';
 import { SignInCard } from '../../acp/SignInCard';
 import { lastRealFolder, projectOfCwd, readStoredCopyPreference, supportsCopies, writeCopyPreference, copyDefault } from '../../../lib/ship-model';
+import { folderName, pathKey, useSidebarProjects } from '../../../lib/sidebarProjects';
 import { IconArrowUp, IconChevronDown, IconFolder, IconPlus, IconSpark } from '../Icons';
 import type { ProjectChoice } from '../NewAgentMenu';
 import { tauriNewAgentApi, type HomeSettings, type NewAgentApi } from './api';
@@ -97,6 +98,10 @@ export interface NewAgentPageProps {
   needs: readonly PaneBrief[];
   /** The folder of the pane that is selected, if any: the first guess for the folder. */
   selectedCwd?: string | null;
+  /** The project to start in (from a project's "+" in the sidebar). Beats the last-used project. */
+  project?: { path: string; name: string } | null;
+  /** The folders agents are running in now: offered in the Project picker when they are not saved projects. */
+  runningFolders?: readonly string[];
   api?: NewAgentApi;
   /** The chat add-ons (install state and install). */
   addonApi?: AcpAddonApi;
@@ -111,7 +116,7 @@ export interface NewAgentPageProps {
 
 type Menu = 'plus' | 'folder' | 'agent' | null;
 
-export function NewAgentPage({ agents, panes, needs, selectedCwd = null, api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, onSignIn, onStart, onOpenPane, onSetUp }: NewAgentPageProps) {
+export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, onSignIn, onStart, onOpenPane, onSetUp }: NewAgentPageProps) {
   const [prompt, setPrompt] = useState('');
   const [exampleIdx, setExampleIdx] = useState(0);
   const [menu, setMenu] = useState<Menu>(null);
@@ -122,7 +127,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, api = t
   const [lanes, setLanes] = useState<LaneView | null>(null);
   const [recent, setRecent] = useState<RecentProject[] | null>(null);
   const [defaultFolder, setDefaultFolder] = useState<string | null>(null);
-  const [chosenFolder, setChosenFolder] = useState<ProjectChoice | null>(null);
+  const [chosenFolder, setChosenFolder] = useState<ProjectChoice | null>(() => (project ? { path: project.path, name: project.name } : null));
+  const [lastProject] = useState<ProjectChoice | null>(readLastProject);
+  const saved = useSidebarProjects();
   const [looked, setLooked] = useState<{ path: string; state: RecentProject['state'] } | null>(null);
   const [pickKey, setPickKey] = useState<string | null>(null);
   const [runPick, setRunPick] = useState<RunAs | null>(null);
@@ -198,8 +205,13 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, api = t
     };
   }, [menu]);
 
-  // ----- the folder: the person's pick, else the selected pane's project, else the newest recent one, else the default -----
-  const base: ProjectChoice | null = chosenFolder ?? projectOfCwd(selectedCwd) ?? lastRealFolder(recent ?? []) ?? projectOfCwd(defaultFolder);
+  // The sidebar's "+" on a project opens the page with that project: take it again when it changes.
+  useEffect(() => {
+    if (project) setChosenFolder({ path: project.path, name: project.name });
+  }, [project?.path]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ----- the folder: the person's pick, else the project passed in (same thing), else the last-used project, else the selected pane's project, else the newest recent one, else the default -----
+  const base: ProjectChoice | null = chosenFolder ?? lastProject ?? projectOfCwd(selectedCwd) ?? lastRealFolder(recent ?? []) ?? projectOfCwd(defaultFolder);
   useEffect(() => {
     if (!base || base.state) return undefined;
     let live = true;
@@ -297,15 +309,36 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, api = t
     setMenu(null);
     area.current?.focus();
   };
-  const browseFolder = async () => {
+  /** A project from the list (or just added): it starts the agent and is remembered for next time. */
+  const chooseProject = (p: ProjectChoice) => {
+    writeLastProject(p);
+    chooseFolder(p);
+  };
+  /** One-off folder (not saved, not remembered) or, with `save`, a new saved project. */
+  const browseFolder = async (save = false) => {
     setError(null);
     try {
       const found = await api.pickFolder();
-      if (found && found.state !== 'missing') chooseFolder({ path: found.path, name: found.name, state: found.state });
+      if (!found || found.state === 'missing') return;
+      const pick = { path: found.path, name: found.name, state: found.state };
+      if (save) {
+        saved.add(found.path);
+        chooseProject(pick);
+      } else chooseFolder(pick);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open the folder dialog.');
     }
   };
+  // Folders agents run in now that are not saved projects yet (copies count as their project).
+  const running = useMemo(() => {
+    const out: ProjectChoice[] = [];
+    for (const cwd of runningFolders) {
+      const p = projectOfCwd(cwd);
+      if (!p || saved.projects.some((x) => pathKey(x.path) === pathKey(p.path)) || out.some((x) => pathKey(x.path) === pathKey(p.path))) continue;
+      out.push(p);
+    }
+    return out;
+  }, [runningFolders, saved.projects]);
 
   const setCards = (cards: HomeCard[]) => {
     setHome((h) => ({ ...h, cards }));
@@ -398,36 +431,32 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, api = t
                   setMenu(menu === 'folder' ? null : 'folder');
                   api.recent().then((list) => alive.current && setRecent(list)).catch(() => undefined);
                 }}
-                label={`Folder: ${folder?.name ?? 'none chosen'}. Change`}
+                label={`Project: ${folder?.name ?? 'none chosen'}. Change`}
                 trigger={
                   <>
                     <IconFolder />
-                    <span className="ck-na-chip-text">{folder?.name ?? 'Choose a folder'}</span>
+                    <span className="ck-na-chip-text">{folder?.name ?? 'Choose a project'}</span>
                     <IconChevronDown />
                   </>
                 }
               >
-                <div className="ck-na-cap">Recent projects</div>
-                {(recent ?? []).filter((p) => p.state !== 'missing').map((p) => (
-                  <button
-                    key={p.path}
-                    type="button"
-                    role="menuitem"
-                    className="ck-na-item"
-                    title={p.path}
-                    onClick={() => chooseFolder({ path: p.path, name: p.name, state: p.state })}
-                  >
-                    <span className="ck-na-item-main">
-                      <span>{p.name}</span>
-                      <span className="ck-na-item-path">{p.path}</span>
-                    </span>
-                    {folder?.path === p.path && <span className="ck-na-item-hint">in use</span>}
-                  </button>
+                {saved.projects.length > 0 && <div className="ck-na-cap">Projects</div>}
+                {saved.projects.map((p) => (
+                  <ProjectItem key={p.path} name={p.name?.trim() || folderName(p.path)} path={p.path} inUse={folder?.path === p.path} onPick={() => chooseProject({ path: p.path, name: p.name?.trim() || folderName(p.path) })} />
                 ))}
-                {recent !== null && recent.length === 0 && <p className="ck-na-note">No projects yet.</p>}
-                <button type="button" role="menuitem" className="ck-na-item" onClick={() => void browseFolder()}>
-                  <span>Choose folder…</span>
-                </button>
+                {running.length > 0 && <div className="ck-na-cap">Running now</div>}
+                {running.map((p) => (
+                  <ProjectItem key={p.path} name={p.name} path={p.path} inUse={folder?.path === p.path} onPick={() => chooseProject(p)} />
+                ))}
+                {saved.projects.length === 0 && running.length === 0 && <p className="ck-na-note">No projects yet.</p>}
+                <div className="ck-na-foot">
+                  <button type="button" role="menuitem" className="ck-na-item" onClick={() => void browseFolder(true)}>
+                    <span>Add project…</span>
+                  </button>
+                  <button type="button" role="menuitem" className="ck-na-item" onClick={() => void browseFolder(false)}>
+                    <span>Choose another folder…</span>
+                  </button>
+                </div>
               </Pop>
 
               <Pop
@@ -554,6 +583,44 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, api = t
 }
 
 /** A chip that opens a small menu under it. */
+const LS_LAST_PROJECT = 'pm.newagent.lastProject';
+
+/** The project the last agent was started in from the page's picker. Broken storage reads as none. */
+function readLastProject(): ProjectChoice | null {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(LS_LAST_PROJECT) ?? 'null');
+    const { path, name } = (v ?? {}) as { path?: unknown; name?: unknown };
+    return typeof path === 'string' && path !== '' ? { path, name: typeof name === 'string' && name ? name : folderName(path) } : null;
+  } catch {
+    return null;
+  }
+}
+function writeLastProject(p: ProjectChoice): void {
+  try {
+    localStorage.setItem(LS_LAST_PROJECT, JSON.stringify({ path: p.path, name: p.name }));
+  } catch {
+    /* a convenience only */
+  }
+}
+
+function ProjectItem({ name, path, inUse, onPick }: { name: string; path: string; inUse: boolean; onPick: () => void }) {
+  return (
+    <button type="button" role="menuitem" className="ck-na-item" title={path} onClick={onPick}>
+      <span className="ck-na-item-main">
+        <span>{name}</span>
+        <span className="ck-na-item-path">{shortPath(path)}</span>
+      </span>
+      {inUse && <span className="ck-na-item-hint">in use</span>}
+    </button>
+  );
+}
+
+/** The last two folders of a path, so a long one stays on one line. */
+const shortPath = (path: string): string => {
+  const parts = path.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean);
+  return parts.length > 2 ? '…/' + parts.slice(-2).join('/') : path;
+};
+
 function Pop({
   id,
   open,

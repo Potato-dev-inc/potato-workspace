@@ -151,7 +151,7 @@ vi.mock('./components/cockpit/Sidebar', async () => {
         'div',
         null,
         h('button', { type: 'button', onClick: onOpenDoctor }, 'Set up agents'),
-        h('button', { type: 'button', onClick: onOpenNewAgent, 'aria-current': newAgentOpen ? 'page' : undefined }, 'New agent row'),
+        h('button', { type: 'button', onClick: () => onOpenNewAgent?.(), 'aria-current': newAgentOpen ? 'page' : undefined }, 'New agent row'),
         h('button', { type: 'button', onClick: () => onOpenToSide?.('p2') }, 'Open p2 to the side'),
         h('button', { type: 'button', onClick: onOpenMemory }, 'Project memory'),
         h('button', { type: 'button', onClick: onOpenScores }, 'Scores'),
@@ -169,7 +169,7 @@ vi.mock('./components/cockpit/Sidebar', async () => {
 });
 vi.mock('./components/cockpit/newagent/NewAgentHost', async () => {
   const { createElement: h } = await import('react');
-  return { NewAgentHost: ({ onSetUp }: { onSetUp?: () => void }) => h('div', null, 'NEW AGENT PAGE', h('button', { type: 'button', onClick: onSetUp }, 'Page set up')) };
+  return { NewAgentHost: ({ onSetUp, project }: { onSetUp?: () => void; project?: { name: string } | null }) => h('div', null, 'NEW AGENT PAGE', project ? ` project:${project.name}` : '', h('button', { type: 'button', onClick: onSetUp }, 'Page set up')) };
 });
 vi.mock('./components/cockpit/AgentDoctor', async () => {
   const { createElement: h, Fragment } = await import('react');
@@ -783,7 +783,7 @@ describe('CockpitApp split view wiring', () => {
 describe('CockpitApp Live Room wiring', () => {
   const flush = () =>
     act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
     });
   /** The app tells every window the room changed (`live://state`). */
   const emit = (over: Partial<LiveStatus>) =>
@@ -911,18 +911,18 @@ describe('CockpitApp New agent page wiring', () => {
     return { seen, stop: () => window.removeEventListener('pm:open-new-menu', seen) };
   };
 
-  it('Ctrl+N opens the sidebar New agent menu, not the page', async () => {
+  it('Ctrl+N opens the page, from a pane too, and does not open the quick menu', async () => {
     await act(async () => root.render(createElement(CockpitApp)));
     const m = menuAsked();
     ctrlN();
     m.stop();
-    expect(m.seen).toHaveBeenCalledTimes(1);
-    expect(mainText()).not.toContain('NEW AGENT PAGE');
+    expect(mainText()).toContain('NEW AGENT PAGE');
+    expect(mainText()).not.toContain('project:');
+    expect(m.seen).not.toHaveBeenCalled();
   });
 
   it('Ctrl+N inside a terminal is the terminal’s own key', async () => {
     await act(async () => root.render(createElement(CockpitApp)));
-    const m = menuAsked();
     const term = document.createElement('div');
     term.className = 'terminal-host';
     const inner = document.createElement('textarea');
@@ -930,17 +930,14 @@ describe('CockpitApp New agent page wiring', () => {
     document.body.appendChild(term);
     ctrlN(inner);
     term.remove();
-    m.stop();
-    expect(m.seen).not.toHaveBeenCalled();
+    expect(mainText()).not.toContain('NEW AGENT PAGE');
   });
 
   it('Shift or Alt with Ctrl+N is not ours', async () => {
     await act(async () => root.render(createElement(CockpitApp)));
-    const m = menuAsked();
     ctrlN(window, { shiftKey: true });
     ctrlN(window, { altKey: true });
-    m.stop();
-    expect(m.seen).not.toHaveBeenCalled();
+    expect(mainText()).not.toContain('NEW AGENT PAGE');
   });
 
   it('the page’s Set up agents row opens the Agent Doctor', async () => {

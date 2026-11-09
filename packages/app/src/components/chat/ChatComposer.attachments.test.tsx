@@ -66,7 +66,7 @@ afterEach(() => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 /** Lets FileReader and the backend calls finish (several ticks). */
 const settle = async () => {
   for (let i = 0; i < 8; i++) await flush();

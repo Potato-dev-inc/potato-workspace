@@ -107,7 +107,7 @@ function fakeClock(): Clock {
     t: 0,
     now: () => c.t,
     sleep: async (ms: number) => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
       c.t += ms;
     },
   };

@@ -20,7 +20,7 @@ import { SessionChatPanel } from './SessionChatPanel';
 
 let host: HTMLDivElement;
 let root: Root;
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 
 const items = (contextWindow: number | null) => [
   { kind: 'user', id: '1:0', at: null, text: 'hello' },

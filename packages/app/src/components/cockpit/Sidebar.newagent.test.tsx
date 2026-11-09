@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The sidebar's top: the "New agent" button (opens the menu), the Search row, and no duplicate icons in the header.
+// The sidebar's top: the "New agent" row (opens the page) with its quick-start chevron, the Search row, and no duplicate icons in the header.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -58,31 +58,41 @@ const row = () => host.querySelector<HTMLButtonElement>('[data-testid="side-new-
 const searchRow = () => host.querySelector<HTMLButtonElement>('[data-testid="side-search"]');
 const inboxRow = () => [...host.querySelectorAll<HTMLButtonElement>('button.ck-row')].find((b) => b.textContent?.includes('Inbox'))!;
 
+const chev = () => host.querySelector<HTMLButtonElement>('button[aria-label="Quick start menu"]');
+
 describe('sidebar: New agent button', () => {
-  it('is the first row at the top, says New agent with its shortcut, and is not the header "+"', async () => {
+  it('is the first row at the top; Ctrl N is its tooltip, and a small chevron sits on its right', async () => {
     await render();
     expect(row()!.textContent).toContain('New agent');
-    expect(row()!.querySelector('.ck-row-hint')!.textContent).toMatch(/Ctrl N|⌘N/);
+    expect(row()!.getAttribute('title')).toMatch(/Ctrl\+N|Ctrl N|⌘N/);
+    expect(row()!.querySelector('.ck-row-hint')).toBeNull();
     expect(row()!.classList.contains('ck-row')).toBe(false); // the pane rows and the Inbox row are found by that class
     expect(host.querySelector('.ck-side-top')!.firstElementChild!.contains(row())).toBe(true);
     expect(host.querySelector('.ck-side-head button')).toBeNull(); // no duplicate "+" or search icon in the header
     expect(host.querySelectorAll('button[aria-label="New agent"]')).toHaveLength(1);
+    expect(chev()!.getAttribute('title')).toBe('Quick start');
+    expect(row()!.contains(chev())).toBe(false); // two buttons, not one inside the other
   });
 
-  it('opens the New agent menu', async () => {
-    await render();
-    expect(host.querySelector('[role="menu"]')).toBeNull();
-    act(() => row()!.click());
-    expect(host.querySelector('[role="menu"]')).not.toBeNull();
-    expect(row()!.getAttribute('aria-expanded')).toBe('true');
-  });
-
-  it('puts the page (Ctrl+N) one row into the menu when the cockpit has it', async () => {
+  it('the label opens the New agent page', async () => {
     const onOpenNewAgent = vi.fn();
     await render({ onOpenNewAgent });
     act(() => row()!.click());
-    act(() => host.querySelector<HTMLButtonElement>('[data-testid="menu-open-page"]')!.click());
     expect(onOpenNewAgent).toHaveBeenCalledTimes(1);
+    expect(onOpenNewAgent).toHaveBeenCalledWith(); // no project: the page picks its own
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  it('the chevron opens the quick menu, which has no page row any more', async () => {
+    const onOpenNewAgent = vi.fn();
+    await render({ onOpenNewAgent });
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    act(() => chev()!.click());
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    expect(chev()!.getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('[data-testid="menu-open-page"]')).toBeNull();
+    expect(onOpenNewAgent).not.toHaveBeenCalled();
+    act(() => chev()!.click());
     expect(host.querySelector('[role="menu"]')).toBeNull();
   });
 

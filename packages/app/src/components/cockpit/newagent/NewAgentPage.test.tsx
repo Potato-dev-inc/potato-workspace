@@ -225,28 +225,89 @@ describe('the agent picker', () => {
   });
 });
 
-describe('the folder picker', () => {
-  it('starts in the newest recent project and switches to another one', async () => {
+const savedProjects = (list: { path: string; name?: string }[]) => localStorage.setItem('pm.sidebar.projects', JSON.stringify(list));
+const menuItems = () => [...host.querySelectorAll<HTMLElement>('.ck-na-menu [role="menuitem"]')].map((b) => b.textContent ?? '');
+
+describe('the project picker', () => {
+  it('starts in the newest recent project (nothing saved) and shows saved projects with a short path', async () => {
+    savedProjects([{ path: '/work/gamma', name: 'Gamma' }, { path: '/home/me/code/delta' }]);
     const { onStart } = await mount(rig());
-    expect(byLabel(/^Folder:/)!.textContent).toContain('alpha-app');
-    await click(byLabel(/^Folder:/));
-    await click(byLabel('beta-site'));
-    expect(byLabel(/^Folder:/)!.textContent).toContain('beta-site');
+    expect(byLabel(/^Project:/)!.textContent).toContain('alpha-app');
+    await click(byLabel(/^Project:/));
+    const items = menuItems();
+    expect(items[0]).toContain('Gamma');
+    expect(items[1]).toContain('delta');
+    expect(items[1]).toContain('…/code/delta');
+    expect(items.slice(-2)).toEqual(['Add project…', 'Choose another folder…']);
+    await click(byLabel('Gamma'));
+    expect(byLabel(/^Project:/)!.textContent).toContain('Gamma');
     await type(input(), 'go');
     await click(send());
-    expect(onStart.mock.calls[0][0].folder).toBe('/work/beta-site');
+    expect(onStart.mock.calls[0][0].folder).toBe('/work/gamma');
   });
 
-  it('Choose folder opens the system dialog and uses what was picked', async () => {
+  it('lists the folders of running agents that are not saved yet, once, and maps copies to their project', async () => {
+    savedProjects([{ path: '/work/gamma' }]);
+    const { onStart } = await mount(rig(), {
+      runningFolders: ['/work/gamma', '/work/live-one', '/work/live-one', '/work/live-two/.potato-workspace/worktrees/x'],
+    });
+    await click(byLabel(/^Project:/));
+    const items = menuItems();
+    expect(items.filter((t) => t.includes('live-one'))).toHaveLength(1);
+    expect(items.filter((t) => t.includes('gamma'))).toHaveLength(1);
+    expect(host.querySelector('.ck-na-menu')!.textContent).toContain('Running now');
+    await click(byLabel('live-two'));
+    await type(input(), 'go');
+    await click(send());
+    expect(onStart.mock.calls[0][0].folder).toBe('/work/live-two');
+  });
+
+  it('Add project… opens the system dialog, saves the folder as a project and selects it', async () => {
     const { onStart } = await mount(rig({ picked: project('picked-one') }));
-    await click(byLabel(/^Folder:/));
-    await click(byLabel('Choose folder'));
+    await click(byLabel(/^Project:/));
+    await click(byLabel('Add project…'));
+    expect(JSON.parse(localStorage.getItem('pm.sidebar.projects') ?? '[]')).toEqual([{ path: '/work/picked-one' }]);
+    expect(byLabel(/^Project:/)!.textContent).toContain('picked-one');
     await type(input(), 'go');
     await click(send());
     expect(onStart.mock.calls[0][0].folder).toBe('/work/picked-one');
   });
 
-  it('starts from the folder of the selected pane when it has one', async () => {
+  it('Choose another folder… uses the folder once: it is not saved and not remembered', async () => {
+    const { onStart } = await mount(rig({ picked: project('one-off') }));
+    await click(byLabel(/^Project:/));
+    await click(byLabel('Choose another folder…'));
+    expect(localStorage.getItem('pm.sidebar.projects')).toBeNull();
+    expect(localStorage.getItem('pm.newagent.lastProject')).toBeNull();
+    await type(input(), 'go');
+    await click(send());
+    expect(onStart.mock.calls[0][0].folder).toBe('/work/one-off');
+  });
+
+  it('remembers the last project picked, for the next time the page opens', async () => {
+    savedProjects([{ path: '/work/gamma', name: 'Gamma' }, { path: '/work/delta' }]);
+    await mount(rig());
+    await click(byLabel(/^Project:/));
+    await click(byLabel('delta'));
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    const { onStart } = await mount(rig());
+    expect(byLabel(/^Project:/)!.textContent).toContain('delta');
+    await type(input(), 'go');
+    await click(send());
+    expect(onStart.mock.calls[0][0].folder).toBe('/work/delta');
+  });
+
+  it('a project passed in (the sidebar "+") beats the last-used one', async () => {
+    localStorage.setItem('pm.newagent.lastProject', JSON.stringify({ path: '/work/old', name: 'old' }));
+    const { onStart } = await mount(rig(), { project: { path: '/work/chosen', name: 'chosen' } });
+    expect(byLabel(/^Project:/)!.textContent).toContain('chosen');
+    await type(input(), 'go');
+    await click(send());
+    expect(onStart.mock.calls[0][0].folder).toBe('/work/chosen');
+  });
+
+  it('starts from the folder of the selected pane when nothing else is chosen', async () => {
     const { onStart } = await mount(rig(), { selectedCwd: '/work/open-pane' });
     await type(input(), 'go');
     await click(send());

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import type { Ctx2D } from './clipDraw';
 import {
   frameCount,
@@ -220,6 +220,14 @@ const ascii = (bytes: Uint8Array, at: number, len: number) => String.fromCharCod
 // second even on an idle PC and several seconds on a busy one. The default 5 s limit is too tight for that.
 // Only the tests that render the whole clip get this longer limit; the short renders keep the default.
 const FULL_RENDER_MS = 30_000;
+
+// The encoder yields with setTimeout(0), which costs a whole timer tick on Windows. Run those yields on setImmediate.
+const realSetTimeout = globalThis.setTimeout;
+beforeEach(() => {
+  vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number, ...rest: unknown[]) =>
+    ms ? realSetTimeout(fn, ms, ...rest) : setImmediate(fn)) as unknown as typeof setTimeout);
+});
+afterEach(() => vi.restoreAllMocks());
 
 beforeEach(() => {
   FakeEncoder.supported = new Set(['avc1.640028']);

@@ -22,7 +22,7 @@ import { SessionChatPanel } from './SessionChatPanel';
 let host: HTMLDivElement;
 let root: Root;
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const emit = (event: string, payload: unknown) => act(() => handlers.get(event)?.({ payload }));
 
 const WAIT = 'The agent is working. Sends when the turn ends.';

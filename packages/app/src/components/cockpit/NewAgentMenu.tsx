@@ -61,8 +61,6 @@ interface Props {
   pick?: PickApi;
   /** "More agents…": opens the Agent Store. Without it the row is not drawn. */
   onOpenStore?: () => void;
-  /** "New agent page": opens the full page. Without it the row is not drawn. */
-  onOpenPage?: () => void;
   /** "Start a mission…" (Preview, Labs). Without it the item is not drawn. */
   onStartMission?: () => void;
   /** "Tonight…" (Night Shift, Labs). Without it the item is not drawn. */
@@ -124,7 +122,6 @@ export function NewAgentMenu({
   ship = shipApi,
   pick: pickApi,
   onOpenStore,
-  onOpenPage,
   onStartMission,
   onTonight,
   chat,
@@ -645,11 +642,6 @@ export function NewAgentMenu({
             </div>
           )}
         </>
-      )}
-      {onOpenPage && (
-        <button type="button" role="menuitem" className="ck-menu-item" data-testid="menu-open-page" onClick={onOpenPage}>
-          <span>New agent page</span>
-        </button>
       )}
       {onOpenStore && (
         <button type="button" role="menuitem" className="ck-menu-item" onClick={onOpenStore}>

@@ -73,7 +73,7 @@ afterEach(() => {
   delete (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__;
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const tab = (name: string) => [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent?.startsWith(name))!;
 
 /** Opens a view from the More menu (Transcript, Receipt, History). */

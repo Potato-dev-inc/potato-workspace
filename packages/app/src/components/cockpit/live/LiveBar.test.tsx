@@ -57,7 +57,7 @@ const noSubscribe = vi.fn(async () => () => {});
 
 async function settle() {
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
 }
 

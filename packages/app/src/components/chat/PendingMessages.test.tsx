@@ -21,7 +21,7 @@ afterEach(() => {
   host.remove();
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const buttons = (label: string) => [...host.querySelectorAll('button')].filter((b) => b.textContent === label);
 
 function message(over: Partial<OutboxMessage>): OutboxMessage {

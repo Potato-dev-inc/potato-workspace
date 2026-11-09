@@ -23,7 +23,7 @@ afterEach(() => {
   host.remove();
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const field = () => host.querySelector('textarea') as HTMLTextAreaElement;
 const sendButton = () => host.querySelector('button[type="submit"]') as HTMLButtonElement;
 const note = () => host.querySelector('[data-testid="chat-composer-note"]')?.textContent ?? '';

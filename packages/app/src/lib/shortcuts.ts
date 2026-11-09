@@ -63,7 +63,7 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
   {
     id: 'new-agent',
     group: 'Navigate',
-    label: 'New agent: open the menu to start one',
+    label: 'New agent: open the page to start one',
     keys: ['Ctrl+N'],
     handlers: [{ file: 'src/CockpitApp.tsx', text: "e.key.toLowerCase() !== 'n'" }],
   },

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.11
+
+- The New agent button (and Ctrl+N) opens the full New agent page again. The small arrow next to it opens the quick menu.
+- The New agent page has a Project picker: your saved projects, folders of running agents, "Add project..." and "Choose another folder...". It remembers the last project you used.
+- The + on a project in the sidebar opens the New agent page with that project already chosen.
+
 ## 1.0.10
 
 - New sidebar: your agents are grouped under projects. Add a project, start a "+ New agent" inside it, and fold a project away. Agent rows are slim, one line each. Group by project or by status, with Pinned on top.

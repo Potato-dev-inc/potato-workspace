@@ -114,7 +114,7 @@ describe('LiveChip', () => {
       root.render(<LiveChip paneId="p-shared" api={api} subscribe={async () => () => {}} />);
     });
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
     });
     expect(api.status).toHaveBeenCalled();
     expect(chip()?.textContent).toBe('LIVE');

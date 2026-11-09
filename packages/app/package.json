@@ -1,6 +1,6 @@
 {
   "name": "@potato-workspace/app",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,9 @@
     "tauri": "tauri",
     "typecheck": "tsc --noEmit --incremental --tsBuildInfoFile ../../node_modules/.cache/pm/tsc-app.tsbuildinfo && tsc --noEmit -p tsconfig.sw.json --incremental --tsBuildInfoFile ../../node_modules/.cache/pm/tsc-sw.tsbuildinfo",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:changed": "vitest run --changed",
+    "test:safe": "vitest run --pool=forks"
   },
   "dependencies": {
     "@fontsource/doto": "5.3.0",

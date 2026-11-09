@@ -29,7 +29,7 @@ let items: ChatItem[];
 let offers: KeepGoingOffer[] | 'reject';
 let queued: OutboxMessage[];
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const button = (text: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.startsWith(text));
 const lines = () => [...host.querySelectorAll('[data-testid="turn-ending"]')];
 

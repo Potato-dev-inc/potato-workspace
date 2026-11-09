@@ -55,7 +55,7 @@ describe('pane-tunnel', () => {
     ingestPaneTunnelData(state, 'orch', 'other', Uint8Array.from([1]));
     ingestPaneTunnelData(state, 'orch', 'orch', Uint8Array.from([2]));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
     expect(received).toEqual([Uint8Array.from([2])]);
   });
 
@@ -83,7 +83,7 @@ describe('pane-tunnel', () => {
     });
     ingestPaneTunnelData(state, 'orch', 'orch', Uint8Array.from([9]));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
     expect(received).toEqual([Uint8Array.from([9])]);
   });
 

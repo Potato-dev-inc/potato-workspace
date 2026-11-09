@@ -76,7 +76,7 @@ afterEach(() => {
   Reflect.deleteProperty(document, 'visibilityState');
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const field = () => host.querySelector('textarea') as HTMLTextAreaElement;
 const mic = () => host.querySelector('[data-testid="chat-composer-mic"]') as HTMLButtonElement;
 const voiceNote = () => host.querySelector('[data-testid="chat-composer-voice"]')?.textContent ?? null;

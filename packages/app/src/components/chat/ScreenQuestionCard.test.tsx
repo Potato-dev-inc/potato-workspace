@@ -34,7 +34,7 @@ let root: Root;
 
 const flush = () =>
   act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
 const buttons = () => Array.from(host.querySelectorAll('button'));
 const button = (label: string) => buttons().find((b) => b.textContent === label)!;

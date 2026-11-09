@@ -35,7 +35,7 @@ function Probe({ paneId }: { paneId: string | null }) {
 }
 
 const show = (paneId: string | null) => act(() => root.render(createElement(Probe, { paneId })));
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const emit = (paneId: string) => act(() => handlers.get('point://draft')?.({ payload: { paneId } }));
 
 beforeEach(() => {

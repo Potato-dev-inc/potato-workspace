@@ -34,7 +34,7 @@ async function mount(api: ReturnType<typeof fakeApi>, teamRelay = '') {
     root.render(<LiveRoomSettings api={api as unknown as LiveRoomApi} teamRelay={teamRelay} onSaved={onSaved} />);
   });
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
   return { onSaved };
 }
@@ -54,7 +54,7 @@ async function leave(el: HTMLInputElement) {
     el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
   });
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
 }
 

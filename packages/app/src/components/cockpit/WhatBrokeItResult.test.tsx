@@ -104,7 +104,7 @@ async function press(label: string) {
 /** Let pending promise callbacks run. */
 async function settle() {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
   });
 }
 

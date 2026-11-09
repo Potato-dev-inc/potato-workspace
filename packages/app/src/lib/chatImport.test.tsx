@@ -43,7 +43,7 @@ const setTauri = (on: boolean) => {
   else delete w.__TAURI_INTERNALS__;
 };
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 const PROGRESS: ImportProgress = {
   phase: 'reading',

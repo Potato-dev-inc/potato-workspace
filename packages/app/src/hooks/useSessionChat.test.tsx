@@ -29,7 +29,7 @@ function Probe({ paneId }: { paneId: string }) {
   return null;
 }
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 
 beforeEach(() => {
   (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {};

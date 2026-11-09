@@ -274,7 +274,7 @@
   left: 0;
   min-width: 260px;
   max-width: 340px;
-  max-height: 320px;
+  max-height: 420px;
   overflow-y: auto;
   padding: 6px;
   border-radius: 12px;
@@ -555,4 +555,13 @@
 /* The add-on prompt or the sign-in card, under the message box. */
 .cockpit .ck-na-card {
   margin: 10px 0 0;
+}
+
+/* The project picker's two actions, after the list. */
+.cockpit .ck-na-foot {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  padding-top: 4px;
+  box-shadow: inset 0 1px 0 var(--sep);
 }

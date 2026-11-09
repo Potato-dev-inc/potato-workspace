@@ -39,7 +39,7 @@ let host: HTMLDivElement;
 let root: Root;
 let lineage: Record<string, KeepGoingLineage>;
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const row = () => host.querySelector<HTMLElement>('[data-keep-going]');
 
 beforeEach(() => {

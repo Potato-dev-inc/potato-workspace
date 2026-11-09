@@ -42,7 +42,7 @@ const api = (all: JobsMap = {}): JobsApi => ({ all: vi.fn(async () => all), stop
 const click = (el: Element | null, init: MouseEventInit = {}) => act(() => void (el as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true, ...init })));
 const button = (label: string) => [...document.querySelectorAll('button')].find((b) => b.textContent === label) ?? null;
 const flush = () => act(async () => {
-  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setImmediate(r));
 });
 /** Command names sent to the desktop shell, in order. */
 const commands = () => (invoke.mock.calls as unknown[][]).map((c) => c[0]);

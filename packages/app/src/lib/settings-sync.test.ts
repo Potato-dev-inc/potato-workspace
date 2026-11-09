@@ -15,7 +15,7 @@ import { subscribeSettingsRefresh, subscribeSettingsTheme } from './settings-syn
 
 const win = window as unknown as Record<string, unknown>;
 const emit = (name: string, payload: unknown) => bus.handlers.get(name)?.({ payload });
-const tick = () => new Promise((r) => setTimeout(r, 0));
+const tick = () => new Promise((r) => setImmediate(r));
 
 beforeEach(() => {
   bus.handlers.clear();

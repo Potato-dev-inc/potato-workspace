@@ -25,7 +25,7 @@ import '../../styles/live-preview.css';
 import '../../styles/cockpit-helpers.css';
 import '../../styles/cockpit-sidebar.css';
 import { DotSpinner } from './DotSpinner';
-import { IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
+import { IconChevronDown, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
 import { RowMark } from './RowMark';
 import { ProjectHeader } from './ProjectHeader';
 import { SidebarFooter } from './SidebarFooter';
@@ -105,8 +105,8 @@ export function Sidebar({
   /** The Inbox row was chosen (the Inbox may already be the view on screen). */
   onOpenInbox?: () => void;
   onNewCompanion?: () => void;
-  /** The New agent page: the menu's "New agent page" row opens it. Absent: no such row. */
-  onOpenNewAgent?: () => void;
+  /** The New agent page: the New agent row opens it (with a project preselected from a project's "+"). Absent: the row opens the quick menu. */
+  onOpenNewAgent?: (project?: { path: string; name: string }) => void;
   /** The New agent page is the view on screen: the New agent row is the active one (and the Inbox row is not). */
   newAgentOpen?: boolean;
   /** Spaces (Labs `spaces_enabled`). The Spaces row shows only when `enabled` is true. */
@@ -405,6 +405,10 @@ export function Sidebar({
   const projectRoots = roots.filter((n) => !pinnedIds.has(n.pane.info.id));
   const projectGroups = groupByProject(projectRoots, (n) => n.pane.info.cwd, projects);
   const newAgentIn = (path: string, name: string) => {
+    if (onOpenNewAgent) {
+      onOpenNewAgent({ path, name });
+      return;
+    }
     setChosen({ path, name });
     setMenuOpen(true);
   };
@@ -507,11 +511,10 @@ export function Sidebar({
           <button
             type="button"
             data-testid="side-new-agent"
-            className={`ck-side-new ck-side-new--primary${newAgentOpen ? ' is-active' : ''}`}
-            onClick={() => setMenuOpen((v) => !v)}
+            className={`ck-side-new ck-side-new--primary ck-side-new--split${newAgentOpen ? ' is-active' : ''}`}
+            onClick={() => (onOpenNewAgent ? onOpenNewAgent() : setMenuOpen((v) => !v))}
             aria-label="New agent"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
+            title={hint('Ctrl+N')}
           >
             <span className="ck-row-glyph ck-row-glyph--icon">
               <IconNewAgent />
@@ -519,7 +522,18 @@ export function Sidebar({
             <span className="ck-row-main">
               <span className="ck-row-title">New agent</span>
             </span>
-            <kbd className="ck-row-hint">{hint('Ctrl+N')}</kbd>
+          </button>
+          <button
+            type="button"
+            data-testid="side-new-agent-menu"
+            className="ck-side-new-chev"
+            aria-label="Quick start menu"
+            title="Quick start"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            <IconChevronDown />
           </button>
           {menuOpen && (
             <div className="ck-menu ck-menu--left ck-menu--wide" role="menu">
@@ -564,14 +578,6 @@ export function Sidebar({
                   writeCopyPreference(projectKey, on);
                 }}
                 ship={ship}
-                onOpenPage={
-                  onOpenNewAgent
-                    ? () => {
-                        setMenuOpen(false);
-                        onOpenNewAgent();
-                      }
-                    : undefined
-                }
                 onOpenStore={
                   onOpenStore
                     ? () => {

@@ -150,7 +150,7 @@ const kindRadio = (label: string) =>
 
 async function flush() {
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
 }
 

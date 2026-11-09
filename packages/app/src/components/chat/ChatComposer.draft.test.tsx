@@ -51,7 +51,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 /** Waits past the save delay, as a person pausing before they look away. */
 const waitForSave = () => act(async () => { await new Promise((r) => setTimeout(r, DRAFT_SAVE_MS + 50)); });
 const field = () => host.querySelector('textarea') as HTMLTextAreaElement;

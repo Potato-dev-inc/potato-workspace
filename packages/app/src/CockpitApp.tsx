@@ -82,6 +82,8 @@ export default function CockpitApp() {
   // Ctrl+Shift+F opens the palette in "Search all chats"; Ctrl+K in its commands.
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands');
   // The one thing the main area shows (see main-view.ts): the last click wins.
+  // The project the New agent page starts with (from a project's "+"); null: the page picks its own.
+  const [newAgentProject, setNewAgentProject] = useState<{ path: string; name: string } | null>(null);
   const [view, setView] = useState<MainView>(() => homeView(c.spawn !== null, c.selectedId));
   // A new selection or spawn state (a pane closing, an agent starting, a digest opening a pane)
   // returns to the resting view. Done while rendering, so no frame shows a stale view.
@@ -297,13 +299,14 @@ export default function CockpitApp() {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
-  // Ctrl+N (Cmd+N on a Mac) opens the sidebar's New agent menu (the page is one row into it). In a terminal the key belongs to the program running there.
+  // Ctrl+N (Cmd+N on a Mac) opens the New agent page. In a terminal the key belongs to the program running there.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'n') return;
       if (inTerminal(e.target) || c.mode === 'individual') return;
       e.preventDefault();
-      window.dispatchEvent(new CustomEvent('pm:open-new-menu'));
+      setNewAgentProject(null);
+      setView('newagent');
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -409,7 +412,10 @@ export default function CockpitApp() {
         openCompanionId={view === 'companion' ? companionId : null}
         onOpenCompanion={openCompanion}
         onNewCompanion={() => setSetupOpen(true)}
-        onOpenNewAgent={() => setView('newagent')}
+        onOpenNewAgent={(project) => {
+          setNewAgentProject(project ?? null);
+          setView('newagent');
+        }}
         newAgentOpen={view === 'newagent'}
         spaces={{ enabled: spacesOn }}
         spacesOpen={view === 'spaces' && spacesOn}
@@ -476,7 +482,7 @@ export default function CockpitApp() {
         ) : view === 'settings' ? (
           <SettingsView key={settings.viewKey} {...settings.viewProps} onOpenStore={openStore} />
         ) : view === 'newagent' ? (
-          <NewAgentHost c={nav} onSetUp={() => setView('doctor')} />
+          <NewAgentHost c={nav} project={newAgentProject} onSetUp={() => setView('doctor')} />
         ) : view === 'spaces' && spacesOn ? (
           <SpacesPage />
         ) : view === 'spawn' && c.spawn ? (

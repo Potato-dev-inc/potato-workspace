@@ -63,7 +63,7 @@ async function mount(api: ReturnType<typeof fakeApi> | LiveRoomApi, extra: Parti
 
 async function settle() {
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
 }
 

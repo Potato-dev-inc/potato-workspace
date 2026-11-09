@@ -48,7 +48,7 @@ function view(over: Partial<CollisionView> = {}): CollisionView {
 let host: HTMLDivElement;
 let root: Root;
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const row = () => host.querySelector<HTMLElement>('[data-collision-banner]');
 const button = (text: string) => Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.trim() === text);
 

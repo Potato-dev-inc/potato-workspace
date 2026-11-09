@@ -84,7 +84,7 @@ afterEach(() => {
   host.remove();
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const buttons = () => [...host.querySelectorAll<HTMLButtonElement>('button')];
 const button = (text: string) => buttons().find((b) => b.textContent === text);
 

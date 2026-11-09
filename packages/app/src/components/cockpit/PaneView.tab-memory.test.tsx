@@ -62,7 +62,7 @@ afterEach(() => {
 
 const flush = () =>
   act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
 const render = async (paneId: string) => {
   await act(async () => root.render(<PaneView c={cockpit(paneId)} paneId={paneId} />));

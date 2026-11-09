@@ -56,7 +56,7 @@ afterEach(() => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 /** The picker debounces its search by 120 ms, then the backend answers: wait past both. */
 const settle = async () => {
   await act(async () => { await new Promise((r) => setTimeout(r, 160)); });

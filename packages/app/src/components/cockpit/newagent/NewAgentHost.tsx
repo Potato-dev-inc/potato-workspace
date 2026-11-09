@@ -8,7 +8,7 @@ import { isCompanionPaneId } from '../companion/model';
 import { NewAgentPage, type PaneBrief } from './NewAgentPage';
 import { realStartDeps, runStart } from './start';
 
-export function NewAgentHost({ c, onSetUp }: { c: CockpitApi; onSetUp?: () => void }) {
+export function NewAgentHost({ c, project = null, onSetUp }: { c: CockpitApi; project?: { path: string; name: string } | null; onSetUp?: () => void }) {
   const listing = useAgentRegistry();
   const needsItems = useNeedsYou(c);
   const waiting = useMemo(() => needsYouPaneIds(blockingItems(needsItems)), [needsItems]);
@@ -22,12 +22,19 @@ export function NewAgentHost({ c, onSetUp }: { c: CockpitApi; onSetUp?: () => vo
   );
   const selectedCwd = c.selectedId ? c.registry.panes.get(c.selectedId)?.info.cwd : null;
 
+  const runningFolders = useMemo(
+    () => c.registry.paneList.filter((p) => !isCompanionPaneId(p.info.id) && p.info.cwd).map((p) => p.info.cwd as string),
+    [c.registry.paneList],
+  );
+
   return (
     <NewAgentPage
       agents={listing.agents}
       panes={briefs}
       needs={briefs.filter((p) => waiting.has(p.id))}
       selectedCwd={selectedCwd}
+      project={project}
+      runningFolders={runningFolders}
       onOpenPane={(id) => c.select(id)}
       onSetUp={onSetUp}
       // The agent's own terminal pane, in the folder: the person signs in there (the same login Chat uses).

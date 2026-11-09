@@ -27,7 +27,7 @@ const PANE = 'p1';
 const BASE = 'https://phone.example'; // a remote host: the phone uses the WebSocket / long-poll path
 const enc = new TextEncoder();
 const flush = (term: Terminal) => new Promise<void>((resolve) => term.write('', resolve));
-const tick = (ms = 0) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const tick = (ms = 0) => new Promise<void>((resolve) => (ms ? setTimeout(resolve, ms) : setImmediate(resolve)));
 const gate = () => {
   let open!: () => void;
   const promise = new Promise<void>((resolve) => (open = resolve));

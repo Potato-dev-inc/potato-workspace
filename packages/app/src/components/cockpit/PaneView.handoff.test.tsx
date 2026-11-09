@@ -60,7 +60,7 @@ afterEach(() => {
   delete (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__;
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const btn = () => host.querySelector<HTMLButtonElement>('[data-testid="pane-handoff"]');
 const show = async (handoff?: HandoffControl) => {
   await act(async () => root.render(<PaneView c={cockpit()} paneId="p1" handoff={handoff} />));

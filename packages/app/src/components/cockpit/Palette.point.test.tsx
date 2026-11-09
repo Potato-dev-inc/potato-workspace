@@ -70,7 +70,7 @@ afterEach(() => {
 
 const flush = () =>
   act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
 // `night_state` is the palette reading the Night Shift Labs switch; it is not one of the preview commands.
 const commands = () => (invoke.mock.calls as unknown[][]).map((c) => c[0]).filter((name) => name !== 'night_state' && name !== 'focus_state');

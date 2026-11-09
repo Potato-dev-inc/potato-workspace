@@ -317,7 +317,7 @@ describe('ApprovalPrompt package check', () => {
   /** Lets resolved promises and their state updates run. */
   async function flush() {
     await act(async () => {
-      await new Promise((done) => setTimeout(done, 0));
+      await new Promise((done) => setImmediate(done));
     });
   }
 

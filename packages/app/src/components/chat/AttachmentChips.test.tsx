@@ -32,7 +32,7 @@ afterEach(() => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const chips = () => Array.from(host.querySelectorAll('[data-testid="attachment-chip"]'));
 
 const IMAGE: ChatAttachment = { name: 'shot.png', path: '/proj/shot.png', kind: 'image', size: 4096 };

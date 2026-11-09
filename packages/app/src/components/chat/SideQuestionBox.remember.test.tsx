@@ -40,7 +40,7 @@ function fakeMemory(stored: Partial<RememberResult> = {}) {
   return { memory, api: memory as RememberApi };
 }
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const q = (testid: string) => host.querySelector(`[data-testid="${testid}"]`);
 const button = (label: string) => [...host.querySelectorAll('button')].find((b) => b.textContent === label) as HTMLButtonElement | undefined;
 

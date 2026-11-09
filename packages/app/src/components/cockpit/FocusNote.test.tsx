@@ -57,7 +57,7 @@ const render = (props: Partial<Parameters<typeof FocusNote>[0]> & { view: FocusV
   act(() => root.render(<FocusNote now={NOW} {...props} />));
 const button = (text: string) => [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
 const click = (el: Element | null | undefined) => act(() => (el as HTMLElement).click());
-const flush = () => act(() => new Promise((r) => setTimeout(r, 0)));
+const flush = () => act(() => new Promise((r) => setImmediate(r)));
 
 describe('the note while Focus is off', () => {
   it('shows a Focus line and the three length chips, the default one marked', () => {

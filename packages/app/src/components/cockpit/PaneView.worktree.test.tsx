@@ -95,7 +95,7 @@ afterEach(() => {
 });
 
 const tabs = () => [...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 
 /** Opens a view from the More menu (Transcript, Receipt, History). */
 const moreTab = (name: string) => {

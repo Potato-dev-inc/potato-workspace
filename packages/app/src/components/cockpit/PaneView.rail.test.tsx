@@ -64,7 +64,7 @@ afterEach(() => {
 });
 const flush = () =>
   act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
 const rail = () => host.querySelector('[data-testid="session-rail"]');
 const toggle = () => host.querySelector<HTMLButtonElement>('button[aria-pressed]')!;

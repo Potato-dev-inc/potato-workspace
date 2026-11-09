@@ -49,7 +49,7 @@ afterEach(async () => {
 });
 
 const button = (text: string) => Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes(text)) as HTMLButtonElement | undefined;
-const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const settle = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 
 function api(over: Partial<ShipApi> = {}): ShipApi {
   return {

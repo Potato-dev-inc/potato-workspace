@@ -222,7 +222,7 @@ const text = () => host.textContent ?? '';
 
 async function flush(ms = 0) {
   await act(async () => {
-    await new Promise((r) => setTimeout(r, ms));
+    await new Promise((r) => (ms ? setTimeout(r, ms) : setImmediate(r)));
   });
 }
 

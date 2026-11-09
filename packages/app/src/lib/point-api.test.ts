@@ -155,7 +155,7 @@ describe('pointApi in the desktop shell', () => {
     const off = pointApi.onDraft(() => {});
     off();
     resolveListen(unlisten);
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
     expect(unlisten).toHaveBeenCalledTimes(1);
   });
 });

@@ -206,7 +206,7 @@ describe('Chat needs a sign-in', () => {
     await mount(r.api, { onStart: vi.fn(async () => 'pane-1') });
     expect(input().value).toBe('fix the tests');
     expect(host.querySelector('[data-testid="signin-card"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label^="Folder"]')?.textContent).toContain('alpha-app');
+    expect(host.querySelector('[aria-label^="Project"]')?.textContent).toContain('alpha-app');
     // The saved trip is used once.
     expect(sessionStorage.getItem('pm.newagent.signin')).toBeNull();
   });

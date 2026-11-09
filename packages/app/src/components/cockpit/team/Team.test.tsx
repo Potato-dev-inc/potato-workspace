@@ -79,7 +79,7 @@ const sheetButton = (text: string) => [...host.querySelectorAll('.ck-sheet butto
 const buttons = () => [...host.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim());
 const button = (text: string) => [...host.querySelectorAll('button')].find((b) => b.textContent?.includes(text)) as HTMLButtonElement | undefined;
 const flush = () => act(async () => {
-  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setImmediate(r));
 });
 
 function renderCard(card: Card, api = fakeApi()) {

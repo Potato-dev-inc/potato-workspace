@@ -27,7 +27,7 @@ afterEach(() => {
   host.remove();
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const field = () => host.querySelector('textarea') as HTMLTextAreaElement;
 const menu = () => host.querySelector('[role="listbox"]');
 const options = () => [...host.querySelectorAll<HTMLElement>('[role="option"]')];

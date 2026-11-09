@@ -70,7 +70,7 @@ afterEach(() => {
   delete (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__;
 });
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const rows = () => [...host.querySelectorAll<HTMLElement>('[data-testid="pane-helper-row"]')];
 
 async function openChat(c: CockpitApi, paneId: string) {

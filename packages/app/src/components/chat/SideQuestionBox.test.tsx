@@ -47,7 +47,7 @@ function Chat({ api }: { api: SideQuestionApi }) {
   return <SessionChatView state="ready" reason={null} turns={TURNS} model={null} cliVersion={null} paneId="p1" headerExtra={side.button} overlay={side.box} />;
 }
 
-const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const q = (testid: string) => host.querySelector(`[data-testid="${testid}"]`);
 const press = (init: KeyboardEventInit) => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })); });
 const ctrlSemicolon = () => press({ key: ';', code: 'Semicolon', ctrlKey: true });

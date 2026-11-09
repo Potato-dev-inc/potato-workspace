@@ -133,7 +133,7 @@ afterEach(() => {
   delete (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__;
 });
 
-const flush = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))));
+const flush = () => act(async () => void (await new Promise((r) => setImmediate(r))));
 // Each setting is one control (a menu pill, or a segmented switch for the effort-like one) tagged with its id and value.
 const pickers = () => [...host.querySelectorAll<HTMLElement>('[data-testid="acp-chips"] [data-chip-id]')];
 const labels = () => pickers().map((s) => s.querySelector('[aria-label]')?.getAttribute('aria-label') ?? s.getAttribute('aria-label'));

@@ -80,7 +80,7 @@ function fakeClock(): Clock & { t: number } {
     t: 0,
     now: () => c.t,
     sleep: async (ms: number) => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
       c.t += ms;
     },
   };
@@ -702,7 +702,7 @@ describe('watchVisibleTest', () => {
     return { w, watcher, log, clock };
   }
   const settle = async (clock: { t: number }) => {
-    for (let i = 0; i < 40; i++) await new Promise((r) => setTimeout(r, 0));
+    for (let i = 0; i < 40; i++) await new Promise((r) => setImmediate(r));
     return clock.t;
   };
 

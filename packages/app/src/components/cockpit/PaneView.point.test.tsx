@@ -77,7 +77,7 @@ afterEach(() => {
 
 const flush = () =>
   act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setImmediate(r));
   });
 const tab = (name: string) => [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent === name)!;
 const commands = () => (invoke.mock.calls as unknown[][]).map((c) => c[0]);

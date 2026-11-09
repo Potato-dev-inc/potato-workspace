@@ -60,7 +60,7 @@ afterEach(() => {
 
 const flush = () =>
   act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
   });
 
 function render(props: { api: Api; request?: ImportedChatRequest; onContinue?: (plan: ResumePlan) => void; onClose?: () => void }) {

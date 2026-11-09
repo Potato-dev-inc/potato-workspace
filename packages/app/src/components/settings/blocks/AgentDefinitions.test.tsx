@@ -642,23 +642,23 @@ ${F}`),
     });
     await click(button('Find it'));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
     });
     await click(button('Skip the visible part'));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
     });
     await click(button('Start'));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
     });
     await click(button('Run the live test'));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
     });
     await click(button('Approve'));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
     });
     // the wizard is gone; the approval dialog for the new definition is open, with the exact command
     expect(host.querySelector('[aria-label="Add an agent with the wizard"]')).toBeNull();
@@ -939,7 +939,7 @@ describe('AgentDefinitions: approved by the wizard', () => {
   it('says on the agent the wizard approved that it did, after how many checks, and keeps Revoke', async () => {
     await render(mockApi(rows()));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
     });
     const items = Array.from(host.querySelectorAll('[data-testid="definition-row"]'));
     const nimbus = items.find((i) => i.textContent?.includes('nimbus'));
@@ -954,7 +954,7 @@ describe('AgentDefinitions: approved by the wizard', () => {
     listing.definitions[1] = { ...listing.definitions[1], approved_by: 'store', approval_checks: 7 };
     await render(mockApi(listing));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
     });
     const items = Array.from(host.querySelectorAll('[data-testid="definition-row"]'));
     const nimbus = items.find((i) => i.textContent?.includes('nimbus'));

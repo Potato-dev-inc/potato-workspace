@@ -208,7 +208,23 @@ describe('sidebar: Add project', () => {
     expect(JSON.parse(localStorage.getItem(LS_SIDEBAR_PROJECTS)!)).toEqual([]);
   });
 
-  it('the "+" on a project opens the New agent menu for that folder', async () => {
+  it('the "+" on a project opens the New agent page with that project', async () => {
+    const onOpenNewAgent = vi.fn();
+    await render(undefined, { onOpenNewAgent });
+    await click(byLabel('New agent in shop'));
+    expect(onOpenNewAgent).toHaveBeenCalledWith({ path: SHOP, name: 'shop' });
+    expect(q('[role="menu"]')).toBeNull();
+  });
+
+  it('the empty-project "New agent" row opens the page with that project', async () => {
+    localStorage.setItem(LS_SIDEBAR_PROJECTS, JSON.stringify([{ path: 'C:\\work\\empty' }]));
+    const onOpenNewAgent = vi.fn();
+    await render(undefined, { onOpenNewAgent });
+    await click(group('empty').querySelector<HTMLButtonElement>('[data-testid="proj-new-agent"]')!);
+    expect(onOpenNewAgent).toHaveBeenCalledWith({ path: 'C:\\work\\empty', name: 'empty' });
+  });
+
+  it('without a page, the "+" on a project opens the quick menu for that folder', async () => {
     await render();
     await click(byLabel('New agent in shop'));
     const menu = q('[role="menu"]')!;

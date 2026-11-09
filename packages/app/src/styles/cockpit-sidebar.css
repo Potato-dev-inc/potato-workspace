@@ -32,6 +32,39 @@
   padding-bottom: 0;
   margin-bottom: 0;
 }
+.cockpit .ck-side-top .ck-menu-wrap {
+  position: relative;
+}
+.cockpit .ck-side-new--split {
+  padding-right: 30px;
+}
+.cockpit .ck-side-new-chev {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-3);
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--ease),
+    color 160ms var(--ease);
+}
+.cockpit .ck-side-new-chev:hover,
+.cockpit .ck-side-new-chev[aria-expanded='true'] {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-side-new-chev:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
 .cockpit .ck-side-new--primary .ck-row-title {
   font-weight: 600;
 }

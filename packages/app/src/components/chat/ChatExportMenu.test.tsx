@@ -39,7 +39,7 @@ function fakeApi(over: Partial<ChatExportApi> = {}): ChatExportApi {
 
 const flush = () =>
   act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
   });
 
 function clickable(label: string): HTMLButtonElement {
