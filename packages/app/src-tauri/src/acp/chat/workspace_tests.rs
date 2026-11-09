@@ -183,6 +183,27 @@ fn closing_the_pane_ends_the_conversation_but_keeps_its_record() {
 }
 
 #[test]
+fn a_pane_that_goes_because_the_app_ends_keeps_its_conversation_restorable() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.say("stream 2");
+    // The app's exit kills every pane; each chat pane's close hook then runs with the app ending.
+    super::on_pane_gone(&id, true);
+    assert!(get(&id).is_none(), "the session stopped");
+    assert_eq!(rig.conversations.record(&id).unwrap().last_known_state, LastState::Live, "the record is not marked closed");
+
+    // The next start: a fresh Conversations from the same folder brings it back.
+    let app = conversations_in(&rig.dir, &rig.opts);
+    let report = app.restore_lazily(&rig.panes);
+    assert_eq!(report.restored, vec![id.clone()]);
+    assert_eq!(app.open_ids(), vec![id.clone()]);
+    let deps = deps_for(&rig.dir, &app);
+    assert_eq!(super::restore_panes(&deps), vec![id.clone()]);
+    assert!(get(&id).is_some(), "the chat is back");
+    on_pane_closed(&id);
+}
+
+#[test]
 fn a_failed_first_start_leaves_no_conversation_behind() {
     let dir = std::env::temp_dir().join(format!("pm-acp-ws-test-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();

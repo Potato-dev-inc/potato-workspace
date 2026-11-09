@@ -227,13 +227,32 @@ fn close_these(chats: Vec<Arc<AcpChat>>) {
     }
 }
 
+static APP_SHUTTING_DOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The app is about to end (quit, or an update install) and will kill every pane: from now on a closing chat pane only
+/// stops its session; its record keeps its state, so the next start brings the conversation back. Set right before the
+/// panes are killed. A person closing a chat is unaffected only while this is not set, and it is never unset (the
+/// process ends).
+pub fn begin_app_shutdown() {
+    APP_SHUTTING_DOWN.store(true, Ordering::SeqCst);
+}
+
 /// The pane was closed (the registry took it): its session stops.
 pub fn on_pane_closed(pane_id: &str) {
+    on_pane_gone(pane_id, APP_SHUTTING_DOWN.load(Ordering::SeqCst));
+}
+
+/// `app_ending`: the pane goes because the app ends, not because a person closed it.
+fn on_pane_gone(pane_id: &str, app_ending: bool) {
     let chat = CHATS.lock().remove(pane_id);
     if let Some(chat) = chat {
-        // Closing the pane ends the conversation (the confirm sheet says so); its record stays, as closed.
+        // Closing the pane ends the conversation (the confirm sheet says so); its record stays, as closed. When the app
+        // ends the record is left as it is, to be restored at the next start.
         let conversations = chat.conversations.clone();
         chat.retire();
+        if app_ending {
+            return;
+        }
         if let Some(conversations) = conversations {
             let _ = conversations.close(pane_id);
         }

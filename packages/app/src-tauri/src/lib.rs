@@ -967,6 +967,8 @@ pub fn run() {
                 }
             }
             if matches!(event, tauri::RunEvent::Exit) {
+                // From here on panes go because the app ends: chats stop but stay restorable.
+                acp::chat::begin_app_shutdown();
                 crash::record_exit(&app_paths::app_data_dir(), None, "Exit");
                 // The link ends with the app: best effort, the relay's time limit ends it otherwise.
                 if let Some(room) = app_handle.try_state::<live_room::service::LiveRoomState>() {

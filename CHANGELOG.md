@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.12
+
+- Fix: your chats now come back after you quit the app or install an update. Before, quitting or updating counted as closing every chat, so they disappeared from the sidebar (they were still saved). Only closing a chat yourself closes it now.
+
 ## 1.0.11
 
 - The New agent button (and Ctrl+N) opens the full New agent page again. The small arrow next to it opens the quick menu.

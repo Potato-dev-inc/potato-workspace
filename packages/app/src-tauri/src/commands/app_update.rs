@@ -119,6 +119,8 @@ pub async fn app_update_install(app: AppHandle, confirm_running: bool) -> Result
 /// process without the usual exit event).
 fn stop_for_update(app: &AppHandle) {
     if let Some(state) = app.try_state::<AppState>() {
+        // The app ends with the install: chats stop but stay restorable.
+        crate::acp::chat::begin_app_shutdown();
         let _ = crate::panic::stop_all(&state.registry, app);
         crate::pty::registry_kill_all_and_wait(&state.registry);
     }
