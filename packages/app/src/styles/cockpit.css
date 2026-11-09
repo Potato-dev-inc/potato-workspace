@@ -1352,3 +1352,27 @@
 .cockpit .ck-gitstep-details .ck-gitstep-cmds {
   margin: 0;
 }
+
+/* Handoff from here: the one-line status under the pane list. */
+.cockpit .ck-handoff {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--label-2);
+  background: var(--fill-2, rgba(128, 128, 128, 0.12));
+}
+.cockpit .ck-handoff.is-failed {
+  color: var(--label-1);
+}
+.cockpit .ck-handoff-text {
+  flex: 1;
+  min-width: 0;
+}
+.cockpit .ck-handoff-x {
+  color: var(--label-3);
+  line-height: 1;
+}

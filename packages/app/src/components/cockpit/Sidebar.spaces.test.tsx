@@ -94,7 +94,7 @@ async function render(enabled: boolean) {
   await act(async () => root.render(<Screen enabled={enabled} />));
   await act(async () => {});
 }
-const spacesRow = () => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Spaces') ?? null;
+const spacesRow = () => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.getAttribute('aria-label') === 'Spaces') ?? null;
 
 describe('sidebar: Spaces row and page', () => {
   it('the row appears when Labs spaces is on', async () => {

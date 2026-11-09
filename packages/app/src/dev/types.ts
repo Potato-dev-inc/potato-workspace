@@ -85,6 +85,8 @@ export interface HarnessScenario {
   checkpointsState?: 'too_big';
   /** Override the example panes. */
   panes?: PaneInfo[];
+  /** Cockpit: browser-storage values set before the window opens (e.g. the sidebar's pins and projects). */
+  storage?: Record<string, string>;
   /** Budget the mocked `budget_for_pane` returns per pane id (absent: no budget, the default). */
   budgets?: Record<string, import('../lib/budgets').BudgetView>;
   /** Pending `ask_user` questions the mocked `questions_list` returns. */

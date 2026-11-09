@@ -18,6 +18,7 @@ export function PaneContextMenu({
   onSide,
   pinned,
   onPin,
+  onHandoff,
   onAction,
   onInterrupt,
   onClose,
@@ -30,6 +31,8 @@ export function PaneContextMenu({
   pinned?: boolean;
   /** Pins or unpins the pane. Absent: no such item. */
   onPin?: () => void;
+  /** "Handoff from here": the agent writes HANDOFF.md and a new agent continues from it. Absent: no such item. */
+  onHandoff?: () => void;
   onAction: (action: PaneAction) => void;
   onInterrupt: () => void;
   /** The menu wants to go away (Escape, Tab, a click outside). `refocus` when the keyboard closed it. */
@@ -127,6 +130,7 @@ export function PaneContextMenu({
       {item('Rename', <IconRename />, () => onAction('rename'))}
       {item('Reflow', <IconReflow />, () => onAction('reflow'))}
       {item('Interrupt', <IconStop />, onInterrupt, '⌃C')}
+      {onHandoff && item('Handoff from here', null, onHandoff)}
       {item('Details', <IconInfo />, () => onAction('details'))}
       <div className="ck-menu-sep" role="separator" />
       {item('Close', <IconClose />, () => onAction('close'))}

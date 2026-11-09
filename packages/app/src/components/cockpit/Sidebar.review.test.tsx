@@ -78,14 +78,18 @@ async function render(onOpenReview?: () => void) {
   await act(async () => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} onOpenReview={onOpenReview} ship={ship} />));
   await act(async () => {});
 }
-const button = () => [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Review'));
+// The footer button is an icon: its words are the aria-label ("Review", or "Review, 7 waiting"), its number a badge.
+const button = () => host.querySelector<HTMLButtonElement>('button[aria-label^="Review"]');
+const words = () => button()?.getAttribute('aria-label');
+const badge = () => host.querySelector('.ck-side-count')?.textContent ?? null;
 
 describe('sidebar: Review', () => {
   it('shows "Review 7" when seven things wait, and opens the desk on click', async () => {
     review.count.mockResolvedValue(7);
     const open = vi.fn();
     await render(open);
-    expect(button()?.textContent).toBe('Review 7');
+    expect(words()).toBe('Review, 7 waiting');
+    expect(badge()).toBe('7');
     act(() => button()!.click());
     expect(open).toHaveBeenCalledTimes(1);
   });
@@ -93,29 +97,29 @@ describe('sidebar: Review', () => {
   it('shows plain "Review" with no number at 0', async () => {
     review.count.mockResolvedValue(0);
     await render(() => {});
-    expect(button()?.textContent).toBe('Review');
-    expect(host.querySelector('.ck-side-count')).toBeNull();
+    expect(words()).toBe('Review');
+    expect(badge()).toBeNull();
   });
 
   it('shows no number when the count cannot be read', async () => {
     review.count.mockRejectedValue(new Error('Desktop shell required'));
     await render(() => {});
-    expect(button()?.textContent).toBe('Review');
+    expect(words()).toBe('Review');
   });
 
   it('has no button, and reads no count, without an open handler', async () => {
     review.count.mockResolvedValue(3);
     await render();
-    expect(button()).toBeUndefined();
+    expect(button()).toBeNull();
     expect(review.count).not.toHaveBeenCalled();
   });
 
   it('reads the count again on a refresh event', async () => {
     review.count.mockResolvedValue(2);
     await render(() => {});
-    expect(button()?.textContent).toBe('Review 2');
+    expect(badge()).toBe('2');
     review.count.mockResolvedValue(5);
     await act(async () => review.refresh?.());
-    expect(button()?.textContent).toBe('Review 5');
+    expect(badge()).toBe('5');
   });
 });

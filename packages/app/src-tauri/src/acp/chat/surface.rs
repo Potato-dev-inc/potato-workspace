@@ -507,7 +507,8 @@ fn wait(body: &[u8]) -> Option<Reply> {
     let mut saw_background = vec![false; chats.len()];
     let started = Instant::now();
     let deadline = started + Duration::from_millis(wait_ms);
-    let mut reason = wait_reasons::TIMEOUT;
+    // Every exit from this loop is a `break` that sets `reason` first, so no initial value is needed.
+    let reason;
     loop {
         let now = Instant::now();
         let mut hits = 0usize;

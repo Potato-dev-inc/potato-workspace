@@ -34,6 +34,7 @@ mod diagnostics;
 mod loop_guard;
 mod attention;
 pub(crate) mod attachments;
+pub(crate) mod handoff_file;
 mod focus;
 mod mcp;
 mod one_brain;

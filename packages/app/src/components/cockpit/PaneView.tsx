@@ -48,6 +48,7 @@ import { HandOverSheet } from '../chat/HandOverSheet';
 import { useAcpChatState } from '../../hooks/useAcpChatState';
 import { useAcpStop } from '../../hooks/useAcpStop';
 import { useHandOver } from '../../hooks/useHandOver';
+import type { HandoffControl } from '../../hooks/useHandoff';
 import { useTerminalConversation } from '../../hooks/useTerminalConversation';
 import '../../styles/cockpit-acp.css';
 import { BudgetChip } from './BudgetChip';
@@ -142,6 +143,7 @@ export function PaneView({
   paneId,
   onWhatBroke,
   acp = tauriAcpChatApi,
+  handoff,
 }: {
   c: CockpitApi;
   paneId: string;
@@ -149,6 +151,8 @@ export function PaneView({
   acp?: AcpChatApi;
   /** Opens "What broke the tests?" for this pane (History tab). Absent: no button. */
   onWhatBroke?: (paneId: string) => void;
+  /** "Hand off": the cockpit's shared handoff starter (the one "Handoff from here" uses). Absent: no button. */
+  handoff?: HandoffControl;
 }) {
   const pane = c.registry.panes.get(paneId);
   const [tab, setTabRaw] = useState<Tab>(() => rememberedTabs.get(paneId) ?? 'terminal');
@@ -444,6 +448,18 @@ export function PaneView({
             onClick={() => void openPreview(preview.url).catch(() => c.notify('Could not open the preview'))}
           >
             <IconGlobe />
+          </button>
+        )}
+        {handoff && handoff.allowed(paneId) && (
+          <button
+            type="button"
+            className="ck-handover-btn"
+            data-testid="pane-handoff"
+            disabled={handoff.busy}
+            title="Write a handoff and continue this work in a new agent of the same kind."
+            onClick={() => handoff.start(paneId)}
+          >
+            {handoff.busy ? 'Handing off…' : 'Hand off'}
           </button>
         )}
         {rail.fits && (

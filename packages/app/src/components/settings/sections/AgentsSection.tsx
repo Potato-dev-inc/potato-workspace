@@ -7,6 +7,7 @@ import { AgentVersions } from '../blocks/AgentVersions';
 import { CHAT_ADDONS_LABEL, ChatAddonRows } from '../blocks/ChatAddonRows';
 import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings';
 import { HelperAgentsChoice, KeepHelpersOpenToggle } from '../blocks/HelperAgents';
+import { HiddenAgentsRow } from '../blocks/HiddenAgentsRow';
 import { PreloadSettings } from '../blocks/PreloadSettings';
 import { useEffect, useState } from 'react';
 import { agentHealthApi, type AgentHealth } from '../../../lib/agent-health';
@@ -138,6 +139,14 @@ export const agentsRows: RowDef[] = [
     keywords: 'keep open close closed pane finish finished done helper helpers subagent sub-agent follow-up followup release',
     group: 'Helpers',
     render: (env) => <KeepHelpersOpenToggle onSaved={env.markSaved} />,
+  },
+  {
+    id: 'hidden-agents',
+    label: 'Agents in the New agent menu',
+    hint: 'Hide the agents you never use from the New agent menu.',
+    keywords: 'hide show hidden agent agents new agent menu list edit remove visible tick untick plus button',
+    group: 'Menu',
+    render: () => <HiddenAgentsRow />,
   },
   {
     id: 'versions',

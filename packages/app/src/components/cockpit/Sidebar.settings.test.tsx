@@ -63,7 +63,7 @@ function fakeApi(overrides: Partial<Record<'openSettings' | 'notify', unknown>> 
 }
 
 function settingsButton(): HTMLButtonElement {
-  const btn = Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Settings');
+  const btn = Array.from(host.querySelectorAll('button')).find((b) => b.getAttribute('aria-label') === 'Settings');
   if (!btn) throw new Error('Settings button not rendered');
   return btn;
 }

@@ -18,6 +18,8 @@ let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
   localStorage.clear();
+  // These tests are about the Needs you / Working / Idle grouping; the Projects view is the default.
+  localStorage.setItem('pm.sidebar.groupBy', 'status');
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

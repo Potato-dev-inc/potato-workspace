@@ -171,3 +171,22 @@ export const IconChevronDown = () => (
     <path d="M4.5 6.5 8 10l3.5-3.5" />
   </Icon>
 );
+
+export const IconCheck = () => (
+  <Icon>
+    <path d="m3.5 8.5 3 3 6-7" />
+  </Icon>
+);
+/** A folder with a plus: "Add project". */
+export const IconFolderPlus = () => (
+  <Icon>
+    <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.8h5A1.5 1.5 0 0 1 14 6.3v5.2a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z" />
+    <path d="M8 7.5v3M6.5 9h3" />
+  </Icon>
+);
+/** Two opposed arrows: "Group by". */
+export const IconSort = () => (
+  <Icon>
+    <path d="M5.5 13V3M3 5.5l2.5-2.5L8 5.5M10.5 3v10M8 10.5l2.5 2.5 2.5-2.5" />
+  </Icon>
+);

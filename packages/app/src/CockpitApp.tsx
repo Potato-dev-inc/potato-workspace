@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AgentDoctor } from './components/cockpit/AgentDoctor';
 import { markSpawned } from './lib/agent-health';
 import { useCockpit } from './hooks/useCockpit';
+import { useHandoff } from './hooks/useHandoff';
 import { useAway } from './hooks/useAway';
 import { LastTurnContext } from './components/cockpit/away-context';
 import { AwayDigest } from './components/cockpit/AwayDigest';
@@ -215,6 +216,8 @@ export default function CockpitApp() {
       c.select(id);
     },
   };
+  // "Handoff from here": the sidebar's row menu and the pane's "Hand off" button share one (it opens the new agent through nav).
+  const handoff = useHandoff(nav);
   // Ctrl+\: split with the pane above (or below) the selected one; again closes it.
   const toggleSplit = () => {
     if (split !== null) {
@@ -294,13 +297,13 @@ export default function CockpitApp() {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
-  // Ctrl+N (Cmd+N on a Mac) opens the New agent page. In a terminal the key belongs to the program running there.
+  // Ctrl+N (Cmd+N on a Mac) opens the sidebar's New agent menu (the page is one row into it). In a terminal the key belongs to the program running there.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'n') return;
       if (inTerminal(e.target) || c.mode === 'individual') return;
       e.preventDefault();
-      setView('newagent');
+      window.dispatchEvent(new CustomEvent('pm:open-new-menu'));
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -389,6 +392,7 @@ export default function CockpitApp() {
     <div className="cockpit" data-theme={c.theme} onClickCapture={onClickCapture}>
       <Sidebar
         c={nav}
+        handoff={handoff}
         onOpenInbox={() => setInboxVisit((n) => n + 1)}
         onOpenPalette={() => {
           setPaletteMode('commands');
@@ -494,7 +498,7 @@ export default function CockpitApp() {
         ) : view === 'pane' && c.selectedId && splitOn && split ? (
           <SplitView c={nav} leftId={c.selectedId} rightId={split} focus={side} ratio={ratio} onFocus={setSide} onRatio={setRatio} onClose={toggleSplit} />
         ) : view === 'pane' && c.selectedId ? (
-          <PaneView c={c} paneId={c.selectedId} key={c.selectedId} onWhatBroke={setWhatBrokePane} />
+          <PaneView c={c} paneId={c.selectedId} key={c.selectedId} onWhatBroke={setWhatBrokePane} handoff={handoff} />
         ) : (
           <Inbox
             c={nav}

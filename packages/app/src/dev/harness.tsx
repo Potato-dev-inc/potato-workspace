@@ -87,6 +87,9 @@ export async function bootHarness(name: string): Promise<() => JSX.Element> {
     try {
       if (scenario.newInstall || scenario.firstRun) window.localStorage.removeItem('pm.cockpit.everSpawned');
       else window.localStorage.setItem('pm.cockpit.everSpawned', '1');
+      // The sidebar's saved choices (pins, projects, folds, grouping) must not leak from one scenario into the next.
+      for (const key of ['pm.sidebar.pinned', 'pm.sidebar.projects', 'pm.sidebar.projectsFolded', 'pm.sidebar.groupBy']) window.localStorage.removeItem(key);
+      for (const [key, value] of Object.entries(scenario.storage ?? {})) window.localStorage.setItem(key, value);
     } catch {
       /* storage blocked: the first-run hint stays off */
     }

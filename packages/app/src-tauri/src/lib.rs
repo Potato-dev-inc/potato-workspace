@@ -295,6 +295,7 @@ pub fn run() {
             commands::attachments::attachment_save_pasted,
             commands::attachments::attachment_preview,
             commands::attachments::project_files_search,
+            commands::handoff_file::handoff_file_stat,
             commands::point_open_preview,
             commands::point_state,
             commands::point_arm,

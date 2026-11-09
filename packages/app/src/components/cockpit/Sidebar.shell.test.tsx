@@ -21,6 +21,8 @@ let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
   localStorage.clear();
+  // These tests are about the Needs you / Working / Idle grouping; the Projects view is the default.
+  localStorage.setItem('pm.sidebar.groupBy', 'status');
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -111,7 +113,7 @@ describe('sidebar: nothing raw', () => {
 
   it('calls the Project view "Project", not "Project memory"', async () => {
     await act(async () => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} onOpenMemory={() => {}} ship={ship('repo')} />));
-    const labels = [...host.querySelectorAll('.ck-side-foot button')].map((b) => b.textContent?.trim());
+    const labels = [...host.querySelectorAll('.ck-side-foot button')].map((b) => b.getAttribute('aria-label'));
     expect(labels).toContain('Project');
     expect(labels).not.toContain('Project memory');
   });

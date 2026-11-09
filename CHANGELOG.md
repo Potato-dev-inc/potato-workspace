@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.10
+
+- New sidebar: your agents are grouped under projects. Add a project, start a "+ New agent" inside it, and fold a project away. Agent rows are slim, one line each. Group by project or by status, with Pinned on top.
+- A "New agent" button (Ctrl+N) and a Search row now sit at the top of the sidebar.
+- Agents waiting for you now show a "Needs you" label.
+- You can hide agents you don't use from the New agent menu ("Edit list...").
+- "Hand off from here" / Hand off button: the agent writes a HANDOFF.md, then a new agent of the same kind and model picks it up.
+
 ## 1.0.9
 
 - Fix: after an install or update, Windows started Potato Workspace with a restriction that stops it following links, so agents installed through links (like Codex) failed with "No application is associated with the specified file". Potato Workspace now restarts itself without that restriction, and if it can't, tells you to reopen it from the Start menu.

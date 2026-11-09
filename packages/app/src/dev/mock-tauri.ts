@@ -300,6 +300,11 @@ export function installTauriMock(scenario: HarnessScenario): void {
         // Chat sessions (ACP) are off in the preview: no agent offers Chat, and no terminal holds a conversation.
         case 'agent_lane_get':
           return { labs_enabled: false, agents: [] };
+        // The Chat tab opens the pane's session file; the preview has none, so it says "not available" (a null answer blanked the page).
+        case 'session_chat_open':
+          return { available: false, reason: 'No session file in the preview.', items: [], source: null, waitingFor: null };
+        case 'session_chat_close':
+          return null;
         case 'acp_conversation_of_terminal':
           return null;
         case 'agent_run_mode_get':

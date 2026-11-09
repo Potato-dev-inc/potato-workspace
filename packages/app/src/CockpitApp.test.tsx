@@ -905,14 +905,24 @@ describe('CockpitApp New agent page wiring', () => {
     expect(mainText()).not.toContain('NEW AGENT PAGE');
   });
 
-  it('Ctrl+N opens the page, from a pane too', async () => {
+  const menuAsked = () => {
+    const seen = vi.fn();
+    window.addEventListener('pm:open-new-menu', seen);
+    return { seen, stop: () => window.removeEventListener('pm:open-new-menu', seen) };
+  };
+
+  it('Ctrl+N opens the sidebar New agent menu, not the page', async () => {
     await act(async () => root.render(createElement(CockpitApp)));
+    const m = menuAsked();
     ctrlN();
-    expect(mainText()).toContain('NEW AGENT PAGE');
+    m.stop();
+    expect(m.seen).toHaveBeenCalledTimes(1);
+    expect(mainText()).not.toContain('NEW AGENT PAGE');
   });
 
   it('Ctrl+N inside a terminal is the terminal’s own key', async () => {
     await act(async () => root.render(createElement(CockpitApp)));
+    const m = menuAsked();
     const term = document.createElement('div');
     term.className = 'terminal-host';
     const inner = document.createElement('textarea');
@@ -920,14 +930,17 @@ describe('CockpitApp New agent page wiring', () => {
     document.body.appendChild(term);
     ctrlN(inner);
     term.remove();
-    expect(mainText()).not.toContain('NEW AGENT PAGE');
+    m.stop();
+    expect(m.seen).not.toHaveBeenCalled();
   });
 
   it('Shift or Alt with Ctrl+N is not ours', async () => {
     await act(async () => root.render(createElement(CockpitApp)));
+    const m = menuAsked();
     ctrlN(window, { shiftKey: true });
     ctrlN(window, { altKey: true });
-    expect(mainText()).not.toContain('NEW AGENT PAGE');
+    m.stop();
+    expect(m.seen).not.toHaveBeenCalled();
   });
 
   it('the page’s Set up agents row opens the Agent Doctor', async () => {

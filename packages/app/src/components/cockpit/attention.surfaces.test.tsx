@@ -24,6 +24,8 @@ import { Sidebar } from './Sidebar';
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  // This file checks the Needs you group; the Projects view is the sidebar default.
+  localStorage.setItem('pm.sidebar.groupBy', 'status');
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

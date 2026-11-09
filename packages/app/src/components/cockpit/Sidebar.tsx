@@ -1,5 +1,7 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { PaneContextMenu } from './PaneContextMenu';
+import type { HandoffDeps } from '../../lib/handoff';
+import { useHandoff, type HandoffControl } from '../../hooks/useHandoff';
 import { requestPaneAction, type PaneAction } from '../../lib/pane-actions';
 import { NewAgentMenu, type ProjectChoice } from './NewAgentMenu';
 import { shipApi, type GitState, type ShipApi } from '../../lib/ship-api';
@@ -21,19 +23,23 @@ import { activityText } from '../../lib/pane-activity';
 import { mainPreview, type PreviewUrl } from '../../lib/pane-preview';
 import '../../styles/live-preview.css';
 import '../../styles/cockpit-helpers.css';
+import '../../styles/cockpit-sidebar.css';
 import { DotSpinner } from './DotSpinner';
-import { IconChart, IconGlobe, IconInbox, IconMoon, IconNewAgent, IconNote, IconPin, IconPlus, IconSearch, IconSettings, IconSun, IconTerminal } from './Icons';
+import { IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
+import { RowMark } from './RowMark';
+import { ProjectHeader } from './ProjectHeader';
+import { SidebarFooter } from './SidebarFooter';
+import { formatKey, isMacPlatform } from '../../lib/shortcuts';
+import { groupByProject, useFoldedProjects, useGroupBy, useSidebarProjects } from '../../lib/sidebarProjects';
 import { formatElapsed, spinnerStatus } from './model';
 import { splitPinned, usePinnedPanes } from '../../lib/pinnedPanes';
-import { groupHelperTree, helperChipText, readFoldedParents, writeFoldedParents, type HelperNode } from '../../lib/pane-helpers';
+import { descendants, groupHelperTree, helperChipText, readFoldedParents, writeFoldedParents, type HelperNode } from '../../lib/pane-helpers';
 import { multiLoginAgents, paneHeading, paneSubline } from './titles';
 import { LastTurnContext } from './away-context';
-import { SegTabs } from './SegTabs';
 import { projectWithCopy } from './shell-labels';
 import type { CompanionView } from '../../lib/companion';
 import { CompanionRow, MakeCompanionRow } from './companion/CompanionRow';
 import { isCompanionPaneId } from './companion/model';
-import { JobsChip } from './rail/JobsChip';
 import { useReviewCount } from './review/useReviewCount';
 import { FocusPill } from './FocusPill';
 
@@ -41,7 +47,6 @@ import { FocusPill } from './FocusPill';
 const previewAddress = (p: PreviewUrl): string => p.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 import { StartMissionSheet } from './mission/StartMissionSheet';
 import { onOpenStartMission, useMissions, useMissionsEnabled, isActive } from '../../lib/missions';
-import { NightChip } from './night/NightChip';
 import { TonightHost } from './night/TonightHost';
 import { onOpenTonight } from '../../lib/night-host';
 import { useNightEnabled } from '../../lib/night';
@@ -72,6 +77,8 @@ export function Sidebar({
   acp = tauriAcpChatApi,
   addons = tauriAcpAddonApi,
   startModeApi = settingsStartModeApi,
+  handoffDeps,
+  handoff,
 }: {
   c: CockpitApi;
   onOpenPalette: () => void;
@@ -98,9 +105,9 @@ export function Sidebar({
   /** The Inbox row was chosen (the Inbox may already be the view on screen). */
   onOpenInbox?: () => void;
   onNewCompanion?: () => void;
-  /** The "New agent" row at the top opens the New agent page. Absent: no row. */
+  /** The New agent page: the menu's "New agent page" row opens it. Absent: no such row. */
   onOpenNewAgent?: () => void;
-  /** The New agent page is the view on screen: its row is the active one (and the Inbox row is not). */
+  /** The New agent page is the view on screen: the New agent row is the active one (and the Inbox row is not). */
   newAgentOpen?: boolean;
   /** Spaces (Labs `spaces_enabled`). The Spaces row shows only when `enabled` is true. */
   spaces?: { enabled: boolean };
@@ -115,6 +122,10 @@ export function Sidebar({
   addons?: AcpAddonApi;
   /** Where the New agent menu's Chat | Terminal choice is saved. Replaceable in tests. */
   startModeApi?: StartModeApi;
+  /** The calls "Handoff from here" makes. Replaceable in tests. */
+  handoffDeps?: HandoffDeps;
+  /** The cockpit's shared handoff (also used by the pane's "Hand off" button). Absent: the sidebar keeps its own. */
+  handoff?: HandoffControl;
 }) {
   const list = c.registry.paneList;
   // `Review 4`: how many finished things wait to be looked at. Hidden at 0.
@@ -133,6 +144,10 @@ export function Sidebar({
   const pinnedIds = new Set(pinnedNodes.map((n) => n.pane.info.id));
   const unpinned = (items: typeof grouped.needs) => items.filter((n) => n.awayFrom || !pinnedIds.has(n.pane.info.id));
   const groups = { needs: unpinned(grouped.needs), working: unpinned(grouped.working), idle: unpinned(grouped.idle) };
+  // Projects view: the folders the person added, which groups are folded, and how the list is grouped.
+  const { projects, add: addProject, remove: removeProject, rename: renameProject } = useSidebarProjects();
+  const { folded: foldedProjects, toggle: toggleProject } = useFoldedProjects();
+  const [groupBy, setGroupBy] = useGroupBy();
   // Parents whose helpers the person folded away (the helpers that need you stay listed in Needs you).
   const [folded, setFolded] = useState<ReadonlySet<string>>(readFoldedParents);
   const toggleFolded = (id: string) =>
@@ -156,6 +171,10 @@ export function Sidebar({
     setRowMenu(null);
     if (refocus) rowMenuFrom.current?.focus();
   }, []);
+  // "Handoff from here": one at a time; the line under the list says where it is. The cockpit may share one with the pane's bar.
+  const ownHandoff = useHandoff(c, handoffDeps);
+  const hand = handoff ?? ownHandoff;
+  const handoffBusy = hand.busy;
   // An action of the row's pane: the pane opens (selected) and its own view runs it, or it is run here (Interrupt).
   const runPaneAction = (id: string, action: PaneAction) => (onPaneAction ?? defaultPaneAction)(id, action);
   const defaultPaneAction = (id: string, action: PaneAction) => {
@@ -273,42 +292,65 @@ export function Sidebar({
       awayFrom ? `Helper of ${paneTitle(awayFrom)} · ${detail}` : detail,
       multiLogin,
     );
+    const entry = c.launchEntries.find((e) => e.type === p.info.agent_type);
+    const asking = p.status === 'waiting_input' || questionPanes.has(id);
+    const pill = asking && p.status !== 'error';
+    const preview = mainPreview(c.previews, id);
     return (
-      <button
-        key={id}
-        type="button"
-        className={`ck-row${active ? ' is-active' : ''}${p.status === 'waiting_input' || questionPanes.has(id) ? ' is-needs' : ''}`}
-        onClick={() => c.select(id)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          rowMenuFrom.current = e.currentTarget;
-          // Opened from the keyboard (the context-menu key, Shift+F10): there is no pointer, so it opens at the row.
-          const r = e.currentTarget.getBoundingClientRect();
-          const fromKeyboard = e.clientX === 0 && e.clientY === 0;
-          setRowMenu({ id, x: fromKeyboard ? r.left + 24 : e.clientX, y: fromKeyboard ? r.bottom - 4 : e.clientY });
-        }}
-        title={lastTurn.get(id)?.sentence}
-        aria-current={active ? 'true' : undefined}
-      >
-        <span className="ck-row-glyph">
-          <DotSpinner status={spinnerStatus(p.status)} />
-        </span>
-        <span className="ck-row-main" title={[...new Set([heading.primary, subline, projectWithCopy(p.info.cwd)])].join(' · ')}>
-          <span className="ck-row-title">{heading.primary}</span>
-          <span className="ck-row-sub">{subline}</span>
-        </span>
-        {mainPreview(c.previews, id) && (
-          <span className="ck-row-preview" title={`Has a preview · ${previewAddress(mainPreview(c.previews, id)!)}`} role="img" aria-label="Has a preview">
-            <IconGlobe />
+      <div key={id} className="ck-rowwrap">
+        <button
+          type="button"
+          className={`ck-row ck-row--slim${active ? ' is-active' : ''}${asking ? ' is-needs' : ''}${p.status === 'error' ? ' is-error' : ''}`}
+          onClick={() => c.select(id)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            rowMenuFrom.current = e.currentTarget;
+            // Opened from the keyboard (the context-menu key, Shift+F10): there is no pointer, so it opens at the row.
+            const r = e.currentTarget.getBoundingClientRect();
+            const fromKeyboard = e.clientX === 0 && e.clientY === 0;
+            setRowMenu({ id, x: fromKeyboard ? r.left + 24 : e.clientX, y: fromKeyboard ? r.bottom - 4 : e.clientY });
+          }}
+          title={lastTurn.get(id)?.sentence}
+          aria-current={active ? 'true' : undefined}
+        >
+          <span className="ck-row-glyph">
+            <RowMark status={p.status} asking={asking && p.status !== 'error'} />
           </span>
-        )}
-        <span className="ck-row-time">{since ? formatElapsed(c.now - since) : ''}</span>
-        {pinSet.has(id) && (
-          <span className="ck-row-pin" role="img" aria-label="Pinned" title="Pinned">
-            <IconPin />
+          <span className="ck-row-main" title={[...new Set([heading.primary, entry?.label, subline, projectWithCopy(p.info.cwd)])].filter(Boolean).join(' · ')}>
+            <span className="ck-row-title">{heading.primary}</span>
+            <span className="ck-row-sub">{subline}</span>
           </span>
-        )}
-      </button>
+          {preview && (
+            <span className="ck-row-preview" title={`Has a preview · ${previewAddress(preview)}`} role="img" aria-label="Has a preview">
+              <IconGlobe />
+            </span>
+          )}
+          {pinSet.has(id) && (
+            <span className="ck-row-pin" role="img" aria-label="Pinned" title="Pinned">
+              <IconPin />
+            </span>
+          )}
+          {pill ? (
+            <span className="ck-row-pill">Needs you</span>
+          ) : (
+            <span className="ck-row-time">{since ? formatElapsed(c.now - since) : ''}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          className="ck-row-more"
+          aria-label={`More for ${heading.primary}`}
+          title="More"
+          aria-haspopup="menu"
+          onClick={(e) => {
+            rowMenuFrom.current = e.currentTarget;
+            const r = e.currentTarget.getBoundingClientRect();
+            setRowMenu({ id, x: r.left, y: r.bottom + 2 });
+          }}
+        >
+          <IconMore />
+        </button>
+      </div>
     );
   };
   // A row, and under it its helpers: indented behind a thin guide line, folded by the "N helpers" chip.
@@ -336,6 +378,17 @@ export function Sidebar({
     );
   };
 
+  const questionsRow = (n: number) => (
+    <button type="button" className="ck-row" onClick={() => c.select(null)}>
+      <span className="ck-row-glyph">
+        <DotSpinner status="waiting_input" />
+      </span>
+      <span className="ck-row-main">
+        <span className="ck-row-title">Questions from agents</span>
+      </span>
+      <span className="ck-row-time">{n}</span>
+    </button>
+  );
   const section = (title: string, items: HelperNode<Pane>[], count?: number, extraRow = 0) =>
     items.length === 0 && extraRow === 0 ? null : (
       <div className="ck-group" key={title}>
@@ -344,20 +397,89 @@ export function Sidebar({
           {count ? <span className="ck-caption-count">{count}</span> : null}
         </div>
         {items.map(node)}
-        {extraRow > 0 && (
-          <button type="button" className="ck-row" onClick={() => c.select(null)}>
-            <span className="ck-row-glyph">
-              <DotSpinner status="waiting_input" />
-            </span>
-            <span className="ck-row-main">
-              <span className="ck-row-title">Questions from agents</span>
-            </span>
-            <span className="ck-row-time">{extraRow}</span>
-          </button>
-        )}
+        {extraRow > 0 && questionsRow(extraRow)}
       </div>
     );
 
+  // The Projects view: every top-level agent under the folder it works in (see groupByProject).
+  const projectRoots = roots.filter((n) => !pinnedIds.has(n.pane.info.id));
+  const projectGroups = groupByProject(projectRoots, (n) => n.pane.info.cwd, projects);
+  const newAgentIn = (path: string, name: string) => {
+    setChosen({ path, name });
+    setMenuOpen(true);
+  };
+  const addFolder = async () => {
+    try {
+      const found = await ship.pickFolder();
+      if (found?.path) addProject(found.path);
+    } catch {
+      c.notify('Could not open the folder picker here.');
+    }
+  };
+  const sectionBar = (
+    <div className="ck-sechead">
+      <span className="ck-sechead-text">{groupBy === 'projects' ? 'Projects' : 'Status'}</span>
+      <button
+        type="button"
+        className="ck-sechead-btn"
+        aria-label={groupBy === 'projects' ? 'Group by status' : 'Group by project'}
+        title={groupBy === 'projects' ? 'Group by status (Needs you, Working, Idle)' : 'Group by project folder'}
+        onClick={() => setGroupBy(groupBy === 'projects' ? 'status' : 'projects')}
+      >
+        <IconSort />
+      </button>
+      <button type="button" className="ck-sechead-btn" data-testid="side-add-project-btn" aria-label="Add project" title="Add project" onClick={() => void addFolder()}>
+        <IconFolderPlus />
+      </button>
+    </div>
+  );
+  const projectsSection = (
+    <div className="ck-group" key="projects">
+      {sectionBar}
+      {asks > 0 && questionsRow(asks)}
+      {projectGroups.map((g) => {
+        const count = g.items.reduce((n, item) => n + 1 + descendants(item).length, 0);
+        const isFolded = foldedProjects.has(g.key);
+        return (
+          <div className="ck-proj" key={g.key} role="group" aria-label={g.name}>
+            <ProjectHeader
+              name={g.name}
+              count={count}
+              folded={isFolded}
+              needs={g.items.some((n) => n.pane.status === 'waiting_input' || n.pane.status === 'error' || questionPanes.has(n.pane.info.id))}
+              added={g.added}
+              hasFolder={g.path !== null}
+              onToggle={() => toggleProject(g.key)}
+              onNewAgent={() => g.path && newAgentIn(g.path, g.name)}
+              onAdd={() => g.path && addProject(g.path)}
+              onRemove={() => g.path && removeProject(g.path)}
+              onRename={(name) => g.path && renameProject(g.path, name)}
+            />
+            {!isFolded &&
+              (g.items.length > 0 ? (
+                <div className="ck-proj-kids">{g.items.map(node)}</div>
+              ) : g.path ? (
+                <button type="button" className="ck-proj-newrow" data-testid="proj-new-agent" onClick={() => g.path && newAgentIn(g.path, g.name)}>
+                  New agent
+                </button>
+              ) : (
+                <p className="ck-proj-empty">No agents</p>
+              ))}
+          </div>
+        );
+      })}
+      <button type="button" data-testid="side-add-project" className="ck-side-new ck-side-add" onClick={() => void addFolder()}>
+        <span className="ck-row-glyph ck-row-glyph--icon">
+          <IconFolderPlus />
+        </span>
+        <span className="ck-row-main">
+          <span className="ck-row-title">Add project</span>
+        </span>
+      </button>
+    </div>
+  );
+
+  const hint = (keys: string) => (isMacPlatform() ? formatKey(keys, true) : keys.replace('+', ' '));
   return (
     <aside className="ck-side" aria-label="Agents">
       {setUpFor && (
@@ -376,20 +498,28 @@ export function Sidebar({
       )}
       <div className="ck-side-head">
         <span className="ck-wordmark">Potato Workspace</span>
-        <button type="button" className="ck-icon-btn" onClick={onOpenPalette} title="Search (Ctrl+K)" aria-label="Search">
-          <IconSearch />
-        </button>
+      </div>
+
+      <FocusPill notify={c.notify} />
+
+      <div className="ck-side-top">
         <div className="ck-menu-wrap" ref={menuRef}>
           <button
             type="button"
-            className="ck-icon-btn"
+            data-testid="side-new-agent"
+            className={`ck-side-new ck-side-new--primary${newAgentOpen ? ' is-active' : ''}`}
             onClick={() => setMenuOpen((v) => !v)}
-            title="New agent"
             aria-label="New agent"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
-            <IconPlus />
+            <span className="ck-row-glyph ck-row-glyph--icon">
+              <IconNewAgent />
+            </span>
+            <span className="ck-row-main">
+              <span className="ck-row-title">New agent</span>
+            </span>
+            <kbd className="ck-row-hint">{hint('Ctrl+N')}</kbd>
           </button>
           {menuOpen && (
             <div className="ck-menu ck-menu--left ck-menu--wide" role="menu">
@@ -434,6 +564,14 @@ export function Sidebar({
                   writeCopyPreference(projectKey, on);
                 }}
                 ship={ship}
+                onOpenPage={
+                  onOpenNewAgent
+                    ? () => {
+                        setMenuOpen(false);
+                        onOpenNewAgent();
+                      }
+                    : undefined
+                }
                 onOpenStore={
                   onOpenStore
                     ? () => {
@@ -462,27 +600,19 @@ export function Sidebar({
             </div>
           )}
         </div>
+        <button type="button" data-testid="side-search" className="ck-side-new" onClick={onOpenPalette}>
+          <span className="ck-row-glyph ck-row-glyph--icon">
+            <IconSearch />
+          </span>
+          <span className="ck-row-main">
+            <span className="ck-row-title">Search</span>
+          </span>
+          <kbd className="ck-row-hint">{hint('Ctrl+K')}</kbd>
+        </button>
       </div>
 
-      <FocusPill notify={c.notify} />
 
       <nav className="ck-side-scroll">
-        {onOpenNewAgent && (
-          <button
-            type="button"
-            data-testid="side-new-agent"
-            className={`ck-side-new${newAgentOpen ? ' is-active' : ''}`}
-            aria-current={newAgentOpen ? 'page' : undefined}
-            onClick={onOpenNewAgent}
-          >
-            <span className="ck-row-glyph ck-row-glyph--icon">
-              <IconNewAgent />
-            </span>
-            <span className="ck-row-main">
-              <span className="ck-row-title">New agent</span>
-            </span>
-          </button>
-        )}
         {companions &&
           (companions.length === 0
             ? onNewCompanion && <MakeCompanionRow onMake={onNewCompanion} />
@@ -511,11 +641,29 @@ export function Sidebar({
           {waiting > 0 && <span className="ck-count">{waiting}</span>}
         </button>
         {section('Pinned', pinnedNodes)}
-        {section('Needs you', groups.needs, waiting, asks)}
-        {section('Working', groups.working)}
-        {section('Idle', groups.idle)}
+        {groupBy === 'projects' ? (
+          projectsSection
+        ) : (
+          <>
+            {sectionBar}
+            {section('Needs you', groups.needs, waiting, asks)}
+            {section('Working', groups.working)}
+            {section('Idle', groups.idle)}
+          </>
+        )}
         {list.length === 0 && c.registry.initialReady && <p className="ck-side-empty">No agents running.</p>}
       </nav>
+
+      {hand.status && (
+        <div className={`ck-handoff${hand.status.kind === 'failed' ? ' is-failed' : ''}`} role="status" data-testid="handoff-status">
+          <span className="ck-handoff-text">{hand.status.text}</span>
+          {!handoffBusy && (
+            <button type="button" className="ck-handoff-x" aria-label="Dismiss" onClick={hand.dismiss}>
+              ×
+            </button>
+          )}
+        </div>
+      )}
 
       {rowMenu && (
         <PaneContextMenu
@@ -524,93 +672,33 @@ export function Sidebar({
           onSide={onOpenToSide ? () => onOpenToSide(rowMenu.id) : undefined}
           pinned={pinSet.has(rowMenu.id)}
           onPin={() => setPinned(rowMenu.id, !pinSet.has(rowMenu.id))}
+          onHandoff={hand.allowed(rowMenu.id) && !handoffBusy ? () => hand.start(rowMenu.id) : undefined}
           onAction={(action) => runPaneAction(rowMenu.id, action)}
           onInterrupt={() => void c.interrupt(rowMenu.id)}
           onClose={closeRowMenu}
         />
       )}
 
-      <div className="ck-side-foot">
-        <SegTabs
-          label="Mode"
-          value={c.mode}
-          onChange={(m) => void c.setMode(m)}
-          options={[
-            { id: 'orchestration', label: 'Orchestration' },
-            { id: 'individual', label: 'Individual' },
-          ]}
-          small
-        />
-        <JobsChip names={c.names} onOpenPane={(id) => c.select(id)} />
-        {onOpenMorning && <NightChip onOpenMorning={onOpenMorning} />}
-        {onOpenDoctor && (
-          <button type="button" className="ck-btn ck-btn--plain" onClick={onOpenDoctor}>
-            <IconTerminal />
-            Set up agents
-          </button>
-        )}
-        {onOpenMemory && (
-          <button type="button" className="ck-btn ck-btn--plain" onClick={onOpenMemory}>
-            <IconNote />
-            Project
-          </button>
-        )}
-        {onOpenPlans && (
-          <button type="button" className="ck-btn ck-btn--plain" onClick={onOpenPlans}>
-            <IconChart />
-            Your plans
-          </button>
-        )}
-        {onOpenScores && (
-          <button type="button" className="ck-btn ck-btn--plain" onClick={onOpenScores}>
-            <IconChart />
-            Scores
-          </button>
-        )}
-        {onOpenReview && (
-          <button type="button" className="ck-btn ck-btn--plain" onClick={onOpenReview}>
-            <IconChart />
-            Review{reviewCount > 0 && <span className="ck-side-count"> {reviewCount}</span>}
-          </button>
-        )}
-        {spaces?.enabled && onOpenSpaces && (
-          <button
-            type="button"
-            className={`ck-btn ck-btn--plain${spacesOpen ? ' is-active' : ''}`}
-            aria-current={spacesOpen ? 'page' : undefined}
-            onClick={onOpenSpaces}
-          >
-            <IconGlobe />
-            Spaces
-          </button>
-        )}
-        <div className="ck-foot-row">
-          <button type="button" className="ck-btn ck-btn--plain" onClick={() => void c.openSettings()}>
-            <IconSettings />
-            Settings
-          </button>
-          <button
-            type="button"
-            className="ck-icon-btn"
-            onClick={() => void c.toggleTheme()}
-            title={c.theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
-            aria-label="Toggle theme"
-          >
-            <span className={`ck-theme-ic${c.theme === 'light' ? ' is-light' : ''}`}>
-              {c.theme === 'dark' ? <IconMoon /> : <IconSun />}
-            </span>
-          </button>
-        </div>
-        {c.bridgeLine && (
-          <div className="ck-bridge" role="status">
-            <span>Connection lost</span>
-            <span aria-hidden="true"> · </span>
-            <button type="button" className="ck-bridge-fix" onClick={() => void c.openSettings('bridge')}>
-              Fix
-            </button>
-          </div>
-        )}
-      </div>
+      <SidebarFooter
+        names={c.names}
+        onOpenPane={(id) => c.select(id)}
+        mode={c.mode}
+        onMode={(m) => void c.setMode(m)}
+        theme={c.theme}
+        onToggleTheme={() => void c.toggleTheme()}
+        onOpenSettings={(tab) => void (tab ? c.openSettings(tab) : c.openSettings())}
+        bridgeLine={c.bridgeLine}
+        onOpenDoctor={onOpenDoctor}
+        onOpenMemory={onOpenMemory}
+        onOpenPlans={onOpenPlans}
+        onOpenScores={onOpenScores}
+        onOpenReview={onOpenReview}
+        reviewCount={reviewCount}
+        onOpenMorning={onOpenMorning}
+        spacesEnabled={spaces?.enabled}
+        spacesOpen={spacesOpen}
+        onOpenSpaces={onOpenSpaces}
+      />
       {tonightOpen && nightOn && (
         <TonightHost
           c={c}

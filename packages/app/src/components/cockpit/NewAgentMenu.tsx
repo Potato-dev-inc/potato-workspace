@@ -14,6 +14,8 @@ import { startFailure, type AcpAddable, type AcpChatApi, type AcpLaneAgent, type
 import { blockOf, type AcpAddonApi } from '../../lib/acpAddon';
 import type { StartMode } from '../../lib/newAgentStart';
 import { NoChatPrompt, type AddChatKind, type NoChatAgent } from './NoChatPrompt';
+import { HiddenAgentsEditor } from './newagent/HiddenAgentsEditor';
+import { useHiddenAgents, visibleAgentEntries } from '../../lib/hiddenAgents';
 
 /** Where a click on an agent goes: a terminal, a chat, a chat in a terminal, or the "no chat yet" prompt. */
 type Route = 'terminal' | 'acp' | 'terminal_chat' | 'prompt';
@@ -59,6 +61,8 @@ interface Props {
   pick?: PickApi;
   /** "More agents…": opens the Agent Store. Without it the row is not drawn. */
   onOpenStore?: () => void;
+  /** "New agent page": opens the full page. Without it the row is not drawn. */
+  onOpenPage?: () => void;
   /** "Start a mission…" (Preview, Labs). Without it the item is not drawn. */
   onStartMission?: () => void;
   /** "Tonight…" (Night Shift, Labs). Without it the item is not drawn. */
@@ -89,7 +93,7 @@ interface Props {
   };
 }
 
-type Step = 'agents' | 'projects' | 'git' | 'pick';
+type Step = 'agents' | 'projects' | 'git' | 'pick' | 'edit';
 
 /** The answer of "Pick for me" for one folder. `path` is the folder it was asked for, so an old answer is never shown. */
 interface PickAnswer {
@@ -108,7 +112,7 @@ function noGitHint(state: GitState | undefined): string {
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 export function NewAgentMenu({
-  entries,
+  entries: allEntries,
   readyAgents,
   onStart,
   onClose,
@@ -120,6 +124,7 @@ export function NewAgentMenu({
   ship = shipApi,
   pick: pickApi,
   onOpenStore,
+  onOpenPage,
   onStartMission,
   onTonight,
   chat,
@@ -140,6 +145,9 @@ export function NewAgentMenu({
   const [promptFor, setPromptFor] = useState<string | null>(null);
   // "Set up chat for another agent…": the pick list of agents with no chat yet (only those that can be started here).
   const [addPick, setAddPick] = useState(false);
+  // Agents the person hid ("Edit list…"): the menu leaves them out. `allEntries` is the full list for the editor.
+  const { hidden } = useHiddenAgents();
+  const entries = visibleAgentEntries(allEntries, hidden);
   const entryOf = (agentId: string): LaunchEntry | undefined => entries.find((e) => e.type === agentId);
   // The switch decides: Terminal (or no chat at all) starts a terminal; Chat starts the agent's chat, or asks what to do.
   const routeOf = (agentId: string): Route => {
@@ -304,6 +312,10 @@ export function NewAgentMenu({
       .catch(() => undefined)
       .finally(loadRecent);
   };
+
+  if (step === 'edit') {
+    return <HiddenAgentsEditor entries={allEntries} onBack={() => setStep('agents')} />;
+  }
 
   if (step === 'projects') {
     return (
@@ -634,6 +646,11 @@ export function NewAgentMenu({
           )}
         </>
       )}
+      {onOpenPage && (
+        <button type="button" role="menuitem" className="ck-menu-item" data-testid="menu-open-page" onClick={onOpenPage}>
+          <span>New agent page</span>
+        </button>
+      )}
       {onOpenStore && (
         <button type="button" role="menuitem" className="ck-menu-item" onClick={onOpenStore}>
           <span>More agents…</span>
@@ -652,6 +669,10 @@ export function NewAgentMenu({
           <span className="ck-menu-hint">Night Shift</span>
         </button>
       )}
+      <div className="ck-menu-sep" />
+      <button type="button" className="ck-menu-edit-agents" onClick={() => setStep('edit')}>
+        Edit list…
+      </button>
     </>
   );
 }

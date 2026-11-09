@@ -160,6 +160,7 @@ pub(super) fn save_keep_open_at(target: &Path, on: bool) -> Result<StoreFile, St
 }
 
 /// The "Keep helpers open" choice of the file at `target` (default on).
+#[cfg(test)]
 pub(super) fn keep_open_at(target: &Path) -> bool {
     read_file(target).keep_helpers_open.unwrap_or(true)
 }
@@ -195,6 +196,7 @@ pub(super) fn save_visibility_at(target: &Path, value: HelperVisibility) -> Resu
 }
 
 /// The "Helper agents" choice of the file at `target` (default `always_show`).
+#[cfg(test)]
 pub(super) fn visibility_at(target: &Path) -> HelperVisibility {
     visibility_in(&read_file(target))
 }
