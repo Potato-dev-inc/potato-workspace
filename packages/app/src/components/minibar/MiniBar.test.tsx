@@ -77,6 +77,18 @@ describe('MiniBarApp (the real window content)', () => {
     expect(api.focus).toHaveBeenCalledWith('b2');
   });
 
+  it('a chat session (ACP) is a normal chip: it focuses its pane window and never mentions a missing terminal', async () => {
+    api.panes = [{ ...pane('c1', 'codex', '/x/api', 'running'), lane: 'acp' }];
+    act(() => root.render(createElement(MiniBarApp)));
+    await flush();
+    const chip = host.querySelector('.mb-chip') as HTMLElement;
+    expect(chip.textContent).toBe('Codexapi');
+    expect(chip.title).toContain('Chat');
+    expect(host.textContent).not.toMatch(/no terminal|not available/i);
+    act(() => chip.click());
+    expect(api.focus).toHaveBeenCalledWith('c1');
+  });
+
   it('zero panes: "No agents yet" and Start one goes back to Orchestration', async () => {
     act(() => root.render(createElement(MiniBarApp)));
     await flush();

@@ -13,7 +13,7 @@
 //! - a standby that shows a dialog / login / update, dies, or never becomes ready is discarded and
 //!   its key backs off (and goes cold after 3 failures), so an untrusted folder is simply not pooled.
 
-use super::config::{self, RecentUse, StandbyConfig, MAX_RECENT};
+use super::config::{self, CurrentProject, FollowWhy, RecentUse, StandbyConfig, MAX_RECENT};
 use super::key::PoolKey;
 use parking_lot::{Condvar, Mutex};
 use serde::Serialize;
@@ -65,6 +65,10 @@ pub trait Host: Send + Sync {
     fn default_project(&self) -> Option<String> {
         None
     }
+    /// Where `default_project` came from (the setting, or the registry when there is none).
+    fn default_source(&self) -> FollowWhy {
+        FollowWhy::Setting
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -86,6 +90,8 @@ struct Entry {
     ready_checks: u32,
     last_observed_ms: i64,
     health: Health,
+    /// First time this worker was seen waiting in a folder Preload no longer follows.
+    stranded_since_ms: Option<i64>,
 }
 
 struct Backoff {
@@ -133,6 +139,9 @@ pub const READY_RECHECK_MS: i64 = 400;
 /// stops at a dialog would otherwise reset the schedule every time and be respawned every 15 seconds
 /// for ever. Capped by the idle timeout, which ends a healthy worker's life anyway.
 pub const STABLE_READY_MS: i64 = 60_000;
+/// When Preload moves to another folder, the old folder's idle workers are kept this long at most
+/// while the new ones start (they go sooner once the new ones are ready).
+pub const MOVE_GRACE_MS: i64 = 60_000;
 const BACKOFF_BASE_MS: i64 = 15_000;
 const BACKOFF_MAX_MS: i64 = 300_000;
 /// After this many failures in a row a key stays cold until its next run.
@@ -224,6 +233,10 @@ struct Inner {
     strict: HashSet<String>,
     stats: Stats,
     shut_down: bool,
+    /// The folder Preload follows (last run / last focused pane); `None`: use the default project.
+    current: Option<CurrentProject>,
+    /// The default project as last seen (canonical), to notice the person editing the setting.
+    last_fallback: Option<String>,
 }
 
 struct PoolShared {
@@ -299,10 +312,29 @@ pub struct StatusView {
     pub blocked: Vec<BlockedView>,
     /// The same per agent (across keys): what Settings shows as "couldn't stay warm".
     pub agents_blocked: Vec<AgentBlockedView>,
+    /// The folder Preload warms in and why (`None`: no folder known).
+    pub following: Option<FollowingView>,
     pub recent: Vec<RecentView>,
     pub stats: Stats,
     /// Which backends can be pooled, and in which kinds (what the settings tab offers).
     pub supported: Vec<SupportedBackend>,
+}
+
+/// "following: <folder> - <why>" in Settings, plus the providers that could not be warmed there.
+#[derive(Debug, Clone, Serialize)]
+pub struct FollowingView {
+    pub project: String,
+    /// `run` (the last run), `focus` (the pane you last opened), `setting` (the project folder
+    /// setting) or `registry` (the app's current project).
+    pub why: &'static str,
+    pub not_warmed: Vec<NotWarmedView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NotWarmedView {
+    pub agent_type: String,
+    /// `needs_trust`: the agent stops at its trust prompt in this folder and the pool never answers it.
+    pub reason: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -362,8 +394,72 @@ impl Pool {
                     strict: HashSet::new(),
                     stats: Stats::default(),
                     shut_down: false,
+                    current: None,
+                    last_fallback: None,
                 }),
             }),
+        }
+    }
+
+    /// Start with the folder the previous run of the app was following.
+    pub fn with_current(self, current: Option<CurrentProject>) -> Self {
+        self.shared.inner.lock().current = current;
+        self
+    }
+
+    /// Follow `path`: a run started there (`FollowWhy::Run`) or the person focused a pane there
+    /// (`FollowWhy::Focus`). The last such event wins. Warm workers then start in that folder; the
+    /// ones in the old folder are retired once the new ones are ready (see `reconcile`). A pool with
+    /// Preload off ignores it. Returns whether the followed folder changed.
+    pub fn note_project(&self, path: &str, why: FollowWhy, now_ms: i64) -> bool {
+        let path = path.trim();
+        if path.is_empty() {
+            return false;
+        }
+        let canonical = super::key::canonical_project(path);
+        let snapshot = {
+            let mut inner = self.shared.inner.lock();
+            if !inner.config.preload.enabled {
+                return false;
+            }
+            if let Some(current) = inner.current.as_mut() {
+                if super::key::canonical_project(&current.path) == canonical {
+                    // Same folder: only the label and the clock move (no write, no wake).
+                    current.why = why;
+                    current.at_ms = now_ms;
+                    return false;
+                }
+            }
+            inner.current = Some(CurrentProject {
+                path: path.to_string(),
+                why,
+                at_ms: now_ms,
+            });
+            (inner.config.clone(), inner.recent.clone(), inner.current.clone())
+        };
+        tracing::info!(project = %path, why = why.as_str(), "standby pool follows a new folder");
+        self.persist(snapshot);
+        self.shared.wake.notify();
+        true
+    }
+
+    /// The folder Preload warms in and why: the followed folder, else the default project (the
+    /// setting, or the registry's project). Editing the setting by hand counts as the newest word
+    /// and drops the followed folder.
+    pub fn followed_project(&self) -> Option<(String, FollowWhy)> {
+        let fallback = self.host.default_project();
+        let source = self.host.default_source();
+        let canonical = fallback.as_deref().map(super::key::canonical_project);
+        let mut inner = self.shared.inner.lock();
+        if inner.last_fallback != canonical {
+            if inner.last_fallback.is_some() && source == FollowWhy::Setting {
+                inner.current = None;
+            }
+            inner.last_fallback = canonical;
+        }
+        match &inner.current {
+            Some(current) => Some((current.path.clone(), current.why)),
+            None => fallback.filter(|path| !path.trim().is_empty()).map(|path| (path, source)),
         }
     }
 
@@ -409,7 +505,7 @@ impl Pool {
                 inner.suppressed.clear();
                 lift_agents(&mut inner, None);
             }
-            (doomed, (inner.config.clone(), inner.recent.clone()))
+            (doomed, (inner.config.clone(), inner.recent.clone(), inner.current.clone()))
         };
         for entry in &doomed {
             self.host.kill(&entry.handle, "pool_config_changed");
@@ -442,7 +538,7 @@ impl Pool {
             inner.suppressed.remove(key);
             inner.backoff.remove(key);
             lift_agents(&mut inner, Some(&key.agent_type));
-            (inner.config.clone(), inner.recent.clone())
+            (inner.config.clone(), inner.recent.clone(), inner.current.clone())
         };
         self.persist(snapshot);
         self.shared.wake.notify();
@@ -477,9 +573,9 @@ impl Pool {
         self.shared.wake.notify();
     }
 
-    fn persist(&self, (config, recent): (StandbyConfig, Vec<RecentUse>)) {
+    fn persist(&self, (config, recent, current): (StandbyConfig, Vec<RecentUse>, Option<CurrentProject>)) {
         if let Some(path) = &self.store {
-            if let Err(error) = config::save(path, &config, &recent) {
+            if let Err(error) = config::save_with_current(path, &config, &recent, current.as_ref()) {
                 tracing::warn!(%error, "could not save the standby pool config");
             }
         }
@@ -547,7 +643,8 @@ impl Pool {
     pub fn reconcile(&self, now_ms: i64) -> Reconciled {
         let mut result = Reconciled::default();
         // A: expiry and disallowed entries.
-        let default_project = self.host.default_project().map(|p| super::key::canonical_project(&p));
+        let followed = self.followed_project();
+        let wanted_project = followed.as_ref().map(|(path, _)| super::key::canonical_project(path));
         let (doomed, observe) = {
             let mut inner = self.shared.inner.lock();
             if inner.shut_down {
@@ -556,16 +653,12 @@ impl Pool {
             let idle_ms = inner.config.idle_timeout_secs as i64 * 1000;
             let mut doomed: Vec<(Entry, &'static str)> = Vec::new();
             let mut keep = Vec::new();
+            let mut stranded: Vec<Entry> = Vec::new();
             for entry in std::mem::take(&mut inner.entries) {
                 if !inner.config.allows(&entry.key) {
                     doomed.push((entry, "pool_config_changed"));
                 } else if inner.strict.contains(&agent_id(&entry.key.agent_type)) {
                     doomed.push((entry, "untested_version"));
-                } else if !entry.key.headless
-                    && default_project.as_deref().is_some_and(|project| project != entry.key.project)
-                {
-                    // Preload warms the default project only; it moved, so this worker is stranded.
-                    doomed.push((entry, "project_changed"));
                 } else if entry
                     .ready_since_ms
                     .is_some_and(|since| now_ms - since >= idle_ms)
@@ -576,8 +669,61 @@ impl Pool {
                     inner.agent_backoff.remove(&agent_id(&entry.key.agent_type));
                     inner.stats.expired += 1;
                     doomed.push((entry, "idle_timeout"));
+                } else if !entry.key.headless
+                    && wanted_project.as_deref().is_some_and(|project| project != entry.key.project)
+                {
+                    // Preload moved to another folder. Do not kill this worker yet: it stays
+                    // claimable until the new folder's workers are ready (decided below).
+                    let mut entry = entry;
+                    entry.stranded_since_ms.get_or_insert(now_ms);
+                    stranded.push(entry);
                 } else {
+                    let mut entry = entry;
+                    entry.stranded_since_ms = None;
                     keep.push(entry);
+                }
+            }
+            if !stranded.is_empty() {
+                let project = wanted_project.as_deref().unwrap_or_default();
+                let cap = inner.config.cap();
+                // How many workers the followed folder still lacks, and how many slots are free.
+                let missing: usize = inner
+                    .config
+                    .preload
+                    .providers
+                    .keys()
+                    .map(|agent| {
+                        let have = keep
+                            .iter()
+                            .filter(|e| !e.key.headless && e.key.project == project && e.key.agent_type.eq_ignore_ascii_case(agent))
+                            .count();
+                        inner.config.preload.count_for(agent).saturating_sub(have)
+                    })
+                    .sum();
+                let room = cap.saturating_sub(keep.len() + stranded.len());
+                let mut must_free = missing.saturating_sub(room);
+                stranded.sort_by_key(|e| e.created_ms);
+                for entry in stranded {
+                    let agent = entry.key.agent_type.clone();
+                    let ready_there = keep
+                        .iter()
+                        .filter(|e| {
+                            !e.key.headless
+                                && e.key.project == project
+                                && e.state == EntryState::Ready
+                                && e.key.agent_type.eq_ignore_ascii_case(&agent)
+                        })
+                        .count();
+                    let replaced = ready_there >= inner.config.preload.count_for(&agent);
+                    let waited = entry.stranded_since_ms.is_some_and(|since| now_ms - since >= MOVE_GRACE_MS);
+                    if must_free > 0 {
+                        must_free -= 1;
+                        doomed.push((entry, "project_changed"));
+                    } else if replaced || waited {
+                        doomed.push((entry, "project_changed"));
+                    } else {
+                        keep.push(entry);
+                    }
                 }
             }
             inner.entries = keep;
@@ -667,7 +813,7 @@ impl Pool {
         if now_ms < self.spawn_not_before_ms {
             return result;
         }
-        let default_project = self.host.default_project();
+        let default_project = followed.map(|(path, _)| path);
         loop {
             let next = {
                 let mut inner = self.shared.inner.lock();
@@ -710,6 +856,7 @@ impl Pool {
                         ready_checks: 0,
                         last_observed_ms: i64::MIN / 2,
                         health: Health::Starting,
+                        stranded_since_ms: None,
                     });
                     result.spawned.push(key);
                 }
@@ -787,6 +934,7 @@ impl Pool {
     }
 
     pub fn status(&self, now_ms: i64) -> StatusView {
+        let followed = self.followed_project();
         let inner = self.shared.inner.lock();
         let idle_ms = inner.config.idle_timeout_secs as i64 * 1000;
         let standbys = inner
@@ -872,6 +1020,22 @@ impl Pool {
                     age_ms: now_ms - recent.at_ms,
                 })
                 .collect(),
+            following: followed.map(|(project, why)| {
+                let canonical = super::key::canonical_project(&project);
+                let not_warmed = inner
+                    .config
+                    .preload
+                    .providers
+                    .keys()
+                    .filter(|agent| inner.config.preload.count_for(agent) > 0)
+                    .filter(|agent| {
+                        let key = PoolKey::new(agent, &canonical, None, false, false, false);
+                        inner.backoff.get(&key).is_some_and(|b| b.last == "dialog")
+                    })
+                    .map(|agent| NotWarmedView { agent_type: agent.clone(), reason: "needs_trust" })
+                    .collect();
+                FollowingView { project, why: why.as_str(), not_warmed }
+            }),
             stats: inner.stats.clone(),
             supported: crate::tui::standby_backends()
                 .into_iter()

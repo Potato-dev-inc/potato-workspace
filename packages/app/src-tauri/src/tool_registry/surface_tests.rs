@@ -236,7 +236,10 @@ fn instructions_lead_with_the_five_tool_happy_path_in_order() {
     .map(|name| text.find(name).unwrap_or_else(|| panic!("{name} missing")))
     .collect();
     assert!(positions.windows(2).all(|pair| pair[0] < pair[1]), "{positions:?}");
-    assert!(text.starts_with("Potato Workspace MCP"));
+    assert!(text.starts_with("For a subagent or delegated task beyond a one-shot lookup, use run_agent"));
+    assert!(text.contains("
+Potato Workspace MCP"));
+    assert!(text.len() < 3200, "instructions go out every session: {}", text.len());
     assert!(text.contains("Five tools"));
     assert!(text.contains("SCHEMA_DRIFT"));
     assert!(text.contains("Rebuild or reinstall the Potato Workspace MCP"));

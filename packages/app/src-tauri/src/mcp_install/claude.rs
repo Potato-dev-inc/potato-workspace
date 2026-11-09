@@ -11,10 +11,14 @@ pub(super) fn merge_mcp_servers(existing: &mut Value, source: McpLaunchSource) {
     if !servers.is_object() {
         *servers = json!({});
     }
-    servers.as_object_mut().expect("mcpServers object").insert(
-        MCP_SERVER_NAME.into(),
-        puppet_master_mcp_server_json(source),
-    );
+    let mut server = puppet_master_mcp_server_json(source);
+    // Documented per-server field (Claude Code MCP docs, "Exempt a server from deferral"): keeps
+    // the small core tool list loaded instead of behind tool search.
+    server["alwaysLoad"] = json!(true);
+    servers
+        .as_object_mut()
+        .expect("mcpServers object")
+        .insert(MCP_SERVER_NAME.into(), server);
 }
 
 pub(super) fn claude_mcp_installed(cwd: &Path) -> bool {

@@ -84,6 +84,9 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
         return None;
     };
     let pane_id: &str = pane_id;
+    if let Some(refused) = chat_pane_refusal(cx, pane_id, rest) {
+        return Some(Err(refused));
+    }
     if let Some(response) = registry_route(cx.method, cx.segments, cx.registry) {
         return Some(response);
     }
@@ -112,6 +115,33 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
         ("GET", ["chat"]) => super::chat::get(cx, pane_id),
         _ => return None,
     })
+}
+
+/// What an ACP chat session's pane answers to a terminal call (read its screen or buffer, press a key, resize, claim
+/// a size, or type raw input as an agent): a clear `NOT_A_TERMINAL` with the way to talk to it, never a vague failure.
+/// `None` for every other pane, and for the calls a chat pane does take (messages, chat, close, model).
+fn chat_pane_refusal(cx: &Ctx, pane_id: &str, rest: &[&str]) -> Option<(u16, serde_json::Value)> {
+    chat_pane_refusal_for(cx.method, rest, cx.session.is_some(), cx.registry, pane_id)
+}
+
+fn chat_pane_refusal_for(
+    method: &str,
+    rest: &[&str],
+    from_agent: bool,
+    registry: &parking_lot::Mutex<crate::pty::PaneRegistry>,
+    pane_id: &str,
+) -> Option<(u16, serde_json::Value)> {
+    let terminal_call = match (method, rest) {
+        ("GET", ["buffer" | "raw" | "snapshot" | "screen", ..]) => true,
+        ("POST", ["key" | "resize" | "viewport", ..]) => true,
+        // The person's own typing into a chat pane is a message (`acp::chat::terminal_input`); an agent's raw input is not.
+        ("POST", ["input", ..]) => from_agent,
+        _ => false,
+    };
+    if !terminal_call || !crate::acp::chat::is_chat_pane(registry, pane_id) {
+        return None;
+    }
+    Some(operation_http_error(crate::acp::chat::not_a_terminal_error(pane_id)))
 }
 
 /// Panic button for the phone: interrupt every running agent pane. Authorised like every other
@@ -562,4 +592,60 @@ fn agent_context(cx: &Ctx, pane_id: &str) -> RouteResult {
         404,
         json!({ "error": crate::pty::registry::unknown_pane_message(pane_id) }),
     ))
+}
+
+#[cfg(test)]
+mod chat_pane_tests {
+    use super::chat_pane_refusal_for;
+    use crate::pty::registry::{insert_virtual_pane, VirtualPaneSpec};
+    use crate::pty::PaneRegistry;
+    use parking_lot::Mutex;
+    use std::sync::Arc;
+
+    fn registry_with_chat() -> Mutex<PaneRegistry> {
+        let registry = Mutex::new(PaneRegistry::new());
+        let spec = VirtualPaneSpec { pane_id: "chat1".into(), agent_type: "codex".into(), cwd: "/work".into(), lane: "acp".into(), pid: 0 };
+        insert_virtual_pane(&registry, spec, Arc::new(|| {}));
+        registry
+    }
+
+    #[test]
+    fn terminal_calls_on_a_chat_pane_say_not_a_terminal_and_how_to_talk_to_it() {
+        let registry = registry_with_chat();
+        for (method, rest) in [
+            ("GET", vec!["buffer"]),
+            ("GET", vec!["raw"]),
+            ("GET", vec!["snapshot"]),
+            ("GET", vec!["screen"]),
+            ("POST", vec!["key"]),
+            ("POST", vec!["resize"]),
+            ("POST", vec!["viewport"]),
+            ("POST", vec!["input"]),
+        ] {
+            let (status, body) = chat_pane_refusal_for(method, &rest, true, &registry, "chat1").unwrap_or_else(|| panic!("{method} {rest:?} was not refused"));
+            assert_eq!(status, 409, "{method} {rest:?}");
+            assert_eq!(body["code"], "NOT_A_TERMINAL");
+            let fix = body["fix"].as_str().unwrap();
+            assert!(fix.contains("send_message") && fix.contains("followup_task"), "{fix}");
+            assert_eq!(body["retryable"], false);
+        }
+    }
+
+    #[test]
+    fn the_calls_a_chat_pane_does_take_and_the_persons_typing_pass() {
+        let registry = registry_with_chat();
+        assert!(chat_pane_refusal_for("GET", &["chat"], true, &registry, "chat1").is_none());
+        assert!(chat_pane_refusal_for("POST", &["messages"], true, &registry, "chat1").is_none());
+        assert!(chat_pane_refusal_for("DELETE", &[], true, &registry, "chat1").is_none());
+        // The person's text in the box is a message, not raw input.
+        assert!(chat_pane_refusal_for("POST", &["input"], false, &registry, "chat1").is_none());
+    }
+
+    #[test]
+    fn a_terminal_pane_and_an_unknown_pane_are_not_touched() {
+        let registry = registry_with_chat();
+        assert!(chat_pane_refusal_for("GET", &["buffer"], true, &registry, "no-such-pane").is_none());
+        let empty = Mutex::new(PaneRegistry::new());
+        assert!(chat_pane_refusal_for("POST", &["key"], true, &empty, "chat1").is_none());
+    }
 }

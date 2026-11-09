@@ -156,11 +156,46 @@ pub struct RecentUse {
     pub at_ms: i64,
 }
 
+/// Why Preload warms where it does (shown in Settings as "following: <folder> - <why>").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FollowWhy {
+    /// The folder of the last run (a run started from an orchestrator, visible or headless).
+    Run,
+    /// The folder of the pane the person last focused.
+    Focus,
+    /// The "project folder" setting.
+    Setting,
+    /// The registry's current project (no setting).
+    Registry,
+}
+
+impl FollowWhy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FollowWhy::Run => "run",
+            FollowWhy::Focus => "focus",
+            FollowWhy::Setting => "setting",
+            FollowWhy::Registry => "registry",
+        }
+    }
+}
+
+/// The folder Preload last followed, kept in the file so a restart warms the right place.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CurrentProject {
+    pub path: String,
+    pub why: FollowWhy,
+    pub at_ms: i64,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct StoreFile {
     config: StandbyConfig,
     recent: Vec<RecentUse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    current: Option<CurrentProject>,
 }
 
 pub const MAX_RECENT: usize = 32;
@@ -202,10 +237,28 @@ fn migrate_legacy_visible(config: &mut StandbyConfig) {
     config.preload.enabled = config.enabled && !config.preload.providers.is_empty();
 }
 
+/// The folder Preload followed when the file was last written (`None`: never, or unreadable).
+pub fn load_current(path: &Path) -> Option<CurrentProject> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let value = serde_json::from_str::<serde_json::Value>(&text).ok()?;
+    serde_json::from_value::<CurrentProject>(value.get("current")?.clone()).ok()
+}
+
+#[cfg(test)]
 pub fn save(path: &Path, config: &StandbyConfig, recent: &[RecentUse]) -> Result<(), String> {
+    save_with_current(path, config, recent, None)
+}
+
+pub fn save_with_current(
+    path: &Path,
+    config: &StandbyConfig,
+    recent: &[RecentUse],
+    current: Option<&CurrentProject>,
+) -> Result<(), String> {
     let file = StoreFile {
         config: config.clone(),
         recent: recent.to_vec(),
+        current: current.cloned(),
     };
     let text = serde_json::to_string_pretty(&file).map_err(|error| error.to_string())?;
     if let Some(parent) = path.parent() {

@@ -6,6 +6,7 @@ import { useAgentRegistry } from '../../../lib/agentRegistry';
 import {
   DEFAULT_STANDBY_CONFIG,
   MAX_WARM_PER_PROVIDER,
+  followWhyText,
   formatDuration,
   holdKeyLabel,
   holdReasonText,
@@ -73,7 +74,7 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
       />
       <SettingBlock
         label="Agents to keep warm"
-        description="Warm agents start in your default project folder; a pane for another project starts normally. They never answer a trust or login prompt: an agent that shows one is dropped (open it once yourself first)."
+        description="Warm agents start in the folder you are working in: the project of your last run or of the pane you opened (your project folder setting until then). A pane for another folder starts normally. They never answer a trust or login prompt: an agent that shows one is dropped (open it once yourself first)."
       >
         <div className="space-y-2" data-testid="preload-providers">
           {providers.map((provider) => {
@@ -133,6 +134,18 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
       <SettingBlock label="Status" description={summarizePreload(status)}>
         <div className="space-y-2 text-sm">
           {error && <p className="text-pm-text">{error}</p>}
+          {status?.following && (
+            <p className="text-sm text-pm-text" data-testid="preload-following">
+              following: <span className="font-mono text-xs">{status.following.project}</span> — {followWhyText(status.following.why)}
+            </p>
+          )}
+          {status?.following?.not_warmed.map((item) => (
+            <p key={item.agent_type} className="text-sm text-pm-text" data-testid={`preload-not-warmed-${item.agent_type}`}>
+              not warmed: <span className="font-mono text-xs">{status.following?.project}</span> needs trust once for{' '}
+              {registry.agents.find((a) => a.id === item.agent_type)?.label ?? item.agent_type}
+              <span className="text-pm-muted"> (open it there yourself once, then it warms on its own)</span>
+            </p>
+          ))}
           {status?.standbys
             .filter((standby) => !standby.headless)
             .map((standby) => (

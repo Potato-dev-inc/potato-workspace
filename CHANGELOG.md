@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.14
+
+- Chat (ACP) agents get a real chat pane, in the main window and in their own window. No more "no terminal" message: the pane shows the agent, project, login and status, the conversation with its questions, a composer, and a short result (files changed and the agent's summary).
+- Warm agents now follow the project you work in: your last run or the pane you click. When you switch projects, the new folder is warmed first and the old one is closed only after that. A folder the agent hasn't trusted yet stays cold, and Settings says why.
+- A new warm agent starts as soon as one is used.
+- Claude now uses Potato Workspace's run_agent for delegated work instead of its own subagents, and our tools stay loaded in projects the app sets up.
+- Tools that only work on a terminal now say so clearly when used on a chat pane, and point to the right tool.
+
 ## 1.0.13
 
 - Individual mode no longer looks like a crash. A small bar stays at the top of the screen with your agents, "+ New" and "Back to Orchestration", even with no agents open. After a switch you get 8 seconds to undo, and the first switch explains what will happen. The mode switch is now a clear Orchestration | Individual toggle, the tray icon brings your agent windows back, and Ctrl+Alt+M switches modes (if no other app uses it).

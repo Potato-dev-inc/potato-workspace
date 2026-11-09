@@ -30,6 +30,7 @@ mod tests;
 pub use config::StandbyConfig;
 pub use host::StandbyProcess;
 pub use key::PoolKey;
+pub use config::FollowWhy;
 pub use pool::{ClaimOutcome, Handle, HealthSummary, StatusView};
 
 use host::LiveHost;
@@ -72,13 +73,11 @@ fn init_with_path(registry: Arc<Mutex<PaneRegistry>>, app: AppHandle, path: std:
     let _ = CONFIG_PATH.set(path.clone());
     let host = Arc::new(LiveHost::new(registry, app.clone()));
     let (config, recent) = config::load(&path);
-    let pool = Arc::new(Pool::new(
-        host.clone(),
-        Some(path),
-        config,
-        recent,
-        now_ms() + STARTUP_GRACE_MS,
-    ));
+    // The folder the last session followed (kept only while it still exists).
+    let current = config::load_current(&path).filter(|c| usable_folder(&c.path));
+    let pool = Arc::new(
+        Pool::new(host.clone(), Some(path), config, recent, now_ms() + STARTUP_GRACE_MS).with_current(current),
+    );
     if GLOBAL
         .set(Global {
             pool: pool.clone(),
@@ -184,6 +183,11 @@ pub fn project_from_settings(file: &serde_json::Value) -> Option<String> {
 /// names an existing directory, else the registry's current project. The registry's own project
 /// follows whatever workspace a run last selected, which would make warm workers chase it.
 pub fn default_project(registry: &Mutex<PaneRegistry>) -> String {
+    default_project_with_source(registry).0
+}
+
+/// `default_project` and where it came from.
+pub fn default_project_with_source(registry: &Mutex<PaneRegistry>) -> (String, FollowWhy) {
     let from_settings = std::fs::read_to_string(crate::app_paths::app_data_dir().join("settings.json"))
         .ok()
         .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
@@ -191,9 +195,36 @@ pub fn default_project(registry: &Mutex<PaneRegistry>) -> String {
         .map(|path| crate::project_path::expand_user_path(std::path::Path::new(&path)))
         .filter(|path| path.is_dir());
     match from_settings {
-        Some(path) => path.to_string_lossy().into_owned(),
-        None => crate::pty::registry_get_project_path(registry),
+        Some(path) => (path.to_string_lossy().into_owned(), FollowWhy::Setting),
+        None => (crate::pty::registry_get_project_path(registry), FollowWhy::Registry),
     }
+}
+
+/// A folder worth warming in: it exists, and it is not a scratch folder under the temp dir (the
+/// first-run wizard and similar helpers run there; Preload must not chase them).
+fn usable_folder(path: &str) -> bool {
+    let expanded = crate::project_path::expand_user_path(std::path::Path::new(path.trim()));
+    expanded.is_dir() && !expanded.starts_with(std::env::temp_dir())
+}
+
+/// A run started in `project` (visible or headless, whether or not it could claim a warm worker):
+/// Preload follows it. The last run wins over an earlier focus.
+pub fn note_run_project(project: &str) {
+    follow(project, FollowWhy::Run);
+}
+
+/// The person focused a pane in `project` (the cockpit calls this, debounced). Returns whether
+/// the followed folder changed.
+pub fn set_current_project(project: &str) -> bool {
+    follow(project, FollowWhy::Focus)
+}
+
+fn follow(project: &str, why: FollowWhy) -> bool {
+    let project = crate::worktrees::folder::real_folder(project.trim());
+    if !usable_folder(&project) {
+        return false;
+    }
+    pool().is_some_and(|pool| pool.note_project(&project, why, now_ms()))
 }
 
 /// Providers with a claimable warm visible worker right now.
@@ -212,6 +243,16 @@ mod project_tests {
         assert_eq!(project_from_settings(&serde_json::json!({"settings": {"project_path": ""}})), None);
         assert_eq!(project_from_settings(&serde_json::json!({"settings": {}})), None);
         assert_eq!(project_from_settings(&serde_json::json!({})), None);
+    }
+
+    #[test]
+    fn a_run_names_why_it_has_no_pool_key() {
+        let key = |model: Option<&str>, headless: bool| key_or_reason("claude", "/p", model, false, false, headless, None);
+        assert!(key(None, false).is_ok(), "control: a plain visible run has a key");
+        assert_eq!(key(Some("opus"), false).unwrap_err(), NoKey::Model);
+        assert_eq!(key(Some("  "), false).map(|k| k.model), Ok(None), "a blank model is no model");
+        assert_eq!(NoKey::Model.as_str(), "model_requested");
+        assert_eq!(NoKey::Guarded.as_str(), "guarded_run");
     }
 
     #[test]
@@ -265,16 +306,23 @@ impl VisibleClaim {
 }
 
 pub fn claim_visible(key: &PoolKey) -> Option<VisibleClaim> {
+    claim_visible_explained(key).ok()
+}
+
+pub use pool::MissReason;
+
+/// `claim_visible` with the miss reason (`None`: the pool is not running, or the worker was not a pane).
+pub fn claim_visible_explained(key: &PoolKey) -> Result<VisibleClaim, Option<MissReason>> {
     debug_assert!(!key.headless);
-    let pool = pool()?;
+    let pool = pool().ok_or(None)?;
     match pool.claim(key, now_ms()) {
         ClaimOutcome::Hit(claim) => match claim.handle().clone() {
-            Handle::Pane(pane_id) => Some(VisibleClaim { claim, pane_id }),
-            Handle::Process(_) => None, // dropped: shut down
+            Handle::Pane(pane_id) => Ok(VisibleClaim { claim, pane_id }),
+            Handle::Process(_) => Err(None), // dropped: shut down
         },
         ClaimOutcome::Miss(reason) => {
             tracing::debug!(?reason, key = %key.label(), "no standby for this run");
-            None
+            Err(Some(reason))
         }
     }
 }
@@ -310,6 +358,36 @@ pub fn claim_headless(key: &PoolKey) -> Option<HeadlessClaim> {
     }
 }
 
+/// Why a run has no pool key at all (so it can never claim a warm worker).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoKey {
+    /// The run names a model: standbys start with the CLI's default model and cannot be re-aimed.
+    Model,
+    /// The agent runs in Linux (WSL): it has no standby (SPEC WSL-15).
+    Linux,
+    /// The backend has no standby mode of that kind (visible / headless).
+    NoStandbyMode,
+    /// The run asks for something the pane must be started with (reasoning effort, read-only).
+    LaunchArgs,
+    /// A guarded run (`no_push`, ...): a warm worker was started without its env guard.
+    Guarded,
+    /// An isolated run in its own worktree: warm workers start in the project folder.
+    Worktree,
+}
+
+impl NoKey {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NoKey::Model => "model_requested",
+            NoKey::Linux => "agent_runs_in_linux",
+            NoKey::NoStandbyMode => "backend_has_no_standby_mode",
+            NoKey::LaunchArgs => "launch_args_needed",
+            NoKey::Guarded => "guarded_run",
+            NoKey::Worktree => "worktree_run",
+        }
+    }
+}
+
 /// The pool key a run would claim, or `None` when this backend has no standby of that kind, or
 /// the run names a model: standbys start with the CLI's default model and cannot be re-aimed.
 pub fn key_for_run(
@@ -321,16 +399,32 @@ pub fn key_for_run(
     headless: bool,
     account: Option<&str>,
 ) -> Option<PoolKey> {
+    key_or_reason(agent_type, project, model, read_only, allow_shell, headless, account).ok()
+}
+
+/// `key_for_run` with the reason when there is no key.
+pub fn key_or_reason(
+    agent_type: &str,
+    project: &str,
+    model: Option<&str>,
+    read_only: bool,
+    allow_shell: bool,
+    headless: bool,
+    account: Option<&str>,
+) -> Result<PoolKey, NoKey> {
     if model.is_some_and(|model| !model.trim().is_empty()) {
-        return None;
+        return Err(NoKey::Model);
     }
     // An agent set to Linux has no standby, so no run can claim one (SPEC WSL-15).
     if crate::wsl::place::agent_runs_in_linux(agent_type) {
-        return None;
+        return Err(NoKey::Linux);
     }
     let support = crate::tui::profile_for(agent_type).standby_support();
     let supported = if headless { support.headless } else { support.visible };
-    supported.then(|| PoolKey::new(agent_type, project, model, read_only, allow_shell, headless).with_account(account))
+    if !supported {
+        return Err(NoKey::NoStandbyMode);
+    }
+    Ok(PoolKey::new(agent_type, project, model, read_only, allow_shell, headless).with_account(account))
 }
 
 /// Placeholder host for `status()` before `init`.

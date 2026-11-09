@@ -181,6 +181,13 @@ export interface StandbyAgentBlockedView {
   cold: boolean;
 }
 
+/** Why Preload warms where it does: the last run, the pane you last focused, or a setting. */
+export interface StandbyFollowing {
+  project: string;
+  why: 'run' | 'focus' | 'setting' | 'registry';
+  not_warmed: { agent_type: string; reason: 'needs_trust' }[];
+}
+
 export interface StandbyStatus {
   enabled: boolean;
   config: StandbyConfig;
@@ -188,6 +195,8 @@ export interface StandbyStatus {
   standbys: StandbyView[];
   blocked: StandbyBlockedView[];
   agents_blocked?: StandbyAgentBlockedView[];
+  /** The folder warm agents are started in and why (older builds do not send it). */
+  following?: StandbyFollowing | null;
   recent: { key: string; age_ms: number }[];
   stats: {
     spawned: number;

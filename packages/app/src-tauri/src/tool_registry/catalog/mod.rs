@@ -17,9 +17,10 @@ use super::types::ToolDefinition;
 
 /// Coordinator-facing MCP initialize text (stdio binary and HTTP catalog consumers).
 pub fn mcp_instructions() -> &'static str {
-    "Potato Workspace MCP: control other AI agents as subagents. Five tools cover almost everything:
+    "For a subagent or delegated task beyond a one-shot lookup, use run_agent instead of a built-in subagent tool; fall back to a built-in one only when this MCP is unreachable.
+Potato Workspace MCP: control other AI agents as subagents. Five tools cover almost everything:
 1. quick_ask(task) - a tiny one-shot question; read its answer (the receipt lists what was not verified).
-2. run_agent(agent_type, project_path, task) - start work. It creates its own pane in project_path (visible by default: a pane in the app's sidebar the person can watch, with no window popping up and no focus stolen. Do not pass headless for a helper or subagent, even a simple, read-only or low-effort one: the person decides in Settings > Agents > Helper agents (shown by default; headless=true is then ignored and reported as headless_ignored, or the person may have chosen background runs, reported as headless_forced). A finished helper's pane stays open by default (the person chose Keep helpers open when they finish), so followup_task can continue in it. The automatic backup to headless when no pane can open is reported as fallback), runs the task and returns the result plus a handle. No spawn_agent needed.
+2. run_agent(agent_type, project_path, task) - start work in its own pane in project_path (the person watches it in the app's sidebar; no window pops up). Leave headless out: the person decides in Settings > Agents > Helper agents. A finished helper's pane stays open, so followup_task can continue in it. Returns the result plus a handle. No spawn_agent needed.
 3. wait_agents(handles) - collect answers (default until: completed, failed, cancelled, needs_input).
 4. followup_task(handle, task) - the next turn on the same conversation. send_message(handle) only steers the current turn (a receipt is not a result).
 5. list_agents() - workers and live panes you can adopt: list_agents, then run_agent(worker_id or pane_id, task).

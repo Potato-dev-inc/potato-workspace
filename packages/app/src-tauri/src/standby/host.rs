@@ -208,6 +208,10 @@ impl Host for LiveHost {
         Some(super::default_project(&self.registry))
     }
 
+    fn default_source(&self) -> super::FollowWhy {
+        super::default_project_with_source(&self.registry).1
+    }
+
     fn kill(&self, handle: &Handle, reason: &str) {
         tracing::info!(?handle, reason, "standby shut down");
         match handle {

@@ -160,3 +160,19 @@ export function holdKeyLabel(key: string): string {
   if (account) parts.push(account.trim().slice(1, -1));
   return `${parts.join(', ')} in ${project}`;
 }
+
+/** Plain words for why Preload follows a folder (`following.why` from `standby/pool.rs`). */
+export function followWhyText(why: string): string {
+  switch (why) {
+    case 'run':
+      return 'your last run';
+    case 'focus':
+      return 'the pane you opened';
+    case 'setting':
+      return 'your project folder setting';
+    case 'registry':
+      return 'the current project';
+    default:
+      return why.replace(/_/g, ' ');
+  }
+}

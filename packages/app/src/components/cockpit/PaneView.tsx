@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { PaneMoreMenu } from './PaneMoreMenu';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { confirmCloseEnabled, needsCloseConfirm } from '../../lib/close-policy';
-import { cockpitApi, type PaneRunInfo, type PaneTranscript } from '../../lib/cockpit-api';
+import { cockpitApi, type PaneRunInfo, type PaneTranscript, type TurnSummary } from '../../lib/cockpit-api';
 import { projectLabel, projectWithCopy, realFolderPath } from './shell-labels';
 import { useLoopGuard } from '../../lib/loop-guard';
 import { activityText } from '../../lib/pane-activity';
@@ -24,6 +24,8 @@ import { chatHelpers } from '../../lib/chat-helpers';
 import { DockedCards } from './DockedCards';
 import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
 import { formatElapsed, spinnerStatus, stateText } from './model';
+import { acpResult, acpStatusWords } from './acp-pane';
+import { AcpResultStrip } from './AcpResultStrip';
 import { ReceiptTab } from './ReceiptTab';
 import { Changes } from './Changes';
 import { changesTabLabel, usePaneWorktree } from './usePaneWorktree';
@@ -155,7 +157,11 @@ export function PaneView({
   handoff?: HandoffControl;
 }) {
   const pane = c.registry.panes.get(paneId);
-  const [tab, setTabRaw] = useState<Tab>(() => rememberedTabs.get(paneId) ?? 'terminal');
+  const [tabPicked, setTabRaw] = useState<Tab>(() => rememberedTabs.get(paneId) ?? 'terminal');
+  // A chat session over ACP has no terminal behind it: its Chat view is the pane, so it never shows a Terminal view.
+  const isAcp = pane?.info.lane === ACP_LANE;
+  const home: Tab = isAcp ? 'chat' : 'terminal';
+  const tab: Tab = isAcp && tabPicked === 'terminal' ? 'chat' : tabPicked;
   // Every choice the person makes is remembered for this pane. Automatic fallbacks use setTabRaw, so they do not overwrite it.
   const setTab = useCallback(
     (t: Tab) => {
@@ -168,8 +174,23 @@ export function PaneView({
   const [renaming, setRenaming] = useState(false);
   const [reflowKey, setReflowKey] = useState(0);
   const getSelectionRef = useRef<(() => string) | null>(null);
-  const run = useRunData(paneId, tab !== 'terminal' && tab !== 'chat', pane?.status ?? '');
-  const lastTurn = useLastTurn(paneId);
+  // A chat session reads its run too (the result strip under the conversation); a terminal pane only for the tabs that show it.
+  const run = useRunData(paneId, isAcp || (tab !== 'terminal' && tab !== 'chat'), pane?.status ?? '');
+  // The cockpit window shares its turn summaries; a pane's own window has none, so a chat session asks for its own.
+  const sharedTurn = useLastTurn(paneId);
+  const [ownTurn, setOwnTurn] = useState<TurnSummary | undefined>(undefined);
+  useEffect(() => {
+    if (!isAcp || sharedTurn) return;
+    let cancelled = false;
+    cockpitApi
+      .turnSummaries(paneId)
+      .then((t) => !cancelled && setOwnTurn(Array.isArray(t) ? t[t.length - 1] : undefined))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isAcp, sharedTurn, paneId, pane?.status]);
+  const lastTurn = sharedTurn ?? ownTurn;
   const worktree = usePaneWorktree(paneId, pane?.status ?? '');
   const { signals } = useLoopGuard();
   const rail = useRailLayout();
@@ -185,11 +206,9 @@ export function PaneView({
   // The Live Room status the cockpit shares; the chip shows only for a pane that is in the room.
   const liveStatus = useContext(LiveStatusContext);
   const agentType = pane?.info.agent_type ?? '';
-  // A chat session over ACP has no terminal behind it: its Chat tab is the pane.
-  const isAcp = pane?.info.lane === ACP_LANE;
   // A Chat (terminal) pane is a normal terminal pane: it opens on its Chat tab, and the Terminal tab stays one click away.
   const isTerminalChat = isTerminalChatLane(pane?.info.lane);
-  const chatAllowed = listing.agents.find((a) => a.id === agentType)?.kind !== 'shell';
+  const chatAllowed = isAcp || listing.agents.find((a) => a.id === agentType)?.kind !== 'shell';
   // A chat session: its state (settings, commands, "open in a terminal"). An ordinary pane may hold a chat conversation
   // that was handed to it: then it can hand it back.
   const acpState = useAcpChatState(paneId, isAcp, acp);
@@ -243,10 +262,10 @@ export function PaneView({
 
   useEffect(() => {
     // A view that is no longer offered falls back to the Terminal for now; the remembered choice stays.
-    if (tab === 'changes' && !worktree) setTabRaw('terminal');
-    if (tab === 'mission' && !mission) setTabRaw('terminal');
+    if (tab === 'changes' && !worktree) setTabRaw(home);
+    if (tab === 'mission' && !mission) setTabRaw(home);
     if (tab === 'chat' && !chatAllowed) setTabRaw('terminal');
-  }, [tab, worktree, mission, chatAllowed]);
+  }, [tab, worktree, mission, chatAllowed, home]);
 
   const copySelection = useCallback(async () => {
     const text = tab === 'terminal' ? (getSelectionRef.current?.() ?? '') : (window.getSelection()?.toString() ?? '');
@@ -268,6 +287,7 @@ export function PaneView({
   const runPaneAction = (action: PaneAction) => {
     if (action === 'rename') setRenaming(true);
     else if (action === 'reflow') {
+      if (isAcp) return;
       setTab('terminal');
       setReflowKey((k) => k + 1);
     } else if (action === 'copy') void copySelection();
@@ -302,7 +322,13 @@ export function PaneView({
   const helperOf = helperOfLabel(c.registry.paneList, paneId, (p) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary);
   const waiting = pane.status === 'waiting_input';
   const elapsed = waiting && since ? formatElapsed(c.now - since) : null;
-  const stateLine = waiting && elapsed ? `Needs you · ${elapsed}` : stateText(pane.status);
+  const stateLine = isAcp
+    ? waiting && elapsed
+      ? `${acpStatusWords(pane.status)} · ${elapsed}`
+      : acpStatusWords(pane.status)
+    : waiting && elapsed
+      ? `Needs you · ${elapsed}`
+      : stateText(pane.status);
   const headLine = headerStateLine({
     waiting,
     headline: prompt?.risk?.headline,
@@ -338,6 +364,7 @@ export function PaneView({
   // person counts as "needs you" whatever the helper's status says.
   const askingPanes = new Set(c.asked.questions.map((q) => q.pane_id).filter((id): id is string => !!id));
   const startedHelpers = chatHelpers(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type, askingPanes);
+  const result = isAcp ? acpResult(lastTurn, run.info?.receipt) : null;
   const chatDock =
     dockNow || helperAsks.length > 0 || isAcp ? (
       <>
@@ -350,6 +377,7 @@ export function PaneView({
           />
         )}
         {isAcp && <AcpChatDock c={c} paneId={paneId} paneName={name} api={acp} stopper={acpStop} />}
+        {isAcp && result && <AcpResultStrip result={result} />}
         <HelperQuestions c={c} ids={helperAsks} />
         {dockNow && <DockedCards c={c} paneId={paneId} dock={dock} dockNow={dockNow} onMore={cycleDock} />}
       </>
@@ -484,7 +512,7 @@ export function PaneView({
             onChange={setTab}
             options={[
               ...(mission ? [{ id: 'mission' as const, label: 'Mission' }] : []),
-              { id: 'terminal', label: 'Terminal' },
+              ...(isAcp ? [] : [{ id: 'terminal' as const, label: 'Terminal' }]),
               ...(chatAllowed ? [{ id: 'chat' as const, label: 'Chat' }] : []),
               ...(worktree ? [{ id: 'changes' as const, label: changesTabLabel(worktree) }] : []),
             ]}
@@ -516,9 +544,6 @@ export function PaneView({
             <div className="ck-scroll ck-fade-in" key="mission">
               <MissionProgress mission={mission} onChanged={missions.reload} onOpenPane={(id) => c.select(id)} onNotify={c.notify} />
             </div>
-          )}
-          {tab === 'terminal' && isAcp && (
-            <Empty title="This is a chat session" body="It runs as a chat, so there is no terminal to show. Everything it says and asks is on the Chat tab." />
           )}
           {tab === 'terminal' && !isAcp && (
             <div className="ck-term-wrap" key={paneId}>

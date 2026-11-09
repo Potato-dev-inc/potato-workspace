@@ -341,6 +341,7 @@ export const tauri = {
     safeInvoke<TunnelConnectionTest>('test_tunnel_connection', { url: url ?? null }),
 
   standbyGetStatus: () => safeInvoke<StandbyStatus | null>('standby_get_status', undefined, null, true),
+  standbySetCurrentProject: (path: string) => safeInvoke<boolean>('standby_set_current_project', { path }, false, true),
   standbySetConfig: (config: StandbyConfig) =>
     safeInvoke<StandbyStatus | null>('standby_set_config', { config }, null, true),
   diagnosticPreview: () => safeInvoke<DiagnosticPreview>('diagnostic_preview'),

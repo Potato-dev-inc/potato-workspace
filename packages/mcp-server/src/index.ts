@@ -26,7 +26,7 @@ import type { BridgeClient, ClientRef } from './types.js';
 import { isRecord, log, tryJson } from './util.js';
 
 const MCP_INSTRUCTIONS =
-  'Potato Workspace MCP (agent mode). Sequence: list_agents → run_agent(worker_id or pane_id, task) → handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup.';
+  'For a subagent or delegated task beyond a one-shot lookup, use run_agent instead of a built-in subagent tool; fall back only when this MCP is unreachable. Potato Workspace MCP (agent mode). Sequence: list_agents → run_agent(worker_id or pane_id, task) → handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup.';
 
 const SET_MODE_NOTE =
   'Sent notifications/tools/list_changed. Hosts that read tools/list only once at startup ignore it and keep the old tool list; if tool_count differs from what you can see, restart the MCP server with --mode <mode> or reconnect.';

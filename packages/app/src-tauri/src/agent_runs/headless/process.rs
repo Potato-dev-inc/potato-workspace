@@ -148,6 +148,20 @@ pub(in crate::agent_runs) fn execute_headless(
     if let Some(key) = &pool_key {
         crate::standby::note_run(key, &project);
     }
+    // Every run moves Preload to its folder, claimable or not.
+    crate::standby::note_run_project(&project);
+    tracing::info!(
+        operation_id = %operation_id,
+        agent = %agent_type,
+        model = ?requested_model,
+        reasoning = ?requested_reasoning,
+        read_only,
+        project = %project,
+        guarded = guard.is_some(),
+        has_key = pool_key.is_some(),
+        claimed = standby.is_some(),
+        "standby claim (headless run): Preload keeps visible panes only, so a headless run starts its own process unless the legacy headless pool is on"
+    );
     let account_env = match account.as_deref() {
         Some(id) => match crate::accounts::launch_env(&agent_type, id) {
             Ok(env) => env,

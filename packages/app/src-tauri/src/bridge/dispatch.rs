@@ -269,7 +269,14 @@ fn assign_pane(
             .is_none()
     };
     // Opt-in warm pool: a run that needs a new pane may take a pre-launched one (see `standby`).
-    let pool_key = standby_key(operation, agent_type).filter(|_| !needs_own_pane);
+    let key_checked = standby_key_checked(operation, agent_type);
+    let no_key_reason: Option<&'static str> = if needs_own_pane {
+        Some(crate::standby::NoKey::LaunchArgs.as_str())
+    } else {
+        key_checked.as_ref().err().map(|reason| reason.as_str())
+    };
+    let pool_key = key_checked.ok().filter(|_| !needs_own_pane);
+    let mut standby_miss: Option<String> = None;
     let mut standby_claim: Option<crate::standby::VisibleClaim> = None;
     let (pane_id, pane_created) = if let Some(requested_id) = operation.pane_id.clone() {
         let pane = existing_panes
@@ -340,10 +347,14 @@ fn assign_pane(
         (requested_id, false)
     } else if let Some(pane) = existing_panes.iter().find(|pane| may_reuse_pane(operation) && eligible(pane)) {
         (pane.id.clone(), false)
-    } else if let Some(claim) = pool_key
-        .as_ref()
-        .and_then(crate::standby::claim_visible)
-    {
+    } else if let Some(claim) = match pool_key.as_ref().map(crate::standby::claim_visible_explained) {
+        Some(Ok(claim)) => Some(claim),
+        Some(Err(reason)) => {
+            standby_miss = Some(format!("{reason:?}"));
+            None
+        }
+        None => None,
+    } {
         let pane_id = claim.pane_id().to_string();
         tracing::info!(
             operation_id = %operation.operation_id,
@@ -354,6 +365,22 @@ fn assign_pane(
         standby_claim = Some(claim);
         (pane_id, true)
     } else {
+        // One line per run that did not get a warm worker, with what decides it, so a real run says why.
+        tracing::info!(
+            operation_id = %operation.operation_id,
+            agent = %agent_type,
+            model = ?operation.worker.requested_model,
+            reasoning = ?operation.worker.requested_reasoning,
+            read_only = operation.read_only,
+            allow_shell = operation.worker.allow_shell,
+            project = %operation.project_path,
+            account = ?operation.worker.account,
+            guarded = operation.worker.guard_env.is_some(),
+            worktree = operation.worker.worktree.is_some(),
+            no_key = ?no_key_reason,
+            miss = ?standby_miss,
+            "standby claim: miss, starting a fresh pane"
+        );
         drop(pane_assignment_guard);
         operation.stage = Some("spawning_pane".into());
         *operation = crate::operations::save_operation_snapshot(operation)?;
@@ -374,6 +401,8 @@ fn assign_pane(
     if let Some(key) = &pool_key {
         crate::standby::note_run(key, &operation.project_path);
     }
+    // Every run moves Preload to its folder, claimable or not (a run with a model has no key).
+    crate::standby::note_run_project(&operation.project_path);
     if pane_created {
         // Nested under the pane of the agent that asked for this run, when it ran from one.
         note_pane_parent(registry, operation.owner_session_id.as_deref(), operation.parent_pane_id.as_deref(), &pane_id);
@@ -455,14 +484,23 @@ fn check_guarded_pane_request(operation: &OperationSnapshot) -> Result<(), Opera
 
 /// The pool key this run would claim: only a run that spawns its own visible pane for a backend
 /// with a standby mode has one.
+#[cfg(test)]
 fn standby_key(operation: &OperationSnapshot, agent_type: &str) -> Option<crate::standby::PoolKey> {
+    standby_key_checked(operation, agent_type).ok()
+}
+
+/// `standby_key` with the reason a run has no key.
+fn standby_key_checked(
+    operation: &OperationSnapshot,
+    agent_type: &str,
+) -> Result<crate::standby::PoolKey, crate::standby::NoKey> {
     if operation.worker.worktree.is_some() {
-        return None; // warm workers are launched in the project folder, not a worktree
+        return Err(crate::standby::NoKey::Worktree); // warm workers start in the project folder, not a worktree
     }
     if !may_reuse_pane(operation) {
-        return None; // a warm worker was launched without the run's env guard
+        return Err(crate::standby::NoKey::Guarded); // a warm worker was launched without the run's env guard
     }
-    crate::standby::key_for_run(
+    crate::standby::key_or_reason(
         agent_type,
         &operation.project_path,
         operation.worker.requested_model.as_deref(),

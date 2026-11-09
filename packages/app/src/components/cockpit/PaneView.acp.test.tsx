@@ -87,12 +87,40 @@ describe('pane view of a chat session over ACP', () => {
     expect(host.querySelector('[data-testid="term"]')).toBeNull();
   });
 
-  it('has no terminal to show: the Terminal tab says so instead of drawing an empty one', async () => {
+  it('has no Terminal view at all: Chat is the pane, with no "no terminal" placeholder', async () => {
     await act(async () => root.render(<PaneView c={cockpit('acp')} paneId="p1" />));
     await flush();
-    await act(async () => tab('Terminal').click());
-    expect(host.textContent).toContain('This is a chat session');
+    expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).not.toContain('Terminal');
+    expect(tab('Chat').getAttribute('aria-selected')).toBe('true');
+    expect(host.textContent).not.toMatch(/no terminal|This is a chat session/i);
+    expect(host.querySelector('textarea')).not.toBeNull();
     expect(host.querySelector('[data-testid="term"]')).toBeNull();
+  });
+
+  it('says its status in words: Working, Waiting for you, Done', async () => {
+    const words = async (status: string) => {
+      await act(async () => root.render(<PaneView c={cockpit('acp', status)} paneId={'p1'} key={status} />));
+      await flush();
+      return host.querySelector('.ck-pane-doing')?.textContent ?? '';
+    };
+    expect(await words('running')).toBe('Working');
+    expect(await words('waiting_input')).toContain('Waiting for you');
+    expect(await words('idle')).toBe('Done');
+  });
+
+  it('shows the result of the run (files changed and the summary) under the conversation', async () => {
+    invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'checkpoints_list') return { state: 'ok', message: '', items: [] };
+      if (cmd === 'pane_run_info') return { handle: 'h1', status: 'completed', receipt: { structured_result: { summary: 'Added notes.txt', files_changed: ['notes.txt'], checks_run: ['cargo test'], open_questions: [] } } };
+      if (cmd === 'turn_summaries') return [{ paneId: 'p1', agent: 'codex', turn: 1, startedAtMs: 0, endedAtMs: 1, durationMs: 1, files: { count: 2, added: 14, deleted: 3, paths: ['notes.txt', 'a.rs'] }, approvals: [], end: { kind: 'idle' }, sentence: 'x' }];
+      return null;
+    });
+    await act(async () => root.render(<PaneView c={cockpit('acp')} paneId="p1" />));
+    await flush();
+    const strip = host.querySelector('[data-testid="acp-result"]');
+    expect(strip?.textContent).toContain('Added notes.txt');
+    expect(strip?.textContent).toContain('2 files +14 −3');
+    expect(strip?.textContent).toContain('1 check');
   });
 
   it('a terminal pane has no badge and keeps its terminal', async () => {

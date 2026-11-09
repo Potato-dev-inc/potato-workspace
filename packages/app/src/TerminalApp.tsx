@@ -16,6 +16,8 @@ import { applyTheme, loadSettings } from './lib/settings';
 import { subscribeSettingsTheme } from './lib/settings-sync';
 import { ClosePaneConfirm } from './components/ClosePaneConfirm';
 import { TerminalViewport } from './components/TerminalViewport';
+import { AcpPaneWindow } from './components/acp/AcpPaneWindow';
+import { ACP_LANE } from './lib/acpChat';
 import { WorkerOpenCodeAuthPanel } from './components/WorkerOpenCodeAuthPanel';
 
 function apiSnippet(baseUrl: string, paneId: string | null, draft: string, appendNewline: boolean): string {
@@ -333,7 +335,10 @@ export default function TerminalApp() {
     <div className="pm-terminal-app" onClickCapture={onClickCapture}>
       <main className={detached ? 'pm-terminal-shell pm-terminal-shell--detached' : 'pm-terminal-shell'}>
         <section className="pm-terminal-main">
-          {selectedPane && detached ? (
+          {selectedPane?.info.lane === ACP_LANE ? (
+            // A chat session has no terminal: its pane window is the chat pane, never a terminal viewport.
+            <AcpPaneWindow paneId={selectedPane.info.id} />
+          ) : selectedPane && detached ? (
             detachedLayoutReady ? (
               <>
                 {workerHost && workerTrayOpen && selectedPane.info.agent_type === 'opencode_native' && (

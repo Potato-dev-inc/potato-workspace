@@ -118,6 +118,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return a.paneId === PANE_CLAUDE ? EXAMPLE_PROMPT : a.paneId === PANE_CODEX ? HIGH_RISK_PROMPT : null;
         case 'get_ui_mode':
           return 'orchestration';
+        case 'standby_set_current_project':
+          return false;
         case 'standby_get_status':
           return standbyStatus(scenario.standbyIdleSecs, scenario.standbyBlocked);
         case 'agents_list':

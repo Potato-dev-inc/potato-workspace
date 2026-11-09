@@ -220,7 +220,7 @@ fn the_first_thing_a_client_reads_leads_with_the_warning() {
     assert!(text.contains("quick_ask("), "the happy path must still follow");
     set_health(&tool_registry::catalog_version());
     let init = rpc("initialize", json!({"protocolVersion":"2025-06-18"}));
-    assert!(init["result"]["instructions"].as_str().unwrap().starts_with("Potato Workspace MCP"));
+    assert!(init["result"]["instructions"].as_str().unwrap().starts_with("For a subagent or delegated task"));
     end_session();
 }
 

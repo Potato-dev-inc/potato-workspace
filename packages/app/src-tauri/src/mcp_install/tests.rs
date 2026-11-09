@@ -19,6 +19,9 @@ fn claude_install_writes_mcp_json_and_approves_project_servers() {
     assert!(result.installed);
     assert!(result.changed);
     assert!(cwd.join(".mcp.json").is_file());
+    let doc: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(cwd.join(".mcp.json")).unwrap()).unwrap();
+    assert_eq!(doc["mcpServers"][MCP_SERVER_NAME]["alwaysLoad"], true);
     assert!(cwd.join(".claude").join("settings.json").is_file());
 
     let again = ensure_claude_mcp(&cwd, McpLaunchSource::Auto).expect("reinstall");

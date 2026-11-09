@@ -95,6 +95,10 @@ fn bridge_health_documents_the_env_section() {
 fn run_agent_documents_cursor_steering_limits_and_the_shell_hint() {
     let tools = tools();
     let run = tools.iter().find(|tool| tool.name == "run_agent").unwrap();
+    assert!(run.description.starts_with("The default way to hand work to another agent"));
+    let one_task = run.description.find("One-task mode").unwrap();
+    let steering = run.description.find("Cursor headless steering").unwrap();
+    assert!(one_task > steering);
     assert!(run
         .description
         .contains("Cursor headless steering works only by restart from turn 2"));
@@ -400,7 +404,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "73-7f3337d109fe3d99");
+    assert_eq!(catalog_version(), "73-4ca4b6816bbee3f6");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one

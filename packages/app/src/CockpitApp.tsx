@@ -1,5 +1,6 @@
 // Cockpit window (`index.html?cockpit=1`): one window that orchestrates every agent pane.
 import { useNudgeOnAction } from './lib/desktop-nudge';
+import { useFollowFocusedProject } from './hooks/useFollowFocusedProject';
 import { useEffect, useRef, useState } from 'react';
 import { AgentDoctor } from './components/cockpit/AgentDoctor';
 import { markSpawned } from './lib/agent-health';
@@ -78,6 +79,8 @@ const inTerminal = (target: EventTarget | null): boolean => target instanceof El
 
 export default function CockpitApp() {
   const c = useCockpit();
+  // Warm agents (Settings > Preload) follow the folder of the focused pane, a moment after it is focused.
+  useFollowFocusedProject(c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : null);
   const spacesOn = useSpacesEnabled();
   const [paletteOpen, setPaletteOpen] = useState(false);
   // Ctrl+Shift+F opens the palette in "Search all chats"; Ctrl+K in its commands.

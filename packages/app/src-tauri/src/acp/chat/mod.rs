@@ -69,7 +69,28 @@ pub use start::{restore_panes, start_gated, StartDeps, StartError, StartRequest}
 /// `PaneInfo.lane` of a chat session.
 pub const LANE: &str = "acp";
 /// Said when raw terminal input reaches a pane that has no terminal.
-pub const NOT_A_TERMINAL: &str = "This pane is a chat session, not a terminal. Send a message instead.";
+pub const NOT_A_TERMINAL: &str = "NOT_A_TERMINAL: this pane is a chat session, not a terminal. Send a message instead (send_message to steer the turn, followup_task for the next one).";
+
+/// True when `pane_id` is a chat session's pane (it has no terminal behind it).
+pub fn is_chat_pane(registry: &parking_lot::Mutex<crate::pty::PaneRegistry>, pane_id: &str) -> bool {
+    registry.lock().panes.get(pane_id).is_some_and(|pane| pane.info.lane.as_deref() == Some(LANE))
+}
+
+/// The error for a terminal call (screen, buffer, keys, resize, raw input) on a chat session's pane: a typed code and the
+/// way to do what the caller wanted. Same words on every surface that can reach such a pane.
+pub fn not_a_terminal_error(pane_id: &str) -> crate::operations::OperationError {
+    let mut error = crate::operations::OperationError::new(
+        "NOT_A_TERMINAL",
+        format!("Pane {pane_id} is a chat session, not a terminal: it has no screen, buffer or keys."),
+        false,
+    );
+    error.context = serde_json::json!({
+        "pane_id": pane_id,
+        "lane": LANE,
+        "fix": "This pane is a chat; use send_message (steer the turn) or followup_task (next turn). Read it with inspect_agent or agent_transcript.",
+    });
+    error
+}
 const WAITING: &str = "Starting the chat. Nothing to show yet.";
 /// The notice (and the strip text) for a turn the app did not see end. The view offers "Continue" next to it.
 pub const INTERRUPTED: &str = "The app closed during this turn.";

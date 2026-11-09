@@ -511,6 +511,7 @@ pub fn run() {
             commands::accounts_set_helper_login,
             commands::standby_get_status,
             commands::standby_set_config,
+            commands::standby_set_current_project,
             commands::get_ui_mode,
             commands::set_ui_mode,
             commands::mini_bar_focus_pane,

@@ -1,6 +1,6 @@
 //! Pool rules, tested against a fake host and a hand-driven clock.
 
-use super::config::{BackendToggle, StandbyConfig};
+use super::config::{BackendToggle, FollowWhy, StandbyConfig};
 use super::key::PoolKey;
 use super::pool::{ClaimOutcome, EntryState, Handle, Health, Host, MissReason, Pool};
 use parking_lot::Mutex;
@@ -16,6 +16,8 @@ struct FakeHost {
     fail_spawn: Mutex<bool>,
     counter: Mutex<u32>,
     project: Mutex<Option<String>>,
+    /// Projects (canonical) whose workers stop at a trust dialog.
+    dialog_projects: Mutex<Vec<String>>,
 }
 
 impl FakeHost {
@@ -47,7 +49,10 @@ impl Host for FakeHost {
         self.spawned.lock().push((key.clone(), handle.clone()));
         Ok(handle)
     }
-    fn check(&self, _key: &PoolKey, handle: &Handle, _age_ms: i64) -> Health {
+    fn check(&self, key: &PoolKey, handle: &Handle, _age_ms: i64) -> Health {
+        if self.dialog_projects.lock().contains(&key.project) {
+            return Health::Dialog;
+        }
         if let Some(health) = self.health.lock().get(handle) {
             return *health;
         }
@@ -638,14 +643,199 @@ fn a_warm_worker_whose_project_is_no_longer_the_default_is_replaced() {
     let host = Arc::new(FakeHost::default());
     host.set_project("/old");
     let pool = pool(&host, config(&[("claude", true, false)]));
-    pool.reconcile(0);
-    let stranded = host.last_handle();
+    let now = warm_up(&pool, 0);
+    let stranded = host.spawned.lock()[0].1.clone();
     host.set_project("/new");
-    let outcome = pool.reconcile(10);
-    assert_eq!(outcome.killed, 1);
-    assert_eq!(host.kills(), vec![(stranded, "project_changed".to_string())]);
+    // The new folder's worker is started first; the old one is not killed while it is still useful.
+    let outcome = pool.reconcile(now);
+    assert_eq!(outcome.killed, 0, "nothing is killed before the new worker is ready");
     assert_eq!(outcome.spawned.len(), 1);
     assert_eq!(outcome.spawned[0].project, "/new");
+    // Once the new one has been seen ready twice, the old one goes.
+    let later = warm_up(&pool, now + 1_000);
+    assert_eq!(host.kills(), vec![(stranded, "project_changed".to_string())]);
+    assert_eq!(pool.status(later).counts.ready, 1);
+}
+
+// ---- Warm workers follow the project you are working in.
+
+#[test]
+fn warm_workers_follow_the_folder_of_the_last_run_or_focused_pane() {
+    let host = Arc::new(FakeHost::default());
+    host.set_project("/setting");
+    let pool = pool(&host, config(&[("claude", true, false)]));
+    assert_eq!(pool.status(0).following.unwrap().why, "setting");
+    assert!(pool.note_project("/run-here", FollowWhy::Run, 10), "a new folder is followed");
+    assert!(!pool.note_project("/run-here", FollowWhy::Run, 11), "the same folder again changes nothing");
+    let spawned = pool.reconcile(20).spawned;
+    assert_eq!(spawned.len(), 1);
+    assert_eq!(spawned[0].project, "/run-here");
+    let following = pool.status(20).following.unwrap();
+    assert_eq!((following.project.as_str(), following.why), ("/run-here", "run"));
+    // Focusing a pane elsewhere is the newest word.
+    pool.note_project("/focus-here", FollowWhy::Focus, 30);
+    let following = pool.status(30).following.unwrap();
+    assert_eq!((following.project.as_str(), following.why), ("/focus-here", "focus"));
+    // Editing the project folder setting by hand is newer still.
+    host.set_project("/setting-2");
+    let following = pool.status(40).following.unwrap();
+    assert_eq!((following.project.as_str(), following.why), ("/setting-2", "setting"));
+}
+
+#[test]
+fn preload_off_ignores_the_followed_folder() {
+    let host = Arc::new(FakeHost::default());
+    let mut off = config(&[("claude", true, false)]);
+    off.preload.enabled = false;
+    let pool = pool(&host, off);
+    assert!(!pool.note_project("/x", FollowWhy::Run, 1));
+    assert_eq!(pool.status(1).following.unwrap().project, "/w", "still the default");
+}
+
+#[test]
+fn the_followed_folder_survives_a_restart() {
+    let dir = std::env::temp_dir().join(format!("pm-standby-follow-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("standby-pool.json");
+    let host = Arc::new(FakeHost::default());
+    let first = Pool::new(host.clone(), Some(path.clone()), config(&[("claude", true, false)]), Vec::new(), 0);
+    first.note_project("/was-here", FollowWhy::Run, 5);
+    let saved = super::config::load_current(&path).expect("saved");
+    assert_eq!((saved.path.as_str(), saved.why), ("/was-here", FollowWhy::Run));
+    let (loaded, recent) = super::config::load(&path);
+    let second = Pool::new(host, None, loaded, recent, 0).with_current(Some(saved));
+    assert_eq!(second.reconcile(0).spawned[0].project, "/was-here");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn moving_keeps_the_old_worker_claimable_until_the_new_one_is_ready() {
+    let host = Arc::new(FakeHost::default());
+    host.set_project("/old");
+    let pool = pool(&host, long_lived(config(&[("claude", true, false)])));
+    let now = warm_up(&pool, 0);
+    pool.note_project("/new", FollowWhy::Run, now);
+    // The new worker is slow to start.
+    pool.reconcile(now);
+    let newer = host.last_handle();
+    host.set_health(&newer, Health::Starting);
+    pool.reconcile(now + 500);
+    assert!(host.kills().is_empty(), "the old worker is still the only warm one");
+    // A run in the old folder still gets it, and a claimed worker is never killed by the move.
+    hit(pool.claim(&key("claude", "/old"), now + 600)).commit();
+    pool.reconcile(now + super::pool::MOVE_GRACE_MS + 1_000);
+    assert!(host.kills().iter().all(|(handle, _)| handle != &newer), "the new worker is untouched");
+    assert_eq!(host.kills().len(), 0, "the claimed old worker was not killed either");
+}
+
+#[test]
+fn the_old_folders_workers_go_after_the_grace_if_the_new_ones_never_get_ready() {
+    let host = Arc::new(FakeHost::default());
+    host.set_project("/old");
+    let pool = pool(&host, long_lived(config(&[("claude", true, false)])));
+    let now = warm_up(&pool, 0);
+    let old = host.spawned.lock()[0].1.clone();
+    pool.note_project("/new", FollowWhy::Focus, now);
+    pool.reconcile(now);
+    let newer = host.last_handle();
+    host.set_health(&newer, Health::Starting);
+    pool.reconcile(now + super::pool::MOVE_GRACE_MS - 1_000);
+    assert!(host.kills().is_empty(), "inside the grace");
+    pool.reconcile(now + super::pool::MOVE_GRACE_MS + 1_000);
+    assert!(host.kills().contains(&(old, "project_changed".to_string())));
+}
+
+#[test]
+fn a_full_pool_retires_the_old_folder_first_and_never_passes_the_cap() {
+    let host = Arc::new(FakeHost::default());
+    host.set_project("/old");
+    let mut cfg = config(&[("claude", true, false)]);
+    cfg.preload.providers.insert("claude".into(), 2);
+    cfg.max_total = 2;
+    let pool = pool(&host, cfg.clamped());
+    pool.reconcile(0);
+    let now = warm_up(&pool, 1_000);
+    assert_eq!(pool.status(now).counts.ready, 2);
+    pool.note_project("/new", FollowWhy::Run, now);
+    let outcome = pool.reconcile(now);
+    assert_eq!(outcome.killed, 2, "no room for both folders: the old workers go first");
+    assert_eq!(outcome.spawned.len(), 2);
+    assert!(pool.status(now).counts.total <= 2, "the cap holds");
+}
+
+#[test]
+fn an_untrusted_folder_stays_cold_and_says_so() {
+    let host = Arc::new(FakeHost::default());
+    host.set_project("/trusted");
+    let pool = pool(&host, long_lived(config(&[("claude", true, false)])));
+    let now = warm_up(&pool, 0);
+    host.dialog_projects.lock().push("/untrusted".to_string());
+    pool.note_project("/untrusted", FollowWhy::Run, now);
+    assert_eq!(pool.reconcile(now).spawned.len(), 1, "one try");
+    pool.reconcile(now + 1); // observe: a trust dialog, discarded (never answered)
+    let following = pool.status(now + 2).following.unwrap();
+    assert_eq!(following.project, "/untrusted");
+    assert_eq!(following.not_warmed.len(), 1);
+    assert_eq!((following.not_warmed[0].agent_type.as_str(), following.not_warmed[0].reason), ("claude", "needs_trust"));
+    // No retry loop: nothing is spawned again inside the backoff.
+    for step in 1..=10 {
+        assert!(pool.reconcile(now + step * 1_000).spawned.is_empty(), "backing off");
+    }
+    // The trusted folder's worker stays to the end of the grace, then is retired.
+    let later = pool.reconcile(now + super::pool::MOVE_GRACE_MS + 1_000);
+    assert_eq!(later.killed, 1);
+}
+
+// ---- A new warm worker the moment one is taken.
+
+#[test]
+fn a_claim_is_refilled_by_the_very_next_pass_without_waiting_for_a_tick() {
+    let host = Arc::new(FakeHost::default());
+    // The app's start-up grace is over by the time of the claim.
+    let pool = Pool::new(host.clone(), None, config(&[("claude", true, false)]), Vec::new(), 5_000);
+    assert!(pool.reconcile(1_000).spawned.is_empty(), "still inside the start-up grace");
+    let now = warm_up(&pool, 6_000);
+    assert_eq!(host.spawn_count(), 1);
+    let _ = pool.wake_handle().wait(std::time::Duration::from_millis(1)); // drain earlier wakes
+    hit(pool.claim(&key("claude", "/w"), now)).commit();
+    assert!(pool.wake_handle().wait(std::time::Duration::from_millis(1)), "the claim wakes the loop at once");
+    assert_eq!(pool.reconcile(now).spawned, vec![key("claude", "/w")], "same instant: no tick, no grace");
+    assert_eq!(host.spawn_count(), 2);
+}
+
+#[test]
+fn two_quick_claims_are_refilled_by_two_spawns_and_never_pass_the_cap() {
+    let host = Arc::new(FakeHost::default());
+    let mut cfg = config(&[("claude", true, false)]);
+    cfg.preload.providers.insert("claude".into(), 2);
+    let pool = pool(&host, cfg.clamped());
+    pool.reconcile(0);
+    let now = warm_up(&pool, 1_000);
+    assert_eq!(host.spawn_count(), 2);
+    hit(pool.claim(&key("claude", "/w"), now)).commit();
+    hit(pool.claim(&key("claude", "/w"), now)).commit();
+    let outcome = pool.reconcile(now);
+    assert_eq!(outcome.spawned.len(), 2, "both slots refilled in one pass");
+    assert_eq!(host.spawn_count(), 4);
+    assert!(pool.reconcile(now).spawned.is_empty(), "back at the count");
+    assert!(pool.status(now).counts.total <= pool.config().cap());
+}
+
+#[test]
+fn an_earlier_failure_does_not_slow_the_refill_after_a_good_claim() {
+    let host = Arc::new(FakeHost::default());
+    let mut cfg = config(&[("claude", true, false)]);
+    cfg.preload.providers.insert("claude".into(), 2);
+    let pool = pool(&host, cfg.clamped());
+    pool.reconcile(0);
+    let second = host.spawned.lock()[1].1.clone();
+    host.set_health(&second, Health::Dialog); // one worker is bad: the agent backs off for 15 s
+    let now = warm_up(&pool, 1_000);
+    assert_eq!(pool.status(now).agents_blocked.len(), 1, "the failure is on record");
+    assert_eq!(pool.status(now).counts.ready, 1);
+    hit(pool.claim(&key("claude", "/w"), now)).commit();
+    assert!(pool.status(now).agents_blocked.is_empty(), "a worker that worked clears the failures");
+    assert_eq!(pool.reconcile(now).spawned.len(), 2, "refilled at once, not after the old backoff");
 }
 
 // ---- Bug #12: warm-standby churn. A worker that is unhealthy right after it starts must not be

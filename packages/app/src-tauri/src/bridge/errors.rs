@@ -44,6 +44,7 @@ pub(super) fn operation_http_error(
         | "PANE_BUSY"
         | "ACCOUNT_MISMATCH"
         | "ACP_OFF"
+        | "NOT_A_TERMINAL"
         | "OPERATION_ALREADY_DISPATCHED"
         | "CANCELLATION_IN_PROGRESS"
         | "CANCELLATION_REQUIRES_WORKER_CONTROL"

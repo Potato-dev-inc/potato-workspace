@@ -47,7 +47,7 @@ export function MiniBar({ panes, toast, onFocusPane, onNew, onBack, onUndo }: Mi
                 key={p.id}
                 type="button"
                 className="mb-chip"
-                title={`${agentName(p.agent_type)}: ${p.status.replace('_', ' ')}`}
+                title={`${agentName(p.agent_type)}: ${p.status.replace('_', ' ')}${p.lane === 'acp' ? ' · Chat' : ''}`}
                 onClick={() => onFocusPane(p.id)}
               >
                 <span className={`mb-dot mb-dot--${p.status}`} aria-hidden="true" />

@@ -114,6 +114,30 @@ describe('PreloadSettings', () => {
     expect(line?.textContent).toContain('Not warming it until you open it.');
   });
 
+  it('shows which folder warm agents follow and why', async () => {
+    const api = mockApi();
+    api.getStatus.mockResolvedValue({
+      ...statusFor(DEFAULT_STANDBY_CONFIG),
+      following: { project: 'D:\\pm-workspace', why: 'run', not_warmed: [] },
+    });
+    await render(api);
+    expect(host.querySelector('[data-testid="preload-following"]')?.textContent).toBe('following: D:\\pm-workspace — your last run');
+    expect(host.querySelector('[data-testid^="preload-not-warmed"]')).toBeNull();
+    api.getStatus.mockResolvedValue({
+      ...statusFor(DEFAULT_STANDBY_CONFIG),
+      following: { project: 'D:\\new-app', why: 'focus', not_warmed: [{ agent_type: 'claude', reason: 'needs_trust' }] },
+    });
+    await act(async () => {
+      root.render(<PreloadSettings api={{ ...api }} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(host.querySelector('[data-testid="preload-following"]')?.textContent).toBe('following: D:\\new-app — the pane you opened');
+    const cold = host.querySelector('[data-testid="preload-not-warmed-claude"]');
+    expect(cold?.textContent).toContain('not warmed: D:\\new-app needs trust once for Claude');
+  });
+
   it('is off by default, explains the cost, and lists visible-capable agents', async () => {
     await render(mockApi());
     const master = host.querySelector('[role="switch"]');
