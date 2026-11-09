@@ -308,6 +308,7 @@ pub fn build_worker(
         worker.provider_session_id = Some(session);
     }
     worker.session_reset = false;
+    worker.resumable = false;
     worker.requested_model = choice.requested_model.clone();
     worker.resolved_model = choice.resolved_model.clone();
     worker.requested_reasoning = choice.requested_reasoning.clone();

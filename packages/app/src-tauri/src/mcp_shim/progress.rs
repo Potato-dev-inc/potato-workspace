@@ -15,6 +15,19 @@ pub(crate) fn call_tool_with_progress(
     token: Option<Value>,
     notifications: Option<std::sync::mpsc::Sender<String>>,
 ) -> Result<Value, String> {
+    // The restart wait reports through this sink; the wait loops below still send their own progress.
+    let sink = ProgressSink::from_parts(token.clone(), notifications.clone());
+    let context = CallContext { sink: sink.clone(), cancelled: None };
+    with_call_context(context, || call_tool_with_progress_inner(params, cancel, token, notifications, sink))
+}
+
+fn call_tool_with_progress_inner(
+    params: Value,
+    cancel: Option<std::sync::mpsc::Receiver<()>>,
+    token: Option<Value>,
+    notifications: Option<std::sync::mpsc::Sender<String>>,
+    sink: Option<ProgressSink>,
+) -> Result<Value, String> {
     if let Some(name) = params.get("name").and_then(Value::as_str) {
         ensure_tool_mode(name)?;
     }
@@ -28,7 +41,7 @@ pub(crate) fn call_tool_with_progress(
             .map(ask_user::wrap);
     }
     if !matches!(tool_name, Some("wait_for_operation") | Some("wait_agents")) {
-        return call_tool_cancellable(params, cancel);
+        return call_tool_with_sink(params, cancel, sink);
     }
     if tool_name == Some("wait_agents") {
         return call_wait_agents_with_progress(params, cancel, token, notifications);
@@ -53,7 +66,7 @@ pub(crate) fn call_tool_with_progress(
     let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
     loop {
         if cancel.as_ref().is_some_and(|rx| rx.try_recv().is_ok()) {
-            return Err(r#"{"code":"REQUEST_CANCELLED","message":"wait request was cancelled","recoverable":true,"context":{}}"#.into());
+            return Err(REQUEST_CANCELLED_JSON.into());
         }
         let remaining = deadline
             .saturating_duration_since(std::time::Instant::now())
@@ -136,7 +149,7 @@ where
     let mut fast_rounds = 0_u32;
     loop {
         if cancel.as_ref().is_some_and(|rx| rx.try_recv().is_ok()) {
-            return Err(r#"{"code":"REQUEST_CANCELLED","message":"agent wait request was cancelled","recoverable":true,"context":{}}"#.into());
+            return Err(REQUEST_CANCELLED_JSON.into());
         }
         let remaining = deadline
             .saturating_duration_since(std::time::Instant::now())

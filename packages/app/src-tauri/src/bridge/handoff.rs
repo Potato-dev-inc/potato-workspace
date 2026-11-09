@@ -138,6 +138,7 @@ pub(super) fn handoff_route(
     }
     if release {
         crate::mcp_sessions::release_owned_pane(session, &pane_id)?;
+        crate::agent_runs::pane_lease::release(&pane_id, session);
         if let Some(handle) = run_handle.as_deref() {
             crate::mcp_sessions::release_owned_agent(session, handle)?;
         }
@@ -156,6 +157,12 @@ pub(super) fn handoff_route(
             )?;
         }
         if pane_alive {
+            if grant {
+                // Explicit preemption: the lease moves to the caller.
+                crate::agent_runs::pane_lease::force(&pane_id, session);
+            } else {
+                crate::agent_runs::pane_lease::acquire(&pane_id, session)?;
+            }
             crate::mcp_sessions::take_over_pane(session, &pane_id, grant)?;
         } else if run_handle.is_none() {
             return Err(OperationError::new(

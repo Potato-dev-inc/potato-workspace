@@ -18,6 +18,14 @@ struct Health {
     ok: bool,
     version: &'static str,
     catalog_version: String,
+    /// Hash of every tool schema; the stdio shim compares it with its own (see `tool_registry::schema_hash`).
+    catalog_hash: String,
+    /// Per-tool schema hashes, so a mismatch can name the tools that differ.
+    tool_hashes: std::collections::BTreeMap<String, String>,
+    /// Always `potato-workspace`: lets the shim tell this bridge from any other local listener.
+    product: &'static str,
+    /// Random per app launch; changes when the app restarts.
+    app_instance_id: &'static str,
     /// Git sha, dirty flag and build time of the running binary.
     build_id: &'static str,
     tool_count: usize,
@@ -58,12 +66,17 @@ pub(super) fn route(
     if segments == ["health"] && method == "GET" {
         crate::mcp_sessions::authorize(request_session(headers), method, "/health", &json!({}))
             .map_err(operation_http_error)?;
+        let hashes = crate::tool_registry::tool_schema_hashes();
         return Ok((
             200,
             serde_json::to_value(Health {
                 ok: true,
                 version: env!("CARGO_PKG_VERSION"),
                 catalog_version: crate::tool_registry::catalog_version(),
+                catalog_hash: crate::tool_registry::catalog_hash_of(&hashes),
+                tool_hashes: hashes,
+                product: super::identity::PRODUCT,
+                app_instance_id: super::identity::app_instance_id(),
                 build_id: env!("PM_BUILD_ID"),
                 tool_count: crate::tool_registry::external_mcp_tool_count(),
                 standby: crate::standby::health_summary(),
@@ -100,6 +113,11 @@ pub(super) fn route(
             })
             .map_err(operation_http_error)?;
     }
+
+    // A long call keeps its session's pane leases alive until it returns.
+    let _keepalive = session
+        .filter(|_| crate::agent_runs::pane_lease::is_long_call(&route_path))
+        .map(crate::agent_runs::pane_lease::KeepAlive::start);
 
     // A companion's agent may start helpers and see that one waits, but it can never answer a card (trust,
     // permission, question) or type a key into a pane. Those are the person's, always.

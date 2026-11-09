@@ -385,3 +385,50 @@ fn keep_helpers_open_on_keeps_the_pane_and_off_leaves_the_run_alone() {
         assert!(!apply_keep_open(&mut asked) && asked, "already asked for: nothing to report");
     });
 }
+
+#[test]
+fn close_helpers_with_agent_defaults_on_and_survives_a_restart() {
+    let dir = std::env::temp_dir().join(format!("pm-run-mode-{}-close-with-agent", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let target = dir.join(store::file_name());
+    assert!(store::close_with_agent_at(&target), "no file: on");
+    store::save_close_with_agent_at(&target, false).unwrap();
+    assert!(!store::close_with_agent_at(&target));
+    store::save_keep_open_at(&target, false).unwrap();
+    assert!(!store::close_with_agent_at(&target), "the other settings do not reset it");
+    store::save_close_with_agent_at(&target, true).unwrap();
+    assert!(store::close_with_agent_at(&target));
+    assert!(!store::keep_open_at(&target), "and it does not reset the others");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn close_helpers_with_agent_reads_the_test_environment() {
+    store::with_test_env(TestEnv::default(), || assert!(close_helpers_with_agent(), "default on"));
+    store::with_test_env(TestEnv { close_helpers_with_agent: Some(false), ..TestEnv::default() }, || {
+        assert!(!close_helpers_with_agent());
+        set_close_helpers_with_agent(true).unwrap();
+        assert!(close_helpers_with_agent());
+    });
+}
+
+#[test]
+fn list_agents_rows_carry_lanes_accounts_and_read_only_support() {
+    let rows = types_summary();
+    let rows = rows.as_array().expect("an array of agent types");
+    let claude = rows.iter().find(|r| r["id"] == "claude").expect("claude is dispatchable");
+    for key in ["headless_supported", "headless_verified", "run_mode"] {
+        assert!(claude.get(key).is_some(), "existing field {key} is kept");
+    }
+    let lanes = claude["lanes"].as_object().expect("lanes object");
+    for key in ["terminal", "headless", "acp"] {
+        assert!(lanes[key].is_boolean(), "lanes.{key} is a bool");
+    }
+    assert_eq!(lanes["terminal"], true);
+    assert!(claude["accounts"].is_array());
+    for account in claude["accounts"].as_array().unwrap() {
+        assert!(account["id"].is_string() && account["label"].is_string());
+        assert!(["signed_in", "signed_out", "unknown"].contains(&account["login_state"].as_str().unwrap()));
+    }
+    assert!(claude["read_only_supported"].is_boolean());
+}

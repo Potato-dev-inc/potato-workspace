@@ -7,7 +7,7 @@
 //! `prompt`, `pane_id`, a cursor), so a caller does not need two code paths.
 //!
 //! * **Choosing.** `run_agent` takes `lane`: `"acp"` asks for a chat session (the Labs switch still applies), `"terminal"`
-//!   asks for today's way, and without it the agent's saved choice ("How to run") decides. When the saved choice
+//!   asks for today's way, `"auto"` picks (`lanes`), and without it the agent's saved choice ("How to run") decides, else auto. When the saved choice
 //!   decides and the chat cannot start, the request falls through to the terminal way (the automatic fallback);
 //!   when the caller asked for `"acp"` it gets the error instead.
 //! * **Answering permissions.** `answer_prompt` on a chat's question needs the person's switch for that chat
@@ -23,8 +23,8 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
-use super::{get, AcpChat, AgentAnswerError, Readiness, SendError, StartDeps, StartRequest, LANE};
-use crate::acp::lane::{effective_lane, LaneStore, RunLane};
+use super::{get, lanes, AcpChat, AgentAnswerError, Readiness, SendError, StartDeps, StartRequest, LANE};
+use crate::acp::lane::LaneStore;
 use crate::acp::state::{ExitKind, Phase, Snapshot, StopKind};
 use crate::audit::Who;
 use crate::operations::OperationError;
@@ -49,28 +49,6 @@ const ITEM_TEXT_CHARS: usize = 600;
 
 fn err(code: &str, message: impl Into<String>, recoverable: bool) -> OperationError {
     OperationError::new(code, message, recoverable)
-}
-
-// ---- choosing the way ---------------------------------------------------------------------------------------
-
-/// What a `run_agent` call wants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Want {
-    /// A chat session. `fallback`: the agent's saved choice asked for it, so a chat that cannot start falls back to
-    /// the terminal way instead of failing.
-    Chat { fallback: bool },
-    /// Today's way.
-    Terminal,
-}
-
-/// `lane` is the caller's word; `saved` the agent's "How to run".
-pub fn wants(lane: Option<&str>, saved: RunLane, labs_on: bool, has_definition: bool) -> Result<Want, String> {
-    match lane.map(str::trim).filter(|l| !l.is_empty()) {
-        Some("acp") => Ok(Want::Chat { fallback: false }),
-        Some("terminal") => Ok(Want::Terminal),
-        Some(other) => Err(format!("lane must be \"acp\" or \"terminal\", not {other:?}")),
-        None => Ok(if effective_lane(saved, labs_on, has_definition) == RunLane::Acp { Want::Chat { fallback: true } } else { Want::Terminal }),
-    }
 }
 
 // ---- the views ----------------------------------------------------------------------------------------------
@@ -178,7 +156,7 @@ pub fn view(chat: &AcpChat) -> Value {
         "reason": end.reason,
         "at_ms": end.at_ms,
     })).unwrap_or(Value::Null);
-    json!({
+    let mut shown = json!({
         "handle": chat.pane_id(),
         "pane_id": chat.pane_id(),
         "lane": LANE,
@@ -209,7 +187,11 @@ pub fn view(chat: &AcpChat) -> Value {
         "revision": snapshot.revision,
         "next_cursor": snapshot.revision,
         "warnings": chat.choice_warnings(),
-    })
+    });
+    if let Some(note) = chat.lane_note() {
+        lanes::merge_note(&mut shown, &note);
+    }
+    shown
 }
 
 fn inspect(chat: &AcpChat) -> Value {
@@ -323,8 +305,20 @@ fn wait_ms_of(value: &Value, default: u64) -> Result<u64, OperationError> {
 /// Handles `/agents/*` requests that belong to a chat session. `None`: not one of ours, carry on with the terminal
 /// runs. `query` is the request's query string (`?after=`).
 pub fn intercept(method: &str, segments: &[&str], query: &str, body: &[u8], deps: &StartDeps, session: Option<&str>) -> Option<Reply> {
+    intercept_noted(method, segments, query, body, deps, session).0
+}
+
+/// [`intercept`] plus, for a `run_agent` that the terminal runs, what to say about the lane: the caller adds it to the
+/// terminal run's answer (`lanes::annotate`).
+pub fn intercept_noted(method: &str, segments: &[&str], query: &str, body: &[u8], deps: &StartDeps, session: Option<&str>) -> (Option<Reply>, Option<lanes::LaneNote>) {
+    if let ("POST", ["agents", "run"]) = (method, segments) {
+        return run(body, query, deps, session);
+    }
+    (intercept_rest(method, segments, query, body, deps, session), None)
+}
+
+fn intercept_rest(method: &str, segments: &[&str], query: &str, body: &[u8], deps: &StartDeps, session: Option<&str>) -> Option<Reply> {
     match (method, segments) {
-        ("POST", ["agents", "run"]) => run(body, query, deps, session),
         ("POST", ["agents", "wait"]) => wait(body),
         ("POST", ["agents", "followup" | "send"]) => {
             let value = body_json(body)?;
@@ -379,45 +373,83 @@ fn abandon_chat(deps: &StartDeps, chat: &AcpChat) {
     deps.host.panes_changed();
 }
 
-fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> Option<Reply> {
-    let value = body_json(body)?;
+/// The ids a chat session can be asked for: agents with an ACP definition.
+fn chat_agent_ids() -> Vec<String> {
+    let mut ids: Vec<String> = crate::acp::config::builtin_agents().into_iter().map(|c| c.id).collect();
+    for cfg in crate::acp::overlay::overlay_agents(&crate::acp::overlay::OverlayStore::in_app_data()) {
+        if !ids.contains(&cfg.id) {
+            ids.push(cfg.id);
+        }
+    }
+    ids
+}
+
+/// `(answer, note)`: the answer when this is a chat session's request; `(None, note)` when the terminal runs it.
+fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> (Option<Reply>, Option<lanes::LaneNote>) {
+    let Some(value) = body_json(body) else { return (None, None) };
     let task = text_of(&value, "task");
     // Adopting a chat that exists: the task is its next message.
     if let Some(id) = ["worker_id", "pane_id", "handle"].iter().find_map(|key| text_of(&value, key)) {
         if let Some(chat) = chat_of(&id) {
-            return Some(match task {
-                Some(_) => owned(&chat, session).and_then(|()| followup(&chat, &value, session, true)),
-                None => Err(err("INVALID_TASK", "task is required", false)),
-            });
+            return (
+                Some(match task {
+                    Some(_) => owned(&chat, session).and_then(|()| followup(&chat, &value, session, true)),
+                    None => Err(err("INVALID_TASK", "task is required", false)),
+                }),
+                None,
+            );
         }
+        // Adopting a terminal pane or worker is not a new run: nothing to say about the lane.
+        return (None, None);
     }
     let lane = text_of(&value, "lane");
     let agent = text_of(&value, "agent_type");
-    let saved = agent.as_deref().map(|a| LaneStore::in_app_data().lane_for(a)).unwrap_or_default();
-    let has_definition = agent.as_deref().is_some_and(|a| crate::acp::config::find_builtin(a).is_some());
-    let want = match wants(lane.as_deref(), saved, crate::acp::chat_enabled(), has_definition) {
-        Ok(want) => want,
-        Err(why) => return Some(Err(err("INVALID_ARGUMENT", why, false))),
+    let account = text_of(&value, "account");
+    let headless = value.get("headless").and_then(Value::as_bool) == Some(true);
+    let saved = agent.as_deref().and_then(|a| LaneStore::in_app_data().chosen(a));
+    let config = agent.as_deref().and_then(crate::acp::config::find_builtin);
+    let labs_on = crate::acp::chat_enabled();
+    let facts = lanes::Facts {
+        labs_on,
+        has_definition: config.is_some(),
+        adapter_installed: config.as_ref().is_some_and(|cfg| !crate::acp::install::is_missing(cfg, &*deps.env)),
+        headless,
     };
-    // A visible/one-task choice the caller made on purpose (headless) is the terminal way's.
-    let Want::Chat { fallback } = want else { return None };
-    if fallback && value.get("headless").and_then(Value::as_bool) == Some(true) {
-        return None;
-    }
+    let plan = match lanes::plan(lane.as_deref(), saved, facts) {
+        Ok(plan) => plan,
+        Err(why) => return (Some(Err(err("INVALID_ARGUMENT", why, false))), None),
+    };
+    let (explicit, reason) = match plan {
+        lanes::Plan::Terminal { reason } => return (None, Some(lanes::LaneNote::terminal(&reason))),
+        lanes::Plan::Chat { explicit, reason } => (explicit, reason),
+    };
     let Some(agent) = agent else {
-        return Some(Err(err("INVALID_ARGUMENT", "agent_type is required with lane: \"acp\"", false)));
+        return (Some(Err(err("INVALID_ARGUMENT", "agent_type is required with lane: \"acp\"", false))), None);
     };
-    let Some(task) = task else { return Some(Err(err("INVALID_TASK", "task is required", false))) };
+    // An id that is no agent at all: the ids that can be asked for. (The terminal says UNKNOWN_AGENT_TYPE.)
+    if explicit && config.is_none() && !crate::tui::is_registered(&agent) {
+        return (Some(Err(lanes::unknown_agent(&agent, &chat_agent_ids()))), None);
+    }
+    if explicit && !labs_on {
+        return (Some(Err(lanes::acp_off())), None);
+    }
+    let Some(task) = task else { return (Some(Err(err("INVALID_TASK", "task is required", false))), None) };
+    // Whether a failure to start gives the terminal a go (auto and the saved choice), or is the caller's error (lane: "acp").
+    let fallback = !explicit;
     let folder = text_of(&value, "project_path").or_else(|| query.trim_start_matches('?').split('&').find_map(|p| p.strip_prefix("project_path=").map(str::to_string))).unwrap_or_else(|| deps.registry.lock().project_path.clone());
-    let started = super::start_gated(deps, StartRequest { agent_id: agent, folder: folder.into(), explicit: !fallback });
+    let started = super::start_gated(deps, StartRequest { agent_id: agent, folder: folder.into(), explicit: !fallback, account: account.clone() });
     let chat = match started {
         Ok(chat) => chat,
-        // The saved choice asked for a chat and it cannot start: the terminal way runs the task.
-        Err(_) if fallback => return None,
+        // Not the caller's mistake and the terminal can run it: once, the terminal way runs the task.
+        Err(error) if fallback && error.fallback => return (None, Some(lanes::LaneNote::fell_back(error.code, &error.message))),
         Err(error) => {
             let mut e = err(error.code, error.message.clone(), error.fallback);
-            e.context = json!({ "fallback": error.fallback.then_some("terminal"), "hint": "Retry with lane: \"terminal\" to run it in a terminal." });
-            return Some(Err(e));
+            e.context = if error.fallback {
+                json!({ "fallback": "terminal", "hint": "Retry with lane: \"terminal\" to run it in a terminal." })
+            } else {
+                json!({ "fix": error.message })
+            };
+            return (Some(Err(e)), None);
         }
     };
     chat.set_started_by(session);
@@ -430,11 +462,11 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> Opt
         if let Err(choice) = chat.apply_choices(model.as_deref(), reasoning.as_deref()) {
             abandon_chat(deps, &chat);
             if fallback {
-                return None;
+                return (None, Some(lanes::LaneNote::fell_back(choice.code, &choice.message)));
             }
             let mut e = err(choice.code, choice.message, true);
             e.context = json!({ "fallback": "terminal", "hint": "The terminal way can run a requested model. Retry with lane: \"terminal\"." });
-            return Some(Err(e));
+            return (Some(Err(e)), None);
         }
     }
     // Nested under the pane of the agent that asked for it, exactly like a terminal helper. The
@@ -449,18 +481,24 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> Opt
     chat.persist_link(session, parent.as_deref());
     deps.host.panes_changed();
     deps.host.state_changed(chat.pane_id(), &chat.state());
+    // Which lane and why (and the account) stay with the chat, so inspect_agent and wait_agents still say it.
+    let mut kept = lanes::LaneNote::acp(&reason).to_value();
+    if let (Some(account), Some(map)) = (&account, kept.as_object_mut()) {
+        map.insert("account".into(), json!(account));
+    }
+    chat.set_lane_note(kept);
     if let Err(error) = chat.send(&task) {
-        return Some(Err(send_failure(error)));
+        return (Some(Err(send_failure(error))), None);
     }
     let background = value.get("background").and_then(Value::as_bool).unwrap_or(false);
     if !background {
         let wait_ms = match wait_ms_of(&value, DEFAULT_WAIT_MS) {
             Ok(ms) => ms,
-            Err(e) => return Some(Err(e)),
+            Err(e) => return (Some(Err(e)), None),
         };
         wait_status(&chat, &default_until(), wait_ms);
     }
-    Some(Ok(view(&chat)))
+    (Some(Ok(view(&chat))), None)
 }
 
 fn wait(body: &[u8]) -> Option<Reply> {
@@ -652,18 +690,6 @@ fn answer(chat: &AcpChat, value: &Value, session: Option<&str>) -> Reply {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_callers_word_decides_and_otherwise_the_saved_choice() {
-        assert_eq!(wants(Some("acp"), RunLane::Terminal, true, true), Ok(Want::Chat { fallback: false }));
-        assert_eq!(wants(Some("terminal"), RunLane::Acp, true, true), Ok(Want::Terminal));
-        assert_eq!(wants(None, RunLane::Acp, true, true), Ok(Want::Chat { fallback: true }));
-        assert_eq!(wants(None, RunLane::Terminal, true, true), Ok(Want::Terminal));
-        // The saved choice needs Labs and a definition; without them it is the terminal.
-        assert_eq!(wants(None, RunLane::Acp, false, true), Ok(Want::Terminal));
-        assert_eq!(wants(None, RunLane::Acp, true, false), Ok(Want::Terminal));
-        assert!(wants(Some("pty"), RunLane::Terminal, true, true).is_err());
-    }
 
     #[test]
     fn final_statuses_end_a_wait_and_running_ones_do_not() {

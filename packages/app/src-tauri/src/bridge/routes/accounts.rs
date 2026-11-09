@@ -96,7 +96,7 @@ mod tests {
         assert_eq!(status, 200);
         assert_eq!(overview["accounts"], json!([]));
         let agents: Vec<&str> = overview["agents"].as_array().unwrap().iter().map(|a| a["agent_id"].as_str().unwrap()).collect();
-        assert!(agents.contains(&"claude") && agents.contains(&"codex") && !agents.contains(&"opencode"));
+        assert!(agents.contains(&"claude") && agents.contains(&"codex") && !agents.contains(&"opencode_native"));
         let claude = overview["agents"].as_array().unwrap().iter().find(|a| a["agent_id"] == "claude").unwrap();
         assert_eq!(claude["home_env"], "CLAUDE_CONFIG_DIR");
         assert!(claude["login_hint"].as_str().unwrap().contains("log in"));
@@ -109,7 +109,7 @@ mod tests {
         let (status, dup) = call(&store, "POST", "/accounts", json!({"agent_id": "claude", "label": "work"}));
         println!("POST /accounts {{claude, work}} -> {status} {dup}");
         assert_eq!(status, 400);
-        let (status, unsupported) = call(&store, "POST", "/accounts", json!({"agent_id": "opencode", "label": "x"}));
+        let (status, unsupported) = call(&store, "POST", "/accounts", json!({"agent_id": "opencode_native", "label": "x"}));
         println!("POST /accounts {{opencode, x}} -> {status} {unsupported}");
         assert_eq!(status, 400);
         assert!(unsupported["message"].as_str().unwrap().contains("does not support accounts"));

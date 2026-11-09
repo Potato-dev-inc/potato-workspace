@@ -30,6 +30,8 @@ pub(super) struct WaitAgentsRequest {
 #[derive(Debug, Deserialize)]
 pub(super) struct SendAgentRequest {
     #[serde(default)]
+    pub(super) structured_result: Option<bool>,
+    #[serde(default)]
     pub(super) project_path: Option<String>,
     pub(super) handle: String,
     #[serde(default)]

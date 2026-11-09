@@ -74,6 +74,7 @@ pub(super) fn bind_existing_worker(
             if find_live_pane(registry, pane_id).is_some() {
                 // Setting A: continuing someone else's pane or run needs a person's OK first.
                 crate::agent_authority::gate::check_take_over(session, Some(pane_id), request.handle.as_deref(), Some(registry))?;
+                crate::agent_runs::pane_lease::acquire(pane_id, session)?;
                 crate::mcp_sessions::take_over_pane(session, pane_id, true)?;
             }
         }
@@ -129,6 +130,7 @@ pub(super) fn bind_existing_worker(
     if let Some(session) = session_id {
         // Setting A: adopting a pane the person opened (or another agent started) needs a person's OK.
         crate::agent_authority::gate::check_take_over(session, Some(&pane.id), None, Some(registry))?;
+        crate::agent_runs::pane_lease::acquire(&pane.id, session)?;
         crate::mcp_sessions::take_over_pane(session, &pane.id, true)?;
     }
     Ok(())

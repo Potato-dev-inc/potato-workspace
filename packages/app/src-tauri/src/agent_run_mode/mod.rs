@@ -25,7 +25,7 @@ use crate::operations::{RunFallback, RunModeNote};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-pub use store::{helper_visibility, keep_helpers_open, set_for_agent, set_helper_visibility, set_keep_helpers_open, setting_for};
+pub use store::{close_helpers_with_agent, helper_visibility, keep_helpers_open, set_close_helpers_with_agent, set_for_agent, set_helper_visibility, set_keep_helpers_open, setting_for};
 #[cfg(test)]
 pub use store::{with_test_env, TestEnv};
 #[cfg(feature = "dev-fake-tui")]
@@ -270,6 +270,17 @@ pub fn decorate_listing(mut listing: Value) -> Value {
     listing
 }
 
+/// Which ways a new session of the agent can run, as this build knows them: `terminal` (a visible pane),
+/// `headless` (a background process) and `acp` (a chat session; needs the Chat switch and an ACP definition).
+pub(crate) fn lanes_of(descriptor: &Value, id: &str) -> Value {
+    let flag = |pointer: &str| descriptor.pointer(pointer).and_then(Value::as_bool).unwrap_or(false);
+    json!({
+        "terminal": flag("/modes/visible"),
+        "headless": flag("/modes/headless"),
+        "acp": crate::acp::chat_enabled() && crate::acp::config::find_builtin(id).is_some(),
+    })
+}
+
 /// `agent_types` for `list_agents`: one short row per dispatchable agent, so a lead sees the
 /// choice even when no worker is live.
 pub fn types_summary() -> Value {
@@ -282,11 +293,15 @@ pub fn types_summary() -> Value {
                 .iter()
                 .filter(|a| a.get("dispatchable").and_then(Value::as_bool).unwrap_or(false))
                 .map(|a| {
+                    let id = a.get("id").and_then(Value::as_str).unwrap_or_default();
                     json!({
                         "id": a.get("id"),
                         "headless_supported": a.get("headless_supported"),
                         "headless_verified": a.get("headless_verified"),
                         "run_mode": a.get("run_mode"),
+                        "lanes": lanes_of(a, id),
+                        "accounts": crate::accounts::capability_rows(&crate::accounts::Store::default_location(), id),
+                        "read_only_supported": crate::agent_runs::read_only_supported(id, false),
                     })
                 })
                 .collect()

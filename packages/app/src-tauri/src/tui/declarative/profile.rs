@@ -382,6 +382,7 @@ impl TuiProfile for DeclarativeProfile {
             home_env: a.home_env.clone(),
             extra_env: a.extra_env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
             login_hint: a.login_hint.clone(),
+            credential_files: a.credential_files.clone(),
         })
     }
 

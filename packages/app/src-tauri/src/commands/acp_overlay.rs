@@ -419,7 +419,7 @@ pub fn acp_overlay_set(agent: String, acp: Value, confirmed: bool) -> Result<Val
 pub(crate) fn remove_in(overlay: &OverlayStore, lanes: &LaneStore, agent: &str) -> Result<bool, String> {
     let had = overlay.remove(agent)?;
     if lanes.lane_for(agent) == RunLane::TerminalChat {
-        lanes.set(agent, RunLane::Terminal)?;
+        lanes.clear(agent)?;
     }
     Ok(had)
 }

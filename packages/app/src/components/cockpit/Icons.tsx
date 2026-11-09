@@ -190,3 +190,8 @@ export const IconSort = () => (
     <path d="M5.5 13V3M3 5.5l2.5-2.5L8 5.5M10.5 3v10M8 10.5l2.5 2.5 2.5-2.5" />
   </Icon>
 );
+export const IconClosedChats = () => (
+  <Icon>
+    <path d="M2.5 4.5h11v2.5h-11zM3.5 7v5.5h9V7M6.5 9.5h3" />
+  </Icon>
+);

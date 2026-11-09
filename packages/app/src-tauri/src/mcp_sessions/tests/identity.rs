@@ -15,10 +15,9 @@ fn sessions_start_in_agent_mode_and_catalog_is_filtered() {
         "wait_agents",
         "send_message",
         "followup_task",
-        "interrupt_agent",
         "inspect_agent",
-        "agent_transcript",
-        "close_agent",
+        "answer_prompt",
+        "ask_user",
     ] {
         assert!(names.contains(name), "agent catalog missing {name}");
     }
@@ -26,7 +25,7 @@ fn sessions_start_in_agent_mode_and_catalog_is_filtered() {
     for hidden in ["send_agent", "cancel_agent", "list_workers", "reply_opencode_question"] {
         assert!(!names.contains(hidden), "{hidden} must be unlisted");
     }
-    assert!(names.contains("list_panes"));
+    assert!(!names.contains("list_panes"), "callable but not in the default core");
     assert!(names.contains("list_agents"));
     assert!(!names.contains("write_terminal_input"));
     assert!(!names.contains("spawn_agent"));

@@ -83,6 +83,13 @@ pub struct ConversationRecord {
     /// The pane that started this chat (its helper-of link). Restored on start when that pane is live.
     #[serde(default)]
     pub parent_pane_id: Option<String>,
+    /// The account (`accounts::Store`) this chat runs under; `None`: the agent's own login. Kept so a restored chat
+    /// starts under the same login.
+    #[serde(default)]
+    pub account: Option<String>,
+    /// Which way `run_agent` chose this chat and why (`{lane_used, lane_reason}`), so a restored chat still says it.
+    #[serde(default)]
+    pub lane_note: Option<serde_json::Value>,
     pub created_ms: u64,
     pub updated_ms: u64,
 }
@@ -113,7 +120,7 @@ impl RecordStore {
     }
 
     /// Removes the journal of every record that `save` drops past the cap.
-    fn drop_journals(&self, dropped: &[ConversationRecord]) {
+    pub(super) fn drop_journals(&self, dropped: &[ConversationRecord]) {
         for r in dropped {
             let path = self.journal_path(&r.id);
             let _ = std::fs::remove_file(path.with_extension("prev.jsonl"));
@@ -188,6 +195,8 @@ mod tests {
             config_options: Vec::new(),
             started_by: None,
             parent_pane_id: None,
+            account: None,
+            lane_note: None,
             created_ms: 1,
             updated_ms: 1,
         }
@@ -282,7 +291,7 @@ mod journal_sweep_tests {
     fn rec(id: &str, state: LastState) -> ConversationRecord {
         ConversationRecord {
             id: id.into(), agent: "codex".into(), session_id: None, cwd: "D:/w".into(), lane: RunLane::Acp,
-            last_known_state: state, terminal_pane: None, notices: Vec::new(), config_options: Vec::new(), started_by: None, parent_pane_id: None, created_ms: 1, updated_ms: 1,
+            last_known_state: state, terminal_pane: None, notices: Vec::new(), config_options: Vec::new(), started_by: None, parent_pane_id: None, account: None, lane_note: None, created_ms: 1, updated_ms: 1,
         }
     }
 

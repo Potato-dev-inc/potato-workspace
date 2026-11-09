@@ -119,6 +119,8 @@ export interface HarnessScenario {
   packageCheck?: import('./package-check-fixtures').PackageCheckScenario;
   /** Review Desk: what the mocked `review_desk_*` commands answer (see review-desk-fixtures.ts). */
   reviewDesk?: import('./review-desk-fixtures').ReviewDeskScenario;
+  /** Closed chats: the chats the mocked `acp_closed_list` starts with (see closed-chats-fixtures.ts). Absent = none, so the sidebar has no Closed chats row. */
+  closedChats?: import('./closed-chats-fixtures').ClosedChatsScenario;
   /** Linux Inside: what the mocked `wsl_*` commands answer (Settings > Agents > Run agents in Linux). Absent = the block stays hidden. */
   wsl?: import('./wsl-fixtures').WslScenario;
   /** What broke the tests?: what the mocked `wb_*` commands answer (see what-broke-it-fixtures.ts). */

@@ -15,9 +15,10 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'whats-new',
   // Agents: adding an agent (the wizard lives in "Agent definitions")
   'definitions',
-  // Agents: whether helpers an agent starts are shown, and whether they stay open
+  // Agents: whether helpers an agent starts are shown, whether they stay open, and whether they close with their agent
   'helper-agents',
   'keep-helpers-open',
+  'close-helpers-with-agent',
   // Keys: all of them
   'key-anthropic',
   'key-openai',

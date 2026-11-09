@@ -33,6 +33,8 @@ pub struct StartRequest {
     pub folder: PathBuf,
     /// The caller asks for a chat session whatever the agent's saved choice is (the Labs switch still applies).
     pub explicit: bool,
+    /// The account (`accounts::Store`) to run the agent's adapter under; `None`: the agent's own login.
+    pub account: Option<String>,
 }
 
 /// Why a chat session did not start. `fallback`: the terminal is the way to run this agent instead.
@@ -99,6 +101,12 @@ pub fn start_gated(deps: &StartDeps, request: StartRequest) -> Result<Arc<AcpCha
     start(deps, cfg, request)
 }
 
+/// The environment of `account` for `agent`, or the error that names what is wrong (`ACCOUNT_NOT_FOUND`,
+/// `ACCOUNT_UNSUPPORTED`). A refusal here never offers the terminal: the account is the caller's mistake.
+fn account_launch_env(agent: &str, account: &str) -> Result<crate::tui::LaunchEnv, StartError> {
+    crate::acp::account::launch_env(&crate::accounts::Store::default_location(), agent, account).map_err(|p| StartError::new(p.code, p.message, false))
+}
+
 static SWEEPER: OnceLock<SweeperHandle> = OnceLock::new();
 
 /// Starts a chat session with `cfg` (no gate). The adapter is started and the session opened before the pane exists,
@@ -108,6 +116,11 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
     if !Path::new(&folder).is_absolute() || !folder.is_dir() {
         return Err(StartError::new("INVALID_ARGUMENT", "The folder must be an existing folder (a full path).", false));
     }
+    // The account, checked before anything starts: the adapter gets that login's environment.
+    let account_env = match request.account.as_deref().map(str::trim).filter(|a| !a.is_empty()) {
+        Some(account) => Some((account.to_string(), account_launch_env(&cfg.id, account)?)),
+        None => None,
+    };
     // A reviewed adapter whose last health check failed (or that fails now, when its agent's version is not the tested
     // one): the chat says why and stops. The terminal lane is not touched.
     if let Some(reason) = crate::acp::adapter_health::check_before_start(&cfg.id) {
@@ -122,7 +135,7 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
     let agent_id = cfg.id.clone();
     let (session, pane_id) = match &deps.conversations {
         Some(conversations) => {
-            let view = conversations.create(&agent_id, &folder).map_err(|e| StartError::new("ACP_START_FAILED", format!("The agent could not start: {e}"), true))?;
+            let view = conversations.create_for(&agent_id, &folder, account_env.as_ref().map(|(id, _)| id.as_str())).map_err(|e| StartError::new("ACP_START_FAILED", format!("The agent could not start: {e}"), true))?;
             let session = conversations.session(&view.id).ok_or_else(|| StartError::new("ACP_START_FAILED", "The agent could not start.", true))?;
             (session, view.id)
         }
@@ -130,6 +143,9 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
             let pane_id = uuid::Uuid::new_v4().to_string();
             let mut cfg = cfg;
             crate::acp::config::add_pane_id(&mut cfg, &pane_id);
+            if let Some((_, env)) = &account_env {
+                crate::acp::config::with_account_env(&mut cfg, env);
+            }
             let session = AcpSession::new(Arc::new(cfg), deps.env.clone(), SessionParams { key: pane_id.clone(), cwd: folder.clone(), resume_session_id: None });
             supervisor::global().insert(session.clone());
             (session, pane_id)
@@ -230,6 +246,9 @@ pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
         );
         chat.set_handles(handles);
         chat.set_started_by(record.started_by.as_deref());
+        if let Some(note) = record.lane_note.clone() {
+            *chat.lane_note.lock() = Some(note);
+        }
         if let Some(parent) = record.parent_pane_id.clone() {
             links.push((id.clone(), parent));
         }

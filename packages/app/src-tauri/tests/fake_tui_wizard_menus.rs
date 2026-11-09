@@ -152,10 +152,6 @@ fn answered(settled: &Value) -> Vec<(String, String, String, String)> {
         .collect()
 }
 
-fn permission_keys(settled: &Value) -> Vec<String> {
-    answered(settled).into_iter().filter(|a| a.0 == "permission").map(|a| a.2).collect()
-}
-
 fn assert_three_safe_answers(session: &Session, settled: &Value, label: &str, keys: &str) {
     let all = answered(settled);
     assert_eq!(all.len(), 4, "the folder question and three permission questions: {settled}");

@@ -65,8 +65,14 @@ pub fn send_agent(
         drop(serial);
         return queued;
     }
-    if let Some(pane_id) = previous.pane_id.as_deref() {
-        if !registry.lock().panes.contains_key(pane_id) {
+    let pane_lost = previous
+        .pane_id
+        .as_deref()
+        .is_some_and(|pane_id| !registry.lock().panes.contains_key(pane_id));
+    // An interrupted run whose pane died with the app resumes its provider session headless.
+    let resume_headless = previous.worker.resumable && pane_lost;
+    if let Some(pane_id) = previous.pane_id.as_deref().filter(|_| !resume_headless) {
+        if pane_lost {
             if let Some(error) = crate::agent_runs::pane_close::closed_after_run_in(
                 std::slice::from_ref(&previous),
                 pane_id,
@@ -79,7 +85,8 @@ pub fn send_agent(
             ));
         }
     }
-    let headless = previous.pane_id.is_none() && previous.agent_type != "opencode_native";
+    let headless =
+        (previous.pane_id.is_none() || resume_headless) && previous.agent_type != "opencode_native";
     if blocked_on_trust {
         // Nothing ran: retire the parked turn so the retry is the handle's live turn.
         if let Ok(parked) = operations::mark_operation_state(
@@ -123,6 +130,7 @@ pub fn send_agent(
             .clone()
             .or_else(|| Some(Uuid::new_v4().to_string())),
         acceptance_criteria: opts.acceptance_criteria.clone(),
+        structured_result: Some(false),
         checks: opts.checks.clone(),
         pane_id: if headless {
             None
@@ -154,6 +162,7 @@ pub fn send_agent(
         allow_shell: false,
         allowed_commands: None,
         account: previous.worker.account.clone(),
+        account_source: previous.worker.account_source.clone(),
         budget_turns: None,
         budget_minutes: None,
         budget_parent: None,
@@ -164,6 +173,7 @@ pub fn send_agent(
         headless_unset: false,
         headless_ignored: false,
         headless_forced: false,
+        lane_note: None,
         kept_open_by_setting: false,
         quick: false,
         // The guard is carried by the run's worker record, not by this request.

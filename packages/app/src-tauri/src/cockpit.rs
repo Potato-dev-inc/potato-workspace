@@ -94,11 +94,37 @@ pub fn open_settings(app: &AppHandle, tab: Option<&str>) {
     }
 }
 
-/// Left-click on the tray and a plain second launch: always the cockpit (the app's first page).
-/// Individual mode keeps each pane in its own pop-out and Settings in its own window, reachable
-/// from the tray and the `open_settings` command; it does not replace the startup window.
+/// Left-click on the tray and a plain second launch: the cockpit (the app's first page) in Orchestration; in
+/// Individual the pop-outs and the mini bar come forward (the cockpit stays hidden there).
 pub fn open_primary_window(app: &AppHandle) {
+    if crate::ui_mode::current() == UiMode::Individual {
+        // Individual keeps the cockpit hidden: bring the pop-outs and the mini bar forward instead.
+        crate::mini_bar::bring_all_to_front(app);
+        return;
+    }
     open_cockpit(app, None);
+}
+
+/// A normal start. Saved Individual with live panes reopens their pop-outs and the mini bar; with no panes it
+/// starts in Orchestration for this launch only (the saved choice stays) and the cockpit says so.
+pub fn open_startup_windows(app: &AppHandle) {
+    let saved = crate::ui_mode::current();
+    let panes = app.state::<crate::AppState>().registry.lock().list().into_iter().filter(|p| gets_window_on_switch(&p.id)).collect::<Vec<_>>();
+    match crate::mini_bar::launch_decision(saved, panes.len()) {
+        crate::mini_bar::Launch::Cockpit => open_cockpit(app, None),
+        crate::mini_bar::Launch::IndividualWindows => {
+            for pane in panes {
+                crate::app_windows::open_pane_window(app, &pane.id, &pane.agent_type, pane.cols, pane.rows, false);
+            }
+            crate::mini_bar::show(app);
+        }
+        crate::mini_bar::Launch::FallBackToOrchestration => {
+            // This launch only: the saved `ui_mode` is not rewritten.
+            crate::ui_mode::set_current(UiMode::Orchestration);
+            crate::mini_bar::note_fallback();
+            open_cockpit(app, None);
+        }
+    }
 }
 
 /// The argument that starts the app without its window (scripts, tests, a launch that must stay
@@ -139,15 +165,31 @@ pub fn set_mode(app: &AppHandle, mode: UiMode) -> Result<(), String> {
         return Ok(());
     }
     let app = app.clone();
+    if mode == UiMode::Individual {
+        crate::mini_bar::note_switch();
+    } else {
+        crate::mini_bar::clear_switch();
+    }
     std::thread::spawn(move || match mode {
         UiMode::Individual => {
-            let panes = app.state::<crate::AppState>().registry.lock().list();
-            for pane in panes.into_iter().filter(|p| gets_window_on_switch(&p.id)) {
-                crate::app_windows::open_pane_window(&app, &pane.id, &pane.agent_type, pane.cols, pane.rows, false);
+            let panes: Vec<_> = app.state::<crate::AppState>().registry.lock().list().into_iter().filter(|p| gets_window_on_switch(&p.id)).collect();
+            let plan = crate::mini_bar::switch_plan(mode, panes.len());
+            if plan.pop_out_panes {
+                for pane in &panes {
+                    crate::app_windows::open_pane_window(&app, &pane.id, &pane.agent_type, pane.cols, pane.rows, false);
+                }
             }
-            crate::app_windows::hide_cockpit_window(&app);
+            // The bar sits on the monitor the cockpit was on, so read that before hiding it.
+            crate::mini_bar::remember_cockpit_monitor(&app);
+            if plan.show_mini_bar {
+                crate::mini_bar::show(&app);
+            }
+            if plan.hide_cockpit {
+                crate::app_windows::hide_cockpit_window(&app);
+            }
         }
         UiMode::Orchestration => {
+            crate::mini_bar::hide(&app);
             let destroyed = crate::app_windows::destroy_pane_windows(&app);
             tracing::info!(destroyed, "ui mode -> orchestration: pop-outs destroyed, panes kept");
             // A Settings window on screen moves into the cockpit (it names its page back through

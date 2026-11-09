@@ -1,7 +1,7 @@
 //! Startup recovery: operations left active by a previous app process are failed as interrupted.
 
 use super::model::*;
-use super::store::{current_runtime_id, indexed_projects, read, root};
+use super::store::{current_runtime_id, indexed_projects, read_or_quarantine, root};
 use super::mark_operation_state;
 use std::fs;
 
@@ -19,11 +19,7 @@ pub fn recover_interrupted_operations(
     for entry in entries {
         let entry = entry.map_err(OperationError::io)?;
         if entry.path().extension().is_some_and(|ext| ext == "json") {
-            let op = match read(&entry.path()) {
-                Ok(operation) => operation,
-                Err(error) if error.code == "OPERATION_NOT_FOUND" => continue,
-                Err(error) => return Err(error),
-            };
+            let Some(op) = read_or_quarantine(&entry.path())? else { continue };
             if op.runtime_id != current_runtime_id()
                 && matches!(
                     op.status,
@@ -49,7 +45,9 @@ pub fn recover_interrupted_operations(
                     Some(error),
                 );
                 match result {
-                    Ok(snapshot) => recovered.push(snapshot),
+                    Ok(snapshot) => {
+                        recovered.push(mark_resumable_if_possible(project, snapshot));
+                    }
                     Err(error) if error.code == "OPERATION_NOT_FOUND" => continue,
                     Err(error) => return Err(error),
                 }
@@ -65,4 +63,21 @@ pub fn recover_all_interrupted_operations() -> Result<Vec<OperationSnapshot>, Op
         recovered.extend(recover_interrupted_operations(&project)?);
     }
     Ok(recovered)
+}
+
+/// An interrupted run that still has a provider session id the CLI/ACP agent can resume from is
+/// flagged `worker.resumable`. Best effort: any failure leaves the plain failed record.
+fn mark_resumable_if_possible(project: &str, snapshot: OperationSnapshot) -> OperationSnapshot {
+    if !crate::agent_runs::persist::snapshot_can_resume(&snapshot) {
+        return snapshot;
+    }
+    let _serial = super::store::update_lock();
+    let Ok(mut op) = super::get_operation(project, &snapshot.operation_id) else {
+        return snapshot;
+    };
+    op.worker.resumable = true;
+    match super::store::bump(&mut op) {
+        Ok(()) => op,
+        Err(_) => snapshot,
+    }
 }

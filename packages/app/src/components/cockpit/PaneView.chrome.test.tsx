@@ -100,6 +100,19 @@ const room = (over: Partial<LiveStatus> = {}): LiveStatus => ({
   ...over,
 });
 
+describe('pane header: account chip', () => {
+  it('names the saved login a pane runs under, and shows nothing for the own login', async () => {
+    const withAccount = cockpit('C:\work\shop', false);
+    (withAccount.registry.panes.get('p1') as unknown as { info: Record<string, unknown> }).info.account_label = 'work';
+    await act(async () => root.render(<PaneView c={withAccount} paneId="p1" />));
+    await flush();
+    expect(host.querySelector('.ck-pane-head [data-testid="pane-account"]')?.textContent).toBe('work');
+    await act(async () => root.render(<PaneView c={cockpit('C:\work\shop', false)} paneId="p1" />));
+    await flush();
+    expect(host.querySelector('[data-testid="pane-account"]')).toBeNull();
+  });
+});
+
 describe('pane header: no actions button', () => {
   it('has no "..." button: the pane menu is the right-click menu of its sidebar row', async () => {
     await act(async () => root.render(<PaneView c={cockpit('C:\work\shop', false)} paneId="p1" />));

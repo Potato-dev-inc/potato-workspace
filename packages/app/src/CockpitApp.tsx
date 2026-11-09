@@ -31,6 +31,7 @@ import { runStoreCheck } from './lib/agentStoreCheck';
 import { useInlineSettings } from './hooks/useInlineSettings';
 import { SpawnView } from './components/cockpit/SpawnView';
 import { PanicSheet } from './components/cockpit/PanicSheet';
+import { IndividualSheet } from './components/cockpit/IndividualSheet';
 import { TellTeamToast } from './components/cockpit/team/TellTeam';
 import { SimpleCockpit } from './components/simple/SimpleCockpit';
 import { FirstRun } from './components/firstrun/FirstRun';
@@ -611,6 +612,7 @@ export default function CockpitApp() {
       {welcome.open && c.mode !== 'individual' && <FirstRun key={welcome.openKey} c={nav} seed={welcome.seed} onFinish={welcome.finish} />}
       {c.mode !== 'individual' && <TellTeamToast />}
       <ImportHost c={nav} />
+      {c.modeExplainer?.open && <IndividualSheet onSwitch={(d) => void c.modeExplainer.confirm(d)} onCancel={c.modeExplainer.cancel} />}
       {stopReport && <PanicSheet report={stopReport} names={c.names} onClose={() => setStopReport(null)} />}
       <AppUpdateHost />
       <div className="ck-toasts" aria-live="polite">

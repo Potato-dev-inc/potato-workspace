@@ -52,15 +52,17 @@ fn only_agents_whose_profile_declares_a_scheme_get_accounts() {
     let (store, root) = temp_store("support");
     assert!(store.add("claude", "a", None).is_ok());
     assert!(store.add("codex", "a", None).is_ok());
+    assert!(store.add("opencode", "a", None).is_ok());
     // no verified env var for these: left out on purpose (docs/features/account-profiles.md)
-    for agent in ["opencode", "opencode_native", "cursor_agent", "cmd"] {
+    for agent in ["opencode_native", "cursor_agent", "cmd"] {
         let err = store.add(agent, "a", None).unwrap_err();
         assert!(err.contains("does not support accounts") || err.contains("unknown agent"), "{agent}: {err}");
     }
     assert!(store.add("no_such_agent", "a", None).unwrap_err().contains("unknown agent"));
     let ids: Vec<String> = supporting_agents().into_iter().map(|a| a.agent_id).collect();
     assert!(ids.contains(&"claude".to_string()) && ids.contains(&"codex".to_string()));
-    assert!(!ids.contains(&"opencode".to_string()));
+    assert!(ids.contains(&"opencode".to_string()));
+    assert!(!ids.contains(&"opencode_native".to_string()));
     let _ = std::fs::remove_dir_all(root);
 }
 
@@ -74,6 +76,10 @@ fn account_maps_to_the_profiles_home_env_var() {
     assert!(env.remove.is_empty());
     let env = store.launch_env("codex", &codex.id).unwrap();
     assert_eq!(env.set, vec![("CODEX_HOME".to_string(), codex.home.clone())]);
+    let opencode = store.add("opencode", "Work", None).unwrap();
+    let env = store.launch_env("opencode", &opencode.id).unwrap();
+    assert_eq!(env.set, vec![("XDG_DATA_HOME".to_string(), opencode.home.clone())]);
+    assert!(env.remove.is_empty());
     // an account belongs to one agent
     assert!(store.launch_env("codex", &claude.id).unwrap_err().contains("belongs to claude"));
     assert!(store.launch_env("claude", "acc_nope").unwrap_err().contains("unknown account"));
@@ -82,6 +88,7 @@ fn account_maps_to_the_profiles_home_env_var() {
         home_env: "X_HOME".into(),
         extra_env: vec![("X_FLAG".into(), "1".into())],
         login_hint: String::new(),
+        credential_files: Vec::new(),
     };
     assert_eq!(env_for(&scheme, &claude).set, vec![("X_HOME".into(), claude.home.clone()), ("X_FLAG".into(), "1".into())]);
     let _ = std::fs::remove_dir_all(root);
@@ -111,7 +118,42 @@ fn removing_never_deletes_the_home_unless_asked_and_only_app_owned_ones() {
 
 #[test]
 fn a_run_naming_an_unsupported_agent_or_unknown_account_is_refused_before_spawning() {
-    assert!(validate_for_run("opencode", "acc_x").unwrap_err().contains("does not support accounts"));
+    assert!(validate_for_run("opencode_native", "acc_x").unwrap_err().contains("does not support accounts"));
     assert!(validate_for_run("claude", "acc_does_not_exist").unwrap_err().contains("unknown account"));
     assert!(validate_for_run("no_such_agent", "acc_x").unwrap_err().contains("unknown agent"));
+}
+
+#[test]
+fn login_state_reads_the_profiles_credential_file() {
+    let (store, root) = temp_store("login-state");
+    let claude = store.add("claude", "Work", None).unwrap();
+    let codex = store.add("codex", "Work", None).unwrap();
+    let state = |agent: &str, account: &Account| login_state(&scheme_for(agent).unwrap(), account);
+    // A fresh, empty folder: never logged in.
+    assert_eq!(state("claude", &claude), "signed_out");
+    // The folder has other files but no credential file: the login may live elsewhere.
+    std::fs::write(Path::new(&claude.home).join("settings.json"), "{}").unwrap();
+    assert_eq!(state("claude", &claude), "unknown");
+    std::fs::write(Path::new(&claude.home).join(".credentials.json"), "{}").unwrap();
+    assert_eq!(state("claude", &claude), "signed_in");
+    // Each agent has its own file name.
+    assert_eq!(state("codex", &codex), "signed_out");
+    std::fs::write(Path::new(&codex.home).join("auth.json"), "{}").unwrap();
+    assert_eq!(state("codex", &codex), "signed_in");
+    // A profile that declares no credential file cannot tell.
+    let none = AccountScheme { home_env: "X".into(), extra_env: Vec::new(), login_hint: String::new(), credential_files: Vec::new() };
+    assert_eq!(login_state(&none, &codex), "unknown");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn capability_rows_list_each_account_with_its_login_state() {
+    let (store, root) = temp_store("capability-rows");
+    let work = store.add("claude", "Work", None).unwrap();
+    store.add("codex", "Other", None).unwrap();
+    std::fs::write(Path::new(&work.home).join(".credentials.json"), "{}").unwrap();
+    let rows = capability_rows(&store, "claude");
+    assert_eq!(rows, vec![serde_json::json!({"id": work.id, "label": "Work", "login_state": "signed_in"})]);
+    assert!(capability_rows(&store, "opencode").is_empty(), "no accounts for an agent without them");
+    let _ = std::fs::remove_dir_all(root);
 }

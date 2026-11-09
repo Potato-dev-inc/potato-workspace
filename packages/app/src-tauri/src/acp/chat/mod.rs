@@ -28,6 +28,7 @@ pub mod api;
 pub mod cards;
 mod choice;
 pub mod ending;
+pub mod lanes;
 pub mod mapper;
 mod start;
 pub mod surface;
@@ -170,6 +171,8 @@ pub struct AcpChat {
     /// The MCP session of the agent that started this chat through the agent tools, if an agent did. Such an agent
     /// may steer, answer (when allowed), stop and close it; no other agent may. `None`: the person started it.
     started_by: Mutex<Option<String>>,
+    /// `{lane_used, lane_reason}` of the `run_agent` that started this chat; also saved with its conversation.
+    lane_note: Mutex<Option<serde_json::Value>>,
     /// The append-only journal of this chat (`journal.rs`): every item is written as it arrives. `None` without a saved conversation.
     journal: Option<Journal>,
     /// The app closed during a turn (found in the journal at start); cleared when a new turn starts. The view offers "Continue".
@@ -235,6 +238,11 @@ static APP_SHUTTING_DOWN: std::sync::atomic::AtomicBool = std::sync::atomic::Ato
 /// process ends).
 pub fn begin_app_shutdown() {
     APP_SHUTTING_DOWN.store(true, Ordering::SeqCst);
+}
+
+/// True once the app is ending (see [`begin_app_shutdown`]): panes then go because the app ends, not because a person closed them.
+pub fn app_is_shutting_down() -> bool {
+    APP_SHUTTING_DOWN.load(Ordering::SeqCst)
 }
 
 /// The pane was closed (the registry took it): its session stops.
@@ -318,6 +326,7 @@ impl AcpChat {
             agent_answering: AtomicBool::new(false),
             waking: AtomicBool::new(false),
             started_by: Mutex::new(None),
+            lane_note: Mutex::new(None),
             journal,
             interrupted: AtomicBool::new(false),
             choice_warnings: Mutex::new(Vec::new()),
@@ -361,6 +370,18 @@ impl AcpChat {
             r.started_by = started_by.map(str::to_string);
             r.parent_pane_id = parent.map(str::to_string);
         });
+    }
+
+    /// Remembers (and saves) which lane `run_agent` chose for this chat and why.
+    pub(crate) fn set_lane_note(&self, note: serde_json::Value) {
+        *self.lane_note.lock() = Some(note.clone());
+        if let Some(conversations) = &self.conversations {
+            conversations.update(&self.pane_id, |r| r.lane_note = Some(note));
+        }
+    }
+
+    pub fn lane_note(&self) -> Option<serde_json::Value> {
+        self.lane_note.lock().clone()
     }
 
     /// Warnings from the last model/reasoning request (shown in the tools' reply).

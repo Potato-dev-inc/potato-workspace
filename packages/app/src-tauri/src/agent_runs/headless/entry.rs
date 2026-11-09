@@ -456,6 +456,9 @@ pub fn run_agent(
                 .map_err(|message| OperationError::new("INVALID_ARGUMENT", message, false))?,
         );
     }
+    if request.account_source.is_some() {
+        worker.account_source = request.account_source.clone();
+    }
     if no_visible_mode {
         // The existing fallback already says why this ran headless; the setting adds nothing.
         worker.fallback = Some(crate::operations::RunFallback::to_headless(
@@ -471,6 +474,7 @@ pub fn run_agent(
         // A follow-up continues in the mode of its run and keeps what that run reported.
         if let Some(earlier) = previous.as_ref() {
             worker.run_mode = earlier.worker.run_mode.clone();
+            worker.lane_note = earlier.worker.lane_note.clone();
             if earlier.worker.fallback.as_ref().is_some_and(|f| f.is_one_task_to_visible()) {
                 worker.fallback = earlier.worker.fallback.clone();
             }
@@ -480,6 +484,14 @@ pub fn run_agent(
     // headless anyway (the agent has no visible mode), which the fallback already reports.
     if request.headless_ignored && !request.headless && request.turn_index == 0 {
         worker.headless_ignored = Some(crate::agent_run_mode::HEADLESS_IGNORED_NOTE.to_string());
+    }
+    if request.turn_index == 0 {
+        worker.lane_note = request.lane_note.clone().map(|mut note| {
+            if request.headless {
+                note.used = "headless".into();
+            }
+            note
+        });
     }
     if request.kept_open_by_setting && !request.headless && request.turn_index == 0 {
         worker.kept_open_note = Some(crate::agent_run_mode::KEPT_OPEN_NOTE.to_string());

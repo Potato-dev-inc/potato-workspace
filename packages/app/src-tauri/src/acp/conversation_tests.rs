@@ -551,3 +551,95 @@ fn a_session_that_replaces_a_lost_one_shows_its_own_settings() {
     assert_eq!(app.record(&id).unwrap().config_options[0]["currentValue"], serde_json::json!("a"), "and the record follows");
     session.close();
 }
+
+// ---- closed chats -----------------------------------------------------------------------------------------
+
+fn write_journal(rig: &Rig, id: &str, lines: &[&str]) -> PathBuf {
+    let path = rig.conversations.journal_path(id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, lines.join("\n")).unwrap();
+    path
+}
+
+fn user_line(text: &str) -> String {
+    format!(r#"{{"v":1,"at":1,"item":{{"kind":"user","id":"u1","at":null,"text":{}}}}}"#, serde_json::to_string(text).unwrap())
+}
+
+#[test]
+fn the_closed_list_has_only_closed_chats_newest_first_with_the_first_message_as_title() {
+    let rig = Rig::new("");
+    let old = rig.conversations.create("fake", &rig.dir).unwrap().id;
+    let new = rig.conversations.create("fake", &rig.dir).unwrap().id;
+    let still_open = rig.conversations.create("fake", &rig.dir).unwrap().id;
+    write_journal(&rig, &old, &[r#"{"v":1,"reset":true}"#, "not json", &user_line("  Fix the\n login   page ")]);
+    rig.conversations.close(&old).unwrap();
+    std::thread::sleep(Duration::from_millis(5));
+    rig.conversations.close(&new).unwrap();
+
+    let list = rig.conversations.closed_list();
+    assert_eq!(list.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), vec![new.as_str(), old.as_str()]);
+    assert!(list.iter().all(|c| c.id != still_open));
+    assert_eq!(list[1].title.as_deref(), Some("Fix the login page"));
+    assert_eq!(list[0].title, None, "no journal, no title");
+    assert_eq!(list[0].agent, "fake");
+    assert!(!list[0].label.is_empty());
+}
+
+#[test]
+fn reopening_a_closed_chat_makes_it_live_with_a_session_and_refuses_a_chat_that_is_not_closed() {
+    let rig = Rig::new("");
+    let id = rig.conversations.create("fake", &rig.dir).unwrap().id;
+    assert_eq!(rig.conversations.reopen_closed(&id), Err(ConversationError::Unknown), "a live chat cannot be reopened");
+    rig.conversations.close(&id).unwrap();
+    assert!(rig.conversations.session(&id).is_none());
+
+    rig.conversations.reopen_closed(&id).unwrap();
+    assert_eq!(rig.conversations.record(&id).unwrap().last_known_state, LastState::Live);
+    assert!(rig.conversations.session(&id).is_some(), "the session is back, not started");
+    assert!(rig.conversations.open_ids().contains(&id));
+    assert!(rig.conversations.closed_list().is_empty());
+    assert_eq!(rig.conversations.reopen_closed("acp-nope"), Err(ConversationError::Unknown));
+}
+
+#[test]
+fn deleting_a_closed_chat_removes_its_record_and_journal_files_and_nothing_else() {
+    let rig = Rig::new("");
+    let gone = rig.conversations.create("fake", &rig.dir).unwrap().id;
+    let kept = rig.conversations.create("fake", &rig.dir).unwrap().id;
+    let journal = write_journal(&rig, &gone, &[&user_line("hello")]);
+    let prev = journal.with_extension("prev.jsonl");
+    std::fs::write(&prev, "x").unwrap();
+    let other = write_journal(&rig, &kept, &[&user_line("other")]);
+    let agents_own = rig.dir.join("agent-sessions").join("session.jsonl");
+    std::fs::create_dir_all(agents_own.parent().unwrap()).unwrap();
+    std::fs::write(&agents_own, "the agent's own file").unwrap();
+
+    // A chat that is not closed is refused, and nothing is lost.
+    assert_eq!(rig.conversations.delete_closed(&gone), Err(ConversationError::Unknown));
+    assert!(journal.exists() && rig.conversations.record(&gone).is_some());
+
+    rig.conversations.close(&gone).unwrap();
+    rig.conversations.delete_closed(&gone).unwrap();
+    assert!(rig.conversations.record(&gone).is_none());
+    assert!(!journal.exists() && !prev.exists());
+    assert!(other.exists() && rig.conversations.record(&kept).is_some(), "another chat is untouched");
+    assert!(agents_own.exists(), "the agent's own files are never deleted");
+    assert!(rig.restarted().record(&gone).is_none(), "the deletion is saved");
+    assert_eq!(rig.conversations.delete_closed(&gone), Err(ConversationError::Unknown));
+}
+
+#[test]
+fn delete_all_removes_only_the_closed_chats() {
+    let rig = Rig::new("");
+    let a = rig.conversations.create("fake", &rig.dir).unwrap().id;
+    let b = rig.conversations.create("fake", &rig.dir).unwrap().id;
+    let live = rig.conversations.create("fake", &rig.dir).unwrap().id;
+    let ja = write_journal(&rig, &a, &[&user_line("a")]);
+    let jlive = write_journal(&rig, &live, &[&user_line("live")]);
+    rig.conversations.close(&a).unwrap();
+    rig.conversations.close(&b).unwrap();
+    assert_eq!(rig.conversations.delete_all_closed(), 2);
+    assert!(!ja.exists() && jlive.exists());
+    assert_eq!(rig.conversations.list().iter().map(|v| v.id.clone()).collect::<Vec<_>>(), vec![live]);
+    assert_eq!(rig.conversations.delete_all_closed(), 0);
+}

@@ -224,6 +224,9 @@ pub struct AccountsTable {
     pub extra_env: BTreeMap<String, String>,
     #[serde(default)]
     pub login_hint: String,
+    /// Files in the account folder whose presence means the agent is signed in there (optional).
+    #[serde(default)]
+    pub credential_files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

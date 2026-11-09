@@ -59,6 +59,7 @@
 // The chat (A2) is `chat/`; the callers that resume sessions, switch to the terminal and show config chips land in A3 to A5.
 #![allow(dead_code)]
 
+pub mod account;
 pub mod adapter_catalog;
 pub mod adapter_health;
 pub mod adapter_keys;
@@ -66,6 +67,7 @@ pub mod adapter_overlay;
 pub mod agent_python;
 pub mod bridge;
 pub mod chat;
+pub mod closed;
 pub mod config;
 pub mod conn;
 pub mod conversations;

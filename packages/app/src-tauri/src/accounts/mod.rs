@@ -325,6 +325,32 @@ pub fn validate_for_run(agent_id: &str, id: &str) -> Result<String, String> {
     Store::default_location().launch_env(agent_id, id).map(|_| id.to_string())
 }
 
+/// Whether the CLI is signed in under an account, as far as the folder shows: `signed_in` when one of the
+/// profile's credential files is there, `signed_out` when the folder is empty or missing (never logged in),
+/// `unknown` otherwise (the login may live in a keychain, or the profile declares no credential file).
+pub fn login_state(scheme: &AccountScheme, account: &Account) -> &'static str {
+    let home = Path::new(&account.home);
+    if scheme.credential_files.iter().any(|name| home.join(name).is_file()) {
+        return "signed_in";
+    }
+    if scheme.credential_files.is_empty() {
+        return "unknown";
+    }
+    let empty = std::fs::read_dir(home).map(|mut entries| entries.next().is_none()).unwrap_or(true);
+    if empty { "signed_out" } else { "unknown" }
+}
+
+/// `[{id, label, login_state}]` for `list_agents`: the saved accounts of `agent_id` (empty when it has none).
+pub fn capability_rows(store: &Store, agent_id: &str) -> Vec<serde_json::Value> {
+    let Ok(scheme) = scheme_for(agent_id) else { return Vec::new() };
+    store
+        .list()
+        .into_iter()
+        .filter(|a| a.agent_id.eq_ignore_ascii_case(agent_id))
+        .map(|a| serde_json::json!({ "id": a.id, "label": a.label, "login_state": login_state(&scheme, &a) }))
+        .collect()
+}
+
 /// Everything the Settings screen shows: agents that support accounts, and the accounts.
 pub fn overview(store: &Store) -> serde_json::Value {
     let helper_logins: BTreeMap<String, String> = supporting_agents()

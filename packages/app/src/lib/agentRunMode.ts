@@ -86,6 +86,8 @@ export const tauriHelperAgentsApi = {
   set: (mode: HelperVisibility) => call<HelperVisibilityView>('helper_visibility_set', { mode }),
   getKeepOpen: () => call<KeepOpenView>('keep_helpers_open_get'),
   setKeepOpen: (on: boolean) => call<KeepOpenView>('keep_helpers_open_set', { on }),
+  getCloseWithAgent: () => call<KeepOpenView>('close_helpers_with_agent_get'),
+  setCloseWithAgent: (on: boolean) => call<KeepOpenView>('close_helpers_with_agent_set', { on }),
 };
 
 export type HelperAgentsApi = typeof tauriHelperAgentsApi;
@@ -102,3 +104,7 @@ export const HELPER_CHOICES: { value: HelperVisibility; label: string }[] = [
 export const KEEP_OPEN_LABEL = 'Keep helpers open when they finish';
 export const KEEP_OPEN_HINT =
   'On: a finished helper stays open so you can read it and ask it more. Off: its pane closes when the work is done unless the agent asks to keep it.';
+
+export const CLOSE_WITH_AGENT_LABEL = 'Close helpers when their agent closes';
+export const CLOSE_WITH_AGENT_HINT =
+  'On: when you close an agent, the helpers it started close too. Off: they stay open until you close them. Quitting the app never closes your chats for good.';

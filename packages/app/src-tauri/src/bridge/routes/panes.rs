@@ -12,7 +12,7 @@ use crate::bridge::pane_util::{
     emit_panes_changed, note_pane_parent, pane_buffer_view, present_spawned_pane, register_spawned_pane,
 };
 use crate::pty::{
-    registry_kill_pane, registry_read_buffer, registry_read_raw_buffer, registry_read_screen_replay_at, registry_read_snapshot,
+    registry_kill_pane_and_helpers, registry_read_buffer, registry_read_raw_buffer, registry_read_screen_replay_at, registry_read_snapshot,
     registry_spawn_pane, registry_write_input, SpawnPaneArgs,
 };
 use crate::settings_store;
@@ -196,7 +196,7 @@ fn spawn(cx: &Ctx) -> RouteResult {
 fn kill(cx: &Ctx, pane_id: &str) -> RouteResult {
     let registry = cx.registry;
     let app = cx.app;
-    registry_kill_pane(registry, pane_id).map_err(|err| (500, json!({ "error": err })))?;
+    registry_kill_pane_and_helpers(registry, pane_id, None).map_err(|err| (500, json!({ "error": err })))?;
     emit_panes_changed(registry, app);
     Ok((200, json!({ "ok": true })))
 }

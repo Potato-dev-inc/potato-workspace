@@ -409,12 +409,8 @@ fn agent_mode_tools_list_is_local_and_includes_primary_controls() {
         "wait_agents",
         "send_message",
         "followup_task",
-        "interrupt_agent",
         "inspect_agent",
-        "agent_transcript",
-        "close_agent",
         "list_agents",
-        "list_panes",
     ] {
         assert!(names.iter().any(|item| item == name), "missing {name}");
     }
@@ -504,7 +500,7 @@ fn stale_port_file_falls_back_to_a_live_bridge_port() {
     let dead_port = dead.local_addr().unwrap().port();
     drop(dead);
     let got = live_endpoint_or_probe(BridgeEndpoint { host: "127.0.0.1".into(), port: dead_port });
-    assert!(got.port == dead_port || (17421..=17430).contains(&got.port));
+    assert!(got.port == dead_port || (17421..=17499).contains(&got.port));
 }
 
 // ---- ask_user: the real shim against an in-process bridge that serves the questions routes ----
@@ -695,6 +691,9 @@ mod notices_tests;
 
 #[path = "team_tests.rs"]
 mod team_tests;
+
+#[path = "resilience_tests.rs"]
+mod resilience_tests;
 
 #[test]
 fn a_run_under_a_budget_names_itself_as_the_parent_of_the_helpers_it_starts() {

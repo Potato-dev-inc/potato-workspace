@@ -2,7 +2,7 @@
 
 use super::model::*;
 use super::store::{current_runtime_id, find_key, indexed_projects, now_ms, persist, delegate_lock};
-use super::{list_operations, run_operation_dispatch};
+use super::{list_operations_lenient, run_operation_dispatch};
 use uuid::Uuid;
 
 /// Resolve an operation previously created with the same idempotency key.
@@ -129,7 +129,7 @@ pub fn create_operation(
         return Ok((existing, false));
     }
     if let Some(handle) = req.agent_run_id.as_deref() {
-        if list_operations(&req.project_path)?.iter().any(|snapshot| {
+        if list_operations_lenient(&req.project_path)?.0.iter().any(|snapshot| {
             snapshot.agent_run_id == handle && snapshot.turn_index == req.turn_index
         }) {
             return Err(OperationError::new(

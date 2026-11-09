@@ -25,7 +25,7 @@ import '../../styles/live-preview.css';
 import '../../styles/cockpit-helpers.css';
 import '../../styles/cockpit-sidebar.css';
 import { DotSpinner } from './DotSpinner';
-import { IconChevronDown, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
+import { IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
 import { RowMark } from './RowMark';
 import { ProjectHeader } from './ProjectHeader';
 import { SidebarFooter } from './SidebarFooter';
@@ -42,6 +42,8 @@ import { CompanionRow, MakeCompanionRow } from './companion/CompanionRow';
 import { isCompanionPaneId } from './companion/model';
 import { useReviewCount } from './review/useReviewCount';
 import { FocusPill } from './FocusPill';
+import { ClosedChatsSheet } from './ClosedChatsSheet';
+import { tauriClosedChatsApi, useClosedChats, type ClosedChatsApi } from '../../lib/closedChats';
 
 /** `localhost:5173`: where the preview is, without the scheme. */
 const previewAddress = (p: PreviewUrl): string => p.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -77,6 +79,7 @@ export function Sidebar({
   acp = tauriAcpChatApi,
   addons = tauriAcpAddonApi,
   startModeApi = settingsStartModeApi,
+  closedChatsApi = tauriClosedChatsApi,
   handoffDeps,
   handoff,
 }: {
@@ -122,12 +125,17 @@ export function Sidebar({
   addons?: AcpAddonApi;
   /** Where the New agent menu's Chat | Terminal choice is saved. Replaceable in tests. */
   startModeApi?: StartModeApi;
+  /** The closed chats (list, reopen, delete). Replaceable in tests. */
+  closedChatsApi?: ClosedChatsApi;
   /** The calls "Handoff from here" makes. Replaceable in tests. */
   handoffDeps?: HandoffDeps;
   /** The cockpit's shared handoff (also used by the pane's "Hand off" button). Absent: the sidebar keeps its own. */
   handoff?: HandoffControl;
 }) {
   const list = c.registry.paneList;
+  // Closed chats: read again whenever the set of panes changes (a chat was closed or reopened).
+  const { chats: closedChats, reload: reloadClosed } = useClosedChats(closedChatsApi, list.map((p) => p.info.id).join('|'));
+  const [closedOpen, setClosedOpen] = useState(false);
   // `Review 4`: how many finished things wait to be looked at. Hidden at 0.
   const reviewCount = useReviewCount(onOpenReview !== undefined);
   // A companion's pane has its own companion row above; it is not listed again as a plain pane.
@@ -658,6 +666,17 @@ export function Sidebar({
           </>
         )}
         {list.length === 0 && c.registry.initialReady && <p className="ck-side-empty">No agents running.</p>}
+        {closedChats.length > 0 && (
+          <button type="button" data-testid="side-closed-chats" className="ck-side-new ck-side-add" onClick={() => setClosedOpen(true)}>
+            <span className="ck-row-glyph ck-row-glyph--icon">
+              <IconClosedChats />
+            </span>
+            <span className="ck-row-main">
+              <span className="ck-row-title">Closed chats</span>
+            </span>
+            <span className="ck-side-count">{closedChats.length}</span>
+          </button>
+        )}
       </nav>
 
       {hand.status && (
@@ -705,6 +724,19 @@ export function Sidebar({
         spacesOpen={spacesOpen}
         onOpenSpaces={onOpenSpaces}
       />
+      {closedOpen && (
+        <ClosedChatsSheet
+          chats={closedChats}
+          api={closedChatsApi}
+          notify={c.notify}
+          onChanged={reloadClosed}
+          onReopened={(paneId) => {
+            setClosedOpen(false);
+            c.select(paneId);
+          }}
+          onClose={() => setClosedOpen(false)}
+        />
+      )}
       {tonightOpen && nightOn && (
         <TonightHost
           c={c}

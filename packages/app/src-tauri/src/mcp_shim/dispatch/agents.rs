@@ -34,7 +34,7 @@ fn run(
         }
         "run_agent" => {
             let mut body = args.clone();
-            ensure_idempotency_key(&mut body);
+            ensure_stable_idempotency_key("run_agent", &mut body);
             // A run Potato Workspace started under a budget names itself in this process's environment;
             // a helper it starts then draws from that budget.
             inject_budget_parent(&mut body, std::env::var(PARENT_RUN_ENV).ok());
@@ -79,7 +79,7 @@ fn run(
             {
                 return Err("missing required argument: message or task".into());
             }
-            ensure_idempotency_key(&mut body);
+            ensure_stable_idempotency_key("followup_task", &mut body);
             match bridge_request("POST", "/agents/followup", Some(body.clone())) {
                 Ok(response) => Ok(response),
                 Err(error) => Err(wait_timeout_recovery("/agents/followup", &body, error)),

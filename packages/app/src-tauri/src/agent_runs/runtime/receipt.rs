@@ -6,6 +6,15 @@ use serde::{Deserialize, Serialize};
 
 /// What a run proved and what it did not. Every `not_verified` entry is derived from a fact the
 /// run recorded; nothing here is a guess.
+/// `(lane_used, lane_reason, lane_fallback)` of a run, from what the worker kept.
+pub(super) fn lane_report(snapshot: &OperationSnapshot) -> (Option<String>, Option<String>, Option<serde_json::Value>) {
+    let to_headless = snapshot.worker.fallback.as_ref().is_some_and(|f| f.to == "headless");
+    match snapshot.worker.lane_note.as_ref().map(|note| note.report(to_headless)) {
+        Some((used, reason, fallback)) => (Some(used), Some(reason), fallback),
+        None => (None, None, None),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunReceipt {
     pub backend: String,
@@ -17,6 +26,9 @@ pub struct RunReceipt {
     /// `none configured` or `<passed>/<total> passed`.
     pub checks: String,
     pub result_capture: String,
+    /// The worker's `potato-result` block when it ended its reply with a valid one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structured_result: Option<serde_json::Value>,
     pub not_verified: Vec<String>,
     /// One field for "did it work": `passed_checks`, `completed_unchecked`, `failed_checks`,
     /// `failed`, `cancelled`, `needs_input` or `in_progress`. Only `passed_checks` means the
@@ -31,6 +43,13 @@ pub struct RunReceipt {
     /// paid for it. Absent when the run used a freshly spawned worker.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub standby_used: bool,
+    /// The saved account id the run used; null when it ran under the CLI's own login.
+    #[serde(default)]
+    pub account_used: Option<String>,
+    /// How the login was chosen: `explicit` (the caller named the account), `helper_default` (the person's
+    /// "Helpers use" setting), `asked` (the person answered a card) or `cli_login` (the CLI's own login).
+    #[serde(default)]
+    pub account_source: String,
     /// Set when the run wanted a visible pane and ran headless instead: `{from, to, reason}` with
     /// reason `no_visible_mode` or `visible_failed`. Null otherwise.
     #[serde(default)]
@@ -47,6 +66,14 @@ pub struct RunReceipt {
     /// Present when "Helper agents" made this run a background one the agent did not ask for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_forced: Option<String>,
+    /// `terminal` or `headless` (see `lane_reason`); absent for runs started without the `/agents/run` route.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_used: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_reason: Option<String>,
+    /// Set when a chat (ACP) was tried first and did not start: `{from, to, code, message}`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_fallback: Option<serde_json::Value>,
     /// The definition (id, source, fingerprint, pinned binary) a declarative agent ran from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_definition: Option<crate::tui::DefinitionRef>,
@@ -121,6 +148,16 @@ pub struct ReceiptSetup {
     /// One plain sentence ("Ran npm ci; copied .env (never committed).").
     pub sentence: String,
     pub copied: Vec<String>,
+}
+
+/// The receipt's `account_source`: recorded by the app when it chose the login, else `explicit` for a named account
+/// and `cli_login` for none.
+fn account_source_of(worker: &crate::operations::WorkerPersist) -> String {
+    match (&worker.account_source, &worker.account) {
+        (Some(source), _) => source.clone(),
+        (None, Some(_)) => crate::accounts::helper::SOURCE_EXPLICIT.into(),
+        (None, None) => crate::accounts::helper::SOURCE_CLI_LOGIN.into(),
+    }
 }
 
 pub(super) fn build_receipt(
@@ -206,6 +243,7 @@ pub(super) fn build_receipt(
         not_verified.push("agent reported a tool failure".to_string());
     }
     let outcome = receipt_outcome(snapshot, total);
+    let lane = lane_report(snapshot);
     RunReceipt {
         backend: snapshot.agent_type.clone(),
         model: snapshot
@@ -216,14 +254,20 @@ pub(super) fn build_receipt(
         read_only: read_only.into(),
         checks,
         result_capture: result_capture.into(),
+        structured_result: None,
         not_verified,
         outcome: outcome.into(),
         build_id: env!("PM_BUILD_ID").to_string(),
         standby_used: snapshot.worker.standby_used,
+        account_used: snapshot.worker.account.clone(),
+        account_source: account_source_of(&snapshot.worker),
         fallback: snapshot.worker.fallback.clone(),
         run_mode: snapshot.worker.run_mode.clone(),
         headless_ignored: snapshot.worker.headless_ignored.clone(),
         headless_forced: snapshot.worker.headless_forced.clone(),
+        lane_used: lane.0,
+        lane_reason: lane.1,
+        lane_fallback: lane.2,
         agent_definition: snapshot.worker.agent_definition.clone(),
         worktree: snapshot.worker.worktree.as_ref().map(|worktree| ReceiptWorktree {
             path: worktree.path.clone(),

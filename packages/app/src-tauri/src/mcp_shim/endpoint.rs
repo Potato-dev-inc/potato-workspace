@@ -64,25 +64,83 @@ pub(crate) fn read_bridge_endpoint_from_candidates(
 }
 
 /// The port file can be stale (an instance exited and left it behind). When its port refuses
-/// connections, fall back to the first port in the bridge range that accepts one.
+/// connections, scan the app's whole bridge port range (`app_paths::bridge_port_range_for`) and take the
+/// first port whose `/health` says it is Potato Workspace (`product` marker). A port that only
+/// accepts a connection is not enough: another program may have taken it.
 pub(crate) fn live_endpoint_or_probe(endpoint: BridgeEndpoint) -> BridgeEndpoint {
-    let accepts = |host: &str, port: u16| {
-        use std::net::{SocketAddr, TcpStream};
-        let Ok(ip) = host.parse::<std::net::IpAddr>() else { return true };
-        TcpStream::connect_timeout(&SocketAddr::new(ip, port), Duration::from_millis(250)).is_ok()
-    };
-    if accepts(&endpoint.host, endpoint.port) {
+    if accepts_connection(&endpoint.host, endpoint.port) {
         return endpoint;
     }
-    for port in 17421..=17430 {
-        if accepts(&endpoint.host, port) {
-            return BridgeEndpoint { host: endpoint.host, port };
+    #[cfg(test)]
+    if test_endpoint_override().is_some() {
+        return endpoint; // a test's fake bridge: never scan for a real app
+    }
+    let (lo, hi) = puppet_master_app_lib::app_paths::bridge_port_range_for(
+        puppet_master_app_lib::app_paths::profile().as_deref(),
+    );
+    match probe_for_bridge(&endpoint.host, lo, hi) {
+        Some(port) => BridgeEndpoint { host: endpoint.host, port },
+        None => endpoint,
+    }
+}
+
+const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
+
+pub(crate) fn accepts_connection(host: &str, port: u16) -> bool {
+    use std::net::{SocketAddr, TcpStream};
+    let Ok(ip) = host.parse::<std::net::IpAddr>() else { return true };
+    TcpStream::connect_timeout(&SocketAddr::new(ip, port), PROBE_CONNECT_TIMEOUT).is_ok()
+}
+
+/// The first port in `lo..=hi` whose `GET /health` names Potato Workspace as the product.
+pub(crate) fn probe_for_bridge(host: &str, lo: u16, hi: u16) -> Option<u16> {
+    let ip = host.parse::<std::net::IpAddr>().ok()?;
+    (lo..=hi).find(|port| port_reports_our_product(ip, *port))
+}
+
+fn port_reports_our_product(ip: std::net::IpAddr, port: u16) -> bool {
+    use std::net::{SocketAddr, TcpStream};
+    let Ok(mut stream) = TcpStream::connect_timeout(&SocketAddr::new(ip, port), PROBE_CONNECT_TIMEOUT) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+    let request = format!("GET /health HTTP/1.1\r\nHost: {ip}:{port}\r\nConnection: close\r\n\r\n");
+    if stream.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut response = Vec::new();
+    let mut chunk = [0_u8; 4096];
+    // Read until close or a timeout; the health body is a few KB at most.
+    while response.len() < 256 * 1024 {
+        match stream.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => response.extend_from_slice(&chunk[..n]),
         }
     }
-    endpoint
+    let Some(split) = response.windows(4).position(|w| w == b"\r\n\r\n") else { return false };
+    serde_json::from_slice::<Value>(&response[split + 4..])
+        .ok()
+        .and_then(|health| health.get("product").and_then(Value::as_str).map(str::to_owned))
+        .is_some_and(|product| product == puppet_master_app_lib::bridge_identity::PRODUCT)
+}
+
+/// Tests point one session at a fake bridge's port file without touching process-wide env vars
+/// (other tests share them). Keyed by MCP session id, which worker threads inherit.
+#[cfg(test)]
+pub(crate) static TEST_ENDPOINTS: std::sync::Mutex<Vec<(String, PathBuf)>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(test)]
+pub(crate) fn test_endpoint_override() -> Option<PathBuf> {
+    let session = current_mcp_session_id()?;
+    TEST_ENDPOINTS.lock().ok()?.iter().find(|(id, _)| *id == session).map(|(_, path)| path.clone())
 }
 
 pub(crate) fn bridge_port_candidates() -> Vec<PathBuf> {
+    #[cfg(test)]
+    if let Some(path) = test_endpoint_override() {
+        return vec![path];
+    }
     if let Ok(path) = env::var(BRIDGE_PORT_FILE_ENV) {
         return vec![PathBuf::from(expand_env_vars(&path, |name| {
             env::var(name).ok()

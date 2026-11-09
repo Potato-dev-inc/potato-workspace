@@ -189,6 +189,18 @@ describe('sending', () => {
     expect(onStart).toHaveBeenCalledTimes(1);
   });
 
+  it('lists each saved login of an agent that has accounts and starts under the one picked', async () => {
+    const r = rig();
+    r.api.accounts = async () => [{ id: 'acc_w', agent_id: 'beta', label: 'Work', home: 'C:/h' }];
+    const { onStart } = await mount(r);
+    await click(byLabel(/^Agent:/));
+    expect(byLabel('Alpha · Work'), 'an agent without accounts has no login row').toBeUndefined();
+    await click(byLabel('Beta · Work'));
+    await type(input(), 'go');
+    await click(send());
+    expect(onStart.mock.calls[0][0]).toMatchObject({ agentId: 'beta', accountId: 'acc_w' });
+  });
+
   it('remembers the agent that was used', async () => {
     const r = rig();
     const { onStart } = await mount(r);

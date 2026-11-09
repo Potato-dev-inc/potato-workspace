@@ -21,29 +21,38 @@ pub(crate) fn run() {
         Ok(None) => {}
         Err(message) => log(format!("ignoring starting mode: {message}")),
     }
-    let stdin = io::stdin();
+    serve(session_id, io::stdin().lock(), io::stdout());
+}
+
+/// How many requests run at once; the next one gets a retryable `RATE_LIMITED` tool error.
+const REQUEST_SLOTS: usize = 16;
+
+/// Requests in flight, by JSON-RPC id: how to cancel each, and whether it was cancelled.
+type ActiveRequests =
+    std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, (std::sync::mpsc::Sender<()>, std::sync::Arc<AtomicBool>)>>>;
+
+/// The request loop: reads JSON-RPC lines from `input`, answers on `output`. A cancelled request
+/// (`notifications/cancelled`) gets no response at all, as the MCP spec says.
+pub(crate) fn serve<R: BufRead, W: Write + Send + 'static>(session_id: String, input: R, output: W) {
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     let writer = std::thread::spawn(move || {
-        let mut stdout = io::stdout();
+        let mut output = output;
         while let Ok(response) = rx.recv() {
-            if writeln!(stdout, "{response}")
-                .and_then(|_| stdout.flush())
+            if writeln!(output, "{response}")
+                .and_then(|_| output.flush())
                 .is_err()
             {
                 break;
             }
         }
     });
-    let (slots_tx, slots_rx) = std::sync::mpsc::sync_channel::<()>(16);
-    for _ in 0..16 {
+    let (slots_tx, slots_rx) = std::sync::mpsc::sync_channel::<()>(REQUEST_SLOTS);
+    for _ in 0..REQUEST_SLOTS {
         let _ = slots_tx.send(());
     }
-    let active = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::<
-        String,
-        std::sync::mpsc::Sender<()>,
-    >::new()));
+    let active: ActiveRequests = Default::default();
     let mut workers = Vec::new();
-    for line in stdin.lock().lines() {
+    for line in input.lines() {
         let line = match line {
             Ok(line) => line,
             Err(err) => {
@@ -70,7 +79,9 @@ pub(crate) fn run() {
             .unwrap_or_default();
         if method == "notifications/cancelled" {
             if let Some(id) = request.pointer("/params/requestId").map(json_id_key) {
-                if let Some(cancel) = active.lock().ok().and_then(|map| map.get(&id).cloned()) {
+                let entry = active.lock().ok().and_then(|map| map.get(&id).cloned());
+                if let Some((cancel, cancelled)) = entry {
+                    cancelled.store(true, Ordering::Release);
                     let _ = cancel.send(());
                 }
             }
@@ -80,36 +91,36 @@ pub(crate) fn run() {
             continue;
         }
         let id = request.get("id").map(json_id_key).unwrap_or_default();
-        if method == "tools/call" {
-            let name = request
-                .pointer("/params/name")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            if matches!(name, "delegate_work" | "cancel_operation") {
-                // Mutation semantics require caller-controlled retries; never cancel implicitly.
-            }
-        }
         if slots_rx.try_recv().is_err() {
-            let _ = tx.send(
-                json_rpc_error(
-                    request.get("id").cloned().unwrap_or(Value::Null),
-                    -32000,
-                    "server busy: request concurrency limit reached".into(),
-                )
-                .to_string(),
-            );
+            let request_id = request.get("id").cloned().unwrap_or(Value::Null);
+            let busy = if method == "tools/call" {
+                // A tool error the caller can act on (wait, then retry), not a protocol failure.
+                let detail = json!({
+                    "code": "RATE_LIMITED",
+                    "message": "Too many requests are running at once. Retry shortly.",
+                    "recoverable": true,
+                    "retryable": true,
+                    "retry_after_ms": 500,
+                    "context": { "limit": REQUEST_SLOTS }
+                });
+                json!({ "jsonrpc": "2.0", "id": request_id, "result": tool_error_result(detail) }).to_string()
+            } else {
+                json_rpc_error(request_id, -32000, "server busy: request concurrency limit reached".into()).to_string()
+            };
+            let _ = tx.send(busy);
             continue;
         }
         let tx = tx.clone();
         let release = slots_tx.clone();
         let active_ref = active.clone();
         let session_id = session_id.clone();
+        let cancelled = std::sync::Arc::new(AtomicBool::new(false));
         let cancel_rx = if id.is_empty() {
             None
         } else {
             let (cancel_tx, cancel_rx) = std::sync::mpsc::channel();
             if let Ok(mut map) = active.lock() {
-                map.insert(id.clone(), cancel_tx);
+                map.insert(id.clone(), (cancel_tx, cancelled.clone()));
             }
             Some(cancel_rx)
         };
@@ -119,13 +130,16 @@ pub(crate) fn run() {
             if is_tool_call {
                 ensure_initial_mode_synced();
             }
-            if let Some(response) =
-                handle_json_rpc_line_cancellable(&line, cancel_rx, Some(tx.clone()))
-            {
-                let _ = tx.send(response);
-            }
+            let response = handle_json_rpc_line_cancellable(&line, cancel_rx, Some(tx.clone()));
+            // Drop the entry first so a cancel that arrives from now on finds nothing to cancel.
             if let Ok(mut map) = active_ref.lock() {
                 map.remove(&id);
+            }
+            // A cancelled request gets no response (MCP spec: the receiver SHOULD NOT answer).
+            if !cancelled.load(Ordering::Acquire) {
+                if let Some(response) = response {
+                    let _ = tx.send(response);
+                }
             }
             let _ = release.send(());
         });
@@ -204,12 +218,7 @@ fn handle_json_rpc_line_cancellable(
                 notifications.clone(),
             ) {
                 Ok(value) => Ok(value),
-                Err(message) => {
-                    let detail = tool_error_detail(&message);
-                    Ok(
-                        json!({"content":[{"type":"text","text":detail.get("message").and_then(Value::as_str).unwrap_or("tool call failed")}],"isError":true,"structuredContent":detail}),
-                    )
-                }
+                Err(message) => Ok(tool_error_result(tool_error_detail(&message))),
             }
         }
         _ => Err(format!("unknown method: {method}")),
@@ -279,18 +288,6 @@ fn annotate_set_mode(result: &mut Value, notification_sent: bool) {
 Note: {note}"
         ));
     }
-}
-
-fn tool_error_detail(message: &str) -> Value {
-    if let Ok(value) = serde_json::from_str::<Value>(message) {
-        if value.get("code").is_some() {
-            return ensure_error_message(value);
-        }
-    }
-    let invalid = message.starts_with("missing required")
-        || message.starts_with("refusing to target")
-        || message.starts_with("unknown tool:");
-    json!({"code":if invalid {"INVALID_ARGUMENT"} else {"bridge_error"},"message":message,"recoverable":!invalid,"context":{}})
 }
 
 fn json_rpc_error(id: Value, code: i64, message: String) -> Value {

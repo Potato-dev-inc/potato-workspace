@@ -75,6 +75,14 @@ fn quick_limits(env: &mut crate::tui::declarative::wizard::WizardEnv) {
     env.visible.test.person = Duration::from_secs(30);
 }
 
+/// Same as `quick_limits`, but for a test whose screen never becomes ready: the wait for it is meant to run out, so it
+/// is the one wait that can be short. The screen is set right after the pane exists, so 6 s is still far from a race,
+/// and a busy machine only makes the wait that is expected to fail fail on time. Saves 14 s per test.
+fn never_ready_limits(env: &mut crate::tui::declarative::wizard::WizardEnv) {
+    quick_limits(env);
+    env.visible.test.ready = Duration::from_secs(6);
+}
+
 #[test]
 fn a_good_draft_passes_every_check_and_the_session_is_tested() {
     let f = fixture("vl-good", None, |_| ());
@@ -112,7 +120,7 @@ fn a_good_draft_passes_every_check_and_the_session_is_tested() {
 
 #[test]
 fn nothing_is_typed_when_the_profile_does_not_read_the_screen_as_ready() {
-    let f = fixture("vl-notready", None, quick_limits);
+    let f = fixture("vl-notready", None, never_ready_limits);
     script_agent(&f.host, "");
     let run = f.run();
     f.pane();
@@ -537,7 +545,7 @@ fn an_error_row_that_is_new_after_the_task_is_found_when_the_startup_screens_hel
 #[test]
 fn an_error_at_startup_before_any_task_is_still_the_agents_error() {
     // nothing was sent yet, so there is no "before": a sign-in wall that never reaches the input box is the program's own
-    let f = fixture("vl-startup-wall", None, quick_limits);
+    let f = fixture("vl-startup-wall", None, never_ready_limits);
     script_agent(&f.host, "");
     let run = f.run();
     f.pane();

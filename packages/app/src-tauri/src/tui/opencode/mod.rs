@@ -15,7 +15,7 @@ pub mod read_only;
 mod screen;
 mod transcript;
 
-use super::{Features, InstructionFile, Kind, LinuxLaunch, SpawnRequest, StandbyScreen, StandbySupport, TuiProfile};
+use super::{AccountScheme, Features, InstructionFile, Kind, LinuxLaunch, SpawnRequest, StandbyScreen, StandbySupport, TuiProfile};
 use crate::pty::agents::{linux_command, AgentType};
 
 /// OpenCode reads `AGENTS.md` (falling back to `CLAUDE.md` only when it is missing): opencode.ai/docs/rules.
@@ -118,6 +118,18 @@ impl TuiProfile for OpenCode {
 
     fn login_hint(&self) -> Option<String> {
         Some("Open OpenCode and type /connect".into())
+    }
+
+    /// `XDG_DATA_HOME` moves OpenCode's data dir: its login is `<data>/opencode/auth.json`
+    /// (OpenCode 1.19.0 binary: `globalDataPath` = `XDG_DATA_HOME || ~/.local/share`, then `Path.data/auth.json`).
+    fn account_scheme(&self) -> Option<AccountScheme> {
+        Some(AccountScheme {
+            home_env: "XDG_DATA_HOME".into(),
+            extra_env: Vec::new(),
+            login_hint: "Run `opencode`, type /connect to log in to a provider, then close it.".into(),
+            // Relative to the account home (XDG_DATA_HOME): `<data>/opencode/auth.json`.
+            credential_files: vec!["opencode/auth.json".into()],
+        })
     }
 
     fn install_spec(&self) -> Option<super::install::InstallSpec> {

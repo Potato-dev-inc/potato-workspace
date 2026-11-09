@@ -28,6 +28,8 @@ pub(super) struct StoreFile {
     allow_hidden_helpers: bool,
     /// "Keep helpers open when they finish": absent means on (finished helpers stay open).
     keep_helpers_open: Option<bool>,
+    /// "Close helpers when their agent closes": absent means on.
+    close_helpers_with_agent: Option<bool>,
 }
 
 fn visibility_in(file: &StoreFile) -> HelperVisibility {
@@ -75,6 +77,8 @@ pub struct TestEnv {
     pub helper_visibility: HelperVisibility,
     /// `None` = the default (on).
     pub keep_helpers_open: Option<bool>,
+    /// `None` = the default (on).
+    pub close_helpers_with_agent: Option<bool>,
 }
 
 #[cfg(test)]
@@ -179,6 +183,53 @@ pub fn set_keep_helpers_open(on: bool) -> Result<(), String> {
     #[cfg(not(test))]
     {
         let file = save_keep_open_at(&path(), on)?;
+        *CACHE.write() = Some(file);
+        Ok(())
+    }
+}
+
+/// "Close helpers when their agent closes": on unless the person turned it off.
+pub fn close_helpers_with_agent() -> bool {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| slot.borrow().as_ref().and_then(|env| env.close_helpers_with_agent).unwrap_or(true))
+    }
+    #[cfg(not(test))]
+    {
+        loaded().close_helpers_with_agent.unwrap_or(true)
+    }
+}
+
+/// Writes "Close helpers when their agent closes" into the file at `target`.
+pub(super) fn save_close_with_agent_at(target: &Path, on: bool) -> Result<StoreFile, String> {
+    let mut file = read_file(target);
+    file.version = FILE_VERSION;
+    file.close_helpers_with_agent = Some(on);
+    let text = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
+    crate::settings_patch::write_atomic(target, &text).map_err(|e| format!("could not save: {e}"))?;
+    Ok(file)
+}
+
+/// The "Close helpers with their agent" choice of the file at `target` (default on).
+#[cfg(test)]
+pub(super) fn close_with_agent_at(target: &Path) -> bool {
+    read_file(target).close_helpers_with_agent.unwrap_or(true)
+}
+
+/// Saves "Close helpers when their agent closes".
+pub fn set_close_helpers_with_agent(on: bool) -> Result<(), String> {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| {
+            if let Some(env) = slot.borrow_mut().as_mut() {
+                env.close_helpers_with_agent = Some(on);
+            }
+        });
+        Ok(())
+    }
+    #[cfg(not(test))]
+    {
+        let file = save_close_with_agent_at(&path(), on)?;
         *CACHE.write() = Some(file);
         Ok(())
     }

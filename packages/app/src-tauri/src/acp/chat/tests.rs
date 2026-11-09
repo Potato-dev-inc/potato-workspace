@@ -84,7 +84,7 @@ impl Rig {
         let registry = Arc::new(Mutex::new(PaneRegistry::new()));
         let host = Arc::new(Recorder::default());
         let deps = StartDeps { registry: registry.clone(), host: host.clone(), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
-        let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true }).expect("the fake agent starts");
+        let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None }).expect("the fake agent starts");
         Rig { chat, registry, host, dir }
     }
 
@@ -200,11 +200,25 @@ fn an_adapter_that_will_not_start_leaves_nothing_behind_and_offers_the_terminal(
     cfg.command = dir.join("no-such-adapter.exe").to_string_lossy().into_owned();
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
-    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true }).err().expect("it cannot start");
+    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: None }).err().expect("it cannot start");
     assert_eq!(error.code, "ACP_START_FAILED");
     assert!(error.message.starts_with("The chat program for Fake agent was not found"), "{}", error.message);
     assert!(!error.message.contains("no-such-adapter"), "no path in the sentence");
     assert!(error.fallback, "the terminal can run this agent instead");
+    assert!(registry.lock().list().is_empty(), "no pane was made");
+}
+
+#[test]
+fn an_account_for_an_agent_without_accounts_is_refused_before_anything_starts() {
+    let dir = std::env::temp_dir().join(format!("pm-acp-chat-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let registry = Arc::new(Mutex::new(PaneRegistry::new()));
+    let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
+    let cfg = fake_agent::agent_config("", &dir.join("store"));
+    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: Some("work".into()) }).err().expect("refused");
+    assert_eq!(error.code, "ACCOUNT_UNSUPPORTED");
+    assert!(error.message.contains("claude"), "{}", error.message);
+    assert!(!error.fallback, "the terminal would refuse the same account");
     assert!(registry.lock().list().is_empty(), "no pane was made");
 }
 
@@ -217,7 +231,7 @@ fn the_labs_switch_off_starts_nothing() {
     let dir = std::env::temp_dir();
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
-    let error = super::start_gated(&deps, StartRequest { agent_id: "codex".into(), folder: dir, explicit: true }).err().expect("refused");
+    let error = super::start_gated(&deps, StartRequest { agent_id: "codex".into(), folder: dir, explicit: true, account: None }).err().expect("refused");
     assert_eq!(error.code, "ACP_LABS_OFF");
     assert!(registry.lock().list().is_empty());
 }
@@ -227,7 +241,7 @@ fn a_folder_that_is_not_a_folder_is_refused_before_anything_starts() {
     let dir = std::env::temp_dir().join("pm-acp-chat-no-such-folder-xyz");
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry, host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: std::env::temp_dir() }), conversations: None };
-    let error = start(&deps, fake_agent::agent_config("", &std::env::temp_dir().join("s")), StartRequest { agent_id: "fake".into(), folder: dir, explicit: true }).err().unwrap();
+    let error = start(&deps, fake_agent::agent_config("", &std::env::temp_dir().join("s")), StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: None }).err().unwrap();
     assert_eq!(error.code, "INVALID_ARGUMENT");
     assert!(!error.fallback);
 }
@@ -783,7 +797,7 @@ fn a_missing_add_on_is_its_own_start_error_and_leaves_nothing_behind() {
     }];
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
-    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true }).err().expect("no add-on, no chat");
+    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: None }).err().expect("no add-on, no chat");
     assert_eq!(error.code, "ACP_ADDON_MISSING");
     assert!(error.message.contains("add-on for Fake (about 12 MB)"), "{}", error.message);
     assert!(error.fallback);
@@ -982,7 +996,7 @@ fn an_adapter_that_never_answers_the_start_fails_in_time_and_leaves_no_process()
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
     let started = Instant::now();
-    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true }).err().expect("the start fails");
+    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None }).err().expect("the start fails");
     assert!(started.elapsed() < Duration::from_secs(20), "{:?}", started.elapsed());
     assert_eq!(error.code, "ACP_START_FAILED");
     assert!(error.fallback, "the terminal can run the agent instead");

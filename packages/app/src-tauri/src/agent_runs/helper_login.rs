@@ -49,9 +49,9 @@ fn gate(
     session: &str,
     wait_ms: u64,
     notify: &dyn Fn(),
-) -> Result<Option<String>, OperationError> {
+) -> Result<(Option<String>, &'static str), OperationError> {
     let pane = crate::pty::pane_parent::request_caller();
-    helper::choose(
+    helper::choose_with_source(
         store,
         &helper::Starting {
             agent_id,
@@ -106,9 +106,10 @@ pub(crate) fn for_run(
         (request.wait_ms.saturating_add(15_000).saturating_sub(MARGIN_MS)).clamp(MIN_GATE_WAIT_MS, MAX_GATE_WAIT_MS)
     };
     let started = Instant::now();
-    let account = gate(store, &request.agent_type, project.as_deref(), &key, session, wait_ms, notify)?;
+    let (account, source) = gate(store, &request.agent_type, project.as_deref(), &key, session, wait_ms, notify)?;
     request.idempotency_key = Some(key);
     request.account = account;
+    request.account_source = Some(source.to_string());
     if !request.background {
         request.wait_ms = request.wait_ms.saturating_sub(started.elapsed().as_millis() as u64);
     }
@@ -134,7 +135,7 @@ pub(crate) fn for_delegate(
     if key.is_empty() || started_already(Some(&request.project_path), &key) {
         return Ok(());
     }
-    let account = gate(
+    let (account, source) = gate(
         store,
         &request.agent_type,
         Some(&request.project_path),
@@ -144,6 +145,7 @@ pub(crate) fn for_delegate(
         notify,
     )?;
     request.worker.account = account;
+    request.worker.account_source = Some(source.to_string());
     Ok(())
 }
 
@@ -165,7 +167,7 @@ pub(crate) fn for_spawn(
         args.cwd.as_deref().unwrap_or(""),
         args.pane_id.as_deref().unwrap_or(""),
     ]);
-    args.account = gate(store, &args.agent_type, args.cwd.as_deref(), &key, session, SHORT_CALL_WAIT_MS, notify)?;
+    args.account = gate(store, &args.agent_type, args.cwd.as_deref(), &key, session, SHORT_CALL_WAIT_MS, notify)?.0;
     Ok(())
 }
 

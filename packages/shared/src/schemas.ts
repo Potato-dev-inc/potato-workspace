@@ -127,6 +127,8 @@ export const SettingsSchema = z.object({
   model_bridge_enabled: z.boolean().optional(),
   /** Spaces (Settings › General › Labs): chat with friends in small groups, computer to computer. Off unless chosen. Rust: spaces. */
   spaces_enabled: z.boolean().optional(),
+  /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
+  individual_explained: z.boolean().optional(),
   /** Simple mode: the cockpit with fewer buttons and plain words, for people who do not write code. Off unless chosen. */
   simple_mode: z.boolean().optional(),
   /** Shows the developer rows in Settings (bridge, MCP, storage, file paths). Off unless chosen. Read by the app only. */

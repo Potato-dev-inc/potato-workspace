@@ -19,6 +19,7 @@ mod app_lifecycle;
 mod autostart;
 pub mod app_paths;
 mod bridge;
+pub use bridge::identity as bridge_identity;
 mod budgets;
 mod canary;
 mod channels;
@@ -79,6 +80,7 @@ mod flight;
 mod secure_file;
 mod app_windows;
 mod cockpit;
+mod mini_bar;
 mod ui_mode;
 mod pane_windows;
 mod tray;
@@ -511,6 +513,9 @@ pub fn run() {
             commands::standby_set_config,
             commands::get_ui_mode,
             commands::set_ui_mode,
+            commands::mini_bar_focus_pane,
+            commands::mini_bar_toast_left,
+            commands::take_individual_fallback,
             commands::open_cockpit,
             commands::pane_set_title,
             commands::ambient_get_prefs,
@@ -700,6 +705,10 @@ pub fn run() {
             commands::acp_chat_remove,
             commands::acp_chat_restart,
             commands::acp_conversations_list,
+            commands::acp_closed_list,
+            commands::acp_reopen_closed,
+            commands::acp_delete_closed,
+            commands::acp_delete_all_closed,
             commands::acp_conversations_restore,
             commands::acp_conversation_create,
             commands::acp_open_in_terminal,
@@ -711,6 +720,8 @@ pub fn run() {
             commands::helper_visibility_set,
             commands::keep_helpers_open_get,
             commands::keep_helpers_open_set,
+            commands::close_helpers_with_agent_get,
+            commands::close_helpers_with_agent_set,
             commands::hidden_runs_list,
             commands::hidden_runs_dismiss,
             commands::audit_recent,
@@ -904,7 +915,7 @@ pub fn run() {
             let args = std::env::args().collect::<Vec<_>>();
             let no_window_env = std::env::var(cockpit::NO_WINDOW_ENV).ok();
             if cockpit::startup_window(&args, worker, no_window_env.as_deref()) {
-                cockpit::open_primary_window(app.handle());
+                cockpit::open_startup_windows(app.handle());
             } else {
                 tracing::info!(worker, "started without a window: tray only");
             }
@@ -920,6 +931,7 @@ pub fn run() {
             pane_activity::init(registry_for_panes.clone(), app.handle().clone());
             loop_guard::init(app.handle().clone());
             panic::init_shortcut(app.handle());
+            mini_bar::init_mode_shortcut(app.handle());
             turn_summary::start_presence();
             attention::init();
             // Focus: load the saved state (resume or end it), then start the tick thread. Once, here.

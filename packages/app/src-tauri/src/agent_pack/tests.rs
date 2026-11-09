@@ -363,8 +363,8 @@ fn pack_texts() -> Vec<(String, String)> {
 
 #[test]
 fn the_pack_teaches_real_tools_and_real_parameters() {
-    // What an agent sees by default: the curated core, with the aliases hidden.
-    let catalog = crate::tool_registry::tools_for_mode(crate::tool_registry::McpMode::Agent);
+    // The full listing (the default is a smaller core; the rest is callable by name); aliases hidden.
+    let catalog = crate::tool_registry::tools_for_mode(crate::tool_registry::McpMode::All);
     for (tool, params) in TAUGHT {
         let def = catalog.iter().find(|t| t.name == *tool).unwrap_or_else(|| panic!("{tool} is not in the default tool list"));
         let props = def.input_schema.get("properties").and_then(Value::as_object).unwrap();

@@ -1,7 +1,7 @@
 //! Turn completion: evidence rules, `checks`/acceptance evaluation and interrupted turns.
 
 use super::model::*;
-use super::store::{bump, now_ms, root, read};
+use super::store::{bump, now_ms, root, read_or_quarantine};
 use super::{get_operation, operation_for_task_any_project};
 use std::fs;
 use super::store::update_lock;
@@ -37,7 +37,7 @@ pub fn mark_task_completed(
     for entry in entries {
         let entry = entry.map_err(OperationError::io)?;
         if entry.path().extension().is_some_and(|ext| ext == "json") {
-            let op = read(&entry.path())?;
+            let Some(op) = read_or_quarantine(&entry.path())? else { continue };
             if op.task_id.as_deref() == Some(task_id) && !op.status.terminal() {
                 completed.push(mark_operation_completed(
                     project,

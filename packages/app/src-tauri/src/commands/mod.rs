@@ -161,7 +161,7 @@ pub use collision::*;
 
 use crate::pty::agents::AgentType;
 use crate::pty::{
-    registry_get_project_path, registry_kill_all, registry_kill_pane, registry_read_buffer,
+    registry_get_project_path, registry_kill_all, registry_kill_pane_and_helpers, registry_read_buffer,
     registry_read_raw_buffer, registry_read_screen_replay_at, registry_read_snapshot, registry_resize, registry_set_project_path,
     registry_spawn_pane, registry_write_input, PaneInfo, PaneRegistry, SpawnPaneArgs,
 };

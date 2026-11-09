@@ -292,8 +292,11 @@ describe('sidebar: footer', () => {
     expect(foot.textContent).not.toContain('Your plans');
     await click(byLabel('More'));
     const item = (label: string) => [...foot.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find((b) => b.textContent === label)!;
-    expect(item('Orchestration').getAttribute('aria-checked')).toBe('true');
-    await click(item('Individual'));
+    const seg = (label: string) => [...foot.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')].find((b) => b.textContent === label)!;
+    expect(foot.querySelector('[role="radiogroup"]')?.getAttribute('title')).toBe('Each agent gets its own window; the main window hides.');
+    expect(seg('Orchestration').getAttribute('aria-checked')).toBe('true');
+    expect(seg('Individual').getAttribute('aria-checked')).toBe('false');
+    await click(seg('Individual'));
     expect(c.setMode).toHaveBeenCalledWith('individual');
     expect(q('.ck-side-foot [role="menu"]')).toBeNull();
     await click(byLabel('More'));

@@ -107,6 +107,20 @@ pub struct AgentRunView {
     /// Present when "Helper agents" made the run a background one (same as `receipt.headless_forced`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_forced: Option<String>,
+    /// True when an app restart ended this run but it kept a provider session, so
+    /// `followup_task` resumes the conversation. `status` reads `interrupted`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub resumable: bool,
+    /// What to do next on a resumable run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<String>,
+    /// Which way the run ran (`terminal` or `headless`) and why; the same as `receipt.lane_used` / `lane_reason`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_used: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_fallback: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,7 +201,14 @@ impl From<OperationSnapshot> for AgentRunView {
                     result: if same_turn { receipt.result } else { None },
                 })
             });
-        let result_capture: String = if snapshot.status.terminal() {
+        let structured_result = if snapshot.status.terminal() {
+            snapshot.result.as_deref().and_then(crate::agent_runs::structured::parse)
+        } else {
+            None
+        };
+        let result_capture: String = if structured_result.is_some() {
+            "structured".into()
+        } else if snapshot.status.terminal() {
             match snapshot.result_capture {
                 Some(ResultCapture::Authoritative) => "authoritative".into(),
                 Some(ResultCapture::Inferred) => "inferred".into(),
@@ -204,7 +225,9 @@ impl From<OperationSnapshot> for AgentRunView {
             (Some(requested), Some(resolved)) => Some(crate::agent_runs::persist::model_matches(requested, resolved)),
             (Some(_), None) => Some(false),
         };
-        let receipt = build_receipt(&snapshot, &warnings, model_verified, &result_capture);
+        let mut receipt = build_receipt(&snapshot, &warnings, model_verified, &result_capture);
+        receipt.structured_result = structured_result;
+        let lane = super::receipt::lane_report(&snapshot);
         Self {
             handle,
             turn_id,
@@ -304,6 +327,14 @@ impl From<OperationSnapshot> for AgentRunView {
             run_mode: snapshot.worker.run_mode.clone(),
             headless_ignored: snapshot.worker.headless_ignored.clone(),
             headless_forced: snapshot.worker.headless_forced.clone(),
+            resumable: snapshot.worker.resumable,
+            next: snapshot
+                .worker
+                .resumable
+                .then(|| "followup_task resumes it".to_string()),
+            lane_used: lane.0,
+            lane_reason: lane.1,
+            lane_fallback: lane.2,
         }
     }
 }

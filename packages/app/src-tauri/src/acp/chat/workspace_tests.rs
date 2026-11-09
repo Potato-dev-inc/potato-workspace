@@ -104,7 +104,7 @@ impl Rig {
         let conversations = conversations_in(&dir, opts);
         let deps = deps_for(&dir, &conversations);
         let cfg = agents(opts, &dir).0["fake"].as_ref().clone();
-        let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true }).expect("the fake agent starts");
+        let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None }).expect("the fake agent starts");
         Rig { dir, opts: opts.to_string(), conversations, deps, chat, panes: Panes::default() }
     }
 
@@ -204,13 +204,30 @@ fn a_pane_that_goes_because_the_app_ends_keeps_its_conversation_restorable() {
 }
 
 #[test]
+fn a_closed_chat_that_is_reopened_gets_its_chat_pane_back() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    on_pane_closed(&id);
+    assert!(get(&id).is_none());
+    assert_eq!(rig.conversations.closed_list().len(), 1);
+
+    rig.conversations.reopen_closed(&id).unwrap();
+    assert_eq!(super::restore_panes(&rig.deps), vec![id.clone()]);
+    assert!(get(&id).is_some(), "the chat pane is back");
+    assert!(rig.deps.registry.lock().get(&id).is_some(), "and listed in the registry");
+    assert_eq!(rig.conversations.record(&id).unwrap().last_known_state, LastState::Live);
+    assert!(rig.conversations.closed_list().is_empty());
+    on_pane_closed(&id);
+}
+
+#[test]
 fn a_failed_first_start_leaves_no_conversation_behind() {
     let dir = std::env::temp_dir().join(format!("pm-acp-ws-test-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let conversations = conversations_in(&dir, "auth=1");
     let deps = deps_for(&dir, &conversations);
     let cfg = agents("auth=1", &dir).0["fake"].as_ref().clone();
-    let failed = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true });
+    let failed = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None });
     assert!(failed.is_err());
     assert!(conversations.list().is_empty(), "{:?}", conversations.list());
     let _ = std::fs::remove_dir_all(&dir);
@@ -480,10 +497,61 @@ fn an_agent_may_steer_only_a_chat_it_started() {
 }
 
 #[test]
-fn the_lane_word_and_the_saved_choice_pick_the_way() {
-    use crate::acp::lane::RunLane;
-    assert_eq!(surface::wants(Some("acp"), RunLane::Terminal, true, true), Ok(surface::Want::Chat { fallback: false }));
-    assert_eq!(surface::wants(None, RunLane::Acp, true, true), Ok(surface::Want::Chat { fallback: true }));
+fn lane_acp_with_the_labs_switch_off_is_acp_off_and_auto_and_a_missing_lane_run_in_the_terminal() {
+    // The switch is off in the test process unless a test of the settings turned it on; this one needs it off.
+    if crate::acp::chat_enabled() {
+        return;
+    }
+    let rig = Rig::new("");
+    let run = |lane: Option<&str>| {
+        let mut body = json!({ "task": "do it", "agent_type": "codex", "project_path": rig.dir.to_string_lossy() });
+        if let Some(lane) = lane {
+            body["lane"] = json!(lane);
+        }
+        let segments = ["agents", "run"];
+        surface::intercept_noted("POST", &segments, "", body.to_string().as_bytes(), &rig.deps, None)
+    };
+    let (answer, note) = run(Some("acp"));
+    let error = answer.expect("ours").expect_err("refused");
+    assert_eq!((error.code.as_str(), error.recoverable), ("ACP_OFF", false));
+    assert_eq!(error.message, "Chat (ACP) is off. Turn on Settings > Labs > Chat (ACP), or leave out lane.");
+    assert!(error.context["fix"].as_str().is_some());
+    assert!(note.is_none());
+    // Auto and a missing lane: not ours, and the note says the terminal and why.
+    for lane in [Some("auto"), None] {
+        let (answer, note) = run(lane);
+        assert!(answer.is_none(), "{lane:?}: the terminal runs it");
+        let note = note.expect("the terminal run is explained");
+        assert_eq!(note.used, "terminal");
+        assert!(note.reason.contains("off in Labs"), "{}", note.reason);
+    }
+    let (answer, note) = run(Some("terminal"));
+    assert!(answer.is_none() && note.is_some_and(|n| n.used == "terminal"));
+    // A word that is not a lane is an error.
+    let (answer, _) = run(Some("pty"));
+    assert_eq!(answer.expect("ours").expect_err("bad lane").code, "INVALID_ARGUMENT");
+}
+
+#[test]
+fn an_unregistered_agent_with_lane_acp_is_unknown_agent_listing_the_valid_ids() {
+    let rig = Rig::new("");
+    let body = json!({ "task": "x", "agent_type": "no_such_agent", "lane": "acp", "project_path": rig.dir.to_string_lossy() });
+    let (answer, _) = surface::intercept_noted("POST", &["agents", "run"], "", body.to_string().as_bytes(), &rig.deps, None);
+    let error = answer.expect("ours").expect_err("unknown");
+    assert_eq!(error.code, "UNKNOWN_AGENT");
+    assert!(error.context["valid"].as_array().is_some_and(|ids| ids.iter().any(|id| id == "claude")));
+}
+
+#[test]
+fn a_chats_lane_note_shows_in_its_answers_and_is_saved_with_its_conversation() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    let note = json!({ "lane_used": "acp", "lane_reason": "auto: Chat (ACP) is on and the chat add-on is installed.", "account": "work" });
+    rig.chat.set_lane_note(note.clone());
+    let inspected = call(&rig, "GET", &format!("agents/{id}"), Value::Null, None).unwrap().unwrap();
+    assert_eq!((inspected["lane_used"].as_str(), inspected["account"].as_str()), (Some("acp"), Some("work")));
+    assert!(inspected["lane_reason"].as_str().unwrap().starts_with("auto:"));
+    assert_eq!(rig.conversations.record(&id).unwrap().lane_note, Some(note), "kept with the conversation");
 }
 
 // ---- P-29: never lose a word --------------------------------------------------------------------------------------
@@ -625,4 +693,43 @@ fn when_the_agent_cannot_bring_the_conversation_back_the_words_stay_and_a_note_s
     assert!(after.iter().any(|i| matches!(i, crate::session_chat::ChatItem::Notice { text, .. } if text.contains("could not be brought back"))));
     chat.retire();
     app.forget_session(&rig.id());
+}
+
+fn start_helper_of(rig: &Rig, parent: &str) -> String {
+    let cfg = agents(&rig.opts, &rig.dir).0["fake"].as_ref().clone();
+    let helper = start(&rig.deps, cfg, StartRequest { agent_id: "fake".into(), folder: rig.dir.clone(), explicit: true, account: None }).expect("the helper chat starts");
+    let id = helper.pane_id().to_string();
+    assert!(crate::pty::pane_parent::set_parent(&rig.deps.registry, &id, parent));
+    id
+}
+
+#[test]
+fn a_person_closing_a_chat_closes_its_helper_chat_and_marks_it_closed() {
+    let rig = Rig::new("");
+    let boss = rig.id();
+    let helper = start_helper_of(&rig, &boss);
+    crate::pty::registry::close_with_helpers(&rig.deps.registry, &boss, None, true, false).unwrap();
+    let closed = |id: &str| rig.conversations.record(id).is_some_and(|r| r.last_known_state == LastState::Closed);
+    assert!(wait_until(30, || get(&boss).is_none() && get(&helper).is_none() && closed(&boss) && closed(&helper)), "both sessions stop and both conversations are marked closed");
+    assert_eq!(rig.conversations.record(&boss).unwrap().last_known_state, LastState::Closed);
+    assert_eq!(rig.conversations.record(&helper).unwrap().last_known_state, LastState::Closed);
+}
+
+#[test]
+fn when_the_app_ends_a_helper_chat_stays_restorable_and_is_not_closed_by_its_agent() {
+    let rig = Rig::new("");
+    let boss = rig.id();
+    let helper = start_helper_of(&rig, &boss);
+    // The exit path: no helper is closed one by one (see the registry tests); every chat pane's close hook runs with the app ending.
+    super::on_pane_gone(&boss, true);
+    super::on_pane_gone(&helper, true);
+    assert_eq!(rig.conversations.record(&boss).unwrap().last_known_state, LastState::Live);
+    assert_eq!(rig.conversations.record(&helper).unwrap().last_known_state, LastState::Live, "restorable at the next start");
+    let app = conversations_in(&rig.dir, &rig.opts);
+    app.restore_lazily(&rig.panes);
+    let mut open = app.open_ids();
+    open.sort();
+    let mut want = vec![boss.clone(), helper.clone()];
+    want.sort();
+    assert_eq!(open, want);
 }

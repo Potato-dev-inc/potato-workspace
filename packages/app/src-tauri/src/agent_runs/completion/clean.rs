@@ -136,6 +136,10 @@ fn echoed_lines(lines: &[&str], task: &str) -> Vec<bool> {
         return echoed;
     }
     let task_n = normalize_echo(task);
+    // The structured-result instruction is one long line that the TUI wraps; its short tail rows
+    // (`[<string>]} ```) are too short for the general rule above but are never a reply.
+    let instruction_ended = task.ends_with(crate::agent_runs::structured::STRUCTURED_RESULT_INSTRUCTION);
+    let instruction_n = normalize_echo(crate::agent_runs::structured::STRUCTURED_RESULT_INSTRUCTION);
     loop {
         let mut changed = false;
         for index in 0..lines.len() {
@@ -149,7 +153,9 @@ fn echoed_lines(lines: &[&str], task: &str) -> Vec<bool> {
             }
             let stripped = lines[index].trim_start_matches(['-', '*', '•', '>']).trim();
             let line_n = normalize_echo(stripped);
-            if line_n.len() >= 12 && task_n.contains(&line_n) {
+            if (line_n.len() >= 12 && task_n.contains(&line_n))
+                || (instruction_ended && instruction_fragment(stripped, &instruction_n))
+            {
                 echoed[index] = true;
                 changed = true;
             }
@@ -158,6 +164,16 @@ fn echoed_lines(lines: &[&str], task: &str) -> Vec<bool> {
             return echoed;
         }
     }
+}
+
+/// A wrapped row of the structured-result instruction: its words (punctuation aside) are a whole-word
+/// run of the instruction, or it holds only punctuation.
+fn instruction_fragment(line: &str, instruction_n: &str) -> bool {
+    let line_n = normalize_echo(line);
+    if line_n.is_empty() {
+        return !line.trim().is_empty();
+    }
+    format!(" {instruction_n} ").contains(&format!(" {line_n} "))
 }
 
 /// A reply can legitimately repeat text from the prompt ("reply with exactly: X"). The prompt echo

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.13
+
+- Individual mode no longer looks like a crash. A small bar stays at the top of the screen with your agents, "+ New" and "Back to Orchestration", even with no agents open. After a switch you get 8 seconds to undo, and the first switch explains what will happen. The mode switch is now a clear Orchestration | Individual toggle, the tray icon brings your agent windows back, and Ctrl+Alt+M switches modes (if no other app uses it).
+- Starting in Individual mode with no agents opens the main window instead, with a "Switch back" button.
+- Helpers can run as chat (ACP) agents: with Chat (ACP) on in Labs, helpers use it when the agent supports it, and the result says which way they ran. Choosing Terminal in Settings is always kept.
+- Chat (ACP) agents can run under a saved login, like terminal agents.
+- "Run helpers on" picks which login your helpers use, per agent. Panes show which login they run under.
+- OpenCode supports more than one login.
+- MCP is sturdier: it finds the app again after a restart (on any port), waits for a restarting app instead of failing, stops waiting when you cancel, never starts a second run when a call is retried, and every error says whether to retry and how to fix it.
+- A run cut off by an app restart can be continued with a follow-up instead of being lost. Two callers can no longer take over the same pane at once.
+- Helpers end their answer with a short structured summary (files changed, checks run, open questions). The default MCP tool list is shorter: 10 core tools, with the rest still callable.
+
+- Helpers now close with the agent that started them. Close an agent and its helpers (and their helpers) close too. Turn this off in Settings with "Close helpers when their agent closes".
+- New "Closed chats" list at the bottom of the sidebar. Reopen a closed chat with its history, or delete it for good.
+
 ## 1.0.12
 
 - Fix: your chats now come back after you quit the app or install an update. Before, quitting or updating counted as closing every chat, so they disappeared from the sidebar (they were still saved). Only closing a chat yourself closes it now.

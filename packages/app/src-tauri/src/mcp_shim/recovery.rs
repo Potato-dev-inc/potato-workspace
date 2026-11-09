@@ -2,6 +2,50 @@
 
 use super::*;
 
+/// Seconds per window in which an identical mutating call gets the same derived key.
+const KEY_BUCKET_SECS: u64 = 600;
+
+/// A key derived from (MCP session, tool, canonical arguments, ten-minute window), so a caller that
+/// retries a mutating call without its own key repeats the same key and does not start a second run.
+pub(crate) fn derive_idempotency_key(session: &str, tool: &str, args: &Value, bucket: u64) -> String {
+    use sha2::{Digest, Sha256};
+    let mut canonical = args.clone();
+    if let Some(object) = canonical.as_object_mut() {
+        object.remove("idempotency_key");
+    }
+    let mut hasher = Sha256::new();
+    for part in [session, tool, &tool_registry::canonical_json(&canonical), &bucket.to_string()] {
+        hasher.update(part.as_bytes());
+        hasher.update([0u8]);
+    }
+    let digest = hasher.finalize();
+    let hex: String = digest.iter().take(16).map(|b| format!("{b:02x}")).collect();
+    format!("auto-{hex}")
+}
+
+/// Like `ensure_idempotency_key`, but a missing key is derived (see `derive_idempotency_key`)
+/// instead of random. Used for the mutating tools whose retries must not duplicate work.
+pub(crate) fn ensure_stable_idempotency_key(tool: &str, args: &mut Value) -> String {
+    if let Some(key) = args
+        .get("idempotency_key")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+    {
+        return key.to_string();
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default();
+    let session = current_mcp_session_id().unwrap_or_default();
+    let key = derive_idempotency_key(&session, tool, args, now / KEY_BUCKET_SECS);
+    if let Some(object) = args.as_object_mut() {
+        object.insert("idempotency_key".into(), Value::String(key.clone()));
+    }
+    key
+}
+
+/// A random key, for calls where repeating the same arguments is a new request (quick_ask, send_message).
 pub(crate) fn ensure_idempotency_key(args: &mut Value) -> String {
     if let Some(key) = args
         .get("idempotency_key")
@@ -253,12 +297,22 @@ pub(crate) fn steer_timeout_recovery(args: &Value, error: String) -> String {
     }
 }
 
+/// Whether `error` is a transport timeout. Errors from this shim carry the `bridge_timeout:` prefix,
+/// set from `io::ErrorKind::{TimedOut, WouldBlock}` where the I/O happened (`io_failure`). The text
+/// check below is only a fallback for strings that reach here without a kind: the OS error text of
+/// a Windows connect timeout (10060) and messages produced before the prefix existed.
 pub(crate) fn is_bridge_timeout(error: &str) -> bool {
+    if error.starts_with(BRIDGE_TIMEOUT) {
+        return true;
+    }
+    if is_connect_failure(error) {
+        return false; // a classified connection failure keeps its class whatever its OS text says
+    }
+    if error.starts_with('{') && serde_json::from_str::<Value>(error).is_ok_and(|v| v.get("code").is_some()) {
+        return false; // already a contract error (BRIDGE_UNAVAILABLE, ...), not a raw transport failure
+    }
     let lower = error.to_ascii_lowercase();
-    lower.contains("10060")
-        || lower.contains("timed out")
-        || lower.contains("timeout grace")
-        || lower.contains("timedout")
+    lower.contains("10060") || lower.contains("timed out") || lower.contains("timeout grace")
 }
 
 pub(crate) fn operation_timeout_outcome(snapshot: &Value) -> &'static str {

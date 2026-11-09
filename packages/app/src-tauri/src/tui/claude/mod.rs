@@ -132,6 +132,8 @@ impl TuiProfile for Claude {
             home_env: "CLAUDE_CONFIG_DIR".into(),
             extra_env: Vec::new(),
             login_hint: "Run `claude` and log in, then close it.".into(),
+            // Linux and Windows keep the login here; macOS may keep it in the keychain (then the state reads unknown).
+            credential_files: vec![".credentials.json".into()],
         })
     }
 

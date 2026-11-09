@@ -15,6 +15,31 @@ pub async fn set_ui_mode(app: AppHandle, mode: UiMode) -> Result<(), String> {
     crate::cockpit::set_mode(&app, mode)
 }
 
+/// The mini bar: bring a pane's pop-out forward and focus it.
+#[tauri::command]
+pub async fn mini_bar_focus_pane(app: AppHandle, state: State<'_, AppState>, pane_id: String) -> Result<(), String> {
+    let found = state.registry.lock().list().into_iter().find(|p| p.id == pane_id);
+    match found {
+        Some(p) => {
+            crate::app_windows::open_pane_window(&app, &p.id, &p.agent_type, p.cols, p.rows, true);
+            Ok(())
+        }
+        None => Err("That agent is gone.".into()),
+    }
+}
+
+/// Milliseconds of Undo left after the last switch to Individual (0: none).
+#[tauri::command]
+pub async fn mini_bar_toast_left() -> Result<u64, String> {
+    Ok(crate::mini_bar::toast_left())
+}
+
+/// True once when this launch fell back from a saved Individual mode (no panes) to Orchestration.
+#[tauri::command]
+pub async fn take_individual_fallback() -> Result<bool, String> {
+    Ok(crate::mini_bar::take_fallback())
+}
+
 #[tauri::command]
 pub async fn open_cockpit(app: AppHandle, pane_id: Option<String>) -> Result<(), String> {
     crate::cockpit::open_cockpit(&app, pane_id.as_deref());

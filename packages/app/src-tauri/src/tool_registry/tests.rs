@@ -326,10 +326,9 @@ fn agent_mode_advertises_worker_controls_without_terminal_tools() {
         "wait_agents",
         "send_message",
         "followup_task",
-        "interrupt_agent",
         "inspect_agent",
-        "agent_transcript",
-        "close_agent",
+        "answer_prompt",
+        "ask_user",
         "set_mode",
     ] {
         assert!(names.contains(&name), "agent mode missing {name}");
@@ -340,7 +339,7 @@ fn agent_mode_advertises_worker_controls_without_terminal_tools() {
         assert!(tool_visible_in_mode(hidden, McpMode::Agent), "{hidden} must stay callable");
     }
     assert!(names.contains(&"list_agents"));
-    assert!(names.contains(&"list_panes"));
+    assert!(!names.contains(&"list_panes"), "list_panes is callable but not in the default core");
     assert!(!names.contains(&"spawn_agent"));
     assert!(!names.contains(&"write_terminal_input"));
     assert!(!names.contains(&"press_key"));
@@ -401,7 +400,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "73-f8e2d123d888d267");
+    assert_eq!(catalog_version(), "73-7f3337d109fe3d99");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one

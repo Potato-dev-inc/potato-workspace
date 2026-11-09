@@ -69,7 +69,10 @@ export interface CockpitApi {
   dismissSpawn: () => void;
   toasts: Toast[];
   notify: (text: string, action?: Toast['action']) => void;
+  /** Switch the UI mode. The first switch to Individual from here opens `modeExplainer` instead of switching. */
   setMode: (mode: UiMode) => Promise<void>;
+  /** The first-switch sheet for Individual mode: `open` while it is up; Switch applies the mode, Cancel closes it. */
+  modeExplainer: { open: boolean; confirm: (dontShowAgain: boolean) => Promise<void>; cancel: () => void };
   toggleTheme: () => Promise<void>;
   /** Opens a new agent pane. Resolves to its pane id, or null when it could not start (the starting view says why). */
   newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string) => Promise<string | null>;
@@ -102,6 +105,9 @@ export function useCockpit(): CockpitApi {
   const [readyAgents, setReadyAgents] = useState<Set<string>>(new Set());
   const [spawn, setSpawn] = useState<SpawnState | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [explainerOpen, setExplainerOpen] = useState(false);
+  // `individual_explained` from settings: the sheet was dismissed for good.
+  const explainedRef = useRef(false);
   const bridge = useBridge();
   // Said only when something is wrong: a healthy bridge shows nothing, and its address is never shown
   // here (it is in Settings > Bridge & MCP).
@@ -169,6 +175,7 @@ export function useCockpit(): CockpitApi {
         if (disposed) return;
         setTheme(s.theme ?? 'dark');
         applyTheme(s.theme ?? 'dark');
+        explainedRef.current = s.individual_explained === true;
       })
       .catch(() => {});
     // A theme chosen in Settings (or any other window) applies here at once.
@@ -354,7 +361,7 @@ export function useCockpit(): CockpitApi {
     if (id) setSpawn((s) => (s && !s.failed ? s : null));
   }, []);
 
-  const setMode = useCallback(
+  const applyMode = useCallback(
     async (next: UiMode) => {
       const prev = mode;
       setModeState(next);
@@ -367,6 +374,50 @@ export function useCockpit(): CockpitApi {
     },
     [mode, notify],
   );
+
+  // A pick from the cockpit (footer, palette): the first switch to Individual explains itself first.
+  const setMode = useCallback(
+    async (next: UiMode) => {
+      if (next === 'individual' && mode !== 'individual' && !explainedRef.current) {
+        setExplainerOpen(true);
+        return;
+      }
+      await applyMode(next);
+    },
+    [mode, applyMode],
+  );
+
+  const modeExplainer = useMemo(
+    () => ({
+      open: explainerOpen,
+      confirm: async (dontShowAgain: boolean) => {
+        setExplainerOpen(false);
+        if (dontShowAgain) {
+          explainedRef.current = true;
+          patchSettings({ individual_explained: true }).catch(() => {});
+        }
+        await applyMode('individual');
+      },
+      cancel: () => setExplainerOpen(false),
+    }),
+    [explainerOpen, applyMode],
+  );
+
+  // A launch that wanted Individual but had no agents opened in Orchestration: say so, and offer the way back.
+  const applyModeRef = useRef(applyMode);
+  applyModeRef.current = applyMode;
+  useEffect(() => {
+    let disposed = false;
+    cockpitApi
+      .takeIndividualFallback()
+      .then((fell) => {
+        if (fell === true && !disposed) notify('You were in Individual mode', { label: 'Switch back', run: () => void applyModeRef.current('individual') });
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+    };
+  }, [notify]);
 
   const toggleTheme = useCallback(async () => {
     const next: AppTheme = theme === 'dark' ? 'light' : 'dark';
@@ -498,6 +549,7 @@ export function useCockpit(): CockpitApi {
     toasts,
     notify,
     setMode,
+    modeExplainer,
     toggleTheme,
     newAgent,
     answer,

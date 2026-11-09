@@ -171,7 +171,7 @@ pub fn request_quit(app: &AppHandle) {
 pub fn close_confirmed(app: &AppHandle, pane_id: &str) {
     use tauri::Manager;
     let Some((_, registry)) = CONTEXT.get() else { return };
-    let result = crate::pty::registry::kill_pane_with_reason(registry, pane_id, Some("pane window closed (confirmed)"));
+    let result = crate::pty::registry::kill_pane_and_helpers(registry, pane_id, Some("pane window closed (confirmed)"));
     tracing::info!(pane = %pane_id, ?result, "pane window close confirmed: killed its pane");
     if let Some(window) = app.get_webview_window(&window_label(pane_id)) {
         let _ = window.destroy();
@@ -206,7 +206,7 @@ pub fn on_close_requested(app: &AppHandle, label: &str) -> bool {
         }
     }
     if kill_pane_of_closed_window(label, &live, |id| {
-        let result = crate::pty::registry::kill_pane_with_reason(registry, id, Some("pane window closed"));
+        let result = crate::pty::registry::kill_pane_and_helpers(registry, id, Some("pane window closed"));
         tracing::info!(%label, pane = %id, ?result, "pane window closed: killed its pane");
     }) {
         return false;

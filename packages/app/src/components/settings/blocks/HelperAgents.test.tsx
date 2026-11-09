@@ -6,7 +6,7 @@ import { rowMatches } from '../model';
 import { agentsRows } from '../sections/AgentsSection';
 import { click, hasText, mountRows, pickOption, settle, type Mounted } from '../test-utils';
 
-const saved = vi.hoisted(() => ({ mode: 'always_show', keepOpen: true }));
+const saved = vi.hoisted(() => ({ mode: 'always_show', keepOpen: true, closeWithAgent: true }));
 
 vi.mock('../../../lib/agentRunMode', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/agentRunMode')>();
@@ -23,19 +23,27 @@ vi.mock('../../../lib/agentRunMode', async (importOriginal) => {
         saved.keepOpen = on;
         return { on };
       }),
+      getCloseWithAgent: vi.fn(async () => ({ on: saved.closeWithAgent })),
+      setCloseWithAgent: vi.fn(async (on: boolean) => {
+        saved.closeWithAgent = on;
+        return { on };
+      }),
     },
   };
 });
 
 const choiceRow = agentsRows.filter((r) => r.id === 'helper-agents');
 const keepRow = agentsRows.filter((r) => r.id === 'keep-helpers-open');
+const closeRow = agentsRows.filter((r) => r.id === 'close-helpers-with-agent');
 let m: Mounted;
 const choice = () => m.host.querySelector<HTMLSelectElement>('select[aria-label="Helper agents"]');
+const closeToggle = () => m.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Close helpers when their agent closes"]');
 const toggle = () => m.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Keep helpers open when they finish"]');
 
 beforeEach(() => {
   saved.mode = 'always_show';
   saved.keepOpen = true;
+  saved.closeWithAgent = true;
 });
 
 afterEach(async () => {
@@ -121,6 +129,47 @@ describe('Keep helpers open when they finish', () => {
   it('is found by the words a person would type', () => {
     for (const words of ['keep open', 'close pane', 'finished']) {
       expect(rowMatches(keepRow[0], words), words).toBe(true);
+    }
+  });
+});
+
+describe('Close helpers when their agent closes', () => {
+  it('is a row in the Helpers group, after the keep-open row, and on by default', async () => {
+    expect(closeRow).toHaveLength(1);
+    expect(closeRow[0].group).toBe('Helpers');
+    m = await mountRows(closeRow);
+    await settle(10);
+    expect(closeToggle()?.getAttribute('aria-checked')).toBe('true');
+    expect(hasText(m.host, 'the helpers it started close too')).toBe(true);
+    expect(hasText(m.host, 'Claude Code')).toBe(false);
+  });
+
+  it('saves through its own command in both directions', async () => {
+    const { tauriHelperAgentsApi } = await import('../../../lib/agentRunMode');
+    m = await mountRows(closeRow);
+    await settle(10);
+    await click(closeToggle());
+    await settle(5);
+    expect(tauriHelperAgentsApi.setCloseWithAgent).toHaveBeenCalledWith(false);
+    expect(saved.closeWithAgent).toBe(false);
+    expect(closeToggle()?.getAttribute('aria-checked')).toBe('false');
+    await click(closeToggle());
+    await settle(5);
+    expect(tauriHelperAgentsApi.setCloseWithAgent).toHaveBeenLastCalledWith(true);
+    expect(saved.keepOpen).toBe(true);
+    expect(m.env.patches).toEqual([]);
+  });
+
+  it('reads a saved off as off', async () => {
+    saved.closeWithAgent = false;
+    m = await mountRows(closeRow);
+    await settle(10);
+    expect(closeToggle()?.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('is found by the words a person would type', () => {
+    for (const words of ['close helpers', 'orchestrator', 'subagent', 'parent']) {
+      expect(rowMatches(closeRow[0], words), words).toBe(true);
     }
   });
 });

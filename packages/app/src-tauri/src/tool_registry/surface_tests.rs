@@ -44,7 +44,7 @@ fn aliases_are_hidden_from_tools_list_in_every_mode_but_all() {
             "wait_for_worker"
         ]
     );
-    for mode in [McpMode::Agent, McpMode::Shell, McpMode::Both] {
+    for mode in [McpMode::Agent, McpMode::Shell, McpMode::Both, McpMode::All] {
         let listed = names_for(mode);
         for (alias, _) in ALIASES {
             assert!(!listed.contains(alias), "{alias} is listed in {mode:?}");
@@ -52,7 +52,11 @@ fn aliases_are_hidden_from_tools_list_in_every_mode_but_all() {
     }
     let all = names_for(McpMode::All);
     for (alias, canonical) in ALIASES {
-        assert!(all.contains(alias), "all mode must still list {alias}");
+        assert!(!all.contains(alias), "all mode must not list {alias}");
+        assert!(
+            callable_tools_for_mode(McpMode::All).iter().any(|t| t.name == *alias),
+            "{alias} must stay callable by name"
+        );
         assert!(
             all.contains(canonical),
             "{alias} points at unlisted {canonical}"
@@ -117,12 +121,26 @@ fn every_alias_really_duplicates_its_canonical_tool() {
 
 #[test]
 fn listed_tool_count_per_mode_is_pinned() {
-    assert_eq!(names_for(McpMode::Agent).len(), 22, "{:?}", names_for(McpMode::Agent));
+    assert_eq!(names_for(McpMode::Agent).len(), 10, "{:?}", names_for(McpMode::Agent));
     assert_eq!(names_for(McpMode::Shell).len(), 16, "{:?}", names_for(McpMode::Shell));
-    assert_eq!(names_for(McpMode::Both).len(), 32, "{:?}", names_for(McpMode::Both));
-    // The old full list, behind mode `all`.
-    assert_eq!(names_for(McpMode::All).len(), 73);
-    assert_eq!(names_for(McpMode::All).len(), external_mcp_tool_count());
+    assert_eq!(names_for(McpMode::Both).len(), 10, "{:?}", names_for(McpMode::Both));
+    // The full list behind mode `all`: every tool except the six aliases.
+    assert_eq!(names_for(McpMode::All).len(), 73 - ALIASES.len());
+    assert_eq!(names_for(McpMode::All).len() + ALIASES.len(), external_mcp_tool_count());
+}
+
+#[test]
+fn default_tools_list_is_exactly_the_core() {
+    let mut expected = vec![
+        "quick_ask", "run_agent", "wait_agents", "followup_task", "send_message",
+        "list_agents", "inspect_agent", "answer_prompt", "ask_user", "set_mode",
+    ];
+    expected.sort();
+    for mode in [McpMode::Agent, McpMode::Both] {
+        let mut got = names_for(mode);
+        got.sort();
+        assert_eq!(got, expected, "{mode:?}");
+    }
 }
 
 #[test]

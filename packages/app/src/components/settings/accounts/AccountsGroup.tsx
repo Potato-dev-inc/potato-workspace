@@ -111,7 +111,7 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
               </ul>
               <div className="mt-3 flex items-center gap-2" data-testid={`helper-login-${agent.agent_id}`}>
                 <label htmlFor={`helper-login-${agent.agent_id}`} className="text-xs text-pm-muted">
-                  Helpers use
+                  Run helpers on
                 </label>
                 <select
                   id={`helper-login-${agent.agent_id}`}

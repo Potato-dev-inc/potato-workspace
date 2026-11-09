@@ -114,6 +114,7 @@ impl TuiProfile for Codex {
             home_env: "CODEX_HOME".into(),
             extra_env: Vec::new(),
             login_hint: "Run `codex` and sign in, then close it.".into(),
+            credential_files: vec!["auth.json".into()],
         })
     }
 

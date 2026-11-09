@@ -461,6 +461,21 @@ pub fn build_env(cfg: &AgentConfig, host: &dyn HostEnv, private_home: Option<&Pa
     out
 }
 
+/// Points the adapter at an account's login: the account's variables replace what the app's own environment would
+/// pass on (`env_allow`), and a variable the account removes is not passed at all. Pure.
+pub fn with_account_env(cfg: &mut AgentConfig, launch: &crate::tui::LaunchEnv) {
+    let same = |a: &str, b: &str| if cfg!(windows) { a.eq_ignore_ascii_case(b) } else { a == b };
+    for (name, value) in &launch.set {
+        cfg.env_allow.retain(|n| !same(n, name));
+        cfg.env.retain(|n, _| !same(n, name));
+        cfg.env.insert(name.clone(), value.clone());
+    }
+    for name in &launch.remove {
+        cfg.env_allow.retain(|n| !same(n, name));
+        cfg.env.retain(|n, _| !same(n, name));
+    }
+}
+
 /// Makes the private home folder and writes its config (only when the text changed). Returns the folder.
 pub fn prepare_private_home(cfg: &AgentConfig, host: &dyn HostEnv) -> Result<Option<PathBuf>, AcpError> {
     let Some(spec) = &cfg.private_home else { return Ok(None) };

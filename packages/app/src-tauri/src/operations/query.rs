@@ -2,7 +2,7 @@
 //! pane/task lookups over the durable records.
 
 use super::model::*;
-use super::store::{find_key, indexed_projects, path_for, project_key, read, root, task_index_path};
+use super::store::{find_key, indexed_projects, path_for, project_key, read, read_or_quarantine, root, task_index_path};
 use std::collections::HashMap;
 use std::fs;
 
@@ -48,7 +48,10 @@ fn read_records(project_path: &str, strict: bool) -> Result<(Vec<OperationSnapsh
                 Ok(snapshot) => snapshots.push(snapshot),
                 Err(error) if error.code == "OPERATION_NOT_FOUND" => continue,
                 Err(error) if strict => return Err(error),
-                Err(_) => unreadable += 1,
+                Err(error) => {
+                    tracing::warn!(path = %entry.path().display(), error = %error.message, "skipping unreadable operation record");
+                    unreadable += 1;
+                }
             }
         }
     }
@@ -178,11 +181,7 @@ pub fn operation_for_task(
     for entry in entries {
         let entry = entry.map_err(OperationError::io)?;
         if entry.path().extension().is_some_and(|ext| ext == "json") {
-            let op = match read(&entry.path()) {
-                Ok(operation) => operation,
-                Err(error) if error.code == "OPERATION_NOT_FOUND" => continue,
-                Err(error) => return Err(error),
-            };
+            let Some(op) = read_or_quarantine(&entry.path())? else { continue };
             if op.task_id.as_deref() == Some(task_id) {
                 return Ok(op);
             }
@@ -224,7 +223,7 @@ pub fn active_operation_for_pane(
     for entry in entries {
         let entry = entry.map_err(OperationError::io)?;
         if entry.path().extension().is_some_and(|ext| ext == "json") {
-            let op = read(&entry.path())?;
+            let Some(op) = read_or_quarantine(&entry.path())? else { continue };
             if op.pane_id.as_deref() == Some(pane_id) && !op.status.terminal() {
                 return Ok(Some(op));
             }
@@ -252,7 +251,7 @@ pub fn conflicting_pane_operation(
     for entry in entries {
         let entry = entry.map_err(OperationError::io)?;
         if entry.path().extension().is_some_and(|ext| ext == "json") {
-            let op = read(&entry.path())?;
+            let Some(op) = read_or_quarantine(&entry.path())? else { continue };
             if op.pane_id.as_deref() == Some(pane_id)
                 && !op.status.terminal()
                 && op.operation_id != operation_id

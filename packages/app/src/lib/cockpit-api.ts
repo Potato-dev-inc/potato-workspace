@@ -261,6 +261,13 @@ export const cockpitApi = {
   getUiMode: () => call<UiMode>('get_ui_mode'),
   setUiMode: (mode: UiMode) => call<void>('set_ui_mode', { mode }),
   openCockpit: (paneId?: string) => call<void>('open_cockpit', { paneId }),
+  /** The mini bar: bring a pane's pop-out forward. */
+  miniBarFocusPane: (paneId: string) => call<void>('mini_bar_focus_pane', { paneId }),
+  /** Milliseconds of Undo left after the last switch to Individual (0: none). */
+  miniBarToastLeft: () => call<number>('mini_bar_toast_left'),
+  /** True once when this launch fell back from a saved Individual mode (no panes) to Orchestration. */
+  takeIndividualFallback: () => call<boolean>('take_individual_fallback'),
+  onMiniBarShown: (cb: (e: { toastMs: number }) => void) => on('mini-bar://shown', cb),
   panePrompt: (paneId: string) => call<PanePrompt | null>('pane_prompt', { paneId }),
   /** A person's answer: `gesture` is their click (`gestureOf(event)`); without one the backend sends
    *  nothing but a refusal of an ordinary prompt (never a yes, never folder trust). */

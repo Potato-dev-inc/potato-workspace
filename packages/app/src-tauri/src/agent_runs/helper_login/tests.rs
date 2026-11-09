@@ -327,3 +327,21 @@ fn a_helper_made_visible_still_raises_the_login_card_when_the_person_said_ask() 
     assert_eq!(request.account, None);
     assert!(!request.headless);
 }
+
+#[test]
+fn the_request_records_where_its_login_came_from() {
+    let s = Setup::new();
+    let work = s.store.add("claude", "Work", None).unwrap();
+    s.store.set_helper_login("claude", &work.id).unwrap();
+    let mut request = s.run(Some("k-src-default"), None);
+    for_run(&mut request, Some(&s.session), &s.store, &|| {}).unwrap();
+    assert_eq!(request.account_source.as_deref(), Some("helper_default"));
+    // A caller that named the account is left alone: nothing is recorded, the receipt says "explicit".
+    let mut named = s.run(Some("k-src-named"), Some(&work.id));
+    for_run(&mut named, Some(&s.session), &s.store, &|| {}).unwrap();
+    assert_eq!(named.account_source, None);
+    // A request body cannot claim a source.
+    let forged: AgentRunRequest =
+        serde_json::from_value(json!({"task": "t", "account_source": "helper_default"})).unwrap();
+    assert_eq!(forged.account_source, None);
+}

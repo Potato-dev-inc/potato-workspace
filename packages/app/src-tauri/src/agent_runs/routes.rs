@@ -63,14 +63,18 @@ pub fn handle_request_as(
         return Some(result);
     }
     // Chat sessions over ACP (`lane: "acp"` and their handles): `crate::acp::chat::surface`.
-    {
+    // When the terminal runs a `run_agent` instead, `lane_note` says which way that was and why.
+    let lane_note = {
         let deps = crate::commands::acp_chat::live_deps(app, registry);
-        if let Some(result) = crate::acp::chat::surface::intercept(method, segments, query, body, &deps, session_id) {
+        let (answer, note) = crate::acp::chat::surface::intercept_noted(method, segments, query, body, &deps, session_id);
+        if let Some(result) = answer {
             return Some(result);
         }
-    }
+        note
+    };
     let result = match (method, segments) {
         ("POST", ["agents", "run"]) => parse::<AgentRunRequest>(body).and_then(|mut request| {
+            request.task = super::structured::with_instruction(&request.task, request.structured_result);
             // The caller left `headless` out (or null): the agent's run-mode setting may decide.
             request.headless_unset = headless_left_out(body);
             // "Helper agents": the person's choice decides whether the helper is shown or runs in the background.
@@ -94,6 +98,7 @@ pub fn handle_request_as(
                 &crate::accounts::Store::default_location(),
                 &|| crate::questions::routes::publish_changed(app),
             )?;
+            request.lane_note = lane_note.as_ref().map(|note| note.record());
             runtime::run_agent(
                 request,
                 registry.clone(),
@@ -147,6 +152,7 @@ pub fn handle_request_as(
         ("POST", ["agents", "followup"]) => parse::<SendAgentRequest>(body).and_then(|request| {
             let project = project_path(request.project_path.as_deref(), query, registry);
             let task = request.task.or(request.message).unwrap_or_default();
+            let structured = request.structured_result;
             if task.trim().is_empty() {
                 return Err(OperationError::new(
                     "INVALID_TASK",
@@ -154,6 +160,7 @@ pub fn handle_request_as(
                     false,
                 ));
             }
+            let task = super::structured::with_instruction(&task, structured);
             runtime::send_agent(
                 &project,
                 &request.handle,

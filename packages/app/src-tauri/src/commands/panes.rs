@@ -22,7 +22,7 @@ pub async fn kill_pane_cmd(
     state: State<'_, AppState>,
     pane_id: String,
 ) -> Result<(), String> {
-    registry_kill_pane(&state.registry, &pane_id)?;
+    registry_kill_pane_and_helpers(&state.registry, &pane_id, None)?;
     let _ = app.emit("pty://panes-changed", ());
     Ok(())
 }

@@ -63,7 +63,7 @@ fn the_setting_is_per_agent_validated_and_cleared_with_its_account() {
     let other = store.add("codex", "Work", None).unwrap();
     assert!(store.set_helper_login("claude", &other.id).is_err(), "another agent's account");
     assert!(store.set_helper_login("claude", "acc_nope").is_err(), "unknown account");
-    assert!(store.set_helper_login("opencode", "main").is_err(), "an agent without accounts");
+    assert!(store.set_helper_login("opencode_native", "main").is_err(), "an agent without accounts");
     assert_eq!(store.set_helper_login("claude", "main").unwrap(), HelperLogin::Main);
     assert_eq!(store.helper_login("codex"), HelperLogin::Ask, "other agents are untouched");
     store.set_helper_login("claude", &work.id).unwrap();
@@ -96,7 +96,7 @@ fn an_agent_without_accounts_has_nothing_to_ask() {
     let (store, root) = temp_store("no-scheme");
     let who = session();
     let mut call = starting(&who, "k", 50);
-    call.agent_id = "opencode";
+    call.agent_id = "opencode_native";
     assert_eq!(choose(&store, &call, &|| {}).unwrap(), None);
     assert!(cards(&who).is_empty());
     let _ = std::fs::remove_dir_all(root);
@@ -257,5 +257,47 @@ fn only_the_person_can_answer_or_dismiss_the_card_over_plain_loopback() {
         assert_eq!(value["code"], "HELPER_LOGIN_NEEDS_PERSON");
     }
     assert_eq!(cards(&who).len(), 1, "still waiting for the person");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_saved_default_is_used_without_asking_and_says_where_it_came_from() {
+    let (store, root) = temp_store("source-default");
+    let work = store.add("claude", "Work", None).unwrap();
+    store.add("claude", "Home", None).unwrap();
+    let who = session();
+    store.set_helper_login("claude", &work.id).unwrap();
+    let got = choose_with_source(&store, &starting(&who, "k1", 50), &|| {}).unwrap();
+    assert_eq!(got, (Some(work.id), SOURCE_HELPER_DEFAULT));
+    store.set_helper_login("claude", "main").unwrap();
+    let got = choose_with_source(&store, &starting(&who, "k2", 50), &|| {}).unwrap();
+    assert_eq!(got, (None, SOURCE_HELPER_DEFAULT));
+    assert!(cards(&who).is_empty(), "a default never raises a card");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn no_default_and_two_accounts_asks_and_says_asked() {
+    let (store, root) = temp_store("source-asked");
+    let work = store.add("claude", "Work", None).unwrap();
+    store.add("claude", "Home", None).unwrap();
+    let who = session();
+    let refused = choose_with_source(&store, &starting(&who, "k", 100), &|| {}).unwrap_err();
+    assert_eq!(refused.code, "HELPER_LOGIN_PENDING");
+    let card = cards(&who).remove(0);
+    assert_eq!(card.choices.len(), 6, "Main login and two accounts, once and always each");
+    answer(&card, &format!("once:{}", work.id));
+    let got = choose_with_source(&store, &starting(&who, "k", 100), &|| {}).unwrap();
+    assert_eq!(got, (Some(work.id), SOURCE_ASKED));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn an_agent_without_accounts_reports_its_own_login() {
+    let (store, root) = temp_store("source-cli");
+    let who = session();
+    let mut call = starting(&who, "k", 50);
+    call.agent_id = "opencode_native";
+    assert_eq!(choose_with_source(&store, &call, &|| {}).unwrap(), (None, SOURCE_CLI_LOGIN));
     let _ = std::fs::remove_dir_all(root);
 }

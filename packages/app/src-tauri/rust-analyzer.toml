@@ -1,0 +1,3 @@
+# Editor checks (rust-analyzer) build into their own target folder so they do not invalidate `cargo test` / `cargo build` artifacts.
+[cargo]
+targetDir = true

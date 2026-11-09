@@ -43,6 +43,7 @@ pub(super) fn operation_http_error(
         | "DISPATCH_CANCELLED"
         | "PANE_BUSY"
         | "ACCOUNT_MISMATCH"
+        | "ACP_OFF"
         | "OPERATION_ALREADY_DISPATCHED"
         | "CANCELLATION_IN_PROGRESS"
         | "CANCELLATION_REQUIRES_WORKER_CONTROL"
@@ -57,15 +58,21 @@ pub(super) fn operation_http_error(
         | "INVALID_OPERATION_ID"
         | "INVALID_AGENT_TYPE"
         | "UNKNOWN_AGENT_TYPE"
+        | "UNKNOWN_AGENT"
+        | "ACCOUNT_NOT_FOUND"
+        | "ACCOUNT_UNSUPPORTED"
         | "INVALID_LOCK"
         | "COMPLETION_EVIDENCE_REQUIRED" => 400,
         "PROJECT_PATH_REQUIRED" => 400,
         _ => 503,
     };
-    (
-        status,
-        json!({"error": error.message, "message": error.message, "code": error.code, "recoverable": error.recoverable, "retry_after_ms": error.retry_after_ms, "context": error.context}),
-    )
+    let mut body = json!({"error": error.message, "message": error.message, "code": error.code, "recoverable": error.recoverable, "retry_after_ms": error.retry_after_ms, "context": error.context});
+    // An error that says how to fix it (`context.fix`) also says so at the top, with `retryable` next to it.
+    if let Some(fix) = error.context.get("fix").filter(|fix| fix.is_string()) {
+        body["fix"] = fix.clone();
+        body["retryable"] = json!(error.recoverable);
+    }
+    (status, body)
 }
 
 pub(super) fn operation_error_from_http(

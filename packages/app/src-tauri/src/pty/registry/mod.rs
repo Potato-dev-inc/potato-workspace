@@ -26,6 +26,10 @@ mod pane_io;
 #[cfg(test)]
 pub(crate) use pane_io::snapshot_text;
 mod linux;
+mod helper_cascade;
+pub use helper_cascade::kill_pane_and_helpers;
+#[cfg(test)]
+pub(crate) use helper_cascade::close_with_helpers;
 mod spawn;
 mod virtual_pane;
 
@@ -441,6 +445,8 @@ mod codex_live_tests;
 mod host_shell_tests;
 #[cfg(test)]
 mod guard_env_tests;
+#[cfg(test)]
+mod helper_cascade_tests;
 #[cfg(test)]
 mod kill_tests;
 #[cfg(test)]

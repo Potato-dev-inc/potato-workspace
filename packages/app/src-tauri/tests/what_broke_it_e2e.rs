@@ -203,12 +203,13 @@ impl Env {
         let lock = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let root = std::env::temp_dir().join(format!("pm-wb18-e2e-{}", std::process::id()));
         ROOT.call_once(|| app_paths::set_data_root_for_e2e(root.join("app")));
-        // Guard: nothing this test writes may land outside its temp folder.
+        // Guard: nothing this test writes may land outside a temp folder. Inside the one e2e binary the fake-agent
+        // World may have set the app-data root first (the first call wins), so check the temp dir, not our own folder.
         assert!(
-            app_paths::app_data_dir().starts_with(&root),
-            "app data is {}, not under the test folder {}",
+            app_paths::app_data_dir().starts_with(std::env::temp_dir()),
+            "app data is {}, not under the temp folder {}",
             app_paths::app_data_dir().display(),
-            root.display()
+            std::env::temp_dir().display()
         );
         let base = root.join(name);
         let project = base.join("project");

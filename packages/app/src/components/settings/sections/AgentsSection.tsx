@@ -6,7 +6,7 @@ import { AgentLaneRows } from '../blocks/AgentLaneRows';
 import { AgentVersions } from '../blocks/AgentVersions';
 import { CHAT_ADDONS_LABEL, ChatAddonRows } from '../blocks/ChatAddonRows';
 import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings';
-import { HelperAgentsChoice, KeepHelpersOpenToggle } from '../blocks/HelperAgents';
+import { CloseHelpersWithAgentToggle, HelperAgentsChoice, KeepHelpersOpenToggle } from '../blocks/HelperAgents';
 import { HiddenAgentsRow } from '../blocks/HiddenAgentsRow';
 import { PreloadSettings } from '../blocks/PreloadSettings';
 import { useEffect, useState } from 'react';
@@ -139,6 +139,14 @@ export const agentsRows: RowDef[] = [
     keywords: 'keep open close closed pane finish finished done helper helpers subagent sub-agent follow-up followup release',
     group: 'Helpers',
     render: (env) => <KeepHelpersOpenToggle onSaved={env.markSaved} />,
+  },
+  {
+    id: 'close-helpers-with-agent',
+    label: 'Close helpers when their agent closes',
+    hint: 'On: when you close an agent, the helpers it started close too.',
+    keywords: 'close closed closing helper helpers subagent sub-agent parent orchestrator agent pane leftover orphan stop with together',
+    group: 'Helpers',
+    render: (env) => <CloseHelpersWithAgentToggle onSaved={env.markSaved} />,
   },
   {
     id: 'hidden-agents',

@@ -134,6 +134,12 @@ pub(super) fn persist(op: &OperationSnapshot) -> Result<(), OperationError> {
     )
     .map_err(|e| OperationError::io_at("write operation file", &temp, e))?;
     replace_file(&temp, &path)?;
+    note_idempotency_key(op)?;
+    if op.status.terminal() {
+        if let Some(pane) = op.pane_id.as_deref() {
+            crate::agent_runs::pane_lease::release_on_terminal(pane, op.owner_session_id.as_deref());
+        }
+    }
     track_for_watchdog(op);
     let (lock, cv) = change();
     {
@@ -358,25 +364,139 @@ pub(super) fn read(path: &Path) -> Result<OperationSnapshot, OperationError> {
     })?;
     serde_json::from_slice(&raw).map_err(OperationError::io)
 }
-pub(super) fn find_key(
-    project: &str,
-    key: &str,
-) -> Result<Option<OperationSnapshot>, OperationError> {
-    let entries = match fs::read_dir(root(project)?) {
+/// Like `read`, but a record that cannot be parsed or read is set aside instead of failing the
+/// caller: it is moved (never deleted) to `operations/_corrupt/`, a warning is logged and `None`
+/// is returned. A record that vanished meanwhile is also `None`.
+pub(super) fn read_or_quarantine(path: &Path) -> Result<Option<OperationSnapshot>, OperationError> {
+    match read(path) {
+        Ok(op) => Ok(Some(op)),
+        Err(error) if error.code == "OPERATION_NOT_FOUND" => Ok(None),
+        Err(error) => {
+            quarantine(path, &error);
+            Ok(None)
+        }
+    }
+}
+
+fn quarantine(path: &Path, error: &OperationError) {
+    tracing::warn!(path = %path.display(), error = %error.message, "skipping unreadable operation record");
+    let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
+        return;
+    };
+    let dir = parent.join("_corrupt");
+    if fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let mut target = dir.join(name);
+    if target.exists() {
+        target = dir.join(format!("{}-{}", Uuid::new_v4(), name.to_string_lossy()));
+    }
+    if let Err(e) = fs::rename(path, &target) {
+        tracing::warn!(path = %path.display(), error = %e, "could not move unreadable operation record aside");
+    }
+}
+
+/// Per-project idempotency index: `{ idempotency_key: operation_id }`. The extension is not
+/// `json` so directory scans never mistake it for an operation record.
+fn idem_index_path(project: &str) -> Result<PathBuf, OperationError> {
+    Ok(root(project)?.join("_idempotency.index"))
+}
+static IDEM_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+type KnownKeys = std::collections::HashSet<(String, String, String)>;
+static IDEM_KNOWN: OnceLock<Mutex<KnownKeys>> = OnceLock::new();
+
+fn known_keys() -> &'static Mutex<KnownKeys> {
+    IDEM_KNOWN.get_or_init(|| Mutex::new(Default::default()))
+}
+
+fn read_idem_index(project: &str) -> Option<HashMap<String, String>> {
+    let bytes = fs::read(idem_index_path(project).ok()?).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+/// Scan every record and write a fresh index. Corrupt records are quarantined on the way.
+fn rebuild_idem_index(project: &str) -> Result<HashMap<String, String>, OperationError> {
+    let mut map = HashMap::new();
+    let dir = root(project)?;
+    let entries = match fs::read_dir(&dir) {
         Ok(v) => v,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(map),
         Err(e) => return Err(OperationError::io(e)),
     };
     for entry in entries {
         let entry = entry.map_err(OperationError::io)?;
         if entry.path().extension().is_some_and(|e| e == "json") {
-            let op = read(&entry.path())?;
-            if op.idempotency_key == key {
-                return Ok(Some(op));
+            if let Some(op) = read_or_quarantine(&entry.path())? {
+                map.insert(op.idempotency_key, op.operation_id);
             }
         }
     }
-    Ok(None)
+    if map.is_empty() {
+        return Ok(map);
+    }
+    atomic_json(&idem_index_path(project)?, &map)?;
+    let mut known = known_keys().lock();
+    let pk = project_key(project);
+    known.retain(|(p, _, _)| *p != pk);
+    for (key, id) in &map {
+        known.insert((pk.clone(), key.clone(), id.clone()));
+    }
+    Ok(map)
+}
+
+/// Record `key -> operation_id` in the project's index. Cheap when already recorded this run.
+fn note_idempotency_key(op: &OperationSnapshot) -> Result<(), OperationError> {
+    let triple = (
+        project_key(&op.project_path),
+        op.idempotency_key.clone(),
+        op.operation_id.clone(),
+    );
+    if known_keys().lock().contains(&triple) {
+        return Ok(());
+    }
+    let _guard = IDEM_LOCK.get_or_init(|| Mutex::new(())).lock();
+    let Some(mut map) = read_idem_index(&op.project_path) else {
+        // Missing or unparseable: the scan includes the record just written.
+        return rebuild_idem_index(&op.project_path).map(|_| ());
+    };
+    if map.get(&op.idempotency_key) != Some(&op.operation_id) {
+        map.insert(op.idempotency_key.clone(), op.operation_id.clone());
+        atomic_json(&idem_index_path(&op.project_path)?, &map)?;
+    }
+    known_keys().lock().insert(triple);
+    Ok(())
+}
+
+/// `Some(answer)` when the index can answer; `None` when it is inconsistent with the records.
+fn indexed_lookup(
+    project: &str,
+    key: &str,
+    map: &HashMap<String, String>,
+) -> Option<Option<OperationSnapshot>> {
+    let Some(id) = map.get(key) else {
+        return Some(None);
+    };
+    match path_for(project, id).ok().and_then(|p| read(&p).ok()) {
+        Some(op) if op.idempotency_key == key => Some(Some(op)),
+        _ => None,
+    }
+}
+
+pub(super) fn find_key(
+    project: &str,
+    key: &str,
+) -> Result<Option<OperationSnapshot>, OperationError> {
+    if !root(project)?.is_dir() {
+        return Ok(None);
+    }
+    let _guard = IDEM_LOCK.get_or_init(|| Mutex::new(())).lock();
+    if let Some(map) = read_idem_index(project) {
+        if let Some(found) = indexed_lookup(project, key, &map) {
+            return Ok(found);
+        }
+    }
+    let map = rebuild_idem_index(project)?;
+    Ok(indexed_lookup(project, key, &map).unwrap_or(None))
 }
 pub(super) fn bump(op: &mut OperationSnapshot) -> Result<(), OperationError> {
     op.revision = op.revision.saturating_add(1);

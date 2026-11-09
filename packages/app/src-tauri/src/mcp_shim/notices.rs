@@ -6,6 +6,7 @@
 //! person reading its transcript) sees the fix without having to call anything.
 
 use super::*;
+#[cfg(not(test))]
 use std::sync::Mutex;
 use std::time::Instant;
 

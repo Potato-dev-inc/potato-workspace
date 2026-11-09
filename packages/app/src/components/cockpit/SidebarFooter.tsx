@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { IconChart, IconCheck, IconGlobe, IconMoon, IconMore, IconNote, IconSettings, IconSun, IconTerminal } from './Icons';
 import { JobsChip } from './rail/JobsChip';
 import { NightChip } from './night/NightChip';
+import '../../styles/individual-mode.css';
 
 type Mode = 'orchestration' | 'individual';
 
@@ -38,7 +39,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
 
   useEffect(() => {
     if (!moreOpen) return;
-    wrapRef.current?.querySelector<HTMLElement>('[role="menu"] [role^="menuitem"]')?.focus();
+    wrapRef.current?.querySelector<HTMLElement>('[role="menu"] [role^="menuitem"], [role="menu"] [role="radio"]')?.focus();
     const away = (e: MouseEvent) => {
       if (!wrapRef.current?.contains(e.target as Node)) setMoreOpen(false);
     };
@@ -47,7 +48,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
         setMoreOpen(false);
         moreBtn.current?.focus();
       } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        const items = [...(wrapRef.current?.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"]') ?? [])];
+        const items = [...(wrapRef.current?.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"], [role="menu"] [role="radio"]') ?? [])];
         if (items.length === 0) return;
         e.preventDefault();
         const at = items.indexOf(document.activeElement as HTMLElement);
@@ -134,19 +135,21 @@ export function SidebarFooter(p: SidebarFooterProps) {
               )}
               {(p.onOpenPlans || p.onOpenScores) && <div className="ck-menu-sep" role="separator" />}
               <div className="ck-menu-cap">Mode</div>
-              {(['orchestration', 'individual'] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={p.mode === m}
-                  className="ck-menu-item"
-                  onClick={pick(() => p.onMode(m))}
-                >
-                  <span className="ck-menu-ic">{p.mode === m ? <IconCheck /> : null}</span>
-                  {m === 'orchestration' ? 'Orchestration' : 'Individual'}
-                </button>
-              ))}
+              <div className="ck-seg" role="radiogroup" aria-label="Mode" title="Each agent gets its own window; the main window hides.">
+                {(['orchestration', 'individual'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={p.mode === m}
+                    className={`ck-seg-opt${p.mode === m ? ' is-on' : ''}`}
+                    title={m === 'individual' ? 'Each agent gets its own window; the main window hides.' : 'Every agent in this window.'}
+                    onClick={pick(() => p.mode !== m && p.onMode(m))}
+                  >
+                    {m === 'orchestration' ? 'Orchestration' : 'Individual'}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>

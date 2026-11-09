@@ -1155,7 +1155,7 @@ fn plain_loopback_http_cannot_answer_a_limit_card_but_a_phone_can() {
 
 #[test]
 fn an_agent_cannot_raise_a_limit_card_through_ask_user() {
-    let body = serde_json::json!({"question": "Claude ran out of usage.", "limit": {"kind": "usage_limit", "agent_label": "x"}});
+    let body = serde_json::json!({"question": "Claude ran out of usage.", "limit": {"kind": "usage_limit", "agent_label": "x"}, "wait_ms": 1});
     let (status, reply) = crate::questions::routes::handle("POST", &["questions", "ask"], &body, None, false, &|| {}).unwrap().unwrap();
     assert_eq!(status, 200);
     let id = reply["question_id"].as_str().unwrap().to_string();

@@ -310,3 +310,57 @@ fn only_a_handed_off_run_is_refused_as_a_follow_up_target() {
     assert!(crate::agent_runs::runtime::refuse_handed_off(&stopped).is_ok());
     let _ = fs::remove_dir_all(project);
 }
+
+#[test]
+fn interrupted_run_with_a_session_resumes_through_the_cli_resume_flag() {
+    let project = std::env::temp_dir().join(format!("pm-resumable-{}", Uuid::new_v4()));
+    let project_path = project.to_string_lossy().into_owned();
+    let first = operations::create_operation(persist_req(&project_path, "resumer", 0, "turn one"))
+        .unwrap()
+        .0;
+    operations::set_provider_session(&project_path, &first.operation_id, "codex-sess-9").unwrap();
+    // A restart ends the run; the session id makes it resumable.
+    let path = project
+        .join(".potato-workspace")
+        .join("operations")
+        .join(format!("{}.json", first.operation_id));
+    let mut raw: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    raw["runtime_id"] = json!("previous-runtime");
+    fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+    operations::recover_interrupted_operations(&project_path).unwrap();
+
+    let previous = operations::latest_agent_run(&project_path, "resumer").unwrap();
+    assert_eq!(previous.status, OperationStatus::Failed);
+    assert!(previous.worker.resumable);
+    let view = serde_json::to_value(crate::agent_runs::runtime::AgentRunView::from(previous.clone())).unwrap();
+    assert_eq!(view["status"], "interrupted");
+    assert_eq!(view["resumable"], true);
+    assert_eq!(view["next"], "followup_task resumes it");
+
+    // The follow-up turn inherits the session, is no longer flagged, and launches with `resume`.
+    let (next, _) = crate::agent_runs::runtime::enqueue_followup(
+        &project_path,
+        "resumer",
+        &previous,
+        "carry on".into(),
+        None,
+        Default::default(),
+    )
+    .unwrap();
+    assert!(!next.worker.resumable);
+    assert!(crate::agent_runs::persist::snapshot_can_resume(&next));
+    let spec = crate::tui::headless_launch(
+        &next.agent_type,
+        &crate::tui::HeadlessLaunch {
+            resume_session: next.worker.provider_session_id.as_deref(),
+            ..crate::tui::HeadlessLaunch::new(".", "carry on")
+        },
+    )
+    .unwrap();
+    assert!(
+        spec.args.windows(2).any(|pair| pair[0] == "resume" && pair[1] == "codex-sess-9"),
+        "{:?}",
+        spec.args
+    );
+    let _ = fs::remove_dir_all(project);
+}

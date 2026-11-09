@@ -50,6 +50,19 @@ pub fn keep_helpers_open_set(on: bool) -> Result<Value, String> {
     Ok(keep_helpers_open_get())
 }
 
+/// `{on: bool}`: "Close helpers when their agent closes" (default on).
+#[tauri::command]
+pub fn close_helpers_with_agent_get() -> Value {
+    serde_json::json!({ "on": agent_run_mode::close_helpers_with_agent() })
+}
+
+/// Saves "Close helpers when their agent closes"; only the Settings window writes it.
+#[tauri::command]
+pub fn close_helpers_with_agent_set(on: bool) -> Result<Value, String> {
+    agent_run_mode::set_close_helpers_with_agent(on)?;
+    Ok(close_helpers_with_agent_get())
+}
+
 /// The helpers that ran hidden (no pane), newest first, for the Inbox.
 #[tauri::command]
 pub fn hidden_runs_list() -> Vec<crate::hidden_runs::HiddenRunView> {

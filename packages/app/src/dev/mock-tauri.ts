@@ -41,6 +41,8 @@ import { packageCheckMock } from './package-check-fixtures';
 import { reviewDeskMock } from './review-desk-fixtures';
 import { createFocusMock } from './focus-fixtures';
 import { wslMock } from './wsl-fixtures';
+import { closedChatsMock } from './closed-chats-fixtures';
+import type { ClosedChat } from '../lib/closedChats';
 import { whatBrokeItMock } from './what-broke-it-fixtures';
 import { whatBrokeItResultMock } from './what-broke-it-result-fixtures';
 import { collisionMock } from './collision-fixtures';
@@ -55,6 +57,7 @@ const DOCTOR_ROWS = [
 export function installTauriMock(scenario: HarnessScenario): void {
   // Focus keeps its state for the page's life (start, +15 min and End Focus work in the harness).
   const focusMock = createFocusMock(scenario.focus);
+  const closedState: { chats: ClosedChat[] | null } = { chats: null };
   const panes = scenario.panes ?? EXAMPLE_PANES;
   // In-memory plugin-store (one store, rid 1), keyed as the app writes it.
   // The two agent-authority switches, at the shipped defaults unless the scenario says otherwise.
@@ -95,6 +98,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (reviewDesk.handled) return reviewDesk.value;
       const focus = focusMock(cmd, a);
       if (focus.handled) return focus.value;
+      const closed = closedChatsMock(scenario.closedChats, closedState, cmd, a);
+      if (closed.handled) return closed.value;
       const wsl = wslMock(scenario.wsl, cmd, a);
       if (wsl.handled) return wsl.value;
       const whatBroke = whatBrokeItMock(scenario.whatBroke, cmd, a);
@@ -318,6 +323,10 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'keep_helpers_open_get':
           return { on: true };
         case 'keep_helpers_open_set':
+          return { on: Boolean(a.on) };
+        case 'close_helpers_with_agent_get':
+          return { on: true };
+        case 'close_helpers_with_agent_set':
           return { on: Boolean(a.on) };
         case 'hidden_runs_list':
           return [];

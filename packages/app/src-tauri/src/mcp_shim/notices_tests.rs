@@ -53,23 +53,19 @@ fn error_code(result: &Value) -> &str {
 
 #[test]
 fn tools_list_size_per_mode_over_json_rpc() {
-    assert_eq!(listed("agent").len(), 22);
+    assert_eq!(listed("agent").len(), 10);
     assert_eq!(listed("shell").len(), 16);
-    assert_eq!(listed("both").len(), 32);
-    assert_eq!(listed("all").len(), 73);
+    assert_eq!(listed("both").len(), 10);
+    assert_eq!(listed("all").len(), 73 - tool_registry::ALIASES.len());
 }
 
 #[test]
 fn tools_list_never_shows_an_alias_except_in_all_mode() {
-    for mode in ["agent", "shell", "both"] {
+    for mode in ["agent", "shell", "both", "all"] {
         let names = listed(mode);
         for (alias, _) in tool_registry::ALIASES {
             assert!(!names.iter().any(|name| name == alias), "{alias} listed in {mode}");
         }
-    }
-    let all = listed("all");
-    for (alias, _) in tool_registry::ALIASES {
-        assert!(all.iter().any(|name| name == alias), "{alias} missing from all");
     }
 }
 
@@ -124,7 +120,7 @@ fn set_mode_all_makes_the_full_list_appear_for_the_same_connection() {
     assert!(rpc("tools/list", json!({}))["result"]["tools"].as_array().unwrap().len() < 40);
     let session = current_mcp_session_id().unwrap();
     mcp_sessions::set_mode(&session, "all").unwrap();
-    assert_eq!(rpc("tools/list", json!({}))["result"]["tools"].as_array().unwrap().len(), 73);
+    assert_eq!(rpc("tools/list", json!({}))["result"]["tools"].as_array().unwrap().len(), 73 - tool_registry::ALIASES.len());
     end_session();
 }
 

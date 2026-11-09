@@ -17,6 +17,8 @@ const cockpit = vi.hoisted(() => ({
   openSettings: (async () => {}) as (tab?: string) => Promise<void>,
   // The pane list is known (the split restores on start only then). Off by default, as before.
   ready: false,
+  // The first-switch sheet the (mocked) hook reports, and what Switch / Cancel did.
+  explainer: { open: false, confirm: (async () => {}) as (d: boolean) => Promise<void>, cancel: () => {} },
 }));
 // The Live Room the (mocked) app reports, and the toasts the cockpit shows.
 const live = vi.hoisted(() => ({
@@ -53,6 +55,7 @@ vi.mock('./hooks/useCockpit', async () => {
         dismissSpawn: () => {},
         mode: cockpit.mode,
         setMode: async () => {},
+        modeExplainer: cockpit.explainer,
         openSettings: cockpit.openSettings,
         newAgent: async () => {},
         notify: (text: string) => void live.notes.push(text),
@@ -945,5 +948,21 @@ describe('CockpitApp New agent page wiring', () => {
     clickButton('New agent row');
     clickButton('Page set up');
     expect(mainText()).toContain('DOCTOR VIEW');
+  });
+});
+
+describe('Individual mode first-switch sheet', () => {
+  it('shows the sheet when the hook says so; Switch passes Do not show again, Cancel closes', () => {
+    const confirm = vi.fn(async () => {});
+    const cancel = vi.fn();
+    cockpit.explainer = { open: true, confirm, cancel };
+    act(() => root.render(createElement(CockpitApp)));
+    const dialog = host.querySelector('[role="alertdialog"]')!;
+    expect(dialog.textContent).toContain('Each agent gets its own window');
+    clickButton('Switch');
+    expect(confirm).toHaveBeenCalledWith(true);
+    clickButton('Cancel');
+    expect(cancel).toHaveBeenCalledTimes(1);
+    cockpit.explainer = { open: false, confirm, cancel };
   });
 });

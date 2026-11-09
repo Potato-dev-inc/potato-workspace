@@ -10,6 +10,7 @@ import './styles/index.css';
 // The other windows and modes load their own code only when they open, so the first screen stays small.
 const AskBarApp = lazy(() => import('./components/askbar/AskBarApp'));
 const PointBoxApp = lazy(() => import('./components/point/PointBoxApp'));
+const MiniBarApp = lazy(() => import('./components/minibar/MiniBarApp'));
 const CockpitApp = lazy(() => import('./CockpitApp'));
 const PwaApp = lazy(() => import('./PwaApp'));
 const PwaLegacyApp = lazy(() => import('./PwaLegacyApp'));
@@ -48,6 +49,7 @@ async function resolveRoot(): Promise<RootComponent> {
   if (params.get('cockpit') === '1') return CockpitApp;
   if (params.get('askbar') === '1') return AskBarApp;
   if (params.get('pointbox') === '1') return PointBoxApp;
+  if (params.get('minibar') === '1') return MiniBarApp;
   if (isTerminalApp) return TerminalApp;
   if (isStandaloneWorker) return WorkerHostBootstrap;
   if (isMobileOrPwa) return isLegacyPwa ? PwaLegacyApp : PwaApp;

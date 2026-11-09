@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 mod acceptance;
 mod dispatch_race;
+mod durability;
 mod guard_env;
 mod handed_off;
 mod idempotency;

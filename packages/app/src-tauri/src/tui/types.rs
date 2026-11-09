@@ -259,6 +259,10 @@ pub struct AccountScheme {
     pub extra_env: Vec<(String, String)>,
     /// Plain-language steps for the one-time login in an account's home.
     pub login_hint: String,
+    /// File names, relative to the account's home, whose presence means the CLI is signed in there
+    /// (`.credentials.json`, `auth.json`). Empty when the agent keeps its login somewhere else (a keychain),
+    /// in which case a signed-in state cannot be read from the folder.
+    pub credential_files: Vec<String>,
 }
 
 /// A TUI that draws a fixed-width sidebar on the right once the pane is wider than `min_cols`

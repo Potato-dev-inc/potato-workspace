@@ -67,24 +67,41 @@ struct Slot {
 
 static SLOTS: Lazy<Mutex<HashMap<String, Slot>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
+/// Where the login a helper starts under came from (the receipt's `account_source`).
+pub const SOURCE_HELPER_DEFAULT: &str = "helper_default";
+pub const SOURCE_ASKED: &str = "asked";
+pub const SOURCE_CLI_LOGIN: &str = "cli_login";
+pub const SOURCE_EXPLICIT: &str = "explicit";
+
 /// The account id to start the helper under (`None` = the agent's main login). Blocks up to `starting.wait`
 /// when the person has to be asked.
+#[cfg(test)]
 pub fn choose(store: &Store, starting: &Starting, notify: &dyn Fn()) -> Result<Option<String>, Refused> {
+    choose_with_source(store, starting, notify).map(|(account, _)| account)
+}
+
+/// Like [`choose`], and says where the answer came from: `helper_default` (the person's saved "Helpers use"),
+/// `asked` (a card the person answered) or `cli_login` (the agent has no accounts, so only its own login exists).
+pub fn choose_with_source(
+    store: &Store,
+    starting: &Starting,
+    notify: &dyn Fn(),
+) -> Result<(Option<String>, &'static str), Refused> {
     // An agent without accounts has only its own login: nothing to choose.
     if super::scheme_for(starting.agent_id).is_err() {
-        return Ok(None);
+        return Ok((None, SOURCE_CLI_LOGIN));
     }
     match store.effective_helper_login(starting.agent_id) {
         // A saved setting answers the question, so a card still open for this call is closed, not left in the Inbox.
         HelperLogin::Main => {
             retire(&slot_key(starting), notify);
-            Ok(None)
+            Ok((None, SOURCE_HELPER_DEFAULT))
         }
         HelperLogin::Account(id) => {
             retire(&slot_key(starting), notify);
-            Ok(Some(id))
+            Ok((Some(id), SOURCE_HELPER_DEFAULT))
         }
-        HelperLogin::Ask => ask_the_person(store, starting, notify),
+        HelperLogin::Ask => ask_the_person(store, starting, notify).map(|account| (account, SOURCE_ASKED)),
     }
 }
 

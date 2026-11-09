@@ -58,7 +58,7 @@ pub fn start_error_text(error: &StartError) -> String {
 #[tauri::command]
 pub async fn acp_chat_start(app: AppHandle, state: State<'_, AppState>, agent_id: String, folder: String, explicit: Option<bool>) -> Result<Value, String> {
     let deps = live_deps(&app, &state.registry);
-    let request = StartRequest { agent_id, folder: PathBuf::from(folder), explicit: explicit.unwrap_or(false) };
+    let request = StartRequest { agent_id, folder: PathBuf::from(folder), explicit: explicit.unwrap_or(false), account: None };
     let started = tauri::async_runtime::spawn_blocking(move || chat::start_gated(&deps, request)).await.map_err(|e| format!("ACP_START_FAILED: {e}"))?;
     match started {
         Ok(session) => Ok(json!({ "pane_id": session.pane_id(), "agent": session.agent_id(), "lane": chat::LANE })),

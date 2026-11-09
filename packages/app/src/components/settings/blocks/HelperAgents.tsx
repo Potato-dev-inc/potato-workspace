@@ -1,7 +1,9 @@
 // Settings > Agents > Helpers: "Helper agents" (shown / agent chooses / background) and "Keep helpers open when they
-// finish". Both are saved by the app, not by the agent, so an agent cannot talk its way around them.
+// finish" and "Close helpers when their agent closes". All are saved by the app, not by the agent, so an agent cannot talk its way around them.
 import { useEffect, useState } from 'react';
 import {
+  CLOSE_WITH_AGENT_HINT,
+  CLOSE_WITH_AGENT_LABEL,
   HELPER_AGENTS_HINT,
   HELPER_AGENTS_LABEL,
   HELPER_CHOICES,
@@ -90,6 +92,36 @@ export function KeepHelpersOpenToggle({
   return (
     <>
       <SettingToggle label={KEEP_OPEN_LABEL} description={KEEP_OPEN_HINT} checked={value} onChange={(v) => void save(v)} />
+      {error && (
+        <div role="alert" className="text-xs">
+          {error}
+        </div>
+      )}
+    </>
+  );
+}
+
+export function CloseHelpersWithAgentToggle({
+  api = tauriHelperAgentsApi,
+  onSaved,
+}: {
+  api?: HelperAgentsApi;
+  onSaved?: () => void;
+}) {
+  const { value, setValue, error, setError } = useSaved<boolean>(async () => (await api.getCloseWithAgent()).on, api);
+  if (value === null) return null;
+  const save = async (next: boolean) => {
+    setError(null);
+    try {
+      setValue((await api.setCloseWithAgent(next)).on);
+      onSaved?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <>
+      <SettingToggle label={CLOSE_WITH_AGENT_LABEL} description={CLOSE_WITH_AGENT_HINT} checked={value} onChange={(v) => void save(v)} />
       {error && (
         <div role="alert" className="text-xs">
           {error}

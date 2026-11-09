@@ -97,6 +97,9 @@ pub struct AgentRunRequest {
     pub idempotency_key: Option<String>,
     #[serde(default)]
     pub acceptance_criteria: Option<Vec<String>>,
+    /// `false` skips the instruction to end the reply with a `potato-result` JSON block.
+    #[serde(default)]
+    pub structured_result: Option<bool>,
     /// State-based checks (file_exists / file_contains / file_absent) evaluated at completion.
     #[serde(default)]
     pub checks: Option<Vec<crate::agent_runs::checks::Check>>,
@@ -142,6 +145,10 @@ pub struct AgentRunRequest {
     /// Absent = the CLI's own login.
     #[serde(default)]
     pub account: Option<String>,
+    /// Where `account` came from when the app decided it (`helper_default`, `asked`, `cli_login`); the receipt
+    /// reports it. Set only inside the app, never from a request body.
+    #[serde(default, skip_deserializing)]
+    pub account_source: Option<String>,
     /// Budget for the new run, in turns (`crate::budgets`). Absent: the Settings default, which is
     /// off unless the person set one.
     #[serde(default)]
@@ -182,6 +189,10 @@ pub struct AgentRunRequest {
     /// Crate-internal: "Keep helpers open when they finish" set `keep_pane` on for this run; the result says so.
     #[serde(skip)]
     pub(crate) kept_open_by_setting: bool,
+    /// Crate-internal: which lane the `/agents/run` route chose for this run and why (`acp::chat::lanes`); stored on
+    /// the worker so later reads of the run still say it.
+    #[serde(skip)]
+    pub(crate) lane_note: Option<crate::operations::LaneNoteRecord>,
     /// Crate-internal: a `quick_ask` question. Hidden by design, so it is not listed as a hidden run.
     #[serde(skip)]
     pub(crate) quick: bool,

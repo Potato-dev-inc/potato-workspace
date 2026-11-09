@@ -55,6 +55,8 @@ pub(super) struct Inner {
     pub(super) supervisor: Arc<Supervisor>,
     pub(super) host: Arc<dyn HostEnv>,
     pub(super) agents: Arc<dyn AgentSource>,
+    /// Where the accounts a chat can run under are kept (tests point it at a temp folder).
+    pub(super) accounts: Mutex<crate::accounts::Store>,
 }
 
 #[derive(Clone)]
@@ -83,6 +85,9 @@ pub enum ConversationError {
     Disabled { agent: String, note: String },
     #[error("{0}")]
     Chat(AcpError),
+    /// The account the chat ran under is gone (`ACCOUNT_NOT_FOUND`) or its agent has none (`ACCOUNT_UNSUPPORTED`).
+    #[error("{code}: {message}")]
+    Account { code: &'static str, message: String },
 }
 
 /// What a restart did for one conversation.
@@ -100,7 +105,12 @@ impl Conversations {
     pub fn new(store: RecordStore, supervisor: Arc<Supervisor>, host: Arc<dyn HostEnv>, agents: Arc<dyn AgentSource>) -> Self {
         let records = store.load();
         store.sweep_orphan_journals(&records);
-        Conversations(Arc::new(Inner { records: Mutex::new(records), store, writers: WriterLedger::new(), supervisor, host, agents }))
+        Conversations(Arc::new(Inner { records: Mutex::new(records), store, writers: WriterLedger::new(), supervisor, host, agents, accounts: Mutex::new(crate::accounts::Store::default_location()) }))
+    }
+
+    /// Where accounts are read from (the app's data folder unless a test says otherwise).
+    pub fn set_accounts_store(&self, store: crate::accounts::Store) {
+        *self.0.accounts.lock() = store;
     }
 
     // ---- reading ---------------------------------------------------------------------------------------
@@ -183,6 +193,12 @@ impl Conversations {
 
     /// Starts a new chat conversation. Nothing runs yet: the adapter starts with the first prompt.
     pub fn create(&self, agent: &str, cwd: &Path) -> Result<ConversationView, ConversationError> {
+        self.create_for(agent, cwd, None)
+    }
+
+    /// [`create`](Self::create) under an account (`accounts::Store`): the adapter gets that login's environment, now and
+    /// after a restart (the record keeps the account id). The caller has checked the account.
+    pub fn create_for(&self, agent: &str, cwd: &Path, account: Option<&str>) -> Result<ConversationView, ConversationError> {
         let cfg = self.config_for(agent)?;
         let id = format!("acp-{}", uuid::Uuid::new_v4().simple());
         let now = now_ms();
@@ -198,6 +214,8 @@ impl Conversations {
             config_options: Vec::new(),
             started_by: None,
             parent_pane_id: None,
+            account: account.map(str::to_string),
+            lane_note: None,
             created_ms: now,
             updated_ms: now,
         };
@@ -226,6 +244,8 @@ impl Conversations {
             config_options: Vec::new(),
             started_by: None,
             parent_pane_id: None,
+            account: None,
+            lane_note: None,
             created_ms: now,
             updated_ms: now,
         };
@@ -361,7 +381,7 @@ impl Conversations {
         report
     }
 
-    fn restore_one(&self, record: &ConversationRecord, replay: bool) -> Result<(), ConversationError> {
+    pub(super) fn restore_one(&self, record: &ConversationRecord, replay: bool) -> Result<(), ConversationError> {
         let cfg = match self.config_for(&record.agent) {
             Ok(cfg) => cfg,
             Err(e) => {
@@ -377,6 +397,19 @@ impl Conversations {
                 return Err(e);
             }
         };
+        // A chat that ran under an account starts under it again, or not at all: never under the main login.
+        if let Some(account) = &record.account {
+            let store = self.0.accounts.lock().clone();
+            if let Err(problem) = super::account::launch_env(&store, &cfg.id, account) {
+                let text = format!("This chat ran under an account that is not available any more ({}). It was not started.", problem.code);
+                self.update(&record.id, |r| {
+                    r.last_known_state = LastState::Closed;
+                    r.terminal_pane = None;
+                    r.push_notice(NoticeKind::RestoreFailed, text, now_ms());
+                });
+                return Err(ConversationError::Account { code: problem.code, message: problem.message });
+            }
+        }
         self.build_session(&record.id, cfg, Path::new(&record.cwd), record.session_id.clone(), replay);
         let _ = self.0.writers.claim(&record.id, Writer::Chat);
         Ok(())
@@ -393,6 +426,13 @@ impl Conversations {
     pub(super) fn build_session(&self, id: &str, cfg: Arc<AgentConfig>, cwd: &Path, resume: Option<String>, replay: bool) -> Arc<AcpSession> {
         let mut cfg = (*cfg).clone();
         super::config::add_pane_id(&mut cfg, id);
+        // A chat under an account starts its adapter under that login (a restored one too).
+        if let Some(account) = self.record(id).and_then(|r| r.account) {
+            let store = self.0.accounts.lock().clone();
+            if let Ok(env) = super::account::launch_env(&store, &cfg.id, &account) {
+                super::config::with_account_env(&mut cfg, &env);
+            }
+        }
         let session = AcpSession::new(Arc::new(cfg), self.0.host.clone(), SessionParams { key: id.to_string(), cwd: cwd.to_path_buf(), resume_session_id: resume });
         if replay {
             session.replay_on_next_start();
@@ -452,7 +492,7 @@ impl Conversations {
         self.save();
     }
 
-    fn save(&self) {
+    pub(super) fn save(&self) {
         let records = self.0.records.lock().clone();
         if let Err(e) = self.0.store.save(&records) {
             tracing::warn!("acp: could not save the conversation records: {e}");

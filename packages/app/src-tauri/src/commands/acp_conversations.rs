@@ -101,6 +101,50 @@ pub fn acp_conversation_create(agent: String, cwd: String) -> Result<Value, Stri
     global().create(&agent, Path::new(&cwd)).map(|view| json!(view)).map_err(|e| e.to_string())
 }
 
+/// The closed chats, newest first: `[{id, agent, label, cwd, updated_ms, title}]`.
+#[tauri::command]
+pub fn acp_closed_list() -> Value {
+    json!(global().closed_list())
+}
+
+/// "Reopen" on a closed chat: the conversation is live again and its chat pane is listed (nothing starts until it is
+/// used, as after a restart). Returns the pane id. Refused for a chat that is not closed.
+#[tauri::command]
+pub async fn acp_reopen_closed(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<String, String> {
+    if !crate::acp::chat_enabled() {
+        return Err("FEATURE_OFF: chat (ACP) is switched off in Labs".into());
+    }
+    let deps = super::acp_chat::live_deps(&app, &state.registry);
+    let opened = tauri::async_runtime::spawn_blocking(move || {
+        global().reopen_closed(&id).map_err(|e| match e {
+            crate::acp::conversations::ConversationError::Unknown => "This chat is not closed any more.".to_string(),
+            other => other.to_string(),
+        })?;
+        crate::acp::chat::restore_panes(&deps);
+        Ok::<String, String>(id)
+    })
+    .await
+    .map_err(|e| format!("INTERNAL: {e}"))??;
+    let _ = app.emit("acp-conversations-changed", ());
+    Ok(opened)
+}
+
+/// "Delete" on a closed chat: its record and its journal files go for good. Refused for a chat that is not closed.
+#[tauri::command]
+pub fn acp_delete_closed(app: AppHandle, id: String) -> Result<(), String> {
+    global().delete_closed(&id).map_err(|_| "This chat is not closed any more.".to_string())?;
+    let _ = app.emit("acp-conversations-changed", ());
+    Ok(())
+}
+
+/// "Delete all closed chats". Returns how many were deleted.
+#[tauri::command]
+pub fn acp_delete_all_closed(app: AppHandle) -> usize {
+    let n = global().delete_all_closed();
+    let _ = app.emit("acp-conversations-changed", ());
+    n
+}
+
 /// Tells the windows that a conversation changed hands: the chat pane re-reads its state (it shows the terminal or
 /// the chat), and a terminal pane re-asks whether it holds a conversation.
 fn announce_hand_over(app: &AppHandle, conversation: &str) {

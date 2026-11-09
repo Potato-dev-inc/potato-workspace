@@ -113,6 +113,8 @@ pub fn authorize(
         }
         return Ok(());
     };
+    // Any call from a session keeps the pane leases it holds alive.
+    crate::agent_runs::pane_lease::heartbeat(session_id);
     let clean_path = path.split('?').next().unwrap_or(path);
     if (method == "GET" && clean_path == "/mcp/tools")
         || (method == "GET" && clean_path == "/mcp/mode")

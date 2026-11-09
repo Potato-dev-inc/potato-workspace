@@ -3,7 +3,7 @@
 //! Stored in `<app data>/agent_lane.json`, one entry per agent that was changed. Like the run-mode and
 //! authority switches it is not in the phone-patchable settings mirror: it changes how an agent runs, so
 //! only the Settings window (a Tauri command) writes it. It is the default of the + menu's Terminal | Chat
-//! switch and of `run_agent` without a `lane` (`acp::chat::surface::wants`).
+//! switch and of `run_agent` without a `lane` (`acp::chat::lanes::plan`).
 //!
 //! The terminal stays a full option, not only a fallback: this setting never removes it.
 
@@ -85,7 +85,13 @@ impl LaneStore {
         self.read().agents.get(&key(agent)).and_then(|v| RunLane::parse(v)).unwrap_or_default()
     }
 
-    /// Choosing the default removes the entry, so the file lists only what was changed.
+    /// The agent's saved choice when there is one. `None`: the person never chose (or the choice was cleared), so
+    /// `run_agent` without a `lane` may pick the way itself (`lane: "auto"`). An explicit Terminal is `Some(Terminal)`.
+    pub fn chosen(&self, agent: &str) -> Option<RunLane> {
+        self.read().agents.get(&key(agent)).and_then(|v| RunLane::parse(v))
+    }
+
+    /// Saves the person's choice. Terminal is saved too, so "I chose the terminal" is not the same as "never chose".
     pub fn set(&self, agent: &str, lane: RunLane) -> Result<(), String> {
         let id = key(agent);
         if id.is_empty() {
@@ -93,12 +99,22 @@ impl LaneStore {
         }
         let mut file = self.read();
         file.version = FILE_VERSION;
-        if lane == RunLane::Terminal {
-            file.agents.remove(&id);
-        } else {
-            file.agents.insert(id, lane.as_str().to_string());
+        file.agents.insert(id, lane.as_str().to_string());
+        self.write(&file)
+    }
+
+    /// Forgets the choice (back to "never chose"): used when the app itself resets an agent, e.g. after its chat was removed.
+    pub fn clear(&self, agent: &str) -> Result<(), String> {
+        let mut file = self.read();
+        if file.agents.remove(&key(agent)).is_none() {
+            return Ok(());
         }
-        let text = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
+        file.version = FILE_VERSION;
+        self.write(&file)
+    }
+
+    fn write(&self, file: &StoreFile) -> Result<(), String> {
+        let text = serde_json::to_vec_pretty(file).map_err(|e| e.to_string())?;
         crate::settings_patch::write_atomic(&self.path, &text).map_err(|e| format!("could not save: {e}"))
     }
 
@@ -145,7 +161,10 @@ mod tests {
         assert_eq!(store.lane_for("claude"), RunLane::Terminal);
         assert_eq!(LaneStore::at(dir.join(FILE)).lane_for(" CODEX "), RunLane::Acp);
         store.set("codex", RunLane::Terminal).unwrap();
-        assert!(store.all().is_empty(), "choosing the default removes the entry");
+        assert_eq!(store.chosen("codex"), Some(RunLane::Terminal), "an explicit terminal is saved, not the same as never chose");
+        assert_eq!(store.chosen("claude"), None);
+        store.clear("codex").unwrap();
+        assert!(store.all().is_empty() && store.chosen("codex").is_none(), "clearing forgets the choice");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -183,7 +202,7 @@ mod tests {
         store.set("kilo", RunLane::TerminalChat).unwrap();
         assert_eq!(store.lane_for("KILO"), RunLane::TerminalChat);
         store.set("kilo", RunLane::Terminal).unwrap();
-        assert!(store.all().is_empty());
+        assert_eq!(store.chosen("kilo"), Some(RunLane::Terminal));
         let _ = std::fs::remove_dir_all(dir);
     }
 

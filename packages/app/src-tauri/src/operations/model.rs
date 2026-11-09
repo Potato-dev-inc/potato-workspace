@@ -373,6 +373,10 @@ pub struct WorkerPersist {
     pub scope: Option<String>,
     #[serde(default)]
     pub provider_session_id: Option<String>,
+    /// Set by startup recovery when an interrupted run kept a provider session: `followup_task`
+    /// resumes that conversation. The run itself stays `failed` / `OPERATION_INTERRUPTED`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub resumable: bool,
     /// True after the provider process/session was replaced; follow-ups must
     /// reconstruct context until a turn lands on the new session.
     #[serde(default)]
@@ -405,6 +409,10 @@ pub struct WorkerPersist {
     /// The user account (`crate::accounts`) this worker runs under; absent = the CLI's own login.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account: Option<String>,
+    /// Where `account` came from when the app decided it (`helper_default`, `asked`, `cli_login`); absent when
+    /// the caller named it (or no account). Reported on the receipt as `account_source`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_source: Option<String>,
     /// The env guard this run's pane or process starts under (`pty::env_guard`, e.g. `no_push`).
     /// Set only by Rust code inside the app, never from a request body. Persisted so a restart,
     /// a headless fallback and a follow-up keep it. Absent = no guard.
@@ -436,6 +444,10 @@ pub struct WorkerPersist {
     /// ask for that. The plain sentence the result and receipt carry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_forced: Option<String>,
+    /// Which way `run_agent` ran this worker (`lane` auto/terminal/acp) and why, kept so a later `inspect_agent` or
+    /// `wait_agents` still says it (`lane_used`, `lane_reason`, `lane_fallback`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_note: Option<LaneNoteRecord>,
     /// "Keep helpers open when they finish" kept this run's pane open although the agent did not ask for that.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kept_open_note: Option<String>,
@@ -459,6 +471,24 @@ impl OperationSnapshot {
             .as_ref()
             .and_then(|worktree| worktree.active_cwd())
             .unwrap_or(&self.project_path)
+    }
+}
+
+/// The lane a run used and why. `used` is `terminal` or `headless` as the run started (a later fallback to headless is
+/// read from the worker's `fallback`); `fallback` is set when a chat was tried first and did not start.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct LaneNoteRecord {
+    pub used: String,
+    pub reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<Value>,
+}
+
+impl LaneNoteRecord {
+    /// `(lane_used, lane_reason, lane_fallback)` for a run whose worker fell back as `fell_back_to_headless` says.
+    pub fn report(&self, fell_back_to_headless: bool) -> (String, String, Option<Value>) {
+        let used = if fell_back_to_headless { "headless" } else { self.used.as_str() };
+        (used.to_string(), self.reason.clone(), self.fallback.clone())
     }
 }
 

@@ -14,6 +14,7 @@ mod dispatch;
 mod errors;
 mod event_log;
 mod handoff;
+pub mod identity;
 mod http;
 #[cfg(test)]
 pub(crate) use http::{spawn_device_gate_listener, spawn_gate_listener};
@@ -172,6 +173,7 @@ pub fn start_embedded_bridge(
     port_file: PathBuf,
     pairing_file: PathBuf,
 ) -> Result<BridgeHandle, String> {
+    let _ = identity::app_instance_id();
     let _ = BRIDGE_APP.set(app.clone());
     let _ = BRIDGE_REGISTRY.set(registry.clone());
     if let Ok(recovered) = recover_interrupted_operations_on_startup() {

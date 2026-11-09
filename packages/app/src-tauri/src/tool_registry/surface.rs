@@ -23,7 +23,7 @@ pub enum ToolTier {
 
 /// Bump when the listed surface changes without any tool name, description, route or schema
 /// changing (it feeds `catalog_version`).
-pub(super) const SURFACE_REVISION: u32 = 1;
+pub(super) const SURFACE_REVISION: u32 = 2;
 
 /// Pure aliases: `(alias, canonical tool)`. Same route and behaviour as the canonical tool.
 /// `send_agent` is NOT a sibling of `send_message`: it posts to `/agents/followup` exactly like
@@ -101,9 +101,35 @@ pub fn alias_of(name: &str) -> Option<&'static str> {
         .map(|(_, canonical)| *canonical)
 }
 
+/// The default `tools/list` for the orchestrator modes (agent, both): exactly these, plus nothing.
+/// Everything else stays callable by name and is listed in `all` mode.
+pub const DEFAULT_LISTED: &[&str] = &[
+    "quick_ask",
+    "run_agent",
+    "wait_agents",
+    "followup_task",
+    "send_message",
+    "list_agents",
+    "inspect_agent",
+    "answer_prompt",
+    "ask_user",
+    "set_mode",
+];
+
 /// Whether `tools/list` advertises `name` in `mode`. Callers also check callability.
+/// Aliases are never listed, not even in `all`; they still work when called by name.
 pub fn tool_listed_in_mode(name: &str, mode: McpMode) -> bool {
-    name == "set_mode" || mode == McpMode::All || tool_tier(name) == ToolTier::Core
+    if name == "set_mode" {
+        return true;
+    }
+    if tool_tier(name) == ToolTier::Alias {
+        return false;
+    }
+    match mode {
+        McpMode::All => true,
+        McpMode::Shell => tool_tier(name) == ToolTier::Core,
+        McpMode::Agent | McpMode::Both => DEFAULT_LISTED.contains(&name),
+    }
 }
 
 /// Stable code per tier for the catalog hash.

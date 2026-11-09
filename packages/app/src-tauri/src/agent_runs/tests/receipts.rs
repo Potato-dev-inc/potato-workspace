@@ -390,3 +390,57 @@ fn receipt_says_which_mode_the_agent_setting_chose_and_the_not_verified_fallback
         receipt.not_verified
     );
 }
+
+#[test]
+fn receipt_reports_the_account_used_and_how_it_was_chosen() {
+    let mut snapshot = parked_snapshot(OperationStatus::Completed, "none");
+    let receipt = receipt_of(snapshot.clone());
+    assert_eq!((receipt.account_used, receipt.account_source.as_str()), (None, "cli_login"));
+    snapshot.worker.account = Some("acc_1".into());
+    let receipt = receipt_of(snapshot.clone());
+    assert_eq!((receipt.account_used.as_deref(), receipt.account_source.as_str()), (Some("acc_1"), "explicit"));
+    snapshot.worker.account_source = Some("helper_default".into());
+    let receipt = receipt_of(snapshot);
+    assert_eq!((receipt.account_used.as_deref(), receipt.account_source.as_str()), (Some("acc_1"), "helper_default"));
+}
+
+#[test]
+fn receipt_gains_structured_result_and_capture_becomes_structured() {
+    let mut snapshot = parked_snapshot(OperationStatus::Completed, "none");
+    snapshot.result_capture = Some(operations::ResultCapture::Inferred);
+    snapshot.result = Some(
+        "All done.\n```potato-result\n{\"summary\":\"fixed it\",\"files_changed\":[\"a.rs\"],\"checks_run\":[\"cargo test\"],\"open_questions\":[]}\n```".into(),
+    );
+    let view = crate::agent_runs::runtime::AgentRunView::from(snapshot);
+    assert_eq!(view.result_capture, "structured");
+    let receipt = view.receipt.unwrap();
+    assert_eq!(receipt.result_capture, "structured");
+    let structured = receipt.structured_result.expect("structured_result");
+    assert_eq!(structured["summary"], "fixed it");
+    assert_eq!(structured["files_changed"][0], "a.rs");
+}
+
+#[test]
+fn a_missing_or_broken_block_keeps_the_old_capture_and_the_raw_result() {
+    for text in ["plain answer", "```potato-result\n{broken\n```"] {
+        let mut snapshot = parked_snapshot(OperationStatus::Completed, "none");
+        snapshot.result_capture = Some(operations::ResultCapture::Inferred);
+        snapshot.result = Some(text.into());
+        let view = crate::agent_runs::runtime::AgentRunView::from(snapshot);
+        assert_eq!(view.result_capture, "inferred");
+        assert_eq!(view.result.as_deref(), Some(text));
+        assert!(view.receipt.unwrap().structured_result.is_none());
+    }
+}
+
+#[test]
+fn structured_result_opt_out_parses_on_both_requests() {
+    let run: crate::agent_runs::runtime::AgentRunRequest =
+        serde_json::from_value(serde_json::json!({"task": "x", "structured_result": false})).unwrap();
+    assert_eq!(run.structured_result, Some(false));
+    assert_eq!(crate::agent_runs::structured::with_instruction(&run.task, run.structured_result), "x");
+    let on: crate::agent_runs::runtime::AgentRunRequest =
+        serde_json::from_value(serde_json::json!({"task": "x"})).unwrap();
+    assert!(crate::agent_runs::structured::with_instruction(&on.task, on.structured_result)
+        .contains(crate::agent_runs::structured::STRUCTURED_RESULT_INSTRUCTION));
+}

@@ -18,7 +18,7 @@ use super::*;
 use crate::acp::config::{HostEnv, RealHost};
 use crate::acp::conversations::Conversations;
 use crate::acp::install;
-use crate::acp::lane::{LaneStore, RunLane};
+use crate::acp::lane::LaneStore;
 use crate::acp::overlay::{OverlayItem, OverlayStore};
 use serde_json::json;
 use std::path::Path;
@@ -172,7 +172,7 @@ pub(crate) fn remove_in(stores: &Stores, agent: &str, remove_addon: bool, stop_c
     let mut out = Removal { chats_stopped: stop_chats(&id), ..Removal::default() };
     out.conversations = stores.conversations.chat_removed(&id).len();
     // Every lane (Acp, terminal chat) goes back to Terminal; a terminal-chat lane is also reset by the shared overlay removal below.
-    stores.lanes.set(&id, RunLane::Terminal)?;
+    stores.lanes.clear(&id)?;
     // The add-on folder is read before the overlay entry goes: a registry add-on is named by that entry.
     let addon = remove_addon.then(|| addon_dir_of(stores.host, stores.overlay, &id)).flatten();
     out.overlay_removed = super::acp_overlay::remove_in(stores.overlay, stores.lanes, &id)?;
@@ -235,6 +235,7 @@ pub(crate) fn addon_info(host: &dyn HostEnv, overlay: &OverlayStore, agent: &str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::acp::lane::RunLane;
     use crate::acp::config;
     use crate::acp::overlay::{OverlayEntry, RegistryEntry};
     use crate::acp::record::RecordStore;

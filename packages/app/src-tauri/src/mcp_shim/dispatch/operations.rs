@@ -27,7 +27,8 @@ fn run(
             (|| {
                 required_string(args, "project_path")?;
                 required_string(args, "task")?;
-                required_string(args, "idempotency_key")?;
+                // A missing key is derived from (session, tool, arguments, 10-minute window).
+                ensure_stable_idempotency_key("delegate_work", &mut body);
                 let object = body
                     .as_object_mut()
                     .ok_or_else(|| "arguments must be an object".to_string())?;
