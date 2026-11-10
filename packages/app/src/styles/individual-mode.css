@@ -79,16 +79,93 @@ html.mb-root #root {
     --mb-sep: rgba(0, 0, 0, 0.14);
   }
 }
+.mb-chips-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+/* Edge fades show only on the side that has hidden chips. */
+.mb-chips-wrap::before,
+.mb-chips-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 22px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.mb-chips-wrap::before {
+  left: 0;
+  background: linear-gradient(to right, var(--mb-bg), transparent);
+}
+.mb-chips-wrap::after {
+  right: 0;
+  background: linear-gradient(to left, var(--mb-bg), transparent);
+}
+.mb-chips-wrap.mb-fade-start::before,
+.mb-chips-wrap.mb-fade-end::after {
+  opacity: 1;
+}
 .mb-chips {
   display: flex;
   flex: 1;
   gap: 4px;
   min-width: 0;
   overflow-x: auto;
+  overflow-y: hidden;
+  padding: 3px 0;
   scrollbar-width: none;
 }
 .mb-chips::-webkit-scrollbar {
   display: none;
+}
+.mb-chip-slot {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+.mb-chip-slot .mb-chip {
+  flex: none;
+  padding-right: 26px;
+}
+/* The close x sits at the chip's right end: hidden until hover or focus, but always in the tab order. */
+.mb-chip-x {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--mb-label-2);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+.mb-chip-slot:hover .mb-chip-x,
+.mb-chip-slot:focus-within .mb-chip-x,
+.mb-chip-x:focus-visible {
+  opacity: 1;
+}
+.mb-chip-x:hover {
+  background: var(--mb-fill-hover);
+  color: var(--mb-label);
+}
+.mb-chip-x:focus-visible {
+  outline: 2px solid var(--mb-label-2);
+  outline-offset: 1px;
 }
 .mb-chip,
 .mb-btn {

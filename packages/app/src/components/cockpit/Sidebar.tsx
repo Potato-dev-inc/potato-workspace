@@ -308,6 +308,7 @@ export function Sidebar({
       <div key={id} className="ck-rowwrap">
         <button
           type="button"
+          data-pane-row={id}
           className={`ck-row ck-row--slim${active ? ' is-active' : ''}${asking ? ' is-needs' : ''}${p.status === 'error' ? ' is-error' : ''}`}
           onClick={() => c.select(id)}
           onContextMenu={(e) => {
@@ -453,7 +454,7 @@ export function Sidebar({
         const count = g.items.reduce((n, item) => n + 1 + descendants(item).length, 0);
         const isFolded = foldedProjects.has(g.key);
         return (
-          <div className="ck-proj" key={g.key} role="group" aria-label={g.name}>
+          <div className="ck-proj" key={g.key} role="group" aria-label={g.name} data-pane-ids={g.items.flatMap((item) => [item.pane.info.id, ...descendants(item).map((d) => d.pane.info.id)]).join(' ')}>
             <ProjectHeader
               name={g.name}
               count={count}

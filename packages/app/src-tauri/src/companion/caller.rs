@@ -73,17 +73,24 @@ pub fn companion_panes(registry: &Arc<Mutex<PaneRegistry>>) -> Vec<CompanionPane
 /// Every live pane of the registry (companion or not), for placing a caller in the pane whose process tree it sits in
 /// (`peer::caller_pane`: the parent a helper is nested under).
 pub fn live_panes(registry: &Arc<Mutex<PaneRegistry>>) -> Vec<CompanionPane> {
-    let reg = registry.lock();
-    reg.panes
-        .iter()
-        .map(|(id, pane)| {
-            let mut roots = vec![pane.info.pid];
-            if let Some(serve) = pane.opencode.as_ref().and_then(|link| link.serve_pid()) {
-                roots.push(serve);
-            }
-            CompanionPane { id: id.clone(), roots, exited: *pane.exited.lock() }
-        })
-        .collect()
+    let mut out: Vec<CompanionPane> = {
+        let reg = registry.lock();
+        reg.panes
+            .iter()
+            .map(|(id, pane)| {
+                let mut roots = vec![pane.info.pid];
+                if let Some(serve) = pane.opencode.as_ref().and_then(|link| link.serve_pid()) {
+                    roots.push(serve);
+                }
+                CompanionPane { id: id.clone(), roots, exited: *pane.exited.lock() }
+            })
+            .collect()
+    };
+    // A chat pane's adapter process as it is now (its registry pid is 0 or stale), asked after the registry unlocks.
+    for pane in &mut out {
+        pane.roots.extend(crate::pty::pane_parent::chat_live_pid(&pane.id));
+    }
+    out
 }
 
 /// A companion's whole territory: its own pane, and every pane started under it (the `parent_pane_id` chain, so

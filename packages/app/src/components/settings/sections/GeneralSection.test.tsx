@@ -3,7 +3,7 @@
 import { unsearchableLabels } from '../test-utils';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { blur, buttonByText, byLabel, click, hasText, mountRows, pickOption, settle, type as typeInto, type Mounted } from '../test-utils';
+import { makeEnv, blur, buttonByText, byLabel, click, hasText, mountRows, pickOption, settle, type as typeInto, type Mounted } from '../test-utils';
 import { generalRows } from './GeneralSection';
 
 const mocks = vi.hoisted(() => ({
@@ -31,7 +31,11 @@ vi.mock('../../../lib/loop-guard', () => ({
   },
 }));
 vi.mock('../../../lib/cockpit-api', () => ({
-  cockpitApi: { ambientGetPrefs: vi.fn(async () => ({ animated_tray_icon: true })), ambientSetAnimatedTray: vi.fn(async () => undefined) },
+  cockpitApi: {
+    ambientGetPrefs: vi.fn(async () => ({ animated_tray_icon: true })),
+    ambientSetAnimatedTray: vi.fn(async () => undefined),
+    modeSwitchPreview: vi.fn(async () => undefined),
+  },
 }));
 vi.mock('../../../lib/memory-api', () => ({
   memoryApi: { globalEnabled: vi.fn(async () => true), setGlobalEnabled: vi.fn(async () => undefined) },
@@ -87,6 +91,7 @@ describe('General: every control renders', () => {
     for (const label of [
       'Default project folder',
       'Theme',
+      'Mode switch animation',
       'Animated tray icon',
       'Ask before closing a working agent',
       'Warn when an agent seems stuck',
@@ -137,6 +142,42 @@ describe('General: each control saves a partial patch', () => {
     await mount();
     await pickOption(byLabel<HTMLSelectElement>(m.host, 'Theme')!, 'light');
     expect(m.env.patches).toEqual([{ theme: 'light' }]);
+  });
+
+  it('Mode switch animation defaults to Domino and saves only {mode_switch_animation}', async () => {
+    await mount();
+    const select = byLabel<HTMLSelectElement>(m.host, 'Mode switch animation')!;
+    expect(select.value).toBe('domino');
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Domino', 'Ink', 'Off']);
+    await pickOption(select, 'ink');
+    await pickOption(select, 'off');
+    await pickOption(select, 'domino');
+    expect(m.env.patches).toEqual([{ mode_switch_animation: 'ink' }, { mode_switch_animation: 'off' }, { mode_switch_animation: 'domino' }]);
+  });
+
+  it('Window layout in Individual defaults to Side by side and saves only {individual_window_layout}', async () => {
+    await mount();
+    const select = byLabel<HTMLSelectElement>(m.host, 'Window layout in Individual')!;
+    expect(select.value).toBe('side_by_side');
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Side by side', 'Cascade']);
+    await pickOption(select, 'cascade');
+    await pickOption(select, 'side_by_side');
+    expect(m.env.patches).toEqual([{ individual_window_layout: 'cascade' }, { individual_window_layout: 'side_by_side' }]);
+  });
+
+  it('Window layout in Individual shows the saved choice and sits right after Mode switch animation', async () => {
+    await mount({ settings: { ...makeEnv().settings, individual_window_layout: 'cascade' } });
+    expect(byLabel<HTMLSelectElement>(m.host, 'Window layout in Individual')!.value).toBe('cascade');
+    const text = m.host.textContent ?? '';
+    expect(text.indexOf('Mode switch animation')).toBeLessThan(text.indexOf('Window layout in Individual'));
+  });
+
+  it('Mode switch animation shows the saved choice and Preview plays it', async () => {
+    await mount({ settings: { ...makeEnv().settings, mode_switch_animation: 'ink' } });
+    expect(byLabel<HTMLSelectElement>(m.host, 'Mode switch animation')!.value).toBe('ink');
+    await click(buttonByText(m.host, 'Preview'));
+    const { cockpitApi } = await import('../../../lib/cockpit-api');
+    expect(cockpitApi.modeSwitchPreview).toHaveBeenCalledWith('ink');
   });
 
   it('Ask before closing saves only {confirm_close_running_pane}', async () => {

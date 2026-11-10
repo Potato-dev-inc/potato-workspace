@@ -337,6 +337,36 @@ fn a_helper_chat_keeps_its_starter_and_its_parent_pane_across_a_restart() {
 }
 
 #[test]
+fn a_restored_chat_that_starts_later_is_still_found_as_the_parent_of_the_helpers_it_starts() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.say("stream 2");
+    rig.chat.retire();
+    rig.conversations.forget_session(&id);
+    let app = conversations_in(&rig.dir, &rig.opts);
+    app.restore_lazily(&rig.panes);
+    let deps = deps_for(&rig.dir, &app);
+    super::restore_panes(&deps);
+    let chat = get(&id).expect("the chat is back");
+    assert_eq!(deps.registry.lock().panes[&id].info.pid, 0, "listed before its adapter started");
+    assert!(crate::pty::pane_parent::claimed_pane(&deps.registry, &id).unwrap().roots.iter().all(|pid| *pid == 0));
+
+    // The person opens it: the adapter starts, but the pane keeps the pid it was listed with.
+    chat.send("stream 1").expect("a message goes in");
+    assert!(wait_until(30, || chat.session().is_live()));
+    let adapter = chat.session().connection().expect("running").pid();
+    assert_eq!(deps.registry.lock().panes[&id].info.pid, 0);
+    for roots in [
+        crate::pty::pane_parent::claimed_pane(&deps.registry, &id).unwrap().roots,
+        crate::companion::caller::live_panes(&deps.registry).into_iter().find(|p| p.id == id).unwrap().roots,
+    ] {
+        assert!(roots.contains(&adapter), "a process under the live adapter is placed in this chat, got {roots:?}");
+    }
+    chat.retire();
+    app.forget_session(&id);
+}
+
+#[test]
 fn after_a_restart_a_message_sent_before_anyone_reads_the_chat_is_not_doubled_or_lost() {
     let rig = Rig::new("");
     let id = rig.id();

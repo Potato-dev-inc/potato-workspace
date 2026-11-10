@@ -145,24 +145,38 @@ pub fn startup_window(args: &[String], worker: bool, no_window_env: Option<&str>
 }
 
 /// The switch to Individual opens a pop-out for each live pane except a background one (a companion).
-fn gets_window_on_switch(pane_id: &str) -> bool {
+/// The live panes that get a window on the switch, in layout order (the cockpit's order: active pane first).
+pub(crate) fn panes_for_switch(app: &AppHandle) -> Vec<crate::pty::PaneInfo> {
+    let panes = app.state::<crate::AppState>().registry.lock().list().into_iter().filter(|p| gets_window_on_switch(&p.id)).collect();
+    crate::window_layout::order_panes(panes, |p: &crate::pty::PaneInfo| p.id.as_str())
+}
+
+pub(crate) fn gets_window_on_switch(pane_id: &str) -> bool {
     !crate::companion::service::is_pane_id(pane_id)
 }
 
 /// Switch mode: persist it, announce `ui://mode-changed`, then move the windows.
 /// Individual: a pop-out for every live pane, then hide the cockpit. Orchestration: destroy every
 /// pop-out (without killing panes) and show the cockpit.
+///
+/// When the cockpit (or the pop-outs) are on screen the windows move with the animation from `switch_anim`;
+/// otherwise, and whenever the cockpit or the overlay does not answer, they move at once. Either way the mode itself
+/// flips first, so the windows opened below already own their panes. A second switch while one is moving cancels it
+/// (it jumps to its end state) and then runs.
 pub fn set_mode(app: &AppHandle, mode: UiMode) -> Result<(), String> {
     let previous = crate::ui_mode::current();
-    if let Err(e) = crate::ui_mode::persist(app, mode) {
-        // The switch still applies for this run; it just will not survive a restart.
-        tracing::warn!(error = %e, "ui_mode not persisted");
-    }
     // Ownership flips first, so the windows opened below already own their panes.
     crate::ui_mode::set_current(mode);
-    let _ = app.emit("ui://mode-changed", serde_json::json!({ "mode": mode.as_str() }));
+    // Saved off the click path (a file write must not hold the first frame back); serial, and always the latest mode.
+    persist_in_background(app);
     if previous == mode {
+        announce_mode(app);
         return Ok(());
+    }
+    // Orchestration tells the cockpit now, so its tiles are mounted when the motion needs them. Individual tells it when
+    // the windows have moved: the tiles must stay up until then (the overlay draws from them).
+    if mode == UiMode::Orchestration {
+        announce_mode(app);
     }
     let app = app.clone();
     if mode == UiMode::Individual {
@@ -170,37 +184,77 @@ pub fn set_mode(app: &AppHandle, mode: UiMode) -> Result<(), String> {
     } else {
         crate::mini_bar::clear_switch();
     }
-    std::thread::spawn(move || match mode {
-        UiMode::Individual => {
-            let panes: Vec<_> = app.state::<crate::AppState>().registry.lock().list().into_iter().filter(|p| gets_window_on_switch(&p.id)).collect();
-            let plan = crate::mini_bar::switch_plan(mode, panes.len());
-            if plan.pop_out_panes {
-                for pane in &panes {
-                    crate::app_windows::open_pane_window(&app, &pane.id, &pane.agent_type, pane.cols, pane.rows, false);
-                }
+    std::thread::spawn(move || {
+        let turn = crate::switch_anim::take_turn();
+        crate::switch_anim::glue::run(&app, mode, &turn, || match mode {
+            UiMode::Individual => {
+                announce_mode(&app);
+                switch_to_individual_now(&app);
             }
-            // The bar sits on the monitor the cockpit was on, so read that before hiding it.
-            crate::mini_bar::remember_cockpit_monitor(&app);
-            if plan.show_mini_bar {
-                crate::mini_bar::show(&app);
-            }
-            if plan.hide_cockpit {
-                crate::app_windows::hide_cockpit_window(&app);
-            }
-        }
-        UiMode::Orchestration => {
-            crate::mini_bar::hide(&app);
-            let destroyed = crate::app_windows::destroy_pane_windows(&app);
-            tracing::info!(destroyed, "ui mode -> orchestration: pop-outs destroyed, panes kept");
-            // A Settings window on screen moves into the cockpit (it names its page back through
-            // `open_settings`, which hides it): never a window AND an inline view.
-            if crate::app_windows::ask_settings_to_move_inline(&app) {
-                tracing::info!("ui mode -> orchestration: Settings window asked to move into the cockpit");
-            }
-            crate::app_windows::open_cockpit_window(&app, None, true);
-        }
+            UiMode::Orchestration => switch_to_orchestration_now(&app),
+        });
     });
     Ok(())
+}
+
+static PERSIST_LOCK: parking_lot::Mutex<()> = parking_lot::const_mutex(());
+
+fn persist_in_background(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let _serial = PERSIST_LOCK.lock();
+        if let Err(e) = crate::ui_mode::persist(&app, crate::ui_mode::current()) {
+            // The switch still applies for this run; it just will not survive a restart.
+            tracing::warn!(error = %e, "ui_mode not persisted");
+        }
+    });
+}
+
+/// `ui://mode-changed` with the mode that is true right now.
+fn announce_mode(app: &AppHandle) {
+    let _ = app.emit("ui://mode-changed", serde_json::json!({ "mode": crate::ui_mode::current().as_str() }));
+}
+
+/// The plain switch to Individual: a pop-out for every live pane, the mini bar, the cockpit hidden.
+fn switch_to_individual_now(app: &AppHandle) {
+    let panes = panes_for_switch(app);
+    let plan = crate::mini_bar::switch_plan(UiMode::Individual, panes.len());
+    if plan.pop_out_panes {
+        if crate::window_layout::grid_active(app) {
+            // Side by side: every pop-out gets its cell from the one layout call (the cockpit is still there for its monitor).
+            let first = crate::app_windows::reserve_slots(panes.len());
+            let grids: Vec<(u16, u16)> = panes.iter().map(|p| (p.cols, p.rows)).collect();
+            for (pane, placement) in panes.iter().zip(crate::window_layout::switch_placements(app, first, &grids)) {
+                crate::app_windows::open_pane_window_hidden(app, &pane.id, &pane.agent_type, pane.cols, pane.rows, placement);
+                crate::app_windows::show_pop_out(app, &pane.id, &pane.agent_type, pane.cols, pane.rows, Some(placement));
+            }
+        } else {
+            for pane in &panes {
+                crate::app_windows::open_pane_window(app, &pane.id, &pane.agent_type, pane.cols, pane.rows, false);
+            }
+        }
+    }
+    // The bar sits on the monitor the cockpit was on, so read that before hiding it.
+    crate::mini_bar::remember_cockpit_monitor(app);
+    if plan.show_mini_bar {
+        crate::mini_bar::show(app);
+    }
+    if plan.hide_cockpit {
+        crate::app_windows::hide_cockpit_window(app);
+    }
+}
+
+/// The plain switch to Orchestration: the bar goes, the pop-outs are destroyed (panes kept), the cockpit comes back.
+fn switch_to_orchestration_now(app: &AppHandle) {
+    crate::mini_bar::hide(app);
+    let destroyed = crate::app_windows::destroy_pane_windows(app);
+    tracing::info!(destroyed, "ui mode -> orchestration: pop-outs destroyed, panes kept");
+    // A Settings window on screen moves into the cockpit (it names its page back through
+    // `open_settings`, which hides it): never a window AND an inline view.
+    if crate::app_windows::ask_settings_to_move_inline(app) {
+        tracing::info!("ui mode -> orchestration: Settings window asked to move into the cockpit");
+    }
+    crate::app_windows::open_cockpit_window(app, None, true);
 }
 
 #[cfg(test)]

@@ -64,9 +64,25 @@ pub fn toggled(mode: UiMode) -> UiMode {
 
 /// Logical top-left of the bar, centred along the top of a monitor given in physical pixels.
 pub fn top_center(mon_x: f64, mon_y: f64, mon_w: f64, scale: f64) -> (f64, f64) {
+    top_center_for(mon_x, mon_y, mon_w, scale, WIDTH)
+}
+
+/// Same, for a bar `width` logical px wide.
+pub fn top_center_for(mon_x: f64, mon_y: f64, mon_w: f64, scale: f64, width: f64) -> (f64, f64) {
     let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
     let (x, y, w) = (mon_x / scale, mon_y / scale, mon_w / scale);
-    (x + ((w - WIDTH) / 2.0).max(0.0), y + TOP_MARGIN)
+    (x + ((w - width) / 2.0).max(0.0), y + TOP_MARGIN)
+}
+
+/// Side margin kept free on each side when the bar grows to fit many agents (logical px).
+pub const SIDE_MARGIN: f64 = 24.0;
+
+/// The width the bar takes: what its content wants, never below `WIDTH`, never wider than the monitor minus margins
+/// (past that the chip strip scrolls).
+pub fn fit_width(wanted: f64, mon_w: f64, scale: f64) -> f64 {
+    let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+    let max = (mon_w / scale - 2.0 * SIDE_MARGIN).max(WIDTH);
+    if wanted.is_finite() { wanted.clamp(WIDTH, max) } else { WIDTH }
 }
 
 /// Milliseconds of Undo left: `switched_at` is when the person switched (None: no switch to undo, e.g. a launch).
@@ -102,14 +118,28 @@ mod runtime {
         }
     }
 
-    fn position(app: &AppHandle) -> Option<(f64, f64)> {
+    fn monitor_rect(app: &AppHandle) -> Option<MonitorRect> {
         let saved = *MONITOR.lock();
-        let rect = saved.or_else(|| {
+        saved.or_else(|| {
             app.primary_monitor().ok().flatten().map(|m| {
                 (f64::from(m.position().x), f64::from(m.position().y), f64::from(m.size().width), m.scale_factor())
             })
-        })?;
+        })
+    }
+
+    fn position(app: &AppHandle) -> Option<(f64, f64)> {
+        let rect = monitor_rect(app)?;
         Some(top_center(rect.0, rect.1, rect.2, rect.3))
+    }
+
+    /// Resize the bar to fit `wanted` logical px of content (many agents), kept centred and inside the monitor.
+    pub fn fit(app: &AppHandle, wanted: f64) {
+        let Some(window) = app.get_webview_window(LABEL) else { return };
+        let Some(rect) = monitor_rect(app) else { return };
+        let width = fit_width(wanted, rect.2, rect.3);
+        let _ = window.set_size(tauri::LogicalSize::new(width, HEIGHT));
+        let (x, y) = top_center_for(rect.0, rect.1, rect.2, rect.3, width);
+        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
     }
 
     /// Note that the person just switched to Individual: the bar offers Undo for `TOAST_MS`.
@@ -201,6 +231,7 @@ mod runtime {
             if event.state == ShortcutState::Pressed {
                 let handle = handle.clone();
                 std::thread::spawn(move || {
+                    crate::switch_anim::note_click(None);
                     let _ = crate::cockpit::set_mode(&handle, toggled(crate::ui_mode::current()));
                 });
             }
@@ -211,7 +242,7 @@ mod runtime {
     }
 }
 
-pub use runtime::{bring_all_to_front, clear_switch, hide, init_mode_shortcut, note_fallback, note_switch, remember_cockpit_monitor, show, take_fallback, toast_left};
+pub use runtime::{bring_all_to_front, clear_switch, fit, hide, init_mode_shortcut, note_fallback, note_switch, remember_cockpit_monitor, show, take_fallback, toast_left};
 
 #[cfg(test)]
 mod tests {
@@ -258,6 +289,18 @@ mod tests {
         assert_eq!(top_center(-2880.0, 0.0, 2880.0, 1.5), (-1920.0 + 580.0, TOP_MARGIN));
         // A bad scale does not divide by zero.
         assert_eq!(top_center(0.0, 0.0, 1920.0, 0.0).1, TOP_MARGIN);
+    }
+
+    #[test]
+    fn the_bar_grows_for_many_agents_but_stays_on_the_monitor() {
+        assert_eq!(fit_width(300.0, 1920.0, 1.0), WIDTH, "never narrower than the base width");
+        assert_eq!(fit_width(1000.0, 1920.0, 1.0), 1000.0);
+        assert_eq!(fit_width(5000.0, 1920.0, 1.0), 1920.0 - 2.0 * SIDE_MARGIN, "capped to the monitor minus margins");
+        assert_eq!(fit_width(5000.0, 2880.0, 1.5), 1920.0 - 2.0 * SIDE_MARGIN, "scale factor is applied");
+        assert_eq!(fit_width(f64::NAN, 1920.0, 1.0), WIDTH);
+        assert_eq!(fit_width(5000.0, 400.0, 1.0), WIDTH, "a tiny monitor keeps the base width");
+        // A wider bar is still centred.
+        assert_eq!(top_center_for(0.0, 0.0, 1920.0, 1.0, 1000.0), (460.0, TOP_MARGIN));
     }
 
     #[test]

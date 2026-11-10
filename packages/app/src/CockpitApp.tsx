@@ -39,6 +39,7 @@ import { FirstRun } from './components/firstrun/FirstRun';
 import { useFirstRun } from './components/firstrun/useFirstRun';
 import { useSimpleMode } from './lib/simple-mode';
 import { projectOfCwd } from './lib/ship-model';
+import { useModeSwitch } from './lib/mode-switch/useModeSwitch';
 import { LoopGuardContext, tauriLoopApi, useLoopSignals, type StopReport } from './lib/loop-guard';
 import { homeView, isMacPlatform, isSplitShortcut, splitAfterSelect, splitFits, splitFocusKey, splitPartner, splitStillOn, SPLIT_DEFAULT_RATIO, viewAfterSelect, type MainView, type SplitSide } from './components/cockpit/main-view';
 import { focusSideComposer, SplitView, useWindowWidth } from './components/cockpit/SplitView';
@@ -113,6 +114,14 @@ export default function CockpitApp() {
   const [ratio, setRatio] = useState(SPLIT_DEFAULT_RATIO);
   const width = useWindowWidth();
   const paneIds = c.registry.paneList.map((p) => p.info.id);
+  // The animated Orchestration <-> Individual switch: Rust asks for the proxies, this window fades around the overlay.
+  useModeSwitch({
+    activeId: c.selectedId,
+    describe: (id) => {
+      const p = c.registry.panes.get(id);
+      return { name: c.names.get(id) ?? p?.info.agent_type ?? id, project: projectOfCwd(p?.info.cwd)?.name ?? '', status: p?.status ?? 'idle' };
+    },
+  });
   const splitOn = splitStillOn(split, { selectedId: c.selectedId, width, hasPane: (id) => c.registry.panes.has(id) });
   // The split turns off by itself when its pane closes, the selection goes away, or the window gets narrow.
   if (split !== null && !splitOn) setSplit(null);

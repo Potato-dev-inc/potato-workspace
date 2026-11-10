@@ -12,6 +12,8 @@ const api = vi.hoisted(() => ({
   toastLeft: 0,
   setUiMode: vi.fn(async (_mode: string) => {}),
   focus: vi.fn(async (_id: string) => {}),
+  kill: vi.fn(async (_id: string) => {}),
+  fit: vi.fn(async (_w: number) => {}),
 }));
 
 vi.mock('../../lib/tauri', () => ({
@@ -19,12 +21,14 @@ vi.mock('../../lib/tauri', () => ({
     listPanes: async () => api.panes,
     onPanesChanged: () => Promise.resolve(() => {}),
     onPtyStatus: () => Promise.resolve(() => {}),
+    killPane: (id: string) => api.kill(id),
   },
 }));
 vi.mock('../../lib/cockpit-api', () => ({
   cockpitApi: {
     miniBarToastLeft: async () => api.toastLeft,
     miniBarFocusPane: (id: string) => api.focus(id),
+    miniBarFit: (w: number) => api.fit(w),
     onMiniBarShown: () => Promise.resolve(() => {}),
     setUiMode: (m: string) => api.setUiMode(m),
   },
@@ -38,6 +42,9 @@ beforeEach(() => {
   api.toastLeft = 0;
   api.setUiMode.mockClear();
   api.focus.mockClear();
+  api.kill.mockReset();
+  api.kill.mockResolvedValue(undefined);
+  api.fit.mockClear();
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -116,5 +123,95 @@ describe('MiniBarApp (the real window content)', () => {
     await flush();
     act(() => button('Back to Orchestration')!.click());
     expect(api.setUiMode).toHaveBeenCalledWith('orchestration');
+  });
+});
+
+describe('MiniBar with many agents', () => {
+  const many = () => Array.from({ length: 12 }, (_, i) => pane(`p${i}`, 'claude', `/x/proj${i}`));
+  const strip = () => host.querySelector('.mb-chips') as HTMLElement;
+  const sizes = (el: HTMLElement, scrollWidth: number, clientWidth: number) => {
+    Object.defineProperty(el, 'scrollWidth', { value: scrollWidth, configurable: true });
+    Object.defineProperty(el, 'clientWidth', { value: clientWidth, configurable: true });
+  };
+  const wheel = (el: HTMLElement, deltaY: number) =>
+    act(() => {
+      el.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
+    });
+
+  it('the mouse wheel scrolls the chip strip sideways', async () => {
+    api.panes = many();
+    act(() => root.render(createElement(MiniBarApp)));
+    await flush();
+    const el = strip();
+    sizes(el, 2000, 400);
+    el.scrollLeft = 0;
+    wheel(el, 120);
+    expect(el.scrollLeft).toBe(120);
+    wheel(el, -50);
+    expect(el.scrollLeft).toBe(70);
+  });
+
+  it('shows an edge fade on the sides that hide chips', async () => {
+    api.panes = many();
+    act(() => root.render(createElement(MiniBarApp)));
+    await flush();
+    const el = strip();
+    sizes(el, 2000, 400);
+    wheel(el, 100);
+    const wrap = host.querySelector('.mb-chips-wrap')!;
+    expect(wrap.classList.contains('mb-fade-start')).toBe(true);
+    expect(wrap.classList.contains('mb-fade-end')).toBe(true);
+  });
+
+  it('keeps + New and Back to Orchestration outside the scrolling strip', async () => {
+    api.panes = many();
+    act(() => root.render(createElement(MiniBarApp)));
+    await flush();
+    expect(strip().contains(button('+ New')!)).toBe(false);
+    expect(strip().contains(button('Back to Orchestration')!)).toBe(false);
+  });
+
+  it('asks the window for the width the chips need', async () => {
+    api.panes = many();
+    const proto = HTMLElement.prototype;
+    Object.defineProperty(proto, 'scrollWidth', { configurable: true, get: () => 1500 });
+    try {
+      act(() => root.render(createElement(MiniBarApp)));
+      await flush();
+      expect(api.fit).toHaveBeenCalled();
+      expect(api.fit.mock.calls.at(-1)![0]).toBeGreaterThan(0);
+    } finally {
+      delete (proto as unknown as Record<string, unknown>).scrollWidth;
+    }
+  });
+
+  it('the x closes that agent through the pane close command, does not focus, and the list updates', async () => {
+    api.panes = [pane('a1', 'claude', '/p/one'), pane('b2', 'codex', '/p/two')];
+    api.kill.mockImplementation(async (id: string) => {
+      api.panes = api.panes.filter((p) => p.id !== id);
+    });
+    act(() => root.render(createElement(MiniBarApp)));
+    await flush();
+    const x = host.querySelector('button[aria-label="Close Codex two"]') as HTMLButtonElement;
+    expect(x).toBeTruthy();
+    expect(x.tabIndex).toBeGreaterThanOrEqual(0);
+    act(() => x.click());
+    await flush();
+    expect(api.kill).toHaveBeenCalledWith('b2');
+    expect(api.focus).not.toHaveBeenCalled();
+    expect([...host.querySelectorAll('.mb-chip')].map((c) => c.textContent)).toEqual(['Claudeone']);
+  });
+
+  it('Delete on a focused chip closes it', async () => {
+    api.panes = [pane('a1', 'claude', '/p/one')];
+    act(() => root.render(createElement(MiniBarApp)));
+    await flush();
+    const chip = host.querySelector('.mb-chip') as HTMLElement;
+    act(() => {
+      chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect(api.kill).toHaveBeenCalledWith('a1');
+    expect(api.focus).not.toHaveBeenCalled();
   });
 });

@@ -81,6 +81,8 @@ mod secure_file;
 mod app_windows;
 mod cockpit;
 mod mini_bar;
+mod switch_anim;
+mod window_layout;
 mod ui_mode;
 mod pane_windows;
 mod tray;
@@ -514,7 +516,14 @@ pub fn run() {
             commands::standby_set_current_project,
             commands::get_ui_mode,
             commands::set_ui_mode,
+            commands::plan_mode_switch,
+            commands::report_pane_order,
+            commands::mode_switch_begin,
+            commands::switch_overlay_ready,
+            commands::switch_overlay_done,
+            commands::mode_switch_preview,
             commands::mini_bar_focus_pane,
+            commands::mini_bar_fit,
             commands::mini_bar_toast_left,
             commands::take_individual_fallback,
             commands::open_cockpit,
@@ -938,6 +947,8 @@ pub fn run() {
             // Focus: load the saved state (resume or end it), then start the tick thread. Once, here.
             attention::focus::live::start(app.handle());
             askbar::glue::init(app.handle());
+            // The mode-switch overlay is built hidden now and reused, so the first switch has no startup lag.
+            switch_anim::glue::init(app.handle());
             team::init(app.handle().clone(), registry_for_panes.clone());
             issue_intake::live::start(registry_for_panes.clone(), app.handle().clone());
             ci_fix::live::start(registry_for_panes.clone(), app.handle().clone());

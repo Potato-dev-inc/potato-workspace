@@ -10,6 +10,24 @@
     <link rel="icon" type="image/svg+xml" href="/app-icon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <title>Potato Workspace</title>
+    <!-- The switch overlay (?switchoverlay=1) is a transparent window. Its page must be see-through from the very first
+         paint: this runs and applies before the stylesheet and the app load, so the theme background (html, body,
+         #root and the body's bg-pm-bg class) never shows, not even for a frame. See styles/switch-overlay.css. -->
+    <script>
+      try {
+        if (/[?&]switchoverlay=1(&|$)/.test(window.location.search)) document.documentElement.classList.add('swo-root');
+      } catch (e) {
+        /* the app adds the class itself once it mounts */
+      }
+    </script>
+    <style>
+      html.swo-root,
+      html.swo-root body,
+      html.swo-root #root {
+        background: transparent !important;
+        background-color: transparent !important;
+      }
+    </style>
   </head>
   <body class="bg-pm-bg text-zinc-100">
     <div id="root"></div>

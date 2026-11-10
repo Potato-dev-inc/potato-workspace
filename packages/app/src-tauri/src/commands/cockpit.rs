@@ -11,8 +11,54 @@ pub async fn get_ui_mode() -> Result<UiMode, String> {
 }
 
 #[tauri::command]
-pub async fn set_ui_mode(app: AppHandle, mode: UiMode) -> Result<(), String> {
+pub async fn set_ui_mode(app: AppHandle, mode: UiMode, clicked_ms_ago: Option<u64>) -> Result<(), String> {
+    crate::switch_anim::note_click(clicked_ms_ago);
     crate::cockpit::set_mode(&app, mode)
+}
+
+/// The animated mode switch: where each pane's pop-out would open if the switch happened now (physical screen px), and
+/// the mini bar. Uses the same placement code as `open_pane_window`; takes no window.
+#[tauri::command]
+pub async fn plan_mode_switch(app: AppHandle) -> Result<crate::switch_anim::Plan, String> {
+    Ok(crate::switch_anim::glue::plan(&app))
+}
+
+/// The cockpit tells Rust the order its panes are in (active pane, then the open tiles in grid order, then the
+/// sidebar-only ones), so the side-by-side layout puts them top-left first. Harmless if never called.
+#[tauri::command]
+pub async fn report_pane_order(ids: Vec<String>) -> Result<(), String> {
+    crate::window_layout::set_reported_order(ids);
+    Ok(())
+}
+
+/// The cockpit's answer to `ui://mode-switch` `prepare`: the proxies to animate (none: Rust switches at once).
+/// A stale generation (a newer switch started) is ignored.
+#[tauri::command]
+pub async fn mode_switch_begin(gen: u64, spec: Value) -> Result<(), String> {
+    crate::switch_anim::post_begin(gen, spec);
+    Ok(())
+}
+
+/// The switch overlay drew its first frame.
+#[tauri::command]
+pub async fn switch_overlay_ready(gen: u64, info: Option<Value>) -> Result<(), String> {
+    crate::switch_anim::post_ready(gen, info);
+    Ok(())
+}
+
+/// The switch overlay finished the motion.
+#[tauri::command]
+pub async fn switch_overlay_done(gen: u64, info: Option<Value>) -> Result<(), String> {
+    crate::switch_anim::post_done(gen, info);
+    Ok(())
+}
+
+/// Settings > Preview: play a demo of `style` ("domino", "ink" or "off") over the middle of the screen.
+#[tauri::command]
+pub async fn mode_switch_preview(app: AppHandle, style: String) -> Result<(), String> {
+    let style = crate::switch_anim::AnimStyle::parse(&style).ok_or_else(|| format!("INVALID_ARGUMENT: unknown animation {style:?}"))?;
+    crate::switch_anim::glue::preview(&app, style);
+    Ok(())
 }
 
 /// The mini bar: bring a pane's pop-out forward and focus it.
@@ -26,6 +72,13 @@ pub async fn mini_bar_focus_pane(app: AppHandle, state: State<'_, AppState>, pan
         }
         None => Err("That agent is gone.".into()),
     }
+}
+
+/// The mini bar: grow (or shrink) to fit `width` logical px of content, capped to the monitor.
+#[tauri::command]
+pub async fn mini_bar_fit(app: AppHandle, width: f64) -> Result<(), String> {
+    crate::mini_bar::fit(&app, width);
+    Ok(())
 }
 
 /// Milliseconds of Undo left after the last switch to Individual (0: none).

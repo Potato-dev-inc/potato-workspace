@@ -12,7 +12,7 @@ import {
 import { readAllBridgePorts, readLocalSecretHeaders } from '@potato-workspace/shared/bridge-port';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const VITE_DEV_PORT = 1420;
+const VITE_DEV_PORT = 1442;
 
 export interface WorkerLaunchOptions {
   agentType?: string;
@@ -51,7 +51,7 @@ async function resolveWorkerBinary(root: string): Promise<string | null> {
   const explicitBin = process.env.POTATO_WORKSPACE_BIN;
   if (explicitBin && existsSync(explicitBin)) return explicitBin;
 
-  // A second `tauri dev` dies on Vite port 1420. Reuse the first worker's dev server.
+  // A second `tauri dev` dies on Vite port 1442. Reuse the first worker's dev server.
   if (await portInUse(VITE_DEV_PORT)) {
     const debug = appBinary(root, 'debug');
     if (debug) {

@@ -1,0 +1,160 @@
+/* The mode-switch overlay: a transparent, click-through window over the monitor. Monochrome tokens only,
+   the same values as the cockpit (see cockpit.css). Nothing here ever receives the pointer. */
+
+html.swo-root,
+html.swo-root body,
+html.swo-root #root {
+  margin: 0;
+  height: 100%;
+  background: transparent !important;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.swo {
+  --swo-win: #292725;
+  --swo-row: rgba(255, 248, 240, 0.09);
+  --swo-line: rgba(255, 248, 240, 0.14);
+  --swo-label: #f4f2ef;
+  --swo-label-2: rgba(244, 242, 239, 0.58);
+  --swo-fill: rgba(255, 248, 240, 0.1);
+  --swo-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.35);
+  --swo-bar: #1f1f1f;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI Variable Text', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  color: var(--swo-label);
+}
+
+html[data-theme='light'] .swo {
+  --swo-win: #ffffff;
+  --swo-row: rgba(0, 0, 0, 0.06);
+  --swo-line: rgba(0, 0, 0, 0.12);
+  --swo-label: #1d1d1f;
+  --swo-label-2: rgba(29, 29, 31, 0.64);
+  --swo-fill: rgba(0, 0, 0, 0.07);
+  --swo-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 10px 28px rgba(0, 0, 0, 0.16);
+  --swo-bar: #f2f2f4;
+}
+
+.swo-proxy {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--swo-line);
+  border-radius: 7px;
+  background: var(--swo-win);
+  box-shadow: var(--swo-shadow);
+  transform-origin: 50% 50%;
+  will-change: left, top, width, height, transform;
+}
+
+.swo-proxy.is-row {
+  border-color: transparent;
+  background: var(--swo-row);
+  box-shadow: none;
+}
+
+.swo-proxy > * {
+  position: absolute;
+  inset: 0;
+}
+
+.swo-snap {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
+  user-select: none;
+}
+
+.swo-winface {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 12px;
+  overflow: hidden;
+}
+
+.swo-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 26px;
+  margin: 0 -12px;
+  padding: 0 12px;
+  background: var(--swo-bar);
+  border-bottom: 1px solid var(--swo-line);
+}
+
+.swo-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--swo-fill);
+}
+
+.swo-name {
+  flex: none;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swo-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.swo-line {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--swo-fill);
+}
+
+.swo-rowface {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.swo-rowdot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--swo-label-2);
+}
+
+.swo-rowname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--swo-label);
+}
+
+.swo-minibar {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: var(--swo-bar);
+  border: 1px solid var(--swo-line);
+  box-shadow: var(--swo-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swo-proxy {
+    will-change: auto;
+  }
+}

@@ -8,6 +8,8 @@ import type { Settings } from '@potato-workspace/shared';
 import { clampAwayMinutes, clampCheckpointsKeep } from '../../../lib/bridge-settings';
 import { redactSettings } from '../../../lib/secrets';
 import { resolveSettingsFilePath } from '../../../lib/settings';
+import { cockpitApi } from '../../../lib/cockpit-api';
+import { parseSwitchStyle, parseWindowLayout, STYLE_LABELS, WINDOW_LAYOUT_LABELS, WINDOW_LAYOUTS, type SwitchStyle } from '../../../lib/mode-switch/model';
 import { tauri, type AppInstallInfo, type CoordinationStorageInfo } from '../../../lib/tauri';
 import { budgetRows } from './BudgetRows';
 import { AmbientSettings } from '../blocks/AmbientSettings';
@@ -185,6 +187,49 @@ function UninstallRow({ env }: { env: SettingsEnv }) {
   );
 }
 
+const SWITCH_STYLES: SwitchStyle[] = ['domino', 'ink', 'off'];
+const SWITCH_HINT = 'How windows move when you switch modes. Off is a quick fade.';
+
+function ModeSwitchRow({ env }: { env: SettingsEnv }) {
+  const style = parseSwitchStyle(env.settings.mode_switch_animation);
+  return (
+    <SettingRow label="Mode switch animation" description={SWITCH_HINT}>
+      <FieldSelect
+        aria-label="Mode switch animation"
+        value={style}
+        onChange={(e) => void env.patch({ mode_switch_animation: parseSwitchStyle(e.target.value) })}
+      >
+        {SWITCH_STYLES.map((value) => (
+          <option key={value} value={value}>
+            {STYLE_LABELS[value]}
+          </option>
+        ))}
+      </FieldSelect>
+      <Btn onClick={() => void cockpitApi.modeSwitchPreview(style).catch(() => undefined)}>Preview</Btn>
+    </SettingRow>
+  );
+}
+
+const LAYOUT_HINT = 'Where windows go in Individual: side by side in rows, or Cascade.';
+
+function WindowLayoutRow({ env }: { env: SettingsEnv }) {
+  return (
+    <SettingRow label="Window layout in Individual" description={LAYOUT_HINT}>
+      <FieldSelect
+        aria-label="Window layout in Individual"
+        value={parseWindowLayout(env.settings.individual_window_layout)}
+        onChange={(e) => void env.patch({ individual_window_layout: parseWindowLayout(e.target.value) })}
+      >
+        {WINDOW_LAYOUTS.map((value) => (
+          <option key={value} value={value}>
+            {WINDOW_LAYOUT_LABELS[value]}
+          </option>
+        ))}
+      </FieldSelect>
+    </SettingRow>
+  );
+}
+
 // ---------- the rows ----------
 
 export const generalRows: RowDef[] = [
@@ -234,6 +279,22 @@ export const generalRows: RowDef[] = [
         </FieldSelect>
       </SettingRow>
     ),
+  },
+  {
+    id: 'mode-switch-animation',
+    label: 'Mode switch animation',
+    hint: SWITCH_HINT,
+    keywords: 'animation motion transition individual orchestration domino ink fade reduced motion preview',
+    group: 'Appearance',
+    render: (env) => <ModeSwitchRow env={env} />,
+  },
+  {
+    id: 'individual-window-layout',
+    label: 'Window layout in Individual',
+    hint: LAYOUT_HINT,
+    keywords: 'windows side by side snap grid cascade tile layout individual pop-out arrange',
+    group: 'Appearance',
+    render: (env) => <WindowLayoutRow env={env} />,
   },
   {
     id: 'simple-mode',

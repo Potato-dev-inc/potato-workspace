@@ -1115,6 +1115,30 @@ mod pane_parent {
     }
 
     #[test]
+    fn a_claimed_warm_pane_gets_the_same_helper_link_as_a_fresh_one() {
+        // `assign_pane` order for a claim: the standby is hidden, gets its parent, then is revealed and listed.
+        let (registry, parent, fresh) = registry(1);
+        let warm = uuid::Uuid::new_v4().to_string();
+        crate::pty::hidden::hide(&warm);
+        registry.lock().panes.insert(warm.clone(), PaneRegistry::test_pane_stub(&warm));
+        assert!(!registry.lock().list().iter().any(|p| p.id == warm), "hidden before the claim");
+
+        note_pane_parent(&registry, None, Some(&parent), &fresh);
+        note_pane_parent(&registry, None, Some(&parent), &warm);
+        assert!(crate::pty::hidden::reveal(&warm));
+
+        let listed = registry.lock().list();
+        let link = |id: &str| listed.iter().find(|p| p.id == id).map(|p| p.parent_pane_id.clone());
+        assert_eq!(link(&warm), Some(Some(parent.clone())), "the revealed pane is listed under its parent");
+        assert_eq!(link(&warm), link(&fresh), "same link as a freshly spawned helper");
+        let mut helpers: Vec<String> = listed.iter().filter(|p| p.parent_pane_id.as_deref() == Some(parent.as_str())).map(|p| p.id.clone()).collect();
+        helpers.sort();
+        let mut expected = vec![fresh, warm];
+        expected.sort();
+        assert_eq!(helpers, expected, "both are counted as the parent's helpers (what closing the parent walks)");
+    }
+
+    #[test]
     fn the_caller_pane_wins_over_a_forged_hint_and_is_kept_for_the_panes_life() {
         let (registry, parent, child) = registry(1);
         let session = uuid::Uuid::new_v4().to_string();

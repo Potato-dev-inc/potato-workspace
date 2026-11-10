@@ -1,4 +1,15 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+
+/** Space kept between the menu and the window edge (px). */
+export const MENU_EDGE_GAP = 8;
+
+/** How far to slide a menu sideways so it sits inside [gap, viewport - gap]. Pure; 0 when it already fits. */
+export function menuShiftX(left: number, right: number, viewport: number, gap = MENU_EDGE_GAP): number {
+  if (right - left > viewport - 2 * gap) return gap - left;
+  if (right > viewport - gap) return viewport - gap - right;
+  if (left < gap) return gap - left;
+  return 0;
+}
 
 /** A "More" menu for the pane's less used views. Its button shows the open view's name. */
 export function PaneMoreMenu<T extends string>({
@@ -16,7 +27,18 @@ export function PaneMoreMenu<T extends string>({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const current = items.find((i) => i.id === value);
+
+  // The menu opens aligned to its button's start edge (CSS), then slides to stay inside the window (collision shift).
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!open || !el) return;
+    el.style.left = '';
+    const r = el.getBoundingClientRect();
+    const dx = menuShiftX(r.left, r.right, window.innerWidth);
+    if (dx !== 0) el.style.left = `${Math.round(dx)}px`;
+  }, [open, items.length]);
 
   // Opening puts focus on the first item. Escape closes and returns focus to the button; Tab or a click outside closes.
   useEffect(() => {
@@ -66,7 +88,7 @@ export function PaneMoreMenu<T extends string>({
         {current ? current.label : label}
       </button>
       {open && (
-        <div className="ck-menu" role="menu" aria-label={label} onKeyDown={onMenuKey}>
+        <div ref={menuRef} className="ck-menu ck-menu--start" role="menu" aria-label={label} onKeyDown={onMenuKey}>
           {items.map((i) => (
             <button
               key={i.id}

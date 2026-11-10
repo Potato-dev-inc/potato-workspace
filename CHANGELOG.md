@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.15
+
+- Switching between Orchestration and Individual now moves your agents: each pane flies to its own window and back, including agents that are only in the sidebar. Pick Domino, Ink or Off (a quick fade) in Settings, General, Mode switch animation, and press Preview to see it. With Windows animation effects off it just fades.
+- Individual mode puts the windows side by side at their normal size, in rows under the mini bar, with your active agent first and nothing overlapping. Pick Cascade in Settings, General, Window layout in Individual for the old step-down look.
+- The mini bar scrolls when you have many agents, grows to fit them first, and each agent has a small × to close it.
+- Fix: the More menu on a pane no longer opens off the left edge of the window.
+- Fix: helpers started from a chat now sit under that chat in the sidebar and count as its helpers. Before, a chat restored when the app started could lose track of its helpers, so they showed as normal agents.
+
 ## 1.0.14
 
 - Chat (ACP) agents get a real chat pane, in the main window and in their own window. No more "no terminal" message: the pane shows the agent, project, login and status, the conversation with its questions, a composer, and a short result (files changed and the agent's summary).

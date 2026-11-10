@@ -2,6 +2,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { UserGesture } from './user-gesture';
+import type { SwitchStyle } from './mode-switch/model';
+import { SWITCH_EVENT, type BeginSpec, type ModeSwitchPlan, type SwitchEvent } from './mode-switch/protocol';
 import type { PackageList } from './package-check';
 
 export type UiMode = 'orchestration' | 'individual';
@@ -259,11 +261,22 @@ async function on<T>(event: string, cb: (payload: T) => void): Promise<UnlistenF
 
 export const cockpitApi = {
   getUiMode: () => call<UiMode>('get_ui_mode'),
-  setUiMode: (mode: UiMode) => call<void>('set_ui_mode', { mode }),
+  /** `clickedMsAgo`: how long ago the person clicked (Rust logs click -> first frame of the switch). */
+  setUiMode: (mode: UiMode, clickedMsAgo?: number) => call<void>('set_ui_mode', { mode, clickedMsAgo }),
+  /** The animated switch: the pop-out rect of every pane that gets a window on the switch, and the mini bar. */
+  planModeSwitch: () => call<ModeSwitchPlan>('plan_mode_switch'),
+  /** Tell Rust the pane order (active pane, open tiles, sidebar-only) so Individual windows are laid out top-left first. */
+  reportPaneOrder: (ids: string[]) => call<void>('report_pane_order', { ids }),
+  /** The cockpit's answer to `ui://mode-switch` `prepare`: the proxies to animate (none: switch at once). */
+  modeSwitchBegin: (gen: number, spec: BeginSpec) => call<void>('mode_switch_begin', { gen, spec }),
+  /** Settings > Appearance > Preview: play the chosen motion over the middle of this screen. */
+  modeSwitchPreview: (style: SwitchStyle) => call<void>('mode_switch_preview', { style }),
+  onModeSwitch: (cb: (e: SwitchEvent) => void) => on<SwitchEvent>(SWITCH_EVENT, cb),
   openCockpit: (paneId?: string) => call<void>('open_cockpit', { paneId }),
   /** The mini bar: bring a pane's pop-out forward. */
   miniBarFocusPane: (paneId: string) => call<void>('mini_bar_focus_pane', { paneId }),
   /** Milliseconds of Undo left after the last switch to Individual (0: none). */
+  miniBarFit: (width: number) => call<void>('mini_bar_fit', { width }),
   miniBarToastLeft: () => call<number>('mini_bar_toast_left'),
   /** True once when this launch fell back from a saved Individual mode (no panes) to Orchestration. */
   takeIndividualFallback: () => call<boolean>('take_individual_fallback'),

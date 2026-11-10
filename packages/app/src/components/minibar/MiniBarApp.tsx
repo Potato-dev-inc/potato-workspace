@@ -41,12 +41,26 @@ export default function MiniBarApp() {
     };
   }, [showToast]);
 
+  // Close through the app's normal close path (kill_pane_cmd: the pane and the helpers it started), then re-read the list.
+  const closePane = useCallback((id: string) => {
+    setPanes((cur) => cur.filter((p) => p.id !== id));
+    void tauri
+      .killPane(id)
+      .catch(() => {})
+      .then(() => tauri.listPanes())
+      .then((list) => setPanes(list.filter((p) => !p.id.startsWith('companion-'))))
+      .catch(() => {});
+  }, []);
+  const wantWidth = useCallback((px: number) => void cockpitApi.miniBarFit(Math.ceil(px)).catch(() => {}), []);
+
   const toOrchestration = () => void cockpitApi.setUiMode('orchestration').catch(() => {});
   return (
     <MiniBar
       panes={panes}
       toast={toast}
       onFocusPane={(id) => void cockpitApi.miniBarFocusPane(id).catch(() => {})}
+      onClosePane={closePane}
+      onWantWidth={wantWidth}
       onNew={toOrchestration}
       onBack={toOrchestration}
       onUndo={toOrchestration}

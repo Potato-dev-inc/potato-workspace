@@ -35,6 +35,8 @@ export default function TerminalApp() {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const lockedPaneId = params.get('pane');
   const detached = params.has('detached');
+  // Rust built this window already at its final size and place (`sized=1`): the window must never resize itself.
+  const sizedByHost = params.has('sized');
   const workerHost = params.has('worker-host');
   const registry = usePaneRegistry();
   const bridge = useBridge();
@@ -211,7 +213,7 @@ export default function TerminalApp() {
   }, [workerHost, selectedPaneId]);
 
   useEffect(() => {
-    if (!detached) {
+    if (!detached || sizedByHost) {
       sizedDetachedPaneRef.current = null;
       setDetachedLayoutReady(true);
       return;
@@ -246,7 +248,7 @@ export default function TerminalApp() {
     return () => {
       cancelled = true;
     };
-  }, [detached, selectedPaneId]);
+  }, [detached, sizedByHost, selectedPaneId]);
 
   const spawnPane = async () => {
     setBusy(true);

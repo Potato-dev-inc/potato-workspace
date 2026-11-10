@@ -129,6 +129,10 @@ export const SettingsSchema = z.object({
   spaces_enabled: z.boolean().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
   individual_explained: z.boolean().optional(),
+  /** How the windows move when the mode switches between Orchestration and Individual: Domino (default), Ink, or Off (a quick fade). Rust reads it (switch_anim). */
+  mode_switch_animation: z.enum(['domino', 'ink', 'off']).optional(),
+  /** Where the pop-out windows go when the mode switches to Individual: side by side in an even grid (default), or cascaded one step down and right each. Rust reads it (window_layout). */
+  individual_window_layout: z.enum(['side_by_side', 'cascade']).optional(),
   /** Simple mode: the cockpit with fewer buttons and plain words, for people who do not write code. Off unless chosen. */
   simple_mode: z.boolean().optional(),
   /** Shows the developer rows in Settings (bridge, MCP, storage, file paths). Off unless chosen. Read by the app only. */

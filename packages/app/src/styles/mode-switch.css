@@ -1,0 +1,33 @@
+/* Cockpit side of the animated mode switch. The overlay window draws the motion; the cockpit only gets out of
+   the way (going to Individual) or stays invisible until the proxies land (coming back). Layout never changes:
+   opacity and visibility only, so no pane's terminal grid moves. */
+
+html.sw-out .cockpit {
+  opacity: 0;
+  transition: opacity 190ms ease-in-out 60ms;
+}
+
+html.sw-hold .cockpit {
+  opacity: 0;
+  transition: none;
+}
+
+html.sw-hold.sw-in .cockpit {
+  opacity: 1;
+  transition: opacity 140ms ease-in-out;
+}
+
+html.sw-hold .cockpit [data-sw-hide],
+html.sw-out .cockpit [data-sw-hide] {
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.sw-out .cockpit {
+    transition-duration: 120ms;
+    transition-delay: 0ms;
+  }
+  html.sw-hold.sw-in .cockpit {
+    transition-duration: 120ms;
+  }
+}

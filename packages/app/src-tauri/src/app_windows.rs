@@ -47,6 +47,18 @@ pub fn warm_pane_url(pane_id: &str) -> String {
     format!("{}&warm=1", pane_url(pane_id))
 }
 
+/// The pane window URL Rust builds windows with: `sized=1` tells the page the window already has its final size and
+/// place, so it must not resize itself (that was a visible jump after the window was shown).
+pub fn sized_url(url: &str) -> String {
+    format!("{url}&sized=1")
+}
+
+/// Whether a pane window is visible the moment it is built. A window with an exact rect to fit is built hidden and
+/// shown after the fit (`build_pane_window`), so it never appears at one size and jumps to another.
+pub fn visible_at_build(warm: bool, hidden: bool, has_exact_rect: bool) -> bool {
+    !warm && !hidden && !has_exact_rect
+}
+
 /// What opening a pane's window has to do, given the window that may already exist (a Preload warm
 /// window is created hidden and only needs placing and showing when its pane is claimed).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,6 +135,39 @@ pub fn cascade_position(anchor: Anchor, slot: usize) -> Anchor {
     (anchor.0 + CASCADE_ORIGIN.0 + step, anchor.1 + CASCADE_ORIGIN.1 + step)
 }
 
+/// Where (and how big) a pop-out opens, in logical pixels. `pos` is `None` when no anchor is known: the OS chooses.
+/// ONE function (`pane_placement`) decides this, for the window code and for the animated mode switch's plan, so the
+/// rect the animation flies to is the rect the window really gets.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PanePlacement {
+    pub pos: Option<Anchor>,
+    pub size: (f64, f64),
+    /// The exact OUTER rect in physical screen pixels, when the layout knows it (Side by side). The window is fitted to
+    /// it after it is built, so a scaled monitor cannot shift it. `None` (Cascade): `pos` and `size` are all there is.
+    pub phys: Option<(f64, f64, f64, f64)>,
+}
+
+/// The placement of the pop-out in cascade `slot` from `anchor`, for a terminal of `cols` x `rows`.
+pub fn pane_placement(anchor: Option<Anchor>, slot: usize, cols: u16, rows: u16) -> PanePlacement {
+    PanePlacement { pos: anchor.map(|a| cascade_position(a, slot)), size: pane_window_size(cols, rows), phys: None }
+}
+
+/// A placement as physical screen pixels `(x, y, w, h)`; `None` without a known position.
+pub fn placement_physical(placement: &PanePlacement, scale: f64) -> Option<(f64, f64, f64, f64)> {
+    if let Some(phys) = placement.phys {
+        return Some(phys);
+    }
+    let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+    let (x, y) = placement.pos?;
+    Some((x * scale, y * scale, placement.size.0 * scale, placement.size.1 * scale))
+}
+
+/// Placements for a run of panes opened one after another from `first_slot` (what `open_pane_window` would do
+/// for each, in order).
+pub fn plan_placements(anchor: Option<Anchor>, first_slot: usize, grids: &[(u16, u16)]) -> Vec<PanePlacement> {
+    grids.iter().enumerate().map(|(i, (cols, rows))| pane_placement(anchor, first_slot + i, *cols, *rows)).collect()
+}
+
 mod runtime {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -130,8 +175,8 @@ mod runtime {
 
     static STAGGER: AtomicUsize = AtomicUsize::new(0);
 
-    /// Logical x/y for the next window (cascaded), or `None` to let the OS choose.
-    fn next_position(app: &AppHandle) -> Option<(f64, f64)> {
+    /// Where windows are anchored: the dev anchor, the user's setting, then the primary monitor's origin.
+    pub fn current_anchor(app: &AppHandle) -> Option<Anchor> {
         let dev = std::env::var("PM_WINDOW_ANCHOR").ok().and_then(|v| parse_anchor(&v));
         let setting = std::fs::read_to_string(crate::app_paths::app_data_dir().join("settings.json"))
             .ok()
@@ -141,8 +186,23 @@ mod runtime {
             let scale = m.scale_factor();
             (f64::from(m.position().x) / scale, f64::from(m.position().y) / scale)
         });
-        let anchor = resolve_anchor(dev, setting, primary)?;
+        resolve_anchor(dev, setting, primary)
+    }
+
+    /// Logical x/y for the next window (cascaded), or `None` to let the OS choose.
+    fn next_position(app: &AppHandle) -> Option<(f64, f64)> {
+        let anchor = current_anchor(app)?;
         Some(cascade_position(anchor, STAGGER.fetch_add(1, Ordering::Relaxed)))
+    }
+
+    /// The cascade slot the next window gets, without taking it.
+    pub fn peek_slot() -> usize {
+        STAGGER.load(Ordering::Relaxed)
+    }
+
+    /// Take `count` cascade slots at once (the animated switch plans all its pop-outs before opening them); the first.
+    pub fn reserve_slots(count: usize) -> usize {
+        STAGGER.fetch_add(count, Ordering::Relaxed)
     }
 
     fn show(window: &tauri::WebviewWindow, focus: bool) {
@@ -314,8 +374,57 @@ mod runtime {
                 show(&window, focus);
                 tracing::info!(pane = %pane_id, focus, "warm pane window shown");
             }
-            _ => build_pane_window(app, &label, pane_id, agent, cols, rows, focus, false),
+            _ => build_pane_window(app, &label, pane_id, agent, cols, rows, PaneWindowOpts { focus, ..PaneWindowOpts::default() }),
         }
+    }
+
+    /// The animated switch: create the pop-out of a pane HIDDEN at `placement`, so it loads while the motion plays.
+    /// A hidden window that exists (a warm one) is moved there; a visible one is left alone.
+    pub fn open_pane_window_hidden(app: &AppHandle, pane_id: &str, agent: &str, cols: u16, rows: u16, placement: PanePlacement) {
+        let label = crate::pane_windows::window_label(pane_id);
+        match app.get_webview_window(&label) {
+            Some(window) => {
+                if !window.is_visible().unwrap_or(true) {
+                    if let Some((x, y)) = placement.pos {
+                        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+                    }
+                    if let Some(phys) = placement.phys {
+                        fit_outer(&window, phys);
+                    }
+                }
+            }
+            None => build_pane_window(app, &label, pane_id, agent, cols, rows, PaneWindowOpts { hidden: true, placement: Some(placement), ..PaneWindowOpts::default() }),
+        }
+    }
+
+    /// The end of an animated switch: show a pop-out made hidden by `open_pane_window_hidden` (never moved, never
+    /// focused). If it does not exist (the switch was cut short), build it now at its planned place.
+    pub fn show_pop_out(app: &AppHandle, pane_id: &str, agent: &str, cols: u16, rows: u16, placement: Option<PanePlacement>) {
+        let label = crate::pane_windows::window_label(pane_id);
+        match app.get_webview_window(&label) {
+            Some(window) => show(&window, false),
+            None => build_pane_window(app, &label, pane_id, agent, cols, rows, PaneWindowOpts { placement, ..PaneWindowOpts::default() }),
+        }
+    }
+
+    /// The outer rect of a window in physical screen pixels `(x, y, w, h)`.
+    pub fn outer_rect(window: &tauri::WebviewWindow) -> Option<(f64, f64, f64, f64)> {
+        let pos = window.outer_position().ok()?;
+        let size = window.outer_size().ok()?;
+        Some((f64::from(pos.x), f64::from(pos.y), f64::from(size.width), f64::from(size.height)))
+    }
+
+    /// Put a window's OUTER rect (frame included) exactly on `phys` (physical screen px): position first, then the
+    /// inner size that makes the outer size match. Physical on purpose: a logical position is converted with one
+    /// monitor's scale, which is wrong on a window headed for another.
+    fn fit_outer(window: &tauri::WebviewWindow, (x, y, w, h): (f64, f64, f64, f64)) {
+        let _ = window.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
+        let frame = match (window.outer_size(), window.inner_size()) {
+            (Ok(o), Ok(i)) => (o.width.saturating_sub(i.width), o.height.saturating_sub(i.height)),
+            _ => (0, 0),
+        };
+        let (iw, ih) = crate::window_layout::inner_for_outer((w, h), frame);
+        let _ = window.set_size(tauri::PhysicalSize::new(iw, ih));
     }
 
     /// Create the hidden window of a warm worker. Nothing is shown and nothing is placed yet.
@@ -326,7 +435,7 @@ mod runtime {
         }
         let label = crate::pane_windows::window_label(pane_id);
         if app.get_webview_window(&label).is_none() {
-            build_pane_window(app, &label, pane_id, agent, cols, rows, false, true);
+            build_pane_window(app, &label, pane_id, agent, cols, rows, PaneWindowOpts { warm: true, ..PaneWindowOpts::default() });
         }
     }
 
@@ -341,25 +450,49 @@ mod runtime {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn build_pane_window(app: &AppHandle, label: &str, pane_id: &str, agent: &str, cols: u16, rows: u16, focus: bool, warm: bool) {
-        let (w, h) = pane_window_size(cols, rows);
+    /// How `build_pane_window` differs from "a normal pop-out, placed next in the cascade, shown, no focus".
+    #[derive(Default)]
+    struct PaneWindowOpts {
+        focus: bool,
+        /// Preload's hidden, unplaced window (its page knows its pane is not listed yet).
+        warm: bool,
+        /// Created hidden (placed): the animated switch shows it when the motion ends.
+        hidden: bool,
+        /// Place it here instead of taking the next cascade slot.
+        placement: Option<PanePlacement>,
+    }
+
+    fn build_pane_window(app: &AppHandle, label: &str, pane_id: &str, agent: &str, cols: u16, rows: u16, opts: PaneWindowOpts) {
+        let warm = opts.warm;
+        let (w, h) = opts.placement.map_or_else(|| pane_window_size(cols, rows), |p| p.size);
         let title = crate::ambient::window_title(agent, pane_id, crate::ambient::store::get(pane_id).as_deref());
-        let url = if warm { warm_pane_url(pane_id) } else { pane_url(pane_id) };
+        let url = sized_url(&if warm { warm_pane_url(pane_id) } else { pane_url(pane_id) });
         let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
             .title(title)
             .inner_size(w, h)
             .min_inner_size(260.0, 140.0)
             .resizable(true)
-            .focused(focus && !warm)
-            .visible(!warm);
+            .focused(opts.focus && !warm && !opts.hidden)
+            .visible(visible_at_build(warm, opts.hidden, opts.placement.and_then(|p| p.phys).is_some()));
         if !warm {
-            if let Some((x, y)) = next_position(app) {
+            if let Some((x, y)) = opts.placement.and_then(|p| p.pos).or_else(|| next_position(app)) {
                 builder = builder.position(x, y);
             }
         }
         match builder.build() {
-            Ok(_) => tracing::info!(pane = %pane_id, warm, "pane window opened"),
+            Ok(window) => {
+                if let Some(phys) = opts.placement.and_then(|p| p.phys).filter(|_| !warm) {
+                    // The exact rect is applied while the window is still hidden; only then is it shown.
+                    fit_outer(&window, phys);
+                    if !opts.hidden {
+                        let _ = window.show();
+                        if opts.focus {
+                            let _ = window.set_focus();
+                        }
+                    }
+                }
+                tracing::info!(pane = %pane_id, warm, hidden = opts.hidden, "pane window opened");
+            }
             Err(e) => tracing::warn!(pane = %pane_id, warm, error = %e, "pane window failed to open"),
         }
     }
@@ -393,8 +526,8 @@ mod runtime {
 }
 
 pub use runtime::{
-    ask_settings_to_move_inline, close_warm_pane_window, destroy_pane_windows, hide_cockpit_window, on_close_requested, open_cockpit_settings, open_cockpit_window, open_pane_window, open_settings_window,
-    open_warm_pane_window, open_worker_host_window,
+    ask_settings_to_move_inline, close_warm_pane_window, current_anchor, destroy_pane_windows, hide_cockpit_window, on_close_requested, open_cockpit_settings, open_cockpit_window, open_pane_window,
+    open_pane_window_hidden, open_settings_window, open_warm_pane_window, open_worker_host_window, outer_rect, peek_slot, reserve_slots, show_pop_out,
 };
 
 #[cfg(test)]
@@ -461,6 +594,19 @@ mod tests {
     }
 
     #[test]
+    fn a_window_with_an_exact_rect_is_built_hidden_and_shown_after_the_fit() {
+        assert!(!visible_at_build(false, false, true), "rect first, then show");
+        assert!(visible_at_build(false, false, false), "cascade windows open as before");
+        assert!(!visible_at_build(false, true, true) && !visible_at_build(true, false, false));
+    }
+
+    #[test]
+    fn rust_built_windows_tell_the_page_not_to_resize_itself() {
+        assert_eq!(sized_url(&pane_url("p1")), "index.html?terminal=1&pane=p1&detached=1&sized=1");
+        assert_eq!(sized_url(&warm_pane_url("p1")), "index.html?terminal=1&pane=p1&detached=1&warm=1&sized=1");
+    }
+
+    #[test]
     fn pane_url_matches_the_frontend_route() {
         assert_eq!(pane_url("abc-123"), "index.html?terminal=1&pane=abc-123&detached=1");
         assert_eq!(pane_url("a b/c"), "index.html?terminal=1&pane=a%20b%2Fc&detached=1");
@@ -476,6 +622,40 @@ mod tests {
         assert_eq!(open_plan(false, false), OpenPlan::Create);
         assert_eq!(open_plan(true, false), OpenPlan::PlaceAndShow, "hidden warm window: show only");
         assert_eq!(open_plan(true, true), OpenPlan::Show);
+    }
+
+    #[test]
+    fn a_placement_is_the_cascade_slot_and_the_grid_size() {
+        let anchor = Some((-1660.0, 60.0));
+        let p = pane_placement(anchor, 1, 120, 30);
+        assert_eq!(p.pos, Some(cascade_position((-1660.0, 60.0), 1)));
+        assert_eq!(p.size, pane_window_size(120, 30));
+        assert_eq!(pane_placement(None, 3, 120, 30).pos, None, "no anchor: the OS chooses");
+    }
+
+    #[test]
+    fn a_planned_run_matches_opening_the_panes_one_by_one() {
+        let anchor = Some((10.0, 20.0));
+        let grids = [(120, 30), (80, 24), (0, 0), (200, 50)];
+        let plan = plan_placements(anchor, 5, &grids);
+        for (i, (cols, rows)) in grids.iter().enumerate() {
+            assert_eq!(plan[i], pane_placement(anchor, 5 + i, *cols, *rows), "pane {i}");
+        }
+        // The cascade wraps like it does for single opens.
+        let wrapped = plan_placements(anchor, CASCADE_SLOTS - 1, &[(120, 30), (120, 30)]);
+        assert_eq!(wrapped[1].pos, pane_placement(anchor, CASCADE_SLOTS, 120, 30).pos);
+        assert_eq!(wrapped[1].pos, pane_placement(anchor, 0, 120, 30).pos);
+    }
+
+    #[test]
+    fn a_placement_in_physical_pixels_scales_position_and_size() {
+        let p = pane_placement(Some((100.0, 50.0)), 0, 120, 30);
+        let (x, y, w, h) = placement_physical(&p, 1.5).unwrap();
+        assert_eq!((x, y), ((100.0 + CASCADE_ORIGIN.0) * 1.5, (50.0 + CASCADE_ORIGIN.1) * 1.5));
+        assert_eq!((w, h), (870.0 * 1.5, 480.0 * 1.5));
+        assert_eq!(placement_physical(&pane_placement(None, 0, 120, 30), 1.5), None);
+        // A broken scale factor does not zero the rect.
+        assert_eq!(placement_physical(&p, 0.0).unwrap().2, 870.0);
     }
 
     #[test]

@@ -30,7 +30,7 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
   general: [
     { group: 'Project', rows: ['project-folder'] },
     { group: 'Startup', rows: ['start-at-sign-in'] },
-    { group: 'Appearance', rows: ['theme', 'your-name', 'animated-tray', 'welcome'] },
+    { group: 'Appearance', rows: ['theme', 'mode-switch-animation', 'individual-window-layout', 'your-name', 'animated-tray', 'welcome'] },
     {
       group: 'Safety',
       rows: ['security-ask-before-control', 'security-agents-merge', 'confirm-close', 'loop-guard', 'package-check', 'security-recent-approvals'],

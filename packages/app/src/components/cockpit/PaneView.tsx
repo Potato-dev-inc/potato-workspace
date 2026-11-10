@@ -386,7 +386,7 @@ export function PaneView({
   const copyTotals = worktree?.summary ?? null;
 
   return (
-    <div className="ck-pane">
+    <div className="ck-pane" data-pane-tile={paneId}>
       <header className="ck-pane-head">
         <div className="ck-pane-id">
           <RenameTitle

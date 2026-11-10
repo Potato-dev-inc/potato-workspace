@@ -730,6 +730,7 @@ mod runtime {
                 });
             }
             Some(Command::SetMode(mode)) => {
+                crate::switch_anim::note_click(None);
                 if let Err(e) = crate::cockpit::set_mode(app, mode) {
                     tracing::warn!(error = %e, "tray: mode switch failed");
                 }

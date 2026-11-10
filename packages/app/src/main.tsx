@@ -11,6 +11,7 @@ import './styles/index.css';
 const AskBarApp = lazy(() => import('./components/askbar/AskBarApp'));
 const PointBoxApp = lazy(() => import('./components/point/PointBoxApp'));
 const MiniBarApp = lazy(() => import('./components/minibar/MiniBarApp'));
+const SwitchOverlayApp = lazy(() => import('./components/switchoverlay/SwitchOverlayApp'));
 const CockpitApp = lazy(() => import('./CockpitApp'));
 const PwaApp = lazy(() => import('./PwaApp'));
 const PwaLegacyApp = lazy(() => import('./PwaLegacyApp'));
@@ -50,6 +51,7 @@ async function resolveRoot(): Promise<RootComponent> {
   if (params.get('askbar') === '1') return AskBarApp;
   if (params.get('pointbox') === '1') return PointBoxApp;
   if (params.get('minibar') === '1') return MiniBarApp;
+  if (params.get('switchoverlay') === '1') return SwitchOverlayApp;
   if (isTerminalApp) return TerminalApp;
   if (isStandaloneWorker) return WorkerHostBootstrap;
   if (isMobileOrPwa) return isLegacyPwa ? PwaLegacyApp : PwaApp;

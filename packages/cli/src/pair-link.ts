@@ -1,7 +1,7 @@
 import { readBridgePort, readLocalSecretHeaders } from '@potato-workspace/shared/bridge-port';
 
 /** Where the desktop app serves its dev/production tunnel info (Vite in dev, PWA server otherwise). */
-export const PWA_INFO_URL = 'http://127.0.0.1:1420/__puppet_master_dev__.json';
+export const PWA_INFO_URL = 'http://127.0.0.1:1442/__puppet_master_dev__.json';
 
 export interface TunnelInfo {
   tunnelUrl?: string | null;

@@ -364,9 +364,14 @@ export function useCockpit(): CockpitApi {
   const applyMode = useCallback(
     async (next: UiMode) => {
       const prev = mode;
-      setModeState(next);
+      // The click's own timestamp (read before any await), so Rust can log click -> first frame.
+      const ev = typeof window !== 'undefined' ? (window.event as Event | undefined) : undefined;
+      const clickedMsAgo = ev && Number.isFinite(ev.timeStamp) ? Math.max(0, Math.round(performance.now() - ev.timeStamp)) : 0;
+      // Individual waits for `ui://mode-changed`: Rust sends it when the animated switch ends, and the tiles must stay
+      // mounted until then (the overlay draws from them). Orchestration shows its tiles at once, as before.
+      if (next !== 'individual') setModeState(next);
       try {
-        await cockpitApi.setUiMode(next);
+        await cockpitApi.setUiMode(next, clickedMsAgo);
       } catch (err) {
         setModeState(prev);
         notify(errText(err));

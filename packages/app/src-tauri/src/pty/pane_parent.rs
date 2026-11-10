@@ -76,16 +76,28 @@ pub fn accept_hint(
     Some(hint.to_string())
 }
 
+/// The adapter process of a chat pane (`acp` lane) as it is NOW. A chat's registry `pid` is fixed when the pane is
+/// listed: 0 for a chat restored before its adapter started, and stale after the adapter restarts. Anything an agent
+/// in the chat starts sits under the live adapter, so that is the root to place a caller in. Asked without the
+/// registry lock held (the session has its own lock).
+pub fn chat_live_pid(pane_id: &str) -> Option<u32> {
+    crate::acp::chat::get(pane_id)?.session().connection().map(|conn| conn.pid()).filter(|pid| *pid != 0)
+}
+
 /// Look the hinted pane up in the live registry.
 pub fn claimed_pane(registry: &Arc<Mutex<PaneRegistry>>, hint: &str) -> Option<ClaimedPane> {
-    let reg = registry.lock();
-    let pane = reg.panes.get(hint)?;
-    let mut roots = vec![pane.info.pid];
-    if let Some(serve) = pane.opencode.as_ref().and_then(|link| link.serve_pid()) {
-        roots.push(serve);
-    }
-    let exited = *pane.exited.lock();
-    Some(ClaimedPane { roots, exited })
+    let mut claimed = {
+        let reg = registry.lock();
+        let pane = reg.panes.get(hint)?;
+        let mut roots = vec![pane.info.pid];
+        if let Some(serve) = pane.opencode.as_ref().and_then(|link| link.serve_pid()) {
+            roots.push(serve);
+        }
+        let exited = *pane.exited.lock();
+        ClaimedPane { roots, exited }
+    };
+    claimed.roots.extend(chat_live_pid(hint));
+    Some(claimed)
 }
 
 /// Records `parent` as the helper-of pane for `child` unless it already has one (set once, kept for

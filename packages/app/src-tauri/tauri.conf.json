@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Potato Workspace",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "identifier": "com.potatodev.workspace",
   "build": {
     "beforeDevCommand": "node ../../scripts/vite-dev.mjs",
-    "devUrl": "http://127.0.0.1:1420",
+    "devUrl": "http://127.0.0.1:1442",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },

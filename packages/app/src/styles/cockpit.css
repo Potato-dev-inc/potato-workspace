@@ -443,6 +443,11 @@
     background: var(--bg-raised);
   }
 }
+.cockpit .ck-menu--start {
+  right: auto;
+  left: 0;
+  max-width: calc(100vw - 16px);
+}
 .cockpit .ck-menu--left {
   right: auto;
   left: -40px;

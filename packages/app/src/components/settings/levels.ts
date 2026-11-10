@@ -7,6 +7,8 @@ export const BASIC_ROW_IDS: readonly string[] = [
   // General
   'your-name',
   'theme',
+  'mode-switch-animation',
+  'individual-window-layout',
   'project-folder',
   'start-at-sign-in',
   'confirm-close',
