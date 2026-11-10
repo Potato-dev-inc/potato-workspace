@@ -25,6 +25,7 @@
       "resources/puppet-master-cli.bundle.mjs",
       "resources/pwa-dist/*",
       "resources/pwa-dist/assets/*",
+      "resources/relay-worker/*",
       "resources/bin/*",
       "resources/adapters/**/*",
       "resources/definitions/*.toml",

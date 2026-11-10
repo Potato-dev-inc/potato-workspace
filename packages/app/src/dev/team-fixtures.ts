@@ -102,6 +102,35 @@ const local = {
 
 const ghCard = (event: TeamEvent): TeamCard => ({ id: event.id, event, receivedAtMs: event.atMs, state: 'new', local: null, panes: [] });
 
+/** War Room: Kai pushed to the default branch (no app needed: my own `gh` poll saw it). */
+export const MAIN_PUSH: TeamEvent = {
+  ...MAYA_PUSH,
+  id: '01JA0MAINPUSH0000000000001',
+  actor: { member: 'github:kai-dev', device: '', display: 'Kai' },
+  kind: 'pushed',
+  atMs: now - 2 * 60_000,
+  subject: { branch: 'main', commit: '3333333333333333333333333333333333333333', commits: 3, firstCommit: 'Relay: keep the cursor across reconnects' },
+  note: undefined,
+  dedupeKey: KEY + '@main:pushed',
+  source: 'github',
+};
+
+/** War Room: the default branch is red (the Inbox banner). */
+export const MAIN_RED: TeamEvent = {
+  ...MAIN_PUSH,
+  id: '01JA0MAINRED00000000000001',
+  actor: { member: 'github:', device: '', display: 'GitHub' },
+  kind: 'ci_failed',
+  atMs: now - 60_000,
+  subject: {
+    branch: 'main',
+    commit: '1111111111111111111111111111111111111111',
+    ci: { conclusion: 'failure', failedJobs: ['CI'], url: 'https://github.com/acme/billing-service/actions/runs/9001' },
+  },
+  dedupeKey: KEY + '@main:ci',
+  tierHint: 'interrupt',
+};
+
 export const GITHUB_CARDS: TeamCard[] = [ghCard(GITHUB_PR_OPEN), ghCard(SAM_MERGED), ghCard(CI_FAILED)];
 
 export const TEAM_CARDS: TeamCard[] = [

@@ -1,0 +1,36 @@
+HTTP/2.0 200 OK
+Content-Type: application/json; charset=utf-8
+Etag: W/"7275e501"
+
+{
+  "total_count": 3,
+  "workflow_runs": [
+    {
+      "name": "CI",
+      "head_branch": "main",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/potato-workspace/app/actions/runs/9001"
+    },
+    {
+      "name": "Lint",
+      "head_branch": "main",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/potato-workspace/app/actions/runs/9002"
+    },
+    {
+      "name": "CI",
+      "head_branch": "main",
+      "head_sha": "0000000000000000000000000000000000000000",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/potato-workspace/app/actions/runs/8990"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+HTTP/2.0 200 OK
+Content-Type: application/json; charset=utf-8
+Etag: W/"c0ffee01"
+
+[
+  {
+    "sha": "1111111111111111111111111111111111111111",
+    "commit": { "message": "Release 1.0.15\n\nChangelog." },
+    "author": { "login": "maya-lead" }
+  }
+]

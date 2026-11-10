@@ -19,6 +19,11 @@ export type TeamEventKind =
   | 'review_requested'
   | 'please_review'
   | 'note'
+  /** War Room: someone is on a red default branch (never a card; it marks the banner). */
+  | 'ci_claimed'
+  | 'ci_released'
+  // Reserved for the capacity module, built separately: 'capacity.request' | 'capacity.offer' |
+  // 'capacity.grant' | 'capacity.revoke' | 'session.transfer'. Nothing here sends or shows them.
   | string;
 
 export interface TeamEvent {
@@ -37,8 +42,11 @@ export interface TeamEvent {
     pr?: { number: number; title: string; url: string; state: string; draft: boolean; files?: number; additions?: number; deletions?: number };
     paths?: string[];
     stats?: { files: number; additions: number; deletions: number };
-    /** GitHub checks on a PR or a branch (ci_failed / ci_passed). */
+    /** GitHub checks on a PR or a branch (ci_failed / ci_passed). On a default branch, failedJobs are workflow names. */
     ci?: { conclusion: 'failure' | 'success' | 'pending' | 'none'; failedJobs: string[]; url: string };
+    /** A push to the default branch: how many commits, and the oldest one's subject. */
+    commits?: number;
+    firstCommit?: string;
   };
   note?: string;
   to?: string[];
@@ -84,6 +92,8 @@ export interface TeamCard {
   local: LocalFacts | null;
   /** Agent panes open in that project (for Queue my agent). */
   panes: PaneChoice[];
+  /** War Room: who is on this red default branch. The earliest claim wins on every teammate's app. */
+  claim?: { member: string; display: string; atMs: number; mine: boolean } | null;
 }
 
 /** `needs_start`: the merge stopped on conflicts and the agent would run commands without asking, so it waits for my click. */
@@ -210,6 +220,17 @@ export interface InviteView {
   expiresAtMs: number;
 }
 
+/** "Create team relay": the deploy steps, in order, as `team://relay-deploy` names them when each starts. */
+export type RelayDeployStep = 'token' | 'upload' | 'subdomain' | 'health' | 'done';
+
+export interface CloudflareAccount {
+  id: string;
+  name: string;
+}
+
+/** The token sees several accounts (deploy again with one), or the relay is up at `url`. */
+export type RelayDeployResult = { status: 'pick_account'; accounts: CloudflareAccount[] } | { status: 'done'; url: string };
+
 /** The "Merge when green" sheet: every field but the method is GitHub's own answer, not the card's. */
 export interface MergePlan {
   /** owner/repo */
@@ -248,6 +269,8 @@ export interface TeamApi {
   send: (draftId: string, note?: string) => Promise<void>;
   dismissDraft: (draftId: string) => Promise<void>;
   dismissCard: (cardId: string) => Promise<void>;
+  /** War Room: "Claim it" (true) or "Release" (false) on the red-default-branch banner. */
+  claimCi: (cardId: string, claim: boolean) => Promise<void>;
   pull: (cardId: string) => Promise<string>;
   queue: (cardId: string, paneId: string, when: 'idle' | 'now') => Promise<TeamJob>;
   /** Starts the agent on a `needs_start` update, in a visible pane (desktop only). */
@@ -255,6 +278,9 @@ export interface TeamApi {
   apply: (jobId: string) => Promise<string>;
   discard: (jobId: string) => Promise<void>;
   diff: (jobId: string) => Promise<WorktreeDiff>;
+  /** Deploys the bundled relay into the person's own Cloudflare account. The token is used once and not kept. */
+  deployRelay: (token: string, accountId?: string | null) => Promise<RelayDeployResult>;
+  onRelayDeployStep: (cb: (step: RelayDeployStep) => void) => Promise<UnlistenFn>;
   onChanged: (cb: () => void) => Promise<UnlistenFn>;
   onDraft: (cb: (draft: TeamDraft) => void) => Promise<UnlistenFn>;
 }
@@ -285,12 +311,16 @@ export const teamApi: TeamApi = {
   send: (draftId, note) => call('team_send', { draftId, note: note ?? null }),
   dismissDraft: (draftId) => call('team_draft_dismiss', { draftId }),
   dismissCard: (cardId) => call('team_card_dismiss', { cardId }),
+  claimCi: (cardId, claim) => call('team_ci_claim', { cardId, claim }),
   pull: (cardId) => call('team_pull', { cardId }),
   queue: (cardId, paneId, when) => call('team_queue', { cardId, paneId, when }),
   startJob: (jobId) => call('team_job_start', { jobId }),
   apply: (jobId) => call('team_job_apply', { jobId }),
   discard: (jobId) => call('team_job_discard', { jobId }),
   diff: (jobId) => call('team_job_diff', { jobId }),
+  deployRelay: (token, accountId) => call('team_relay_deploy', { token, accountId: accountId ?? null }),
+  onRelayDeployStep: (cb) =>
+    isTauri() ? listen<{ step: RelayDeployStep }>('team://relay-deploy', (e) => cb(e.payload.step)) : Promise.resolve(noop),
   onChanged: (cb) => (isTauri() ? listen('team://changed', () => cb()) : Promise.resolve(noop)),
   onDraft: (cb) => (isTauri() ? listen<TeamDraft>('team://draft', (e) => cb(e.payload)) : Promise.resolve(noop)),
 };
@@ -308,8 +338,75 @@ export function whoDid(event: TeamEvent): string {
   return agent ? `${event.actor.display}'s ${agent}` : event.actor.display;
 }
 
+/** `acme/billing` for a GitHub project, else its short name. */
+export function repoName(event: TeamEvent): string {
+  const key = event.project.key;
+  return key.startsWith('github.com/') ? key.slice('github.com/'.length) : event.project.name;
+}
+
+/** War Room: a red default branch (not a PR's checks). The Inbox shows it as the banner, not a card. */
+export function isRedBanner(card: TeamCard): boolean {
+  return card.event.kind === 'ci_failed' && !card.event.subject.pr && card.state !== 'dismissed';
+}
+
+/** The red banners that count toward the Inbox badge: nobody has claimed them yet. */
+export function unclaimedRed(state: TeamState | null): { id: string; receivedAtMs: number }[] {
+  if (!state?.enabled) return [];
+  return state.cards.filter((c) => isRedBanner(c) && !c.claim).map((c) => ({ id: c.id, receivedAtMs: c.receivedAtMs }));
+}
+
+/** "main is red in acme/billing · CI" */
+export function redBannerText(event: TeamEvent): string {
+  const workflow = event.subject.ci?.failedJobs?.[0];
+  return `${event.subject.branch ?? 'main'} is red in ${repoName(event)}${workflow ? ` · ${workflow}` : ''}`;
+}
+
+/** Where "Open on GitHub" goes: the PR, the failed run, or the pushed commit. Only https GitHub links. */
+export function githubUrl(event: TeamEvent): string | null {
+  const s = event.subject;
+  const url = s.pr?.url || s.ci?.url || '';
+  if (url.startsWith('https://github.com/')) return url;
+  if (event.project.key.startsWith('github.com/') && s.commit && /^[0-9a-f]{40,64}$/.test(s.commit)) {
+    return `https://${event.project.key}/commit/${s.commit}`;
+  }
+  return null;
+}
+
+/**
+ * War Room: one sentence for a PR or a push to the default branch, or null for other cards.
+ * "Kai opened PR #482 in acme/app · feat/relay-rooms → main · 14 files +612 −88"
+ * "Kai pushed 3 commits to main in acme/app"
+ */
+export function warRoomLine(event: TeamEvent): string | null {
+  const who = whoDid(event);
+  const s = event.subject;
+  if (event.kind === 'pr_opened' && s.pr) {
+    const pr = s.pr;
+    const branches = s.branch && s.base ? `${s.branch} → ${s.base}` : (s.branch ?? '');
+    const stats = pr.files !== undefined ? statsText({ files: pr.files, additions: pr.additions ?? 0, deletions: pr.deletions ?? 0 }) : statsText(s.stats);
+    return [`${who} opened PR #${pr.number} in ${repoName(event)}`, branches, stats].filter(Boolean).join(' · ');
+  }
+  if (event.kind === 'pushed' && s.commits !== undefined) {
+    return `${who} pushed ${plural(s.commits, 'commit')} to ${s.branch ?? 'main'} in ${repoName(event)}`;
+  }
+  return null;
+}
+
+/** The muted line under a War Room sentence: the PR's title and checks, or the first commit. */
+function warRoomMeta(event: TeamEvent): string {
+  const s = event.subject;
+  if (event.kind === 'pr_opened') {
+    const ci = s.ci?.conclusion;
+    const checks = ci === 'failure' ? 'checks failing' : ci === 'success' ? 'checks passed' : ci === 'pending' ? 'checks running' : '';
+    return [s.pr?.title, checks].filter(Boolean).join(' · ');
+  }
+  return [s.firstCommit, s.commit?.slice(0, 7)].filter(Boolean).join(' · ');
+}
+
 /** The bold first line of a teammate's card. */
 export function cardTitle(event: TeamEvent): string {
+  const line = warRoomLine(event);
+  if (line) return line;
   const who = whoDid(event);
   const pr = event.subject.pr;
   if (pr && (event.kind === 'pr_opened' || event.kind === 'pr_ready')) return `${who} opened #${pr.number}`;
@@ -341,6 +438,7 @@ export function statsText(stats?: { files: number; additions: number; deletions:
 
 /** The muted second line: project · branch · files ± · PR title. */
 export function cardMeta(event: TeamEvent): string {
+  if (warRoomLine(event)) return warRoomMeta(event);
   const parts = [event.project.name];
   const pr = event.subject.pr;
   if (pr?.title) parts.push(pr.title);
@@ -392,6 +490,8 @@ export interface CardActions {
 export function cardActions(card: TeamCard): CardActions {
   // A teammate's card can name any repository, number and title, so only GitHub's own facts offer it.
   const mergeWhenGreen = card.event.source === 'github' && isGithubPr(card.event) && card.event.subject.pr?.state === 'open';
+  // Checks have no commit to bring in (a red default branch names its commit for the banner only).
+  if (card.event.kind === 'ci_failed' || card.event.kind === 'ci_passed') return { primary: null, mergeWhenGreen, note: null };
   if (!card.local && hasNothingToPull(card.event)) return { primary: null, mergeWhenGreen, note: null };
   if (!card.local) return { primary: null, mergeWhenGreen, note: "This project isn't open here. Open an agent in it to pull or queue." };
   if (card.state === 'queued') return { primary: null, mergeWhenGreen, note: 'Queued for your agent.' };

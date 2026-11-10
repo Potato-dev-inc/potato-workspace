@@ -103,6 +103,24 @@ pub enum TeamEventKind {
     Presence,
     Note,
     Ack,
+    /// War Room: "I'm on it" for a red default branch (`subject.branch` + `subject.commit`). Not a
+    /// card: it marks the `ci_failed` card of that branch as claimed. Two claims at once: the
+    /// earliest `at_ms` wins everywhere (`store::earliest_claim`).
+    CiClaimed,
+    /// The claimant lets go of a `ci_claimed`.
+    CiReleased,
+    // Reserved names only, for the capacity module the person builds separately. No build sends,
+    // shows or acts on them yet (`shown_as_card` is false, so `ingest` drops them).
+    #[serde(rename = "capacity.request")]
+    CapacityRequest,
+    #[serde(rename = "capacity.offer")]
+    CapacityOffer,
+    #[serde(rename = "capacity.grant")]
+    CapacityGrant,
+    #[serde(rename = "capacity.revoke")]
+    CapacityRevoke,
+    #[serde(rename = "session.transfer")]
+    SessionTransfer,
     /// A kind from a newer build. Parsed so the rest of the batch still reads; never shown.
     #[serde(other)]
     Unknown,
@@ -130,6 +148,13 @@ impl TeamEventKind {
             Self::Presence => "presence",
             Self::Note => "note",
             Self::Ack => "ack",
+            Self::CiClaimed => "ci_claimed",
+            Self::CiReleased => "ci_released",
+            Self::CapacityRequest => "capacity.request",
+            Self::CapacityOffer => "capacity.offer",
+            Self::CapacityGrant => "capacity.grant",
+            Self::CapacityRevoke => "capacity.revoke",
+            Self::SessionTransfer => "session.transfer",
             Self::Unknown => "unknown",
         }
     }
@@ -208,6 +233,12 @@ pub struct Subject {
     pub sentence: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence: Option<String>,
+    /// A push to the default branch: how many commits it brought.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commits: Option<u32>,
+    /// A push to the default branch: the subject line of its first (oldest) new commit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_commit: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -428,6 +459,9 @@ pub fn validate_inbound(mut event: TeamEvent, now_ms: u64) -> Result<TeamEvent, 
             return Err(Rejected("bad pull request"));
         }
     }
+    if matches!(event.kind, TeamEventKind::CiClaimed | TeamEventKind::CiReleased) && subject.branch.is_none() {
+        return Err(Rejected("a claim names its branch"));
+    }
     if event.kind == TeamEventKind::PleaseReview && subject.pr.is_none() && subject.branch.is_none() {
         return Err(Rejected("a review request names a pull request or a branch"));
     }
@@ -450,8 +484,27 @@ pub fn validate_inbound(mut event: TeamEvent, now_ms: u64) -> Result<TeamEvent, 
         pr.state = clean_text(&pr.state, 20);
     }
     event.subject.sentence = event.subject.sentence.as_deref().map(|s| clean_text(s, 280));
+    event.subject.first_commit = event.subject.first_commit.as_deref().map(|s| clean_text(s, 120)).filter(|s| !s.is_empty());
     event.dedupe_key = clean_text(&event.dedupe_key, 300);
     Ok(event)
+}
+
+/// War Room dedupe: the identity of `pr_opened`, `pushed` and `ci_failed` is (repo, kind, PR number
+/// or commit). The instant path (a teammate's app saw it happen) and the catch-up path (my own `gh`
+/// poll) describe the same thing with different event ids; this says they are one. Checked when
+/// sending (`TeamStore::sent`) and when receiving (`store::ingest`). `None`: not a War Room event.
+pub fn war_room_id(event: &TeamEvent) -> Option<String> {
+    let repo = &event.project.key;
+    match event.kind {
+        TeamEventKind::PrOpened => event.subject.pr.as_ref().map(|pr| format!("{repo}:pr_opened:#{}", pr.number)),
+        // Pushes to the default branch only (they carry `commits`): a feature push keeps the
+        // per-branch card that updates in place.
+        TeamEventKind::Pushed if event.subject.commits.is_none() => None,
+        TeamEventKind::Pushed | TeamEventKind::CiFailed => {
+            event.subject.commit.as_ref().map(|sha| format!("{repo}:{}:{sha}", event.kind.as_str()))
+        }
+        _ => None,
+    }
 }
 
 /// The dedupe key of a whole event: [`dedupe_key`], except that every note is its own card (a note

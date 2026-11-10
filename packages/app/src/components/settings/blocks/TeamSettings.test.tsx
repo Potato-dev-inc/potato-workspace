@@ -4,8 +4,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { teamConfig } from '../../../dev/team-fixtures';
-import type { TeamApi, TeamConfigView } from '../../../lib/team';
+import type { RelayDeployResult, RelayDeployStep, TeamApi, TeamConfigView } from '../../../lib/team';
 import { buttonByText, click, hasText, settle, type as typeInto } from '../test-utils';
+import { CLOUDFLARE_TOKENS_URL } from './RelaySheet';
 import { RELAY_HELP_URL, TeamSettings } from './TeamSettings';
 
 vi.mock('qrcode', () => ({ default: { toCanvas: vi.fn(async () => undefined) } }));
@@ -24,7 +25,10 @@ afterEach(async () => {
 
 const NOT_ON_TEAM: Partial<TeamConfigView> = { enabled: false, team: '', teamName: '', relay: '', name: '', members: [], joins: [], admin: false, transport: null, link: null };
 
+let stepListeners: ((step: RelayDeployStep) => void)[] = [];
+
 function fakeApi(view: TeamConfigView) {
+  stepListeners = [];
   const calls: string[] = [];
   const rec =
     <T,>(name: string, value: T) =>
@@ -44,6 +48,11 @@ function fakeApi(view: TeamConfigView) {
     declineJoin: rec('declineJoin', teamConfig({ joins: [] })),
     removeMember: rec('removeMember', teamConfig()),
     confirmGithub: rec('confirmGithub', teamConfig()),
+    deployRelay: rec<RelayDeployResult>('deployRelay', { status: 'done', url: 'https://pm-relay.maya.workers.dev' }),
+    onRelayDeployStep: async (cb: (step: RelayDeployStep) => void) => {
+      stepListeners.push(cb);
+      return () => {};
+    },
   };
   return api as typeof api & TeamApi;
 }
@@ -67,6 +76,7 @@ describe('not on a team', () => {
     const { api } = await mount(teamConfig(NOT_ON_TEAM));
     expect(hasText(host, 'Create a team')).toBe(true);
     expect(hasText(host, 'Join with an invite')).toBe(true);
+    await click(host.querySelector('[role="switch"][aria-label="Use my own address"]'));
     expect(buttonByText(host, 'Create team')!.disabled).toBe(true);
     await typeInto(field('Team name'), 'Acme');
     await typeInto(field('Relay address'), 'https://relay.example.com');
@@ -77,8 +87,10 @@ describe('not on a team', () => {
     expect(api.calls.filter((c) => c.startsWith('create'))).toEqual(['create({"teamName":"Acme","name":"Maya","relay":"https://relay.example.com","folder":""})']);
   });
 
-  it('create: the relay address says in plain words where to host your own, with a link to the guide', async () => {
+  it('create: my own relay address says in plain words where to host your own, with a link to the guide', async () => {
     await mount(teamConfig(NOT_ON_TEAM));
+    expect(hasText(host, 'host your own')).toBe(false);
+    await click(host.querySelector('[role="switch"][aria-label="Use my own address"]'));
     expect(hasText(host, 'Host your own relay on Cloudflare or with Docker. A hosted relay from Potato Workspace is coming.')).toBe(true);
     const link = [...host.querySelectorAll('a')].find((a) => a.textContent === 'How to host your own') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe(RELAY_HELP_URL);
@@ -88,6 +100,88 @@ describe('not on a team', () => {
     // The help is about the relay: with a shared folder instead there is nothing to explain.
     await click(host.querySelector('[role="switch"][aria-label="Use a shared folder instead"]'));
     expect(hasText(host, 'host your own')).toBe(false);
+  });
+
+  it('create team relay: one button deploys a relay with a pasted token, creates the team with it and opens the invite', async () => {
+    const { api } = await mount(teamConfig(NOT_ON_TEAM));
+    expect(field('Relay address')).toBeUndefined();
+    expect(buttonByText(host, 'Create team relay')!.disabled).toBe(true);
+    await typeInto(field('Team name'), 'Acme');
+    await typeInto(host.querySelectorAll<HTMLInputElement>('label input[placeholder="Maya"]')[0], 'Maya');
+    await click(buttonByText(host, 'Create team relay'));
+    expect(sheet()!.textContent).toContain('Use the “Edit Cloudflare Workers” template.');
+    const link = [...sheet()!.querySelectorAll('a')].find((a) => a.textContent === 'Create a Cloudflare token') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe(CLOUDFLARE_TOKENS_URL);
+    expect(sheetButton('Deploy').disabled).toBe(true);
+    const token = sheet()!.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!;
+    expect(token.type).toBe('password');
+    await typeInto(token, 'cf-token');
+    await click(sheetButton('Deploy'));
+    await settle(5);
+    expect(api.calls).toContain('deployRelay("cf-token",null)');
+    expect(api.calls.find((c) => c.startsWith('create'))).toBe('create({"teamName":"Acme","name":"Maya","relay":"https://pm-relay.maya.workers.dev","folder":""})');
+    // The relay sheet is gone and the invite (code + link) is up.
+    expect(host.querySelector('.st-relay')).toBeNull();
+    expect(host.querySelector('.st-invite-code')!.textContent).toBe('KQ7M-4XPD');
+  });
+
+  it('create team relay: shows each step, and an error inline with Retry', async () => {
+    const api = fakeApi(teamConfig(NOT_ON_TEAM));
+    let fail = true;
+    api.deployRelay = async (...[t, a]: unknown[]): Promise<RelayDeployResult> => {
+      api.calls.push(`deployRelay(${JSON.stringify(t)},${JSON.stringify(a)})`);
+      stepListeners.forEach((cb) => cb('token'));
+      stepListeners.forEach((cb) => cb('upload'));
+      if (fail) throw new Error("That token can't edit Workers.");
+      return { status: 'done', url: 'https://pm-relay.maya.workers.dev' };
+    };
+    await act(async () => root.render(<TeamSettings api={api} />));
+    await settle(5);
+    await typeInto(field('Team name'), 'Acme');
+    await typeInto(host.querySelectorAll<HTMLInputElement>('label input[placeholder="Maya"]')[0], 'Maya');
+    await click(buttonByText(host, 'Create team relay'));
+    await typeInto(sheet()!.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!, 'cf-token');
+    await click(sheetButton('Deploy'));
+    await settle(5);
+    const steps = [...sheet()!.querySelectorAll('.st-relay-steps li')].map((li) => `${li.textContent}:${li.getAttribute('data-state')}`);
+    expect(steps).toEqual(['Checking token:done', 'Uploading relay:failed', 'Turning on workers.dev:later', 'Waiting for relay:later', 'Done:later']);
+    expect(sheet()!.querySelector('[role="alert"]')!.textContent).toBe("That token can't edit Workers.");
+    expect(api.calls.some((c) => c.startsWith('create'))).toBe(false);
+    fail = false;
+    await click(sheetButton('Retry'));
+    await settle(5);
+    expect(api.calls.filter((c) => c.startsWith('deployRelay'))).toHaveLength(2);
+    expect(api.calls.some((c) => c.startsWith('create'))).toBe(true);
+  });
+
+  it('create team relay: a token that sees several accounts asks which one', async () => {
+    const api = fakeApi(teamConfig(NOT_ON_TEAM));
+    api.deployRelay = async (...[t, a]: unknown[]): Promise<RelayDeployResult> => {
+      api.calls.push(`deployRelay(${JSON.stringify(t)},${JSON.stringify(a)})`);
+      return a
+        ? { status: 'done', url: 'https://pm-relay.work.workers.dev' }
+        : {
+            status: 'pick_account',
+            accounts: [
+              { id: 'a1', name: 'Maya' },
+              { id: 'a2', name: 'Work' },
+            ],
+          };
+    };
+    await act(async () => root.render(<TeamSettings api={api} />));
+    await settle(5);
+    await typeInto(field('Team name'), 'Acme');
+    await typeInto(host.querySelectorAll<HTMLInputElement>('label input[placeholder="Maya"]')[0], 'Maya');
+    await click(buttonByText(host, 'Create team relay'));
+    expect(sheet()!.querySelector('[aria-label="Cloudflare account"]')).toBeNull();
+    await typeInto(sheet()!.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!, 'cf-token');
+    await click(sheetButton('Deploy'));
+    await settle(5);
+    expect(sheet()!.querySelector('[aria-label="Cloudflare account"]')).not.toBeNull();
+    await click(sheetButton('Deploy'));
+    await settle(5);
+    expect(api.calls.filter((c) => c.startsWith('deployRelay'))).toEqual(['deployRelay("cf-token",null)', 'deployRelay("cf-token","a1")']);
+    expect(api.calls.find((c) => c.startsWith('create'))).toContain('"relay":"https://pm-relay.work.workers.dev"');
   });
 
   it('create: a shared folder replaces the relay address', async () => {

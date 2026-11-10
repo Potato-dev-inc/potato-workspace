@@ -2,6 +2,9 @@
 // updates, under the agents' questions. Same rules as the desktop card: at most two buttons, the
 // ones this phone's pairing allows (`can`), and every action that changes a branch asks first.
 // A teammate's words are untrusted data: they are rendered as plain text, in quotes, nothing more.
+// War Room: PR and default-branch push cards get their one-sentence copy from lib/team.ts here too.
+// TODO(war-room): the red-default-branch banner and its Claim it are desktop only for now; on the
+// phone a red main shows as a plain "Checks failed on main" card (the bridge has no claim route yet).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BridgeClient, TeamCardsReply } from '../../lib/bridge-types';
 import { ago } from '../../lib/mobile-agent-tabs';

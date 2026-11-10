@@ -11,8 +11,15 @@
 //! - **Baseline first:** the first look at a repository records its state and announces nothing.
 //! - The mapping (`diff_pulls`, `ci_state`, `fact_event`) is pure and tested with recorded `gh`
 //!   output (`team/fixtures/gh/`).
+//! - **War Room catch-up:** the default branch (main/master) is watched too: new commits on it
+//!   become `pushed`, and a failed Actions run on its newest commit becomes `ci_failed` (the Inbox
+//!   banner). Unlike other facts, a red default branch is announced on the first look as well: it is
+//!   a state, and a teammate who was offline must still see it. Failed polls back off
+//!   ([`backoff_ms`]).
+//! - TODO(war-room): GitHub webhooks to the team's Worker would make the catch-up path instant. Out
+//!   of scope for now (the Worker can't read events, so it would need its own sealed fact format).
 
-use crate::team::event::{self, Actor, CiRef, EventSource, PrRef, ProjectRef, Subject, TeamEvent, TeamEventKind, Tier};
+use crate::team::event::{self, Actor, CiRef, DiffStat, EventSource, PrRef, ProjectRef, Subject, TeamEvent, TeamEventKind, Tier};
 use crate::team::roster::Roster;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -146,6 +153,17 @@ pub struct PrSnapshot {
     pub head: String,
     pub head_sha: String,
     pub base: String,
+    /// Files changed and lines added/removed (`GET .../pulls/{n}`; the list doesn't carry them).
+    pub stats: Option<DiffStat>,
+    /// Checks on the head commit when the PR was seen opening.
+    pub ci: Option<CiRef>,
+}
+
+/// `GET /repos/{o}/{r}/pulls/{n}`: files changed and lines added/removed.
+pub fn parse_pull_stats(json: &str) -> Option<DiffStat> {
+    let v: serde_json::Value = serde_json::from_str(json).ok()?;
+    let n = |key: &str| v.get(key).and_then(|x| x.as_u64()).map(|n| n.min(u64::from(u32::MAX)) as u32);
+    Some(DiffStat { files: n("changed_files")?, additions: n("additions")?, deletions: n("deletions")? })
 }
 
 /// `GET /repos/{o}/{r}/pulls?state=all` → snapshots. Malformed entries are skipped.
@@ -165,6 +183,8 @@ pub fn parse_pulls(json: &str) -> Vec<PrSnapshot> {
             head_sha: if event::is_valid_commit(&p.head.sha) { p.head.sha } else { String::new() },
             head: p.head.name,
             base: p.base.name,
+            stats: None,
+            ci: None,
         })
         .collect()
 }
@@ -176,6 +196,124 @@ pub enum Fact {
     PrClosed(PrSnapshot),
     CiFailed { branch: String, pr: Option<PrSnapshot>, ci: CiRef },
     CiPassed { branch: String, pr: Option<PrSnapshot>, ci: CiRef },
+    /// New commits on the default branch (from any machine, with or without this app).
+    Pushed(DefaultPush),
+    /// The default branch's newest commit went red (`failed`), or green again after red.
+    DefaultCi { failed: bool, branch: String, sha: String, ci: CiRef },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefaultPush {
+    pub branch: String,
+    pub head_sha: String,
+    /// New commits since the last look (at most one page, 20).
+    pub commits: u32,
+    /// Subject line of the oldest new commit.
+    pub first_commit: String,
+    /// GitHub login of the head commit's author ("" when GitHub doesn't know it).
+    pub author: String,
+}
+
+// ----------------------------------------------------------------------- the default branch
+
+/// `GET /repos/{o}/{r}`: `default_branch`.
+pub fn parse_default_branch(json: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(json).ok()?;
+    v.get("default_branch")?.as_str().filter(|b| event::is_valid_branch(b)).map(str::to_string)
+}
+
+/// One commit of `GET /repos/{o}/{r}/commits?sha=<branch>` (newest first).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitInfo {
+    pub sha: String,
+    pub subject: String,
+    pub author: String,
+}
+
+pub fn parse_commits(json: &str) -> Vec<CommitInfo> {
+    let Ok(list) = serde_json::from_str::<Vec<serde_json::Value>>(json) else { return Vec::new() };
+    list.iter()
+        .filter_map(|c| {
+            let sha = c.get("sha")?.as_str().filter(|s| event::is_full_commit(s))?.to_string();
+            let message = c.pointer("/commit/message").and_then(|m| m.as_str()).unwrap_or("");
+            let subject = event::clean_text(message.lines().next().unwrap_or(""), 120);
+            let author = c.pointer("/author/login").and_then(|a| a.as_str()).unwrap_or("").to_string();
+            Some(CommitInfo { sha, subject, author })
+        })
+        .collect()
+}
+
+/// New commits on the default branch since `prev_head`. The first look (`None`) is a baseline.
+pub fn push_fact(prev_head: Option<&str>, branch: &str, commits: &[CommitInfo]) -> Option<Fact> {
+    let prev = prev_head?;
+    let head = commits.first()?;
+    if head.sha == prev {
+        return None;
+    }
+    // A force-push that dropped the old head: everything on the page counts.
+    let count = commits.iter().position(|c| c.sha == prev).unwrap_or(commits.len());
+    let first = &commits[count.saturating_sub(1)];
+    Some(Fact::Pushed(DefaultPush {
+        branch: branch.into(),
+        head_sha: head.sha.clone(),
+        commits: count as u32,
+        first_commit: first.subject.clone(),
+        author: head.author.clone(),
+    }))
+}
+
+/// `GET /repos/{o}/{r}/actions/runs?branch=<b>`: the newest commit, its state, and the workflows
+/// that failed on it (the newest run of each workflow counts, so a re-run that passed wins).
+pub fn runs_state(json: &str) -> Option<(String, CiState, CiRef)> {
+    let v: serde_json::Value = serde_json::from_str(json).ok()?;
+    let runs = v.get("workflow_runs")?.as_array()?;
+    let sha = runs.first()?.get("head_sha")?.as_str().filter(|s| event::is_full_commit(s))?.to_string();
+    let mut seen = std::collections::BTreeSet::new();
+    let (mut failed, mut pending, mut url) = (Vec::new(), false, String::new());
+    for run in runs.iter().filter(|r| r.get("head_sha").and_then(|s| s.as_str()) == Some(sha.as_str())) {
+        let name = event::clean_text(run.get("name").and_then(|n| n.as_str()).unwrap_or("CI"), 80);
+        if !seen.insert(name.clone()) {
+            continue; // an older run of the same workflow
+        }
+        let conclusion = run.get("conclusion").and_then(|c| c.as_str());
+        if matches!(conclusion, Some("failure" | "timed_out" | "startup_failure")) {
+            if url.is_empty() {
+                url = run.get("html_url").and_then(|u| u.as_str()).filter(|u| u.starts_with("https://")).unwrap_or("").to_string();
+            }
+            failed.push(name);
+        } else if run.get("status").and_then(|s| s.as_str()) != Some("completed") {
+            pending = true;
+        }
+    }
+    let state = if !failed.is_empty() { CiState::Failed } else if pending { CiState::Pending } else { CiState::Passed };
+    let conclusion = match state {
+        CiState::Failed => "failure",
+        CiState::Pending => "pending",
+        _ => "success",
+    };
+    failed.truncate(10);
+    Some((sha, state, CiRef { conclusion: conclusion.into(), failed_jobs: failed, url }))
+}
+
+/// A fact when the default branch's CI changes: red on a commit not yet announced red (on the first
+/// look too), green after red. `red_sha` is the commit last announced red, and is kept up to date.
+pub fn default_ci_fact(red_sha: &mut Option<String>, branch: &str, sha: &str, now: CiState, ci: CiRef) -> Option<Fact> {
+    match now {
+        CiState::Failed if red_sha.as_deref() != Some(sha) => {
+            *red_sha = Some(sha.to_string());
+            Some(Fact::DefaultCi { failed: true, branch: branch.into(), sha: sha.into(), ci })
+        }
+        CiState::Passed if red_sha.is_some() => {
+            *red_sha = None;
+            Some(Fact::DefaultCi { failed: false, branch: branch.into(), sha: sha.into(), ci })
+        }
+        _ => None,
+    }
+}
+
+/// How long to wait after `failures` polls in a row failed: 60 s, 120 s, 240 s ... at most 15 minutes.
+pub fn backoff_ms(failures: u32) -> u64 {
+    (DEFAULT_POLL_S * 1000).saturating_mul(1u64 << failures.min(4)).min(15 * 60 * 1000)
 }
 
 /// What changed between two looks at the pull request list. The first look (`prev` = `None`) is
@@ -272,9 +410,9 @@ fn pr_ref(pr: &PrSnapshot, state: &str) -> PrRef {
         url: pr.url.clone(),
         state: state.into(),
         draft: pr.draft,
-        files: None,
-        additions: None,
-        deletions: None,
+        files: pr.stats.map(|s| s.files),
+        additions: pr.stats.map(|s| s.additions),
+        deletions: pr.stats.map(|s| s.deletions),
     }
 }
 
@@ -285,7 +423,13 @@ pub fn fact_event(project_key: &str, fact: &Fact, roster: Option<&Roster>, now_m
         Fact::PrOpened(pr) => (
             TeamEventKind::PrOpened,
             pr.author.clone(),
-            Subject { branch: Some(pr.head.clone()), base: Some(pr.base.clone()), pr: Some(pr_ref(pr, "open")), ..Subject::default() },
+            Subject {
+                branch: Some(pr.head.clone()),
+                base: Some(pr.base.clone()),
+                pr: Some(pr_ref(pr, "open")),
+                ci: pr.ci.clone(),
+                ..Subject::default()
+            },
             Tier::Ambient,
         ),
         Fact::PrMerged(pr) => (
@@ -314,6 +458,30 @@ pub fn fact_event(project_key: &str, fact: &Fact, roster: Option<&Roster>, now_m
                 if failed { Tier::Interrupt } else { Tier::Digest },
             )
         }
+        Fact::Pushed(push) => (
+            TeamEventKind::Pushed,
+            push.author.clone(),
+            Subject {
+                branch: Some(push.branch.clone()),
+                commit: Some(push.head_sha.clone()),
+                commits: Some(push.commits),
+                first_commit: Some(push.first_commit.clone()).filter(|s| !s.is_empty()),
+                ..Subject::default()
+            },
+            Tier::Ambient,
+        ),
+        Fact::DefaultCi { failed, branch, sha, ci } => (
+            if *failed { TeamEventKind::CiFailed } else { TeamEventKind::CiPassed },
+            String::new(),
+            Subject {
+                branch: Some(branch.clone()),
+                // Only the red one names its commit (the banner's dedupe); a green card has nothing to pull.
+                commit: failed.then(|| sha.clone()),
+                ci: Some(ci.clone()),
+                ..Subject::default()
+            },
+            if *failed { Tier::Interrupt } else { Tier::Digest },
+        ),
     };
     let member = roster.and_then(|r| r.by_github(&author));
     let actor = Actor {
@@ -359,6 +527,16 @@ pub struct RepoPoll {
     /// head sha → (etag, last state)
     pub checks: BTreeMap<String, (Option<String>, CiState)>,
     pub next_at_ms: u64,
+    /// Polls in a row that failed (for [`backoff_ms`]).
+    pub failures: u32,
+    /// The default branch, read once (`None` until GitHub answered).
+    pub default_branch: Option<String>,
+    pub commits_etag: Option<String>,
+    /// Newest commit seen on the default branch.
+    pub head: Option<String>,
+    pub runs_etag: Option<String>,
+    /// The default branch's commit last announced red.
+    pub red_sha: Option<String>,
 }
 
 /// One poll of one repository: the pull request list, then CI of the open pull requests' heads.
@@ -402,5 +580,56 @@ pub fn poll_repo(gh: &dyn Gh, owner_repo: &str, state: &mut RepoPoll, now_ms: u6
         }
         state.checks.insert(pr.head_sha.clone(), (response.etag, now_state));
     }
+    // A newly opened PR's card says how big it is and how its checks stand.
+    for fact in facts.iter_mut() {
+        if let Fact::PrOpened(pr) = fact {
+            if let Ok(r) = gh.api(&format!("repos/{owner_repo}/pulls/{}", pr.number), None) {
+                pr.stats = if r.status == 200 { parse_pull_stats(&r.body) } else { None };
+            }
+            pr.ci = state.checks.get(&pr.head_sha).map(|(_, s)| CiRef {
+                conclusion: match s {
+                    CiState::Failed => "failure",
+                    CiState::Passed => "success",
+                    CiState::Pending => "pending",
+                    CiState::None => "none",
+                }
+                .into(),
+                failed_jobs: Vec::new(),
+                url: String::new(),
+            });
+        }
+    }
+    poll_default_branch(gh, owner_repo, state, &mut facts);
     Ok(facts)
+}
+
+/// Pushes to and CI on the default branch. Best effort: a failure here leaves the PR facts alone.
+fn poll_default_branch(gh: &dyn Gh, owner_repo: &str, state: &mut RepoPoll, facts: &mut Vec<Fact>) {
+    if state.default_branch.is_none() {
+        state.default_branch = gh
+            .api(&format!("repos/{owner_repo}"), None)
+            .ok()
+            .filter(|r| r.status == 200)
+            .and_then(|r| parse_default_branch(&r.body));
+    }
+    let Some(branch) = state.default_branch.clone() else { return };
+    let query = branch.replace('+', "%2B");
+    if let Ok(r) = gh.api(&format!("repos/{owner_repo}/commits?sha={query}&per_page=20"), state.commits_etag.as_deref()) {
+        if r.status == 200 {
+            let commits = parse_commits(&r.body);
+            facts.extend(push_fact(state.head.as_deref(), &branch, &commits));
+            if let Some(head) = commits.first() {
+                state.head = Some(head.sha.clone());
+            }
+            state.commits_etag = r.etag;
+        }
+    }
+    if let Ok(r) = gh.api(&format!("repos/{owner_repo}/actions/runs?branch={query}&per_page=20"), state.runs_etag.as_deref()) {
+        if r.status == 200 {
+            if let Some((sha, now, ci)) = runs_state(&r.body) {
+                facts.extend(default_ci_fact(&mut state.red_sha, &branch, &sha, now, ci));
+            }
+            state.runs_etag = r.etag;
+        }
+    }
 }

@@ -1019,6 +1019,45 @@
   min-width: 0;
   font-size: 11px;
 }
+/* "Create team relay": the token, then the steps as they happen. */
+.settings .st-sheet.st-relay {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings .st-sheet.st-relay h2 {
+  margin: 0;
+}
+.st-relay-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--label-3);
+}
+.st-relay-steps li::before {
+  display: inline-block;
+  width: 18px;
+  content: '·';
+}
+.st-relay-steps li[data-state='now'] {
+  color: var(--label);
+}
+.st-relay-steps li[data-state='now']::before {
+  content: '…';
+}
+.st-relay-steps li[data-state='done'] {
+  color: var(--label-2);
+}
+.st-relay-steps li[data-state='done']::before {
+  content: '✓';
+}
+.st-relay-steps li[data-state='failed'] {
+  color: var(--label);
+  font-weight: 500;
+}
+.st-relay-steps li[data-state='failed']::before {
+  content: '✕';
+}
 
 /* ---------- Telegram (early) setup ---------- */
 .settings .st-tg-warn {

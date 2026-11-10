@@ -332,6 +332,8 @@ fn a_claimed_github_login_is_not_trusted_until_the_admin_confirms_it() {
         head: "feat/x".into(),
         head_sha: String::new(),
         base: "main".into(),
+        stats: None,
+        ci: None,
     };
     let fact = github::fact_event("github.com/acme/billing", &Fact::PrMerged(pr.clone()), Some(&roster), NOW);
     assert_ne!(fact.actor.member, leo_id, "a claimed login is not Leo's yet");

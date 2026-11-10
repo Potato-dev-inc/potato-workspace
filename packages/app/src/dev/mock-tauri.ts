@@ -429,6 +429,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return teamConfig({ enabled: !!scenario.team?.enabled, name: scenario.team?.me ?? 'Leo', ...scenario.teamConfig });
         case 'team_invite':
           return { link: 'pm://team/join?t=Acme&r=relay.acme.dev&k=8Vh2mQ0pXn4cD7wLrT1uYb3sZaE5gJfK', code: 'KQ7M-4XPD', expiresAtMs: Date.now() + 10 * 60_000 };
+        case 'team_relay_deploy':
+          return { status: 'done', url: 'https://pm-relay.acme.workers.dev' };
         case 'team_gaps_clear':
           return null;
         case 'team_merge_plan': {
@@ -457,6 +459,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'team_send':
         case 'team_draft_dismiss':
         case 'team_card_dismiss':
+        case 'team_ci_claim':
         case 'team_job_discard':
         case 'team_job_start':
           return null;

@@ -2,11 +2,11 @@
 // the admin lets people in and removes them. Messages are end-to-end encrypted; the relay (or the shared
 // folder) only moves ciphertext. No ids are shown here: people are names, the team is its name.
 import { useEffect, useState } from 'react';
-import { tauri } from '../../../lib/tauri';
 import { teamApi, type MemberView, type TeamApi, type TeamConfigView, type TeamCreateInput, type TeamJoinInput } from '../../../lib/team';
 import { ConfirmSheet, Switch } from '../controls';
 import { Btn, FieldInput, Note, SettingBlock } from '../settings-ui';
 import { InviteSheet } from './InviteSheet';
+import { ExternalLink, RelaySheet } from './RelaySheet';
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 const splitLines = (text: string) =>
@@ -33,21 +33,7 @@ function RelayHelp() {
       <span />
       <p className="st-note st-team-relay-help">
         Host your own relay on Cloudflare or with Docker. A hosted relay from Potato Workspace is coming.{' '}
-        <a
-          className="st-link"
-          href={RELAY_HELP_URL}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => {
-            // In the desktop app the system browser opens it; elsewhere the link works as usual.
-            if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-              e.preventDefault();
-              void tauri.openExternalUrl(RELAY_HELP_URL);
-            }
-          }}
-        >
-          How to host your own
-        </a>
+        <ExternalLink href={RELAY_HELP_URL}>How to host your own</ExternalLink>
       </p>
     </div>
   );
@@ -129,7 +115,16 @@ export function TeamSettings({ api = teamApi, onSaved }: { api?: TeamApi; onSave
     if (view.team === '') {
       return (
         <>
-          <CreateForm busy={busy} onCreate={(input) => run(() => api.create(input), true)} />
+          <CreateForm
+            api={api}
+            busy={busy}
+            onCreate={async (input) => {
+              // A new team's next step is inviting someone, so the invite opens right away.
+              const ok = await run(() => api.create(input), true);
+              if (ok) setInviting(true);
+              return ok;
+            }}
+          />
           <JoinForm busy={busy} onJoin={(input) => run(() => api.join(input), true)} />
         </>
       );
@@ -295,14 +290,20 @@ export function TeamSettings({ api = teamApi, onSaved }: { api?: TeamApi; onSave
   );
 }
 
-function CreateForm({ busy, onCreate }: { busy: boolean; onCreate: (input: TeamCreateInput) => Promise<boolean> }) {
+function CreateForm({ api, busy, onCreate }: { api: TeamApi; busy: boolean; onCreate: (input: TeamCreateInput) => Promise<boolean> }) {
   const [teamName, setTeamName] = useState('');
   const [name, setName] = useState('');
   const [relay, setRelay] = useState('');
+  const [ownRelay, setOwnRelay] = useState(false);
+  const [deploying, setDeploying] = useState(false);
   const [useFolder, setUseFolder] = useState(false);
   const [folder, setFolder] = useState('');
   const where = useFolder ? folder.trim() : relay.trim();
-  const ready = !!teamName.trim() && !!name.trim() && !!where;
+  const named = !!teamName.trim() && !!name.trim();
+  const ready = named && !!where;
+  const create = (relayUrl: string) => void onCreate({ teamName: teamName.trim(), name: name.trim(), relay: useFolder ? '' : relayUrl, folder: useFolder ? folder.trim() : '' });
+  // With no address yet, the one button deploys a relay first; the team is then created with it.
+  const needsRelay = !useFolder && !ownRelay && !relay.trim();
   return (
     <div className="st-team-section">
       <h3 className="st-team-h">Create a team</h3>
@@ -319,13 +320,27 @@ function CreateForm({ busy, onCreate }: { busy: boolean; onCreate: (input: TeamC
           <span>Shared folder</span>
           <FieldInput value={folder} className="font-mono" placeholder="D:\team\wire" onChange={(e) => setFolder(e.target.value)} />
         </label>
-      ) : (
+      ) : ownRelay || relay ? (
         <label className="st-team-row">
           <span>Relay address</span>
           <FieldInput value={relay} className="font-mono" placeholder="https://relay.example.com" onChange={(e) => setRelay(e.target.value)} />
         </label>
+      ) : (
+        <div className="st-team-row">
+          <span>Relay</span>
+          <p className="st-note">A free relay in your own Cloudflare account. It only passes on encrypted messages.</p>
+        </div>
       )}
-      {!useFolder && <RelayHelp />}
+      {!useFolder && ownRelay && <RelayHelp />}
+      {!useFolder && (
+        <div className="st-team-row">
+          <span />
+          <div className="st-team-inline">
+            <Switch checked={ownRelay} label="Use my own address" onChange={setOwnRelay} />
+            <span>Use my own address</span>
+          </div>
+        </div>
+      )}
       <div className="st-team-row">
         <span />
         <div className="st-team-inline">
@@ -335,14 +350,27 @@ function CreateForm({ busy, onCreate }: { busy: boolean; onCreate: (input: TeamC
       </div>
       <div className="st-team-row">
         <span />
-        <Btn
-          primary
-          disabled={busy || !ready}
-          onClick={() => void onCreate({ teamName: teamName.trim(), name: name.trim(), relay: useFolder ? '' : relay.trim(), folder: useFolder ? folder.trim() : '' })}
-        >
-          Create team
-        </Btn>
+        {needsRelay ? (
+          <Btn primary disabled={busy || !named} onClick={() => setDeploying(true)}>
+            Create team relay
+          </Btn>
+        ) : (
+          <Btn primary disabled={busy || !ready} onClick={() => create(relay.trim())}>
+            Create team
+          </Btn>
+        )}
       </div>
+      {deploying && (
+        <RelaySheet
+          api={api}
+          onClose={() => setDeploying(false)}
+          onDone={(url) => {
+            setDeploying(false);
+            setRelay(url);
+            create(url);
+          }}
+        />
+      )}
     </div>
   );
 }

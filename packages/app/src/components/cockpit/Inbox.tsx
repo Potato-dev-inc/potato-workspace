@@ -24,6 +24,9 @@ import { PaneErrorCard } from './InboxError';
 import { focusWithRing } from './InboxCard';
 import { handleInboxKey, isEditable } from './inbox-keys';
 import { TeamSection } from './team/TeamSection';
+import { RedBanners } from './team/RedBanner';
+import { useTeam } from './team/useTeam';
+import { teamApi } from '../../lib/team';
 import { MissionsSection, readyMissions } from './mission/MissionCards';
 import { CollisionSection } from './CollisionSection';
 import { useMissions } from '../../lib/missions';
@@ -75,6 +78,8 @@ export function Inbox({
   // The mission cards themselves are drawn by MissionsSection; their count is already in `needs`
   // (CockpitApp passes the missions to useNeedsYouSource), like the tray and the phone's number.
   const missions = useMissions();
+  // One Team read for the red-branch banner on top and the Team section below.
+  const team = useTeam();
   // Focus on: finished missions wait out of sight until Focus ends. "Show" unfolds them for this Focus only.
   const focus = useFocus();
   const [shownSession, setShownSession] = useState<string | null>(null);
@@ -258,6 +263,7 @@ export function Inbox({
         onShowFinished={() => setShownSession(focus.view?.sessionId ?? null)}
         onChange={focus.set}
       />
+      <RedBanners state={team.state} api={teamApi} now={c.now} onDone={team.refresh} />
       <header className="ck-inbox-hero">
         {!firstRun && (
           <div className="ck-doto" aria-label={`${count} ${count === 1 ? 'thing needs' : 'things need'} you`}>
@@ -320,7 +326,7 @@ export function Inbox({
       <HiddenRuns />
       <ImportChatsCard />
 
-      <TeamSection now={c.now} paneNames={c.names} />
+      <TeamSection now={c.now} paneNames={c.names} team={team} />
     </div>
   );
 }

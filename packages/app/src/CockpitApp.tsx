@@ -1,7 +1,7 @@
 // Cockpit window (`index.html?cockpit=1`): one window that orchestrates every agent pane.
 import { useNudgeOnAction } from './lib/desktop-nudge';
 import { useFollowFocusedProject } from './hooks/useFollowFocusedProject';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgentDoctor } from './components/cockpit/AgentDoctor';
 import { markSpawned } from './lib/agent-health';
 import { useCockpit } from './hooks/useCockpit';
@@ -14,6 +14,8 @@ import { PaneView } from './components/cockpit/PaneView';
 import { requestPaneAction } from './lib/pane-actions';
 import { Palette, type PaletteMode } from './components/cockpit/Palette';
 import { NeedsYouContext, useNeedsYouSource } from './hooks/useNeedsYou';
+import { useTeam } from './components/cockpit/team/useTeam';
+import { unclaimedRed } from './lib/team';
 import { useMissions } from './lib/missions';
 import { UndoSheet } from './components/cockpit/UndoSheet';
 import { WhatBrokeItSheet } from './components/cockpit/WhatBrokeItSheet';
@@ -384,7 +386,10 @@ export default function CockpitApp() {
   const { onClickCapture } = useNudgeOnAction();
   // Mission cards (Labs) count once in the one list, as they do in the Rust snapshot (tray, phone).
   const missionList = useMissions();
-  const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined);
+  // War Room: a red default branch nobody claimed counts too (the Rust `team_ci:` item, for tray and phone).
+  const team = useTeam();
+  const teamRed = useMemo(() => unclaimedRed(team.state), [team.state]);
+  const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined, teamRed);
   // Simple mode (Settings > General) swaps the whole face; off by default, so this line does nothing then.
   const simple = useSimpleMode();
   // While the welcome is open the normal face stays, so its sign-in and install windows are visible.
