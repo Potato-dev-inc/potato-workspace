@@ -71,6 +71,7 @@ mod pane_prompt;
 mod first_run;
 mod plain_mode;
 mod plans_report;
+mod usage;
 mod prompt_risk;
 mod package_check;
 pub mod questions;
@@ -142,6 +143,7 @@ mod live_room;
 mod model_bridge;
 // Share an agent: Lend through my PC (Labs `lend_enabled`).
 mod capacity_proxy;
+mod keep_awake;
 mod wsl;
 mod collision;
 
@@ -616,6 +618,7 @@ pub fn run() {
             commands::budget_adjust,
             commands::pane_usage,
             commands::plans_report,
+            commands::usage_snapshot,
             commands::agent_scores,
             commands::pick_agent,
             commands::pane_worktree,
@@ -789,6 +792,8 @@ pub fn run() {
         ])
         .setup(|app| {
             commands::startup_probe(app.handle().clone());
+            // Agents keep working when the PC is locked: hold it awake while any pane is busy.
+            keep_awake::spawn(app.state::<AppState>().registry.clone());
             // Copy (never move) the data release 1.0.3 left under the old names once: the home and
             // companion folders, and the paired phones / tunnel / push files in the app data folder.
             // The old files stay untouched and nothing already saved under the new names is overwritten.
@@ -958,6 +963,7 @@ pub fn run() {
             }
             ambient::init(app.handle());
             standby::init(registry_for_panes.clone(), app.handle().clone());
+            acp::warm::init(registry_for_panes.clone());
             canary::init(app.handle().clone());
             // The Agent Wizard's panes (guided capture, visible test) go through the app's pane registry. The
             // host is installed here, not referenced from the wizard module, so the Tauri window code stays out
@@ -1029,6 +1035,7 @@ pub fn run() {
                     room.stop_all(live_room::publisher::StopReason::AppQuit);
                 }
                 standby::shutdown();
+                acp::warm::shutdown();
                 // The computer may sleep again: a Night Shift hold must not outlive the app.
                 night_shift::power::release_all();
                 if let Some(chat) = app_handle.try_state::<commands::SessionChatState>() {

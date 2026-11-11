@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // When WSL is missing, or has no Linux, the section gives the one command to run and a Check again button, and
 // installs nothing itself. needs-external: this PC must lack WSL or a distro, so on a PC with Linux the test skips.
 import { linuxState, openLinuxBlock } from './_area.mjs';

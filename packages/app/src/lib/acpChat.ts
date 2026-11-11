@@ -109,6 +109,12 @@ export interface AcpLaneAgent {
   lane: RunLaneWord;
   /** What a new session really uses (the choice, unless something stops it). */
   effective_lane: RunLaneWord;
+  /** The person saved a choice. `false`: `lane` is only the default. Absent (an older backend): treat as saved. */
+  saved?: boolean;
+  /** What a helper this agent starts gets when it names no lane: a chat when the agent can, else the terminal. */
+  helper_lane?: AcpLane;
+  /** The chat add-on is installed. Absent: unknown. */
+  addon_installed?: boolean;
   disabled: boolean;
   disabled_note: string | null;
   /** `adapter` health: "Not tested on version X" after a passing check on another version. Absent: none. */

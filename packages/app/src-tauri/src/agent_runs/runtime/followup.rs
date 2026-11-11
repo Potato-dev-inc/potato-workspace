@@ -65,28 +65,11 @@ pub fn send_agent(
         drop(serial);
         return queued;
     }
-    let pane_lost = previous
+    let pane_alive = previous
         .pane_id
         .as_deref()
-        .is_some_and(|pane_id| !registry.lock().panes.contains_key(pane_id));
-    // An interrupted run whose pane died with the app resumes its provider session headless.
-    let resume_headless = previous.worker.resumable && pane_lost;
-    if let Some(pane_id) = previous.pane_id.as_deref().filter(|_| !resume_headless) {
-        if pane_lost {
-            if let Some(error) = crate::agent_runs::pane_close::closed_after_run_in(
-                std::slice::from_ref(&previous),
-                pane_id,
-                false,
-            ) {
-                return Err(error);
-            }
-            return Err(crate::agent_runs::pane_close::bound_pane_missing_error(
-                pane_id,
-            ));
-        }
-    }
-    let headless =
-        (previous.pane_id.is_none() || resume_headless) && previous.agent_type != "opencode_native";
+        .is_none_or(|pane_id| registry.lock().panes.contains_key(pane_id));
+    let plan = plan_followup(&previous, pane_alive, opts.context_policy, blocked_on_trust);
     if blocked_on_trust {
         // Nothing ran: retire the parked turn so the retry is the handle's live turn.
         if let Ok(parked) = operations::mark_operation_state(
@@ -101,14 +84,110 @@ pub fn send_agent(
             let _ = crate::bridge::publish_operation(&parked, &registry, &app);
         }
     }
-    let policy = persist::followup_policy(opts.context_policy, previous.worker.context_policy);
     let pending = messaging::pending_texts(&project, handle);
     let task = if pending.is_empty() {
         task
     } else {
         format!("{task}\n\nSteering messages:\n- {}", pending.join("\n- "))
     };
-    let request = AgentRunRequest {
+    let request = build_followup_request(&previous, &project, handle, task, &plan, opts);
+    let reopened = plan.reopened;
+    drop(serial);
+    run_agent(request, registry, app, session_id).map(|mut view| {
+        view.reopened = reopened;
+        view
+    })
+}
+
+/// What a follow-up on a finished run does about the run's pane.
+#[derive(Debug, Clone, PartialEq)]
+pub(in crate::agent_runs) struct FollowupPlan {
+    pub headless: bool,
+    /// The pane to continue in; `None` for a headless turn or a new pane.
+    pub pane_id: Option<String>,
+    /// The old pane is gone: start a new pane on the same handle (never re-adopt `previous.pane_id`).
+    pub fresh_pane: bool,
+    pub policy: ContextPolicy,
+    /// Reported on the answer as `reopened` when the conversation had to be brought back.
+    pub reopened: Option<serde_json::Value>,
+}
+
+/// Decide how a follow-up on a terminal (or trust-parked) run continues. `pane_alive` is whether
+/// the run's pane is still in the registry (ignored when the run had no pane).
+pub(in crate::agent_runs) fn plan_followup(
+    previous: &OperationSnapshot,
+    pane_alive: bool,
+    requested_policy: Option<ContextPolicy>,
+    blocked_on_trust: bool,
+) -> FollowupPlan {
+    let pane_lost = previous.pane_id.is_some() && !pane_alive;
+    let not_native = previous.agent_type != "opencode_native";
+    let policy_for = |default: Option<ContextPolicy>| {
+        if blocked_on_trust {
+            ContextPolicy::Fresh
+        } else {
+            requested_policy
+                .or(default)
+                .unwrap_or_else(|| persist::followup_policy(None, previous.worker.context_policy))
+        }
+    };
+    if pane_lost && previous.worker.resumable {
+        // An interrupted run whose pane died with the app resumes its provider session headless.
+        return FollowupPlan {
+            headless: not_native,
+            pane_id: previous.pane_id.clone(),
+            fresh_pane: false,
+            policy: policy_for(None),
+            reopened: Some(reopened_note(
+                "resumed_session",
+                previous.pane_id.as_deref(),
+                "The old pane was gone; continued the earlier provider session.",
+            )),
+        };
+    }
+    if pane_lost {
+        // Closed (close_agent, closed after the run, lost in a restart) and no session to resume:
+        // a new pane on the same handle, told what happened before.
+        return FollowupPlan {
+            headless: false,
+            pane_id: None,
+            fresh_pane: true,
+            policy: policy_for(Some(ContextPolicy::ParentSummary)),
+            reopened: Some(reopened_note(
+                "new_pane_with_summary",
+                previous.pane_id.as_deref(),
+                "The old pane was closed; started a new pane and gave it a summary of the earlier turns.",
+            )),
+        };
+    }
+    FollowupPlan {
+        headless: previous.pane_id.is_none() && not_native,
+        pane_id: previous.pane_id.clone(),
+        fresh_pane: false,
+        policy: policy_for(None),
+        reopened: None,
+    }
+}
+
+fn reopened_note(how: &str, previous_pane_id: Option<&str>, note: &str) -> serde_json::Value {
+    serde_json::json!({
+        "how": how,
+        "previous_pane_id": previous_pane_id,
+        "previous_handle": serde_json::Value::Null,
+        "note": note,
+    })
+}
+
+pub(in crate::agent_runs) fn build_followup_request(
+    previous: &OperationSnapshot,
+    project: &str,
+    handle: &str,
+    task: String,
+    plan: &FollowupPlan,
+    opts: FollowupOpts,
+) -> AgentRunRequest {
+    let headless = plan.headless;
+    AgentRunRequest {
         project_path: Some(project.to_string()),
         task,
         agent_type: previous.agent_type.clone(),
@@ -132,22 +211,14 @@ pub fn send_agent(
         acceptance_criteria: opts.acceptance_criteria.clone(),
         structured_result: Some(false),
         checks: opts.checks.clone(),
-        pane_id: if headless {
-            None
-        } else {
-            previous.pane_id.clone()
-        },
+        pane_id: plan.pane_id.clone().filter(|_| !headless),
         worker_id: None,
         allow_broad: false,
         name: previous.worker.name.clone(),
         handle: Some(handle.to_string()),
         agent_run_id: Some(handle.to_string()),
         turn_index: previous.turn_index.saturating_add(1),
-        context_policy: if blocked_on_trust {
-            ContextPolicy::Fresh
-        } else {
-            policy
-        },
+        context_policy: plan.policy,
         model: opts
             .requested_model
             .or(previous.worker.requested_model.clone()),
@@ -179,9 +250,8 @@ pub fn send_agent(
         // The guard is carried by the run's worker record, not by this request.
         guard_env: None,
         on_behalf_of_companion: None,
-    };
-    drop(serial);
-    run_agent(request, registry, app, session_id)
+        fresh_pane: plan.fresh_pane,
+    }
 }
 
 pub(in crate::agent_runs) fn enqueue_followup(

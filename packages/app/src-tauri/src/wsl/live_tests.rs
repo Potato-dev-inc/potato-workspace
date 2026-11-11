@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Live check for `stop_in`: starts `sleep 300` under a unique marker inside a real WSL 2 distro,
 //! stops it, and asserts it is gone. Ignored by default (it boots a distro and starts `wsl.exe`).
 //! Run by hand only:

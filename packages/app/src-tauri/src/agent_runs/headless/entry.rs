@@ -411,7 +411,7 @@ pub fn run_agent(
         selected_history: request.selected_history.as_deref().unwrap_or(&[]),
         can_resume: previous.as_ref().is_some_and(|snapshot| {
             persist::snapshot_can_resume(snapshot)
-                || (!request.headless && persist::pane_keeps_context(snapshot))
+                || (!request.headless && !request.fresh_pane && persist::pane_keeps_context(snapshot))
         }),
         is_followup: previous.is_some(),
     });
@@ -432,6 +432,11 @@ pub fn run_agent(
     );
     // APR-4/SEC-4: the file must still be what was approved and the binary the pinned one; the
     // reference is recorded on this turn (OBS-2).
+    if request.fresh_pane {
+        // The conversation is open again: the earlier close no longer applies to this turn.
+        worker.closed = false;
+        worker.pane_disposed = false;
+    }
     worker.agent_definition = crate::tui::registry::admit(&agent_type, &project_path)?;
     // The receipt reports what the profile held HERE could enforce, not whatever the live registry
     // says when the turn ends (the definition may have been edited or removed mid-run).

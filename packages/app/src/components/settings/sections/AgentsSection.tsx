@@ -190,7 +190,7 @@ export const agentsRows: RowDef[] = [
   {
     id: 'agent-lane',
     label: 'How to run',
-    hint: 'Run an agent in a terminal (the default) or as a chat.',
+    hint: 'Helpers run as a chat when the agent can, else in a terminal.',
     keywords: 'chat acp terminal lane run mode conversation session how to run',
     group: 'Chat',
     labsFlag: 'acp_chat_enabled',

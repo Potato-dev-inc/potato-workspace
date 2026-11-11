@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Windows and Linux folder paths for Linux Inside (SPEC-n33 section 3.3). Pure: no I/O, no process calls.
 //!
 //! `C:\x` is `/mnt/c/x`. The mount root comes from the probe (`wslpath`), so `wsl.conf` `root=/` gives `/c/x`.

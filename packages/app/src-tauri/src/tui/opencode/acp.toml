@@ -4,6 +4,7 @@
 # Protocol) server`; `opencode acp` with `initialize` {protocolVersion: 1} answers protocolVersion 1,
 # agentInfo OpenCode 1.19.0, loadSession true, sessionCapabilities resume/list/fork/close; `session/new`
 # answers `ses_...`, the same id `opencode --session <id>` takes (so "Open in terminal" works). No flag needed.
+# Checked again on OpenCode 2.2.7 (2026-11-11): the same `opencode acp` command works (initialize, session/new, session/prompt, session/load; 2.x also offers resume).
 # Sign-in is the person's own (`opencode auth login`, stored by OpenCode itself); provider key variables of
 # the app's environment are not passed on unless listed in env_allow.
 command = "opencode"

@@ -46,6 +46,7 @@ const blank = (): LendProfile => ({
   max_secs: 24 * 3600,
   approval: 'each',
   sign_out_on_end: true,
+  keep_awake: true,
   max_requests: null,
   max_tokens: null,
 });
@@ -446,6 +447,10 @@ function ProfileEditor({
         <input type="checkbox" checked={p.sign_out_on_end} onChange={(e) => set({ sign_out_on_end: e.target.checked })} />
         <span>Sign out when it ends</span>
       </label>
+      <label className="lend-radio">
+        <input type="checkbox" checked={p.keep_awake} onChange={(e) => set({ keep_awake: e.target.checked })} />
+        <span>Keep this PC awake while lending</span>
+      </label>
       {problems.length > 0 && <p className="lend-muted">{problems[0]}</p>}
       {error && (
         <p className="lend-error" role="alert">
@@ -484,6 +489,7 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
     <section className="lend-block" aria-label="Active lends">
       <h3>Active lends</h3>
       {live.length === 0 && <p className="lend-muted">Nothing is lent or borrowed right now.</p>}
+      {state.keeping_awake && <p className="lend-muted">This PC stays awake while you lend.</p>}
       <ul className="lend-list">
         {live.map((g) => (
           <li key={g.id}>

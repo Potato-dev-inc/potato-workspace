@@ -25,6 +25,7 @@
 mod git;
 pub mod folder;
 pub mod harden;
+pub mod holders;
 pub mod pr;
 pub mod preset;
 pub mod proc;
@@ -962,6 +963,43 @@ pub fn discard(reference: &WorktreeRef) -> Result<(), OperationError> {
 
 /// Remove the checkout, the branch (`-d` after a merge, `-D` for a discard) and the description.
 fn remove_checkout(reference: &WorktreeRef, merged: bool) -> Result<(), OperationError> {
+    remove_checkout_with(reference, merged, &REMOVE_DELAYS_MS, &holders::find)
+}
+
+/// Pauses between the attempts at deleting a checkout folder (about 9 s in all).
+pub(crate) const REMOVE_DELAYS_MS: [u64; 8] = [100, 200, 400, 800, 1600, 2000, 2000, 2000];
+
+/// The failure after the retries ran out: names the processes still holding files, when found.
+fn remove_failed(path: &Path, error: &std::io::Error, scan: &dyn Fn(&Path) -> Vec<holders::Holder>) -> OperationError {
+    let found = scan(path);
+    let mut message = format!("could not remove {}: {error}.", path.display());
+    let recovery = match found.first() {
+        Some(first) => {
+            message.push_str(&format!(" Still in use by: {}.", holders::describe(&found)));
+            format!(
+                "close {} (PID {}) or stop the agent, then call review_worktree discard again",
+                first.name, first.pid
+            )
+        }
+        None => "stop the agent or close anything using that folder, then call review_worktree discard again".to_string(),
+    };
+    message.push_str(&format!(" To finish: {recovery}."));
+    let mut failure = OperationError::new("WORKTREE_REMOVE_FAILED", message, true);
+    failure.context = serde_json::json!({
+        "path": path.to_string_lossy(),
+        "holders": found,
+        "recovery": recovery,
+    });
+    failure
+}
+
+/// [`remove_checkout`] with the retry pauses and the holder scan injected (tests).
+pub(crate) fn remove_checkout_with(
+    reference: &WorktreeRef,
+    merged: bool,
+    delays: &[u64],
+    scan: &dyn Fn(&Path) -> Vec<holders::Holder>,
+) -> Result<(), OperationError> {
     let origin = PathBuf::from(&reference.repo);
     let root = worktrees_root(&origin);
     let path = PathBuf::from(&reference.path);
@@ -982,13 +1020,9 @@ fn remove_checkout(reference: &WorktreeRef, merged: bool) -> Result<(), Operatio
             &[],
         )?;
         if !removed.ok || path.exists() {
-            // Locked files on Windows or a broken checkout: fall back to deleting the folder.
-            remove_dir_all_retry(&path).map_err(|error| {
-                err(
-                    "WORKTREE_REMOVE_FAILED",
-                    format!("could not remove {}: {error}", path.display()),
-                )
-            })?;
+            // Locked files on Windows or a broken checkout: fall back to deleting the folder,
+            // retrying for several seconds (a just-stopped process releases its files late).
+            remove_dir_all_with(&path, delays).map_err(|error| remove_failed(&path, &error, scan))?;
         }
     }
     let _ = git_raw(&origin, &["worktree", "prune"], &[]);
@@ -1009,20 +1043,25 @@ fn remove_checkout(reference: &WorktreeRef, merged: bool) -> Result<(), Operatio
 }
 
 fn remove_dir_all_retry(path: &Path) -> std::io::Result<()> {
-    let mut last = Ok(());
-    for attempt in 0..5 {
+    remove_dir_all_with(path, &[80, 160, 240, 320])
+}
+
+/// Delete `path`, trying once more after each pause in `delays_ms` (and once up front).
+fn remove_dir_all_with(path: &Path, delays_ms: &[u64]) -> std::io::Result<()> {
+    let mut attempt = 0;
+    loop {
         match std::fs::remove_dir_all(path) {
             Ok(()) => return Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             Err(error) => {
                 // Read-only files (git objects) block deletion on Windows.
                 clear_readonly(path);
-                last = Err(error);
-                std::thread::sleep(std::time::Duration::from_millis(80 * (attempt + 1)));
+                let Some(pause) = delays_ms.get(attempt) else { return Err(error) };
+                std::thread::sleep(std::time::Duration::from_millis(*pause));
+                attempt += 1;
             }
         }
     }
-    last
 }
 
 fn clear_readonly(path: &Path) {

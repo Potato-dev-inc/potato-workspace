@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // Linux Inside: typed wrappers for the WSL commands (`commands/wsl.rs`, desktop window only). The types
 // mirror `wsl/model.rs` and the spawn args mirror `SpawnPaneArgs` (snake_case, as Rust serialises it).
 // The Rust side decides everything; nothing here starts a distro or changes WSL.

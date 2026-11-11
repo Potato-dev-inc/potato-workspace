@@ -86,6 +86,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "handoff_mode",
     "handoff_fixed_notes",
     "lend_enabled",
+    "keep_awake_while_working",
 ];
 
 pub fn default_public_settings() -> Value {
@@ -130,6 +131,8 @@ pub fn default_public_settings() -> Value {
         "handoff_fixed_notes": "",
         // Share an agent (Labs): lend an agent sign-in to another PC through this one. Off until chosen. Rust: capacity_proxy.
         "lend_enabled": false,
+        // Keep the PC awake (the screen may still turn off) while an agent works, so locking with Win+L does not stop it.
+        "keep_awake_while_working": true,
     })
 }
 
@@ -183,6 +186,7 @@ fn apply_public_settings(effective: &Value) {
     crate::model_bridge::apply_settings(effective);
     crate::spaces::runtime::apply_settings(effective);
     crate::capacity_proxy::apply_settings(effective);
+    crate::keep_awake::apply_settings(effective);
 }
 
 /// Merge `patch` into the public mirror (bridge state + mobile SSE) without any window event.

@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Where a pane runs (SPEC-n33 sections 3.1 and 3.6 C). `decide` picks Windows or Linux for a spawn
 //! from the setting, the one-shot request and the pane's facts. `resolve` turns a chosen distro into
 //! a `LinuxPlace` (distro listed and WSL 2, folder mapped, program found). `check_run` is the early

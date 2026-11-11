@@ -32,6 +32,26 @@ struct Health {
     /// Warm standby pool counts (see `GET /standby` for the detail); absent before it starts.
     #[serde(skip_serializing_if = "Option::is_none")]
     standby: Option<crate::standby::HealthSummary>,
+    /// The profile this app runs as (`POTATO_WORKSPACE_PROFILE`); absent for the default profile.
+    /// Lets a shim tell the installed app from a dev profile when it has to scan for a bridge.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    profile: Option<String>,
+    /// Folder name (never the full path) of this app's data directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    app_data_dir: Option<String>,
+    /// `dev` for a debug build, `release` otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    build_kind: Option<&'static str>,
+}
+
+/// Which app this is, for a shim that has to choose between several: the profile, the app-data
+/// folder name (never a full path) and the build kind.
+fn health_identity() -> (Option<String>, Option<String>, Option<&'static str>) {
+    (
+        crate::app_paths::profile(),
+        Some(crate::app_paths::app_id()),
+        Some(if cfg!(debug_assertions) { "dev" } else { "release" }),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -67,6 +87,7 @@ pub(super) fn route(
         crate::mcp_sessions::authorize(request_session(headers), method, "/health", &json!({}))
             .map_err(operation_http_error)?;
         let hashes = crate::tool_registry::tool_schema_hashes();
+        let (profile, app_data_dir, build_kind) = health_identity();
         return Ok((
             200,
             serde_json::to_value(Health {
@@ -80,6 +101,9 @@ pub(super) fn route(
                 build_id: env!("PM_BUILD_ID"),
                 tool_count: crate::tool_registry::external_mcp_tool_count(),
                 standby: crate::standby::health_summary(),
+                profile,
+                app_data_dir,
+                build_kind,
             })
             .unwrap(),
         ));
@@ -186,7 +210,7 @@ fn is_pane_typing_route(method: &str, segments: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_helper_start_route, is_pane_typing_route};
+    use super::{health_identity, is_helper_start_route, is_pane_typing_route, Health};
 
     #[test]
     fn the_routes_that_start_a_helper_are_the_ones_that_record_a_caller() {
@@ -207,5 +231,33 @@ mod tests {
         assert!(!is_pane_typing_route("DELETE", &["panes", "p1"]));
         assert!(!is_pane_typing_route("POST", &["panes", "p1", "viewport"]));
         assert!(!is_pane_typing_route("POST", &["agents", "run"]));
+    }
+
+    #[test]
+    fn health_names_the_profile_data_folder_and_build_kind_without_a_path() {
+        let (profile, app_data_dir, build_kind) = health_identity();
+        let health = Health {
+            ok: true,
+            version: "1",
+            catalog_version: String::new(),
+            catalog_hash: String::new(),
+            tool_hashes: Default::default(),
+            product: "potato-workspace",
+            app_instance_id: "i",
+            build_id: "b",
+            tool_count: 0,
+            standby: None,
+            profile,
+            app_data_dir,
+            build_kind,
+        };
+        let body = serde_json::to_value(&health).unwrap();
+        let folder = body["app_data_dir"].as_str().unwrap();
+        assert!(folder.starts_with("com.potatodev.workspace"), "{folder}");
+        assert!(!folder.contains('/') && !folder.contains('\\'), "{folder}");
+        assert_eq!(body["build_kind"], if cfg!(debug_assertions) { "dev" } else { "release" });
+        // Older shims keep parsing: unset fields are left out.
+        let bare = serde_json::to_value(Health { profile: None, app_data_dir: None, build_kind: None, ..health }).unwrap();
+        assert!(bare.get("profile").is_none() && bare.get("app_data_dir").is_none() && bare.get("build_kind").is_none());
     }
 }

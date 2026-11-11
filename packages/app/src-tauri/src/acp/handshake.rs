@@ -144,6 +144,7 @@ mod tests {
         let text = match name {
             "codex" => include_str!("fixtures/initialize_codex_1_1_4.json"),
             "claude" => include_str!("fixtures/initialize_claude_0_74_0.json"),
+            "opencode2" => include_str!("fixtures/initialize_opencode_2_2_7.json"),
             other => panic!("no fixture {other}"),
         };
         serde_json::from_str(text).unwrap()
@@ -157,6 +158,20 @@ mod tests {
         assert_eq!(params["clientCapabilities"]["fs"]["writeTextFile"], json!(false));
         assert_eq!(params["clientCapabilities"]["terminal"], json!(false));
         assert_eq!(params["clientCapabilities"]["_meta"]["jetbrains"]["air"]["capabilities"], json!(["asyncTasks"]));
+    }
+
+    #[test]
+    fn a_real_opencode_2_2_7_answer_is_read_into_capabilities() {
+        // Recorded from `opencode acp` 2.2.7 (the same handshake our chat lane sends).
+        let caps = parse_initialize(&fixture("opencode2")).unwrap();
+        assert_eq!(caps.agent_name.as_deref(), Some("OpenCode"));
+        assert_eq!(caps.agent_version.as_deref(), Some("2.2.7"));
+        assert!(caps.load_session && caps.resume && caps.list && caps.close);
+        assert!(caps.image_prompts && caps.embedded_context && caps.mcp_http && !caps.mcp_sse);
+        assert!(caps.steering);
+        assert_eq!(caps.auth_methods.len(), 1);
+        assert_eq!(caps.auth_methods[0].id, "opencode-login");
+        assert_eq!(caps.auth_methods[0].kind, "agent");
     }
 
     #[test]

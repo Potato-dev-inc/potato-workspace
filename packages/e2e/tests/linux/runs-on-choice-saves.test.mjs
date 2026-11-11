@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // Choosing Linux for an agent is saved (to the app's own file) and survives leaving Settings; choosing Windows undoes it.
 // No Linux program is started: only the choice is saved. needs-external: needs a real WSL 2 distro on the test PC.
 import { chooseRunsOn, linuxState, openLinuxBlock, runsOn } from './_area.mjs';

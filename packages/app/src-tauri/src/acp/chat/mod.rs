@@ -31,6 +31,7 @@ pub mod ending;
 pub mod lanes;
 pub mod mapper;
 mod start;
+pub mod receipt;
 pub mod surface;
 
 #[cfg(test)]
@@ -39,6 +40,8 @@ mod golden_tests;
 mod tests;
 #[cfg(test)]
 mod workspace_tests;
+#[cfg(test)]
+mod auto_lane_tests;
 
 use crate::attach::ChatAttachment;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -194,6 +197,10 @@ pub struct AcpChat {
     started_by: Mutex<Option<String>>,
     /// `{lane_used, lane_reason}` of the `run_agent` that started this chat; also saved with its conversation.
     lane_note: Mutex<Option<serde_json::Value>>,
+    /// This chat was taken from the warm (ready-made) chats instead of started fresh; the receipt says so.
+    warm_claimed: AtomicBool,
+    /// What the `run_agent` that started this chat asked for and how its turns were checked (`receipt.rs`).
+    run_meta: Mutex<receipt::RunMeta>,
     /// The append-only journal of this chat (`journal.rs`): every item is written as it arrives. `None` without a saved conversation.
     journal: Option<Journal>,
     /// The app closed during a turn (found in the journal at start); cleared when a new turn starts. The view offers "Continue".
@@ -354,6 +361,8 @@ impl AcpChat {
             waking: AtomicBool::new(false),
             started_by: Mutex::new(None),
             lane_note: Mutex::new(None),
+            warm_claimed: AtomicBool::new(false),
+            run_meta: Mutex::new(receipt::RunMeta::default()),
             journal,
             interrupted: AtomicBool::new(false),
             choice_warnings: Mutex::new(Vec::new()),
@@ -405,6 +414,15 @@ impl AcpChat {
         if let Some(conversations) = &self.conversations {
             conversations.update(&self.pane_id, |r| r.lane_note = Some(note));
         }
+    }
+
+    /// Marks this chat as taken from the warm chats (so the receipt's `standby_used` says so).
+    pub fn set_warm_claimed(&self, claimed: bool) {
+        self.warm_claimed.store(claimed, Ordering::SeqCst);
+    }
+
+    pub fn warm_claimed(&self) -> bool {
+        self.warm_claimed.load(Ordering::SeqCst)
     }
 
     pub fn lane_note(&self) -> Option<serde_json::Value> {

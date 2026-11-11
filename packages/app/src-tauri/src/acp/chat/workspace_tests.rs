@@ -41,7 +41,7 @@ impl HostEnv for Env {
     }
 }
 
-struct Agents(BTreeMap<String, Arc<AgentConfig>>);
+pub(super) struct Agents(pub(super) BTreeMap<String, Arc<AgentConfig>>);
 
 impl AgentSource for Agents {
     fn config(&self, agent: &str) -> Option<Arc<AgentConfig>> {
@@ -82,18 +82,18 @@ struct Rig {
     panes: Panes,
 }
 
-fn agents(opts: &str, dir: &Path) -> Arc<Agents> {
+pub(super) fn agents(opts: &str, dir: &Path) -> Arc<Agents> {
     let mut cfg = fake_agent::agent_config(opts, &dir.join("agent-sessions"));
     cfg.resume_command = vec!["resume".into(), "{session}".into()];
     Arc::new(Agents(BTreeMap::from([("fake".to_string(), Arc::new(cfg))])))
 }
 
-fn conversations_in(dir: &Path, opts: &str) -> Conversations {
+pub(super) fn conversations_in(dir: &Path, opts: &str) -> Conversations {
     let env: Arc<dyn HostEnv> = Arc::new(Env { root: dir.to_path_buf() });
     Conversations::new(RecordStore::at(dir.join("conversations.json")), Arc::new(Supervisor::new(SupervisorConfig::default())), env, agents(opts, dir))
 }
 
-fn deps_for(dir: &Path, conversations: &Conversations) -> StartDeps {
+pub(super) fn deps_for(dir: &Path, conversations: &Conversations) -> StartDeps {
     StartDeps { registry: Arc::new(Mutex::new(PaneRegistry::new())), host: Arc::new(QuietHost), env: Arc::new(Env { root: dir.to_path_buf() }), conversations: Some(conversations.clone()) }
 }
 
@@ -781,4 +781,42 @@ fn when_the_app_ends_a_helper_chat_stays_restorable_and_is_not_closed_by_its_age
     let mut want = vec![boss.clone(), helper.clone()];
     want.sort();
     assert_eq!(open, want);
+}
+
+#[test]
+fn followup_on_a_closed_chat_reopens_it_and_loads_the_agents_session() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.set_started_by(Some("session-A"));
+    rig.conversations.update(&id, |r| r.started_by = Some("session-A".into()));
+    rig.say("stream 2");
+    let session_id = rig.conversations.record(&id).unwrap().session_id.expect("the agent gave the chat a session id");
+
+    on_pane_closed(&id);
+    assert!(get(&id).is_none(), "the closed chat is not listed");
+
+    // Another agent may not bring it back.
+    let refused = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 1" }), Some("session-B")).unwrap();
+    assert_eq!(refused.unwrap_err().code, "NOT_YOUR_CHAT");
+
+    let done = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 3", "wait_ms": 20000 }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(done["reopened"]["how"], "chat_reopened");
+    assert_eq!(done["reopened"]["previous_handle"], json!(id));
+    assert_eq!(done["status"], "completed");
+    let chat = get(&id).expect("the chat is back");
+    assert_eq!(chat.session().snapshot().session_id.as_deref(), Some(session_id.as_str()), "the agent's own session was loaded, not a new one");
+    assert_eq!(rig.conversations.record(&id).unwrap().session_id.as_deref(), Some(session_id.as_str()));
+    on_pane_closed(&id);
+}
+
+#[test]
+fn followup_on_a_closed_chat_without_a_session_id_says_so_instead_of_starting_fresh() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    on_pane_closed(&id);
+    rig.conversations.update(&id, |r| r.session_id = None);
+    let error = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 1" }), None).unwrap().unwrap_err();
+    assert_eq!(error.code, "ACP_SESSION_UNKNOWN");
+    assert!(error.context["recovery"].as_str().unwrap().contains("run_agent"));
+    assert!(get(&id).is_none(), "nothing was started");
 }

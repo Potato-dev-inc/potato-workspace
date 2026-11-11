@@ -298,6 +298,12 @@ pub trait TuiProfile: Send + Sync {
         None
     }
 
+    /// Where this agent's plan usage can be read for the "Used" strip (`crate::usage`): the `[usage]` table of
+    /// its `usage.toml`. `None` (the default): the agent is not shown there.
+    fn usage_source(&self) -> Option<crate::usage::source::UsageSource> {
+        None
+    }
+
     /// The usage limit (or transient retry, warning) the screen shows, if any. The default runs the
     /// generic detector over `limits()` and the profile's own `busy_marker`; no override is needed.
     fn detect_limit(&self, screen: &str, clock: &dyn crate::handoff::reset::Clock) -> Option<crate::handoff::LimitHit> {

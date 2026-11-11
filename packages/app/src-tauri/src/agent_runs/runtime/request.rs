@@ -207,6 +207,10 @@ pub struct AgentRunRequest {
     /// the companion's home folder, a `delegated` feed line.
     #[serde(skip)]
     pub on_behalf_of_companion: Option<String>,
+    /// Crate-internal: a follow-up whose pane is gone starts a new pane on the same handle instead of
+    /// re-adopting the pane the earlier turn used.
+    #[serde(skip)]
+    pub fresh_pane: bool,
 }
 
 impl AgentRunRequest {

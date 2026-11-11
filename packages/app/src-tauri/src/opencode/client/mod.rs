@@ -111,6 +111,21 @@ pub struct OpenCodeSession {
     pub id: String,
 }
 
+/// A failed request as text. An HTTP error carries the server's answer (cut, secrets masked), so a
+/// refusal such as 405 says what answered and why.
+pub(crate) fn describe_error(what: &str, err: ureq::Error) -> String {
+    match err {
+        ureq::Error::Status(code, response) => {
+            let allow = response.header("allow").map(|value| format!(" (allow: {value})")).unwrap_or_default();
+            let body = response.into_string().unwrap_or_default();
+            let body: String = body.trim().chars().take(300).collect();
+            let body = crate::redact::text(&body).into_inner();
+            format!("{what}: status code {code}{allow}{}", if body.is_empty() { String::new() } else { format!(": {body}") })
+        }
+        other => format!("{what}: {other}"),
+    }
+}
+
 pub fn create_session(base_url: &str, title: &str) -> Result<OpenCodeSession, String> {
     let base = normalize_base_url(base_url);
     let url = format!("{base}/session");
@@ -118,7 +133,7 @@ pub fn create_session(base_url: &str, title: &str) -> Result<OpenCodeSession, St
         ureq::post(&url)
             .timeout(DEFAULT_TIMEOUT)
             .send_json(json!({ "title": title }))
-            .map_err(|err| format!("opencode create session: {err}"))
+            .map_err(|err| describe_error("opencode create session", err))
     })?;
     if !(200..300).contains(&response.status()) {
         return Err(format!(

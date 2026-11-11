@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // With a Linux available, every agent that can run there still starts on Windows until the person says otherwise, and
 // the section warns that Linux is not a sandbox. needs-external: it needs a real WSL 2 distro on the PC running the test.
 import { linuxState, openLinuxBlock, runsOn } from './_area.mjs';

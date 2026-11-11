@@ -40,6 +40,30 @@ fn codex_install_appends_project_config_toml() {
 
     let content = fs::read_to_string(cwd.join(".codex").join("config.toml")).expect("toml");
     assert!(codex_has_puppet_master(&content));
+    assert!(content.contains("tool_timeout_sec = 3600"));
+}
+
+#[test]
+fn codex_block_without_a_tool_timeout_is_upgraded() {
+    let cwd = temp_dir("codex-timeout");
+    fs::create_dir_all(cwd.join(".codex")).expect("codex dir");
+    let path = cwd.join(".codex").join("config.toml");
+    let fresh = codex_mcp_block(McpLaunchSource::Auto);
+    let old = fresh.replace("tool_timeout_sec = 3600
+", "");
+    // Another server's timeout must not count as ours.
+    fs::write(&path, format!("{old}
+[mcp_servers.other]
+command = \"x\"
+tool_timeout_sec = 30
+")).expect("seed");
+    assert!(codex_needs_refresh(&fs::read_to_string(&path).unwrap(), McpLaunchSource::Auto));
+
+    let result = ensure_codex_mcp(&cwd, McpLaunchSource::Auto).expect("upgrade");
+    assert!(result.changed);
+    let upgraded = fs::read_to_string(&path).expect("toml");
+    assert!(upgraded.contains("tool_timeout_sec = 3600"));
+    assert!(!codex_needs_refresh(&upgraded, McpLaunchSource::Auto));
 }
 
 #[test]

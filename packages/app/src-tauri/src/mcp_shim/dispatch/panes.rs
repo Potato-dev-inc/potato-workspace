@@ -22,7 +22,10 @@ fn run(name: &str, args: &Value, known: &mut bool) -> Result<String, String> {
                 return body;
             };
             let drift = schema_drift_from_health(&health);
+            let connected = connected_to(&health, last_resolution().as_ref());
             if let Some(object) = health.as_object_mut() {
+                object.insert("connected_to_text".into(), json!(connected_to_text(&connected)));
+                object.insert("connected_to".into(), connected);
                 object.insert(
                     "shim_catalog_version".into(),
                     json!(tool_registry::catalog_version()),

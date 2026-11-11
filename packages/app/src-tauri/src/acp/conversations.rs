@@ -226,6 +226,54 @@ impl Conversations {
         Ok(self.view_of(&record))
     }
 
+    /// A session for a conversation that does not exist yet: the id is minted now (the pane id is baked into the adapter's
+    /// tool-server setting, so it must be fixed before the adapter starts), the session is built exactly as `create_for`
+    /// would build it, but nothing is recorded: no record, no supervisor entry, no writer claim, no sink. The caller starts
+    /// it (`ensure_running`) and either hands it to `adopt_warm` or closes it. Events are kept for the owner (`start_buffering`).
+    pub fn prepare_warm(&self, agent: &str, cwd: &Path, account: Option<&str>) -> Result<(String, Arc<AcpSession>), ConversationError> {
+        let cfg = self.config_for(agent)?;
+        let id = format!("acp-{}", uuid::Uuid::new_v4().simple());
+        let session = self.new_session(&id, cfg, cwd, None, false, account.map(str::to_string));
+        session.start_buffering();
+        Ok((id, session))
+    }
+
+    /// The config a warm session for `agent` would be built from (the pool compares it with the one a start asks for).
+    pub fn warm_config(&self, agent: &str) -> Result<Arc<AgentConfig>, ConversationError> {
+        self.config_for(agent)
+    }
+
+    /// Makes a warm session (`prepare_warm`, started) a conversation: the record (with the session id it already has),
+    /// the sink, the supervisor entry, the writer claim. Returns the view, like `create_for`.
+    pub fn adopt_warm(&self, id: &str, agent: &str, cwd: &Path, account: Option<&str>, session: Arc<AcpSession>) -> Result<ConversationView, ConversationError> {
+        let cfg = self.config_for(agent)?;
+        let now = now_ms();
+        let snapshot = session.snapshot();
+        let record = ConversationRecord {
+            id: id.to_string(),
+            agent: cfg.id.clone(),
+            session_id: snapshot.session_id.clone(),
+            cwd: cwd.to_string_lossy().into_owned(),
+            lane: RunLane::Acp,
+            last_known_state: LastState::Live,
+            terminal_pane: None,
+            notices: Vec::new(),
+            config_options: snapshot.config_options.clone(),
+            started_by: None,
+            parent_pane_id: None,
+            account: account.map(str::to_string),
+            lane_note: None,
+            created_ms: now,
+            updated_ms: now,
+        };
+        self.0.records.lock().push(record.clone());
+        self.save();
+        self.attach_sink(&session, id);
+        self.0.supervisor.insert(session);
+        let _ = self.0.writers.claim(id, Writer::Chat);
+        Ok(self.view_of(&record))
+    }
+
     /// Brings an agent's own old session (one the person had in a terminal or another app) into the chat as a new
     /// conversation. Nothing runs yet: the first read starts the adapter, which loads the session and replays it.
     pub fn import(&self, agent: &str, cwd: &Path, session_id: &str) -> Result<ConversationView, ConversationError> {
@@ -424,10 +472,22 @@ impl Conversations {
     }
 
     pub(super) fn build_session(&self, id: &str, cfg: Arc<AgentConfig>, cwd: &Path, resume: Option<String>, replay: bool) -> Arc<AcpSession> {
+        let account = self.record(id).and_then(|r| r.account);
+        let session = self.new_session(id, cfg, cwd, resume, replay, account);
+        if let Some(record) = self.record(id) {
+            session.seed_config_options(record.config_options);
+        }
+        self.attach_sink(&session, id);
+        self.0.supervisor.insert(session.clone());
+        session
+    }
+
+    /// The session itself, not yet attached to anything: the config with the pane id and the account's login baked in.
+    fn new_session(&self, id: &str, cfg: Arc<AgentConfig>, cwd: &Path, resume: Option<String>, replay: bool, account: Option<String>) -> Arc<AcpSession> {
         let mut cfg = (*cfg).clone();
         super::config::add_pane_id(&mut cfg, id);
         // A chat under an account starts its adapter under that login (a restored one too).
-        if let Some(account) = self.record(id).and_then(|r| r.account) {
+        if let Some(account) = account {
             let store = self.0.accounts.lock().clone();
             if let Ok(env) = super::account::launch_env(&store, &cfg.id, &account) {
                 super::config::with_account_env(&mut cfg, &env);
@@ -437,11 +497,6 @@ impl Conversations {
         if replay {
             session.replay_on_next_start();
         }
-        if let Some(record) = self.record(id) {
-            session.seed_config_options(record.config_options);
-        }
-        self.attach_sink(&session, id);
-        self.0.supervisor.insert(session.clone());
         session
     }
 

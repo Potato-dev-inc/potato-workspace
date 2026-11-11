@@ -2,13 +2,17 @@
 
 use super::*;
 
+/// Codex cuts a tool call at 60 s by default; run_agent and wait_agents may wait up to an hour.
+pub(super) const CODEX_TOOL_TIMEOUT_SEC: u32 = 3600;
+
 pub(super) fn codex_mcp_block(source: McpLaunchSource) -> String {
     let launch = launch_spec(source);
     let port_file = crate::app_paths::bridge_port_file_env_value();
     format!(
-        "\n[mcp_servers.{MCP_SERVER_NAME}]\ncommand = \"{}\"\nargs = {:?}\nenabled = true\ndefault_tools_approval_mode = \"approve\"\n\n[mcp_servers.{MCP_SERVER_NAME}.env]\n{} = \"{}\"\n",
+        "\n[mcp_servers.{MCP_SERVER_NAME}]\ncommand = \"{}\"\nargs = {:?}\nenabled = true\ndefault_tools_approval_mode = \"approve\"\ntool_timeout_sec = {}\n\n[mcp_servers.{MCP_SERVER_NAME}.env]\n{} = \"{}\"\n",
         launch.command,
         launch.args,
+        CODEX_TOOL_TIMEOUT_SEC,
         crate::app_paths::BRIDGE_PORT_FILE_ENV,
         port_file,
     )
@@ -30,6 +34,10 @@ pub(super) fn codex_needs_refresh(content: &str, source: McpLaunchSource) -> boo
     if !content.contains("default_tools_approval_mode") {
         return true;
     }
+    // Written before long single-call waits: Codex would cut run_agent at its 60 s default.
+    if !codex_own_block(content).contains("tool_timeout_sec") {
+        return true;
+    }
     if source == McpLaunchSource::NpmPackage {
         return !content.contains(&format!("[mcp_servers.{MCP_SERVER_NAME}]"))
             || !content.contains("command = \"npx\"")
@@ -42,6 +50,23 @@ pub(super) fn codex_needs_refresh(content: &str, source: McpLaunchSource) -> boo
         return true;
     }
     false
+}
+
+/// Only this server's `[mcp_servers.potato-workspace...]` tables, so another server's keys never count.
+fn codex_own_block(content: &str) -> String {
+    let mut out = Vec::new();
+    let mut inside = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            inside = trimmed.starts_with("[mcp_servers.") && trimmed.contains(MCP_SERVER_NAME);
+        }
+        if inside {
+            out.push(line);
+        }
+    }
+    out.join("
+")
 }
 
 pub(super) fn strip_codex_puppet_master_block(content: &str) -> String {

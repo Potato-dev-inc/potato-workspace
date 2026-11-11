@@ -1,0 +1,256 @@
+/* The "Used" strip in the sidebar footer (components/cockpit/UsageStrip.tsx). Grayscale only, cockpit tokens:
+   a warning is told by its glyph and weight, never by colour. */
+.cockpit .ck-usage {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-height: 24px;
+  padding: 2px 2px 2px 8px;
+  color: var(--label-3);
+  font-size: 11px;
+  line-height: 20px;
+}
+.cockpit .ck-usage-cap {
+  flex: 0 0 auto;
+  color: var(--label-3);
+  font-weight: 600;
+}
+.cockpit .ck-usage-chips {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 6px;
+}
+.cockpit .ck-usage-chip {
+  max-width: 100%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cockpit .ck-usage-chip:disabled {
+  cursor: default;
+}
+.cockpit .ck-usage-chip:not(:disabled):hover {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .ck-usage-chip:focus-visible,
+.cockpit .ck-usage-refresh:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-usage-ic {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 2px;
+  border-radius: 4px;
+  background: var(--fill-active);
+  color: var(--label);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.cockpit .ck-usage-ic.is-logo {
+  background: none;
+  padding: 0;
+  min-width: 14px;
+  color: var(--label-2);
+}
+.cockpit .ck-usage-ic.is-logo svg {
+  display: block;
+}
+.cockpit .ck-usage-acct {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--label-3);
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit .ck-usage-chip.is-limited .ck-usage-text,
+.cockpit .ck-usage-chip.is-expired .ck-usage-text {
+  color: var(--label);
+  font-weight: 600;
+}
+.cockpit .ck-usage-chip.is-unknown .ck-usage-text {
+  color: var(--label-3);
+}
+.cockpit .ck-usage-refresh {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--label-3);
+  cursor: pointer;
+}
+.cockpit .ck-usage-refresh:hover:not(:disabled) {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .ck-usage-refresh.is-busy svg {
+  animation: ck-usage-spin 0.9s linear infinite;
+}
+@keyframes ck-usage-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-usage-refresh.is-busy svg {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+/* The Usage popover above the strip. */
+.cockpit .ck-usage-wrap {
+  position: relative;
+  width: 100%;
+}
+.cockpit .ck-usage-chip.is-warn .ck-usage-text {
+  color: var(--label);
+  font-weight: 600;
+}
+/* A fixed layer over the whole app (portalled out of the sidebar); left, bottom and width come from the strip. */
+.cockpit .ck-usage-pop {
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  max-height: 60vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-float);
+  backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  color: var(--label-2);
+  font-size: 12px;
+}
+.cockpit .ck-usage-pop-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cockpit .ck-usage-pop-title {
+  color: var(--label);
+  font-weight: 600;
+}
+.cockpit .ck-usage-pop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.cockpit .ck-usage-pop-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.cockpit .ck-usage-pop-name {
+  min-width: 0;
+  color: var(--label);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cockpit .ck-usage-pop-plan {
+  color: var(--label-3);
+}
+.cockpit .ck-usage-pop-state {
+  margin-left: auto;
+  color: var(--label);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cockpit .ck-usage-win {
+  display: grid;
+  grid-template-columns: 84px 1fr auto;
+  grid-template-areas: 'name bar pct' '. reset reset';
+  align-items: center;
+  column-gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ck-usage-win-name {
+  grid-area: name;
+}
+.cockpit .ck-usage-bar {
+  grid-area: bar;
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--fill-active);
+  overflow: hidden;
+}
+.cockpit .ck-usage-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--label-3);
+}
+.cockpit .ck-usage-bar.is-high > span {
+  background: var(--label);
+}
+.cockpit .ck-usage-win-pct {
+  grid-area: pct;
+  color: var(--label);
+}
+.cockpit .ck-usage-win-reset {
+  grid-area: reset;
+  color: var(--label-3);
+  font-size: 11px;
+}
+.cockpit .ck-usage-pop-reason {
+  margin: 4px 0 0;
+  color: var(--label-3);
+  font-size: 11px;
+}
+.cockpit .ck-usage-pop-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  color: var(--label-3);
+  font-size: 11px;
+}
+.cockpit .ck-usage-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--label-2);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.cockpit .ck-usage-link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+/* In a narrow strip the numbers give way (cut with an ellipsis), not the sign-in's name. */
+.cockpit .ck-usage-chip .ck-usage-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

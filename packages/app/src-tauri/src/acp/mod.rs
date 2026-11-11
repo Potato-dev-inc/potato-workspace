@@ -90,6 +90,7 @@ pub mod state;
 pub mod supervisor;
 pub mod timers;
 pub mod types;
+pub mod warm;
 pub mod wire;
 pub mod write_queue;
 pub mod writers;
@@ -106,6 +107,10 @@ mod fake_agent;
 mod guard_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod speedup_tests;
+#[cfg(test)]
+mod warm_tests;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

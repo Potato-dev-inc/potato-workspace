@@ -42,6 +42,23 @@ async function render(api: { laneGet: () => Promise<AcpLaneView>; laneSet: (id: 
 const popup = () => host.querySelector<HTMLSelectElement>('select');
 
 describe('How to run', () => {
+  it('shows what helpers get when nothing was saved, and says why when that is the terminal', async () => {
+    await render({ laneGet: async () => ({ labs_enabled: true, agents: [agent({ saved: false, helper_lane: 'acp' })] }), laneSet: vi.fn() });
+    expect(popup()?.value).toBe('acp');
+    expect(host.textContent).toContain('Helpers this agent starts run as a chat when it can.');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render({ laneGet: async () => ({ labs_enabled: true, agents: [agent({ saved: false, helper_lane: 'terminal', addon_installed: false })] }), laneSet: vi.fn() });
+    expect(popup()?.value).toBe('terminal');
+    expect(host.textContent).toContain('until its chat add-on is installed');
+  });
+
+  it('shows the saved choice over the default', async () => {
+    await render({ laneGet: async () => ({ labs_enabled: true, agents: [agent({ saved: true, lane: 'terminal', helper_lane: 'terminal' })] }), laneSet: vi.fn() });
+    expect(popup()?.value).toBe('terminal');
+    expect(host.textContent).toContain('Helpers and new sessions run in a terminal.');
+  });
+
   it('shows nothing while the Labs switch is off', async () => {
     await render({ laneGet: async () => ({ labs_enabled: false, agents: [agent()] }), laneSet: vi.fn() });
     expect(host.querySelector('[data-testid="agent-lane"]')).toBeNull();

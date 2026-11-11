@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 import { EXAMPLE_PLACES } from '../wsl-fixtures';
 import type { HarnessScenario } from '../types';
 

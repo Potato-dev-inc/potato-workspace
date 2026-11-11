@@ -179,6 +179,18 @@ describe('Lend profiles', () => {
     expect(buttonByText(editor(), 'Save profile')!.disabled).toBe(true);
   });
 
+  it('has a "Keep this PC awake while lending" row, on by default, that is saved when turned off', async () => {
+    const { api } = await mount();
+    await click(buttonByText(section('Lend profiles'), 'Edit'));
+    const row = checkbox(editor(), 'Keep this PC awake while lending');
+    expect(row.checked).toBe(true);
+    await click(row);
+    expect(checkbox(editor(), 'Keep this PC awake while lending').checked).toBe(false);
+    await click(buttonByText(editor(), 'Save profile'));
+    await settle(3);
+    expect(api.calls.find((c) => c.startsWith('profileSave('))).toContain('"keep_awake":false');
+  });
+
   it('edits and deletes a profile', async () => {
     const { api } = await mount();
     await click(buttonByText(section('Lend profiles'), 'Edit'));

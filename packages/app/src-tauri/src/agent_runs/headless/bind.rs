@@ -64,9 +64,14 @@ pub(super) fn bind_existing_worker(
         request.handle = Some(existing.agent_run_id.clone());
         request.agent_run_id = Some(existing.agent_run_id.clone());
         request.agent_type = existing.agent_type.clone();
-        request.pane_id = existing.pane_id.clone().or(request.pane_id.clone());
+        // A follow-up whose pane is gone opens a new pane on this handle: the old pane id is not re-adopted.
+        if !request.fresh_pane {
+            request.pane_id = existing.pane_id.clone().or(request.pane_id.clone());
+        }
         request.project_path = Some(worker_dir.to_string());
-        request.headless = request.pane_id.is_none();
+        if !request.fresh_pane {
+            request.headless = request.pane_id.is_none();
+        }
         if request.pane_id.is_some() {
             request.keep_pane = true;
         }

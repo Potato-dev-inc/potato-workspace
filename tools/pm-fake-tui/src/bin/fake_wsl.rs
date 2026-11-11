@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! `pm-fake-wsl`: a stand-in for `wsl.exe` in Puppet Master's Linux Inside end-to-end tests. Dev only; the
 //! tests point `PM_FAKE_WSL_EXE` at it (the app honours that only in builds with feature `dev-fake-tui`), so the
 //! real `wsl.exe` is never started.

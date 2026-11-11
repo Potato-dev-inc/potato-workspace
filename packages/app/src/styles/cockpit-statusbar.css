@@ -1,0 +1,90 @@
+/* The bottom status bar of the cockpit (components/cockpit/UsageBar.tsx): one thin line under the sidebar and the
+   main area. While it shows, the cockpit root ends above it, so nothing is pushed out and nothing scrolls twice.
+   Grayscale; only the warning glyph is told apart. */
+:root {
+  --ck-statusbar-h: 26px;
+}
+.cockpit:has(> .ck-statusbar) {
+  bottom: var(--ck-statusbar-h);
+}
+.cockpit > .ck-statusbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--ck-statusbar-h);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 12px;
+  border-top: 1px solid var(--sep);
+  background: var(--bg-side);
+  color: var(--label-3);
+  font-size: 11px;
+  line-height: 20px;
+  overflow: hidden;
+  z-index: 40;
+}
+.cockpit .ck-statusbar .ck-usage-cap {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+.cockpit .ck-sb-chips {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+.cockpit .ck-sb-chips .ck-usage-chip,
+.cockpit .ck-sb-measure .ck-usage-chip {
+  flex: 0 0 auto;
+  max-width: none;
+}
+.cockpit .ck-sb-measure {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  gap: 10px;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.cockpit .ck-sb-more {
+  flex: 0 0 auto;
+  height: 20px;
+  min-width: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--label-2);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.cockpit .ck-sb-more:hover {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .ck-sb-more:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-statusbar .ck-usage-warn {
+  color: var(--accent);
+}
+/* Several sign-ins of one agent: a tiny tag after the mark (the full label is in the tooltip). */
+.cockpit .ck-usage-suffix {
+  margin-left: -2px;
+  color: var(--label-3);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  align-self: flex-end;
+  padding-bottom: 4px;
+}

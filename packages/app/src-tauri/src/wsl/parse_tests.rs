@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Tests for `parse.rs` (SPEC n33 WSL-6). Fixtures live in `wsl/fixtures/` and use placeholders only:
 //! the distro `Ubuntu-Test` and the folder `you`. The programs are fake ids (`fake-cli`, `fake-tui`).
 

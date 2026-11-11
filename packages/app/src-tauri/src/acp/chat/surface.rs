@@ -144,6 +144,24 @@ pub fn view(chat: &AcpChat) -> Value {
     let (reply, problem) = last_turn(&items);
     let in_terminal = !state.get("inTerminal").map(Value::is_null).unwrap_or(true);
     let (model, reasoning) = super::choice::in_use(chat);
+    // The run's acceptance checks, evaluated once for a completed turn (cached by turn).
+    let results = chat.checked(status == "completed" && !in_terminal, snapshot.turn, reply.as_deref());
+    let checks_total = chat.checks_configured();
+    let checks_failed = results.as_ref().is_some_and(|r| r.iter().any(|c| !c.passed));
+    let (requested_model, account, account_source) = chat.run_meta_snapshot();
+    let receipt = super::receipt::build(&super::receipt::ReceiptInputs {
+        status: if in_terminal && !is_final(status) { "idle" } else { status },
+        final_turn: is_final(status),
+        checks_total,
+        results: results.as_deref(),
+        reply: reply.as_deref(),
+        requested_model: requested_model.as_deref(),
+        model_in_use: model.as_deref(),
+        account: account.as_deref(),
+        account_source: account_source.as_deref(),
+        lane_note: chat.lane_note().as_ref(),
+        warm: chat.warm_claimed(),
+    });
     let running: Vec<&crate::acp::state::BackgroundTask> = snapshot.background_tasks.iter().filter(|t| t.is_running()).collect();
     let tracking = match chat.session().caps() {
         Some(caps) if caps.background_tasks => "reported",
@@ -162,16 +180,27 @@ pub fn view(chat: &AcpChat) -> Value {
         "lane": LANE,
         "agent": chat.agent_id(),
         "name": chat.label(),
-        "status": if in_terminal && !is_final(status) { "idle" } else { status },
+        "status": if in_terminal && !is_final(status) { "idle" } else if checks_failed { "failed" } else { status },
         "stage": state.get("phase"),
         "result": if status == "completed" { reply.clone().map(Value::String).unwrap_or(Value::Null) } else { Value::Null },
         "result_capture": if is_final(status) { "authoritative" } else { "pending" },
         "prompt": prompt_of(&state),
         "error": if status == "failed" {
             json!({ "code": "ACP_TURN_FAILED", "message": problem.unwrap_or_else(|| "The turn failed.".to_string()), "recoverable": true })
+        } else if checks_failed {
+            json!({ "code": "ACCEPTANCE_FAILED", "message": crate::agent_runs::checks::failure_summary(results.as_deref().unwrap_or(&[])).unwrap_or_else(|| "A check failed.".to_string()), "recoverable": true })
         } else {
             Value::Null
         },
+        "acceptance_status": match results.as_deref() {
+            Some(r) if !r.is_empty() && r.iter().all(|c| c.passed) => "passed",
+            Some(r) if r.iter().any(|c| !c.passed) => "failed",
+            _ => "not_checked",
+        },
+        "checks_configured": checks_total,
+        "checks": results.clone().unwrap_or_default(),
+        "verified": results.as_deref().is_some_and(|r| !r.is_empty() && r.iter().all(|c| c.passed)),
+        "receipt": super::receipt::receipt_value(&receipt),
         "pane_open": !chat.is_closed(),
         "pane_policy": "stays_open_until_you_close_it",
         "in_terminal": in_terminal,
@@ -311,8 +340,51 @@ pub fn intercept(method: &str, segments: &[&str], query: &str, body: &[u8], deps
 /// [`intercept`] plus, for a `run_agent` that the terminal runs, what to say about the lane: the caller adds it to the
 /// terminal run's answer (`lanes::annotate`).
 pub fn intercept_noted(method: &str, segments: &[&str], query: &str, body: &[u8], deps: &StartDeps, session: Option<&str>) -> (Option<Reply>, Option<lanes::LaneNote>) {
+    intercept_noted_with(method, segments, query, body, deps, session, &Live)
+}
+
+/// What the lane decision asks of the app and the agent. [`Live`] answers from the real settings; tests answer
+/// with their own agent.
+pub trait LaneLookup {
+    /// The Labs switch Chat (ACP).
+    fn labs_on(&self) -> bool;
+    /// The agent's ACP definition.
+    fn config_for(&self, agent: &str) -> Option<crate::acp::config::AgentConfig>;
+    /// The agent's saved "How to run" (`None`: never changed).
+    fn saved(&self, agent: &str) -> Option<crate::acp::lane::RunLane>;
+    /// Its chat add-on is installed.
+    fn adapter_installed(&self, cfg: &crate::acp::config::AgentConfig, env: &dyn crate::acp::config::HostEnv) -> bool;
+    /// The installed OpenCode's major version, when known (2.x has no native terminal agent).
+    fn opencode_major(&self) -> Option<u32> {
+        None
+    }
+}
+
+/// The real settings.
+pub struct Live;
+
+impl LaneLookup for Live {
+    fn labs_on(&self) -> bool {
+        crate::acp::chat_enabled()
+    }
+    fn config_for(&self, agent: &str) -> Option<crate::acp::config::AgentConfig> {
+        crate::acp::config::find_builtin(agent)
+    }
+    fn saved(&self, agent: &str) -> Option<crate::acp::lane::RunLane> {
+        LaneStore::in_app_data().chosen(agent)
+    }
+    fn adapter_installed(&self, cfg: &crate::acp::config::AgentConfig, env: &dyn crate::acp::config::HostEnv) -> bool {
+        !crate::acp::install::is_missing(cfg, env)
+    }
+    fn opencode_major(&self) -> Option<u32> {
+        crate::opencode::edition::installed_major()
+    }
+}
+
+/// [`intercept_noted`] with the agent facts looked up through `lookup`.
+pub fn intercept_noted_with(method: &str, segments: &[&str], query: &str, body: &[u8], deps: &StartDeps, session: Option<&str>, lookup: &dyn LaneLookup) -> (Option<Reply>, Option<lanes::LaneNote>) {
     if let ("POST", ["agents", "run"]) = (method, segments) {
-        return run(body, query, deps, session);
+        return run(body, query, deps, session, lookup);
     }
     (intercept_rest(method, segments, query, body, deps, session), None)
 }
@@ -322,8 +394,19 @@ fn intercept_rest(method: &str, segments: &[&str], query: &str, body: &[u8], dep
         ("POST", ["agents", "wait"]) => wait(body),
         ("POST", ["agents", "followup" | "send"]) => {
             let value = body_json(body)?;
-            let chat = chat_of(&text_of(&value, "handle")?)?;
-            Some(followup(&chat, &value, session, segments[1] == "followup"))
+            let handle = text_of(&value, "handle")?;
+            let next_turn = segments[1] == "followup";
+            match chat_of(&handle) {
+                Some(chat) if !chat.is_closed() => Some(followup(&chat, &value, session, next_turn)),
+                // A closed chat (or one that is gone after close_agent): followup_task brings the same
+                // conversation back, loading the agent's own session, and sends the task as the next turn.
+                found if next_turn => match reopen(&handle, deps, session) {
+                    Some(Ok(chat)) => Some(followup(&chat, &value, session, true).map(|answer| with_reopened(answer, &handle))),
+                    Some(Err(error)) => Some(Err(error)),
+                    None => found.map(|chat| followup(&chat, &value, session, next_turn)),
+                },
+                found => found.map(|chat| followup(&chat, &value, session, next_turn)),
+            }
         }
         ("POST", ["agents", "answer"]) => {
             let value = body_json(body)?;
@@ -364,6 +447,50 @@ fn intercept_rest(method: &str, segments: &[&str], query: &str, body: &[u8], dep
     }
 }
 
+/// `followup_task` on a chat that was closed: the conversation is brought back under the same handle, in the way a
+/// restart does (`Conversations::reopen_closed`, then `restore_panes`), and it loads the agent's own session, so the
+/// agent remembers what was said. `None`: this handle is not a closed conversation (the caller carries on as before).
+/// An error says why it cannot come back: it is never replaced by a fresh chat without saying so.
+fn reopen(handle: &str, deps: &StartDeps, session: Option<&str>) -> Option<Result<std::sync::Arc<AcpChat>, OperationError>> {
+    let conversations = deps.conversations.as_ref()?;
+    let record = conversations.record(handle)?;
+    if record.last_known_state != crate::acp::record::LastState::Closed {
+        return None;
+    }
+    // Only the agent that started the chat may bring it back (a caller without a session, the command line, may).
+    if let (Some(me), owner) = (session, record.started_by.as_deref()) {
+        if owner != Some(me) {
+            return Some(Err(err("NOT_YOUR_CHAT", "This chat session was not started by you, so you may not reopen it. Start your own with run_agent(lane: \"acp\"), or ask the person.", false)));
+        }
+    }
+    if record.session_id.as_deref().is_none_or(str::is_empty) {
+        let mut e = err("ACP_SESSION_UNKNOWN", "That chat was closed before the agent gave it a session id, so its conversation cannot be loaded again.", false);
+        e.context = json!({ "recovery": "Start a new chat with run_agent(lane: \"acp\") and put what it needs to know in the task; agent_transcript(handle) still shows the old one." });
+        return Some(Err(e));
+    }
+    let failed = |why: String| {
+        let mut e = err("ACP_REOPEN_FAILED", why, true);
+        e.context = json!({ "recovery": "Open the closed chat from the app, or start a new chat with run_agent(lane: \"acp\")." });
+        Some(Err(e))
+    };
+    if let Err(error) = conversations.reopen_closed(handle) {
+        return failed(format!("The closed chat could not be reopened: {error}"));
+    }
+    super::restore_panes(deps);
+    match chat_of(handle) {
+        Some(chat) => Some(Ok(chat)),
+        None => failed("The closed chat could not be reopened.".into()),
+    }
+}
+
+/// Adds `reopened` to the answer of a follow-up that brought a closed chat back.
+fn with_reopened(mut answer: Value, handle: &str) -> Value {
+    if let Some(map) = answer.as_object_mut() {
+        map.insert("reopened".into(), json!({ "how": "chat_reopened", "previous_pane_id": handle, "previous_handle": handle, "note": "The chat was closed; reopened it under the same handle, and the agent's earlier session loads with this message so it remembers the conversation." }));
+    }
+    answer
+}
+
 /// A chat that could not take the requested settings is closed and its unused conversation dropped.
 fn abandon_chat(deps: &StartDeps, chat: &AcpChat) {
     let _ = crate::pty::registry_kill_pane_and_wait(&deps.registry, chat.pane_id(), Some("the requested model could not be used"));
@@ -384,8 +511,94 @@ fn chat_agent_ids() -> Vec<String> {
     ids
 }
 
+/// Request fields a chat session cannot honour. A chat has no read-only mode, worktree, lock, budget, backup agent,
+/// shell allow-list or context packet, so a request that uses them must not quietly run as a chat. (`checks` and
+/// `structured_result` are honoured; `role` is only a label and is ignored; `scope` only shapes a packet prompt a
+/// chat does not build, so it counts.)
+pub fn chat_cannot_do(value: &Value) -> Vec<&'static str> {
+    let truthy = |key: &str| value.get(key).and_then(Value::as_bool) == Some(true);
+    let present = |key: &str| value.get(key).is_some_and(|v| !v.is_null());
+    let filled = |key: &str| match value.get(key) {
+        Some(Value::Array(list)) => !list.is_empty(),
+        Some(Value::String(text)) => !text.trim().is_empty(),
+        Some(Value::Null) | None => false,
+        Some(_) => true,
+    };
+    let mut fields = Vec::new();
+    if truthy("read_only") {
+        fields.push("read_only");
+    }
+    if value.get("isolation").and_then(Value::as_str).is_some_and(|i| !i.trim().is_empty() && i.trim() != "none") {
+        fields.push("isolation");
+    }
+    if filled("locks") {
+        fields.push("locks");
+    }
+    if present("budget_turns") {
+        fields.push("budget_turns");
+    }
+    if present("budget_minutes") {
+        fields.push("budget_minutes");
+    }
+    if filled("budget_parent") {
+        fields.push("budget_parent");
+    }
+    if filled("backup_agents") {
+        fields.push("backup_agents");
+    }
+    if truthy("allow_shell") {
+        fields.push("allow_shell");
+    }
+    if filled("allowed_commands") {
+        fields.push("allowed_commands");
+    }
+    if truthy("trust_workspace") {
+        fields.push("trust_workspace");
+    }
+    if truthy("until_checks_pass") {
+        fields.push("until_checks_pass");
+    }
+    let policy_needs_packet = ["context_policy", "context_mode"]
+        .iter()
+        .any(|key| matches!(value.get(*key).and_then(Value::as_str), Some("parent_summary" | "resume" | "selected_history")));
+    if policy_needs_packet {
+        fields.push("context_policy");
+    }
+    if filled("selected_history") {
+        fields.push("selected_history");
+    }
+    if filled("scope") {
+        fields.push("scope");
+    }
+    fields
+}
+
+/// `run_agent`s already started as a chat: (MCP session, idempotency key) -> the chat's handle.
+static STARTED_BY_KEY: parking_lot::Mutex<Vec<((Option<String>, String), String)>> = parking_lot::Mutex::new(Vec::new());
+
+fn remembered_chat(session: Option<&str>, key: &str) -> Option<std::sync::Arc<AcpChat>> {
+    let handle = STARTED_BY_KEY.lock().iter().find(|((s, k), _)| s.as_deref() == session && k == key).map(|(_, h)| h.clone())?;
+    chat_of(&handle).filter(|chat| !chat.is_closed())
+}
+
+fn remember_chat(session: Option<&str>, key: &str, handle: &str) {
+    let mut started = STARTED_BY_KEY.lock();
+    started.retain(|((s, k), _)| !(s.as_deref() == session && k == key));
+    started.push(((session.map(str::to_string), key.to_string()), handle.to_string()));
+    // Entries of chats that are gone leave with the next start.
+    started.retain(|(_, h)| get(h).is_some());
+}
+
+/// The checks a `run_agent`/`followup_task` body names, validated against the folder.
+fn checks_of(value: &Value, folder: &std::path::Path) -> Result<Vec<crate::agent_runs::checks::Check>, OperationError> {
+    let Some(raw) = value.get("checks").filter(|v| !v.is_null()) else { return Ok(Vec::new()) };
+    let checks: Vec<crate::agent_runs::checks::Check> = serde_json::from_value(raw.clone()).map_err(|e| err("INVALID_ARGUMENT", format!("checks: {e}"), false))?;
+    crate::agent_runs::checks::validate(folder, &checks).map_err(|why| err("INVALID_ARGUMENT", why, false))?;
+    Ok(checks)
+}
+
 /// `(answer, note)`: the answer when this is a chat session's request; `(None, note)` when the terminal runs it.
-fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> (Option<Reply>, Option<lanes::LaneNote>) {
+fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup: &dyn LaneLookup) -> (Option<Reply>, Option<lanes::LaneNote>) {
     let Some(value) = body_json(body) else { return (None, None) };
     let task = text_of(&value, "task");
     // Adopting a chat that exists: the task is its next message.
@@ -402,27 +615,58 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> (Op
         // Adopting a terminal pane or worker is not a new run: nothing to say about the lane.
         return (None, None);
     }
-    let lane = text_of(&value, "lane");
-    let agent = text_of(&value, "agent_type");
+    // The same call again (a retry after a timeout): the chat it started, not a second one.
+    let key = text_of(&value, "idempotency_key");
+    if let Some(chat) = key.as_deref().and_then(|key| remembered_chat(session, key)) {
+        if value.get("background").and_then(Value::as_bool) != Some(true) {
+            match wait_ms_of(&value, DEFAULT_WAIT_MS) {
+                Ok(ms) => {
+                    wait_status(&chat, &default_until(), ms);
+                }
+                Err(e) => return (Some(Err(e)), None),
+            }
+        }
+        return (Some(Ok(view(&chat))), None);
+    }
+    let mut lane = text_of(&value, "lane");
+    let mut agent = text_of(&value, "agent_type");
+    // OpenCode 2.x has no native terminal agent: its runs go to the OpenCode chat lane, and say so.
+    let mut routed: Option<String> = None;
+    if agent.as_deref() == Some("opencode_native") {
+        match crate::opencode::edition::route_native_run(lane.as_deref(), lookup.opencode_major()) {
+            Ok(Some(why)) => {
+                routed = Some(why);
+                agent = Some("opencode".to_string());
+                lane = Some("acp".to_string());
+            }
+            Ok(None) => {}
+            Err(why) => return (Some(Err(err("OPENCODE_NATIVE_UNAVAILABLE", why, false))), None),
+        }
+    }
     let account = text_of(&value, "account");
     let headless = value.get("headless").and_then(Value::as_bool) == Some(true);
-    let saved = agent.as_deref().and_then(|a| LaneStore::in_app_data().chosen(a));
-    let config = agent.as_deref().and_then(crate::acp::config::find_builtin);
-    let labs_on = crate::acp::chat_enabled();
+    let saved = agent.as_deref().and_then(|a| lookup.saved(a));
+    let config = agent.as_deref().and_then(|a| lookup.config_for(a));
+    let labs_on = lookup.labs_on();
     let facts = lanes::Facts {
         labs_on,
         has_definition: config.is_some(),
-        adapter_installed: config.as_ref().is_some_and(|cfg| !crate::acp::install::is_missing(cfg, &*deps.env)),
+        adapter_installed: config.as_ref().is_some_and(|cfg| lookup.adapter_installed(cfg, &*deps.env)),
         headless,
+        terminal_only: chat_cannot_do(&value),
     };
     let plan = match lanes::plan(lane.as_deref(), saved, facts) {
         Ok(plan) => plan,
         Err(why) => return (Some(Err(err("INVALID_ARGUMENT", why, false))), None),
     };
-    let (explicit, reason) = match plan {
+    let (explicit, mut reason) = match plan {
         lanes::Plan::Terminal { reason } => return (None, Some(lanes::LaneNote::terminal(&reason))),
+        lanes::Plan::CannotChat { fields } => return (Some(Err(lanes::cannot_chat(&fields))), None),
         lanes::Plan::Chat { explicit, reason } => (explicit, reason),
     };
+    if let Some(why) = routed {
+        reason = why;
+    }
     let Some(agent) = agent else {
         return (Some(Err(err("INVALID_ARGUMENT", "agent_type is required with lane: \"acp\"", false))), None);
     };
@@ -437,7 +681,21 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> (Op
     // Whether a failure to start gives the terminal a go (auto and the saved choice), or is the caller's error (lane: "acp").
     let fallback = !explicit;
     let folder = text_of(&value, "project_path").or_else(|| query.trim_start_matches('?').split('&').find_map(|p| p.strip_prefix("project_path=").map(str::to_string))).unwrap_or_else(|| deps.registry.lock().project_path.clone());
-    let started = super::start_gated(deps, StartRequest { agent_id: agent, folder: folder.into(), explicit: !fallback, account: account.clone() });
+    let folder = std::path::PathBuf::from(folder);
+    // Checks are validated before anything starts: a bad check is the caller's mistake, never a reason for the terminal.
+    let checks = match checks_of(&value, &folder) {
+        Ok(checks) => checks,
+        Err(e) => return (Some(Err(e)), None),
+    };
+    // The plan already decided on a chat, so the gate left is the Labs switch and a definition. (`start_gated` would
+    // read the agent's saved choice again, which is the terminal when nothing is saved, and refuse auto's choice.)
+    let started = match super::start::check_gate(labs_on, config.is_some(), crate::acp::lane::RunLane::Acp, true) {
+        Err(gate) => Err(gate.into()),
+        Ok(()) => match config {
+            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone() }),
+            None => Err(super::start::GateError::NoDefinition.into()),
+        },
+    };
     let chat = match started {
         Ok(chat) => chat,
         // Not the caller's mistake and the terminal can run it: once, the terminal way runs the task.
@@ -487,6 +745,18 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>) -> (Op
         map.insert("account".into(), json!(account));
     }
     chat.set_lane_note(kept);
+    // What the run asked for, kept for its receipt and its checks.
+    chat.set_run_meta(super::receipt::RunMeta {
+        folder: Some(folder),
+        checks,
+        requested_model: model.clone(),
+        account: account.clone(),
+        account_source: text_of(&value, "account_source"),
+        ..Default::default()
+    });
+    if let Some(key) = &key {
+        remember_chat(session, key, chat.pane_id());
+    }
     if let Err(error) = chat.send(&task) {
         return (Some(Err(send_failure(error))), None);
     }
@@ -635,6 +905,15 @@ fn followup(chat: &AcpChat, value: &Value, session: Option<&str>, next_turn: boo
     let reasoning = text_of(value, "reasoning");
     if model.is_some() || reasoning.is_some() {
         chat.apply_choices(model.as_deref(), reasoning.as_deref()).map_err(|choice| err(choice.code, choice.message, true))?;
+        if model.is_some() {
+            chat.note_requested_model(model.clone());
+        }
+    }
+    // New checks replace the run's checks from this turn on; none named keeps the old ones.
+    if next_turn && value.get("checks").is_some_and(|v| !v.is_null()) {
+        let folder = chat.run_folder().ok_or_else(|| err("INVALID_ARGUMENT", "checks need the folder of the run, which this chat does not have", false))?;
+        let checks = checks_of(value, &folder)?;
+        chat.replace_checks(checks);
     }
     if next_turn {
         match chat.send(&task) {

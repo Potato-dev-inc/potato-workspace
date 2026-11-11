@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // Helpers for the Linux Inside tests. Not a test.
 import { openSettings, scrollToCss } from '../night/_area.mjs';
 

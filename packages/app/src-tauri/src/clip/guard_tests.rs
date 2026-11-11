@@ -42,7 +42,7 @@ fn no_bridge_or_tool_catalog_source_mentions_clip() {
 #[test]
 fn catalog_version_is_the_pinned_one() {
     // The same value `tool_registry/tests.rs` pins: adding Clip It must not move it.
-    assert_eq!(crate::tool_registry::catalog_version(), "73-4ca4b6816bbee3f6");
+    assert_eq!(crate::tool_registry::catalog_version(), "73-c6fae36f34b7944c");
 }
 
 #[test]

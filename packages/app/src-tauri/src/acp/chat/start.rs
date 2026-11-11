@@ -121,19 +121,33 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
         Some(account) => Some((account.to_string(), account_launch_env(&cfg.id, account)?)),
         None => None,
     };
-    // A reviewed adapter whose last health check failed (or that fails now, when its agent's version is not the tested
-    // one): the chat says why and stops. The terminal lane is not touched.
-    if let Some(reason) = crate::acp::adapter_health::check_before_start(&cfg.id) {
-        return Err(StartError::new("ACP_ADAPTER_BLOCKED", reason, true));
-    }
-    // The add-on (the adapter) is not installed: say so, so the screen can offer to install it (A5).
-    if crate::acp::install::is_missing(&cfg, &*deps.env) {
-        let size = cfg.addon.size_mb.map(|mb| format!(" (about {mb} MB)")).unwrap_or_default();
-        return Err(StartError::new("ACP_ADDON_MISSING", format!("Chat needs a small add-on for {}{size}. Install it first.", cfg.label), true));
+    // A session started ahead of time for this agent, folder and account (`acp::warm`): the same chat, minus the adapter's
+    // startup. The checks below ran when it was warmed; nothing about the chat differs.
+    let account_id = account_env.as_ref().map(|(id, _)| id.clone());
+    let warm = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim(&cfg, &folder, account_id.as_deref()));
+    if warm.is_none() {
+        // A reviewed adapter whose last health check failed (or that fails now, when its agent's version is not the tested
+        // one): the chat says why and stops. The terminal lane is not touched.
+        if let Some(reason) = crate::acp::adapter_health::check_before_start(&cfg.id) {
+            return Err(StartError::new("ACP_ADAPTER_BLOCKED", reason, true));
+        }
+        // The add-on (the adapter) is not installed: say so, so the screen can offer to install it (A5).
+        if crate::acp::install::is_missing(&cfg, &*deps.env) {
+            let size = cfg.addon.size_mb.map(|mb| format!(" (about {mb} MB)")).unwrap_or_default();
+            return Err(StartError::new("ACP_ADDON_MISSING", format!("Chat needs a small add-on for {}{size}. Install it first.", cfg.label), true));
+        }
     }
     let label = cfg.label.clone();
     let agent_id = cfg.id.clone();
+    let warm_claimed = warm.is_some();
     let (session, pane_id) = match &deps.conversations {
+        Some(conversations) if warm.is_some() => {
+            let warm = warm.expect("checked above");
+            let view = conversations
+                .adopt_warm(&warm.id, &agent_id, &folder, account_id.as_deref(), warm.session.clone())
+                .map_err(|e| StartError::new("ACP_START_FAILED", format!("The agent could not start: {e}"), true))?;
+            (warm.session, view.id)
+        }
         Some(conversations) => {
             let view = conversations.create_for(&agent_id, &folder, account_env.as_ref().map(|(id, _)| id.as_str())).map_err(|e| StartError::new("ACP_START_FAILED", format!("The agent could not start: {e}"), true))?;
             let session = conversations.session(&view.id).ok_or_else(|| StartError::new("ACP_START_FAILED", "The agent could not start.", true))?;
@@ -153,6 +167,11 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
     };
     let chat = AcpChat::build(&pane_id, &label, session.clone(), deps.host.clone(), deps.conversations.clone());
     chat.attach();
+    if warm_claimed {
+        chat.set_warm_claimed(true);
+        // The chat has seen what the session said while it waited (it was kept for this sink); from now on events come live.
+        session.stop_buffering();
+    }
     if !cfg!(test) {
         // Test agents are fakes with no tool server by design.
         chat.note_workspace_tools();
@@ -271,6 +290,10 @@ pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
     }
     restored
 }
+
+#[cfg(test)]
+#[path = "start_warm_tests.rs"]
+mod warm_tests;
 
 #[cfg(test)]
 mod tests {

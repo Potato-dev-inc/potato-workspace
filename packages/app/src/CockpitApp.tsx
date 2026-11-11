@@ -22,6 +22,7 @@ import { WhatBrokeItSheet } from './components/cockpit/WhatBrokeItSheet';
 import { panesSharingFolder } from './components/cockpit/history-model';
 import { ProjectMemory } from './components/cockpit/ProjectMemory';
 import { Sidebar } from './components/cockpit/Sidebar';
+import { UsageBar } from './components/cockpit/UsageBar';
 import { SettingsView } from './components/cockpit/SettingsView';
 import { AppUpdateHost } from './components/updates/AppUpdateHost';
 import { PlansMonth } from './components/cockpit/PlansMonth';
@@ -704,6 +705,8 @@ export default function CockpitApp() {
       {c.modeExplainer?.open && <IndividualSheet onSwitch={(d) => void c.modeExplainer.confirm(d)} onCancel={c.modeExplainer.cancel} />}
       {stopReport && <PanicSheet report={stopReport} names={c.names} onClose={() => setStopReport(null)} />}
       <AppUpdateHost />
+      {/* The "Used" bar along the bottom edge; the root leaves room for it only while it shows. */}
+      <UsageBar />
       <div className="ck-toasts" aria-live="polite">
         {c.toasts.map((t) => (
           <div className="ck-toast" key={t.id}>

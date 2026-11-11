@@ -108,6 +108,11 @@ impl TuiProfile for Codex {
         }
     }
 
+    /// Plan usage for the "Used" strip: `usage.toml` (data).
+    fn usage_source(&self) -> Option<crate::usage::source::UsageSource> {
+        crate::usage::source::from_toml(include_str!("usage.toml"))
+    }
+
     /// `CODEX_HOME` is the documented directory for this CLI's config and login.
     fn account_scheme(&self) -> Option<AccountScheme> {
         Some(AccountScheme {

@@ -15,7 +15,7 @@ use serde_json::json;
 
 use super::link::{ConnectError, LendNet};
 use super::proxy_tests::{http, sse_script, Script, Upstream, SSE_TEXT};
-use super::service::{Approval, Deps, Direction, GrantEnd, GrantState, Lend, LendAccount, LendProfile, LendWho, RefreshJob, TeamPort, SIGNIN_PROBLEM};
+use super::service::{Approval, Deps, Direction, GrantEnd, GrantState, Lend, LendAccount, LendProfile, LendWho, AwakePort, RefreshJob, TeamPort, SIGNIN_PROBLEM};
 use super::spec::ProxySpec;
 use super::wire::{self, Body, NodeHint};
 use crate::keys::KeyStore as LinkKeys;
@@ -61,7 +61,31 @@ impl FakeRefresh {
     }
 }
 
+/// A stand-in for the OS keep-awake: counts takes and releases.
+#[derive(Default)]
+struct FakeAwake {
+    takes: AtomicU64,
+    releases: AtomicU64,
+}
+
+impl FakeAwake {
+    fn held(&self) -> bool {
+        self.takes.load(Ordering::SeqCst) > self.releases.load(Ordering::SeqCst)
+    }
+}
+
+impl AwakePort for FakeAwake {
+    fn hold(&self) -> Result<(), String> {
+        self.takes.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+    fn release(&self) {
+        self.releases.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
 struct Side {
+    awake: Arc<FakeAwake>,
     dir: std::path::PathBuf,
     refresh: Arc<FakeRefresh>,
     lend: Arc<Lend>,
@@ -118,7 +142,9 @@ fn side(name: &str, session: Session, transport: &Arc<dyn TeamTransport>, mem: &
     let team = Arc::new(TestTeam { session, transport: transport.clone(), seq: AtomicU64::new(0) });
     let refresh = Arc::new(FakeRefresh::default());
     let fake = refresh.clone();
+    let awake = Arc::new(FakeAwake::default());
     let deps = Deps {
+        awake: awake.clone(),
         dir: dir.join("lend"),
         secrets: backend,
         team: team.clone(),
@@ -146,7 +172,7 @@ fn side(name: &str, session: Session, transport: &Arc<dyn TeamTransport>, mem: &
     let lend = Lend::new(deps);
     lend.apply_settings(&json!({ "lend_enabled": true }));
     let rx = Mutex::new(transport.subscribe(0).unwrap());
-    Side { dir, refresh, lend, team, secrets, rx, tracker: Mutex::new(SeqTracker::default()) }
+    Side { awake, dir, refresh, lend, team, secrets, rx, tracker: Mutex::new(SeqTracker::default()) }
 }
 
 async fn world2(script: Script) -> World2 {
@@ -167,6 +193,10 @@ async fn world2(script: Script) -> World2 {
 }
 
 fn profile(w: &World2) -> String {
+    profile_with(w, true)
+}
+
+fn profile_with(w: &World2, keep_awake: bool) -> String {
     let p = w
         .maya
         .lend
@@ -183,6 +213,7 @@ fn profile(w: &World2) -> String {
             sign_out_on_end: false,
             max_requests: None,
             max_tokens: None,
+            keep_awake,
             has_key: false,
         })
         .unwrap();
@@ -409,6 +440,7 @@ async fn the_profile_needs_a_credential_and_a_cap_holds_for_another_person() {
             sign_out_on_end: false,
             max_requests: None,
             max_tokens: None,
+            keep_awake: true,
             has_key: false,
         })
         .unwrap();
@@ -457,6 +489,7 @@ async fn a_profile_request_limit_holds_end_to_end() {
             sign_out_on_end: false,
             max_requests: Some(1),
             max_tokens: None,
+            keep_awake: true,
             has_key: false,
         })
         .unwrap();
@@ -503,6 +536,7 @@ fn sign_in_profile(w: &World2, expires_ms: u64) -> (String, String) {
             sign_out_on_end: false,
             max_requests: None,
             max_tokens: None,
+            keep_awake: true,
             has_key: false,
         })
         .unwrap();
@@ -660,6 +694,7 @@ async fn the_screens_see_a_key_profile_a_lend_sign_in_a_borrowed_pane_and_the_ro
             sign_out_on_end: true,
             max_requests: Some(5),
             max_tokens: Some(1000),
+            keep_awake: true,
             has_key: true,
         })
         .unwrap();
@@ -736,4 +771,56 @@ async fn a_chat_on_a_borrowed_sign_in_gets_the_proxy_env_and_is_listed_on_the_gr
     let mine = w.leo.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
     assert_eq!(mine.pane_ids, vec!["chat-pane-1".to_string()]);
     assert_eq!((mine.requests, mine.input_tokens, mine.output_tokens), (1, 25, 42), "the borrower's own count matches the lender's");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_outgoing_lend_holds_the_pc_awake_until_the_last_one_ends() {
+    let w = world2(sse_script()).await;
+    assert!(!w.maya.awake.held());
+    let profile_id = profile(&w);
+    let (first, _) = lend_one_with(&w, 3600, &profile_id).await;
+    let req = w.leo.lend.request(&w.maya.member(), None, "claude", 3600, "second").unwrap();
+    w.maya.pump();
+    let second = w.maya.lend.answer(&req.id, true, Some(&profile_id), None).await.unwrap().unwrap().id;
+    assert!(w.maya.awake.held(), "the lender holds the PC awake");
+    assert!(w.maya.lend.state(true).keeping_awake);
+    assert_eq!(w.maya.awake.takes.load(Ordering::SeqCst), 1, "one hold for both lends");
+    assert!(!w.leo.awake.held(), "the borrower's PC is not held");
+    assert!(!w.leo.lend.state(true).keeping_awake);
+
+    w.leo.lend.give_back(&first).unwrap();
+    w.maya.pump();
+    assert!(w.maya.awake.held(), "one lend is still going");
+    w.maya.lend.revoke(&second).unwrap();
+    assert!(!w.maya.awake.held(), "the last lend ended");
+    assert!(!w.maya.lend.state(true).keeping_awake);
+    assert_eq!(w.maya.awake.releases.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_hold_is_released_when_a_lend_expires() {
+    let w = world2(sse_script()).await;
+    let (_grant, _base) = lend_one(&w, 2).await;
+    assert!(w.maya.awake.held());
+    until("the lend expires and the hold is released", || !w.maya.awake.held()).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_profile_with_keep_awake_off_never_holds_the_pc() {
+    let w = world2(sse_script()).await;
+    let profile_id = profile_with(&w, false);
+    let _ = lend_one_with(&w, 3600, &profile_id).await;
+    assert!(!w.maya.awake.held());
+    assert_eq!(w.maya.awake.takes.load(Ordering::SeqCst), 0);
+    assert!(!w.maya.lend.state(true).keeping_awake);
+}
+
+#[test]
+fn an_old_saved_profile_without_the_setting_keeps_the_pc_awake() {
+    let p: LendProfile = serde_json::from_value(json!({
+        "id": "lp_1", "name": "Old", "agent_ids": ["claude"], "account": {"kind": "main"}, "who": "teammates",
+        "default_secs": 60, "max_secs": 3600, "approval": "each"
+    }))
+    .unwrap();
+    assert!(p.keep_awake);
 }

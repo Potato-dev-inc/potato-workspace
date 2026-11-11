@@ -1,6 +1,6 @@
 // The bottom of the sidebar: one row of icon buttons with tooltips (Set up agents, Project, Review, Spaces), a More menu
 // that holds the rest (Plans, Scores, the Orchestration | Individual mode), and Theme and Settings on the right.
-// Background jobs and the Night Shift chip sit above the row (they show only while there is something to say), and the
+// Background jobs and the Night Shift chip sit above the row (plan usage is the bottom bar, UsageBar.tsx) (they show only while there is something to say), and the
 // "Connection lost" line sits under it.
 import { useEffect, useRef, useState } from 'react';
 import { IconChart, IconCheck, IconGlobe, IconMoon, IconMore, IconNote, IconSun, IconTerminal } from './Icons';

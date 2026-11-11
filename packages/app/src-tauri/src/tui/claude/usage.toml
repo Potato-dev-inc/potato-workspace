@@ -1,0 +1,43 @@
+# Claude: its plan usage for the "Used" strip. Read by `crate::usage`; the table is DATA.
+#
+# Claude keeps plan usage on Anthropic's servers; nothing local holds it (CLI 2.1.322, read 2026-11-11).
+# Its own `/usage` screen asks `GET /api/oauth/usage` with the login's access token. Founder decision
+# 2026-11-11: do the same, per sign-in (the main login and each account's CLAUDE_CONFIG_DIR), with the
+# headers Orca (stablyai/orca, MIT) sends: `claude-oauth-usage-request.ts`. The token is read from the
+# sign-in's own `.credentials.json` only for the request and never refreshed, stored or logged.
+# Answer fields: `five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`, each
+# `{utilization (0-100), resets_at (RFC 3339)}`. Fixture: fixtures/usage/ (SYNTHETIC).
+[usage]
+schema = 1
+page = "https://claude.ai/settings/usage"
+main_home = "~/.claude"
+
+[usage.reader]
+kind = "oauth_usage"
+credentials_file = ".credentials.json"
+token = "/claudeAiOauth/accessToken"
+expires_at = "/claudeAiOauth/expiresAt"
+url = "https://api.anthropic.com/api/oauth/usage"
+headers = [["anthropic-beta", "oauth-2025-04-20"], ["User-Agent", "claude-code/2.1.0"]]
+used = "utilization"
+resets_at = "resets_at"
+provider = "Anthropic"
+reason = "Not read yet. Type /usage in a Claude pane, or open the usage page."
+
+[[usage.reader.windows]]
+key = "five_hour"
+minutes = 300
+
+[[usage.reader.windows]]
+key = "seven_day"
+minutes = 10080
+
+[[usage.reader.windows]]
+key = "seven_day_opus"
+minutes = 10080
+name = "Weekly Opus"
+
+[[usage.reader.windows]]
+key = "seven_day_sonnet"
+minutes = 10080
+name = "Weekly Sonnet"

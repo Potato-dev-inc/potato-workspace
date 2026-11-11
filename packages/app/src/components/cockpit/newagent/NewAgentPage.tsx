@@ -34,6 +34,7 @@ import {
   type RunAs,
   type StartRequest,
 } from './model';
+import { AgentLogo } from '../../common/AgentLogo';
 import { isStartBlock } from './start';
 import '../../../styles/cockpit-newagent.css';
 import { BringChatsLink } from '../../history/BringChatsLink';
@@ -471,6 +472,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 trigger={
                   <>
                     <span className={`ck-na-dot is-${choice?.state ?? 'missing'}`} aria-hidden="true" />
+                    {choice && <AgentLogo id={choice.agentId} size={13} decorative fallback={null} className="ck-na-logo" />}
                     <span className="ck-na-chip-text">{choice?.label ?? 'No agent ready'}</span>
                     <IconChevronDown />
                   </>
@@ -495,6 +497,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                     <span className="ck-na-item-main">
                       <span className="ck-na-item-row">
                         <span className={`ck-na-dot is-${c.state}`} aria-hidden="true" />
+                        <AgentLogo id={c.agentId} size={13} decorative fallback={null} className="ck-na-logo" />
                         <span>{c.label}</span>
                       </span>
                     </span>

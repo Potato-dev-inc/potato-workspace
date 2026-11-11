@@ -104,10 +104,17 @@ pub struct LendProfile {
     pub max_requests: Option<u64>,
     #[serde(default)]
     pub max_tokens: Option<u64>,
+    /// Keep this PC awake while a lend from this profile is active. On unless turned off.
+    #[serde(default = "default_keep_awake")]
+    pub keep_awake: bool,
     /// Shown only: a pasted API key is kept for this profile (it is never sent to the screen). Set by `state`,
     /// ignored on save.
     #[serde(default)]
     pub has_key: bool,
+}
+
+fn default_keep_awake() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -197,6 +204,9 @@ pub struct LendState {
     pub requests_in: Vec<LendRequest>,
     pub requests_out: Vec<LendRequest>,
     pub drivers: Vec<Driver>,
+    /// This PC is being held awake right now for an outgoing lend.
+    #[serde(default)]
+    pub keeping_awake: bool,
 }
 
 // ------------------------------------------------------------------------------------------------- saved records
@@ -246,6 +256,16 @@ pub trait TeamPort: Send + Sync {
     fn send(&self, payload: &Payload) -> Result<(), String>;
 }
 
+pub use crate::night_shift::power::AwakePort;
+
+/// The key of the lend hold among Night Shift's keyed holds (run ids never look like this).
+pub const AWAKE_KEY: &str = "lend:out";
+
+/// The lend hold: shares Night Shift's keyed holds, so ending a lend never lets go of a Night Shift hold and the reverse.
+pub fn app_awake() -> crate::night_shift::power::KeyedHold {
+    crate::night_shift::power::KeyedHold::new(AWAKE_KEY, "Potato Workspace is lending an agent")
+}
+
 /// The real team service.
 pub struct AppTeam;
 
@@ -289,6 +309,7 @@ pub struct Deps {
     pub accounts: crate::accounts::Store,
     pub specs: Vec<ProxySpec>,
     pub now: Arc<dyn Fn() -> u64 + Send + Sync>,
+    pub awake: Arc<dyn AwakePort>,
     pub changed: Arc<dyn Fn() + Send + Sync>,
     pub spawn: Spawn,
     /// Renews a lend sign-in's token (the real one runs the agent's CLI, hidden).
@@ -355,6 +376,8 @@ struct Inner {
 pub struct Lend {
     deps: Deps,
     inner: Mutex<Inner>,
+    /// Whether the awake hold is on (taken once for all outgoing lends, not per grant).
+    awake_on: Mutex<bool>,
     me: Weak<Lend>,
 }
 
@@ -383,6 +406,7 @@ impl Lend {
         let svc = Arc::new_cyclic(|me| Self {
             deps,
             inner: Mutex::new(Inner { saved, out: HashMap::new(), inn: HashMap::new(), in_grants: HashMap::new() }),
+            awake_on: Mutex::new(false),
             me: me.clone(),
         });
         let book: Weak<dyn LenderBook> = svc.me.clone();
@@ -410,7 +434,34 @@ impl Lend {
     }
 
     fn changed(&self) {
+        self.sync_awake();
         (self.deps.changed)()
+    }
+
+    /// Hold the computer awake while at least one outgoing grant is active and its profile asks for it; let go
+    /// when the last one ends. Cheap to call after any change. Never called with `inner` locked.
+    fn sync_awake(&self) {
+        let want = {
+            let inner = lock(&self.inner);
+            inner.saved.grants.iter().any(|g| {
+                g.view.direction == Direction::Out
+                    && g.view.state == GrantState::Active
+                    && g.profile_id
+                        .as_ref()
+                        .and_then(|id| inner.saved.profiles.iter().find(|p| &p.id == id))
+                        .is_none_or(|p| p.keep_awake)
+            })
+        };
+        let mut on = lock(&self.awake_on);
+        if want && !*on {
+            match self.deps.awake.hold() {
+                Ok(()) => *on = true,
+                Err(e) => tracing::warn!(error = %e, "lend: could not keep the PC awake"),
+            }
+        } else if !want && *on {
+            self.deps.awake.release();
+            *on = false;
+        }
     }
 
     fn spec(&self, agent_id: &str) -> Option<&ProxySpec> {
@@ -451,6 +502,7 @@ impl Lend {
             requests_in: pick(Direction::In),
             requests_out: pick(Direction::Out),
             drivers: self.drivers(),
+            keeping_awake: *lock(&self.awake_on),
         }
     }
 

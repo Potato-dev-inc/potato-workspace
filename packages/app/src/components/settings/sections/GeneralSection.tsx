@@ -288,6 +288,36 @@ export const generalRows: RowDef[] = [
     render: (env) => <ModeSwitchRow env={env} />,
   },
   {
+    id: 'usage-bar',
+    label: 'Show usage bar',
+    hint: 'How much of its plan each signed-in agent has used, at the bottom of the sidebar.',
+    keywords: 'usage limit quota plan percent reset used rate limit bar strip',
+    group: 'Appearance',
+    render: (env) => (
+      <SettingToggle
+        label="Show usage bar"
+        description="How much of its plan each signed-in agent has used, at the bottom of the sidebar."
+        checked={env.settings.show_usage_bar ?? true}
+        onChange={(value) => void env.patch({ show_usage_bar: value })}
+      />
+    ),
+  },
+  {
+    id: 'usage-login-reads',
+    label: 'Read Claude usage with my Claude sign-in',
+    hint: 'Asks Anthropic for your Claude usage using your Claude sign-in.',
+    keywords: 'usage claude anthropic login token limit percent oauth',
+    group: 'Appearance',
+    render: (env) => (
+      <SettingToggle
+        label="Read Claude usage with my Claude sign-in"
+        description="Asks Anthropic for your Claude usage using your Claude sign-in."
+        checked={env.settings.usage_login_reads ?? true}
+        onChange={(value) => void env.patch({ usage_login_reads: value })}
+      />
+    ),
+  },
+  {
     id: 'individual-window-layout',
     label: 'Window layout in Individual',
     hint: LAYOUT_HINT,
@@ -343,6 +373,21 @@ export const generalRows: RowDef[] = [
         description="Asks first when you close a pane or quit from the tray while an agent works."
         checked={env.settings.confirm_close_running_pane ?? true}
         onChange={(value) => void env.patch({ confirm_close_running_pane: value })}
+      />
+    ),
+  },
+  {
+    id: 'keep-awake',
+    label: 'Keep this PC awake while agents work',
+    hint: 'Your agents keep going when you lock the PC (Win+L). The screen can still turn off.',
+    keywords: 'awake sleep lock locked win+l windows power standby suspend screen display idle keep working',
+    group: 'While agents work',
+    render: (env) => (
+      <SettingToggle
+        label="Keep this PC awake while agents work"
+        description="Your agents keep going when you lock the PC (Win+L). The screen can still turn off."
+        checked={env.settings.keep_awake_while_working ?? true}
+        onChange={(value) => void env.patch({ keep_awake_while_working: value })}
       />
     ),
   },

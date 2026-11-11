@@ -1,0 +1,14 @@
+# Cursor Agent: sign-in for the "Used" strip. Read by `crate::usage`; the table is DATA.
+#
+# `agent status --format json` (2026.10.22, verified on this PC 2026-11-11) prints
+# `{status, isAuthenticated, hasAccessToken, hasRefreshToken, message}`. Only the two booleans are read.
+# The CLI has no usage or quota command; plan usage is on the Cursor dashboard.
+[usage]
+schema = 1
+page = "https://cursor.com/dashboard?tab=usage"
+
+[usage.reader]
+kind = "status_json"
+signed_in = "/isAuthenticated"
+had_login = "/hasRefreshToken"
+reason = "Cursor's agent CLI has no usage command. Open the usage page."

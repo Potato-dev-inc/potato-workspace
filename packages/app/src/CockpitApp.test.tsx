@@ -132,6 +132,19 @@ vi.mock('./lib/loop-guard', async (importOriginal) => ({
 
 vi.mock('./lib/desktop-nudge', () => ({ useNudgeOnAction: () => ({ onClickCapture: () => {} }) }));
 vi.mock('./lib/agent-health', () => ({ markSpawned: () => {} }));
+// The "Used" bar: one signed-in agent, and the setting on (the real bar renders from these).
+vi.mock('./lib/usage', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('./lib/usage')>();
+  const snap = {
+    refreshed_at_ms: 0,
+    rows: [{ agent_id: 'codex', label: 'Codex CLI', account_id: null, account_label: null, state: 'ok', reason: null, windows: [{ name: '5-hour', used_percent: 40, reset_since: false }], plan: null, observed_at_ms: null, limited_until_ms: null, page: null }],
+  };
+  return {
+    ...orig,
+    useUsageBarOn: () => ({ on: true, loginReads: true }),
+    usageApi: { snapshot: async () => snap, openPage: async () => {}, onChanged: async () => () => {} },
+  };
+});
 
 // Child views are stubbed so the test exercises only CockpitApp's view wiring.
 vi.mock('./components/cockpit/Sidebar', async () => {
@@ -370,6 +383,17 @@ function clickButton(text: string) {
 }
 // The main view is the first child of <main>; the away digest, when shown, comes after it.
 const mainText = () => host.querySelector('main')?.firstElementChild?.textContent;
+
+describe('CockpitApp: the Used bar', () => {
+  it('runs along the bottom of the cockpit root, outside the sidebar and the main area', async () => {
+    await act(async () => {});
+    const bar = host.querySelector('.cockpit > .ck-statusbar');
+    expect(bar).not.toBeNull();
+    expect(bar!.closest('main')).toBeNull();
+    expect(bar!.closest('.ck-side')).toBeNull();
+    expect(bar!.textContent).toContain('40%');
+  });
+});
 
 describe('CockpitApp main view precedence', () => {
   it('shows the selected pane by default', () => {

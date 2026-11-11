@@ -27,7 +27,7 @@ fn on(webview: &tauri::Webview) -> Result<std::sync::Arc<lend::service::Lend>, S
 pub async fn lend_state(webview: tauri::Webview) -> Result<LendState, String> {
     guard(&webview)?;
     if !lend::enabled() {
-        return Ok(LendState { enabled: false, profiles: vec![], grants: vec![], requests_in: vec![], requests_out: vec![], drivers: vec![] });
+        return Ok(LendState { enabled: false, profiles: vec![], grants: vec![], requests_in: vec![], requests_out: vec![], drivers: vec![], keeping_awake: false });
     }
     Ok(lend::app_service()?.state(true))
 }

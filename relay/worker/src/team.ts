@@ -50,6 +50,8 @@ interface Row {
 interface Attachment {
   device: string;
   cursor: number;
+  /** When the socket was accepted (ms); sockets from before this field was added read as oldest. */
+  opened_at?: number;
 }
 
 /** A device request that passed the access list, the replay guard and the per-device cap. */
@@ -494,16 +496,27 @@ export class Team extends DurableObject<Env> {
     const { device } = this.authorize(request);
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return refuse(426, "this is a WebSocket address");
     const after = queryU64(url, "after") ?? 0;
-    // A device may keep a few sockets; beyond that the new one is refused.
+    // A device may keep a few sockets. A client killed without a close handshake leaves a dead socket that
+    // still reads as OPEN, so over the cap the oldest ones are closed to make room instead of refusing.
     // One that is closing (this side has closed it, the client has not answered yet) no longer counts.
-    const open = this.ctx
+    const mine = this.ctx
       .getWebSockets()
-      .filter((ws) => ws.readyState === WebSocket.OPEN && (ws.deserializeAttachment() as Attachment | null)?.device === device).length;
-    if (open >= this.limits().socketsPerDevice) throw new Refusal(429, "too many open connections for this device");
+      .filter((ws) => ws.readyState === WebSocket.OPEN)
+      .map((ws) => ({ ws, att: ws.deserializeAttachment() as Attachment | null }))
+      .filter((s) => s.att?.device === device)
+      .sort((a, b) => (a.att?.opened_at ?? 0) - (b.att?.opened_at ?? 0));
+    const keep = Math.max(this.limits().socketsPerDevice, 1) - 1;
+    for (const { ws } of mine.slice(0, Math.max(mine.length - keep, 0))) {
+      try {
+        ws.close(4000, "replaced by a newer connection");
+      } catch (error) {
+        console.debug("relay: closing an old socket failed", error);
+      }
+    }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ device, cursor: after } satisfies Attachment);
+    server.serializeAttachment({ device, cursor: after, opened_at: Date.now() } satisfies Attachment);
     this.catchUp(server); // the backlog; live envelopes are broadcast
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -527,7 +540,7 @@ export class Team extends DurableObject<Env> {
         cursor = page.next;
         if (page.rows.length < BATCH) break;
       }
-      if (cursor !== attachment.cursor) ws.serializeAttachment({ device: attachment.device, cursor } satisfies Attachment);
+      if (cursor !== attachment.cursor) ws.serializeAttachment({ ...attachment, cursor } satisfies Attachment);
     } catch (error) {
       console.debug("relay: socket send failed", error);
     }
@@ -548,7 +561,7 @@ export class Team extends DurableObject<Env> {
           ws.close(1008, "device not on this team");
         } else if (attachment.cursor === row.seq - 1) {
           ws.send(text);
-          ws.serializeAttachment({ device: attachment.device, cursor: row.seq } satisfies Attachment);
+          ws.serializeAttachment({ ...attachment, cursor: row.seq } satisfies Attachment);
         } else if (attachment.cursor < row.seq) {
           this.catchUp(ws);
         }

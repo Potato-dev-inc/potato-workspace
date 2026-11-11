@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Tauri commands of Linux Inside (SPEC-n33 section 3.7). Desktop only: no bridge route and no MCP
 //! tool, so a phone or an agent cannot pick where an agent runs. The commands are thin: the rules
 //! live in `wsl::*`. What this file adds: the checks of the arguments (a distro must be listed and

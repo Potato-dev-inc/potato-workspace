@@ -1,0 +1,7 @@
+Agent logos from Simple Icons (CC0 1.0). Trademarks belong to their owners.
+
+Source: https://simpleicons.org (npm: simple-icons). Licence: CC0 1.0 Universal,
+https://creativecommons.org/publicdomain/zero/1.0/
+Only the SVG path data for the logos listed in scripts/gen-agent-logos.mjs is copied, into
+packages/app/src/lib/agentLogoData.ts (generated). The OpenAI logo comes from simple-icons 13.21.0
+(newer releases dropped it); it is CC0 in that release.

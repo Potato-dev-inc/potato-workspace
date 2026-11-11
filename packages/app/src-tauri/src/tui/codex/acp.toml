@@ -51,6 +51,9 @@ base = { features = { plugins = false } }
 own_server_path = ["mcp_servers", "{name}"]
 own_server_extra = { enabled = true, default_tools_approval_mode = "approve" }
 on_list_failure = "refuse"
+# `codex mcp list` takes about a second at every start. Its answer comes from these config files: the listing is
+# remembered (10 minutes) and asked again when one of them changes, appears or goes.
+list_cache_files = ["{CODEX_HOME}/config.toml", "{home}/.codex/config.toml", "{cwd}/.codex/config.toml"]
 
 # Codex's own state database can be locked for a moment by a previous process that is still closing.
 [start_retry]

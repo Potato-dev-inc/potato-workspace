@@ -121,6 +121,9 @@ pub struct AgentRunView {
     pub lane_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lane_fallback: Option<serde_json::Value>,
+    /// Present when this follow-up had to bring a closed conversation back (new pane, resumed session).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reopened: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -335,6 +338,7 @@ impl From<OperationSnapshot> for AgentRunView {
             lane_used: lane.0,
             lane_reason: lane.1,
             lane_fallback: lane.2,
+            reopened: None,
         }
     }
 }

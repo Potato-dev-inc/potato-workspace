@@ -558,7 +558,7 @@ pub fn addons() -> &'static Addons {
 /// Whether starting a chat for `cfg` would fail only because the add-on is not there. The start path asks this first
 /// so it can say "install it" instead of "could not start".
 pub fn is_missing(cfg: &AgentConfig, host: &dyn HostEnv) -> bool {
-    cfg.pin_policy != PinPolicy::Off && matches!(pin::check(&cfg.pins, host), PinCheck::Missing { .. })
+    cfg.pin_policy != PinPolicy::Off && pin::entry_missing(&cfg.pins, host)
 }
 
 #[cfg(test)]

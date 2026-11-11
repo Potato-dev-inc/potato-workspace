@@ -29,6 +29,22 @@ export const TERMINAL_LABEL = 'Terminal';
 export const CHAT_LABEL = RUN_WAYS.chat;
 export const ADD_CHAT_LABEL = `Add ${RUN_WAYS.chat.toLowerCase()}`;
 
+/** What the popup shows: the saved choice, else what a helper this agent starts would get. */
+export function shownLane(agent: AcpLaneAgent): RunLaneWord {
+  return agent.saved === false && agent.helper_lane ? agent.helper_lane : agent.lane;
+}
+
+/** One plain sentence under the agent's name: how its helpers run. */
+export function laneNote(agent: AcpLaneAgent): string {
+  if (agent.saved !== false) {
+    if (agent.lane === 'acp') return 'Helpers and new sessions run as a chat.';
+    return 'Helpers and new sessions run in a terminal.';
+  }
+  if (agent.helper_lane === 'acp') return 'Helpers this agent starts run as a chat when it can. Pick Terminal to always use a terminal.';
+  if (agent.addon_installed === false) return 'Helpers this agent starts run in a terminal until its chat add-on is installed.';
+  return 'Helpers this agent starts run in a terminal.';
+}
+
 export function AgentLaneRows({ api = tauriAcpChatApi }: { api?: Pick<AcpChatApi, 'laneGet' | 'laneSet'> & Pick<AcpChatApi, 'overlayDetect' | 'overlaySet' | 'overlayRemove' | 'chatRemove'> }) {
   const [view, setView] = useState<AcpLaneView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +130,7 @@ export function AgentLaneRows({ api = tauriAcpChatApi }: { api?: Pick<AcpChatApi
           label={agent.label}
           description={
             <>
-              {agent.disabled ? <span data-testid="agent-lane-note">{agent.disabled_note ?? 'Chat is not available for this agent.'}</span> : 'New sessions start in a terminal unless you pick Chat.'}
+              {agent.disabled ? <span data-testid="agent-lane-note">{agent.disabled_note ?? 'Chat is not available for this agent.'}</span> : laneNote(agent)}
               {agent.adapter_note ? <span data-testid="agent-adapter-note"> {agent.adapter_note}</span> : null}
               {terminalChatNote(agent.id)}
             </>
@@ -131,7 +147,7 @@ export function AgentLaneRows({ api = tauriAcpChatApi }: { api?: Pick<AcpChatApi
             Remove chat
           </Btn>
           {!agent.disabled && (
-            <Popup aria-label={`How ${agent.label} runs`} value={agent.lane} onChange={(event) => void save(agent.id, event.target.value as RunLaneWord)}>
+            <Popup aria-label={`How ${agent.label} runs`} value={shownLane(agent)} onChange={(event) => void save(agent.id, event.target.value as RunLaneWord)}>
               <option value="terminal">{TERMINAL_LABEL}</option>
               <option value="acp">{CHAT_LABEL}</option>
               {terminalChat.some((t) => t.id === agent.id) && <option value={TERMINAL_CHAT_LANE}>{TERMINAL_CHAT_WORD}</option>}

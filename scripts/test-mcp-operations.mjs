@@ -162,6 +162,11 @@ async function main() {
   const switched = await rpc(client, messages, 21, 'tools/call', { name: 'set_mode', arguments: { mode: 'both' } });
   assert.equal(switched.result.isError, undefined);
   assert.ok(messages.some((item) => item.method === 'notifications/tools/list_changed'));
+  // The default (curated) list carries the run and cleanup tools; everything else is listed in mode all.
+  const curated = (await rpc(client, messages, 26, 'tools/list', {})).result.tools.map((tool) => tool.name);
+  for (const name of ['run_agent', 'wait_agents', 'followup_task', 'close_agent', 'review_worktree']) assert.ok(curated.includes(name), `${name} missing from the default tool list`);
+  const all = await rpc(client, messages, 27, 'tools/call', { name: 'set_mode', arguments: { mode: 'all' } });
+  assert.notEqual(all.result.isError, true);
   const listing = await rpc(client, messages, 2, 'tools/list', {});
   const names = listing.result.tools.map((tool) => tool.name);
   for (const name of ['delegate_work', 'get_operation', 'wait_for_operation', 'cancel_operation']) assert.ok(names.includes(name), `${name} missing from MCP discovery`);

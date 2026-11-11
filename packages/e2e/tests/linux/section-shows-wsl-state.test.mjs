@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // Settings > Agents > Run agents in Linux (WSL) says what WSL looks like on this PC in plain words, whatever it is.
 // What it says depends on the PC running the test (WSL missing, no Linux installed, or a Linux listed), so the test
 // checks that one of the four known states is shown with its own words. needs-external for a real WSL.

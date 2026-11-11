@@ -121,6 +121,7 @@ pub fn app_service() -> Result<Arc<Lend>, String> {
         accounts: crate::accounts::Store::default_location(),
         specs: spec::all(),
         now: Arc::new(now_ms),
+        awake: Arc::new(service::app_awake()),
         changed: Arc::new(|| {
             if let Some(app) = APP.get() {
                 use tauri::Emitter;

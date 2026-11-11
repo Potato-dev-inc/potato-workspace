@@ -1,0 +1,34 @@
+# Codex: its plan usage for the "Used" strip. Read by `crate::usage`; the table is DATA.
+#
+# Source (verified on this PC 2026-11-11, codex rollouts of 2026-10 and 2026-11): every turn appends a
+# `{"type":"event_msg","payload":{"type":"token_count","rate_limits":{...}}}` line to
+# `<CODEX_HOME>/sessions/YYYY/MM/DD/rollout-*.jsonl`. `rate_limits` has `primary` and `secondary` windows
+# (`used_percent`, `window_minutes`, `resets_at` in Unix seconds), `plan_type` and `rate_limit_reached_type`.
+# Seen: plus = 300 min + 10080 min; free = one 43200 min window with `secondary: null`.
+# Only the newest such line is read, and only these numbers. Fixture: fixtures/usage/ (SYNTHETIC).
+[usage]
+schema = 1
+page = "https://chatgpt.com/codex/settings/usage"
+main_home = "~/.codex"
+
+[usage.reader]
+kind = "jsonl_rate_limits"
+dir = "sessions"
+file_prefix = "rollout-"
+max_age_days = 30
+object = "/payload/rate_limits"
+observed_at = "/timestamp"
+plan = "plan_type"
+reached = "rate_limit_reached_type"
+
+[[usage.reader.windows]]
+key = "primary"
+used = "used_percent"
+minutes = "window_minutes"
+resets_at = "resets_at"
+
+[[usage.reader.windows]]
+key = "secondary"
+used = "used_percent"
+minutes = "window_minutes"
+resets_at = "resets_at"

@@ -121,9 +121,9 @@ fn every_alias_really_duplicates_its_canonical_tool() {
 
 #[test]
 fn listed_tool_count_per_mode_is_pinned() {
-    assert_eq!(names_for(McpMode::Agent).len(), 10, "{:?}", names_for(McpMode::Agent));
+    assert_eq!(names_for(McpMode::Agent).len(), 12, "{:?}", names_for(McpMode::Agent));
     assert_eq!(names_for(McpMode::Shell).len(), 16, "{:?}", names_for(McpMode::Shell));
-    assert_eq!(names_for(McpMode::Both).len(), 10, "{:?}", names_for(McpMode::Both));
+    assert_eq!(names_for(McpMode::Both).len(), 12, "{:?}", names_for(McpMode::Both));
     // The full list behind mode `all`: every tool except the six aliases.
     assert_eq!(names_for(McpMode::All).len(), 73 - ALIASES.len());
     assert_eq!(names_for(McpMode::All).len() + ALIASES.len(), external_mcp_tool_count());
@@ -133,7 +133,7 @@ fn listed_tool_count_per_mode_is_pinned() {
 fn default_tools_list_is_exactly_the_core() {
     let mut expected = vec![
         "quick_ask", "run_agent", "wait_agents", "followup_task", "send_message",
-        "list_agents", "inspect_agent", "answer_prompt", "ask_user", "set_mode",
+        "list_agents", "inspect_agent", "answer_prompt", "close_agent", "review_worktree", "ask_user", "set_mode",
     ];
     expected.sort();
     for mode in [McpMode::Agent, McpMode::Both] {
@@ -226,16 +226,18 @@ fn set_mode_accepts_all_and_it_is_never_hidden() {
 fn instructions_lead_with_the_five_tool_happy_path_in_order() {
     let text = mcp_instructions();
     let positions: Vec<usize> = [
-        "quick_ask(",
-        "run_agent(",
-        "wait_agents(",
-        "followup_task(",
-        "list_agents()",
+        "1. quick_ask(",
+        "2. run_agent(",
+        "3. wait_agents(",
+        "4. followup_task(",
+        "5. list_agents()",
     ]
     .iter()
     .map(|name| text.find(name).unwrap_or_else(|| panic!("{name} missing")))
     .collect();
     assert!(positions.windows(2).all(|pair| pair[0] < pair[1]), "{positions:?}");
+    // The lead is a launch-and-wait example; the numbered five-tool list follows it.
+    assert!(text.find("wait_ms:1800000").unwrap() < positions[0]);
     assert!(text.starts_with("For a subagent or delegated task beyond a one-shot lookup, use run_agent"));
     assert!(text.contains("
 Potato Workspace MCP"));

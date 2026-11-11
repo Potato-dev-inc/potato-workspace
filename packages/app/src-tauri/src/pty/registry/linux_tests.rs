@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! The Linux branch of a pane spawn: the Windows command is unchanged, the Linux command has the
 //! exact `wsl.exe` shape, refusals stop the spawn, and closing a Linux pane stops what it left.
 

@@ -131,6 +131,11 @@ impl TuiProfile for Claude {
         Some(include_str!("lend_proxy.toml"))
     }
 
+    /// Plan usage for the "Used" strip: `usage.toml` (data).
+    fn usage_source(&self) -> Option<crate::usage::source::UsageSource> {
+        crate::usage::source::from_toml(include_str!("usage.toml"))
+    }
+
     /// `CLAUDE_CONFIG_DIR` is the documented directory for this CLI's config and login.
     fn account_scheme(&self) -> Option<AccountScheme> {
         Some(AccountScheme {

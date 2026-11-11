@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! The live probe (spec section 3.5): finds `wsl.exe`, runs `--list --verbose`, `--status` and the
 //! per-distro probe through a `Runner`, and caches the answers. Only `check` and `facts` start a
 //! distro (a person's click or a Linux spawn). `status` only lists and never starts a distro (S6).

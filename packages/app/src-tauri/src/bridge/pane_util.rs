@@ -14,15 +14,19 @@ use crate::pty::{registry_read_snapshot, registry_spawn_pane, PaneRegistry, Spaw
 pub(super) fn spawn_pane_with_timeout(
     registry: &Arc<Mutex<PaneRegistry>>,
     app: &AppHandle,
-    args: SpawnPaneArgs,
+    mut args: SpawnPaneArgs,
     timeout: Duration,
 ) -> Result<String, crate::operations::OperationError> {
+    // The id is chosen here so the wait can look at this pane while its spawn is still running.
+    let watched_id = args.pane_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    args.pane_id = Some(watched_id.clone());
     // A folder Windows cannot start a program in is refused before a pane is opened for it.
     let folder = args.cwd.as_ref().map(std::path::PathBuf::from);
     if let Some(folder) = &folder {
         crate::path_limit::check_error(folder)?;
     }
     let (tx, rx) = std::sync::mpsc::channel();
+    let registry_watch = Arc::clone(registry);
     let registry = Arc::clone(registry);
     let app = app.clone();
     thread::Builder::new()
@@ -33,18 +37,59 @@ pub(super) fn spawn_pane_with_timeout(
         .map_err(|err| {
             crate::operations::OperationError::new("PANE_SPAWN_FAILED", err.to_string(), true)
         })?;
-    match rx.recv_timeout(timeout) {
-        Ok(Ok(pane_id)) => Ok(pane_id),
-        Ok(Err(err)) => Err(crate::path_limit::pane_spawn_failure(err, folder.as_deref())),
-        Err(_) => Err(crate::operations::OperationError::new(
+    let deadline = Instant::now() + timeout;
+    let outcome = loop {
+        match rx.recv_timeout(PANE_WATCH_TICK.min(deadline.saturating_duration_since(Instant::now()))) {
+            Ok(result) => break Some(result),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break None,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // A pane whose process already ended will not become ready: say so now, not at the deadline.
+                if let Some(gone) = exited_pane_report(&registry_watch, &watched_id) {
+                    return Err(crate::operations::OperationError::new("PANE_SPAWN_FAILED", gone, true));
+                }
+                if Instant::now() >= deadline {
+                    return Err(crate::operations::OperationError::new(
+                        "PANE_SPAWN_FAILED",
+                        format!("timed out after {}s waiting for worker pane spawn", timeout.as_secs()),
+                        true,
+                    ));
+                }
+            }
+        }
+    };
+    match outcome {
+        Some(Ok(pane_id)) => Ok(pane_id),
+        Some(Err(err)) => Err(crate::path_limit::pane_spawn_failure(err, folder.as_deref())),
+        None => Err(crate::operations::OperationError::new(
             "PANE_SPAWN_FAILED",
-            format!(
-                "timed out after {}s waiting for worker pane spawn",
-                timeout.as_secs()
-            ),
+            "the pane spawn thread ended without a result",
             true,
         )),
     }
+}
+
+const PANE_WATCH_TICK: Duration = Duration::from_millis(250);
+
+
+/// `Some(text)` when the pane is registered and its process has exited: the last lines it printed.
+pub(super) fn exited_pane_report(registry: &Mutex<PaneRegistry>, pane_id: &str) -> Option<String> {
+    let (exited, screen) = {
+        let reg = registry.lock();
+        let pane = reg.get(pane_id)?;
+        (Arc::clone(&pane.exited), Arc::clone(&pane.screen))
+    };
+    if !*exited.lock() {
+        return None;
+    }
+    let text = screen.lock().screen().contents();
+    let lines: Vec<&str> = text.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+    let tail = crate::redact::text(&lines[lines.len().saturating_sub(8)..].join("
+")).into_inner();
+    Some(if tail.is_empty() {
+        "the agent exited before it was ready, with no output".to_string()
+    } else {
+        format!("the agent exited before it was ready: {tail}")
+    })
 }
 
 /// Screen must hold still this long after the pane reads idle before a prompt is typed into it.

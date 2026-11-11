@@ -503,7 +503,6 @@ fn join_limits_are_per_team_and_address_and_invite_counters_expire() {
 fn websockets_are_capped_per_device_and_client_frames_are_small() {
     let t = setup(Limits { sockets_per_device: 1, ..Limits::default() });
     let mut first = open_ws(&t, &t.device, 0);
-    assert!(tungstenite::connect(ws_request(&t, &t.device, 0)).is_err(), "a second socket for the same device is refused");
     // A big client message closes the socket instead of being buffered.
     let _ = first.send(tungstenite::Message::Text("x".repeat(64 * 1024).into()));
     let closed = loop {
@@ -575,58 +574,29 @@ fn a_full_mailbox_says_507_in_the_relays_words() {
     }
 }
 
-/// A WebSocket upgrade written by hand so that a refusal's whole body can be read (a WebSocket
-/// client library keeps only the part of it that arrived with the headers).
-fn refused_upgrade(t: &Team, device: &SigningKey, after: u64) -> (u16, serde_json::Value) {
-    use std::io::{Read, Write};
-    let path = format!("/v1/teams/{}/ws?after={after}", t.team);
-    let authority = t.base.trim_start_matches("http://");
-    let mut stream = std::net::TcpStream::connect(authority).unwrap();
-    stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-    let lines = [
-        format!("GET {path} HTTP/1.1"),
-        format!("Host: {authority}"),
-        format!("{AUTH_HEADER}: {}", auth_header(device, "GET", &path, now_ms(), b"")),
-        "Connection: Upgrade".to_string(),
-        "Upgrade: websocket".to_string(),
-        "Sec-WebSocket-Version: 13".to_string(),
-        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==".to_string(),
-    ];
-    let request = format!("{}\r\n\r\n", lines.join("\r\n"));
-    stream.write_all(request.as_bytes()).unwrap();
-    let mut raw = Vec::new();
-    let mut chunk = [0u8; 1024];
-    let (head_end, length) = loop {
-        let n = stream.read(&mut chunk).unwrap();
-        assert!(n > 0, "the relay closed the connection without an answer");
-        raw.extend_from_slice(&chunk[..n]);
-        if let Some(at) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
-            let head = String::from_utf8_lossy(&raw[..at]).to_lowercase();
-            let length = head.lines().find_map(|l| l.strip_prefix("content-length:")).and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(0);
-            break (at + 4, length);
-        }
-    };
-    while raw.len() < head_end + length {
-        let n = stream.read(&mut chunk).unwrap();
-        assert!(n > 0, "the body ended early");
-        raw.extend_from_slice(&chunk[..n]);
-    }
-    let code: u16 = String::from_utf8_lossy(&raw[..12]).split(' ').nth(1).unwrap().parse().unwrap();
-    (code, serde_json::from_slice(&raw[head_end..head_end + length]).unwrap_or(serde_json::Value::Null))
-}
-
 #[test]
-fn a_socket_over_the_cap_is_refused_in_the_relays_words() {
+fn a_socket_over_the_cap_replaces_the_devices_oldest() {
     let t = setup(Limits { sockets_per_device: 2, ..Limits::default() });
-    let _a = open_ws(&t, &t.device, 0);
+    let mut a = open_ws(&t, &t.device, 0);
     let _b = open_ws(&t, &t.device, 0);
-    let (code, said) = refused_upgrade(&t, &t.device, 0);
-    assert_eq!(code, 429);
-    assert_eq!(said, serde_json::json!({ "error": "too many open connections for this device" }));
-    // Another device has its own count.
+    // Another device has its own count and is never touched.
     let other = key(3);
     assert_eq!(put_acl(&t, 2, vec![key_id(&t.device), key_id(&other)]), 204);
-    let _c = open_ws(&t, &other, 0);
+    let mut o = open_ws(&t, &other, 0);
+    // A third socket from the first device succeeds; the oldest is closed with 4000.
+    let _c = open_ws(&t, &t.device, 0);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let code = loop {
+        assert!(Instant::now() < deadline, "the oldest socket is closed");
+        match a.read() {
+            Ok(tungstenite::Message::Close(Some(frame))) => break u16::from(frame.code),
+            Ok(_) => continue,
+            Err(e) => panic!("closed without a 4000 frame: {e}"),
+        }
+    };
+    assert_eq!(code, 4000);
+    // The other device's socket is still open (a ping goes through).
+    assert!(o.send(tungstenite::Message::Ping(Vec::new().into())).is_ok());
 }
 
 #[test]

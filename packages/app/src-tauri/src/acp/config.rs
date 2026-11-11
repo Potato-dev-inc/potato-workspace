@@ -35,11 +35,13 @@
 //! Nothing outside this file, `tui/<agent>/acp.toml` and the definitions names an agent: the connection,
 //! session, supervisor and hand-over code only read these fields.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime};
 
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -226,6 +228,11 @@ pub struct McpConfig {
     /// `disable_listed`: JSON merged into the own server's entry (a switch that turns it on, its approval setting).
     pub own_server_extra: Value,
     pub on_list_failure: ListFailure,
+    /// `disable_listed`: the files the agent's own list is read from (templates: `{home}` the user's home folder, `{cwd}` the
+    /// session's folder, `{NAME}` an environment variable; a file whose variable is not set is left out). When set, the
+    /// listing is remembered for ten minutes and asked again as soon as one of these files changes or appears/disappears.
+    /// Empty (the default): the listing is asked for at every start.
+    pub list_cache_files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -367,6 +374,11 @@ pub trait HostEnv: Send + Sync {
     fn capture(&self, _program: &Path, _args: &[String], _cwd: &Path, _env: &[(OsString, OsString)]) -> Option<String> {
         None
     }
+    /// Whether a tool-server listing (`list_cache_files`) may be remembered. Only the real machine says yes: a fake host
+    /// answers from a table that a test changes, and its answers must never outlive it.
+    fn cache_listings(&self) -> bool {
+        false
+    }
 }
 
 pub struct RealHost;
@@ -376,7 +388,7 @@ impl HostEnv for RealHost {
         std::env::var_os(name)
     }
     fn which(&self, program: &str) -> Option<PathBuf> {
-        crate::env_probe::find_on_path(program)
+        which_cached(program)
     }
     fn adapters_dir(&self) -> PathBuf {
         crate::app_paths::app_data_dir().join("acp").join("adapters")
@@ -390,6 +402,38 @@ impl HostEnv for RealHost {
     fn capture(&self, program: &Path, args: &[String], cwd: &Path, env: &[(OsString, OsString)]) -> Option<String> {
         capture_stdout(program, args, cwd, env, CAPTURE_LIMIT)
     }
+    fn cache_listings(&self) -> bool {
+        true
+    }
+}
+
+/// Program lookups, remembered for the process: a start asks for the same few programs again and again, and each lookup
+/// is a walk over every folder on PATH (times every PATHEXT entry on Windows). The key holds the PATH it was found on, so a
+/// changed PATH asks again; an entry whose file is gone is dropped. A program that was not found is not remembered
+/// (it may be installed a minute later).
+fn which_cached(program: &str) -> Option<PathBuf> {
+    static CACHE: Lazy<Mutex<HashMap<(String, OsString), PathBuf>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+    let path_var = std::env::var_os("PATH").unwrap_or_default();
+    let key = (program.to_string(), path_var);
+    let hit = CACHE.lock().get(&key).cloned();
+    if let Some(found) = hit {
+        if found.is_file() {
+            return Some(found);
+        }
+        CACHE.lock().remove(&key);
+    }
+    let found = crate::env_probe::find_on_path(program)?;
+    CACHE.lock().insert(key, found.clone());
+    Some(found)
+}
+
+/// The lookup through the cache the app uses (`RealHost`), and the plain walk it replaced: for measuring and tests.
+pub fn which_for_tests(program: &str) -> Option<PathBuf> {
+    which_cached(program)
+}
+
+pub fn which_for_tests_uncached(program: &str) -> Option<PathBuf> {
+    crate::env_probe::find_on_path(program)
 }
 
 /// How long a listing command may run, and how much of its output is read.
@@ -599,8 +643,85 @@ pub fn mcp_isolation(cfg: &AgentConfig, host: &dyn HostEnv, cwd: &Path, env: &[(
 
 fn list_server_names(m: &McpConfig, host: &dyn HostEnv, cwd: &Path, env: &[(OsString, OsString)]) -> Result<Vec<String>, String> {
     let program = host.which(&m.list_program).ok_or_else(|| format!("{} was not found", m.list_program))?;
+    // Asked again only when something it is read from may have changed (`list_cache_files`).
+    let watched = if host.cache_listings() { list_cache_paths(m, host, cwd) } else { Vec::new() };
+    let cache_key = (!watched.is_empty()).then(|| list_cache_key(&program, m, cwd, env));
+    let stamps: Vec<Option<(SystemTime, u64)>> = watched.iter().map(|p| file_stamp(p)).collect();
+    if let Some(key) = cache_key {
+        if let Some(entry) = LIST_CACHE.lock().get(&key) {
+            if entry.at.elapsed() < LIST_CACHE_TTL && entry.stamps == stamps {
+                return Ok(entry.names.clone());
+            }
+        }
+    }
     let output = host.capture(&program, &m.list_args, cwd, env).ok_or_else(|| format!("{} did not list them", m.list_program))?;
-    parse_server_names(&output, &m.name_field)
+    let names = parse_server_names(&output, &m.name_field)?;
+    if let Some(key) = cache_key {
+        // The stamps are those from before the listing ran: a file changed meanwhile is seen as changed next time.
+        let mut cache = LIST_CACHE.lock();
+        if cache.len() >= 32 {
+            cache.clear();
+        }
+        cache.insert(key, ListCacheEntry { at: Instant::now(), stamps, names: names.clone() });
+    }
+    Ok(names)
+}
+
+/// How long a remembered listing is trusted when none of its files changed.
+const LIST_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
+
+struct ListCacheEntry {
+    at: Instant,
+    stamps: Vec<Option<(SystemTime, u64)>>,
+    names: Vec<String>,
+}
+
+static LIST_CACHE: Lazy<Mutex<HashMap<u64, ListCacheEntry>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// Forgets every remembered listing (tests; the person's own change is seen through the file stamps).
+pub fn clear_list_cache() {
+    LIST_CACHE.lock().clear();
+}
+
+fn file_stamp(path: &Path) -> Option<(SystemTime, u64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    Some((meta.modified().ok()?, meta.len()))
+}
+
+fn list_cache_key(program: &Path, m: &McpConfig, cwd: &Path, env: &[(OsString, OsString)]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    program.hash(&mut hasher);
+    m.list_args.hash(&mut hasher);
+    m.name_field.hash(&mut hasher);
+    cwd.hash(&mut hasher);
+    env.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// `list_cache_files` with its placeholders filled in (a file whose variable is not set is left out).
+fn list_cache_paths(m: &McpConfig, host: &dyn HostEnv, cwd: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for template in &m.list_cache_files {
+        let mut text = template.replace("{cwd}", &cwd.to_string_lossy());
+        if text.contains("{home}") {
+            let Some(home) = crate::project_path::home_dir() else { continue };
+            text = text.replace("{home}", &home.to_string_lossy());
+        }
+        // Any other `{NAME}` is an environment variable.
+        let mut complete = true;
+        while let (Some(open), true) = (text.find('{'), complete) {
+            let Some(close) = text[open..].find('}').map(|i| open + i) else { break };
+            match host.var(&text[open + 1..close]).filter(|v| !v.is_empty()) {
+                Some(value) => text.replace_range(open..=close, &value.to_string_lossy()),
+                None => complete = false,
+            }
+        }
+        if complete {
+            out.push(PathBuf::from(text));
+        }
+    }
+    out
 }
 
 /// Names from a JSON array of objects, each with a string `name_field`. Anything else is an error: a list
@@ -866,6 +987,9 @@ pub fn problems(cfg: &AgentConfig) -> Vec<(String, String)> {
             }
             if cfg.env.keys().any(|k| k.eq_ignore_ascii_case(&m.env)) {
                 add("mcp_config.env", "is also set in [acp.env]".into());
+            }
+            if m.list_cache_files.len() > 8 || !m.list_cache_files.iter().all(|f| plain_text(f)) {
+                add("mcp_config.list_cache_files", "at most 8 short file names".into());
             }
         }
     }

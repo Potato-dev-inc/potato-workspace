@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Tests for `probe.rs` (SPEC n33 WSL-12). A fake `Runner` answers from the WSL-6 fixtures in
 //! `wsl/fixtures/` (placeholders only: the distro `Ubuntu-Test`, the folder `you`). No test starts
 //! `wsl.exe`; the one live-runner test uses a path that does not exist.

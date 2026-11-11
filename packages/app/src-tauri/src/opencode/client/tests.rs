@@ -236,3 +236,27 @@ fn a_server_that_never_comes_up_still_fails_with_the_connection_error() {
     // Bounded: four tries (Windows takes ~2 s to refuse each) and 2.5 s of pauses, never the 30 s request timeout per try.
     assert!(started.elapsed() < Duration::from_secs(25), "{:?}", started.elapsed());
 }
+
+#[test]
+fn a_refused_create_session_carries_the_servers_answer() {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = stream.unwrap();
+            let mut buf = [0u8; 2048];
+            let _ = stream.read(&mut buf);
+            let body = "Method Not Allowed by some other server";
+            let reply = format!(
+                "HTTP/1.1 405 Method Not Allowed\r\nAllow: GET\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(reply.as_bytes());
+            let _ = stream.flush();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    });
+    let err = create_session(&format!("http://127.0.0.1:{port}"), "t").unwrap_err();
+    assert!(err.contains("405") && err.contains("allow: GET") && err.contains("some other server"), "{err}");
+}

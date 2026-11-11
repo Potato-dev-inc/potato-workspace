@@ -101,6 +101,9 @@ pub(super) fn agent_run_schema() -> Value {
         .and_then(Value::as_object_mut)
     {
         properties.insert("result_unchanged".into(), json!({"type":"boolean"}));
+        properties.insert("wait_extended".into(), json!({"type":"boolean","description":"True when run_agent/followup_task kept waiting past the bridge's 300 s cap inside the same call."}));
+        properties.insert("waited_ms".into(), json!({"type":"integer","minimum":0,"description":"Total milliseconds this call waited."}));
+        properties.insert("reopened".into(), json!({"type":"object","description":"Present when followup_task reopened a closed or stale handle: how (resumed_session | new_pane_with_summary | new_chat_resumed), previous_pane_id, previous_handle, note.","properties":{"how":{"type":"string"},"previous_pane_id":{"type":["string","null"]},"previous_handle":{"type":["string","null"]},"note":{"type":"string"}}}));
         properties.insert("wake_reason".into(), json!({"type":"string"}));
         properties.insert("result_verified".into(), json!({"type":"boolean"}));
         properties.insert("model_verified".into(), json!({"type":["boolean","null"]}));

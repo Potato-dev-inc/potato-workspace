@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 import type { HarnessScenario } from '../types';
 import { EXAMPLE_PANES, PANE_CLAUDE } from '../fixtures';
 

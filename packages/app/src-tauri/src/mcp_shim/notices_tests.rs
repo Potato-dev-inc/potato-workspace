@@ -53,9 +53,9 @@ fn error_code(result: &Value) -> &str {
 
 #[test]
 fn tools_list_size_per_mode_over_json_rpc() {
-    assert_eq!(listed("agent").len(), 10);
+    assert_eq!(listed("agent").len(), 12);
     assert_eq!(listed("shell").len(), 16);
-    assert_eq!(listed("both").len(), 10);
+    assert_eq!(listed("both").len(), 12);
     assert_eq!(listed("all").len(), 73 - tool_registry::ALIASES.len());
 }
 

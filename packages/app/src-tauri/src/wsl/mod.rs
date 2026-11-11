@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Linux Inside: an agent can run inside a WSL 2 Linux distro instead of on Windows. Settings >
 //! Agents picks the place per agent (`Runs on: Windows / Linux · <distro>`) and every spawn path
 //! follows that choice. The UI calls it "Linux"; "WSL" appears only where the person must type a

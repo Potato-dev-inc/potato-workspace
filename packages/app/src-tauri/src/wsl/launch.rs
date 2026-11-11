@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Argv and environment for starting an agent inside the distro (pure, SPEC-n33 section 3.4). No process
 //! starts here: `wrap` builds the `wsl.exe` launch and the PTY layer turns it into a `CommandBuilder`.
 //! No shell parses anything: the agent's program and arguments go after `--exec` one element each, and the

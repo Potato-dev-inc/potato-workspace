@@ -157,6 +157,25 @@ pub enum SessionEvent {
 
 pub type Sink = Arc<dyn Fn(&SessionEvent) + Send + Sync>;
 
+/// Where one adapter start spent its time (milliseconds). Logged once per start and kept as `SessionStats::last_start`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StartTiming {
+    /// The pin check (version and hash of the adapter file).
+    pub pin_ms: u64,
+    /// `config::resolve_spawn`: the environment, program lookups and the tool-server listing.
+    pub resolve_ms: u64,
+    /// Starting the adapter process.
+    pub spawn_ms: u64,
+    /// The `initialize` call.
+    pub initialize_ms: u64,
+    /// `session/new`, or the restore call (resume/load) when the conversation already had a session.
+    pub open_ms: u64,
+    /// The whole `ensure_running` start, retries included.
+    pub total_ms: u64,
+    /// The session was restored (not new).
+    pub restored: bool,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SessionStats {
     pub foreign_updates: u64,
@@ -165,6 +184,8 @@ pub struct SessionStats {
     pub unsupported_requests: u64,
     pub refused_questions: u64,
     pub starts: u64,
+    /// The stage times of the latest successful start.
+    pub last_start: Option<StartTiming>,
 }
 
 struct Turn {
@@ -225,7 +246,13 @@ pub struct AcpSession {
     changed: Condvar,
     outbox: Mutex<Outbox>,
     sinks: RwLock<Vec<Sink>>,
+    /// While `Some`, every event is also kept here and handed to a sink added later (a warm session starts before the
+    /// chat that will own it exists). `stop_buffering` ends it.
+    buffered: Mutex<Option<Vec<SessionEvent>>>,
 }
+
+/// Most events a warm session keeps for its future owner.
+const MAX_BUFFERED_EVENTS: usize = 512;
 
 struct Handler {
     session: Weak<AcpSession>,
@@ -276,6 +303,7 @@ impl AcpSession {
             changed: Condvar::new(),
             outbox: Mutex::new(Outbox::default()),
             sinks: RwLock::new(Vec::new()),
+            buffered: Mutex::new(None),
         })
     }
 
@@ -327,6 +355,12 @@ impl AcpSession {
         self.core.lock().conn.as_ref().is_some_and(AcpConnection::is_alive)
     }
 
+    /// An adapter is up with its session open and ready for a prompt.
+    pub fn is_ready(&self) -> bool {
+        let core = self.core.lock();
+        !core.closed && core.held.is_none() && core.is_running()
+    }
+
     pub fn idle_since(&self) -> Option<Instant> {
         self.core.lock().idle_since
     }
@@ -354,7 +388,42 @@ impl AcpSession {
 
     /// Receives every event from now on, in order, on whichever thread caused it.
     pub fn add_sink(&self, sink: Sink) {
-        self.sinks.write().push(sink);
+        let mut seen = 0usize;
+        loop {
+            let pending: Vec<SessionEvent> = {
+                let guard = self.buffered.lock();
+                match guard.as_ref() {
+                    // Nothing (more) to hand over. `drain` takes its sink list under this same lock, so from here on
+                    // the sink gets every event itself and none twice.
+                    Some(kept) if kept.len() > seen => kept[seen..].to_vec(),
+                    _ => {
+                        self.sinks.write().push(sink);
+                        return;
+                    }
+                }
+            };
+            seen += pending.len();
+            for event in &pending {
+                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| sink(event))).is_err() {
+                    tracing::error!(session = %self.key, "acp: an event sink panicked");
+                }
+            }
+        }
+    }
+
+    /// Keeps the events from now on for a sink added later (see `add_sink`). For a session that starts before its owner.
+    pub fn start_buffering(&self) {
+        let mut guard = self.buffered.lock();
+        if guard.is_none() {
+            *guard = Some(Vec::new());
+        }
+    }
+
+    /// The owner has taken over: nothing more is kept. Also restarts the idle clock, so the time spent waiting to be
+    /// claimed does not count against the session.
+    pub fn stop_buffering(&self) {
+        *self.buffered.lock() = None;
+        self.core.lock().idle_since = Some(Instant::now());
     }
 
     // ---- the one place state changes -------------------------------------------------------------------
@@ -394,7 +463,14 @@ impl AcpSession {
                 }
                 outbox.queue.drain(..).collect()
             };
-            let sinks: Vec<Sink> = self.sinks.read().clone();
+            let sinks: Vec<Sink> = {
+                let mut kept = self.buffered.lock();
+                if let Some(kept) = kept.as_mut() {
+                    let room = MAX_BUFFERED_EVENTS.saturating_sub(kept.len());
+                    kept.extend(batch.iter().take(room).cloned());
+                }
+                self.sinks.read().clone()
+            };
             for event in &batch {
                 for sink in &sinks {
                     let sink = sink.clone();
@@ -437,11 +513,29 @@ impl AcpSession {
     }
 
     fn start_with_retries(&self) -> Result<StartKind, AcpError> {
+        let begun = Instant::now();
         pin::enforce(&self.cfg, &*self.host)?;
+        let pin_ms = begun.elapsed().as_millis() as u64;
         let mut attempt = 0usize;
         loop {
             match self.start_once() {
-                Ok(kind) => return Ok(kind),
+                Ok(kind) => {
+                    let total_ms = begun.elapsed().as_millis() as u64;
+                    let timing = self.with_core(|core, _| {
+                        let timing = core.stats.last_start.as_mut()?;
+                        timing.pin_ms = pin_ms;
+                        timing.total_ms = total_ms;
+                        Some(*timing)
+                    });
+                    if let Some(t) = timing {
+                        tracing::info!(
+                            session = %self.key, agent = %self.cfg.id, restored = t.restored, attempts = attempt + 1,
+                            "acp: adapter started in {} ms (pin {} ms, resolve {} ms, spawn {} ms, initialize {} ms, session {} ms)",
+                            t.total_ms, t.pin_ms, t.resolve_ms, t.spawn_ms, t.initialize_ms, t.open_ms
+                        );
+                    }
+                    return Ok(kind);
+                }
                 Err(failure) if matches!(failure.error, AcpError::SessionClosed) => return Err(failure.error.clone()),
                 Err(failure) => match self.retry_delay(&failure.hint, attempt) {
                     Some(delay) => {
@@ -524,9 +618,13 @@ impl AcpSession {
 
     fn connect_and_open(&self, epoch: u64, resume_id: Option<&str>) -> Result<StartKind, AcpError> {
         let cfg = &self.cfg;
+        let t0 = Instant::now();
         let spec = config::resolve_spawn(cfg, &*self.host, &self.cwd)?;
+        let resolve_ms = t0.elapsed().as_millis() as u64;
         let handler = Arc::new(Handler { session: self.me.clone(), epoch });
+        let t1 = Instant::now();
         let conn = AcpConnection::spawn(spec, cfg.timeouts.conn_limits(), handler)?;
+        let spawn_ms = t1.elapsed().as_millis() as u64;
         // Stored under the lock only while this start is still the live one: a close() in the
         // meantime has already run, so nobody would ever kill this adapter.
         let stored = self.with_core(|core, _| {
@@ -541,11 +639,15 @@ impl AcpSession {
             return Err(AcpError::SessionClosed);
         }
 
+        let t2 = Instant::now();
         let init = conn.request("initialize", handshake::initialize_params("potato-workspace", crate::app_lifecycle::app_version()), cfg.timeouts.request())?;
         let caps = handshake::parse_initialize(&init)?;
         self.with_core(|core, _| core.caps = Some(caps.clone()));
+        let initialize_ms = t2.elapsed().as_millis() as u64;
 
+        let t3 = Instant::now();
         let (session_id, kind, info) = self.open_session(&conn, &caps, resume_id)?;
+        let open_ms = t3.elapsed().as_millis() as u64;
 
         let reapply = self.with_core(|core, ev| {
             if core.closed || core.state.epoch() != epoch {
@@ -553,6 +655,7 @@ impl AcpSession {
             }
             core.state.on_ready(&session_id, &info, matches!(kind, StartKind::Resumed | StartKind::Loaded));
             core.idle_since = Some(Instant::now());
+            core.stats.last_start = Some(StartTiming { resolve_ms, spawn_ms, initialize_ms, open_ms, restored: matches!(kind, StartKind::Resumed | StartKind::Loaded), ..StartTiming::default() });
             ev.push(SessionEvent::Started { how: kind, caps: Box::new(caps.clone()) });
             Some(core.desired_config.clone())
         });

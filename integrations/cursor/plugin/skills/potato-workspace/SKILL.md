@@ -20,8 +20,8 @@ Do not delegate what you can do directly in a few steps, and never put secrets i
 ## The five tools
 
 1. **`quick_ask(task)`** for a tiny question. Read `answer`. `receipt.not_verified` lists what was not checked. If it returns `status: "running"`, call `wait_agents` with the `handle`.
-2. **`run_agent(agent_type, project_path, task)`** for real work. `agent_type` is `claude`, `codex`, `cursor_agent` or `opencode_native`. It opens a visible pane the user can watch and keeps it open when the run ends (the user decides in Settings whether helpers are shown, run in the background, or stay open; do not pass `headless`), runs the task and returns `status`, `result`, `receipt` and a `handle`. Pick a different agent than yourself for a review.
-3. **`wait_agents(handles)`** collects results. Each call waits at most 120 s, so loop while `status` is `running`. A turn that still runs carries a `watch_command`: run it in your shell tool's background mode.
+2. **`run_agent(agent_type, project_path, task)`** for real work. Launch and wait in one call: `run_agent({agent_type:"codex", project_path:"D:/repo", task:"...", wait_ms:1800000})` returns the result in this call when the turn ends within `wait_ms` (default 120000, max 3600000; hosts like Claude Code move a long call to the background and hand you the result when it ends). Only if it is still running do you get a `handle` and a `watch_command` fallback. `agent_type` is `claude`, `codex`, `cursor_agent` or `opencode_native`. It opens a visible pane the user can watch and keeps it open when the run ends (the user decides in Settings whether helpers are shown, run in the background, or stay open; do not pass `headless`), runs the task and returns `status`, `result`, `receipt` and a `handle`. Pick a different agent than yourself for a review.
+3. **`wait_agents(handles)`** collects results. Each call waits at most 120 s, so loop while `status` is `running`. Fallback for very long tasks: a turn that still runs carries a `watch_command`; run it in your shell tool's background mode.
    - `completed` can mean only that the turn ended. Check `background_running` and `background_tracking`. When the adapter reports background work, `wait_agents` keeps waiting by default; pass `wait_for_background: false` only if you really want the turn-only answer.
    - When `background_tracking` is `not_reported_by_adapter`, the app cannot see work that outlives the turn: say so instead of claiming the agent is done.
    - If `wait_agents` itself fails with `bridge_unreachable`, the app may still be running: it was a local connection problem, not proof the agent is gone. Retry, and read the helper's transcript (`agent_transcript`) or its pane before saying you got no reply.
@@ -52,6 +52,25 @@ Pass `isolation: "worktree"` to `run_agent`. The agent works on its own branch `
 
 Merge or discard only when the user has said so.
 
+## Clean up
+
+`close_agent(handle)` closes a helper's pane when you are done with it. For a worktree run use `review_worktree(handle, action: "diff"|"merge"|"discard")`.
+
+## Advanced run_agent options
+
+Fields marked "Advanced:" in the tool schema are rarely needed:
+
+- `lane` (`auto`|`acp`|`terminal`): chat session or terminal; the result says `lane_used`. `placement` (`window`|`grid`|`auto`): where a visible pane opens.
+- `context_policy` (`fresh`|`packet`|`parent_summary`|`resume`|`selected_history`, alias `context_mode`) with `selected_history`: what earlier context the worker gets.
+- `budget_turns`, `budget_minutes`: pause a new run after that many turns or minutes; a followup then fails with `BUDGET_EXHAUSTED`. `budget_parent` is filled in for you.
+- `until_checks_pass` (preview mission mode, needs Settings > Labs, `checks` with `command_exits`, a budget and a visible pane) with `backup_agents`.
+- `locks` (`type:name`): resources held for the run, `RESOURCE_LOCKED` if taken. `account`: an account id from Settings > Agents > Accounts.
+- Cursor only: `trust_workspace` (`--trust`), `allow_shell` (`--force`, pair with `checks`), `allowed_commands` (program names or argv patterns answered allow-once).
+- `structured_result:false` skips the result block; `acceptance_criteria` is free text, not checked (use `checks`); `shell` picks the shell `watch_command` targets.
+- Visible vs headless: the run opens a visible pane by default; the person chooses in Settings > Agents > Helper agents, so `headless:true` is ignored (`headless_ignored`) or forced on (`headless_forced`). Headless is also the automatic backup: when the agent has no visible mode or the pane cannot open or take the prompt, the run falls back to headless once and `receipt.fallback` says so (`no_visible_mode`, `visible_failed`; listed in `receipt.not_verified`).
+- One-task mode: an agent set to One-task mode in Settings > Agents > How agent runs work runs headless when it has a verified headless mode; a verified run mode is reported as `run_mode` and `headless_verified` in `list_agents`.
+- Cursor steering limits: Cursor headless steering works only by restart from turn 2, and visible Cursor panes are queue-only; `send_message` with `delivery=queue` queues the message as the next turn instead of steering live.
+
 ## Ask the human
 
 - `ask_user(question, choices?)` when only the person can decide. It shows in the Potato Workspace Inbox and on a paired phone, and blocks until answered. Do not ask what you can find out yourself.
@@ -64,5 +83,5 @@ Merge or discard only when the user has said so.
 
 - Use `read_only: true` for reviews and questions.
 - `interrupt_agent(handle)` stops a turn and keeps the handle.
-- Do not close the user's own panes. Panes a run created close themselves; pass `keep_pane: true` to keep one.
+- Do not close the user's own panes. Panes a run created close themselves unless the person keeps helpers open; pass `keep_pane: true` to keep one, or call `close_agent(handle)`.
 - Reuse the same `idempotency_key` when you retry after a timeout, so no duplicate turn starts.

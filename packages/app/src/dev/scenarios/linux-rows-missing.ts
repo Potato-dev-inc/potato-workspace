@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 import type { HarnessScenario } from '../types';
 
 // Settings > Agents > Run agents in Linux when WSL is not installed: the official command with Copy and Check again.

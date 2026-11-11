@@ -26,6 +26,8 @@ export interface LendProfile {
   max_secs: number;
   approval: 'each' | 'none';
   sign_out_on_end: boolean;
+  /** Keep this PC awake while a lend from this profile is active. */
+  keep_awake: boolean;
   /** Optional caps per lend. Absent or null: no cap. */
   max_requests?: number | null;
   max_tokens?: number | null;
@@ -84,6 +86,8 @@ export interface LendState {
   requests_in: LendRequest[];
   requests_out: LendRequest[];
   drivers: LendDriver[];
+  /** This PC is being held awake right now for an outgoing lend. */
+  keeping_awake?: boolean;
 }
 
 export interface LendApi {

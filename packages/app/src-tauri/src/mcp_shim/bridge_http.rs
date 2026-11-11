@@ -46,8 +46,9 @@ pub(crate) fn io_failure(what: &str, err: &io::Error) -> String {
 fn bridge_stream(endpoint: &BridgeEndpoint) -> Result<TcpStream, String> {
     let stream = TcpStream::connect((endpoint.host.as_str(), endpoint.port)).map_err(|err| {
         format!(
-            "{BRIDGE_UNREACHABLE}: {} ({err}). The bridge may still be running; this was a local connection problem. Retry, or read the agent's transcript or pane before saying you got no reply.",
-            endpoint.base_url()
+            "{BRIDGE_UNREACHABLE}: {} ({err}). The bridge may still be running; this was a local connection problem. Retry, or read the agent's transcript or pane before saying you got no reply. {}",
+            endpoint.base_url(),
+            unreachable_detail(endpoint.port)
         )
     })?;
     BRIDGE_SEEN_UP.store(true, Ordering::Release);

@@ -1,6 +1,7 @@
 // UX-9: every row can be found by its keywords, and search results name the section.
 import { describe, expect, it } from 'vitest';
 import { SECTIONS } from './catalog';
+import { BASIC_ROW_IDS } from './levels';
 import { searchSections } from './model';
 
 const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s, row: r })));
@@ -30,6 +31,16 @@ describe('settings search keywords', () => {
       expect(hits.map((h) => h.section.id), word).toContain('team');
       expect(hits.find((h) => h.section.id === 'general')?.rows.map((r) => r.id) ?? [], word).not.toContain('team-page');
     }
+  });
+
+  it('"awake", "sleep" and "lock" find the keep-awake row, a basic General row with a short hint', () => {
+    for (const word of ['awake', 'sleep', 'lock']) {
+      const rows = searchSections(SECTIONS, word).flatMap((h) => h.rows);
+      expect(rows.map((r) => r.id), word).toContain('keep-awake');
+    }
+    const row = allRows.find(({ row }) => row.id === 'keep-awake')!.row;
+    expect(row.hint!.length).toBeLessThanOrEqual(90);
+    expect(BASIC_ROW_IDS).toContain('keep-awake');
   });
 
   it('"chat add-on" finds its row', () => {

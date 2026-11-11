@@ -24,6 +24,13 @@ pub(super) fn children() -> &'static Mutex<HashMap<String, Arc<HeadlessControl>>
     CHILDREN.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Stop the live headless child of `operation_id`, waiting until its process tree is gone. `false`
+/// when no child is alive for it (finished, or never headless). Used before a worktree is deleted.
+pub(crate) fn stop_for_operation(operation_id: &str) -> bool {
+    let control = children().lock().get(operation_id).cloned();
+    control.is_some_and(|control| terminate(&control).is_ok())
+}
+
 pub(super) fn terminate(control: &HeadlessControl) -> Result<(), OperationError> {
     let mut child = control.child.lock();
     let pid = child.id();

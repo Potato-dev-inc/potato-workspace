@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // Settings > Agents > Run agents in Linux (WSL): the WSL state, one check per distro, and where each agent runs.
 // Saves through the wsl_* commands (lib/wsl.ts). Only "Check" starts a distro; opening this block never does.
 // Hidden on a build without WSL (status `not_windows`). Agent names come from the backend; nothing here names one.

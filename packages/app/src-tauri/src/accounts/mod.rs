@@ -3,7 +3,10 @@
 //! An account is `{ id, agent_id, label, home }`. `home` is a directory the user controls (by
 //! default one folder per account under `<app data>/accounts/`). Potato Workspace only points the
 //! agent CLI at it through the env var the agent's profile declares (`TuiProfile::account_scheme`);
-//! it never reads, copies or pools the credentials inside. Generic code here never matches agent
+//! it never reads, copies or pools the credentials inside. One exception (founder, 2026-11-11): the "Used" strip
+//! (`crate::usage::oauth`) reads an access token from a sign-in's credential file, only in memory, only to ask
+//! that agent's own usage address for the plan numbers; it is never stored, logged, refreshed or sent anywhere
+//! else, and the Settings switch "Read Claude usage with my Claude login" turns it off. Generic code here never matches agent
 //! names: whether an agent supports accounts is the profile's answer.
 
 use crate::tui::{AccountScheme, LaunchEnv};

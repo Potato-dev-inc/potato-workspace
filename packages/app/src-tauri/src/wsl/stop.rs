@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Stopping a pane's processes inside the distro (spec section 3.4). Pure command building: the
 //! stop script is a fixed constant, and the pane id reaches it only as a positional argument.
 //!

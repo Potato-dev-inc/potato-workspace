@@ -230,6 +230,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
               .map((p) => ({ pane_id: p.id, agent_type: p.agent_type, cwd: p.cwd })),
             failed: [],
           };
+        case 'usage_snapshot':
+          return scenario.usage ?? { rows: [], refreshed_at_ms: Date.now() };
         case 'canary_status':
           return scenario.canary ?? { agents: [], auto_check: true, notices: [], captures: 0 };
         case 'canary_set_auto':

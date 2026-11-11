@@ -26,7 +26,11 @@ pub(super) fn kill_serve_child(child: &mut std::process::Child) {
 
 pub(super) fn pick_free_port(lo: u16, hi: u16) -> Result<u16, String> {
     for port in lo..=hi {
-        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+        // Both the loopback and the all-interfaces address must be free: a server listening on
+        // either one can answer requests meant for ours (a 405 from someone else's server).
+        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+            && std::net::TcpListener::bind(("0.0.0.0", port)).is_ok()
+        {
             return Ok(port);
         }
     }

@@ -186,6 +186,14 @@ describe('General: each control saves a partial patch', () => {
     expect(m.env.patches).toEqual([{ confirm_close_running_pane: false }]);
   });
 
+  it('Keep this PC awake shows on by default and saves only {keep_awake_while_working}', async () => {
+    await mount();
+    expect(m.host.textContent).toContain('Your agents keep going when you lock the PC (Win+L). The screen can still turn off.');
+    expect(switchFor('Keep this PC awake while agents work')!.getAttribute('aria-checked')).toBe('true');
+    await click(switchFor('Keep this PC awake while agents work'));
+    expect(m.env.patches).toEqual([{ keep_awake_while_working: false }]);
+  });
+
   it('Checkpoints saves immediately; Keep last N clamps on blur and is disabled when checkpoints are off', async () => {
     await mount();
     await click(switchFor('Checkpoints'));

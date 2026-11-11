@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Linux Inside in the end-to-end tests: an agent set to run in Linux starts through `pm-fake-wsl` (a stand-in for
 //! `wsl.exe`, `tools/pm-fake-tui/src/bin/fake_wsl.rs`) instead of the real tool. The app's own code does all the work
 //! (settings, probe, place, argv, env, stop); only the program at the end is the fake agent, and the "Linux home"

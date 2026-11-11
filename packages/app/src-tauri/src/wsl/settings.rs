@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! The per-agent place setting in `<app data>/wsl.json` (spec section 3.2): which agents run in
 //! which distro. A missing or broken file means every agent runs on Windows. Reads are tolerant: an
 //! invalid distro name is ignored, and unknown fields are ignored. A rewrite keeps the unknown

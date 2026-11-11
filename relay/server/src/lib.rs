@@ -40,7 +40,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 
 mod rooms;
 
@@ -271,7 +271,9 @@ pub struct Relay {
     signals: Mutex<HashMap<String, watch::Sender<Signal>>>,
     windows: Mutex<HashMap<String, Window>>,
     seen_sigs: Mutex<SeenSigs>,
-    sockets: Mutex<HashMap<String, usize>>,
+    /// Open sockets per device, oldest first: `(id, kick)`. A device over its cap closes its oldest.
+    sockets: Mutex<HashMap<String, Vec<(u64, oneshot::Sender<()>)>>>,
+    next_socket: AtomicU64,
     /// Live Room rooms, in memory only.
     rooms: rooms::Rooms,
     /// Added to the clock for Live Room calls (tests move time with `advance_room_clock`).
@@ -302,14 +304,15 @@ struct Authed {
 struct SocketSlot {
     relay: Arc<Relay>,
     device: String,
+    id: u64,
 }
 
 impl Drop for SocketSlot {
     fn drop(&mut self) {
         let mut sockets = self.relay.sockets.lock().unwrap();
-        if let Some(n) = sockets.get_mut(&self.device) {
-            *n = n.saturating_sub(1);
-            if *n == 0 {
+        if let Some(list) = sockets.get_mut(&self.device) {
+            list.retain(|(id, _)| *id != self.id);
+            if list.is_empty() {
                 sockets.remove(&self.device);
             }
         }
@@ -377,6 +380,7 @@ impl Relay {
             windows: Mutex::new(HashMap::new()),
             seen_sigs: Mutex::new(SeenSigs::default()),
             sockets: Mutex::new(HashMap::new()),
+            next_socket: AtomicU64::new(0),
             rooms: rooms::Rooms::default(),
             room_clock_ms: AtomicU64::new(0),
         }))
@@ -788,21 +792,26 @@ async fn ws(
 ) -> Reply {
     let authed = relay.authorize(&team, "GET", &uri, &headers, b"")?;
     let after = query_u64(&uri, "after").unwrap_or(0);
+    let (kick_tx, kick_rx) = oneshot::channel();
     let slot = {
         let mut sockets = relay.sockets.lock().unwrap();
-        let open = sockets.entry(authed.device.clone()).or_insert(0);
-        if *open >= relay.limits.sockets_per_device {
-            return Err(refuse(StatusCode::TOO_MANY_REQUESTS, "too many open connections for this device"));
+        let list = sockets.entry(authed.device.clone()).or_default();
+        // A dead connection (killed client, no close handshake) can linger as open. Over the cap,
+        // the oldest socket is told to close (4000) to make room instead of refusing the new one.
+        while !list.is_empty() && list.len() >= relay.limits.sockets_per_device.max(1) {
+            let (_, kick) = list.remove(0);
+            let _ = kick.send(());
         }
-        *open += 1;
-        SocketSlot { relay: relay.clone(), device: authed.device.clone() }
+        let id = relay.next_socket.fetch_add(1, Ordering::Relaxed);
+        list.push((id, kick_tx));
+        SocketSlot { relay: relay.clone(), device: authed.device.clone(), id }
     };
     let rx = relay.listen(&team).map_err(internal)?;
     Ok(upgrade
         .max_message_size(MAX_CLIENT_FRAME)
         .max_frame_size(MAX_CLIENT_FRAME)
         .on_upgrade(move |socket| async move {
-            stream_team(socket, relay, team, authed, after, rx).await;
+            stream_team(socket, relay, team, authed, after, rx, kick_rx).await;
             drop(slot);
         }))
 }
@@ -828,7 +837,7 @@ async fn send_backlog(socket: &mut WebSocket, relay: &Relay, team: &str, authed:
     }
 }
 
-async fn stream_team(mut socket: WebSocket, relay: Arc<Relay>, team: String, authed: Authed, after: u64, mut rx: watch::Receiver<Signal>) {
+async fn stream_team(mut socket: WebSocket, relay: Arc<Relay>, team: String, authed: Authed, after: u64, mut rx: watch::Receiver<Signal>, mut kick: oneshot::Receiver<()>) {
     let mut ping = tokio::time::interval(Duration::from_secs(30));
     let mut seen = *rx.borrow_and_update();
     let Some(mut cursor) = send_backlog(&mut socket, &relay, &team, &authed, after).await else { return };
@@ -859,6 +868,11 @@ async fn stream_team(mut socket: WebSocket, relay: Arc<Relay>, team: String, aut
                 if socket.send(Message::Ping(Vec::new().into())).await.is_err() {
                     return;
                 }
+            }
+            _ = &mut kick => {
+                let frame = axum::extract::ws::CloseFrame { code: 4000, reason: "replaced by a newer connection".into() };
+                let _ = socket.send(Message::Close(Some(frame))).await;
+                return;
             }
             incoming = socket.recv() => {
                 match incoming {

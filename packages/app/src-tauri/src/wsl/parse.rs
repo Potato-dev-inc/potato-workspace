@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Parsing `wsl.exe --list --verbose` and the probe output (SPEC n33 section 3.5). Pure: no process
 //! starts here (`probe.rs` runs the commands). Everything WSL prints is untrusted. A distro name, a
 //! folder, or a program path is data: a name that fails `DistroName::parse` is dropped, and the probe

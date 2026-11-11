@@ -23,7 +23,7 @@ pub enum ToolTier {
 
 /// Bump when the listed surface changes without any tool name, description, route or schema
 /// changing (it feeds `catalog_version`).
-pub(super) const SURFACE_REVISION: u32 = 2;
+pub(super) const SURFACE_REVISION: u32 = 3;
 
 /// Pure aliases: `(alias, canonical tool)`. Same route and behaviour as the canonical tool.
 /// `send_agent` is NOT a sibling of `send_message`: it posts to `/agents/followup` exactly like
@@ -112,6 +112,8 @@ pub const DEFAULT_LISTED: &[&str] = &[
     "list_agents",
     "inspect_agent",
     "answer_prompt",
+    "close_agent",
+    "review_worktree",
     "ask_user",
     "set_mode",
 ];

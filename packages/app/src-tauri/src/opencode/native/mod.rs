@@ -19,10 +19,12 @@ use uuid::Uuid;
 mod idle;
 mod process;
 mod reattach;
+mod serve;
 
 use idle::*;
 use process::*;
 pub use reattach::*;
+use serve::*;
 
 const SCROLLBACK_CAP: usize = 10_000;
 const PORT_MIN: u16 = 4096;
@@ -39,6 +41,9 @@ pub fn spawn_native_pane(
     }
 
     let opencode_exe = crate::shell_env::resolve_opencode_executable()?;
+    if let Some(version) = crate::opencode::edition::installed_version(&opencode_exe) {
+        crate::opencode::edition::check_supported(&version)?;
+    }
 
     let cwd = crate::project_path::resolve_spawn_cwd(
         args.cwd.clone(),
@@ -70,6 +75,11 @@ pub fn spawn_native_pane(
     let port = pick_free_port(PORT_MIN, PORT_MAX)?;
     let base_url = format!("http://127.0.0.1:{port}");
 
+    // OpenCode keeps its normal data folder unless the person picked an OpenCode account.
+    let account_env = match args.account.as_deref().map(str::trim).filter(|a| !a.is_empty()) {
+        Some(id) => Some(crate::accounts::launch_for("opencode", id)?.0),
+        None => None,
+    };
     let mut serve = crate::proc_util::hidden_command(&opencode_exe);
     serve
         .args([
@@ -82,7 +92,11 @@ pub fn spawn_native_pane(
         .current_dir(&cwd)
         .env("PATH", crate::shell_env::path_for_spawn())
         // The MCP shim opencode starts reports this pane, so its helpers nest under it.
-        .env(crate::pty::PANE_ID_ENV, &pane_id);
+        .env(crate::pty::PANE_ID_ENV, &pane_id)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    apply_env(&mut serve, &data_env(account_env.as_ref()));
     #[cfg(windows)]
     serve.env("Path", crate::shell_env::path_for_spawn());
     if args.read_only {
@@ -99,15 +113,22 @@ pub fn spawn_native_pane(
         .spawn()
         .map_err(|err| format!("opencode serve spawn ({opencode_exe}): {err}"))?;
 
+    let serve_output = capture_output(&mut serve_child);
     crate::startup_timing::mark(&pane_id, "serve_spawned");
-    let health = client::wait_for_health(&base_url, SERVE_START_TIMEOUT);
+    let health = wait_until_healthy(&mut serve_child, &serve_output, SERVE_START_TIMEOUT, || {
+        // The child must say it listens on our port first: another program's server on the port
+        // would answer the health check too.
+        reports_listening(&serve_output, port)
+            && client::wait_for_health(&base_url, Duration::from_millis(1)).is_ok()
+    });
     if health.is_ok() {
         crate::startup_timing::mark(&pane_id, "health_ready");
     }
     if let Err(err) = health {
         crate::pty::proc_tree::kill_process_tree(serve_child.id());
         let _ = serve_child.kill();
-        error!(%pane_id, %base_url, %err, "opencode serve failed health check");
+        let _ = serve_child.wait();
+        error!(%pane_id, %base_url, %err, "opencode serve failed to start");
         return Err(err);
     }
 

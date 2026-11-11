@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! The Linux branch of `spawn_pane` (SPEC-n33 section 3.6 C): where a pane runs, and the `wsl.exe`
 //! command for a pane that runs inside a distro. Generic: no agent is named here, the profile answers
 //! `linux_launch`. When the place is Windows nothing in this file changes the spawn: `pane_command`

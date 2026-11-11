@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! The data model of Linux Inside: timing and size limits, the error codes, the probe and status
 //! types, and the JSON the Settings page and PaneInfo get. Pure data: no process starts here
 //! (see `probe.rs`). Facts from the probe never leave this PC; `DistroFacts` has no serde derive.

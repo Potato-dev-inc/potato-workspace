@@ -8,7 +8,8 @@ New MCP connections default to **agent mode** with worker tools: `run_agent`,
 `wait_agents`, `send_message`, `followup_task`, `interrupt_agent`, `inspect_agent`,
 `agent_transcript`, `close_agent`, plus wrappers `send_agent` / `cancel_agent`,
 `answer_prompt`, `list_agents`, `take_over`, and `set_mode`. `run_agent` performs
-dispatch plus a bounded wait; `background: true` returns an immediate handle. Use
+dispatch plus a wait of up to `wait_ms` (default 120000, max 3600000: a long
+wait stays inside the one call and the result comes back when the turn ends); `background: true` returns an immediate handle. Use
 `set_mode({"mode":"shell"})` for terminal tools or `both` for the full catalog.
 Catalog changes emit `notifications/tools/list_changed`. Hosts that ignore it can start in a chosen mode with `--mode <agent|shell|both>` or `POTATO_WORKSPACE_MODE`. See the
 [agent and shell contract](../../docs/orchestrator/agent-shell-modes.md) and

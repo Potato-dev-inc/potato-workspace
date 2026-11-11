@@ -24,12 +24,27 @@ pub(crate) fn view() -> Value {
 }
 
 fn row(cfg: &config::AgentConfig, chosen: &std::collections::BTreeMap<String, RunLane>, labs: bool, overlay: bool) -> Value {
-    let lane = chosen.get(&cfg.id).copied().unwrap_or_default();
+    let saved = chosen.get(&cfg.id).copied();
+    let lane = saved.unwrap_or_default();
+    // What a helper this agent starts (`run_agent` without a lane) would get: the saved choice, else a chat when the
+    // agent can (Labs on, a definition, its add-on installed), else the terminal.
+    let addon_installed = !crate::acp::install::is_missing(cfg, &config::RealHost);
+    let helper_lane = match crate::acp::chat::lanes::plan(
+        None,
+        saved,
+        crate::acp::chat::lanes::Facts { labs_on: labs, has_definition: !cfg.disabled, adapter_installed: addon_installed, headless: false, terminal_only: Vec::new() },
+    ) {
+        Ok(crate::acp::chat::lanes::Plan::Chat { .. }) => "acp",
+        _ => "terminal",
+    };
     let mut row = json!({
         "id": cfg.id,
         "label": cfg.label,
         "lane": lane.as_str(),
         "effective_lane": effective_lane(lane, labs, !cfg.disabled).as_str(),
+        "saved": saved.is_some(),
+        "helper_lane": helper_lane,
+        "addon_installed": addon_installed,
         "disabled": cfg.disabled,
         "disabled_note": cfg.disabled_note,
     });
@@ -75,7 +90,7 @@ pub(crate) fn lane_view(store: &LaneStore, overlay: &OverlayStore, labs: bool) -
     json!({ "labs_enabled": labs, "agents": agents, "can_add_chat": can_add, "terminal_chat": terminal_chat })
 }
 
-/// `{labs_enabled, agents: [{id, label, lane, effective_lane, disabled, disabled_note, overlay?}], can_add_chat: [{id, label, reason?}],
+/// `{labs_enabled, agents: [{id, label, lane, effective_lane, saved, helper_lane, addon_installed, disabled, disabled_note, overlay?}], can_add_chat: [{id, label, reason?}],
 /// terminal_chat: [{id, label, reads_file, can_resume, can_answer_prompts, note, chosen}]}`. `terminal_chat` lists every agent that
 /// can run as a chat over its own terminal (`crate::terminal_chat`); `chosen` = its saved lane is `terminal_chat`.
 /// `agents` lists every agent that has chat: its own ACP definition, or the person's overlay (`overlay: true`).

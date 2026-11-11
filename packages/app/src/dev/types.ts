@@ -115,6 +115,8 @@ export interface HarnessScenario {
   collision?: import('./collision-fixtures').CollisionScenario;
   /** Night Shift: what the state, plans and checks the mocked `night_*` commands answer (see night-fixtures.ts). */
   night?: import('./night-fixtures').NightScenario;
+  /** The "Used" strip: what the mocked `usage_snapshot` answers (absent: no signed-in agent, so no strip). */
+  usage?: import('../lib/usage').UsageSnapshot;
   /** Package check: the packages the mocked approval carries and what the mocked `package_check_*` commands answer. */
   packageCheck?: import('./package-check-fixtures').PackageCheckScenario;
   /** Review Desk: what the mocked `review_desk_*` commands answer (see review-desk-fixtures.ts). */

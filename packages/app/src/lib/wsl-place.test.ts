@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 import { describe, expect, it } from 'vitest';
 import type { PanePlace } from './wsl';
 import { placeLabel, placeTooltip, toWindowsPath } from './wsl-place';

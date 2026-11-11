@@ -110,7 +110,9 @@ pub fn agent_types_listing() -> Value {
         .filter(|agent| agent.dispatchable)
         .map(|agent| agent.id)
         .collect();
-    serde_json::json!({ "agents": agents, "dispatchable_ids": dispatchable_ids })
+    let listing = serde_json::json!({ "agents": agents, "dispatchable_ids": dispatchable_ids });
+    // OpenCode 2.x has no native terminal agent: it is listed, but not offered.
+    crate::opencode::edition::mark_listing(listing, crate::opencode::edition::installed_major())
 }
 
 /// Every registered profile, in registry order (a copy of the current snapshot).

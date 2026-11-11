@@ -34,7 +34,7 @@
 //!
 //! `_session/steering` is answered `injected` while a prompt runs, else `promptRequired` (the option `steer=1` advertises it).
 //!
-//! Options (`PM_FAKE_ACP=load=0;resume=1;lose=1;auth=1;deaf_ms=3000;deaf_after_new_ms=5000;fail_init_once=1;grandchild=1`) change
+//! Options (`PM_FAKE_ACP=load=0;resume=1;lose=1;auth=1;deaf_ms=3000;deaf_after_new_ms=5000;init_delay_ms=300;new_delay_ms=500;fail_init_once=1;grandchild=1`) change
 //! what the handshake and session calls do. `PM_FAKE_ACP_STORE` is a folder where sessions are remembered
 //! across processes, like an agent's own session files.
 
@@ -227,6 +227,11 @@ fn handle_request(shared: &Arc<Shared>, method: &str, id: &Value, params: Value)
     match method {
         "initialize" => {
             let opts = &shared.opts;
+            // A real adapter takes a while to come up: `init_delay_ms` makes the fake slow to answer.
+            let slow = opts.number("init_delay_ms");
+            if slow > 0 {
+                std::thread::sleep(Duration::from_millis(slow));
+            }
             let mut session_caps = json!({"list": {}, "close": {}});
             if opts.flag("resume", true) {
                 session_caps["resume"] = json!({});
@@ -259,6 +264,10 @@ fn handle_request(shared: &Arc<Shared>, method: &str, id: &Value, params: Value)
             }
         }
         "session/new" => {
+            let slow = shared.opts.number("new_delay_ms");
+            if slow > 0 {
+                std::thread::sleep(Duration::from_millis(slow));
+            }
             if shared.opts.signed_out() {
                 shared.fail(id, -32000, "Authentication required");
                 return;

@@ -14,7 +14,7 @@ use crate::acp::lane::{effective_lane, RunLane};
 use crate::operations::OperationError;
 
 /// What the decision needs to know about the app and the agent.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Facts {
     /// The Labs switch Chat (ACP).
     pub labs_on: bool,
@@ -24,6 +24,10 @@ pub struct Facts {
     pub adapter_installed: bool,
     /// The caller asked for a background (headless) run, which has no chat.
     pub headless: bool,
+    /// Request fields a chat session cannot honour (`read_only`, `isolation`, ...): see `surface::chat_cannot_do`.
+    /// Running such a request as a chat would silently drop them, so it takes the terminal (or, when the caller
+    /// insisted on a chat, is refused).
+    pub terminal_only: Vec<&'static str>,
 }
 
 /// The way chosen for a new run.
@@ -33,6 +37,8 @@ pub enum Plan {
     /// terminal.
     Chat { explicit: bool, reason: String },
     Terminal { reason: String },
+    /// The caller insisted on `lane: "acp"` but the request uses fields only the terminal honours.
+    CannotChat { fields: Vec<&'static str> },
 }
 
 /// What the answer says about the way that ran.
@@ -65,6 +71,7 @@ impl LaneNote {
 /// `lane` is the caller's word, `saved` the agent's saved "How to run" (`None`: the person never changed it).
 pub fn plan(lane: Option<&str>, saved: Option<RunLane>, facts: Facts) -> Result<Plan, String> {
     match lane.map(str::trim).filter(|l| !l.is_empty()) {
+        Some("acp") if !facts.terminal_only.is_empty() => Ok(Plan::CannotChat { fields: facts.terminal_only }),
         Some("acp") => Ok(Plan::Chat { explicit: true, reason: "You asked for lane \"acp\".".into() }),
         Some("terminal") => Ok(Plan::Terminal { reason: "You asked for lane \"terminal\".".into() }),
         Some("auto") => Ok(auto(facts)),
@@ -74,6 +81,8 @@ pub fn plan(lane: Option<&str>, saved: Option<RunLane>, facts: Facts) -> Result<
             Some(saved) => {
                 if facts.headless {
                     Plan::Terminal { reason: "A background run was asked for, and a chat session has no background mode.".into() }
+                } else if !facts.terminal_only.is_empty() {
+                    Plan::Terminal { reason: needs_terminal_reason("The agent's saved \"How to run\" is Chat (ACP), but", &facts.terminal_only) }
                 } else if effective_lane(saved, facts.labs_on, facts.has_definition) == RunLane::Acp {
                     Plan::Chat { explicit: false, reason: "The agent's saved \"How to run\" is Chat (ACP).".into() }
                 } else if saved == RunLane::Acp && !facts.labs_on {
@@ -91,6 +100,9 @@ pub fn auto(facts: Facts) -> Plan {
     if facts.headless {
         return Plan::Terminal { reason: "auto: a background run was asked for, and a chat session has no background mode.".into() };
     }
+    if !facts.terminal_only.is_empty() {
+        return Plan::Terminal { reason: needs_terminal_reason("auto:", &facts.terminal_only) };
+    }
     if !facts.labs_on {
         return Plan::Terminal { reason: "auto: Chat (ACP) is off in Labs.".into() };
     }
@@ -101,6 +113,27 @@ pub fn auto(facts: Facts) -> Plan {
         return Plan::Terminal { reason: "auto: the chat add-on for this agent is not installed.".into() };
     }
     Plan::Chat { explicit: false, reason: "auto: Chat (ACP) is on and the chat add-on is installed.".into() }
+}
+
+fn needs_terminal_reason(prefix: &str, fields: &[&str]) -> String {
+    let (verb, it) = if fields.len() == 1 { ("needs", "it") } else { ("need", "them") };
+    format!("{prefix} {} {verb} the terminal way (a chat cannot honour {it}).", fields.join(", "))
+}
+
+/// `lane: "acp"` with options only the terminal honours.
+pub fn cannot_chat(fields: &[&str]) -> OperationError {
+    let list = fields.join(", ");
+    let mut error = OperationError::new(
+        "CHAT_CANNOT_DO",
+        format!("A chat session cannot honour {list}. Nothing was started. Leave lane out (or pass lane: \"terminal\") to run it in a terminal, or drop {list}."),
+        false,
+    );
+    error.context = json!({
+        "fields": fields,
+        "fix": "Pass lane: \"terminal\" to run it in a terminal, or leave the listed options out to run it as a chat.",
+        "retryable": false,
+    });
+    error
 }
 
 /// `lane: "acp"` while Labs Chat (ACP) is off. Not retryable until the person turns the switch on.
@@ -158,7 +191,7 @@ mod tests {
     use super::*;
 
     fn facts() -> Facts {
-        Facts { labs_on: true, has_definition: true, adapter_installed: true, headless: false }
+        Facts { labs_on: true, has_definition: true, adapter_installed: true, headless: false, terminal_only: Vec::new() }
     }
 
     fn is_chat(plan: &Plan) -> bool {
@@ -174,7 +207,7 @@ mod tests {
             Facts { adapter_installed: false, ..facts() },
             Facts { headless: true, ..facts() },
         ] {
-            let Plan::Terminal { reason } = auto(facts) else { panic!("{facts:?} must be the terminal") };
+            let Plan::Terminal { reason } = auto(facts.clone()) else { panic!("{facts:?} must be the terminal") };
             assert!(reason.starts_with("auto:"), "{reason}");
         }
     }

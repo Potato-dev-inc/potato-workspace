@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! Source-scan guards for the Linux Inside rules (spec section 4). Tests only.
 //! They read the non-test sources of `wsl/` (`wsl/*.rs` minus `*_tests.rs`, and the inline
 //! `#[cfg(test)]` blocks inside them) and fail when a forbidden word shows up.

@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // @vitest-environment jsdom
 // Settings > Agents > Run agents in Linux: each WSL state, Copy puts the exact command on the clipboard, Check shows the
 // spinner and then the checked and found lines, "Runs on" saves per agent, and an agent with a reason cannot go to Linux.

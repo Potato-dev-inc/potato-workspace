@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // Linux Inside: plain helpers for a pane's place (the chip, its tooltip, and Linux -> Windows paths).
 // `toWindowsPath` is the TypeScript mirror of `wsl::path::to_windows` (spec 3.3) for the pane's own
 // mount root and UNC root. It is display only: nothing here decides where an agent runs.

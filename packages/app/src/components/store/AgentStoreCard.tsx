@@ -2,6 +2,7 @@
 // Every text comes from the catalog as data: it is shown as plain text (React escapes it), never as HTML, and no link is made.
 import type { StoreCard, StoreState } from '../../lib/agent-store';
 import { licenseWords, primaryButton, tierWords } from '../../lib/agent-store-model';
+import { AgentLogo } from '../common/AgentLogo';
 import { DotSpinner, type DotSpinnerProps } from '../cockpit/DotSpinner';
 
 /** The glyph reuses the doctor's DotSpinner statics: check = ready, plus = needs you, cross = a problem. */
@@ -50,7 +51,7 @@ export function AgentStoreCard({ card, onOpen }: AgentStoreCardProps) {
     <article className="ck-store-card" data-state={card.state} data-tier={card.tier}>
       <div className="ck-store-card-head">
         <span className="ck-store-icon" aria-hidden="true">
-          {card.icon}
+          <AgentLogo id={card.id} size={16} decorative fallback={card.icon} />
         </span>
         <div className="ck-store-card-title">
           <span className="ck-row-title">{card.label}</span>

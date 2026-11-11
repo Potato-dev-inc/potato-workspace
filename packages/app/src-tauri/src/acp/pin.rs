@@ -73,6 +73,11 @@ pub fn check(pins: &[AdapterPin], host: &dyn HostEnv) -> PinCheck {
     PinCheck::Ok { version: found }
 }
 
+/// Whether the adapter's entry file is not there (what `check` answers `Missing` for, minus the hash): no file is read.
+pub fn entry_missing(pins: &[AdapterPin], host: &dyn HostEnv) -> bool {
+    pins.first().is_some_and(|first| !PathBuf::from(expand(&first.entry, host)).is_file())
+}
+
 /// The start-time hook: applies the agent's policy to the result.
 pub fn enforce(cfg: &AgentConfig, host: &dyn HostEnv) -> Result<PinCheck, AcpError> {
     if cfg.pin_policy == PinPolicy::Off {
@@ -108,7 +113,14 @@ fn installed_version(entry: &Path, package: &str) -> Option<String> {
     None
 }
 
+/// The SHA-256 of a file.
 pub fn sha256_hex(path: &Path) -> std::io::Result<String> {
+    // Not cached: this is the adapter integrity check, and a same-size edit within the clock's resolution must still be
+    // seen. Hashing the 1.1 MB entry costs under 1 ms (measured), so there is nothing worth caching here.
+    sha256_hex_uncached(path)
+}
+
+pub fn sha256_hex_uncached(path: &Path) -> std::io::Result<String> {
     use std::io::Read;
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();

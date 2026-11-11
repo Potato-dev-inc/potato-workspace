@@ -23,6 +23,18 @@ fn run(
     match name {
         "set_mode" => {
             let mode = required_string(args, "mode")?;
+            // Reject an unknown mode here, before the bridge is asked, so the check does not depend on
+            // whether this call carries an MCP session id. A rejected call is a tool error and sends no
+            // tools/list_changed notice (stdio.rs only notices a successful set_mode).
+            if tool_registry::McpMode::parse(&mode).is_none() {
+                return Err(serde_json::to_string(&json!({
+                    "code": "INVALID_ARGUMENT",
+                    "message": "mode must be agent, shell, both, or all",
+                    "recoverable": false,
+                    "retryable": false,
+                }))
+                .unwrap_or_default());
+            }
             let response = bridge_request("POST", "/mcp/mode", Some(json!({"mode":mode})))?;
             if let Some(session_id) = current_mcp_session_id() {
                 mcp_sessions::set_mode(&session_id, &mode)
@@ -38,10 +50,7 @@ fn run(
             // A run Potato Workspace started under a budget names itself in this process's environment;
             // a helper it starts then draws from that budget.
             inject_budget_parent(&mut body, std::env::var(PARENT_RUN_ENV).ok());
-            match bridge_request("POST", "/agents/run", Some(body.clone())) {
-                Ok(response) => Ok(response),
-                Err(error) => Err(wait_timeout_recovery("/agents/run", &body, error)),
-            }
+            super::super::long_wait::launch_and_wait("/agents/run", body, cancel_rx)
         }
         "quick_ask" => {
             let mut body = args.clone();
@@ -80,10 +89,7 @@ fn run(
                 return Err("missing required argument: message or task".into());
             }
             ensure_stable_idempotency_key("followup_task", &mut body);
-            match bridge_request("POST", "/agents/followup", Some(body.clone())) {
-                Ok(response) => Ok(response),
-                Err(error) => Err(wait_timeout_recovery("/agents/followup", &body, error)),
-            }
+            super::super::long_wait::launch_and_wait("/agents/followup", body, cancel_rx)
         }
         "answer_prompt" => bridge_request("POST", "/agents/answer", Some(args.clone())),
         "interrupt_agent" | "cancel_agent" => {

@@ -95,14 +95,12 @@ fn bridge_health_documents_the_env_section() {
 fn run_agent_documents_cursor_steering_limits_and_the_shell_hint() {
     let tools = tools();
     let run = tools.iter().find(|tool| tool.name == "run_agent").unwrap();
-    assert!(run.description.starts_with("The default way to hand work to another agent"));
-    let one_task = run.description.find("One-task mode").unwrap();
-    let steering = run.description.find("Cursor headless steering").unwrap();
-    assert!(one_task > steering);
-    assert!(run
-        .description
-        .contains("Cursor headless steering works only by restart from turn 2"));
-    assert!(run.description.contains("queue-only"));
+    assert!(run.description.starts_with("Launch and wait: run_agent({"));
+    // The long Cursor facts moved out of the tool description into the skill text.
+    let skill = include_str!("../../../../../integrations/skills/potato-workspace/SKILL.md");
+    let steering = skill.find("Cursor headless steering works only by restart from turn 2").unwrap();
+    assert!(skill[steering..].contains("queue-only"));
+    assert!(skill.contains("One-task mode"));
     for name in ["run_agent", "wait_agents", "followup_task"] {
         let tool = tools.iter().find(|tool| tool.name == name).unwrap();
         assert_eq!(
@@ -404,7 +402,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "73-4ca4b6816bbee3f6");
+    assert_eq!(catalog_version(), "73-c6fae36f34b7944c");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one
@@ -457,8 +455,10 @@ fn run_agent_is_visible_first_and_describes_the_headless_backup() {
     let tool = tools().into_iter().find(|t| t.name == "run_agent").expect("run_agent");
     let headless = &tool.input_schema["properties"]["headless"];
     assert_eq!(headless["default"], false, "visible is the default");
-    assert!(headless["description"].as_str().unwrap().contains("fallback"));
-    assert!(tool.description.contains("visible by default") && tool.description.contains("no_visible_mode"));
+    assert!(headless["description"].as_str().unwrap().contains("Leave out"));
+    assert!(tool.description.contains("visible pane") && tool.description.contains("do not pass headless"));
+    let skill = include_str!("../../../../../integrations/skills/potato-workspace/SKILL.md");
+    assert!(skill.contains("receipt.fallback") && skill.contains("no_visible_mode") && skill.contains("headless_ignored"));
     let schema = tool.output_schema.as_ref().expect("output schema").to_string();
     assert!(schema.contains("\"fallback\"") && schema.contains("visible_failed"), "{schema}");
 }
@@ -588,9 +588,12 @@ fn companion_recall_is_callable_in_agent_mode_but_listed_only_for_a_companions_a
 #[test]
 fn run_agent_and_list_agents_describe_the_agent_run_mode() {
     let run = tools().into_iter().find(|t| t.name == "run_agent").expect("run_agent");
-    assert!(run.description.contains("One-task mode") && run.description.contains("not_verified"));
+    let skill = include_str!("../../../../../integrations/skills/potato-workspace/SKILL.md");
+    assert!(skill.contains("One-task mode") && skill.contains("not_verified") && skill.contains("run_mode"));
     let headless = run.input_schema["properties"]["headless"]["description"].as_str().unwrap();
-    assert!(headless.contains("agent's own setting") && headless.contains("always wins"), "{headless}");
+    assert!(headless.contains("Leave out") && headless.contains("headless_ignored"), "{headless}");
+    let shell = run.input_schema["properties"]["shell"]["description"].as_str().unwrap();
+    assert!(shell.contains("watch_command"), "{shell}");
     let output = run.output_schema.as_ref().expect("output schema").to_string();
     assert!(output.contains("\"run_mode\"") && output.contains("agent_setting") && output.contains("not_verified"), "{output}");
     let list = tools().into_iter().find(|t| t.name == "list_agents").expect("list_agents");
@@ -598,4 +601,35 @@ fn run_agent_and_list_agents_describe_the_agent_run_mode() {
     for field in ["id", "headless_supported", "headless_verified", "run_mode"] {
         assert!(types.get(field).is_some(), "list_agents agent_types lacks {field}");
     }
+}
+
+#[test]
+fn run_agent_is_short_and_leads_with_the_launch_and_wait_example() {
+    let registry = tools();
+    let run = registry.iter().find(|tool| tool.name == "run_agent").unwrap();
+    assert!(run.description.len() < 1200, "{} chars", run.description.len());
+    assert!(run.description.starts_with("Launch and wait: run_agent({"));
+    for word in ["close_agent", "review_worktree", "idempotency_key", "watch_command"] {
+        assert!(run.description.contains(word), "{word}");
+    }
+    assert!(mcp_instructions().contains("wait_ms:1800000"));
+    for name in ["run_agent", "followup_task"] {
+        let tool = registry.iter().find(|tool| tool.name == name).unwrap();
+        assert_eq!(tool.input_schema["properties"]["wait_ms"]["maximum"], 3_600_000, "{name}");
+        assert_eq!(tool.input_schema["properties"]["wait_ms"]["default"], 120_000, "{name}");
+    }
+    // Rarely used fields keep existing but are marked.
+    for field in ["lane", "budget_turns", "until_checks_pass", "allowed_commands", "locks"] {
+        let text = run.input_schema["properties"][field]["description"].as_str().unwrap();
+        assert!(text.starts_with("Advanced:"), "{field}: {text}");
+    }
+    assert!(run.input_schema.to_string().len() < 6_000);
+}
+
+#[test]
+fn agent_run_output_schema_describes_the_wait_and_reopen_fields() {
+    let schema = agent_run_schema();
+    assert_eq!(schema["properties"]["wait_extended"]["type"], "boolean");
+    assert_eq!(schema["properties"]["waited_ms"]["type"], "integer");
+    assert_eq!(schema["properties"]["reopened"]["type"], "object");
 }

@@ -1,3 +1,4 @@
+// POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 // Linux Inside for the harness: what the mocked `wsl_*` commands answer (Settings > Agents > Run agents in Linux).
 // Example data only: the distros are `Ubuntu-Test` and `Debian-Test`. Without a `wsl` scenario the status says
 // "not Windows", so the block stays hidden in every other scenario. Shapes are `lib/wsl.ts`.

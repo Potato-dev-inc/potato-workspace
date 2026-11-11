@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! The live side of closing a Linux pane (SPEC-n33 section 3.6 F). `stop_pane` runs the fixed stop
 //! script inside the distro through `wsl.exe`, after the pane's `wsl.exe` tree was ended by pid. It
 //! never panics and never blocks longer than `STOP_TIMEOUT_MS`; a failure is logged and nothing else.

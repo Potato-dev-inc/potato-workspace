@@ -23,6 +23,7 @@ mod call_ctx;
 mod dispatch;
 mod endpoint;
 mod errors;
+mod long_wait;
 pub(crate) mod hook;
 mod notices;
 mod progress;

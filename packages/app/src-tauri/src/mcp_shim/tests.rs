@@ -493,14 +493,21 @@ fn stable_client_id_gives_a_stable_session_id_and_default_is_unique() {
 fn stale_port_file_falls_back_to_a_live_bridge_port() {
     let live = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let live_port = live.local_addr().unwrap().port();
-    let ok = live_endpoint_or_probe(BridgeEndpoint { host: "127.0.0.1".into(), port: live_port });
+    let (ok, picked) = resolve_endpoint(BridgeEndpoint { host: "127.0.0.1".into(), port: live_port }, None);
     assert_eq!(ok.port, live_port, "a live port is kept as is");
-    // A closed port with nothing in 17421..=17430 listening returns the original endpoint.
+    assert_eq!(picked, Picked::PortFile);
+    // A closed port: either the original endpoint is kept (no live bridge found), or the probe picks a
+    // live Potato Workspace bridge inside the app's port range. Never a port outside that range.
     let dead = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let dead_port = dead.local_addr().unwrap().port();
     drop(dead);
-    let got = live_endpoint_or_probe(BridgeEndpoint { host: "127.0.0.1".into(), port: dead_port });
-    assert!(got.port == dead_port || (17421..=17499).contains(&got.port));
+    let (got, picked) = resolve_endpoint(BridgeEndpoint { host: "127.0.0.1".into(), port: dead_port }, None);
+    match picked {
+        Picked::PortFile => assert_eq!(got.port, dead_port, "no live bridge found: keep the original"),
+        Picked::ProbeSameProfile | Picked::ProbeOtherProfile => {
+            assert!((17421..=17499).contains(&got.port), "probe must stay in the bridge range: {}", got.port);
+        }
+    }
 }
 
 // ---- ask_user: the real shim against an in-process bridge that serves the questions routes ----

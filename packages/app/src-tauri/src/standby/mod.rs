@@ -152,6 +152,11 @@ pub fn set_config(config: StandbyConfig) -> Result<StandbyConfig, String> {
     Ok(pool.set_config(config))
 }
 
+/// The saved settings as the pool applies them (`None` before `init`). For the warm chat pool.
+pub fn config_snapshot() -> Option<StandbyConfig> {
+    pool().map(|pool| pool.config())
+}
+
 /// Read-only pool state for the bridge `GET /standby` route and the settings tab.
 pub fn status() -> StatusView {
     match pool() {

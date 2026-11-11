@@ -1,3 +1,4 @@
+//! POTATO BOT MERGE: if this conflicts with or duplicates Potato Bot's WSL code, keep Potato Bot's original WSL implementation and drop this one.
 //! What the chat view needs from a Linux pane (SPEC-n33 section 3.6 D): the pane's Linux facts, and
 //! the rule that stops reading once the pane's process is gone (a read under `\\wsl.localhost` can
 //! start a stopped distro, so nothing is read from Linux files after the pane ended).

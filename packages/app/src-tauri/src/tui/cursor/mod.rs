@@ -133,6 +133,16 @@ impl TuiProfile for CursorAgent {
         launch::is_installed()
     }
 
+    /// Sign-in for the "Used" strip: `usage.toml` names `status --format json`; the program is found here.
+    fn usage_source(&self) -> Option<crate::usage::source::UsageSource> {
+        let mut source = crate::usage::source::from_toml(include_str!("usage.toml"))?;
+        if let Some(cli) = binary::installed() {
+            let args: Vec<String> = ["status", "--format", "json"].iter().map(|s| s.to_string()).collect();
+            source.command = Some(binary::probe_launch(&cli, &args));
+        }
+        Some(source)
+    }
+
     fn version_command(&self) -> Option<VersionCommand> {
         let cli = binary::installed()?;
         let (program, args) = binary::probe_launch(&cli, &["--version".to_string()]);

@@ -166,7 +166,49 @@ fn ensure_idle(
 
 /// Close the panes sitting in the worktree (their directory is about to disappear).
 fn close_panes(registry: &Registry, worktree: &WorktreeRef) {
+    close_workers(registry, worktree, &Workers::default());
+}
+
+/// Everything besides the panes in the folder that a handle's turns tie to its worktree.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct Workers {
+    /// Panes the handle's runs opened themselves (their folder may differ from the checkout).
+    pub panes: Vec<String>,
+    /// Operations whose headless child process may still be alive.
+    pub operations: Vec<String>,
+}
+
+/// The panes and headless workers the handle's turns recorded.
+fn workers_of(project: &str, handle: &str) -> Workers {
+    let mut found = Workers::default();
+    for turn in operations::turns_for_handle(project, handle).unwrap_or_default() {
+        found.operations.push(turn.operation_id.clone());
+        if let Some(pane_id) = turn.pane_id.clone().filter(|_| turn.pane_created) {
+            if !found.panes.contains(&pane_id) {
+                found.panes.push(pane_id);
+            }
+        }
+    }
+    found
+}
+
+/// Stop every headless worker and close every pane tied to the worktree, waiting for each to
+/// exit: a shell or agent process still running there keeps the folder (Windows: "Permission
+/// denied" on delete).
+fn close_workers(registry: &Registry, worktree: &WorktreeRef, workers: &Workers) {
+    for operation_id in &workers.operations {
+        crate::agent_runs::headless::stop_for_operation(operation_id);
+    }
+    let mut panes: Vec<String> = workers.panes.clone();
     for (pane_id, _) in panes_in(registry, worktree) {
+        if !panes.contains(&pane_id) {
+            panes.push(pane_id);
+        }
+    }
+    for pane_id in panes {
+        if !registry.lock().panes.contains_key(&pane_id) {
+            continue;
+        }
         // Waits: the folder is removed right after, and a running shell would hold it.
         let _ = crate::pty::registry_kill_pane_and_wait(registry, &pane_id, Some("worktree_closed"));
     }
@@ -214,10 +256,21 @@ pub fn discard(
 ) -> Result<(), OperationError> {
     let (project, worktree) = resolve(project, handle, registry)?;
     ensure_idle(&project, &worktree, registry)?;
-    close_panes(registry, &worktree);
-    super::discard(&worktree)?;
+    let workers = workers_of(&project, handle);
+    discard_with(registry, &worktree, &workers, super::discard)?;
     record_closed(&project, handle, "discarded");
     Ok(())
+}
+
+/// Close everything tied to the worktree, then `remove` it (injected so tests see the order).
+pub(crate) fn discard_with(
+    registry: &Registry,
+    worktree: &WorktreeRef,
+    workers: &Workers,
+    remove: impl FnOnce(&WorktreeRef) -> Result<(), OperationError>,
+) -> Result<(), OperationError> {
+    close_workers(registry, worktree, workers);
+    remove(worktree)
 }
 
 // ------------------------------------------------------------------------------ pull requests

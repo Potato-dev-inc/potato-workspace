@@ -750,3 +750,155 @@ fn a_separate_copy_keeps_the_projects_memory_block_in_a_tracked_file_the_user_al
     assert!(merge(&wt).unwrap().merged);
     assert_eq!(repo.read("CLAUDE.md"), claude);
 }
+
+// ---------------------------------------------------------------------------------- discard
+
+mod discard_tests {
+    use super::*;
+    use crate::pty::proc_tree::test_support::{pid_alive, wait_until_dead};
+    use crate::pty::PaneRegistry;
+    use crate::worktrees::holders::Holder;
+    use crate::worktrees::service::{discard_with, Workers};
+    use parking_lot::Mutex;
+    use portable_pty::CommandBuilder;
+    use std::sync::Arc;
+
+    fn sleeper(id: &str, cwd: &str) -> (crate::pty::registry::PaneState, u32) {
+        let mut cmd = CommandBuilder::new(if cfg!(windows) { "ping" } else { "sh" });
+        if cfg!(windows) {
+            cmd.args(["-n", "60", "127.0.0.1"]);
+        } else {
+            cmd.args(["-c", "sleep 60 & wait"]);
+        }
+        let mut pane = PaneRegistry::test_pane_running(id, cmd);
+        pane.info.cwd = cwd.to_string();
+        let pid = pane.info.pid;
+        assert!(pid > 0 && pid_alive(pid), "the test process did not start");
+        (pane, pid)
+    }
+
+    #[test]
+    fn discard_closes_the_bound_pane_and_the_pane_in_the_folder_before_deleting() {
+        let repo = repo();
+        let wt = create(&repo.path(), "run-close").unwrap();
+        let registry = Arc::new(Mutex::new(PaneRegistry::default()));
+        let (inside, inside_pid) = sleeper("p-inside", &wt.path);
+        let (bound, bound_pid) = sleeper("p-bound", ".");
+        let (other, other_pid) = sleeper("p-other", ".");
+        for (id, pane) in [("p-inside", inside), ("p-bound", bound), ("p-other", other)] {
+            registry.lock().panes.insert(id.into(), pane);
+        }
+        let workers = Workers { panes: vec!["p-bound".into()], operations: vec![] };
+        let folder = PathBuf::from(&wt.path);
+        let seen_before_delete = std::cell::Cell::new(false);
+        discard_with(&registry, &wt, &workers, |wt| {
+            // At the moment of deletion both panes are already gone and their processes dead.
+            let guard = registry.lock();
+            assert!(!guard.panes.contains_key("p-inside"));
+            assert!(!guard.panes.contains_key("p-bound"));
+            assert!(guard.panes.contains_key("p-other"), "an unrelated pane stays");
+            drop(guard);
+            assert!(wait_until_dead(inside_pid) && wait_until_dead(bound_pid));
+            assert!(folder.exists(), "still on disk when the panes were closed");
+            seen_before_delete.set(true);
+            discard(wt)
+        })
+        .unwrap();
+        assert!(seen_before_delete.get());
+        assert!(!folder.exists());
+        assert!(pid_alive(other_pid), "an unrelated pane's process is left alone");
+        crate::pty::registry_kill_pane_and_wait(&registry, "p-other", None).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn hold_open(path: &Path) -> std::fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new().read(true).share_mode(0).open(path).unwrap()
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_remove_that_keeps_failing_names_the_holders_and_says_what_to_do() {
+        let repo = repo();
+        let wt = create(&repo.path(), "run-locked").unwrap();
+        let folder = PathBuf::from(&wt.path);
+        let held = hold_open(&folder.join("a.txt"));
+        let scanned = std::cell::RefCell::new(Vec::<PathBuf>::new());
+        let error = remove_checkout_with(&wt, false, &[10, 10], &|path| {
+            scanned.borrow_mut().push(path.to_path_buf());
+            vec![Holder { pid: 4242, name: "Editor.exe".into() }]
+        })
+        .unwrap_err();
+        assert_eq!(error.code, "WORKTREE_REMOVE_FAILED", "{error:?}");
+        assert!(error.message.contains("Editor.exe (PID 4242)"), "{}", error.message);
+        assert!(error.message.contains("review_worktree discard again"), "{}", error.message);
+        assert_eq!(error.context["holders"][0]["pid"], 4242);
+        assert_eq!(error.context["holders"][0]["name"], "Editor.exe");
+        assert!(error.context["recovery"].as_str().unwrap().contains("close Editor.exe (PID 4242)"));
+        assert_eq!(std::path::Path::new(error.context["path"].as_str().unwrap()).file_name(), folder.file_name());
+        assert_eq!(*scanned.borrow(), vec![folder.clone()], "the scan only looked at the checked path");
+        assert!(repo.branches().lines().any(|b| b == "pm/run-locked"), "the branch stays until the folder is gone");
+        drop(held);
+        discard(&wt).unwrap();
+        assert!(!folder.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_restart_manager_names_this_process_for_a_file_it_holds_open() {
+        let dir = temp_dir("rm");
+        std::fs::write(dir.join("held.txt"), "x").unwrap();
+        let held = hold_open(&dir.join("held.txt"));
+        let found = holders::find(&dir);
+        drop(held);
+        assert!(found.iter().any(|h| h.pid == std::process::id()), "{found:?}");
+        assert!(holders::find(&dir).is_empty(), "nothing holds the folder any more");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_slow_release_is_waited_for_instead_of_failing() {
+        let repo = repo();
+        let wt = create(&repo.path(), "run-slow").unwrap();
+        let folder = PathBuf::from(&wt.path);
+        remove_checkout_with(&wt, false, &REMOVE_DELAYS_MS[..2], &|_| Vec::new()).unwrap();
+        assert!(!folder.exists());
+    }
+
+    #[test]
+    fn the_sample_walk_is_bounded_and_stays_inside_the_folder() {
+        let dir = temp_dir("walk");
+        for i in 0..30 {
+            std::fs::write(dir.join(format!("f{i}.txt")), "x").unwrap();
+        }
+        let files = holders::sample_files(&dir, 10);
+        assert_eq!(files.len(), 10);
+        assert!(files.iter().all(|f| f.starts_with(&dir)));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_path_outside_the_worktrees_folder_is_refused_and_nothing_is_scanned_or_deleted() {
+        let repo = repo();
+        let mut wt = create(&repo.path(), "run-out").unwrap();
+        let outside = temp_dir("outside2");
+        std::fs::write(outside.join("keep.txt"), "precious").unwrap();
+        wt.path = outside.to_string_lossy().into_owned();
+        let registry = Arc::new(Mutex::new(PaneRegistry::default()));
+        let scanned = std::cell::Cell::new(false);
+        let error = discard_with(&registry, &wt, &Workers::default(), |wt| {
+            remove_checkout_with(wt, false, &[1], &|_| {
+                scanned.set(true);
+                Vec::new()
+            })
+        })
+        .unwrap_err();
+        assert_eq!(error.code, "WORKTREE_PATH_REFUSED");
+        assert!(!scanned.get());
+        assert!(outside.join("keep.txt").is_file());
+        // The worktrees folder itself is refused as well.
+        wt.path = worktrees_root(Path::new(&repo.path())).to_string_lossy().into_owned();
+        assert_eq!(discard(&wt).unwrap_err().code, "WORKTREE_PATH_REFUSED");
+        let _ = std::fs::remove_dir_all(outside);
+    }
+}

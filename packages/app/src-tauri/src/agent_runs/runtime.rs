@@ -32,7 +32,7 @@ pub(super) use control::settle_native_abort;
 pub(super) use control::{active_turns, interrupt_active_turns};
 pub use control::{cancel_agent, close_agent, inspect_agent};
 #[cfg(test)]
-pub(super) use followup::{enqueue_followup, refuse_handed_off};
+pub(super) use followup::{build_followup_request, enqueue_followup, plan_followup, refuse_handed_off};
 pub use followup::send_agent;
 pub use present::agent_view_after_wait;
 #[cfg(test)]
@@ -44,7 +44,6 @@ pub(crate) fn receipt_usage_limit(snapshot: &crate::operations::OperationSnapsho
 }
 #[cfg(test)]
 pub(super) use present::pane_presentation;
-#[cfg(test)]
 pub use receipt::RunReceipt;
 pub(super) use request::default_agent;
 pub(crate) use request::normalize_context_policy_fields;

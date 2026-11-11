@@ -1,5 +1,6 @@
 pub mod client;
 pub mod delivery;
+pub mod edition;
 pub mod keys;
 pub mod link;
 pub mod messages;

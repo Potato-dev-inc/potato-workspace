@@ -96,6 +96,12 @@ export const SettingsSchema = z.object({
   ui_mode: z.enum(['orchestration', 'individual']).default('orchestration'),
   /** Ask before closing a pane window, a cockpit pane or the app while an agent is working. */
   confirm_close_running_pane: z.boolean().default(true),
+  /** Keep the PC awake (the screen may still turn off) while an agent works, so locking it does not stop the agents (Rust: keep_awake). */
+  keep_awake_while_working: z.boolean().default(true),
+  /** The "Used" strip at the bottom of the sidebar: plan usage per signed-in agent (Rust: usage). */
+  show_usage_bar: z.boolean().default(true),
+  /** The strip may read Claude's plan usage with the person's own Claude login (on by default, like Orca; Rust: usage::oauth). */
+  usage_login_reads: z.boolean().default(true),
   /** Developer option: install MCP configs to launch the bundled Rust binary instead of npm. */
   developer_use_rust_mcp: z.boolean().default(false),
   /** Save the project's files at each agent turn so a turn can be undone (Rust: checkpoints). */

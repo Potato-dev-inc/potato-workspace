@@ -349,3 +349,36 @@ test("an idle socket hibernates the team's object, answers a ping, and still get
     ws.close();
   }
 });
+
+test("a fifth socket from one device replaces its oldest; another device's sockets are untouched", async () => {
+  const other = key(3);
+  const { api, team } = await newTeam(HOOKS, [device, other]);
+  const open = async (dev) => {
+    const path = `/v1/teams/${team}/ws?after=0`;
+    const ws = new WebSocket(HOOKS.replace("http", "ws") + path, { headers: { "x-pm-auth": authHeader(dev, "GET", path) } });
+    await new Promise((resolve, reject) => {
+      ws.onopen = resolve;
+      ws.onerror = () => reject(new Error("the socket did not open"));
+    });
+    return ws;
+  };
+  const mine = [];
+  try {
+    const theirs = await open(other);
+    for (let i = 0; i < 4; i += 1) {
+      mine.push(await open(device));
+      await sleep(5);
+    }
+    mine.push(await open(device)); // the fifth: accepted, the oldest goes
+    // The server has sent its close (4000, "replaced by a newer connection"); this client may not finish the
+    // handshake in time, so a socket that left OPEN (closing or closed) is what is checked.
+    for (let i = 0; i < 100 && mine[0].readyState === 1; i += 1) await sleep(50);
+    assert.notEqual(mine[0].readyState, 1, "the oldest socket is closed");
+    await sleep(200);
+    assert.deepEqual(mine.slice(1).map((w) => w.readyState), [1, 1, 1, 1], "the newer four stay open");
+    assert.equal(theirs.readyState, 1, "another device is untouched");
+    theirs.close();
+  } finally {
+    for (const w of mine) w.close();
+  }
+});

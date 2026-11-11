@@ -250,6 +250,11 @@ pub fn rotate(target: RotateTarget) -> Result<OpenCodeKeyStatus, String> {
 
 pub fn apply_active_auth() -> Result<(), String> {
     let store = load_store()?;
+    // Key switching is not in use until a key was saved for some profile: there is nothing to
+    // apply, OpenCode keeps its own login, and nothing is worth a warning.
+    if !store.profiles.values().any(|profile| profile_configured_value(&profile.auth)) {
+        return Ok(());
+    }
     let profile = store
         .profiles
         .get(&store.active)
@@ -586,6 +591,34 @@ mod tests {
         format!(
             r#"{{"version":{version},"active":"a","profiles":{{"a":{{"label":"Primary","auth":{{}}}},"b":{{"label":"Secondary","auth":{{}}}}}}{mode},"restart_pane_on_rotate":true}}"#
         )
+    }
+
+    #[test]
+    fn no_key_saved_means_nothing_to_apply_and_no_error() {
+        with_store_file(None, |_| {
+            for name in ["a", "b"] {
+                let _ = crate::secrets::backend().delete(&secret_name(name));
+            }
+            let auth = std::env::temp_dir().join(format!("pm-opencode-auth-{}.json", uuid::Uuid::new_v4()));
+            std::env::set_var("POTATO_WORKSPACE_TEST_OPENCODE_AUTH", &auth);
+            // Key switching is not in use: no warning-worthy error, and OpenCode's own login is left alone.
+            assert!(apply_active_auth().is_ok());
+            assert!(!auth.exists());
+            std::env::remove_var("POTATO_WORKSPACE_TEST_OPENCODE_AUTH");
+        });
+    }
+
+    #[test]
+    fn an_active_profile_without_a_key_still_errors_when_the_other_has_one() {
+        with_store_file(None, |_| {
+            let mut store = default_store();
+            store.profiles.get_mut(PROFILE_B).unwrap().auth = auth_json_for_key("key-b");
+            store.active = PROFILE_A.to_string();
+            save_store(&store).expect("save");
+            let err = apply_active_auth().unwrap_err();
+            assert!(err.contains("'a' is not configured"), "{err}");
+            let _ = crate::secrets::backend().delete(&secret_name("b"));
+        });
     }
 
     #[test]

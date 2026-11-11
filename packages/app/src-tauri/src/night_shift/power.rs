@@ -117,6 +117,34 @@ pub fn is_held(key: &str) -> bool {
     HOLDS.lock().contains_key(key)
 }
 
+/// A keep-awake hold taken and released as a whole. The lend service and the busy-agents governor use it, with a
+/// fake in tests. Each user has its own key among the holds above, so none can cancel another's.
+pub trait AwakePort: Send + Sync {
+    fn hold(&self) -> Result<(), String>;
+    fn release(&self);
+}
+
+/// The real port: one keyed hold in the shared table.
+pub struct KeyedHold {
+    key: &'static str,
+    reason: &'static str,
+}
+
+impl KeyedHold {
+    pub const fn new(key: &'static str, reason: &'static str) -> Self {
+        Self { key, reason }
+    }
+}
+
+impl AwakePort for KeyedHold {
+    fn hold(&self) -> Result<(), String> {
+        hold(self.key, self.reason)
+    }
+    fn release(&self) {
+        release(self.key)
+    }
+}
+
 /// The helper command that keeps the computer awake on `os` (`std::env::consts::OS` names), or
 /// `None` where there is no such helper (Windows uses the thread instead, and unknown systems have
 /// none). `pid` is our own process id, which `caffeinate -w` watches. Pure: nothing is started.
@@ -277,5 +305,18 @@ mod tests {
         assert!(!is_held("ns-test-hold-b"));
         assert!(wait_until_dead(pid_b), "the exit hook ends every helper");
         assert_eq!(release_all(), 0, "nothing is left to release");
+    }
+
+    #[test]
+    fn a_lend_hold_and_a_night_shift_hold_are_separate_keys() {
+        let (run, lend) = (long_sleeper(), long_sleeper());
+        let (pid_run, pid_lend) = (run.id(), lend.id());
+        adopt("ns-test-run-x", Guard { held: Held::Child(run) });
+        adopt("lend:out-test", Guard { held: Held::Child(lend) });
+        release("lend:out-test");
+        assert!(wait_until_dead(pid_lend));
+        assert!(is_held("ns-test-run-x") && pid_alive(pid_run), "ending a lend leaves the Night Shift hold on");
+        release("ns-test-run-x");
+        assert!(wait_until_dead(pid_run));
     }
 }
