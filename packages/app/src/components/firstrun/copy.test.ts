@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { MAX_SENTENCES_PER_CARD, MAX_WORDS_PER_SENTENCE, sentencesOf, wordsOf } from '../simple/language-rules';
-import { ownStrings, T, TASK_PROMPT } from './copy';
+import { demoPrompt, ownStrings, T, TASK_PROMPT } from './copy';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,18 +38,30 @@ describe('first-run copy', () => {
     expect(bad).toEqual([]);
   });
 
-  it('uses the words of the list: separate copy, Sign in, Set up agents, Undo, History, Receipt', () => {
+  it('uses the words of the list: separate copy, Sign in, Undo, History', () => {
     expect(T.looks.ai.hint).toContain('separate copy');
-    expect(T.agentsHowTo).toContain('sign in');
-    expect(T.undoTip).toContain('History');
-    expect(T.undoTip).toContain('Undo');
-    expect(T.receiptTip).toContain('receipt');
+    expect(T.agentSignIn).toBe('Sign in');
+    expect(T.tipHistory).toBe('History');
+    expect(T.connectUndo).toBe('Undo');
+    expect(T.tipHistoryBody).toContain('Undo');
   });
 
   it('the three answers are the founder wording', () => {
     expect(T.looks.code.label).toBe('I write code');
     expect(T.looks.ai.label).toBe('I build with AI, not much code');
     expect(T.looks.none.label).toBe("I don't code");
+  });
+
+  it('the demo prompt names our run_agent tool, so the agent does not run the other CLI itself', () => {
+    expect(demoPrompt('Codex')).toContain('potato-workspace run_agent tool');
+    // It must not ask for the read_only flag: with hidden helpers off, that raises a card a new user cannot answer.
+    expect(demoPrompt('Codex')).not.toMatch(/read-only|read_only/);
+    expect(demoPrompt('Codex')).toContain('not to change any files');
+  });
+
+  it('the demo prompt asks a named helper for a review and its answer', () => {
+    // A prompt for an agent, not UI copy: it says "commit", a word the screens avoid.
+    expect(demoPrompt('Codex')).toBe('Use the potato-workspace run_agent tool to have Codex review the last commit in this project and list 3 risks. Tell Codex not to change any files. Show me its answer.');
   });
 
   it('shows the same suggested prompt Rust sends', () => {

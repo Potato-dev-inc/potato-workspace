@@ -60,7 +60,7 @@ describe('runStrip', () => {
 
 describe('the badge', () => {
   it('names the way to run, not an agent', () => {
-    expect(ACP_BADGE).toBe('Chat (ACP)');
+    expect(ACP_BADGE).toBe('Chat');
     expect(ACP_BADGE.toLowerCase()).not.toContain('claude');
   });
 });

@@ -105,7 +105,7 @@ describe('pane window of a chat session over ACP', () => {
     await act(async () => root.render(<TerminalApp />));
     await flush();
     expect(host.querySelector('[data-testid="acp-pane-window"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="pane-lane"]')?.textContent).toBe('Chat (ACP)');
+    expect(host.querySelector('[data-testid="pane-lane"]')?.textContent).toBe('Chat');
     expect(host.textContent).toContain('Write notes.txt');
     expect(host.querySelector('textarea')).not.toBeNull();
     expect(host.querySelector('[data-testid="term"]')).toBeNull();

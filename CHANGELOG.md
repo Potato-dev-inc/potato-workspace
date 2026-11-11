@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.0.16
+
+This is a beta.
+
+- Team: a new Team page in Settings. Start a team or join one by pasting an invite: your name is filled in and joining is one click. The page shows Connecting, Connected or what is wrong, the invite comes with a QR code, and people waiting to join get Let in and Decline right there.
+- Team: Create team relay puts a free relay in your own Cloudflare account from a pasted token. The token is used once and not kept.
+- Team: War Room events in Inbox, Team. Pushes to main and new PRs from teammates show up, and when CI on main fails a "main is red" banner lets one person Claim it.
+- The welcome now takes you from install to a first result in four steps: pick agents, connect them, pick a project, then watch Claude hand a review to Codex. If the agent answers by itself instead, it says so, with Try again.
+- Warm Codex helpers no longer die at start. Codex's update menu is skipped for that launch, and nothing is installed.
+- Keyboard shortcuts are now yours to change. Settings, Shortcuts lists every shortcut: change it, turn it off or reset it. You get a warning when keys clash with another shortcut or with keys terminals need. The Ask bar, Stop all and the mode switch can use your own keys too, and if the system refuses a key the old one stays and Settings says why.
+- New keys: Alt+Shift+Down and Up move between agents, Alt+Shift+1 to 9 jump to one, Alt+Shift+N goes to the next agent that needs you, and Alt+Shift+I opens the Inbox (Cmd+Option on a Mac). The command palette lists agents that need you first, then the one you used last, and has Inbox, next and previous actions.
+- The app opens on the pane and tab you left. If terminal agents ended with the restart, one line says so, with Reopen (starts each again in its folder) and Dismiss. Chats still come back on their own.
+- After you answer an Inbox card with a key, focus moves to the next card and "Next: agent" shows for a few seconds. The pane approval card shows its keys.
+- An agent with several sign-ins starts under the one you used last, with no extra step. Shift+Enter, Shift+click or a small Change button picks another. The usage-limit card has "Use another sign-in".
+- The update notice shows progress ("Downloading 42%"), then Restart now or When agents finish. It names the agents that will stop and says chats come back but terminal agents are not reopened. If the install fails after agents were stopped, it says so and offers Reopen chats.
+- The terminal keeps your place while an agent prints. Scroll up and a "Jump to latest" button appears. The terminal font adds SF Mono and Menlo, and Option works as Meta.
+- The welcome is a real dialog: Tab stays inside it, Esc works the way the footer says, and the app behind it is not reachable. Step 1 is shorter, "How do you work?" moved to the last screen, the two skip buttons are one "Skip for now", and the last step shows a plain summary with the exact words one click away.
+- Sign-in and Check my setup are now in the basic Agents settings. Agent definitions moved to advanced.
+- An empty Inbox leads with "Start an agent", and the Focus timer stays hidden until an agent has run. The sidebar footer shows text labels and "Review · N" in wide windows, Settings has its own icon, and rows that need you are read out as "Agent, needs you".
+- One set of words everywhere: "agent" instead of "AI helper", "sign in" instead of login and account, and "Chat" instead of "Chat (ACP)". The Puppet Master name is gone from visible text.
+- The mini bar shows the agents' real names and puts the ones that need you first. The New agent page says "New agent", shows its question over the box, and explains cards once.
+- On a Mac, Ctrl+K, Ctrl+Shift+F, Ctrl+/ and the split key use Cmd only, and the Mac defaults for Ask bar and mode switch no longer use Ctrl+Alt+Space, which macOS uses to switch input source. A plan for the full Mac port is in docs/plans/macos-port.md.
+- Fix: opening a link no longer goes through a command shell. Only http and https links open, so a link with & or | can't run commands.
+- Fix: a locked or damaged settings.json is no longer overwritten with just the newest change. The save is refused and a damaged file is kept as settings.json.bak. Clearing a setting now resets it to its default.
+- Fix: removing an account can no longer delete folders outside the app's own accounts folder, even if its folder was set with ".." in the path.
+- Fix: the MCP tools and the CLI no longer read the app's address from the current folder, and only connect to this computer.
+- Fix: the local bridge and the phone server refuse oversized requests, time out slow ones and limit open connections.
+- Fix: a refused pane lease no longer shows another session's id.
+- Fix: pairing codes are checked in constant time and dropped after 5 wrong guesses.
+- Fix: Settings shows the real version, and the phone input delay default is the same everywhere.
+- Fix: a failed save no longer shows "Saved" or clears what you typed, and a typed API key is no longer lost when secure storage is off. Ask bar and stuck-warning settings put the old value back.
+- Fix: a rejected account rename goes back to the saved name, a failed refresh keeps the list and shows an error, and the public address panel shows an error instead of failing silently.
+- Fix: Settings, Agent definitions no longer shows "Cannot read properties of null".
+- Fix: cancelling a headless run while it is starting now stops it instead of letting it run on and edit files.
+- Fix: closing a chat while its adapter is starting no longer leaves a hidden process running.
+- Fix: long headless runs keep their session, so a follow-up can resume. A stuck or unwatchable process is force-stopped, and an unused warm process is stopped when its run is cancelled.
+- Fix: a chat turn that can't start no longer leaves the chat refusing every later message.
+- Fix: a restarted pane's old exit no longer revokes the new pane's hooks or reports it as exited.
+- Fix: terminal output without line breaks no longer grows memory without limit, a failed pane start no longer leaves its process running, closed panes leave nothing behind, typing no longer holds up other panes, and two quick resizes no longer leave the grid the wrong size.
+- Fix: two writers can no longer corrupt the event log. Unreadable lines are skipped, recent events are read from the end of the file, and the log rotates at 32 MB.
+- Fix: a terminal whose history can't be read now retries, then goes live, instead of showing nothing.
+- Fix: Update now checks again after the download for agents that are working or waiting for you, and only stops agents just before the installer runs.
+- Fix: the bridge answers refused requests reliably instead of sometimes resetting the connection on Windows.
+- Fix: the personal-folder guard passes, and an ACP chat test that failed now and then waits for the journal to settle.
+
 ## 1.0.15
 
 - Switching between Orchestration and Individual now moves your agents: each pane flies to its own window and back, including agents that are only in the sidebar. Pick Domino, Ink or Off (a quick fade) in Settings, General, Mode switch animation, and press Preview to see it. With Windows animation effects off it just fades.

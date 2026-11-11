@@ -43,7 +43,7 @@ describe('deep links to every row', () => {
     for (const old of Object.keys(LEGACY_TABS)) expect(resolveSettingsTarget(old), old).not.toBeNull();
     expect(resolveSettingsTarget('mobile')).toEqual({ page: 'phone' });
     expect(resolveSettingsTarget('preload')).toEqual({ page: 'agents', row: 'preload' });
-    expect(resolveSettingsTarget('team')).toEqual({ page: 'general', row: 'team' });
+    expect(resolveSettingsTarget('team')).toEqual({ page: 'team' });
     expect(resolveSettingsTarget('security')).toEqual({ page: 'general', row: 'security-ask-before-control' });
     expect(resolveSettingsTarget('plugins')).toEqual({ page: 'bridge', row: 'agent-pack' });
     expect(resolveSettingsTarget('costs')).toEqual({ page: 'general', row: 'budget-turns' });

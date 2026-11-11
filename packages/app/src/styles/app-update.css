@@ -30,6 +30,27 @@
   border-color: transparent;
   opacity: 0.7;
 }
+/* The download bar: thin and grayscale, like the rest of the notice. */
+.app-update-bar {
+  flex: none;
+  width: 96px;
+  height: 4px;
+  appearance: none;
+  border: 0;
+  border-radius: 2px;
+  background: var(--sep, rgba(128, 128, 128, 0.3));
+  color: var(--label, currentColor);
+  overflow: hidden;
+}
+.app-update-bar::-webkit-progress-bar {
+  background: var(--sep, rgba(128, 128, 128, 0.3));
+}
+.app-update-bar::-webkit-progress-value {
+  background: var(--label, currentColor);
+}
+.app-update-bar::-moz-progress-bar {
+  background: var(--label, currentColor);
+}
 /* Inside Settings the notice is part of the row, not a floating card. */
 .app-update-row .app-update-notice {
   position: static;

@@ -31,7 +31,7 @@ afterEach(async () => {
 const button = (text: string) => Array.from(host.querySelectorAll('button')).find((b) => b.textContent === text) as HTMLButtonElement | undefined;
 
 describe('Simple: no agent is ready', () => {
-  it('the main button says Set up an AI helper and opens that, not Settings', async () => {
+  it('the main button says Set up an agent and opens that, not Settings', async () => {
     const open = vi.fn();
     await act(async () => {
       root.render(<MakeSomething onStarted={vi.fn()} onCancel={vi.fn()} onOpenSettings={open} />);
@@ -39,7 +39,7 @@ describe('Simple: no agent is ready', () => {
     expect(host.querySelector('[data-testid="no-agent"]')).not.toBeNull();
     expect(button('Open settings')).toBeUndefined();
     const go = button(T.makeAddAgent)!;
-    expect(go.textContent).toBe('Set up an AI helper');
+    expect(go.textContent).toBe('Set up an agent');
     await act(async () => go.click());
     expect(open).toHaveBeenCalledTimes(1);
   });
@@ -49,7 +49,7 @@ describe('Simple home footer', () => {
   const cockpit = () =>
     ({ registry: { paneList: [], panes: new Map() }, openSettings: vi.fn(async () => undefined), select: vi.fn() }) as unknown as CockpitApi;
 
-  it('offers AI helpers, Phone, Settings and a way to switch Simple mode off', async () => {
+  it('offers Agents, Phone, Settings and a way to switch Simple mode off', async () => {
     const c = cockpit();
     const onHelpers = vi.fn();
     const onTurnOff = vi.fn();
@@ -57,7 +57,7 @@ describe('Simple home footer', () => {
       root.render(<SimpleHome c={c} onMake={vi.fn()} onOpen={vi.fn()} onHelpers={onHelpers} onTurnOff={onTurnOff} />);
     });
     const foot = host.querySelector('[data-testid="sx-foot"]')!;
-    expect(foot.textContent).toBe('AI helpers · Phone · Settings · Simple mode Switch off');
+    expect(foot.textContent).toBe('Agents · Phone · Settings · Simple mode Switch off');
     await act(async () => button(T.footHelpers)!.click());
     expect(onHelpers).toHaveBeenCalledTimes(1);
     await act(async () => button(T.footPhone)!.click());

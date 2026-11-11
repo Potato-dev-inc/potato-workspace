@@ -31,8 +31,9 @@ const ALLOWED_NAMES = new Set([
 // Local parts allowed on consumer mail domains (e.g. an example address in docs).
 const ALLOWED_MAIL_LOCALS = new Set(['you', 'me', 'user', 'example', 'test', 'noreply', 'no-reply']);
 
-// Sources the check does not read: this script and lockfiles/vendored output.
-const SKIP = [/(^|\/)package-lock\.json$/, /(^|\/)Cargo\.lock$/, /(^|\/)node_modules\//, /^scripts\/check-no-personal-paths\.mjs$/];
+// Sources the check does not read: this script, lockfiles/vendored output, and the upstream ACP registry snapshot
+// (public maintainers' contact emails, and URL paths like `/users/overview` that look like a user folder).
+const SKIP = [/^packages\/app\/src-tauri\/src\/acp\/fixtures\/registry_snapshot\.json$/, /(^|\/)package-lock\.json$/, /(^|\/)Cargo\.lock$/, /(^|\/)node_modules\//, /^scripts\/check-no-personal-paths\.mjs$/];
 
 // A `Users` path segment (either slash direction, doubled when escaped in a
 // string literal) followed by the folder name. The name stops at a separator,

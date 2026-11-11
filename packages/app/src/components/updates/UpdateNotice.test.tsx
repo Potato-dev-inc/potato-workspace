@@ -59,30 +59,102 @@ describe('the notice', () => {
     await click(buttonByText(h, 'Update'));
     await settle();
     expect(t.install).toHaveBeenCalledWith(false);
-    expect(hasText(h, 'Updating.')).toBe(true);
+    expect(hasText(h, 'Installing the update.')).toBe(true);
+    expect(hasText(h, 'Open it again when the installer is done')).toBe(true);
   });
 
-  it('warns first when an agent is working, and goes on only after the second press', async () => {
-    const t = transport({ busy: vi.fn(async () => ['claude']) });
+  it('downloads first, and asks to restart only when an agent is working once the download is done', async () => {
+    const t = transport({
+      install: vi.fn(async (confirm: boolean) => {
+        if (!confirm) throw new Error('UPDATE_RUNNING: claude is working or waiting for you.');
+      }),
+      busyInfo: vi.fn(async () => ({ agents: ['claude', 'codex'], chats: ['claude'], terminals: ['codex'] })),
+    });
     const h = await mount(<AppUpdateHost transport={t} />);
     await click(buttonByText(h, 'Update'));
     await settle();
-    expect(t.install).not.toHaveBeenCalled();
-    expect(hasText(h, 'An agent is working')).toBe(true);
-    await click(buttonByText(h, 'Update anyway'));
+    expect(t.install).toHaveBeenCalledTimes(1);
+    expect(t.install).toHaveBeenLastCalledWith(false);
+    expect(hasText(h, 'Ready.')).toBe(true);
+    expect(hasText(h, '2 agents are still working or waiting for you (claude, codex)')).toBe(true);
+    expect(hasText(h, 'come back after the restart: claude')).toBe(true);
+    expect(hasText(h, 'not reopened: codex')).toBe(true);
+    await click(buttonByText(h, 'Restart now'));
     await settle();
-    expect(t.install).toHaveBeenCalledWith(true);
+    expect(t.install).toHaveBeenLastCalledWith(true);
   });
 
-  it('Not now goes back to the offer without installing', async () => {
-    const t = transport({ busy: vi.fn(async () => ['claude']) });
+  it('shows the download percent while the file comes in', async () => {
+    let send: (p: { downloaded: number; total: number | null }) => void = () => undefined;
+    let finish: () => void = () => undefined;
+    const t = transport({
+      onProgress: vi.fn(async (cb) => {
+        send = cb;
+        return () => undefined;
+      }),
+      install: vi.fn(() => new Promise<void>((resolve) => (finish = resolve))),
+    });
     const h = await mount(<AppUpdateHost transport={t} />);
     await click(buttonByText(h, 'Update'));
     await settle();
-    await click(buttonByText(h, 'Not now'));
+    expect(hasText(h, 'Downloading…')).toBe(true);
+    await act(async () => send({ downloaded: 42, total: 100 }));
+    expect(hasText(h, 'Downloading 42%')).toBe(true);
+    expect((h.querySelector('progress') as HTMLProgressElement).value).toBe(42);
+    await act(async () => finish());
     await settle();
-    expect(hasText(h, 'Update available: 1.0.3')).toBe(true);
-    expect(t.install).not.toHaveBeenCalled();
+    expect(hasText(h, 'Installing the update.')).toBe(true);
+  });
+
+  it('with nothing busy there is no ready step: it goes straight on', async () => {
+    const t = transport();
+    const h = await mount(<AppUpdateHost transport={t} />);
+    await click(buttonByText(h, 'Update'));
+    await settle();
+    expect(hasText(h, 'Ready.')).toBe(false);
+    expect(t.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('When agents finish waits, and offers a plain restart once nobody is working', async () => {
+    vi.useFakeTimers();
+    try {
+      let busyNow = ['claude'];
+      const t = transport({
+        install: vi.fn(async (confirm: boolean) => {
+          if (!confirm) throw new Error('UPDATE_RUNNING: claude is working.');
+        }),
+        busyInfo: vi.fn(async () => ({ agents: busyNow, chats: busyNow, terminals: [] })),
+      });
+      const h = await mount(<AppUpdateHost transport={t} />);
+      await click(buttonByText(h, 'Update'));
+      await settle();
+      await click(buttonByText(h, 'When agents finish'));
+      expect(hasText(h, 'Waiting for your agents to finish')).toBe(true);
+      busyNow = [];
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000);
+      });
+      expect(hasText(h, 'Restart to finish the update.')).toBe(true);
+      expect(t.install).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says the agents were stopped when the installer could not start, and Reopen chats brings them back', async () => {
+    const t = transport({
+      install: vi.fn(async () => Promise.reject(new Error('UPDATE_STOPPED: Agents were stopped. The update could not be installed. Your current version keeps working.'))),
+      reopenChats: vi.fn(async () => undefined),
+    });
+    const h = await mount(<AppUpdateHost transport={t} />);
+    await click(buttonByText(h, 'Update'));
+    await settle();
+    expect(hasText(h, 'Agents were stopped.')).toBe(true);
+    expect(hasText(h, 'UPDATE_STOPPED')).toBe(false);
+    await click(buttonByText(h, 'Reopen chats'));
+    await settle();
+    expect(t.reopenChats).toHaveBeenCalledTimes(1);
+    expect(hasText(h, 'Chats reopened. Terminal agents were not reopened.')).toBe(true);
   });
 
   it('a bad signature is refused with a plain sentence and the app carries on', async () => {

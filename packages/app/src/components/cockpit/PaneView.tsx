@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { PaneMoreMenu } from './PaneMoreMenu';
+import { rememberSelectedTab } from './session-memory';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { confirmCloseEnabled, needsCloseConfirm } from '../../lib/close-policy';
 import { cockpitApi, type PaneRunInfo, type PaneTranscript, type TurnSummary } from '../../lib/cockpit-api';
@@ -69,6 +70,18 @@ type Tab = 'mission' | 'terminal' | 'chat' | 'changes' | 'transcript' | 'receipt
 
 /** The tab each pane was last on, kept for this app run only (not on disk). A remount opens the same view. */
 const rememberedTabs = new Map<string, Tab>();
+
+const TABS: readonly string[] = ['mission', 'terminal', 'chat', 'changes', 'transcript', 'receipt', 'history'];
+
+/** The tab a pane was last on this run, if any. */
+export function rememberedTabOf(paneId: string): string | undefined {
+  return rememberedTabs.get(paneId);
+}
+
+/** Starts a pane on a tab from the last run (session-memory.ts). Unknown names and panes already on a tab are left alone. */
+export function seedRememberedTab(paneId: string, tab: string | undefined): void {
+  if (tab && TABS.includes(tab) && !rememberedTabs.has(paneId)) rememberedTabs.set(paneId, tab as Tab);
+}
 
 /** Forgets every remembered tab (tests start each case on the default view). */
 export function forgetRememberedTabs(): void {
@@ -166,6 +179,7 @@ export function PaneView({
   const setTab = useCallback(
     (t: Tab) => {
       rememberedTabs.set(paneId, t);
+      rememberSelectedTab(paneId, t);
       setTabRaw(t);
     },
     [paneId],
@@ -413,7 +427,7 @@ export function PaneView({
         </div>
         <UntestedChip agent={info.agent_type} />
         {isAcp && (
-          <span className="ck-lane-chip" data-testid="pane-lane" title="This agent runs as a chat over the Agent Client Protocol, not in a terminal.">
+          <span className="ck-lane-chip" data-testid="pane-lane" title="This agent runs as a chat as a chat, not in a terminal.">
             {ACP_BADGE}
           </span>
         )}

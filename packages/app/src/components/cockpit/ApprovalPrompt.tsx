@@ -9,7 +9,7 @@ import type { PanePrompt, PromptChoice } from '../../lib/cockpit-api';
 import { CAUTION, LEVEL_WORD, choiceWords, firstReason, isStartupGate, layoutChoices, ownWords } from '../../lib/approval-risk';
 import { gestureOf, type UserGesture } from '../../lib/user-gesture';
 import '../../styles/approval-card.css';
-import { CardButton, InboxCard, InlineCode, RiskGlyph, focusWithRing } from './InboxCard';
+import { CardButton, InboxCard, InlineCode, KeyHints, RiskGlyph, approvalHints, focusWithRing } from './InboxCard';
 import { PackageFacts } from './PackageFacts';
 
 /** Shown when an answer was sent and the question is still on the screen: press the answer again. */
@@ -26,6 +26,7 @@ export function ApprovalPrompt({
   onOpen,
   asks,
   openLabel = 'Open terminal',
+  hints = false,
 }: {
   prompt: PanePrompt;
   /** `gesture` is the click that chose it (`lib/user-gesture.ts`); the backend needs it. */
@@ -45,6 +46,8 @@ export function ApprovalPrompt({
   asks?: string;
   /** Card: the open button's words. */
   openLabel?: string;
+  /** Card: show the keys that work on it. The Inbox turns this on; a card docked in a pane has no such keys. */
+  hints?: boolean;
 }) {
   const risk = prompt.risk;
   const [details, setDetails] = useState(false);
@@ -142,7 +145,7 @@ export function ApprovalPrompt({
           reason={prompt.stalled ? STALLED_NOTE : firstReason(risk) || null}
           caution={high ? CAUTION : null}
           body={
-            packageFacts || detailsPanel || runs.length > 0 ? (
+            packageFacts || detailsPanel || runs.length > 0 || hints ? (
               <>
                 {runs.map((r) => (
                   <p key={r} className="ib-runs">
@@ -151,6 +154,7 @@ export function ApprovalPrompt({
                 ))}
                 {packageFacts}
                 {detailsPanel}
+                {hints && <KeyHints hints={approvalHints({ answers: layout.visible.length, high, canOpen: !!onOpen })} />}
               </>
             ) : null
           }

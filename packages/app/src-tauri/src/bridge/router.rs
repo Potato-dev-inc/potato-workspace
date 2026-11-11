@@ -71,7 +71,7 @@ pub(super) fn route(
             200,
             serde_json::to_value(Health {
                 ok: true,
-                version: env!("CARGO_PKG_VERSION"),
+                version: crate::app_lifecycle::app_version(),
                 catalog_version: crate::tool_registry::catalog_version(),
                 catalog_hash: crate::tool_registry::catalog_hash_of(&hashes),
                 tool_hashes: hashes,

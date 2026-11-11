@@ -129,10 +129,15 @@ impl Store {
         let id = format!("acc_{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
         let home = match home.map(str::trim).filter(|h| !h.is_empty()) {
             Some(custom) => {
-                if !Path::new(custom).is_absolute() {
+                let expanded = crate::project_path::expand_user_path(Path::new(custom));
+                if !expanded.is_absolute() {
                     return Err("the account folder must be an absolute path".into());
                 }
-                custom.to_string()
+                if expanded.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+                    return Err("the account folder must not contain \"..\"".into());
+                }
+                self.check_custom_home(&expanded, &file.accounts)?;
+                expanded.to_string_lossy().into_owned()
             }
             None => self.homes_root.join(&id).to_string_lossy().into_owned(),
         };
@@ -180,12 +185,35 @@ impl Store {
         if !delete_home {
             return Ok(false);
         }
+        // Only the folder this store made (`<homes_root>/<id>`) is ever deleted. A user-chosen folder, even
+        // one that merely sits inside the app's folder, is not. Compare real paths, so `..` and links cannot
+        // lead the delete elsewhere.
         let home = Path::new(&account.home);
-        if home.starts_with(&self.homes_root) && home != self.homes_root {
-            std::fs::remove_dir_all(home).map_err(|e| format!("removed the account but not its folder: {e}"))?;
+        if home.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            return Ok(false);
+        }
+        let (Ok(real_home), Ok(real_root)) = (home.canonicalize(), self.homes_root.canonicalize()) else {
+            return Ok(false);
+        };
+        if real_home.parent() == Some(real_root.as_path()) && real_home.file_name().is_some_and(|n| n == account.id.as_str()) {
+            std::fs::remove_dir_all(&real_home).map_err(|e| format!("removed the account but not its folder: {e}"))?;
             return Ok(true);
         }
         Ok(false)
+    }
+
+    /// A custom home must not be, hold or sit inside another account's folder or the app's own data folder.
+    fn check_custom_home(&self, home: &Path, accounts: &[Account]) -> Result<(), String> {
+        let wanted = resolve_for_compare(home);
+        let mut protected: Vec<PathBuf> = accounts.iter().map(|a| resolve_for_compare(Path::new(&a.home))).collect();
+        if let Some(data_dir) = self.file.parent() {
+            protected.push(resolve_for_compare(data_dir));
+        }
+        protected.push(resolve_for_compare(&self.homes_root));
+        if protected.iter().any(|other| wanted.starts_with(other) || other.starts_with(&wanted)) {
+            return Err("that folder overlaps another account or the app's own data folder; pick a separate folder".into());
+        }
+        Ok(())
     }
 
     /// The saved choice for helpers of `agent_id`, as written. A saved account that is gone still shows up here;
@@ -261,6 +289,33 @@ fn scheme_for(agent_id: &str) -> Result<AccountScheme, String> {
     crate::tui::profile_for(agent_id)
         .account_scheme()
         .ok_or_else(|| format!("{agent_id} does not support accounts"))
+}
+
+/// `path` with its nearest existing ancestor resolved (links, case, `\\?\`), the rest appended, and folded
+/// to lower case on Windows, so two spellings of one folder compare equal.
+fn resolve_for_compare(path: &Path) -> PathBuf {
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    let mut cur = path.to_path_buf();
+    let mut base = loop {
+        if let Ok(real) = cur.canonicalize() {
+            break real;
+        }
+        match (cur.file_name().map(|n| n.to_os_string()), cur.parent().map(Path::to_path_buf)) {
+            (Some(name), Some(parent)) => {
+                tail.push(name);
+                cur = parent;
+            }
+            _ => break path.to_path_buf(),
+        }
+    };
+    for part in tail.into_iter().rev() {
+        base.push(part);
+    }
+    if cfg!(windows) {
+        PathBuf::from(base.to_string_lossy().to_lowercase())
+    } else {
+        base
+    }
 }
 
 fn unknown(id: &str) -> String {

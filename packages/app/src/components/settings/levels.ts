@@ -15,8 +15,9 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'away-minutes',
   'version',
   'whats-new',
-  // Agents: adding an agent (the wizard lives in "Agent definitions")
-  'definitions',
+  // Agents: sign in first, and check that the setup works. Writing your own agent file is advanced.
+  'accounts',
+  'setup-check',
   // Agents: whether helpers an agent starts are shown, whether they stay open, and whether they close with their agent
   'helper-agents',
   'keep-helpers-open',
@@ -28,6 +29,8 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'opencode-keys',
   'opencode-restart',
   'remove-all-keys',
+  // Team: the whole page is one row
+  'team-page',
   // Phone: pair a phone, and the phones that are paired
   'pairing',
   'paired-devices',

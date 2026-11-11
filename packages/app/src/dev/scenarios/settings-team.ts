@@ -1,12 +1,12 @@
 import { teamState } from '../team-fixtures';
 import type { HarnessScenario } from '../types';
 
-// Settings > General > Labs > Team: Leo is the admin of Acme (relay, live), two others on the team and
+// Settings > Team: Leo is the admin of Acme (relay, live), two others on the team and
 // Priya waiting for a yes.
 const s: HarnessScenario = {
   name: 'settings-team',
   route: 'settings',
-  settingsTab: 'general',
+  settingsTab: 'team',
   team: teamState(),
   after: async (dom) => {
     const row = await dom.waitFor('.st-team');

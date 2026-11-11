@@ -255,10 +255,16 @@ static APP_SHUTTING_DOWN: std::sync::atomic::AtomicBool = std::sync::atomic::Ato
 
 /// The app is about to end (quit, or an update install) and will kill every pane: from now on a closing chat pane only
 /// stops its session; its record keeps its state, so the next start brings the conversation back. Set right before the
-/// panes are killed. A person closing a chat is unaffected only while this is not set, and it is never unset (the
-/// process ends).
+/// panes are killed. A person closing a chat is unaffected only while this is not set. Quitting never unsets it (the
+/// process ends); an update install that failed does ([`cancel_app_shutdown`]), because then the app keeps running.
 pub fn begin_app_shutdown() {
     APP_SHUTTING_DOWN.store(true, Ordering::SeqCst);
+}
+
+/// The app is not ending after all (the update installer could not start): closing a chat is the person's doing again,
+/// not the app ending, until the next [`begin_app_shutdown`].
+pub fn cancel_app_shutdown() {
+    APP_SHUTTING_DOWN.store(false, Ordering::SeqCst);
 }
 
 /// True once the app is ending (see [`begin_app_shutdown`]): panes then go because the app ends, not because a person closed them.

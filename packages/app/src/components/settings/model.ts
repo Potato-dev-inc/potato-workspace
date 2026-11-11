@@ -1,4 +1,4 @@
-// Settings window model: the six sections, the row contract every section implements, and search.
+// Settings window model: the seven sections, the row contract every section implements, and search.
 //
 // A section is a list of rows (`RowDef`). The panel renders them grouped, filters them when you search
 // (label + hint + keywords), and hands every row a `SettingsEnv`: the fresh settings, a partial-patch
@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import type { Settings } from '@potato-workspace/shared';
 import type { SettingsPatch } from '../../lib/settings';
 
-export const SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone'] as const;
+export const SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'shortcuts'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
 /** `later` is the read-only "Coming later" page; it is not a section of settings. */

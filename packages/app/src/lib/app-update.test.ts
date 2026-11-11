@@ -33,7 +33,7 @@ describe('plain errors', () => {
   });
 
   it('says one agent or several when work runs', () => {
-    expect(runningJobWarning(['claude'])).toContain('An agent is working');
-    expect(runningJobWarning(['claude', 'codex'])).toContain('2 agents are working');
+    expect(runningJobWarning(['claude'])).toContain('An agent is still working');
+    expect(runningJobWarning(['claude', 'codex'])).toContain('2 agents are still working');
   });
 });

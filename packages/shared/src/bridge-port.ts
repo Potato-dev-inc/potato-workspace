@@ -22,13 +22,24 @@ function defaultAppDataBridgePortFile(): string {
   }
 }
 
-function parseBridgePort(raw: string): { port: number; host: string } {
+/** Whether `host` is this computer. The bridge only listens on loopback; a port file naming anything else is refused. */
+export function isLoopbackHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return h === 'localhost' || h === '::1' || /^127(\.\d{1,3}){3}$/.test(h);
+}
+
+/** `{host, port}` from a port file's text, or `null` when it names a host that is not loopback. */
+export function parseBridgePort(raw: string): { port: number; host: string } | null {
   const trimmed = raw.trim();
+  let host = '127.0.0.1';
+  let portStr = trimmed;
   if (trimmed.includes(':')) {
-    const [host, portStr] = trimmed.split(':');
-    return { host: host || '127.0.0.1', port: Number(portStr) };
+    const [h, p] = trimmed.split(':');
+    host = h || '127.0.0.1';
+    portStr = p ?? '';
   }
-  return { host: '127.0.0.1', port: Number(trimmed) };
+  if (!isLoopbackHost(host)) return null;
+  return { host: host.toLowerCase() === 'localhost' ? '127.0.0.1' : host, port: Number(portStr) };
 }
 
 /** Expands `%VAR%` so MCP client `env` blocks can reference `%APPDATA%`. Unknown vars stay as-is. */
@@ -40,7 +51,8 @@ function bridgePortCandidates(filePath?: string): string[] {
   if (filePath) return [filePath];
   const envPath = process.env[BRIDGE_PORT_FILE_ENV];
   if (envPath) return [expandEnvVars(envPath)];
-  return [DEFAULT_BRIDGE_PORT_FILE, defaultAppDataBridgePortFile()];
+  // Never the current directory: an untrusted repository could ship its own port file and redirect traffic.
+  return [defaultAppDataBridgePortFile()];
 }
 
 export async function readAllBridgePorts(
@@ -51,7 +63,7 @@ export async function readAllBridgePorts(
   for (const fp of [...new Set(bridgePortCandidates(filePath))]) {
     try {
       const parsed = parseBridgePort(await readFile(fp, 'utf-8'));
-      if (!Number.isFinite(parsed.port) || parsed.port <= 0) continue;
+      if (!parsed || !Number.isFinite(parsed.port) || parsed.port <= 0) continue;
       const key = `${parsed.host}:${parsed.port}`;
       if (seen.has(key)) continue;
       seen.add(key);

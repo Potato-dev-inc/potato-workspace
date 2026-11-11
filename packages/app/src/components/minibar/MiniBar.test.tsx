@@ -2,7 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MiniBar, projectName } from './MiniBar';
+import { MiniBar, needsYouFirst, projectName } from './MiniBar';
 import MiniBarApp from './MiniBarApp';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -78,7 +78,7 @@ describe('MiniBarApp (the real window content)', () => {
     act(() => root.render(createElement(MiniBarApp)));
     await flush();
     const chips = [...host.querySelectorAll('.mb-chip')];
-    expect(chips.map((c) => c.textContent)).toEqual(['Claudeshop', 'Codexapi']);
+    expect(chips.map((c) => c.textContent)).toEqual(['Claudeshop', 'Codex CLIapi']);
     expect(host.querySelector('.mb-dot--running')).toBeTruthy();
     act(() => (chips[1] as HTMLElement).click());
     expect(api.focus).toHaveBeenCalledWith('b2');
@@ -89,7 +89,7 @@ describe('MiniBarApp (the real window content)', () => {
     act(() => root.render(createElement(MiniBarApp)));
     await flush();
     const chip = host.querySelector('.mb-chip') as HTMLElement;
-    expect(chip.textContent).toBe('Codexapi');
+    expect(chip.textContent).toBe('Codex CLIapi');
     expect(chip.title).toContain('Chat');
     expect(host.textContent).not.toMatch(/no terminal|not available/i);
     act(() => chip.click());
@@ -192,7 +192,7 @@ describe('MiniBar with many agents', () => {
     });
     act(() => root.render(createElement(MiniBarApp)));
     await flush();
-    const x = host.querySelector('button[aria-label="Close Codex two"]') as HTMLButtonElement;
+    const x = host.querySelector('button[aria-label="Close Codex CLI two"]') as HTMLButtonElement;
     expect(x).toBeTruthy();
     expect(x.tabIndex).toBeGreaterThanOrEqual(0);
     act(() => x.click());
@@ -213,5 +213,46 @@ describe('MiniBar with many agents', () => {
     await flush();
     expect(api.kill).toHaveBeenCalledWith('a1');
     expect(api.focus).not.toHaveBeenCalled();
+  });
+});
+
+describe('MiniBar names and order', () => {
+  const props = { toast: false, onFocusPane: () => {}, onNew: () => {}, onBack: () => {}, onUndo: () => {} };
+
+  it('shows the friendly name the caller gives, not the raw id', () => {
+    const panes = [pane('o1', 'opencode_native', '/x/api')] as never;
+    act(() => root.render(createElement(MiniBar, { ...props, panes, labelOf: () => 'OpenCode' })));
+    expect(host.querySelector('.mb-chip-name')?.textContent).toBe('OpenCode');
+  });
+
+  it('tidies the id when no name is given', () => {
+    const panes = [pane('o1', 'opencode_native', '/x/api')] as never;
+    act(() => root.render(createElement(MiniBar, { ...props, panes })));
+    expect(host.querySelector('.mb-chip-name')?.textContent).toBe('Opencode native');
+  });
+
+  it('puts agents that need you first and keeps the order of the rest', () => {
+    const list = [pane('a', 'claude', '/x/a', 'running'), pane('b', 'codex', '/x/b', 'idle'), pane('c', 'claude', '/x/c', 'waiting_input'), pane('d', 'codex', '/x/d', 'error')];
+    expect(needsYouFirst(list as never).map((p) => p.id)).toEqual(['c', 'd', 'a', 'b']);
+    act(() => root.render(createElement(MiniBar, { ...props, panes: list as never })));
+    expect([...host.querySelectorAll('.mb-chip')].map((c) => c.textContent)).toEqual(['Claudec', 'Codexd', 'Claudea', 'Codexb']);
+    expect(host.querySelectorAll('.mb-chip[data-needs]')).toHaveLength(2);
+  });
+
+  it('a chip that is cut short still has its whole name and folder in the title', () => {
+    const panes = [pane('a', 'claude', '/work/a-very-long-project-folder-name', 'waiting_input')] as never;
+    act(() => root.render(createElement(MiniBar, { ...props, panes, labelOf: () => 'Claude with a long name' })));
+    const chip = host.querySelector('.mb-chip') as HTMLElement;
+    expect(chip.title).toBe('Claude with a long name · a-very-long-project-folder-name: needs you');
+  });
+
+  it('a chip that gets the keyboard scrolls into view', () => {
+    const panes = [pane('a', 'claude', '/x/a')] as never;
+    act(() => root.render(createElement(MiniBar, { ...props, panes })));
+    const chip = host.querySelector('.mb-chip') as HTMLElement;
+    const scroll = vi.fn();
+    chip.scrollIntoView = scroll;
+    act(() => chip.focus());
+    expect(scroll).toHaveBeenCalled();
   });
 });

@@ -45,7 +45,10 @@ pub(crate) use shell_hint::*;
 pub(crate) use stdio::run;
 
 const SERVER_NAME: &str = "potato-workspace";
-const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The shipped app version (tauri.conf.json), not the crate number.
+fn server_version() -> &'static str {
+    puppet_master_app_lib::app_lifecycle::app_version()
+}
 const BRIDGE_PORT_FILE_ENV: &str = "POTATO_WORKSPACE_BRIDGE_PORT_FILE";
 const DEFAULT_BRIDGE_PORT_FILE: &str = "potato-workspace.bridge.port";
 const APP_ID: &str = "com.potatodev.workspace";

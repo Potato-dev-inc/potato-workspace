@@ -6,6 +6,7 @@
 //   - the links left behind where a row used to be
 // A row that is not named here (for example one a new feature adds) keeps its own `group` and is placed after the
 // named groups of its section, so adding a row never needs a change here to show up.
+import { SIGN_IN } from '../../lib/glossary';
 import type { ReactNode } from 'react';
 import type { RowDef, SectionDef, SectionId, SettingsEnv } from './model';
 import { useDevLabsOverride, DEV_LABS_NOTE } from '../../lib/dev-labs';
@@ -24,7 +25,7 @@ export const LABS_GROUP = 'Labs';
 export const LABS_INDEX_ID = 'labs-index';
 
 /** Early features list in this order; one added later (a new row with `labs`) is listed after them. */
-const LABS_ORDER = ['team', 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation'];
+const LABS_ORDER = ['ask-bar', 'simple-mode', 'live-updates', 'opencode-automation'];
 
 export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
   general: [
@@ -47,7 +48,7 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
     { group: 'Uninstall', rows: ['uninstall'] },
   ],
   agents: [
-    { group: 'Logins', rows: ['accounts'] },
+    { group: SIGN_IN.group, rows: ['accounts'] },
     { group: 'Helpers', rows: ['helper-agents', 'keep-helpers-open', 'close-helpers-with-agent'] },
     { group: 'Ready to use', rows: ['preload', 'helper-tools'] },
     { group: 'Chat', rows: ['agent-lane', 'chat-addons'] },
@@ -72,12 +73,15 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
     { group: 'Set up by hand', rows: ['snippet-claude-desktop', 'snippet-codex'] },
     { group: 'Uninstall', rows: ['mcp-uninstall'] },
   ],
+  // Shortcuts: one group per kind of shortcut, in the order lib/shortcuts.ts lists them (the section file names the groups).
+  shortcuts: [],
   phone: [
     { group: 'Pair a phone', rows: ['pairing'] },
     { group: 'Your phones', rows: ['paired-devices', 'revoke-all-devices'] },
     { group: 'On the phone', rows: ['phone-notifications', 'mobile-input-delay', 'mobile-keyboard-resizes', 'mobile-input-visible'] },
     { group: 'Public address', rows: ['tunnel'] },
   ],
+  team: [{ group: 'Your team', rows: ['team-page'] }],
 };
 
 /** Every row id the layout names (not the `@labs` placeholder or the links). Used to catch stale ids. */

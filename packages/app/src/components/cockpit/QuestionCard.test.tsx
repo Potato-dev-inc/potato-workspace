@@ -81,9 +81,9 @@ describe('QuestionCard: which login should a helper use', () => {
       root.render(<QuestionCard q={helperCard} now={90_000} onAnswer={onAnswer} onDismiss={vi.fn()} onAddLogin={onAddLogin} />);
     });
     expect(host.querySelector('.ib-title')?.textContent).toBe('Which login should this Claude helper use?');
-    expect(buttons().map((b) => b.textContent)).toEqual(['Main login', 'Work', 'Add another login', 'Dismiss']);
+    expect(buttons().map((b) => b.textContent)).toEqual(['Main login', 'Work', 'Add another sign-in', 'Dismiss']);
     expect(host.querySelector('[data-testid="helper-always"]')?.textContent).toBe('Always use this');
-    act(() => byText('Add another login').click());
+    act(() => byText('Add another sign-in').click());
     expect(onAddLogin).toHaveBeenCalledOnce();
     expect(onAnswer).not.toHaveBeenCalled();
   });

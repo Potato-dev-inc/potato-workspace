@@ -8,7 +8,7 @@ fn dir() -> PathBuf {
 
 /// Shipped code only: comments dropped, and everything from the first test module on.
 fn shipped(source: &str) -> String {
-    let cut = ["#[cfg(test)]\nmod tests {", "#[cfg(test)]\nmod labs_tests {"]
+    let cut = ["#[cfg(test)]\nmod tests {", "#[cfg(test)]\nmod labs_tests {", "#[cfg(test)]\nmod prompt_tests {"]
         .iter()
         .filter_map(|marker| source.find(marker))
         .min()

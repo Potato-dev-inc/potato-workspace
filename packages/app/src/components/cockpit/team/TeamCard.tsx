@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { cardActions, cardMeta, cardTitle, type TeamApi, type TeamCard as Card } from '../../../lib/team';
+import { cardActions, cardMeta, cardTitle, githubUrl, warRoomLine, type TeamApi, type TeamCard as Card } from '../../../lib/team';
+import { tauri } from '../../../lib/tauri';
 import { CardButton, InboxCard } from '../InboxCard';
 import { MergeSheet } from './MergeSheet';
 import { QueueSheet } from './QueueSheet';
@@ -21,6 +22,8 @@ export function TeamCard({ card, api, now, onDone }: { card: Card; api: TeamApi;
   const [mergeOpen, setMergeOpen] = useState(false);
   const actions = cardActions(card);
   const e = card.event;
+  // War Room cards (a PR opened, a push to the default branch) link to GitHub.
+  const url = warRoomLine(e) ? githubUrl(e) : null;
 
   const run = async (what: () => Promise<string | void>) => {
     setBusy(true);
@@ -71,6 +74,11 @@ export function TeamCard({ card, api, now, onDone }: { card: Card; api: TeamApi;
             {actions.mergeWhenGreen && (
               <CardButton tone="secondary" role="answer" disabled={busy} onClick={() => setMergeOpen(true)}>
                 Merge when green
+              </CardButton>
+            )}
+            {url && (
+              <CardButton tone="plain" role="open" onClick={() => void tauri.openExternalUrl(url)}>
+                Open on GitHub
               </CardButton>
             )}
           </>

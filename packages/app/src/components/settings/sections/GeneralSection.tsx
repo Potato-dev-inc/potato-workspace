@@ -24,7 +24,6 @@ import { LiveRoomRow } from '../blocks/LiveRoomRow';
 import { LoopGuardSettingsBlock } from '../blocks/LoopGuardSettings';
 import { SharedMemoryToggle } from '../blocks/SharedMemoryToggle';
 import { START_AT_SIGN_IN_HINT, START_AT_SIGN_IN_LABEL, StartAtSignInSettings } from '../blocks/StartAtSignInSettings';
-import { TeamSettings } from '../blocks/TeamSettings';
 import { WhatsNew, WHATS_NEW_LABEL } from '../blocks/WhatsNew';
 import { NumberControl, TextControl } from '../controls';
 import type { RowDef, SettingsEnv } from '../model';
@@ -459,7 +458,7 @@ export const generalRows: RowDef[] = [
   {
     id: 'chat-search-index',
     label: 'Search index of my chats',
-    hint: 'Keeps chat text for Ctrl+Shift+F search, on this computer only. Clear it any time.',
+    hint: 'Keeps chat text for chat search, on this computer only. Clear it any time.',
     keywords: 'keep keeps clear search index chats find ctrl shift f palette history privacy forget saved text',
     group: 'Storage',
     render: (env) => <ChatIndexSettings env={env} />,
@@ -467,7 +466,7 @@ export const generalRows: RowDef[] = [
   {
     id: 'bring-old-chats',
     label: 'Bring my old chats',
-    hint: 'Adds chats from Claude, Codex and other agents to Ctrl+Shift+F search. Stays on this PC.',
+    hint: 'Adds chats from Claude, Codex and other agents to chat search. Stays on this PC.',
     keywords: 'import old chats claude codex opencode history bring',
     group: 'Storage',
     render: (env) => <BringChatsSettings env={env} />,
@@ -524,14 +523,14 @@ export const generalRows: RowDef[] = [
   },
   {
     id: 'acp-chat-labs',
-    label: 'Chat sessions (ACP)',
+    label: 'Chat sessions',
     hint: 'Run an agent as a chat instead of a terminal. Pick Chat per agent under Agents.',
     keywords: 'chat acp agent client protocol conversation terminal lane labs early',
     group: 'Labs',
-    labs: { name: 'Chat sessions (ACP)', about: 'Run an agent as a chat instead of in a terminal.' },
+    labs: { name: 'Chat sessions', about: 'Run an agent as a chat instead of in a terminal.' },
     render: (env) => (
       <SettingToggle
-        label="Chat sessions (ACP)"
+        label="Chat sessions"
         description="Run an agent as a chat instead of a terminal. Pick Chat per agent under Agents."
         checked={env.settings.acp_chat_enabled ?? true}
         onChange={(value) => void env.patch({ acp_chat_enabled: value })}
@@ -570,7 +569,6 @@ export const generalRows: RowDef[] = [
       />
     ),
   },
-  { id: 'team', label: 'Team', hint: 'Tell teammates when your agent pushes; get a card when theirs does.', keywords: 'team heads-up co-work teammates push pull merge labs shared folder', group: 'Labs', labs: { name: 'Team', about: 'Tell teammates when your agent pushes, and see when theirs does.' }, render: (env) => <TeamSettings onSaved={env.markSaved} /> },
   { id: 'live-room', label: 'Live Room', hint: 'Let people with a link watch a chat. Pick the relay address, how long and how many.', keywords: 'live room share stream watch link relay viewers broadcast default length', group: 'Live Room', render: (env) => <LiveRoomRow onSaved={env.markSaved} /> },
   { id: 'version', label: 'Version', hint: 'Check for updates and download the installer.', keywords: 'app version update release download install', group: 'About', render: () => <VersionRow /> },
   { id: 'whats-new', label: WHATS_NEW_LABEL, hint: 'The short version of what changed, with a link to each place.', keywords: 'release notes changelog new features changes version update 0.2.0', group: 'About', render: (env) => <WhatsNew env={env} /> },

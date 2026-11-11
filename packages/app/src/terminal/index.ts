@@ -8,7 +8,7 @@ export { createOwnerReplayReader } from './pane-replay';
 export type { OwnerReplayDeps } from './pane-replay';
 export { CLEAR_SCROLLBACK, ReprintWipe } from './reprint-wipe';
 export { SnapshotBatcher } from './snapshot-batcher';
-export { TerminalSession } from './terminal-session';
+export { JUMP_TO_LATEST_EVENT, TerminalSession } from './terminal-session';
 export {
   TERMINAL_AUTHORITY_CHANGED_EVENT,
   TERMINAL_SCALE_STAGE_CLASS,

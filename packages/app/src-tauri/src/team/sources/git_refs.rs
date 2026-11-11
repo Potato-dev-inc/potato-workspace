@@ -57,6 +57,37 @@ pub struct PushFact {
     pub forced: bool,
     pub stats: DiffStat,
     pub paths: Vec<String>,
+    /// The push went to the remote's default branch (main/master): War Room, sent without asking.
+    pub default_branch: bool,
+    /// Default branch only: new commits, and the subject of the oldest one.
+    pub commits: Option<u32>,
+    pub first_commit: Option<String>,
+}
+
+/// `refs/remotes/<remote>/<default>`: from `<remote>/HEAD`, else the first of main, master, trunk,
+/// develop that exists.
+fn default_ref(dir: &Path, remote: &str, snap: &RefSnapshot) -> Option<String> {
+    git::run(dir, &["symbolic-ref", "-q", &format!("refs/remotes/{remote}/HEAD")])
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            ["main", "master", "trunk", "develop"]
+                .iter()
+                .map(|b| format!("refs/remotes/{remote}/{b}"))
+                .find(|r| snap.contains_key(r))
+        })
+}
+
+/// How many commits `from..to` holds, and the subject of the oldest.
+fn commit_summary(dir: &Path, from: Option<&str>, to: &str) -> (Option<u32>, Option<String>) {
+    let range = match from {
+        Some(f) => format!("{f}..{to}"),
+        None => to.to_string(),
+    };
+    let Ok(text) = git::run(dir, &["log", "--format=%s", "--max-count=500", &range]) else { return (None, None) };
+    let subjects: Vec<&str> = text.lines().collect();
+    let first = subjects.last().map(|s| crate::team::event::clean_text(s, 120)).filter(|s| !s.is_empty());
+    (Some(subjects.len() as u32), first)
 }
 
 /// `refs/remotes/<remote>/<branch>` → (`remote`, `branch`).
@@ -76,15 +107,7 @@ pub fn moved(old: &RefSnapshot, new: &RefSnapshot) -> Vec<(String, Option<String
 
 /// The commit a new branch's changes are counted from: where it left the remote's default branch.
 fn base_for_new_branch(dir: &Path, remote: &str, commit: &str, snap: &RefSnapshot) -> Option<String> {
-    let default = git::run(dir, &["symbolic-ref", "-q", &format!("refs/remotes/{remote}/HEAD")])
-        .ok()
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            ["main", "master", "trunk", "develop"]
-                .iter()
-                .map(|b| format!("refs/remotes/{remote}/{b}"))
-                .find(|r| snap.contains_key(r))
-        })?;
+    let default = default_ref(dir, remote, snap)?;
     let base = git::run(dir, &["merge-base", commit, &default]).ok()?;
     (!base.is_empty() && base != commit).then_some(base)
 }
@@ -131,7 +154,13 @@ pub fn pushes(dir: &Path, common_dir: &Path, old: &RefSnapshot, new: &RefSnapsho
             _ => base_for_new_branch(dir, &remote, &after, new),
         };
         let (stats, paths) = diff_stat(dir, from.as_deref(), &after);
-        out.push(PushFact { remote, branch, old: before, commit: after, forced, stats, paths });
+        let default_branch = default_ref(dir, &remote, new).as_deref() == Some(refname.as_str());
+        let (commits, first_commit) = if default_branch && !forced {
+            commit_summary(dir, before.as_deref(), &after)
+        } else {
+            (None, None)
+        };
+        out.push(PushFact { remote, branch, old: before, commit: after, forced, stats, paths, default_branch, commits, first_commit });
     }
     out
 }

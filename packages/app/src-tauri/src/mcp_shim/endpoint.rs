@@ -88,7 +88,10 @@ const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 
 pub(crate) fn accepts_connection(host: &str, port: u16) -> bool {
     use std::net::{SocketAddr, TcpStream};
-    let Ok(ip) = host.parse::<std::net::IpAddr>() else { return true };
+    let Ok(ip) = host.parse::<std::net::IpAddr>() else { return false };
+    if !ip.is_loopback() {
+        return false;
+    }
     TcpStream::connect_timeout(&SocketAddr::new(ip, port), PROBE_CONNECT_TIMEOUT).is_ok()
 }
 
@@ -146,10 +149,9 @@ pub(crate) fn bridge_port_candidates() -> Vec<PathBuf> {
             env::var(name).ok()
         }))];
     }
-    vec![
-        PathBuf::from(DEFAULT_BRIDGE_PORT_FILE),
-        default_app_data_bridge_port_file(),
-    ]
+    // Never the current directory: a repository an agent works in could ship its own port file and
+    // redirect MCP traffic (and the local secret) to a server of its choosing.
+    vec![default_app_data_bridge_port_file()]
 }
 
 /// Expands `%VAR%` references so config files that cannot expand variables
@@ -215,10 +217,37 @@ pub(crate) fn parse_bridge_endpoint(raw: &str) -> Result<BridgeEndpoint, String>
     let port = port_text
         .parse::<u16>()
         .map_err(|err| format!("invalid bridge port file value {trimmed:?}: {err}"))?;
+    // The bridge only ever listens on this computer. A port file naming any other host is refused.
+    let host = if host.eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { host };
+    match host.parse::<std::net::IpAddr>() {
+        Ok(ip) if ip.is_loopback() => {}
+        _ => return Err(format!("refusing a non-loopback bridge host {host:?} in the port file")),
+    }
     Ok(BridgeEndpoint {
         host: host.to_string(),
         port,
     })
+}
+
+#[cfg(test)]
+mod loopback_tests {
+    use super::*;
+
+    #[test]
+    fn a_port_file_naming_another_host_is_refused() {
+        assert!(parse_bridge_endpoint("evil.example.com:17321").is_err());
+        assert!(parse_bridge_endpoint("10.0.0.5:17321").is_err());
+        assert!(parse_bridge_endpoint("0.0.0.0:17321").is_err());
+        assert_eq!(parse_bridge_endpoint("localhost:17321").unwrap().host, "127.0.0.1");
+        assert!(!accepts_connection("10.0.0.5", 17321));
+        assert!(!accepts_connection("example.com", 17321));
+    }
+
+    #[test]
+    fn the_current_directory_is_never_a_port_file_candidate() {
+        let candidates = bridge_port_candidates();
+        assert!(!candidates.contains(&PathBuf::from(DEFAULT_BRIDGE_PORT_FILE)), "{candidates:?}");
+    }
 }
 
 #[cfg(test)]

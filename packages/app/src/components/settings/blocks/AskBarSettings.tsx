@@ -11,8 +11,11 @@ export function AskBarSettingsBlock({ api = tauriAskbarApi, onSaved }: { api?: A
     api.settingsGet().then(setS).catch(() => {});
     api.agents().then(setAgents).catch(() => {});
   }, [api]);
+  const [error, setError] = useState<string | null>(null);
   if (!s) return null;
   const save = (next: AskbarSettings) => {
+    const before = s;
+    setError(null);
     setS(next);
     api
       .settingsSet(next)
@@ -20,17 +23,25 @@ export function AskBarSettingsBlock({ api = tauriAskbarApi, onSaved }: { api?: A
         setS(saved);
         onSaved?.();
       })
-      .catch(() => {});
+      .catch((e: unknown) => {
+        setS(before); // put the old value back: it was not saved
+        setError('Not saved: ' + (e instanceof Error ? e.message : String(e)));
+      });
   };
   return (
     <>
+      {error && (
+        <p role="alert" className="text-xs text-pm-err">
+          {error}
+        </p>
+      )}
       <SettingToggle
         label="Ask bar"
-        description="Open a small bar from anywhere in Windows to ask an agent a quick question. Off by default."
+        description="Open a small bar from any app to ask an agent a quick question. Off by default."
         checked={s.enabled}
         onChange={(enabled) => save({ ...s, enabled })}
       />
-      <SettingRow label="Ask bar shortcut" description="Pick the keys that open the bar.">
+      <SettingRow label="Ask bar shortcut" description="Pick the keys that open the bar. Record your own in Settings > Shortcuts.">
         <FieldSelect aria-label="Ask bar shortcut" value={s.shortcut} disabled={!s.enabled} onChange={(e) => save({ ...s, shortcut: e.target.value })}>
           {ASKBAR_SHORTCUTS.map((key) => (
             <option key={key} value={key}>

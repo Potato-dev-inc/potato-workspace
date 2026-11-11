@@ -704,7 +704,7 @@ describe('CockpitApp palette shortcuts', () => {
     expect(palette()?.dataset.mode).toBe('chats');
     press({ key: 'k', ctrlKey: true });
     press({ key: 'k', ctrlKey: true });
-    press({ key: 'f', metaKey: true, shiftKey: true });
+    press({ key: 'f', ctrlKey: true, shiftKey: true });
     expect(palette()?.dataset.mode).toBe('chats');
   });
 
@@ -729,6 +729,48 @@ describe('CockpitApp palette shortcuts', () => {
     act(() => void field.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true, cancelable: true })));
     expect(sheet()).toBeNull();
     field.remove();
+  });
+});
+
+describe('CockpitApp keyboard moves between agents', () => {
+  const press = (init: KeyboardEventInit) => act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })));
+
+  it('Alt+Shift+Down goes to the next agent and Alt+Shift+Up back, wrapping round', () => {
+    expect(mainText()).toBe('PANE VIEW p1');
+    press({ key: 'ArrowDown', altKey: true, shiftKey: true });
+    expect(mainText()).toBe('PANE VIEW p2');
+    press({ key: 'ArrowDown', altKey: true, shiftKey: true });
+    expect(mainText()).toBe('PANE VIEW p1');
+    press({ key: 'ArrowUp', altKey: true, shiftKey: true });
+    expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('Alt+Shift+2 jumps to agent number 2, and a number past the end does nothing', () => {
+    press({ key: '@', code: 'Digit2', altKey: true, shiftKey: true });
+    expect(mainText()).toBe('PANE VIEW p2');
+    press({ key: '#', code: 'Digit3', altKey: true, shiftKey: true });
+    expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('Alt+Shift+I opens the Inbox', () => {
+    press({ key: 'I', altKey: true, shiftKey: true });
+    expect(mainText()).toContain('INBOX VIEW');
+  });
+
+  it('says so when no agent needs you', () => {
+    live.notes.length = 0;
+    press({ key: 'N', altKey: true, shiftKey: true });
+    expect(live.notes).toContain('Nothing needs you right now');
+  });
+
+  it('the keys follow the person\'s own choice', async () => {
+    const { setKeybindings } = await import('./lib/shortcuts');
+    act(() => setKeybindings({ 'pane-next': 'Mod+Alt+J' }));
+    press({ key: 'ArrowDown', altKey: true, shiftKey: true });
+    expect(mainText()).toBe('PANE VIEW p1');
+    press({ key: 'j', ctrlKey: true, altKey: true });
+    expect(mainText()).toBe('PANE VIEW p2');
+    act(() => setKeybindings({}));
   });
 });
 

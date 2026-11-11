@@ -18,6 +18,7 @@ import {
   type ImportState,
 } from '../../lib/chatImport';
 import '../../styles/history.css';
+import { bindingLabel } from '../../lib/shortcuts';
 
 export const BRING_CHATS_TITLE_ID = 'bc-panel-title';
 /** The text of the "Remove imported chats" question. The Settings row uses the same words. */
@@ -331,7 +332,7 @@ export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = f
           {progress.phase === 'done' ? (
             <p className="ck-sub" role="status">
               {added > 0
-                ? `Added ${chatCount(added)}. Press Ctrl+Shift+F to find anything in them.`
+                ? `Added ${chatCount(added)}. Press ${bindingLabel('search-chats') || 'the search shortcut'} to find anything in them.`
                 : 'Nothing new to add. Your old chats are already in search.'}
             </p>
           ) : (

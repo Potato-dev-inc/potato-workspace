@@ -83,12 +83,14 @@ impl TunnelState {
     }
 
     fn dev_info_payload(&self) -> DevInfoPayload {
-        let local_url = format!("http://127.0.0.1:{}", pwa_server::pwa_port());
+        // Empty while the phone server is not running: the page treats an empty address as "none".
+        let local_url = local_phone_url().unwrap_or_default();
         let tunnel_url = self.tunnel_url.clone();
-        let bridge_proxy_url = tunnel_url
-            .as_ref()
-            .map(|url| format!("{}/bridge", url.trim_end_matches('/')))
-            .unwrap_or_else(|| format!("{local_url}/bridge"));
+        let bridge_proxy_url = match (&tunnel_url, local_url.is_empty()) {
+            (Some(url), _) => format!("{}/bridge", url.trim_end_matches('/')),
+            (None, false) => format!("{local_url}/bridge"),
+            (None, true) => String::new(),
+        };
 
         DevInfoPayload {
             local_url: local_url.clone(),
@@ -111,6 +113,14 @@ impl TunnelState {
         }
     }
 }
+
+/// Where the phone server answers on this computer, or `None` when it is not running (it never bound a port).
+fn local_phone_url() -> Option<String> {
+    pwa_server::bound_pwa_port().map(|port| format!("http://127.0.0.1:{port}"))
+}
+
+/// What the person reads when a tunnel is asked for while the phone server is not running.
+const PHONE_SERVER_DOWN: &str = "The phone server is not running, so there is nothing to share yet.";
 
 fn tunnel_state() -> Arc<Mutex<TunnelState>> {
     TUNNEL_STATE
@@ -257,7 +267,7 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
     };
 
     let cloudflared_bin = resolve_cloudflared_bin(app).map_err(&fail)?;
-    let local_target = format!("http://127.0.0.1:{}", pwa_server::pwa_port());
+    let local_target = local_phone_url().ok_or_else(|| fail(PHONE_SERVER_DOWN.into()))?;
     let mut command = crate::proc_util::hidden_command(&cloudflared_bin);
     command
         .args(tunnel_config::cloudflared_args(&plan, &local_target))

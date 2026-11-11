@@ -47,12 +47,9 @@ impl OwnPorts {
     /// The ports this app uses now: the phone server (1420 or the bound port), the bridge range,
     /// the WebView2 debugging port (from the environment, and 9333), and the dev server port.
     pub fn current(dev_url_port: Option<u16>) -> Self {
-        let mut ports = vec![
-            crate::pwa_server::PWA_PORT,
-            crate::pwa_server::pwa_port(),
-            pwa_port_for(None),
-            CDP_PORT,
-        ];
+        let mut ports = vec![crate::pwa_server::PWA_PORT, pwa_port_for(None), CDP_PORT];
+        // The port the phone server really bound; nothing when it is not running.
+        ports.extend(crate::pwa_server::bound_pwa_port());
         if let Ok(args) = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS") {
             ports.extend(cdp_port_in(&args));
         }

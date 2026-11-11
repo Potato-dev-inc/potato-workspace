@@ -262,3 +262,44 @@ pub fn rotate(roster: &mut Roster, keys: &KeyStore, transport: &dyn TeamTranspor
     *roster = next;
     Ok(epoch)
 }
+
+/// A first guess for "Your name" on the Team page when nothing else is known: the sign-in name of this
+/// computer, else the computer's name. `get` reads an environment variable (a fake in tests).
+pub fn suggest_name(get: impl Fn(&str) -> Option<String>) -> String {
+    for key in ["USERNAME", "USER", "COMPUTERNAME", "HOSTNAME"] {
+        let value = get(key).unwrap_or_default();
+        let value = value.trim();
+        if !value.is_empty() {
+            let mut chars = value.chars();
+            let first = chars.next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default();
+            return format!("{first}{}", chars.as_str()).chars().take(40).collect();
+        }
+    }
+    String::new()
+}
+
+#[cfg(test)]
+mod suggest_name_tests {
+    use super::suggest_name;
+
+    fn env<'a>(pairs: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
+        move |k| pairs.iter().find(|(n, _)| *n == k).map(|(_, v)| v.to_string())
+    }
+
+    #[test]
+    fn prefers_the_sign_in_name_and_capitalises_it() {
+        assert_eq!(suggest_name(env(&[("USERNAME", "maya"), ("COMPUTERNAME", "DESK-1")])), "Maya");
+    }
+
+    #[test]
+    fn falls_back_to_the_computer_name_then_to_nothing() {
+        assert_eq!(suggest_name(env(&[("USERNAME", "  "), ("COMPUTERNAME", "DESK-1")])), "DESK-1");
+        assert_eq!(suggest_name(env(&[])), "");
+    }
+
+    #[test]
+    fn is_cut_at_40_characters() {
+        let long = "x".repeat(60);
+        assert_eq!(suggest_name(env(&[("USER", long.as_str())])).chars().count(), 40);
+    }
+}

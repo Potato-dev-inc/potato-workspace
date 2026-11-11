@@ -22,7 +22,7 @@ export const LEGACY_TABS: Record<string, SettingsPageId> = {
   marketplace: 'later',
   rules: 'later',
   costs: 'later',
-  team: 'general',
+  team: 'team',
   automation: 'later',
   observability: 'later',
   plugins: 'bridge',

@@ -35,6 +35,8 @@ const MODE_LIVE: u8 = 1;
 const MODE_POLLING: u8 = 2;
 /// The relay answered "not on this team": the access list no longer has this device.
 const MODE_DENIED: u8 = 3;
+/// Nothing has been tried yet: the first WebSocket connect or poll has not finished.
+const MODE_CONNECTING: u8 = 4;
 
 pub struct RelayTransport {
     /// `https://relay.example.com` (or `http://127.0.0.1:8787`), no trailing slash.
@@ -103,6 +105,15 @@ pub fn normalize_relay_url(raw: &str) -> Result<String, String> {
     Ok(url)
 }
 
+/// The mode after a failed poll: the relay turning this device away is not the same as it being unreachable.
+fn mode_after_error(error: &TransportError) -> u8 {
+    if error.is_denied() {
+        MODE_DENIED
+    } else {
+        MODE_OFFLINE
+    }
+}
+
 impl RelayTransport {
     pub fn new(base: &str, team: &str, device: SigningKey) -> Result<Self, String> {
         let base = normalize_relay_url(base)?;
@@ -121,7 +132,7 @@ impl RelayTransport {
             device,
             agent,
             stops: Mutex::new(Vec::new()),
-            mode: Arc::new(AtomicU8::new(MODE_OFFLINE)),
+            mode: Arc::new(AtomicU8::new(MODE_CONNECTING)),
             poll_only: false,
         })
     }
@@ -281,7 +292,7 @@ impl ReaderCtx {
                         }
                     }
                     Err(error) => {
-                        self.mode.store(if error.is_denied() { MODE_DENIED } else { MODE_OFFLINE }, Ordering::SeqCst);
+                        self.mode.store(mode_after_error(&error), Ordering::SeqCst);
                         tracing::debug!(%error, "team: relay poll failed");
                         std::thread::sleep(BACKOFF);
                     }
@@ -428,6 +439,8 @@ impl TeamTransport for RelayTransport {
         match self.mode.load(Ordering::SeqCst) {
             MODE_LIVE => "live",
             MODE_POLLING => "polling",
+            MODE_CONNECTING => "connecting",
+            MODE_DENIED => "denied",
             _ => "offline",
         }
     }
@@ -461,5 +474,27 @@ mod tests {
         assert!(normalize_relay_url("http://relay.example.com").is_err());
         assert!(normalize_relay_url("ftp://x").is_err());
         assert!(normalize_relay_url("https://").is_err());
+    }
+
+    fn transport() -> RelayTransport {
+        RelayTransport::new("https://relay.example.com", "team-x", crate::team::crypto::new_signing_key()).unwrap()
+    }
+
+    #[test]
+    fn status_is_connecting_before_the_first_attempt_finishes() {
+        assert_eq!(transport().status(), "connecting");
+    }
+
+    #[test]
+    fn status_tells_denied_from_offline() {
+        let t = transport();
+        t.mode.store(mode_after_error(&TransportError::new(format!("{}: not on the list", super::super::DENIED))), Ordering::SeqCst);
+        assert_eq!(t.status(), "denied");
+        assert!(t.lost_access());
+        t.mode.store(mode_after_error(&TransportError::new("timed out")), Ordering::SeqCst);
+        assert_eq!(t.status(), "offline");
+        assert!(!t.lost_access());
+        t.mode.store(MODE_LIVE, Ordering::SeqCst);
+        assert_eq!(t.status(), "live");
     }
 }

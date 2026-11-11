@@ -147,12 +147,12 @@ mod tests {
     #[test]
     fn a_value_with_a_single_quote_falls_back_to_a_double_quoted_string() {
         let mut s = server();
-        s.command = "C:/Users/O'Brien/x.exe".into();
+        s.command = "C:/Users/you/O'Brien/x.exe".into();
         let args = launch(&request(&s, &[])).args;
         let (_, command) = args[1].split_once('=').unwrap();
         assert!(command.starts_with('"'));
         let parsed: toml::Value = toml::from_str(&format!("v = {command}")).unwrap();
-        assert_eq!(parsed["v"].as_str(), Some("C:/Users/O'Brien/x.exe"));
+        assert_eq!(parsed["v"].as_str(), Some("C:/Users/you/O'Brien/x.exe"));
     }
 
     #[test]

@@ -655,7 +655,9 @@ mod runtime {
         });
         let project = chosen.clone().unwrap_or(default_project);
         let account = account.map(str::trim).filter(|a| !a.is_empty());
-        let key = if isolated || chosen.is_some() {
+        // A folder the person chose is warmed too: Preload follows it (standby_set_current_project), so
+        // a worker keyed to that folder may be waiting. Only a separate copy never claims one.
+        let key = if isolated {
             None
         } else {
             crate::standby::preload_key(agent, &project).map(|key| key.with_account(account))

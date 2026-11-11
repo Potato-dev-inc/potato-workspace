@@ -88,13 +88,13 @@ describe('AccountsGroup', () => {
     const api = fakeApi();
     await render(api);
     const claude = host.querySelector('[data-testid="accounts-claude"]') as HTMLElement;
-    const input = claude.querySelector('input[aria-label="New claude account name"]') as HTMLInputElement;
+    const input = claude.querySelector('input[aria-label="New claude sign-in name"]') as HTMLInputElement;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'Work');
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await act(async () => {
-      button(claude, 'Add account')!.click();
+      button(claude, 'Add another sign-in')!.click();
     });
     expect(api.add).toHaveBeenCalledWith('claude', 'Work');
     expect(host.querySelector('[data-testid="accounts-claude"]')?.querySelector('input[aria-label="Name of Work"]')).toBeTruthy();
@@ -105,10 +105,10 @@ describe('AccountsGroup', () => {
     await render(api);
     const codex = host.querySelector('[data-testid="accounts-codex"]') as HTMLElement;
     await act(async () => {
-      button(codex, 'Open login pane')!.click();
+      button(codex, 'Open sign-in window')!.click();
     });
     expect(api.openLoginPane).toHaveBeenCalledWith('codex', 'acc_9');
-    expect(host.textContent).toContain('Log in there once');
+    expect(host.textContent).toContain('Sign in there once');
   });
 
   it('remove keeps the folder (deleteHome stays false)', async () => {
@@ -139,10 +139,10 @@ describe('AccountsGroup', () => {
     );
     const select = host.querySelector('#helper-login-claude') as HTMLSelectElement;
     expect(select.value).toBe('ask');
-    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Ask me', 'Main login', 'Work']);
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Ask me', 'Default sign-in', 'Work']);
     expect(host.querySelector('label[for="helper-login-claude"]')?.textContent).toBe('Run helpers on');
     const codex = host.querySelector('#helper-login-codex') as HTMLSelectElement;
-    expect(Array.from(codex.options).map((o) => o.textContent)).toEqual(['Ask me', 'Main login', 'Personal']);
+    expect(Array.from(codex.options).map((o) => o.textContent)).toEqual(['Ask me', 'Default sign-in', 'Personal']);
   });
 
   it('Helpers use: picking a login saves it for that agent and the row shows it', async () => {

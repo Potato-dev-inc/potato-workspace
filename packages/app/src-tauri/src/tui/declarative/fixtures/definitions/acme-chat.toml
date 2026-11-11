@@ -1,5 +1,5 @@
 # Acme: a fictional CLI that writes a JSONL transcript. The Chat tab reads it (`[session_chat]`).
-# The same text is in docs/specs/agent-definitions/DEFINITION-FORMAT.md (a test keeps them equal).
+# The same text is in packages/app/src-tauri/src/tui/declarative/DEFINITION-FORMAT.md (a test keeps them equal).
 schema_version = 1
 
 [agent]

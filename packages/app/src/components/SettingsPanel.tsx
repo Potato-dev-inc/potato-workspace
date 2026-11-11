@@ -21,6 +21,7 @@ import {
   type ConfirmOptions,
   type RowDef,
   type SectionDef,
+  type SectionId,
   type SettingsEnv,
   type SettingsPageId,
   visibleSections,
@@ -92,6 +93,60 @@ const IconLater = () => (
     <path d="M8 5v3.2l2 1.3" />
   </svg>
 );
+
+const ICON_PROPS = { width: 14, height: 14, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
+/** One small line icon per page, in the same style as the search and back icons. */
+const SECTION_ICONS: Record<SectionId, JSX.Element> = {
+  general: (
+    <svg {...ICON_PROPS}>
+      <path d="M2.5 5h6M11.5 5h2M2.5 11h2M7.5 11h6" />
+      <circle cx="10" cy="5" r="1.5" />
+      <circle cx="6" cy="11" r="1.5" />
+    </svg>
+  ),
+  agents: (
+    <svg {...ICON_PROPS}>
+      <rect x="2" y="3" width="12" height="10" rx="2" />
+      <path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+    </svg>
+  ),
+  models: (
+    <svg {...ICON_PROPS}>
+      <rect x="4" y="4" width="8" height="8" rx="1.5" />
+      <path d="M6.5 2v2M9.5 2v2M6.5 12v2M9.5 12v2M2 6.5h2M2 9.5h2M12 6.5h2M12 9.5h2" />
+    </svg>
+  ),
+  keys: (
+    <svg {...ICON_PROPS}>
+      <circle cx="5.5" cy="10.5" r="2.5" />
+      <path d="m7.3 8.7 6-6M11 5l1.5 1.5" />
+    </svg>
+  ),
+  bridge: (
+    <svg {...ICON_PROPS}>
+      <path d="M6.5 9.5a2.5 2.5 0 0 0 3.5 0l2-2a2.5 2.5 0 0 0-3.5-3.5l-.7.7M9.5 6.5a2.5 2.5 0 0 0-3.5 0l-2 2A2.5 2.5 0 0 0 7.5 12l.7-.7" />
+    </svg>
+  ),
+  phone: (
+    <svg {...ICON_PROPS}>
+      <rect x="4.5" y="2" width="7" height="12" rx="1.8" />
+      <path d="M7 11.8h2" />
+    </svg>
+  ),
+  team: (
+    <svg {...ICON_PROPS}>
+      <circle cx="6" cy="5.5" r="2" />
+      <path d="M2.5 13c0-2 1.6-3.5 3.5-3.5s3.5 1.5 3.5 3.5" />
+      <path d="M10.5 3.8a2 2 0 0 1 0 3.4M12 9.8c1 .5 1.7 1.5 1.7 3.2" />
+    </svg>
+  ),
+  shortcuts: (
+    <svg {...ICON_PROPS}>
+      <rect x="1.5" y="4" width="13" height="8" rx="2" />
+      <path d="M4.5 7h.01M7 7h.01M9.5 7h.01M12 7h.01M5 9.5h6" />
+    </svg>
+  ),
+};
 
 export function SettingsPanel({
   open,
@@ -268,6 +323,7 @@ export function SettingsPanel({
       } catch (error) {
         setRowError(rowId, `Not saved: ${errorText(error)}`);
         reloadAfter.current = true; // drop the optimistic value and show what is really saved
+        throw error; // callers must not run their saved path (clear a draft, show Saved) on failure
       } finally {
         inflight.current -= 1;
         if (inflight.current === 0 && reloadAfter.current) {
@@ -301,7 +357,11 @@ export function SettingsPanel({
     settings: settings as Settings,
     openRow,
     openStore: onOpenStore,
-    patch: (patch) => patchFor(row.id, patch),
+    patch: (patch) => {
+      const done = patchFor(row.id, patch);
+      done.catch(() => undefined); // the panel already shows the error; fire-and-forget callers stay quiet
+      return done;
+    },
     markSaved: () => markSaved(row.id),
     setError: (message) => setRowError(row.id, message),
     confirm,
@@ -369,7 +429,8 @@ export function SettingsPanel({
                 setQuery('');
               }}
             >
-              {item.title}
+              {SECTION_ICONS[item.id]}
+              <span>{item.title}</span>
             </button>
           ))}
         </nav>

@@ -2,22 +2,30 @@
 //!
 //! - Nothing is installed without a press. A check only reads `latest.json` (the GitHub release) and keeps the answer.
 //! - The download is checked against the public key in `tauri.conf.json` before anything else happens; a file that does not
-//!   verify is refused and the app goes on as it was.
-//! - If an agent is working, the install is refused until the page says the person was warned (`confirm_running`).
+//!   verify is refused and the app goes on as it was. Progress is sent to the page as `app-update-progress`.
+//! - The download is kept. If an agent is working or waiting for you once it is done, the install is refused until the
+//!   page says the person was warned (`confirm_running`); the kept download is used on the second press.
 //! - Only then the running agents are asked to stop (each one is checkpointed first, the way the panic button does it), the
 //!   panes are closed, and the installer runs. The installer is the MSI of the next version: same upgrade code, so it
 //!   replaces the old one in place. The app's data folder is not touched by it.
+//! - If the installer cannot start after the agents were stopped, the error starts with `UPDATE_STOPPED:` and the page
+//!   offers to reopen the chats (`reopen_chats`). Terminal agents are not reopened.
 //! - Any failure is a plain sentence; the version that is running keeps working.
 
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 use crate::commands::AppState;
 
 static FOUND: Mutex<Option<Update>> = Mutex::new(None);
+/// A downloaded and verified update, kept while the person decides about the agents that are still working.
+static READY: Mutex<Option<(Update, Vec<u8>)>> = Mutex::new(None);
+
+/// The event the page listens to while the file downloads.
+pub const PROGRESS_EVENT: &str = "app-update-progress";
 
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -30,8 +38,19 @@ pub struct UpdateOffer {
 #[derive(Serialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateBusy {
-    /// Agent types with a pane that is working now (for example "claude" or "codex").
+    /// Agent types with a pane that is working or waiting for you now (for example "claude" or "codex").
     pub agents: Vec<String>,
+    /// The part of `agents` that are chats: they are brought back after the restart.
+    pub chats: Vec<String>,
+    /// The part of `agents` that run in a terminal: they stop for good and are not reopened.
+    pub terminals: Vec<String>,
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+struct Progress {
+    downloaded: u64,
+    total: Option<u64>,
 }
 
 /// A plain sentence for what went wrong (the page shows it as it is). Pure, so tests can pin the words.
@@ -48,24 +67,50 @@ pub fn plain_update_error(raw: &str) -> String {
     }
 }
 
-/// The agent types of the panes that are working now, each named once. Pure: the caller passes `(agent_type, status)`.
+/// Panes whose agent is busy: working, or waiting for an answer (the same set the pane windows use).
+fn counts_as_busy(status: &str) -> bool {
+    matches!(status, "running" | "waiting_input")
+}
+
+/// The agent types of the panes that are working or waiting for you now, each named once. Pure: the caller passes
+/// `(agent_type, status)`.
+#[cfg(test)]
 pub fn working_agents<'a>(panes: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     for (agent_type, status) in panes {
-        if status == "running" && !names.iter().any(|n| n == agent_type) {
+        if counts_as_busy(status) && !names.iter().any(|n| n == agent_type) {
             names.push(agent_type.to_string());
         }
     }
     names
 }
 
-fn busy_agents(app: &AppHandle) -> Vec<String> {
+/// Busy agents split into chats (brought back after the restart) and terminals (stopped for good). Pure: the caller
+/// passes `(agent_type, status, is_chat)`.
+pub fn working_split<'a>(panes: impl IntoIterator<Item = (&'a str, &'a str, bool)>) -> UpdateBusy {
+    let mut busy = UpdateBusy { agents: Vec::new(), chats: Vec::new(), terminals: Vec::new() };
+    for (agent_type, status, is_chat) in panes {
+        if !counts_as_busy(status) {
+            continue;
+        }
+        let list = if is_chat { &mut busy.chats } else { &mut busy.terminals };
+        if !list.iter().any(|n| n == agent_type) {
+            list.push(agent_type.to_string());
+        }
+        if !busy.agents.iter().any(|n| n == agent_type) {
+            busy.agents.push(agent_type.to_string());
+        }
+    }
+    busy
+}
+
+fn busy_now(app: &AppHandle) -> UpdateBusy {
     match app.try_state::<AppState>() {
         Some(state) => {
             let panes = state.registry.lock().list();
-            working_agents(panes.iter().map(|p| (p.agent_type.as_str(), p.status.as_str())))
+            working_split(panes.iter().map(|p| (p.agent_type.as_str(), p.status.as_str(), p.lane.as_deref() == Some("acp"))))
         }
-        None => Vec::new(),
+        None => UpdateBusy { agents: Vec::new(), chats: Vec::new(), terminals: Vec::new() },
     }
 }
 
@@ -76,6 +121,7 @@ pub async fn app_update_check(app: AppHandle) -> Result<Option<UpdateOffer>, Str
         Ok(Some(update)) => {
             let offer = UpdateOffer { current_version: update.current_version.clone(), version: update.version.clone(), notes: update.body.clone().filter(|n| !n.trim().is_empty()) };
             *FOUND.lock().unwrap_or_else(|p| p.into_inner()) = Some(update);
+            *READY.lock().unwrap_or_else(|p| p.into_inner()) = None;
             Ok(Some(offer))
         }
         Ok(None) => {
@@ -86,37 +132,73 @@ pub async fn app_update_check(app: AppHandle) -> Result<Option<UpdateOffer>, Str
     }
 }
 
-/// Which agents are working: the page warns before it asks to install.
+/// Which agents are working or waiting for you: the page warns before it restarts.
 #[tauri::command]
 pub fn app_update_busy(app: AppHandle) -> UpdateBusy {
-    UpdateBusy { agents: busy_agents(&app) }
+    busy_now(&app)
 }
 
-/// The press on Update: download and verify, then stop the agents and close their panes, then install.
+/// The press on Update: download and verify (with progress), then stop the agents and close their panes, then install.
+/// `reopen_chats` is the other use: after an install that could not start, bring the stopped chats back.
 #[tauri::command]
-pub async fn app_update_install(app: AppHandle, confirm_running: bool) -> Result<(), String> {
-    let busy = busy_agents(&app);
-    if !busy.is_empty() && !confirm_running {
-        return Err(format!("UPDATE_RUNNING: {} is working. Confirm to update anyway; its work is saved before the restart.", busy.join(", ")));
+pub async fn app_update_install(app: AppHandle, confirm_running: bool, reopen_chats: Option<bool>) -> Result<(), String> {
+    if reopen_chats == Some(true) {
+        return reopen_stopped_chats(&app);
     }
-    let update = FOUND.lock().unwrap_or_else(|p| p.into_inner()).take();
-    let update = match update {
-        Some(update) => update,
+    let kept = READY.lock().unwrap_or_else(|p| p.into_inner()).take();
+    let (update, bytes) = match kept {
+        Some(ready) => ready,
         None => {
-            let updater = app.updater().map_err(|e| plain_update_error(&e.to_string()))?;
-            updater.check().await.map_err(|e| plain_update_error(&e.to_string()))?.ok_or_else(|| "There is no update to install.".to_string())?
+            let found = FOUND.lock().unwrap_or_else(|p| p.into_inner()).take();
+            let update = match found {
+                Some(update) => update,
+                None => {
+                    let updater = app.updater().map_err(|e| plain_update_error(&e.to_string()))?;
+                    updater.check().await.map_err(|e| plain_update_error(&e.to_string()))?.ok_or_else(|| "There is no update to install.".to_string())?
+                }
+            };
+            // Download first and check the signature; nothing has been stopped yet, so a failure here changes nothing.
+            let mut downloaded: u64 = 0;
+            let mut last_sent: Option<u8> = None;
+            let progress_app = app.clone();
+            let bytes = update
+                .download(
+                    move |chunk, total| {
+                        downloaded += chunk as u64;
+                        let percent = total.filter(|t| *t > 0).map(|t| (downloaded.saturating_mul(100) / t).min(100) as u8);
+                        if percent.is_none() || percent != last_sent {
+                            last_sent = percent;
+                            let _ = progress_app.emit(PROGRESS_EVENT, Progress { downloaded, total });
+                        }
+                    },
+                    || {},
+                )
+                .await
+                .map_err(|e| plain_update_error(&e.to_string()))?;
+            (update, bytes)
         }
     };
-    // Download first and check the signature; nothing has been stopped yet, so a failure here changes nothing.
-    let bytes = update.download(|_, _| {}, || {}).await.map_err(|e| plain_update_error(&e.to_string()))?;
+    // The download took a while: ask again who is working now (an agent may have started or asked something).
+    let busy = busy_now(&app).agents;
+    if !busy.is_empty() && !confirm_running {
+        *READY.lock().unwrap_or_else(|p| p.into_inner()) = Some((update, bytes));
+        return Err(format!("UPDATE_RUNNING: {} is working or waiting for you. Confirm to restart anyway; its work is saved first.", busy.join(", ")));
+    }
     stop_for_update(&app);
-    update.install(bytes).map_err(|e| plain_update_error(&e.to_string()))?;
+    update.install(bytes).map_err(|e| update_stopped_error(&e.to_string()))?;
     // On Windows the installer ends this process; if it is still here, it is not going to run.
     Ok(())
 }
 
-/// What the app's own exit does for the agents and the panes, done before the installer closes the app (it ends the
-/// process without the usual exit event).
+/// The installer could not start after the agents were stopped: the app keeps running, so it is not ending any more
+/// (closing a chat must again count as the person closing it), and the page gets the `UPDATE_STOPPED:` message.
+fn update_stopped_error(raw: &str) -> String {
+    crate::acp::chat::cancel_app_shutdown();
+    format!("UPDATE_STOPPED: Agents were stopped. {}", plain_update_error(raw))
+}
+
+/// What the app's own exit does for the agents and the panes, done right before the installer closes the app (it ends
+/// the process without the usual exit event, and on Windows it ends it as soon as it starts, so this cannot wait).
 fn stop_for_update(app: &AppHandle) {
     if let Some(state) = app.try_state::<AppState>() {
         // The app ends with the install: chats stop but stay restorable.
@@ -124,6 +206,18 @@ fn stop_for_update(app: &AppHandle) {
         let _ = crate::panic::stop_all(&state.registry, app);
         crate::pty::registry_kill_all_and_wait(&state.registry);
     }
+}
+
+/// After an install that could not start: the chats that were stopped are open records again; list their panes.
+fn reopen_stopped_chats(app: &AppHandle) -> Result<(), String> {
+    let state = app.try_state::<AppState>().ok_or_else(|| "The app is not ready yet.".to_string())?;
+    if !crate::acp::chat_enabled() {
+        return Ok(());
+    }
+    let deps = super::acp_chat::live_deps(app, &state.registry);
+    crate::acp::chat::restore_panes(&deps);
+    let _ = app.emit("acp-conversations-changed", ());
+    Ok(())
 }
 
 /// With `PM_UPDATE_PROBE=<file>` set: at start-up, check, download and verify (never install) and write what happened
@@ -179,9 +273,32 @@ mod tests {
     }
 
     #[test]
-    fn only_running_panes_count_and_each_agent_is_named_once() {
-        let panes = [("claude", "running"), ("codex", "idle"), ("claude", "running"), ("shell", "exited")];
-        assert_eq!(working_agents(panes), vec!["claude".to_string()]);
+    fn running_and_waiting_panes_count_and_each_agent_is_named_once() {
+        let panes = [("claude", "running"), ("codex", "idle"), ("claude", "waiting_input"), ("gemini", "waiting_input"), ("shell", "exited")];
+        assert_eq!(working_agents(panes), vec!["claude".to_string(), "gemini".to_string()]);
         assert!(working_agents([("codex", "idle")]).is_empty());
+    }
+
+    #[test]
+    fn busy_agents_are_split_into_chats_and_terminals() {
+        let busy = working_split([("claude", "running", true), ("codex", "waiting_input", false), ("claude", "running", true), ("shell", "idle", false)]);
+        assert_eq!(busy.agents, vec!["claude".to_string(), "codex".to_string()]);
+        assert_eq!(busy.chats, vec!["claude".to_string()]);
+        assert_eq!(busy.terminals, vec!["codex".to_string()]);
+    }
+
+    #[test]
+    fn a_failed_install_after_the_stop_is_marked_so_the_page_can_offer_to_reopen() {
+        let said = update_stopped_error("installer failed");
+        assert!(said.starts_with("UPDATE_STOPPED:") && said.contains("keeps working"), "{said}");
+    }
+
+    #[test]
+    fn a_failed_install_means_the_app_is_not_ending_so_closing_a_chat_is_the_persons_again() {
+        crate::acp::chat::begin_app_shutdown();
+        assert!(crate::acp::chat::app_is_shutting_down());
+        let said = update_stopped_error("installer failed");
+        assert!(said.starts_with("UPDATE_STOPPED:"), "{said}");
+        assert!(!crate::acp::chat::app_is_shutting_down(), "the flag stays set after the installer failed");
     }
 }

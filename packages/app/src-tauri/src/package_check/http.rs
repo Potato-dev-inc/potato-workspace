@@ -207,7 +207,7 @@ fn is_timeout_kind(kind: io::ErrorKind) -> bool {
 }
 
 fn user_agent() -> String {
-    format!("{USER_AGENT_PREFIX}{}", env!("CARGO_PKG_VERSION"))
+    format!("{USER_AGENT_PREFIX}{}", crate::app_lifecycle::app_version())
 }
 
 fn now_ms() -> u64 {
@@ -415,7 +415,7 @@ mod tests {
         assert_eq!(header(request, "accept-encoding"), "gzip");
         assert_eq!(
             header(request, "user-agent"),
-            format!("PotatoWorkspace-PackageCheck/{}", env!("CARGO_PKG_VERSION"))
+            format!("PotatoWorkspace-PackageCheck/{}", crate::app_lifecycle::app_version())
         );
         assert_eq!(header(request, "accept"), ACCEPT);
         assert_eq!(header(request, "host"), server.base.trim_start_matches("http://"));

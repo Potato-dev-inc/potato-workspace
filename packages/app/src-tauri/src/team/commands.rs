@@ -11,6 +11,12 @@ async fn blocking<T: serde::Serialize + Send + 'static>(
     serde_json::to_value(out).map_err(|e| e.to_string())
 }
 
+/// "Your name" on the Team page when settings have none: this computer's sign-in or computer name.
+#[tauri::command]
+pub fn team_default_name() -> String {
+    super::membership::suggest_name(|k| std::env::var(k).ok())
+}
+
 #[tauri::command]
 pub async fn team_state() -> Result<Value, String> {
     blocking(service::view).await
@@ -39,6 +45,12 @@ pub async fn team_draft_dismiss(draft_id: String) -> Result<Value, String> {
 #[tauri::command]
 pub async fn team_card_dismiss(card_id: String) -> Result<Value, String> {
     blocking(move || service::dismiss_card(&card_id)).await
+}
+
+/// War Room: "Claim it" / "Release" on the red-default-branch banner.
+#[tauri::command]
+pub async fn team_ci_claim(card_id: String, claim: bool) -> Result<Value, String> {
+    blocking(move || service::claim_ci(&card_id, claim)).await
 }
 
 #[tauri::command]
@@ -124,4 +136,25 @@ pub async fn team_job_start(job_id: String) -> Result<Value, String> {
 #[tauri::command]
 pub async fn team_member_confirm_github(member_id: String) -> Result<Value, String> {
     blocking(move || service::confirm_github(&member_id)).await
+}
+
+/// "Create team relay": deploys the bundled relay Worker into the person's Cloudflare account with a pasted API
+/// token. Progress goes out as `team://relay-deploy` `{ step }` events. Answers `{status:"pick_account", accounts}`
+/// when the token sees several accounts (call again with `account_id`), or `{status:"done", url}`.
+#[tauri::command]
+pub async fn team_relay_deploy(app: tauri::AppHandle, token: String, account_id: Option<String>) -> Result<Value, String> {
+    use super::relay_deploy::{deploy, load_bundle, CloudflareAuth};
+    use tauri::{Emitter, Manager};
+    let auth = CloudflareAuth::ApiToken(token);
+    let resource_dir = app.path().resource_dir().ok();
+    let exe_dir = std::env::current_exe().ok().and_then(|exe| exe.parent().map(std::path::PathBuf::from));
+    let dir = crate::mcp_runtime::installed_resource_dir(resource_dir.as_deref(), exe_dir.as_deref(), "relay-worker")
+        .or_else(|| cfg!(debug_assertions).then(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/relay-worker")));
+    blocking(move || {
+        let bundle = load_bundle(&dir.unwrap_or_default())?;
+        deploy(auth, account_id, &bundle, |step| {
+            let _ = app.emit("team://relay-deploy", serde_json::json!({ "step": step }));
+        })
+    })
+    .await
 }

@@ -7,6 +7,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { Question } from './questions';
 import type { AcpInitCheck } from './agentWizardAcp';
 import { blockOf } from './acpAddon';
+import { RUN_WAYS } from './glossary';
 import { sendPaneMessage } from './paneOutbox';
 
 /** `PaneInfo.lane` of a chat session. */
@@ -14,7 +15,7 @@ export const ACP_LANE = 'acp';
 /** `Question.kind` of the card for the agent's own permission request. */
 export const ACP_PERMISSION_KIND = 'acp_permission';
 /** The badge on the pane (the name of the way to run, never an agent's product name). */
-export const ACP_BADGE = 'Chat (ACP)';
+export const ACP_BADGE = RUN_WAYS.chat;
 
 /** One permission question of the agent, as the session reports it. */
 export interface AcpPermission {
@@ -306,7 +307,7 @@ export function registrySentence(info: RegistryInfo): string {
   const by = authorsText(info.authors);
   const license = info.license?.trim() ? ` (${info.license.trim()})` : '';
   const size = info.size_hint?.trim() ? ` About ${info.size_hint.trim()}.` : '';
-  return `Potato Workspace will download ${info.name} ${info.version}${by ? ` by ${by}` : ''}${license} from the official ACP registry and run it for chat.${size}`;
+  return `Potato Workspace will download ${info.name} ${info.version}${by ? ` by ${by}` : ''}${license} from the ${RUN_WAYS.registryName} and run it for chat.${size}`;
 }
 
 /** The `[acp]` table the person confirmed. */

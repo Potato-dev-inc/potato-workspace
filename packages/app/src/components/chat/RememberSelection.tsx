@@ -1,9 +1,10 @@
-// "Remember for all agents": a small pill over text selected in a message of the Chat tab. A click (or Ctrl+Shift+M)
+// "Remember for all agents": a small pill over text selected in a message of the Chat tab. A click (or its shortcut, Ctrl+Shift+M by default)
 // adds the text as one line of the project memory every agent reads at its next start; a toast says so, with Undo.
 // Esc hides the pill. Desktop only: the phone chat does not mount this.
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { MEMORY_OFF_PROJECT, rememberApi, rememberErrorCode, rememberErrorMessage, type RememberApi } from '../../lib/chat-remember';
 import { rememberableSelection } from '../../lib/chatSelection';
+import { ariaKeyshortcuts, bindingHint, matchesAction } from '../../lib/shortcuts';
 
 export const REMEMBER_LABEL = 'Remember for all agents';
 export const REMEMBER_SAVED = 'Saved. Every agent reads it at its next start.';
@@ -118,7 +119,7 @@ export function RememberSelection({ paneId, root, api = rememberApi }: RememberS
         return;
       }
       const current = pillRef.current;
-      if (current && e.shiftKey && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
+      if (current && matchesAction(e, 'remember')) {
         e.preventDefault();
         void remember(current.text);
       }
@@ -144,8 +145,8 @@ export function RememberSelection({ paneId, root, api = rememberApi }: RememberS
           className="ck-chat-remember"
           data-testid="remember-pill"
           style={{ left: pill.x, top: pill.y }}
-          title={`${REMEMBER_LABEL} (Ctrl+Shift+M)`}
-          aria-keyshortcuts="Control+Shift+M Meta+Shift+M"
+          title={`${REMEMBER_LABEL}${bindingHint('remember')}`}
+          aria-keyshortcuts={ariaKeyshortcuts('remember')}
           // Keeps the text selected while the pill is pressed.
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => void remember(pill.text)}

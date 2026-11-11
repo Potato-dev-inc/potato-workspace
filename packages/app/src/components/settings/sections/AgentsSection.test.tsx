@@ -168,10 +168,10 @@ describe('Agents: every row renders', () => {
     for (const id of ['accounts', 'preload', 'versions', 'definitions']) expect(rowOf(id), `missing row: ${id}`).toBeTruthy();
 
     // Accounts
-    expect(hasText(m.host, 'Accounts')).toBe(true);
-    expect(byLabel(m.host, 'New claude account name')).toBeTruthy();
-    expect(buttonByText(m.host, 'Add account')).toBeTruthy();
-    expect(buttonByText(m.host, 'Open login pane')).toBeTruthy();
+    expect(hasText(m.host, 'Sign in')).toBe(true);
+    expect(byLabel(m.host, 'New claude sign-in name')).toBeTruthy();
+    expect(buttonByText(m.host, 'Add another sign-in')).toBeTruthy();
+    expect(buttonByText(m.host, 'Open sign-in window')).toBeTruthy();
     expect(buttonByText(m.host, 'Remove')).toBeTruthy();
 
     // Preload
@@ -201,10 +201,10 @@ describe('Agents: every row renders', () => {
     expect(buttonByText(m.host, 'Save changes')).toBeUndefined();
   });
 
-  it('groups the rows: Logins, Speed, Helpers, Menu, Updates, Chat, Live updates, Keep going, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
+  it('groups the rows: Sign in, Speed, Helpers, Menu, Updates, Chat, Live updates, Keep going, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
     await mount();
     const heads = [...m.host.querySelectorAll('section.st-group')].map((g) => g.querySelector(':scope > h2')?.textContent?.trim() ?? '');
-    expect(heads).toEqual(['Check my setup', 'Logins', 'Speed', 'Helpers', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Linux', 'Same file', '']);
+    expect(heads).toEqual(['Check my setup', 'Sign in', 'Speed', 'Helpers', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Linux', 'Same file', '']);
   });
 
   it('mounts the same-file switch under Same file and it is found by search', async () => {
@@ -227,7 +227,7 @@ describe('Agents: every row renders', () => {
 describe('Agents: each control saves through its own command', () => {
   it('Accounts: Add account creates the account for that agent only', async () => {
     await mount();
-    const input = byLabel<HTMLInputElement>(m.host, 'New claude account name')!;
+    const input = byLabel<HTMLInputElement>(m.host, 'New claude sign-in name')!;
     await typeInto(input, 'Personal');
     await click(input.closest('form')!.querySelector<HTMLButtonElement>('button[type="submit"]'));
     await settle();
@@ -236,7 +236,7 @@ describe('Agents: each control saves through its own command', () => {
 
   it('Accounts: Open login pane starts that agent under that account', async () => {
     await mount();
-    await click(buttonByText(m.host, 'Open login pane'));
+    await click(buttonByText(m.host, 'Open sign-in window'));
     await settle();
     expect(tauriAccountsApi.openLoginPane).toHaveBeenCalledExactlyOnceWith('claude', 'acc_9');
   });
@@ -249,7 +249,7 @@ describe('Agents: each control saves through its own command', () => {
     expect(claude.closest('[data-row="accounts"]'), 'it sits inside the Accounts row').toBeTruthy();
     expect(claude.value).toBe('ask');
     expect(codex.value).toBe('main');
-    expect(Array.from(claude.options).map((o) => o.textContent)).toEqual(['Ask me', 'Main login', 'Work']);
+    expect(Array.from(claude.options).map((o) => o.textContent)).toEqual(['Ask me', 'Default sign-in', 'Work']);
     await pickOption(claude, 'acc_9');
     await settle();
     expect(tauriAccountsApi.setHelperLogin).toHaveBeenCalledExactlyOnceWith('claude', 'acc_9');

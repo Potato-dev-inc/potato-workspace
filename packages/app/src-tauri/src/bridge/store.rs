@@ -10,14 +10,16 @@ pub(super) fn rebuild_read_models() -> Result<crate::projections::ReadModels, St
 pub(super) fn rebuild_operation_read_models(
     project: &str,
 ) -> Result<crate::projections::ReadModels, String> {
-    let log = crate::event_log::EventLog::new(crate::event_log::project_event_log_path(
+    let entries = crate::event_log::read_entries(&crate::event_log::project_event_log_path(
         std::path::Path::new(project),
     ))?;
-    Ok(crate::projections::build_read_models(&log.read_all()?))
+    Ok(crate::projections::build_read_models(&entries))
 }
 
 pub(super) fn append_operation_event(project: &str, payload: SystemEvent) -> Result<(), String> {
-    let log = crate::event_log::EventLog::new(crate::event_log::project_event_log_path(
+    // The process-wide writer for this file: every append goes through one handle and one lock,
+    // so concurrent events cannot interleave their lines.
+    let log = crate::event_log::EventLog::shared(crate::event_log::project_event_log_path(
         std::path::Path::new(project),
     ))?;
     log.append(&crate::events::EventEntry::new(

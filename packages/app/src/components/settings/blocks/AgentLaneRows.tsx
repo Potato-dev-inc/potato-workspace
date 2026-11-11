@@ -1,6 +1,7 @@
 // Settings > Agents > How to run: for each agent that has an enabled chat (ACP) definition, a popup that picks how a new
 // session runs by default, "Terminal" (the default) or "Chat (ACP)". The terminal stays a full way to run every agent.
 // The whole block is hidden while the Labs switch is off. An agent that cannot run as a chat shows why instead.
+import { RUN_WAYS } from '../../../lib/glossary';
 import { useCallback, useEffect, useState } from 'react';
 import {
   addableChat,
@@ -25,8 +26,8 @@ import { RemoveChatDialog } from './RemoveChatDialog';
 type RemovableAgent = Pick<AcpLaneAgent, 'id' | 'label' | 'addon'> & { overlay?: boolean };
 
 export const TERMINAL_LABEL = 'Terminal';
-export const CHAT_LABEL = 'Chat (ACP)';
-export const ADD_CHAT_LABEL = 'Add chat (ACP)';
+export const CHAT_LABEL = RUN_WAYS.chat;
+export const ADD_CHAT_LABEL = `Add ${RUN_WAYS.chat.toLowerCase()}`;
 
 export function AgentLaneRows({ api = tauriAcpChatApi }: { api?: Pick<AcpChatApi, 'laneGet' | 'laneSet'> & Pick<AcpChatApi, 'overlayDetect' | 'overlaySet' | 'overlayRemove' | 'chatRemove'> }) {
   const [view, setView] = useState<AcpLaneView | null>(null);

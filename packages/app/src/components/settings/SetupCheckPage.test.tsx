@@ -16,7 +16,7 @@ const deps = (over: Partial<SetupCheckDeps> = {}): SetupCheckDeps => ({
       state: 'needs_login',
       installed: true,
       version: '1',
-      reason: 'Needs sign-in at C:\\Users\\renee\\work',
+      reason: 'Needs sign-in at C:\\Users\\someone\\work',
       install_hint: null,
       login_hint: null,
       can_test: true,
@@ -62,7 +62,7 @@ describe('SetupCheckPage', () => {
     await settle();
     const sent = (copy.mock.calls as unknown as string[][])[0]?.[0] ?? '';
     expect(sent).toContain('Claude needs sign-in');
-    expect(sent).not.toContain('renee');
+    expect(sent).not.toContain('someone');
     expect(hasText(m.host, 'Report copied')).toBe(true);
     await m.unmount();
   });

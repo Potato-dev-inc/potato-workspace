@@ -18,6 +18,8 @@ struct FakeHost {
     project: Mutex<Option<String>>,
     /// Projects (canonical) whose workers stop at a trust dialog.
     dialog_projects: Mutex<Vec<String>>,
+    /// What each worker is stopped at (`Host::detail`).
+    details: Mutex<HashMap<Handle, String>>,
 }
 
 impl FakeHost {
@@ -60,6 +62,9 @@ impl Host for FakeHost {
     }
     fn kill(&self, handle: &Handle, reason: &str) {
         self.killed.lock().push((handle.clone(), reason.to_string()));
+    }
+    fn detail(&self, handle: &Handle) -> Option<String> {
+        self.details.lock().get(handle).cloned()
     }
     fn default_project(&self) -> Option<String> {
         Some(self.project.lock().clone().unwrap_or_else(|| "/w".to_string()))
@@ -1122,4 +1127,24 @@ fn a_faked_version_bump_turns_the_chip_on_and_the_standby_cold() {
     let now = warm_up(&pool, now);
     assert_eq!(pool.status(now).counts.ready, 1);
     crate::canary::strict::replace(Vec::<String>::new());
+}
+
+#[test]
+fn a_worker_shut_down_as_unhealthy_says_what_it_stopped_at() {
+    let host = Arc::new(FakeHost::default());
+    *host.default_health.lock() = Some(Health::Dialog);
+    let warm = pool(&host, config(&[("codex", true, false)]));
+    warm.reconcile(0); // spawns
+    let first = host.last_handle();
+    host.details.lock().insert(first.clone(), "workspace_trust".to_string());
+    warm.reconcile(1); // observes it: a dialog
+    let kills = host.kills();
+    assert_eq!(kills, vec![(first, "dialog:workspace_trust".to_string())], "cause in the line");
+    // No detail known: the plain reason, never the old generic "unhealthy".
+    let host = Arc::new(FakeHost::default());
+    *host.default_health.lock() = Some(Health::NeedsAttention);
+    let warm = pool(&host, config(&[("codex", true, false)]));
+    warm.reconcile(0);
+    warm.reconcile(1);
+    assert_eq!(host.kills()[0].1, "needs_attention");
 }

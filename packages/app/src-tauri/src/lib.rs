@@ -15,7 +15,7 @@ mod agent_health;
 mod agent_install;
 mod agent_store;
 pub mod agent_hooks;
-mod app_lifecycle;
+pub mod app_lifecycle;
 mod autostart;
 pub mod app_paths;
 mod bridge;
@@ -113,6 +113,7 @@ mod scores;
 mod secrets;
 mod settings_store;
 mod settings_patch;
+mod global_shortcuts;
 mod shell_env;
 mod startup_timing;
 mod review_desk;
@@ -313,10 +314,12 @@ pub fn run() {
             commands::point_open_blocked_link,
             team::commands::team_state,
             team::commands::team_config_get,
+            team::commands::team_default_name,
             team::commands::team_config_set,
             team::commands::team_send,
             team::commands::team_draft_dismiss,
             team::commands::team_card_dismiss,
+            team::commands::team_ci_claim,
             team::commands::team_pull,
             team::commands::team_queue,
             team::commands::team_job_apply,
@@ -334,6 +337,7 @@ pub fn run() {
             team::commands::team_merge_when_green,
             team::commands::team_job_start,
             team::commands::team_member_confirm_github,
+            team::commands::team_relay_deploy,
             commands::spawn_pane,
             commands::wsl_status,
             commands::wsl_check,
@@ -541,6 +545,8 @@ pub fn run() {
             commands::one_brain_set_project_enabled,
             commands::open_settings,
             settings_patch::settings_patch,
+            global_shortcuts::global_shortcut_set,
+            global_shortcuts::global_shortcuts_status,
             commands::pane_prompt,
             commands::answer_pane_prompt,
             commands::terminal_chat_prompt,
@@ -656,6 +662,7 @@ pub fn run() {
             commands::first_run_state,
             commands::first_run_start_task,
             commands::first_run_task_status,
+            commands::first_run_pane_mcp,
             commands::project_recent,
             commands::project_forget,
             commands::project_remember,
@@ -940,6 +947,7 @@ pub fn run() {
             ));
             pane_activity::init(registry_for_panes.clone(), app.handle().clone());
             loop_guard::init(app.handle().clone());
+            global_shortcuts::load_overrides();
             panic::init_shortcut(app.handle());
             mini_bar::init_mode_shortcut(app.handle());
             turn_summary::start_presence();

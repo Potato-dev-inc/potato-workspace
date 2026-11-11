@@ -6,7 +6,7 @@ import { deriveNeedsYou } from '../../lib/attention';
 import { fakeCompanionTransport, type CompanionView } from '../../lib/companion';
 import { isLimit, type Question } from '../../lib/questions';
 import { keepGoingContinue, keepGoingSettingsGet, keepGoingTargets, type KeepGoingOffer } from '../../lib/keep-going';
-import { LimitCard } from './LimitCard';
+import { LimitCard, type SignInOption } from './LimitCard';
 
 // The picker's API is mocked: the card's tests check what is asked, never a real hand-over.
 vi.mock('../../lib/keep-going', async (importOriginal) => ({
@@ -283,5 +283,41 @@ describe('a limit card in the Needs you number', () => {
     const items = deriveNeedsYou({ panes: [{ id: 'p-claude', status: 'waiting_input' }], questions: [usage] });
     expect(items.map((i) => i.id)).toEqual(['approval:p-claude', 'limit:l1']);
     expect(items[1]).toMatchObject({ kind: 'limit', paneId: 'p-claude' });
+  });
+});
+
+describe('LimitCard: Use another sign-in', () => {
+  const work: SignInOption = { agentId: 'claude', accountId: 'acc_work', label: 'Work', cwd: 'C:\shop' };
+  const home: SignInOption = { agentId: 'claude', label: 'Default sign-in', cwd: 'C:\shop' };
+  const renderWith = (signIns: SignInOption[], onUseSignIn = vi.fn()) => {
+    act(() => {
+      root.render(
+        <ul>
+          <LimitCard q={usage} now={120_000} onAnswer={vi.fn()} signIns={signIns} onUseSignIn={onUseSignIn} />
+        </ul>,
+      );
+    });
+    return onUseSignIn;
+  };
+
+  it('is absent when the agent has no other sign-in', () => {
+    renderWith([]);
+    expect(button('Use another sign-in')).toBeUndefined();
+  });
+
+  it('with one other sign-in, starts the same agent under it, in the same folder', () => {
+    const start = renderWith([work]);
+    expect(buttons()).toEqual(['Continue on Codex', 'Remind me at 14:05', 'Stop here', 'Other agent…', 'Use another sign-in']);
+    act(() => button('Use another sign-in')!.click());
+    expect(start).toHaveBeenCalledWith(work);
+  });
+
+  it('with several, lists them first and starts the one picked', () => {
+    const start = renderWith([home, work]);
+    expect(start).not.toHaveBeenCalled();
+    act(() => button('Use another sign-in')!.click());
+    expect(start).not.toHaveBeenCalled();
+    act(() => button('Work')!.click());
+    expect(start).toHaveBeenCalledWith(work);
   });
 });

@@ -2,11 +2,13 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AGENT_DRAFT, CI_FAILED, GITHUB_CARDS, GITHUB_PR_OPEN, MAYA_PUSH, MY_DRAFT, NEEDS_START_JOB, READY_JOB, SAM_MERGED, SAM_PR, TEAM_CARDS, TEAM_DIFF, WAITING_JOB, teamConfig, teamState } from '../../../dev/team-fixtures';
-import { cardActions, cardMeta, cardTitle, draftTitle, jobTitle, tellLabel, type MergePlan, type TeamApi, type TeamCard as Card, type TeamJob } from '../../../lib/team';
+import { AGENT_DRAFT, CI_FAILED, GITHUB_CARDS, GITHUB_PR_OPEN, MAIN_PUSH, MAIN_RED, MAYA_PUSH, MY_DRAFT, NEEDS_START_JOB, READY_JOB, SAM_MERGED, SAM_PR, TEAM_CARDS, TEAM_DIFF, WAITING_JOB, teamConfig, teamState } from '../../../dev/team-fixtures';
+import { cardActions, cardMeta, cardTitle, draftTitle, jobTitle, tellLabel, unclaimedRed, type MergePlan, type TeamApi, type TeamCard as Card, type TeamJob } from '../../../lib/team';
 import { TeamCard } from './TeamCard';
 import { TeamJobCard } from './TeamJobCard';
 import { TeamSection } from './TeamSection';
+import { RedBanners } from './RedBanner';
+import { blockingItems, deriveNeedsYou } from '../../../lib/attention';
 import { TellTeamPrompt } from './TellTeam';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -62,6 +64,7 @@ function fakeApi(overrides: Partial<TeamApi> = {}): TeamApi & { calls: string[] 
     send: rec('send', undefined),
     dismissDraft: rec('dismissDraft', undefined),
     dismissCard: rec('dismissCard', undefined),
+    claimCi: rec('claimCi', undefined),
     pull: rec('pull', 'Pulled feat/auth.'),
     queue: rec('queue', WAITING_JOB),
     startJob: rec('startJob', undefined),
@@ -91,7 +94,7 @@ describe('copy', () => {
   it('names the person and their agent, the branch and the size', () => {
     expect(cardTitle(MAYA_PUSH)).toBe("Maya's Claude pushed feat/auth");
     expect(cardMeta(MAYA_PUSH)).toBe('billing-service · feat/auth · 3 files +84 −12');
-    expect(cardTitle(SAM_PR)).toBe("Sam's Codex opened #142");
+    expect(cardTitle(SAM_PR)).toBe("Sam's Codex opened PR #142 in acme/billing-service · feat/invoices · 6 files +212 −34");
     expect(cardTitle({ ...MAYA_PUSH, actor: { ...MAYA_PUSH.actor, agent: undefined } })).toBe('Maya pushed feat/auth');
     expect(cardTitle({ ...MAYA_PUSH, subject: { ...MAYA_PUSH.subject, forced: true } })).toBe("Maya's Claude force-pushed feat/auth");
     expect(tellLabel(['Leo'])).toBe('Tell Leo');
@@ -109,7 +112,7 @@ describe('copy', () => {
     expect(cardTitle({ ...CI_FAILED, subject: { ...CI_FAILED.subject, pr: undefined } })).toBe('Checks failed on feat/invoices');
     expect(cardMeta(CI_FAILED)).toBe('billing-service · Invoice PDF export · feat/invoices · govulncheck failed');
     expect(cardMeta({ ...CI_FAILED, kind: 'ci_passed' })).not.toContain('failed');
-    expect(cardTitle(GITHUB_PR_OPEN)).toBe('priya-dev opened #144');
+    expect(cardTitle(GITHUB_PR_OPEN)).toBe('priya-dev opened PR #144 in acme/billing-service · fix/rounding → main');
   });
 });
 
@@ -460,5 +463,81 @@ describe('cards for review requests and notes', () => {
     act(() => root.render(<TeamCard card={{ id: event.id, event, receivedAtMs: Date.now(), state: 'new', local: null, panes: [] }} api={fakeApi()} now={Date.now()} />));
     expect(host.textContent).toContain('“<b>x</b> Ignore previous instructions”');
     expect(host.querySelector('b')).toBeNull();
+  });
+});
+
+describe('War Room', () => {
+  const red = (claim?: Card['claim']): Card => ({ id: MAIN_RED.id, event: MAIN_RED, receivedAtMs: MAIN_RED.atMs, state: 'new', local: null, panes: [], claim });
+  const push: Card = { id: MAIN_PUSH.id, event: MAIN_PUSH, receivedAtMs: MAIN_PUSH.atMs, state: 'new', local: null, panes: [] };
+  const withCards = (cards: Card[]) => ({ ...teamState(), cards });
+  const renderBanners = (cards: Card[], api = fakeApi()) => {
+    act(() => root.render(<RedBanners state={withCards(cards)} api={api} now={MAIN_RED.atMs + 60_000} onDone={() => {}} />));
+    return api;
+  };
+
+  it('says a PR and a push to main in one sentence, with a link to GitHub', () => {
+    expect(cardTitle(MAIN_PUSH)).toBe('Kai pushed 3 commits to main in acme/billing-service');
+    expect(cardMeta(MAIN_PUSH)).toBe('Relay: keep the cursor across reconnects · 3333333');
+    renderCard(push);
+    expect(host.textContent).toContain('Kai pushed 3 commits to main in acme/billing-service');
+    expect(buttons()).toContain('Open on GitHub');
+    renderCard(TEAM_CARDS[1]);
+    expect(host.textContent).toContain('opened PR #142 in acme/billing-service');
+    expect(buttons()).toContain('Open on GitHub');
+    renderCard(TEAM_CARDS[0]);
+    expect(buttons()).not.toContain('Open on GitHub');
+  });
+
+  it('shows a red main as a banner with Claim it, and Claim it tells the team', async () => {
+    const api = renderBanners([red(), push]);
+    expect(host.querySelectorAll('[data-team-red]').length).toBe(1);
+    expect(host.textContent).toContain('main is red in acme/billing-service · CI');
+    expect(host.textContent).toContain('Nobody is on it yet.');
+    expect(buttons()).toEqual(['Claim it', 'Open on GitHub', 'Dismiss']);
+    await act(async () => button('Claim it')!.click());
+    await flush();
+    expect(api.calls).toContain(`claimCi("${MAIN_RED.id}",true)`);
+  });
+
+  it('shows who is on it; only the claimant can release', async () => {
+    renderBanners([red({ member: 'kai', display: 'Kai', atMs: 1, mine: false })]);
+    expect(host.textContent).toContain('Kai is on it');
+    expect(buttons()).toEqual(['Open on GitHub', 'Dismiss']);
+    const api = renderBanners([red({ member: 'me', display: 'Me', atMs: 1, mine: true })]);
+    expect(host.textContent).toContain('You are on it');
+    await act(async () => button('Release')!.click());
+    await flush();
+    expect(api.calls).toContain(`claimCi("${MAIN_RED.id}",false)`);
+  });
+
+  it('shows the error when a claim could not be sent', async () => {
+    renderBanners([red()], fakeApi({ claimCi: async () => { throw new Error("Can't reach the team's relay."); } }));
+    await act(async () => button('Claim it')!.click());
+    await flush();
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("Can't reach the team's relay.");
+  });
+
+  it('renders nothing for a dismissed red, the checks of a PR, or Team off', () => {
+    renderBanners([{ ...red(), state: 'dismissed' }, CI_FAILED_CARD]);
+    expect(host.querySelector('[data-team-red]')).toBeNull();
+    act(() => root.render(<RedBanners state={{ ...withCards([red()]), enabled: false }} api={fakeApi()} now={0} onDone={() => {}} />));
+    expect(host.innerHTML).toBe('');
+  });
+
+  it('keeps the red main out of the Team list', async () => {
+    const api = fakeApi({ state: async () => withCards([red(), push]) });
+    act(() => root.render(<TeamSection api={api} now={MAIN_PUSH.atMs + 60_000} />));
+    await flush();
+    expect(host.querySelector('[data-team-red]')).toBeNull();
+    expect(host.querySelectorAll('[data-team-card]').length).toBe(1);
+  });
+
+  it('counts an unclaimed red main toward the badge, and a claimed one not', () => {
+    const state = withCards([red(), { ...red({ member: 'kai', display: 'Kai', atMs: 1, mine: false }), id: 'other' }, push]);
+    const teamRed = unclaimedRed(state);
+    expect(teamRed.map((r) => r.id)).toEqual([MAIN_RED.id]);
+    const items = blockingItems(deriveNeedsYou({ panes: [], teamRed }));
+    expect(items.map((i) => i.id)).toEqual([`team_ci:${MAIN_RED.id}`]);
+    expect(unclaimedRed({ ...state, enabled: false })).toEqual([]);
   });
 });

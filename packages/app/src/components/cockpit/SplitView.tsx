@@ -8,6 +8,7 @@ import { composerBlock } from '../../lib/paneOutbox';
 import { useAgentRegistry } from '../../lib/agentRegistry';
 import { useLoopGuard } from '../../lib/loop-guard';
 import { helperOfLabel } from '../../lib/pane-helpers';
+import { bindingHint } from '../../lib/shortcuts';
 import '../../styles/cockpit-split.css';
 import { DockedCards } from './DockedCards';
 import { DotSpinner } from './DotSpinner';
@@ -183,7 +184,7 @@ function SplitSideView({
         <span className="ck-split-state">{waiting ? 'Needs you' : stateText(pane.status)}</span>
         {actions}
         {side === 'right' && (
-          <button type="button" className="ck-icon-btn" aria-label="Close split view" title="Close split view ( Ctrl+\ )" onClick={onClose}>
+          <button type="button" className="ck-icon-btn" aria-label="Close split view" title={`Close split view${bindingHint('split')}`} onClick={onClose}>
             <IconClose />
           </button>
         )}

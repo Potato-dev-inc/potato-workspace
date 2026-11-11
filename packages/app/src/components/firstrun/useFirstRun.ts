@@ -51,7 +51,7 @@ async function seedFrom(state: FirstRunState | null, load: typeof loadSettings, 
   };
 }
 
-const EMPTY_SEED: Seed = { start: 'welcome', look: null, project: null, agentId: null };
+const EMPTY_SEED: Seed = { start: 'agents', look: null, project: null, agentId: null };
 
 /**
  * `paneCount` and `panesReady` come from the pane registry: an automatic show waits until the panes are
@@ -130,7 +130,7 @@ export function useFirstRun(paneCount: number, panesReady: boolean, deps: Deps =
     decided.current = true;
     setDoneHere(false);
     void patch(reopenPatch()).catch(() => undefined);
-    show({ show: true, auto: false, step: 'welcome' }, true);
+    show({ show: true, auto: false, step: 'agents' }, true);
   }, [patch, show]);
 
   const resume = useCallback(() => {

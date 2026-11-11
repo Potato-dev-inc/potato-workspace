@@ -24,6 +24,14 @@ describe('settings search keywords', () => {
     expect(keys?.rows.map((r) => r.id)).toEqual(expect.arrayContaining(['key-anthropic', 'key-openai', 'key-openrouter']));
   });
 
+  it('"team", "relay", "invite" and "join" find the Team page, and only the Team page', () => {
+    for (const word of ['team', 'relay', 'invite', 'join']) {
+      const hits = searchSections(SECTIONS, word);
+      expect(hits.map((h) => h.section.id), word).toContain('team');
+      expect(hits.find((h) => h.section.id === 'general')?.rows.map((r) => r.id) ?? [], word).not.toContain('team-page');
+    }
+  });
+
   it('"chat add-on" finds its row', () => {
     const addon = searchSections(SECTIONS, 'chat add-on').flatMap((h) => h.rows.map((r) => r.id));
     expect(addon).toContain('chat-addons');

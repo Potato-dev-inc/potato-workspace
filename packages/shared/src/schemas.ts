@@ -78,7 +78,7 @@ export const SettingsSchema = z.object({
   /** Stable pane id for the dedicated orchestrator CLI pane (CLI backends). */
   orchestrator_pane_id: z.string().optional(),
   /** Mobile terminal text buffer delay before committing to the PTY (autocorrect settling). */
-  mobile_input_delay_ms: z.number().int().min(0).max(1000).default(250),
+  mobile_input_delay_ms: z.number().int().min(0).max(1000).default(60),
   /** Show the mobile terminal command input bar. When false, the tap target remains invisible. */
   mobile_input_visible: z.boolean().default(true),
   /** Phone: let the keyboard shrink the agent (PTY redraw per open/close). Off keeps the agent at its size. */
@@ -104,6 +104,8 @@ export const SettingsSchema = z.object({
   checkpoints_keep: z.number().int().min(5).max(500).default(50),
   /** Minutes without keyboard or mouse before you count as away (the "While you were away" digest); 0 = off. */
   away_minutes: z.number().int().min(0).max(1440).default(5),
+  /** The person's own keyboard shortcuts: { actionId: combo }, "none" = turned off. A missing id keeps its default (lib/shortcuts.ts in the app; Rust: global_shortcuts). */
+  keybindings: z.record(z.string(), z.string()).optional(),
   /** Budget every agent run that agents start gets, in turns; 0 = no budget (the default). Rust: budgets. */
   budget_default_turns: z.number().int().min(0).max(10000).default(0),
   /** Same, in wall-clock minutes; 0 = no limit. */

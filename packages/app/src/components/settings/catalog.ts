@@ -1,4 +1,4 @@
-// The sections of Settings (six) and the read-only "Coming later" list.
+// The sections of Settings (seven) and the read-only "Coming later" list.
 //
 // `BASE_SECTIONS` is what each section file defines. `SECTIONS` is what the window shows: the same rows,
 // placed and grouped by `arrange.tsx` (group titles, order, General > Labs, links where rows moved).
@@ -12,15 +12,19 @@ import { keysRows } from './sections/KeysSection';
 import { modelBridgeRows } from './sections/ModelBridgeSection';
 import { modelsRows } from './sections/ModelsSection';
 import { phoneRows } from './sections/PhoneSection';
+import { teamRows } from './sections/TeamSection';
+import { shortcutsRows } from './sections/ShortcutsSection';
 
 /** The sections as their files define them, with each row's level (levels.ts). */
 const RAW_SECTIONS: SectionDef[] = [
   { id: 'general', title: 'General', blurb: 'Project, appearance, safety, early features and updates.', rows: generalRows },
-  { id: 'agents', title: 'Agents', blurb: 'Logins, keeping agents ready, versions and your own agents.', rows: agentsRows },
+  { id: 'agents', title: 'Agents', blurb: 'Sign in, keeping agents ready, versions and your own agents.', rows: agentsRows },
   { id: 'models', title: 'Orchestrator & Models', blurb: 'Choose the AI that coordinates your other agents, and which models it can use.', rows: [...modelsRows, ...modelBridgeRows] },
   { id: 'keys', title: 'Keys', blurb: 'API keys. They are kept in your system keychain when there is one.', rows: keysRows },
   { id: 'bridge', title: 'Bridge & MCP', blurb: 'How other tools and agents connect to Potato Workspace.', rows: bridgeRows },
   { id: 'phone', title: 'Phone', blurb: 'Pair a phone to watch and steer your agents.', rows: phoneRows },
+  { id: 'team', title: 'Team', blurb: 'Work with teammates: see when their agents push, and tell them about yours.', rows: teamRows },
+  { id: 'shortcuts', title: 'Shortcuts', blurb: 'Change the keys, or turn a shortcut off. Terminals keep their own keys.', rows: shortcutsRows },
 ];
 
 export const BASE_SECTIONS: SectionDef[] = RAW_SECTIONS.map((section) => ({

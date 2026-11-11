@@ -65,7 +65,7 @@ describe('How to run', () => {
     await render({ laneGet: async () => ({ labs_enabled: true, agents: [agent()] }), laneSet });
     expect(host.textContent).toContain('Codex');
     expect(popup()!.value).toBe('terminal');
-    expect([...popup()!.options].map((o) => o.textContent)).toEqual(['Terminal', 'Chat (ACP)']);
+    expect([...popup()!.options].map((o) => o.textContent)).toEqual(['Terminal', 'Chat']);
     await act(async () => {
       popup()!.value = 'acp';
       popup()!.dispatchEvent(new Event('change', { bubbles: true }));
@@ -211,7 +211,7 @@ describe('the settings rows', () => {
 
   it('the Labs switch row is named in plain words', () => {
     const row = SECTIONS.flatMap((s) => s.rows).find((r) => r.id === 'acp-chat-labs')!;
-    expect(row.labs?.name).toBe('Chat sessions (ACP)');
+    expect(row.labs?.name).toBe('Chat sessions');
     expect(row.labs?.about).toBe('Run an agent as a chat instead of in a terminal.');
     expect(row.group).toBe('Labs');
   });

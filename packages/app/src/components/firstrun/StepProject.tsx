@@ -24,6 +24,19 @@ export function folderText(code: string | null): string {
   }
 }
 
+/**
+ * The demo runs in the folder itself and only reads, so the old "too big to copy" refusal does not apply
+ * here. Only the broad-folder guard (a home folder, Documents) still refuses.
+ */
+export const refusal = (check: { ok: boolean; code?: string }): string | null => (check.ok || check.code === 'FOLDER_TOO_BIG' ? null : (check.code ?? 'FOLDER_FAILED'));
+
+/** A recent folder inside another listed one (a subfolder of a repo already there) is left out. */
+export function withoutNested<T extends { path: string; state: string }>(list: T[]): T[] {
+  const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const roots = list.filter((p) => p.state !== 'missing').map((p) => norm(p.path));
+  return list.filter((p) => { const me = norm(p.path); return !roots.some((r) => r !== me && me.startsWith(r + '/')); });
+}
+
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err)).replace(/^[A-Z_]+: /, '');
 
 export function StepProject({
@@ -48,12 +61,16 @@ export function StepProject({
     ship
       .recent()
       .then((list) => {
-        setRecent(list);
-        for (const p of list) {
+        const shown = withoutNested(list);
+        setRecent(shown);
+        for (const p of shown) {
           if (p.state === 'missing') continue;
           simple
             .checkFolder(p.path)
-            .then((check) => !check.ok && setBroad((b) => ({ ...b, [p.path]: check.code })))
+            .then((check) => {
+              const code = refusal(check);
+              if (code) setBroad((b) => ({ ...b, [p.path]: code }));
+            })
             .catch(() => undefined);
         }
       })
@@ -76,9 +93,10 @@ export function StepProject({
     if (found.state === 'missing') return;
     try {
       const check = await simple.checkFolder(found.path);
-      if (!check.ok) {
+      const code = refusal(check);
+      if (code) {
         onProject(null);
-        setProblem(folderText(check.code));
+        setProblem(folderText(code));
         return;
       }
     } catch {

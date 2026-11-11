@@ -63,3 +63,11 @@ pub async fn first_run_task_status(project: String, handle: String) -> Result<Va
     .await
     .map_err(|e| format!("INTERNAL: {e}"))?
 }
+
+/// Does the agent in `pane_id` reach THIS app's MCP bridge? True once one of its MCP connections has said
+/// it runs in that pane. A dev build and an installed app have different bridges, so an agent set up by the
+/// other one answers false here.
+#[tauri::command]
+pub async fn first_run_pane_mcp(pane_id: String) -> bool {
+    crate::mcp_sessions::pane_has_session(&pane_id)
+}

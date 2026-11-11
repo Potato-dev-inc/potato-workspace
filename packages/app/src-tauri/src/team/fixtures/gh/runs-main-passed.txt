@@ -1,0 +1,27 @@
+HTTP/2.0 200 OK
+Content-Type: application/json; charset=utf-8
+Etag: W/"7275e502"
+
+{
+  "total_count": 2,
+  "workflow_runs": [
+    {
+      "name": "CI",
+      "head_branch": "main",
+      "head_sha": "3333333333333333333333333333333333333333",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/potato-workspace/app/actions/runs/9010"
+    },
+    {
+      "name": "CI",
+      "head_branch": "main",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/potato-workspace/app/actions/runs/9001"
+    }
+  ]
+}

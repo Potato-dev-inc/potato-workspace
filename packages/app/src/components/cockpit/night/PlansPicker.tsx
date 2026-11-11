@@ -25,7 +25,7 @@ export function PlansPicker({
         <span className="ck-night-label" id="ck-night-plans-t">
           Plans to use
         </span>
-        <span className="ck-night-hint">(one login per company)</span>
+        <span className="ck-night-hint">(one sign-in per company)</span>
       </div>
       {plans.length === 0 ? (
         <p className="ck-night-note">No agent is set up on this computer yet.</p>

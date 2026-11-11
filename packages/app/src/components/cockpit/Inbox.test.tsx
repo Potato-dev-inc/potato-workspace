@@ -307,7 +307,7 @@ describe('empty and first-run states', () => {
     const open = vi.fn();
     mount(api, open);
     expect(host.querySelector('h1')?.textContent).toBe('Welcome to Potato Workspace');
-    expect(host.querySelector('.ck-sub')?.textContent).toBe('Your AI helpers work here. First, check which ones this PC has.');
+    expect(host.querySelector('.ck-sub')?.textContent).toBe('Your agents work here. First, check which ones this PC has.');
     // no "00" counter on a welcome
     expect(host.querySelector('.ck-doto')).toBeNull();
     const buttons = Array.from(host.querySelectorAll('button'));
@@ -342,6 +342,31 @@ describe('empty and first-run states', () => {
     const labels = Array.from(host.querySelectorAll('button')).map((b) => b.textContent);
     expect(labels).not.toContain('Set up your agents');
     expect(labels).not.toContain('Use Simple mode');
+  });
+
+  it('the empty Inbox after setup starts with Start an agent, and Set up agents is second', () => {
+    const { api } = fixture({ panes: [] });
+    const start = vi.fn();
+    const doctor = vi.fn();
+    act(() => root.render(<Inbox c={api} onOpenDoctor={doctor} onStartAgent={start} />));
+    const labels = Array.from(host.querySelectorAll('button')).map((b) => b.textContent);
+    expect(labels.indexOf('Start an agent')).toBeGreaterThanOrEqual(0);
+    expect(labels.indexOf('Start an agent')).toBeLessThan(labels.indexOf('Set up agents'));
+    const startButton = Array.from(host.querySelectorAll('button')).find((b) => b.textContent === 'Start an agent')!;
+    const setUpButton = Array.from(host.querySelectorAll('button')).find((b) => b.textContent === 'Set up agents')!;
+    expect(startButton.className).toContain('ck-btn--primary');
+    expect(setUpButton.className).toContain('ck-btn--secondary');
+    act(() => startButton.click());
+    expect(start).toHaveBeenCalledTimes(1);
+    act(() => setUpButton.click());
+    expect(doctor).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the Focus timer until an agent has run', () => {
+    window.localStorage.clear();
+    const { api } = fixture({ panes: [] });
+    mount(api, () => {});
+    expect(host.querySelector('.ck-focus-note')).toBeNull();
   });
 
   it('is not a welcome once something was ever opened', () => {
@@ -451,7 +476,7 @@ describe('Collision alert cards in the Inbox', () => {
 });
 
 describe('Which login should a helper use, in the Inbox', () => {
-  it('draws the card with an Always box, answers with the pick, and Add another login opens Settings on the accounts', () => {
+  it('draws the card with an Always box, answers with the pick, and Add another sign-in opens Settings on the accounts', () => {
     const helper = question({
       id: 'hl-1',
       agent: undefined,
@@ -476,7 +501,7 @@ describe('Which login should a helper use, in the Inbox', () => {
       act(() => (card.querySelector('[data-testid="helper-always"] input') as HTMLInputElement).click());
       act(() => button('Work').click());
       expect(answerQuestion).toHaveBeenCalledWith('hl-1', { choice_id: 'always:acc_1' });
-      act(() => button('Add another login').click());
+      act(() => button('Add another sign-in').click());
       expect(opened).toHaveBeenCalledWith('accounts');
     } finally {
       registerSettingsOpener(null);

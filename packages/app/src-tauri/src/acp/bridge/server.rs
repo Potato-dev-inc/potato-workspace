@@ -168,7 +168,7 @@ pub fn serve<R: BufRead, W: Write + Send + 'static>(profile: Arc<dyn TuiProfile>
 fn initialize_result(label: &str) -> Value {
     json!({
         "protocolVersion": 1,
-        "agentInfo": {"name": label, "title": label, "version": env!("CARGO_PKG_VERSION")},
+        "agentInfo": {"name": label, "title": label, "version": crate::app_lifecycle::app_version()},
         "agentCapabilities": {
             "loadSession": false,
             "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false}
@@ -257,10 +257,12 @@ fn start_prompt(shared: &Arc<Shared>, id: Value, params: &Value) -> Option<std::
         }
         *active = Some(Active { session: session_id.clone(), ctl: ctl.clone() });
     }
-    let shared = shared.clone();
-    std::thread::Builder::new()
+    let on_failure = (shared.clone(), id.clone());
+    let spawned = std::thread::Builder::new()
         .name("acp-bridge-turn".into())
-        .spawn(move || {
+        .spawn({
+            let shared = shared.clone();
+            move || {
             if notice {
                 shared.chunk(&session_id, &format!("{NO_MEMORY_NOTICE}\n\n"));
             }
@@ -283,13 +285,60 @@ fn start_prompt(shared: &Arc<Shared>, id: Value, params: &Value) -> Option<std::
                 TurnEnd::Cancelled => shared.reply(&id, json!({"stopReason": "cancelled"})),
                 TurnEnd::Failed(sentence) => shared.fail(&id, RPC_FAILED, &sentence),
             }
-        })
-        .ok()
+            }
+        });
+    match spawned {
+        Ok(handle) => Some(handle),
+        Err(_) => {
+            turn_not_started(&on_failure.0, &on_failure.1);
+            None
+        }
+    }
+}
+
+/// The turn thread could not be created: free the slot (or every later message would be refused as
+/// "still being answered") and tell the host, which is waiting for this request's answer.
+fn turn_not_started(shared: &Shared, id: &Value) {
+    *shared.active.lock() = None;
+    shared.fail(id, RPC_FAILED, "Could not start answering this message. Try again.");
 }
 
 #[cfg(test)]
 mod prompt_tests {
     use super::*;
+
+    struct Capture(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for Capture {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_turn_thread_that_cannot_start_frees_the_slot_and_answers_the_request() {
+        let written = Arc::new(Mutex::new(Vec::new()));
+        let shared = Shared {
+            out: Mutex::new(Box::new(Capture(written.clone()))),
+            profile: crate::tui::profile_for("claude"),
+            label: "claude".into(),
+            options: ServeOptions::default(),
+            has_memory: false,
+            sessions: Mutex::new(HashMap::new()),
+            active: Mutex::new(Some(Active { session: "s".into(), ctl: TurnControl::new() })),
+            next_session: Mutex::new(0),
+        };
+        turn_not_started(&shared, &json!(7));
+        assert!(shared.active.lock().is_none(), "the next message must not be refused as busy");
+        let out = String::from_utf8(written.lock().clone()).unwrap();
+        let reply: Value = serde_json::from_str(out.trim()).unwrap();
+        assert_eq!(reply["id"], json!(7));
+        assert!(reply["error"]["message"].is_string());
+    }
 
     #[test]
     fn file_blocks_become_a_line_with_the_path_and_images_stay_refused() {

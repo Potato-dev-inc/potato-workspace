@@ -601,6 +601,22 @@ fn next_run(rig: &Rig, opts: &str) -> (Conversations, Arc<AcpChat>) {
     (app, chat)
 }
 
+/// Waits until nothing more is written to the journal. `retire()` closes the session, and the closing can still add a
+/// line (a turn end) or let a coalesced write land a moment later; a test that puts "what a killed process left" on
+/// disk must do it after that, or the late write lands on top of its file.
+fn wait_journal_quiet(rig: &Rig) {
+    let quiet_for = crate::acp::journal::COALESCE * 3;
+    let mut last = (std::fs::metadata(journal_of(rig)).map(|m| m.len()).unwrap_or(0), Instant::now());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while last.1.elapsed() < quiet_for && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+        let now = std::fs::metadata(journal_of(rig)).map(|m| m.len()).unwrap_or(0);
+        if now != last.0 {
+            last = (now, Instant::now());
+        }
+    }
+}
+
 #[test]
 fn a_kill_in_the_middle_of_a_turn_loses_nothing_and_offers_continue() {
     let rig = Rig::new("");
@@ -614,6 +630,7 @@ fn a_kill_in_the_middle_of_a_turn_loses_nothing_and_offers_continue() {
     let on_disk = std::fs::read(journal_of(&rig)).unwrap();
     let seen_before_kill = crate::acp::journal::load(&journal_of(&rig));
     rig.chat.retire();
+    wait_journal_quiet(&rig);
     // The kill also cut the last line in half.
     let mut cut = on_disk.clone();
     cut.extend_from_slice(br#"{"v":1,"at":1,"item":{"kind":"assistant","id":"a2.1","te"#);
@@ -655,6 +672,8 @@ fn a_second_restart_keeps_the_interruption_and_the_continue_offer() {
     std::thread::sleep(Duration::from_millis(300));
     let on_disk = std::fs::read(journal_of(&rig)).unwrap();
     rig.chat.retire();
+    // Closing can still write a turn end a moment later; wait for it, then put back what a killed process left.
+    wait_journal_quiet(&rig);
     std::fs::write(journal_of(&rig), on_disk).unwrap();
     let (app, first) = next_run(&rig, "");
     assert_eq!(first.state()["interruptedTurn"], true);

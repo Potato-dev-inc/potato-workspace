@@ -45,9 +45,13 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
   const [test, setTest] = useState<TunnelConnectionTest | null>(null);
 
   const load = useCallback(async () => {
-    const next = await api.getStatus();
-    setStatus(next);
-    setDraft(draftFromConfig(next?.config));
+    try {
+      const next = await api.getStatus();
+      setStatus(next);
+      setDraft(draftFromConfig(next?.config));
+    } catch (e) {
+      setError(`Could not read the address: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }, [api]);
 
   useEffect(() => {
@@ -58,7 +62,10 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
   useEffect(() => {
     if (status?.state !== 'starting') return;
     const id = window.setInterval(() => {
-      void api.getStatus().then((next) => next && setStatus(next));
+      api
+        .getStatus()
+        .then((next) => next && setStatus(next))
+        .catch((e: unknown) => setError(`Could not check the address: ${e instanceof Error ? e.message : String(e)}`));
     }, 1500);
     return () => window.clearInterval(id);
   }, [api, status?.state]);

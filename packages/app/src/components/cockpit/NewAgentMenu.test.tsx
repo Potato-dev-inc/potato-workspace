@@ -32,6 +32,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  window.localStorage.clear();
 });
 
 const item = (label: string) =>
@@ -59,10 +60,10 @@ describe('NewAgentMenu', () => {
   it('an agent with accounts asks which login, then starts under it', async () => {
     const work = { id: 'acc_1', agent_id: 'claude', label: 'Work', home: 'C:/a' };
     const { onStart } = await mount([work, { id: 'acc_2', agent_id: 'claude', label: 'Personal', home: 'C:/b' }]);
-    expect(item('Claude')!.textContent).toContain('3 logins');
+    expect(item('Claude')!.textContent).toContain('3 sign-ins');
     await act(async () => item('Claude')!.click());
     expect(onStart).not.toHaveBeenCalled();
-    expect(host.textContent).toContain('Default login');
+    expect(host.textContent).toContain('Default sign-in');
     expect(host.textContent).toContain('Personal');
     await act(async () => item('Work')!.click());
     expect(onStart).toHaveBeenCalledWith('claude', 'acc_1');
@@ -74,7 +75,7 @@ describe('NewAgentMenu', () => {
     await act(async () => item('Back')!.click());
     expect(item('Codex')).toBeTruthy();
     await act(async () => item('Claude')!.click());
-    await act(async () => item('Default login')!.click());
+    await act(async () => item('Default sign-in')!.click());
     expect(onStart).toHaveBeenCalledWith('claude', undefined);
   });
 

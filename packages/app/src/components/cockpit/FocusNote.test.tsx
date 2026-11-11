@@ -69,6 +69,18 @@ describe('the note while Focus is off', () => {
     expect(chips.map((c) => c.getAttribute('data-default'))).toEqual([null, 'true', null]);
   });
 
+  it('is hidden until an agent has run, then it shows', () => {
+    render({ view: OFF, hasRun: false });
+    expect(host.querySelector('.ck-focus-note')).toBeNull();
+    render({ view: OFF, hasRun: true });
+    expect(host.querySelector('[data-focus="off"]')).not.toBeNull();
+  });
+
+  it('a Focus that is already on stays visible even before an agent has run', () => {
+    render({ view: ON, hasRun: false });
+    expect(host.querySelector('[data-focus="on"]')).not.toBeNull();
+  });
+
   it('marks the default length the person set', () => {
     render({ view: { ...OFF, settings: { default_minutes: 90, quiet_blocking: true } } });
     const marked = [...host.querySelectorAll('[data-default="true"]')];

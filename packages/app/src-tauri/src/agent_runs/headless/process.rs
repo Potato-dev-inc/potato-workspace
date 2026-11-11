@@ -3,7 +3,7 @@
 
 use super::control::{children, terminate, HeadlessControl};
 use super::finish::finish_from_output;
-use super::output::{spawn_reader, stream_text};
+use super::output::{forget_raw, spawn_reader, stream_text};
 use crate::agent_runs::{persist, transcript};
 use crate::operations::{self, ContextPolicy, OperationError, OperationStatus, StateSource};
 use parking_lot::Mutex;
@@ -141,10 +141,13 @@ pub(in crate::agent_runs) fn execute_headless(
             )
         })
         .flatten();
-    let mut standby = pool_key
-        .as_ref()
-        .and_then(crate::standby::claim_headless)
-        .and_then(|claim| claim.into_process());
+    // Held in a guard: every early return below kills a warm process that was never used.
+    let mut standby = StandbyGuard(
+        pool_key
+            .as_ref()
+            .and_then(crate::standby::claim_headless)
+            .and_then(|claim| claim.into_process()),
+    );
     if let Some(key) = &pool_key {
         crate::standby::note_run(key, &project);
     }
@@ -159,7 +162,7 @@ pub(in crate::agent_runs) fn execute_headless(
         project = %project,
         guarded = guard.is_some(),
         has_key = pool_key.is_some(),
-        claimed = standby.is_some(),
+        claimed = standby.0.is_some(),
         "standby claim (headless run): Preload keeps visible panes only, so a headless run starts its own process unless the legacy headless pool is on"
     );
     let account_env = match account.as_deref() {
@@ -197,6 +200,7 @@ pub(in crate::agent_runs) fn execute_headless(
     let dispatch = operations::run_operation_dispatch(&project, &operation_id, |_| {
         operations::dispatch_input_if_active(&project, &operation_id, |_| {
             let from_standby = standby
+                .0
                 .take()
                 .and_then(|process| hand_task_to_standby(process, &profile, &task));
             if from_standby.is_some() {
@@ -228,6 +232,15 @@ pub(in crate::agent_runs) fn execute_headless(
             children()
                 .lock()
                 .insert(operation_id.clone(), control.clone());
+            // A cancel that landed after the Starting check but before this insert found no
+            // child (and was treated as "nothing to stop"). Look again now that the child is
+            // registered: if the run left Starting meanwhile, stop it before it does anything.
+            if operations::operation_left_starting(&project, &operation_id) {
+                tracing::warn!(operation_id = %operation_id, "run was cancelled while its process started; stopping it");
+                if terminate(&control).is_err() {
+                    force_kill(&control);
+                }
+            }
             let (stdout, stderr) = {
                 let mut child = control.child.lock();
                 (child.stdout.take(), child.stderr.take())
@@ -252,10 +265,14 @@ pub(in crate::agent_runs) fn execute_headless(
     });
     if dispatch.is_err() {
         children().lock().remove(&operation_id);
+        forget_raw(&project, &operation_id);
         publish(&project, &operation_id, &registry, &app);
         return;
     }
     let Some(control) = children().lock().get(&operation_id).cloned() else {
+        // Cancelled while queued (or the process never registered): nothing runs; tell the UI.
+        forget_raw(&project, &operation_id);
+        publish(&project, &operation_id, &registry, &app);
         return;
     };
     operations::mark_operation_stage(&project, &operation_id, "process_running");
@@ -271,6 +288,10 @@ pub(in crate::agent_runs) fn execute_headless(
             Ok(Some(status)) => break Some(status.code().unwrap_or(-1)),
             Ok(None) => {}
             Err(error) => {
+                // We can no longer watch it: do not leave it running unattended.
+                let pid = child.id();
+                crate::pty::proc_tree::kill_process_tree(pid);
+                let _ = child.kill();
                 let _ = operations::mark_operation_state(
                     &project,
                     &operation_id,
@@ -293,6 +314,16 @@ pub(in crate::agent_runs) fn execute_headless(
         // stop it and finish the turn from that result.
         if last_result_poll.elapsed() >= Duration::from_millis(RESULT_POLL_MS) {
             last_result_poll = Instant::now();
+            // The run was cancelled or ended elsewhere and the cancel did not reach this child
+            // (it raced the start): stop it here instead of letting it run on.
+            if operations::get_operation(&project, &operation_id)
+                .is_ok_and(|op| op.status.terminal() || op.status == OperationStatus::Cancelling)
+            {
+                if terminate(&control).is_err() {
+                    force_kill(&control);
+                }
+                break None;
+            }
             if result_seen_at.is_none() {
                 let stdout = stream_text(&project, &operation_id, "stdout");
                 if profile.headless_result_ready(&stdout) {
@@ -310,6 +341,8 @@ pub(in crate::agent_runs) fn execute_headless(
         }
         if started.elapsed() >= Duration::from_millis(timeout_ms) {
             if let Err(stop_error) = terminate(&control) {
+                // The polite stop failed at the deadline: kill it outright so it cannot run on.
+                force_kill(&control);
                 let failure = OperationError::new("WORKER_STOP_FAILED", stop_error.message, true);
                 let _ = operations::mark_operation_state(
                     &project,
@@ -341,12 +374,11 @@ pub(in crate::agent_runs) fn execute_headless(
         }
         thread::sleep(Duration::from_millis(75));
     };
-    for reader in readers {
-        let _ = reader.join();
-    }
+    join_bounded(readers, READER_JOIN_MS);
     let current = operations::get_operation(&project, &operation_id).ok();
     if current.as_ref().is_some_and(|op| op.status.terminal()) {
         children().lock().remove(&operation_id);
+        forget_raw(&project, &operation_id);
         publish(&project, &operation_id, &registry, &app);
         return;
     }
@@ -354,7 +386,46 @@ pub(in crate::agent_runs) fn execute_headless(
         finish_from_output(&project, &operation_id, &profile, &spec.program, code);
     }
     children().lock().remove(&operation_id);
+    forget_raw(&project, &operation_id);
     publish(&project, &operation_id, &registry, &app);
+}
+
+/// Kills the child and its process tree outright, without waiting on it. Best effort.
+fn force_kill(control: &HeadlessControl) {
+    let mut child = control.child.lock();
+    crate::pty::proc_tree::kill_process_tree(child.id());
+    let _ = child.kill();
+    control.cancelled.store(true, Ordering::Release);
+}
+
+/// How long to wait for the output readers once the child is gone. A grandchild that inherited
+/// the pipes can keep them open forever; the turn must still settle.
+const READER_JOIN_MS: u64 = 5000;
+
+fn join_bounded(readers: Vec<thread::JoinHandle<()>>, limit_ms: u64) {
+    let deadline = Instant::now() + Duration::from_millis(limit_ms);
+    for reader in readers {
+        while !reader.is_finished() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(20));
+        }
+        if reader.is_finished() {
+            let _ = reader.join();
+        }
+        // An unfinished reader is detached: it ends on its own when the pipe finally closes.
+    }
+}
+
+/// A claimed warm process that was not handed a task is killed (and reaped) when the run returns,
+/// whatever path it returns by; otherwise it would linger as an orphaned CLI with open stdin.
+struct StandbyGuard(Option<crate::standby::StandbyProcess>);
+
+impl Drop for StandbyGuard {
+    fn drop(&mut self) {
+        if let Some(mut process) = self.0.take() {
+            let _ = process.child.kill();
+            let _ = process.child.wait();
+        }
+    }
 }
 
 /// Gives a claimed standby process its task and closes its stdin. `None` (the process is shut
@@ -443,6 +514,119 @@ pub(crate) fn headless_command(spec: &crate::tui::LaunchSpec, account_env: &crat
         command.process_group(0);
     }
     command
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    use crate::operations::DelegateWorkRequest;
+
+    fn sleeper() -> std::process::Child {
+        let mut command = if cfg!(windows) {
+            let mut command = crate::proc_util::hidden_command("ping");
+            command.args(["-n", "60", "127.0.0.1"]);
+            command
+        } else {
+            let mut command = crate::proc_util::hidden_command("sleep");
+            command.arg("60");
+            command
+        };
+        command.stdout(Stdio::null()).stderr(Stdio::null()).spawn().expect("spawn sleeper")
+    }
+
+    #[test]
+    fn an_unused_warm_process_is_killed_when_the_run_returns() {
+        let child = sleeper();
+        let pid = child.id();
+        let process = crate::standby::StandbyProcess { child };
+        let guard = StandbyGuard(Some(process));
+        drop(guard);
+        // Reap check: the pid is gone, so a new handle to it cannot be waited on as alive.
+        let alive = if cfg!(windows) {
+            crate::proc_util::hidden_command("tasklist")
+                .args(["/FI", &format!("PID eq {pid}")])
+                .output()
+                .map(|out| String::from_utf8_lossy(&out.stdout).contains(&pid.to_string()))
+                .unwrap_or(false)
+        } else {
+            crate::proc_util::hidden_command("kill")
+                .args(["-0", &pid.to_string()])
+                .status()
+                .map(|status| status.success())
+                .unwrap_or(false)
+        };
+        assert!(!alive, "the unclaimed warm process must be killed");
+    }
+
+    #[test]
+    fn force_kill_stops_a_child_the_wait_loop_can_no_longer_watch() {
+        let control = HeadlessControl { child: Mutex::new(sleeper()), cancelled: AtomicBool::new(false) };
+        force_kill(&control);
+        assert!(control.cancelled.load(Ordering::Acquire));
+        let status = control.child.lock().wait().expect("reaped");
+        assert!(!status.success());
+    }
+
+    #[test]
+    fn joining_readers_gives_up_on_a_pipe_that_never_closes() {
+        let (hold, release) = std::sync::mpsc::channel::<()>();
+        let stuck = thread::spawn(move || {
+            let _ = release.recv();
+        });
+        let started = Instant::now();
+        join_bounded(vec![stuck], 200);
+        assert!(started.elapsed() < Duration::from_secs(3));
+        drop(hold);
+    }
+
+    #[test]
+    fn a_cancel_that_lands_before_the_process_registers_is_noticed_afterwards() {
+        let project = std::env::temp_dir().join(format!("pm-hl-race-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&project).unwrap();
+        let path = project.to_string_lossy().into_owned();
+        let request = DelegateWorkRequest {
+            project_path: path.clone(),
+            task: "x".into(),
+            agent_type: "claude".into(),
+            pane_id: None,
+            idempotency_key: uuid::Uuid::new_v4().to_string(),
+            acceptance_criteria: None,
+            task_id: None,
+            exclusive: false,
+            locks: vec![],
+            timeout_ms: 900_000,
+            read_only: false,
+            keep_pane: false,
+            placement: None,
+            owner_session_id: None,
+            parent_pane_id: None,
+            worker_has_mcp_tools: false,
+            agent_run_id: None,
+            turn_index: 0,
+            worker: Default::default(),
+            context_policy: None,
+            checks: Vec::new(),
+        };
+        let (op, _) = operations::create_operation(request).unwrap();
+        let id = op.operation_id.clone();
+        operations::run_operation_dispatch(&path, &id, |_| {
+            // The run is Starting inside dispatch: nothing has left it yet.
+            assert!(!operations::operation_left_starting(&path, &id));
+            // A cancel arrives now: the hook finds no process yet and reports nothing to stop.
+            let mut hook_saw_a_process = true;
+            let _ = operations::cancel_operation_with(&path, &id, |_| {
+                hook_saw_a_process = children().lock().contains_key(&id);
+                Ok(())
+            });
+            assert!(!hook_saw_a_process, "the race: the cancel ran before the child registered");
+            // The worker registers its child afterwards and must now see that it was cancelled.
+            assert!(operations::operation_left_starting(&path, &id));
+            Ok(())
+        })
+        .unwrap();
+        assert!(!operations::operation_left_starting(&path, "no-such-operation"));
+        let _ = std::fs::remove_dir_all(project);
+    }
 }
 
 #[cfg(test)]

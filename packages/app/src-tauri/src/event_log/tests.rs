@@ -149,3 +149,92 @@ fn find_last_entry_handles_missing_empty_and_unterminated_files() {
     let _ = fs::remove_file(empty);
     let _ = fs::remove_file(odd);
 }
+
+#[test]
+fn concurrent_appends_through_the_shared_writer_never_share_a_line() {
+    let path = temp_event_log_path("concurrent");
+    let threads: Vec<_> = (0..8)
+        .map(|worker| {
+            let path = path.clone();
+            std::thread::spawn(move || {
+                // Each call asks for the writer anew, as the bridge does for every event.
+                for index in 0..200 {
+                    let log = EventLog::shared(path.clone()).unwrap();
+                    log.append(&status_entry(&format!("pane-{worker}"), &format!("s{index}"))).unwrap();
+                }
+            })
+        })
+        .collect();
+    for thread in threads {
+        thread.join().unwrap();
+    }
+    let text = fs::read_to_string(&path).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 1600);
+    for line in &lines {
+        assert!(serde_json::from_str::<EventEntry>(line).is_ok(), "one entry per line: {line}");
+    }
+    assert_eq!(read_entries(&path).unwrap().len(), 1600);
+    assert!(Arc::ptr_eq(&EventLog::shared(path.clone()).unwrap(), &EventLog::shared(path.clone()).unwrap()));
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn a_glued_or_damaged_line_is_recovered_or_skipped_not_fatal() {
+    let a = serde_json::to_string(&status_entry("pane-a", "first")).unwrap();
+    let b = serde_json::to_string(&status_entry("pane-b", "second")).unwrap();
+    let c = serde_json::to_string(&status_entry("pane-c", "third")).unwrap();
+    let path = temp_event_log_path("damaged");
+    // `{A}{B}` is what two interleaved appends used to leave behind; then plain garbage; then a good line.
+    fs::write(&path, format!("{a}{b}\nnot json at all\n{{\"half\":\n{c}\n")).unwrap();
+    let entries = read_entries(&path).unwrap();
+    assert_eq!(entries.len(), 3, "A and B from the glued line, and C");
+    let want = |pane: &'static str| {
+        move |entry: &EventEntry| {
+            matches!(&entry.payload, SystemEvent::PaneStatusChanged { pane_id, .. } if pane_id.0 == pane)
+        }
+    };
+    for chunk in [5usize, 64, 1 << 20] {
+        assert!(find_last_entry_in(&path, chunk, want("pane-a")).unwrap().is_some(), "chunk {chunk}");
+        assert!(find_last_entry_in(&path, chunk, want("pane-b")).unwrap().is_some(), "chunk {chunk}");
+        assert!(find_last_entry_in(&path, chunk, want("pane-c")).unwrap().is_some(), "chunk {chunk}");
+    }
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn a_log_over_its_size_limit_is_moved_aside_and_restarted() {
+    let path = temp_event_log_path("rotate");
+    let log = EventLog::with_limit(path.clone(), 4_000).unwrap();
+    for index in 0..100 {
+        log.append(&status_entry("pane-r", &format!("s{index}"))).unwrap();
+    }
+    let rotated = rotated_path(&path);
+    assert!(rotated.exists(), "the full log was moved aside");
+    let current = fs::metadata(&path).unwrap().len();
+    assert!(current < 4_000 + 400, "the live file stays near the limit, got {current}");
+    let newest = find_last_entry_in(&path, 256, |_| true).unwrap().unwrap();
+    assert!(matches!(&newest.payload, SystemEvent::PaneStatusChanged { status, .. } if status == "s99"));
+    assert!(!read_entries(&path).unwrap().is_empty());
+    let _ = fs::remove_file(rotated);
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn walking_the_log_backwards_stops_early_and_goes_newest_first() {
+    let path = temp_event_log_path("backwards");
+    let log = EventLog::new(path.clone()).unwrap();
+    for index in 0..500 {
+        log.append(&status_entry("pane-w", &format!("s{index}"))).unwrap();
+    }
+    let mut seen = Vec::new();
+    scan_entries_backwards(&path, 512, |entry| {
+        if let SystemEvent::PaneStatusChanged { status, .. } = entry.payload {
+            seen.push(status);
+        }
+        seen.len() >= 3
+    })
+    .unwrap();
+    assert_eq!(seen, vec!["s499", "s498", "s497"]);
+    let _ = fs::remove_file(path);
+}

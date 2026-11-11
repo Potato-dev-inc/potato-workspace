@@ -12,8 +12,8 @@ describe('settings entry', () => {
     expect(settingsEntryTab('?settings=1&tab=nope')).toBe('agents');
   });
 
-  it('opens each of the six sections and Coming later by id', () => {
-    for (const id of ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'later']) {
+  it('opens each of the seven sections and Coming later by id', () => {
+    for (const id of ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'later']) {
       expect(settingsEntryTab(`?settings=1&tab=${id}`)).toBe(id);
     }
   });
@@ -23,7 +23,7 @@ describe('settings entry', () => {
       appearance: 'general', storage: 'general', advanced: 'general', preload: 'agents', session: 'models',
       orchestrator: 'models', api: 'keys', mcp: 'bridge', developer: 'bridge', mobile: 'phone',
       security: 'general', notifications: 'later', backup: 'later', marketplace: 'later', rules: 'later',
-      costs: 'later', team: 'general', automation: 'later', observability: 'later', plugins: 'bridge',
+      costs: 'later', team: 'team', automation: 'later', observability: 'later', plugins: 'bridge',
     };
     for (const [old, now] of Object.entries(expected)) expect(resolveSettingsTab(old)).toBe(now);
     expect(resolveSettingsTab('')).toBeNull();

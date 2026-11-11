@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Chat sessions (ACP) in the "+" menu of the sidebar: the one Chat | Terminal switch shows only while Chat is on in Labs;
+// Chat sessions in the "+" menu of the sidebar: the one Chat | Terminal switch shows only while Chat is on in Labs;
 // Chat (the default) starts a chat session in the menu's folder (the person's pick, so `explicit`) and
 // selects the new pane; a failed start says why.
 import { act } from 'react';

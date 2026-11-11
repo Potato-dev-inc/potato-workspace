@@ -383,8 +383,24 @@ mod tests {
     /// Codex 0.162.1 -> 0.164.0 (retyped from a live screenshot): the selected row carries the glyph and
     /// the "Update now" row wraps onto a second line.
     const LIVE_UPDATE_MENU_0_164: &str = include_str!("fixtures/update_prompt_0_164_live.txt");
+    /// Codex 0.166.0 -> 0.167.0, captured from a real PTY in the dev project (D:\pm-workspace, trusted):
+    /// the menu Codex shows on EVERY launch until the user updates or skips it for good.
+    const LIVE_UPDATE_MENU_0_166: &str = include_str!("fixtures/update_prompt_0_166_live.txt");
     const LIVE_READY_BANNER: &str = include_str!("fixtures/standby_ready_live.txt");
     const LIVE_TRUST_FOLDER: &str = include_str!("fixtures/trust_folder_live.txt");
+
+    #[test]
+    fn the_0_166_update_menu_is_a_skippable_gate_and_never_the_trust_question() {
+        // Warm Codex workers died on this screen again and again: it reads NeedsAttention, but its own
+        // "esc skip" is a safe key the standby may press (no install, nothing saved).
+        assert_eq!(standby_screen(LIVE_UPDATE_MENU_0_166), StandbyScreen::NeedsAttention);
+        let gate = startup_gate(LIVE_UPDATE_MENU_0_166).expect("update menu is a gate");
+        assert_eq!((gate.id, gate.dismiss), ("update_available", Some(SKIP_KEY)));
+        // Trust and login declare no keys: a standby never answers them.
+        let trust = startup_gate(LIVE_TRUST_FOLDER).expect("trust is a gate");
+        assert_eq!((trust.id, trust.dismiss), (StartupGate::WORKSPACE_TRUST, None));
+        assert_eq!(startup_gate(LOGIN).and_then(|gate| gate.dismiss), None);
+    }
 
     #[test]
     fn live_composer_with_text_that_enter_did_not_submit_is_has_text() {

@@ -1,10 +1,14 @@
 // The keyboard shortcuts sheet: `?`, Ctrl+/ or "Keyboard shortcuts" in the palette. The list is lib/shortcuts.ts.
 // Esc closes it (Sheet), and so does the Close button.
 import { SHORTCUT_GROUPS, SHORTCUTS, isMacPlatform, shortcutKeys } from '../../lib/shortcuts';
+import { useKeybindingsVersion } from '../../hooks/useKeybindings';
+import { openSettingsAt } from '../../lib/openSettingsAt';
 import '../../styles/cockpit-shortcuts.css';
 import { Sheet } from './Sheet';
 
 export function ShortcutsSheet({ onClose, mac = isMacPlatform() }: { onClose: () => void; mac?: boolean }) {
+  // Draws again when you change a key in Settings > Shortcuts.
+  useKeybindingsVersion();
   return (
     <Sheet labelledBy="ck-shortcuts-t" role="dialog" onClose={onClose} className="ck-sheet--shortcuts">
       <h2 className="ck-section" id="ck-shortcuts-t">
@@ -23,6 +27,7 @@ export function ShortcutsSheet({ onClose, mac = isMacPlatform() }: { onClose: ()
                       {key}
                     </kbd>
                   ))}
+                  {s.bind && shortcutKeys(s, mac).length === 0 && <span className="ck-caption">Off</span>}
                 </span>
               </li>
             ))}
@@ -30,6 +35,16 @@ export function ShortcutsSheet({ onClose, mac = isMacPlatform() }: { onClose: ()
         </section>
       ))}
       <div className="ck-sheet-actions">
+        <button
+          type="button"
+          className="ck-btn ck-btn--secondary"
+          onClick={() => {
+            onClose();
+            openSettingsAt('shortcuts');
+          }}
+        >
+          Change shortcuts
+        </button>
         <button type="button" className="ck-btn ck-btn--secondary" autoFocus onClick={onClose}>
           Close
         </button>

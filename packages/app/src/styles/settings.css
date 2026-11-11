@@ -1019,6 +1019,339 @@
   min-width: 0;
   font-size: 11px;
 }
+/* "Create team relay": the token, then the steps as they happen. */
+.settings .st-sheet.st-relay {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings .st-sheet.st-relay h2 {
+  margin: 0;
+}
+.st-relay-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--label-3);
+}
+.st-relay-steps li::before {
+  display: inline-block;
+  width: 18px;
+  content: '·';
+}
+.st-relay-steps li[data-state='now'] {
+  color: var(--label);
+}
+.st-relay-steps li[data-state='now']::before {
+  content: '…';
+}
+.st-relay-steps li[data-state='done'] {
+  color: var(--label-2);
+}
+.st-relay-steps li[data-state='done']::before {
+  content: '✓';
+}
+.st-relay-steps li[data-state='failed'] {
+  color: var(--label);
+  font-weight: 500;
+}
+.st-relay-steps li[data-state='failed']::before {
+  content: '✕';
+}
+
+/* ---------- Team page (Settings > Team): start / join / on a team. Grayscale only. ---------- */
+.settings .st-nav-row svg {
+  flex: none;
+}
+.tp {
+  gap: 14px;
+  padding: 14px 16px;
+}
+.tp-h {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.tp-h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label-2);
+}
+.tp-sub {
+  margin: 0;
+  color: var(--label-3);
+}
+.tp-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.tp-block {
+  display: flex;
+  flex-direction: column;
+}
+.tp-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.tp-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--label);
+  text-align: left;
+  cursor: pointer;
+}
+.tp-choice:hover {
+  background: var(--fill-hover);
+}
+.tp-choice:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.tp-choice strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.tp-choice span {
+  color: var(--label-2);
+}
+.tp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tp-form-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tp-paste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tp-paste > span {
+  color: var(--label-2);
+}
+.tp-paste textarea.st-field {
+  min-height: 64px;
+  padding: 8px;
+  resize: vertical;
+}
+.tp-found {
+  margin: 0;
+  color: var(--label);
+  font-weight: 500;
+}
+.tp-way {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--label-4);
+  border-radius: 10px;
+  background: var(--fill);
+}
+.tp-way p {
+  margin-top: 2px;
+}
+.tp-way .st-btn {
+  flex: none;
+}
+.tp-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--fill-active);
+  color: var(--label-2);
+  font-size: 11px;
+}
+.tp-disclose {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--sep);
+  background: none;
+  color: var(--label-2);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.tp-disclose:hover {
+  color: var(--label);
+}
+.tp-others,
+.tp-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.tp-seg {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--fill);
+}
+.tp-seg button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--label-2);
+  cursor: pointer;
+}
+.tp-seg button[aria-pressed='true'] {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.tp-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--fill);
+}
+.tp-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--fill);
+}
+.tp-status-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.tp-status-text small {
+  color: var(--label-3);
+  overflow-wrap: anywhere;
+}
+.tp-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--label);
+}
+.tp-status[data-state='wait'] .tp-dot,
+.tp-status[data-state='paused'] .tp-dot {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--label-2);
+}
+.tp-status[data-state='bad'] {
+  border-color: var(--label-3);
+}
+.tp-status[data-state='bad'] .tp-dot {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--label);
+  position: relative;
+}
+.tp-status[data-state='bad'] .tp-dot::after {
+  content: '';
+  position: absolute;
+  inset: 2.5px 1.5px;
+  background: var(--label);
+}
+.tp-invite-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.tp-send {
+  margin: 0 0 8px;
+  color: var(--label-2);
+}
+.tp-invite-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.tp-qr {
+  width: 132px;
+  height: 132px;
+}
+.tp-invite-side {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.tp-code-line,
+.tp-invite-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tp-code-line small,
+.tp-invite-foot small {
+  color: var(--label-3);
+}
+.tp-invite-foot {
+  justify-content: space-between;
+}
+.tp-code-line .st-invite-code {
+  font-size: 16px;
+}
+.tp-leave {
+  padding-top: 8px;
+  border-top: 1px solid var(--sep);
+}
+.st-relay-how {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  list-style: decimal;
+  color: var(--label-2);
+}
+.st-relay-how li {
+  margin: 0 0 4px;
+}
+.st-relay-how strong {
+  color: var(--label);
+  font-weight: 500;
+}
+.st-relay-now {
+  margin: 0;
+  color: var(--label);
+  font-weight: 500;
+}
+.settings .st-sheet p.st-relay-hint {
+  color: var(--label-3);
+}
+@media (max-width: 760px) {
+  .tp-choices {
+    grid-template-columns: 1fr;
+  }
+  .tp-way {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .tp-invite-body {
+    flex-direction: column;
+  }
+}
 
 /* ---------- Telegram (early) setup ---------- */
 .settings .st-tg-warn {

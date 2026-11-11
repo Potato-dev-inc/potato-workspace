@@ -5,7 +5,7 @@
  * tauri.conf.json `bundle.resources` covers it. A missing file here means the MSI would ship without it.
  *
  * Covered: Node.js with npm (fetch-node.mjs), MinGit (fetch-git.mjs), cloudflared (fetch-cloudflared.mjs), the
- * Rust MCP server (bundle-mcp.mjs builds it in release form), the agent adapters, and the licence texts.
+ * Rust MCP server (bundle-mcp.mjs builds it in release form), the relay Worker bundle, the agent adapters, and the licence texts.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
@@ -61,6 +61,8 @@ need(`resources/bin/puppet-master-mcp${exe}`);
 // The bundled bridges the app loads at run time.
 need('resources/mcp-stdio.bundle.cjs');
 need('resources/puppet-master-cli.bundle.mjs');
+// The relay Worker that "Create team relay" uploads to the person's Cloudflare account (relay/worker/scripts/bundle-for-app.mjs).
+for (const f of ['manifest.json', 'index.js', 'pm_relay_wasm_bg.wasm']) need(`resources/relay-worker/${f}`);
 // The agent adapters and definitions.
 if (!existsSync(join(res, 'adapters')) || walk(join(res, 'adapters')).length === 0) problems.push('no agent adapters staged under resources/adapters');
 for (const f of walk(join(res, 'adapters'))) need(relative(tauri, f).split(sep).join('/'));

@@ -12,11 +12,15 @@ import { useChatSearch } from '../../hooks/useChatSearch';
 import { useChatFacets } from '../../hooks/useChatFacets';
 import { dropShortcut, hasChatFilters, mergeChatFilters, parseChatQuery, type ChatFilters } from '../../lib/chatFilters';
 import '../../styles/cockpit-chat-search.css';
-import { ChatHitDetail, ChatHitRows, SEARCH_CHATS_HINT, SEARCH_CHATS_TITLE } from './ChatHits';
+import { ChatHitDetail, ChatHitRows, SEARCH_CHATS_TITLE } from './ChatHits';
+import { bindingLabel } from '../../lib/shortcuts';
+import { nextNeedingPane, paneLastUsed, rankPanes, stepPane } from '../../lib/pane-order';
+import { NeedsYouContext } from '../../hooks/useNeedsYou';
+import { useKeybindingsVersion } from '../../hooks/useKeybindings';
 import { ChatFilterChips, type ChipKey } from './ChatFilterChips';
 import { T as WELCOME } from '../firstrun/copy';
 import { DotSpinner } from './DotSpinner';
-import { IconChart, IconClose, IconCopy, IconGlobe, IconInfo, IconLayers, IconMoon, IconNote, IconPlus, IconReflow, IconRename, IconSearch, IconSettings, IconStop, IconSun, IconTerminal } from './Icons';
+import { IconChart, IconInbox, IconClose, IconCopy, IconGlobe, IconInfo, IconLayers, IconMoon, IconNote, IconPlus, IconReflow, IconRename, IconSearch, IconSettings, IconStop, IconSun, IconTerminal } from './Icons';
 import { isCompanionPaneId } from './companion/model';
 import { requestPaneAction } from '../../lib/pane-actions';
 import { matchesQuery, spinnerStatus, stateText } from './model';
@@ -43,6 +47,8 @@ interface Item {
   run: () => void;
 }
 
+const NO_ITEMS: never[] = [];
+
 export type PaletteMode = 'commands' | 'chats';
 
 export function Palette({
@@ -63,12 +69,13 @@ export function Palette({
   onOpenWelcome,
   onStartCrew,
   onOpenShortcuts,
+  onOpenInbox,
   companions,
   onOpenCompanion,
   onNewCompanion,
 }: {
   c: CockpitApi;
-  /** `chats`: open straight in "Search all chats" (Ctrl+Shift+F). */
+  /** `chats`: open straight in "Search all chats" (Ctrl+Shift+F by default). */
   initialMode?: PaletteMode;
   onClose: () => void;
   onOpenDoctor?: () => void;
@@ -95,6 +102,8 @@ export function Palette({
   onStartCrew?: () => void;
   /** Opens the keyboard shortcuts sheet. */
   onOpenShortcuts?: () => void;
+  /** Opens the Inbox. Absent: no Inbox action. */
+  onOpenInbox?: () => void;
   /** The companions (null: no companion backend). Each one gets an "Open {name}" row. */
   companions?: CompanionView[] | null;
   onOpenCompanion?: (id: string) => void;
@@ -126,6 +135,9 @@ export function Palette({
   const nightOn = useNightEnabled();
   // Focus rows: the start lengths while off; End Focus and +15 min while on.
   const [focus] = useFocusView();
+  // The panes that need you list first, then the one you used last. The hints follow the keys you chose.
+  const needsYou = useContext(NeedsYouContext) ?? NO_ITEMS;
+  const keysVersion = useKeybindingsVersion();
   const items = useMemo<Item[]>(() => {
     const out: Item[] = [];
     const multiLogin = multiLoginAgents(c.registry.paneList.map((p) => p.info));
@@ -140,7 +152,13 @@ export function Palette({
         run: () => onOpenCompanion?.(companion.id),
       });
     }
-    for (const p of c.registry.paneList) {
+    const waiting = new Set(needsYou.flatMap((item) => (item.paneId ? [item.paneId] : [])));
+    const ranked = rankPanes(
+      c.registry.paneList.map((p) => ({ id: p.info.id, p })),
+      waiting,
+      paneLastUsed(),
+    ).map((x) => x.p);
+    for (const p of ranked) {
       const id = p.info.id;
       if (isCompanionPaneId(id)) continue;
       const agentName = c.names.get(id) ?? p.info.agent_type;
@@ -149,7 +167,7 @@ export function Palette({
         id: `pane:${id}`,
         group: 'Panes',
         title: heading.primary,
-        desc: `${paneSubline(p.info, agentName, projectWithCopy(p.info.cwd), multiLogin)} · ${stateText(p.status)}`,
+        desc: `${paneSubline(p.info, agentName, projectWithCopy(p.info.cwd), multiLogin)} · ${waiting.has(id) ? 'Needs you' : stateText(p.status)}`,
         icon: <DotSpinner status={spinnerStatus(p.status)} />,
         run: () => c.select(id),
       });
@@ -176,6 +194,21 @@ export function Palette({
         icon: <IconPlus />,
         run: onNewCompanion,
       });
+    }
+    // Moving around: the same actions as the keys, with the keys you chose shown on the right.
+    const listed = c.registry.paneList.map((p) => p.info.id).filter((id) => !isCompanionPaneId(id));
+    if (onOpenInbox) {
+      out.push({ id: 'act:inbox', group: 'Actions', title: 'Open the Inbox', desc: 'Everything that is waiting for you', keywords: 'inbox needs you waiting cards', icon: <IconInbox />, hint: bindingLabel('open-inbox') || undefined, run: onOpenInbox });
+    }
+    if (waiting.size > 0) {
+      const target = nextNeedingPane(listed, waiting, c.selectedId);
+      if (target) out.push({ id: 'act:next-needs-me', group: 'Actions', title: 'Jump to the next agent that needs you', keywords: 'needs me waiting next approval question', icon: <IconInbox />, hint: bindingLabel('next-needs-me') || undefined, run: () => c.select(target) });
+    }
+    if (listed.length > 1) {
+      const next = stepPane(listed, c.selectedId, 1);
+      const prev = stepPane(listed, c.selectedId, -1);
+      if (next) out.push({ id: 'act:pane-next', group: 'Actions', title: 'Next agent', keywords: 'next pane switch down', icon: <IconTerminal />, hint: bindingLabel('pane-next') || undefined, run: () => c.select(next) });
+      if (prev) out.push({ id: 'act:pane-prev', group: 'Actions', title: 'Previous agent', keywords: 'previous pane switch up back', icon: <IconTerminal />, hint: bindingLabel('pane-prev') || undefined, run: () => c.select(prev) });
     }
     if (c.selectedId && c.registry.panes.has(c.selectedId)) {
       const sel = c.selectedId;
@@ -260,7 +293,7 @@ export function Palette({
       desc: 'Find an answer from any agent, any day',
       keywords: 'find history conversation messages',
       icon: <IconSearch />,
-      hint: SEARCH_CHATS_HINT,
+      hint: bindingLabel('search-chats') || undefined,
       run: () => {
         setMode('chats');
         setQuery('');
@@ -452,7 +485,7 @@ export function Palette({
       },
     );
     return out;
-  }, [c, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, missionsOn, nightOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn, focus]);
+  }, [c, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, keysVersion, missionsOn, nightOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn, focus]);
 
   const filtered = useMemo(
     () => items.filter((i) => matchesQuery(`${i.title} ${i.desc ?? ''} ${i.keywords ?? ''} ${i.group}`, query)),

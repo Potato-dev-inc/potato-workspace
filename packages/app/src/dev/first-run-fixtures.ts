@@ -1,4 +1,5 @@
 // What the mocked backend answers for the first-run welcome (harness scenarios only).
+import { emit } from '@tauri-apps/api/event';
 import cases from '../components/simple/folder-cases.json';
 import { folderVerdict, type KnownDirs } from '../components/simple/folder-guard';
 import type { Look, StepId } from '../components/firstrun/model';
@@ -12,43 +13,44 @@ export interface FirstRunScenario {
   /** Folder and agent saved from an earlier visit, so a later step can show its content. */
   project?: string;
   agent?: string;
-  /** What the first task does once it runs. */
-  task?: 'running' | 'done' | 'failed';
+  /** Potato Workspace is already in the agents' config files. */
+  connected?: boolean;
 }
 
 const KNOWN = cases.known as KnownDirs;
 const now = Date.now();
+/** Whether the mocked agent pack has been applied (the welcome's Connect step). */
+let connected = false;
 
 /** Recent projects with one folder the guard refuses (Documents). */
 export const FIRST_RUN_RECENT: RecentProject[] = [
   { path: 'D:\\code\\shop', name: 'shop', state: 'repo', last_used_ms: now - 60_000 },
+  // A subfolder of a listed repository: not offered.
+  { path: 'D:\\code\\shop\\packages\\app', name: 'app', state: 'repo', last_used_ms: now - 120_000 },
   { path: 'D:\\code\\landing-page', name: 'landing-page', state: 'folder', last_used_ms: now - 3_600_000 },
   { path: 'C:\\Users\\Ana\\Documents', name: 'Documents', state: 'folder', last_used_ms: now - 86_400_000 },
   { path: 'D:\\code\\old-experiment', name: 'old-experiment', state: 'missing', last_used_ms: now - 9 * 86_400_000 },
 ];
 
-// The shape of a real answer from the live run: paragraphs, a list, bold and code marks.
-export const TASK_ANSWER = [
-  'This is a tiny plant shop. The README says it lists plants and lets a visitor add them to a cart, but the code only does the listing part so far.',
-  '',
-  'The project has three files:',
-  '- **`README.md`** is a two-line description.',
-  '- **`package.json`** names the project `tiny-shop` and defines one script, `npm start`, which runs `node src/server.js`.',
-  '- **`src/server.js`** is a plain Node `http` server on port 3000 with two hard-coded plants.',
-  '',
-  "I didn't change any files.",
-].join('\n');
+/** The agents the welcome finds: Claude and Codex are on this PC, Cursor and OpenCode are not. */
+const AGENTS = [
+  { id: 'claude', label: 'Claude', state: 'unchecked', installed: true, version: '2.1.4 (Claude Code)', reason: 'Installed.', install_hint: null, login_hint: null, can_test: true },
+  { id: 'codex', label: 'Codex', state: 'unchecked', installed: true, version: 'codex-cli 0.162.1', reason: 'Installed.', install_hint: null, login_hint: null, can_test: true },
+  { id: 'cursor_agent', label: 'Cursor', state: 'not_installed', installed: false, version: null, reason: 'Not installed on this computer.', install_hint: 'winget install Cursor.Agent', login_hint: null, can_test: false },
+  { id: 'opencode', label: 'OpenCode', state: 'not_installed', installed: false, version: null, reason: 'Not installed on this computer.', install_hint: 'winget install SST.opencode', login_hint: null, can_test: false },
+];
 
-const RECEIPT = {
-  backend: 'claude',
-  read_only: 'enforced',
-  checks: 'none configured',
-  result_capture: 'authoritative',
-  not_verified: [],
-  outcome: 'completed_unchecked',
-  build_id: 'harness',
-  worktree: { path: 'D:\\code\\shop\\.potato-workspace\\worktrees\\a1b2', branch: 'pm/task-1', base: 'main', state: 'discarded', files_changed: 0, additions: 0, deletions: 0 },
-};
+/** The plan of the agent pack for Claude Code and Codex, with the connection added or not. */
+function packReport(done: boolean, recorded: number) {
+  const agent = (id: string, label: string, dir: string, file: string) => ({
+    id,
+    label,
+    installed: true,
+    skills: { status: done ? 'unchanged' : 'ready', path: `C:/Users/dev/${dir}/skills`, shared_with: [], files: [{ name: 'delegate', kind: done ? 'unchanged' : 'add' }, { name: 'review', kind: done ? 'unchanged' : 'add' }], reason: null, written: false },
+    mcp: { status: done ? 'unchanged' : 'ready', path: `C:/Users/dev/${dir}/${file}`, format: 'json', shared_with: [], change: done ? 'unchanged' : id === 'codex' ? 'update' : 'add', reason: null, diff: id === 'codex' ? '- command = "C:\\old\\potato-workspace-mcp.exe"\n+ command = "C:\\dev\\mcp.exe"' : '', written: false, backup: null },
+  });
+  return { dry_run: !done, agents: [agent('claude', 'Claude Code', '.claude', '.claude.json'), agent('codex', 'Codex', '.codex', 'config.toml')], unsupported: [], custom: [], recorded };
+}
 
 /** The settings the mocked store starts with, besides the theme. */
 export function firstRunStore(sc: FirstRunScenario | undefined): Record<string, unknown> {
@@ -67,19 +69,33 @@ export function firstRunMock(sc: FirstRunScenario | undefined, cmd: string, a: R
     case 'first_run_state':
       return yes({ show: true, auto: false, step: sc.step ?? null });
     case 'plain_check_folder': {
+      // The repository is big: the old copy check refused it. The welcome now lets it through.
+      if (String(a.path ?? '') === 'D:\\code\\shop') return yes({ ok: false, code: 'FOLDER_TOO_BIG', message: 'This folder is too big to copy.' });
       const verdict = folderVerdict(String(a.path ?? ''), KNOWN);
       return yes(verdict === 'ok' ? { ok: true } : { ok: false, code: 'FOLDER_TOO_BROAD', message: verdict });
     }
     case 'project_recent':
       return yes(FIRST_RUN_RECENT);
-    case 'first_run_start_task':
-      return yes({ project: a.project, handle: 'task-1', pane_id: null, enforced: true });
-    case 'first_run_task_status':
-      if (sc.task === 'failed') {
-        return yes({ status: 'failed', result: null, error: { code: 'AGENT_EXITED', message: 'exited' }, receipt: null, pane_id: null });
-      }
-      if (sc.task === 'running') return yes({ status: 'running', result: null, error: null, receipt: null, pane_id: null });
-      return yes({ status: 'completed', result: TASK_ANSWER, error: null, receipt: RECEIPT, pane_id: null });
+    case 'agents_health':
+      return yes({ agents: AGENTS });
+    case 'agent_pack_preview':
+      return yes(packReport(connected || !!sc.connected, connected ? 2 : 0));
+    case 'agent_pack_apply':
+      connected = true;
+      return yes(packReport(true, 2));
+    case 'agent_pack_undo':
+      connected = false;
+      return yes({ restored: [], removed: ['a', 'b'], skipped: [], recorded: 0 });
+    case 'standby_get_status':
+      return yes({ enabled: false, config: { preload: { enabled: false, providers: {} }, backends: {}, max_total: 3, recent_projects: 2, recent_hours: 6, idle_timeout_secs: 1200 }, counts: { total: 0, ready: 0, starting: 0 }, standbys: [], blocked: [], recent: [] });
+    case 'standby_set_config':
+      return yes(null);
+    case 'new_pane':
+      // A warm agent is ready at once: say so, as the real app does.
+      window.setTimeout(() => void emit('pane://spawn-stage', { agent_id: a.agentId, pane_id: 'pane-new-1', stage: 'ready', warm: true }), 50);
+      return yes('pane-new-1');
+    case 'write_pane_input':
+      return yes(null);
     default:
       return { handled: false };
   }

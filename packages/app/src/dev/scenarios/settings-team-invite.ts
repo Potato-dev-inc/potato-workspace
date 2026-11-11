@@ -5,13 +5,13 @@ import type { HarnessScenario } from '../types';
 const s: HarnessScenario = {
   name: 'settings-team-invite',
   route: 'settings',
-  settingsTab: 'general',
+  settingsTab: 'team',
   team: teamState(),
   after: async (dom) => {
     const row = await dom.waitFor('.st-team');
     row?.scrollIntoView({ block: 'center' });
     await dom.sleep(150);
-    await dom.clickText('.st-team button', 'Invite someone');
+    await dom.clickText('.st-team button', 'Make an invite');
     await dom.waitFor('.st-invite-code');
     await dom.sleep(300);
   },

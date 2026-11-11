@@ -97,7 +97,7 @@ describe('palette commands for features that hide', () => {
   it.each([
     ['live-updates', 'general'],
     ['budget-turns', 'general'],
-    ['team', 'general'],
+    ['team-page', 'team'],
     ['pairing', 'phone'],
     ['diagnostic-file', 'general'],
   ])('the row %s is a real Settings row (in %s)', (row, page) => {

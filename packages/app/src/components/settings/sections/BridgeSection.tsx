@@ -55,13 +55,13 @@ export const bridgeRows: RowDef[] = [
   {
     id: 'rust-mcp',
     label: 'Use bundled Rust MCP',
-    hint: 'When on, MCP configs start the bundled puppet-master-mcp instead of npx.',
+    hint: 'When on, MCP configs start the bundled Rust MCP instead of npx.',
     keywords: 'rust binary bundled npx npm node runtime developer',
     group: 'Bridge',
     render: (env) => (
       <SettingToggle
         label="Use bundled Rust MCP"
-        description="When on, MCP configs start the bundled puppet-master-mcp instead of npx."
+        description="When on, MCP configs start the bundled Rust MCP instead of npx."
         checked={Boolean(env.settings.developer_use_rust_mcp)}
         onChange={(value) => void env.patch({ developer_use_rust_mcp: value })}
       />

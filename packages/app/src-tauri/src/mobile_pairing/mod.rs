@@ -76,7 +76,12 @@ struct PendingPairing {
     bridge_url: String,
     /// What the device that redeems this code will be allowed to do (chosen on the desktop).
     caps: Caps,
+    /// Wrong codes tried against this pending code; at `MAX_WRONG_CODES` the code is thrown away.
+    wrong_guesses: u32,
 }
+
+/// How many wrong codes a pending pairing code survives (the code is 6 digits' worth of guessing at most).
+pub const MAX_WRONG_CODES: u32 = 5;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PairingSessionInfo {
@@ -156,6 +161,7 @@ impl MobilePairingStore {
             expires_at,
             bridge_url,
             caps: persisted.pending_caps.unwrap_or_else(Caps::all),
+            wrong_guesses: 0,
         })
     }
 
@@ -348,6 +354,7 @@ impl MobilePairingStore {
             expires_at,
             bridge_url: bridge_url.clone(),
             caps,
+            wrong_guesses: 0,
         });
         let _ = self.persist();
         let qr_payload = serde_json::json!({
@@ -366,14 +373,32 @@ impl MobilePairingStore {
         }
     }
 
-    pub fn lookup_pairing_session(&self, code: &str) -> Result<PairingSessionInfo, String> {
+    /// Compare `supplied` with the pending code in constant time. A wrong code is counted; after
+    /// `MAX_WRONG_CODES` the pending code is dropped, so it cannot be guessed by trying them all.
+    fn check_code(&mut self, supplied: &str) -> Result<(), String> {
+        use subtle::ConstantTimeEq;
+        let pending = self
+            .pending
+            .as_mut()
+            .ok_or_else(|| "no active pairing session — refresh QR on desktop".to_string())?;
+        if bool::from(pending.code.as_bytes().ct_eq(supplied.as_bytes())) {
+            return Ok(());
+        }
+        pending.wrong_guesses += 1;
+        if pending.wrong_guesses >= MAX_WRONG_CODES {
+            self.pending = None;
+            let _ = self.persist();
+            return Err("too many wrong pairing codes — refresh QR on desktop".into());
+        }
+        Err("invalid pairing code".into())
+    }
+
+    pub fn lookup_pairing_session(&mut self, code: &str) -> Result<PairingSessionInfo, String> {
+        self.check_code(code)?;
         let pending = self
             .pending
             .as_ref()
             .ok_or_else(|| "no active pairing session — refresh QR on desktop".to_string())?;
-        if pending.code != code {
-            return Err("invalid pairing code".into());
-        }
         if now_secs() > pending.expires_at {
             return Err("pairing code expired".into());
         }
@@ -386,13 +411,11 @@ impl MobilePairingStore {
     }
 
     pub fn pair_device(&mut self, req: PairRequestBody) -> Result<PairResponseBody, String> {
+        self.check_code(&req.pairing_code)?;
         let pending = self
             .pending
             .as_ref()
             .ok_or_else(|| "no active pairing session — refresh QR on desktop".to_string())?;
-        if pending.code != req.pairing_code {
-            return Err("invalid pairing code".into());
-        }
         if now_secs() > pending.expires_at {
             return Err("pairing code expired".into());
         }

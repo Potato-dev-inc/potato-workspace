@@ -5,7 +5,7 @@
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { ApprovalPrompt } from './ApprovalPrompt';
 import { gestureOf } from '../../lib/user-gesture';
-import { CardButton, InboxCard } from './InboxCard';
+import { CardButton, InboxCard, KeyHints, approvalHints } from './InboxCard';
 import { promptSummary } from './model';
 import { projectWithCopy } from './shell-labels';
 import { paneHeading } from './titles';
@@ -51,6 +51,7 @@ export function PaneApprovalCard({
         onOpen={onOpen}
         asks={asks}
         openLabel={openLabel}
+        hints={!!onOpen}
         onAnswer={(ch, gesture) => void c.answer(paneId, prompt.promptId, ch.id, ch.label, gesture)}
       />
     );
@@ -62,6 +63,7 @@ export function PaneApprovalCard({
       title={asks ? `${asks}: ${plainTitle}` : plainTitle}
       meta={who}
       age={age}
+      body={onOpen && hasChoices ? <KeyHints hints={approvalHints({ answers: prompt.choices.length, high: false, canOpen: true })} /> : undefined}
       actions={
         hasChoices ? (
           <>

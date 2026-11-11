@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// A chat session over ACP in the pane view: the "Chat (ACP)" badge, the Chat tab as the pane (there is no terminal
+// A chat session over ACP in the pane view: the "Chat" badge, the Chat tab as the pane (there is no terminal
 // to show), and a message box that stays on after the agent stopped (the next message starts it again).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -78,10 +78,10 @@ const flush = () => act(async () => { await new Promise((r) => setImmediate(r));
 const tab = (name: string) => [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent === name)!;
 
 describe('pane view of a chat session over ACP', () => {
-  it('says "Chat (ACP)" on the pane and opens on its Chat tab', async () => {
+  it('says "Chat" on the pane and opens on its Chat tab', async () => {
     await act(async () => root.render(<PaneView c={cockpit('acp')} paneId="p1" />));
     await flush();
-    expect(host.querySelector('[data-testid="pane-lane"]')?.textContent).toBe('Chat (ACP)');
+    expect(host.querySelector('[data-testid="pane-lane"]')?.textContent).toBe('Chat');
     expect(tab('Chat').getAttribute('aria-selected')).toBe('true');
     expect(host.textContent).toContain('Write notes.txt');
     expect(host.querySelector('[data-testid="term"]')).toBeNull();

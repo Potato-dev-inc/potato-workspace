@@ -11,6 +11,16 @@ import '../../styles/cockpit-questions.css';
 import { WakeOnSheet } from './companion/WakeOnSheet';
 import { ContinueOnSheet } from './ContinueOnSheet';
 import { CardButton, InboxCard } from './InboxCard';
+import { SIGN_IN } from '../../lib/glossary';
+
+/** Another way to sign in to the agent that ran out: start the same agent under it, in the same folder. */
+export interface SignInOption {
+  agentId: string;
+  /** Absent: the default sign-in. */
+  accountId?: string;
+  label: string;
+  cwd?: string;
+}
 
 export function LimitCard({
   q,
@@ -20,6 +30,8 @@ export function LimitCard({
   onOpenPane,
   companion,
   companionTransport,
+  signIns = [],
+  onUseSignIn,
 }: {
   q: Question;
   /** The pane's name in the sidebar, when it is open. */
@@ -30,7 +42,11 @@ export function LimitCard({
   /** The pane is a companion's: the card then offers "Wake {name} on…" (it runs on another agent). */
   companion?: CompanionView;
   companionTransport?: Pick<CompanionTransport, 'agents' | 'update'>;
+  /** The agent's other sign-ins (not the one this pane runs under). Empty: no "Use another sign-in". */
+  signIns?: SignInOption[];
+  onUseSignIn?: (option: SignInOption) => void;
 }) {
+  const [picking, setPicking] = useState(false);
   const [waking, setWaking] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const first = q.choices[0];
@@ -66,6 +82,21 @@ export function LimitCard({
                 Other agent…
               </CardButton>
             )}
+            {signIns.length > 0 && onUseSignIn && (
+              <CardButton
+                tone="plain"
+                aria-expanded={signIns.length > 1 ? picking : undefined}
+                title={signIns.length === 1 ? `Start ${paneName ?? 'this agent'} as ${signIns[0].label}` : undefined}
+                onClick={() => (signIns.length === 1 ? onUseSignIn(signIns[0]) : setPicking((p) => !p))}
+              >
+                {SIGN_IN.useAnother}
+              </CardButton>
+            )}
+            {picking && signIns.length > 1 && onUseSignIn && signIns.map((o) => (
+              <CardButton key={o.accountId ?? 'default'} tone="secondary" onClick={() => onUseSignIn(o)}>
+                {o.label}
+              </CardButton>
+            ))}
             {canMove && (
               <CardButton tone="plain" onClick={() => setWaking(true)}>
                 Wake {companion.name} on…

@@ -665,7 +665,7 @@ fn a_removed_devices_relay_reader_reports_lost_access_so_the_app_looks_at_the_te
         assert!(std::time::Instant::now() < deadline, "the relay refused Leo's reader, and it never said so");
         std::thread::sleep(Duration::from_millis(20));
     }
-    assert_eq!(leo_wire.status(), "offline");
+    assert_eq!(leo_wire.status(), "denied");
     leo_wire.stop();
     drop(rx);
 }

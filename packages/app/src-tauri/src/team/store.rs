@@ -61,6 +61,63 @@ pub struct Card {
     pub event: TeamEvent,
     pub received_at_ms: u64,
     pub state: CardState,
+    /// War Room: who said "I'm on it" for this red default branch (`ci_failed` cards only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim: Option<CiClaim>,
+}
+
+/// A `ci_claimed` from a teammate (or me), on the `ci_failed` card it names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CiClaim {
+    pub member: String,
+    /// Cleaned display name ("Kai").
+    pub display: String,
+    /// When the claimant clicked (the claim event's `at_ms`).
+    pub at_ms: u64,
+    /// The claim is mine (any of my devices).
+    #[serde(default)]
+    pub mine: bool,
+}
+
+/// Two people clicked "Claim it" at about the same time: the earliest click wins, and on a tie the
+/// smaller member id, so every app settles on the same person whatever order the envelopes came in.
+pub fn earliest_claim(current: Option<&CiClaim>, incoming: CiClaim) -> CiClaim {
+    match current {
+        Some(c) if (c.at_ms, c.member.as_str()) <= (incoming.at_ms, incoming.member.as_str()) => c.clone(),
+        _ => incoming,
+    }
+}
+
+/// The `ci_failed` card a claim or a later push is about: same project, same branch, not a PR's.
+fn red_card_for<'a>(cards: &'a mut [Card], project: &str, branch: &str) -> Option<&'a mut Card> {
+    cards.iter_mut().find(|c| {
+        c.event.kind == super::event::TeamEventKind::CiFailed
+            && c.event.subject.pr.is_none()
+            && c.event.project.key == project
+            && c.event.subject.branch.as_deref() == Some(branch)
+    })
+}
+
+/// Apply a `ci_claimed` / `ci_released` to the red card it names. Only the claimant releases.
+/// Returns the card id when something changed.
+pub fn apply_claim(store: &mut TeamStore, event: &TeamEvent, mine: bool) -> Option<String> {
+    use super::event::TeamEventKind;
+    let branch = event.subject.branch.as_deref()?;
+    let card = red_card_for(&mut store.cards, &event.project.key, branch)?;
+    if card.state == CardState::Dismissed {
+        return None;
+    }
+    let before = card.claim.clone();
+    match event.kind {
+        TeamEventKind::CiClaimed => {
+            let incoming = CiClaim { member: event.actor.member.clone(), display: event.actor.display.clone(), at_ms: event.at_ms, mine };
+            card.claim = Some(earliest_claim(card.claim.as_ref(), incoming));
+        }
+        TeamEventKind::CiReleased if card.claim.as_ref().is_some_and(|c| c.member == event.actor.member) => card.claim = None,
+        _ => return None,
+    }
+    (card.claim != before).then(|| card.id.clone())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -159,6 +216,9 @@ pub struct TeamStore {
     /// Hashes of join boxes already looked at (so a wrong code counts once).
     #[serde(default)]
     pub processed_joins: std::collections::BTreeSet<String>,
+    /// War Room events I already sent: `event::war_room_id` → when it may be forgotten.
+    #[serde(default)]
+    pub sent: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -207,6 +267,19 @@ pub fn ingest(store: &mut TeamStore, config: &TeamConfig, verified: Verified, no
     if event.team != config.team {
         return Ingested::Ignored("another team");
     }
+    if matches!(event.kind, super::event::TeamEventKind::CiClaimed | super::event::TeamEventKind::CiReleased) {
+        // Local facts never claim. A claim (also one from my other computer) marks the red card,
+        // nothing more.
+        if local_fact || store.seen.contains_key(&event.id) {
+            return Ingested::Ignored("not a teammate's claim, or already seen");
+        }
+        store.remember_seen(event.id.clone(), event.expires_at_ms);
+        let mine = !config.me.id.is_empty() && event.actor.member == config.me.id;
+        return match apply_claim(store, &event, mine) {
+            Some(id) => Ingested::Card(id),
+            None => Ingested::Ignored("no red card to claim"),
+        };
+    }
     if !local_fact && !config.me.id.is_empty() && event.actor.member == config.me.id {
         return Ingested::Ignored("my own event");
     }
@@ -219,6 +292,25 @@ pub fn ingest(store: &mut TeamStore, config: &TeamConfig, verified: Verified, no
     }
     if !addressed_to_me(&event, config) {
         return Ingested::Ignored("addressed to someone else");
+    }
+    // War Room dedupe: the same PR, push or red commit already has a card. Only GitHub's own fact
+    // may still land on a teammate's card about it (in place, so "Merge when green" can show).
+    if let Some(identity) = super::event::war_room_id(&event) {
+        let shown = store.cards.iter().find(|c| super::event::war_room_id(&c.event).as_deref() == Some(identity.as_str()));
+        if shown.is_some_and(|c| !local_fact || c.event.source == super::event::EventSource::Github) {
+            return Ingested::Ignored("already shown");
+        }
+    }
+    if event.kind == super::event::TeamEventKind::Pushed {
+        // A newer push to a red branch clears its banner; CI on the new commit says what's next.
+        if let Some(branch) = event.subject.branch.as_deref() {
+            if let Some(red) = red_card_for(&mut store.cards, &event.project.key, branch) {
+                if red.event.at_ms < event.at_ms && red.event.subject.commit != event.subject.commit {
+                    red.state = CardState::Dismissed;
+                    red.claim = None;
+                }
+            }
+        }
     }
     if let Some(existing) = store.cards.iter_mut().find(|c| c.event.dedupe_key == event.dedupe_key) {
         // A card GitHub's own facts made is never replaced by a teammate's words about it.
@@ -242,10 +334,13 @@ pub fn ingest(store: &mut TeamStore, config: &TeamConfig, verified: Verified, no
         existing.event.note = note;
         existing.received_at_ms = now_ms;
         existing.state = CardState::New;
+        if existing.event.kind != super::event::TeamEventKind::CiFailed {
+            existing.claim = None; // CI passed: nobody needs to be on it any more
+        }
         return Ingested::Card(existing.id.clone());
     }
     let id = event.id.clone();
-    store.cards.push(Card { id: id.clone(), event, received_at_ms: now_ms, state: CardState::New });
+    store.cards.push(Card { id: id.clone(), event, received_at_ms: now_ms, state: CardState::New, claim: None });
     if store.cards.len() > MAX_CARDS {
         let extra = store.cards.len() - MAX_CARDS;
         store.cards.drain(..extra);
@@ -297,6 +392,18 @@ impl TeamStore {
             received_at_ms: now_ms,
             warning: shared.then(|| CODE_SHARED.to_string()),
         });
+        true
+    }
+
+    /// Send-side War Room dedupe: true the first time `event` goes out; false when the same PR, push
+    /// or red commit was already sent (the instant path and a retry, or two pushes of one commit).
+    pub fn mark_sent(&mut self, event: &TeamEvent, now_ms: u64) -> bool {
+        self.sent.retain(|_, until| *until > now_ms);
+        let Some(identity) = super::event::war_room_id(event) else { return true };
+        if self.sent.contains_key(&identity) {
+            return false;
+        }
+        self.sent.insert(identity, event.expires_at_ms.max(now_ms + 1));
         true
     }
 

@@ -34,6 +34,7 @@ const settle = () => act(async () => { for (let i = 0; i < 5; i++) await Promise
 async function mount(state: FirstRunState | Error, opts: { panes?: number; ready?: boolean; settings?: Record<string, unknown> } = {}) {
   const patch = vi.fn(async () => ({}));
   const api: FirstRunApi = {
+    paneMcp: vi.fn(async () => true),
     state: vi.fn(async () => {
       if (state instanceof Error) throw state;
       return state;
@@ -53,7 +54,7 @@ describe('useFirstRun', () => {
   it('shows once on a fresh profile with no panes', async () => {
     await mount({ show: true, auto: true, step: null });
     expect(last.open).toBe(true);
-    expect(last.seed.start).toBe('welcome');
+    expect(last.seed.start).toBe('agents');
   });
 
   it('does not show for an install that has had a pane', async () => {
@@ -135,9 +136,9 @@ describe('useFirstRun', () => {
     const key = last.openKey;
     await act(async () => last.reopen());
     await settle();
-    expect(patch).toHaveBeenCalledWith({ onboarding_done: false, onboarding_step: 'welcome' });
+    expect(patch).toHaveBeenCalledWith({ onboarding_done: false, onboarding_step: 'agents' });
     expect(last.open).toBe(true);
-    expect(last.seed.start).toBe('welcome');
+    expect(last.seed.start).toBe('agents');
     expect(last.openKey).toBeGreaterThan(key);
     expect(last.done).toBe(false);
   });

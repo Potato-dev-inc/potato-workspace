@@ -306,3 +306,14 @@
   color: var(--label-2);
   overflow-wrap: anywhere;
 }
+
+/* "Next: <agent>" after an answer; the paragraph stays so the screen reader hears the change */
+.cockpit .ib-next {
+  min-height: 0;
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--label-2);
+}
+.cockpit .ib-next:empty {
+  margin: 0;
+}

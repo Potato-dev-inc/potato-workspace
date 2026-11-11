@@ -1,8 +1,8 @@
-import { teamApi, type TeamApi } from '../../../lib/team';
+import { isRedBanner, teamApi, type TeamApi } from '../../../lib/team';
 import { TellTeamPrompt } from './TellTeam';
 import { TeamCard } from './TeamCard';
 import { TeamJobCard } from './TeamJobCard';
-import { useTeam } from './useTeam';
+import { useTeam, type TeamHandle } from './useTeam';
 import '../../../styles/cockpit-team.css';
 
 /**
@@ -11,11 +11,14 @@ import '../../../styles/cockpit-team.css';
  * Team cards do not add to the Needs-you count: they wait for me but block no agent. They are the
  * same card as everything else in the Inbox, 12px apart.
  */
-export function TeamSection({ api = teamApi, now, paneNames }: { api?: TeamApi; now: number; paneNames?: Map<string, string> }) {
-  const { state, refresh } = useTeam(api);
+export function TeamSection({ api = teamApi, now, paneNames, team }: { api?: TeamApi; now: number; paneNames?: Map<string, string>; team?: TeamHandle }) {
+  const own = useTeam(api, !team);
+  const { state, refresh } = team ?? own;
   if (!state?.enabled) return null;
   const jobs = state.jobs.filter((j) => j.state !== 'discarded');
-  const empty = state.drafts.length === 0 && jobs.length === 0 && state.cards.length === 0;
+  // A red default branch is the banner on top of the Inbox (RedBanners), not a card here.
+  const cards = state.cards.filter((c) => !isRedBanner(c));
+  const empty = state.drafts.length === 0 && jobs.length === 0 && cards.length === 0;
 
   return (
     <section className="ck-team" aria-label="Team">
@@ -30,6 +33,9 @@ export function TeamSection({ api = teamApi, now, paneNames }: { api?: TeamApi; 
       )}
       {state.transport === 'relay' && state.link === 'offline' && (
         <p className="ck-sub ck-team-empty">Can't reach the team's relay. Updates will arrive when it's back.</p>
+      )}
+      {state.transport === 'relay' && state.link === 'denied' && (
+        <p className="ck-sub ck-team-empty">The relay turned this computer away. Ask the owner to let you in again.</p>
       )}
       {state.missing > 0 && (
         <div className="ck-team-gap">
@@ -70,9 +76,9 @@ export function TeamSection({ api = teamApi, now, paneNames }: { api?: TeamApi; 
         </ul>
       )}
 
-      {state.cards.length > 0 && (
+      {cards.length > 0 && (
         <ul className="ib-list" aria-label="From your team">
-          {state.cards.map((card) => (
+          {cards.map((card) => (
             <li key={card.id}>
               <TeamCard card={card} api={api} now={now} onDone={refresh} />
             </li>

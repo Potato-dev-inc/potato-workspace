@@ -34,8 +34,17 @@ pub struct LiveHost {
     next_token: AtomicU64,
     /// Stillness state of experimental panes, by pane id (`standby::stillness`).
     stillness: Mutex<HashMap<String, Stillness>>,
+    /// What a pane was last stopped at (a startup gate's id, or "prompt"), by pane id: the detail
+    /// in the shutdown line (`Host::detail`).
+    stopped_at: Mutex<HashMap<String, String>>,
+    /// How many times a skippable startup screen was dismissed on a pane, by pane id.
+    dismissals: Mutex<HashMap<String, u32>>,
     started: Instant,
 }
+
+/// A warm pane stuck on a skippable startup screen (an update menu) is dismissed at most this many
+/// times; past that it counts as unhealthy.
+const MAX_DISMISSALS: u32 = 3;
 
 impl LiveHost {
     pub fn new(registry: Arc<Mutex<PaneRegistry>>, app: AppHandle) -> Self {
@@ -45,6 +54,8 @@ impl LiveHost {
             processes: Mutex::new(HashMap::new()),
             next_token: AtomicU64::new(1),
             stillness: Mutex::new(HashMap::new()),
+            stopped_at: Mutex::new(HashMap::new()),
+            dismissals: Mutex::new(HashMap::new()),
             started: Instant::now(),
         }
     }
@@ -158,7 +169,29 @@ impl LiveHost {
         } else {
             true
         };
-        match profile.standby_screen(&text) {
+        let gate = profile.startup_gate(&text);
+        // A startup screen the profile says is safe to skip (Codex's update menu: "esc skip" goes on
+        // for this launch only and installs and saves nothing) is closed here with the profile's own
+        // keys, through the audited gate permit. Trust, login and approvals declare no such keys and
+        // are never answered: they stay `Dialog` / `NeedsAttention` below.
+        if gate.is_some_and(|gate| gate.dismiss.is_some()) {
+            let tries = {
+                let mut dismissals = self.dismissals.lock();
+                let tries = dismissals.entry(pane_id.to_string()).or_insert(0);
+                *tries += 1;
+                *tries
+            };
+            if tries <= MAX_DISMISSALS {
+                crate::bridge::startup_gate::press_on_pane(&self.registry, &self.app, pane_id, &key.agent_type);
+                return Health::Starting;
+            }
+        }
+        let verdict = profile.standby_screen(&text);
+        if matches!(verdict, StandbyScreen::Dialog | StandbyScreen::NeedsAttention) {
+            let at = gate.map(|gate| gate.id).unwrap_or("prompt");
+            self.stopped_at.lock().insert(pane_id.to_string(), at.to_string());
+        }
+        match verdict {
             StandbyScreen::Dialog => Health::Dialog,
             StandbyScreen::NeedsAttention => Health::NeedsAttention,
             StandbyScreen::Ready if status == PaneStatus::Idle && still => Health::Ready,
@@ -212,11 +245,20 @@ impl Host for LiveHost {
         super::default_project_with_source(&self.registry).1
     }
 
+    fn detail(&self, handle: &Handle) -> Option<String> {
+        match handle {
+            Handle::Pane(id) => self.stopped_at.lock().get(id).cloned(),
+            Handle::Process(_) => None,
+        }
+    }
+
     fn kill(&self, handle: &Handle, reason: &str) {
         tracing::info!(?handle, reason, "standby shut down");
         match handle {
             Handle::Pane(id) => {
                 self.stillness.lock().remove(id);
+                self.stopped_at.lock().remove(id);
+                self.dismissals.lock().remove(id);
                 // Taking the pane out of the registry is quick; stopping its process tree is not.
                 let (registry, id, reason) = (self.registry.clone(), id.clone(), reason.to_string());
                 let app = self.app.clone();

@@ -9,7 +9,7 @@ const base = teamConfig();
 const s: HarnessScenario = {
   name: 'settings-team-shared-code',
   route: 'settings',
-  settingsTab: 'general',
+  settingsTab: 'team',
   team: teamState(),
   teamConfig: {
     joins: [

@@ -41,11 +41,7 @@ pub fn init(app: &AppHandle) {
 
 /// Bring the shortcut and the window in line with `settings` (also after a Settings change).
 pub fn apply(app: &AppHandle, settings: &Settings) {
-    let result = {
-        let mut current = REGISTERED.lock();
-        sync_shortcut(&mut GlobalRegistrar(app), &mut current, settings)
-    };
-    if let Err(e) = result {
+    if let Err(e) = sync_shortcut_now(app, settings) {
         tracing::warn!(error = %e, "ask bar shortcut could not be registered");
     }
     if settings.enabled {
@@ -56,6 +52,41 @@ pub fn apply(app: &AppHandle, settings: &Settings) {
     } else {
         hide(app);
     }
+}
+
+/// Registers the bar's shortcut: the person's own choice (Settings > Shortcuts), else the one picked in the
+/// old list, else the default for this computer. A choice the OS refuses falls back to the next one and the
+/// error says which. Nothing is registered while the bar is off.
+pub fn sync_shortcut_now(app: &AppHandle, settings: &Settings) -> Result<(), String> {
+    let legacy = (settings.shortcut != DEFAULT_SHORTCUT).then_some(settings.shortcut.as_str());
+    let tries = crate::global_shortcuts::plugin_candidates("ask-bar", legacy);
+    let mut current = REGISTERED.lock();
+    // Drop whatever is registered first, so a retry never stacks a second registration on the first.
+    let mut off = settings.clone();
+    off.enabled = false;
+    let _ = sync_shortcut(&mut GlobalRegistrar(app), &mut current, &off);
+    crate::global_shortcuts::record("ask-bar", None, None);
+    if !settings.enabled || tries.is_empty() {
+        return Ok(());
+    }
+    let mut first_error: Option<String> = None;
+    for (index, (ui, plugin)) in tries.iter().enumerate() {
+        let mut on = settings.clone();
+        on.shortcut = plugin.clone();
+        match sync_shortcut(&mut GlobalRegistrar(app), &mut current, &on) {
+            Ok(()) => {
+                let note = first_error.as_ref().map(|_| format!("{} is used by another app, so {ui} is on.", tries[0].0));
+                crate::global_shortcuts::record("ask-bar", Some((ui.clone(), plugin.clone())), note);
+                return if index == 0 { Ok(()) } else { Err(first_error.unwrap_or_default()) };
+            }
+            Err(_) => {
+                first_error.get_or_insert_with(|| format!("{} is already used by another app or by Windows. Pick another combination.", tries[0].0));
+            }
+        }
+    }
+    let message = first_error.unwrap_or_default();
+    crate::global_shortcuts::record("ask-bar", None, Some(message.clone()));
+    Err(message)
 }
 
 /// The bar's window, created hidden on first use.

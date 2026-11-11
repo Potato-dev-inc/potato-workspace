@@ -9,7 +9,10 @@
 //!   which become **drafts** ("Tell the team?"); polls GitHub for facts; keeps the roster and keys
 //!   current; picks up join requests (admin) or the admin's yes (joiner); moves queued updates.
 //!
-//! Nothing is sent without a click (`send`), and a teammate's event never runs anything.
+//! A push to a feature branch is sent only on a click (`send`). War Room (the instant path): a push
+//! to the default branch, and a pushed branch's PR once `gh` finds it open, are facts GitHub will
+//! show anyway, so they go to the team at once (`auto_send`), each at most once
+//! (`TeamStore::mark_sent`). A teammate's event never runs anything.
 
 use super::actions::{self, LocalFacts, Refusal};
 use super::config::{self, TeamConfig};
@@ -25,7 +28,7 @@ use super::secure::{Opened, Payload, Session, Verified};
 use super::sources::git_refs::{self, PaneFacts, PushFact, RepoWatch};
 use super::sources::github::{self, Gh, GhCli, RepoPoll};
 use super::sources::pr::{GhCli as PrGh, PrLookup, RETRY_AFTER_MS};
-use super::store::{ingest, Card, CardState, Draft, Ingested, Job, JobState, TeamStore};
+use super::store::{apply_claim, ingest, Card, CardState, Draft, Ingested, Job, JobState, TeamStore};
 use super::transport::{folder::FolderTransport, relay::RelayTransport, Inbound, TeamTransport};
 use crate::audit::{self, Kind, Who};
 use crate::pty::PaneRegistry;
@@ -79,6 +82,8 @@ struct Inner {
     last_join_poll_ms: u64,
     /// The roster or the relay says this device is no longer on the team (`team_*` tools: `NOT_A_MEMBER`).
     removed: bool,
+    /// Red-default-branch banners raised in the attention list (`team_ci:<card id>`).
+    raised: HashSet<String>,
 }
 
 pub struct Service {
@@ -313,6 +318,7 @@ impl Service {
                 last_refresh_ms: 0,
                 last_join_poll_ms: 0,
                 removed: false,
+                raised: HashSet::new(),
             }),
             wake: Mutex::new(None),
         }
@@ -531,6 +537,7 @@ impl Service {
                 Err(_) => false,
             };
             let config = self.inner.lock().config.clone();
+            self.sync_red_banners();
             if !config.enabled {
                 continue;
             }
@@ -550,6 +557,39 @@ impl Service {
             }
             self.poll_github(&config, now);
             self.advance_jobs();
+        }
+    }
+
+    /// The red-default-branch banner counts toward the Inbox badge (and the tray and phone) while
+    /// nobody has claimed it: one attention item per unclaimed red card, `team_ci:<card id>`, the
+    /// same id `lib/attention.ts` derives from the Team state.
+    fn sync_red_banners(&self) {
+        let mut inner = self.inner.lock();
+        let on = inner.config.enabled && inner.config.is_active();
+        let want: HashMap<String, String> = inner
+            .store
+            .cards
+            .iter()
+            .filter(|c| on && is_red_banner(c) && c.claim.is_none())
+            .map(|c| (format!("team_ci:{}", c.id), red_banner_text(&c.event)))
+            .collect();
+        let stale: Vec<String> = inner.raised.iter().filter(|k| !want.contains_key(*k)).cloned().collect();
+        for key in stale {
+            crate::attention::clear(&key, None);
+            inner.raised.remove(&key);
+        }
+        for (key, title) in want {
+            if inner.raised.insert(key.clone()) {
+                crate::attention::raise(crate::attention::model::Raised {
+                    key,
+                    kind: crate::attention::model::Kind::Setup,
+                    pane_id: None,
+                    title,
+                    sentence: Some("Claim it in the Inbox so the team knows someone is on it.".into()),
+                    expires_at_ms: None,
+                    actions: Vec::new(),
+                });
+            }
         }
     }
 
@@ -775,6 +815,11 @@ impl Service {
                 inner.store.add_draft(draft.clone());
                 self.save(&inner);
             }
+            if fact.default_branch {
+                // War Room: a push to main is news for everyone; no draft to click.
+                self.auto_send(&id);
+                continue;
+            }
             self.announce_draft(&draft);
             self.changed();
             if key.starts_with("github.com/") {
@@ -795,17 +840,20 @@ impl Service {
                 if !svc.inner.lock().store.drafts.iter().any(|d| d.id == draft_id) {
                     return; // sent or dismissed meanwhile
                 }
-                if let Some(pr) = PrGh.open_pr_for(&repo, &branch) {
+                if let Some(found) = PrGh.open_pr_for(&repo, &branch) {
                     let mut inner = svc.inner.lock();
                     if let Some(draft) = inner.store.drafts.iter_mut().find(|d| d.id == draft_id) {
                         draft.event.kind = TeamEventKind::PrOpened;
-                        draft.event.subject.pr = Some(pr);
+                        draft.event.subject.pr = Some(found.pr);
+                        draft.event.subject.base = found.base;
+                        draft.event.subject.ci = found.ci;
                         draft.event.dedupe_key =
                             event::dedupe_key(&draft.event.project.key, draft.event.kind, &draft.event.subject);
                     }
                     svc.save(&inner);
                     drop(inner);
-                    svc.changed();
+                    // War Room: the PR is open on GitHub, so the team hears about it now.
+                    svc.auto_send(&draft_id);
                     return;
                 }
             }
@@ -827,6 +875,12 @@ impl Service {
                 std::mem::take(state)
             };
             let facts = github::poll_repo(self.gh.as_ref(), &owner_repo, &mut state, now);
+            if facts.is_err() {
+                state.failures = state.failures.saturating_add(1);
+                state.next_at_ms = now + github::backoff_ms(state.failures);
+            } else {
+                state.failures = 0;
+            }
             if state.next_at_ms <= now {
                 state.next_at_ms = now + github::DEFAULT_POLL_S * 1000;
             }
@@ -834,7 +888,11 @@ impl Service {
             match facts {
                 Ok(facts) => {
                     for fact in facts {
-                        self.receive_fact(github::fact_event(&key, &fact, roster.as_ref(), now));
+                        let event = github::fact_event(&key, &fact, roster.as_ref(), now);
+                        if is_my_push(config, &fact, &event) {
+                            continue; // my own push to main: the instant path already told the team
+                        }
+                        self.receive_fact(event);
                     }
                 }
                 Err(error) => tracing::debug!(%error, repo = %owner_repo, "team: GitHub poll failed"),
@@ -1030,6 +1088,8 @@ pub fn build_push_event(
         forced: fact.forced,
         paths: fact.paths.clone(),
         stats: Some(fact.stats),
+        commits: fact.commits,
+        first_commit: fact.first_commit.clone(),
         ..Subject::default()
     };
     TeamEvent {
@@ -1053,6 +1113,29 @@ pub fn build_push_event(
         expires_at_ms: now + event::DEFAULT_TTL_MS,
         source: EventSource::Git,
     }
+}
+
+/// A `ci_failed` card for a default branch (not a PR's checks): the Inbox shows it as the banner.
+pub(crate) fn is_red_banner(card: &Card) -> bool {
+    card.state != CardState::Dismissed && card.event.kind == TeamEventKind::CiFailed && card.event.subject.pr.is_none()
+}
+
+/// "main is red in acme/billing · CI"
+pub(crate) fn red_banner_text(event: &TeamEvent) -> String {
+    let repo = github::owner_repo(&event.project.key).unwrap_or_else(|| event.project.name.clone());
+    let branch = event.subject.branch.as_deref().unwrap_or("main");
+    let workflow = event.subject.ci.as_ref().and_then(|c| c.failed_jobs.first()).cloned();
+    match workflow {
+        Some(w) => format!("{branch} is red in {repo} · {w}"),
+        None => format!("{branch} is red in {repo}"),
+    }
+}
+
+/// A default-branch push GitHub shows that I made myself (by my member id, or my GitHub login).
+fn is_my_push(config: &TeamConfig, fact: &github::Fact, event: &TeamEvent) -> bool {
+    let github::Fact::Pushed(push) = fact else { return false };
+    (!config.me.id.is_empty() && event.actor.member == config.me.id)
+        || config.github.as_deref().is_some_and(|g| !push.author.is_empty() && g.eq_ignore_ascii_case(&push.author))
 }
 
 // ------------------------------------------------------------------ team tools for agents (MCP)
@@ -1244,7 +1327,7 @@ pub struct TeamView {
     /// Teammates' names (not me).
     pub members: Vec<String>,
     pub transport: Option<&'static str>,
-    /// `live`, `polling` or `offline`.
+    /// `live`, `polling`, `connecting`, `denied` or `offline`.
     pub link: Option<&'static str>,
     pub error: Option<String>,
     /// Messages from teammates known to be missing (gap detection).
@@ -1752,12 +1835,20 @@ fn send_via(svc: &Arc<Service>, draft_id: &str, note: Option<String>) -> Result<
     }
     draft.event.at_ms = now_ms();
     draft.event.team = session.team().to_string();
-    let seq = next_seq(svc);
-    let sent = session
-        .seal(&Payload::Event { event: draft.event.clone() }, seq, now_ms())
-        .and_then(|env| transport.send(&env).map_err(|e| e.0));
-    if let Err(error) = sent {
+    if !svc.inner.lock().store.mark_sent(&draft.event, now_ms()) {
+        // War Room dedupe: this PR or commit already went out (the draft is gone either way).
+        tracing::info!(event = %draft.event.id, "team: already sent, skipped");
+        let inner = svc.inner.lock();
+        svc.save(&inner);
+        drop(inner);
+        svc.changed();
+        return Ok(());
+    }
+    if let Err(error) = seal_and_send(svc, &session, transport.as_ref(), &draft.event) {
         let mut inner = svc.inner.lock();
+        if let Some(identity) = event::war_room_id(&draft.event) {
+            inner.store.sent.remove(&identity);
+        }
         inner.store.add_draft(draft);
         return Err(error);
     }
@@ -1769,6 +1860,79 @@ fn send_via(svc: &Arc<Service>, draft_id: &str, note: Option<String>) -> Result<
         json!({ "event": draft.event.id, "kind": draft.event.kind.as_str() }),
     );
     let inner = svc.inner.lock();
+    svc.save(&inner);
+    drop(inner);
+    svc.changed();
+    Ok(())
+}
+
+fn seal_and_send(svc: &Service, session: &Session, transport: &dyn TeamTransport, event: &TeamEvent) -> Result<(), String> {
+    let seq = next_seq(svc);
+    session
+        .seal(&Payload::Event { event: event.clone() }, seq, now_ms())
+        .and_then(|env| transport.send(&env).map_err(|e| e.0))
+}
+
+impl Service {
+    /// War Room's instant path: send a draft without waiting for a click. If it can't go (offline,
+    /// Team off), it stays as an ordinary "Tell the team?" draft and the catch-up path covers it.
+    fn auto_send(self: &Arc<Self>, draft_id: &str) {
+        match send_via(self, draft_id, None) {
+            Ok(()) => tracing::info!(draft = %draft_id, "team: War Room event sent"),
+            Err(error) => {
+                tracing::info!(%error, draft = %draft_id, "team: War Room event not sent, kept as a draft");
+                if let Some(draft) = self.inner.lock().store.drafts.iter().find(|d| d.id == draft_id).cloned() {
+                    self.announce_draft(&draft);
+                }
+                self.changed();
+            }
+        }
+    }
+}
+
+/// **Claim it** (`claim` = true) or **Release** on the red-default-branch banner: a small
+/// `ci_claimed` / `ci_released` to the team, then the same rule here as on every teammate's app
+/// (`store::apply_claim`: the earliest claim wins; only the claimant releases).
+pub fn claim_ci(card_id: &str, claim: bool) -> Result<(), String> {
+    let svc = service()?;
+    svc.keep_roster_fresh(now_ms(), SEND_FRESH_MS);
+    let (event, transport, session) = {
+        let inner = svc.inner.lock();
+        let transport = inner.transport.clone().ok_or("Team is off. Turn it on in Settings first.")?;
+        let session = inner.session.clone().ok_or("Join a team first.")?;
+        let card = inner.store.card(card_id).filter(|c| is_red_banner(c)).cloned().ok_or("That's no longer red.")?;
+        if !claim && !card.claim.as_ref().is_some_and(|c| c.mine) {
+            return Err("Only the person on it can release it.".into());
+        }
+        let now = now_ms();
+        let kind = if claim { TeamEventKind::CiClaimed } else { TeamEventKind::CiReleased };
+        let subject = Subject { branch: card.event.subject.branch.clone(), commit: card.event.subject.commit.clone(), ..Subject::default() };
+        let event = TeamEvent {
+            v: event::SCHEMA_VERSION,
+            id: event::new_event_id(now),
+            team: session.team().to_string(),
+            project: card.event.project.clone(),
+            actor: event::Actor {
+                member: inner.config.me.id.clone(),
+                device: inner.config.device.clone(),
+                display: inner.config.me.name.clone(),
+                agent: None,
+            },
+            kind,
+            at_ms: now,
+            dedupe_key: event::dedupe_key(&card.event.project.key, kind, &subject),
+            subject,
+            note: None,
+            to: Vec::new(),
+            tier_hint: Tier::Ambient,
+            expires_at_ms: now + event::DEFAULT_TTL_MS,
+            source: EventSource::Pm,
+        };
+        (event, transport, session)
+    };
+    seal_and_send(svc, &session, transport.as_ref(), &event)?;
+    let mut inner = svc.inner.lock();
+    apply_claim(&mut inner.store, &event, true);
     svc.save(&inner);
     drop(inner);
     svc.changed();

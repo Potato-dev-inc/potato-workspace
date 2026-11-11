@@ -106,7 +106,11 @@ fn an_agent_without_accounts_has_nothing_to_ask() {
 fn a_saved_account_that_is_gone_asks_again() {
     let (store, root) = temp_store("gone");
     std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(root.join("accounts.json"), r#"{"version":1,"accounts":[],"helper_logins":{"claude":"acc_gone"}}"#).unwrap();
+    std::fs::write(
+        root.join("accounts.json"),
+        r#"{"version":1,"accounts":[{"id":"acc_1","agent_id":"claude","label":"Work","home":"C:/x"}],"helper_logins":{"claude":"acc_gone"}}"#,
+    )
+    .unwrap();
     assert_eq!(store.effective_helper_login("claude"), HelperLogin::Ask);
     let who = session();
     let refused = choose(&store, &starting(&who, "k", 100), &|| {}).unwrap_err();
@@ -116,22 +120,51 @@ fn a_saved_account_that_is_gone_asks_again() {
 }
 
 #[test]
-fn ask_me_with_no_other_login_still_asks_and_offers_main_login() {
+fn ask_me_with_no_other_login_uses_the_main_login_without_a_card() {
     let (store, root) = temp_store("zero");
     let who = session();
-    let refused = choose(&store, &starting(&who, "k", 100), &|| {}).unwrap_err();
+    // One login only: nothing to choose, so no card and no wait.
+    let started = Instant::now();
+    let got = choose_with_source(&store, &starting(&who, "k", 5_000), &|| {}).unwrap();
+    assert_eq!(got, (None, SOURCE_CLI_LOGIN));
+    assert!(started.elapsed() < Duration::from_secs(2), "it did not wait");
+    assert!(cards(&who).is_empty(), "no question for the Inbox");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_card_left_open_is_closed_when_the_second_login_was_never_added() {
+    // A card raised while an account existed is retired once the account is gone (one login again).
+    let (store, root) = temp_store("zero-retire");
+    let work = store.add("claude", "Work", None).unwrap();
+    let who = session();
+    assert_eq!(choose(&store, &starting(&who, "k", 80), &|| {}).unwrap_err().code, "HELPER_LOGIN_PENDING");
+    assert_eq!(cards(&who).len(), 1);
+    store.remove(&work.id, false).unwrap();
+    assert_eq!(choose(&store, &starting(&who, "k", 80), &|| {}).unwrap(), None);
+    assert!(cards(&who).is_empty(), "the stale card left the Inbox");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn with_two_logins_the_waiting_call_names_the_key_and_the_answer_starts_the_retry() {
+    let (store, root) = temp_store("retry-key");
+    store.add("claude", "Work", None).unwrap();
+    let who = session();
+    // A key the agent chose: the message repeats it, so the retry can carry it.
+    let refused = choose(&store, &starting(&who, "demo-key-1", 80), &|| {}).unwrap_err();
     assert_eq!(refused.code, "HELPER_LOGIN_PENDING");
     assert!(refused.recoverable);
-    let card = cards(&who).remove(0);
-    let label = agent_label("claude");
-    assert_eq!(card.question, format!("Which login should this {label} helper use?"));
-    let ids: Vec<&str> = card.choices.iter().map(|c| c.id.as_str()).collect();
-    assert_eq!(ids, ["once:main", "always:main"]);
-    assert_eq!(card.choices[0].label, "Main login");
-    assert!(!card.allow_free_text);
-    assert!(card.context.as_deref().unwrap().contains("Settings"));
-    answer(&card, "once:main");
-    assert_eq!(choose(&store, &starting(&who, "k", 100), &|| {}).unwrap(), None);
+    assert!(refused.message.contains("idempotency_key \"demo-key-1\""), "{}", refused.message);
+    // A key made from the call (the agent never saw it): the message says to repeat the same arguments.
+    let auto = choose(&store, &starting(&who, "auto-00ff", 80), &|| {}).unwrap_err();
+    assert!(auto.message.contains("exactly the same arguments"), "{}", auto.message);
+    assert!(!auto.message.contains("auto-00ff"));
+    // The person picks Main login (and "always"): the same call, retried, now goes through and it is remembered.
+    answer(&cards(&who).into_iter().find(|c| c.question.contains("login")).unwrap(), "always:main");
+    let got = choose(&store, &starting(&who, "demo-key-1", 80), &|| {}).unwrap();
+    assert_eq!(got, None, "main login");
+    assert_eq!(store.helper_login("claude"), HelperLogin::Main, "always: the next helper asks nothing");
     let _ = std::fs::remove_dir_all(root);
 }
 
@@ -165,6 +198,7 @@ fn the_card_lists_main_login_and_each_account_and_once_does_not_save() {
 #[test]
 fn a_retry_with_the_same_key_finds_the_same_card() {
     let (store, root) = temp_store("retry");
+    store.add("claude", "Work", None).unwrap();
     let who = session();
     for _ in 0..3 {
         assert_eq!(choose(&store, &starting(&who, "same", 80), &|| {}).unwrap_err().code, "HELPER_LOGIN_PENDING");
@@ -179,6 +213,7 @@ fn a_retry_with_the_same_key_finds_the_same_card() {
 #[test]
 fn a_dismissed_card_is_an_error_and_a_retry_does_not_ask_again() {
     let (store, root) = temp_store("dismiss");
+    store.add("claude", "Spare", None).unwrap(); // a second login, so the card is asked
     let who = session();
     assert_eq!(choose(&store, &starting(&who, "k", 80), &|| {}).unwrap_err().code, "HELPER_LOGIN_PENDING");
     let card = cards(&who).remove(0);
@@ -195,6 +230,7 @@ fn a_dismissed_card_is_an_error_and_a_retry_does_not_ask_again() {
 #[test]
 fn a_saved_setting_closes_the_open_card_so_it_leaves_the_inbox() {
     let (store, root) = temp_store("saved-closes");
+    store.add("claude", "Spare", None).unwrap(); // a second login, so the card is asked
     let who = session();
     assert_eq!(choose(&store, &starting(&who, "k", 80), &|| {}).unwrap_err().code, "HELPER_LOGIN_PENDING");
     assert_eq!(cards(&who).len(), 1);
@@ -215,6 +251,7 @@ fn a_saved_setting_closes_the_open_card_so_it_leaves_the_inbox() {
 #[test]
 fn a_card_nobody_answers_times_out_with_an_error() {
     let (store, root) = temp_store("timeout");
+    store.add("claude", "Spare", None).unwrap(); // a second login, so the card is asked
     let who = session();
     assert_eq!(choose(&store, &starting(&who, "k", 80), &|| {}).unwrap_err().code, "HELPER_LOGIN_PENDING");
     let card = cards(&who).remove(0);
@@ -228,6 +265,7 @@ fn a_card_nobody_answers_times_out_with_an_error() {
 #[test]
 fn a_login_added_while_the_card_is_open_replaces_the_card() {
     let (store, root) = temp_store("added");
+    store.add("claude", "Spare", None).unwrap(); // a second login, so the card is asked
     let who = session();
     assert_eq!(choose(&store, &starting(&who, "k", 80), &|| {}).unwrap_err().code, "HELPER_LOGIN_PENDING");
     let first = cards(&who).remove(0);
@@ -236,13 +274,14 @@ fn a_login_added_while_the_card_is_open_replaces_the_card() {
     let now = cards(&who);
     assert_eq!(now.len(), 1, "the old card is closed, not left beside the new one");
     assert_ne!(now[0].id, first.id);
-    assert_eq!(now[0].choices.len(), 4);
+    assert_eq!(now[0].choices.len(), 6, "Main login and two accounts, once and always each");
     let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
 fn only_the_person_can_answer_or_dismiss_the_card_over_plain_loopback() {
     let (store, root) = temp_store("person-only");
+    store.add("claude", "Spare", None).unwrap(); // a second login, so the card is asked
     let who = session();
     let _ = choose(&store, &starting(&who, "k", 50), &|| {});
     let card = cards(&who).remove(0);

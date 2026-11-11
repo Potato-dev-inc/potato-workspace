@@ -1,5 +1,5 @@
-// The short steps of the welcome: How do you work, Use your phone, Add Potato Workspace to your agents, Done.
-import { useEffect, useState } from 'react';
+// The short screens of the welcome: Done, and the two it links to (Use your phone, Add skills to your agents).
+import { useEffect, useRef, useState } from 'react';
 import type { Settings } from '@potato-workspace/shared';
 import { agentPackApi, groupAgents, visibleRows, type AgentPackApi } from '../../lib/agent-pack';
 import type { loadSettings, patchSettings } from '../../lib/settings';
@@ -8,36 +8,7 @@ import { DotSpinner } from '../cockpit/DotSpinner';
 import { MobilePairingPanel } from '../MobilePairingPanel';
 import { PackSheet } from '../settings/pack/AgentPackGroup';
 import { T } from './copy';
-import { isSimpleLook, LOOKS, type Look } from './model';
-
-export function StepWelcome({ look, onLook }: { look: Look | null; onLook: (look: Look) => void }) {
-  return (
-    <section className="fr-step fr-step--welcome" aria-labelledby="fr-welcome-t">
-      <div className="fr-hero" aria-hidden="true">
-        <DotSpinner status="idle" size={5} />
-      </div>
-      <h1 className="ck-title" id="fr-welcome-t">{T.title}</h1>
-      <p className="fr-lead">{T.welcomeLead}</p>
-      <h2 className="ck-section fr-ask-q" id="fr-how">{T.howDoYouWork}</h2>
-      <div className="fr-choices" role="radiogroup" aria-labelledby="fr-how">
-        {LOOKS.map((id) => (
-          <button key={id} type="button" role="radio" aria-checked={look === id} className="fr-choice" onClick={() => onLook(id)}>
-            <span className="fr-radio" aria-hidden="true" />
-            <span className="fr-choice-text">
-              <span className="fr-choice-label">{T.looks[id].label}</span>
-              <span className="fr-choice-hint">{T.looks[id].hint}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-      {look !== null && (
-        <p className="fr-note" role="status" data-testid="look-note">
-          {isSimpleLook(look) ? T.noteSimple : T.noteCode}
-        </p>
-      )}
-    </section>
-  );
-}
+import { isSimpleLook, LOOKS, type Look, type MoreId } from './model';
 
 export function StepPhone({ load, patch }: { load: typeof loadSettings; patch: typeof patchSettings }) {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -56,8 +27,7 @@ export function StepPhone({ load, patch }: { load: typeof loadSettings; patch: t
   };
   return (
     <section className="fr-step" aria-labelledby="fr-phone-t">
-      <div className="ck-doto fr-num" aria-hidden="true">05</div>
-      <h1 className="ck-title" id="fr-phone-t">{T.phoneTitle}</h1>
+            <h1 className="ck-title" id="fr-phone-t">{T.phoneTitle}</h1>
       <p className="fr-lead">{T.phoneLead}</p>
       <p className="fr-hint">{T.phoneNote}</p>
       {settings && (
@@ -97,8 +67,7 @@ export function StepPack({ api = agentPackApi }: { api?: AgentPackApi }) {
   const [notice, setNotice] = useState<string | null>(null);
   return (
     <section className="fr-step" aria-labelledby="fr-pack-t">
-      <div className="ck-doto fr-num" aria-hidden="true">06</div>
-      <h1 className="ck-title" id="fr-pack-t">{T.packTitle}</h1>
+            <h1 className="ck-title" id="fr-pack-t">{T.packTitle}</h1>
       <p className="fr-lead">{T.packLead}</p>
       <div className="fr-card">
         <p className="fr-card-line" data-testid="pack-found">{found === null ? T.looking : T.packFound(found)}</p>
@@ -125,7 +94,71 @@ export function StepPack({ api = agentPackApi }: { api?: AgentPackApi }) {
   );
 }
 
-export function StepDone() {
+/** `packDone`: step 2 already added Potato Workspace and its skills, so that row shows as done. */
+/**
+ * "How do you work?": three radios. Each is named by its label and described by its hint; the arrow keys move
+ * between them and Tab leaves the group, as for any radio group.
+ */
+export function LookPicker({ look, onLook }: { look: Look | null; onLook: (look: Look) => void }) {
+  const refs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const stop = look ?? LOOKS[0];
+  const move = (from: number, by: number) => {
+    const next = LOOKS[(from + by + LOOKS.length) % LOOKS.length];
+    refs.current[next]?.focus();
+    onLook(next);
+  };
+  return (
+    <div className="fr-look">
+      <h2 className="fr-cap" id="fr-how">{T.doneLookTitle}</h2>
+      <div className="fr-looklist" role="radiogroup" aria-labelledby="fr-how">
+        {LOOKS.map((id, i) => (
+          <button
+            key={id}
+            ref={(el) => {
+              refs.current[id] = el;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={look === id}
+            aria-describedby={`fr-look-${id}-hint`}
+            tabIndex={stop === id ? 0 : -1}
+            className="fr-lookopt"
+            onClick={() => onLook(id)}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                move(i, 1);
+              } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                move(i, -1);
+              }
+            }}
+          >
+            <span className="fr-lookname">{T.looks[id].label}</span>
+            <span className="fr-hint" id={`fr-look-${id}-hint`}>{T.looks[id].hint}</span>
+          </button>
+        ))}
+      </div>
+      {look !== null && (
+        <p className="fr-hint" role="status" data-testid="look-note">
+          {isSimpleLook(look) ? T.noteSimple : T.noteCode}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function StepDone({
+  onMore,
+  packDone = false,
+  look,
+  onLook,
+}: {
+  onMore: (id: MoreId) => void;
+  packDone?: boolean;
+  look: Look | null;
+  onLook: (look: Look) => void;
+}) {
   const tips = [
     { term: T.tipKeys, body: T.tipKeysBody, kbd: true },
     { term: T.tipInbox, body: T.tipInboxBody, kbd: false },
@@ -149,6 +182,31 @@ export function StepDone() {
           </li>
         ))}
       </ol>
+      <LookPicker look={look} onLook={onLook} />
+      <h2 className="fr-cap">{T.moreTitle}</h2>
+      <ul className="fr-agentlist" data-testid="more-links">
+        {(
+          [
+            { id: 'phone', label: T.morePhone, body: T.morePhoneBody, done: false },
+            { id: 'pack', label: T.morePack, body: packDone ? T.morePackDone : T.morePackBody, done: packDone },
+          ] as const
+        ).map((m) => (
+          <li key={m.id} className="fr-more" data-done={m.done ? 'true' : undefined}>
+            <span className="fr-more-text">
+              <span className="fr-more-title">
+                {m.done && <DotSpinner status="exited" size={3} />}
+                {m.label}
+              </span>
+              <span className="fr-more-body">{m.body}</span>
+            </span>
+            {!m.done && (
+              <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => onMore(m.id)}>
+                {T.moreOpen}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -63,13 +63,24 @@ fn patch_file_merges_keeps_other_keys_and_creates_missing_files() {
 }
 
 #[test]
-fn an_unreadable_file_is_replaced_not_crashed_on() {
+fn a_corrupt_file_is_kept_as_bak_and_the_patch_is_refused() {
     let dir = temp_dir("corrupt");
     let path = dir.join("settings.json");
     std::fs::write(&path, "{ not json").unwrap();
-    let merged = patch_file(&path, &obj(json!({"theme": "light"}))).unwrap();
-    assert_eq!(merged["theme"], "light");
-    assert_eq!(read(&path)["settings"]["theme"], "light");
+    let err = patch_file(&path, &obj(json!({"theme": "light"}))).unwrap_err();
+    assert!(err.contains("damaged"), "{err}");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ not json", "the file is not overwritten");
+    assert_eq!(std::fs::read_to_string(dir.join("settings.json.bak")).unwrap(), "{ not json");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_unreadable_path_is_an_error_not_an_empty_file() {
+    let dir = temp_dir("unreadable");
+    // A directory where the file should be: reading fails with something other than NotFound.
+    let path = dir.join("settings.json");
+    std::fs::create_dir_all(&path).unwrap();
+    assert!(patch_file(&path, &obj(json!({"theme": "light"}))).is_err());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

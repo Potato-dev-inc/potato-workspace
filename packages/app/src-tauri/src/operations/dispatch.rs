@@ -227,6 +227,15 @@ pub fn checkpoint_operation(
     save_operation_snapshot(snapshot)
 }
 
+/// Whether the operation is known to have left `Starting` (cancelled, failed, ...), read under
+/// the update lock. A worker that registers its process after `dispatch_input_if_active` checked
+/// uses this to notice a cancel that landed in between (the cancel found no process to stop).
+/// An unreadable operation is not treated as left.
+pub fn operation_left_starting(project: &str, id: &str) -> bool {
+    let _serial = update_lock();
+    get_operation(project, id).is_ok_and(|op| op.status != OperationStatus::Starting)
+}
+
 /// Serialize the final dispatch side effect against cancellation. If cancellation has reserved
 /// the operation, input is never written to the pane.
 ///

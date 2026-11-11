@@ -101,7 +101,16 @@ pub fn choose_with_source(
             retire(&slot_key(starting), notify);
             Ok((Some(id), SOURCE_HELPER_DEFAULT))
         }
-        HelperLogin::Ask => ask_the_person(store, starting, notify).map(|account| (account, SOURCE_ASKED)),
+        HelperLogin::Ask => {
+            // One login only (the agent's own, no other account added): nothing to choose, so nothing to ask.
+            // A card that offers just "Main login" blocks the helper for no reason. The first time a second
+            // login exists and no default is saved, the card appears.
+            if accounts_of(store, &starting.agent_id.trim().to_ascii_lowercase()).is_empty() {
+                retire(&slot_key(starting), notify);
+                return Ok((None, SOURCE_CLI_LOGIN));
+            }
+            ask_the_person(store, starting, notify).map(|account| (account, SOURCE_ASKED))
+        }
     }
 }
 
@@ -185,7 +194,7 @@ fn ask_the_person(store: &Store, starting: &Starting, notify: &dyn Fn()) -> Resu
         if remaining.is_zero() || Instant::now() >= deadline {
             return Err(Refused {
                 code: "HELPER_LOGIN_PENDING",
-                message: "Waiting for the person to pick which login this helper uses. No helper was started yet. Call again with the same idempotency_key; do not use a new one.".into(),
+                message: pending_message(starting.key),
                 recoverable: true,
             });
         }
@@ -197,6 +206,19 @@ fn ask_the_person(store: &Store, starting: &Starting, notify: &dyn Fn()) -> Resu
             card = None;
         }
     }
+}
+
+/// What the agent is told while the card is open. It names the key the retry must carry: a call that came
+/// without one had its key made from the call, and the agent never saw it.
+fn pending_message(key: &str) -> String {
+    let how = if key.starts_with("auto-") {
+        "Call the same tool again with exactly the same arguments".to_string()
+    } else {
+        format!("Call the same tool again with idempotency_key \"{key}\" and the same arguments")
+    };
+    format!(
+        "Waiting for the person to pick which login this helper uses. No helper was started yet. {how}. Their answer is kept, and the helper starts on that call; do not use a new key."
+    )
 }
 
 /// Close the card remembered for `slot_key` if it is still open (the person never sees a stale one).

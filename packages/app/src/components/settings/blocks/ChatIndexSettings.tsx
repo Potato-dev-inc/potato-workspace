@@ -2,6 +2,7 @@
 // and a button that clears it. Clearing asks first and never touches the chats themselves.
 import { useEffect, useState } from 'react';
 import { chatIndexClear, chatIndexSetEnabled, chatIndexStatus, indexStatusText, type ChatIndexStatus } from '../../../lib/chatIndex';
+import { bindingLabel } from '../../../lib/shortcuts';
 import type { SettingsEnv } from '../model';
 import { Btn, SettingRow, SettingToggle } from '../settings-ui';
 
@@ -57,7 +58,7 @@ export function ChatIndexSettings({ env }: { env: SettingsEnv }) {
     <>
       <SettingToggle
         label="Keep a search index of my chats"
-        description="Lets Ctrl+Shift+F find what was said in the chats you have opened. The saved text is redacted and stays on this computer. Off: nothing new is saved and nothing is searched."
+        description={`Lets ${bindingLabel('search-chats') || 'chat search'} find what was said in the chats you have opened. The saved text is redacted and stays on this computer. Off: nothing new is saved and nothing is searched.`}
         checked={enabled}
         onChange={(value) => void toggle(value)}
       />

@@ -9,6 +9,7 @@ import '../../styles/focus-note.css';
 export function FocusNote({
   view,
   now,
+  hasRun = true,
   foldedCount = 0,
   onShowFinished,
   onChange,
@@ -17,6 +18,8 @@ export function FocusNote({
   view: FocusView | null;
   /** The clock for "min left". */
   now: number;
+  /** An agent has run on this computer. Before that the timer is hidden: it has nothing to time yet. */
+  hasRun?: boolean;
   /** Finished missions Focus is holding back from this list (0: none, or Focus is off). */
   foldedCount?: number;
   /** "Show": unfold the finished missions for this view. */
@@ -44,6 +47,7 @@ export function FocusNote({
   ) : null;
 
   if (!view.on) {
+    if (!hasRun) return null;
     return (
       <div className="ck-focus-note" data-focus="off" role="group" aria-label="Focus">
         <span className="ck-focus-note-label">Focus</span>

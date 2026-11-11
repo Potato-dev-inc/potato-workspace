@@ -13,6 +13,7 @@ import { useBridge } from './useBridge';
 import { useQuestions, type QuestionsApi } from './useQuestions';
 import { paneNames } from '../components/cockpit/model';
 import { visibleSelection } from '../components/cockpit/selection';
+import { forgetTerminal } from '../components/cockpit/session-memory';
 import { usePaneActivity, type ActivityMap } from '../lib/pane-activity';
 import type { UserGesture } from '../lib/user-gesture';
 
@@ -503,6 +504,7 @@ export function useCockpit(): CockpitApi {
     async (paneId: string) => {
       try {
         await registry.killPane(paneId);
+        forgetTerminal(paneId);
         setSelectedId((cur) => (cur === paneId ? null : cur));
       } catch (err) {
         notify(errText(err));

@@ -3,7 +3,6 @@
 import { snippetParts, kindText, whenText, type ChatHit } from '../../lib/chatSearch';
 
 export const SEARCH_CHATS_TITLE = 'Search all chats';
-export const SEARCH_CHATS_HINT = 'Ctrl+Shift+F';
 /** Marks a hit in an old chat the person brought in (see "Bring my old chats"). */
 export const OLD_CHAT_TAG = 'Old chat';
 

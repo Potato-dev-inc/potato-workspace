@@ -29,7 +29,7 @@ import { IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox,
 import { RowMark } from './RowMark';
 import { ProjectHeader } from './ProjectHeader';
 import { SidebarFooter } from './SidebarFooter';
-import { formatKey, isMacPlatform } from '../../lib/shortcuts';
+import { bindingLabel, isMacPlatform } from '../../lib/shortcuts';
 import { groupByProject, useFoldedProjects, useGroupBy, useSidebarProjects } from '../../lib/sidebarProjects';
 import { formatElapsed, spinnerStatus } from './model';
 import { splitPinned, usePinnedPanes } from '../../lib/pinnedPanes';
@@ -321,6 +321,7 @@ export function Sidebar({
           }}
           title={lastTurn.get(id)?.sentence}
           aria-current={active ? 'true' : undefined}
+          aria-label={pill ? `${heading.primary}, needs you` : undefined}
         >
           <span className="ck-row-glyph">
             <RowMark status={p.status} asking={asking && p.status !== 'error'} />
@@ -492,7 +493,8 @@ export function Sidebar({
     </div>
   );
 
-  const hint = (keys: string) => (isMacPlatform() ? formatKey(keys, true) : keys.replace('+', ' '));
+  // The key of a shortcut as the person set it (CockpitApp draws again when they change it).
+  const hint = (id: string) => (isMacPlatform() ? bindingLabel(id) : bindingLabel(id).replace('+', ' '));
   return (
     <aside className="ck-side" aria-label="Agents">
       {setUpFor && (
@@ -523,7 +525,7 @@ export function Sidebar({
             className={`ck-side-new ck-side-new--primary ck-side-new--split${newAgentOpen ? ' is-active' : ''}`}
             onClick={() => (onOpenNewAgent ? onOpenNewAgent() : setMenuOpen((v) => !v))}
             aria-label="New agent"
-            title={hint('Ctrl+N')}
+            title={hint('new-agent')}
           >
             <span className="ck-row-glyph ck-row-glyph--icon">
               <IconNewAgent />
@@ -622,7 +624,7 @@ export function Sidebar({
           <span className="ck-row-main">
             <span className="ck-row-title">Search</span>
           </span>
-          <kbd className="ck-row-hint">{hint('Ctrl+K')}</kbd>
+          <kbd className="ck-row-hint">{hint('palette')}</kbd>
         </button>
       </div>
 

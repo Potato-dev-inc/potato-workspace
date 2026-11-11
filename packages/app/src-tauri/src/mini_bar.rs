@@ -15,6 +15,7 @@ pub const TOP_MARGIN: f64 = 8.0;
 /// How long the Undo toast lives after a switch to Individual.
 pub const TOAST_MS: u64 = 8000;
 /// Global shortcut that toggles the mode.
+#[allow(dead_code)]
 pub const MODE_SHORTCUT: &str = "Ctrl+Alt+M";
 
 /// What switching to `mode` does to the windows.
@@ -223,26 +224,26 @@ mod runtime {
         }
     }
 
-    /// Register Ctrl+Alt+M. A taken shortcut is logged, not fatal.
+    /// Register the mode switch (Ctrl+Alt+M by default). A taken shortcut is logged, not fatal.
     pub fn init_mode_shortcut(app: &AppHandle) {
-        use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-        let handle = app.clone();
-        let result = app.global_shortcut().on_shortcut(MODE_SHORTCUT, move |_app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                let handle = handle.clone();
-                std::thread::spawn(move || {
-                    crate::switch_anim::note_click(None);
-                    let _ = crate::cockpit::set_mode(&handle, toggled(crate::ui_mode::current()));
-                });
-            }
-        });
-        if let Err(e) = result {
+        if let Err(e) = apply_mode_shortcut(app) {
             tracing::warn!(error = %e, "mode shortcut could not be registered");
         }
     }
+
+    /// Registers it again from the person's choice (Settings > Shortcuts); says why when that fails.
+    pub fn apply_mode_shortcut(app: &AppHandle) -> Result<(), String> {
+        crate::global_shortcuts::apply(app, "mode-toggle", true, None, |handle| {
+            let handle = handle.clone();
+            std::thread::spawn(move || {
+                crate::switch_anim::note_click(None);
+                let _ = crate::cockpit::set_mode(&handle, toggled(crate::ui_mode::current()));
+            });
+        })
+    }
 }
 
-pub use runtime::{bring_all_to_front, clear_switch, fit, hide, init_mode_shortcut, note_fallback, note_switch, remember_cockpit_monitor, show, take_fallback, toast_left};
+pub use runtime::{apply_mode_shortcut, bring_all_to_front, clear_switch, fit, hide, init_mode_shortcut, note_fallback, note_switch, remember_cockpit_monitor, show, take_fallback, toast_left};
 
 #[cfg(test)]
 mod tests {

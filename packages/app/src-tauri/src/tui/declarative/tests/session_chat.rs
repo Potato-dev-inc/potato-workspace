@@ -14,7 +14,7 @@ use crate::tui::TuiProfile;
 
 const ACME: &str = include_str!("../fixtures/definitions/acme-chat.toml");
 const TRANSCRIPT: &str = include_str!("../fixtures/acme/session.jsonl");
-const FORMAT_DOC: &str = include_str!("../../../../../../../docs/specs/agent-definitions/DEFINITION-FORMAT.md");
+const FORMAT_DOC: &str = include_str!("../DEFINITION-FORMAT.md");
 
 fn problems(text: &str) -> Vec<DefError> {
     match parse_definition(text) {

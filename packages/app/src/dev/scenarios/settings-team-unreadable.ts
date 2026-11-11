@@ -5,7 +5,7 @@ import type { HarnessScenario } from '../types';
 const s: HarnessScenario = {
   name: 'settings-team-unreadable',
   route: 'settings',
-  settingsTab: 'general',
+  settingsTab: 'team',
   team: teamState({ enabled: false, active: false }),
   teamConfig: teamConfig({
     enabled: false,

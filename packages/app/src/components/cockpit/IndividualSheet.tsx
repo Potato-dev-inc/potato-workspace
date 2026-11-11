@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { bindingLabel } from '../../lib/shortcuts';
 import { Sheet } from './Sheet';
 import '../../styles/individual-mode.css';
 
@@ -12,7 +13,7 @@ export function IndividualSheet({ onSwitch, onCancel }: { onSwitch: (dontShowAga
       </h2>
       <p className="ck-sub">
         Each agent gets its own window and this main window hides. A small bar stays at the top of your screen: use it to
-        jump between agents or to go back to Orchestration (Ctrl+Alt+M does the same).
+        jump between agents or to go back to Orchestration{bindingLabel('mode-toggle') ? ` (${bindingLabel('mode-toggle')} does the same)` : ''}.
       </p>
       <label className="ck-explain-check">
         <input type="checkbox" checked={dontShow} onChange={(e) => setDontShow(e.target.checked)} />

@@ -9,11 +9,84 @@ pub fn unknown_pane_message(pane_id: &str) -> String {
     )
 }
 
+static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static GENERATIONS: std::sync::OnceLock<Mutex<HashMap<String, u64>>> = std::sync::OnceLock::new();
+
+fn generations() -> &'static Mutex<HashMap<String, u64>> {
+    GENERATIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Numbers a new spawn of `pane_id`; every earlier spawn of that id is stale from now on.
+pub(super) fn begin_generation(pane_id: &str) -> u64 {
+    let generation = NEXT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    generations().lock().insert(pane_id.to_string(), generation);
+    generation
+}
+
+/// False once a later spawn took the id over. An id with no entry (its pane was closed or already
+/// finished) is not taken over, so the genuine last exit of a closed pane is still reported.
+pub(super) fn is_current_generation(pane_id: &str, generation: u64) -> bool {
+    generations().lock().get(pane_id).map_or(true, |current| *current == generation)
+}
+
+/// This spawn is over: drop its entry unless a later spawn already replaced it.
+pub(super) fn retire_generation(pane_id: &str, generation: u64) {
+    let mut all = generations().lock();
+    if all.get(pane_id) == Some(&generation) {
+        all.remove(pane_id);
+    }
+}
+
+/// Undoes a spawn that fails after it started to take effect: the new process (if one started) is
+/// killed with its tree instead of running on with no pane to own it, and the per-pane records the
+/// spawn created are dropped. `disarm` once the pane is registered.
+struct SpawnCleanup {
+    pane_id: String,
+    generation: u64,
+    pid: u32,
+    killer: Option<Box<dyn portable_pty::ChildKiller + Send + Sync>>,
+    armed: bool,
+}
+
+impl SpawnCleanup {
+    fn new(pane_id: &str, generation: u64) -> Self {
+        Self { pane_id: pane_id.to_string(), generation, pid: 0, killer: None, armed: true }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for SpawnCleanup {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        if let Some(mut killer) = self.killer.take() {
+            if self.pid > 0 {
+                crate::pty::proc_tree::kill_process_tree(self.pid);
+            }
+            let _ = killer.kill();
+        }
+        retire_generation(&self.pane_id, self.generation);
+        crate::agent_hooks::revoke(&self.pane_id);
+        crate::pty::stream_pos::forget(&self.pane_id);
+        crate::pty::launch_session::forget(&self.pane_id);
+        crate::flight::closed(&self.pane_id);
+    }
+}
+
 /// Mark a pane's process as gone: status Error, `pty://exit` event. Runs once per pane, from the
 /// reader thread (EOF) or from the exit watcher, whichever notices first. On Windows ConPTY the
 /// reader can stay blocked after the child exits, so the watcher must not depend on EOF.
+///
+/// `generation` is the spawn this reader/watcher belongs to. A pane respawned under the same id
+/// must not hear from its predecessor: the old reader sees EOF once the old process is killed, and
+/// without this check it would revoke the NEW pane's hook token and announce an exit for a live pane.
 fn finish_exit(
     pane_id: &str,
+    generation: u64,
     app: &AppHandle,
     status: &Arc<Mutex<PaneStatus>>,
     exited: &Arc<Mutex<bool>>,
@@ -25,6 +98,11 @@ fn finish_exit(
         }
         *done = true;
     }
+    if !is_current_generation(pane_id, generation) {
+        debug!(pane = %pane_id, "a replaced pane's reader ended; its successor is untouched");
+        return;
+    }
+    retire_generation(pane_id, generation);
     // Hook Lane: the pane's hook token stops working the moment the pane is gone.
     crate::agent_hooks::revoke(pane_id);
     // A conversation that was handed to this pane goes back to the chat.
@@ -174,6 +252,10 @@ pub fn spawn_pane(
         &cwd,
     )?;
 
+    // This spawn's number: the id's earlier reader and exit watcher go stale from here on.
+    let generation = begin_generation(&pane_id);
+    let mut cleanup = SpawnCleanup::new(&pane_id, generation);
+
     let replaced = {
         let mut reg = registry.lock();
         // Not `take`: a replaced id keeps its hidden mark (a standby is spawned under a pre-hidden id).
@@ -245,6 +327,9 @@ pub fn spawn_pane(
         linux.as_ref(),
     )?;
     let PtyChild { master, child, pid } = open_pty_child(cmd, rows, cols)?;
+    // From here on a failure must not leave the new process running with no pane.
+    cleanup.pid = pid;
+    cleanup.killer = Some(child.clone_killer());
     crate::pty::launch_session::set(&pane_id, session_id);
 
     let writer = master
@@ -337,6 +422,11 @@ pub fn spawn_pane(
                             break;
                         }
                         Ok(n) => {
+                            // A newer pane took this id over (respawn): the old process's last bytes
+                            // belong to nobody and must not reach the new pane's viewers.
+                            if !is_current_generation(&pane_id, generation) {
+                                break;
+                            }
                             // Dev-only (fake-agent e2e): a slow ConPTY on demand.
                             #[cfg(feature = "dev-fake-tui")]
                             crate::fake_tui::hold_output_chunk(&buf[..n]);
@@ -488,7 +578,7 @@ pub fn spawn_pane(
                         }
                     }
                 }
-                finish_exit(&pane_id, &app, &status, &exited);
+                finish_exit(&pane_id, generation, &app, &status, &exited);
             })
             .map_err(|e| format!("spawn reader thread: {e}"))?;
     }
@@ -511,7 +601,7 @@ pub fn spawn_pane(
                 if !process_alive(pid) {
                     // Let the reader drain the child's last output before declaring it gone.
                     thread::sleep(Duration::from_millis(400));
-                    finish_exit(&pane_id, &app, &status, &exited);
+                    finish_exit(&pane_id, generation, &app, &status, &exited);
                     break;
                 }
             });
@@ -576,6 +666,7 @@ pub fn spawn_pane(
     }
 
     let id = pane.info.id.clone();
+    cleanup.disarm();
     registry.lock().panes.insert(pane.info.id.clone(), pane);
     let _ = app.emit("pty://panes-changed", ());
     crate::event_log::append_system_event(SystemEvent::PaneSpawned {
@@ -614,6 +705,78 @@ pub(super) struct TerminalDataEvent {
     /// Where this chunk starts in the pane's byte stream (see `pty::stream_pos`).
     #[serde(skip_serializing_if = "Option::is_none")]
     offset: Option<u64>,
+}
+
+#[cfg(test)]
+mod generation_tests {
+    use super::*;
+
+    #[test]
+    fn a_respawn_makes_the_earlier_spawn_stale_but_not_itself() {
+        let id = "generation-respawn";
+        let old = begin_generation(id);
+        assert!(is_current_generation(id, old));
+        let new = begin_generation(id);
+        assert_ne!(old, new);
+        assert!(!is_current_generation(id, old), "the old reader must not act for the new pane");
+        assert!(is_current_generation(id, new));
+        // The old spawn finishing late cannot retire the new one's entry.
+        retire_generation(id, old);
+        assert!(is_current_generation(id, new));
+        assert!(!is_current_generation(id, old));
+        retire_generation(id, new);
+    }
+
+    #[test]
+    fn the_last_exit_of_a_closed_pane_is_still_reported() {
+        let id = "generation-closed";
+        let only = begin_generation(id);
+        retire_generation(id, only);
+        assert!(is_current_generation(id, only), "no successor: the exit is genuine");
+    }
+
+    #[test]
+    fn a_failed_spawn_kills_the_new_process_and_clears_its_records() {
+        let id = "generation-failed-spawn";
+        let mut cmd = CommandBuilder::new(if cfg!(windows) { "ping" } else { "sh" });
+        if cfg!(windows) {
+            cmd.args(["-n", "60", "127.0.0.1"]);
+        } else {
+            cmd.args(["-c", "sleep 60"]);
+        }
+        let generation = begin_generation(id);
+        let started = open_pty_child(cmd, 3, 10).expect("start child");
+        let pid = started.pid;
+        let mut cleanup = SpawnCleanup::new(id, generation);
+        cleanup.pid = pid;
+        cleanup.killer = Some(started.child.clone_killer());
+        // A later step of the spawn fails: the guard goes out of scope still armed.
+        drop(cleanup);
+        let mut child = started.child;
+        let gone = Instant::now() + Duration::from_secs(10);
+        let mut exited = false;
+        while Instant::now() < gone {
+            if child.try_wait().ok().flatten().is_some() {
+                exited = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert!(exited, "the leaked child must have been killed");
+        assert!(is_current_generation(id, generation));
+        assert!(!generations().lock().contains_key(id), "the generation entry is gone");
+    }
+
+    #[test]
+    fn a_registered_pane_is_not_touched_by_its_disarmed_guard() {
+        let id = "generation-disarmed";
+        let generation = begin_generation(id);
+        let mut cleanup = SpawnCleanup::new(id, generation);
+        cleanup.disarm();
+        drop(cleanup);
+        assert!(generations().lock().contains_key(id));
+        retire_generation(id, generation);
+    }
 }
 
 #[cfg(all(test, windows))]

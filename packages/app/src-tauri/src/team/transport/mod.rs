@@ -83,7 +83,8 @@ pub trait TeamTransport: Send + Sync {
     fn set_acl(&self, _acl: &SignedAcl) -> Result<(), TransportError> {
         Ok(())
     }
-    /// How messages arrive right now, for Settings ("live", "polling", "offline").
+    /// How messages arrive right now, for Settings ("live", "polling", "connecting" before the first connect or poll finishes, "denied" when the
+    /// relay turned this device away, "offline" when it cannot be reached).
     fn status(&self) -> &'static str {
         "live"
     }

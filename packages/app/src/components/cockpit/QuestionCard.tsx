@@ -10,6 +10,7 @@ import {
   type Question,
   type QuestionAnswer,
 } from '../../lib/questions';
+import { SIGN_IN } from '../../lib/glossary';
 import '../../styles/cockpit-questions.css';
 import { CardButton, InboxCard } from './InboxCard';
 
@@ -103,7 +104,7 @@ export function QuestionCard({
         <>
           {helper && onAddLogin && (
             <CardButton tone="plain" onClick={onAddLogin}>
-              Add another login
+              {SIGN_IN.addAnother}
             </CardButton>
           )}
           <CardButton tone="plain" role="dismiss" onClick={onDismiss}>

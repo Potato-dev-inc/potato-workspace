@@ -8,6 +8,11 @@ import { nudgeDesktop, onDesktopNudge } from '../lib/desktop-nudge';
 import { NUDGE_MIN_GAP_MS } from '../lib/nudge-scheduler';
 import type { PaneData, PaneRegistryApi } from '../hooks/usePaneRegistry';
 
+/** Same name as `JUMP_TO_LATEST_EVENT` in terminal-session.ts (kept here so this file needs only the session class). */
+const JUMP_TO_LATEST_EVENT = 'pm-terminal-jump-latest';
+/** How often the pill checks whether the reader is above the newest output. */
+const SCROLL_WATCH_MS = 250;
+
 /** Pointer, key and focus events in a phone-held window come in bursts: one reclaim per window. */
 const RECLAIM_THROTTLE_MS = 500;
 
@@ -89,6 +94,17 @@ export function TerminalViewport({
 
   if (getSelectionRef) getSelectionRef.current = getSelection;
 
+  // A reader who scrolled up stays there while the agent prints; this pill says new output is below and goes back.
+  const [scrolledUp, setScrolledUp] = useState(false);
+  useEffect(() => {
+    const timer = window.setInterval(() => setScrolledUp(isScrolledUp()), SCROLL_WATCH_MS);
+    return () => window.clearInterval(timer);
+  }, [isScrolledUp, epoch, pane.info.id]);
+  const jumpToLatest = useCallback(() => {
+    containerRef.current?.dispatchEvent(new CustomEvent(JUMP_TO_LATEST_EVENT));
+    setScrolledUp(false);
+  }, [containerRef]);
+
   const remount = useCallback(() => {
     mountedAtRef.current = Date.now();
     setEpoch((n) => n + 1);
@@ -148,6 +164,15 @@ export function TerminalViewport({
         </div>
       )}
       <div ref={containerRef} className="terminal-host pm-terminal-host" />
+      {scrolledUp && (
+        <button
+          type="button"
+          className="absolute bottom-3 right-4 z-20 rounded-full border border-pm-border bg-pm-panel px-3 py-1 text-xs text-pm-text shadow hover:bg-pm-border/40"
+          onClick={jumpToLatest}
+        >
+          Jump to latest
+        </button>
+      )}
       {pane.info.viewer_held && (
         // The PTY is sized to a phone that is viewing this pane: this window's grid does not match,
         // so say so instead of drawing a broken (often black) screen. Ends when the phone leaves.

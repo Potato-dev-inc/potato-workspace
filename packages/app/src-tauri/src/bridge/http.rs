@@ -27,8 +27,54 @@ pub(super) struct Request {
     pub peer: Option<crate::companion::peer::Peer>,
 }
 
-/// Read one request off the socket. `Ok(None)` means the peer closed without sending anything.
-pub(super) fn read_request(stream: &mut TcpStream) -> Result<Option<Request>, String> {
+/// The largest request body the bridge buffers (413 above it).
+pub(super) const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+/// The largest request head (request line and headers).
+const MAX_HEAD_BYTES: usize = 256 * 1024;
+/// How long a client gets to send its whole request before the connection is dropped.
+const READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+const WRITE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+/// Requests served at once; more get a 503 instead of another buffer and thread of work.
+const MAX_CONNECTIONS: usize = 512;
+
+static OPEN_CONNECTIONS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+struct ConnectionSlot(&'static std::sync::atomic::AtomicUsize);
+
+impl ConnectionSlot {
+    fn take(limit: usize) -> Option<Self> {
+        Self::take_from(&OPEN_CONNECTIONS, limit)
+    }
+
+    fn take_from(counter: &'static std::sync::atomic::AtomicUsize, limit: usize) -> Option<Self> {
+        use std::sync::atomic::Ordering;
+        if counter.fetch_add(1, Ordering::SeqCst) >= limit {
+            counter.fetch_sub(1, Ordering::SeqCst);
+            return None;
+        }
+        Some(Self(counter))
+    }
+}
+
+impl Drop for ConnectionSlot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// A request whose head is read and whose body is not (yet).
+pub(super) struct Head {
+    pub req: Request,
+    pub content_length: usize,
+    /// Body bytes that arrived with the head.
+    leftover: Vec<u8>,
+}
+
+/// Read the request line and headers only, with timeouts and a size cap.
+pub(super) fn read_head(stream: &mut TcpStream) -> Result<Option<Head>, String> {
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(10)));
+    let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
+    let started = std::time::Instant::now();
     let mut buf = Vec::new();
     let mut chunk = [0_u8; 4096];
     let header_end;
@@ -44,8 +90,11 @@ pub(super) fn read_request(stream: &mut TcpStream) -> Result<Option<Request>, St
             header_end = pos;
             break;
         }
-        if buf.len() > 1024 * 1024 {
+        if buf.len() > MAX_HEAD_BYTES {
             return Err("request headers too large".into());
+        }
+        if started.elapsed() > READ_DEADLINE {
+            return Err("request head took too long".into());
         }
     }
 
@@ -69,35 +118,72 @@ pub(super) fn read_request(stream: &mut TcpStream) -> Result<Option<Request>, St
         })
         .unwrap_or(0);
 
-    let body_start = header_end + 4;
-    while buf.len().saturating_sub(body_start) < content_length {
-        let n = stream
-            .read(&mut chunk)
-            .map_err(|err| format!("read body: {err}"))?;
-        if n == 0 {
-            break;
-        }
-        buf.extend_from_slice(&chunk[..n]);
-    }
-    let body = buf[body_start..body_start + content_length.min(buf.len().saturating_sub(body_start))]
-        .to_vec();
+    let leftover = buf[(header_end + 4).min(buf.len())..].to_vec();
 
     let peer_loopback = stream
         .peer_addr()
         .map(|addr| addr.ip().is_loopback())
         .unwrap_or(false);
 
-    Ok(Some(Request {
-        method,
-        target,
-        headers_raw,
-        body,
-        peer_loopback,
-        peer: stream
-            .peer_addr()
-            .and_then(|remote| stream.local_addr().map(|local| crate::companion::peer::Peer { local, remote }))
-            .ok(),
+    Ok(Some(Head {
+        req: Request {
+            method,
+            target,
+            headers_raw,
+            body: Vec::new(),
+            peer_loopback,
+            peer: stream
+                .peer_addr()
+                .and_then(|remote| stream.local_addr().map(|local| crate::companion::peer::Peer { local, remote }))
+                .ok(),
+        },
+        content_length,
+        leftover,
     }))
+}
+
+/// Read the body the head announced (the caller has already checked `content_length` against the cap),
+/// then lift the read timeout so long-lived handlers (SSE, WebSocket) are not cut off.
+pub(super) fn read_body(stream: &mut TcpStream, head: Head) -> Result<Request, String> {
+    let Head { mut req, content_length, leftover } = head;
+    let started = std::time::Instant::now();
+    let mut body = leftover;
+    let mut chunk = [0_u8; 8192];
+    while body.len() < content_length {
+        if started.elapsed() > READ_DEADLINE {
+            return Err("request body took too long".into());
+        }
+        let n = stream
+            .read(&mut chunk)
+            .map_err(|err| format!("read body: {err}"))?;
+        if n == 0 {
+            break;
+        }
+        body.extend_from_slice(&chunk[..n]);
+    }
+    body.truncate(content_length);
+    req.body = body;
+    let _ = stream.set_read_timeout(None);
+    Ok(req)
+}
+
+/// A reply sent before the body was read (refused, or too large) must not close the socket on unread bytes: on
+/// Windows that resets the connection and the client can lose the reply it was just sent. Read what is still
+/// coming, a little (at most 1 MiB, 1 s), then let the caller close.
+fn drain_unread_body(stream: &mut TcpStream, unread: usize) {
+    if unread == 0 {
+        return;
+    }
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(200)));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+    let mut left = unread.min(1024 * 1024);
+    let mut chunk = [0_u8; 8192];
+    while left > 0 && std::time::Instant::now() < deadline {
+        match stream.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => left = left.saturating_sub(n),
+        }
+    }
 }
 
 /// The authorization every request passes before any route runs: public paths are open, everything
@@ -172,19 +258,36 @@ pub(super) fn handle_connection(
     registry: Arc<Mutex<PaneRegistry>>,
     app: AppHandle,
 ) -> Result<(), String> {
-    let Some(req) = read_request(&mut stream)? else {
+    let Some(_slot) = ConnectionSlot::take(MAX_CONNECTIONS) else {
+        let cors = String::new();
+        let mut stream = CorsStream { stream: &mut stream, cors: &cors };
+        return write_json_cors(&mut stream, 503, &json!({ "error": "too many connections" }));
+    };
+    let Some(head) = read_head(&mut stream)? else {
         return Ok(());
     };
-    let cors = cors_lines(&req.headers_raw);
+    let cors = cors_lines(&head.req.headers_raw);
     let mut stream = CorsStream { stream: &mut stream, cors: &cors };
-    if req.method == "OPTIONS" {
+    if head.req.method == "OPTIONS" {
         return write_json_cors(&mut stream, 204, &json!({}));
     }
-    // Fail closed before any route, SSE or WebSocket handler runs. Each handler below checks again.
-    let caller = match gate(&req) {
+    // Fail closed before any route, SSE or WebSocket handler runs, and before the body is read: an
+    // unauthorised caller never gets the app to buffer anything. Each handler below checks again.
+    let unread = head.content_length.saturating_sub(head.leftover.len());
+    let caller = match gate(&head.req) {
         Ok(caller) => caller,
-        Err((status, value)) => return write_json_cors(&mut stream, status, &value),
+        Err((status, value)) => {
+            let sent = write_json_cors(&mut stream, status, &value);
+            drain_unread_body(&mut *stream.stream, unread);
+            return sent;
+        }
     };
+    if head.content_length > MAX_BODY_BYTES {
+        let sent = write_json_cors(&mut stream, 413, &json!({ "error": "request body too large", "code": "PAYLOAD_TOO_LARGE" }));
+        drain_unread_body(&mut *stream.stream, unread);
+        return sent;
+    }
+    let req = read_body(&mut *stream.stream, head)?;
     if caller == mobile_pairing::Caller::Local {
         // S3, log-only: a local caller without the app's per-launch key is logged and still served.
         // The hook emitter never gets the secret (it would sit in every agent tool's env); its
@@ -420,6 +523,7 @@ fn write_json_with(
         401 => "Unauthorized",
         403 => "Forbidden",
         409 => "Conflict",
+        413 => "Payload Too Large",
         503 => "Service Unavailable",
         500 => "Internal Server Error",
         _ => "OK",
@@ -480,7 +584,7 @@ pub(super) fn request_session(headers: &str) -> Option<&str> {
     Some(session)
 }
 
-/// Test double for the bridge listener: the real `read_request` + `gate` (the same authorization
+/// Test double for the bridge listener: the real `read_head`, `read_body` + `gate` (the same authorization
 /// `handle_connection` runs before any route), with the `AppHandle`-bound dispatch replaced by a
 /// reply that reports what the real routes would have been told: `{"authorized":true,
 /// "local_app":<bool>, "target", "proxied_markers"}`. `local_app` is what `routes::definitions::is_local_app` says about the
@@ -505,13 +609,28 @@ fn spawn_test_listener(real_poll: bool) -> std::net::SocketAddr {
         for stream in listener.incoming().flatten() {
             std::thread::spawn(move || {
                 let mut stream = stream;
-                let Ok(Some(req)) = read_request(&mut stream) else {
+                // The same order as `handle_connection`: head, gate, size cap, then the body.
+                let Ok(Some(head)) = read_head(&mut stream) else {
                     return;
                 };
-                let cors = cors_lines(&req.headers_raw);
+                let cors = cors_lines(&head.req.headers_raw);
+                let gated = gate(&head.req);
+                let unread = head.content_length.saturating_sub(head.leftover.len());
+                if gated.is_ok() && head.content_length > MAX_BODY_BYTES {
+                    let mut stream = CorsStream { stream: &mut stream, cors: &cors };
+                    let _ = write_json_cors(&mut stream, 413, &json!({ "error": "request body too large" }));
+                    drain_unread_body(&mut *stream.stream, unread);
+                    return;
+                }
+                let unread = if gated.is_ok() { 0 } else { unread };
+                let req = if gated.is_ok() {
+                    let Ok(req) = read_body(&mut stream, head) else { return };
+                    req
+                } else {
+                    head.req
+                };
                 let mut stream = CorsStream { stream: &mut stream, cors: &cors };
                 let (path, query) = split_target(&req.target);
-                let gated = gate(&req);
                 if gated == Ok(mobile_pairing::Caller::Local) {
                     mobile_pairing::local_secret::observe_local_request(&req.headers_raw, &req.method, path);
                 }
@@ -552,8 +671,61 @@ fn spawn_test_listener(real_poll: bool) -> std::net::SocketAddr {
                         }),
                     ),
                 };
+                // A refused request's body was never read: take it before closing, or the reply can be reset away.
+                drain_unread_body(&mut *stream.stream, unread);
             });
         }
     });
     addr
+}
+
+#[cfg(test)]
+mod body_limit_tests {
+    use super::*;
+
+    fn send(addr: std::net::SocketAddr, raw: &str) -> String {
+        let mut s = TcpStream::connect(addr).unwrap();
+        s.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        s.write_all(raw.as_bytes()).unwrap();
+        let mut out = String::new();
+        let _ = s.read_to_string(&mut out);
+        out
+    }
+
+    #[test]
+    fn a_huge_content_length_gets_413_without_the_body_being_read() {
+        let addr = spawn_gate_listener();
+        let raw = format!(
+            "POST /bridge/x HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            MAX_BODY_BYTES + 1
+        );
+        let reply = send(addr, &raw);
+        assert!(reply.starts_with("HTTP/1.1 413"), "{reply}");
+    }
+
+    #[test]
+    fn an_unpaired_caller_is_refused_before_any_body_is_read() {
+        let addr = spawn_gate_listener();
+        // A foreign Host needs a paired token. The body is announced but never sent: the answer must
+        // still come at once (401), proving the gate runs on the head alone.
+        let raw = "POST /bridge/x HTTP/1.1\r\nHost: evil.example\r\nContent-Length: 1000000\r\nConnection: close\r\n\r\n";
+        let reply = send(addr, raw);
+        assert!(reply.starts_with("HTTP/1.1 401"), "{reply}");
+    }
+
+    #[test]
+    fn a_small_body_still_reaches_the_route() {
+        let addr = spawn_gate_listener();
+        let reply = send(addr, "POST /bridge/x HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}");
+        assert!(reply.starts_with("HTTP/1.1 200"), "{reply}");
+    }
+
+    #[test]
+    fn connection_slots_are_bounded_and_released() {
+        static LOCAL: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let a = ConnectionSlot::take_from(&LOCAL, 1).expect("first slot");
+        assert!(ConnectionSlot::take_from(&LOCAL, 1).is_none(), "second is refused at the limit");
+        drop(a);
+        assert!(ConnectionSlot::take_from(&LOCAL, 1).is_some());
+    }
 }

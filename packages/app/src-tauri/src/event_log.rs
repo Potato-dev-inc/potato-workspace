@@ -21,10 +21,34 @@ const PROJECT_STORAGE_DIR_NAME: &str = ".potato-workspace";
 
 static EVENT_LOG: OnceCell<Arc<EventLogManager>> = OnceCell::new();
 
+/// A log that grows past this is moved aside (`events.jsonl.1`, replacing the last one) and a new
+/// file started, so reading it back (read models, `/events/recent`) stays cheap. One busy
+/// project's log reached 40 MB.
+const MAX_LOG_BYTES: u64 = 32 * 1024 * 1024;
+/// After a failed rotation, how much more may be written before the next try.
+const ROTATE_RETRY_BYTES: u64 = 1024 * 1024;
+
+#[derive(Debug)]
+struct LogWriter {
+    file: File,
+    size: u64,
+    rotate_at: u64,
+}
+
 #[derive(Debug)]
 pub struct EventLog {
     path: PathBuf,
-    writer: Mutex<File>,
+    writer: Mutex<LogWriter>,
+    max_bytes: u64,
+}
+
+static SHARED_LOGS: once_cell::sync::Lazy<Mutex<std::collections::HashMap<PathBuf, Arc<EventLog>>>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(std::collections::HashMap::new()));
+
+fn rotated_path(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(".1");
+    PathBuf::from(name)
 }
 
 #[derive(Debug)]
@@ -42,30 +66,79 @@ pub struct EventLogManager {
 
 impl EventLog {
     pub fn new(path: PathBuf) -> Result<Self, String> {
+        Self::with_limit(path, MAX_LOG_BYTES)
+    }
+
+    fn with_limit(path: PathBuf, max_bytes: u64) -> Result<Self, String> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .map_err(|err| format!("create event log dir {}: {err}", parent.display()))?;
         }
-        let writer = OpenOptions::new()
+        let file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)
             .map_err(|err| format!("open event log {}: {err}", path.display()))?;
+        let size = file.metadata().map(|meta| meta.len()).unwrap_or(0);
         Ok(Self {
             path,
-            writer: Mutex::new(writer),
+            writer: Mutex::new(LogWriter { file, size, rotate_at: max_bytes }),
+            max_bytes,
         })
     }
 
+    /// The one writer for this file in this process. Every append to a path goes through the same
+    /// handle and lock, so two threads cannot interleave their lines.
+    pub fn shared(path: PathBuf) -> Result<Arc<EventLog>, String> {
+        let mut all = SHARED_LOGS.lock();
+        if let Some(log) = all.get(&path) {
+            // The file (or its folder) was removed under us: a handle to it would write to nothing.
+            if path.exists() {
+                return Ok(log.clone());
+            }
+        }
+        let log = Arc::new(EventLog::new(path.clone())?);
+        all.insert(path, log.clone());
+        Ok(log)
+    }
+
+    /// Moves the full log aside and starts a new file. Best effort: on failure the log keeps
+    /// growing and is tried again after a little more.
+    fn rotate(&self, writer: &mut LogWriter) {
+        let rotated = rotated_path(&self.path);
+        let _ = fs::remove_file(&rotated);
+        let started = fs::rename(&self.path, &rotated).and_then(|()| {
+            OpenOptions::new().create(true).append(true).open(&self.path)
+        });
+        match started {
+            Ok(file) => {
+                writer.file = file;
+                writer.size = 0;
+                writer.rotate_at = self.max_bytes;
+            }
+            Err(err) => {
+                tracing::warn!(path = %self.path.display(), %err, "could not rotate the event log");
+                writer.rotate_at = writer.size.saturating_add(ROTATE_RETRY_BYTES);
+            }
+        }
+    }
+
     pub fn append(&self, entry: &EventEntry) -> Result<(), String> {
-        let json = serde_json::to_string(entry)
+        let mut line = serde_json::to_string(entry)
             .map_err(|err| format!("serialize event log entry: {err}"))?;
+        line.push('\n');
         let mut writer = self.writer.lock();
+        if writer.size >= writer.rotate_at {
+            self.rotate(&mut writer);
+        }
+        // One write for the entry and its newline: a second handle appending at the same moment
+        // can then never land between them and glue two entries into one line.
         writer
-            .write_all(json.as_bytes())
-            .and_then(|_| writer.write_all(b"\n"))
-            .and_then(|_| writer.flush())
-            .map_err(|err| format!("write event log {}: {err}", self.path.display()))
+            .file
+            .write_all(line.as_bytes())
+            .map_err(|err| format!("write event log {}: {err}", self.path.display()))?;
+        writer.size = writer.size.saturating_add(line.len() as u64);
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -93,7 +166,7 @@ pub fn project_event_log_path(project_path: &Path) -> PathBuf {
 
 impl EventLogManager {
     pub fn new(fallback_path: PathBuf) -> Result<Self, String> {
-        let log = Arc::new(EventLog::new(fallback_path.clone())?);
+        let log = EventLog::shared(fallback_path.clone())?;
         Ok(Self {
             fallback_path: fallback_path.clone(),
             active_project_path: Mutex::new(None),
@@ -130,7 +203,7 @@ impl EventLogManager {
             // The project's events.jsonl must not end up in the user's commits.
             crate::git_exclude::ensure_project_storage_excluded(&project);
         }
-        let log = Arc::new(EventLog::new(path.clone())?);
+        let log = EventLog::shared(path.clone())?;
         *slot = EventLogSlot {
             path,
             log: log.clone(),
@@ -237,9 +310,52 @@ fn find_last_entry_in(
     chunk_bytes: usize,
     mut want: impl FnMut(&EventEntry) -> bool,
 ) -> Result<Option<EventEntry>, String> {
+    let mut found = None;
+    scan_entries_backwards(path, chunk_bytes, |entry| {
+        if want(&entry) {
+            found = Some(entry);
+            true
+        } else {
+            false
+        }
+    })?;
+    Ok(found)
+}
+
+/// Whether a damaged line has been reported already (the first one is a warning, the rest are not,
+/// so a log with one bad line does not fill the app's own log on every read).
+static WARNED_BAD_LINE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The entries on one log line. Normally one; a line written by two interleaved appends (`{A}{B}`)
+/// yields both; a line that cannot be read is skipped (logged), never an error for the whole log.
+fn entries_of_line(line: &[u8], path: &Path) -> Vec<EventEntry> {
+    let mut out = Vec::new();
+    for item in serde_json::Deserializer::from_slice(line).into_iter::<EventEntry>() {
+        match item {
+            Ok(entry) => out.push(entry),
+            Err(err) => {
+                if WARNED_BAD_LINE.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    tracing::debug!(path = %path.display(), %err, "skipping an unreadable event log line");
+                } else {
+                    tracing::warn!(path = %path.display(), %err, "skipping an unreadable event log line");
+                }
+                break;
+            }
+        }
+    }
+    out
+}
+
+/// Calls `visit` with the entries of the log newest first until it returns true. Reads the file in
+/// chunks from its end, so stopping early costs only the tail.
+fn scan_entries_backwards(
+    path: &Path,
+    chunk_bytes: usize,
+    mut visit: impl FnMut(EventEntry) -> bool,
+) -> Result<(), String> {
     use std::io::{Read, Seek, SeekFrom};
     if !path.exists() {
-        return Ok(None);
+        return Ok(());
     }
     let mut file =
         File::open(path).map_err(|err| format!("open event log {}: {err}", path.display()))?;
@@ -270,15 +386,24 @@ fn find_last_entry_in(
             if line.iter().all(u8::is_ascii_whitespace) {
                 continue;
             }
-            let entry: EventEntry = serde_json::from_slice(line)
-                .map_err(|err| format!("parse event log {}: {err}", path.display()))?;
-            if want(&entry) {
-                return Ok(Some(entry));
+            for entry in entries_of_line(line, path).into_iter().rev() {
+                if visit(entry) {
+                    return Ok(());
+                }
             }
         }
         carry = if position > 0 { buffer[..head_len].to_vec() } else { Vec::new() };
     }
-    Ok(None)
+    Ok(())
+}
+
+/// Like [`find_last_entry`], for any consumer that walks the global log newest first (`visit`
+/// returns true to stop).
+pub(crate) fn scan_global_entries_backwards(visit: impl FnMut(EventEntry) -> bool) -> Result<(), String> {
+    let log = EVENT_LOG
+        .get()
+        .ok_or_else(|| "event log not initialized".to_string())?;
+    scan_entries_backwards(&log.current_path(), TAIL_CHUNK_BYTES, visit)
 }
 
 pub fn read_entries(path: &Path) -> Result<Vec<EventEntry>, String> {
@@ -289,14 +414,12 @@ pub fn read_entries(path: &Path) -> Result<Vec<EventEntry>, String> {
         File::open(path).map_err(|err| format!("open event log {}: {err}", path.display()))?;
     let reader = BufReader::new(file);
     let mut entries = Vec::new();
-    for (index, line) in reader.lines().enumerate() {
+    for (index, line) in reader.split(b'\n').enumerate() {
         let line = line.map_err(|err| format!("read event log line {}: {err}", index + 1))?;
-        if line.trim().is_empty() {
+        if line.iter().all(u8::is_ascii_whitespace) {
             continue;
         }
-        let entry = serde_json::from_str::<EventEntry>(&line)
-            .map_err(|err| format!("parse event log line {}: {err}", index + 1))?;
-        entries.push(entry);
+        entries.extend(entries_of_line(&line, path));
     }
     Ok(entries)
 }

@@ -12,6 +12,8 @@
 // Functions take the pieces that change (an agent name, a count, a file name). Each has samples in
 // `SAMPLES` so the test can check what it makes.
 
+import { SIGN_IN } from '../../lib/glossary';
+
 export const T = {
   // ---- window
   look: 'Look: Simple',
@@ -105,7 +107,7 @@ export const T = {
   goBackWorking: 'Claude is working. Press Stop first, then go back.',
   goBackEmpty: 'No versions yet. The app saves one when Claude finishes a step.',
   goBackOff: 'Go back is off. Your work is safe, but the app cannot save versions.',
-  goBackNeedsHelper: 'Go back needs a small helper on this computer. It is not there yet.',
+  goBackNeedsHelper: 'Go back needs a small program on this computer. It is not there yet.',
   goBackUnavailable: 'The app cannot show your versions. Your work is safe.',
   goBackDone: 'You went back.',
   goBackUndo: 'Undo',
@@ -138,8 +140,8 @@ export const T = {
   makeSeeLead: 'You can change the words.',
   makeRulesTitle: 'The app also asks it to',
   makeStarting: 'Starting',
-  makeNoAgent: 'No AI is ready on this computer. Add Claude or Codex first.',
-  makeAddAgent: 'Set up an AI helper',
+  makeNoAgent: 'No agent is ready on this computer. Add Claude or Codex first.',
+  makeAddAgent: 'Set up an agent',
   makeFolder: 'Use a folder I already have',
   makeFolderChoose: 'Choose a folder',
   makeFolderTooBroad: 'This folder is too big to use. Pick a smaller folder, or make a new one.',
@@ -152,7 +154,7 @@ export const T = {
 
   // ---- problems
   tryAgain: 'Start again',
-  signInAgain: 'Sign in',
+  signInAgain: SIGN_IN.action,
   askFix: 'Ask Claude to fix it',
   goBackButton: 'Go back',
   copyReport: 'Copy report',
@@ -160,7 +162,7 @@ export const T = {
   somethingWrong: 'Something went wrong. Your work is saved.',
 
   // ---- settings row
-  footHelpers: 'AI helpers',
+  footHelpers: 'Agents',
   footPhone: 'Phone',
   footSettings: 'Settings',
   footSimple: 'Simple mode',

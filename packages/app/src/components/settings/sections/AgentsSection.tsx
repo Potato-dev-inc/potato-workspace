@@ -1,5 +1,6 @@
-// Settings > Agents: logins (accounts), keeping agents warm (preload) and agent definitions (TOML files,
+// Settings > Agents: signing in, keeping agents warm (preload) and agent definitions (TOML files,
 // consent, review and approval). Most blocks save through their own command; the Live updates row calls env.patch.
+import { SIGN_IN } from '../../../lib/glossary';
 import { AccountsGroup } from '../accounts/AccountsGroup';
 import { AgentDefinitions } from '../blocks/AgentDefinitions';
 import { AgentLaneRows } from '../blocks/AgentLaneRows';
@@ -95,10 +96,10 @@ export const agentsRows: RowDef[] = [
   setupCheckRow,
   {
     id: 'accounts',
-    label: 'Accounts',
-    hint: 'Use the same agent with more than one login, and pick one per pane.',
-    keywords: 'login profile work personal open login pane add account remove',
-    group: 'Logins',
+    label: SIGN_IN.rowLabel,
+    hint: SIGN_IN.rowHint,
+    keywords: SIGN_IN.rowKeywords,
+    group: SIGN_IN.group,
     render: () => <AccountsGroup />,
   },
   {

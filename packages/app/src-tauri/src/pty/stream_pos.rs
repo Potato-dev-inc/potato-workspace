@@ -53,6 +53,11 @@ pub fn start(pane_id: &str) -> Arc<StreamPos> {
     pos
 }
 
+/// Drops a closed pane's counter (otherwise the table grows by one entry per pane ever opened).
+pub fn forget(pane_id: &str) {
+    POS.lock().remove(pane_id);
+}
+
 pub fn get(pane_id: &str) -> Option<Arc<StreamPos>> {
     POS.lock().get(pane_id).cloned()
 }
@@ -79,6 +84,26 @@ mod tests {
         let mut registry = PaneRegistry::new();
         registry.panes.insert(id.to_string(), PaneRegistry::test_pane_stub(id));
         Mutex::new(registry)
+    }
+
+    #[test]
+    fn a_closed_pane_leaves_no_counter_behind() {
+        let id = "stream-pos-forget-test";
+        start(id);
+        assert!(get(id).is_some());
+        forget(id);
+        assert!(get(id).is_none());
+        assert_eq!(emitted(id), None);
+        let mut registry = PaneRegistry::new();
+        let (a, b) = ("stream-pos-take-a", "stream-pos-take-b");
+        start(a);
+        start(b);
+        registry.panes.insert(a.to_string(), PaneRegistry::test_pane_stub(a));
+        registry.panes.insert(b.to_string(), PaneRegistry::test_pane_stub(b));
+        drop(registry.take(a));
+        assert!(get(a).is_none(), "take forgets the closed pane");
+        drop(registry.take_all());
+        assert!(get(b).is_none(), "take_all forgets every pane");
     }
 
     #[test]

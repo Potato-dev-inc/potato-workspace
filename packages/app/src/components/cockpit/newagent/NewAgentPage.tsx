@@ -355,7 +355,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   return (
     <section className="ck-na" aria-label="New agent">
       <header className="ck-na-top">
-        <span className="ck-na-top-title">Agent</span>
+        <span className="ck-na-top-title">New agent</span>
       </header>
       <div className="ck-na-scroll">
         <div className="ck-na-center">
@@ -365,6 +365,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
           <h1 className="ck-na-greet" data-testid="na-greeting">
             {greeting(name)}
           </h1>
+          <h2 className="ck-na-ask" data-testid="na-ask">
+            What should the agent do?
+          </h2>
 
           <div className="ck-na-composer" ref={menuRoot}>
             <div className="ck-na-field">

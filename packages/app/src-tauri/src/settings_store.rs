@@ -136,7 +136,13 @@ pub fn merge_public_settings(base: &Value, patch: &Value) -> Value {
         if let Some(target) = merged.as_object_mut() {
             for key in PATCHABLE_KEYS {
                 if let Some(value) = obj.get(*key) {
-                    target.insert((*key).to_string(), value.clone());
+                    if value.is_null() {
+                        // Merge-patch rule: null removes the key, so the mirror falls back to its default.
+                        let default = default_public_settings().get(*key).cloned().unwrap_or(Value::Null);
+                        target.insert((*key).to_string(), default);
+                    } else {
+                        target.insert((*key).to_string(), value.clone());
+                    }
                 }
             }
         }
@@ -171,11 +177,16 @@ fn apply_public_settings(effective: &Value) {
 /// Merge `patch` into the public mirror (bridge state + mobile SSE) without any window event.
 /// `settings_patch` uses this and emits its own `settings://changed`. Returns the effective settings.
 pub fn mirror_public_patch(app: &AppHandle, patch: &Value) -> Value {
-    let current = stored_public_settings(app);
-    let merged = merge_public_settings(&current, patch);
-    if let Some(state) = app.try_state::<AppState>() {
-        *state.public_settings.lock() = merged.clone();
-    }
+    // Read, merge and store under one lock so two patches cannot lose each other's keys.
+    let merged = match app.try_state::<AppState>() {
+        Some(state) => {
+            let mut guard = state.public_settings.lock();
+            let merged = merge_public_settings(&guard, patch);
+            *guard = merged.clone();
+            merged
+        }
+        None => merge_public_settings(&default_public_settings(), patch),
+    };
     let effective = with_dev_labs(&merged, dev_labs_override_active());
     apply_public_settings(&effective);
 
@@ -238,6 +249,15 @@ mod tests {
         assert_eq!(out["mobile_keyboard_resizes_agent"], false);
         assert!(out.get("api_key").is_none() && out.get("pane_window_position").is_none());
         assert_eq!(public_settings_from_store_file(&json!({})), default_public_settings());
+    }
+
+    #[test]
+    fn a_null_in_a_patch_resets_the_mirror_key_to_its_default() {
+        let base = json!({"away_minutes": 30, "default_model": "m1"});
+        let out = merge_public_settings(&base, &json!({"away_minutes": null, "default_model": "m2"}));
+        assert_eq!(out["away_minutes"], 5, "null removes the key, so the default shows");
+        assert_eq!(out["default_model"], "m2");
+        assert_eq!(default_public_settings()["mobile_input_delay_ms"], 60);
     }
 
     #[test]

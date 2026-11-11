@@ -1,6 +1,7 @@
 // The quiet row under a finished reply: Copy (the whole message) and, on the newest turn, Retry (the turn's existing
 // retry). Seen when the reply is hovered or has focus; dimmed (not hidden) on a touch screen, where there is no hover.
 import { useState } from 'react';
+import { formatKey, isMacPlatform } from '../../lib/shortcuts';
 import { useCopy } from './useCopy';
 
 const COPY = 'M5.5 5.5h6v7h-6zM3.5 10.5v-7h6';
@@ -29,7 +30,7 @@ export function ResponseActions({ text, targetRef, onRetry }: { text: string; ta
   };
   return (
     <div className="ck-acts" role="group" aria-label="Message actions" data-testid="response-actions">
-      <button type="button" className="ck-act" aria-label={state === 'idle' ? 'Copy' : state === 'copied' ? 'Copied' : 'Selected, press Ctrl+C'} data-tip={state === 'idle' ? 'Copy' : state === 'copied' ? 'Copied' : 'Selected: copy it yourself'} onClick={() => void copy(text, targetRef.current)}>
+      <button type="button" className="ck-act" aria-label={state === 'idle' ? 'Copy' : state === 'copied' ? 'Copied' : `Selected, press ${formatKey('Mod+C', isMacPlatform())}`} data-tip={state === 'idle' ? 'Copy' : state === 'copied' ? 'Copied' : 'Selected: copy it yourself'} onClick={() => void copy(text, targetRef.current)}>
         <Svg d={state === 'copied' ? TICK : COPY} />
       </button>
       {onRetry && (

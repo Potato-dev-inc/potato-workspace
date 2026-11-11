@@ -16,22 +16,32 @@ pub fn write_input(
     if let Some(result) = crate::acp::chat::terminal_input(pane_id, text, append_newline) {
         return result;
     }
-    let reg = registry.lock();
-    let pane = reg
-        .panes
-        .get(pane_id)
-        .ok_or_else(|| unknown_pane_message(pane_id))?;
+    // Copy what the write needs and let go of the registry: the typing permit below looks at the
+    // process table (a slow snapshot), and the registry lock must not be held across that.
+    let (pid, agent, pane_screen, writer, pane_exited) = {
+        let reg = registry.lock();
+        let pane = reg
+            .panes
+            .get(pane_id)
+            .ok_or_else(|| unknown_pane_message(pane_id))?;
+        (
+            pane.info.pid,
+            pane.info.agent_type.clone(),
+            pane.screen.clone(),
+            pane.writer.clone(),
+            pane.exited.clone(),
+        )
+    };
 
     // The typing permit (`agent_runs::readiness`): a run's input reaches the terminal only with a
     // permit whose screen is still the latest, a gate's keys only with that gate's permit. Checked
     // before anything else looks at the input, so a refused write leaves no trace.
     let api_path = via_opencode_api
-        && pane.info.agent_type == "opencode_native"
+        && agent == "opencode_native"
         && ((!text.trim().is_empty() && !is_pty_control_input(text)) || (text.is_empty() && append_newline));
     // The output position the permit was checked against; read again once the writer is held.
     let mut admitted_at: Option<u64> = None;
     if !api_path {
-        let pid = pane.info.pid;
         let emitted = crate::pty::stream_pos::emitted(pane_id);
         admitted_at = emitted;
         // Only a typing permit's write looks at the process: the child it types into is the agent.
@@ -47,15 +57,14 @@ pub fn write_input(
     // The screen's last line tells whether the line answers a secret prompt; shells are not titled.
     // The same line keeps typed secrets out of the flight recording (shells included: `sudo`,
     // `ssh` and `git` ask there).
-    let screen_line = crate::ambient::title::last_line(&pane.screen.lock().screen().contents()).to_string();
+    let screen_line = crate::ambient::title::last_line(&pane_screen.lock().screen().contents()).to_string();
     let at_secret_prompt = crate::ambient::title::is_secret_prompt(&screen_line);
-    let titled = crate::ambient::store::observe_input(pane_id, &pane.info.agent_type, &screen_line, text, append_newline);
+    let titled = crate::ambient::store::observe_input(pane_id, &agent, &screen_line, text, append_newline);
 
-    let agent = pane.info.agent_type.clone();
     // How this TUI wants a submit to look (a pause after the text, the keys): per-agent, from its profile.
     let submit = crate::tui::profile_for(&agent).submit_sequence();
 
-    if *pane.exited.lock() {
+    if *pane_exited.lock() {
         return Err(format!(
             "pane {pane_id} has exited — close the worker window and run `npm run worker` again"
         ));
@@ -66,7 +75,6 @@ pub fn write_input(
         && !text.trim().is_empty()
         && !is_pty_control_input(text)
     {
-        drop(reg);
         announce_title(app, pane_id, titled);
         crate::opencode::write_native_input(registry, app, pane_id, text, opencode_model.as_ref())?;
         crate::event_log::append_system_event(SystemEvent::PaneInputWritten {
@@ -84,8 +92,6 @@ pub fn write_input(
 
     // ponytail: ConPTY write_all/flush can block; holding PaneRegistry across
     // that freezes list_panes, keyboard input, and the HTTP bridge.
-    let writer = pane.writer.clone();
-    drop(reg);
     announce_title(app, pane_id, titled);
 
     // Flight recorder: the writer is the origin (refined by the bridge for a person or API caller).
@@ -615,12 +621,35 @@ pub(super) fn wipe_history(parser: &mut vt100::Parser) {
     *parser = fresh;
 }
 
+/// One resize at a time per pane. A resize reads the pane's recorded grid, changes the PTY, then
+/// records the new grid; a second resize arriving in between used to compare against the stale
+/// grid and answer "unchanged" although the PTY had moved.
+static RESIZE_GATES: std::sync::OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = std::sync::OnceLock::new();
+
+fn resize_gate(pane_id: &str) -> Arc<Mutex<()>> {
+    RESIZE_GATES
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .entry(pane_id.to_string())
+        .or_default()
+        .clone()
+}
+
+/// Forget a closed pane's gate (called when the pane leaves the registry).
+pub(super) fn forget_resize_gate(pane_id: &str) {
+    if let Some(gates) = RESIZE_GATES.get() {
+        gates.lock().remove(pane_id);
+    }
+}
+
 pub fn resize(
     registry: &Mutex<PaneRegistry>,
     pane_id: &str,
     cols: u16,
     rows: u16,
 ) -> Result<bool, String> {
+    let gate = resize_gate(pane_id);
+    let _one_at_a_time = gate.lock();
     let (master, screen, reprints, old_grid) = {
         let mut reg = registry.lock();
         let pane = reg

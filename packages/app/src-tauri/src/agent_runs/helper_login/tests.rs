@@ -114,15 +114,42 @@ fn run_agent_with_ask_me_waits_for_the_pick_then_goes_on_with_it() {
 }
 
 #[test]
-fn run_agent_with_no_extra_login_still_asks() {
+fn run_agent_with_one_login_starts_at_once_without_asking() {
+    // The live demo case: Codex had no other login, and the helper still waited on a card that offered only "Main login".
     let s = Setup::new();
-    let call = s.run_in_thread(s.run(Some("k-zero"), None));
-    let card = s.wait_for_card(1);
-    assert_eq!(card.choices.len(), 2, "Main login, and Main login as the default");
-    s.answer(&card, "once:main");
-    let (result, request) = call.join().unwrap();
-    result.unwrap();
-    assert_eq!(request.account, None);
+    let started = std::time::Instant::now();
+    let mut request = s.run(Some("k-zero"), None);
+    for_run(&mut request, Some(&s.session), &s.store, &|| {}).unwrap();
+    assert_eq!(request.account, None, "the main login");
+    assert_eq!(request.account_source.as_deref(), Some("cli_login"));
+    assert!(started.elapsed() < Duration::from_secs(2), "no wait");
+    assert!(s.cards().is_empty(), "nothing in the Inbox");
+    // A call that came without a key behaves the same.
+    let mut keyless = s.run(None, None);
+    for_run(&mut keyless, Some(&s.session), &s.store, &|| {}).unwrap();
+    assert_eq!(keyless.account, None);
+    assert!(s.cards().is_empty());
+}
+
+#[test]
+fn a_pending_call_can_be_retried_without_a_key_and_the_answer_starts_the_helper() {
+    // Two logins, no default: the card waits. The call returns while it is still open (the agent's own wait ran out), and
+    // the agent never had a key. The person answers; the same call, repeated, now goes through with that pick.
+    let s = Setup::new();
+    let work = s.store.add("claude", "Work", None).unwrap();
+    let mut first = s.run(None, None);
+    first.wait_ms = 0; // the shortest gate wait
+    let started = std::time::Instant::now();
+    let refused = for_run(&mut first, Some(&s.session), &s.store, &|| {}).unwrap_err();
+    assert_eq!(refused.code, "HELPER_LOGIN_PENDING");
+    assert!(started.elapsed() < Duration::from_secs(20));
+    assert!(refused.message.contains("exactly the same arguments"), "{}", refused.message);
+    assert_eq!(s.cards().len(), 1);
+    s.answer(&s.cards().remove(0), &format!("once:{}", work.id));
+    let mut retry = s.run(None, None);
+    for_run(&mut retry, Some(&s.session), &s.store, &|| {}).unwrap();
+    assert_eq!(retry.account.as_deref(), Some(work.id.as_str()), "the retry carries the person's pick");
+    assert_eq!(s.cards().len(), 0, "one card for both calls");
 }
 
 #[test]
@@ -141,7 +168,11 @@ fn an_always_pick_is_saved_and_the_next_run_asks_nothing() {
 #[test]
 fn a_saved_account_that_was_deleted_asks_again() {
     let s = Setup::new();
-    std::fs::write(s.root.join("accounts.json"), r#"{"version":1,"accounts":[],"helper_logins":{"claude":"acc_deleted"}}"#).unwrap();
+    std::fs::write(
+        s.root.join("accounts.json"),
+        r#"{"version":1,"accounts":[{"id":"acc_1","agent_id":"claude","label":"Work","home":"C:/x"}],"helper_logins":{"claude":"acc_deleted"}}"#,
+    )
+    .unwrap();
     let call = s.run_in_thread(s.run(Some("k-del"), None));
     let card = s.wait_for_card(1);
     s.answer(&card, "once:main");

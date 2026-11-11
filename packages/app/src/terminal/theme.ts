@@ -42,6 +42,6 @@ export function terminalThemeFromCss(): TerminalTheme {
   };
 }
 
-export const TERMINAL_FONT_FAMILY = '"Cascadia Code", Consolas, "Courier New", monospace';
+export const TERMINAL_FONT_FAMILY = '"Cascadia Code", Consolas, "SF Mono", Menlo, ui-monospace, "Courier New", monospace';
 export const TERMINAL_FONT_SIZE = 12;
 export const TERMINAL_SCROLLBACK = 5000;

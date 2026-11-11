@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Ensure Tauri bundle resource globs exist before `tauri dev` / `tauri build`.
- * `pwa-dist` and `bin` are gitignored and produced by the production build scripts.
+ * `pwa-dist`, `bin` and `relay-worker` are gitignored and produced by the production build scripts.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -16,8 +16,10 @@ const binDir = join(root, 'packages/app/src-tauri/resources/bin');
 const binName = process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared';
 const cloudflaredSource = join(root, 'node_modules/cloudflared/bin', binName);
 
+const relayBundle = join(root, 'packages/app/src-tauri/resources/relay-worker/manifest.json');
+
 function runNodeScript(scriptName) {
-  const script = join(root, 'scripts', scriptName);
+  const script = join(root, scriptName.includes('/') ? scriptName : `scripts/${scriptName}`);
   const result = spawnSync(process.execPath, [script], {
     cwd: root,
     stdio: 'inherit',
@@ -63,9 +65,15 @@ function ensureCloudflaredBin() {
   console.error('[ensure-tauri-resources] cloudflared missing - wrote empty bin stub for tauri dev');
 }
 
+/** The relay Worker the app deploys for "Create team relay" (relay/worker/scripts/bundle-for-app.mjs). */
+function ensureRelayBundle() {
+  if (!existsSync(relayBundle)) runNodeScript('relay/worker/scripts/bundle-for-app.mjs');
+}
+
 export function ensureTauriResources() {
   ensurePwaDist();
   ensureCloudflaredBin();
+  ensureRelayBundle();
 }
 
 const invokedDirectly =

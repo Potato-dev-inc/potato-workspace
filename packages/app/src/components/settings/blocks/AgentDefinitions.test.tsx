@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { wizardResult, type AgentDefinitionsApi, type DefinitionsListing, type RemovedAgent } from '../../../lib/agentDefinitions';
-import { AgentDefinitions } from './AgentDefinitions';
+import { AgentDefinitions, shownError } from './AgentDefinitions';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -1027,5 +1027,21 @@ describe('AgentDefinitions: a failed approve stays in its dialog', () => {
     expect(api.checkFile).toHaveBeenCalledWith(BUNDLED, undefined);
     expect(host.querySelector('[role="alert"]')).toBeNull();
     expect(host.querySelector('[data-testid="fixtures-none"]')).toBeTruthy();
+  });
+});
+
+describe('AgentDefinitions: a list that comes back empty', () => {
+  it('a missing removed-agents list is an empty list, with no error shown', async () => {
+    const api = { ...mockApi(), removedList: vi.fn(async () => null as never) } as never;
+    await render(api);
+    expect(host.textContent).not.toContain('Cannot read properties');
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="definition-row"]')).toHaveLength(2);
+  });
+
+  it('a code bug never shows its own words', () => {
+    expect(shownError(new TypeError("Cannot read properties of null (reading 'removed')"))).toBe('That did not load. Your agents are safe. Try again.');
+    expect(shownError('AGENT_NOT_INSTALLED: gone')).toContain("isn't installed");
+    expect(shownError('INVALID_ARGUMENT: name is taken')).toBe('name is taken');
   });
 });

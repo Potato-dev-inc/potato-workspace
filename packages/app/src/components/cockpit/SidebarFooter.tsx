@@ -3,12 +3,30 @@
 // Background jobs and the Night Shift chip sit above the row (they show only while there is something to say), and the
 // "Connection lost" line sits under it.
 import { useEffect, useRef, useState } from 'react';
-import { IconChart, IconCheck, IconGlobe, IconMoon, IconMore, IconNote, IconSettings, IconSun, IconTerminal } from './Icons';
+import { IconChart, IconCheck, IconGlobe, IconMoon, IconMore, IconNote, IconSun, IconTerminal } from './Icons';
 import { JobsChip } from './rail/JobsChip';
 import { NightChip } from './night/NightChip';
 import '../../styles/individual-mode.css';
+import '../../styles/sidebar-footer.css';
 
 type Mode = 'orchestration' | 'individual';
+
+/** A gear, so Settings does not look like the Sun of the theme button. */
+function GearIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="2.1" />
+      <path d="M7 1.6h2l.4 1.7 1.3.6 1.5-.9 1.4 1.4-.9 1.5.6 1.3 1.7.4v2l-1.7.4-.6 1.3.9 1.5-1.4 1.4-1.5-.9-1.3.6L9 14.4H7l-.4-1.7-1.3-.6-1.5.9-1.4-1.4.9-1.5-.6-1.3-1.7-.4V7l1.7-.4.6-1.3-.9-1.5 1.4-1.4 1.5.9 1.3-.6z" />
+    </svg>
+  );
+}
+
+/** Visible from 900px wide up (sidebar-footer.css); below that only the icon and its tooltip show. */
+const Label = ({ children }: { children: string }) => (
+  <span className="ck-foot-label" aria-hidden="true">
+    {children}
+  </span>
+);
 
 export interface SidebarFooterProps {
   names: ReadonlyMap<string, string>;
@@ -77,16 +95,19 @@ export function SidebarFooter(p: SidebarFooterProps) {
         {p.onOpenDoctor && (
           <button type="button" className="ck-icon-btn" aria-label="Set up agents" title="Set up agents" onClick={p.onOpenDoctor}>
             <IconTerminal />
+            <Label>Set up agents</Label>
           </button>
         )}
         {p.onOpenMemory && (
           <button type="button" className="ck-icon-btn" aria-label="Project" title="Project" onClick={p.onOpenMemory}>
             <IconNote />
+            <Label>Project</Label>
           </button>
         )}
         {p.onOpenReview && (
           <button type="button" className="ck-icon-btn ck-foot-review" aria-label={reviewLabel} title={reviewLabel} onClick={p.onOpenReview}>
             <IconCheck />
+            <Label>{p.reviewCount > 0 ? `Review · ${p.reviewCount}` : 'Review'}</Label>
             {p.reviewCount > 0 && <span className="ck-side-count ck-foot-badge">{p.reviewCount}</span>}
           </button>
         )}
@@ -100,6 +121,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
             onClick={p.onOpenSpaces}
           >
             <IconGlobe />
+            <Label>Spaces</Label>
           </button>
         )}
         <div className="ck-menu-wrap" ref={wrapRef}>
@@ -114,6 +136,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
             onClick={() => setMoreOpen((v) => !v)}
           >
             <IconMore />
+            <Label>More</Label>
           </button>
           {moreOpen && (
             <div className="ck-menu ck-menu--up" role="menu" aria-label="More">
@@ -162,9 +185,11 @@ export function SidebarFooter(p: SidebarFooterProps) {
           aria-label="Toggle theme"
         >
           <span className={`ck-theme-ic${p.theme === 'light' ? ' is-light' : ''}`}>{p.theme === 'dark' ? <IconMoon /> : <IconSun />}</span>
+          <Label>Theme</Label>
         </button>
         <button type="button" className="ck-icon-btn" aria-label="Settings" title="Settings" onClick={() => p.onOpenSettings()}>
-          <IconSettings />
+          <GearIcon />
+          <Label>Settings</Label>
         </button>
       </div>
       {p.bridgeLine && (

@@ -65,7 +65,7 @@ fn session(code: &str) -> RouteResult {
     let store = mobile_pairing::pairing_store()
         .ok_or_else(|| (503, serde_json::json!({ "error": "pairing_unavailable" })))?;
     let info = {
-        let guard = store.lock();
+        let mut guard = store.lock();
         guard
             .lookup_pairing_session(code)
             .map_err(|err| (404, json!({ "error": err })))?

@@ -154,7 +154,7 @@ async function flush() {
   });
 }
 
-async function findIt(kind?: 'Chat (ACP)' | 'Both') {
+async function findIt(kind?: 'Chat' | 'Both') {
   if (kind) await click(kindRadio(kind));
   await setValue(field('wizard-command'), 'fake-agent');
   await click(button('Find it'));
@@ -179,7 +179,7 @@ describe('AgentWizard: chat (ACP)', () => {
     const api = mockApi();
     await render(api);
     expect(kindRadio('Terminal').checked).toBe(true);
-    expect(kindRadio('Chat (ACP)').checked).toBe(false);
+    expect(kindRadio('Chat').checked).toBe(false);
     await findIt();
     expect(api.start).toHaveBeenCalledWith('fake-agent', true);
     expect(api.acpDetect).not.toHaveBeenCalled();
@@ -202,7 +202,7 @@ describe('AgentWizard: chat (ACP)', () => {
     const api = mockApi();
     const approved: FinishResult[] = [];
     await render(api, (d) => approved.push(d));
-    await findIt('Chat (ACP)');
+    await findIt('Chat');
     expect(api.start).toHaveBeenCalledWith('fake-agent', false);
     expect(api.probe).toHaveBeenCalledWith('wz_1');
     expect(api.acpDetect).toHaveBeenCalledWith('wz_1');
@@ -237,7 +237,7 @@ describe('AgentWizard: chat (ACP)', () => {
   it('shows what the program printed as text, not as HTML, and lets the person pick a candidate or enter it', async () => {
     const api = mockApi();
     await render(api);
-    await findIt('Chat (ACP)');
+    await findIt('Chat');
     expect(host.querySelector('[data-testid="acp-step"] b')).toBeNull();
     expect(text()).toContain('From the help: acp  Start the <b>chat</b> server');
     expect(text()).toContain('Looks like a good match.');
@@ -262,7 +262,7 @@ describe('AgentWizard: chat (ACP)', () => {
   it('with nothing detected or a failed look-up, the person enters it themselves', async () => {
     const api = mockApi({ acpDetect: vi.fn(async () => ({ ok: true, command: 'fake-agent', candidates: [] })) });
     await render(api);
-    await findIt('Chat (ACP)');
+    await findIt('Chat');
     expect(host.querySelector('[data-testid="acp-no-candidates"]')).toBeTruthy();
     expect((host.querySelector('input[name="wizard-acp-pick"]') as HTMLInputElement).checked).toBe(true);
     expect(field('acp-command').value).toBe('fake-agent');
@@ -271,7 +271,7 @@ describe('AgentWizard: chat (ACP)', () => {
   it('says so when detection fails and still allows typing', async () => {
     const api = mockApi({ acpDetect: vi.fn(async () => Promise.reject('WIZARD_NOT_AVAILABLE: no help text.')) });
     await render(api);
-    await findIt('Chat (ACP)');
+    await findIt('Chat');
     expect(host.querySelector('[data-testid="acp-detect-error"]')?.textContent).toContain('no help text.');
     expect(button('Review')).toBeTruthy();
   });
@@ -279,7 +279,7 @@ describe('AgentWizard: chat (ACP)', () => {
   it('shows plain local messages and does not go on until they are fixed', async () => {
     const api = mockApi({ acpDetect: vi.fn(async () => ({ ok: true, command: 'fake-agent', candidates: [] })) });
     await render(api);
-    await findIt('Chat (ACP)');
+    await findIt('Chat');
     await setValue(field('acp-command'), '   ');
     await setValue(field('acp-env'), 'GOOD\n1bad');
     await setValue(field('acp-resume'), '--resume');
@@ -305,7 +305,7 @@ describe('AgentWizard: chat (ACP)', () => {
   it("shows the backend's refusal text and stays on the review step", async () => {
     const api = mockApi({ acpFinish: vi.fn(async () => Promise.reject('AGENT_DEF_ACP_INVALID: acp.args is out of range.')) });
     await render(api);
-    await findIt('Chat (ACP)');
+    await findIt('Chat');
     await click(button('Review'));
     await click(button('Approve'));
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('acp.args is out of range.');

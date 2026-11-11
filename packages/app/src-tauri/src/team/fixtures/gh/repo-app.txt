@@ -1,0 +1,9 @@
+HTTP/2.0 200 OK
+Content-Type: application/json; charset=utf-8
+Etag: W/"7a1d0c"
+
+{
+  "full_name": "potato-workspace/app",
+  "default_branch": "main",
+  "private": true
+}

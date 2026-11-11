@@ -13,6 +13,7 @@ import { riskGlyph } from '../../lib/approval-risk';
 import '../../styles/inbox-card.css';
 import { DotSpinner } from './DotSpinner';
 import { agePhrase, formatAge } from './inbox-age';
+import { formatKey, isMacPlatform } from '../../lib/shortcuts';
 
 /** `needs` waits for a person, `error` stopped, `notice` is calm information, `done` finished, the risk levels are approvals. */
 export type CardGlyphKind = 'needs' | 'error' | 'notice' | 'working' | 'done' | RiskLevel;
@@ -149,6 +150,44 @@ export function CardButton({
       {children}
     </button>
   );
+}
+
+/** One group of key hints: the keys, then what they do ("1 2 answer"). Keys go through formatKey, like every other hint. */
+export interface KeyHint {
+  keys: string[];
+  label: string;
+}
+
+/**
+ * The hints the Inbox shows under its title, on a card that is out of the Inbox's reach of that line
+ * (a pane's approval card). Same look, same keys.
+ */
+export function KeyHints({ hints }: { hints: KeyHint[] }) {
+  if (hints.length === 0) return null;
+  const mac = isMacPlatform();
+  return (
+    <p className="ib-hint ib-hint--card" aria-label="Keyboard shortcuts">
+      {hints.map((h) => (
+        <span key={h.label}>
+          {h.keys.map((k) => (
+            <kbd key={k} className="ib-kbd">
+              {formatKey(k, mac)}
+            </kbd>
+          ))}{' '}
+          {h.label}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+/** The hints for an approval card in the Inbox: number keys answer (not on high risk), Tab and Enter on high risk, O opens. */
+export function approvalHints({ answers, high, canOpen }: { answers: number; high: boolean; canOpen: boolean }): KeyHint[] {
+  const out: KeyHint[] = [];
+  if (high) out.push({ keys: ['Tab'], label: 'move' }, { keys: ['Enter'], label: 'choose' });
+  else if (answers > 0) out.push({ keys: Array.from({ length: Math.min(answers, 3) }, (_, i) => String(i + 1)), label: 'answer' });
+  if (canOpen) out.push({ keys: ['O'], label: 'open' });
+  return out;
 }
 
 /** A command or scope inside a sentence or a button: inline code, never backticks. */

@@ -2,7 +2,8 @@
 // accounts: its accounts, "Add account", and "Open login pane" (starts the agent under that
 // account so the user logs in once). Potato Workspace only points the CLI at a folder the user
 // controls; it never reads or shares the credentials inside.
-import { useCallback, useEffect, useState } from 'react';
+import { SIGN_IN } from '../../../lib/glossary';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   accountsFor,
   errorText,
@@ -22,12 +23,16 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const registry = useAgentRegistry();
+  const loaded = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
       setData(await api.list());
-    } catch {
-      setData(null); // no desktop shell / old backend: nothing to configure
+      loaded.current = true;
+    } catch (err) {
+      // Never loaded: no desktop shell or an old backend, so there is nothing to configure.
+      // Loaded before: keep what we have and say the refresh failed.
+      if (loaded.current) setError(`Could not refresh the sign-ins: ${errorText(err)}`);
     }
   }, [api]);
 
@@ -35,7 +40,8 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
     void refresh();
   }, [refresh]);
 
-  const run = async (work: () => Promise<unknown>, done?: string) => {
+  /** Runs one change. Resolves true when it worked, false when it failed (the error is shown). */
+  const run = async (work: () => Promise<unknown>, done?: string): Promise<boolean> => {
     setBusy(true);
     setError(null);
     setNote(null);
@@ -43,8 +49,10 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
       await work();
       if (done) setNote(done);
       await refresh();
+      return true;
     } catch (err) {
       setError(errorText(err));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -54,8 +62,8 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
 
   return (
     <SettingBlock
-      label="Accounts"
-      description="Use the same agent with more than one login, and pick one per pane. Each account is a folder you control; Potato Workspace only points the agent at it and never reads or shares what is inside. Check your provider's terms before using several accounts."
+      label={SIGN_IN.rowLabel}
+      description="Use the same agent with more than one sign-in, and pick one per pane. Each sign-in is a folder you control; Potato Workspace only points the agent at it and never reads or shares what is inside. Check your provider's terms before using several sign-ins."
     >
       {error && (
         <p role="alert" className="mb-3 text-sm text-pm-muted">
@@ -72,10 +80,10 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
           const mine = accountsFor(data.accounts, agent.agent_id);
           const draft = drafts[agent.agent_id] ?? '';
           return (
-            <section key={agent.agent_id} aria-label={`${agent.agent_id} accounts`} data-testid={`accounts-${agent.agent_id}`}>
+            <section key={agent.agent_id} aria-label={`${agent.agent_id} sign-ins`} data-testid={`accounts-${agent.agent_id}`}>
               <h4 className="text-sm font-medium">{agentLabel(registry, agent.agent_id)}</h4>
               <p className="mt-0.5 text-xs text-pm-muted">{agent.login_hint}</p>
-              {mine.length === 0 && <p className="mt-2 text-xs text-pm-muted">No accounts yet. It uses its own login.</p>}
+              {mine.length === 0 && <p className="mt-2 text-xs text-pm-muted">No extra sign-ins yet. It uses its own.</p>}
               <ul className="mt-2 divide-y divide-pm-border rounded-lg border border-pm-border">
                 {mine.map((a) => (
                   <li key={a.id} className="flex items-center gap-2 px-3 py-2">
@@ -84,24 +92,29 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
                       defaultValue={a.label}
                       className="min-w-0 flex-1 bg-transparent text-sm outline-none"
                       onBlur={(e) => {
-                        const label = e.target.value.trim();
-                        if (label && label !== a.label) void run(() => api.rename(a.id, label));
-                        else e.target.value = a.label;
+                        const input = e.target;
+                        const label = input.value.trim();
+                        if (label && label !== a.label) {
+                          // A rejected name (for example one already in use) goes back to the saved one.
+                          void run(() => api.rename(a.id, label)).then((ok) => {
+                            if (!ok) input.value = a.label;
+                          });
+                        } else input.value = a.label;
                       }}
                     />
                     <button
                       type="button"
                       className={BTN}
                       disabled={busy}
-                      onClick={() => void run(() => api.openLoginPane(agent.agent_id, a.id), 'Opened a pane. Log in there once.')}
+                      onClick={() => void run(() => api.openLoginPane(agent.agent_id, a.id), 'Opened a sign-in window. Sign in there once.')}
                     >
-                      Open login pane
+                      {SIGN_IN.openWindow}
                     </button>
                     <button
                       type="button"
                       className={BTN}
                       disabled={busy}
-                      title="Forgets the account. Its folder is kept."
+                      title="Forgets this sign-in. Its folder is kept."
                       onClick={() => void run(() => api.remove(a.id, false))}
                     >
                       Remove
@@ -121,7 +134,7 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
                   className="rounded-lg border border-pm-border bg-pm-bg px-2 py-1.5 text-xs outline-none"
                 >
                   <option value="ask">Ask me</option>
-                  <option value="main">Main login</option>
+                  <option value="main">{SIGN_IN.defaultOne}</option>
                   {mine.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.label}
@@ -130,7 +143,7 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
                 </select>
               </div>
               <p className="mt-1 text-xs text-pm-muted">
-                The login for a helper an agent starts without picking one. Ask me shows a card each time.
+                The sign-in for a helper an agent starts without picking one. Ask me shows a card each time.
               </p>
               <form
                 className="mt-2 flex items-center gap-2"
@@ -146,15 +159,15 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
                 }}
               >
                 <input
-                  aria-label={`New ${agent.agent_id} account name`}
-                  placeholder="Account name, for example Work"
+                  aria-label={`New ${agent.agent_id} sign-in name`}
+                  placeholder="Name, for example Work"
                   value={draft}
                   maxLength={40}
                   onChange={(e) => setDrafts((d) => ({ ...d, [agent.agent_id]: e.target.value }))}
                   className="min-w-0 flex-1 rounded-lg border border-pm-border bg-pm-bg px-3 py-1.5 text-sm outline-none"
                 />
                 <button type="submit" className={BTN} disabled={busy || !draft.trim()}>
-                  Add account
+                  {SIGN_IN.addAnother}
                 </button>
               </form>
             </section>

@@ -6,9 +6,9 @@ import { SECTION_IDS, groupRows, rowMatches, rowScore, searchSections } from './
 const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row: r })));
 
 describe('settings catalog', () => {
-  it('has exactly the six sections, in order', () => {
+  it('has exactly the eight sections, in order', () => {
     expect(SECTIONS.map((s) => s.id)).toEqual([...SECTION_IDS]);
-    expect(SECTIONS.map((s) => s.title)).toEqual(['General', 'Agents', 'Orchestrator & Models', 'Keys', 'Bridge & MCP', 'Phone']);
+    expect(SECTIONS.map((s) => s.title)).toEqual(['General', 'Agents', 'Orchestrator & Models', 'Keys', 'Bridge & MCP', 'Phone', 'Team', 'Shortcuts']);
   });
 
   it('every row has a unique id, a label and a hint', () => {
@@ -53,6 +53,22 @@ describe('settings catalog', () => {
       expect(item.title.length).toBeGreaterThan(2);
       expect(item.note.length).toBeGreaterThan(10);
     }
+  });
+});
+
+describe('what a new person sees first in Agents', () => {
+  const agents = SECTIONS.find((s) => s.id === 'agents')!;
+  const level = (id: string) => agents.rows.find((r) => r.id === id)?.level;
+
+  it('sign in and Check my setup are basic; your own agent files are advanced', () => {
+    expect(level('accounts')).toBe('basic');
+    expect(level('setup-check')).toBe('basic');
+    expect(level('definitions')).toBe('advanced');
+  });
+
+  it('the sign-in row uses the shared words, not login or account', () => {
+    const row = agents.rows.find((r) => r.id === 'accounts')!;
+    expect(`${row.label} ${row.hint}`).not.toMatch(/login|account/i);
   });
 });
 
@@ -137,7 +153,7 @@ describe('search ranking and coverage', () => {
 
   it('Labs: "labs", "early" and each feature name find the right row', () => {
     const hit = (q: string) => searchSections(SECTIONS, q).flatMap((h) => h.rows.map((r) => r.id));
-    expect(hit('labs')).toEqual(expect.arrayContaining(['labs-index', 'team', 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation']));
+    expect(hit('labs')).toEqual(expect.arrayContaining(['labs-index', 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation']));
     expect(hit('hook lane')).toContain('live-updates');
     expect(hit('simple')).toContain('simple-mode');
   });

@@ -49,14 +49,14 @@ describe('useInlineSettings with row names', () => {
     expect(hook.viewProps.initialRow).toBe('live-updates');
   });
 
-  it('a page name carries no row; a legacy tab name with a row (team) does', async () => {
+  it('a page name carries no row; a legacy tab name with a row (preload) does', async () => {
     await act(async () => hook.open('keys'));
     await render();
     expect(hook.viewProps.initialTab).toBe('keys');
     expect(hook.viewProps.initialRow).toBeUndefined();
-    await act(async () => hook.open('team'));
+    await act(async () => hook.open('preload'));
     await render();
-    expect(hook.viewProps.initialRow).toBe('team');
+    expect(hook.viewProps.initialRow).toBe('preload');
   });
 
   it('asking again while Settings is open re-opens the panel on the new row (the view key changes)', async () => {

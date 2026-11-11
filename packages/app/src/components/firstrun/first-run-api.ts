@@ -25,12 +25,15 @@ export interface FirstRunApi {
   state: () => Promise<FirstRunState>;
   startTask: (project: string, agent: string) => Promise<TaskStarted>;
   taskStatus: (project: string, handle: string) => Promise<TaskStatus>;
+  /** The agent in this pane reaches THIS app's MCP bridge (false: another copy's, or none). */
+  paneMcp: (paneId: string) => Promise<boolean>;
 }
 
 export const firstRunApi: FirstRunApi = {
   state: () => invoke<FirstRunState>('first_run_state'),
   startTask: (project, agent) => invoke<TaskStarted>('first_run_start_task', { project, agent }),
   taskStatus: (project, handle) => invoke<TaskStatus>('first_run_task_status', { project, handle }),
+  paneMcp: (paneId) => invoke<boolean>('first_run_pane_mcp', { paneId }),
 };
 
 export const isFinalStatus = (status: string): boolean => status === 'completed' || status === 'failed' || status === 'cancelled';

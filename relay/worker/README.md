@@ -10,6 +10,18 @@ single binary or Docker? See [`../README.md`](../README.md).)
 
 ## Deploy
 
+### From the app
+
+Settings › Team › **Create team relay**. Make a Cloudflare API token with the "Edit Cloudflare Workers"
+template, paste it, and the app uploads this Worker to your own account through the Cloudflare API (no
+Node or wrangler needed), turns on its `workers.dev` address, waits for `/v1/health` and creates the
+team with it. The token is used for that deploy only and not kept. Your account needs a `workers.dev`
+subdomain: open Workers in the Cloudflare dashboard once if it has none.
+
+What the app uploads is built from this folder by `scripts/bundle-for-app.mjs` (one JS module, the wasm
+and a manifest read from `wrangler.toml`; the app build runs it). It uses the same Worker name and
+migration tags as `wrangler.toml`, so `npm run deploy` later carries on from it, and the other way round.
+
 ### One click
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Potato-dev-inc/puppet-master/tree/main/relay/worker)
@@ -36,7 +48,7 @@ Nothing needs building: the protocol checks are a WebAssembly file committed in 
 
 ### Then, in Puppet Master
 
-Settings › Team › Relay address: paste the `https://…` address and create the team. Teammates' invite
+Settings › Team › Use my own address: paste the `https://…` address and create the team. Teammates' invite
 links carry the relay address, so they don't type it. Use `https://`; the app only accepts plain
 `http://` for a relay on the same computer.
 

@@ -127,6 +127,11 @@ export function HomeCards({
         </div>
       )}
 
+      {cards.length === 0 && adding === null && kinds.length > 0 && (
+        <p className="ck-na-note" data-testid="na-cards-hint">
+          Pin shortcuts here: your recent projects, running agents, or a prompt you reuse.
+        </p>
+      )}
       <div className="ck-na-foot">
         {adding === null && kinds.length > 0 && (
           <button type="button" className="ck-na-addrow" onClick={() => setAdding('list')}>

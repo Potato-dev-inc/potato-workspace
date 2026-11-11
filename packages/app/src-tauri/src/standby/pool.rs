@@ -61,6 +61,11 @@ pub trait Host: Send + Sync {
     fn check(&self, key: &PoolKey, handle: &Handle, age_ms: i64) -> Health;
     /// Shut a standby down. Must not block for long (called under no lock, but on hot paths).
     fn kill(&self, handle: &Handle, reason: &str);
+    /// What a worker was stopped at when it was classed bad (a startup screen's id), for the
+    /// shutdown line. Read just before `kill`.
+    fn detail(&self, _handle: &Handle) -> Option<String> {
+        None
+    }
     /// The folder Preload warms workers in (the default project folder). `None`: nothing to warm.
     fn default_project(&self) -> Option<String> {
         None
@@ -743,7 +748,7 @@ impl Pool {
             .iter()
             .map(|(id, key, handle, created)| (*id, self.host.check(key, handle, now_ms - created)))
             .collect();
-        let mut broken: Vec<Entry> = Vec::new();
+        let mut broken: Vec<(Entry, String)> = Vec::new();
         {
             let mut inner = self.shared.inner.lock();
             let stable_ms = STABLE_READY_MS.min(inner.config.idle_timeout_secs as i64 * 1000);
@@ -786,7 +791,7 @@ impl Pool {
                             let entry = inner.entries.remove(index);
                             fail(&mut inner, &entry.key, "startup_timeout", now_ms);
                             inner.stats.discarded += 1;
-                            broken.push(entry);
+                            broken.push((entry, "startup_timeout".to_string()));
                         }
                     }
                     Health::Dialog | Health::NeedsAttention | Health::Dead => {
@@ -800,13 +805,18 @@ impl Pool {
                         };
                         fail(&mut inner, &entry.key, reason, now_ms);
                         inner.stats.discarded += 1;
-                        broken.push(entry);
+                        broken.push((entry, reason.to_string()));
                     }
                 }
             }
         }
-        for entry in &broken {
-            self.host.kill(&entry.handle, "unhealthy");
+        for (entry, reason) in &broken {
+            // The real cause in the line: "dialog:workspace_trust", "needs_attention:login".
+            let why = match self.host.detail(&entry.handle) {
+                Some(detail) => format!("{reason}:{detail}"),
+                None => reason.clone(),
+            };
+            self.host.kill(&entry.handle, &why);
             result.killed += 1;
         }
         // C: spawn what is missing, one at a time.

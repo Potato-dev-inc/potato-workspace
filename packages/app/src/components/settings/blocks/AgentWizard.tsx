@@ -5,6 +5,7 @@
 // The wizard only writes an UNAPPROVED definition; the person approves it in the normal approval dialog,
 // which the parent opens from `onApprove`. Everything the program printed or drew is shown as React text,
 // never as HTML.
+import { RUN_WAYS } from '../../../lib/glossary';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   agentErrorMessage,
@@ -96,7 +97,7 @@ interface Choice {
 
 const KIND_CHOICES: Array<[Kind, string, string]> = [
   ['terminal', 'Terminal', 'The agent runs in a pane, like today.'],
-  ['chat', 'Chat (ACP)', 'The agent runs as a chat. It is not watched or tested.'],
+  ['chat', RUN_WAYS.chat, 'The agent runs as a chat. It is not watched or tested.'],
   ['both', 'Both', 'A terminal agent and a chat for the same agent.'],
 ];
 
@@ -1265,7 +1266,7 @@ function Review({
       </div>
       {acp && (
         <div data-testid="review-acp" className="mt-3">
-          <div className="text-xs font-medium text-pm-muted">Chat (ACP) table added to the definition</div>
+          <div className="text-xs font-medium text-pm-muted">Chat table added to the definition</div>
           <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-pm-bg p-2 text-xs">{acpTableText(acp)}</pre>
           <p className="mt-1 text-xs text-pm-muted">The chat was not started or tested.</p>
         </div>

@@ -7,7 +7,7 @@
 //
 // Anything the program printed (help text, live test output) is untrusted data. It sits inside <<<...>>> blocks
 // and the rules tell the AI never to follow instructions found there. The checker, not the AI, is the guard.
-import formatDoc from '../../../../docs/specs/agent-definitions/DEFINITION-FORMAT.md?raw';
+import formatDoc from '../../src-tauri/src/tui/declarative/DEFINITION-FORMAT.md?raw';
 import kiloToml from '../../src-tauri/tests/agent-definitions/kilo.toml?raw';
 import kiroToml from '../../src-tauri/tests/agent-definitions/kiro.toml?raw';
 import nimbusToml from '../../src-tauri/tests/agent-definitions/nimbus.toml?raw';

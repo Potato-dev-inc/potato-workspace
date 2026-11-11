@@ -3,30 +3,40 @@
 //! step 2). `gh pr create` often follows the push by a few seconds, so a miss is retried at
 //! [`RETRY_AFTER_MS`]. Without `gh`, or for a remote that is not on GitHub, it quietly finds nothing.
 
-use crate::team::event::{is_valid_branch, PrRef};
+use crate::team::event::{is_valid_branch, CiRef, PrRef};
 use std::path::Path;
 use std::process::Stdio;
 
 /// Delays after a push at which the lookup is retried.
 pub const RETRY_AFTER_MS: [u64; 2] = [30_000, 120_000];
 
+/// The open pull request for a branch, with what its card shows besides the PR itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundPr {
+    pub pr: PrRef,
+    /// The branch it merges into.
+    pub base: Option<String>,
+    /// Its checks right now (usually pending, a moment after `gh pr create`).
+    pub ci: Option<CiRef>,
+}
+
 /// Looks up the open pull request for a branch (a fake in tests).
 pub trait PrLookup: Send + Sync {
-    fn open_pr_for(&self, repo: &Path, branch: &str) -> Option<PrRef>;
+    fn open_pr_for(&self, repo: &Path, branch: &str) -> Option<FoundPr>;
 }
 
 /// `gh pr list --head <branch> --state open --json …` in the repository.
 pub struct GhCli;
 
 impl PrLookup for GhCli {
-    fn open_pr_for(&self, repo: &Path, branch: &str) -> Option<PrRef> {
+    fn open_pr_for(&self, repo: &Path, branch: &str) -> Option<FoundPr> {
         if !is_valid_branch(branch) {
             return None;
         }
         let mut cmd = crate::proc_util::hidden_command("gh");
         cmd.args([
             "pr", "list", "--head", branch, "--state", "open", "--limit", "1",
-            "--json", "number,title,url,isDraft,state,changedFiles,additions,deletions",
+            "--json", "number,title,url,isDraft,state,changedFiles,additions,deletions,baseRefName,statusCheckRollup",
         ])
         .current_dir(repo)
         .env("GH_PROMPT_DISABLED", "1")
@@ -38,8 +48,40 @@ impl PrLookup for GhCli {
         if !out.status.success() {
             return None;
         }
-        parse_pr_list(&String::from_utf8_lossy(&out.stdout))
+        parse_found_pr(&String::from_utf8_lossy(&out.stdout))
     }
+}
+
+/// [`parse_pr_list`] plus the base branch and the checks (`statusCheckRollup`).
+pub fn parse_found_pr(json: &str) -> Option<FoundPr> {
+    let pr = parse_pr_list(json)?;
+    let value: serde_json::Value = serde_json::from_str(json).ok()?;
+    let first = value.as_array()?.first()?;
+    let base = first.get("baseRefName").and_then(|v| v.as_str()).filter(|b| is_valid_branch(b)).map(str::to_string);
+    let ci = first.get("statusCheckRollup").and_then(|v| v.as_array()).map(|checks| {
+        // Check runs carry `status` + `conclusion`; commit statuses carry `state`.
+        let verdict = |c: &serde_json::Value| {
+            let word = c.get("conclusion").or_else(|| c.get("state")).and_then(|v| v.as_str()).unwrap_or("").to_ascii_uppercase();
+            let done = c.get("status").and_then(|v| v.as_str()).map_or(true, |s| s.eq_ignore_ascii_case("completed"));
+            (word, done)
+        };
+        let failed = checks.iter().any(|c| matches!(verdict(c).0.as_str(), "FAILURE" | "ERROR" | "TIMED_OUT" | "STARTUP_FAILURE"));
+        let pending = checks.iter().any(|c| {
+            let (word, done) = verdict(c);
+            !done || matches!(word.as_str(), "" | "PENDING" | "EXPECTED")
+        });
+        let conclusion = if checks.is_empty() {
+            "none"
+        } else if failed {
+            "failure"
+        } else if pending {
+            "pending"
+        } else {
+            "success"
+        };
+        CiRef { conclusion: conclusion.into(), failed_jobs: Vec::new(), url: String::new() }
+    });
+    Some(FoundPr { pr, base, ci })
 }
 
 /// The first entry of `gh pr list --json …` output.
@@ -74,6 +116,19 @@ mod tests {
         assert_eq!(pr.files, Some(6));
         assert_eq!(pr.state, "open");
         assert!(!pr.draft);
+    }
+
+    #[test]
+    fn a_new_pr_carries_its_base_and_checks() {
+        let json = r#"[{"number":482,"title":"Relay rooms","url":"https://github.com/potato-workspace/app/pull/482","isDraft":false,"state":"OPEN","changedFiles":14,"additions":612,"deletions":88,"baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"build","status":"IN_PROGRESS","conclusion":null},{"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"SUCCESS"}]}]"#;
+        let found = parse_found_pr(json).unwrap();
+        assert_eq!(found.pr.files, Some(14));
+        assert_eq!(found.base.as_deref(), Some("main"));
+        assert_eq!(found.ci.unwrap().conclusion, "pending");
+        let red = r#"[{"number":482,"statusCheckRollup":[{"status":"COMPLETED","conclusion":"FAILURE"},{"state":"SUCCESS"}]}]"#;
+        assert_eq!(parse_found_pr(red).unwrap().ci.unwrap().conclusion, "failure");
+        let none = r#"[{"number":3,"statusCheckRollup":[]}]"#;
+        assert_eq!(parse_found_pr(none).unwrap().ci.unwrap().conclusion, "none");
     }
 
     #[test]

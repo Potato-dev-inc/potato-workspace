@@ -173,3 +173,24 @@ fn an_open_stream_stops_when_the_device_expires_without_a_new_request() {
     assert_eq!(stream_caps_at(&device, now + DEVICE_IDLE_EXPIRY_SECS + 60), None, "past its idle expiry the stream closes");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Guessing a pairing code is capped: after five wrong codes the pending code is gone.
+#[test]
+fn a_pairing_code_is_dropped_after_too_many_wrong_guesses() {
+    let dir = std::env::temp_dir().join(format!("pm-pair-guess-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut store = MobilePairingStore::load_or_create(dir.join("pairing.json")).unwrap();
+    let session = store.create_pairing_session_with_caps("http://127.0.0.1:1".into(), Caps::all());
+    for _ in 0..MAX_WRONG_CODES - 1 {
+        assert_eq!(store.lookup_pairing_session("000000").unwrap_err(), "invalid pairing code");
+    }
+    // The real code still works before the limit.
+    assert!(store.lookup_pairing_session(&session.pairing_code).is_ok());
+    let err = store.lookup_pairing_session("000000").unwrap_err();
+    assert!(err.contains("too many"), "{err}");
+    // Now even the real code is refused: the guesser burned it.
+    assert!(store.lookup_pairing_session(&session.pairing_code).is_err());
+    let req = PairRequestBody { pairing_code: session.pairing_code, device_name: "p".into(), device_public_key: session.server_public_key };
+    assert!(store.pair_device(req).is_err());
+    let _ = std::fs::remove_dir_all(dir);
+}

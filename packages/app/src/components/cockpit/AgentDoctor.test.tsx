@@ -245,8 +245,8 @@ describe('Inbox first-run hint', () => {
     window.localStorage.setItem('pm.cockpit.everSpawned', '1');
     act(() => root.render(<Inbox c={cockpit(0)} onOpenDoctor={() => {}} />));
     expect(host.textContent).not.toContain('Welcome');
-    expect(button(host, 'Set up your agents')).toBeDefined();
+    expect(button(host, 'Set up agents')).toBeDefined();
     act(() => root.render(<Inbox c={cockpit(1)} onOpenDoctor={() => {}} />));
-    expect(button(host, 'Set up your agents')).toBeUndefined();
+    expect(button(host, 'Set up agents')).toBeUndefined();
   });
 });

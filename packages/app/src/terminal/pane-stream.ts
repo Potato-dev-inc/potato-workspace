@@ -6,6 +6,9 @@ const MAX_LOADING_CHUNKS = 8192;
 export const RAW_REPLAY_LINES = 10_000;
 /** Screen fetches per subscribe when the PTY keeps resizing while one is in flight. */
 const MAX_REPLAY_ATTEMPTS = 3;
+/** A failed replay read is tried again this many times (waits 250 ms, then 500 ms), then the stream goes live. */
+const MAX_READ_FAILURES = 3;
+const READ_RETRY_MS = 250;
 
 export type PaneStreamMode = 'buffering' | 'live';
 
@@ -148,7 +151,22 @@ export class PaneStreamManager {
     stream.resizeLog = [];
     stream.pendingResize = null;
 
-    const load = (attempt: number): void => {
+    const load = (attempt: number, failures = 0): void => {
+      // The read can fail (the backend is busy or the pane is gone). Without a catch the stream would stay
+      // "buffering" forever and the pane would never show new output: retry a few times, then go live from now.
+      const onReadFailed = (): void => {
+        const current = this.streams.get(paneId);
+        if (!current || current.listener !== cb || current.mode === 'live') return;
+        if (failures + 1 >= MAX_READ_FAILURES) {
+          this.discardBacklogAndGoLive(current);
+          return;
+        }
+        setTimeout(() => {
+          const again = this.streams.get(paneId);
+          if (!again || again.listener !== cb || again.mode === 'live') return;
+          load(attempt, failures + 1);
+        }, READ_RETRY_MS * 2 ** failures);
+      };
       void readRawBuffer(paneId, RAW_REPLAY_LINES).then((replay) => {
         const current = this.streams.get(paneId);
         if (!current || current.listener !== cb || current.mode === 'live') return;
@@ -187,7 +205,7 @@ export class PaneStreamManager {
           if (pending) current.resizeListener?.(pending.cols, pending.rows);
         }
         this.discardBacklogAndGoLive(current);
-      });
+      }, onReadFailed);
     };
     load(1);
 

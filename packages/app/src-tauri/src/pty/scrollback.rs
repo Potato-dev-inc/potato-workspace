@@ -20,7 +20,15 @@ pub struct Scrollback {
     /// Current line being assembled (no trailing `\n` yet).
     current: Vec<u8>,
     cap: usize,
+    /// Bytes held in `lines` (not `current`).
+    bytes: usize,
 }
+
+/// A line that grows past this without a `\n` (a progress bar, a binary dump) is stored as a line
+/// of its own and a new one starts; replaying the lines in order still gives the same bytes.
+const MAX_LINE_BYTES: usize = 64 * 1024;
+/// Total bytes kept in completed lines: the oldest lines go first, whatever the line cap says.
+const MAX_TOTAL_BYTES: usize = 32 * 1024 * 1024;
 
 #[allow(dead_code)]
 impl Scrollback {
@@ -29,6 +37,17 @@ impl Scrollback {
             lines: VecDeque::with_capacity(cap.min(1024)),
             current: Vec::with_capacity(512),
             cap,
+            bytes: 0,
+        }
+    }
+
+    fn store_line(&mut self, line: Vec<u8>) {
+        self.bytes += line.len();
+        self.lines.push_back(line);
+        while self.lines.len() > self.cap || (self.bytes > MAX_TOTAL_BYTES && self.lines.len() > 1) {
+            if let Some(old) = self.lines.pop_front() {
+                self.bytes -= old.len();
+            }
         }
     }
 
@@ -39,12 +58,13 @@ impl Scrollback {
                 // Finalize current line with the \n included.
                 self.current.push(b'\n');
                 let line = std::mem::take(&mut self.current);
-                self.lines.push_back(line);
-                while self.lines.len() > self.cap {
-                    self.lines.pop_front();
-                }
+                self.store_line(line);
             } else {
                 self.current.push(b);
+                if self.current.len() >= MAX_LINE_BYTES {
+                    let line = std::mem::take(&mut self.current);
+                    self.store_line(line);
+                }
             }
         }
     }
@@ -81,6 +101,7 @@ impl Scrollback {
     pub fn clear(&mut self) {
         self.lines.clear();
         self.current.clear();
+        self.bytes = 0;
     }
 }
 
@@ -218,6 +239,33 @@ mod tests {
         sb.push_chunk(&[0xa9, b'\n']);
         let text = sb.tail_text(10);
         assert_eq!(text, "café\n");
+    }
+
+    #[test]
+    fn output_without_a_newline_does_not_grow_without_bound() {
+        let mut sb = Scrollback::new(10);
+        let chunk = [b'x'; 4096];
+        // 40 MB with no line break at all.
+        for _ in 0..10_240 {
+            sb.push_chunk(&chunk);
+        }
+        assert!(sb.current.len() < MAX_LINE_BYTES, "the open line is bounded");
+        assert!(sb.line_count() <= 10, "the line cap holds for long lines too");
+        assert!(sb.bytes <= 10 * MAX_LINE_BYTES);
+        // What is kept still replays as one unbroken stretch of the stream.
+        let tail = sb.tail_raw_bytes(10);
+        assert!(tail.iter().all(|b| *b == b'x'));
+        assert!(tail.len() <= 11 * MAX_LINE_BYTES);
+    }
+
+    #[test]
+    fn a_short_line_after_a_long_one_keeps_its_bytes_in_order() {
+        let mut sb = Scrollback::new(100);
+        let mut long = vec![b'a'; MAX_LINE_BYTES + 10];
+        long.extend_from_slice(b"\nnext\n");
+        sb.push_chunk(&long);
+        let raw = sb.tail_raw_bytes(100);
+        assert_eq!(raw, long);
     }
 
     #[test]

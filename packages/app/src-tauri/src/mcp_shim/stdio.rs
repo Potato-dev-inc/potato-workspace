@@ -3,7 +3,7 @@
 use super::*;
 pub(crate) fn run() {
     if env::args().any(|arg| arg == "--version") {
-        println!("{SERVER_NAME} {SERVER_VERSION}");
+        println!("{SERVER_NAME} {}", server_version());
         return;
     }
 
@@ -200,7 +200,7 @@ fn handle_json_rpc_line_cancellable(
             "capabilities": { "tools": { "listChanged": true }, "resources": {}, "prompts": {} },
             "serverInfo": {
                 "name": SERVER_NAME,
-                "version": SERVER_VERSION,
+                "version": server_version(),
                 "catalog_version": tool_registry::catalog_version(),
             },
             "instructions": instructions_with_notices()

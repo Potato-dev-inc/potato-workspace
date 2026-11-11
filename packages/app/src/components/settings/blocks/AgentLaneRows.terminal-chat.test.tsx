@@ -63,14 +63,14 @@ const popupFor = (label: string) => popups().find((p) => p.getAttribute('aria-la
 describe('How to run: Chat (terminal)', () => {
   it('adds the Chat (terminal) option to an eligible agent and shows its note under the row', async () => {
     await render({ labs_enabled: true, agents: [acp()], terminal_chat: [tc()] });
-    expect([...popupFor('Codex').options].map((o) => o.textContent)).toEqual(['Terminal', 'Chat (ACP)', 'Chat (terminal)']);
+    expect([...popupFor('Codex').options].map((o) => o.textContent)).toEqual(['Terminal', 'Chat', 'Chat (terminal)']);
     expect(host.querySelector('[data-testid="agent-terminal-chat-note"]')?.textContent).toContain('It cannot resume old sessions.');
     expect(popupFor('Codex').options[2].textContent).not.toContain('ACP');
   });
 
   it('gives no third option, and no note, to an agent that is not eligible', async () => {
     await render({ labs_enabled: true, agents: [acp()], terminal_chat: [] });
-    expect([...popupFor('Codex').options].map((o) => o.textContent)).toEqual(['Terminal', 'Chat (ACP)']);
+    expect([...popupFor('Codex').options].map((o) => o.textContent)).toEqual(['Terminal', 'Chat']);
     expect(host.querySelector('[data-testid="agent-terminal-chat-note"]')).toBeNull();
   });
 

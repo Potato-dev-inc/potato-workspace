@@ -1,6 +1,6 @@
 //! Recent-event queries over the global log: filtered summaries and a pane's last event.
 
-use super::read_global_entries;
+use super::scan_global_entries_backwards;
 use crate::events::{EventEntry, PaneId, SystemEvent};
 use crate::opencode::status::LastEventSummary;
 use serde::Serialize;
@@ -20,12 +20,7 @@ pub fn read_recent_events(
     types: Option<&[String]>,
     since_id: Option<&str>,
 ) -> Result<Vec<RecentEventSummary>, String> {
-    let mut entries = read_global_entries()?;
-    if let Some(since_id) = since_id.map(str::trim).filter(|value| !value.is_empty()) {
-        if let Some(index) = entries.iter().position(|entry| entry.id.0 == since_id) {
-            entries = entries.into_iter().skip(index + 1).collect();
-        }
-    }
+    let since_id = since_id.map(str::trim).filter(|value| !value.is_empty());
     let limit = limit.clamp(1, 200);
     let type_filter: Option<Vec<String>> = types.map(|values| {
         values
@@ -34,12 +29,18 @@ pub fn read_recent_events(
             .filter(|value| !value.is_empty())
             .collect()
     });
+    let pane_filter = pane_id.map(str::trim).filter(|value| !value.is_empty());
     let mut out = Vec::new();
-    for entry in entries.into_iter().rev() {
+    // Newest first from the end of the file: the answer is the last `limit` matches, so only the
+    // tail is read, however large the log has grown. Reaching `since_id` ends the walk.
+    scan_global_entries_backwards(|entry| {
+        if since_id.is_some_and(|since| entry.id.0 == since) {
+            return true;
+        }
         let summary = summarize_event(&entry);
-        if let Some(pane_filter) = pane_id.map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(pane_filter) = pane_filter {
             if summary.pane_id.as_deref() != Some(pane_filter) {
-                continue;
+                return false;
             }
         }
         if let Some(types) = type_filter.as_ref() {
@@ -47,14 +48,12 @@ pub fn read_recent_events(
                 .iter()
                 .any(|kind| summary.event_type.to_ascii_lowercase().contains(kind))
             {
-                continue;
+                return false;
             }
         }
         out.push(summary);
-        if out.len() >= limit {
-            break;
-        }
-    }
+        out.len() >= limit
+    })?;
     out.reverse();
     Ok(out)
 }

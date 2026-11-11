@@ -111,8 +111,30 @@ pub fn patch_file(path: &Path, patch: &Map<String, Value>) -> Result<Value, Stri
     patch_file_locked(path, patch)
 }
 
+/// The file as JSON, for a write. A missing file is `{}`; a file that cannot be read (locked) or parsed is an
+/// error, never `{}`, because writing a patch over it would wipe every other setting. A corrupt file is
+/// first copied to `settings.json.bak` so the person can recover it.
+fn read_file_value_strict(path: &Path) -> Result<Value, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(json!({})),
+        Err(e) => return Err(format!("could not read settings (nothing was changed): {e}")),
+    };
+    if text.trim().is_empty() {
+        return Ok(json!({}));
+    }
+    match serde_json::from_str::<Value>(&text) {
+        Ok(value) if value.is_object() => Ok(value),
+        _ => {
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| SETTINGS_FILE.into());
+            let _ = std::fs::write(path.with_file_name(format!("{name}.bak")), &text);
+            Err("settings.json is damaged; a copy was kept as settings.json.bak and nothing was changed".into())
+        }
+    }
+}
+
 pub(crate) fn patch_file_locked(path: &Path, patch: &Map<String, Value>) -> Result<Value, String> {
-    let next = merge_into_file(&read_file_value(path), patch);
+    let next = merge_into_file(&read_file_value_strict(path)?, patch);
     let bytes = serde_json::to_vec_pretty(&next).map_err(|e| format!("could not encode settings: {e}"))?;
     write_atomic(path, &bytes).map_err(|e| format!("could not save settings: {e}"))?;
     Ok(next[SETTINGS_KEY].clone())

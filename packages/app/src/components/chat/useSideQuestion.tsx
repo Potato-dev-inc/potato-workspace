@@ -4,9 +4,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ChatTurn } from '../../lib/sessionChatModel';
 import { tauriSideQuestionApi, type SideQuestionApi } from '../../lib/sideQuestion';
+import { bindingHint, matchesAction } from '../../lib/shortcuts';
 import { SideQuestionBox } from './SideQuestionBox';
 
-export const SIDE_SHORTCUT_LABEL = 'Ctrl+;';
 /** How many answers a pane keeps for the "Earlier" list. */
 export const RECENT_LIMIT = 3;
 
@@ -34,9 +34,9 @@ export function clearRecentSideAnswers(): void {
   recentByPane.clear();
 }
 
-/** Ctrl+; (Cmd+; on a Mac), with no other modifier. */
+/** Ctrl+; (Cmd+; on a Mac), or the keys the person chose in Settings > Shortcuts. */
 export function isSideShortcut(event: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): boolean {
-  return (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && (event.key === ';' || event.code === 'Semicolon');
+  return matchesAction(event, 'ask-aside');
 }
 
 /** False when the element or an ancestor is not displayed (a hidden tab). */
@@ -80,7 +80,7 @@ export function useSideQuestion(paneId: string, turns: readonly ChatTurn[], api:
       ref={anchor}
       type="button"
       aria-expanded={open}
-      title={`Ask about this session without writing into it (${SIDE_SHORTCUT_LABEL})`}
+      title={`Ask about this session without writing into it${bindingHint('ask-aside')}`}
       onClick={() => (open ? close() : setOpen(true))}
       className="rounded px-1.5 py-0.5 text-[11px] text-pm-muted ck-chat-aside"
     >

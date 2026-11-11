@@ -68,6 +68,13 @@ describe('groups inside the sections', () => {
     expect(appearance[appearance.length - 1]).toBe('welcome');
   });
 
+  it('Team is its own page with one row, and nothing about it is left in General or Labs', () => {
+    expect(section('team').rows.map((r) => r.id)).toEqual(['team-page']);
+    expect(rowIn('general', 'team-page')).toBeUndefined();
+    expect(rowIn('general', 'team')).toBeUndefined();
+    expect(collectLabs(BASE_SECTIONS).some((r) => r.id === 'team-page' || r.labs?.name === 'Team')).toBe(false);
+  });
+
   it('Phone starts with Pair a phone, then the paired phones, then the settings, then the public address', () => {
     const heads = groupRows(section('phone').rows).map((g) => g.head);
     expect(heads.filter(Boolean)).toEqual(['Pair a phone', 'Your phones', 'On the phone', 'Public address']);
@@ -92,12 +99,12 @@ describe('General > Labs', () => {
   const labsRows = () => section('general').rows.filter((r) => r.group === LABS_GROUP);
 
   it('collects every early feature in one place, in a fixed order, after the overview', () => {
-    expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'team', 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'telegram']);
+    expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'telegram']);
   });
 
   it('each feature has a short name and one plain line (no second sentence, no raw ids)', () => {
     const features = collectLabs(BASE_SECTIONS);
-    expect(features.map((r) => r.id)).toEqual(['team', 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'telegram']);
+    expect(features.map((r) => r.id)).toEqual(['ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'telegram']);
     for (const row of features) {
       const { name, about } = row.labs!;
       expect(name.length, row.id).toBeGreaterThan(2);

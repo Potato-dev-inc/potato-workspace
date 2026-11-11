@@ -32,6 +32,8 @@ pub use helper_cascade::kill_pane_and_helpers;
 pub(crate) use helper_cascade::close_with_helpers;
 mod spawn;
 mod virtual_pane;
+#[cfg(test)]
+mod resize_race_tests;
 
 pub use command::*;
 pub use pane_io::*;
@@ -215,6 +217,8 @@ impl PaneRegistry {
         super::resize_clock::forget(id);
         super::pane_facts::forget(id);
         super::launch_session::forget(id);
+        super::stream_pos::forget(id);
+        pane_io::forget_resize_gate(id);
         crate::flight::closed(id);
         self.panes.remove(id)
     }
@@ -225,6 +229,8 @@ impl PaneRegistry {
             super::resize_clock::forget(id);
             super::pane_facts::forget(id);
             super::launch_session::forget(id);
+            super::stream_pos::forget(id);
+            pane_io::forget_resize_gate(id);
             crate::flight::closed(id);
         }
         std::mem::take(&mut self.panes).into_values().collect()

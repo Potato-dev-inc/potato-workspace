@@ -1,0 +1,13 @@
+HTTP/2.0 200 OK
+Content-Type: application/json; charset=utf-8
+Etag: W/"9a8b7c"
+
+{
+  "html_url": "https://github.com/potato-workspace/app/pull/482",
+  "number": 482,
+  "state": "open",
+  "title": "Relay rooms",
+  "changed_files": 14,
+  "additions": 612,
+  "deletions": 88
+}

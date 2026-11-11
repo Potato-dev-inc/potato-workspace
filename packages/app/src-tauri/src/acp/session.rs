@@ -442,6 +442,7 @@ impl AcpSession {
         loop {
             match self.start_once() {
                 Ok(kind) => return Ok(kind),
+                Err(failure) if matches!(failure.error, AcpError::SessionClosed) => return Err(failure.error.clone()),
                 Err(failure) => match self.retry_delay(&failure.hint, attempt) {
                     Some(delay) => {
                         attempt += 1;
@@ -464,7 +465,11 @@ impl AcpSession {
     }
 
     fn start_once(&self) -> Result<StartKind, Box<StartError>> {
-        let (epoch, resume_id) = self.with_core(|core, ev| {
+        let begun = self.with_core(|core, ev| {
+            // A close() that landed while this start was waiting (or retrying) ends it: no new adapter.
+            if core.closed {
+                return None;
+            }
             let resume_id = core.state.session_id().map(str::to_string);
             // Defensive: a start replaces the adapter, so any prompt parked on the old one can no
             // longer be answered. Today starts are gated while a prompt is open; record it anyway
@@ -478,8 +483,11 @@ impl AcpSession {
             core.caps = None;
             core.loading = false;
             core.stats.starts += 1;
-            (core.state.epoch(), resume_id)
+            Some((core.state.epoch(), resume_id))
         });
+        let Some((epoch, resume_id)) = begun else {
+            return Err(Box::new(StartError { error: AcpError::SessionClosed, hint: String::new() }));
+        };
         match self.connect_and_open(epoch, resume_id.as_deref()) {
             Ok(kind) => Ok(kind),
             Err(error) => {
@@ -500,7 +508,8 @@ impl AcpSession {
 
     fn fail_start(&self, epoch: u64, error: &AcpError, stderr_tail: Vec<String>) {
         let conn = self.with_core(|core, ev| {
-            if core.state.epoch() != epoch {
+            // A closed session keeps its Closed exit; a close() also moved the epoch on.
+            if core.closed || core.state.epoch() != epoch {
                 return None;
             }
             let summary = ExitSummary { kind: ExitKind::StartFailed, code: None, stderr_tail, reason: Some(error.to_string()) };
@@ -518,16 +527,28 @@ impl AcpSession {
         let spec = config::resolve_spawn(cfg, &*self.host, &self.cwd)?;
         let handler = Arc::new(Handler { session: self.me.clone(), epoch });
         let conn = AcpConnection::spawn(spec, cfg.timeouts.conn_limits(), handler)?;
-        self.with_core(|core, _| core.conn = Some(conn.clone()));
+        // Stored under the lock only while this start is still the live one: a close() in the
+        // meantime has already run, so nobody would ever kill this adapter.
+        let stored = self.with_core(|core, _| {
+            if core.closed || core.state.epoch() != epoch {
+                return false;
+            }
+            core.conn = Some(conn.clone());
+            true
+        });
+        if !stored {
+            conn.kill();
+            return Err(AcpError::SessionClosed);
+        }
 
-        let init = conn.request("initialize", handshake::initialize_params("potato-workspace", env!("CARGO_PKG_VERSION")), cfg.timeouts.request())?;
+        let init = conn.request("initialize", handshake::initialize_params("potato-workspace", crate::app_lifecycle::app_version()), cfg.timeouts.request())?;
         let caps = handshake::parse_initialize(&init)?;
         self.with_core(|core, _| core.caps = Some(caps.clone()));
 
         let (session_id, kind, info) = self.open_session(&conn, &caps, resume_id)?;
 
         let reapply = self.with_core(|core, ev| {
-            if core.state.epoch() != epoch {
+            if core.closed || core.state.epoch() != epoch {
                 return None;
             }
             core.state.on_ready(&session_id, &info, matches!(kind, StartKind::Resumed | StartKind::Loaded));
@@ -535,9 +556,12 @@ impl AcpSession {
             ev.push(SessionEvent::Started { how: kind, caps: Box::new(caps.clone()) });
             Some(core.desired_config.clone())
         });
-        if let Some(desired) = reapply {
-            self.reapply_config(&conn, &session_id, &desired);
-        }
+        let Some(desired) = reapply else {
+            // Closed (or replaced) while the handshake ran: the adapter must not outlive that.
+            conn.kill();
+            return Err(AcpError::SessionClosed);
+        };
+        self.reapply_config(&conn, &session_id, &desired);
         Ok(kind)
     }
 
@@ -1009,6 +1033,9 @@ impl AcpSession {
     pub fn close(&self) {
         let conn = self.with_core(|core, ev| {
             core.closed = true;
+            // Moves the epoch on so a start that is still in flight (its handler, its handshake)
+            // sees it is stale and tears its own adapter down instead of storing it.
+            core.state.begin_epoch(true);
             if let Some(turn) = core.turn.take() {
                 let _ = turn;
                 let summary = core.state.on_turn_end(TurnOutcome::Failed { message: "the session was closed".into(), code: None });
@@ -1301,4 +1328,82 @@ fn auth_required(caps: &AgentCaps, _cause: AcpError) -> AcpError {
 #[cfg(test)]
 pub(super) fn restore_order_for_tests(preference: ResumePreference, caps: &AgentCaps) -> Vec<&'static str> {
     restore_order(preference, caps).into_iter().map(|r| if r == Restore::Resume { "resume" } else { "load" }).collect()
+}
+
+#[cfg(test)]
+mod close_race_tests {
+    use super::*;
+    use crate::acp::config::HostEnv;
+    use crate::acp::state::ExitKind;
+    use std::path::PathBuf;
+
+    struct Host {
+        root: PathBuf,
+    }
+
+    impl HostEnv for Host {
+        fn var(&self, name: &str) -> Option<std::ffi::OsString> {
+            std::env::var_os(name)
+        }
+        fn which(&self, _: &str) -> Option<PathBuf> {
+            None
+        }
+        fn adapters_dir(&self) -> PathBuf {
+            self.root.join("adapters")
+        }
+        fn homes_dir(&self) -> PathBuf {
+            self.root.join("homes")
+        }
+    }
+
+    fn session_for(opts: &str, key: &str) -> (Arc<AcpSession>, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("pm-acp-close-race-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = crate::acp::fake_agent::agent_config(opts, &dir.join("store"));
+        let host: Arc<dyn HostEnv> = Arc::new(Host { root: dir.clone() });
+        let session = AcpSession::new(Arc::new(cfg), host, SessionParams { key: key.into(), cwd: dir.clone(), resume_session_id: None });
+        (session, dir)
+    }
+
+    /// A close() that lands while the adapter is still being started must leave no adapter behind
+    /// and must not turn the session's Closed exit into a start failure.
+    #[test]
+    fn closing_during_a_start_leaves_no_adapter_and_keeps_the_closed_exit() {
+        // The agent answers `initialize`, then goes deaf for 4 s: the start is parked in session/new.
+        let (session, dir) = session_for("deaf_ms=4000", "t-close-during-start");
+        let starter = {
+            let session = session.clone();
+            thread::spawn(move || session.ensure_running())
+        };
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let pid = loop {
+            if let Some(conn) = session.connection() {
+                break conn.pid();
+            }
+            assert!(Instant::now() < deadline, "the adapter never started");
+            thread::sleep(Duration::from_millis(10));
+        };
+        thread::sleep(Duration::from_millis(500));
+        session.close();
+        let outcome = starter.join().expect("starter thread");
+        assert!(outcome.is_err(), "a start that was closed must not report success");
+        assert!(session.connection().is_none(), "no connection may be kept after close");
+        let exit = session.snapshot().exit.expect("an exit is recorded");
+        assert_eq!(exit.kind, ExitKind::Closed, "the start failure must not overwrite Closed");
+        let gone = Instant::now() + Duration::from_secs(5);
+        while pid != 0 && crate::proc_util::pid_alive(pid) && Instant::now() < gone {
+            thread::sleep(Duration::from_millis(25));
+        }
+        assert!(pid == 0 || !crate::proc_util::pid_alive(pid), "the adapter process must be gone");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_closed_session_refuses_to_start_again() {
+        let (session, dir) = session_for("", "t-closed");
+        session.close();
+        assert!(matches!(session.ensure_running(), Err(AcpError::SessionClosed)));
+        assert!(session.connection().is_none());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

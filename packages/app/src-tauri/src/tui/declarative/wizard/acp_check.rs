@@ -66,7 +66,7 @@ pub fn initialize_line() -> String {
         "params": {
             "protocolVersion": 1,
             "clientCapabilities": {},
-            "clientInfo": {"name": "potato-workspace", "title": "Potato Workspace", "version": env!("CARGO_PKG_VERSION")},
+            "clientInfo": {"name": "potato-workspace", "title": "Potato Workspace", "version": crate::app_lifecycle::app_version()},
         },
     });
     format!("{request}\n")

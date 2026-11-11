@@ -9,20 +9,64 @@ export interface UpdateOffer {
   notes: string | null;
 }
 
+/** Who is working (or waiting for you) now. Chats come back after the restart; terminal agents do not. */
+export interface UpdateBusyInfo {
+  agents: string[];
+  chats: string[];
+  terminals: string[];
+}
+
+/** How far the download is. `total` is null when the server did not say. */
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+}
+
 export interface UpdateTransport {
   /** Reads the release's latest.json. Rejects with a plain sentence (no network, nothing found). */
   check(): Promise<UpdateOffer | null>;
-  /** Names of the agents that are working now. */
+  /** Names of the agents that are working or waiting for you now. */
   busy(): Promise<string[]>;
-  /** Downloads, checks the signature, stops the agents cleanly, installs. Rejects with a plain sentence. */
+  /** Same, split into chats and terminals. Absent in older transports (then `busy` is used). */
+  busyInfo?(): Promise<UpdateBusyInfo>;
+  /**
+   * Downloads and checks the signature. If an agent is working it then rejects with `UPDATE_RUNNING` and keeps the
+   * download; with `confirmRunning` it stops the agents cleanly and installs. Rejects with a plain sentence.
+   */
   install(confirmRunning: boolean): Promise<void>;
+  /** Download progress while `install` runs. Resolves with the way to stop listening. */
+  onProgress?(callback: (progress: UpdateProgress) => void): Promise<() => void>;
+  /** After `UPDATE_STOPPED`: brings the stopped chats back. Terminal agents are not reopened. */
+  reopenChats?(): Promise<void>;
 }
 
 export const tauriUpdateTransport: UpdateTransport = {
   check: () => invoke<UpdateOffer | null>('app_update_check'),
   busy: async () => (await invoke<{ agents: string[] }>('app_update_busy')).agents,
+  busyInfo: async () => {
+    const info = await invoke<Partial<UpdateBusyInfo>>('app_update_busy');
+    return { agents: info.agents ?? [], chats: info.chats ?? [], terminals: info.terminals ?? [] };
+  },
   install: (confirmRunning) => invoke<void>('app_update_install', { confirmRunning }),
+  onProgress: async (callback) => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen<{ downloaded: number; total: number | null }>('app-update-progress', (event) => callback(event.payload));
+  },
+  reopenChats: () => invoke<void>('app_update_install', { confirmRunning: false, reopenChats: true }),
 };
+
+/** The code at the start of a backend error ("UPDATE_RUNNING: ..."), or null for a plain sentence. */
+export function updateErrorCode(error: unknown): 'UPDATE_RUNNING' | 'UPDATE_STOPPED' | null {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  const match = /^(UPDATE_RUNNING|UPDATE_STOPPED):/.exec(raw.trim());
+  return match ? (match[1] as 'UPDATE_RUNNING' | 'UPDATE_STOPPED') : null;
+}
+
+/** Whole percent for a progress reading, or null when the total is not known. */
+export function progressPercent(progress: UpdateProgress): number | null {
+  if (!progress.total || progress.total <= 0) return null;
+  return Math.max(0, Math.min(100, Math.floor((progress.downloaded * 100) / progress.total)));
+}
 
 export function normalizeVersion(version: string): string {
   return version.trim().replace(/^v/i, '');
@@ -60,8 +104,17 @@ export function plainUpdateError(error: unknown): string {
   return text;
 }
 
-/** The sentence when an agent is working: the person is told before anything starts. */
-export function runningJobWarning(agents: string[]): string {
+/**
+ * The sentence when an agent is working or waiting for you: it says which agents stop, and that chats come back after
+ * the restart while terminal agents do not. Without the split (an older backend) it says only that they stop.
+ */
+export function runningJobWarning(agents: string[], split?: { chats: string[]; terminals: string[] }): string {
   const who = agents.length === 1 ? 'An agent is' : `${agents.length} agents are`;
-  return `${who} working. Updating stops it for a moment; Potato Workspace restarts after the update.`;
+  const names = agents.length > 0 ? ` (${agents.join(', ')})` : '';
+  const lead = `${who} still working or waiting for you${names}. Restarting stops ${agents.length === 1 ? 'it' : 'them'}.`;
+  if (!split) return lead;
+  const parts = [lead];
+  if (split.chats.length > 0) parts.push(`Chats are saved and come back after the restart: ${split.chats.join(', ')}.`);
+  if (split.terminals.length > 0) parts.push(`Terminal agents stop for good and are not reopened: ${split.terminals.join(', ')}.`);
+  return parts.join(' ');
 }

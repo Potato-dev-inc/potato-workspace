@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { setKeybindings } from '../../lib/shortcuts';
 import {
   clampSplitRatio,
   homeView,
@@ -87,6 +88,21 @@ describe('split view: Ctrl+\\ shortcut', () => {
     expect(isSplitShortcut(press({ shiftKey: true }))).toBe(false);
     expect(isSplitShortcut(press({ altKey: true }))).toBe(false);
     expect(isSplitShortcut(press({ metaKey: true }))).toBe(false);
+  });
+
+  it('is Cmd and backslash on a Mac, and Ctrl+backslash stays the terminal key', () => {
+    expect(isSplitShortcut(press({ ctrlKey: false, metaKey: true }), true)).toBe(true);
+    expect(isSplitShortcut(press({}), true)).toBe(false);
+    expect(isSplitShortcut(press({ ctrlKey: true, metaKey: true }), true)).toBe(false);
+  });
+
+  it('follows the keys the person chose, and is off when they turned it off', () => {
+    setKeybindings({ split: 'Mod+Alt+S' });
+    expect(isSplitShortcut(press({}))).toBe(false);
+    expect(isSplitShortcut(press({ key: 's', altKey: true }))).toBe(true);
+    setKeybindings({ split: 'none' });
+    expect(isSplitShortcut(press({}))).toBe(false);
+    setKeybindings({});
   });
 });
 

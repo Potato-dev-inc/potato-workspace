@@ -14,7 +14,11 @@
 //! - [`store`]: drafts, cards, queued updates, the replay guard and gap counters;
 //! - [`actions`], [`merge_green`]: what a click does in git and on GitHub, with the safety rules;
 //! - [`mcp`]: the agent tools (`team_roster`, `team_events`, `team_wait`, `team_notify`): read-only, and drafts only;
-//! - [`service`] / [`commands`] / [`phone`]: the live wiring, the cockpit commands, the phone route.
+//! - [`service`] / [`commands`] / [`phone`]: the live wiring, the cockpit commands, the phone route;
+//! - War Room (multiplayer step 2): `pr_opened`, `pushed` and `ci_failed` for the default branch, from
+//!   my own pushes at once (`service`) and from `gh` polls (`sources::github`), deduped by
+//!   `event::war_room_id`; a red default branch is the Inbox banner, claimed with `ci_claimed`;
+//! - [`relay_deploy`]: "Create team relay", the bundled relay Worker uploaded to the person's own Cloudflare account.
 //!
 //! Boundaries: team traffic never uses the bridge or device pairing (plan §0); a teammate's event
 //! is untrusted data that can only become a card, and only after its signature, its sender's place
@@ -36,6 +40,7 @@ pub mod membership;
 pub mod merge_green;
 pub mod phone;
 pub mod project_key;
+pub mod relay_deploy;
 pub mod roster;
 pub mod secure;
 pub mod service;
@@ -50,5 +55,7 @@ mod tests_v1;
 mod tests_hardening;
 #[cfg(test)]
 mod tests_mcp;
+#[cfg(test)]
+mod tests_war_room;
 
 pub use service::init;

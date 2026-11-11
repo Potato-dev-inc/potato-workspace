@@ -19,12 +19,24 @@ pub struct AppInstallInfo {
     pub data_dir: String,
 }
 
+/// The shipped app version. It lives in `tauri.conf.json` (what the installer and updater use);
+/// `CARGO_PKG_VERSION` is a stale crate number. Read from the embedded config so it needs no app handle.
+pub fn app_version() -> &'static str {
+    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VERSION.get_or_init(|| {
+        serde_json::from_str::<serde_json::Value>(include_str!("../tauri.conf.json"))
+            .ok()
+            .and_then(|v| v.get("version").and_then(|v| v.as_str()).map(str::to_string))
+            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+    })
+}
+
 #[tauri::command]
 pub fn get_app_install_info() -> AppInstallInfo {
     let platform = std::env::consts::OS.to_string();
     let is_packaged = is_packaged_install();
     AppInstallInfo {
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        version: app_version().to_string(),
         is_packaged,
         platform: platform.clone(),
         uninstall_available: uninstall_supported(&platform, is_packaged),
@@ -35,11 +47,33 @@ pub fn get_app_install_info() -> AppInstallInfo {
 
 #[tauri::command]
 pub fn open_external_url(url: String) -> Result<(), String> {
+    let checked = validate_external_url(&url)?;
+    open_url(&checked)
+}
+
+/// Accept only a plain http(s) URL with a host: no whitespace or control characters, and none of
+/// the characters a shell or command line treats specially (quotes, `<>`, `^`, `|`, backtick, backslash).
+/// `&` and `%` stay legal (query strings, percent-encoding); the launch never goes through a shell.
+pub(crate) fn validate_external_url(url: &str) -> Result<String, String> {
     let trimmed = url.trim();
-    if !(trimmed.starts_with("https://") || trimmed.starts_with("http://")) {
-        return Err("only http(s) URLs are allowed".into());
+    let lower = trimmed.to_ascii_lowercase();
+    let rest = lower
+        .strip_prefix("https://")
+        .or_else(|| lower.strip_prefix("http://"))
+        .ok_or("only http(s) URLs are allowed")?;
+    if rest.is_empty() || rest.starts_with('/') || rest.starts_with('?') || rest.starts_with('#') {
+        return Err("the URL has no host".into());
     }
-    open_url(trimmed)
+    if trimmed.len() > 4096 {
+        return Err("the URL is too long".into());
+    }
+    if trimmed
+        .chars()
+        .any(|c| c.is_control() || c.is_whitespace() || !c.is_ascii() || "\"'<>^|`\\{}".contains(c))
+    {
+        return Err("the URL contains characters that are not allowed".into());
+    }
+    Ok(trimmed.to_string())
 }
 
 /// Whether "Start Potato Workspace when I sign in" is on. The OS entry is the source of truth.
@@ -141,8 +175,10 @@ fn uninstall_instructions(platform: &str) -> String {
 fn open_url(url: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        crate::proc_util::hidden_command("cmd.exe")
-            .args(["/C", "start", "", url])
+        // No shell: rundll32 hands the URL to the default browser as one argument.
+        crate::proc_util::hidden_command("rundll32.exe")
+            .arg("url.dll,FileProtocolHandler")
+            .arg(url)
             .spawn()
             .map_err(|err| format!("could not open URL: {err}"))?;
         return Ok(());
@@ -219,6 +255,37 @@ fn default_macos_app_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn external_url_accepts_plain_http_and_query_ampersands() {
+        assert!(validate_external_url("https://example.com/a?b=1&c=2%20x#f").is_ok());
+        assert!(validate_external_url("  HTTP://localhost:3000/x ").is_ok());
+    }
+
+    #[test]
+    fn external_url_rejects_injection_and_other_schemes() {
+        for bad in [
+            "https://a.com/\"&calc",
+            "https://a.com/ x",
+            "https://a.com/|calc",
+            "https://a.com/^x",
+            "https://a.com/\"x",
+            "https://a.com/\nx",
+            "https://a.com/`x",
+            "file:///C:/x",
+            "javascript:alert(1)",
+            "https://",
+            "https:///x",
+        ] {
+            assert!(validate_external_url(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn app_version_comes_from_tauri_conf() {
+        assert_ne!(app_version(), "0.2.2");
+        assert_eq!(app_version().split('.').count(), 3);
+    }
 
     #[test]
     fn packaged_install_detects_target_folder() {

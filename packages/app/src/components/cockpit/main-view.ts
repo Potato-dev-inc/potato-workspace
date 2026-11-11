@@ -1,6 +1,7 @@
 // The cockpit's main area shows exactly one thing. `CockpitApp` keeps that as ONE value, and every
 // click is a transition on it, so "the last click wins" holds by construction (no stack of
 // booleans whose render order decides).
+import { isMacPlatform, matchesAction } from '../../lib/shortcuts';
 
 export type MainView = 'inbox' | 'pane' | 'doctor' | 'memory' | 'plans' | 'morning' | 'scores' | 'review' | 'spawn' | 'settings' | 'companion' | 'store' | 'newagent' | 'spaces';
 
@@ -68,9 +69,9 @@ export function splitStillOn(split: string | null, opts: { selectedId: string | 
   return splitFits(opts.width) && opts.selectedId !== null && split !== opts.selectedId && opts.hasPane(split);
 }
 
-/** Ctrl+\ with no other modifier: the split view toggles. */
-export function isSplitShortcut(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): boolean {
-  return e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key === '\\';
+/** The split shortcut (Ctrl+\ by default, Cmd+\ on a Mac, or the person's own choice): the split view toggles. */
+export function isSplitShortcut(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>, mac: boolean = isMacPlatform()): boolean {
+  return matchesAction(e, 'split', mac);
 }
 
 // Split view sizing. The ratio is the left side's share of the room both sides share (the window minus the divider).
@@ -107,20 +108,12 @@ export function ratioFromLeftPx(leftPx: number, span: number): number {
   return clampSplitRatio(leftPx / span, span);
 }
 
-/** Whether a platform string is macOS (Cmd is the main modifier there, Ctrl elsewhere). */
-export function isMacPlatform(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
-}
-
 /**
- * Ctrl+Alt+Left / Ctrl+Alt+Right (Cmd+Alt on a Mac) move the focus to the left or right side. Any other
- * modifier, or any other key, is not ours: null. The caller only asks while the split is open.
+ * Ctrl+Alt+Left / Ctrl+Alt+Right (Cmd+Option on a Mac, or the person's own keys) move the focus to the left or
+ * right side. Any other modifier, or any other key, is not ours: null. The caller only asks while the split is open.
  */
 export function splitFocusKey(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>, mac: boolean): SplitSide | null {
-  const mainModifier = mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-  if (!mainModifier || !e.altKey || e.shiftKey) return null;
-  if (e.key === 'ArrowLeft') return 'left';
-  if (e.key === 'ArrowRight') return 'right';
+  if (matchesAction(e, 'split-focus-left', mac)) return 'left';
+  if (matchesAction(e, 'split-focus-right', mac)) return 'right';
   return null;
 }

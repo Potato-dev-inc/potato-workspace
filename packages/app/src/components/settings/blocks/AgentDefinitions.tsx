@@ -37,6 +37,7 @@ import {
   listAgentRegistry,
 } from '../../../lib/agentRegistry';
 import type { FinishResult, WizardApi } from '../../../lib/agentWizard';
+import { explainError } from '../../cockpit/error-sentences';
 import { SettingBlock } from '../settings-ui';
 import { AgentWizard } from './AgentWizard';
 import { RunModeControl } from './AgentRunMode';
@@ -61,6 +62,18 @@ interface Reviewing {
 
 /** What the "Delete for good" sheet is about: one removed agent (Dismiss), or every entry (Clear all). */
 type Purging = { kind: 'one'; item: RemovedAgent } | { kind: 'all'; total: number };
+
+/** An error as a sentence a person can read: a known run code gets its sentence, a code bug never shows its text. */
+export function shownError(e: unknown): string {
+  const text = plainError(e);
+  const code = /^([A-Z][A-Z0-9_]+):/.exec(errorMessage(e))?.[1];
+  const known = explainError(code, 'The agent');
+  if (known) return `${known.title}. ${known.sentence}`;
+  if (/cannot read propert|is not a function|is not defined|undefined|null/i.test(text)) {
+    return 'That did not load. Your agents are safe. Try again.';
+  }
+  return text;
+}
 
 export function AgentDefinitions({
   api = tauriAgentDefinitionsApi,
@@ -120,10 +133,11 @@ export function AgentDefinitions({
     if (!api.removedList) return;
     try {
       const next = await api.removedList();
-      setRemoved(next.removed);
-      setRemovedTotal(next.total ?? next.removed.length);
+      const list = next?.removed ?? [];
+      setRemoved(list);
+      setRemovedTotal(next?.total ?? list.length);
     } catch (e) {
-      setError(plainError(e));
+      setError(shownError(e));
     }
   }, [api]);
 
@@ -257,7 +271,7 @@ export function AgentDefinitions({
     try {
       await api.approve(reviewing.row.file, reviewing.row.fingerprint);
     } catch (e) {
-      const message = plainError(e);
+      const message = shownError(e);
       setReviewing((r) => (r ? { ...r, error: message || 'Could not approve this agent. Try again.' } : r));
       setBusy(false);
       return;
@@ -268,7 +282,7 @@ export function AgentDefinitions({
       await handleDefinitionsChanged();
       if (id) setNote(agentReadyMessage(await listAgentRegistry(), id));
     } catch (e) {
-      setError(plainError(e));
+      setError(shownError(e));
     } finally {
       setBusy(false);
     }
@@ -316,7 +330,7 @@ export function AgentDefinitions({
         setUndo({ removedId: done.removed_id, label: done.label || rowName(row) });
       } catch (e) {
         setRemoving(null);
-        throw new Error(plainError(e));
+        throw new Error(shownError(e));
       }
       apply(await api.list());
       await loadRemoved();
@@ -331,7 +345,7 @@ export function AgentDefinitions({
         setUndo(null);
         setNote(restoreMessage({ ...done, label: done.label || fallbackLabel }));
       } catch (e) {
-        throw new Error(plainError(e));
+        throw new Error(shownError(e));
       }
       apply(await api.list());
       await loadRemoved();
@@ -359,7 +373,7 @@ export function AgentDefinitions({
         setUndo((current) => (target.kind === 'all' || current?.removedId === target.item.removed_id ? null : current));
       } catch (e) {
         setPurging(null);
-        throw new Error(plainError(e));
+        throw new Error(shownError(e));
       }
       await loadRemoved();
     });

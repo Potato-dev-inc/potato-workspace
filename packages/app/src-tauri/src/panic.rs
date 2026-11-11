@@ -162,6 +162,9 @@ pub fn stop_all_and_show(app: &AppHandle) -> StopReport {
     report
 }
 
+/// The default combo on Windows and Linux. Which one is used now (a person's own choice, or the Mac
+/// default) is decided in `global_shortcuts`.
+#[allow(dead_code)]
 pub const SHORTCUT: &str = "Ctrl+Alt+Shift+P";
 
 /// Register (or unregister) the global shortcut according to the saved setting. Off by default.
@@ -170,24 +173,19 @@ pub fn init_shortcut(app: &AppHandle) {
 }
 
 pub fn apply_shortcut(app: &AppHandle, enabled: bool) {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-    let shortcuts = app.global_shortcut();
-    let _ = shortcuts.unregister(SHORTCUT);
-    if !enabled {
-        return;
-    }
-    let handle = app.clone();
-    let result = shortcuts.on_shortcut(SHORTCUT, move |_app, _shortcut, event| {
-        if event.state == ShortcutState::Pressed {
-            let handle = handle.clone();
-            std::thread::spawn(move || {
-                stop_all_and_show(&handle);
-            });
-        }
-    });
-    if let Err(e) = result {
+    if let Err(e) = apply_shortcut_result(app, enabled) {
         tracing::warn!(error = %e, "panic shortcut could not be registered");
     }
+}
+
+/// Like `apply_shortcut`, and says why when the person's combo could not be registered.
+pub fn apply_shortcut_result(app: &AppHandle, enabled: bool) -> Result<(), String> {
+    crate::global_shortcuts::apply(app, "stop-all", enabled, None, |handle| {
+        let handle = handle.clone();
+        std::thread::spawn(move || {
+            stop_all_and_show(&handle);
+        });
+    })
 }
 
 #[cfg(test)]

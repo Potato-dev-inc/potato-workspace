@@ -108,20 +108,20 @@ describe('runAllChecks', () => {
 
 describe('Copy report redaction', () => {
   it('removes a folder path with a user name and a key-looking string', () => {
-    const out = redactReport('Failed at C:\\Users\\renee\\Desktop\\notes.txt with sk-abcdef1234567890XYZ');
-    expect(out).not.toContain('renee');
+    const out = redactReport('Failed at C:\\Users\\someone\\Desktop\\notes.txt with sk-abcdef1234567890XYZ');
+    expect(out).not.toContain('someone');
     expect(out).not.toContain('sk-abcdef');
     expect(out).toContain('[key removed]');
   });
 
   it('the full report has no user name or key from the rows', () => {
     const report = buildReport(
-      [{ id: 'a', status: 'fail', sentence: 'Problem in C:\\Users\\renee\\AppData\\app with sk-test1234567890abc', fix: null }],
+      [{ id: 'a', status: 'fail', sentence: 'Problem in C:\\Users\\someone\\AppData\\app with sk-test1234567890abc', fix: null }],
       '1.2.3',
       '2026-11-02 10:00',
     );
     expect(report).toContain('[PROBLEM]');
-    expect(report).not.toContain('renee');
+    expect(report).not.toContain('someone');
     expect(report).not.toContain('sk-test');
   });
 });

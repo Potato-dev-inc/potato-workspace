@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// "Add chat (ACP)": detect -> best guess -> confirm (no typing) -> set with confirmed true; no guess / error / timeout -> form; a refusal shows the backend's text; the
+// "Add chat": detect -> best guess -> confirm (no typing) -> set with confirmed true; no guess / error / timeout -> form; a refusal shows the backend's text; the
 // Settings rows (add / remove / reason) and the "+" menu hint (only for agents that can get a chat, Labs on).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -225,7 +225,7 @@ describe('AddChatDialog with the app resolving the best way (native, registry, b
     const overlaySet = vi.fn();
     const { onAdded } = await open({ overlayResolve, overlayDetect: vi.fn(), overlaySet, overlayInstall, overlayProgress });
     const text = q('[data-testid="add-chat-summary"]')?.textContent;
-    expect(text).toBe('Potato Workspace will download Fake Adapter 1.2.3 by Alice, Bob (MIT) from the official ACP registry and run it for chat. About 40 MB.');
+    expect(text).toBe('Potato Workspace will download Fake Adapter 1.2.3 by Alice, Bob (MIT) from the official agent registry and run it for chat. About 40 MB.');
     expect(q('[data-testid="add-chat-registry-about"]')?.textContent).toBe('An adapter that speaks ACP.');
     expect(overlayInstall).not.toHaveBeenCalled();
     await click(byText('Add chat'));
@@ -372,8 +372,8 @@ describe('AddChatDialog with the app resolving the best way (native, registry, b
 describe('overlay option helpers', () => {
   it('writes the confirm sentence with and without optional parts', () => {
     const info = registryOpt().registry!;
-    expect(registrySentence(info)).toBe('Potato Workspace will download Fake Adapter 1.2.3 by Alice, Bob (MIT) from the official ACP registry and run it for chat. About 40 MB.');
-    expect(registrySentence({ ...info, authors: [], license: '', size_hint: null })).toBe('Potato Workspace will download Fake Adapter 1.2.3 from the official ACP registry and run it for chat.');
+    expect(registrySentence(info)).toBe('Potato Workspace will download Fake Adapter 1.2.3 by Alice, Bob (MIT) from the official agent registry and run it for chat. About 40 MB.');
+    expect(registrySentence({ ...info, authors: [], license: '', size_hint: null })).toBe('Potato Workspace will download Fake Adapter 1.2.3 from the official agent registry and run it for chat.');
     expect(authorsText(['A', 'B', 'C', 'D'])).toBe('A, B, C and others');
   });
 
@@ -412,17 +412,17 @@ describe('Settings How to run rows', () => {
     const overlaySet = vi.fn(async () => row({ overlay: true }));
     await act(async () => root.render(<AgentLaneRows api={{ laneGet, laneSet: vi.fn(), overlayDetect: async () => detected, overlaySet, overlayRemove: vi.fn() }} />));
     await flush();
-    const blocked = document.querySelector<HTMLButtonElement>('[aria-label="Add chat (ACP) for Blocked"]');
+    const blocked = document.querySelector<HTMLButtonElement>('[aria-label="Add chat for Blocked"]');
     expect(blocked?.disabled).toBe(true);
     expect(document.body.textContent).toContain('It has no help text to read.');
-    await click(document.querySelector('[aria-label="Add chat (ACP) for Fake"]'));
+    await click(document.querySelector('[aria-label="Add chat for Fake"]'));
     await flush();
-    await click(byText('Add chat'));
+    await click([...q('[data-testid="add-chat-dialog"]')!.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Add chat'));
     await flush();
     expect(overlaySet).toHaveBeenCalledWith('fake', expect.anything(), true);
     expect(laneGet).toHaveBeenCalledTimes(2);
     expect(q('[data-testid="add-chat-dialog"]')).toBeNull();
-    expect(document.querySelector('[aria-label="Add chat (ACP) for Fake"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Add chat for Fake"]')).toBeNull();
   });
 
   it('Remove chat shows on every agent with a chat, asks first, and an older app removes only an added chat', async () => {

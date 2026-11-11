@@ -1381,3 +1381,30 @@
   color: var(--label-3);
   line-height: 1;
 }
+
+/* a menu row with a small "Change" beside it (the sign-in remembered for the agent) */
+.cockpit .ck-menu-split {
+  display: flex;
+  align-items: center;
+}
+.cockpit .ck-menu-split > .ck-menu-item {
+  flex: 1;
+  min-width: 0;
+}
+.cockpit .ck-menu-change {
+  flex: none;
+  margin: 0 4px 0 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--label-2);
+  cursor: pointer;
+}
+.cockpit .ck-menu-change:hover,
+.cockpit .ck-menu-change:focus-visible {
+  background: var(--fill-active);
+  color: var(--label);
+}

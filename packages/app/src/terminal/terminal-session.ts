@@ -29,6 +29,9 @@ import { ReprintWipe } from './reprint-wipe';
 import type { PaneDataSubscriber, TerminalRenderMode, TerminalSessionOptions } from './types';
 import '@xterm/xterm/css/xterm.css';
 
+/** Dispatched on the terminal host element to scroll to the newest output and follow it again. */
+export const JUMP_TO_LATEST_EVENT = 'pm-terminal-jump-latest';
+
 /** Rows shown under the cursor row on a phone mirror (e.g. Claude's status line). */
 const CURSOR_ROWS_BELOW = 2;
 
@@ -64,6 +67,7 @@ export class TerminalSession {
   private muteOnData = false;
   private readonly mirrorEchoFilter = new MirrorEchoFilter();
   private focusCleanup: (() => void) | null = null;
+  private jumpCleanup: (() => void) | null = null;
   private pasteCleanup: (() => void) | null = null;
   private clipboardShortcutCleanup: (() => void) | null = null;
   private openFrame: number | null = null;
@@ -506,6 +510,7 @@ export class TerminalSession {
         convertEol: false,
         allowProposedApi: true,
         allowTransparency: false,
+        macOptionIsMeta: true, // on a Mac, Option works as Alt/Meta (word moves, Alt shortcuts in agents)
         scrollOnUserInput: !mobileMirror,
         disableStdin: false,
         windowsPty: isWindowsRuntime()
@@ -593,7 +598,7 @@ export class TerminalSession {
           return;
         }
         terminal.write(data, () => {
-          this.scrollToCursor();
+          this.followOutput();
           this.scheduleWriteFollowUp();
         });
       };
@@ -611,6 +616,7 @@ export class TerminalSession {
       this.installResizeObservers(container);
       this.installDriftWatchers();
       this.installFocusHandlers(container);
+      this.installJumpListener(container);
       this.installThemeObserver(terminal);
       if (this.syncPTYResize) {
         this.fitAndNotify();
@@ -689,6 +695,9 @@ export class TerminalSession {
 
     this.focusCleanup?.();
     this.focusCleanup = null;
+
+    this.jumpCleanup?.();
+    this.jumpCleanup = null;
 
     this.pasteCleanup?.();
     this.pasteCleanup = null;
@@ -809,6 +818,13 @@ export class TerminalSession {
     };
   }
 
+  /** The page's "Jump to latest" pill asks through an event on the host element. */
+  private installJumpListener(container: HTMLElement): void {
+    const jump = () => this.scrollToLatest();
+    container.addEventListener(JUMP_TO_LATEST_EVENT, jump);
+    this.jumpCleanup = () => container.removeEventListener(JUMP_TO_LATEST_EVENT, jump);
+  }
+
   private installFocusHandlers(container: HTMLElement): void {
     if (this.mobileInputGuard) {
       return;
@@ -900,6 +916,20 @@ export class TerminalSession {
     } finally {
       this.muteOnData = false;
     }
+  }
+
+  /**
+   * New output arrived. Follow it only while the view is at the bottom: a reader who scrolled up to read history
+   * stays where they are while an agent keeps printing (typing, paste and "Jump to latest" still go to the bottom).
+   */
+  private followOutput(): void {
+    if (this.isScrolledUp()) return;
+    this.scrollToCursor();
+  }
+
+  /** "Jump to latest": back to the newest output, and follow it again. */
+  scrollToLatest(): void {
+    this.scrollToCursor();
   }
 
   private scrollToCursor(): void {

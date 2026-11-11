@@ -117,6 +117,41 @@ fn removing_never_deletes_the_home_unless_asked_and_only_app_owned_ones() {
 }
 
 #[test]
+fn custom_homes_with_dotdot_or_overlapping_folders_are_refused_and_never_deleted() {
+    let (store, root) = temp_store("overlap");
+    let first = store.add("claude", "first", None).unwrap();
+    std::fs::write(Path::new(&first.home).join("keep.txt"), "x").unwrap();
+    // `..` is refused outright.
+    let sneaky = format!("{}/accounts/../accounts/{}", root.display(), first.id);
+    assert!(store.add("claude", "dots", Some(&sneaky)).is_err());
+    // Another account's folder, the app's accounts folder, and the app data folder are all refused.
+    assert!(store.add("claude", "dup", Some(&first.home)).is_err());
+    assert!(store.add("claude", "root", Some(root.join("accounts").to_str().unwrap())).is_err());
+    assert!(store.add("claude", "data", Some(root.to_str().unwrap())).is_err());
+    assert!(store.add("claude", "inside", Some(root.join("accounts").join("x").to_str().unwrap())).is_err());
+    assert!(store.add("claude", "parent", Some(root.parent().unwrap().to_str().unwrap())).is_err());
+    assert!(Path::new(&first.home).join("keep.txt").is_file());
+    // A hand-edited accounts.json that points an account at the app data folder deletes nothing.
+    let mut file = store.read();
+    file.accounts.push(Account { id: "acc_evil".into(), agent_id: "claude".into(), label: "evil".into(), home: root.join("accounts").join("..").to_string_lossy().into_owned() });
+    file.accounts.push(Account { id: "acc_other".into(), agent_id: "claude".into(), label: "other".into(), home: first.home.clone() });
+    store.write(&file).unwrap();
+    assert_eq!(store.remove("acc_evil", true), Ok(false));
+    assert_eq!(store.remove("acc_other", true), Ok(false), "a home that is not <accounts>/<its own id> is not app-created");
+    assert!(Path::new(&first.home).join("keep.txt").is_file());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_leading_tilde_in_a_custom_home_is_expanded_first() {
+    let (store, root) = temp_store("tilde");
+    // "~" alone would be the real home folder; it must be treated as an absolute path, not "relative".
+    let err = store.add("claude", "tilde", Some("~/pm-accounts-test-never-created-dir/..")).unwrap_err();
+    assert!(!err.contains("absolute"), "{err}");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn a_run_naming_an_unsupported_agent_or_unknown_account_is_refused_before_spawning() {
     assert!(validate_for_run("opencode_native", "acc_x").unwrap_err().contains("does not support accounts"));
     assert!(validate_for_run("claude", "acc_does_not_exist").unwrap_err().contains("unknown account"));

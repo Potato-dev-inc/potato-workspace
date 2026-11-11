@@ -310,7 +310,7 @@ export function AddChatDialog({
           <input type="radio" name="add-chat-option" checked={sel === i} disabled={busy} onChange={() => setSel(i)} className="mt-1" />
           <span>
             <span className="block">
-              {o.kind === 'native' ? 'Use the program already on this computer' : o.kind === 'registry' ? 'Download a ready-made one from the official ACP registry' : o.kind === 'terminal_chat' ? o.label : o.kind === 'adapter' ? 'Use a reviewed adapter from Potato Workspace' : 'Let Potato Workspace make one (text only)'}
+              {o.kind === 'native' ? 'Use the program already on this computer' : o.kind === 'registry' ? 'Download a ready-made one from the official agent registry' : o.kind === 'terminal_chat' ? o.label : o.kind === 'adapter' ? 'Use a reviewed adapter from Potato Workspace' : 'Let Potato Workspace make one (text only)'}
             </span>
             {o.kind === 'terminal_chat' ? (
               <span className="block text-xs text-pm-muted">

@@ -21,6 +21,44 @@ pub fn pwa_port() -> u16 {
     BOUND_PORT.get().copied().unwrap_or(PWA_PORT)
 }
 
+/// The port the PWA server is really listening on, or `None` when it has not started or its bind
+/// failed (then `pwa_port()` would name a port nothing here serves). New callers should use this.
+pub fn bound_pwa_port() -> Option<u16> {
+    BOUND_PORT.get().copied()
+}
+
+/// The largest bridge request body this server buffers for the tunnel (413 above it).
+const MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
+const MAX_HEAD_BYTES: usize = 256 * 1024;
+const READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+/// Connections served at once; more get a 503.
+const MAX_CONNECTIONS: usize = 256;
+
+static OPEN_CONNECTIONS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+struct ConnectionSlot(&'static std::sync::atomic::AtomicUsize);
+
+impl ConnectionSlot {
+    fn take(limit: usize) -> Option<Self> {
+        Self::take_from(&OPEN_CONNECTIONS, limit)
+    }
+
+    fn take_from(counter: &'static std::sync::atomic::AtomicUsize, limit: usize) -> Option<Self> {
+        use std::sync::atomic::Ordering;
+        if counter.fetch_add(1, Ordering::SeqCst) >= limit {
+            counter.fetch_sub(1, Ordering::SeqCst);
+            return None;
+        }
+        Some(Self(counter))
+    }
+}
+
+impl Drop for ConnectionSlot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 static BOUND_PORT: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
 
 #[derive(Debug, Clone, Serialize)]
@@ -95,6 +133,12 @@ fn handle_connection(
     bridge_port_file: &Path,
     dev_info: &DevInfoSupplier,
 ) -> Result<(), String> {
+    let Some(_slot) = ConnectionSlot::take(MAX_CONNECTIONS) else {
+        return write_text(&mut stream, 503, "Too many connections");
+    };
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(10)));
+    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(30)));
+    let started = std::time::Instant::now();
     let mut buf = Vec::new();
     let mut chunk = [0_u8; 4096];
     let header_end;
@@ -110,8 +154,11 @@ fn handle_connection(
             header_end = pos;
             break;
         }
-        if buf.len() > 1024 * 1024 {
+        if buf.len() > MAX_HEAD_BYTES {
             return Err("request headers too large".into());
+        }
+        if started.elapsed() > READ_DEADLINE {
+            return Err("request head took too long".into());
         }
     }
 
@@ -124,17 +171,31 @@ fn handle_connection(
     let (path, query) = split_target(target);
 
     let content_length = parse_content_length(&headers_raw);
+    let is_bridge = path == "/bridge" || path.starts_with("/bridge/");
     let body_start = header_end + 4;
-    while buf.len().saturating_sub(body_start) < content_length {
-        let n = stream
-            .read(&mut chunk)
-            .map_err(|err| format!("read body: {err}"))?;
-        if n == 0 {
-            break;
-        }
-        buf.extend_from_slice(&chunk[..n]);
+    // Only a request headed for the bridge has a body worth reading (the static files and the dev info
+    // take none), and the size is checked before a single body byte is buffered.
+    if is_bridge && content_length > MAX_BODY_BYTES && !is_websocket_upgrade(&headers_raw) {
+        return write_text(&mut stream, 413, "Payload Too Large");
     }
-    let body = &buf[body_start..body_start.saturating_add(content_length).min(buf.len())];
+    if is_bridge && !is_websocket_upgrade(&headers_raw) {
+        while buf.len().saturating_sub(body_start) < content_length {
+            if started.elapsed() > READ_DEADLINE {
+                return Err("request body took too long".into());
+            }
+            let n = stream
+                .read(&mut chunk)
+                .map_err(|err| format!("read body: {err}"))?;
+            if n == 0 {
+                break;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+        }
+    }
+    // Long-lived paths (a WebSocket tunnel, a long poll) must not be cut off by the head/body timeout.
+    let _ = stream.set_read_timeout(None);
+    let body_end = if is_bridge { body_start.saturating_add(content_length).min(buf.len()) } else { body_start.min(buf.len()) };
+    let body = &buf[body_start.min(buf.len())..body_end];
 
     if path == "/__puppet_master_dev__.json" && method == "GET" {
         let payload = dev_info();
@@ -445,12 +506,11 @@ fn split_target(target: &str) -> (&str, &str) {
 
 fn parse_content_length(headers: &str) -> usize {
     for line in headers.lines().skip(1) {
-        if let Some(value) = line
-            .strip_prefix("Content-Length:")
-            .or_else(|| line.strip_prefix("content-length:"))
-        {
-            if let Ok(n) = value.trim().parse::<usize>() {
-                return n;
+        if let Some((name, value)) = line.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("content-length") {
+                if let Ok(n) = value.trim().parse::<usize>() {
+                    return n;
+                }
             }
         }
     }
@@ -502,6 +562,8 @@ fn write_bytes(
         403 => "Forbidden",
         404 => "Not Found",
         405 => "Method Not Allowed",
+        413 => "Payload Too Large",
+        503 => "Service Unavailable",
         502 => "Bad Gateway",
         _ => "Error",
     };
@@ -631,5 +693,40 @@ mod tests {
         assert!(looks_like_asset_path("/assets/index.js"));
         assert!(looks_like_asset_path("/@vite/client"));
         assert!(!looks_like_asset_path("/pair/invite"));
+    }
+
+    #[test]
+    fn content_length_is_found_whatever_the_header_case() {
+        assert_eq!(parse_content_length("POST / HTTP/1.1\r\nCONTENT-LENGTH: 12\r\n"), 12);
+        assert_eq!(parse_content_length("POST / HTTP/1.1\r\ncontent-Length:7\r\n"), 7);
+        assert_eq!(parse_content_length("POST / HTTP/1.1\r\nHost: x\r\n"), 0);
+    }
+
+    #[test]
+    fn an_oversized_bridge_body_gets_413_before_it_is_read() {
+        let dir = std::env::temp_dir().join(format!("pm-pwa-413-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let pwa = spawn_test_server(dir.clone(), dir.join("bridge.port"));
+        let mut client = TcpStream::connect(pwa).unwrap();
+        client.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        write!(
+            client,
+            "POST /bridge/x HTTP/1.1\r\nHost: x\r\nCONTENT-LENGTH: {}\r\nConnection: close\r\n\r\n",
+            MAX_BODY_BYTES + 1
+        )
+        .unwrap();
+        let mut out = String::new();
+        let _ = client.read_to_string(&mut out);
+        assert!(out.starts_with("HTTP/1.1 413"), "{out}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn connection_slots_are_bounded_and_released() {
+        static LOCAL: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let a = ConnectionSlot::take_from(&LOCAL, 1).expect("first slot");
+        assert!(ConnectionSlot::take_from(&LOCAL, 1).is_none());
+        drop(a);
+        assert!(ConnectionSlot::take_from(&LOCAL, 1).is_some());
     }
 }

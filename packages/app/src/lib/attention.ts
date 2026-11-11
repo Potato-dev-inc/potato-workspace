@@ -38,7 +38,12 @@ export type NeedsYouKind =
    * A companion that keeps stopping (`src-tauri/src/companion`, key `companion:<id>`). Its card offers "Try again",
    * which restarts it. Counts like the Rust card (kind `setup`).
    */
-  | 'companion';
+  | 'companion'
+  /**
+   * War Room: a teammate-visible red default branch nobody has claimed yet (`src-tauri/src/team/service.rs`,
+   * key `team_ci:<card id>`). The Inbox draws it as the banner on top. Counts like the Rust item (kind `setup`).
+   */
+  | 'team_ci';
 
 export interface NeedsYouItem {
   /** Stable across renders: `<kind>:<pane or question or notice id>`. */
@@ -67,6 +72,8 @@ export interface AttentionInput {
   missions?: ReadonlyArray<{ id: string; state: string; needs?: string | null }>;
   /** Companions: one item per companion that stopped for good (the Rust store raises the same card). */
   companions?: ReadonlyArray<{ id: string; state: string }>;
+  /** War Room: the red-default-branch cards nobody claimed (`team.ts` `isRedBanner`, no claim). */
+  teamRed?: ReadonlyArray<{ id: string; receivedAtMs?: number }>;
 }
 
 const RISKS = new Set(['low', 'medium', 'high']);
@@ -115,6 +122,7 @@ export function deriveNeedsYou(input: AttentionInput): NeedsYouItem[] {
   for (const x of input.companions ?? []) {
     if (x.state === 'stopped') items.push({ id: `companion:${x.id}`, kind: 'companion' });
   }
+  for (const r of input.teamRed ?? []) items.push({ id: `team_ci:${r.id}`, kind: 'team_ci', since: r.receivedAtMs });
   return items;
 }
 

@@ -1,0 +1,30 @@
+/* Sidebar footer: text beside each icon once the window is wide enough (900px). Below that, icons only. */
+.cockpit .ck-foot-label {
+  display: none;
+}
+@media (min-width: 900px) {
+  .cockpit .ck-foot-icons {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .cockpit .ck-foot-icons .ck-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    padding: 0 8px;
+  }
+  .cockpit .ck-foot-label {
+    display: inline;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  /* The count is part of the label here ("Review · 3"), so the round badge on the icon steps aside. */
+  .cockpit .ck-foot-icons .ck-foot-review .ck-foot-badge {
+    display: none;
+  }
+  /* The spacer would force an empty line when the buttons wrap: let them flow instead. */
+  .cockpit .ck-foot-spacer {
+    flex: 0 0 0;
+  }
+}

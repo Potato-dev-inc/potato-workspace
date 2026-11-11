@@ -14,6 +14,8 @@ export interface MiniBarProps {
   onNew: () => void;
   onBack: () => void;
   onUndo: () => void;
+  /** The friendly name of an agent id (the registry's label). Absent: the id, tidied. */
+  labelOf?: (agentId: string) => string;
 }
 
 /** Last folder name of a path, either slash style. */
@@ -22,12 +24,18 @@ export function projectName(cwd: string): string {
   return parts[parts.length - 1] ?? '';
 }
 
-function agentName(id: string): string {
+export function agentName(id: string): string {
   return id ? id.charAt(0).toUpperCase() + id.slice(1).replace(/_/g, ' ') : 'Agent';
 }
 
+/** Agents that wait on the person (a question, an error) first; the rest keep their order. */
+export function needsYouFirst(panes: PaneInfo[]): PaneInfo[] {
+  const needs = (p: PaneInfo) => p.status === 'waiting_input' || p.status === 'error';
+  return [...panes.filter(needs), ...panes.filter((p) => !needs(p))];
+}
+
 /** The strip that stays on screen in Individual mode: a chip per agent, New, Back, and the 8 s Undo. */
-export function MiniBar({ panes, toast, onFocusPane, onClosePane, onWantWidth, onNew, onBack, onUndo }: MiniBarProps) {
+export function MiniBar({ panes, toast, onFocusPane, onClosePane, onWantWidth, onNew, onBack, onUndo, labelOf = agentName }: MiniBarProps) {
   const barRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ start: false, end: false });
@@ -92,15 +100,19 @@ export function MiniBar({ panes, toast, onFocusPane, onClosePane, onWantWidth, o
         <>
           <div className={`mb-chips-wrap${fade.start ? ' mb-fade-start' : ''}${fade.end ? ' mb-fade-end' : ''}`}>
             <div className="mb-chips" ref={stripRef} onWheel={onWheel} onScroll={measure}>
-              {panes.map((p) => {
+              {needsYouFirst(panes).map((p) => {
                 const proj = projectName(p.cwd);
-                const name = agentName(p.agent_type);
+                const name = labelOf(p.agent_type);
+                const needs = p.status === 'waiting_input' || p.status === 'error';
                 return (
                   <span key={p.id} className="mb-chip-slot" onKeyDown={(e) => onChipKey(e, p.id)}>
                     <button
                       type="button"
                       className="mb-chip"
-                      title={`${name}: ${p.status.replace('_', ' ')}${p.lane === 'acp' ? ' · Chat' : ''}`}
+                      // The whole name and folder, for when the chip is cut short.
+                      title={`${name}${proj ? ` · ${proj}` : ''}: ${needs ? 'needs you' : p.status.replace('_', ' ')}${p.lane === 'acp' ? ' · Chat' : ''}`}
+                      data-needs={needs ? '' : undefined}
+                      onFocus={(e) => e.currentTarget.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })}
                       onClick={() => onFocusPane(p.id)}
                     >
                       <span className={`mb-dot mb-dot--${p.status}`} aria-hidden="true" />

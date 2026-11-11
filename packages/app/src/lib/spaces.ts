@@ -101,7 +101,7 @@ export function spacesErrorText(e: unknown): string {
 export function joinStateText(j: SpaceJoining): string {
   switch (j.state) {
     case 'connecting': return "Reaching the owner's computer…";
-    case 'waiting': return 'Waiting for the owner to let you in. Keep Puppet Master open. This can take up to 30 minutes.';
+    case 'waiting': return 'Waiting for the owner to let you in. Keep Potato Workspace open. This can take up to 30 minutes.';
     case 'joined': return `You're in ${j.spaceName}.`;
     case 'wrongWords': return `Those words don't match. ${j.triesLeft} ${j.triesLeft === 1 ? 'try' : 'tries'} left.`;
     case 'gone': return 'This invite no longer works. Ask for a new one.';
@@ -110,7 +110,7 @@ export function joinStateText(j: SpaceJoining): string {
     case 'busy': return "The owner's computer is busy. Try again in a minute.";
     case 'full': return 'This space is full (50 people).';
     case 'noAnswer': return "The owner didn't answer in time. Ask them for a new invite.";
-    case 'unreachable': return "Can't reach the owner's computer. They need to be online with Puppet Master open.";
+    case 'unreachable': return "Can't reach the owner's computer. They need to be online with Potato Workspace open.";
     case 'bad': return "Something in the invite didn't check out. Ask for a new one.";
   }
 }

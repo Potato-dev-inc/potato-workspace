@@ -1,4 +1,5 @@
 // Where this pane runs: the agent, its model and version, the folder, the git branch and the account.
+import { SIGN_IN } from '../../../lib/glossary';
 import type { ReactNode } from 'react';
 import { RailCard } from './RailCard';
 import { shortFolder } from './railFormat';
@@ -41,7 +42,7 @@ export function WhereCard({ agentName, model, cliVersion, folder, branch, accoun
             <span className="ck-mono">{branch}</span>
           </Row>
         )}
-        {accountLabel && <Row label="Account">{accountLabel}</Row>}
+        {accountLabel && <Row label={SIGN_IN.rowLabel}>{accountLabel}</Row>}
       </dl>
     </RailCard>
   );

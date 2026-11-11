@@ -35,6 +35,16 @@ fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
+/// A short label for "which other session", stable within this run of the app and not reversible to
+/// the session id (keyed by a per-process random salt).
+fn opaque_owner_label(session: &str) -> String {
+    use std::hash::{BuildHasher, Hash, Hasher};
+    static SALT: OnceLock<std::collections::hash_map::RandomState> = OnceLock::new();
+    let mut hasher = SALT.get_or_init(std::collections::hash_map::RandomState::new).build_hasher();
+    session.hash(&mut hasher);
+    format!("other-session-{:04x}", hasher.finish() & 0xffff)
+}
+
 fn expires_in(lease: &Lease, now: u64) -> u64 {
     lease
         .heartbeat_at_ms
@@ -65,7 +75,8 @@ pub(crate) fn acquire_at(pane_id: &str, owner: &str, now: u64) -> Result<(), Ope
             error.retry_after_ms = Some(remaining);
             error.context = json!({
                 "pane_id": pane_id,
-                "owner_session": held.owner_session,
+                // An opaque label, never the session id: the id is the holder's only credential.
+                "owner": opaque_owner_label(&held.owner_session),
                 "expires_in_ms": remaining,
             });
             return Err(error);
@@ -185,7 +196,12 @@ mod tests {
         let error = acquire_at(pane, "session-b", 11_000).unwrap_err();
         assert_eq!(error.code, "PANE_LEASED");
         assert!(error.recoverable);
-        assert_eq!(error.context["owner_session"], "session-a");
+        assert!(error.context.get("owner_session").is_none(), "the holder's session id is a credential");
+        let label = error.context["owner"].as_str().unwrap().to_string();
+        assert!(label.starts_with("other-session-") && !label.contains("session-a"), "{label}");
+        assert!(!error.message.contains("session-a") && !error.context.to_string().contains("\"session-a\""));
+        let again = acquire_at(pane, "session-b", 11_500).unwrap_err();
+        assert_eq!(again.context["owner"], label.as_str(), "the label is stable");
         assert_eq!(error.context["expires_in_ms"], 50_000);
         assert_eq!(error.retry_after_ms, Some(50_000));
         // The owner re-adopting its own pane is fine.

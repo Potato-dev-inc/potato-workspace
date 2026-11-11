@@ -23,7 +23,13 @@ import { CiFixCard } from './CiFixCard';
 import { PaneErrorCard } from './InboxError';
 import { focusWithRing } from './InboxCard';
 import { handleInboxKey, isEditable } from './inbox-keys';
+import { useNextCard } from './useNextCard';
+import { accountsFor, tauriAccountsApi, type Account } from '../../lib/accounts';
+import { SIGN_IN } from '../../lib/glossary';
 import { TeamSection } from './team/TeamSection';
+import { RedBanners } from './team/RedBanner';
+import { useTeam } from './team/useTeam';
+import { teamApi } from '../../lib/team';
 import { MissionsSection, readyMissions } from './mission/MissionCards';
 import { CollisionSection } from './CollisionSection';
 import { useMissions } from '../../lib/missions';
@@ -44,6 +50,7 @@ export function Inbox({
   c,
   onOpenDoctor,
   onSetUp,
+  onStartAgent,
   companions,
   onRestartCompanion,
   companionTransport,
@@ -69,12 +76,16 @@ export function Inbox({
    * bar), so the Inbox offers no second way in. Absent: Set up agents.
    */
   onSetUp?: (() => void) | null;
+  /** "Start an agent" on the empty Inbox: the cockpit opens the New agent page. Absent: Set up agents is the main button. */
+  onStartAgent?: () => void;
 }) {
   // One list for every surface: the badge, the Doto counter and the sidebar group use its length.
   const needs = useNeedsYou(c);
   // The mission cards themselves are drawn by MissionsSection; their count is already in `needs`
   // (CockpitApp passes the missions to useNeedsYouSource), like the tray and the phone's number.
   const missions = useMissions();
+  // One Team read for the red-branch banner on top and the Team section below.
+  const team = useTeam();
   // Focus on: finished missions wait out of sight until Focus ends. "Show" unfolds them for this Focus only.
   const focus = useFocus();
   const [shownSession, setShownSession] = useState<string | null>(null);
@@ -86,6 +97,26 @@ export function Inbox({
   const firstRun = noPanes && !hasEverSpawned();
   const setUp = onSetUp === undefined ? onOpenDoctor : onSetUp;
   const stuckIds = itemsOfKind(needs, 'stuck').flatMap((i) => (i.paneId ? [i.paneId] : []));
+
+  // The sign-ins, for a usage-limit card's "Use another sign-in". No store (browser, old backend): the button stays away.
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  useEffect(() => {
+    let alive = true;
+    tauriAccountsApi
+      .list()
+      .then((o) => alive && setAccounts(o.accounts))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const signInsOf = (paneId?: string) => {
+    const info = paneId && !isCompanionPaneId(paneId) ? c.registry.panes.get(paneId)?.info : undefined;
+    if (!info) return [];
+    const others = accountsFor(accounts, info.agent_type).filter((a) => a.id !== info.account);
+    const out = others.map((a) => ({ agentId: info.agent_type, accountId: a.id, label: a.label, cwd: info.cwd }));
+    return info.account ? [{ agentId: info.agent_type, label: SIGN_IN.defaultOne, cwd: info.cwd }, ...out] : out;
+  };
 
   const entries = (() => {
     const out: Entry[] = [];
@@ -128,6 +159,8 @@ export function Inbox({
               now={c.now}
               onAnswer={answer(q.id)}
               onOpenPane={open(q.pane_id)}
+              signIns={signInsOf(q.pane_id)}
+              onUseSignIn={(o) => void c.newAgent(o.agentId, o.accountId, false, o.cwd || undefined)}
               companion={q.pane_id && isCompanionPaneId(q.pane_id) ? companions?.find((x) => x.id === q.pane_id!.slice(COMPANION_PANE_PREFIX.length)) : undefined}
               companionTransport={companionTransport}
             />
@@ -239,6 +272,16 @@ export function Inbox({
     focusWithRing(root.current?.querySelector<HTMLElement>('[data-ib-card]'));
   }, [visit, entries.length]);
 
+  // The card that was answered leaves; the keyboard goes to the one that took its place, and the line says whose it is.
+  const nameOfKey = (key: string): string | undefined => {
+    const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+    if (['approval', 'error', 'stuck'].includes(kind)) return c.names.get(id);
+    const q = c.asked.questions.find((x) => x.id === id);
+    const paneId = q?.consent?.pane_id ?? q?.pane_id;
+    return (paneId ? c.names.get(paneId) : undefined) ?? q?.agent;
+  };
+  const nextCard = useNextCard(root, entries.map((e) => e.key), nameOfKey);
+
   const quick = entries.some((e) => e.quick);
   const title = firstRun ? 'Welcome to Potato Workspace' : count === 0 ? 'Nothing needs you' : count === 1 ? 'One thing needs you' : `${count} things need you`;
 
@@ -247,17 +290,20 @@ export function Inbox({
       ref={root}
       className="ck-inbox"
       tabIndex={-1}
+      onFocus={nextCard.onFocus}
       onKeyDown={(e) => {
         if (root.current) handleInboxKey(e.nativeEvent, root.current);
       }}
     >
       <FocusNote
+        hasRun={!noPanes || hasEverSpawned()}
         view={focus.view}
         now={focus.now}
         foldedCount={folding ? readyMissions(missions.missions).length : 0}
         onShowFinished={() => setShownSession(focus.view?.sessionId ?? null)}
         onChange={focus.set}
       />
+      <RedBanners state={team.state} api={teamApi} now={c.now} onDone={team.refresh} />
       <header className="ck-inbox-hero">
         {!firstRun && (
           <div className="ck-doto" aria-label={`${count} ${count === 1 ? 'thing needs' : 'things need'} you`}>
@@ -267,7 +313,7 @@ export function Inbox({
         <h1 className="ck-title">{title}</h1>
         <p className="ck-sub">
           {firstRun
-            ? 'Your AI helpers work here. First, check which ones this PC has.'
+            ? 'Your agents work here. First, check which ones this PC has.'
             : count === 0
             ? 'Agents that stop to ask a question will show up here.'
             : 'Answer here, or open the terminal.'}
@@ -289,9 +335,17 @@ export function Inbox({
             </span>
           </p>
         )}
+        <p className="ib-next" role="status" aria-live="polite">
+          {nextCard.next !== null && <>Next: {nextCard.next}</>}
+        </p>
+        {noPanes && !firstRun && onStartAgent && (
+          <button type="button" className="ck-btn ck-btn--primary" onClick={onStartAgent}>
+            Start an agent
+          </button>
+        )}
         {noPanes && setUp && (
-          <button type="button" className={`ck-btn ${firstRun ? 'ck-btn--primary' : 'ck-btn--secondary'}`} onClick={setUp}>
-            Set up your agents
+          <button type="button" className={`ck-btn ${firstRun || !onStartAgent ? 'ck-btn--primary' : 'ck-btn--secondary'}`} onClick={setUp}>
+            {firstRun ? 'Set up your agents' : 'Set up agents'}
           </button>
         )}
         {firstRun && onSetUp !== null && (
@@ -307,7 +361,9 @@ export function Inbox({
       {entries.length > 0 && (
         <ul className="ib-list" aria-label="Needs you">
           {entries.map((e, i) => (
-            <li key={e.key}>{e.render(i === 0)}</li>
+            <li key={e.key} data-ib-key={e.key}>
+              {e.render(i === 0)}
+            </li>
           ))}
         </ul>
       )}
@@ -320,7 +376,7 @@ export function Inbox({
       <HiddenRuns />
       <ImportChatsCard />
 
-      <TeamSection now={c.now} paneNames={c.names} />
+      <TeamSection now={c.now} paneNames={c.names} team={team} />
     </div>
   );
 }

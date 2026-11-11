@@ -5,7 +5,7 @@ import type { PaneInfo } from '../lib/tauri-types';
 // The Individual-mode mini bar with many agents, drawn with the real component and CSS at the bar's fixed width.
 const AGENTS = ['claude', 'opencode_native', 'codex', 'claude', 'cursor', 'opencode_native', 'claude', 'codex', 'claude', 'cursor'];
 const PANES = AGENTS.map(
-  (agent_type, i) => ({ id: `p${i}`, agent_type, cwd: 'C:\\work\\pm-workspace', status: i % 4 === 0 ? 'running' : 'idle' }) as unknown as PaneInfo,
+  (agent_type, i) => ({ id: `p${i}`, agent_type, cwd: 'C:\\work\\pm-workspace', status: i === 7 ? 'waiting_input' : i % 4 === 0 ? 'running' : 'idle' }) as unknown as PaneInfo,
 );
 
 export const MiniBarPreview: FC = () => {
@@ -22,6 +22,7 @@ export const MiniBarPreview: FC = () => {
           onNew={() => undefined}
           onBack={() => undefined}
           onUndo={() => undefined}
+          labelOf={(id) => ({ claude: 'Claude', codex: 'Codex CLI', cursor: 'Cursor', opencode_native: 'OpenCode' })[id] ?? id}
         />
       </div>
     </div>

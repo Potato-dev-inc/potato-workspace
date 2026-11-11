@@ -77,7 +77,7 @@ method (with a generic default) to `TuiProfile` instead.
    `["--resume", "{session}"]`), or leave `resume` empty when the CLI has no resume option. Do not read the real home in a
    test: use `HistoryEnv::fixed` with a fixture folder. `conformance.rs` checks every profile
    that answers it. Feature page: `docs/features/bring-all-my-chats.md`. A TOML agent does this with `[session_chat.history]`
-   instead (`docs/specs/agent-definitions/DEFINITION-FORMAT.md` 6.1).
+   instead (`packages/app/src-tauri/src/tui/declarative/DEFINITION-FORMAT.md` 6.1).
 
 ## Submit, composer and startup-gate hooks
 
@@ -93,7 +93,7 @@ Declared per profile, generic defaults, used by `agent_runs/delivery.rs`, `bridg
 If the CLI can be driven by an argument list, a TOML file replaces steps 1-4 above: no Rust, no rebuild.
 
 1. Write `<app data>/agents/foo.toml` (Windows: `%APPDATA%\com.potatoworkspace.app\agents\`). Format and examples:
-   `docs/specs/agent-definitions/DEFINITION-FORMAT.md`; the worked example is `kilo.toml` (SPEC 7.2).
+   `packages/app/src-tauri/src/tui/declarative/DEFINITION-FORMAT.md`; the worked example is `kilo.toml` (SPEC 7.2).
 2. Check it without registering anything: `POST /agents/definitions/validate` with `{"toml": "...", "source": "user"}`
    returns `{ok, errors, rendered}` (rendered argv with placeholders). Settings > Agents lists errors with file and line.
 3. Approve it in Settings > Agents (the dialog shows the argv). A new or changed file stays `unapproved` until then.

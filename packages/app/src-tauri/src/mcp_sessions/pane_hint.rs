@@ -39,3 +39,23 @@ pub fn claimed_session_pane(session_id: &str) -> Option<String> {
 pub fn session_pid(session_id: &str) -> Option<u32> {
     SESSION_PIDS.lock().ok()?.get(session_id).copied()
 }
+
+/// Some MCP connection to this app says it runs in `pane`: the agent in that pane reaches this app's
+/// bridge (not another copy's). The first-run demo checks it before it asks an agent to use the tool.
+pub fn pane_has_session(pane: &str) -> bool {
+    SESSION_PANES.lock().map(|panes| panes.values().any(|p| p == pane)).unwrap_or(false)
+}
+
+#[cfg(test)]
+mod pane_session_tests {
+    use super::*;
+
+    #[test]
+    fn a_pane_has_a_session_once_a_connection_names_it() {
+        let pane = "pane-demo-check-1";
+        assert!(!pane_has_session(pane));
+        note_session_pane("session-demo-check-1", pane);
+        assert!(pane_has_session(pane));
+        assert!(!pane_has_session("pane-demo-check-2"));
+    }
+}

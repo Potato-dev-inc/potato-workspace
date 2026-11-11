@@ -1,6 +1,7 @@
 // Settings > General: stuck-agent warnings and the "Stop all agents" shortcut.
 import { useEffect, useState } from 'react';
 import { tauriLoopApi, type LoopGuardApi, type LoopGuardSettings } from '../../../lib/loop-guard';
+import { bindingLabel } from '../../../lib/shortcuts';
 import { FieldSelect, SettingRow, SettingToggle } from '../settings-ui';
 
 export function LoopGuardSettingsBlock({ api = tauriLoopApi, onSaved }: { api?: LoopGuardApi; onSaved?: () => void }) {
@@ -8,8 +9,11 @@ export function LoopGuardSettingsBlock({ api = tauriLoopApi, onSaved }: { api?: 
   useEffect(() => {
     api.settingsGet().then(setS).catch(() => {});
   }, [api]);
+  const [error, setError] = useState<string | null>(null);
   if (!s) return null;
   const save = (next: LoopGuardSettings) => {
+    const before = s;
+    setError(null);
     setS(next);
     api
       .settingsSet(next)
@@ -17,10 +21,18 @@ export function LoopGuardSettingsBlock({ api = tauriLoopApi, onSaved }: { api?: 
         setS(saved);
         onSaved?.();
       })
-      .catch(() => {});
+      .catch((e: unknown) => {
+        setS(before); // put the old value back: it was not saved
+        setError('Not saved: ' + (e instanceof Error ? e.message : String(e)));
+      });
   };
   return (
     <>
+      {error && (
+        <p role="alert" className="text-xs text-pm-err">
+          {error}
+        </p>
+      )}
       <SettingToggle
         label="Warn when an agent seems stuck"
         description="Shows a card when an agent repeats the same error or the same steps, or works for a long time with nothing new."
@@ -50,7 +62,7 @@ export function LoopGuardSettingsBlock({ api = tauriLoopApi, onSaved }: { api?: 
       </SettingRow>
       <SettingToggle
         label="Global shortcut: stop all agents"
-        description="Ctrl+Alt+Shift+P interrupts every working agent from anywhere. Off by default."
+        description={`${bindingLabel('stop-all') || 'A shortcut'} interrupts every working agent from anywhere. Off by default.`}
         checked={s.panic_shortcut}
         onChange={(panic_shortcut) => save({ ...s, panic_shortcut })}
       />

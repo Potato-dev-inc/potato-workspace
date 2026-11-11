@@ -469,7 +469,7 @@
 }
 .cockpit .fr-tipr {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-columns: 40px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 14px;
@@ -477,8 +477,8 @@
 .cockpit .fr-tipr + .fr-tipr {
   border-top: 1px solid var(--sep);
 }
-.cockpit .fr-tipnum {
-  font-size: 28px;
+.cockpit .fr-tipr .fr-tipnum {
+  font-size: 16px;
   color: var(--label-3);
 }
 .cockpit .fr-tipmain {
@@ -570,4 +570,137 @@
 }
 .cockpit .fr-answer li + li {
   margin-top: 3px;
+}
+
+/* Your agents, helpers it started and the files that change: one quiet list style. */
+.cockpit .fr-agentlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  box-shadow: var(--raise-hi);
+}
+.cockpit .fr-agentrow {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  min-height: 40px;
+}
+.cockpit .fr-agentrow + .fr-agentrow {
+  border-top: 1px solid var(--sep);
+}
+.cockpit .fr-agentrow--plain {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.cockpit .fr-agentname {
+  font-weight: 500;
+  min-width: 0;
+}
+.cockpit .fr-agentstate {
+  color: var(--label-3);
+  font-size: 12px;
+  min-width: 0;
+}
+.cockpit .fr-agentrow[data-state='missing'] .fr-agentname {
+  color: var(--label-3);
+}
+.cockpit .fr-look {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cockpit .fr-looklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cockpit .fr-lookopt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  text-align: left;
+}
+.cockpit .fr-lookopt[aria-checked='true'] {
+  border-color: var(--label);
+  background: var(--fill-hover);
+}
+.cockpit .fr-lookname {
+  font-weight: 600;
+}
+/* The window takes focus when a screen opens so a screen reader starts at its top; no ring on the window itself. */
+.cockpit .fr-shell:focus {
+  outline: none;
+}
+.cockpit .fr-ask-toggle {
+  align-self: flex-start;
+}
+.cockpit .fr-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cockpit .fr-files li {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+.cockpit .fr-file-agent {
+  font-weight: 500;
+}
+.cockpit .fr-file-path {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .fr-helpers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cockpit .fr-more {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+.cockpit .fr-more + .fr-more {
+  border-top: 1px solid var(--sep);
+}
+.cockpit .fr-more-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cockpit .fr-more-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cockpit .fr-more-body {
+  color: var(--label-3);
+  font-size: 12px;
+}
+.cockpit .fr-file-what {
+  grid-column: 2;
+  overflow-wrap: anywhere;
 }

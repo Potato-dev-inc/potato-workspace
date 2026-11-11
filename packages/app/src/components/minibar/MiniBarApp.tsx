@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { cockpitApi } from '../../lib/cockpit-api';
 import { tauri } from '../../lib/tauri';
 import type { PaneInfo } from '../../lib/tauri-types';
-import { MiniBar } from './MiniBar';
+import { MiniBar, agentName } from './MiniBar';
+import { useAgentRegistry } from '../../lib/agentRegistry';
 
 /** The mini bar window (`index.html?minibar=1`): live agents from the pane list, and the mode buttons. */
 export default function MiniBarApp() {
   const [panes, setPanes] = useState<PaneInfo[]>([]);
   const [toast, setToast] = useState(false);
+  const listing = useAgentRegistry();
   const timer = useRef<number | undefined>(undefined);
 
   const showToast = useCallback((ms: number) => {
@@ -64,6 +66,7 @@ export default function MiniBarApp() {
       onNew={toOrchestration}
       onBack={toOrchestration}
       onUndo={toOrchestration}
+      labelOf={(id) => listing.agents.find((a) => a.id === id)?.label || agentName(id)}
     />
   );
 }

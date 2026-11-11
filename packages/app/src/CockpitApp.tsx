@@ -1,7 +1,7 @@
 // Cockpit window (`index.html?cockpit=1`): one window that orchestrates every agent pane.
 import { useNudgeOnAction } from './lib/desktop-nudge';
 import { useFollowFocusedProject } from './hooks/useFollowFocusedProject';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgentDoctor } from './components/cockpit/AgentDoctor';
 import { markSpawned } from './lib/agent-health';
 import { useCockpit } from './hooks/useCockpit';
@@ -14,6 +14,8 @@ import { PaneView } from './components/cockpit/PaneView';
 import { requestPaneAction } from './lib/pane-actions';
 import { Palette, type PaletteMode } from './components/cockpit/Palette';
 import { NeedsYouContext, useNeedsYouSource } from './hooks/useNeedsYou';
+import { useTeam } from './components/cockpit/team/useTeam';
+import { unclaimedRed } from './lib/team';
 import { useMissions } from './lib/missions';
 import { UndoSheet } from './components/cockpit/UndoSheet';
 import { WhatBrokeItSheet } from './components/cockpit/WhatBrokeItSheet';
@@ -41,8 +43,13 @@ import { useSimpleMode } from './lib/simple-mode';
 import { projectOfCwd } from './lib/ship-model';
 import { useModeSwitch } from './lib/mode-switch/useModeSwitch';
 import { LoopGuardContext, tauriLoopApi, useLoopSignals, type StopReport } from './lib/loop-guard';
-import { homeView, isMacPlatform, isSplitShortcut, splitAfterSelect, splitFits, splitFocusKey, splitPartner, splitStillOn, SPLIT_DEFAULT_RATIO, viewAfterSelect, type MainView, type SplitSide } from './components/cockpit/main-view';
+import { homeView, isSplitShortcut, splitAfterSelect, splitFits, splitFocusKey, splitPartner, splitStillOn, SPLIT_DEFAULT_RATIO, viewAfterSelect, type MainView, type SplitSide } from './components/cockpit/main-view';
+import { digitForAction, isMacPlatform, isShortcutRecording, matchesAction } from './lib/shortcuts';
+import { nextNeedingPane, paneAtNumber, recordPaneUse, stepPane } from './lib/pane-order';
+import { useKeybindingsSync, useKeybindingsVersion } from './hooks/useKeybindings';
 import { focusSideComposer, SplitView, useWindowWidth } from './components/cockpit/SplitView';
+import { useSessionMemory } from './components/cockpit/useSessionMemory';
+import { EndedAgentsLine } from './components/cockpit/EndedAgentsLine';
 import { clearSplitMemory, readSplitMemory, restorableSplit, writeSplitMemory } from './components/cockpit/split-memory';
 import { useCompanions } from './hooks/useCompanions';
 import { tauriCompanionTransport } from './lib/companion';
@@ -80,6 +87,9 @@ const inTerminal = (target: EventTarget | null): boolean => target instanceof El
 
 export default function CockpitApp() {
   const c = useCockpit();
+  // The person's own shortcuts (Settings > Shortcuts) for every handler and hint in this window.
+  useKeybindingsSync();
+  useKeybindingsVersion();
   // Warm agents (Settings > Preload) follow the folder of the focused pane, a moment after it is focused.
   useFollowFocusedProject(c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : null);
   const spacesOn = useSpacesEnabled();
@@ -282,13 +292,12 @@ export default function CockpitApp() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-      const key = e.key.toLowerCase();
-      if (!e.shiftKey && key === 'k') {
+      if (e.isComposing) return;
+      if (matchesAction(e, 'palette')) {
         e.preventDefault();
         setPaletteMode('commands');
         setPaletteOpen((v) => !v);
-      } else if (e.shiftKey && key === 'f') {
+      } else if (matchesAction(e, 'search-chats')) {
         e.preventDefault();
         setPaletteMode('chats');
         setPaletteOpen(true);
@@ -298,13 +307,13 @@ export default function CockpitApp() {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
-  // `?` (not while typing in a box or a terminal) or Ctrl+/ opens the keyboard shortcuts sheet.
+  // `?` (not while typing in a box or a terminal) or Ctrl+/ (Cmd+/ on a Mac, or your own keys) opens the keyboard shortcuts sheet.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.isComposing || e.altKey || e.defaultPrevented) return;
-      const questionMark = e.key === '?' && !e.ctrlKey && !e.metaKey && !isTypingTarget(e.target) && !inTerminal(e.target);
-      const ctrlSlash = e.key === '/' && (e.ctrlKey || e.metaKey) && !e.shiftKey;
-      if (!questionMark && !ctrlSlash) return;
+      if (e.isComposing || e.defaultPrevented) return;
+      const questionMark = e.key === '?' && !isShortcutRecording() && !e.altKey && !e.ctrlKey && !e.metaKey && !isTypingTarget(e.target) && !inTerminal(e.target);
+      const ownKeys = matchesAction(e, 'show-list');
+      if (!questionMark && !ownKeys) return;
       e.preventDefault();
       setShortcutsOpen(true);
     };
@@ -315,7 +324,7 @@ export default function CockpitApp() {
   // Ctrl+N (Cmd+N on a Mac) opens the New agent page. In a terminal the key belongs to the program running there.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.isComposing || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'n') return;
+      if (e.isComposing || !matchesAction(e, 'new-agent')) return;
       if (inTerminal(e.target) || c.mode === 'individual') return;
       e.preventDefault();
       setNewAgentProject(null);
@@ -357,10 +366,19 @@ export default function CockpitApp() {
 
   // The split comes back on start when both of its panes still exist (split-memory.ts). The left pane is selected
   // again too: the app starts with no pane selected. Runs once, when the pane list is first known.
+  const session = useSessionMemory({
+    ready: c.registry.initialReady,
+    selectedId: c.selectedId,
+    panes: c.registry.panes,
+    select: nav.select,
+    newAgent: c.newAgent,
+  });
   const restoredSplit = useRef(false);
   useEffect(() => {
     if (!c.registry.initialReady || restoredSplit.current) return;
     restoredSplit.current = true;
+    // The pane the last run ended on comes back first (session-memory.ts); a restored split then takes over.
+    if (c.selectedId === null && !c.spawn) session.restoreSelection();
     const memory = restorableSplit(readSplitMemory(), { width, hasPane: (id) => c.registry.panes.has(id) });
     if (!memory) return;
     nav.select(memory.left);
@@ -384,7 +402,50 @@ export default function CockpitApp() {
   const { onClickCapture } = useNudgeOnAction();
   // Mission cards (Labs) count once in the one list, as they do in the Rust snapshot (tray, phone).
   const missionList = useMissions();
-  const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined);
+  // War Room: a red default branch nobody claimed counts too (the Rust `team_ci:` item, for tray and phone).
+  const team = useTeam();
+  const teamRed = useMemo(() => unclaimedRed(team.state), [team.state]);
+  const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined, teamRed);
+
+  // Which pane was looked at when: the palette lists the most recent first.
+  useEffect(() => {
+    if (c.selectedId) recordPaneUse(c.selectedId);
+  }, [c.selectedId]);
+
+  // Moving between agents from the keyboard: next / previous, jump to number 1 to 9, the next one that needs you, the Inbox.
+  // Re-listens each render so it sees the current list. The pane never gets these keys.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || c.mode === 'individual') return;
+      const ids = paneIds.filter((id) => !isCompanionPaneId(id));
+      let handled = true;
+      const digit = digitForAction(e, 'pane-jump');
+      if (digit !== null) {
+        const id = paneAtNumber(ids, digit);
+        if (id) nav.select(id);
+      } else if (matchesAction(e, 'pane-next')) {
+        const id = stepPane(ids, c.selectedId, 1);
+        if (id) nav.select(id);
+      } else if (matchesAction(e, 'pane-prev')) {
+        const id = stepPane(ids, c.selectedId, -1);
+        if (id) nav.select(id);
+      } else if (matchesAction(e, 'next-needs-me')) {
+        const waiting = new Set(needsYou.flatMap((item) => (item.paneId ? [item.paneId] : [])));
+        const id = nextNeedingPane(ids, waiting, c.selectedId);
+        if (id) nav.select(id);
+        else c.notify('Nothing needs you right now');
+      } else if (matchesAction(e, 'open-inbox')) {
+        nav.select(null);
+        setView('inbox');
+        setInboxVisit((n) => n + 1);
+      } else handled = false;
+      if (!handled) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
   // Simple mode (Settings > General) swaps the whole face; off by default, so this line does nothing then.
   const simple = useSimpleMode();
   // While the welcome is open the normal face stays, so its sign-in and install windows are visible.
@@ -442,6 +503,7 @@ export default function CockpitApp() {
         }}
       />
       <main className="ck-main">
+        <EndedAgentsLine ended={session.ended} onReopen={session.reopen} onDismiss={session.dismiss} />
         {c.mode === 'individual' ? (
           <div className="ck-spawn ck-spawn--plain">
             <h1 className="ck-title">Individual mode</h1>
@@ -524,6 +586,10 @@ export default function CockpitApp() {
             visit={inboxVisit}
             onOpenDoctor={() => setView('doctor')}
             onSetUp={welcomeSetUp}
+            onStartAgent={() => {
+              setNewAgentProject(null);
+              setView('newagent');
+            }}
             companions={companions.companions}
             onRestartCompanion={(id) => tauriCompanionTransport.restart(id).finally(companions.refresh)}
             companionTransport={{
@@ -568,6 +634,11 @@ export default function CockpitApp() {
           onWhatBroke={setWhatBrokePane}
           onOpenWelcome={welcome.reopen}
           onStartCrew={() => setCrewOpen(true)}
+          onOpenInbox={() => {
+            nav.select(null);
+            setView('inbox');
+            setInboxVisit((n) => n + 1);
+          }}
           onOpenShortcuts={() => setShortcutsOpen(true)}
           companions={companions.companions}
           onOpenCompanion={openCompanion}

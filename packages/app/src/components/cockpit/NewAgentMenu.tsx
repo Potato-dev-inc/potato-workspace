@@ -8,8 +8,9 @@
 // selected); a remembered choice wins. Without Git it cannot be turned on: a one-line hint and "Set up Git here".
 // The first row of step 1 is "Pick for me" (only with a `pick` API and a project). It asks which agent to start
 // here, from the person's own history. It starts nothing: only a press on its Start button does.
+import { SIGN_IN } from '../../lib/glossary';
 import { Fragment, useEffect, useState } from 'react';
-import { accountsFor, needsAccountStep, tauriAccountsApi, type Account, type AccountsApi } from '../../lib/accounts';
+import { accountsFor, needsAccountStep, rememberSignIn, rememberedSignIn, tauriAccountsApi, type Account, type AccountsApi } from '../../lib/accounts';
 import { startFailure, type AcpAddable, type AcpChatApi, type AcpLaneAgent, type TerminalChatAgent } from '../../lib/acpChat';
 import { blockOf, type AcpAddonApi } from '../../lib/acpAddon';
 import type { StartMode } from '../../lib/newAgentStart';
@@ -199,15 +200,20 @@ export function NewAgentMenu({
   const pickResult = pickState !== null && pickState !== 'loading' && pickState !== 'failed' ? pickState : null;
 
   const start = (agentId: string, accountId?: string) => {
+    // An agent with several sign-ins starts under the one used last next time, without the extra step.
+    if (accountsFor(accounts, agentId).length > 0) rememberSignIn(agentId, accountId);
     onClose();
     onStart(agentId, accountId);
   };
 
-  /** A terminal, through the login step when the agent has several logins. */
-  const startTerminal = (agentId: string) => {
+  /** A terminal. An agent with several sign-ins uses the one from last time; `ask` (Shift+Enter, "Change") shows the choice. */
+  const startTerminal = (agentId: string, ask = false) => {
     const entry = entryOf(agentId);
-    if (entry && needsAccountStep(accounts, agentId)) setPicking(entry);
-    else start(agentId);
+    if (entry && needsAccountStep(accounts, agentId)) {
+      const last = ask ? null : rememberedSignIn(accounts, agentId);
+      if (last) start(agentId, last.accountId);
+      else setPicking(entry);
+    } else start(agentId);
   };
 
   /** What a click on an agent does, by the switch. `accountId` (from "Pick for me") goes straight to the terminal. */
@@ -463,9 +469,9 @@ export function NewAgentMenu({
   if (picking) {
     return (
       <>
-        <div className="ck-menu-cap">{picking.label} · login</div>
+        <div className="ck-menu-cap">{picking.label} · {SIGN_IN.action.toLowerCase()}</div>
         <button type="button" role="menuitem" className="ck-menu-item" onClick={() => start(picking.type)}>
-          <span>Default login</span>
+          <span>{SIGN_IN.defaultOne}</span>
         </button>
         {accountsFor(accounts, picking.type).map((a) => (
           <button key={a.id} type="button" role="menuitem" className="ck-menu-item" onClick={() => start(picking.type, a.id)}>
@@ -537,21 +543,46 @@ export function NewAgentMenu({
         const route = routeOf(e.type);
         // An agent that will start as a chat skips the login step: a chat session has no login choice.
         const hasAccounts = route === 'terminal' && needsAccountStep(accounts, e.type);
-        const row = (
+        const last = hasAccounts ? rememberedSignIn(accounts, e.type) : null;
+        const button = (
           <button
             key={e.type}
             type="button"
             role="menuitem"
             className="ck-menu-item"
             disabled={e.disabled || (route !== 'terminal' && chatBusy)}
-            title={e.disabled ? `${e.disabledReason ? `${e.disabledReason}. ` : ''}Only for tasks from other agents.` : e.disabledReason}
-            onClick={() => launch(e.type)}
+            title={
+              e.disabled
+                ? `${e.disabledReason ? `${e.disabledReason}. ` : ''}Only for tasks from other agents.`
+                : last
+                  ? `Starts with ${last.label}. Shift+Enter picks another ${SIGN_IN.noun}.`
+                  : e.disabledReason
+            }
+            onClick={(ev) => (hasAccounts && ev.shiftKey ? startTerminal(e.type, true) : launch(e.type))}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter' && ev.shiftKey && hasAccounts && !e.disabled) {
+                ev.preventDefault();
+                startTerminal(e.type, true);
+              }
+            }}
           >
             <span>{e.label}</span>
-            {!e.disabled && hasAccounts && <span className="ck-menu-hint">{accountsFor(accounts, e.type).length + 1} logins ›</span>}
+            {!e.disabled && hasAccounts && <span className="ck-menu-hint">{last ? `${last.label} ›` : `${accountsFor(accounts, e.type).length + 1} sign-ins ›`}</span>}
             {!e.disabled && !hasAccounts && route === 'terminal' && readyAgents.has(e.type) && <span className="ck-menu-hint">ready</span>}
           </button>
         );
+        // The remembered sign-in has a small way to pick another (Shift+Enter on the row does the same).
+        const row =
+          last && !e.disabled ? (
+            <div key={e.type} className="ck-menu-split">
+              {button}
+              <button type="button" role="menuitem" className="ck-menu-change" aria-label={`Change ${SIGN_IN.noun} for ${e.label}`} onClick={() => startTerminal(e.type, true)}>
+                Change
+              </button>
+            </div>
+          ) : (
+            button
+          );
         // Only an agent that a click sends to the "no chat yet" prompt (Chat on) opens it. Setting up a chat from the list
         // is the link under the rows below.
         const addable = chat && !e.disabled && !e.shell ? chat.canAdd?.find((a) => a.id === e.type) : undefined;

@@ -446,3 +446,21 @@ describe('home cards', () => {
     expect(host.querySelector('.ck-na-hc')!.textContent).toContain('Needs you');
   });
 });
+
+describe('page words', () => {
+  it('the header says New agent and a heading asks what the agent should do', async () => {
+    await mount(rig());
+    expect(host.querySelector('.ck-na-top-title')?.textContent).toBe('New agent');
+    expect(host.querySelector('[data-testid="na-ask"]')?.textContent).toBe('What should the agent do?');
+    expect(host.querySelector('h2[data-testid="na-ask"]')).not.toBeNull();
+  });
+
+  it('explains Add card in one line on first use, and the line goes once a card is pinned', async () => {
+    await mount(rig());
+    expect(host.querySelector('[data-testid="na-cards-hint"]')?.textContent).toContain('Pin shortcuts here');
+    await click(byLabel('Add card'));
+    expect(host.querySelector('[data-testid="na-cards-hint"]')).toBeNull();
+    await click(byLabel('Recent projects'));
+    expect(host.querySelector('[data-testid="na-cards-hint"]')).toBeNull();
+  });
+});

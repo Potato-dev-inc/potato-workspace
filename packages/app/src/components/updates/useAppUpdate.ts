@@ -1,35 +1,84 @@
-// The update flow of the page: a quiet check, the offer, a warning when an agent is working, the press, the plain error.
+// The update flow of the page: a quiet check, the offer, the download with its progress, a ready step that asks first when an
+// agent is working, the restart, and the plain error. After an install that could not start but already stopped the agents,
+// it says so and offers to reopen the chats.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { plainUpdateError, tauriUpdateTransport, type UpdateOffer, type UpdateTransport } from '../../lib/app-update';
+import {
+  plainUpdateError,
+  progressPercent,
+  tauriUpdateTransport,
+  updateErrorCode,
+  type UpdateBusyInfo,
+  type UpdateOffer,
+  type UpdateTransport,
+} from '../../lib/app-update';
 
-export type UpdatePhase = 'idle' | 'checking' | 'none' | 'available' | 'warn' | 'installing' | 'error';
+export type UpdatePhase =
+  | 'idle'
+  | 'checking'
+  | 'none'
+  | 'available'
+  | 'downloading'
+  /** Downloaded and checked. Agents may still be working: Restart now asks nothing more, it is the confirmed press. */
+  | 'ready'
+  /** The person chose "When agents finish": the page watches and says when they are done. */
+  | 'waiting'
+  | 'installing'
+  /** The installer could not start after the agents were stopped. */
+  | 'stopped'
+  | 'error';
 
 export interface AppUpdateState {
   phase: UpdatePhase;
   offer: UpdateOffer | null;
   busyAgents: string[];
+  /** The split of `busyAgents` (empty lists when the backend does not say). */
+  busy: UpdateBusyInfo;
+  /** Whole percent of the download, or null while it is not known. */
+  percent: number | null;
   error: string | null;
+  /** The chats were brought back after a failed install. */
+  reopened: boolean;
   /** Looks for an update. A quiet check (loud = false) never shows an error; a press on Check does. */
   check(loud?: boolean): Promise<void>;
-  /** The press on Update. With an agent working it first asks (phase `warn`); a second press goes on. */
+  /** The press on Update (also Try again): downloads, then asks to restart when an agent is working. */
   update(): Promise<void>;
-  dismissWarning(): void;
+  /** The press on Restart now: stops the agents and installs. */
+  restartNow(): Promise<void>;
+  /** "When agents finish": waits and says when it is safe. */
+  restartWhenIdle(): void;
+  /** After a failed install: brings the stopped chats back. */
+  reopenChats(): Promise<void>;
 }
 
 /** A quiet check at start and then every six hours. */
 export const RECHECK_MS = 6 * 60 * 60 * 1000;
+/** While waiting for the agents to finish, look this often. */
+export const IDLE_POLL_MS = 10_000;
+
+const NO_BUSY: UpdateBusyInfo = { agents: [], chats: [], terminals: [] };
 
 export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, auto = true): AppUpdateState {
   const [phase, setPhase] = useState<UpdatePhase>('idle');
   const [offer, setOffer] = useState<UpdateOffer | null>(null);
-  const [busyAgents, setBusyAgents] = useState<string[]>([]);
+  const [busy, setBusy] = useState<UpdateBusyInfo>(NO_BUSY);
+  const [percent, setPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reopened, setReopened] = useState(false);
   const live = useRef(true);
-  const installing = useRef(false);
+  const working = useRef(false);
+
+  const readBusy = useCallback(async (): Promise<UpdateBusyInfo> => {
+    try {
+      if (transport.busyInfo) return await transport.busyInfo();
+      return { agents: await transport.busy(), chats: [], terminals: [] };
+    } catch {
+      return NO_BUSY;
+    }
+  }, [transport]);
 
   const check = useCallback(
     async (loud = false) => {
-      if (installing.current) return;
+      if (working.current) return;
       if (loud) {
         setError(null);
         setPhase('checking');
@@ -54,42 +103,72 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
 
   const run = useCallback(
     async (confirmRunning: boolean) => {
-      installing.current = true;
+      working.current = true;
       setError(null);
-      setPhase('installing');
+      setReopened(false);
+      setPercent(null);
+      setPhase(confirmRunning ? 'installing' : 'downloading');
+      let stopListening: (() => void) | undefined;
       try {
+        if (!confirmRunning && transport.onProgress) {
+          stopListening = await transport.onProgress((progress) => {
+            if (live.current) setPercent(progressPercent(progress));
+          }).catch(() => undefined);
+        }
         await transport.install(confirmRunning);
         // The installer closes the app; if this page is still here the installer did not start.
+        if (live.current) setPhase('installing');
       } catch (e) {
         if (!live.current) return;
+        const code = updateErrorCode(e);
+        if (code === 'UPDATE_RUNNING') {
+          setBusy(await readBusy());
+          setPhase('ready');
+          return;
+        }
         setError(plainUpdateError(e));
-        setPhase('error');
+        setPhase(code === 'UPDATE_STOPPED' ? 'stopped' : 'error');
       } finally {
-        installing.current = false;
+        stopListening?.();
+        working.current = false;
       }
     },
-    [transport],
+    [readBusy, transport],
   );
 
   const update = useCallback(async () => {
-    if (installing.current) return;
-    if (phase !== 'warn') {
-      let agents: string[] = [];
-      try {
-        agents = await transport.busy();
-      } catch {
-        agents = [];
-      }
-      if (agents.length > 0) {
-        setBusyAgents(agents);
-        setPhase('warn');
-        return;
-      }
-    }
-    await run(phase === 'warn');
-  }, [phase, run, transport]);
+    if (working.current) return;
+    await run(false);
+  }, [run]);
 
-  const dismissWarning = useCallback(() => setPhase(offer ? 'available' : 'idle'), [offer]);
+  const restartNow = useCallback(async () => {
+    if (working.current) return;
+    await run(true);
+  }, [run]);
+
+  const restartWhenIdle = useCallback(() => setPhase('waiting'), []);
+
+  const reopenChats = useCallback(async () => {
+    try {
+      await transport.reopenChats?.();
+      if (live.current) setReopened(true);
+    } catch (e) {
+      if (live.current) setError(plainUpdateError(e));
+    }
+  }, [transport]);
+
+  // "When agents finish": look now and then; when nobody is working, go back to Ready with nothing to warn about.
+  useEffect(() => {
+    if (phase !== 'waiting') return;
+    const timer = window.setInterval(() => {
+      void readBusy().then((info) => {
+        if (!live.current || info.agents.length > 0) return;
+        setBusy(info);
+        setPhase((p) => (p === 'waiting' ? 'ready' : p));
+      });
+    }, IDLE_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [phase, readBusy]);
 
   useEffect(() => {
     live.current = true;
@@ -106,5 +185,5 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
     };
   }, [auto, check]);
 
-  return { phase, offer, busyAgents, error, check, update, dismissWarning };
+  return { phase, offer, busyAgents: busy.agents, busy, percent, error, reopened, check, update, restartNow, restartWhenIdle, reopenChats };
 }
