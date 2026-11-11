@@ -12,10 +12,13 @@
 //! Nothing here reads a folder until `scan` or `start` is called with a `HistoryEnv`, and only the agents the person
 //! chose are read. Counts and agent ids are the only things logged or sent: no path and no chat text.
 
+mod browse;
 mod plan;
 mod prefs;
 mod progress;
 mod run;
+#[cfg(test)]
+mod bring_tests;
 #[cfg(test)]
 mod fakes;
 #[cfg(test)]
@@ -32,6 +35,7 @@ use crate::session_chat::history::{
     open_chat, resume_plan as plan_resume, valid_session_id, HistoryEnv, OpenedChat, ResumePlan, SessionHistory,
 };
 
+pub use browse::{BrowsePage, BrowseQuery, BrowseRow, PAGE as BROWSE_PAGE};
 pub use plan::RegistryCatalog;
 pub use prefs::{ImportPrefs, DEFAULT_SINCE_DAYS};
 pub use progress::{Emitter, Phase, Progress, EMIT_EVERY};
@@ -90,10 +94,15 @@ pub struct Found {
 }
 
 /// What the person chose: the agents (by id) and how far back (`None` = all).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// `from_ms` / `to_ms` bound the chats' last-update time (`from_ms` wins over `since_days`); `sessions` limits the run to
+/// those chats (`None` = every chat in the range).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ImportRequest {
     pub agents: Vec<String>,
     pub since_days: Option<u32>,
+    pub from_ms: Option<i64>,
+    pub to_ms: Option<i64>,
+    pub sessions: Option<Vec<String>>,
 }
 
 /// State shared between the importer and its worker thread.
@@ -108,6 +117,8 @@ pub struct Importer {
     catalog: Arc<dyn Catalog>,
     index: Arc<ChatIndex>,
     shared: Arc<Shared>,
+    /// The last listing `browse` made, reused by "Show more".
+    listings: browse::ListingCache,
 }
 
 /// The source with this agent id. `UNKNOWN_AGENT` when the catalog has no reader for it.
@@ -137,7 +148,7 @@ impl Importer {
 
     pub(super) fn with_reporter(catalog: Arc<dyn Catalog>, index: Arc<ChatIndex>, reporter: progress::Reporter) -> Importer {
         let shared = Shared { reporter, cancel: AtomicBool::new(false), running: AtomicBool::new(false) };
-        Importer { catalog, index, shared: Arc::new(shared) }
+        Importer { catalog, index, shared: Arc::new(shared), listings: browse::ListingCache::default() }
     }
 
     /// The agents that can be read (what the screen lists), in registry order.
@@ -148,6 +159,7 @@ impl Importer {
     /// What each agent has, from `list` only (each within its time budget). Reads no chat. Call it only after the
     /// person pressed "Find my chats".
     pub fn scan(&self, env: &HistoryEnv, since_days: Option<u32>) -> Vec<Found> {
+        self.listings.forget();
         plan::scan(self.catalog.as_ref(), &self.index, env, since_days, now_ms())
     }
 
@@ -169,7 +181,9 @@ impl Importer {
         }
         self.shared.cancel.store(false, Ordering::SeqCst);
         self.shared.reporter.reset(Progress { phase: Phase::Looking, ..Progress::idle() });
-        let job = run::Job { sources, since_ms: plan::since_ms(req.since_days, now_ms()), env };
+        let since_ms = req.from_ms.or_else(|| plan::since_ms(req.since_days, now_ms()));
+        let only = req.sessions.map(|sessions| sessions.into_iter().filter(|session| valid_session_id(session)).collect());
+        let job = run::Job { sources, since_ms, until_ms: req.to_ms, only, env };
         let (index, shared) = (self.index.clone(), self.shared.clone());
         let spawned = std::thread::Builder::new().name("chat-import".into()).spawn(move || run::run(&index, &shared, job));
         if spawned.is_err() {

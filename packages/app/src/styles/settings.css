@@ -513,6 +513,13 @@
   width: 100%;
   min-width: 0;
 }
+.settings .st-field.st-textarea {
+  height: auto;
+  min-height: 84px;
+  padding: 6px 8px;
+  line-height: 1.4;
+  resize: vertical;
+}
 .settings .st-field::placeholder {
   color: var(--label-3);
 }

@@ -14,7 +14,7 @@ type CockpitState = Pick<CockpitApi, 'registry' | 'prompts' | 'asked' | 'statusS
 
 type MissionFacts = AttentionInput['missions'];
 
-function derive(c: CockpitState, stuckPaneIds: string[], notices: { id: string; at_ms?: number }[], missions?: MissionFacts, companions?: AttentionInput['companions'], teamRed?: AttentionInput['teamRed']): NeedsYouItem[] {
+function derive(c: CockpitState, stuckPaneIds: string[], notices: { id: string; at_ms?: number }[], missions?: MissionFacts, companions?: AttentionInput['companions'], teamRed?: AttentionInput['teamRed'], lendRequests?: AttentionInput['lendRequests']): NeedsYouItem[] {
   return deriveNeedsYou({
     panes: c.registry.paneList.map((p) => ({ id: p.info.id, status: p.status })),
     prompts: c.prompts,
@@ -25,6 +25,7 @@ function derive(c: CockpitState, stuckPaneIds: string[], notices: { id: string; 
     missions,
     companions,
     teamRed,
+    lendRequests,
   });
 }
 
@@ -39,9 +40,11 @@ export function useNeedsYouSource(
   companions?: AttentionInput['companions'],
   /** War Room: unclaimed red default branches (`useTeam`), like the Rust `team_ci:` items. */
   teamRed?: AttentionInput['teamRed'],
+  /** Share an agent: open requests to borrow from me (`useLend`). */
+  lendRequests?: AttentionInput['lendRequests'],
 ): NeedsYouItem[] {
   const { notices } = useAskNotices(askbar);
-  const items = useMemo(() => derive(c, Object.keys(signals), notices, missions, companions, teamRed), [c.registry.paneList, c.prompts, c.asked.questions, c.statusSince, signals, notices, missions, companions, teamRed]); // eslint-disable-line react-hooks/exhaustive-deps
+  const items = useMemo(() => derive(c, Object.keys(signals), notices, missions, companions, teamRed, lendRequests), [c.registry.paneList, c.prompts, c.asked.questions, c.statusSince, signals, notices, missions, companions, teamRed, lendRequests]); // eslint-disable-line react-hooks/exhaustive-deps
   useShadowCheck(items);
   return items;
 }

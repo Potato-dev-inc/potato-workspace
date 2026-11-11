@@ -158,6 +158,8 @@ export interface MemberView {
   github: string | null;
   githubConfirmed: boolean;
   devices: number;
+  /** The member's computers by name (Request usage lists them). Absent from an older backend: `devices` is all there is. */
+  deviceList?: { id: string; name: string; current?: boolean }[];
 }
 
 /** Someone waiting for my yes (admin only). */

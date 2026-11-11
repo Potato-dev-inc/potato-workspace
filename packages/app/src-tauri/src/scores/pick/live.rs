@@ -147,7 +147,7 @@ impl PickIo for AppIo {
     }
 
     fn account_ok(&self, agent_id: &str, account_id: &str) -> bool {
-        crate::accounts::validate_for_run(agent_id, account_id).is_ok()
+        crate::accounts::validate_for_agent_run(agent_id, account_id).is_ok()
     }
 
     fn account_label(&self, account_id: &str) -> Option<String> {

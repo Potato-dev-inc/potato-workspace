@@ -66,7 +66,7 @@ const META_SPEC: FileHistorySpec = FileHistorySpec { id: SessionKey::Meta(meta_o
 
 fn meta_of(path: &Path) -> Option<FileMeta> {
     let name = path.file_name()?.to_str()?;
-    name.starts_with("meta").then(|| FileMeta { id: "meta-session-0001".to_string(), cwd: None })
+    name.starts_with("meta").then(|| FileMeta { id: "meta-session-0001".to_string(), cwd: None, child: false })
 }
 
 /// A folder under the system temp folder, unique per test. It is never deleted by the tests.

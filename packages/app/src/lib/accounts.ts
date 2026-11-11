@@ -1,11 +1,27 @@
 // User accounts per agent (Settings > Agents > Accounts, cockpit "+" menu). Backend: `accounts.rs`.
 import { invoke } from '@tauri-apps/api/core';
+import { leftText } from './lend';
 
 export interface Account {
   id: string;
   agent_id: string;
   label: string;
   home: string;
+  /** A lend sign-in (Lend through my PC): signed in once, used only for lending. Never offered as a login to start with. */
+  lend_only?: boolean;
+  /** A sign-in lent to this PC (`lend:<grant id>`), shown next to my own. Has no home folder. */
+  borrowed?: boolean;
+  /** Borrowed only: when the lend ends, in epoch milliseconds. */
+  ends_ms?: number;
+}
+
+/** What `accounts_overview` lists in `borrowed`: a grant lent to this PC, one more sign-in each. */
+export interface BorrowedSignIn {
+  id: string;
+  agent_id: string;
+  label: string;
+  ends_ms: number;
+  grant_id: string;
 }
 
 /** An agent whose profile declares how it is pointed at another account. */
@@ -20,6 +36,8 @@ export interface AccountsOverview {
   accounts: Account[];
   /** Per agent id: which login a helper that agent starts uses. `ask`, `main` or an account id. Absent on an old backend. */
   helper_logins?: Record<string, string>;
+  /** Grants lent to this PC (desktop window only; empty while Lend through my PC is off, absent on an old backend). */
+  borrowed?: BorrowedSignIn[];
 }
 
 export interface AccountsApi {
@@ -48,6 +66,24 @@ export const tauriAccountsApi: AccountsApi = {
   openLoginPane: (agentId, accountId) => call<string>('new_pane', { agentId, accountId }),
   setHelperLogin: (agentId, value) => call<string>('accounts_set_helper_login', { agentId, value }),
 };
+
+/**
+ * The sign-ins a pane, chat or terminal can start with: my own logins (a lend-only one is for lending, so it is left
+ * out) and then the borrowed ones that are still running. Settings > Accounts keeps using `overview.accounts`.
+ */
+export function pickableAccounts(overview: Pick<AccountsOverview, 'accounts' | 'borrowed'>, now: number = Date.now()): Account[] {
+  const own = overview.accounts.filter((a) => !a.lend_only);
+  const borrowed = (overview.borrowed ?? [])
+    .filter((b) => b.ends_ms > now)
+    .map((b): Account => ({ id: b.id, agent_id: b.agent_id, label: b.label, home: '', borrowed: true, ends_ms: b.ends_ms }));
+  return [...own, ...borrowed];
+}
+
+/** "Leo's PC (lent) · 2h 14m left" for a borrowed sign-in, the plain label for my own. */
+export function signInLabel(account: Pick<Account, 'label' | 'borrowed' | 'ends_ms'>, now: number = Date.now()): string {
+  if (!account.borrowed || account.ends_ms === undefined) return account.label;
+  return `${account.label} · ${leftText(account.ends_ms - now)} left`;
+}
 
 export function accountsFor(accounts: Account[], agentId: string): Account[] {
   return accounts.filter((a) => a.agent_id === agentId);
@@ -102,10 +138,15 @@ export function rememberSignIn(agentId: string, accountId: string | undefined): 
  * Which sign-in a start can use without asking: the one used last for this agent, when it is still there.
  * `null` means ask (nothing remembered, or the remembered one was removed). `{ accountId: undefined }` is the default sign-in.
  */
-export function rememberedSignIn(accounts: Account[], agentId: string, last: LastSignIns = readLastSignIns()): { accountId: string | undefined; label: string } | null {
+export function rememberedSignIn(
+  accounts: Account[],
+  agentId: string,
+  last: LastSignIns = readLastSignIns(),
+  now: number = Date.now(),
+): { accountId: string | undefined; label: string } | null {
   const v = last[agentId];
   if (v === undefined) return null;
   if (v === '') return { accountId: undefined, label: 'Default' };
-  const found = accountsFor(accounts, agentId).find((a) => a.id === v);
-  return found ? { accountId: found.id, label: found.label } : null;
+  const found = accountsFor(accounts, agentId).find((a) => a.id === v && (!a.borrowed || (a.ends_ms ?? 0) > now));
+  return found ? { accountId: found.id, label: signInLabel(found, now) } : null;
 }

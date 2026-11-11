@@ -1,6 +1,6 @@
 // The New agent page: the rules that need no screen. Greeting, example tasks, which agent can start, the run-as
 // choice, pinned home cards, and the request the page hands to whoever starts the agent. No React, no IPC.
-import type { Account } from '../../../lib/accounts';
+import { signInLabel, type Account } from '../../../lib/accounts';
 import type { AgentDescriptor } from '../../../lib/agentRegistry';
 
 // ---------- greeting ----------
@@ -79,7 +79,7 @@ export function agentChoices(agents: readonly AgentDescriptor[], accounts: reado
     const logins = accounts.filter((a) => a.agent_id === agent.id);
     out.push({ key: agent.id, agentId: agent.id, label, state, hint });
     for (const login of logins) {
-      out.push({ key: `${agent.id}:${login.id}`, agentId: agent.id, accountId: login.id, label: `${label} · ${login.label}`, state, hint });
+      out.push({ key: `${agent.id}:${login.id}`, agentId: agent.id, accountId: login.id, label: `${label} · ${signInLabel(login)}`, state, hint });
     }
   }
   return out;

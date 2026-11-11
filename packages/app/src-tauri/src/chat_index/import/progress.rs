@@ -38,6 +38,14 @@ pub struct Progress {
     pub unchanged: usize,
     pub too_big: usize,
     pub unreadable: usize,
+    /// Of `unreadable`: the chat's file was gone when it was read.
+    pub missing: usize,
+    /// Of `unreadable`: the chat is in a layout this version does not know.
+    pub format: usize,
+    /// Chats written to the index in this run (new, or changed since they were brought).
+    pub brought: usize,
+    /// Chats with no message of the person or the agent: left out, not an error.
+    pub empty: usize,
     pub message: Option<String>,
 }
 
@@ -52,6 +60,10 @@ impl Progress {
             unchanged: 0,
             too_big: 0,
             unreadable: 0,
+            missing: 0,
+            format: 0,
+            brought: 0,
+            empty: 0,
             message: None,
         }
     }

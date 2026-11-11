@@ -110,7 +110,8 @@ fn only_known_files_use_the_p2p_module() {
     for file in files(&tauri_src(), &["rs"]) {
         let rel = file.strip_prefix(tauri_src()).unwrap().to_string_lossy().replace('\\', "/");
         // The desk link (My computers, DL-7 and DL-9) is the first capability built on the link layer.
-        if rel.starts_with("p2p/") || rel.starts_with("desk/link/") || allowed.contains(&rel.as_str()) {
+        // Share an agent (Lend through my PC) is the `agents/lend` capability: its own folder.
+        if rel.starts_with("p2p/") || rel.starts_with("desk/link/") || rel.starts_with("capacity_proxy/") || allowed.contains(&rel.as_str()) {
             continue;
         }
         let text = code_only(&read(&file));

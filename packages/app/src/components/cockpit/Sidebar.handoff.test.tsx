@@ -7,8 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaneInfo } from '@potato-workspace/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { GitState, ShipApi } from '../../lib/ship-api';
-import { HANDOFF_WRITE_PROMPT, type HandoffDeps } from '../../lib/handoff';
+import { quickWritePrompt, type HandoffDeps } from '../../lib/handoff';
+import type { HandoffControl } from '../../hooks/useHandoff';
 import { Sidebar } from './Sidebar';
+
+const invoke = vi.hoisted(() => vi.fn(async (_cmd: string, _args?: unknown) => null as unknown));
+vi.mock('@tauri-apps/api/core', async (importOriginal) => ({ ...(await importOriginal<typeof import('@tauri-apps/api/core')>()), invoke }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
@@ -103,6 +107,14 @@ function fakeDeps(writes: boolean): HandoffDeps {
       if (sent && busy > 0) busy -= 1;
     },
     now: () => clock,
+    // The default mode (Handoff to new agent) is what these tests run.
+    quick: {
+      stamp: () => '20261111-0930',
+      prepare: vi.fn(async (_id: string, stamp: string) => ({ stamp, path: PATH })),
+      appendNotes: vi.fn(async () => undefined),
+      archive: vi.fn(async () => 'D:/data/handoffs/x.md'),
+      account: vi.fn(async () => undefined),
+    },
   };
 }
 
@@ -120,6 +132,8 @@ const rightClick = (el: HTMLElement) => el.dispatchEvent(new MouseEvent('context
 const menuItem = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent === label);
 const statusText = () => host.querySelector('[data-testid="handoff-status"]')?.textContent ?? null;
 
+const PATH = 'C:\work\shop/.potato/handoffs/handoff-20261111-0930.md';
+
 describe('Handoff from here (pane row menu)', () => {
   it('shows the item on an agent pane, not on a plain shell', async () => {
     await render(fakeApi(), fakeDeps(true));
@@ -129,13 +143,13 @@ describe('Handoff from here (pane row menu)', () => {
     expect(menuItem('Handoff from here')).toBeUndefined();
   });
 
-  it('starts the flow: asks the agent for HANDOFF.md, then reports the new pane', async () => {
+  it('starts the flow: asks the agent for the temporary note, then reports the new pane', async () => {
     const deps = fakeDeps(true);
     await render(fakeApi(), deps);
     await act(async () => rightClick(rowOf('Agent X')));
     await act(async () => menuItem('Handoff from here')!.click());
     await vi.waitFor(() => expect(statusText()).toContain('Opened Agent X two'));
-    expect(deps.send).toHaveBeenCalledWith('p1', HANDOFF_WRITE_PROMPT);
+    expect(deps.send).toHaveBeenCalledWith('p1', quickWritePrompt(PATH));
     expect(deps.startTerminal).toHaveBeenCalledWith('agentx', 'C:\\work\\shop');
     // The old pane stays open: nothing closes or replaces it.
     expect(rowOf('Agent X')).toBeTruthy();
@@ -145,8 +159,16 @@ describe('Handoff from here (pane row menu)', () => {
     await render(fakeApi(), fakeDeps(false));
     await act(async () => rightClick(rowOf('Agent X')));
     await act(async () => menuItem('Handoff from here')!.click());
-    await vi.waitFor(() => expect(statusText()).toContain("The agent finished but HANDOFF.md wasn't written."));
+    await vi.waitFor(() => expect(statusText()).toContain("The agent finished but the handoff file wasn't written."));
     await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="handoff-status"] button')!.click());
     expect(statusText()).toBeNull();
+  });
+
+  it('Quick handoff: shows "HANDOFF.md saved" with Open file, which opens that file for the pane', async () => {
+    const handoff: HandoffControl = { status: { kind: 'saved', paneId: 'p1', text: 'HANDOFF.md saved' }, busy: false, mode: 'file', allowed: () => true, start: vi.fn(), dismiss: vi.fn() };
+    await act(async () => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} ship={makeShip()} handoff={handoff} />));
+    expect(statusText()).toContain('HANDOFF.md saved');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="handoff-open-file"]')!.click());
+    expect(invoke).toHaveBeenCalledWith('handoff_open_file', { paneId: 'p1' });
   });
 });

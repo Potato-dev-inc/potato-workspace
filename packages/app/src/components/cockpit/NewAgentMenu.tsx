@@ -10,7 +10,7 @@
 // here, from the person's own history. It starts nothing: only a press on its Start button does.
 import { SIGN_IN } from '../../lib/glossary';
 import { Fragment, useEffect, useState } from 'react';
-import { accountsFor, needsAccountStep, rememberSignIn, rememberedSignIn, tauriAccountsApi, type Account, type AccountsApi } from '../../lib/accounts';
+import { accountsFor, needsAccountStep, pickableAccounts, rememberSignIn, rememberedSignIn, signInLabel, tauriAccountsApi, type Account, type AccountsApi } from '../../lib/accounts';
 import { startFailure, type AcpAddable, type AcpChatApi, type AcpLaneAgent, type TerminalChatAgent } from '../../lib/acpChat';
 import { blockOf, type AcpAddonApi } from '../../lib/acpAddon';
 import type { StartMode } from '../../lib/newAgentStart';
@@ -76,11 +76,11 @@ interface Props {
     onMode: (mode: StartMode) => void;
     agents: readonly AcpLaneAgent[];
     /** Starts the chat and rejects with the backend's error. */
-    onStart: (agentId: string) => Promise<void>;
+    onStart: (agentId: string, accountId?: string) => Promise<void>;
     /** Agents whose saved way to run is Chat (terminal). */
     terminalChat?: readonly TerminalChatAgent[];
     /** Starts the agent as Chat (terminal) and opens its Chat tab. Rejects with the backend's error. */
-    onStartTerminal?: (agentId: string) => Promise<void>;
+    onStartTerminal?: (agentId: string, accountId?: string) => Promise<void>;
     /** Agents with no chat yet: each gets a quiet "Set up chat" next to its name. */
     canAdd?: readonly AcpAddable[];
     /** The add-on status, install and progress (the Settings install). */
@@ -128,7 +128,11 @@ export function NewAgentMenu({
   chat,
 }: Props) {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  // A sign-in lent by another PC ("Leo's PC (lent) · 2h 14m left") is listed next to my own, and its time left ticks.
+  const [now, setNow] = useState(() => Date.now());
   const [picking, setPicking] = useState<LaunchEntry | null>(null);
+  // The sign-in step was opened for a chat (a borrowed sign-in can start one too): which kind of chat to start.
+  const [pickingChat, setPickingChat] = useState<'acp' | 'terminal_chat' | null>(null);
   const [step, setStep] = useState<Step>('agents');
   const [recent, setRecent] = useState<RecentProject[] | null>(null);
   const [plan, setPlan] = useState<GitInitPlan | null>(null);
@@ -159,12 +163,21 @@ export function NewAgentMenu({
     let alive = true;
     accountsApi
       .list()
-      .then((o) => alive && setAccounts(o.accounts))
+      .then((o) => alive && setAccounts(pickableAccounts(o)))
       .catch(() => undefined); // no accounts store (browser, old backend): the plain menu still works
     return () => {
       alive = false;
     };
   }, [accountsApi]);
+
+  const anyBorrowed = accounts.some((a) => a.borrowed);
+  useEffect(() => {
+    if (!anyBorrowed) return undefined;
+    const tick = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(tick);
+  }, [anyBorrowed]);
+  // A lend that ran out while the menu was open is gone from the choices.
+  const live = accounts.filter((a) => !a.borrowed || (a.ends_ms ?? 0) > now);
 
   const loadRecent = () => {
     ship
@@ -201,7 +214,7 @@ export function NewAgentMenu({
 
   const start = (agentId: string, accountId?: string) => {
     // An agent with several sign-ins starts under the one used last next time, without the extra step.
-    if (accountsFor(accounts, agentId).length > 0) rememberSignIn(agentId, accountId);
+    if (accountsFor(live, agentId).length > 0) rememberSignIn(agentId, accountId);
     onClose();
     onStart(agentId, accountId);
   };
@@ -209,8 +222,8 @@ export function NewAgentMenu({
   /** A terminal. An agent with several sign-ins uses the one from last time; `ask` (Shift+Enter, "Change") shows the choice. */
   const startTerminal = (agentId: string, ask = false) => {
     const entry = entryOf(agentId);
-    if (entry && needsAccountStep(accounts, agentId)) {
-      const last = ask ? null : rememberedSignIn(accounts, agentId);
+    if (entry && needsAccountStep(live, agentId)) {
+      const last = ask ? null : rememberedSignIn(live, agentId, undefined, now);
       if (last) start(agentId, last.accountId);
       else setPicking(entry);
     } else start(agentId);
@@ -220,7 +233,14 @@ export function NewAgentMenu({
   const launch = (agentId: string, accountId?: string) => {
     const route = routeOf(agentId);
     setChatFail(null);
-    if (route === 'acp' || route === 'terminal_chat') void startChat(agentId, route);
+    if (route === 'acp' || route === 'terminal_chat') {
+      // A chat has no login step, except when a sign-in lent by another PC is there to choose.
+      const entry = entryOf(agentId);
+      if (entry && live.some((a) => a.borrowed && a.agent_id === agentId)) {
+        setPickingChat(route);
+        setPicking(entry);
+      } else void startChat(agentId, route);
+    }
     else if (route === 'prompt') {
       setStep('agents');
       setPromptFor(agentId);
@@ -229,19 +249,19 @@ export function NewAgentMenu({
   };
 
   /** Starts the chat and closes the menu; rejects with the backend's error (the prompt shows it). */
-  const runChat = async (agentId: string, how: 'acp' | 'terminal_chat') => {
+  const runChat = async (agentId: string, how: 'acp' | 'terminal_chat', accountId?: string) => {
     if (!chat) return;
-    if (how === 'acp') await chat.onStart(agentId);
-    else await chat.onStartTerminal?.(agentId);
+    if (how === 'acp') await (accountId === undefined ? chat.onStart(agentId) : chat.onStart(agentId, accountId));
+    else await (accountId === undefined ? chat.onStartTerminal?.(agentId) : chat.onStartTerminal?.(agentId, accountId));
     onClose();
   };
 
-  const startChat = async (agentId: string, how: 'acp' | 'terminal_chat') => {
+  const startChat = async (agentId: string, how: 'acp' | 'terminal_chat', accountId?: string) => {
     if (!chat || chatBusy) return;
     setChatBusy(true);
     setChatFail(null);
     try {
-      await runChat(agentId, how);
+      await runChat(agentId, how, accountId);
     } catch (err) {
       // The chat add-on is missing: the same small prompt as for an agent with no chat, not a paragraph.
       if (blockOf(err instanceof Error ? err.message : String(err)) === 'addon') {
@@ -467,18 +487,27 @@ export function NewAgentMenu({
   }
 
   if (picking) {
+    const chooseForChat = (accountId: string | undefined) => {
+      const how = pickingChat!;
+      setPicking(null);
+      setPickingChat(null);
+      void startChat(picking.type, how, accountId);
+    };
     return (
       <>
         <div className="ck-menu-cap">{picking.label} · {SIGN_IN.action.toLowerCase()}</div>
-        <button type="button" role="menuitem" className="ck-menu-item" onClick={() => start(picking.type)}>
+        <button type="button" role="menuitem" className="ck-menu-item" onClick={() => (pickingChat ? chooseForChat(undefined) : start(picking.type))}>
           <span>{SIGN_IN.defaultOne}</span>
         </button>
-        {accountsFor(accounts, picking.type).map((a) => (
-          <button key={a.id} type="button" role="menuitem" className="ck-menu-item" onClick={() => start(picking.type, a.id)}>
-            <span>{a.label}</span>
+        {accountsFor(live, picking.type).map((a) => (
+          <button key={a.id} type="button" role="menuitem" className="ck-menu-item" onClick={() => (pickingChat ? chooseForChat(a.id) : start(picking.type, a.id))}>
+            <span>{signInLabel(a, now)}</span>
           </button>
         ))}
-        <button type="button" role="menuitem" className="ck-menu-item" onClick={() => setPicking(null)}>
+        <button type="button" role="menuitem" className="ck-menu-item" onClick={() => {
+            setPicking(null);
+            setPickingChat(null);
+          }}>
           <span>Back</span>
         </button>
       </>
@@ -542,8 +571,8 @@ export function NewAgentMenu({
       {entries.map((e) => {
         const route = routeOf(e.type);
         // An agent that will start as a chat skips the login step: a chat session has no login choice.
-        const hasAccounts = route === 'terminal' && needsAccountStep(accounts, e.type);
-        const last = hasAccounts ? rememberedSignIn(accounts, e.type) : null;
+        const hasAccounts = route === 'terminal' && needsAccountStep(live, e.type);
+        const last = hasAccounts ? rememberedSignIn(live, e.type, undefined, now) : null;
         const button = (
           <button
             key={e.type}
@@ -567,7 +596,7 @@ export function NewAgentMenu({
             }}
           >
             <span>{e.label}</span>
-            {!e.disabled && hasAccounts && <span className="ck-menu-hint">{last ? `${last.label} ›` : `${accountsFor(accounts, e.type).length + 1} sign-ins ›`}</span>}
+            {!e.disabled && hasAccounts && <span className="ck-menu-hint">{last ? `${last.label} ›` : `${accountsFor(live, e.type).length + 1} sign-ins ›`}</span>}
             {!e.disabled && !hasAccounts && route === 'terminal' && readyAgents.has(e.type) && <span className="ck-menu-hint">ready</span>}
           </button>
         );

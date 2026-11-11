@@ -65,9 +65,14 @@ pub fn labs_on(public: &Value) -> bool {
 /// Spaces has its own Labs switch; every other capability uses `LABS_KEY`.
 pub const SPACES_LABS_KEY: &str = "spaces_enabled";
 
+/// Share an agent ("Lend through my PC") has its own Labs switch too.
+pub const LEND_LABS_KEY: &str = "lend_enabled";
+
 pub fn labs_key_for(capability: &str) -> &'static str {
     if capability == capability::SPACES {
         SPACES_LABS_KEY
+    } else if capability == capability::AGENTS_LEND {
+        LEND_LABS_KEY
     } else {
         LABS_KEY
     }
@@ -82,11 +87,18 @@ struct LabsGated {
     inner: Arc<dyn Permissions>,
     desk: Arc<AtomicBool>,
     spaces: Arc<AtomicBool>,
+    lend: Arc<AtomicBool>,
 }
 
 impl Permissions for LabsGated {
     fn allowed(&self, peer: &NodeId, capability: &str) -> bool {
-        let on = if capability == capability::SPACES { &self.spaces } else { &self.desk };
+        let on = if capability == capability::SPACES {
+            &self.spaces
+        } else if capability == capability::AGENTS_LEND {
+            &self.lend
+        } else {
+            &self.desk
+        };
         on.load(Ordering::SeqCst) && self.inner.allowed(peer, capability)
     }
 
@@ -124,6 +136,7 @@ struct Running {
 pub struct P2p {
     labs: Arc<AtomicBool>,
     spaces_labs: Arc<AtomicBool>,
+    lend_labs: Arc<AtomicBool>,
     /// True while either switch is on: the accept loop refuses everything otherwise.
     any_labs: Arc<AtomicBool>,
     keys: KeyStore,
@@ -145,6 +158,7 @@ impl P2p {
         Self {
             labs: Arc::new(AtomicBool::new(false)),
             spaces_labs: Arc::new(AtomicBool::new(false)),
+            lend_labs: Arc::new(AtomicBool::new(false)),
             any_labs: Arc::new(AtomicBool::new(false)),
             keys,
             factory,
@@ -185,6 +199,8 @@ impl P2p {
     pub fn labs_for(&self, capability: &str) -> bool {
         if capability == capability::SPACES {
             self.spaces_labs.load(Ordering::SeqCst)
+        } else if capability == capability::AGENTS_LEND {
+            self.lend_labs.load(Ordering::SeqCst)
         } else {
             self.labs()
         }
@@ -197,10 +213,12 @@ impl P2p {
     pub fn apply_settings(&self, public: &Value) {
         let desk = labs_on(public);
         let spaces = labs_on_for(public, capability::SPACES);
+        let lend = labs_on_for(public, capability::AGENTS_LEND);
         self.labs.store(desk, Ordering::SeqCst);
         self.spaces_labs.store(spaces, Ordering::SeqCst);
-        self.any_labs.store(desk || spaces, Ordering::SeqCst);
-        if !desk && !spaces {
+        self.lend_labs.store(lend, Ordering::SeqCst);
+        self.any_labs.store(desk || spaces || lend, Ordering::SeqCst);
+        if !desk && !spaces && !lend {
             self.stop();
             return;
         }
@@ -327,7 +345,12 @@ impl P2p {
                 let task = tokio::spawn(accept_loop(
                     transport.clone(),
                     self.registry.clone(),
-                    Arc::new(LabsGated { inner: self.perms.clone(), desk: self.labs.clone(), spaces: self.spaces_labs.clone() }),
+                    Arc::new(LabsGated {
+                        inner: self.perms.clone(),
+                        desk: self.labs.clone(),
+                        spaces: self.spaces_labs.clone(),
+                        lend: self.lend_labs.clone(),
+                    }),
                     self.refusals.clone(),
                     self.any_labs.clone(),
                 ));

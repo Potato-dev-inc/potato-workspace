@@ -22,6 +22,8 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'helper-agents',
   'keep-helpers-open',
   'close-helpers-with-agent',
+  // Agents: Hand off does (and the fixed notes)
+  'handoff-mode',
   // Keys: all of them
   'key-anthropic',
   'key-openai',

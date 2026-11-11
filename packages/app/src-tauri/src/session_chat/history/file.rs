@@ -21,6 +21,9 @@ pub struct FileMeta {
     pub id: String,
     /// The folder the chat was started in, as written in the file (`~` is applied by the store).
     pub cwd: Option<String>,
+    /// The file is a sub-conversation of another chat (a helper agent's thread). It is not a chat of its own, so a
+    /// listing leaves it out, the way a sidechain file is left out.
+    pub child: bool,
 }
 
 /// How a chat file names its chat (its session id).
@@ -109,22 +112,31 @@ impl FileHistory {
             SessionKey::Meta(_) => return None,
         };
         let cwd = self.spec.cwd_pointer.and_then(|pointer| pointer_text(head.as_deref()?, pointer));
-        Some(FileMeta { id, cwd })
+        Some(FileMeta { id, cwd, child: false })
     }
 
-    /// The one file of this chat. A plain file wins over a compressed copy of the same chat.
+    /// The one file of this chat. A plain file wins over a compressed copy of the same chat. A file whose name holds the
+    /// session id is tried first, so a store that keeps the id inside the file (and must open each file to read it) is
+    /// not opened file by file for every chat; the rest are looked at only when no name matched.
     fn locate(&self, roots: &[PathBuf], session: &str) -> Option<PathBuf> {
         let caps = ListLimits::default();
         let walked = collect(&self.spec, roots, caps.max_entries, caps.budget);
+        let (named, others): (Vec<PathBuf>, Vec<PathBuf>) =
+            walked.files.into_iter().partition(|path| path.file_name().is_some_and(|name| name.to_string_lossy().contains(session)));
+        self.first_with_id(&named, session).or_else(|| self.first_with_id(&others, session))
+    }
+
+    /// The first of `paths` (a plain file before a compressed one) whose chat id is `session`.
+    fn first_with_id(&self, paths: &[PathBuf], session: &str) -> Option<PathBuf> {
         let mut compressed: Option<PathBuf> = None;
-        for path in walked.files {
-            if self.id_of(&path).as_deref() != Some(session) {
+        for path in paths {
+            if self.id_of(path).as_deref() != Some(session) {
                 continue;
             }
-            if !is_zst(&path) {
-                return Some(path);
+            if !is_zst(path) {
+                return Some(path.clone());
             }
-            compressed.get_or_insert(path);
+            compressed.get_or_insert_with(|| path.clone());
         }
         compressed
     }
@@ -138,16 +150,21 @@ impl SessionHistory for FileHistory {
         let home = env.home().map(|home| home.to_string_lossy().into_owned());
         let mut out = Listing { cut_short: walked.cut_short, ..Listing::default() };
         let mut found: Vec<(bool, HistoryChat)> = Vec::new();
+        // Newest first, so a time budget that runs out loses the oldest chats and never the ones just written.
+        let mut dated: Vec<(i64, &PathBuf, fs::Metadata)> = Vec::with_capacity(walked.files.len());
         for path in &walked.files {
+            match fs::metadata(path) {
+                Ok(meta) => dated.push((modified_ms(&meta), path, meta)),
+                Err(_) => out.unreadable += 1,
+            }
+        }
+        dated.sort_by(|a, b| b.0.cmp(&a.0));
+        for (updated_ms, path, meta) in &dated {
+            let (updated_ms, path) = (*updated_ms, *path);
             if started.elapsed() >= limits.budget {
                 out.cut_short = true;
                 break;
             }
-            let Ok(meta) = fs::metadata(path) else {
-                out.unreadable += 1;
-                continue;
-            };
-            let updated_ms = modified_ms(&meta);
             if limits.since_ms.is_some_and(|since| updated_ms < since) {
                 continue;
             }
@@ -159,6 +176,9 @@ impl SessionHistory for FileHistory {
                 out.unreadable += 1;
                 continue;
             };
+            if file.child {
+                continue;
+            }
             if !valid_session_id(&file.id) {
                 out.unreadable += 1;
                 continue;

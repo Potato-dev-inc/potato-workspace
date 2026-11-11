@@ -12,6 +12,9 @@ pub const DESK_CLIPBOARD: &[u8] = b"pm/desk-clipboard/1";
 /// Files between my computers.
 pub const FILES: &[u8] = b"pm/files/1";
 
+/// Share an agent: model calls from a borrowing PC to the lending PC (`agents/lend`).
+pub const LEND: &[u8] = b"pm/lend/1";
+
 /// Every name starts with this; anything else is not ours.
 pub const PREFIX: &[u8] = b"pm/";
 

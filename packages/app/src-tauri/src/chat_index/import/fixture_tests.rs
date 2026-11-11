@@ -91,7 +91,7 @@ fn file_importer(dir: &Path) -> (Arc<Importer>, Arc<ChatIndex>) {
 }
 
 fn all_agents() -> ImportRequest {
-    ImportRequest { agents: RegistryCatalog.sources().iter().map(|source| source.id.clone()).collect(), since_days: None }
+    ImportRequest { agents: RegistryCatalog.sources().iter().map(|source| source.id.clone()).collect(), since_days: None, ..ImportRequest::default() }
 }
 
 /// Whether `needle` is in the index file or its write-ahead log.

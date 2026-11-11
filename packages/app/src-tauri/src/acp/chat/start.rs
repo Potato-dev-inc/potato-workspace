@@ -187,6 +187,10 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
         on_close,
     );
     chat.set_handles(handles);
+    // A chat on a borrowed sign-in (`lend:<grant>`) is listed on its grant, so the chip and the usage find it.
+    if let Some(grant) = account_env.as_ref().and_then(|(id, _)| id.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX)) {
+        crate::capacity_proxy::note_pane(grant, &pane_id);
+    }
     deps.host.panes_changed();
     deps.host.state_changed(&pane_id, &chat.state());
     Ok(chat)

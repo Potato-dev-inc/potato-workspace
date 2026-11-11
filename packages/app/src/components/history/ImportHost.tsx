@@ -1,4 +1,4 @@
-// Shows the "Bring my old chats" sheets. Anything can ask for them (the palette, a search hit, the Settings card)
+// Shows the "Bring my chats" sheets. Anything can ask for them (the palette, a search hit, the Settings card)
 // through the request stores in lib/chatImport.ts; this host watches both and shows the sheet while a request waits.
 // Closing a sheet clears its request, so no request means no sheet. "Continue in a pane" starts a pane with exactly the
 // backend's plan, selects it and opens its Chat tab.
@@ -19,7 +19,7 @@ import { BringChatsPanel, BRING_CHATS_TITLE_ID } from './BringChatsPanel';
 import { ImportedChatSheet } from './ImportedChatSheet';
 
 /**
- * The Bring my old chats panel in a sheet, while it is asked for. A window with no cockpit around it (the Settings
+ * The Bring my chats panel in a sheet, while it is asked for. A window with no cockpit around it (the Settings
  * window) uses it alone with `standalone`: the sheet styles live under `.cockpit`, so a see-through one wraps it.
  */
 export function BringChatsHost({ api = chatImportApi, standalone = false }: { api?: ImportApi; standalone?: boolean }) {

@@ -1,0 +1,57 @@
+# Lend through my PC (Labs "lend_enabled", `crate::capacity_proxy`): Claude's proxy spec, as data.
+# The sign-in never leaves the lending PC. The borrowing PC's Claude sends its Messages API calls to a local
+# shim, which carries them over the PC link to the lender; the lender adds its own auth and forwards them to the
+# ONE upstream below, for the listed method + path pairs only. Generic code reads `shape`, never the agent name.
+# Proven in the lend lab (2026-11-11):
+# a Claude subscription token works through the gateway for both `claude -p` and the
+# claude ACP adapter (200, usage counted). Not proven on two real PCs yet, so "lab".
+agent_id = "claude"
+support = "lab"
+
+# How usage is counted from the replies (message_start / message_delta `usage` in the SSE stream).
+shape = "anthropic_messages_sse"
+upstream = "https://api.anthropic.com"
+paths = ["POST /v1/messages", "POST /v1/messages/count_tokens"]
+max_body_bytes = 16777216
+
+# A pasted Anthropic API key (kept in the OS credential store, never in a file).
+[auth.api_key]
+header = "x-api-key"
+scheme = ""
+
+# A lend sign-in the app manages (an account flagged lend_only, signed in once inside the app). Only that
+# folder is ever read, never the person's own login folder. The token is read again on every request (the agent
+# rewrites the file when it renews the token).
+[auth.account]
+header = "authorization"
+scheme = "Bearer"
+file = ".credentials.json"
+json_pointer = "/claudeAiOauth/accessToken"
+# When the token runs out (epoch milliseconds). An expired token is never sent: the borrower gets a clear message.
+expires_pointer = "/claudeAiOauth/expiresAt"
+expires_unit = "ms"
+# Joined onto the borrower's own value of the header (comma separated), never replacing it.
+add_headers = [{ name = "anthropic-beta", value = "oauth-2025-04-20" }]
+
+# Claude Code refreshes its own OAuth token (and rewrites .credentials.json) before any model call when it is near
+# expiry. `claude auth status` was not proven to refresh, so a 1-turn haiku call is used, and only when the token
+# is within 4 minutes of expiry (inside Claude Code's own renew window of about 5 minutes, so one call renews it; about once per 8 hours while a lend is active). The app never talks to the
+# provider's OAuth endpoint itself.
+[auth.account.refresh]
+args = ["-p", "--model", "haiku", "--max-turns", "1", "Reply with OK"]
+before_secs = 240
+
+# How a pane started on a borrowed grant is pointed at the shim. `{base_url}` is the shim's address.
+[hookup]
+set = [
+  { name = "ANTHROPIC_BASE_URL", value = "{base_url}" },
+  { name = "ANTHROPIC_AUTH_TOKEN", value = "pm-lend" },
+]
+# Every other inherited variable with one of these prefixes is removed from that pane (the borrower's own
+# keys, Bedrock / Vertex switches, another base URL), so the pane can only talk to the shim.
+remove_prefixes = ["ANTHROPIC_", "CLAUDE_"]
+# Removed by name too, even when not inherited (the chat lane passes an allowlist of names).
+remove = [
+  "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL", "ANTHROPIC_CUSTOM_HEADERS",
+  "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CONFIG_DIR",
+]

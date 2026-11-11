@@ -36,6 +36,7 @@ import {
 } from './model';
 import { isStartBlock } from './start';
 import '../../../styles/cockpit-newagent.css';
+import { BringChatsLink } from '../../history/BringChatsLink';
 
 const REMEMBER_KEY = 'pm.newagent.agent';
 
@@ -579,6 +580,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               area.current?.focus();
             }}
           />
+          <BringChatsLink className="bc-link" label="Bring my chats from another agent" />
         </div>
       </div>
     </section>

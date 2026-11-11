@@ -133,8 +133,8 @@ fn custom_homes_with_dotdot_or_overlapping_folders_are_refused_and_never_deleted
     assert!(Path::new(&first.home).join("keep.txt").is_file());
     // A hand-edited accounts.json that points an account at the app data folder deletes nothing.
     let mut file = store.read();
-    file.accounts.push(Account { id: "acc_evil".into(), agent_id: "claude".into(), label: "evil".into(), home: root.join("accounts").join("..").to_string_lossy().into_owned() });
-    file.accounts.push(Account { id: "acc_other".into(), agent_id: "claude".into(), label: "other".into(), home: first.home.clone() });
+    file.accounts.push(Account { id: "acc_evil".into(), agent_id: "claude".into(), label: "evil".into(), home: root.join("accounts").join("..").to_string_lossy().into_owned(), lend_only: false });
+    file.accounts.push(Account { id: "acc_other".into(), agent_id: "claude".into(), label: "other".into(), home: first.home.clone(), lend_only: false });
     store.write(&file).unwrap();
     assert_eq!(store.remove("acc_evil", true), Ok(false));
     assert_eq!(store.remove("acc_other", true), Ok(false), "a home that is not <accounts>/<its own id> is not app-created");
@@ -191,4 +191,14 @@ fn capability_rows_list_each_account_with_its_login_state() {
     assert_eq!(rows, vec![serde_json::json!({"id": work.id, "label": "Work", "login_state": "signed_in"})]);
     assert!(capability_rows(&store, "opencode").is_empty(), "no accounts for an agent without them");
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn an_agent_or_helper_run_may_not_use_a_borrowed_sign_in() {
+    let error = validate_for_agent_run("claude", "lend:lg_abc").unwrap_err();
+    assert_eq!(error, "A borrowed sign-in can only be used in a pane you start yourself, not by an agent or helper run.");
+    // Even with stray spaces, and for any agent: it is refused before anything else is looked at.
+    assert!(validate_for_agent_run("no_such_agent", "  lend:lg_abc").unwrap_err().contains("borrowed sign-in"));
+    // Everything else is judged as before.
+    assert!(validate_for_agent_run("claude", "acc_does_not_exist").unwrap_err().contains("unknown account"));
 }

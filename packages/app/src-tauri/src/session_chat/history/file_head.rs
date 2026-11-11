@@ -7,9 +7,9 @@ use std::path::Path;
 use crate::session_chat::tail::open_lines;
 
 /// Lines read from the start of a file.
-const HEAD_LINES: usize = 50;
+const HEAD_LINES: usize = 100;
 /// Bytes read from the start of a file.
-const HEAD_BYTES: usize = 64 * 1024;
+const HEAD_BYTES: usize = 1024 * 1024;
 
 /// The first lines of `path` without their line ends. `None` when the file cannot be opened or read.
 pub(super) fn head_lines(path: &Path) -> Option<Vec<String>> {

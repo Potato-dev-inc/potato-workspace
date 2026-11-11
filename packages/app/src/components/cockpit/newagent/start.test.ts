@@ -77,3 +77,14 @@ describe('runStart', () => {
     expect(d.notify).toHaveBeenCalledWith('ACP_SIGN_IN_NEEDED: x');
   });
 });
+
+describe('a chat on a borrowed sign-in', () => {
+  it('hands the lent sign-in to the chat start, and the real start sends it as accountId', async () => {
+    const startChat = vi.fn(async () => 'chat-1');
+    const deps = { newAgent: vi.fn(), startChat, select: vi.fn(), send: vi.fn(async () => undefined), notify: vi.fn() };
+    const id = await runStart({ agentId: 'claude', accountId: 'lend:g1', folder: 'C:\p', isolated: false, runAs: 'chat', prompt: 'hi' }, deps);
+    expect(id).toBe('chat-1');
+    expect(startChat).toHaveBeenCalledWith('claude', 'C:\p', 'lend:g1');
+    expect(deps.newAgent).not.toHaveBeenCalled();
+  });
+});

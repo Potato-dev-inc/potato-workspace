@@ -6,9 +6,9 @@ import { SECTION_IDS, groupRows, rowMatches, rowScore, searchSections } from './
 const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row: r })));
 
 describe('settings catalog', () => {
-  it('has exactly the eight sections, in order', () => {
+  it('has exactly the nine sections, in order', () => {
     expect(SECTIONS.map((s) => s.id)).toEqual([...SECTION_IDS]);
-    expect(SECTIONS.map((s) => s.title)).toEqual(['General', 'Agents', 'Orchestrator & Models', 'Keys', 'Bridge & MCP', 'Phone', 'Team', 'Shortcuts']);
+    expect(SECTIONS.map((s) => s.title)).toEqual(['General', 'Agents', 'Orchestrator & Models', 'Keys', 'Bridge & MCP', 'Phone', 'Team', 'Lend', 'Shortcuts']);
   });
 
   it('every row has a unique id, a label and a hint', () => {

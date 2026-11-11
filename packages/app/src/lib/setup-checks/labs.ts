@@ -8,6 +8,7 @@ const LABEL: Record<string, string> = {
   acp_chat_enabled: 'Chat',
   model_bridge_enabled: 'Model Bridge',
   spaces_enabled: 'Spaces',
+  lend_enabled: 'Share an agent',
 };
 
 export function checkLabs(ctx: SetupCheckContext): CheckRow[] {

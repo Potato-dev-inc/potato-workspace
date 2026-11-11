@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { PaneContextMenu } from './PaneContextMenu';
-import type { HandoffDeps } from '../../lib/handoff';
+import { openHandoffFile, type HandoffDeps } from '../../lib/handoff';
 import { useHandoff, type HandoffControl } from '../../hooks/useHandoff';
 import { requestPaneAction, type PaneAction } from '../../lib/pane-actions';
 import { NewAgentMenu, type ProjectChoice } from './NewAgentMenu';
@@ -52,6 +52,7 @@ import { onOpenStartMission, useMissions, useMissionsEnabled, isActive } from '.
 import { TonightHost } from './night/TonightHost';
 import { onOpenTonight } from '../../lib/night-host';
 import { useNightEnabled } from '../../lib/night';
+import { BringChatsLink } from '../history/BringChatsLink';
 
 export function Sidebar({
   c,
@@ -246,9 +247,9 @@ export function Sidebar({
   const [setUpFor, setSetUpFor] = useState<{ agent: NoChatAgent; prefer?: AddChatKind } | null>(null);
   const [startMode, setStartMode] = useStartMode(menuOpen, startModeApi);
   /** Starts the agent's chat in the menu's project and opens it. Rejects with the backend's error. */
-  const startAcpChat = async (agentId: string) => {
+  const startAcpChat = async (agentId: string, accountId?: string) => {
     if (!project) throw new Error('Pick a project folder first.');
-    const started = await acp.start(agentId, project.path, true);
+    const started = await (accountId === undefined ? acp.start(agentId, project.path, true) : acp.start(agentId, project.path, true, accountId));
     c.select(started.pane_id);
   };
   // Missions (Preview, Labs): "+" → Start a mission… opens the start sheet for the menu's project.
@@ -566,9 +567,9 @@ export function Sidebar({
                         terminalChat: terminalChatAgents,
                         addons,
                         resolve: acp.overlayResolve,
-                        onStartTerminal: async (agentId) => {
+                        onStartTerminal: async (agentId, accountId) => {
                           if (!project) throw new Error('Pick a project folder first.');
-                          const paneId = await startTerminalChat(agentId, project.path);
+                          const paneId = await startTerminalChat(agentId, project.path, accountId);
                           c.select(paneId);
                           requestChatTab(paneId);
                         },
@@ -668,7 +669,12 @@ export function Sidebar({
             {section('Idle', groups.idle)}
           </>
         )}
-        {list.length === 0 && c.registry.initialReady && <p className="ck-side-empty">No agents running.</p>}
+        {list.length === 0 && c.registry.initialReady && (
+          <>
+            <p className="ck-side-empty">No agents running.</p>
+            <BringChatsLink className="bc-link ck-side-bring" label="Bring my chats from another agent" />
+          </>
+        )}
         {closedChats.length > 0 && (
           <button type="button" data-testid="side-closed-chats" className="ck-side-new ck-side-add" onClick={() => setClosedOpen(true)}>
             <span className="ck-row-glyph ck-row-glyph--icon">
@@ -685,6 +691,16 @@ export function Sidebar({
       {hand.status && (
         <div className={`ck-handoff${hand.status.kind === 'failed' ? ' is-failed' : ''}`} role="status" data-testid="handoff-status">
           <span className="ck-handoff-text">{hand.status.text}</span>
+          {hand.status.kind === 'saved' && (
+            <button
+              type="button"
+              className="ck-handoff-x"
+              data-testid="handoff-open-file"
+              onClick={() => void openHandoffFile((hand.status as { paneId: string }).paneId).catch(() => c.notify('Could not open HANDOFF.md'))}
+            >
+              Open file
+            </button>
+          )}
           {!handoffBusy && (
             <button type="button" className="ck-handoff-x" aria-label="Dismiss" onClick={hand.dismiss}>
               ×

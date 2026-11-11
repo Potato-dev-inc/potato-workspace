@@ -201,7 +201,7 @@ mod tests {
     }
 
     fn saved_login(id: &str, agent_id: &str) -> Account {
-        Account { id: id.into(), agent_id: agent_id.into(), label: "Work".into(), home: "C:\\Users\\you\\acct".into() }
+        Account { id: id.into(), agent_id: agent_id.into(), label: "Work".into(), home: "C:\\Users\\you\\acct".into(), lend_only: false }
     }
 
     fn plan(agent: AgentChoice, label: &str, vendor: Option<&str>) -> PlanChoice {

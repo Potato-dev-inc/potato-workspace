@@ -1,0 +1,420 @@
+/* Share an agent (Labs): Request usage, the lend sheets, member-row lends, the time-left chip.
+   Works in the cockpit and in the Settings window, so every colour is a token both define (with a fallback).
+   Grayscale, except the time-left chip: amber at 10 minutes, red at 1 (the founder asked for these two). */
+
+.lend-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.42);
+}
+.lend-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 440px;
+  max-width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--bg-float, var(--float-bg, #2a2826));
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
+  box-shadow: var(--float-shadow, 0 12px 32px rgba(0, 0, 0, 0.45));
+  color: var(--label-2, #bbb);
+  font-size: 13px;
+}
+.lend-sheet h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--label, #f4f2ef);
+}
+.lend-sheet p {
+  margin: 0;
+}
+.lend-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.lend-field > span,
+.lend-legend {
+  color: var(--label-3, #999);
+  font-size: 12px;
+}
+.lend-field select,
+.lend-field input[type='text'],
+.lend-field input[type='password'],
+.lend-field input[type='number'],
+.lend-field textarea,
+:is(.cockpit, .settings, body) .lend-num {
+  min-width: 0;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--label, #f4f2ef);
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
+  border-radius: 6px;
+}
+.lend-field textarea {
+  resize: vertical;
+  min-height: 56px;
+}
+.lend-field select:focus-visible,
+.lend-field input:focus-visible,
+.lend-field textarea:focus-visible,
+:is(.cockpit, .settings, body) .lend-num:focus-visible,
+:is(.cockpit, .settings, body) .lend-btn:focus-visible,
+:is(.cockpit, .settings, body) .lend-chip:focus-visible,
+:is(.cockpit, .settings, body) .lend-seg button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus, 0 0 0 3px rgba(255, 255, 255, 0.3));
+}
+.lend-count {
+  align-self: flex-end;
+  color: var(--label-3, #999);
+  font-size: 11px;
+}
+.lend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lend-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+:is(.cockpit, .settings, body) .lend-btn {
+  height: 28px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--label, #f4f2ef);
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+:is(.cockpit, .settings, body) .lend-btn:hover:not(:disabled) {
+  background: var(--fill-hover, rgba(255, 255, 255, 0.1));
+}
+
+:is(.cockpit, .settings, body) .lend-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+:is(.cockpit, .settings, body) .lend-btn.is-primary {
+  color: var(--primary-fg, #1b1a19);
+  background: var(--primary-bg, #f4f2ef);
+  border-color: transparent;
+  font-weight: 500;
+}
+
+:is(.cockpit, .settings, body) .lend-btn.is-plain {
+  background: transparent;
+  border-color: transparent;
+  color: var(--label-2, #bbb);
+}
+
+:is(.cockpit, .settings, body) .lend-btn.is-small {
+  height: 24px;
+  padding: 0 9px;
+}
+
+/* Duration: presets then Custom. */
+.lend-dur {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.lend-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+:is(.cockpit, .settings, body) .lend-seg button {
+  height: 26px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--label-2, #bbb);
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+:is(.cockpit, .settings, body) .lend-seg button[aria-pressed='true'] {
+  color: var(--primary-fg, #1b1a19);
+  background: var(--primary-bg, #f4f2ef);
+  border-color: transparent;
+}
+
+:is(.cockpit, .settings, body) .lend-num {
+  width: 64px;
+}
+.lend-problem {
+  color: var(--label, #f4f2ef);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* The "Use at your own risk" box. */
+.lend-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--label-3, #999);
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  color: var(--label-2, #bbb);
+  font-size: 12px;
+}
+.lend-warning strong {
+  color: var(--label, #f4f2ef);
+  font-weight: 600;
+}
+.lend-tick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label, #f4f2ef);
+  font-weight: 500;
+}
+
+/* Status of an ask: Waiting / Ready / Said no. */
+.lend-status {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--label-2, #bbb);
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  box-shadow: inset 0 0 0 1px var(--sep, rgba(255, 255, 255, 0.1));
+}
+.lend-status[data-state='accepted'] {
+  color: var(--label, #f4f2ef);
+  font-weight: 600;
+}
+.lend-asks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lend-asks li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label-2, #bbb);
+  font-size: 12px;
+}
+.lend-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/* Member rows: "Lending Claude to Maya · 2h 14m left". */
+.lend-lends {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.lend-lends li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label-3, #999);
+  font-size: 12px;
+}
+.lend-lends li > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Settings > Lend page. */
+.lend-page {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.lend-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lend-block > h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label, #f4f2ef);
+}
+.lend-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lend-list > li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
+  color: var(--label-2, #bbb);
+}
+.lend-list > li > .lend-who {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.lend-list small,
+.lend-muted {
+  color: var(--label-3, #999);
+  font-size: 12px;
+}
+.lend-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  box-shadow: inset 0 0 0 1px var(--sep, rgba(255, 255, 255, 0.1));
+}
+.lend-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.lend-checks label,
+.lend-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label, #f4f2ef);
+}
+.lend-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--label-3, #999);
+  box-shadow: inset 0 0 0 1px var(--sep, rgba(255, 255, 255, 0.1));
+}
+.lend-note {
+  color: var(--label-3, #999);
+  font-size: 12px;
+}
+.lend-error {
+  color: var(--label, #f4f2ef);
+  font-weight: 500;
+  font-size: 12px;
+}
+.lend-usage {
+  color: var(--label-3, #999);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The time-left chip in a pane's header. */
+.lend-chip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+:is(.cockpit, .settings, body) .lend-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  box-shadow: inset 0 0 0 1px var(--sep, rgba(255, 255, 255, 0.1));
+  color: var(--label-2, #bbb);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+:is(.cockpit, .settings, body) .lend-chip[data-urgency='soon'] {
+  color: #e0a43a;
+  box-shadow: inset 0 0 0 1px #e0a43a;
+}
+
+:is(.cockpit, .settings, body) .lend-chip[data-urgency='now'] {
+  color: #ef6a5e;
+  box-shadow: inset 0 0 0 1px #ef6a5e;
+  font-weight: 600;
+}
+.lend-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 288px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-float, var(--float-bg, #2a2826));
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
+  box-shadow: var(--float-shadow, 0 12px 32px rgba(0, 0, 0, 0.45));
+  font-size: 12px;
+  color: var(--label-2, #bbb);
+}
+.lend-pop p {
+  margin: 0;
+}
+.lend-pop-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label, #f4f2ef);
+}
+
+/* The "Borrowed" group of the New agent menu. */
+.ck-menu-sub {
+  padding: 6px 10px 2px;
+  color: var(--label-3, #999);
+  font-size: 11px;
+}

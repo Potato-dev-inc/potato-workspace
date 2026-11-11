@@ -24,7 +24,7 @@ import { PaneErrorCard } from './InboxError';
 import { focusWithRing } from './InboxCard';
 import { handleInboxKey, isEditable } from './inbox-keys';
 import { useNextCard } from './useNextCard';
-import { accountsFor, tauriAccountsApi, type Account } from '../../lib/accounts';
+import { accountsFor, pickableAccounts, signInLabel, tauriAccountsApi, type Account } from '../../lib/accounts';
 import { SIGN_IN } from '../../lib/glossary';
 import { TeamSection } from './team/TeamSection';
 import { RedBanners } from './team/RedBanner';
@@ -104,7 +104,7 @@ export function Inbox({
     let alive = true;
     tauriAccountsApi
       .list()
-      .then((o) => alive && setAccounts(o.accounts))
+      .then((o) => alive && setAccounts(pickableAccounts(o)))
       .catch(() => undefined);
     return () => {
       alive = false;
@@ -114,7 +114,7 @@ export function Inbox({
     const info = paneId && !isCompanionPaneId(paneId) ? c.registry.panes.get(paneId)?.info : undefined;
     if (!info) return [];
     const others = accountsFor(accounts, info.agent_type).filter((a) => a.id !== info.account);
-    const out = others.map((a) => ({ agentId: info.agent_type, accountId: a.id, label: a.label, cwd: info.cwd }));
+    const out = others.map((a) => ({ agentId: info.agent_type, accountId: a.id, label: signInLabel(a), cwd: info.cwd }));
     return info.account ? [{ agentId: info.agent_type, label: SIGN_IN.defaultOne, cwd: info.cwd }, ...out] : out;
   };
 

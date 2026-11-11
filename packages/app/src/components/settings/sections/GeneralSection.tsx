@@ -465,9 +465,9 @@ export const generalRows: RowDef[] = [
   },
   {
     id: 'bring-old-chats',
-    label: 'Bring my old chats',
+    label: 'Bring my chats',
     hint: 'Adds chats from Claude, Codex and other agents to chat search. Stays on this PC.',
-    keywords: 'import old chats claude codex opencode history bring',
+    keywords: 'import chats history bring old previous',
     group: 'Storage',
     render: (env) => <BringChatsSettings env={env} />,
   },
@@ -566,6 +566,22 @@ export const generalRows: RowDef[] = [
         description="Chat with friends in small groups, computer to computer. No server keeps your messages."
         checked={env.settings.spaces_enabled ?? false}
         onChange={(value) => void env.patch({ spaces_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'lend-labs',
+    label: 'Share an agent',
+    hint: 'Lend an agent sign-in to another PC, or borrow one. Adds a Lend page to Settings.',
+    keywords: 'lend borrow share agent usage sign-in login labs early request',
+    group: 'Labs',
+    labs: { name: 'Share an agent', about: 'Lend an agent sign-in to another PC, or borrow one.' },
+    render: (env) => (
+      <SettingToggle
+        label="Share an agent"
+        description="Lend an agent sign-in to another PC, or borrow one. Adds a Lend page to Settings."
+        checked={env.settings.lend_enabled ?? false}
+        onChange={(value) => void env.patch({ lend_enabled: value })}
       />
     ),
   },

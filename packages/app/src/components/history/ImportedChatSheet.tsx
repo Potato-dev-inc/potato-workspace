@@ -1,4 +1,4 @@
-// The read-only view of one old chat ("Bring my old chats"), opened from a search hit. Only the search text is
+// The read-only view of one old chat ("Bring my chats"), opened from a search hit. Only the search text is
 // stored, so the chat is read again from the agent's own file when it opens. It shows in the normal chat view with
 // no message box, and a banner says it is old and read-only. "Continue in a pane" starts the agent on this chat with
 // the agent's own resume option, when the agent has one. The plan comes from the backend; nothing is typed.

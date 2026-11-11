@@ -1,64 +1,96 @@
-// "Bring my old chats": finds the chats each agent kept on this PC and adds them to search. It is the content
-// only; the caller wraps it in a Sheet (Escape and Tab come from there). Nothing in an agent folder is read
-// until the person presses "Find my chats". Nothing leaves this computer.
-import { useEffect, useRef, useState } from 'react';
+// "Bring my chats": pick an agent, see its 10 newest chats, pick some or bring a whole time range. It is the content
+// only; the caller wraps it in a Sheet (Escape and Tab come from there). Opening it is the person's own press, so it
+// looks at the agents' chat folders then and not before. Nothing leaves this computer.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatIndexSetEnabled } from '../../lib/chatIndex';
+import {
+  bringingLine,
+  doneLine,
+  endOfDay,
+  failedCount,
+  rangeOf,
+  RANGE_CHIPS,
+  startOfDay,
+  whyLines,
+  type RangeKey,
+} from '../../lib/bringChats';
 import {
   chatCount,
   chatImportApi,
-  DEFAULT_SINCE_DAYS,
-  foundLine,
   idleProgress,
   onImportProgress,
-  progressLine,
-  SINCE_CHOICES,
+  requestImportedChat,
+  type BrowseRow,
   type ImportApi,
   type ImportFound,
   type ImportProgress,
   type ImportState,
 } from '../../lib/chatImport';
 import '../../styles/history.css';
-import { bindingLabel } from '../../lib/shortcuts';
+import { BringAgentList } from './BringAgentList';
+import { BringChatRows } from './BringChatRows';
 
 export const BRING_CHATS_TITLE_ID = 'bc-panel-title';
+export const BRING_CHATS_TITLE = 'Bring my chats';
 /** The text of the "Remove imported chats" question. The Settings row uses the same words. */
-export const BRING_REMOVE_BODY = "This removes the old chats Potato Workspace added to search. Your agents' own chat files are not touched.";
-
-type View = 'intro' | 'off' | 'looking' | 'found' | 'reading' | 'result';
+export const BRING_REMOVE_BODY = "This removes the chats Potato Workspace brought in. Your agents' own chat files are not touched.";
+/** Chats on a page. */
+export const PAGE_SIZE = 10;
+/** How often the panel asks for the progress of a run, on top of the events it listens to. */
+const POLL_MS = 500;
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Looking and reading come first; then the index switch; then the list; then the last run's result. */
-function pickView(a: { looking: boolean; starting: boolean; progress: ImportProgress; indexEnabled: boolean; hasFound: boolean }): View {
-  if (a.looking) return 'looking';
-  if (a.starting || a.progress.phase === 'reading') return 'reading';
-  if (!a.indexEnabled) return 'off';
-  if (a.hasFound) return 'found';
-  if (a.progress.phase === 'done' || a.progress.phase === 'cancelled' || a.progress.phase === 'failed') return 'result';
-  return 'intro';
-}
-
-/**
- * `startLooking`: the caller's own "Find my chats" press already asked the person (the first-start card), so the
- * look starts once, when the saved answers are in. Without it the intro waits for its own button.
- */
-export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = false }: { api?: ImportApi; onClose?: () => void; startLooking?: boolean }) {
+export function BringChatsPanel({
+  api = chatImportApi,
+  onClose,
+  now = Date.now,
+}: {
+  api?: ImportApi;
+  onClose?: () => void;
+  /** The clock, so a test can fix "2 days ago". */
+  now?: () => number;
+}) {
   const [state, setState] = useState<ImportState | null>(null);
-  const [progress, setProgress] = useState<ImportProgress>(idleProgress);
   const [found, setFound] = useState<ImportFound[] | null>(null);
-  // The switches: which agents are on. Set when a look finishes, from the saved choice or the default.
-  const [picked, setPicked] = useState<Record<string, boolean>>({});
-  const [sinceDays, setSinceDays] = useState<number | null>(DEFAULT_SINCE_DAYS);
-  const [looking, setLooking] = useState(false);
-  const [starting, setStarting] = useState(false);
+  const [agent, setAgent] = useState<string | null>(null);
+  const [rangeKey, setRangeKey] = useState<RangeKey | null>(null);
+  const [custom, setCustom] = useState({ from: '', to: '' });
+  const [rows, setRows] = useState<BrowseRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [more, setMore] = useState(false);
+  const [next, setNext] = useState(0);
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [progress, setProgress] = useState<ImportProgress>(idleProgress);
+  const [working, setWorking] = useState(false);
+  const [result, setResult] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const wanted = useRef(0);
 
-  // Reads the saved settings and the last run only. Also listens for progress from the worker.
+  // "Now" is read once, and again when a chip is pressed: a range that moved on every render would reload forever.
+  const [when, setWhen] = useState(now);
+  const range = useMemo(() => (rangeKey === null ? { fromMs: null, toMs: null } : rangeOf(rangeKey, when, custom)), [rangeKey, when, custom]);
+  const customReady = rangeKey !== 'custom' || startOfDay(custom.from) !== null || endOfDay(custom.to) !== null;
+  const rangeFrom = range.fromMs;
+  const rangeTo = range.toMs;
+
+  const look = useCallback(async () => {
+    setError(null);
+    try {
+      setFound(await api.look(null));
+    } catch (e) {
+      setError(errorText(e));
+      setFound([]);
+    }
+  }, [api]);
+
+  // The saved state first (no folder is read), then one look at the agents when chat search is on.
   useEffect(() => {
     let live = true;
     void api
@@ -66,8 +98,9 @@ export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = f
       .then((next) => {
         if (!live) return;
         setState(next);
-        setSinceDays(next.sinceDays);
         setProgress(next.progress);
+        if (next.progress.phase === 'reading' || next.progress.phase === 'looking') setWorking(true);
+        if (next.indexEnabled) void look();
       })
       .catch((e: unknown) => live && setError(errorText(e)));
     const stop = onImportProgress((next) => live && setProgress(next));
@@ -75,71 +108,81 @@ export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = f
       live = false;
       stop();
     };
-  }, [api]);
+  }, [api, look]);
 
-  const indexEnabled = state?.indexEnabled ?? true;
-  const view = pickView({ looking, starting, progress, indexEnabled, hasFound: found !== null });
+  // One page of the chosen agent: ten chats, newest first. A newer ask makes an older answer stale.
+  const loadRows = useCallback(
+    async (offset: number) => {
+      if (!agent) return;
+      const ticket = ++wanted.current;
+      setLoadingRows(true);
+      setError(null);
+      try {
+        const page = await api.browse(agent, { fromMs: rangeFrom, toMs: rangeTo }, offset, PAGE_SIZE);
+        if (ticket !== wanted.current) return;
+        setRows((prev) => (offset === 0 ? page.rows : [...prev, ...page.rows]));
+        setTotal(page.total);
+        setMore(page.more);
+        setNext(page.next);
+      } catch (e) {
+        if (ticket === wanted.current) setError(errorText(e));
+      } finally {
+        if (ticket === wanted.current) setLoadingRows(false);
+      }
+    },
+    [api, agent, rangeFrom, rangeTo],
+  );
 
-  const labelOf = (agent: string | null): string | undefined => {
-    if (!agent) return undefined;
-    return found?.find((f) => f.id === agent)?.label ?? state?.agents.find((a) => a.id === agent)?.label;
-  };
-
-  const look = async (days: number | null) => {
-    setError(null);
-    setNotice(null);
-    setLooking(true);
-    try {
-      const list = await api.look(days);
-      setFound(list);
-      setPicked(
-        Object.fromEntries(
-          list.map((f) => [f.id, state?.agents.find((a) => a.id === f.id)?.enabled ?? !f.fromDefinition]),
-        ),
-      );
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setLooking(false);
-    }
-  };
-
-  const chooseSince = (days: number | null) => {
-    setSinceDays(days);
-    void look(days);
-  };
-
-  // Once per panel: the caller's press was the consent. Waits for the saved window and switches (`state`).
-  const startedLook = useRef(false);
   useEffect(() => {
-    if (!startLooking || !state || startedLook.current) return;
-    startedLook.current = true;
-    void look(state.sinceDays);
-    // `look` is rebuilt every render; this must run once, when `state` arrives.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startLooking, state]);
+    setRows([]);
+    setTotal(0);
+    setMore(false);
+    setPicked(new Set());
+    if (agent && customReady) void loadRows(0);
+  }, [agent, rangeFrom, rangeTo, customReady, loadRows]);
 
-  const enabledIds = (found ?? []).filter((f) => picked[f.id]).map((f) => f.id);
-  // Chats already in search are not counted again.
-  const addCount = (found ?? []).filter((f) => picked[f.id]).reduce((sum, f) => sum + Math.max(0, f.chats - f.already), 0);
+  // While a run works: ask for its progress now and then (the events can be missed), and show the result at the end.
+  useEffect(() => {
+    if (!working) return;
+    let live = true;
+    const timer = setInterval(() => {
+      void api
+        .state()
+        .then((next) => live && setProgress(next.progress))
+        .catch(() => undefined);
+    }, POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [api, working]);
 
-  const start = async () => {
+  const finished = progress.phase === 'done' || progress.phase === 'cancelled' || progress.phase === 'failed';
+  useEffect(() => {
+    if (!working || !finished) return;
+    setWorking(false);
+    setResult(true);
+    void look();
+  }, [working, finished, look]);
+
+  const label = (id: string | null): string => found?.find((f) => f.id === id)?.label ?? state?.agents.find((a) => a.id === id)?.label ?? id ?? '';
+
+  const bring = async (sessions: string[] | null) => {
+    if (!agent) return;
     setError(null);
     setNotice(null);
-    setStarting(true);
+    setResult(false);
+    setWorking(true);
+    setProgress({ ...idleProgress(), phase: 'looking' });
     try {
-      const next = await api.start(enabledIds, sinceDays);
-      setProgress(next);
-      setFound(null);
+      setProgress(await api.bring({ agent, sessions, fromMs: sessions ? null : rangeFrom, toMs: sessions ? null : rangeTo }));
     } catch (e) {
+      setWorking(false);
       setError(errorText(e));
-    } finally {
-      setStarting(false);
     }
   };
 
   const stop = async () => {
-    setError(null);
     try {
       setProgress(await api.cancel());
     } catch (e) {
@@ -149,10 +192,10 @@ export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = f
 
   const turnOn = async () => {
     setBusy(true);
-    setError(null);
     try {
       const status = await chatIndexSetEnabled(true);
       setState((prev) => prev && { ...prev, indexEnabled: status.enabled });
+      if (status.enabled) void look();
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -163,13 +206,13 @@ export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = f
   const remove = async () => {
     setConfirming(false);
     setBusy(true);
-    setError(null);
     try {
-      const status = await api.clear();
-      setState((prev) => prev && { ...prev, imported: { chats: status.importedChats ?? 0, items: status.importedItems ?? 0 } });
+      await api.clear();
       setProgress(idleProgress());
-      setFound(null);
-      setNotice("Old chats removed from search. Your agents' own chat files are not touched.");
+      setResult(false);
+      setAgent(null);
+      await look();
+      setNotice("Brought chats removed. Your agents' own chat files are not touched.");
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -177,57 +220,67 @@ export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = f
     }
   };
 
-  const toggle = (id: string) => setPicked((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggle = (session: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(session)) next.add(session);
+      return next;
+    });
 
-  const closeButton = onClose ? (
+  const chooseChip = (key: RangeKey) => {
+    setWhen(now());
+    setRangeKey((prev) => (prev === key ? null : key));
+  };
+  const closeButton = onClose && (
     <button type="button" className="ck-btn ck-btn--plain" onClick={onClose}>
       Close
     </button>
-  ) : null;
-
-  const counters = (
-    <>
-      {progress.unchanged > 0 && <span className="bc-counts">Skipped {progress.unchanged} (already in search)</span>}
-      {progress.tooBig > 0 && <span className="bc-counts">Too big {progress.tooBig}</span>}
-      {progress.unreadable > 0 && <span className="bc-counts">Could not read {progress.unreadable}</span>}
-    </>
   );
 
-  const added = Math.max(0, progress.chatsDone - progress.unchanged);
-  const greyed = found === null ? [] : (state?.agents ?? []).filter((a) => !found.some((f) => f.id === a.id));
+  const view = !state
+    ? 'looking'
+    : working
+      ? 'bringing'
+      : result
+        ? 'done'
+        : !state.indexEnabled
+          ? 'off'
+          : found === null
+            ? 'looking'
+            : agent
+              ? 'agent'
+              : 'agents';
+
+  const failed = failedCount(progress);
+  const why = whyLines(progress);
+  const chosen = agent ? label(agent) : '';
+  const sample = rows.slice(0, 3);
 
   return (
     <section className="bc-panel" aria-labelledby={BRING_CHATS_TITLE_ID}>
       <h2 className="ck-section" id={BRING_CHATS_TITLE_ID}>
-        Bring my old chats
+        {BRING_CHATS_TITLE}
       </h2>
       {error && (
         <p className="bc-error" role="alert">
           {error}
         </p>
       )}
-      {notice && view !== 'reading' && (
+      {notice && view !== 'bringing' && (
         <p className="ck-sub" role="status">
           {notice}
         </p>
       )}
 
-      {view === 'intro' && (
-        <>
-          <p className="ck-sub">Read my old chats on this PC. Nothing leaves this computer.</p>
-          <p className="ck-sub">Secrets are hidden before anything is saved. Tool output is not saved. You can remove it all in one click.</p>
-          <div className="bc-actions">
-            {closeButton}
-            <button type="button" className="ck-btn ck-btn--primary" onClick={() => void look(sinceDays)}>
-              Find my chats
-            </button>
-          </div>
-        </>
+      {view === 'looking' && (
+        <p className="ck-sub" role="status">
+          Looking for your chats…
+        </p>
       )}
 
       {view === 'off' && (
         <>
-          <p className="ck-sub">Chat search is off. Turn it on to bring your old chats.</p>
+          <p className="ck-sub">Chat search is off. Turn it on to bring your chats.</p>
           <div className="bc-actions">
             {closeButton}
             <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => void turnOn()}>
@@ -237,88 +290,94 @@ export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = f
         </>
       )}
 
-      {view === 'looking' && (
-        <p className="ck-sub" role="status">
-          Looking…
-        </p>
+      {view === 'agents' && found && (
+        <>
+          <p className="ck-sub">Pick an agent to see its chats on this PC. Nothing leaves this computer.</p>
+          <BringAgentList
+            found={found}
+            unreadable={(state?.agents ?? []).filter((a) => !found.some((f) => f.id === a.id))}
+            now={when}
+            onPick={(id) => {
+              setRangeKey(null);
+              setAgent(id);
+            }}
+          />
+          {found.length === 0 && <p className="ck-sub">No agent has chats to bring.</p>}
+          <div className="bc-actions">{closeButton}</div>
+        </>
       )}
 
-      {view === 'found' && found && (
+      {view === 'agent' && (
         <>
-          {found.length === 0 && greyed.length === 0 && <p className="ck-sub">No agent has old chats to read.</p>}
-          <ul className="bc-agents" aria-label="Agents">
-            {found.map((f) => {
-              const on = Boolean(picked[f.id]);
-              return (
-                <li key={f.id} className={`bc-agent${on ? '' : ' is-off'}`}>
-                  <div className="bc-agent-main">
-                    <div className="bc-agent-name">{foundLine(f)}</div>
-                    {f.places.length > 0 && <div className="bc-agent-sub">Reads {f.places.join(', ')}</div>}
-                    {f.fromDefinition && <div className="bc-agent-sub">From your agent definition</div>}
-                    {f.already > 0 && <div className="bc-agent-sub">{f.already.toLocaleString('en-US')} already in search</div>}
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={on}
-                    aria-label={`Add ${f.label} chats`}
-                    className="ck-switch"
-                    onClick={() => toggle(f.id)}
-                  >
-                    <span className="ck-switch-knob" />
-                  </button>
-                </li>
-              );
-            })}
-            {greyed.map((a) => (
-              <li key={a.id} className="bc-agent is-off">
-                <div className="bc-agent-main">
-                  <div className="bc-agent-name">{a.label}</div>
-                  <div className="bc-agent-sub">Can't read its old chats yet</div>
-                </div>
-              </li>
+          <button type="button" className="bc-back" onClick={() => setAgent(null)}>
+            ‹ All agents
+          </button>
+          <p className="ck-sub">{`${chosen}: newest chats first. Pick some, or bring a whole time range.`}</p>
+          <div className="bc-chips" role="group" aria-label="Time range">
+            {RANGE_CHIPS.map((chip) => (
+              <button key={chip.key} type="button" className="bc-chip" aria-pressed={rangeKey === chip.key} onClick={() => chooseChip(chip.key)}>
+                {chip.label}
+              </button>
             ))}
-          </ul>
-          <label className="bc-since">
-            <span>Only chats from the last</span>
-            <select
-              aria-label="Only chats from the last"
-              value={sinceDays === null ? 'all' : String(sinceDays)}
-              onChange={(e) => chooseSince(e.target.value === 'all' ? null : Number(e.target.value))}
-            >
-              {SINCE_CHOICES.map((c) => (
-                <option key={c.label} value={c.days === null ? 'all' : String(c.days)}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {enabledIds.length === 0 && <p className="ck-sub">Turn on at least one agent to add its chats.</p>}
+          </div>
+          {rangeKey === 'custom' && (
+            <div className="bc-dates">
+              <label>
+                From <input type="date" aria-label="From date" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+              </label>
+              <label>
+                To <input type="date" aria-label="To date" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+              </label>
+            </div>
+          )}
+          {loadingRows && rows.length === 0 && (
+            <p className="ck-sub" role="status">
+              Loading…
+            </p>
+          )}
+          {!loadingRows && rows.length === 0 && customReady && <p className="ck-sub">No chats in this range.</p>}
+          {rows.length > 0 && <BringChatRows rows={rows} picked={picked} now={when} onToggle={toggle} onOpen={(session) => agent && requestImportedChat(agent, session)} />}
+          {more && (
+            <button type="button" className="ck-btn ck-btn--secondary" disabled={loadingRows} onClick={() => void loadRows(next)}>
+              Show more
+            </button>
+          )}
+          {rangeKey !== null && customReady && total > 0 && (
+            <div className="bc-range">
+              <button type="button" className="ck-btn ck-btn--primary" onClick={() => void bring(null)}>
+                {rangeKey === 'all' ? `Bring all ${chatCount(total)}` : `Bring all ${chatCount(total)} from this range`}
+              </button>
+              <ul aria-label="A few of them">
+                {sample.map((row) => (
+                  <li key={row.session}>{row.title}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="bc-actions">
             {closeButton}
-            <button type="button" className="ck-btn ck-btn--primary" disabled={enabledIds.length === 0 || addCount === 0} onClick={() => void start()}>
-              {`Add ${chatCount(addCount)} to search`}
+            <button type="button" className="ck-btn ck-btn--primary" disabled={picked.size === 0} onClick={() => void bring([...picked])}>
+              {picked.size > 0 ? `Bring these (${picked.size})` : 'Bring these'}
             </button>
           </div>
         </>
       )}
 
-      {view === 'reading' && (
+      {view === 'bringing' && (
         <>
           <p className="ck-sub" role="status">
-            {progress.phase === 'idle' ? 'Starting…' : progressLine(progress, labelOf(progress.agent))}
+            {bringingLine(progress)}
           </p>
           <div
             className="bc-bar"
             role="progressbar"
-            aria-label="Reading old chats"
+            aria-label="Bringing chats"
             aria-valuemin={0}
             aria-valuemax={Math.max(progress.chatsTotal, 1)}
             aria-valuenow={progress.chatsDone}
           >
             <span className="bc-bar-fill" style={{ width: `${progress.chatsTotal > 0 ? Math.min(100, (progress.chatsDone / progress.chatsTotal) * 100) : 0}%` }} />
           </div>
-          {counters}
           <div className="bc-actions">
             <button type="button" className="ck-btn ck-btn--secondary" onClick={() => void stop()}>
               Stop
@@ -327,21 +386,23 @@ export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = f
         </>
       )}
 
-      {view === 'result' && (
+      {view === 'done' && (
         <>
-          {progress.phase === 'done' ? (
-            <p className="ck-sub" role="status">
-              {added > 0
-                ? `Added ${chatCount(added)}. Press ${bindingLabel('search-chats') || 'the search shortcut'} to find anything in them.`
-                : 'Nothing new to add. Your old chats are already in search.'}
-            </p>
-          ) : (
-            <p className="ck-sub" role="status">
-              {progressLine(progress, labelOf(progress.agent))}
-            </p>
+          <p className="ck-sub" role="status">
+            {progress.phase === 'done' ? doneLine(progress) : progress.phase === 'cancelled' ? `Stopped. ${chatCount(progress.brought)} brought so far are kept.` : (progress.message ?? 'Could not bring the chats.')}
+          </p>
+          {progress.unchanged > 0 && progress.phase === 'done' && <p className="ck-sub">{`${chatCount(progress.unchanged)} were already in your chat list.`}</p>}
+          {failed > 0 && (
+            <details className="bc-why">
+              <summary>Why?</summary>
+              <ul>
+                {why.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </details>
           )}
-          {counters}
-          {confirming && (
+          {confirming ? (
             <>
               <p className="ck-sub">{BRING_REMOVE_BODY}</p>
               <div className="bc-actions">
@@ -353,14 +414,20 @@ export function BringChatsPanel({ api = chatImportApi, onClose, startLooking = f
                 </button>
               </div>
             </>
-          )}
-          {!confirming && (
+          ) : (
             <div className="bc-actions">
               <button type="button" className="ck-btn ck-btn--plain" disabled={busy} onClick={() => setConfirming(true)}>
                 Remove imported chats
               </button>
-              <button type="button" className="ck-btn ck-btn--secondary" disabled={busy || looking} onClick={() => void look(sinceDays)}>
-                Look again
+              <button
+                type="button"
+                className="ck-btn ck-btn--secondary"
+                onClick={() => {
+                  setResult(false);
+                  if (agent) void loadRows(0);
+                }}
+              >
+                Bring more
               </button>
               {onClose && (
                 <button type="button" className="ck-btn ck-btn--primary" onClick={onClose}>

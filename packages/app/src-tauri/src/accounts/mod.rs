@@ -27,6 +27,10 @@ pub struct Account {
     pub label: String,
     /// Directory the agent is pointed at (its config and login live here).
     pub home: String,
+    /// A lend sign-in (Share an agent): signed in once inside the app and used only for lending. Older files have
+    /// no such field (it reads as false).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub lend_only: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -142,7 +146,7 @@ impl Store {
             None => self.homes_root.join(&id).to_string_lossy().into_owned(),
         };
         std::fs::create_dir_all(&home).map_err(|e| format!("could not create {home}: {e}"))?;
-        let account = Account { id, agent_id, label, home };
+        let account = Account { id, agent_id, label, home, lend_only: false };
         file.accounts.push(account.clone());
         self.write(&file)?;
         Ok(account)
@@ -267,8 +271,24 @@ impl Store {
         Ok(account)
     }
 
-    /// The environment that points `agent_id` at account `id`.
+    /// A lend sign-in (Share an agent): a new account folder marked `lend_only`, signed into once inside the app.
+    pub fn add_lend(&self, agent_id: &str, label: &str) -> Result<Account, String> {
+        let account = self.add(agent_id, label, None)?;
+        let _guard = WRITE_LOCK.lock();
+        let mut file = self.read();
+        let Some(slot) = file.accounts.iter_mut().find(|a| a.id == account.id) else { return Err(unknown(&account.id)) };
+        slot.lend_only = true;
+        let marked = slot.clone();
+        self.write(&file)?;
+        Ok(marked)
+    }
+
+    /// The environment that points `agent_id` at account `id`. A borrowed grant (`lend:<grant id>`, Share an
+    /// agent) is one more sign-in: its env points the agent at the local lend shim instead of a home folder.
     pub fn launch_env(&self, agent_id: &str, id: &str) -> Result<LaunchEnv, String> {
+        if let Some(grant) = id.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX) {
+            return crate::capacity_proxy::borrowed_launch_env(agent_id, grant);
+        }
         let scheme = scheme_for(agent_id)?;
         let account = self.resolve(agent_id, id)?;
         Ok(env_for(&scheme, &account))
@@ -364,13 +384,13 @@ pub fn launch_env(agent_id: &str, id: &str) -> Result<LaunchEnv, String> {
 pub fn launch_for(agent_id: &str, id: &str) -> Result<(LaunchEnv, String), String> {
     let store = Store::default_location();
     let env = store.launch_env(agent_id, id)?;
-    let label = store.get(id).map(|a| a.label).unwrap_or_default();
+    let label = store.get(id).map(|a| a.label).or_else(|| id.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX).and_then(crate::capacity_proxy::borrowed_label)).unwrap_or_default();
     Ok((env, label))
 }
 
 /// The account's label for display, when it still exists.
 pub fn label_of(id: &str) -> Option<String> {
-    Store::default_location().get(id).map(|a| a.label)
+    Store::default_location().get(id).map(|a| a.label).or_else(|| id.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX).and_then(crate::capacity_proxy::borrowed_label))
 }
 
 /// Validate a run's `account` argument before anything spawns: the agent supports accounts and
@@ -378,6 +398,15 @@ pub fn label_of(id: &str) -> Option<String> {
 pub fn validate_for_run(agent_id: &str, id: &str) -> Result<String, String> {
     let id = id.trim();
     Store::default_location().launch_env(agent_id, id).map(|_| id.to_string())
+}
+
+/// `validate_for_run` for a run an agent or helper starts (MCP `run_agent`, an automatic pick): a borrowed
+/// sign-in (Lend through my PC) is refused, because only a person starting a pane may use one.
+pub fn validate_for_agent_run(agent_id: &str, id: &str) -> Result<String, String> {
+    if id.trim().starts_with(crate::capacity_proxy::ACCOUNT_PREFIX) {
+        return Err("A borrowed sign-in can only be used in a pane you start yourself, not by an agent or helper run.".into());
+    }
+    validate_for_run(agent_id, id)
 }
 
 /// Whether the CLI is signed in under an account, as far as the folder shows: `signed_in` when one of the
@@ -420,7 +449,12 @@ pub fn overview(store: &Store) -> serde_json::Value {
 
 /// Shared by the Tauri commands and the bridge routes.
 pub fn overview_default() -> serde_json::Value {
-    overview(&Store::default_location())
+    let mut out = overview(&Store::default_location());
+    // `borrowed` (desktop window only, not the bridge listing): active grants lent to this PC (Share an agent), one
+    // more sign-in each: `{id: "lend:<grant>", agent_id, label: "<Peer>'s PC (lent)", ends_ms, grant_id}`. Empty
+    // while the Labs switch is off.
+    out["borrowed"] = serde_json::Value::Array(crate::capacity_proxy::borrowed_rows());
+    out
 }
 
 #[cfg(test)]

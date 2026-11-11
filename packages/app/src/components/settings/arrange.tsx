@@ -49,7 +49,9 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
   ],
   agents: [
     { group: SIGN_IN.group, rows: ['accounts'] },
+    { group: 'Your chats', rows: ['bring-chats-agents'] },
     { group: 'Helpers', rows: ['helper-agents', 'keep-helpers-open', 'close-helpers-with-agent'] },
+    { group: 'Handoff', rows: ['handoff-mode'] },
     { group: 'Ready to use', rows: ['preload', 'helper-tools'] },
     { group: 'Chat', rows: ['agent-lane', 'chat-addons'] },
     { group: 'Versions', rows: ['versions'] },
@@ -82,6 +84,7 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
     { group: 'Public address', rows: ['tunnel'] },
   ],
   team: [{ group: 'Your team', rows: ['team-page'] }],
+  lend: [{ group: 'Share an agent', rows: ['lend-page'] }],
 };
 
 /** Every row id the layout names (not the `@labs` placeholder or the links). Used to catch stale ids. */

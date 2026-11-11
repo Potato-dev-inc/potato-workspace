@@ -88,8 +88,18 @@ pub fn recent_rollouts(home: &Path, since: SystemTime) -> Vec<PathBuf> {
     found
 }
 
-/// The `cwd` and thread `id` from a rollout's first line (`session_meta`), or `None` when it has none.
-pub fn rollout_meta(path: &Path) -> Option<(String, String)> {
+/// What a rollout's first line (`session_meta`) says about its thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RolloutHeader {
+    pub cwd: String,
+    pub id: String,
+    /// The thread was started by another thread (a helper agent's sub-conversation): it has a `parent_thread_id`, or its
+    /// `source` says `subagent`. It is part of the other chat, not a chat of its own.
+    pub child: bool,
+}
+
+/// The header of a rollout, or `None` when its first line is not a `session_meta` with a folder and an id.
+pub fn rollout_header(path: &Path) -> Option<RolloutHeader> {
     let mut first = String::new();
     open_lines(path).ok()?.read_line(&mut first).ok()?;
     let root: Value = serde_json::from_str(&first).ok()?;
@@ -99,7 +109,16 @@ pub fn rollout_meta(path: &Path) -> Option<(String, String)> {
     let payload = &root["payload"];
     let cwd = str_field(payload, "cwd")?;
     let id = str_field(payload, "id").or_else(|| str_field(payload, "session_id"))?;
-    Some((cwd, id))
+    let source = &payload["source"];
+    let child = str_field(payload, "parent_thread_id").is_some()
+        || source.as_str().is_some_and(|kind| kind.eq_ignore_ascii_case("subagent"))
+        || source.get("subagent").is_some();
+    Some(RolloutHeader { cwd, id, child })
+}
+
+/// The `cwd` and thread `id` from a rollout's first line (`session_meta`), or `None` when it has none.
+pub fn rollout_meta(path: &Path) -> Option<(String, String)> {
+    rollout_header(path).map(|header| (header.cwd, header.id))
 }
 
 /// When a rollout started: the `timestamp` of its first line (`session_meta`), or `None` when it has none.

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// "Bring my old chats" first-start card: fake api and settings, no agent folder touched.
+// "Bring my chats" first-start card: fake api and settings, no agent folder touched.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,7 +20,7 @@ afterEach(() => {
   host.remove();
 });
 
-const IDLE = { phase: 'idle' as const, agent: null, chatsDone: 0, chatsTotal: 0, items: 0, unchanged: 0, tooBig: 0, unreadable: 0, message: null };
+const IDLE = { phase: 'idle' as const, agent: null, chatsDone: 0, chatsTotal: 0, items: 0, unchanged: 0, tooBig: 0, unreadable: 0, missing: 0, format: 0, brought: 0, empty: 0, message: null };
 
 function state(over: Partial<ImportState> = {}): ImportState {
   return {
@@ -79,7 +79,7 @@ async function mount(api: ImportApi, welcomeDone: boolean) {
 const card = () => host.querySelector<HTMLElement>('[data-testid="import-chats-card"]');
 const buttonNamed = (text: string) => Array.from(host.querySelectorAll('button')).find((b) => b.textContent === text) ?? null;
 
-describe('first-start card: Bring my old chats', () => {
+describe('first-start card: Bring my chats', () => {
   it('is hidden when the question was already answered', async () => {
     await mount(fakeApi(state({ asked: true })), true);
     expect(card()).toBeNull();
@@ -110,7 +110,7 @@ describe('first-start card: Bring my old chats', () => {
     expect(el.matches('[data-ib-card][data-kind="note"][data-info]')).toBe(true);
     expect(el.querySelector('.ib-title')?.textContent).toBe(IMPORT_CARD_TITLE);
     expect(el.querySelector('.ib-reason')?.textContent).toBe(IMPORT_CARD_BODY);
-    expect(Array.from(el.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Find my chats', 'Not now']);
+    expect(Array.from(el.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Bring my chats', 'Not now']);
     expect(api.state).toHaveBeenCalled();
     expect(api.look).not.toHaveBeenCalled();
     expect(api.start).not.toHaveBeenCalled();
@@ -137,19 +137,18 @@ describe('first-start card: Bring my old chats', () => {
     expect(card()!.querySelector('.ib-note')?.textContent).toBe('The settings file is locked.');
   });
 
-  it('"Find my chats" opens the Bring panel and looks once, with no second press', async () => {
+  it('"Bring my chats" opens the Bring panel, which looks once when it opens', async () => {
     const api = fakeApi();
     api.look = vi.fn(async () => [FOUND]);
     await mount(api, true);
-    await act(async () => buttonNamed('Find my chats')!.click());
+    await act(async () => buttonNamed('Bring my chats')!.click());
     await flush();
     const sheet = host.querySelector<HTMLElement>('[aria-modal="true"]');
     expect(sheet).not.toBeNull();
     expect(sheet?.getAttribute('aria-labelledby')).toBe('bc-panel-title');
-    expect(sheet?.querySelector('#bc-panel-title')?.textContent).toBe('Bring my old chats');
-    // The look ran from the card's press: the list is there and the panel's own intro button is not.
+    expect(sheet?.querySelector('#bc-panel-title')?.textContent).toBe('Bring my chats');
+    // The look ran from the card's press: the agents are listed with a count each, and no second press is asked for.
     expect(api.look).toHaveBeenCalledTimes(1);
-    expect(api.look).toHaveBeenCalledWith(365);
     expect(sheet?.textContent).toContain('Claude · 412 chats');
     expect(Array.from(sheet?.querySelectorAll('button') ?? []).some((b) => b.textContent === 'Find my chats')).toBe(false);
     expect(api.start).not.toHaveBeenCalled();
@@ -158,7 +157,7 @@ describe('first-start card: Bring my old chats', () => {
   it('closing the panel re-reads the answer, so a started run hides the card', async () => {
     const api = fakeApi();
     await mount(api, true);
-    await act(async () => buttonNamed('Find my chats')!.click());
+    await act(async () => buttonNamed('Bring my chats')!.click());
     // The run was started from the panel, which marks the question as answered.
     (api.state as ReturnType<typeof vi.fn>).mockResolvedValue(state({ asked: true }));
     const close = host.querySelector<HTMLButtonElement>('.bc-actions .ck-btn--plain');

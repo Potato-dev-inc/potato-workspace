@@ -452,7 +452,7 @@ pub fn run_agent(
             ));
         }
         worker.account = Some(
-            crate::accounts::validate_for_run(&agent_type, account)
+            crate::accounts::validate_for_agent_run(&agent_type, account)
                 .map_err(|message| OperationError::new("INVALID_ARGUMENT", message, false))?,
         );
     }

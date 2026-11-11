@@ -43,7 +43,12 @@ export type NeedsYouKind =
    * War Room: a teammate-visible red default branch nobody has claimed yet (`src-tauri/src/team/service.rs`,
    * key `team_ci:<card id>`). The Inbox draws it as the banner on top. Counts like the Rust item (kind `setup`).
    */
-  | 'team_ci';
+  | 'team_ci'
+  /**
+   * Share an agent: another PC asked to borrow an agent sign-in and waits for my yes (key `lend_request:<id>`).
+   * The Inbox draws it as a card under Team. The Rust snapshot does not know this kind yet.
+   */
+  | 'lend_request';
 
 export interface NeedsYouItem {
   /** Stable across renders: `<kind>:<pane or question or notice id>`. */
@@ -74,6 +79,8 @@ export interface AttentionInput {
   companions?: ReadonlyArray<{ id: string; state: string }>;
   /** War Room: the red-default-branch cards nobody claimed (`team.ts` `isRedBanner`, no claim). */
   teamRed?: ReadonlyArray<{ id: string; receivedAtMs?: number }>;
+  /** Share an agent: open requests to borrow from me. */
+  lendRequests?: ReadonlyArray<{ id: string; at_ms?: number }>;
 }
 
 const RISKS = new Set(['low', 'medium', 'high']);
@@ -123,6 +130,7 @@ export function deriveNeedsYou(input: AttentionInput): NeedsYouItem[] {
     if (x.state === 'stopped') items.push({ id: `companion:${x.id}`, kind: 'companion' });
   }
   for (const r of input.teamRed ?? []) items.push({ id: `team_ci:${r.id}`, kind: 'team_ci', since: r.receivedAtMs });
+  for (const r of input.lendRequests ?? []) items.push({ id: `lend_request:${r.id}`, kind: 'lend_request', since: r.at_ms });
   return items;
 }
 

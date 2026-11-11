@@ -52,9 +52,11 @@ import { useAcpChatState } from '../../hooks/useAcpChatState';
 import { useAcpStop } from '../../hooks/useAcpStop';
 import { useHandOver } from '../../hooks/useHandOver';
 import type { HandoffControl } from '../../hooks/useHandoff';
+import { handoffLabel } from '../../lib/handoff';
 import { useTerminalConversation } from '../../hooks/useTerminalConversation';
 import '../../styles/cockpit-acp.css';
 import { BudgetChip } from './BudgetChip';
+import { BorrowedChip } from '../lend/Borrowed';
 import { MissionProgress } from './mission/MissionProgress';
 import { missionOfPane, useMissions } from '../../lib/missions';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
@@ -462,6 +464,7 @@ export function PaneView({
         )}
         <LiveChip paneId={paneId} status={liveStatus} />
         <BudgetChip paneId={paneId} refreshKey={pane.status} onNotify={c.notify} />
+        <BorrowedChip paneId={paneId} />
         <div className="ck-pane-state">
           <DotSpinner status={spinnerStatus(pane.status)} />
           <span className="ck-pane-doing" title={stateLine}>
@@ -498,10 +501,10 @@ export function PaneView({
             className="ck-handover-btn"
             data-testid="pane-handoff"
             disabled={handoff.busy}
-            title="Write a handoff and continue this work in a new agent of the same kind."
+            title={handoff.mode === 'file' ? 'Save a handoff note (HANDOFF.md) for the next agent.' : 'Write a handoff and continue this work in a new agent of the same kind.'}
             onClick={() => handoff.start(paneId)}
           >
-            {handoff.busy ? 'Handing off…' : 'Hand off'}
+            {handoff.busy ? 'Handing off…' : handoffLabel(handoff.mode)}
           </button>
         )}
         {rail.fits && (

@@ -27,7 +27,7 @@ const live = vi.hoisted(() => ({
   notes: [] as string[],
   stops: 0,
 }));
-// The Bring my old chats sheets: the pane start the (mocked) registry does.
+// The Bring my chats sheets: the pane start the (mocked) registry does.
 const imp = vi.hoisted(() => ({ spawnPane: (async () => 'p2') as (a: unknown) => Promise<string> }));
 // The runner the Store page was given (the mocked StoreHost records it).
 const store = vi.hoisted(() => ({ runCheck: undefined as unknown }));

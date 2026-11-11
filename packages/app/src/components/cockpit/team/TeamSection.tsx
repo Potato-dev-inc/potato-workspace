@@ -1,4 +1,8 @@
 import { isRedBanner, teamApi, type TeamApi } from '../../../lib/team';
+import { lendApi, type LendApi } from '../../../lib/lend';
+import { IncomingRequestCard } from '../../lend/IncomingRequestCard';
+import { RequestUsage } from '../../lend/RequestUsage';
+import { useLend } from '../../lend/useLend';
 import { TellTeamPrompt } from './TellTeam';
 import { TeamCard } from './TeamCard';
 import { TeamJobCard } from './TeamJobCard';
@@ -11,14 +15,17 @@ import '../../../styles/cockpit-team.css';
  * Team cards do not add to the Needs-you count: they wait for me but block no agent. They are the
  * same card as everything else in the Inbox, 12px apart.
  */
-export function TeamSection({ api = teamApi, now, paneNames, team }: { api?: TeamApi; now: number; paneNames?: Map<string, string>; team?: TeamHandle }) {
+export function TeamSection({ api = teamApi, now, paneNames, team, lend: lendClient = lendApi }: { api?: TeamApi; now: number; paneNames?: Map<string, string>; team?: TeamHandle; lend?: LendApi }) {
   const own = useTeam(api, !team);
   const { state, refresh } = team ?? own;
+  // Share an agent (Labs): the Request usage button and the requests to borrow from me. Nothing while it is off.
+  const lend = useLend(lendClient);
+  const asked = lend.state?.requests_in.filter((r) => r.state === 'open') ?? [];
   if (!state?.enabled) return null;
   const jobs = state.jobs.filter((j) => j.state !== 'discarded');
   // A red default branch is the banner on top of the Inbox (RedBanners), not a card here.
   const cards = state.cards.filter((c) => !isRedBanner(c));
-  const empty = state.drafts.length === 0 && jobs.length === 0 && cards.length === 0;
+  const empty = state.drafts.length === 0 && jobs.length === 0 && cards.length === 0 && asked.length === 0;
 
   return (
     <section className="ck-team" aria-label="Team">
@@ -26,6 +33,16 @@ export function TeamSection({ api = teamApi, now, paneNames, team }: { api?: Tea
         Team
         {!state.active && <span className="ck-sub-inline"> · finish setting it up in Settings › General</span>}
       </h2>
+      <RequestUsage api={lendClient} team={api} lend={lend} variant="inbox" />
+      {lend.state && asked.length > 0 && (
+        <ul className="ib-list" aria-label="Requests to borrow">
+          {asked.map((r) => (
+            <li key={r.id}>
+              <IncomingRequestCard request={r} state={lend.state!} api={lendClient} now={now} onDone={lend.refresh} />
+            </li>
+          ))}
+        </ul>
+      )}
       {state.error && (
         <p className="ck-team-error" role="alert">
           {state.error}

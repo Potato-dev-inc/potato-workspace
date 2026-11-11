@@ -140,6 +140,11 @@ const SECTION_ICONS: Record<SectionId, JSX.Element> = {
       <path d="M10.5 3.8a2 2 0 0 1 0 3.4M12 9.8c1 .5 1.7 1.5 1.7 3.2" />
     </svg>
   ),
+  lend: (
+    <svg {...ICON_PROPS}>
+      <path d="M2 6h9.5M9 3.5 11.5 6 9 8.5M14 10H4.5M7 7.5 4.5 10 7 12.5" />
+    </svg>
+  ),
   shortcuts: (
     <svg {...ICON_PROPS}>
       <rect x="1.5" y="4" width="13" height="8" rx="2" />

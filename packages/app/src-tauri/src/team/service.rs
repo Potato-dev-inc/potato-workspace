@@ -246,6 +246,8 @@ pub(crate) struct Received {
     pub card: Option<(String, String, TeamEventKind)>,
     /// The roster or keys should be re-read.
     pub refresh: bool,
+    /// A Share-an-agent item for some device (`crate::capacity_proxy` opens it, or ignores one for another device).
+    pub capacity: Option<super::secure::CapacityIn>,
 }
 
 /// Open an envelope with every check (`Session::open`), then `ingest` what passed. The relay
@@ -266,6 +268,7 @@ pub(crate) fn open_and_ingest(session: &Session, store: &mut TeamStore, config: 
             }
         }
         Ok(Opened::RosterChanged(_)) => out.refresh = true,
+        Ok(Opened::Capacity(item)) => out.capacity = Some(item),
         Ok(Opened::Mine) => {}
         Err(reject) => {
             tracing::debug!(why = reject.as_str(), from = %short_id(&inbound.envelope.from), "team: envelope refused");
@@ -438,6 +441,9 @@ impl Service {
         }
         if outcome.refresh {
             self.poke();
+        }
+        if let Some(item) = outcome.capacity {
+            crate::capacity_proxy::on_team_item(item);
         }
     }
 
@@ -1864,6 +1870,27 @@ fn send_via(svc: &Arc<Service>, draft_id: &str, note: Option<String>) -> Result<
     drop(inner);
     svc.changed();
     Ok(())
+}
+
+/// Share an agent (`crate::capacity_proxy`): the live team session (verified roster and my keys), to seal a lend
+/// item to one device.
+pub(crate) fn capacity_session() -> Result<Session, String> {
+    let svc = service()?;
+    let inner = svc.inner.lock();
+    inner.session.clone().ok_or_else(|| "Team is off. Turn it on in Settings first.".to_string())
+}
+
+/// Share an agent: seal one `Payload::Capacity` with the team key and hand it to the relay.
+pub(crate) fn capacity_send(payload: &Payload) -> Result<(), String> {
+    let svc = service()?;
+    let (session, transport) = {
+        let inner = svc.inner.lock();
+        let session = inner.session.clone().ok_or("Team is off. Turn it on in Settings first.")?;
+        let transport = inner.transport.clone().ok_or("Team is off. Turn it on in Settings first.")?;
+        (session, transport)
+    };
+    let seq = next_seq(svc);
+    session.seal(payload, seq, now_ms()).and_then(|env| transport.send(&env).map_err(|e| e.0))
 }
 
 fn seal_and_send(svc: &Service, session: &Session, transport: &dyn TeamTransport, event: &TeamEvent) -> Result<(), String> {

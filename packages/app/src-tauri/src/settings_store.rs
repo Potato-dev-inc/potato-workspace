@@ -16,6 +16,7 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "acp_chat_enabled",
     "model_bridge_enabled",
     "spaces_enabled",
+    "lend_enabled",
 ];
 
 /// Tests turn the override on through this; it is off in every test unless a test sets it.
@@ -82,6 +83,9 @@ const PATCHABLE_KEYS: &[&str] = &[
     "acp_chat_enabled",
     "model_bridge_enabled",
     "spaces_enabled",
+    "handoff_mode",
+    "handoff_fixed_notes",
+    "lend_enabled",
 ];
 
 pub fn default_public_settings() -> Value {
@@ -120,6 +124,12 @@ pub fn default_public_settings() -> Value {
         "model_bridge_enabled": false,
         // Spaces (Labs): small-group chat between people's own computers. Off until chosen. Rust: spaces.
         "spaces_enabled": false,
+        // What the Hand off button does (Settings > Agents): "file" saves HANDOFF.md, "new_agent" opens a fresh agent that says Ready.
+        "handoff_mode": "new_agent",
+        // Text added to every handoff under "Always remember".
+        "handoff_fixed_notes": "",
+        // Share an agent (Labs): lend an agent sign-in to another PC through this one. Off until chosen. Rust: capacity_proxy.
+        "lend_enabled": false,
     })
 }
 
@@ -172,6 +182,7 @@ fn apply_public_settings(effective: &Value) {
     crate::acp::apply_settings(effective);
     crate::model_bridge::apply_settings(effective);
     crate::spaces::runtime::apply_settings(effective);
+    crate::capacity_proxy::apply_settings(effective);
 }
 
 /// Merge `patch` into the public mirror (bridge state + mobile SSE) without any window event.
@@ -288,6 +299,19 @@ mod tests {
     }
 
     #[test]
+    fn hand_off_mode_defaults_to_a_new_agent_has_no_notes_and_can_be_patched() {
+        let defaults = default_public_settings();
+        assert_eq!(defaults["handoff_mode"], "new_agent");
+        assert_eq!(defaults["handoff_fixed_notes"], "");
+        assert!(PATCHABLE_KEYS.contains(&"handoff_mode") && PATCHABLE_KEYS.contains(&"handoff_fixed_notes"));
+        let on = merge_public_settings(&defaults, &json!({"handoff_mode": "file", "handoff_fixed_notes": "Be brief."}));
+        assert_eq!(on["handoff_mode"], "file");
+        assert_eq!(on["handoff_fixed_notes"], "Be brief.");
+        // Not a Labs switch: a development build does not turn it on.
+        assert_eq!(with_dev_labs(&defaults, true)["handoff_mode"], "new_agent");
+    }
+
+    #[test]
     fn dev_override_turns_every_labs_switch_on_and_nothing_else() {
         let stored = default_public_settings();
         let effective = with_dev_labs(&stored, true);
@@ -359,6 +383,13 @@ mod spaces_labs_tests {
     fn dev_labs_keys_include_spaces_enabled() {
         assert!(DEV_LABS_KEYS.contains(&"spaces_enabled"));
         assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "spaces_enabled").count(), 1);
+    }
+
+    #[test]
+    fn lend_enabled_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "lend_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"lend_enabled"));
+        assert_eq!(default_public_settings()["lend_enabled"], serde_json::json!(false));
     }
 
     #[test]

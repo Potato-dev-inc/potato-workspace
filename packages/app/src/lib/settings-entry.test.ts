@@ -12,8 +12,8 @@ describe('settings entry', () => {
     expect(settingsEntryTab('?settings=1&tab=nope')).toBe('agents');
   });
 
-  it('opens each of the seven sections and Coming later by id', () => {
-    for (const id of ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'later']) {
+  it('opens each of the eight sections and Coming later by id', () => {
+    for (const id of ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'lend', 'later']) {
       expect(settingsEntryTab(`?settings=1&tab=${id}`)).toBe(id);
     }
   });

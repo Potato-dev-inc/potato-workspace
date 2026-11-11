@@ -16,7 +16,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use super::{AppState, SessionChatState};
 use crate::chat_index::import::{
-    source_named, Emitter as ProgressEmitter, Found, ImportPrefs, ImportRequest, Importer, Phase, Progress, RegistryCatalog, PROGRESS_EVENT,
+    source_named, BrowsePage, BrowseQuery, Emitter as ProgressEmitter, Found, ImportPrefs, ImportRequest, Importer, Phase, Progress,
+    RegistryCatalog, PROGRESS_EVENT,
 };
 use crate::chat_index::{self, ChatIndex, Status};
 use crate::session_chat::history::{HistoryEnv, OpenedChat, ResumePlan};
@@ -106,25 +107,55 @@ pub async fn chat_import_look(app: AppHandle, since_days: Option<u32>) -> Result
     .await
 }
 
-/// "Add N chats to search": saves the choice (and marks the first question answered), then starts the run.
+/// One page of one agent's chats, newest first, with a title, folder, date and message count each. Reads the agent's
+/// own files (never writes), after the person opened Bring my chats and chose this agent.
 #[tauri::command]
-pub async fn chat_import_start(app: AppHandle, agents: Vec<String>, since_days: Option<u32>) -> Result<Progress, String> {
+pub async fn chat_import_browse(
+    app: AppHandle,
+    agent: String,
+    from_ms: Option<i64>,
+    to_ms: Option<i64>,
+    offset: usize,
+    limit: usize,
+) -> Result<BrowsePage, String> {
+    blocking(move || {
+        let importer = importer_in(&app).ok_or_else(|| NO_INDEX.to_string())?;
+        importer.browse(&HistoryEnv::from_process(), &BrowseQuery { agent, from_ms, to_ms, offset, limit })
+    })
+    .await
+}
+
+/// "Bring these" / "Bring all N chats": starts the run. With `sessions` only those chats of the one agent; otherwise
+/// every chat of the chosen agents in the range (`from_ms` / `to_ms`, or the older `since_days`). Marks the first
+/// question answered. A choice of one agent's chats does not change which agents the person kept switched on.
+#[tauri::command]
+pub async fn chat_import_start(
+    app: AppHandle,
+    agents: Vec<String>,
+    since_days: Option<u32>,
+    sessions: Option<Vec<String>>,
+    from_ms: Option<i64>,
+    to_ms: Option<i64>,
+) -> Result<Progress, String> {
     blocking(move || {
         let importer = importer_in(&app).ok_or_else(|| NO_INDEX.to_string())?;
         let sources = importer.sources();
         for agent in &agents {
             source_named(&sources, agent)?;
         }
+        let whole_agents = sessions.is_none() && from_ms.is_none() && to_ms.is_none();
         update_prefs(&app, |prefs| {
             prefs.asked = true;
-            prefs.since_days = since_days;
-            for source in &sources {
-                prefs.set_agent(&source.id, agents.contains(&source.id));
+            if whole_agents {
+                prefs.since_days = since_days;
+                for source in &sources {
+                    prefs.set_agent(&source.id, agents.contains(&source.id));
+                }
             }
             // The importer has no end hook, so this is the time the run started.
             prefs.last_run_ms = now_ms();
         })?;
-        importer.start(ImportRequest { agents: agents.clone(), since_days }, HistoryEnv::from_process())?;
+        importer.start(ImportRequest { agents: agents.clone(), since_days, from_ms, to_ms, sessions }, HistoryEnv::from_process())?;
         Ok(importer.progress())
     })
     .await
@@ -423,7 +454,7 @@ mod tests {
         assert_eq!(value["progress"]["phase"], "idle");
         assert_eq!(
             keys(&value["progress"]),
-            ["agent", "chatsDone", "chatsTotal", "items", "message", "phase", "tooBig", "unchanged", "unreadable"]
+            ["agent", "brought", "chatsDone", "chatsTotal", "empty", "format", "items", "message", "missing", "phase", "tooBig", "unchanged", "unreadable"]
         );
         assert_eq!(keys(&value["agents"][0]), ["enabled", "fromDefinition", "id", "label"]);
     }

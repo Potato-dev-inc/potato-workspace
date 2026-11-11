@@ -30,6 +30,7 @@ import {
   EXAMPLE_REVIEW_POLL,
 } from './fixtures';
 import { TEAM_DIFF, teamConfig } from './team-fixtures';
+import { borrowedOf, createLendMock } from './lend-fixtures';
 import { shipMock } from './ship-fixtures';
 import { simpleMock } from './simple-fixtures';
 import { firstRunMock, firstRunStore } from './first-run-fixtures';
@@ -42,6 +43,7 @@ import { reviewDeskMock } from './review-desk-fixtures';
 import { createFocusMock } from './focus-fixtures';
 import { wslMock } from './wsl-fixtures';
 import { closedChatsMock } from './closed-chats-fixtures';
+import { bringChatsMock, newBringChatsState } from './bring-chats-fixtures';
 import type { ClosedChat } from '../lib/closedChats';
 import { whatBrokeItMock } from './what-broke-it-fixtures';
 import { whatBrokeItResultMock } from './what-broke-it-result-fixtures';
@@ -57,12 +59,14 @@ const DOCTOR_ROWS = [
 export function installTauriMock(scenario: HarnessScenario): void {
   // Focus keeps its state for the page's life (start, +15 min and End Focus work in the harness).
   const focusMock = createFocusMock(scenario.focus);
+  const lendMock = createLendMock(scenario.lend);
   const closedState: { chats: ClosedChat[] | null } = { chats: null };
+  const bringState = newBringChatsState();
   const panes = scenario.panes ?? EXAMPLE_PANES;
   // In-memory plugin-store (one store, rid 1), keyed as the app writes it.
   // The two agent-authority switches, at the shipped defaults unless the scenario says otherwise.
   let authority = scenario.authority ?? { ask_before_agent_control: true, agents_may_merge: false };
-  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}) }]]);
+  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}) }]]);
   // Settings > Phone > Devices: one phone with full control in daily use, one watch-and-answer.
   const now = Math.floor(Date.now() / 1000);
   const day = 24 * 60 * 60;
@@ -96,10 +100,14 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (packageCheck.handled) return packageCheck.value;
       const reviewDesk = reviewDeskMock(scenario.reviewDesk, cmd, a);
       if (reviewDesk.handled) return reviewDesk.value;
+      const lend = lendMock(cmd, a);
+      if (lend.handled) return lend.value;
       const focus = focusMock(cmd, a);
       if (focus.handled) return focus.value;
       const closed = closedChatsMock(scenario.closedChats, closedState, cmd, a);
       if (closed.handled) return closed.value;
+      const bringChats = bringChatsMock(scenario.bringChats, bringState, cmd, a);
+      if (bringChats.handled) return bringChats.value;
       const wsl = wslMock(scenario.wsl, cmd, a);
       if (wsl.handled) return wsl.value;
       const whatBroke = whatBrokeItMock(scenario.whatBroke, cmd, a);
@@ -111,7 +119,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'accounts_set_helper_login':
           return a.value;
         case 'accounts_list':
-          return { agents: ACCOUNT_AGENTS, accounts: scenario.accounts ?? [] };
+          return { agents: ACCOUNT_AGENTS, accounts: scenario.accounts ?? [], borrowed: borrowedOf(scenario.lend?.grants ?? []) };
         case 'new_pane':
           return 'pane-new-1';
         case 'pane_prompt':

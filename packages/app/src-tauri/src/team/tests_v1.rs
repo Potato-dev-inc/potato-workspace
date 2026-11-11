@@ -32,31 +32,31 @@ pub(super) fn now() -> u64 {
     super::transport::now_ms()
 }
 
-pub(super) fn temp_dir(tag: &str) -> PathBuf {
+pub(crate) fn temp_dir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("pmteam1-{tag}-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
-pub(super) fn person(name: &str) -> KeyStore {
+pub(crate) fn person(name: &str) -> KeyStore {
     KeyStore::with_backend(Arc::new(MemoryBackend::new()), name)
 }
 
-pub(super) fn folder(dir: &std::path::Path) -> Arc<dyn TeamTransport> {
+pub(crate) fn folder(dir: &std::path::Path) -> Arc<dyn TeamTransport> {
     Arc::new(FolderTransport::new(dir.to_path_buf()))
 }
 
 /// Maya creates a team; each name in `others` is invited, asks to join with the right code, and
 /// is let in. Returns the admin's roster and everyone's key stores.
-pub(super) struct World {
-    pub(super) roster: Roster,
-    pub(super) maya: KeyStore,
-    pub(super) others: Vec<(String, KeyStore, Roster)>,
+pub(crate) struct World {
+    pub(crate) roster: Roster,
+    pub(crate) maya: KeyStore,
+    pub(crate) others: Vec<(String, KeyStore, Roster)>,
     #[allow(dead_code)]
     link: Option<InviteLink>,
 }
 
-pub(super) fn world(transport: &Arc<dyn TeamTransport>, others: &[&str], at: u64) -> World {
+pub(crate) fn world(transport: &Arc<dyn TeamTransport>, others: &[&str], at: u64) -> World {
     let maya = person("maya");
     let t = transport.clone();
     let mut roster = membership::create_team("Acme", "Maya", &maya, move |_| Ok(t), at).unwrap();

@@ -300,7 +300,9 @@ pub fn spawn_pane(
     own_env.extend(pane_mcp.env);
     // Model Bridge: a service the person added to this agent gets its key in the environment (never in argv).
     // Nothing for a Linux pane, and nothing while the Labs switch is off.
-    if linux.is_none() {
+    // A borrowed sign-in (Share an agent, `lend:<grant>`) talks only to its lend shim: no Model Bridge key either.
+    let borrowed = args.account.as_deref().is_some_and(|a| a.trim().starts_with(crate::capacity_proxy::ACCOUNT_PREFIX));
+    if linux.is_none() && !borrowed {
         own_env.extend(crate::model_bridge::launch_env(profile.id()));
     }
     let account_env = compose_pane_env(account_env, own_env, &pane_id, guard_env);
@@ -678,6 +680,10 @@ pub fn spawn_pane(
         rows,
     });
     info!(pane = %id, agent = %args.agent_type, pid, "pane spawned");
+    // A pane on a borrowed sign-in is listed on its grant, so the time-left chip and usage find it.
+    if let Some(grant) = args.account.as_deref().and_then(|a| a.trim().strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX)) {
+        crate::capacity_proxy::note_pane(grant, &id);
+    }
     Ok(id)
 }
 

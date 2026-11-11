@@ -33,7 +33,7 @@ serde_json = "1"
 arc-swap = "1"
 portable-pty = "0.8"
 vt100 = "0.16"
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "fs", "process", "io-util", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "fs", "process", "io-util", "time", "net"] }
 parking_lot = "0.12"
 uuid = { version = "1", features = ["v4", "serde"] }
 regex = "1"

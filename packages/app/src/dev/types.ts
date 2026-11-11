@@ -121,12 +121,16 @@ export interface HarnessScenario {
   reviewDesk?: import('./review-desk-fixtures').ReviewDeskScenario;
   /** Closed chats: the chats the mocked `acp_closed_list` starts with (see closed-chats-fixtures.ts). Absent = none, so the sidebar has no Closed chats row. */
   closedChats?: import('./closed-chats-fixtures').ClosedChatsScenario;
+  /** Bring my chats: how the mocked `chat_import_*` commands behave (see bring-chats-fixtures.ts). Absent = they are not mocked. */
+  bringChats?: import('./bring-chats-fixtures').BringChatsScenario;
   /** Linux Inside: what the mocked `wsl_*` commands answer (Settings > Agents > Run agents in Linux). Absent = the block stays hidden. */
   wsl?: import('./wsl-fixtures').WslScenario;
   /** What broke the tests?: what the mocked `wb_*` commands answer (see what-broke-it-fixtures.ts). */
   whatBroke?: import('./what-broke-it-fixtures').WhatBrokeItScenario;
   /** What broke it: the result card. What the mocked `wb_*` result commands answer (see what-broke-it-result-fixtures.ts). */
   whatBrokeItResult?: import('./what-broke-it-result-fixtures').WhatBrokeItResultScenario;
+  /** Share an agent (Labs `lend_enabled`): the state the mocked `lend_*` commands start from. Absent = the switch is off and nothing shows. */
+  lend?: import('./lend-fixtures').LendScenario;
   /** Settings > Labs > Team: overrides on top of the example config (on a team as admin) the mocked `team_config_get` returns. */
   teamConfig?: Partial<import('../lib/team').TeamConfigView>;
   /** Set up agents > Install: what the mocked `agents_install_*` commands answer. */

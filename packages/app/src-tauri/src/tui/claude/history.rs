@@ -189,4 +189,25 @@ mod tests {
         assert_eq!(HISTORY.places(&unix_var), vec!["~/.claude/projects".to_string(), "/srv/claude/projects".to_string()]);
         assert!(HISTORY.places(&HistoryEnv::isolated()).is_empty(), "no home, nothing to show");
     }
+
+    #[test]
+    fn the_folder_is_found_when_the_chat_opens_with_long_queue_lines() {
+        // Real chats can open with two queue lines of 60 to 70 KB each, and the first line with a folder comes after
+        // them. With a 64 KB look at the start, one chat in ten came out with no folder (and could not be continued).
+        let (home, env) = fixture_home("long-head");
+        let session = "7a1e5b44-2222-4333-8444-955566667777";
+        let dir = home.join(".claude").join("projects").join("C--Users-you-late");
+        fs::create_dir_all(&dir).expect("project folder");
+        let filler = "x".repeat(70_000);
+        let lines = [
+            format!(r#"{{"type":"queue-operation","operation":"enqueue","content":"{filler}"}}"#),
+            r#"{"type":"queue-operation","operation":"dequeue"}"#.to_string(),
+            format!(r#"{{"type":"queue-operation","operation":"enqueue","content":"{filler}"}}"#),
+            r#"{"type":"user","cwd":"C:\\Users\\you\\late","sessionId":"7a1e5b44-2222-4333-8444-955566667777","message":{"role":"user","content":"synthetic question"}}"#.to_string(),
+        ];
+        fs::write(dir.join(format!("{session}.jsonl")), lines.join("\n") + "\n").expect("chat");
+        let listing = HISTORY.list(&env, &ListLimits::default());
+        let chat = listing.chats.iter().find(|chat| chat.session == session).expect("the chat is listed");
+        assert_eq!(chat.cwd.as_deref(), Some("~\\late"));
+    }
 }

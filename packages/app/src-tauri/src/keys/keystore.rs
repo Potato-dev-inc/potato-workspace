@@ -42,6 +42,13 @@ impl KeyStore {
         Self { backend: Arc::new(Global), prefix: format!("pc-link/{profile}/") }
     }
 
+    /// The app's store under its own sub-prefix (`pc-link/<profile>/<scope>/`): a second endpoint gets a node key of
+    /// its own instead of sharing one identity with another endpoint.
+    pub fn app_scoped(scope: &str) -> Self {
+        let profile = crate::app_paths::profile().unwrap_or_else(|| "default".into());
+        Self { backend: Arc::new(Global), prefix: format!("pc-link/{profile}/{scope}/") }
+    }
+
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn with_backend(backend: Arc<dyn SecretBackend>, prefix: &str) -> Self {
         Self { backend, prefix: format!("pc-link/{prefix}/") }

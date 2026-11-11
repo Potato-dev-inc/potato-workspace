@@ -1,4 +1,4 @@
-// "Bring my old chats": the types, the typed wrappers for the `chat_import_*` commands, the progress listener, the
+// "Bring my chats": the types, the typed wrappers for the `chat_import_*` commands, the progress listener, the
 // small line helpers, and the two request stores (open an old chat, open the Bring panel). The Rust side is
 // src-tauri/src/commands/chat_import.rs. Nothing here reads an agent folder: that starts only after "Find my chats".
 import { invoke } from '@tauri-apps/api/core';
@@ -42,7 +42,54 @@ export interface ImportProgress {
   unchanged: number;
   tooBig: number;
   unreadable: number;
+  /** Of `unreadable`: the file was moved or deleted. */
+  missing: number;
+  /** Of `unreadable`: a format this version does not know. */
+  format: number;
+  /** Chats written to the list in this run (new or changed). */
+  brought: number;
+  /** Chats with nothing in them: left out, not an error. */
+  empty: number;
   message: string | null;
+}
+
+/** One chat in an agent's list of recent chats. `error` is a plain sentence when it can't be read. */
+export interface BrowseRow {
+  session: string;
+  title: string;
+  folder: string;
+  updatedMs: number;
+  messages: number;
+  /** A cap stopped the count: the chat has at least this many messages. */
+  messagesCut: boolean;
+  /** Already brought, and unchanged since. */
+  brought: boolean;
+  bytes: number;
+  error: string | null;
+}
+
+/** One page of an agent's chats, newest first. `total` is every chat in the range. */
+export interface BrowsePage {
+  rows: BrowseRow[];
+  total: number;
+  offset: number;
+  /** Where "Show more" continues (empty chats are passed over). */
+  next: number;
+  more: boolean;
+  tooBig: number;
+  unreadable: number;
+}
+
+/** Which chats of one agent: a time range in ms (null = no limit on that side). */
+export interface BrowseRange {
+  fromMs: number | null;
+  toMs: number | null;
+}
+
+/** What to bring: all chats of the agent in the range, or only the chats in `sessions`. */
+export interface BringRequest extends BrowseRange {
+  agent: string;
+  sessions: string[] | null;
 }
 
 /** `imported`: how many old chats and search rows are in the index now. */
@@ -84,6 +131,10 @@ export interface ResumePlan {
 export interface ImportApi {
   state: () => Promise<ImportState>;
   look: (sinceDays: number | null) => Promise<ImportFound[]>;
+  /** One agent's chats, newest first, ten at a time (`offset` for "Show more"). */
+  browse: (agent: string, range: BrowseRange, offset: number, limit: number) => Promise<BrowsePage>;
+  /** Brings chosen chats (or a whole range) of one agent. Resolves with the progress at the start. */
+  bring: (request: BringRequest) => Promise<ImportProgress>;
   start: (agents: string[], sinceDays: number | null) => Promise<ImportProgress>;
   cancel: () => Promise<ImportProgress>;
   dismiss: () => Promise<void>;
@@ -108,7 +159,21 @@ export const SINCE_CHOICES: { label: string; days: number | null }[] = [
 const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export function idleProgress(): ImportProgress {
-  return { phase: 'idle', agent: null, chatsDone: 0, chatsTotal: 0, items: 0, unchanged: 0, tooBig: 0, unreadable: 0, message: null };
+  return {
+    phase: 'idle',
+    agent: null,
+    chatsDone: 0,
+    chatsTotal: 0,
+    items: 0,
+    unchanged: 0,
+    tooBig: 0,
+    unreadable: 0,
+    missing: 0,
+    format: 0,
+    brought: 0,
+    empty: 0,
+    message: null,
+  };
 }
 
 /** Outside the desktop app there is nothing to import: `asked` is true so the first-start card stays hidden. */
@@ -127,6 +192,24 @@ export async function chatImportLook(sinceDays: number | null): Promise<ImportFo
   if (!isTauri()) return [];
   const answer = await invoke<{ found: ImportFound[] }>('chat_import_look', { sinceDays });
   return answer.found;
+}
+
+/** One agent's chats, newest first. Only after the person opened Bring my chats and chose this agent. */
+export async function chatImportBrowse(agent: string, range: BrowseRange, offset: number, limit: number): Promise<BrowsePage> {
+  if (!isTauri()) return { rows: [], total: 0, offset, next: offset, more: false, tooBig: 0, unreadable: 0 };
+  return invoke<BrowsePage>('chat_import_browse', { agent, fromMs: range.fromMs, toMs: range.toMs, offset, limit });
+}
+
+/** Brings the chosen chats of one agent (or all of a range). Re-bringing a chat that did not change adds nothing. */
+export async function chatImportBring(request: BringRequest): Promise<ImportProgress> {
+  if (!isTauri()) return idleProgress();
+  return invoke<ImportProgress>('chat_import_start', {
+    agents: [request.agent],
+    sinceDays: null,
+    sessions: request.sessions,
+    fromMs: request.fromMs,
+    toMs: request.toMs,
+  });
 }
 
 /** Starts reading the chosen agents' chats. Also saves the choice and marks the first question as answered. */
@@ -177,6 +260,8 @@ export async function chatImportContinueAsChat(agent: string, session: string): 
 export const chatImportApi: ImportApi = {
   state: chatImportState,
   look: chatImportLook,
+  browse: chatImportBrowse,
+  bring: chatImportBring,
   start: chatImportStart,
   cancel: chatImportCancel,
   dismiss: chatImportDismiss,
@@ -216,7 +301,7 @@ function rangeText(oldestMs: number | null, newestMs: number | null, now: number
   return end === start ? start : `${start} to ${end}`;
 }
 
-/** A count with its noun: "1 chat", "412 chats". Every count on the Bring my old chats screens uses it. */
+/** A count with its noun: "1 chat", "412 chats". Every count on the Bring my chats screens uses it. */
 export function chatCount(count: number): string {
   return `${count.toLocaleString('en-US')} ${count === 1 ? 'chat' : 'chats'}`;
 }
@@ -264,7 +349,7 @@ export interface ImportedChatRequest {
   nonce: number;
 }
 
-/** The request to open the Bring my old chats panel. */
+/** The request to open the Bring my chats panel. */
 export interface BringChatsRequest {
   nonce: number;
 }

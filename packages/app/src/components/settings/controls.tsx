@@ -7,7 +7,7 @@
 //
 // All of them flush a pending edit when they unmount, so leaving a section or closing the window with
 // text still in a field does not lose it.
-import { useCallback, useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { useCallback, useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 
 export const DEBOUNCE_MS = 600;
 
@@ -130,6 +130,54 @@ export function TextControl({
       onKeyDown={(e) => {
         if (e.key === 'Enter') committer.flush();
       }}
+    />
+  );
+}
+
+/** Several lines of text. Saves after a pause in typing and on blur (never on Enter: Enter makes a new line). */
+export function TextAreaControl({
+  value,
+  onCommit,
+  debounceMs = DEBOUNCE_MS,
+  normalize = (s: string) => s,
+  className,
+  ...rest
+}: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange' | 'onBlur'> & {
+  value: string;
+  onCommit: (next: string) => void | Promise<void>;
+  debounceMs?: number;
+  normalize?: (text: string) => string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const dirty = useRef(false);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  useEffect(() => {
+    if (!dirty.current) setDraft(value);
+  }, [value]);
+
+  const committer = useCommitter(() => {
+    dirty.current = false;
+    const next = normalize(draftRef.current);
+    if (next !== valueRef.current) void onCommit(next);
+  }, debounceMs);
+
+  return (
+    <textarea
+      {...rest}
+      value={draft}
+      spellCheck={false}
+      className={`st-field st-textarea${className ? ` ${className}` : ''}`}
+      onChange={(e) => {
+        dirty.current = true;
+        setDraft(e.target.value);
+        draftRef.current = e.target.value;
+        committer.schedule();
+      }}
+      onBlur={() => committer.flush()}
     />
   );
 }

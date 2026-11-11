@@ -16,7 +16,7 @@ use crate::session_chat::{ChatItem, ItemObserver};
 const NOW_MS: i64 = 1_790_000_000_000;
 
 fn request(agents: &[&str]) -> ImportRequest {
-    ImportRequest { agents: agents.iter().map(|id| id.to_string()).collect(), since_days: None }
+    ImportRequest { agents: agents.iter().map(|id| id.to_string()).collect(), since_days: None, ..ImportRequest::default() }
 }
 
 fn env() -> HistoryEnv {

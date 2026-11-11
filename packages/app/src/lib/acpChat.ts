@@ -382,7 +382,8 @@ export interface AcpChatApi {
   laneGet: () => Promise<AcpLaneView>;
   laneSet: (agentId: string, lane: RunLaneWord) => Promise<AcpLaneView>;
   /** Start a chat session. `explicit`: the person picked Chat for this session, so the saved choice is not needed. */
-  start: (agentId: string, folder: string, explicit?: boolean) => Promise<AcpStarted>;
+  /** `accountId`: run the chat under that sign-in (an account, or a borrowed `lend:<grant>`); absent: the agent's own login. */
+  start: (agentId: string, folder: string, explicit?: boolean, accountId?: string) => Promise<AcpStarted>;
   /** Read the agent's help text for how it starts as a chat. Runs nothing but help. */
   overlayDetect?: (agent: string) => Promise<OverlayDetect>;
   /** Every way to give the agent a chat (its own program, the official ACP registry, the built-in bridge), best first. */
@@ -445,7 +446,8 @@ export const tauriAcpChatApi: AcpChatApi = {
   },
   laneGet: async () => normalizeLaneView(await call<AcpLaneView>('agent_lane_get')),
   laneSet: async (agentId, lane) => normalizeLaneView(await call<AcpLaneView>('agent_lane_set', { id: agentId, lane })),
-  start: (agentId, folder, explicit) => call<AcpStarted>('acp_chat_start', { agentId, folder, explicit: explicit ?? false }),
+  start: (agentId, folder, explicit, accountId) =>
+    call<AcpStarted>('acp_chat_start', accountId ? { agentId, folder, explicit: explicit ?? false, accountId } : { agentId, folder, explicit: explicit ?? false }),
   overlayDetect: (agent) => call<OverlayDetect>('acp_overlay_detect', { agent }),
   overlayResolve: async (agent) => ({ ok: true, options: normalizeOptions(await call<OverlayResolve>('acp_overlay_resolve', { agent })) }),
   overlayInstall: (agent, option, confirmed) => call<unknown>('acp_overlay_install', { agent, option, confirmed }),
@@ -654,8 +656,8 @@ export function terminalChatCapable(view: AcpLaneView | null): TerminalChatAgent
 }
 
 /** Start an agent as Chat (terminal) (`terminal_chat_start`): a normal terminal pane. Resolves to the new pane id. */
-export function startTerminalChat(agentId: string, cwd?: string): Promise<string> {
-  return call<string>('terminal_chat_start', { agent: agentId, cwd: cwd ?? null });
+export function startTerminalChat(agentId: string, cwd?: string, accountId?: string): Promise<string> {
+  return call<string>('terminal_chat_start', accountId ? { agent: agentId, cwd: cwd ?? null, accountId } : { agent: agentId, cwd: cwd ?? null });
 }
 
 // ---- The app closed during a turn (P-29) --------------------------------------------------------------------------

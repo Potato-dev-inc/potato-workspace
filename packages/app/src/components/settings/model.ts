@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import type { Settings } from '@potato-workspace/shared';
 import type { SettingsPatch } from '../../lib/settings';
 
-export const SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'shortcuts'] as const;
+export const SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'lend', 'shortcuts'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
 /** `later` is the read-only "Coming later" page; it is not a section of settings. */
@@ -75,7 +75,7 @@ export interface RowDef {
   /** A link left where a row used to be. Never searched (the real row is), and has no setting of its own. */
   pointer?: boolean;
   /** An early feature's own row: shown (and searched) only while this Labs flag is on. Hidden otherwise, as if it did not exist. */
-  labsFlag?: 'acp_chat_enabled' | 'model_bridge_enabled';
+  labsFlag?: 'acp_chat_enabled' | 'model_bridge_enabled' | 'lend_enabled';
   render: (env: SettingsEnv) => ReactNode;
 }
 
@@ -107,8 +107,10 @@ export function splitByLevel(rows: RowDef[], showDeveloper: boolean): { basic: R
 /**
  * The sections a person sees now: rows of an early feature appear only while their switch is on.
  */
-export function visibleSections(sections: SectionDef[], settings: { acp_chat_enabled?: boolean; model_bridge_enabled?: boolean } | null): SectionDef[] {
-  return sections.map((s) => (s.rows.some((r) => r.labsFlag) ? { ...s, rows: s.rows.filter((r) => !r.labsFlag || settings?.[r.labsFlag] === true) } : s));
+export function visibleSections(sections: SectionDef[], settings: { acp_chat_enabled?: boolean; model_bridge_enabled?: boolean; lend_enabled?: boolean } | null): SectionDef[] {
+  return sections
+    .map((s) => (s.rows.some((r) => r.labsFlag) ? { ...s, rows: s.rows.filter((r) => !r.labsFlag || settings?.[r.labsFlag] === true) } : s))
+    .filter((s) => s.rows.length > 0);
 }
 
 export interface RowGroup {

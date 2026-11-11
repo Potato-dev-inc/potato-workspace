@@ -116,6 +116,10 @@ export const SettingsSchema = z.object({
   agent_hooks_agents: z.record(z.string(), z.enum(['off', 'shadow', 'evidence'])).optional(),
   /** Potato Workspace's helper tools (run_agent, wait_agents) given to every agent pane for its launch. On unless false. Rust: pane_mcp. */
   pane_mcp_enabled: z.boolean().optional(),
+  /** What Settings › Agents › "Hand off does" picks: `file` (Quick handoff: save HANDOFF.md) or `new_agent` (Handoff to new agent; the default when absent). App: lib/handoff.ts. */
+  handoff_mode: z.enum(["file", "new_agent"]).optional(),
+  /** Text added to every quick handoff under "Always remember". */
+  handoff_fixed_notes: z.string().optional(),
   /** Missions (Preview, Settings › General › Labs): goal + checks + budget, worked on in rounds. Off unless chosen. Rust: missions. */
   missions_enabled: z.boolean().optional(),
   /** Night Shift (Settings › General › Labs): plan tasks for tonight, review them in the morning. Off unless chosen. Rust: night_shift. */
@@ -129,6 +133,8 @@ export const SettingsSchema = z.object({
   model_bridge_enabled: z.boolean().optional(),
   /** Spaces (Settings › General › Labs): chat with friends in small groups, computer to computer. Off unless chosen. Rust: spaces. */
   spaces_enabled: z.boolean().optional(),
+  /** Share an agent (Settings > General > Labs): lend an agent sign-in to another PC, or borrow one. Off unless chosen. Rust: lend. */
+  lend_enabled: z.boolean().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
   individual_explained: z.boolean().optional(),
   /** How the windows move when the mode switches between Orchestration and Individual: Domino (default), Ink, or Off (a quick fade). Rust reads it (switch_anim). */

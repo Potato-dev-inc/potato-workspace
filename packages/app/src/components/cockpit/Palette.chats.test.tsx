@@ -101,7 +101,7 @@ function JumpProbe() {
   return null;
 }
 
-// The old-chat and "Bring my old chats" requests, read the way the cockpit reads them.
+// The old-chat and "Bring my chats" requests, read the way the cockpit reads them.
 let importedReq: ImportedChatRequest | null = null;
 let bringReq: BringChatsRequest | null = null;
 function ImportProbe() {
@@ -279,7 +279,7 @@ describe('Palette: old chats', () => {
     expect(importedReq).toMatchObject({ agent: 'codex', session: 'old-session-1' });
   });
 
-  it('the commands list has "Bring my old chats": choosing it closes the palette and asks for the Bring panel', () => {
+  it('the commands list has "Bring my chats": choosing it closes the palette and asks for the Bring panel', () => {
     const onClose = vi.fn();
     act(() =>
       root.render(
@@ -289,7 +289,7 @@ describe('Palette: old chats', () => {
         </>,
       ),
     );
-    const row = options().find((r) => r.querySelector('.ck-palette-title')?.textContent === 'Bring my old chats')!;
+    const row = options().find((r) => r.querySelector('.ck-palette-title')?.textContent === 'Bring my chats')!;
     expect(row).toBeTruthy();
     expect(bringReq).toBeNull();
     act(() => row.click());

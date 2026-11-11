@@ -54,6 +54,10 @@ const PROGRESS: ImportProgress = {
   unchanged: 0,
   tooBig: 0,
   unreadable: 0,
+  missing: 0,
+  format: 0,
+  brought: 0,
+  empty: 0,
   message: null,
 };
 

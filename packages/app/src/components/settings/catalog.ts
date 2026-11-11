@@ -13,6 +13,7 @@ import { modelBridgeRows } from './sections/ModelBridgeSection';
 import { modelsRows } from './sections/ModelsSection';
 import { phoneRows } from './sections/PhoneSection';
 import { teamRows } from './sections/TeamSection';
+import { lendRows } from './sections/LendSection';
 import { shortcutsRows } from './sections/ShortcutsSection';
 
 /** The sections as their files define them, with each row's level (levels.ts). */
@@ -24,6 +25,7 @@ const RAW_SECTIONS: SectionDef[] = [
   { id: 'bridge', title: 'Bridge & MCP', blurb: 'How other tools and agents connect to Potato Workspace.', rows: bridgeRows },
   { id: 'phone', title: 'Phone', blurb: 'Pair a phone to watch and steer your agents.', rows: phoneRows },
   { id: 'team', title: 'Team', blurb: 'Work with teammates: see when their agents push, and tell them about yours.', rows: teamRows },
+  { id: 'lend', title: 'Lend', blurb: 'Lend an agent sign-in to another PC, or borrow one. Early feature.', rows: lendRows },
   { id: 'shortcuts', title: 'Shortcuts', blurb: 'Change the keys, or turn a shortcut off. Terminals keep their own keys.', rows: shortcutsRows },
 ];
 

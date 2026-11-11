@@ -14,12 +14,14 @@
  * The live run adds two real chats, so pass the real counts there.
  *
  * Steps. Each one writes a screenshot into <shots-dir> and a line into <shots-dir>/result.json:
- *   1 find    "Find my chats": each agent's chat count equals --expect.
- *   2 toggle  Codex switched off: the "Add N chats to search" count drops; switched on again: back to the same N.
- *   3 add     "Add N chats to search": the progress bar is shown if seen, and the result says "Added N chats"
- *             with N = the sum of --expect.
- *   4 search  Ctrl+Shift+F, then --search: a hit with the "Old chat" tag shows the text.
- *   5 open    that hit opens a read-only viewer (no composer) with the text; Escape closes it.
+ *   1 agents  "Bring my chats" lists each agent with its chat count; the count equals --expect.
+ *   2 recent  pick the first agent: at most 10 chats, each with a folder, a date and a message count.
+ *   3 bring   the All chip -> "Bring all N chats"; the progress line is shown if seen, and the result says
+ *             "Done. N chats are now in your chat list." with N = the agent's count (empty chats are left out, so
+ *             the check is "at most N and at least 1"). Then the same for every other expected agent.
+ *   4 again   "Bring more" and bring the same range again: the result says the chats were already there.
+ *   5 search  Ctrl+Shift+F, then --search: a hit with the "Old chat" tag shows the text.
+ *   6 open    that hit opens a read-only viewer (no composer) with the text; Escape closes it.
  * Exit 0 when every step passes. On the first failure it keeps fail.png and exits 1.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -73,9 +75,9 @@ export function chatsIn(line) {
   return m ? Number(m[1].replace(/,/g, '')) : null;
 }
 
-/** "Add 12 chats to search" -> 12, anything else -> null. */
-export function addCountIn(text) {
-  const m = /^Add (\d[\d,]*) chats to search$/.exec(text);
+/** "Bring all 12 chats" or "Bring all 12 chats from this range" -> 12, anything else -> null. */
+export function bringAllIn(text) {
+  const m = /^Bring all (\d[\d,]*) chats?(?: from this range)?$/.exec(text);
   return m ? Number(m[1].replace(/,/g, '')) : null;
 }
 
@@ -174,22 +176,16 @@ async function run(argv) {
     await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code, windowsVirtualKeyCode: vk, modifiers });
     await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code, windowsVirtualKeyCode: vk, modifiers });
   };
-  // Reads the agent lines of the card: name text and switch state.
+  // The agent buttons of step 1: name text.
   const rows = () =>
-    cdp.evaluate(
-      `[...document.querySelectorAll('section.bc-panel li.bc-agent')].map((li) => ({
-        name: li.querySelector('.bc-agent-name')?.innerText ?? '',
-        on: li.querySelector('.ck-switch')?.getAttribute('aria-checked') === 'true',
-        switchable: !!li.querySelector('.ck-switch'),
-      }))`,
-    );
-  const addText = () =>
-    cdp.evaluate(
-      `[...document.querySelectorAll('section.bc-panel button')].map((b) => b.textContent.trim())
-        .find((t) => t.startsWith('Add ') && t.endsWith('chats to search')) ?? ''`,
-    );
-  const rowFor = (agentKey) => `[...document.querySelectorAll('section.bc-panel li.bc-agent')]
-    .find((li) => new RegExp(${JSON.stringify(agentKey)}, 'i').test(li.querySelector('.bc-agent-name')?.innerText ?? ''))`;
+    cdp.evaluate(`[...document.querySelectorAll('section.bc-panel .bc-agent-pick')].map((b) => ({ name: b.innerText.replace(/\\s+/g, ' ').trim(), off: b.disabled }))`);
+  const buttonText = (test) =>
+    cdp.evaluate(`[...document.querySelectorAll('section.bc-panel button')].map((b) => b.textContent.trim()).find((t) => ${test}) ?? ''`);
+  const clickButton = (label) =>
+    clickAt(`[...document.querySelectorAll('section.bc-panel button')].find((b) => b.textContent.trim() === ${JSON.stringify(label)})`, label);
+  const pickAgent = (agentKey) =>
+    clickAt(`[...document.querySelectorAll('section.bc-panel .bc-agent-pick')].find((b) => new RegExp(${JSON.stringify(agentKey)}, 'i').test(b.innerText))`, `the ${agentKey} button`);
+  const resultLine = () => cdp.evaluate(`[...document.querySelectorAll('section.bc-panel [role="status"]')].map((e) => e.innerText.trim()).join(' | ')`);
 
   try {
     // Moves the app window to the left monitor (SPEC-n32 section 6), so the check never shows on the primary screen.
@@ -205,67 +201,80 @@ async function run(argv) {
       }
     }
 
-    // 1 find
-    await waitFor(`!!document.querySelector('section.bc-panel')`, 'the Bring my old chats card (BringChatsPanel)', 20000);
-    const findButton = `[...document.querySelectorAll('section.bc-panel button')].find((b) => b.textContent.trim() === 'Find my chats')`;
-    if (await cdp.evaluate(`!!${findButton}`)) {
-      await clickAt(findButton, 'Find my chats');
-    }
-    await waitFor(`document.querySelectorAll('section.bc-panel li.bc-agent').length > 0`, 'the agent list');
+    // 1 agents
+    await waitFor(`!!document.querySelector('section.bc-panel')`, 'the Bring my chats panel (BringChatsPanel)', 20000);
+    await waitFor(`document.querySelectorAll('section.bc-panel .bc-agent-pick').length > 0`, 'the agent list');
     const found = await rows();
     const counts = Object.entries(opts.expect).map(([agentKey, want]) => {
       const row = found.find((r) => new RegExp(agentKey, 'i').test(r.name));
       return { agentKey, want, got: row ? chatsIn(row.name) : null };
     });
     const summary = counts.map((c) => `${c.agentKey} ${c.got ?? 'none'} (want ${c.want})`).join(', ');
-    await check('find: counts match --expect', counts.every((c) => c.got === c.want), summary, 'found');
+    await check('agents: counts match --expect', counts.every((c) => c.got === c.want), summary, 'agents');
 
-    // 2 toggle Codex off and on
-    const before = addCountIn(await addText());
-    await check('toggle: "Add N chats" is shown', before !== null, `before ${before}`);
-    const setCodex = async (on) => {
-      const current = (await rows()).find((r) => /codex/i.test(r.name));
-      await check('toggle: a Codex line with a switch', current && current.switchable, '');
-      if (current.on !== on) await clickAt(`${rowFor('codex')}?.querySelector('.ck-switch')`, 'Codex switch');
-      await waitFor(`${rowFor('codex')}?.querySelector('.ck-switch')?.getAttribute('aria-checked') === '${on}'`, 'the Codex switch');
-    };
-    await setCodex(false);
-    const off = addCountIn(await addText());
-    await check('toggle: Codex off lowers the count', off !== null && before !== null && off < before, `${before} -> ${off}`, 'toggled-off');
-    await setCodex(true);
-    const back = addCountIn(await addText());
-    await check('toggle: Codex on restores the count', back === before, `${off} -> ${back}`);
-
-    // 3 add
-    const total = Object.values(opts.expect).reduce((sum, n) => sum + n, 0);
-    await check('add: the count is the sum of --expect', before === total, `${before} vs ${total}`);
-    const addButton = `[...document.querySelectorAll('section.bc-panel button')].find((b) => {
-      const t = b.textContent.trim(); return t.startsWith('Add ') && t.endsWith('chats to search'); })`;
-    await check('add: the Add button is enabled', await cdp.evaluate(`!!(${addButton}) && !(${addButton}).disabled`), '');
-    await clickAt(addButton, 'Add chats to search');
-    let sawBar = false;
-    let result = '';
-    const end = Date.now() + 240000;
-    while (Date.now() < end && !result) {
-      if (!sawBar && (await cdp.evaluate(`!!document.querySelector('section.bc-panel .bc-bar')`))) {
-        sawBar = true;
-        await shot('reading');
-      }
-      result = await cdp.evaluate(
-        `[...document.querySelectorAll('section.bc-panel [role="status"]')].map((e) => e.innerText.trim()).join(' | ')`,
-      );
-      if (!/Added [\d,]+ chats|Nothing new to add/.test(result)) result = '';
-      if (!result) await sleep(300);
-    }
-    const added = /Added (\d[\d,]*) chats/.exec(result);
+    // 2 recent chats of the first agent
+    const [first, ...others] = Object.keys(opts.expect);
+    await pickAgent(first);
+    await waitFor(`document.querySelectorAll('section.bc-panel .bc-row').length > 0`, 'the chat list');
+    const list = await cdp.evaluate(
+      `[...document.querySelectorAll('section.bc-panel .bc-row')].map((r) => ({
+        title: !!r.querySelector('.bc-row-title')?.innerText.trim(),
+        sub: r.querySelector('.bc-row-sub')?.innerText ?? '' }))`,
+    );
     await check(
-      'add: "Added N chats" with N = the sum of --expect',
-      added && Number(added[1].replace(/,/g, '')) === total,
-      `${result.slice(0, 120) || 'no result line'}; progress bar seen: ${sawBar}`,
+      'recent: at most 10 chats, each with a title, a date and a message count',
+      list.length >= 1 && list.length <= 10 && list.every((r) => r.title && /ago|just now|Unknown date/.test(r.sub) && /messages?/.test(r.sub)),
+      `${list.length} rows`,
+      'recent',
+    );
+
+    // 3 bring everything of each expected agent (the All chip)
+    const bringAll = async (agentKey) => {
+      await clickButton('All');
+      await waitFor(`!!document.querySelector('section.bc-panel .bc-range button')`, 'the "Bring all" button');
+      const label = await buttonText('t.startsWith("Bring all")');
+      const n = bringAllIn(label);
+      await clickButton(label);
+      let sawBar = false;
+      let line = '';
+      const end = Date.now() + 600000;
+      while (Date.now() < end && !/^Done\./.test(line)) {
+        if (!sawBar && (await cdp.evaluate(`!!document.querySelector('section.bc-panel .bc-bar')`))) {
+          sawBar = true;
+          await shot(`bringing-${agentKey}`);
+        }
+        line = await resultLine();
+        if (!/^Done\./.test(line)) await sleep(300);
+      }
+      return { n, line, sawBar };
+    };
+    const firstRun = await bringAll(first);
+    const doneCount = /^Done\. (\d[\d,]*) chats?/.exec(firstRun.line);
+    const brought = doneCount ? Number(doneCount[1].replace(/,/g, '')) : null;
+    await check(
+      `bring: "Done. N chats are now in your chat list" for ${first}`,
+      brought !== null && brought >= 1 && brought <= firstRun.n,
+      `${firstRun.line.slice(0, 140) || 'no result line'}; offered ${firstRun.n}; progress bar seen: ${firstRun.sawBar}`,
       'done',
     );
 
-    // 4 search
+    // 4 the same range again brings nothing new
+    await clickButton('Bring more');
+    await waitFor(`!!document.querySelector('section.bc-panel .bc-range button')`, 'the Bring all button again');
+    const again = await bringAll(first);
+    await check('again: the second run says the chats were already there', /already in your chat list/.test(again.line) || /Nothing new/.test(again.line), again.line.slice(0, 140), 'again');
+
+    // The other agents, once each.
+    for (const agentKey of others) {
+      await clickButton('Bring more');
+      await clickButton('‹ All agents');
+      await pickAgent(agentKey);
+      await waitFor(`document.querySelectorAll('section.bc-panel .bc-row').length > 0`, `the ${agentKey} chat list`);
+      const run = await bringAll(agentKey);
+      await check(`bring: ${agentKey} finishes`, /^Done\./.test(run.line), run.line.slice(0, 140));
+    }
+
+    // 5 search
     await key('F', 'KeyF', 70, 10); // Ctrl+Shift+F
     await waitFor(`!!document.querySelector('.ck-palette-input')`, 'the search box (Ctrl+Shift+F)');
     await clickAt(`document.querySelector('.ck-palette-input')`, 'search box');
@@ -288,7 +297,7 @@ async function run(argv) {
       'search',
     );
 
-    // 5 open the hit
+    // 6 open the hit
     const hitOption = `((list) => list.find((o) => o.innerText.includes('Old chat') && o.innerText.toLowerCase().includes(${JSON.stringify(query)})) ?? list.find((o) => o.innerText.includes('Old chat')) ?? null)([...document.querySelectorAll('[role="option"]')])`;
     await clickAt(hitOption, 'the Old chat hit');
     await waitFor(`!!document.querySelector('.history-viewer')`, 'the read-only viewer');

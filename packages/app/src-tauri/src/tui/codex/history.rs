@@ -11,7 +11,7 @@ use crate::session_chat::history::{
 };
 use crate::session_chat::ChatItem;
 
-use super::session_file::{rollout_meta, CodexRollout};
+use super::session_file::{rollout_header, CodexRollout};
 
 static FORMAT: CodexRollout = CodexRollout;
 
@@ -29,10 +29,19 @@ const SPEC: FileHistorySpec = FileHistorySpec {
     resume: &["resume", "{session}"],
 };
 
-/// The chat id and the folder, both from the `session_meta` line. The file name is not used.
+/// The chat id and the folder, both from the `session_meta` line, and whether the thread is a helper's sub-thread. The
+/// file name is not used.
 fn meta_of(path: &Path) -> Option<FileMeta> {
-    let (cwd, id) = rollout_meta(path)?;
-    Some(FileMeta { id, cwd: Some(cwd) })
+    #[cfg(test)]
+    META_READS.with(|reads| reads.set(reads.get() + 1));
+    let header = rollout_header(path)?;
+    Some(FileMeta { id: header.id, cwd: Some(header.cwd), child: header.child })
+}
+
+// Test only: how many rollout headers this thread has opened (a read must not open every file in the store).
+#[cfg(test)]
+thread_local! {
+    static META_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Codex's old-chat store: the generic file store with Codex's spec.
@@ -227,5 +236,58 @@ mod tests {
     fn the_profile_offers_this_store() {
         let profile = crate::tui::profile_for("codex");
         assert!(profile.session_history().is_some(), "codex answers session_history()");
+    }
+
+    /// One synthetic rollout: a `session_meta` line with these fields, then a user message and an answer.
+    fn write_rollout(home: &Path, name: &str, id: &str, extra: &str) {
+        let dir = home.join(".codex").join("sessions").join("2026").join("09").join("01");
+        fs::create_dir_all(&dir).expect("day folder");
+        let meta = format!(r#"{{"timestamp":"2026-09-01T10:00:00.000Z","type":"session_meta","payload":{{"id":"{id}","cwd":"C:\\Users\\you\\proj"{extra}}}}}"#);
+        let user = r#"{"timestamp":"2026-09-01T10:00:01.000Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"u1","content":[{"type":"text","text":"synthetic question"}]}}}"#;
+        let answer = r#"{"timestamp":"2026-09-01T10:00:02.000Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","id":"a1","text":"synthetic answer"}}}"#;
+        fs::write(dir.join(name), format!("{meta}\n{user}\n{answer}\n")).expect("rollout");
+    }
+
+    #[test]
+    fn reading_one_chat_opens_the_file_named_for_it_and_not_every_file_in_the_store() {
+        // Real stores hold thousands of rollouts. Opening each one to read its id made every read take seconds.
+        let (home, env) = fixture_home("named");
+        for n in 0..60 {
+            let id = format!("0199d000-0000-7000-8000-{n:012}");
+            write_rollout(&home, &format!("rollout-2026-09-01T10-00-00-{id}.jsonl"), &id, "");
+        }
+        let target = "0199e000-0000-7000-8000-00000000f00d";
+        write_rollout(&home, &format!("rollout-2026-09-01T11-00-00-{target}.jsonl"), target, "");
+        super::META_READS.with(|reads| reads.set(0));
+        let items = read_all(&env, target).expect("the chat is read");
+        assert!(items.iter().any(|item| matches!(item, ChatItem::User { text, .. } if text == "synthetic question")));
+        let opened = super::META_READS.with(|reads| reads.get());
+        assert!(opened <= 2, "{opened} rollout headers were opened for one read");
+    }
+
+    #[test]
+    fn a_chat_whose_file_name_does_not_hold_its_id_is_still_found() {
+        let (home, env) = fixture_home("renamed");
+        let id = "0199f000-0000-7000-8000-00000000abcd";
+        write_rollout(&home, "rollout-2026-09-01T12-00-00-renamed.jsonl", id, "");
+        assert!(read_all(&env, id).is_ok());
+    }
+
+    #[test]
+    fn helper_agent_threads_are_not_chats_of_their_own() {
+        // Codex writes a rollout for every thread a helper agent starts. They carry `parent_thread_id` / a subagent
+        // `source`; a quarter of the files in a busy store are these.
+        let (home, env) = fixture_home("children");
+        let parent = "0199a000-0000-7000-8000-0000000000aa";
+        let child = "0199a100-0000-7000-8000-0000000000bb";
+        let child_by_source = "0199a200-0000-7000-8000-0000000000cc";
+        write_rollout(&home, &format!("rollout-2026-09-01T10-00-00-{parent}.jsonl"), parent, "");
+        write_rollout(&home, &format!("rollout-2026-09-01T10-05-00-{child}.jsonl"), child, &format!(r#","parent_thread_id":"{parent}""#));
+        write_rollout(&home, &format!("rollout-2026-09-01T10-06-00-{child_by_source}.jsonl"), child_by_source, r#","source":{"subagent":{"thread_spawn":{}}}"#);
+        let listing = HISTORY.list(&env, &ListLimits::default());
+        let ids: Vec<&str> = listing.chats.iter().map(|chat| chat.session.as_str()).collect();
+        assert!(ids.contains(&parent));
+        assert!(!ids.contains(&child) && !ids.contains(&child_by_source), "{ids:?}");
+        assert_eq!(listing.unreadable, 0, "a helper thread is left out, not counted as unreadable");
     }
 }

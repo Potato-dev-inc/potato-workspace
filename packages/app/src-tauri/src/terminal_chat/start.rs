@@ -16,14 +16,14 @@ pub(crate) fn tag_pane(registry: &Mutex<PaneRegistry>, pane_id: &str) -> bool {
 /// Opens `agent` in a normal pane (folder `cwd`, or the project the cockpit shows) that opens on its Chat tab, and
 /// returns the pane id. Refuses an agent that cannot run as a terminal chat (`NOT_AVAILABLE`).
 #[tauri::command]
-pub async fn terminal_chat_start(app: AppHandle, agent: String, cwd: Option<String>) -> Result<String, String> {
+pub async fn terminal_chat_start(app: AppHandle, agent: String, cwd: Option<String>, account_id: Option<String>) -> Result<String, String> {
     let id = agent.trim().to_ascii_lowercase();
     if id.is_empty() {
         return Err("INVALID_ARGUMENT: agent is required".into());
     }
     available_for(&id).map_err(|reason| format!("NOT_AVAILABLE: {reason}"))?;
     // The same call the + menu makes, so isolation, folder memory, warm workers and window rules are unchanged.
-    let pane = crate::commands::new_pane(app.clone(), id.clone(), None, None, cwd).await?;
+    let pane = crate::commands::new_pane(app.clone(), id.clone(), account_id.filter(|a| !a.trim().is_empty()), None, cwd).await?;
     let state = app.state::<crate::commands::AppState>();
     if !tag_pane(&state.registry, &pane) {
         tracing::warn!(agent = %id, pane = %pane, "terminal chat: pane vanished before it was tagged");

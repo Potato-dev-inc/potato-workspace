@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The host of the Bring my old chats sheets: no request, no sheet; a request opens its sheet; closing clears the request;
+// The host of the Bring my chats sheets: no request, no sheet; a request opens its sheet; closing clears the request;
 // Continue starts a pane with exactly the plan's agent, folder and arguments, selects it, asks for its Chat tab and
 // closes the sheet; a failed start keeps the sheet and tells the person.
 import { act } from 'react';

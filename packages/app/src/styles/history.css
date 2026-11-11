@@ -1,4 +1,4 @@
-/* "Bring my old chats" panel: the content of its sheet. Grayscale only, cockpit tokens. The title and the
+/* "Bring my chats" panel: the content of its sheet. Grayscale only, cockpit tokens. The title and the
    sentences use the shared .ck-section and .ck-sub classes. */
 .cockpit .bc-panel {
   display: flex;
@@ -91,4 +91,182 @@
   .cockpit .bc-bar-fill {
     transition: none;
   }
+}
+
+/* Bring my chats: agent buttons, time-range chips, the list of recent chats, the range box, the "Why?" fold. */
+.cockpit .bc-agent-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cockpit .bc-agent-pick:hover {
+  background: var(--fill-active);
+}
+.cockpit .bc-agent-pick:focus-visible,
+.cockpit .bc-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .bc-agent-pick[disabled] {
+  cursor: default;
+  color: var(--label-3);
+  background: transparent;
+}
+.cockpit .bc-back {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cockpit .bc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cockpit .bc-chip {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--sep);
+  background: transparent;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cockpit .bc-chip:hover {
+  background: var(--fill-active);
+}
+.cockpit .bc-chip[aria-pressed='true'] {
+  background: var(--label);
+  border-color: var(--label);
+  color: var(--bg, #fff);
+}
+.cockpit .bc-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.cockpit .bc-dates input {
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--label);
+  font: inherit;
+}
+.cockpit .bc-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 490px;
+  overflow-y: auto;
+}
+.cockpit .bc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 4px;
+  border-radius: 6px;
+}
+.cockpit .bc-row:hover {
+  background: var(--fill);
+}
+.cockpit .bc-row input[type='checkbox'] {
+  margin-top: 3px;
+  flex: none;
+}
+.cockpit .bc-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cockpit .bc-row-title {
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+.cockpit .bc-row-sub {
+  font-size: 12px;
+  color: var(--label-3);
+  overflow-wrap: anywhere;
+}
+.cockpit .bc-row-open {
+  flex: none;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cockpit .bc-range {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--fill);
+}
+.cockpit .bc-range ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.cockpit .bc-why summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.cockpit .bc-why ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.cockpit .bc-link {
+  align-self: flex-start;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cockpit .bc-link:hover {
+  color: var(--label);
+}
+.cockpit .bc-link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-side-bring {
+  margin: 0 12px;
 }

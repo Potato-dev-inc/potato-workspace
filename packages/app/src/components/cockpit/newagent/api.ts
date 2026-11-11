@@ -3,7 +3,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { pickFiles } from '../../../lib/attachFiles';
-import { tauriAccountsApi, type Account } from '../../../lib/accounts';
+import { pickableAccounts, tauriAccountsApi, type Account } from '../../../lib/accounts';
 import { loadSettings, patchSettings } from '../../../lib/settings';
 import { shipApi, type RecentProject } from '../../../lib/ship-api';
 import { realRecents } from '../../../lib/ship-model';
@@ -75,7 +75,7 @@ export const tauriNewAgentApi: NewAgentApi = {
   },
   accounts: async () => {
     try {
-      return (await tauriAccountsApi.list()).accounts;
+      return pickableAccounts(await tauriAccountsApi.list());
     } catch {
       return [];
     }

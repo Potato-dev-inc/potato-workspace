@@ -50,7 +50,7 @@ pub mod transport;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-mod tests_v1;
+pub(crate) mod tests_v1;
 #[cfg(test)]
 mod tests_hardening;
 #[cfg(test)]

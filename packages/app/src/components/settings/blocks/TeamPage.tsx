@@ -6,8 +6,10 @@
 //     Options (Use Team, projects), and Leave team at the bottom.
 // Messages are end-to-end encrypted; the relay (or the shared folder) only moves ciphertext. No ids are shown:
 // people are names, the team is its name.
+import { lendApi, type LendApi } from "../../../lib/lend";
+import { useLend } from "../../lend/useLend";
 import QRCode from "qrcode";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { formatCode, parsePastedInvite } from "../../../lib/team-invite";
 import {
@@ -190,14 +192,21 @@ function StatusLine({
 // ---------- the page ----------
 
 /** How often the page re-reads the relay link while it is not up. */
+// Share an agent (Labs): these screens load when they are drawn, so the settings bundle does not carry them.
+const RequestUsage = lazy(() => import("../../lend/RequestUsage").then((m) => ({ default: m.RequestUsage })));
+const MemberLends = lazy(() => import("../../lend/Borrowed").then((m) => ({ default: m.MemberLends })));
+
 const LINK_REFRESH_MS = 3000;
 
 export function TeamPage({
   api = teamApi,
+  lend: lendClient = lendApi,
   displayName = "",
   onSaved,
 }: {
   api?: TeamApi;
+  /** Share an agent (Labs): Request usage and the lends on each person's row. */
+  lend?: LendApi;
   displayName?: string;
   onSaved?: () => void;
 }) {
@@ -212,6 +221,7 @@ export function TeamPage({
   const [leaving, setLeaving] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const projectsEdited = useRef(false);
+  const lend = useLend(lendClient);
 
   const take = (v: TeamConfigView) => {
     setView(v);
@@ -435,6 +445,9 @@ export function TeamPage({
 
         <section className="tp-block" aria-label="People">
           <h4 className="tp-h4">People</h4>
+          <Suspense fallback={null}>
+            <RequestUsage api={lendClient} team={api} lend={lend} variant="settings" />
+          </Suspense>
           <ul className="st-team-people" aria-label="People">
             {view.members.map((m) => {
               const gh = githubText(m.github, m.githubConfirmed);
@@ -446,6 +459,9 @@ export function TeamPage({
                       {m.me && <span className="st-team-you"> (you)</span>}
                     </span>
                     {gh && <small>{gh}</small>}
+                    <Suspense fallback={null}>
+                      <MemberLends memberId={m.id} lend={lend} api={lendClient} />
+                    </Suspense>
                   </div>
                   {view.admin && !m.me && m.github && !m.githubConfirmed && (
                     <Btn

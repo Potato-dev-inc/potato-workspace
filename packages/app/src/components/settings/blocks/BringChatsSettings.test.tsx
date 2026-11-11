@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Settings > General: "Bring my old chats". The status line counts the old chats in search, Remove asks first and
-// calls the clear command, and Add or update opens the Bring panel (through the request store).
+// Settings > General: "Bring my chats". The status line counts the old chats in search, Remove asks first and
+// calls the clear command, and Bring chats opens the Bring panel (through the request store).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -69,7 +69,7 @@ describe('BringChatsSettings', () => {
   it('shows Not added and disables Remove when no old chats were added', async () => {
     spies(0);
     await render(makeEnv());
-    expect(text()).toContain('Bring my old chats');
+    expect(text()).toContain('Bring my chats');
     expect(text()).toContain('Not added');
     expect(buttonNamed('Remove imported chats')?.disabled).toBe(true);
   });
@@ -106,10 +106,10 @@ describe('BringChatsSettings', () => {
     expect(text()).toContain('Not added');
   });
 
-  it('Add or update opens the Bring panel through the request store and reads no folder', async () => {
+  it('Bring chats opens the Bring panel through the request store and reads no folder', async () => {
     const s = spies(0);
     await render(makeEnv());
-    await act(async () => buttonNamed('Add or update')!.click());
+    await act(async () => buttonNamed('Bring chats')!.click());
     expect(s.request).toHaveBeenCalledTimes(1);
     expect(s.clear).not.toHaveBeenCalled();
   });

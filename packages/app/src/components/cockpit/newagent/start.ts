@@ -10,7 +10,7 @@ export interface StartDeps {
   /** The cockpit's `newAgent`: opens the pane and the starting view; resolves to the pane id, or null if it failed. */
   newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string) => Promise<string | null>;
   /** Starts a chat session in `folder`; resolves to its pane id. Rejects with one plain sentence. */
-  startChat: (agentId: string, folder: string) => Promise<string>;
+  startChat: (agentId: string, folder: string, accountId?: string) => Promise<string>;
   /** Opens a pane in the main area. */
   select: (paneId: string) => void;
   /** Queues a message for the pane. */
@@ -31,8 +31,8 @@ export const isStartBlock = (value: unknown): value is StartBlock =>
 const errText = (error: unknown): string => (error instanceof Error ? error.message : typeof error === 'string' ? error : 'Something went wrong.');
 
 /** The real chat start. */
-export async function startChatSession(agentId: string, folder: string): Promise<string> {
-  const started = await invoke<{ pane_id: string }>('acp_chat_start', { agentId, folder, explicit: true });
+export async function startChatSession(agentId: string, folder: string, accountId?: string): Promise<string> {
+  const started = await invoke<{ pane_id: string }>('acp_chat_start', accountId ? { agentId, folder, explicit: true, accountId } : { agentId, folder, explicit: true });
   return started.pane_id;
 }
 
@@ -53,7 +53,7 @@ export async function runStart(req: StartRequest, deps: StartDeps): Promise<stri
         deps.notify('Pick a folder for a chat session.');
         return null;
       }
-      paneId = await deps.startChat(req.agentId, req.folder);
+      paneId = await (req.accountId === undefined ? deps.startChat(req.agentId, req.folder) : deps.startChat(req.agentId, req.folder, req.accountId));
       deps.select(paneId);
     } else {
       paneId = await deps.newAgent(req.agentId, req.accountId, req.isolated, req.folder);

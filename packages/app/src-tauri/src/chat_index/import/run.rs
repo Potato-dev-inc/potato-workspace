@@ -3,6 +3,7 @@
 //! index or a killed app leaves only whole chats. It sleeps a moment after every chunk so the screen and the live
 //! writer always get their turn. It logs and reports counts and agent ids only: no path and no chat text.
 
+use std::collections::HashSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::Ordering;
 
@@ -16,6 +17,10 @@ use crate::session_chat::history::{valid_session_id, HistoryChat, HistoryEnv, Li
 pub(super) struct Job {
     pub(super) sources: Vec<Source>,
     pub(super) since_ms: Option<i64>,
+    /// Only chats updated at or before this time.
+    pub(super) until_ms: Option<i64>,
+    /// Only these chats (by session id). `None` = every chat in the time range.
+    pub(super) only: Option<HashSet<String>>,
     pub(super) env: HistoryEnv,
 }
 
@@ -83,7 +88,12 @@ fn work(index: &ChatIndex, shared: &Shared, job: &Job) -> End {
         }
         shared.reporter.update(|p| p.agent = Some(source.id.clone()));
         let limits = ListLimits { since_ms: job.since_ms, ..ListLimits::default() };
-        let listing = source.history.list(&job.env, &limits);
+        let mut listing = source.history.list(&job.env, &limits);
+        // The store was asked for the range already; the importer does not rely on every store honouring it.
+        listing.chats.retain(|chat| {
+            job.since_ms.map_or(true, |since| chat.updated_ms >= since)
+                && job.until_ms.map_or(true, |until| chat.updated_ms <= until) && job.only.as_ref().map_or(true, |only| only.contains(&chat.session))
+        });
         shared.reporter.update(|p| {
             p.chats_total += listing.chats.len();
             p.too_big += listing.too_big;
@@ -154,11 +164,19 @@ fn one_chat(index: &ChatIndex, shared: &Shared, job: &Job, source: &Source, chat
     match read {
         Ok(outcome) => {
             let (row, entries) = draft.finish(outcome.cut_short, now_ms());
+            if entries.is_empty() {
+                // A chat with nothing in it (a session opened and closed) is not worth a row in the list.
+                bump(|p| p.empty += 1);
+                return Next::Go;
+            }
             match index.import_chat(&row, &entries) {
                 Ok(()) => {
                     *write_failures = 0;
                     let kept = entries.len();
-                    shared.reporter.update(|p| p.items += kept);
+                    shared.reporter.update(|p| {
+                        p.items += kept;
+                        p.brought += 1;
+                    });
                     Next::Go
                 }
                 Err(error) if error == super::INDEX_OFF => Next::End(End::IndexOff),
@@ -169,7 +187,21 @@ fn one_chat(index: &ChatIndex, shared: &Shared, job: &Job, source: &Source, chat
             bump(|p| p.too_big += 1);
             Next::Go
         }
-        Err(ReadError::Missing | ReadError::Unreadable | ReadError::Format) => {
+        Err(ReadError::Missing) => {
+            bump(|p| {
+                p.unreadable += 1;
+                p.missing += 1;
+            });
+            Next::Go
+        }
+        Err(ReadError::Format) => {
+            bump(|p| {
+                p.unreadable += 1;
+                p.format += 1;
+            });
+            Next::Go
+        }
+        Err(ReadError::Unreadable) => {
             bump(|p| p.unreadable += 1);
             Next::Go
         }

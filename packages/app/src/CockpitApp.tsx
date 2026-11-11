@@ -77,6 +77,8 @@ import './styles/night.css';
 import { registerSettingsOpener } from './lib/openSettingsAt';
 import { SpacesPage } from './components/spaces/SpacesPage';
 import { useSpacesEnabled } from './lib/spaces';
+import { useLend } from './components/lend/useLend';
+import { useLendToasts } from './components/lend/Borrowed';
 import './styles/night-morning.css';
 import './styles/night-chip.css';
 
@@ -405,7 +407,11 @@ export default function CockpitApp() {
   // War Room: a red default branch nobody claimed counts too (the Rust `team_ci:` item, for tray and phone).
   const team = useTeam();
   const teamRed = useMemo(() => unclaimedRed(team.state), [team.state]);
-  const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined, teamRed);
+  // Share an agent (Labs): requests to borrow wait for my yes, borrowed panes get toasts as the time runs out.
+  const lend = useLend();
+  const lendRequests = useMemo(() => (lend.state?.requests_in ?? []).filter((r) => r.state === 'open'), [lend.state]);
+  useLendToasts(lend, c.notify);
+  const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined, teamRed, lendRequests);
 
   // Which pane was looked at when: the palette lists the most recent first.
   useEffect(() => {

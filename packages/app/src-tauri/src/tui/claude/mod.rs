@@ -126,6 +126,11 @@ impl TuiProfile for Claude {
         crate::tui::side_panel::strip_text(text)
     }
 
+    /// Lend through my PC: the Anthropic Messages API behind a local shim (`lend_proxy.toml`).
+    fn lend_proxy_toml(&self) -> Option<&'static str> {
+        Some(include_str!("lend_proxy.toml"))
+    }
+
     /// `CLAUDE_CONFIG_DIR` is the documented directory for this CLI's config and login.
     fn account_scheme(&self) -> Option<AccountScheme> {
         Some(AccountScheme {

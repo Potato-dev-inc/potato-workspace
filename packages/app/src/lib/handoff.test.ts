@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AcpChatState } from './acpChat';
-import { HANDOFF_START_PROMPT, HANDOFF_WRITE_PROMPT, runHandoff, type HandoffDeps, type HandoffFileStat, type HandoffPane, type HandoffStatus } from './handoff';
+import { fileWritePrompt, handoffLabel, runHandoff, type HandoffDeps, type HandoffFileStat, type HandoffPane, type HandoffStatus } from './handoff';
 
 const modelOption = (current: string) => ({
   id: 'model',
@@ -68,49 +68,79 @@ function world(opts: { pane?: Partial<HandoffPane>; stats?: HandoffFileStat[]; b
       if (sent && busyLeft > 0) busyLeft -= 1;
     }),
     now: () => clock,
+    // Only appendNotes is used by this mode; the rest of the new-agent way must stay untouched.
+    quick: {
+      stamp: vi.fn(() => '20261111-0930'),
+      prepare: vi.fn(async () => ({ stamp: '20261111-0930', path: 'C:/shop/.potato/handoffs/handoff-20261111-0930.md' })),
+      appendNotes: vi.fn(async () => undefined),
+      archive: vi.fn(async () => 'D:/data/handoffs/shop/x.md'),
+      account: vi.fn(async () => 'acct-1'),
+    },
   };
   return { deps, pane };
 }
 
 const mocked = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
 
-const run = async (deps: HandoffDeps) => {
+const run = async (deps: HandoffDeps, fixedNotes = '') => {
   const seen: HandoffStatus[] = [];
-  const final = await runHandoff('p1', deps, (s) => seen.push(s));
+  const final = await runHandoff('p1', deps, (s) => seen.push(s), { mode: 'file', fixedNotes });
   return { final, seen };
 };
 
-describe('runHandoff (terminal pane)', () => {
-  it('asks for HANDOFF.md, waits for the turn, then opens a new agent of the same type in the same folder', async () => {
+const untouched = (deps: HandoffDeps) => {
+  expect(deps.startTerminal).not.toHaveBeenCalled();
+  expect(deps.startChat).not.toHaveBeenCalled();
+  expect(deps.startTerminalChat).not.toHaveBeenCalled();
+  expect(deps.quick.prepare).not.toHaveBeenCalled();
+  expect(deps.quick.archive).not.toHaveBeenCalled();
+};
+
+describe('Quick handoff (mode "file")', () => {
+  it('asks for HANDOFF.md with both parts, waits for the turn, and reports it saved without opening any agent', async () => {
     const { deps } = world();
     const { final, seen } = await run(deps);
-    expect(deps.send).toHaveBeenNthCalledWith(1, 'p1', HANDOFF_WRITE_PROMPT);
-    expect(deps.startTerminal).toHaveBeenCalledWith('agentx', 'C:/shop');
-    expect(deps.send).toHaveBeenNthCalledWith(2, 'n1', HANDOFF_START_PROMPT);
-    expect(deps.setConfig).not.toHaveBeenCalled();
-    expect(seen.map((s) => s.kind)).toEqual(['writing', 'opening', 'done']);
-    expect(final).toEqual({ kind: 'done', newPaneId: 'n1', text: 'Opened Agent X two' });
-  });
-
-  it('fails in plain words when the agent finished but wrote no file, and opens nothing', async () => {
-    const { deps } = world({ stats: [missing, missing] });
-    const { final } = await run(deps);
-    expect(final).toEqual({ kind: 'failed', text: "The agent finished but HANDOFF.md wasn't written." });
-    expect(deps.startTerminal).not.toHaveBeenCalled();
     expect(deps.send).toHaveBeenCalledTimes(1);
+    expect(deps.send).toHaveBeenCalledWith('p1', fileWritePrompt());
+    const prompt = mocked(deps.send).mock.calls[0][1] as string;
+    expect(prompt).toContain('HANDOFF.md');
+    expect(prompt).toContain('## Part 1: The task');
+    expect(prompt).toContain('## Part 2: How this person works');
+    expect(prompt).not.toContain('.potato');
+    expect(deps.stat).toHaveBeenCalledWith('p1');
+    untouched(deps);
+    expect(seen.map((s) => s.kind)).toEqual(['writing', 'saved']);
+    expect(final).toEqual({ kind: 'saved', paneId: 'p1', text: 'HANDOFF.md saved' });
   });
 
-  it('fails when an existing HANDOFF.md was not touched', async () => {
-    const { deps } = world({ stats: [written, written] });
-    const { final } = await run(deps);
+  it('adds the fixed notes to HANDOFF.md itself (no stamp), only when there are some', async () => {
+    const a = world();
+    await run(a.deps, 'Reply short.');
+    expect(a.deps.quick.appendNotes).toHaveBeenCalledWith('p1', undefined, 'Reply short.');
+    const b = world();
+    await run(b.deps, '  ');
+    expect(b.deps.quick.appendNotes).not.toHaveBeenCalled();
+  });
+
+  it('says so, and where, when the notes cannot be added', async () => {
+    const { deps } = world();
+    mocked(deps.quick.appendNotes).mockRejectedValue(new Error('Disk full'));
+    const { final } = await run(deps, 'x');
     expect(final.kind).toBe('failed');
-    expect(final.text).toMatch(/wasn't updated/);
-    expect(deps.startTerminal).not.toHaveBeenCalled();
+    expect(final.text).toBe('HANDOFF.md is written, but your fixed notes could not be added: Disk full');
   });
 
-  it('accepts an existing HANDOFF.md that changed', async () => {
-    const { deps } = world({ stats: [written, { ...written, modifiedMs: 9 }] });
-    expect((await run(deps)).final.kind).toBe('done');
+  it('fails in plain words when the agent finished but wrote no file', async () => {
+    const { deps } = world({ stats: [missing, missing] });
+    expect((await run(deps)).final).toEqual({ kind: 'failed', text: "The agent finished but HANDOFF.md wasn't written." });
+    untouched(deps);
+  });
+
+  it('fails when an existing HANDOFF.md was not touched, and accepts one that changed', async () => {
+    const same = world({ stats: [written, written] });
+    expect((await run(same.deps)).final.text).toMatch(/wasn't updated/);
+    const changed = world({ stats: [written, { ...written, modifiedMs: 9 }] });
+    expect((await run(changed.deps)).final.kind).toBe('saved');
   });
 
   it('refuses while the agent is working or waiting for the person, without sending anything', async () => {
@@ -122,78 +152,24 @@ describe('runHandoff (terminal pane)', () => {
     expect(waiting.deps.send).not.toHaveBeenCalled();
   });
 
-  it('says so when the agent never starts the turn', async () => {
-    const { deps } = world({ busyPolls: 0 });
-    const { final } = await run(deps);
-    expect(final.text).toMatch(/didn't start/);
-    expect(deps.startTerminal).not.toHaveBeenCalled();
-  });
-
-  it('says why when the new agent cannot start, and why when its first message fails', async () => {
-    const a = world();
-    mocked(a.deps.startTerminal).mockRejectedValue(new Error('No login'));
-    expect((await run(a.deps)).final.text).toBe("The handoff is written, but the new agent didn't start: No login");
-    const b = world();
-    mocked(b.deps.startTerminal).mockResolvedValue(null);
-    expect((await run(b.deps)).final.text).toBe("The handoff is written, but the new agent didn't start.");
-    const c = world();
-    const realSend = mocked(c.deps.send).getMockImplementation()!;
-    mocked(c.deps.send).mockImplementation(async (id: string, text: string) => {
-      if (id === 'n1') throw new Error('Pane closed');
-      return realSend(id, text);
-    });
-    expect((await run(c.deps)).final.text).toBe('The new agent opened, but its first message was not sent: Pane closed');
-  });
-
-  it('fails when the pane is closed during the turn', async () => {
+  it('says so when the agent never starts the turn, and when the pane is closed', async () => {
+    const never = world({ busyPolls: 0 });
+    expect((await run(never.deps)).final.text).toMatch(/didn't start/);
     const { deps } = world();
     let calls = 0;
     mocked(deps.pane).mockImplementation(() => (++calls > 3 ? undefined : { id: 'p1', agentType: 'agentx', cwd: 'C:/shop', status: 'idle' }));
     expect((await run(deps)).final.text).toMatch(/closed/);
   });
-});
 
-describe('runHandoff (chat)', () => {
-  it('starts a chat in the same folder, opens it, and passes the same model through', async () => {
-    const { deps } = world({ pane: { lane: 'acp' }, newChatModel: 'small' });
-    const { final } = await run(deps);
-    expect(deps.startChat).toHaveBeenCalledWith('agentx', 'C:/shop');
-    expect(deps.startTerminal).not.toHaveBeenCalled();
-    expect(deps.select).toHaveBeenCalledWith('n1');
-    expect(deps.setConfig).toHaveBeenCalledWith('n1', 'model', 'big');
-    expect(final.text).toBe('Opened Agent X two (Big)');
-    expect(deps.send).toHaveBeenLastCalledWith('n1', HANDOFF_START_PROMPT);
+  it('works the same for a chat, and opens nothing', async () => {
+    const { deps } = world({ pane: { lane: 'acp' } });
+    expect((await run(deps)).final.kind).toBe('saved');
+    untouched(deps);
+    expect(deps.select).not.toHaveBeenCalled();
   });
 
-  it('does not set the model when the new chat already has it', async () => {
-    const { deps } = world({ pane: { lane: 'acp' }, newChatModel: 'big' });
-    await run(deps);
-    expect(deps.setConfig).not.toHaveBeenCalled();
-  });
-
-  it('keeps the default model, and says so, when the model cannot be set', async () => {
-    const { deps } = world({ pane: { lane: 'acp' }, newChatModel: 'small' });
-    mocked(deps.setConfig).mockRejectedValue(new Error('BUSY'));
-    const { final } = await run(deps);
-    expect(final.kind).toBe('done');
-    expect(final.text).toBe('Opened Agent X two (the new agent kept its default model)');
-  });
-
-  it('sees a turn in flight through the chat state, and a permission wait as waiting', async () => {
-    const busy = world({ pane: { lane: 'acp' } });
-    mocked(busy.deps.chatState).mockResolvedValue(chatState({ turnInFlight: true }));
-    expect((await run(busy.deps)).final.text).toMatch(/still working/);
-    const ask = world({ pane: { lane: 'acp' } });
-    mocked(ask.deps.chatState).mockResolvedValue(chatState({ status: 'waiting_input' }));
-    expect((await run(ask.deps)).final.text).toMatch(/waiting for you/);
-  });
-});
-
-describe('runHandoff (terminal chat)', () => {
-  it('starts a terminal chat in the same folder and opens it', async () => {
-    const { deps } = world({ pane: { lane: 'terminal_chat' } });
-    await run(deps);
-    expect(deps.startTerminalChat).toHaveBeenCalledWith('agentx', 'C:/shop');
-    expect(deps.select).toHaveBeenCalledWith('n1');
+  it('the button label follows the mode', () => {
+    expect(handoffLabel('file')).toBe('Quick handoff');
+    expect(handoffLabel('new_agent')).toBe('Hand off to new agent');
   });
 });

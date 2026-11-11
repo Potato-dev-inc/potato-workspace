@@ -35,6 +35,23 @@ pub enum Payload {
     Event { event: TeamEvent },
     /// The admin changed the roster or the keys: fetch the `keys` and `roster` slots.
     RosterChanged { seq: u64 },
+    /// Share an agent (Labs, `crate::capacity_proxy`): one item sealed again, with HPKE, to ONE device (`to`), the
+    /// same pattern as key grants. The team key only gets it through the relay; only that device can read it.
+    /// `msg_id` is also the envelope id. An older build doesn't know this kind and drops it as a bad payload
+    /// (after its replay guard has recorded the envelope).
+    Capacity { msg_id: String, to: String, enc: String, ct: String },
+}
+
+/// A `Payload::Capacity` that passed every envelope check: who sent it (from the roster) and the still-sealed
+/// inner item. `crate::capacity_proxy::wire` opens it with this device's key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapacityIn {
+    pub member: String,
+    pub device: String,
+    pub msg_id: String,
+    pub to: String,
+    pub enc: String,
+    pub ct: String,
 }
 
 /// A teammate's event that passed every check. `store::ingest` takes only this.
@@ -75,6 +92,8 @@ impl Verified {
 pub enum Opened {
     Event(Verified),
     RosterChanged(u64),
+    /// A lend item for some device of the team (maybe not this one).
+    Capacity(CapacityIn),
     /// My own message, echoed back.
     Mine,
 }
@@ -217,6 +236,7 @@ impl Session {
         let id = match payload {
             Payload::Event { event } => event.id.clone(),
             Payload::RosterChanged { .. } => new_event_id(now_ms),
+            Payload::Capacity { msg_id, .. } => msg_id.clone(),
         };
         let mut env = Envelope {
             v: 1,
@@ -268,6 +288,15 @@ impl Session {
                     return Err(Reject::NotAllowed);
                 }
                 Ok(Opened::RosterChanged(seq))
+            }
+            Payload::Capacity { msg_id, to, enc, ct } => {
+                if msg_id != env.id {
+                    return Err(Reject::Impersonation);
+                }
+                if !member.has(Role::Watch) {
+                    return Err(Reject::NotAllowed);
+                }
+                Ok(Opened::Capacity(CapacityIn { member: member.id.clone(), device: device.id.clone(), msg_id, to, enc, ct }))
             }
             Payload::Event { event } => {
                 if event.id != env.id || event.team != env.team {

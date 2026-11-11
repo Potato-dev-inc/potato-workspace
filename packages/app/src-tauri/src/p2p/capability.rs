@@ -14,6 +14,8 @@ pub const DESK_INPUT: &str = "desk/input";
 pub const DESK_CLIPBOARD: &str = "desk/clipboard";
 pub const FILES: &str = "files";
 pub const SPACES: &str = "spaces";
+/// Share an agent: a borrowing PC's model calls, carried to the lending PC ("Lend through my PC").
+pub const AGENTS_LEND: &str = "agents/lend";
 /// Pairing is not a permission anyone is given: it is open to strangers only while the person shows a code.
 pub const PAIR: &str = "pair";
 

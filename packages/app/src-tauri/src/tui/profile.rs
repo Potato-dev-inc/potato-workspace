@@ -51,6 +51,13 @@ pub trait TuiProfile: Send + Sync {
         None
     }
 
+    /// "Lend through my PC" (Labs `lend_enabled`, `crate::capacity_proxy`): this agent's proxy spec as TOML text
+    /// (protocol shape, fixed upstream, allowed paths, how the lender's auth is added, how a borrowed pane is
+    /// pointed at the local shim). `None` (the default): this agent cannot be lent through a PC.
+    fn lend_proxy_toml(&self) -> Option<&'static str> {
+        None
+    }
+
     /// Whether the CLI this profile launches can be found on this machine. Defaults to true for
     /// backends with nothing to look up; CLI profiles override it with a PATH lookup.
     fn is_installed(&self) -> bool {

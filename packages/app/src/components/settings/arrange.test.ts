@@ -99,12 +99,12 @@ describe('General > Labs', () => {
   const labsRows = () => section('general').rows.filter((r) => r.group === LABS_GROUP);
 
   it('collects every early feature in one place, in a fixed order, after the overview', () => {
-    expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'telegram']);
+    expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'telegram']);
   });
 
   it('each feature has a short name and one plain line (no second sentence, no raw ids)', () => {
     const features = collectLabs(BASE_SECTIONS);
-    expect(features.map((r) => r.id)).toEqual(['ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'telegram']);
+    expect(features.map((r) => r.id)).toEqual(['ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'telegram']);
     for (const row of features) {
       const { name, about } = row.labs!;
       expect(name.length, row.id).toBeGreaterThan(2);
@@ -137,7 +137,7 @@ describe('General > Labs', () => {
       .find((s) => s.id === 'general')!
       .rows.filter((r) => r.group === LABS_GROUP)
       .map((r) => r.id);
-    expect(labs.slice(-8)).toEqual(['assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'telegram', 'later-feature']);
+    expect(labs.slice(-9)).toEqual(['assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'telegram', 'later-feature']);
     expect(arranged.find((s) => s.id === 'phone')!.rows.some((r) => r.id === 'later-feature')).toBe(false);
   });
 
@@ -151,7 +151,7 @@ describe('General > Labs', () => {
 });
 
 describe('the layout table', () => {
-  it('covers all seven sections, and Labs lists the `@labs` placeholder once', () => {
+  it('covers all nine sections, and Labs lists the `@labs` placeholder once', () => {
     expect(Object.keys(LAYOUT).sort()).toEqual([...SECTION_IDS].sort());
     const placeholders = Object.values(LAYOUT)
       .flatMap((groups) => groups!.flatMap((g) => g.rows))

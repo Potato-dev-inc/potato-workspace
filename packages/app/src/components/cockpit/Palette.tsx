@@ -302,9 +302,9 @@ export function Palette({
     out.push({
       id: 'act:bring-chats',
       group: 'Actions',
-      title: 'Bring my old chats',
-      desc: 'Read the chats you had in other agents, into search. Nothing leaves this PC.',
-      keywords: 'import old chats claude codex opencode history bring read',
+      title: 'Bring my chats',
+      desc: 'Pick an agent, then bring its recent chats here. Nothing leaves this PC.',
+      keywords: 'import old previous chats history bring read other agents',
       icon: <IconNote />,
       run: requestBringChats,
     });

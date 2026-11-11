@@ -1,5 +1,5 @@
-// "Bring my old chats": the one first-start card in the Inbox. It shows once, after the welcome is done and
-// chat search is on. It reads nothing: "Find my chats" opens the Bring panel (the first step that looks at an
+// "Bring my chats": the one first-start card in the Inbox. It shows once, after the welcome is done and
+// chat search is on. It reads nothing: "Bring my chats" opens the Bring panel (the first step that looks at an
 // agent folder), and "Not now" remembers the answer. Nothing leaves this computer.
 import { useCallback, useEffect, useState } from 'react';
 import { chatImportApi, type ImportApi, type ImportState } from '../../lib/chatImport';
@@ -8,8 +8,8 @@ import { BringChatsPanel, BRING_CHATS_TITLE_ID } from '../history/BringChatsPane
 import { CardButton, InboxCard } from './InboxCard';
 import { Sheet } from './Sheet';
 
-export const IMPORT_CARD_TITLE = 'Bring your old chats here';
-export const IMPORT_CARD_BODY = 'Read my old chats on this PC. Nothing leaves this computer.';
+export const IMPORT_CARD_TITLE = 'Bring your chats here';
+export const IMPORT_CARD_BODY = 'Bring the chats your other agents kept on this PC. Nothing leaves this computer.';
 
 /** True once the first-run welcome was finished or skipped (`onboarding_done: true` in the settings file). */
 async function welcomeDone(): Promise<boolean> {
@@ -83,7 +83,7 @@ export function ImportChatsCard({ api = chatImportApi, isWelcomeDone = welcomeDo
             data={{ 'data-testid': 'import-chats-card' }}
             actions={
               <CardButton tone="primary" onClick={() => setPanel(true)}>
-                Find my chats
+                Bring my chats
               </CardButton>
             }
             more={
@@ -96,8 +96,8 @@ export function ImportChatsCard({ api = chatImportApi, isWelcomeDone = welcomeDo
       </ul>
       {panel && (
         <Sheet labelledBy={BRING_CHATS_TITLE_ID} role="dialog" onClose={closePanel}>
-          {/* The card's "Find my chats" is the consent: the panel starts looking without a second press. */}
-          <BringChatsPanel api={api} onClose={closePanel} startLooking />
+          {/* The card's button is the person's own press: the panel looks at the agents' folders when it opens. */}
+          <BringChatsPanel api={api} onClose={closePanel} />
         </Sheet>
       )}
     </>

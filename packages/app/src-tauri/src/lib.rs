@@ -140,6 +140,8 @@ pub mod env_probe;
 mod webview_service_worker;
 mod live_room;
 mod model_bridge;
+// Share an agent: Lend through my PC (Labs `lend_enabled`).
+mod capacity_proxy;
 mod wsl;
 mod collision;
 
@@ -252,6 +254,7 @@ pub fn run() {
             commands::chat_import_state,
             commands::chat_import_look,
             commands::chat_import_start,
+            commands::chat_import_browse,
             commands::chat_import_cancel,
             commands::chat_import_dismiss,
             commands::chat_import_clear,
@@ -277,6 +280,18 @@ pub fn run() {
             commands::model_bridge_preview,
             commands::model_bridge_apply,
             commands::model_bridge_undo,
+            commands::lend_state,
+            commands::lend_profile_save,
+            commands::lend_profile_delete,
+            commands::lend_key_set,
+            commands::lend_account_add,
+            commands::lend_request,
+            commands::lend_answer,
+            commands::lend_revoke,
+            commands::lend_return,
+            commands::lend_start_agent,
+            commands::lend_export_pm,
+            commands::lend_import_pm,
             commands::clip_plan,
             commands::clip_stage,
             commands::clip_save,
@@ -301,6 +316,11 @@ pub fn run() {
             commands::attachments::attachment_preview,
             commands::attachments::project_files_search,
             commands::handoff_file::handoff_file_stat,
+            commands::handoff_file::handoff_quick_prepare,
+            commands::handoff_file::handoff_quick_append,
+            commands::handoff_file::handoff_open_file,
+            commands::handoff_file::handoff_quick_archive,
+            commands::handoff_file::handoff_pane_account,
             commands::point_open_preview,
             commands::point_state,
             commands::point_arm,
@@ -958,6 +978,8 @@ pub fn run() {
             // The mode-switch overlay is built hidden now and reused, so the first switch has no startup lag.
             switch_anim::glue::init(app.handle());
             team::init(app.handle().clone(), registry_for_panes.clone());
+            // Share an agent keeps only the handle here; nothing is built until its Labs switch is on.
+            capacity_proxy::init(app.handle().clone());
             issue_intake::live::start(registry_for_panes.clone(), app.handle().clone());
             ci_fix::live::start(registry_for_panes.clone(), app.handle().clone());
             companion::live::start(app.handle().clone(), registry_for_panes.clone());

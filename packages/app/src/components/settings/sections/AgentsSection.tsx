@@ -10,6 +10,7 @@ import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings'
 import { CloseHelpersWithAgentToggle, HelperAgentsChoice, KeepHelpersOpenToggle } from '../blocks/HelperAgents';
 import { HiddenAgentsRow } from '../blocks/HiddenAgentsRow';
 import { PreloadSettings } from '../blocks/PreloadSettings';
+import { HANDOFF_MODE_HINT, HANDOFF_MODE_LABEL, QuickHandoffRows } from '../blocks/QuickHandoffRows';
 import { useEffect, useState } from 'react';
 import { agentHealthApi, type AgentHealth } from '../../../lib/agent-health';
 import { DEV_LABS_KEYS } from '../../../lib/dev-labs';
@@ -17,7 +18,8 @@ import { SETUP_CHECK_ROW_ID } from '../../../lib/openSettingsAt';
 import { SetupCheckPage } from '../SetupCheckPage';
 import { Popup } from '../controls';
 import type { RowDef, SettingsEnv } from '../model';
-import { SettingRow, SettingToggle } from '../settings-ui';
+import { requestBringChats } from '../../../lib/chatImport';
+import { Btn, SettingRow, SettingToggle } from '../settings-ui';
 import { KeepGoingRows } from './KeepGoingRows';
 import { LinuxRows } from './LinuxRows';
 
@@ -103,6 +105,18 @@ export const agentsRows: RowDef[] = [
     render: () => <AccountsGroup />,
   },
   {
+    id: 'bring-chats-agents',
+    label: 'Bring my chats',
+    hint: 'Pick an agent, see its newest chats and bring them into your chat list.',
+    keywords: 'bring import old previous chats history agents list',
+    group: 'Your chats',
+    render: () => (
+      <SettingRow label="Bring my chats" description="Pick an agent, see its newest chats and bring the ones you want. Nothing leaves this computer.">
+        <Btn onClick={() => requestBringChats()}>Bring chats</Btn>
+      </SettingRow>
+    ),
+  },
+  {
     id: 'preload',
     label: 'Keep agents ready',
     hint: 'Keep an agent started and waiting, so opening a pane feels instant.',
@@ -148,6 +162,14 @@ export const agentsRows: RowDef[] = [
     keywords: 'close closed closing helper helpers subagent sub-agent parent orchestrator agent pane leftover orphan stop with together',
     group: 'Helpers',
     render: (env) => <CloseHelpersWithAgentToggle onSaved={env.markSaved} />,
+  },
+  {
+    id: 'handoff-mode',
+    label: HANDOFF_MODE_LABEL,
+    hint: HANDOFF_MODE_HINT,
+    keywords: 'handoff hand off every quick handoff handoff to new agent fresh ready new agent same agent note notes fixed always remember continue switch temporary file HANDOFF.md save',
+    group: 'Handoff',
+    render: (env) => <QuickHandoffRows env={env} />,
   },
   {
     id: 'hidden-agents',

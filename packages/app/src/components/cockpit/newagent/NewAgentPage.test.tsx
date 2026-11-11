@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentDescriptor } from '../../../lib/agentRegistry';
+import * as chatImport from '../../../lib/chatImport';
 import type { RecentProject } from '../../../lib/ship-api';
 import type { NewAgentApi } from './api';
 import { EXAMPLES, EXAMPLE_MS, type HomeCard, type LaneView, type StartRequest } from './model';
@@ -111,6 +112,16 @@ async function key(el: HTMLElement, k: string, init: KeyboardEventInit = {}) {
 const send = () => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!;
 
 describe('the greeting', () => {
+  it('offers "Bring my chats from another agent" and pressing it asks for the Bring panel', async () => {
+    const ask = vi.spyOn(chatImport, 'requestBringChats').mockImplementation(() => {});
+    await mount(rig());
+    const link = host.querySelector<HTMLButtonElement>('[data-testid="bring-chats-link"]');
+    expect(link?.textContent).toBe('Bring my chats from another agent');
+    await act(async () => link!.click());
+    expect(ask).toHaveBeenCalledTimes(1);
+    ask.mockRestore();
+  });
+
   it('has no name until the person saved one', async () => {
     await mount(rig());
     expect(host.querySelector('[data-testid="na-greeting"]')!.textContent).toBe('What\u2019s up next?');

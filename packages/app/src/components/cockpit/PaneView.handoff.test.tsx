@@ -41,7 +41,7 @@ function cockpit(): CockpitApi {
 }
 
 function control(over: Partial<HandoffControl> = {}): HandoffControl {
-  return { status: null, busy: false, allowed: () => true, start: vi.fn(), dismiss: vi.fn(), ...over };
+  return { status: null, busy: false, mode: 'new_agent', allowed: () => true, start: vi.fn(), dismiss: vi.fn(), ...over };
 }
 
 let host: HTMLDivElement;
@@ -71,9 +71,16 @@ describe('pane header: Hand off', () => {
   it('starts the handoff for this pane', async () => {
     const h = control();
     await show(h);
-    expect(btn()!.textContent).toBe('Hand off');
+    expect(btn()!.textContent).toBe('Hand off to new agent');
     act(() => btn()!.click());
     expect(h.start).toHaveBeenCalledWith('p1');
+  });
+
+  it('the label follows the mode', async () => {
+    await show(control({ mode: 'file' }));
+    expect(btn()!.textContent).toBe('Quick handoff');
+    await show(control({ mode: 'new_agent' }));
+    expect(btn()!.textContent).toBe('Hand off to new agent');
   });
 
   it('is disabled and says so while one runs', async () => {

@@ -1,11 +1,11 @@
-// Settings > General: "Bring my old chats". Shows how many old chats are in search, a button that opens the Bring
+// Settings > General: "Bring my chats". Shows how many old chats are in search, a button that opens the Bring
 // panel, and a button that removes them (asks first). Reading this status touches no agent folder.
 import { useEffect, useState } from 'react';
 import { chatCount, chatImportClear, chatImportState, requestBringChats } from '../../../lib/chatImport';
 import type { SettingsEnv } from '../model';
 import { Btn, SettingRow } from '../settings-ui';
 
-export const BRING_CHATS_REMOVE_BODY = "This removes the old chats Potato Workspace added to search. Your agents' own chat files are not touched.";
+export const BRING_CHATS_REMOVE_BODY = "This removes the chats Potato Workspace brought in. Your agents' own chat files are not touched.";
 
 /** "Not added" for none, otherwise "538 chats" (or "1 chat"). */
 export function bringChatsStatusText(chats: number): string {
@@ -49,8 +49,8 @@ export function BringChatsSettings({ env }: { env: SettingsEnv }) {
   };
 
   return (
-    <SettingRow label="Bring my old chats" description={chats === null ? 'Loading…' : bringChatsStatusText(chats)}>
-      <Btn onClick={() => requestBringChats()}>Add or update</Btn>
+    <SettingRow label="Bring my chats" description={chats === null ? 'Loading…' : bringChatsStatusText(chats)}>
+      <Btn onClick={() => requestBringChats()}>Bring chats</Btn>
       <Btn disabled={busy || !chats} onClick={() => void remove()}>
         {busy ? 'Removing…' : 'Remove imported chats'}
       </Btn>
