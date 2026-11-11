@@ -16,3 +16,13 @@ resume_command = ["--session", "{session}"]
 
 [addon]
 signin_hint = "In the terminal that opens, run `opencode auth login`. Chat uses the same sign-in as the terminal."
+
+# A new chat with no model asked for starts on the model of Settings › Orchestrator & Models › OpenCode model
+# (else the one the person picked last), not on OpenCode's own default, which can be a paid model with no credit.
+[default_model]
+provider_setting = "opencode_model_provider"
+model_setting = "opencode_model_id"
+provider_fallback = "opencode-go"
+separator = "/"
+credit_patterns = ["insufficient balance", "insufficient credit", "top up at", "/billing", "model not found", "unknown model", "providermodelnotfound"]
+credit_message = "OpenCode's model {model} needs credit. Pick another model in the chat, or set Settings › Orchestrator & Models › OpenCode model."

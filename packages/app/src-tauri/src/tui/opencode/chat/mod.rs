@@ -72,10 +72,16 @@ fn free_port() -> Option<u16> {
 }
 
 /// Launch arguments that make the TUI serve its API on a port Potato Workspace knows. Nothing when the person chose
-/// a port or a server themselves.
+/// a port or a server themselves, and nothing on OpenCode 2.x (its plain command has no `--port` or `--hostname`,
+/// and prints its help instead of opening the screen).
 pub(super) fn prepare(pane_id: &str, user_args: &[String]) -> Vec<String> {
+    prepare_for(pane_id, user_args, crate::opencode::edition::installed_major())
+}
+
+/// [`prepare`] for a known OpenCode major version (`None`: not known, which keeps the 1.x arguments).
+pub(super) fn prepare_for(pane_id: &str, user_args: &[String], major: Option<u32>) -> Vec<String> {
     let chosen = user_args.iter().any(|arg| arg == "--port" || arg.starts_with("--port=") || arg == "--hostname" || arg.starts_with("--hostname="));
-    let port = if chosen { None } else { free_port() };
+    let port = if chosen || major.is_some_and(|m| m >= 2) { None } else { free_port() };
     match port {
         Some(port) => {
             ports().lock().insert(pane_id.to_string(), port);

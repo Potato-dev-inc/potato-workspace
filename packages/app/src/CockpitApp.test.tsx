@@ -11,6 +11,8 @@ import { runStoreCheck } from './lib/agentStoreCheck';
 const away = vi.hoisted(() => ({ digest: null as null | object }));
 // The spawn the (mocked) cockpit hook reports: null, running, or failed.
 const ui = vi.hoisted(() => ({ spawn: null as null | { failed: string | null } }));
+// The chat that is starting, as the (mocked) cockpit hook reports it: null when none.
+const chatStart = vi.hoisted(() => ({ starting: null as null | { agentId: string; folder: string } }));
 // The UI mode and the "open the Settings window" command (what Individual mode uses) the mocked cockpit reports.
 const cockpit = vi.hoisted(() => ({
   mode: 'orchestration' as 'orchestration' | 'individual',
@@ -53,6 +55,9 @@ vi.mock('./hooks/useCockpit', async () => {
         },
         spawn: ui.spawn,
         dismissSpawn: () => {},
+        chatStarting: chatStart.starting,
+        beginChatStart: () => {},
+        endChatStart: () => {},
         mode: cockpit.mode,
         setMode: async () => {},
         modeExplainer: cockpit.explainer,
@@ -315,6 +320,10 @@ vi.mock('./components/cockpit/SpawnView', async () => {
   const { createElement: h } = await import('react');
   return { SpawnView: () => h('div', null, 'SPAWN VIEW') };
 });
+vi.mock('./components/cockpit/ChatStartingView', async () => {
+  const { createElement: h } = await import('react');
+  return { ChatStartingView: () => h('div', { role: 'status' }, 'CHAT STARTING VIEW') };
+});
 vi.mock('./components/cockpit/Palette', async () => {
   const { createElement: h } = await import('react');
   return {
@@ -353,6 +362,7 @@ let root: Root;
 beforeEach(async () => {
   away.digest = null;
   ui.spawn = null;
+  chatStart.starting = null;
   cockpit.mode = 'orchestration';
   cockpit.openSettings = vi.fn(async () => {});
   cockpit.ready = false;
@@ -498,6 +508,27 @@ describe('CockpitApp main view precedence', () => {
     expect(mainText()).toContain('SETTINGS VIEW');
     clickButton('Settings back');
     expect(mainText()).toBe('SPAWN VIEW');
+  });
+});
+
+describe('CockpitApp chat starting skeleton', () => {
+  it('covers the open pane while a chat starts, and gives the pane back when it is done or failed', () => {
+    const before = mainText();
+    chatStart.starting = { agentId: 'codex', folder: 'C:\\work\\shop' };
+    act(() => root.render(createElement(CockpitApp)));
+    expect(host.querySelector('main [role="status"]')?.textContent).toBe('CHAT STARTING VIEW');
+    expect(mainText()).toBe('CHAT STARTING VIEW');
+    chatStart.starting = null;
+    act(() => root.render(createElement(CockpitApp)));
+    expect(host.querySelector('main [role="status"]')).toBeNull();
+    expect(mainText()).toBe(before);
+  });
+
+  it('is in front of a running terminal spawn, because it is the chat the person just started', () => {
+    ui.spawn = { failed: null };
+    chatStart.starting = { agentId: 'codex', folder: 'C:\\work\\shop' };
+    act(() => root.render(createElement(CockpitApp)));
+    expect(mainText()).toBe('CHAT STARTING VIEW');
   });
 });
 

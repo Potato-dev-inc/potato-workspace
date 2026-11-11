@@ -624,8 +624,29 @@ mod runtime {
         isolated: bool,
         project: Option<&str>,
     ) -> Result<String, String> {
+        new_pane_on_model(app, agent, origin, account, isolated, project, None)
+    }
+
+    /// `new_pane_in` on a chosen model: the agent's own launch flag carries it (a cold spawn, never a warm worker,
+    /// which started on the default). Refused when the agent cannot take a model at start.
+    pub fn new_pane_on_model(
+        app: &AppHandle,
+        agent: &str,
+        origin: crate::cockpit::Origin,
+        account: Option<&str>,
+        isolated: bool,
+        project: Option<&str>,
+        model: Option<&str>,
+    ) -> Result<String, String> {
+        let model = model.map(str::trim).filter(|m| !m.is_empty());
+        let flags = match model {
+            Some(model) => Some(crate::tui::pane_model_args(agent, model).ok_or_else(|| {
+                format!("MODEL_NOT_SUPPORTED: {agent} cannot take a model when it starts (or {model:?} is not a usable model id).")
+            })?),
+            None => None,
+        };
         emit_stage(app, agent, None, "claiming", false, None);
-        let result = open_new_pane(app, agent, origin, account, isolated, project);
+        let result = open_new_pane(app, agent, origin, account, isolated, project, flags);
         if let Err(e) = &result {
             emit_stage(app, agent, None, "failed", false, Some(e));
         }
@@ -639,6 +660,7 @@ mod runtime {
         account: Option<&str>,
         isolated: bool,
         chosen_project: Option<&str>,
+        model_flags: Option<Vec<String>>,
     ) -> Result<String, String> {
         use tauri::Emitter;
         let started = std::time::Instant::now();
@@ -657,7 +679,7 @@ mod runtime {
         let account = account.map(str::trim).filter(|a| !a.is_empty());
         // A folder the person chose is warmed too: Preload follows it (standby_set_current_project), so
         // a worker keyed to that folder may be waiting. Only a separate copy never claims one.
-        let key = if isolated {
+        let key = if isolated || model_flags.is_some() {
             None
         } else {
             crate::standby::preload_key(agent, &project).map(|key| key.with_account(account))
@@ -702,7 +724,7 @@ mod runtime {
                 cwd: Some(spawn_dir),
                 cols: None,
                 rows: None,
-                extra_args: None,
+                extra_args: model_flags,
                 pane_id: None,
                 read_only: false,
                 account: account.map(str::to_string),
@@ -809,7 +831,7 @@ mod runtime {
     }
 }
 
-pub use runtime::{init, new_pane, new_pane_in, request_refresh};
+pub use runtime::{init, new_pane, new_pane_on_model, request_refresh};
 
 #[cfg(test)]
 mod tests {

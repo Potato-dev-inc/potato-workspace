@@ -50,7 +50,7 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
   agents: [
     { group: SIGN_IN.group, rows: ['accounts'] },
     { group: 'Your chats', rows: ['bring-chats-agents'] },
-    { group: 'Helpers', rows: ['helper-agents', 'keep-helpers-open', 'close-helpers-with-agent'] },
+    { group: 'Helpers', rows: ['helper-agents', 'helper-default-models', 'keep-helpers-open', 'close-helpers-with-agent'] },
     { group: 'Handoff', rows: ['handoff-mode'] },
     { group: 'Ready to use', rows: ['preload', 'helper-tools'] },
     { group: 'Chat', rows: ['agent-lane', 'chat-addons'] },

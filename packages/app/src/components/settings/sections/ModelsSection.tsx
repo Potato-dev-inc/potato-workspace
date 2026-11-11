@@ -171,7 +171,7 @@ export const modelsRows: RowDef[] = [
     keywords: 'opencode model id',
     group: 'OpenCode',
     render: (env) => (
-      <SettingRow label="OpenCode model" description="The model used with the provider above.">
+      <SettingRow label="OpenCode model" description="The model used with the provider above. Also applies to OpenCode chats.">
         <TextControl
           aria-label="OpenCode model ID"
           mono

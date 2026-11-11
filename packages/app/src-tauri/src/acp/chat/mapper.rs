@@ -316,6 +316,8 @@ pub struct Mapper {
     quiet_minutes: u64,
     /// A key-based add-on chat: endings show the agent's own message (see `TurnFacts::own_cause`).
     own_cause: bool,
+    /// How a "needs credit" failure reads, from the agent's definition.
+    credit: Option<crate::acp::config::DefaultModel>,
 }
 
 impl Default for Mapper {
@@ -352,6 +354,7 @@ impl Mapper {
             turn_visible: false,
             quiet_minutes: 5,
             own_cause: false,
+            credit: None,
         }
     }
 
@@ -365,6 +368,7 @@ impl Mapper {
     pub fn for_config(cfg: &crate::acp::config::AgentConfig) -> Self {
         let mut mapper = Self::with_quiet_secs(cfg.timeouts.inactivity_secs);
         mapper.own_cause = !cfg.adapter_keys.is_empty();
+        mapper.credit = cfg.default_model.clone();
         mapper
     }
 
@@ -800,7 +804,7 @@ impl Mapper {
         self.user = None;
         let mut out = Vec::new();
         let duration_ms = now.checked_duration_since(turn.started).map(|d| d.as_millis() as u64);
-        let facts = TurnFacts { files: self.turn_files.len(), visible: self.turn_visible, duration_ms, agent: self.agent_label.as_deref(), quiet_minutes: self.quiet_minutes, own_cause: self.own_cause };
+        let facts = TurnFacts { files: self.turn_files.len(), visible: self.turn_visible, duration_ms, agent: self.agent_label.as_deref(), quiet_minutes: self.quiet_minutes, own_cause: self.own_cause, credit: self.credit.as_ref(), model: self.model.as_deref() };
         let end = match summary {
             Some(s) => ending::ending_of(s, &facts),
             None if fallback == Some(CHAT_CLOSED) => ending::Ending { reason: EndReason::Stopped, text: "The chat was closed".to_string() },

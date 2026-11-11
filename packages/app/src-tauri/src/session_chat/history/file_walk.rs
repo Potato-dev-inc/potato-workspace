@@ -29,6 +29,8 @@ pub(super) fn is_candidate(name: &str, spec: &FileHistorySpec) -> bool {
 /// Every chat file under `roots` (already real folders), down to the spec's depth. A symlink to a file counts only
 /// when its real place is under a root; a symlinked folder is never followed.
 pub(super) fn collect(spec: &FileHistorySpec, roots: &[PathBuf], max_entries: usize, budget: Duration) -> Walked {
+    #[cfg(test)]
+    super::file_paths::count_walk();
     let mut walker = Walker { spec, roots, max_entries, budget, started: Instant::now(), seen: 0, out: Walked::default() };
     for root in roots {
         walker.dir(root, 0);

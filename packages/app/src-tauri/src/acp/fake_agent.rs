@@ -107,6 +107,8 @@ struct Shared {
     cancel: AtomicBool,
     /// A prompt is being answered (for `_session/steering`).
     running: AtomicBool,
+    /// `authenticate` was called (with `needs_authenticate=1` a session cannot open before that).
+    authenticated: AtomicBool,
     responses: Mutex<HashMap<u64, mpsc::Sender<Value>>>,
     next_request: AtomicU64,
     opts: Opts,
@@ -178,6 +180,7 @@ pub fn run_agent() {
         out: Mutex::new(std::io::stdout()),
         cancel: AtomicBool::new(false),
         running: AtomicBool::new(false),
+        authenticated: AtomicBool::new(false),
         responses: Mutex::new(HashMap::new()),
         next_request: AtomicU64::new(1000),
         opts,
@@ -263,7 +266,19 @@ fn handle_request(shared: &Arc<Shared>, method: &str, id: &Value, params: Value)
                 std::thread::sleep(Duration::from_millis(deaf));
             }
         }
+        "authenticate" => {
+            // Records the method id so a test can read it back (`authenticated` marker file in the store).
+            let method = params.get("methodId").and_then(Value::as_str).unwrap_or_default().to_string();
+            shared.authenticated.store(true, Ordering::SeqCst);
+            let _ = std::fs::create_dir_all(&shared.store);
+            let _ = std::fs::write(shared.store.join("authenticated"), method);
+            shared.reply(id, json!({}));
+        }
         "session/new" => {
+            if shared.opts.flag("needs_authenticate", false) && !shared.authenticated.load(Ordering::SeqCst) {
+                shared.fail(id, -32000, "Authentication required");
+                return;
+            }
             let slow = shared.opts.number("new_delay_ms");
             if slow > 0 {
                 std::thread::sleep(Duration::from_millis(slow));

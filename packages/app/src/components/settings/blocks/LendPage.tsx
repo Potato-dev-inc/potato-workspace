@@ -20,6 +20,7 @@ import {
   limitsText,
   offerable,
   problemText,
+  signInProblem,
   supportTag,
   usageText,
   type LendApi,
@@ -29,6 +30,7 @@ import { teamApi, type MemberView, type TeamApi } from '../../../lib/team';
 import { DurationField } from '../../lend/Duration';
 import { useLend } from '../../lend/useLend';
 import { LendWarning } from '../../lend/OwnRiskBox';
+import { TestLink } from '../../lend/TestLink';
 import '../../../styles/lend.css';
 
 export const MAIN_SIGN_IN_HINT = 'Coming later';
@@ -212,7 +214,7 @@ function ProfileEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The sign-in: a lend sign-in signed into once, or a pasted API key. The main sign-in is off for now.
-  const [how, setHow] = useState<'signin' | 'key'>(initial.has_key ? 'key' : 'signin');
+  const [wanted, setHow] = useState<'signin' | 'key'>(initial.has_key ? 'key' : 'signin');
   const [key, setKey] = useState('');
   const [removeKey, setRemoveKey] = useState(false);
   const [added, setAdded] = useState<Account | null>(null);
@@ -221,6 +223,9 @@ function ProfileEditor({
   const forOther = p.who === 'teammates';
   const set = (patch: Partial<LendProfile>) => setP((cur) => ({ ...cur, ...patch }));
   const agents = offerable(state.drivers);
+  // A sign-in is only offered when every picked agent has one that can be lent; otherwise the key is the way (and why not is said).
+  const noSignIn = signInProblem(state.drivers, p.agent_ids);
+  const how = noSignIn ? 'key' : wanted;
   const soon = comingSoonAgents(state.drivers);
   const toggle = <T,>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const firstAgent = p.agent_ids[0] ?? '';
@@ -327,6 +332,7 @@ function ProfileEditor({
             <input type="checkbox" checked={p.agent_ids.includes(d.agent_id)} onChange={() => set({ agent_ids: toggle(p.agent_ids, d.agent_id) })} />
             <span>{d.label}</span>
             <span className="lend-tag">{supportTag(d.support)}</span>
+            {d.account_note && <span className="lend-muted">{d.account_note}</span>}
           </label>
         ))}
         {soon.map((c) => (
@@ -338,10 +344,15 @@ function ProfileEditor({
       </fieldset>
       <fieldset className="lend-checks" aria-label="Sign-in">
         <legend className="lend-legend">Sign-in</legend>
-        <label className="lend-radio">
-          <input type="radio" name="lend-how" checked={how === 'signin'} onChange={() => setHow('signin')} />
-          <span>A lend sign-in</span>
+        <label className="lend-radio" aria-disabled={noSignIn ? 'true' : undefined}>
+          <input type="radio" name="lend-how" checked={how === 'signin'} disabled={!!noSignIn} onChange={() => setHow('signin')} />
+          <span className={noSignIn ? 'lend-muted' : undefined}>A lend sign-in</span>
         </label>
+        {noSignIn && (
+          <p className="lend-note" role="status" data-testid="lend-signin-not-yet">
+            {noSignIn}
+          </p>
+        )}
         <label className="lend-radio">
           <input type="radio" name="lend-how" checked={how === 'key'} onChange={() => setHow('key')} />
           <span>{PASTE_KEY}</span>
@@ -503,6 +514,7 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
                 </small>
               )}
             </div>
+            <TestLink grantId={g.id} api={api} />
             <button type="button" className="lend-btn is-small" onClick={() => void act(g.id, g.direction === 'out')}>
               {g.direction === 'out' ? 'Revoke' : 'Give back'}
             </button>

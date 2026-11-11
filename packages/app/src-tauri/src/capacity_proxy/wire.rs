@@ -78,6 +78,10 @@ pub enum Body {
     /// The borrower gave it back (only from the device the grant was for).
     Return { grant_id: String },
     Ack { of: String },
+    /// Team page ping: "are you there?" The answer is a `Pong` with the same nonce, so the sender can time the round
+    /// trip through the relay. Answered whether or not Lend is on (`ping`); an older build drops it as a bad item.
+    Ping { nonce: String },
+    Pong { nonce: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

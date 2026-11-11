@@ -32,6 +32,12 @@ pub async fn lend_state(webview: tauri::Webview) -> Result<LendState, String> {
     Ok(lend::app_service()?.state(true))
 }
 
+/// Test link on a lend row: the real link handshake (borrower) or the lender's own checks and a ping (lender).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_test_link(webview: tauri::Webview, grant_id: String) -> Result<lend::service::LinkTest, String> {
+    on(&webview)?.test_link(&grant_id).await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn lend_profile_save(webview: tauri::Webview, profile: LendProfile) -> Result<LendProfile, String> {
     on(&webview)?.profile_save(profile)
@@ -51,7 +57,7 @@ pub async fn lend_key_set(webview: tauri::Webview, profile_id: String, key: Stri
 /// A new lend sign-in for `agent_id`: an app-managed account folder marked lend-only, to sign into once.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn lend_account_add(webview: tauri::Webview, agent_id: String, label: String) -> Result<crate::accounts::Account, String> {
-    on(&webview)?;
+    on(&webview)?.account_lendable(&agent_id)?;
     crate::accounts::Store::default_location().add_lend(&agent_id, &label)
 }
 

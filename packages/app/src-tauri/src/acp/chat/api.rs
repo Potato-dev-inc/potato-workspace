@@ -18,7 +18,7 @@ pub fn start(body: &Value, deps: &StartDeps) -> ApiResult {
     let agent = text("agent").ok_or_else(|| (400, json!({ "code": "INVALID_ARGUMENT", "error": "agent is required" })))?;
     let folder = text("folder").ok_or_else(|| (400, json!({ "code": "INVALID_ARGUMENT", "error": "folder is required" })))?;
     let explicit = text("lane").as_deref() == Some(LANE);
-    match start_gated(deps, StartRequest { agent_id: agent, folder: folder.into(), explicit, account: None }) {
+    match start_gated(deps, StartRequest { agent_id: agent, folder: folder.into(), explicit, account: None, ..Default::default() }) {
         Ok(session) => Ok((200, json!({ "pane_id": session.pane_id(), "agent": session.agent_id(), "lane": LANE }))),
         Err(error) => {
             let status = match error.code {

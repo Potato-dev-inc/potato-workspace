@@ -135,6 +135,31 @@ pub struct AgentConfig {
     pub resume_command: Vec<String>,
     /// What the install and sign-in screens say about this agent's chat add-on (A5).
     pub addon: AddonInfo,
+    /// Which model a new chat starts on when nobody asked for one, and what a "needs credit" failure says
+    /// (`[acp.default_model]`). Absent: the agent's own default is kept.
+    pub default_model: Option<DefaultModel>,
+    /// Set for one session only (never from a table): the `authenticate` method to call right after `initialize`. A chat on
+    /// a borrowed sign-in (`capacity_proxy`) uses it, because the adapter then has no login of its own, only a placeholder key.
+    #[serde(skip)]
+    pub authenticate_with: Option<String>,
+}
+
+/// `[acp.default_model]`: the app setting that picks the starting model of a chat, and the words for a model that
+/// cannot be used for want of credit. Data, so the chat code never asks which agent it is starting.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DefaultModel {
+    /// The app settings holding the provider and the model id (`opencode_model_provider`, `opencode_model_id`).
+    pub provider_setting: String,
+    pub model_setting: String,
+    /// The provider used when the saved model id has none of its own. Empty: the id is used as saved.
+    pub provider_fallback: String,
+    /// Between provider and model id in the value the agent offers (`opencode-go/glm-5.2`).
+    pub separator: String,
+    /// Lower-case pieces of an agent error that mean "this model cannot be used without credit" (or does not exist).
+    pub credit_patterns: Vec<String>,
+    /// The sentence shown for such an error. `{model}` is the model in use.
+    pub credit_message: String,
 }
 
 /// One approved key of a reviewed adapter: the variable the child gets and the credential-store slot it is read from.
@@ -518,6 +543,13 @@ pub fn with_account_env(cfg: &mut AgentConfig, launch: &crate::tui::LaunchEnv) {
         cfg.env_allow.retain(|n| !same(n, name));
         cfg.env.retain(|n, _| !same(n, name));
     }
+}
+
+//// A chat on a borrowed sign-in: the env of the account, the adapter's extra arguments and the `authenticate` method.
+pub fn with_borrowed_chat(cfg: &mut AgentConfig, chat: &crate::capacity_proxy::service::BorrowedChat) {
+    with_account_env(cfg, &chat.env);
+    cfg.args.extend(chat.args.iter().cloned());
+    cfg.authenticate_with = chat.authenticate.clone();
 }
 
 /// Makes the private home folder and writes its config (only when the text changed). Returns the folder.
@@ -934,6 +966,12 @@ pub fn problems(cfg: &AgentConfig) -> Vec<(String, String)> {
     }
     if cfg.addon.size_mb.is_some_and(|mb| mb == 0 || mb > 4096) || cfg.addon.signin_hint.chars().count() > 300 || cfg.addon.signin_hint.chars().any(char::is_control) {
         add("addon", "size_mb is 1 to 4096; signin_hint is at most 300 characters on one line".into());
+    }
+    if let Some(d) = &cfg.default_model {
+        let short = |t: &str| t.chars().count() <= 300 && !t.chars().any(char::is_control);
+        if d.model_setting.trim().is_empty() || d.credit_patterns.len() > 16 || !d.credit_patterns.iter().all(|p| plain_text(p)) || !short(&d.credit_message) || !short(&d.separator) {
+            add("default_model", "model_setting is needed; at most 16 short credit_patterns; credit_message at most 300 characters on one line".into());
+        }
     }
     if cfg.disabled_note.chars().count() > 300 {
         add("disabled_note", "at most 300 characters".into());

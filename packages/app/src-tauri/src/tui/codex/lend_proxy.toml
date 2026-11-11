@@ -1,0 +1,62 @@
+# Lend through my PC (Labs "lend_enabled", `crate::capacity_proxy`): Codex with an OpenAI API key, as data.
+# The key never leaves the lending PC. The borrowing PC's Codex sends its Responses API calls to a local shim, which
+# carries them over the PC link to the lender; the lender adds its own key and forwards them to the ONE upstream below,
+# for the listed method + path pairs only. Generic code reads `shape`, never the agent name.
+# Proven in the lend lab (2026-11-11, fake upstream, real Codex 0.166.0 and codex-acp 1.1.4): terminal and chat reach the
+# gateway with the placeholder only, the upstream sees only the lender's key, usage is counted. Not run against OpenAI
+# with a real key, so "lab".
+agent_id = "codex"
+support = "lab"
+
+# How usage is counted from the replies (`response.completed` carries `response.usage`).
+shape = "openai_responses_sse"
+upstream = "https://api.openai.com"
+paths = ["POST /v1/responses", "POST /v1/responses/compact", "GET /v1/models"]
+max_body_bytes = 16777216
+# Organisation and project headers would steer the lender's key to another organisation.
+strip_headers = ["openai-organization", "openai-project"]
+
+[auth]
+# Codex signed in with ChatGPT goes to another backend (chatgpt.com) and its reply stream was NOT proven in the lab
+# (workspace routing discovery). It is not offered: the screens show this sentence instead.
+account_not_yet = "Codex signed in with ChatGPT is not supported yet. Only an OpenAI API key can be lent."
+
+# A pasted OpenAI API key (kept in the OS credential store, never in a file).
+[auth.api_key]
+header = "authorization"
+scheme = "Bearer"
+
+# Terminal. The pane gets its own CODEX_HOME for this lend with one config.toml, so nothing is read from the borrower's
+# real Codex setup. WebSockets are switched off (the shim carries HTTP and server-sent events only). The key variable
+# holds the placeholder.
+[hookup]
+set = [{ name = "LEND_KEY", value = "pm-lend" }]
+home_env = "CODEX_HOME"
+remove_prefixes = ["OPENAI_", "CODEX_"]
+remove = ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_ORG_ID", "OPENAI_PROJECT_ID", "CODEX_API_KEY"]
+files = [{ path = "config.toml", content = """
+model_provider = "lend"
+
+[model_providers.lend]
+name = "lend"
+base_url = "{base_url}/v1"
+env_key = "LEND_KEY"
+wire_api = "responses"
+supports_websockets = false
+""" }]
+
+# Chat (the Codex ACP adapter). The adapter reads the placeholder from its environment, the client must call
+# authenticate("api-key") first, and the base URL is the built-in provider's `openai_base_url` in the same kind of
+# scratch CODEX_HOME. (The adapter's CODEX_CONFIG setting is not used: the app builds that one itself.)
+[chat]
+set = [
+  { name = "CODEX_API_KEY", value = "pm-lend" },
+  { name = "OPENAI_API_KEY", value = "pm-lend" },
+]
+home_env = "CODEX_HOME"
+authenticate = "api-key"
+remove_prefixes = ["OPENAI_", "CODEX_"]
+remove = ["OPENAI_BASE_URL", "OPENAI_ORG_ID", "OPENAI_PROJECT_ID"]
+files = [{ path = "config.toml", content = """
+openai_base_url = "{base_url}/v1"
+""" }]

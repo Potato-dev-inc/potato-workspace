@@ -27,6 +27,7 @@
 pub mod api;
 pub mod cards;
 mod choice;
+pub mod default_model;
 pub mod ending;
 pub mod lanes;
 pub mod mapper;
@@ -68,6 +69,8 @@ use mapper::Mapper;
 
 pub use choice::{Applied, ChoiceError};
 pub use start::{restore_panes, start_gated, StartDeps, StartError, StartRequest};
+#[cfg(test)]
+pub(crate) use start::start;
 
 /// `PaneInfo.lane` of a chat session.
 pub const LANE: &str = "acp";

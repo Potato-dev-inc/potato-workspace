@@ -36,6 +36,13 @@ export interface SpawnState {
   failed: string | null;
 }
 
+/** A chat (ACP) that is starting: shown as a skeleton in the main area until it is selected or fails. */
+export interface ChatStartState {
+  agentId: string;
+  /** The folder the chat starts in (the menu's project). */
+  folder: string;
+}
+
 export interface Toast {
   id: number;
   text: string;
@@ -68,6 +75,10 @@ export interface CockpitApi {
   now: number;
   spawn: SpawnState | null;
   dismissSpawn: () => void;
+  /** A chat that is starting now (null when none). Cleared by `endChatStart` on success or failure. */
+  chatStarting: ChatStartState | null;
+  beginChatStart: (agentId: string, folder: string) => void;
+  endChatStart: () => void;
   toasts: Toast[];
   notify: (text: string, action?: Toast['action']) => void;
   /** Switch the UI mode. The first switch to Individual from here opens `modeExplainer` instead of switching. */
@@ -76,7 +87,7 @@ export interface CockpitApi {
   modeExplainer: { open: boolean; confirm: (dontShowAgain: boolean) => Promise<void>; cancel: () => void };
   toggleTheme: () => Promise<void>;
   /** Opens a new agent pane. Resolves to its pane id, or null when it could not start (the starting view says why). */
-  newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string) => Promise<string | null>;
+  newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string, model?: string) => Promise<string | null>;
   /** A person's answer to a pane prompt; `gesture` is their click (`lib/user-gesture.ts`). */
   answer: (paneId: string, promptId: string, choiceId: string, label: string, gesture: UserGesture) => Promise<void>;
   interrupt: (paneId: string) => Promise<void>;
@@ -105,6 +116,7 @@ export function useCockpit(): CockpitApi {
   const [now, setNow] = useState(() => Date.now());
   const [readyAgents, setReadyAgents] = useState<Set<string>>(new Set());
   const [spawn, setSpawn] = useState<SpawnState | null>(null);
+  const [chatStarting, setChatStarting] = useState<ChatStartState | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [explainerOpen, setExplainerOpen] = useState(false);
   // `individual_explained` from settings: the sheet was dismissed for good.
@@ -437,11 +449,11 @@ export function useCockpit(): CockpitApi {
   }, [theme, notify]);
 
   const newAgent = useCallback(
-    async (agentId: string, accountId?: string, isolated = false, projectPath?: string) => {
+    async (agentId: string, accountId?: string, isolated = false, projectPath?: string, model?: string) => {
       setSelectedId(null);
       setSpawn({ agentId, paneId: null, log: [], failed: null });
       try {
-        const paneId = await cockpitApi.newPane(agentId, accountId, isolated ? 'worktree' : undefined, projectPath);
+        const paneId = await cockpitApi.newPane(agentId, accountId, isolated ? 'worktree' : undefined, projectPath, model);
         setSpawn((s) => (s && s.agentId === agentId ? { ...s, paneId } : s));
         // The pane may already be attached (ready event raced the command): select it once listed.
         if (spawnRef.current === null) setSelectedId(paneId);
@@ -553,6 +565,9 @@ export function useCockpit(): CockpitApi {
     now,
     spawn,
     dismissSpawn: () => setSpawn(null),
+    chatStarting,
+    beginChatStart: (agentId: string, folder: string) => setChatStarting({ agentId, folder }),
+    endChatStart: () => setChatStarting(null),
     toasts,
     notify,
     setMode,

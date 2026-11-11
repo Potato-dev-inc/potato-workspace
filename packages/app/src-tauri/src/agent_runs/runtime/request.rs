@@ -189,6 +189,9 @@ pub struct AgentRunRequest {
     /// Crate-internal: "Keep helpers open when they finish" set `keep_pane` on for this run; the result says so.
     #[serde(skip)]
     pub(crate) kept_open_by_setting: bool,
+    /// Crate-internal: `model` was filled in from the person's helper default for this agent.
+    #[serde(skip)]
+    pub(crate) model_from_helper_default: bool,
     /// Crate-internal: which lane the `/agents/run` route chose for this run and why (`acp::chat::lanes`); stored on
     /// the worker so later reads of the run still say it.
     #[serde(skip)]

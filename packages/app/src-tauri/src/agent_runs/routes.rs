@@ -287,6 +287,14 @@ fn prepare_run(
     {
         request.project_path = query_value(query, "project_path");
     }
+    // No model named: the person's "Default model for helpers" for this agent decides. A named model always wins.
+    if request.turn_index == 0 && request.pane_id.is_none() && request.worker_id.is_none() && request.handle.is_none() && request.agent_run_id.is_none() {
+        request.model_from_helper_default = crate::agent_run_mode::apply_helper_model(
+            &crate::settings_store::read_public_settings(app),
+            &request.agent_type,
+            &mut request.model,
+        );
+    }
     // An agent starting a helper without naming an account: the person's choice decides, or a card asks.
     Some(
         super::helper_login::for_run(
@@ -311,6 +319,11 @@ fn chat_view_of(body: &[u8], request: &AgentRunRequest) -> Vec<u8> {
     };
     map.insert("headless".into(), Value::Bool(headless));
     map.insert("task".into(), Value::String(request.task.clone()));
+    if request.model_from_helper_default {
+        if let Some(model) = &request.model {
+            map.insert("model".into(), Value::String(model.clone()));
+        }
+    }
     if let Some(account) = &request.account {
         map.insert("account".into(), Value::String(account.clone()));
     }

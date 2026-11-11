@@ -140,19 +140,21 @@ pub async fn new_pane(
     account_id: Option<String>,
     isolation: Option<String>,
     project_path: Option<String>,
+    model: Option<String>,
 ) -> Result<String, String> {
     let isolated = match isolation.as_deref() {
         None | Some("") | Some("none") => false,
         Some("worktree") => true,
         Some(other) => return Err(format!("INVALID_ARGUMENT: isolation must be \"none\" or \"worktree\", got {other:?}")),
     };
-    let started = crate::tray::new_pane_in(
+    let started = crate::tray::new_pane_on_model(
         &app,
         &agent_id,
         crate::cockpit::Origin::CockpitUi,
         account_id.as_deref(),
         isolated,
         project_path.as_deref(),
+        model.as_deref(),
     );
     if started.is_ok() {
         if let Some(project) = project_path.as_deref().filter(|p| !p.trim().is_empty()) {

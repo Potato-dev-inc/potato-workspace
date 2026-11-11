@@ -23,6 +23,11 @@ pub const SIGNIN_EXPIRED: &str =
     r#"{"error":{"type":"lend_signin_expired","message":"The lender's sign-in expired. Ask them to sign in again."}}"#;
 pub const UNAVAILABLE: &str = r#"{"error":{"type":"lend_unavailable","message":"The lending PC can't be reached"}}"#;
 
+/// The 502 body for a link that can't be opened, with the plain reason (the agent shows this line).
+pub fn unavailable_body(message: &str) -> String {
+    serde_json::json!({ "error": { "type": "lend_unavailable", "message": message } }).to_string()
+}
+
 /// A reply header the lender adds on its own refusals, so the borrower's PC can tell why without reading the body.
 pub const LEND_HEADER: &str = "x-pm-lend";
 /// The `x-pm-lend` value for an expired lend sign-in.

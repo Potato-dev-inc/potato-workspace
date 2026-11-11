@@ -52,9 +52,9 @@ describe('Request usage', () => {
     const api = await open();
     const sel = dialog().querySelectorAll('optgroup');
     expect([...sel].map((g) => g.label)).toEqual(['My PCs', 'Teammates']);
-    // Claude is a lab driver (tagged); Codex is listed as coming soon and cannot be picked.
+    // Claude, Codex and Gemini are lab drivers (tagged); none is "coming soon".
     const agents = [...field('Agent').options].map((o) => [o.textContent, o.disabled]);
-    expect(agents).toEqual([['Claude · Lab', false], ['Codex: coming soon', true]]);
+    expect(agents).toEqual([['Claude · Lab', false], ['Codex · Lab', false], ['Gemini CLI · Lab', false]]);
     await typeInto(field('Why'), 'Mine is out of usage.');
     await click(buttonByText(dialog(), 'Ask'));
     await settle(4);

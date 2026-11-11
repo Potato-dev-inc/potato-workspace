@@ -18,6 +18,8 @@ mod prefs;
 mod progress;
 mod run;
 #[cfg(test)]
+mod bench_tests;
+#[cfg(test)]
 mod bring_tests;
 #[cfg(test)]
 mod fakes;

@@ -195,6 +195,13 @@ pub fn read_only_spawned_pane_backends() -> Vec<&'static str> {
         .collect()
 }
 
+/// The launch flags that start a visible pane of `agent_type` on `model`, or `None` when its profile cannot put a
+/// model on the command line (or the model is blank / looks like a flag).
+pub fn pane_model_args(agent_type: &str, model: &str) -> Option<Vec<String>> {
+    let args = profile_for(agent_type).visible_run_args(&VisibleRun { model: Some(model), ..VisibleRun::default() });
+    args.model_applied.then_some(args.args)
+}
+
 /// Whether this profile starts a visible pane read-only with launch flags (`visible_run_args`).
 pub fn enforces_read_only_by_flags(profile: &dyn TuiProfile) -> bool {
     profile

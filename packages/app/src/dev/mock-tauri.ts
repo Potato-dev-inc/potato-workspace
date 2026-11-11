@@ -324,6 +324,11 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return null;
         case 'acp_conversation_of_terminal':
           return null;
+        // The model pickers: Claude starts a pane on a model; every other agent lists none in the preview.
+        case 'agent_model_options':
+          return a.agentId === 'claude'
+            ? { terminal: true, default_model: 'sonnet', models: ['opus', 'sonnet', 'haiku'] }
+            : { terminal: false, default_model: null, models: [] };
         case 'agent_run_mode_get':
         case 'agent_run_mode_set':
           // The dev harness has no custom agents to choose for.

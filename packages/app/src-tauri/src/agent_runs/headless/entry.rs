@@ -498,6 +498,9 @@ pub fn run_agent(
             note
         });
     }
+    if request.model_from_helper_default && request.turn_index == 0 {
+        worker.model_note = Some(crate::agent_run_mode::HELPER_MODEL_NOTE.to_string());
+    }
     if request.kept_open_by_setting && !request.headless && request.turn_index == 0 {
         worker.kept_open_note = Some(crate::agent_run_mode::KEPT_OPEN_NOTE.to_string());
     }

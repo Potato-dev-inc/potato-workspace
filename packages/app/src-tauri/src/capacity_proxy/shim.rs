@@ -33,7 +33,7 @@ const DROP_HEADERS: &[&str] = &["host", "content-length", "transfer-encoding", "
 pub enum OpenError {
     /// The lend is over.
     Ended,
-    /// The lending PC can't be reached right now.
+    /// The lending PC can't be reached right now. The text is the plain reason the agent shows.
     Unavailable(String),
 }
 
@@ -324,7 +324,7 @@ async fn serve(inner: &Inner, r: &mut BufReader<tokio::net::tcp::OwnedReadHalf>,
         }
         Err(OpenError::Unavailable(why)) => {
             tracing::debug!(%why, "lend stream unavailable");
-            return reply_json(w, 502, frame::UNAVAILABLE).await;
+            return reply_json(w, 502, &frame::unavailable_body(&why)).await;
         }
     };
 

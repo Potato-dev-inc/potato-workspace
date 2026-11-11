@@ -136,6 +136,11 @@ pub trait Transport: Send + Sync {
     fn home_relay(&self) -> Option<String> {
         None
     }
+    /// `home_relay`, after waiting up to `within` for the endpoint to have reached its relay. Right after the bind
+    /// the relay is not known yet; a hint handed out then would leave the other side no way in across the internet.
+    async fn home_relay_within(&self, _within: std::time::Duration) -> Option<String> {
+        self.home_relay()
+    }
 }
 
 /// What an endpoint is started with. Computed from the capabilities that are wanted, nothing else.

@@ -25,6 +25,7 @@ pub mod frame;
 pub mod gate;
 pub mod link;
 pub mod meter;
+pub mod ping;
 pub mod refresh;
 pub mod service;
 pub mod shim;
@@ -33,7 +34,13 @@ pub mod spec;
 pub mod wire;
 
 #[cfg(test)]
+mod agents_e2e_tests;
+#[cfg(test)]
 mod e2e_tests;
+#[cfg(test)]
+mod link_tests;
+#[cfg(test)]
+mod wan_tests;
 #[cfg(test)]
 mod guard_tests;
 #[cfg(test)]
@@ -57,6 +64,7 @@ pub const OFF: &str = "Share an agent is off. Turn it on in Settings > General >
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 static SERVICE: OnceLock<Arc<Lend>> = OnceLock::new();
+static PINGER: OnceLock<Arc<ping::Pinger>> = OnceLock::new();
 static LAST_SETTINGS: std::sync::Mutex<Option<Value>> = std::sync::Mutex::new(None);
 
 pub fn enabled() -> bool {
@@ -77,7 +85,39 @@ pub fn apply_settings(public: &Value) {
     }
     if let Some(svc) = SERVICE.get() {
         svc.apply_settings(public);
+    } else if on && APP.get().is_some() {
+        // Build the service now (not at the first click): a lender that restarted tells its borrowers at once, and a
+        // borrower's shim comes back before its panes need it.
+        tauri::async_runtime::spawn_blocking(|| {
+            let _ = app_service();
+        });
     }
+}
+
+/// The pinger of this app: answers pings and sends them. Works without Labs lend (it is a diagnostic).
+pub fn pinger() -> Arc<ping::Pinger> {
+    PINGER.get_or_init(|| ping::Pinger::new(Arc::new(service::AppTeam), Arc::new(now_ms))).clone()
+}
+
+/// Pings every other computer of the team (Settings > Team > People). The team relay round trip for each; where a PC
+/// link to that computer exists (a lend from them), the link's own round trip and path replace it.
+pub async fn ping_team() -> Result<Vec<ping::DevicePing>, String> {
+    let pinger = pinger();
+    let svc = if enabled() { SERVICE.get().cloned() } else { None };
+    let probes = async {
+        match &svc {
+            Some(s) => s.probe_lenders(std::time::Duration::from_secs(10)).await,
+            None => Default::default(),
+        }
+    };
+    let (mailbox, probes) = tokio::join!(pinger.ping_all(), probes);
+    let mut list = mailbox?;
+    for p in &mut list {
+        if let Some(pr) = probes.get(&p.device_id) {
+            *p = ping::from_probe(p, pr.rtt, pr.path == crate::p2p::endpoint::PathKind::Direct);
+        }
+    }
+    Ok(list)
 }
 
 struct AppSecrets;
@@ -122,6 +162,7 @@ pub fn app_service() -> Result<Arc<Lend>, String> {
         specs: spec::all(),
         now: Arc::new(now_ms),
         awake: Arc::new(service::app_awake()),
+        pinger: pinger(),
         changed: Arc::new(|| {
             if let Some(app) = APP.get() {
                 use tauri::Emitter;
@@ -155,6 +196,10 @@ impl Lend {
 
 /// The team relay delivered a lend item (`team::service`). Dropped while the switch is off.
 pub fn on_team_item(item: crate::team::secure::CapacityIn) {
+    // A ping is answered with Lend off too.
+    if pinger().handle(&item) {
+        return;
+    }
     let Ok(svc) = app_service() else { return };
     if let Err(why) = svc.on_item(&item) {
         if why != wire::WireReject::NotForMe {
@@ -166,6 +211,11 @@ pub fn on_team_item(item: crate::team::secure::CapacityIn) {
 /// `accounts::Store::launch_env` for the sign-in `lend:<grant id>`.
 pub fn borrowed_launch_env(agent_id: &str, grant_id: &str) -> Result<crate::tui::LaunchEnv, String> {
     app_service()?.borrowed_launch_env(agent_id, grant_id)
+}
+
+/// The chat (ACP) version of `borrowed_launch_env`: the adapter's env, extra arguments and `authenticate` method.
+pub fn borrowed_chat(agent_id: &str, grant_id: &str) -> Result<service::BorrowedChat, String> {
+    app_service()?.borrowed_chat(agent_id, grant_id)
 }
 
 /// A pane started on the sign-in `lend:<grant id>` (any way of starting one): listed on the grant.

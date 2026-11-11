@@ -21,11 +21,12 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use super::env::hookup_env;
+use super::env::{hookup_env, set_home, write_home};
 use super::forward::{AuthSource, Forwarder, InjectedAuth};
 use super::frame::{SigninNote, UsageNote};
 use super::gate::{EndReason, Gate, Limits};
-use super::link::{node_from_hex, BorrowerGrant, LendNet, LenderBook, LenderGrant, LinkOpener, CLOSE_LEND_ENDED};
+use super::link::{node_from_hex, BorrowerGrant, ConnectError, LendNet, LenderBook, LenderGrant, LinkOpener, Probe, CLOSE_LEND_ENDED};
+use super::ping::Pinger;
 use super::shim::Shim;
 use super::signin::SigninFile;
 use super::spec::{ProxySpec, RefreshSpec};
@@ -189,11 +190,34 @@ pub struct LendRequest {
     pub state: RequestState,
 }
 
+/// What a chat on a borrowed sign-in is started with.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BorrowedChat {
+    pub env: LaunchEnv,
+    /// Added to the adapter's arguments.
+    pub args: Vec<String>,
+    /// The adapter's `authenticate` method to call before a session opens.
+    pub authenticate: Option<String>,
+}
+
+/// A grant id as a folder name (letters, digits, `-` and `_` only).
+fn safe_name(id: &str) -> String {
+    id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Driver {
     pub agent_id: String,
     pub label: String,
     pub support: &'static str,
+    /// The lender can paste an API key for this agent.
+    pub api_key: bool,
+    /// The lender can lend a signed-in account of this agent (a lend sign-in).
+    pub account: bool,
+    /// A borrowed chat (not only a terminal) works for this agent.
+    pub chat: bool,
+    /// A sign-in this agent has that cannot be lent yet, in plain words (shown, never offered).
+    pub account_note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -246,6 +270,32 @@ struct Saved {
     requests: Vec<RequestRec>,
     #[serde(default)]
     guard: Guard,
+    /// Revokes still to send after a restart (see `Lend::resume`): ids only, never a secret.
+    #[serde(default)]
+    pending_revokes: Vec<PendingRevoke>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct PendingRevoke {
+    grant_id: String,
+    /// The borrower's device.
+    device: String,
+}
+
+/// The reason the borrower sees when this PC lost its lends by restarting.
+pub const RESTARTED: &str = "lender restarted";
+/// How often a revoke that could not go out yet is tried again (the team may not be connected right after launch).
+const REVOKE_RETRY: Duration = if cfg!(test) { Duration::from_millis(200) } else { Duration::from_secs(15) };
+const REVOKE_TRIES: u32 = 80;
+
+/// What Test link found, in words for the row it was pressed on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LinkTest {
+    pub ok: bool,
+    pub ms: Option<u64>,
+    /// `direct`, `relay` (the PC link) or `mailbox` (the team relay).
+    pub via: Option<String>,
+    pub message: String,
 }
 
 // ------------------------------------------------------------------------------------------------- the seams
@@ -312,6 +362,8 @@ pub struct Deps {
     pub awake: Arc<dyn AwakePort>,
     pub changed: Arc<dyn Fn() + Send + Sync>,
     pub spawn: Spawn,
+    /// Team page pings (shared with the code that answers them; it works without Lend on).
+    pub pinger: Arc<Pinger>,
     /// Renews a lend sign-in's token (the real one runs the agent's CLI, hidden).
     pub refresh: Refresh,
     /// Inherited environment variable names (for the pane env: which provider variables to remove).
@@ -514,8 +566,22 @@ impl Lend {
                 agent_id: s.agent_id.clone(),
                 label: crate::tui::descriptors().into_iter().find(|d| d.id == s.agent_id).map(|d| d.label).unwrap_or_else(|| s.agent_id.clone()),
                 support: s.support.as_str(),
+                api_key: s.auth.api_key.is_some(),
+                account: s.auth.account.is_some(),
+                chat: s.chat.is_some(),
+                account_note: s.auth.account_not_yet.clone(),
             })
             .collect()
+    }
+
+    /// Whether a signed-in account of `agent_id` can be lent. Not when the spec has no account auth: the reason is the
+    /// spec's own plain sentence (for example Codex signed in with ChatGPT, which is not proven).
+    pub fn account_lendable(&self, agent_id: &str) -> Result<(), String> {
+        let spec = self.spec(agent_id).ok_or_else(|| format!("{agent_id} can't be lent through this PC."))?;
+        if spec.auth.account.is_some() {
+            return Ok(());
+        }
+        Err(spec.auth.account_not_yet.clone().unwrap_or_else(|| "A sign-in of this agent can't be lent yet. Use an API key.".to_string()))
     }
 
     // ------------------------------------------------------------------------------------------------- profiles
@@ -539,6 +605,9 @@ impl Lend {
             return Err("Pick a length between one minute and 7 days.".into());
         }
         if let LendAccount::Account { id } = &p.account {
+            for a in &p.agent_ids {
+                self.account_lendable(a)?;
+            }
             let acc = self.deps.accounts.get(id).ok_or("That lend sign-in no longer exists.")?;
             if !acc.lend_only {
                 return Err("Only a lend sign-in can be lent. Add one with \"New lend sign-in\".".into());
@@ -1043,6 +1112,16 @@ impl Lend {
     /// The sign-in `lend:<grant id>`: the pane env that points `agent_id` at the shim. An ended grant is refused
     /// for new panes (a pane that is already running keeps the shim, which answers "This lend ended").
     pub fn borrowed_launch_env(&self, agent_id: &str, grant_id: &str) -> Result<LaunchEnv, String> {
+        self.borrowed_env(agent_id, grant_id, false).map(|c| c.env)
+    }
+
+    /// The same for a chat (ACP) session: the spec's `[chat]` table, with the adapter's extra arguments and the
+    /// `authenticate` method it must be told to use. Refused when the agent's spec has no chat table.
+    pub fn borrowed_chat(&self, agent_id: &str, grant_id: &str) -> Result<BorrowedChat, String> {
+        self.borrowed_env(agent_id, grant_id, true)
+    }
+
+    fn borrowed_env(&self, agent_id: &str, grant_id: &str, chat: bool) -> Result<BorrowedChat, String> {
         let inner = lock(&self.inner);
         let rec = inner.saved.grants.iter().find(|g| g.view.id == grant_id && g.view.direction == Direction::In).ok_or("That borrowed sign-in is gone.")?;
         if !rec.view.agent_id.eq_ignore_ascii_case(agent_id) {
@@ -1053,7 +1132,13 @@ impl Lend {
         }
         let live = inner.inn.get(grant_id).ok_or("The borrowed sign-in is still starting. Try again in a moment.")?;
         let spec = self.spec(agent_id).ok_or("This agent can't be borrowed through a PC.")?;
-        Ok(hookup_env(&spec.hookup, &live.shim.base_url(), &(self.deps.env_names)()))
+        let hookup = if chat { spec.chat.as_ref().ok_or("Chat can't be borrowed through a PC for this agent yet. Open it in a terminal.")? } else { &spec.hookup };
+        let base_url = live.shim.base_url();
+        let mut env = hookup_env(hookup, &base_url, &(self.deps.env_names)());
+        // The agent's own config folder for THIS lend (a fresh one, never the borrower's real one).
+        let folder = self.deps.dir.join("lend-homes").join(safe_name(grant_id)).join(if chat { "chat" } else { "terminal" });
+        set_home(&mut env, write_home(hookup, &base_url, &folder)?);
+        Ok(BorrowedChat { env, args: hookup.args.clone(), authenticate: hookup.authenticate.clone() })
     }
 
     pub fn note_pane(&self, grant_id: &str, pane_id: &str) {
@@ -1246,14 +1331,20 @@ impl Lend {
                 }
                 self.finish_out(&grant_id, EndReason::Returned);
             }
-            Body::Ack { .. } => return Ok(()),
+            // Pings are answered before the lend service (`ping`); one that gets here is not for it.
+            Body::Ack { .. } | Body::Ping { .. } | Body::Pong { .. } => return Ok(()),
         }
         self.changed();
         Ok(())
     }
 
-    /// After a restart: grants I lend can't be served again (the forwarder lived in memory), so they end; grants I
-    /// borrow get their shim back until their time is up.
+    /// After a restart: grants I lend can't be served again, so they end and the borrower is told (a revoke with the
+    /// reason "lender restarted"); grants I borrow get their shim back until their time is up.
+    ///
+    /// Why not resume serving them: the forwarder, the gate and its usage counts, and the refresh job live in
+    /// memory only. Serving again after a restart would restart the request and token counts from zero, so a limit
+    /// could be dodged by restarting. A revoke needs only the grant id and the borrower's device, which the saved
+    /// state has already; nothing secret is added to the disk.
     pub fn resume(&self) {
         let now = self.now();
         let (ended_out, live_in): (Vec<String>, Vec<GrantRec>) = {
@@ -1264,12 +1355,26 @@ impl Lend {
         };
         {
             let mut inner = lock(&self.inner);
+            let mut told = Vec::new();
             for g in inner.saved.grants.iter_mut().filter(|g| ended_out.contains(&g.view.id)) {
                 g.view.state = GrantState::Ended;
                 g.view.end_reason = Some(if now >= g.view.ends_ms { GrantEnd::Expired } else { GrantEnd::Revoked });
+                // The borrower knows an expired lend ended by itself; one cut short needs telling.
+                if now < g.view.ends_ms {
+                    told.push(PendingRevoke { grant_id: g.view.id.clone(), device: g.borrower_device.clone() });
+                }
+            }
+            for p in told {
+                if !inner.saved.pending_revokes.iter().any(|x| x.grant_id == p.grant_id) {
+                    inner.saved.pending_revokes.push(p);
+                }
             }
             self.save(&inner);
         }
+        for id in &ended_out {
+            let _ = self.deps.secrets.delete(&link_slot(id));
+        }
+        self.send_pending_revokes();
         for g in live_in {
             let secret = self.deps.secrets.get(&link_slot(&g.view.id)).ok().flatten().and_then(|s| unb64(&s));
             match (g.node.clone(), secret) {
@@ -1277,6 +1382,146 @@ impl Lend {
                 _ => self.finish_in(&g.view.id, Some(GrantEnd::Expired)),
             }
         }
+    }
+}
+
+impl Lend {
+    /// Sends the revokes saved by `resume` off the calling thread, and tries again while the team is not reachable.
+    fn send_pending_revokes(&self) {
+        if lock(&self.inner).saved.pending_revokes.is_empty() {
+            return;
+        }
+        let me = self.me.clone();
+        (self.deps.spawn)(Box::pin(async move {
+            for _ in 0..REVOKE_TRIES {
+                let Some(svc) = me.upgrade() else { return };
+                let worker = svc.clone();
+                let left = tokio::task::spawn_blocking(move || worker.flush_revokes()).await.unwrap_or(1);
+                if left == 0 {
+                    return;
+                }
+                drop(svc);
+                tokio::time::sleep(REVOKE_RETRY).await;
+            }
+        }));
+    }
+
+    /// One pass over the saved revokes. Returns how many are still to send.
+    fn flush_revokes(&self) -> usize {
+        let pending = lock(&self.inner).saved.pending_revokes.clone();
+        if pending.is_empty() {
+            return 0;
+        }
+        let Ok(session) = self.deps.team.session() else { return pending.len() };
+        let mut done = Vec::new();
+        for p in &pending {
+            let body = Body::Revoke { grant_id: p.grant_id.clone(), reason: RESTARTED.into() };
+            match wire::seal(&session, &p.device, body, self.now()) {
+                Ok((payload, _)) => {
+                    if self.deps.team.send(&payload).is_ok() {
+                        done.push(p.grant_id.clone());
+                    }
+                }
+                // The device is no longer on the team: nobody to tell.
+                Err(_) => done.push(p.grant_id.clone()),
+            }
+        }
+        let mut inner = lock(&self.inner);
+        inner.saved.pending_revokes.retain(|p| !done.contains(&p.grant_id));
+        self.save(&inner);
+        inner.saved.pending_revokes.len()
+    }
+
+    /// Test link on one lend row, either side.
+    ///
+    /// Borrower: the real `pm/lend/1` handshake with the lender (nothing is forwarded), timed. Lender: this PC's
+    /// own side (is the lend live, is the PC link up), and the borrower's PC pinged through the team relay.
+    pub async fn test_link(&self, grant_id: &str) -> Result<LinkTest, String> {
+        let rec = self.grant_rec(grant_id).ok_or("That lend is gone.")?;
+        let fail = |message: &str| Ok(LinkTest { ok: false, ms: None, via: None, message: message.to_string() });
+        if rec.view.state != GrantState::Active {
+            return fail(ENDED);
+        }
+        match rec.view.direction {
+            Direction::In => {
+                let hint = rec.node.clone().ok_or("This lend has no PC address.")?;
+                let Some(secret) = self.deps.secrets.get(&link_slot(grant_id)).ok().flatten().and_then(|s| unb64(&s)) else {
+                    return fail("The lender's PC no longer has this lend; ask again");
+                };
+                match self.deps.net.probe(&hint, grant_id, &secret).await {
+                    Ok(p) => Ok(link_ok(p)),
+                    Err(e) => {
+                        if e == ConnectError::Ended {
+                            self.finish_in(grant_id, None);
+                        }
+                        fail(&e.plain(!hint.relay.is_empty()))
+                    }
+                }
+            }
+            Direction::Out => {
+                let links = {
+                    let inner = lock(&self.inner);
+                    match inner.out.get(grant_id) {
+                        Some(l) if l.gate.ended().is_none() => l.links.len(),
+                        _ => return fail("This PC is no longer serving this lend."),
+                    }
+                };
+                if let Err(e) = self.deps.net.start().await {
+                    return fail(&format!("The PC link could not start: {e}"));
+                }
+                let r = self.deps.pinger.ping_device(&rec.borrower_device).await;
+                let Some(ms) = r.ms.filter(|_| r.ok) else {
+                    return fail("The borrower's PC isn't answering (is the app open?)");
+                };
+                let link = if links > 0 { "a link is open" } else { "no link open yet" };
+                Ok(LinkTest { ok: true, ms: Some(ms), via: r.via, message: format!("OK. The borrower's PC answers in {ms} ms through the team relay; {link}.") })
+            }
+        }
+    }
+
+    /// The PC link round trip to every lender I am borrowing from right now, by lender device. A lender that does
+    /// not answer in time is left out (the Team page then shows the relay mailbox figure).
+    pub async fn probe_lenders(&self, within: Duration) -> HashMap<String, Probe> {
+        let now = self.now();
+        let targets: Vec<(String, NodeHint, String, Vec<u8>)> = {
+            let inner = lock(&self.inner);
+            inner
+                .saved
+                .grants
+                .iter()
+                .filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active && g.view.ends_ms > now)
+                .filter_map(|g| {
+                    let secret = self.deps.secrets.get(&link_slot(&g.view.id)).ok().flatten().and_then(|s| unb64(&s))?;
+                    Some((g.lender_device.clone(), g.node.clone()?, g.view.id.clone(), secret))
+                })
+                .collect()
+        };
+        let mut tasks = Vec::new();
+        for (device, hint, id, secret) in targets {
+            let net = self.deps.net.clone();
+            tasks.push(tokio::spawn(async move {
+                let probe = tokio::time::timeout(within, net.probe(&hint, &id, &secret)).await.ok().and_then(Result::ok);
+                (device, probe)
+            }));
+        }
+        let mut out = HashMap::new();
+        for t in tasks {
+            if let Ok((device, Some(p))) = t.await {
+                out.insert(device, p);
+            }
+        }
+        out
+    }
+}
+
+fn link_ok(p: Probe) -> LinkTest {
+    let direct = p.path == crate::p2p::endpoint::PathKind::Direct;
+    let ms = p.rtt.as_millis() as u64;
+    LinkTest {
+        ok: true,
+        ms: Some(ms),
+        via: Some(if direct { super::ping::VIA_DIRECT } else { super::ping::VIA_RELAY }.into()),
+        message: format!("OK. The link answers in {ms} ms{}.", if direct { ", direct" } else { " via relay" }),
     }
 }
 

@@ -26,7 +26,9 @@ import {
   exampleAt,
   greeting,
   nextExample,
+  parseRunAs,
   sendBlock,
+  usableModel,
   withPaths,
   type AgentChoice,
   type HomeCard,
@@ -35,12 +37,16 @@ import {
   type StartRequest,
 } from './model';
 import { AgentLogo } from '../../common/AgentLogo';
+import { ModelPicker } from '../../common/ModelPicker';
+import { readPickedModel, tauriModelOptionsApi, useModelOptions, writePickedModel, type ModelOptionsApi } from '../../../lib/modelOptions';
 import { isStartBlock } from './start';
 import '../../../styles/cockpit-newagent.css';
 import { BringChatsLink } from '../../history/BringChatsLink';
 
 const REMEMBER_KEY = 'pm.newagent.agent';
+const REMEMBER_RUN_KEY = 'pm.newagent.runAs';
 
+// Each remembered choice is a convenience: storage can be blocked, and a bad value is simply ignored.
 function remembered(): string | null {
   try {
     return localStorage.getItem(REMEMBER_KEY);
@@ -53,6 +59,20 @@ function remember(key: string): void {
     localStorage.setItem(REMEMBER_KEY, key);
   } catch {
     /* storage can be blocked: the choice just is not remembered */
+  }
+}
+function rememberedRunAs(): RunAs | null {
+  try {
+    return parseRunAs(localStorage.getItem(REMEMBER_RUN_KEY));
+  } catch {
+    return null;
+  }
+}
+function rememberRunAs(mode: RunAs): void {
+  try {
+    localStorage.setItem(REMEMBER_RUN_KEY, mode);
+  } catch {
+    /* a convenience only */
   }
 }
 
@@ -107,6 +127,8 @@ export interface NewAgentPageProps {
   api?: NewAgentApi;
   /** The chat add-ons (install state and install). */
   addonApi?: AcpAddonApi;
+  /** The models each agent can start on. */
+  modelApi?: ModelOptionsApi;
   /** Opens the agent's own terminal pane in `folder`, where the person signs in. Absent: the card only explains. */
   onSignIn?: (agentId: string, folder?: string) => Promise<unknown> | void;
   /** Hand the request to whoever starts agents. May resolve later; the page is busy until then. */
@@ -118,7 +140,7 @@ export interface NewAgentPageProps {
 
 type Menu = 'plus' | 'folder' | 'agent' | null;
 
-export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, onSignIn, onStart, onOpenPane, onSetUp }: NewAgentPageProps) {
+export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, onSignIn, onStart, onOpenPane, onSetUp }: NewAgentPageProps) {
   const [prompt, setPrompt] = useState('');
   const [exampleIdx, setExampleIdx] = useState(0);
   const [menu, setMenu] = useState<Menu>(null);
@@ -131,10 +153,12 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const [defaultFolder, setDefaultFolder] = useState<string | null>(null);
   const [chosenFolder, setChosenFolder] = useState<ProjectChoice | null>(() => (project ? { path: project.path, name: project.name } : null));
   const [lastProject] = useState<ProjectChoice | null>(readLastProject);
+  // The remembered project turned out to be gone (its folder is missing): it is skipped quietly.
+  const [goneFolder, setGoneFolder] = useState<string | null>(null);
   const saved = useSidebarProjects();
   const [looked, setLooked] = useState<{ path: string; state: RecentProject['state'] } | null>(null);
   const [pickKey, setPickKey] = useState<string | null>(null);
-  const [runPick, setRunPick] = useState<RunAs | null>(null);
+  const [runPick, setRunPick] = useState<RunAs | null>(rememberedRunAs);
   // The agent whose chat start said "sign in first"; the card shows until the person says they are signed in.
   const [signInFor, setSignInFor] = useState<string | null>(null);
   const addons = useAcpAddons(addonApi);
@@ -213,13 +237,18 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   }, [project?.path]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ----- the folder: the person's pick, else the project passed in (same thing), else the last-used project, else the selected pane's project, else the newest recent one, else the default -----
-  const base: ProjectChoice | null = chosenFolder ?? lastProject ?? projectOfCwd(selectedCwd) ?? lastRealFolder(recent ?? []) ?? projectOfCwd(defaultFolder);
+  const usableLast = lastProject && lastProject.path !== goneFolder ? lastProject : null;
+  const base: ProjectChoice | null = chosenFolder ?? usableLast ?? projectOfCwd(selectedCwd) ?? lastRealFolder(recent ?? []) ?? projectOfCwd(defaultFolder);
   useEffect(() => {
     if (!base || base.state) return undefined;
     let live = true;
     api
       .gitState(base.path)
-      .then((state) => live && setLooked({ path: base.path, state }))
+      .then((state) => {
+        if (!live) return;
+        setLooked({ path: base.path, state });
+        if (state === 'missing') setGoneFolder(base.path);
+      })
       .catch(() => undefined);
     return () => {
       live = false;
@@ -233,12 +262,24 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
 
   // ----- the agent -----
   const choices = useMemo(() => agentChoices(agents, accounts), [agents, accounts]);
+  // The remembered agent and sign-in (the key holds both). A key that is gone, or not ready, falls back to the first ready one.
   const choice: AgentChoice | null = (pickKey ? choices.find((c) => c.key === pickKey) : undefined) ?? defaultChoice(choices, remembered());
   const canChat = chatAvailable(lanes, choice?.agentId ?? null);
-  const runAs: RunAs = canChat ? (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null)) : 'terminal';
+  // Chat is the default when the agent's chat add-on is in place; otherwise the page starts a terminal.
+  const chatAddon = addonFor(addons.byAgent, choice?.agentId);
+  const runAs: RunAs = canChat ? (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null, !needsInstall(chatAddon))) : 'terminal';
   const isolated = copyDefault(storedCopy) && copiesOk && runAs === 'terminal';
 
-  const addon = runAs === 'chat' ? addonFor(addons.byAgent, choice?.agentId) : undefined;
+  // ----- the model: remembered per agent and sign-in (this page only; helper defaults live in Settings) -----
+  const modelList = useModelOptions(choice?.agentId ?? null, modelApi);
+  const modelSlot = choice ? `${choice.agentId}|${choice.accountId ?? ''}` : '';
+  const [modelPick, setModelPick] = useState<{ slot: string; value: string } | null>(null);
+  const storedModel = choice ? readPickedModel(choice.agentId, choice.accountId) : '';
+  const model = modelPick?.slot === modelSlot ? modelPick.value : usableModel(storedModel, modelList.status === 'ready' ? modelList.options : null);
+  // A chat sets its model once it starts, so it always can. A terminal pane needs the agent's own launch flag.
+  const showModel = !!choice && (runAs === 'chat' || (modelList.status === 'ready' && modelList.options.terminal));
+
+  const addon = runAs === 'chat' ? chatAddon : undefined;
   const installFirst = needsInstall(addon);
   const block = sendBlock({ prompt, choice, runAs, folder: folder?.path ?? null, busy }) ?? (installFirst ? 'Install the chat add-on first.' : null);
   const signInCard = runAs === 'chat' && choice && signInFor !== null && signInFor.toLowerCase() === choice.agentId.toLowerCase();
@@ -257,6 +298,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
         isolated,
         runAs,
         prompt: prompt.trim(),
+        ...(showModel && model ? { model } : {}),
       });
       // Chat could not start for a reason a card answers: the add-on is gone, or a sign-in is needed.
       if (isStartBlock(result)) {
@@ -489,7 +531,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                     title={c.state === 'ready' ? undefined : c.hint}
                     onClick={() => {
                       setPickKey(c.key);
-                      setRunPick(null);
+                      remember(c.key);
                       setMenu(null);
                       area.current?.focus();
                     }}
@@ -528,12 +570,28 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                       role="radio"
                       aria-checked={runAs === mode}
                       className="ck-na-seg-btn"
-                      onClick={() => setRunPick(mode)}
+                      onClick={() => {
+                        setRunPick(mode);
+                        rememberRunAs(mode);
+                      }}
                     >
                       {mode === 'terminal' ? 'Terminal' : 'Chat'}
                     </button>
                   ))}
                 </div>
+              )}
+
+              {showModel && choice && (
+                <ModelPicker
+                  testId="na-model"
+                  label={`Model for ${choice.label}`}
+                  state={modelList}
+                  value={model}
+                  onChange={(next) => {
+                    setModelPick({ slot: modelSlot, value: next });
+                    writePickedModel(choice.agentId, choice.accountId, next);
+                  }}
+                />
               )}
 
               <span className="ck-na-spacer" />

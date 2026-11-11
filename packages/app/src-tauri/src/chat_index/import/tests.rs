@@ -499,3 +499,98 @@ fn an_imported_chat_is_dated_by_its_own_last_item_and_the_file_time_only_without
     let (bare_row, _) = bare.finish(false, 5);
     assert_eq!(bare_row.updated_ms, NOW_MS, "a chat with no readable time keeps the file's time");
 }
+
+fn page_query(from_ms: Option<i64>, offset: usize) -> super::BrowseQuery {
+    super::BrowseQuery { agent: "agent-a".into(), from_ms, to_ms: None, offset, limit: 10 }
+}
+
+#[test]
+fn browse_twice_reads_each_chat_once() {
+    let (index, _) = memory_index();
+    let fake = store_of(25, "rows");
+    let (importer, _) = importer(vec![source("agent-a", false, fake)], &index);
+    let first = importer.browse(&env(), &page_query(None, 0)).unwrap();
+    assert_eq!(first.rows.len(), 10);
+    assert_eq!(fake.read_count(), 10);
+    let second = importer.browse(&env(), &page_query(None, 0)).unwrap();
+    assert_eq!(second.rows, first.rows);
+    assert_eq!(fake.read_count(), 10, "the second look read nothing");
+}
+
+#[test]
+fn a_changed_chat_is_read_again() {
+    let (index, _) = memory_index();
+    let fake = store_of(12, "rows");
+    let (importer, _) = importer(vec![source("agent-a", false, fake)], &index);
+    importer.browse(&env(), &page_query(None, 0)).unwrap();
+    assert_eq!(fake.read_count(), 10);
+    // The chat is rewritten: a new stamp and new words. A different range asks the store for a fresh listing.
+    fake.set_stamp("sess-0003", "3:999");
+    fake.items.lock().insert("sess-0003".into(), crate::chat_index::import::fakes::conversation("rewritten"));
+    let page = importer.browse(&env(), &page_query(Some(0), 0)).unwrap();
+    assert_eq!(fake.read_count(), 11, "only the changed chat was read again");
+    let row = page.rows.iter().find(|row| row.session == "sess-0003").unwrap();
+    assert_eq!(row.title, "question about rewritten");
+}
+
+#[test]
+fn a_chat_that_failed_is_tried_again_and_not_remembered() {
+    let (index, _) = memory_index();
+    let fake = store_of(3, "rows");
+    fake.errors.lock().insert("sess-0002".into(), ReadError::Unreadable);
+    let (importer, _) = importer(vec![source("agent-a", false, fake)], &index);
+    let page = importer.browse(&env(), &page_query(None, 0)).unwrap();
+    assert!(page.rows.iter().find(|row| row.session == "sess-0002").unwrap().error.is_some());
+    fake.errors.lock().clear();
+    let page = importer.browse(&env(), &page_query(None, 0)).unwrap();
+    assert!(page.rows.iter().all(|row| row.error.is_none()), "the chat opens now");
+}
+
+#[test]
+fn page_order_is_unchanged_with_threads() {
+    let (index, _) = memory_index();
+    let fake = FakeHistory::new();
+    for n in 1..=40 {
+        fake.add(&format!("sess-{n:04}"), &format!("{n}:100"), NOW_MS - n as i64 * 1000, &format!("words{n}"));
+    }
+    // Every fifth chat has nothing in it, and the early chats are the slowest to read, so threads finish out of order.
+    for n in (5..=40).step_by(5) {
+        fake.items.lock().insert(format!("sess-{n:04}"), vec![ChatItem::Session { id: "0:0".into(), at: None, model: None, cli_version: None }]);
+    }
+    *fake.on_read.lock() = Some(Box::new(|session: &str| {
+        let n: u64 = session[5..].parse().unwrap();
+        std::thread::sleep(Duration::from_millis((12u64.saturating_sub(n)) * 3));
+    }));
+    let fake = fake.leak();
+    let (importer, _) = importer(vec![source("agent-a", false, fake)], &index);
+    let mut seen: Vec<String> = Vec::new();
+    let mut offset = 0;
+    loop {
+        let page = importer.browse(&env(), &page_query(None, offset)).unwrap();
+        seen.extend(page.rows.iter().map(|row| row.session.clone()));
+        assert!(page.rows.len() <= 10);
+        offset = page.next;
+        if !page.more {
+            break;
+        }
+    }
+    let expected: Vec<String> = (1..=40).filter(|n| n % 5 != 0).map(|n| format!("sess-{n:04}")).collect();
+    assert_eq!(seen, expected, "newest first, empty chats passed over, nothing twice, nothing lost");
+}
+
+#[test]
+fn brought_is_fresh_after_import() {
+    let (index, _) = memory_index();
+    let fake = store_of(4, "rows");
+    let (importer, _) = importer(vec![source("agent-a", false, fake)], &index);
+    let before = importer.browse(&env(), &page_query(None, 0)).unwrap();
+    assert!(before.rows.iter().all(|row| !row.brought));
+    importer.start(ImportRequest { sessions: Some(vec!["sess-0002".into()]), ..request(&["agent-a"]) }, env()).unwrap();
+    finished(&importer);
+    let reads = fake.read_count();
+    let after = importer.browse(&env(), &page_query(None, 0)).unwrap();
+    for row in &after.rows {
+        assert_eq!(row.brought, row.session == "sess-0002", "{}", row.session);
+    }
+    assert!(fake.read_count() <= reads, "the page used the rows it had");
+}

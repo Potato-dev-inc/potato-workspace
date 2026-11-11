@@ -5,8 +5,10 @@
 //! - `mod` (here): the `ChatAttachment` record, `prepare`, `save_pasted`, `preview`.
 //! - `blocks`: the ACP prompt blocks an attachment becomes, and file URIs.
 //! - `search`: the project file picker behind `@`.
+//! - `clipboard`: the files copied in Explorer (Ctrl+V in the message box).
 
 pub mod blocks;
+pub mod clipboard;
 pub mod search;
 
 #[cfg(test)]

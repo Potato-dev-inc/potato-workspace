@@ -246,6 +246,7 @@ pub(in crate::agent_runs) fn build_followup_request(
         headless_forced: false,
         lane_note: None,
         kept_open_by_setting: false,
+        model_from_helper_default: false,
         quick: false,
         // The guard is carried by the run's worker record, not by this request.
         guard_env: None,

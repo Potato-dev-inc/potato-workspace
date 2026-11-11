@@ -99,6 +99,19 @@ pub fn in_use(chat: &AcpChat) -> (Option<String>, Option<String>) {
     (current(MODEL_CATEGORY, MODEL_IDS), current(REASONING_CATEGORY, REASONING_IDS))
 }
 
+/// The value the agent offers for `requested` in its model setting, when it offers one. Nothing is sent.
+pub fn offered_model(chat: &AcpChat, requested: &str) -> Option<String> {
+    let options = chat.session().snapshot().config_options;
+    let group = group(&options, MODEL_CATEGORY, MODEL_IDS)?;
+    select(group, requested).ok().map(|(value, _)| value)
+}
+
+/// Whether `option_id` is the agent's model setting.
+pub fn is_model_option(chat: &AcpChat, option_id: &str) -> bool {
+    let options = chat.session().snapshot().config_options;
+    group(&options, MODEL_CATEGORY, MODEL_IDS).and_then(|g| g.get("id")).and_then(Value::as_str) == Some(option_id)
+}
+
 fn nonempty(value: Option<&str>) -> Option<String> {
     value.map(str::trim).filter(|v| !v.is_empty()).map(str::to_string)
 }

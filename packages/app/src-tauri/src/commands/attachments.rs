@@ -47,3 +47,9 @@ pub async fn project_files_search(state: State<'_, AppState>, pane_id: String, q
     let cwd = pane_cwd(&state, &pane_id);
     tauri::async_runtime::spawn_blocking(move || attach::search::search(&cwd, &query, limit)).await.map_err(failed)
 }
+
+/// The paths of files copied in Explorer (Ctrl+C), for Ctrl+V in the message box. Empty when there are none, or outside Windows.
+#[tauri::command]
+pub async fn clipboard_file_paths() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(attach::clipboard::clipboard_file_paths).await.map_err(failed)
+}

@@ -208,6 +208,11 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
           ))}
         </select>
       </label>
+      {state.drivers.find((d) => d.agent_id === agentId)?.account_note && (
+        <p className="lend-note" role="note">
+          {state.drivers.find((d) => d.agent_id === agentId)?.account_note}
+        </p>
+      )}
       <DurationField secs={secs} onChange={setSecs} forOther={forOther} />
       <label className="lend-field">
         <span>Why (optional)</span>

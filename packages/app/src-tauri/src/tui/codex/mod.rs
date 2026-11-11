@@ -113,6 +113,11 @@ impl TuiProfile for Codex {
         crate::usage::source::from_toml(include_str!("usage.toml"))
     }
 
+    /// Lend through my PC: the Responses API with an OpenAI API key behind a local shim (`lend_proxy.toml`).
+    fn lend_proxy_toml(&self) -> Option<&'static str> {
+        Some(include_str!("lend_proxy.toml"))
+    }
+
     /// `CODEX_HOME` is the documented directory for this CLI's config and login.
     fn account_scheme(&self) -> Option<AccountScheme> {
         Some(AccountScheme {

@@ -13,6 +13,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } 
 import { createPortal } from "react-dom";
 import { formatCode, parsePastedInvite } from "../../../lib/team-invite";
 import {
+  pingText,
   teamApi,
   type InviteView,
   type MemberView,
@@ -24,6 +25,7 @@ import {
 import { ConfirmSheet, Switch } from "../controls";
 import { Btn, FieldInput, Note } from "../settings-ui";
 import { ExternalLink, RelaySheet } from "./RelaySheet";
+import { useTeamPings } from "./useTeamPings";
 
 const errText = (err: unknown): string =>
   err instanceof Error ? err.message : String(err);
@@ -222,6 +224,9 @@ export function TeamPage({
   const [optionsOpen, setOptionsOpen] = useState(false);
   const projectsEdited = useRef(false);
   const lend = useLend(lendClient);
+  // Pings need a relay team (a shared folder has no mailbox to time) and a backend that can ping.
+  const canPing = !!view && view.enabled && view.transport === "relay" && !!api.ping;
+  const pings = useTeamPings(api, canPing);
 
   const take = (v: TeamConfigView) => {
     setView(v);
@@ -444,7 +449,15 @@ export function TeamPage({
         )}
 
         <section className="tp-block" aria-label="People">
-          <h4 className="tp-h4">People</h4>
+          <div className="st-team-people-head">
+            <h4 className="tp-h4">People</h4>
+            {canPing && (
+              <Btn small disabled={pings.busy} onClick={pings.ping}>
+                {pings.busy ? "Pinging" : "Ping"}
+              </Btn>
+            )}
+          </div>
+          {canPing && pings.error && <Note>{pings.error}</Note>}
           <Suspense fallback={null}>
             <RequestUsage api={lendClient} team={api} lend={lend} variant="settings" />
           </Suspense>
@@ -459,6 +472,22 @@ export function TeamPage({
                       {m.me && <span className="st-team-you"> (you)</span>}
                     </span>
                     {gh && <small>{gh}</small>}
+                    {canPing &&
+                      (m.deviceList ?? [])
+                        .filter((d) => !d.current && pings.byDevice[d.id])
+                        .map((d) => {
+                          const p = pings.byDevice[d.id];
+                          return (
+                            <small
+                              key={d.id}
+                              className="st-team-ping"
+                              data-ok={p.ok ? "true" : "false"}
+                              title={p.ok ? undefined : (p.message ?? undefined)}
+                            >
+                              {(m.deviceList ?? []).length > 1 ? `${m.name}'s ${d.name}` : m.name} · {pingText(p)}
+                            </small>
+                          );
+                        })}
                     <Suspense fallback={null}>
                       <MemberLends memberId={m.id} lend={lend} api={lendClient} />
                     </Suspense>

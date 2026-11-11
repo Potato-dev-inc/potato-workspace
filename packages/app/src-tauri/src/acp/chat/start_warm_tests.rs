@@ -77,7 +77,7 @@ impl Rig {
     }
 
     fn request(&self) -> StartRequest {
-        StartRequest { agent_id: "fake".into(), folder: self.dir.clone(), explicit: true, account: None }
+        StartRequest { agent_id: "fake".into(), folder: self.dir.clone(), explicit: true, account: None, ..Default::default() }
     }
 
     /// `start()` to the chat being ready, then a tiny prompt to its answer. Returns the chat and both times.

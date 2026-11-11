@@ -25,6 +25,8 @@ struct Hub {
     nodes: HashMap<NodeId, Slot>,
     paths: HashMap<(NodeId, NodeId), watch::Sender<PathKind>>,
     default_relayed: bool,
+    /// What a relay-enabled node reports as its home relay (the real network learns it from iroh).
+    home_relay: Option<String>,
     binds: usize,
     /// Pairs whose datagrams are silently dropped (a pulled network cable).
     holes: std::collections::HashSet<(NodeId, NodeId)>,
@@ -64,6 +66,11 @@ impl MemoryNet {
     /// The spec a node is currently bound with.
     pub fn spec_of(&self, id: &NodeId) -> Option<BindSpec> {
         self.hub().nodes.get(id).map(|s| s.spec.clone())
+    }
+
+    /// Relay-enabled nodes report this as their home relay from now on (`None`: they have none).
+    pub fn set_home_relay(&self, url: Option<&str>) {
+        self.hub().home_relay = url.map(str::to_string);
     }
 
     /// New pairs of nodes start relayed instead of direct.
@@ -163,6 +170,11 @@ impl Transport for MemTransport {
     async fn close(&self) {
         // Dropping the slot drops the sender: `accept` returns None.
         self.net.hub().nodes.remove(&self.id);
+    }
+
+    fn home_relay(&self) -> Option<String> {
+        let hub = self.net.hub();
+        hub.nodes.get(&self.id).filter(|s| s.spec.relays).and_then(|_| hub.home_relay.clone())
     }
 }
 

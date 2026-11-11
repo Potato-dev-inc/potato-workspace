@@ -491,6 +491,7 @@ impl Conversations {
             let store = self.0.accounts.lock().clone();
             if let Ok(env) = super::account::launch_env(&store, &cfg.id, &account) {
                 super::config::with_account_env(&mut cfg, &env);
+                super::account::apply_lend_extras(&mut cfg, &account);
             }
         }
         let session = AcpSession::new(Arc::new(cfg), self.0.host.clone(), SessionParams { key: id.to_string(), cwd: cwd.to_path_buf(), resume_session_id: resume });

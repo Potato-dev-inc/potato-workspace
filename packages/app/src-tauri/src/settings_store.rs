@@ -87,6 +87,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "handoff_fixed_notes",
     "lend_enabled",
     "keep_awake_while_working",
+    "helper_default_models",
 ];
 
 pub fn default_public_settings() -> Value {
@@ -133,6 +134,8 @@ pub fn default_public_settings() -> Value {
         "lend_enabled": false,
         // Keep the PC awake (the screen may still turn off) while an agent works, so locking with Win+L does not stop it.
         "keep_awake_while_working": true,
+        // Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none.
+        "helper_default_models": {},
     })
 }
 
@@ -400,5 +403,25 @@ mod spaces_labs_tests {
     fn spaces_enabled_is_patchable_and_off_by_default() {
         assert!(PATCHABLE_KEYS.contains(&"spaces_enabled"));
         assert_eq!(default_public_settings()["spaces_enabled"], serde_json::json!(false));
+    }
+}
+
+#[cfg(test)]
+mod helper_default_models_tests {
+    use super::{default_public_settings, merge_public_settings, PATCHABLE_KEYS};
+    use serde_json::json;
+
+    #[test]
+    fn helper_default_models_start_empty_and_old_settings_load_with_that() {
+        assert!(PATCHABLE_KEYS.contains(&"helper_default_models"));
+        assert_eq!(default_public_settings()["helper_default_models"], json!({}));
+        let merged = merge_public_settings(&json!({ "orchestrator_backend": "api" }), &json!({}));
+        assert_eq!(merged["helper_default_models"], json!({}));
+    }
+
+    #[test]
+    fn a_saved_map_is_kept() {
+        let merged = merge_public_settings(&json!({}), &json!({ "helper_default_models": { "claude": "sonnet" } }));
+        assert_eq!(merged["helper_default_models"]["claude"], json!("sonnet"));
     }
 }

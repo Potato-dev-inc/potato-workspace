@@ -66,6 +66,9 @@ pub struct RunReceipt {
     /// Present when "Helper agents" made this run a background one the agent did not ask for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_forced: Option<String>,
+    /// Present when `requested_model` is the person's helper default for this agent, not something the request named.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_note: Option<String>,
     /// `terminal` or `headless` (see `lane_reason`); absent for runs started without the `/agents/run` route.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lane_used: Option<String>,
@@ -265,6 +268,7 @@ pub(super) fn build_receipt(
         run_mode: snapshot.worker.run_mode.clone(),
         headless_ignored: snapshot.worker.headless_ignored.clone(),
         headless_forced: snapshot.worker.headless_forced.clone(),
+        model_note: snapshot.worker.model_note.clone(),
         lane_used: lane.0,
         lane_reason: lane.1,
         lane_fallback: lane.2,

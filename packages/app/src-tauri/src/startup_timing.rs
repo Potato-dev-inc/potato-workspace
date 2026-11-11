@@ -48,6 +48,19 @@ pub fn mark(key: &str, stage: &str) -> u64 {
     elapsed
 }
 
+/// Moves the stages recorded under `from` onto `to` (a pane id once it exists), keeping their elapsed times and the
+/// clock they started on. A key with no stages does nothing.
+#[allow(dead_code)]
+pub fn carry(from: &str, to: &str) {
+    let mut tracks = TRACKS.lock();
+    if let Some(track) = tracks.remove(from) {
+        if tracks.len() >= MAX_TRACKS && !tracks.contains_key(to) {
+            tracks.clear();
+        }
+        tracks.insert(to.to_string(), track);
+    }
+}
+
 /// Stages recorded so far, in order.
 #[allow(dead_code)]
 pub fn stages(key: &str) -> Vec<(String, u64)> {

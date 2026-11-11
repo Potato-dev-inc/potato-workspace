@@ -14,7 +14,7 @@ import type { CockpitApi } from '../../hooks/useCockpit';
 import { deriveNeedsYou } from '../../lib/attention';
 import type { ShipApi } from '../../lib/ship-api';
 import { SettingsPanel, type SettingsApi } from '../SettingsPanel';
-import { BASE_SETTINGS, buttonByText, click, settle, type as typeInto } from '../settings/test-utils';
+import { BASE_SETTINGS, buttonByText, click, pickOption, settle, type as typeInto } from '../settings/test-utils';
 import { TeamPage } from '../settings/blocks/TeamPage';
 import { Inbox } from '../cockpit/Inbox';
 import { PaneView } from '../cockpit/PaneView';
@@ -104,10 +104,15 @@ describe('Request usage is reachable from Teams', () => {
     await settle(4);
     const sheet = document.querySelector<HTMLElement>('.lend-sheet')!;
     expect([...sheet.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['My PCs', 'Teammates']);
-    // Codex is only a line saying it is coming; Claude is the one to ask for.
+    // Claude, Codex and Gemini can all be asked for; only Codex and Gemini say what is not lendable yet.
     const agents = [...sheet.querySelectorAll<HTMLOptionElement>('select[aria-label="Agent"] option')];
-    expect(agents.map((o) => o.textContent)).toEqual(['Claude · Lab', 'Codex: coming soon']);
-    expect(agents[1].disabled).toBe(true);
+    expect(agents.map((o) => o.textContent)).toEqual(['Claude · Lab', 'Codex · Lab', 'Gemini CLI · Lab']);
+    expect(agents.some((o) => o.disabled)).toBe(false);
+    expect(sheet.querySelector('[role="note"]')).toBeNull();
+    await pickOption(sheet.querySelector('select[aria-label="Agent"]')!, 'codex');
+    expect(sheet.querySelector('[role="note"]')!.textContent).toBe('Codex signed in with ChatGPT is not supported yet. Only an OpenAI API key can be lent.');
+    await pickOption(sheet.querySelector('select[aria-label="Agent"]')!, 'claude');
+    expect(sheet.querySelector('[role="note"]')).toBeNull();
     // Ask works: the command goes out with the member, device, agent and length.
     await click(buttonByText(sheet, 'Ask'));
     await settle(4);
@@ -215,10 +220,10 @@ describe('Settings > Lend', () => {
     const nav = [...host.querySelectorAll('.st-nav .st-nav-row')].find((b) => b.textContent === 'Lend') as HTMLButtonElement;
     expect(nav.querySelector('svg')).not.toBeNull();
     await click(nav);
-    await settle(6);
-    // The page itself is loaded when it opens.
-    await act(async () => void (await new Promise((r) => setTimeout(r, 100))));
-    await settle(4);
+    // The page loads its state when it opens: poll for what the test needs, no fixed wait.
+    for (let i = 0; i < 200 && !(main()?.querySelector('h1')?.textContent === 'Lend' && main().querySelector('section[aria-label="Active lends"]') && main().querySelector('[data-row="lend-page"]')); i++) {
+      await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
+    }
     expect(main().querySelector('h1')!.textContent).toBe('Lend');
     for (const label of ['Lend profiles', 'Active lends']) {
       expect(main().querySelector(`section[aria-label="${label}"]`), label).not.toBeNull();

@@ -6,38 +6,64 @@ pub trait Meter: Send {
     fn finish(&mut self) -> (u64, u64);
 }
 
+/// Where a protocol shape keeps its token counts: the JSON objects (pointers, tried in order) and the field names
+/// inside them. Output fields are added together (Gemini counts thinking tokens apart).
+#[derive(Clone, Copy)]
+struct Usage {
+    pointers: &'static [&'static str],
+    input: &'static str,
+    outputs: &'static [&'static str],
+}
+
+const ANTHROPIC: Usage = Usage { pointers: &["/message/usage", "/usage"], input: "input_tokens", outputs: &["output_tokens"] };
+const OPENAI_RESPONSES: Usage = Usage { pointers: &["/response/usage", "/usage"], input: "input_tokens", outputs: &["output_tokens"] };
+const GEMINI: Usage = Usage { pointers: &["/usageMetadata"], input: "promptTokenCount", outputs: &["candidatesTokenCount", "thoughtsTokenCount"] };
+
 /// The meter for a protocol shape and reply content type, or none when the shape is unknown.
 pub fn for_shape(shape: &str, content_type: &str) -> Option<Box<dyn Meter>> {
-    match shape {
-        "anthropic_messages_sse" => {
-            let ct = content_type.to_ascii_lowercase();
-            if ct.contains("text/event-stream") {
-                Some(Box::new(SseMeter::default()))
-            } else if ct.contains("json") {
-                Some(Box::new(JsonMeter::default()))
-            } else {
-                None
-            }
-        }
-        _ => None,
+    let usage = match shape {
+        "anthropic_messages_sse" => ANTHROPIC,
+        "openai_responses_sse" => OPENAI_RESPONSES,
+        "gemini_generate_content" => GEMINI,
+        _ => return None,
+    };
+    let ct = content_type.to_ascii_lowercase();
+    if ct.contains("text/event-stream") {
+        Some(Box::new(SseMeter { usage, ..SseMeter::default() }))
+    } else if ct.contains("json") {
+        Some(Box::new(JsonMeter { usage, ..JsonMeter::default() }))
+    } else {
+        None
     }
 }
 
-fn read_usage(usage: &serde_json::Value, input: &mut u64, output: &mut u64) {
-    if let Some(n) = usage.get("input_tokens").and_then(|v| v.as_u64()) {
-        *input = (*input).max(n);
+impl Default for Usage {
+    fn default() -> Self {
+        ANTHROPIC
     }
-    if let Some(n) = usage.get("output_tokens").and_then(|v| v.as_u64()) {
-        *output = (*output).max(n);
+}
+
+/// Reads one reply object: the largest count seen so far is kept (a stream repeats a growing total).
+fn read_object(value: &serde_json::Value, usage: &Usage, input: &mut u64, output: &mut u64) {
+    for pointer in usage.pointers {
+        let Some(u) = value.pointer(pointer) else { continue };
+        if let Some(n) = u.get(usage.input).and_then(|v| v.as_u64()) {
+            *input = (*input).max(n);
+        }
+        let out: u64 = usage.outputs.iter().filter_map(|k| u.get(*k).and_then(|v| v.as_u64())).sum();
+        if usage.outputs.iter().any(|k| u.get(*k).is_some()) {
+            *output = (*output).max(out);
+        }
     }
 }
 
 /// The most one line (or one buffered JSON reply) may take.
 const MAX_LINE: usize = 1024 * 1024;
 
-/// Server-sent events: `data:` lines carry JSON with `usage` at `.message.usage` or `.usage`.
+/// Server-sent events: `data:` lines carry JSON with the usage object where the shape keeps it.
 #[derive(Default)]
 struct SseMeter {
+    usage: Usage,
     line: Vec<u8>,
     input: u64,
     output: u64,
@@ -49,12 +75,7 @@ impl SseMeter {
         let line = line.strip_suffix(b"\r").unwrap_or(&line);
         let Some(rest) = line.strip_prefix(b"data:") else { return };
         let Ok(value) = serde_json::from_slice::<serde_json::Value>(rest.trim_ascii()) else { return };
-        if let Some(u) = value.pointer("/message/usage") {
-            read_usage(u, &mut self.input, &mut self.output);
-        }
-        if let Some(u) = value.get("usage") {
-            read_usage(u, &mut self.input, &mut self.output);
-        }
+        read_object(&value, &self.usage, &mut self.input, &mut self.output);
     }
 }
 
@@ -80,6 +101,7 @@ impl Meter for SseMeter {
 /// A non-streaming reply: buffer it (up to 1 MiB) and read `.usage` at the end.
 #[derive(Default)]
 struct JsonMeter {
+    usage: Usage,
     buf: Vec<u8>,
 }
 
@@ -92,8 +114,10 @@ impl Meter for JsonMeter {
     fn finish(&mut self) -> (u64, u64) {
         let (mut input, mut output) = (0, 0);
         if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&self.buf) {
-            if let Some(u) = value.get("usage") {
-                read_usage(u, &mut input, &mut output);
+            // A streamed JSON array (one object per chunk) is read element by element.
+            match value.as_array() {
+                Some(items) => items.iter().for_each(|v| read_object(v, &self.usage, &mut input, &mut output)),
+                None => read_object(&value, &self.usage, &mut input, &mut output),
             }
         }
         (input, output)
@@ -160,6 +184,44 @@ mod tests {
         let mut m = for_shape("anthropic_messages_sse", "application/json").unwrap();
         m.feed(b"<html>");
         assert_eq!(m.finish(), (0, 0));
+    }
+
+    #[test]
+    fn openai_responses_usage_comes_from_the_completed_event() {
+        let text = "event: response.created
+data: {\"type\":\"response.created\",\"response\":{\"usage\":null}}
+
+event: response.completed
+data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":31,\"output_tokens\":7}}}
+
+";
+        let mut m = for_shape("openai_responses_sse", "text/event-stream").unwrap();
+        for part in text.as_bytes().chunks(5) {
+            m.feed(part);
+        }
+        assert_eq!(m.finish(), (31, 7));
+        let mut m = for_shape("openai_responses_sse", "application/json").unwrap();
+        m.feed(b"{\"object\":\"response\",\"usage\":{\"input_tokens\":4,\"output_tokens\":2}}");
+        assert_eq!(m.finish(), (4, 2));
+    }
+
+    #[test]
+    fn gemini_usage_keeps_the_largest_and_adds_thinking_tokens() {
+        let mut m = for_shape("gemini_generate_content", "text/event-stream").unwrap();
+        m.feed(b"data: {\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":3}}
+
+");
+        m.feed(b"data: {\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":9,\"thoughtsTokenCount\":4}}
+
+");
+        assert_eq!(m.finish(), (12, 13));
+        // A streamed JSON array (no alt=sse) and a single object.
+        let mut m = for_shape("gemini_generate_content", "application/json; charset=UTF-8").unwrap();
+        m.feed(b"[{\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":1}},{\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":6}}]");
+        assert_eq!(m.finish(), (5, 6));
+        let mut m = for_shape("gemini_generate_content", "application/json").unwrap();
+        m.feed(b"{\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":8}}");
+        assert_eq!(m.finish(), (2, 8));
     }
 
     #[test]

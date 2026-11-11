@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.17
+
+This is a beta.
+
+- New agents start as a chat by default (a terminal when the agent has no chat). The New agent page remembers your last choices: chat or terminal, agent, sign-in, model and project.
+- The New agent page has a model picker. Settings has a default model for helpers, per agent. Shells like PowerShell are no longer listed there.
+- A chat picks its model in this order: the one asked for, the helper default (helpers only), your setting, your last pick, then the agent's own default.
+- Starting a chat shows a "Starting" view at once instead of waiting with nothing on screen.
+- Copy a file in File Explorer and press Ctrl+V in a chat: it is attached, like the attach button. Several files and folders work too.
+- A usage bar along the bottom shows each sign-in's usage, with agent logos.
+- Lend through my PC (Labs): lend your Claude sign-in or API key, or a Codex or Gemini API key, to a teammate. The login stays on your PC. Codex signed in with ChatGPT says "not supported yet".
+- Lending works across countries and different internet: it uses a relay when a direct link fails, reconnects by itself after a drop or a restart of the lending PC, and waits longer on slow links. Test link checks a lend end to end and says what works. Team shows pings for each teammate.
+- The PC stays awake while you lend and while agents work.
+- Helpers start as chats by default, and chats start faster with warm sessions.
+- Hand off does a Quick handoff or a handoff to a new agent.
+- Bring my chats reads OpenCode 2 chats, opens old chats much faster, and the page loads faster when you open it again.
+- OpenCode 2 runs in the chat. Its terminal starts without the flags 2.x no longer has, and a billing or credit problem is shown in plain words.
+- MCP: long waits in one call, discard closes the pane first, closed helpers can be reopened, and cleanup tools are in the default set.
+- Fix: a team relay no longer answers a reconnecting device with "too many requests".
+
 ## 1.0.16
 
 This is a beta.

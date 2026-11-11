@@ -451,6 +451,9 @@ pub struct WorkerPersist {
     /// "Keep helpers open when they finish" kept this run's pane open although the agent did not ask for that.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kept_open_note: Option<String>,
+    /// The model came from the person's "Default model for helpers" (Settings > Agents > Helper agents), not from the request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_note: Option<String>,
     /// Programs pre-authorised for allow-once on Cursor shell prompts (see approval_policy).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_commands: Vec<String>,

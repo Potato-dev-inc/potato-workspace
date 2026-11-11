@@ -7,6 +7,7 @@
 
 mod env;
 mod file;
+mod file_paths;
 mod file_head;
 mod file_walk;
 mod ids;

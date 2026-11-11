@@ -642,6 +642,11 @@ impl AcpSession {
         let t2 = Instant::now();
         let init = conn.request("initialize", handshake::initialize_params("potato-workspace", crate::app_lifecycle::app_version()), cfg.timeouts.request())?;
         let caps = handshake::parse_initialize(&init)?;
+        // A borrowed sign-in has no login of its own, only a placeholder key in the environment: the adapter is told to
+        // use that method before it opens a session.
+        if let Some(method) = &cfg.authenticate_with {
+            conn.request("authenticate", json!({ "methodId": method }), cfg.timeouts.request())?;
+        }
         self.with_core(|core, _| core.caps = Some(caps.clone()));
         let initialize_ms = t2.elapsed().as_millis() as u64;
 

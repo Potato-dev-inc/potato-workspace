@@ -36,7 +36,12 @@ function cockpit() {
   const panes = [{ info, status: 'idle' }];
   const select = vi.fn();
   const newAgent = vi.fn(async (_agent: string, ..._rest: unknown[]) => undefined);
+  const beginChatStart = vi.fn();
+  const endChatStart = vi.fn();
   const c = {
+    chatStarting: null,
+    beginChatStart,
+    endChatStart,
     registry: { paneList: panes, panes: new Map([['p1', panes[0]]]), initialReady: true },
     names: new Map([['p1', 'Codex']]),
     asked: { questions: [] },
@@ -56,7 +61,7 @@ function cockpit() {
     openSettings: vi.fn(async () => {}),
     bridgeLine: '',
   } as unknown as CockpitApi;
-  return { c, select, newAgent };
+  return { c, select, newAgent, beginChatStart, endChatStart };
 }
 
 const ship = { recent: vi.fn().mockResolvedValue([]), gitState: vi.fn().mockResolvedValue('repo') } as unknown as ShipApi;
@@ -126,5 +131,37 @@ describe('Sidebar "+" menu with chat sessions', () => {
     const fallback = [...host.querySelectorAll<HTMLButtonElement>('[data-testid="chat-start-failed"] button')].find((b) => b.textContent === 'Start in terminal')!;
     await act(async () => fallback.click());
     expect(newAgent.mock.calls[0][0]).toBe('codex');
+  });
+});
+
+describe('Sidebar chat start: the starting skeleton is announced at once', () => {
+  it('begins the skeleton before the start resolves, then ends it and selects the chat on success', async () => {
+    const { c, select, beginChatStart, endChatStart } = cockpit();
+    let finish: (v: { pane_id: string; agent: string; lane: 'acp' }) => void = () => {};
+    const start = vi.fn(() => new Promise<{ pane_id: string; agent: string; lane: 'acp' }>((resolve) => (finish = resolve)));
+    await openMenu(c, fakeAcpApi({ laneGet: async () => lanes(), start }));
+    await act(async () => agentRow('Codex').click());
+    // The start has not answered yet: the skeleton is asked for, and nothing is selected or ended.
+    expect(beginChatStart).toHaveBeenCalledWith('codex', 'C:\\work\\shop');
+    expect(endChatStart).not.toHaveBeenCalled();
+    expect(select).not.toHaveBeenCalled();
+    await act(async () => finish({ pane_id: 'chat-9', agent: 'codex', lane: 'acp' }));
+    await act(async () => {});
+    expect(endChatStart).toHaveBeenCalledTimes(1);
+    expect(select).toHaveBeenCalledWith('chat-9');
+  });
+
+  it('ends the skeleton on failure, and the menu still says why', async () => {
+    const { c, select, beginChatStart, endChatStart } = cockpit();
+    const start = vi.fn(async () => {
+      throw 'ACP_ADAPTER_MISSING: The chat could not start. The terminal can run this agent instead.';
+    });
+    await openMenu(c, fakeAcpApi({ laneGet: async () => lanes({ agents: [{ id: 'codex', label: 'Codex', lane: 'acp', effective_lane: 'acp', disabled: false, disabled_note: null }] }), start }));
+    await act(async () => agentRow('Codex').click());
+    await act(async () => {});
+    expect(beginChatStart).toHaveBeenCalledTimes(1);
+    expect(endChatStart).toHaveBeenCalledTimes(1);
+    expect(select).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="chat-start-failed"]')?.textContent).toContain('The terminal can run this agent instead.');
   });
 });

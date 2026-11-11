@@ -396,3 +396,117 @@ fn a_duration_budget_of_a_second_is_enough_for_the_fixtures() {
     assert_eq!(listing.chats.len(), 2);
     assert!(!listing.cut_short);
 }
+
+/// One user line and one assistant line, so a read of the file gives two items.
+fn two_lines(tag: &str) -> String {
+    format!(
+        "{{\"type\":\"user\",\"message\":{{\"content\":\"question {tag}\"}}}}
+{{\"type\":\"assistant\",\"message\":{{\"content\":\"answer {tag}\"}}}}
+"
+    )
+}
+
+fn read_texts(history: &FileHistory, env: &HistoryEnv, session: &str) -> Result<Vec<String>, ReadError> {
+    let (outcome, items) = read_all(history, env, session, &ReadLimits::default());
+    outcome.map(|_| texts(&items))
+}
+
+#[test]
+fn reading_many_chats_walks_the_store_once() {
+    let (_temp, projects) = bare_home("walks-once");
+    let env = HistoryEnv::fixed(projects.ancestors().nth(3).map(Path::to_path_buf), &[]);
+    for n in 0..30 {
+        write(&projects, &format!("session-{n:02}.jsonl"), &two_lines(&n.to_string()));
+    }
+    let history = FileHistory::new(PROJECTS_SPEC);
+    let before = super::file_paths::walks();
+    let listing = history.list(&env, &ListLimits::default());
+    assert_eq!(listing.chats.len(), 30);
+    for chat in &listing.chats {
+        let n: usize = chat.session[8..].parse().expect("number");
+        assert_eq!(read_texts(&history, &env, &chat.session), Ok(vec![format!("question {n}"), format!("answer {n}")]));
+    }
+    assert_eq!(super::file_paths::walks() - before, 1, "only the listing walked the store");
+}
+
+#[test]
+fn a_chat_never_listed_is_found_by_a_walk_once() {
+    let (_temp, projects) = bare_home("walk-miss");
+    let env = HistoryEnv::fixed(projects.ancestors().nth(3).map(Path::to_path_buf), &[]);
+    write(&projects, "chat-solo.jsonl", &two_lines("solo"));
+    let history = FileHistory::new(PROJECTS_SPEC);
+    let before = super::file_paths::walks();
+    assert!(read_texts(&history, &env, "chat-solo").is_ok());
+    assert!(read_texts(&history, &env, "chat-solo").is_ok());
+    assert_eq!(super::file_paths::walks() - before, 1, "the first read walked and remembered, the second did not");
+}
+
+#[test]
+fn a_moved_file_is_found_again() {
+    let (temp, projects) = bare_home("moved");
+    let env = HistoryEnv::fixed(Some(temp.0.clone()), &[]);
+    write(&projects, "chat-move.jsonl", &two_lines("moved"));
+    let history = FileHistory::new(PROJECTS_SPEC);
+    history.list(&env, &ListLimits::default());
+    assert!(read_texts(&history, &env, "chat-move").is_ok());
+    let other = temp.0.join(".claude").join("projects").join("other");
+    fs::create_dir_all(&other).expect("other folder");
+    fs::rename(projects.join("chat-move.jsonl"), other.join("chat-move.jsonl")).expect("move");
+    assert_eq!(read_texts(&history, &env, "chat-move"), Ok(vec!["question moved".to_string(), "answer moved".to_string()]));
+}
+
+#[test]
+fn a_deleted_file_is_reported_missing_and_never_served_stale() {
+    let (temp, projects) = bare_home("deleted");
+    let env = HistoryEnv::fixed(Some(temp.0.clone()), &[]);
+    write(&projects, "chat-gone.jsonl", &two_lines("gone"));
+    let history = FileHistory::new(PROJECTS_SPEC);
+    history.list(&env, &ListLimits::default());
+    assert!(read_texts(&history, &env, "chat-gone").is_ok());
+    fs::remove_file(projects.join("chat-gone.jsonl")).expect("delete");
+    assert_eq!(read_texts(&history, &env, "chat-gone"), Err(ReadError::Missing));
+    assert_eq!(read_texts(&history, &env, "chat-gone"), Err(ReadError::Missing), "and again");
+}
+
+#[test]
+fn a_pointer_store_does_not_serve_a_file_that_now_holds_another_chat() {
+    let (temp, projects) = bare_home("pointer-stale");
+    let env = HistoryEnv::fixed(Some(temp.0.clone()), &[]);
+    let with_id = |id: &str, tag: &str| format!("{{\"session_id\":\"{id}\"}}
+{}", two_lines(tag));
+    write(&projects, "a.jsonl", &with_id("chat-aaaa", "first"));
+    let history = FileHistory::new(POINTER_SPEC);
+    history.list(&env, &ListLimits::default());
+    assert_eq!(read_texts(&history, &env, "chat-aaaa"), Ok(vec!["question first".to_string(), "answer first".to_string()]));
+    write(&projects, "a.jsonl", &with_id("chat-bbbb", "second"));
+    assert_eq!(read_texts(&history, &env, "chat-aaaa"), Err(ReadError::Missing), "the file is another chat now");
+    assert_eq!(read_texts(&history, &env, "chat-bbbb"), Ok(vec!["question second".to_string(), "answer second".to_string()]));
+}
+
+#[test]
+fn a_plain_file_still_wins_over_zst() {
+    let (temp, projects) = bare_home("plain-wins");
+    let env = HistoryEnv::fixed(Some(temp.0.clone()), &[]);
+    let other = temp.0.join(".claude").join("projects").join("other");
+    fs::create_dir_all(&other).expect("other folder");
+    // The compressed copy is not valid zstd: if a read ever opens it, the test fails.
+    write(&other, "chat-both.jsonl.zst", "not zstd");
+    write(&projects, "chat-both.jsonl", &two_lines("plain"));
+    let history = FileHistory::new(PROJECTS_SPEC);
+    history.list(&env, &ListLimits::default());
+    assert_eq!(read_texts(&history, &env, "chat-both"), Ok(vec!["question plain".to_string(), "answer plain".to_string()]));
+    assert_eq!(read_texts(&history, &env, "chat-both"), Ok(vec!["question plain".to_string(), "answer plain".to_string()]));
+}
+
+#[test]
+fn a_plain_copy_that_appears_later_wins_over_a_remembered_zst() {
+    let (temp, projects) = bare_home("plain-later");
+    let env = HistoryEnv::fixed(Some(temp.0.clone()), &[]);
+    write(&projects, "chat-late.jsonl.zst", "not zstd");
+    let history = FileHistory::new(PROJECTS_SPEC);
+    history.list(&env, &ListLimits::default());
+    let other = temp.0.join(".claude").join("projects").join("other");
+    fs::create_dir_all(&other).expect("other folder");
+    write(&other, "chat-late.jsonl", &two_lines("late"));
+    assert_eq!(read_texts(&history, &env, "chat-late"), Ok(vec!["question late".to_string(), "answer late".to_string()]));
+}

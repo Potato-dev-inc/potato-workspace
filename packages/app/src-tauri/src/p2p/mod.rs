@@ -246,6 +246,12 @@ impl P2p {
         self.running.lock().unwrap_or_else(|p| p.into_inner()).as_ref().and_then(|r| r.transport.home_relay())
     }
 
+    /// `home_relay`, waiting up to `within` for the endpoint to reach its relay first.
+    pub async fn home_relay_within(&self, within: std::time::Duration) -> Option<String> {
+        let transport = self.running.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(|r| r.transport.clone())?;
+        transport.home_relay_within(within).await
+    }
+
     /// LAN addresses of the running endpoint (the pairing ticket carries them).
     pub fn local_addrs(&self) -> Vec<std::net::SocketAddr> {
         self.running.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(|r| r.transport.local_addrs()).unwrap_or_default()

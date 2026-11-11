@@ -254,6 +254,25 @@ export interface MergePlan {
   autoMergeOff: boolean;
 }
 
+/** One computer of the team, timed by Ping. `via`: "direct" / "relay" on the PC link, "mailbox" through the team relay. */
+export interface DevicePing {
+  member_id: string;
+  device_id: string;
+  device_name: string;
+  ok: boolean;
+  ms: number | null;
+  via: 'direct' | 'relay' | 'mailbox' | null;
+  /** The plain reason when `ok` is false. */
+  message: string | null;
+}
+
+/** "182 ms direct", "240 ms via relay", "95 ms relay", or "Not reachable". */
+export function pingText(p: DevicePing): string {
+  if (!p.ok || p.ms == null) return 'Not reachable';
+  const via = p.via === 'direct' ? ' direct' : p.via === 'relay' ? ' via relay' : p.via === 'mailbox' ? ' relay' : '';
+  return `${p.ms} ms${via}`;
+}
+
 export interface TeamApi {
   state: () => Promise<TeamState>;
   configGet: () => Promise<TeamConfigView>;
@@ -270,6 +289,8 @@ export interface TeamApi {
   /** Admin: the member's claimed GitHub login is theirs (GitHub facts about it then show as theirs). */
   confirmGithub: (memberId: string) => Promise<TeamConfigView>;
   clearGaps: () => Promise<void>;
+  /** Times every other computer of the team (relay teams only). Absent from an older backend. */
+  ping?: () => Promise<DevicePing[]>;
   mergePlan: (cardId: string) => Promise<MergePlan>;
   /** Arms auto-merge at `headSha`, the commit the sheet showed. */
   mergeWhenGreen: (cardId: string, headSha: string) => Promise<string>;
@@ -314,6 +335,7 @@ export const teamApi: TeamApi = {
   removeMember: (memberId) => call('team_member_remove', { memberId }),
   confirmGithub: (memberId) => call('team_member_confirm_github', { memberId }),
   clearGaps: () => call('team_gaps_clear'),
+  ping: () => call('team_ping'),
   mergePlan: (cardId) => call('team_merge_plan', { cardId }),
   mergeWhenGreen: (cardId, headSha) => call('team_merge_when_green', { cardId, headSha }),
   send: (draftId, note) => call('team_send', { draftId, note: note ?? null }),

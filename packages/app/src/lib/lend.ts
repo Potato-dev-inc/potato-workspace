@@ -77,6 +77,14 @@ export interface LendDriver {
   agent_id: string;
   label: string;
   support: Support;
+  /** The lender can paste an API key for this agent. */
+  api_key: boolean;
+  /** The lender can lend a signed-in account of this agent (a lend sign-in). */
+  account: boolean;
+  /** A borrowed chat (not only a terminal) works. */
+  chat: boolean;
+  /** A sign-in of this agent that cannot be lent yet, in plain words. Shown, never offered. */
+  account_note?: string | null;
 }
 
 export interface LendState {
@@ -90,6 +98,15 @@ export interface LendState {
   keeping_awake?: boolean;
 }
 
+/** What Test link found. `via`: the PC link ("direct" or "relay") or the team relay ("mailbox"). */
+export interface LinkTest {
+  ok: boolean;
+  ms: number | null;
+  via: 'direct' | 'relay' | 'mailbox' | null;
+  /** Plain words, ready to show. */
+  message: string;
+}
+
 export interface LendApi {
   state: () => Promise<LendState>;
   profileSave: (profile: LendProfile) => Promise<LendProfile>;
@@ -98,6 +115,8 @@ export interface LendApi {
   answer: (requestId: string, accept: boolean, profileId: string | null, secs: number | null) => Promise<Grant | null>;
   revoke: (grantId: string) => Promise<void>;
   giveBack: (grantId: string) => Promise<void>;
+  /** Test link: opens the real link handshake to the other PC and reports. Absent from an older backend. */
+  testLink?: (grantId: string) => Promise<LinkTest>;
   startAgent: (grantId: string, projectPath: string) => Promise<{ pane_id: string }>;
   /** A new lend sign-in: an app-managed account folder for `agentId`, marked lend-only. Sign in to it once in a pane. */
   accountAdd: (agentId: string, label: string) => Promise<Account>;
@@ -123,6 +142,7 @@ export const lendApi: LendApi = {
   answer: (requestId, accept, profileId, secs) => call('lend_answer', { request_id: requestId, accept, profile_id: profileId, secs }),
   revoke: (grantId) => call('lend_revoke', { grant_id: grantId }),
   giveBack: (grantId) => call('lend_return', { grant_id: grantId }),
+  testLink: (grantId) => call('lend_test_link', { grant_id: grantId }),
   startAgent: (grantId, projectPath) => call('lend_start_agent', { grant_id: grantId, project_path: projectPath }),
   accountAdd: (agentId, label) => call('lend_account_add', { agent_id: agentId, label }),
   keySet: (profileId, key) => call('lend_key_set', { profile_id: profileId, key }),
@@ -215,14 +235,24 @@ export function offerable(drivers: readonly LendDriver[]): LendDriver[] {
   return drivers.filter((d) => d.support !== 'no');
 }
 
-/** Agents shown in the lists as "<Agent>: coming soon" and never offered. Codex is only a lab idea for now. */
-export const COMING_SOON: readonly { agent_id: string; label: string }[] = [{ agent_id: 'codex', label: 'Codex' }];
+/** Agents shown in the lists as "<Agent>: coming soon" and never offered. None today: Codex and Gemini lend with an API key. */
+export const COMING_SOON: readonly { agent_id: string; label: string }[] = [];
 
 export const comingSoonText = (label: string): string => `${label}: coming soon`;
 
 /** The coming-soon agents that have no working driver in this state. */
 export function comingSoonAgents(drivers: readonly LendDriver[]): { agent_id: string; label: string }[] {
   return COMING_SOON.filter((c) => !drivers.some((d) => d.agent_id === c.agent_id && d.support !== 'no'));
+}
+
+/**
+ * Why a lend sign-in cannot be used for these agents, or null when it can. A sign-in is not offered when any picked
+ * agent has none that can be lent (the words come from that agent's own lend spec).
+ */
+export function signInProblem(drivers: readonly LendDriver[], agentIds: readonly string[]): string | null {
+  const blocked = drivers.find((d) => agentIds.includes(d.agent_id) && !d.account);
+  if (!blocked) return null;
+  return blocked.account_note || `${blocked.label} can only be lent with an API key.`;
 }
 
 export const supportTag = (s: Support): string => (s === 'verified' ? 'Works' : s === 'lab' ? 'Lab' : 'Not possible');

@@ -84,7 +84,7 @@ impl Rig {
         let registry = Arc::new(Mutex::new(PaneRegistry::new()));
         let host = Arc::new(Recorder::default());
         let deps = StartDeps { registry: registry.clone(), host: host.clone(), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
-        let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None }).expect("the fake agent starts");
+        let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None, ..Default::default() }).expect("the fake agent starts");
         Rig { chat, registry, host, dir }
     }
 
@@ -200,7 +200,7 @@ fn an_adapter_that_will_not_start_leaves_nothing_behind_and_offers_the_terminal(
     cfg.command = dir.join("no-such-adapter.exe").to_string_lossy().into_owned();
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
-    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: None }).err().expect("it cannot start");
+    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: None, ..Default::default() }).err().expect("it cannot start");
     assert_eq!(error.code, "ACP_START_FAILED");
     assert!(error.message.starts_with("The chat program for Fake agent was not found"), "{}", error.message);
     assert!(!error.message.contains("no-such-adapter"), "no path in the sentence");
@@ -215,7 +215,7 @@ fn an_account_for_an_agent_without_accounts_is_refused_before_anything_starts() 
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
     let cfg = fake_agent::agent_config("", &dir.join("store"));
-    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: Some("work".into()) }).err().expect("refused");
+    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: Some("work".into()), ..Default::default() }).err().expect("refused");
     assert_eq!(error.code, "ACCOUNT_UNSUPPORTED");
     assert!(error.message.contains("claude"), "{}", error.message);
     assert!(!error.fallback, "the terminal would refuse the same account");
@@ -231,7 +231,7 @@ fn the_labs_switch_off_starts_nothing() {
     let dir = std::env::temp_dir();
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
-    let error = super::start_gated(&deps, StartRequest { agent_id: "codex".into(), folder: dir, explicit: true, account: None }).err().expect("refused");
+    let error = super::start_gated(&deps, StartRequest { agent_id: "codex".into(), folder: dir, explicit: true, account: None, ..Default::default() }).err().expect("refused");
     assert_eq!(error.code, "ACP_LABS_OFF");
     assert!(registry.lock().list().is_empty());
 }
@@ -241,7 +241,7 @@ fn a_folder_that_is_not_a_folder_is_refused_before_anything_starts() {
     let dir = std::env::temp_dir().join("pm-acp-chat-no-such-folder-xyz");
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry, host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: std::env::temp_dir() }), conversations: None };
-    let error = start(&deps, fake_agent::agent_config("", &std::env::temp_dir().join("s")), StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: None }).err().unwrap();
+    let error = start(&deps, fake_agent::agent_config("", &std::env::temp_dir().join("s")), StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: None, ..Default::default() }).err().unwrap();
     assert_eq!(error.code, "INVALID_ARGUMENT");
     assert!(!error.fallback);
 }
@@ -797,7 +797,7 @@ fn a_missing_add_on_is_its_own_start_error_and_leaves_nothing_behind() {
     }];
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
-    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: None }).err().expect("no add-on, no chat");
+    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir, explicit: true, account: None, ..Default::default() }).err().expect("no add-on, no chat");
     assert_eq!(error.code, "ACP_ADDON_MISSING");
     assert!(error.message.contains("add-on for Fake (about 12 MB)"), "{}", error.message);
     assert!(error.fallback);
@@ -996,7 +996,7 @@ fn an_adapter_that_never_answers_the_start_fails_in_time_and_leaves_no_process()
     let registry = Arc::new(Mutex::new(PaneRegistry::new()));
     let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
     let started = Instant::now();
-    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None }).err().expect("the start fails");
+    let error = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None, ..Default::default() }).err().expect("the start fails");
     assert!(started.elapsed() < Duration::from_secs(20), "{:?}", started.elapsed());
     assert_eq!(error.code, "ACP_START_FAILED");
     assert!(error.fallback, "the terminal can run the agent instead");
@@ -1151,4 +1151,127 @@ fn a_chat_without_the_workspace_tool_server_says_so_once() {
     if let crate::session_chat::ChatItem::Notice { text, .. } = &notes[0] {
         assert!(text.starts_with("Potato Workspace tools aren't available in this chat: "), "{text}");
     }
+}
+
+// ---- the starting model of a chat nobody named a model for ---------------------------------------------------------
+
+fn start_rule() -> crate::acp::config::DefaultModel {
+    crate::acp::config::DefaultModel {
+        model_setting: "starting_model".into(),
+        separator: "/".into(),
+        credit_patterns: vec!["insufficient balance".into()],
+        credit_message: "{model} needs credit.".into(),
+        ..Default::default()
+    }
+}
+
+fn picked_store(rig: &Rig) -> crate::acp::chat::default_model::LastPicked {
+    crate::acp::chat::default_model::LastPicked::at(rig.dir.join("last.json"))
+}
+
+#[test]
+fn the_starting_model_is_request_then_helper_then_setting_then_last_picked() {
+    use crate::acp::chat::default_model::{choose, Source};
+    let all = |r, h, s, l| choose(r, h, s, l);
+    assert_eq!(all(Some("r"), Some("h"), Some("s"), Some("l")), Some(("r".into(), Source::Request)), "the request beats every default");
+    assert_eq!(all(None, Some("h"), Some("s"), Some("l")), Some(("h".into(), Source::Helper)), "the helper default beats the setting");
+    assert_eq!(all(Some(" "), Some("h"), Some("s"), Some("l")), Some(("h".into(), Source::Helper)), "a blank request names nothing");
+    assert_eq!(all(None, None, Some("s"), Some("l")), Some(("s".into(), Source::Setting)), "the setting beats the last pick");
+    assert_eq!(all(None, Some(""), None, Some("l")), Some(("l".into(), Source::LastPicked)), "the last pick beats the agent's default");
+    assert_eq!(all(None, None, None, None), None, "then the agent's own default stays");
+}
+
+#[test]
+fn the_helper_default_is_used_for_a_helper_chat_only() {
+    let rig = Rig::with("", |cfg| cfg.default_model = Some(start_rule()));
+    let store = picked_store(&rig);
+    store.set("fake", "a");
+    let settings = json!({"starting_model": "a", "helper_default_models": {"fake": "b"}});
+    let rule = rig.chat.session().config().default_model.clone();
+    let plan = |request: Option<&str>, helper: bool| crate::acp::chat::default_model::plan(&rig.chat, rule.as_ref(), &settings, &store, request, helper);
+    assert_eq!(plan(None, true), Ok(Some("b".into())), "a helper chat starts on the helper default, not the setting");
+    assert_eq!(plan(None, false), Ok(Some("a".into())), "any other chat ignores it and uses the setting");
+    assert_eq!(plan(Some("b"), true), Ok(None), "a model in the request is applied by the caller, not by the defaults");
+}
+
+#[test]
+fn a_helper_chat_starts_on_the_helper_default_before_the_setting() {
+    let rig = Rig::with("", |cfg| cfg.default_model = Some(start_rule()));
+    let store = picked_store(&rig);
+    store.set("fake", "a");
+    let settings = json!({"starting_model": "a", "helper_default_models": {"fake": "b"}});
+    crate::acp::chat::default_model::apply_with(&rig.chat, &settings, &store, None, true);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("b"));
+}
+
+#[test]
+fn a_chat_that_is_not_a_helper_ignores_the_helper_default() {
+    let rig = Rig::with("", |cfg| cfg.default_model = Some(start_rule()));
+    let settings = json!({"helper_default_models": {"fake": "b"}});
+    crate::acp::chat::default_model::apply_with(&rig.chat, &settings, &picked_store(&rig), None, false);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("a"), "nothing else is set: the agent's own default");
+}
+
+#[test]
+fn a_model_in_the_request_leaves_the_defaults_unapplied() {
+    let rig = Rig::with("", |cfg| cfg.default_model = Some(start_rule()));
+    let settings = json!({"starting_model": "b", "helper_default_models": {"fake": "b"}});
+    crate::acp::chat::default_model::apply_with(&rig.chat, &settings, &picked_store(&rig), Some("a"), true);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("a"), "the caller's own apply decides");
+}
+
+#[test]
+fn the_setting_names_the_model_the_way_the_agent_writes_it() {
+    use crate::acp::chat::default_model::setting_value;
+    let rule = crate::acp::config::DefaultModel { provider_setting: "p".into(), model_setting: "m".into(), provider_fallback: "go".into(), separator: "/".into(), ..Default::default() };
+    assert_eq!(setting_value(&rule, &json!({"m": "glm"})).as_deref(), Some("go/glm"), "a bare id gets the fallback provider");
+    assert_eq!(setting_value(&rule, &json!({"p": "x", "m": "glm"})).as_deref(), Some("x/glm"));
+    assert_eq!(setting_value(&rule, &json!({"p": "x", "m": "y/glm"})).as_deref(), Some("y/glm"), "an id with a provider is kept");
+    assert_eq!(setting_value(&rule, &json!({"m": ""})), None);
+}
+
+#[test]
+fn a_new_chat_starts_on_the_setting_before_the_last_pick() {
+    let rig = Rig::with("", |cfg| cfg.default_model = Some(start_rule()));
+    let store = picked_store(&rig);
+    store.set("fake", "a");
+    crate::acp::chat::default_model::apply_with(&rig.chat, &json!({"starting_model": "b"}), &store, None, false);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("b"));
+}
+
+#[test]
+fn a_new_chat_without_a_setting_starts_on_the_last_pick() {
+    let rig = Rig::with("", |cfg| cfg.default_model = Some(start_rule()));
+    let store = picked_store(&rig);
+    store.set("fake", "b");
+    crate::acp::chat::default_model::apply_with(&rig.chat, &json!({}), &store, None, false);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("b"));
+}
+
+#[test]
+fn nothing_chosen_keeps_the_agents_own_default() {
+    let rig = Rig::with("", |cfg| cfg.default_model = Some(start_rule()));
+    crate::acp::chat::default_model::apply_with(&rig.chat, &json!({}), &picked_store(&rig), None, false);
+    let view = crate::acp::chat::surface::view(&rig.chat);
+    assert_eq!(view["model"], json!("a"));
+    assert!(view["warnings"].as_array().is_none_or(|w| w.is_empty()));
+}
+
+#[test]
+fn a_model_not_in_the_list_is_not_sent_and_the_result_says_so() {
+    let rig = Rig::with("", |cfg| cfg.default_model = Some(start_rule()));
+    crate::acp::chat::default_model::apply_with(&rig.chat, &json!({"starting_model": "gone/model"}), &picked_store(&rig), None, false);
+    let view = crate::acp::chat::surface::view(&rig.chat);
+    assert_eq!(view["model"], json!("a"), "the agent keeps its own choice");
+    let note = view["warnings"][0].as_str().unwrap_or_default();
+    assert!(note.contains("'gone/model' isn't available here"), "{note}");
+}
+
+#[test]
+fn an_agent_without_a_default_model_rule_is_left_alone() {
+    let rig = Rig::new("");
+    let store = picked_store(&rig);
+    store.set("fake", "b");
+    crate::acp::chat::default_model::apply_with(&rig.chat, &json!({"starting_model": "b"}), &store, None, false);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("a"));
 }

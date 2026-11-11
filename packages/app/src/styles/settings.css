@@ -965,6 +965,15 @@
   color: var(--label-3);
   overflow-wrap: anywhere;
 }
+.st-team-people-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.st-team-who small.st-team-ping[data-ok="false"] {
+  color: var(--label-3);
+}
 .st-team-who small.st-team-warning {
   color: var(--label);
   font-weight: 500;
@@ -1558,3 +1567,20 @@
 .settings .st-adv-toggle:hover { color: var(--label); }
 .settings .st-adv-count { color: var(--label-3); font-weight: 400; }
 .settings .st-adv-toggle > span:last-child { margin-left: auto; }
+
+/* Default model for helpers: one line per agent, name left, picker right. */
+.st-helper-model {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+.st-helper-model-name {
+  min-width: 0;
+  font-size: 13px;
+}
+.st-helper-model .mp-menu {
+  left: auto;
+  right: 0;
+}

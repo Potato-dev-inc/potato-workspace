@@ -98,3 +98,73 @@ fn context_agent(agent_type: &str) -> Result<AgentType, String> {
         }
     }
 }
+
+/// What the New agent page's model picker needs for one agent.
+#[derive(Serialize, Debug, PartialEq, Eq)]
+pub struct AgentModelOptions {
+    /// A terminal pane can start on a model (the agent has a launch flag for it). A chat always can: it sets the
+    /// model once the session lists its settings.
+    pub terminal: bool,
+    /// The model the agent uses when none is asked for, when it can be told.
+    pub default_model: Option<String>,
+    /// Models worth listing, best known first. Empty: the page offers a typed id.
+    pub models: Vec<String>,
+}
+
+pub(crate) fn model_options_for(agent_type: &str) -> AgentModelOptions {
+    let profile = crate::tui::profile_for(agent_type);
+    AgentModelOptions {
+        terminal: crate::tui::pane_model_args(agent_type, "probe").is_some(),
+        default_model: if profile.probes_default_model() { profile.default_model() } else { None },
+        models: profile.model_choices(),
+    }
+}
+
+/// Models for the picker. Probing the CLI can take seconds, so it runs off the UI thread.
+#[tauri::command]
+pub async fn agent_model_options(agent_id: String) -> Result<AgentModelOptions, String> {
+    let agent = context_agent_id(&agent_id)?;
+    tauri::async_runtime::spawn_blocking(move || model_options_for(&agent))
+        .await
+        .map_err(|err| format!("model list failed: {err}"))
+}
+
+/// Registry gate: an id nobody registered is an error, a registered one is used as given.
+fn context_agent_id(agent_id: &str) -> Result<String, String> {
+    let id = agent_id.trim();
+    if id.is_empty() || !crate::tui::is_registered(id) {
+        return Err(format!("UNKNOWN_AGENT_TYPE: {agent_id:?} is not an agent."));
+    }
+    Ok(id.to_string())
+}
+
+#[cfg(test)]
+mod model_options_tests {
+    use super::*;
+
+    #[test]
+    fn claude_starts_on_a_model_and_lists_its_aliases() {
+        let options = model_options_for("claude");
+        assert!(options.terminal);
+        assert!(options.models.iter().any(|m| m == "sonnet"));
+    }
+
+    #[test]
+    fn an_agent_without_a_model_flag_cannot_start_a_pane_on_one() {
+        assert!(!model_options_for("codex").terminal);
+        assert!(crate::tui::pane_model_args("codex", "gpt-5").is_none());
+    }
+
+    #[test]
+    fn the_pane_flag_is_the_agents_own_and_a_flag_lookalike_is_refused() {
+        assert_eq!(crate::tui::pane_model_args("claude", " opus "), Some(vec!["--model".into(), "opus".into()]));
+        assert!(crate::tui::pane_model_args("claude", "--dangerously-skip-permissions").is_none());
+        assert!(crate::tui::pane_model_args("claude", "  ").is_none());
+    }
+
+    #[test]
+    fn an_unregistered_agent_is_refused() {
+        assert!(context_agent_id("nope-agent").is_err());
+        assert!(context_agent_id("claude").is_ok());
+    }
+}

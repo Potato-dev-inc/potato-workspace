@@ -213,8 +213,10 @@ impl Forwarder {
         }
 
         // 6. The URL is always our base + the allowed path (+ the sanitized query).
+        let query = query.split('&').filter(|p| !p.is_empty() && !self.spec.strips_query(p)).collect::<Vec<_>>().join("&");
         let url = if query.is_empty() { format!("{}{}", self.base, path) } else { format!("{}{}?{}", self.base, path, query) };
-        let headers = outgoing_headers(&head.headers, &auth);
+        let kept: Vec<(String, String)> = head.headers.iter().filter(|(k, _)| !self.spec.strips_header(k)).cloned().collect();
+        let headers = outgoing_headers(&kept, &auth);
 
         // 7. Send from a blocking thread; the reply comes back over a small channel.
         let (tx, mut rx) = mpsc::channel::<Msg>(8);

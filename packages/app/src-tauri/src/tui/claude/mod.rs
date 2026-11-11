@@ -224,6 +224,11 @@ impl TuiProfile for Claude {
         super::VisibleRunArgs { args, model_applied, reasoning_applied, read_only_enforced: run.read_only }
     }
 
+    /// The aliases `--model` accepts; they follow the newest model of each family.
+    fn model_choices(&self) -> Vec<String> {
+        ["opus", "sonnet", "haiku"].map(String::from).to_vec()
+    }
+
     fn extract_result(&self, output: &str, exit_code: i32) -> Option<String> {
         headless::extract_result(output, exit_code)
     }

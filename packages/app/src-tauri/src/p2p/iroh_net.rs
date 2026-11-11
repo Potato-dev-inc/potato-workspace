@@ -24,6 +24,10 @@ use super::identity::DeviceIdentity;
 /// How often a link looks at which path iroh has selected.
 const PATH_POLL: Duration = Duration::from_millis(500);
 
+/// How long one dial may take. A path between continents through a relay needs seconds (hole punching tries, then
+/// the relay carries it); accepting a handshake keeps the shorter `HANDSHAKE_TIMEOUT`.
+const DIAL_TIMEOUT: Duration = Duration::from_secs(20);
+
 fn net<E: std::fmt::Display>(e: E) -> P2pError {
     P2pError::Net(e.to_string())
 }
@@ -89,7 +93,7 @@ impl Transport for IrohTransport {
                 addr = addr.with_relay_url(url);
             }
         }
-        let conn = tokio::time::timeout(HANDSHAKE_TIMEOUT, self.endpoint.connect(addr, alpn))
+        let conn = tokio::time::timeout(DIAL_TIMEOUT, self.endpoint.connect(addr, alpn))
             .await
             .map_err(|_| P2pError::Net("timed out".into()))?
             .map_err(net)?;
@@ -118,6 +122,15 @@ impl Transport for IrohTransport {
             return None;
         }
         self.endpoint.addr().relay_urls().next().map(|u| u.to_string())
+    }
+
+    async fn home_relay_within(&self, within: Duration) -> Option<String> {
+        if !self.relays {
+            return None;
+        }
+        // `online` returns once a relay connection exists; without internet it never does, hence the limit.
+        let _ = tokio::time::timeout(within, self.endpoint.online()).await;
+        self.home_relay()
     }
 }
 

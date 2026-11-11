@@ -169,5 +169,7 @@ export const SettingsSchema = z.object({
   opencode_model_provider: z.string().optional(),
   /** Default OpenCode model for opencode_native API prompts (write_terminal_input). */
   opencode_model_id: z.string().optional(),
+  /** Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none. Absent: none. Rust reads it (agent_run_mode::helper_model). */
+  helper_default_models: z.record(z.string().max(120)).optional(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;

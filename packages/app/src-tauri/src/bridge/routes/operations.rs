@@ -54,6 +54,16 @@ fn delegate(cx: &Ctx) -> RouteResult {
     if req.pane_id.is_none() && crate::agent_run_mode::apply_keep_open(&mut req.keep_pane) {
         req.worker.kept_open_note = Some(crate::agent_run_mode::KEPT_OPEN_NOTE.to_string());
     }
+    // No model named: the person's "Default model for helpers" for this agent decides.
+    if req.pane_id.is_none()
+        && crate::agent_run_mode::apply_helper_model(
+            &crate::settings_store::read_public_settings(&app),
+            &req.agent_type,
+            &mut req.worker.requested_model,
+        )
+    {
+        req.worker.model_note = Some(crate::agent_run_mode::HELPER_MODEL_NOTE.to_string());
+    }
     // An agent delegating work without naming an account: the person's login choice decides, or a card asks.
     let owner = req.owner_session_id.clone();
     crate::agent_runs::helper_login::for_delegate(

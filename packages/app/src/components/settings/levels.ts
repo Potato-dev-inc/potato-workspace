@@ -22,6 +22,7 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'setup-check',
   // Agents: whether helpers an agent starts are shown, whether they stay open, and whether they close with their agent
   'helper-agents',
+  'helper-default-models',
   'keep-helpers-open',
   'close-helpers-with-agent',
   // Agents: Hand off does (and the fixed notes)

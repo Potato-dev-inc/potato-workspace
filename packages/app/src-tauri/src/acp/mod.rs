@@ -129,6 +129,7 @@ pub fn labs_on(public: &Value) -> bool {
 /// Called with the public settings whenever they change (and once at startup from the saved file). Turning
 /// the switch off closes every live ACP session: the switch is also the kill switch.
 pub fn apply_settings(public: &Value) {
+    chat::default_model::note_settings(public);
     let on = labs_on(public);
     let was = ENABLED.swap(on, Ordering::SeqCst);
     if was && !on {

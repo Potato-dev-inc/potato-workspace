@@ -248,3 +248,19 @@ fn the_session_another_pane_showed_before_is_not_taken_by_a_pane_with_none() {
     let error = API.fetch(&pane(), &endpoint(&server_a, None)).unwrap_err();
     assert!(error.contains("no session yet"), "{error}");
 }
+
+#[test]
+fn the_tui_launch_args_follow_the_installed_edition() {
+    // 1.x (and an unknown version) keep today's flags; 2.x has neither flag, so it gets none.
+    for major in [Some(1), None] {
+        let args = prepare_for("pane-edition-1", &[], major);
+        assert_eq!(args[0], "--port");
+        assert_eq!(&args[2..], ["--hostname", "127.0.0.1"]);
+    }
+    assert!(prepare_for("pane-edition-2", &[], Some(2)).is_empty());
+    assert!(ports().lock().get("pane-edition-2").is_none(), "no port is remembered for 2.x");
+    // The version text the check reads: 1.19.5 and `opencode v2.2.7`.
+    let major = |text: &str| crate::opencode::edition::major_version(text);
+    assert_eq!(prepare_for("pane-edition-3", &[], major("opencode v2.2.7")), Vec::<String>::new());
+    assert_eq!(prepare_for("pane-edition-4", &[], major("1.19.5")).len(), 4);
+}

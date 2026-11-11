@@ -23,7 +23,7 @@ pub async fn terminal_chat_start(app: AppHandle, agent: String, cwd: Option<Stri
     }
     available_for(&id).map_err(|reason| format!("NOT_AVAILABLE: {reason}"))?;
     // The same call the + menu makes, so isolation, folder memory, warm workers and window rules are unchanged.
-    let pane = crate::commands::new_pane(app.clone(), id.clone(), account_id.filter(|a| !a.trim().is_empty()), None, cwd).await?;
+    let pane = crate::commands::new_pane(app.clone(), id.clone(), account_id.filter(|a| !a.trim().is_empty()), None, cwd, None).await?;
     let state = app.state::<crate::commands::AppState>();
     if !tag_pane(&state.registry, &pane) {
         tracing::warn!(agent = %id, pane = %pane, "terminal chat: pane vanished before it was tagged");

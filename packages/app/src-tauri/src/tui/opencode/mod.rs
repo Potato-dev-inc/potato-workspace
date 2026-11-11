@@ -4,13 +4,16 @@
 //! - `screen` — the interactive TUI's menus and selectors
 //! - `transcript` — how the conversation is drawn (message rows, tool rows, the input box, the sidebar)
 //! - `chat` — the same conversation read from OpenCode's local HTTP API, with tool input, output and diffs
-//! - `history` — old chats, read from OpenCode's own SQLite database (read-only), for "Bring all my chats"
+//! - `history` — old chats, read from OpenCode's own SQLite database (read-only), for "Bring all my chats";
+//!   `history_v2` reads the layout of OpenCode 2.x in the same file, and `history` picks the layout
 //!
 //! The HTTP API client (keys, quota, messages) is a protocol backend, not a screen-scraped TUI,
 //! and stays in `crate::opencode`.
 
 mod chat;
 mod history;
+mod history_v2;
+mod models;
 pub mod read_only;
 mod screen;
 mod transcript;
@@ -93,6 +96,10 @@ impl TuiProfile for OpenCode {
     /// The TUI only: `opencode_native` (the HTTP protocol backend) has no Linux launch.
     fn linux_launch(&self, request: &SpawnRequest) -> Option<LinuxLaunch> {
         Some(LinuxLaunch::from_command(linux_command(AgentType::Opencode), request.extra_args))
+    }
+
+    fn model_choices(&self) -> Vec<String> {
+        models::listed()
     }
 
     fn is_installed(&self) -> bool {

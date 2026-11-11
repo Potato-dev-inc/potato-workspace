@@ -290,12 +290,13 @@ export const cockpitApi = {
   declinePanePrompt: (paneId: string, promptId: string, choice: string) =>
     call<void>('answer_pane_prompt', { paneId, promptId, choice, gesture: null }),
   interruptPane: (paneId: string) => call<void>('interrupt_pane', { paneId }),
-  newPane: (agentId: string, accountId?: string, isolation?: 'none' | 'worktree', projectPath?: string) =>
+  newPane: (agentId: string, accountId?: string, isolation?: 'none' | 'worktree', projectPath?: string, model?: string) =>
     call<string>('new_pane', {
       agentId,
       accountId: accountId ?? null,
       isolation: isolation ?? null,
       projectPath: projectPath ?? null,
+      model: model ?? null,
     }),
   paneWorktree: (paneId: string) => call<WorktreeItem | null>('pane_worktree', { paneId }),
   /** The git branch of the folder the pane works in; null for a folder that is not a git work tree. */

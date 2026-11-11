@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { StartRequest } from './model';
-import { isStartBlock, runStart, type StartDeps } from './start';
+import { chipChoiceFor, isStartBlock, runStart, setChatModelOn, type StartDeps } from './start';
 
 const req = (extra: Partial<StartRequest> = {}): StartRequest => ({ agentId: 'alpha', folder: '/work/p', isolated: false, runAs: 'terminal', prompt: 'fix it', ...extra });
 
@@ -86,5 +86,64 @@ describe('a chat on a borrowed sign-in', () => {
     expect(id).toBe('chat-1');
     expect(startChat).toHaveBeenCalledWith('claude', 'C:\p', 'lend:g1');
     expect(deps.newAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe('runStart with a model', () => {
+  it('a terminal start passes the model to the agent launch', async () => {
+    const d = deps();
+    await runStart(req({ model: 'gpt-5-mini' }), d);
+    expect(d.newAgent).toHaveBeenCalledWith('alpha', undefined, false, '/work/p', 'gpt-5-mini');
+  });
+
+  it('a chat start sets the model right after the session starts, before the first message', async () => {
+    const order: string[] = [];
+    const d = deps({
+      setChatModel: vi.fn(async () => {
+        order.push('model');
+        return null;
+      }),
+      send: vi.fn(async (): Promise<unknown> => order.push('send')),
+    });
+    expect(await runStart(req({ runAs: 'chat', model: 'gpt-5-mini' }), d)).toBe('chat-1');
+    expect(d.setChatModel).toHaveBeenCalledWith('chat-1', 'gpt-5-mini');
+    expect(order).toEqual(['model', 'send']);
+  });
+
+  it('a chat that cannot take the model keeps going on its default and says so', async () => {
+    const d = deps({ setChatModel: vi.fn(async () => 'This chat does not list "x", so it uses its default model.') });
+    expect(await runStart(req({ runAs: 'chat', model: 'x' }), d)).toBe('chat-1');
+    expect(d.notify).toHaveBeenCalledWith('This chat does not list "x", so it uses its default model.');
+    expect(d.send).toHaveBeenCalled();
+  });
+
+  it('with no model nothing is set', async () => {
+    const d = deps({ setChatModel: vi.fn(async () => null) });
+    await runStart(req({ runAs: 'chat' }), d);
+    expect(d.setChatModel).not.toHaveBeenCalled();
+  });
+});
+
+describe('setChatModelOn', () => {
+  const state = (value: string) => ({ configOptions: [{ id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: value, options: [{ value: 'a', name: 'Alpha One' }, { value: 'b', name: 'Beta Two' }] }] }) as never;
+
+  it('matches by id or by shown name, any case', () => {
+    const choices = [{ value: 'a', name: 'Alpha One' }];
+    expect(chipChoiceFor('A', choices)).toBe('a');
+    expect(chipChoiceFor('alpha one', choices)).toBe('a');
+    expect(chipChoiceFor('zzz', choices)).toBeNull();
+  });
+
+  it('waits for the settings to appear, then sets the model', async () => {
+    const api = { state: vi.fn().mockResolvedValueOnce(null).mockResolvedValue(state('a')), setConfig: vi.fn(async () => state('b')) };
+    expect(await setChatModelOn('p', 'b', api, async () => undefined)).toBeNull();
+    expect(api.setConfig).toHaveBeenCalledWith('p', 'model', 'b');
+  });
+
+  it('does nothing when the chat is already on it, and explains a model it does not list', async () => {
+    const api = { state: vi.fn(async () => state('a')), setConfig: vi.fn() };
+    expect(await setChatModelOn('p', 'a', api, async () => undefined)).toBeNull();
+    expect(api.setConfig).not.toHaveBeenCalled();
+    expect(await setChatModelOn('p', 'nope', api, async () => undefined)).toContain('does not list "nope"');
   });
 });

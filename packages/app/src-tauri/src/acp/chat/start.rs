@@ -26,6 +26,7 @@ pub struct StartDeps {
     pub conversations: Option<Conversations>,
 }
 
+#[derive(Default)]
 pub struct StartRequest {
     /// The agent's id (`"codex"`): it must have an ACP definition (`acp::config`).
     pub agent_id: String,
@@ -35,6 +36,10 @@ pub struct StartRequest {
     pub explicit: bool,
     /// The account (`accounts::Store`) to run the agent's adapter under; `None`: the agent's own login.
     pub account: Option<String>,
+    /// The model the caller named. It wins over every default; the caller applies it (strictly) after the start.
+    pub model: Option<String>,
+    /// An agent started this chat as its helper: the "Default model for helpers" setting counts.
+    pub is_helper: bool,
 }
 
 /// Why a chat session did not start. `fallback`: the terminal is the way to run this agent instead.
@@ -112,6 +117,11 @@ static SWEEPER: OnceLock<SweeperHandle> = OnceLock::new();
 /// Starts a chat session with `cfg` (no gate). The adapter is started and the session opened before the pane exists,
 /// so a failure leaves nothing behind and the caller can run the agent in a terminal instead (`fallback`).
 pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
+    // Timing only: the stages are logged (`startup_stage`). Until the pane exists they sit under a temporary key, then move
+    // to the pane's id (`startup_timing::carry`). The key holds no folder: logs stay free of paths.
+    let timing_key = format!("chat-start-{}-{}", cfg.id, uuid::Uuid::new_v4());
+    crate::startup_timing::begin(&timing_key);
+    crate::startup_timing::mark(&timing_key, "chat_start_begin");
     let folder = request.folder.clone();
     if !Path::new(&folder).is_absolute() || !folder.is_dir() {
         return Err(StartError::new("INVALID_ARGUMENT", "The folder must be an existing folder (a full path).", false));
@@ -125,6 +135,7 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
     // startup. The checks below ran when it was warmed; nothing about the chat differs.
     let account_id = account_env.as_ref().map(|(id, _)| id.clone());
     let warm = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim(&cfg, &folder, account_id.as_deref()));
+    crate::startup_timing::mark(&timing_key, if warm.is_some() { "chat_warm_hit" } else { "chat_warm_miss" });
     if warm.is_none() {
         // A reviewed adapter whose last health check failed (or that fails now, when its agent's version is not the tested
         // one): the chat says why and stops. The terminal lane is not touched.
@@ -157,14 +168,16 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
             let pane_id = uuid::Uuid::new_v4().to_string();
             let mut cfg = cfg;
             crate::acp::config::add_pane_id(&mut cfg, &pane_id);
-            if let Some((_, env)) = &account_env {
+            if let Some((account, env)) = &account_env {
                 crate::acp::config::with_account_env(&mut cfg, env);
+                crate::acp::account::apply_lend_extras(&mut cfg, account);
             }
             let session = AcpSession::new(Arc::new(cfg), deps.env.clone(), SessionParams { key: pane_id.clone(), cwd: folder.clone(), resume_session_id: None });
             supervisor::global().insert(session.clone());
             (session, pane_id)
         }
     };
+    crate::startup_timing::carry(&timing_key, &pane_id);
     let chat = AcpChat::build(&pane_id, &label, session.clone(), deps.host.clone(), deps.conversations.clone());
     chat.attach();
     if warm_claimed {
@@ -178,6 +191,7 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
     }
     CHATS.lock().insert(pane_id.clone(), chat.clone());
     pushed::register(&pane_id, chat.clone());
+    crate::startup_timing::mark(&pane_id, "chat_pane_registered");
     SWEEPER.get_or_init(|| supervisor::global().start_thread());
 
     if let Err(error) = session.ensure_running() {
@@ -189,6 +203,10 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Resul
         let message = if needs_sign_in { "The agent needs you to sign in first.".to_string() } else { start_failure_sentence(&label, &error) };
         return Err(StartError::new(if needs_sign_in { "ACP_SIGN_IN_NEEDED" } else { "ACP_START_FAILED" }, message, true));
     }
+    crate::startup_timing::mark(&pane_id, "chat_session_ready");
+
+    // The starting model: request, helper default, app setting, last pick, the agent's own default (`default_model::choose`).
+    super::default_model::apply_at_start(&chat, request.model.as_deref(), request.is_helper);
 
     let on_close = {
         let pane_id = pane_id.clone();

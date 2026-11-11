@@ -247,9 +247,19 @@ export function Sidebar({
   const [setUpFor, setSetUpFor] = useState<{ agent: NoChatAgent; prefer?: AddChatKind } | null>(null);
   const [startMode, setStartMode] = useStartMode(menuOpen, startModeApi);
   /** Starts the agent's chat in the menu's project and opens it. Rejects with the backend's error. */
+  // The main area shows a starting skeleton at once (ChatStartingView) until the chat is selected. On a failure the
+  // skeleton goes and the rejection goes on to the menu, which shows why (and the terminal fallback).
   const startAcpChat = async (agentId: string, accountId?: string) => {
     if (!project) throw new Error('Pick a project folder first.');
-    const started = await (accountId === undefined ? acp.start(agentId, project.path, true) : acp.start(agentId, project.path, true, accountId));
+    c.beginChatStart(agentId, project.path);
+    let started: Awaited<ReturnType<AcpChatApi['start']>>;
+    try {
+      started = await (accountId === undefined ? acp.start(agentId, project.path, true) : acp.start(agentId, project.path, true, accountId));
+    } catch (err) {
+      c.endChatStart();
+      throw err;
+    }
+    c.endChatStart();
     c.select(started.pane_id);
   };
   // Missions (Preview, Labs): "+" → Start a mission… opens the start sheet for the menu's project.

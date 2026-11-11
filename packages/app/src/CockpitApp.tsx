@@ -34,6 +34,7 @@ import { StoreHost } from './components/store/StoreHost';
 import { runStoreCheck } from './lib/agentStoreCheck';
 import { useInlineSettings } from './hooks/useInlineSettings';
 import { SpawnView } from './components/cockpit/SpawnView';
+import { ChatStartingView } from './components/cockpit/ChatStartingView';
 import { PanicSheet } from './components/cockpit/PanicSheet';
 import { IndividualSheet } from './components/cockpit/IndividualSheet';
 import { TellTeamToast } from './components/cockpit/team/TellTeam';
@@ -105,11 +106,13 @@ export default function CockpitApp() {
   const [view, setView] = useState<MainView>(() => homeView(c.spawn !== null, c.selectedId));
   // A new selection or spawn state (a pane closing, an agent starting, a digest opening a pane)
   // returns to the resting view. Done while rendering, so no frame shows a stale view.
-  const [seen, setSeen] = useState({ spawn: c.spawn, selectedId: c.selectedId });
+  const [seen, setSeen] = useState({ spawn: c.spawn, selectedId: c.selectedId, chatStarting: c.chatStarting !== null });
   const [companionId, setCompanionId] = useState<string | null>(null);
   const [inboxVisit, setInboxVisit] = useState(0);
-  if (seen.spawn !== c.spawn || seen.selectedId !== c.selectedId) {
-    setSeen({ spawn: c.spawn, selectedId: c.selectedId });
+  // A chat starting (its skeleton) also returns the main area to its resting view, so an open overlay does not hide it.
+  const chatStartingNow = c.chatStarting !== null;
+  if (seen.spawn !== c.spawn || seen.selectedId !== c.selectedId || seen.chatStarting !== chatStartingNow) {
+    setSeen({ spawn: c.spawn, selectedId: c.selectedId, chatStarting: chatStartingNow });
     // A companion's pane closes and starts again by itself (a move, a restart, a nap). Whoever was looking at it
     // lands back on the companion's page, not on the Inbox.
     const lostCompanionPane = c.spawn === null && c.selectedId === null && seen.selectedId !== null && isCompanionPaneId(seen.selectedId);
@@ -567,6 +570,9 @@ export default function CockpitApp() {
           <NewAgentHost c={nav} project={newAgentProject} onSetUp={() => setView('doctor')} />
         ) : view === 'spaces' && spacesOn ? (
           <SpacesPage />
+        ) : c.chatStarting ? (
+          // Before the pane views, so the skeleton shows over the inbox or the pane that was open.
+          <ChatStartingView start={c.chatStarting} />
         ) : view === 'spawn' && c.spawn ? (
           <SpawnView spawn={c.spawn} onDismiss={c.dismissSpawn} />
         ) : view === 'companion' && companion ? (

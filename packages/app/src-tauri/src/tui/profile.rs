@@ -58,6 +58,14 @@ pub trait TuiProfile: Send + Sync {
         None
     }
 
+    /// The parsed and checked spec: from `lend_proxy_toml`, or (a declarative agent) from the app's own lend table
+    /// (`declarative/lend-specs.toml`). `None`: not lendable. `Some(Err)`: declared but refused (logged by the
+    /// caller, never half used).
+    fn lend_proxy_spec(&self) -> Option<Result<crate::capacity_proxy::spec::ProxySpec, String>> {
+        let text = self.lend_proxy_toml()?;
+        Some(crate::capacity_proxy::spec::ProxySpec::parse(text))
+    }
+
     /// Whether the CLI this profile launches can be found on this machine. Defaults to true for
     /// backends with nothing to look up; CLI profiles override it with a PATH lookup.
     fn is_installed(&self) -> bool {
@@ -173,6 +181,12 @@ pub trait TuiProfile: Send + Sync {
     /// for them says plainly that the pane could not apply them.
     fn visible_run_args(&self, _run: &VisibleRun) -> VisibleRunArgs {
         VisibleRunArgs::default()
+    }
+
+    /// Models worth offering in a picker, best known first (aliases the CLI accepts, or what it lists). May shell
+    /// out, so callers run it off-thread. Empty when the profile knows none: the picker then takes a typed id.
+    fn model_choices(&self) -> Vec<String> {
+        Vec::new()
     }
 
     /// Final machine-readable result after a successful exit; never a human-readable fallback.

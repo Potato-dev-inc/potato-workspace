@@ -129,10 +129,10 @@ describe('basic rows across the real catalog', () => {
     for (const section of SECTIONS) for (const r of section.rows) expect(['basic', 'advanced', 'developer']).toContain(rowLevel(r));
   });
 
-  // 26 in all since "Show usage bar" (founder asked for it at the basic level, 2026-11-11); 27 with "Keep this PC awake".
-  it('shows at most 27 basic rows in all, and at most 25 in any one section', () => {
+  // 28 with "Default model for helpers" (founder asked for it, 2026-11-12). 26 in all since "Show usage bar" (founder asked for it at the basic level, 2026-11-11); 27 with "Keep this PC awake".
+  it('shows at most 28 basic rows in all, and at most 25 in any one section', () => {
     const counts = SECTIONS.map((s) => s.rows.filter((r) => rowLevel(r) === 'basic').length);
-    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(27);
+    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(28);
     for (const c of counts) expect(c).toBeLessThanOrEqual(25);
   });
 });

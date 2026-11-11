@@ -92,7 +92,9 @@ async function mount(addonApi: AcpAddonApi, props: Partial<NewAgentPageProps> = 
 
 const input = () => host.querySelector<HTMLTextAreaElement>('textarea[aria-label="What should the agent do?"]')!;
 const sendButton = () => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!;
-const chooseChat = () => act(async () => host.querySelector<HTMLButtonElement>('[role=radio]:not([aria-checked=true])')!.click());
+const runAsButton = (word: 'Chat' | 'Terminal') => [...host.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent === word)!;
+const chooseChat = () => act(async () => runAsButton('Chat').click());
+const chooseTerminal = () => act(async () => runAsButton('Terminal').click());
 const button = (text: string | RegExp) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => (typeof text === 'string' ? b.textContent === text : text.test(b.textContent ?? '')));
 async function type(value: string) {
   await act(async () => {
@@ -146,7 +148,7 @@ describe('Chat needs the add-on', () => {
   it('Terminal mode never asks, and an installed add-on is not mentioned', async () => {
     const r = addonRig({ labsEnabled: true, addons: [status({ state: 'installed', version: '0.74.0' })] });
     await mount(r.api);
-    await chooseChat();
+    await chooseTerminal();
     expect(host.querySelector('[data-testid="addon-prompt"]')).toBeNull();
     await type('go');
     expect(sendButton().disabled).toBe(false);

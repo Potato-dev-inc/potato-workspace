@@ -1,4 +1,5 @@
 use super::blocks::*;
+use super::clipboard;
 use super::search;
 use super::*;
 use serde_json::json;
@@ -332,4 +333,63 @@ fn replayed_blocks_become_attachments() {
     let image = attachment_of_block(&json!({"type":"image","mimeType":"image/png","data":"AQID"})).unwrap();
     assert_eq!((image.kind, image.path.as_str(), image.name.as_str()), (AttachKind::Image, "", "image"));
     assert!(attachment_of_block(&json!({"type":"text","text":"x"})).is_none());
+}
+
+// ---- Explorer clipboard (CF_HDROP) ----------------------------------------------------------------------------
+
+/// A DROPFILES block as Explorer writes it: a 20-byte header, then the paths (UTF-16 when `wide`), each null-ended.
+fn drop_files(paths: &[&str], wide: bool) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&20u32.to_le_bytes()); // pFiles: the list starts after the header
+    out.extend_from_slice(&[0u8; 8]); // pt
+    out.extend_from_slice(&0u32.to_le_bytes()); // fNC
+    out.extend_from_slice(&u32::from(wide).to_le_bytes()); // fWide
+    for path in paths {
+        if wide {
+            for unit in path.encode_utf16().chain(std::iter::once(0)) {
+                out.extend_from_slice(&unit.to_le_bytes());
+            }
+        } else {
+            out.extend_from_slice(path.as_bytes());
+            out.push(0);
+        }
+    }
+    if wide {
+        out.extend_from_slice(&[0, 0]);
+    } else {
+        out.push(0);
+    }
+    out
+}
+
+#[test]
+fn explorer_paths_are_read_one_per_file_in_order() {
+    let block = drop_files(&[r"C:\Users\me\notes.md", r"D:\photos\shot one.png", r"C:\work\src"], true);
+    assert_eq!(clipboard::parse_drop_files(&block), vec![r"C:\Users\me\notes.md", r"D:\photos\shot one.png", r"C:\work\src"]);
+}
+
+#[test]
+fn a_non_ascii_name_survives_the_wide_format() {
+    let block = drop_files(&[r"C:\Docs\résumé ☕.txt"], true);
+    assert_eq!(clipboard::parse_drop_files(&block), vec![r"C:\Docs\résumé ☕.txt"]);
+}
+
+#[test]
+fn the_ansi_flavour_is_read_too() {
+    let block = drop_files(&[r"C:\a.txt", r"C:\b.txt"], false);
+    assert_eq!(clipboard::parse_drop_files(&block), vec![r"C:\a.txt", r"C:\b.txt"]);
+}
+
+#[test]
+fn an_empty_or_broken_block_gives_no_paths_and_no_panic() {
+    assert!(clipboard::parse_drop_files(&[]).is_empty());
+    assert!(clipboard::parse_drop_files(&[1, 2, 3]).is_empty());
+    // The list offset points past the end of the block.
+    let mut bad = drop_files(&[r"C:\a.txt"], true);
+    bad[0..4].copy_from_slice(&9999u32.to_le_bytes());
+    assert!(clipboard::parse_drop_files(&bad).is_empty());
+    // A list with no closing empty path still gives what it has.
+    let mut cut = drop_files(&[r"C:\a.txt"], true);
+    cut.truncate(cut.len() - 2);
+    assert_eq!(clipboard::parse_drop_files(&cut), vec![r"C:\a.txt"]);
 }

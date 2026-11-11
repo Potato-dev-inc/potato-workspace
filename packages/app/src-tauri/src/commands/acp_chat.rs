@@ -58,7 +58,7 @@ pub fn start_error_text(error: &StartError) -> String {
 #[tauri::command]
 pub async fn acp_chat_start(app: AppHandle, state: State<'_, AppState>, agent_id: String, folder: String, explicit: Option<bool>, account_id: Option<String>) -> Result<Value, String> {
     let deps = live_deps(&app, &state.registry);
-    let request = StartRequest { agent_id, folder: PathBuf::from(folder), explicit: explicit.unwrap_or(false), account: account_id.filter(|a| !a.trim().is_empty()) };
+    let request = StartRequest { agent_id, folder: PathBuf::from(folder), explicit: explicit.unwrap_or(false), account: account_id.filter(|a| !a.trim().is_empty()), ..Default::default() };
     let started = tauri::async_runtime::spawn_blocking(move || chat::start_gated(&deps, request)).await.map_err(|e| format!("ACP_START_FAILED: {e}"))?;
     match started {
         Ok(session) => Ok(json!({ "pane_id": session.pane_id(), "agent": session.agent_id(), "lane": chat::LANE })),
@@ -113,6 +113,7 @@ pub async fn acp_chat_state(pane_id: String) -> Result<Value, String> {
 pub async fn acp_chat_set_config(pane_id: String, option_id: String, value: String) -> Result<Value, String> {
     let session = chat::get(&pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
     let worker = session.clone();
+    let (option_id_for_pick, value_for_pick) = (option_id.clone(), value.clone());
     tauri::async_runtime::spawn_blocking(move || worker.set_config(&option_id, &value))
         .await
         .map_err(|e| format!("INTERNAL: {e}"))?
@@ -121,6 +122,8 @@ pub async fn acp_chat_set_config(pane_id: String, option_id: String, value: Stri
             crate::acp::error::AcpError::BadOption(what) => format!("INVALID_ARGUMENT: the agent does not offer {what}"),
             other => format!("ACP_CONFIG_FAILED: {other}"),
         })?;
+    // A model the person picks is the next chat's starting model (for an agent that has a default-model rule).
+    crate::acp::chat::default_model::remember_pick(&session, &option_id_for_pick, &value_for_pick);
     Ok(session.state())
 }
 

@@ -71,7 +71,7 @@ describe('Lend profiles', () => {
     expect(api.calls.some((c) => /Pm\(/.test(c))).toBe(false);
   });
 
-  it('creates a profile with a lend sign-in: the main sign-in is shown but off, Codex says coming soon', async () => {
+  it('creates a profile with a lend sign-in: the main sign-in is shown but off, Codex and Gemini are offered with a key', async () => {
     const { api, onSaved } = await mount();
     await click(buttonByText(host, 'New profile'));
     expect(buttonByText(editor(), 'Save profile')!.disabled).toBe(true);
@@ -83,11 +83,10 @@ describe('Lend profiles', () => {
     const main = [...editor().querySelectorAll<HTMLInputElement>('input[type="radio"]')].find((i) => i.parentElement?.textContent?.includes('Main sign-in'))!;
     expect(main.disabled).toBe(true);
     expect(editor().textContent).toContain(`Main sign-in · ${MAIN_SIGN_IN_HINT}`);
-    expect(editor().textContent).toContain('Codex: coming soon');
-    const codex = checkbox(editor(), 'Codex: coming soon');
-    expect(codex.disabled).toBe(true);
+    expect(editor().textContent).not.toContain('coming soon');
+    expect(checkbox(editor(), 'Codex').disabled).toBe(false);
     expect(editor().textContent).toContain('Ask me before each request');
-    expect([...editor().querySelectorAll('.lend-tag')].map((t) => t.textContent)).toEqual(['Lab']);
+    expect([...editor().querySelectorAll('.lend-tag')].map((t) => t.textContent)).toEqual(['Lab', 'Lab', 'Lab']);
     await pickOption(signIn, 'acct-lend');
     await click(buttonByText(editor(), 'Save profile'));
     await settle(3);
@@ -99,6 +98,50 @@ describe('Lend profiles', () => {
     expect(api.calls.some((c) => c.startsWith('keySet('))).toBe(false);
     expect(onSaved).toHaveBeenCalled();
     expect(section('Lend profiles').textContent).toContain('Short loans');
+  });
+
+  it('Codex and Gemini can only be lent with a key: the sign-in is off and says why in plain words', async () => {
+    const { api } = await mount({ profiles: [] });
+    await click(buttonByText(host, 'New profile'));
+    await typeInto(input(editor(), 'Name'), 'Codex loans');
+    // Every agent row says what its other sign-in cannot do yet.
+    expect(editor().textContent).toContain('Codex signed in with ChatGPT is not supported yet.');
+    expect(editor().textContent).toContain('Gemini signed in with Google is not supported yet.');
+    await click(checkbox(editor(), 'Codex'));
+    const signIn = [...editor().querySelectorAll<HTMLInputElement>('input[type="radio"]')].find((i) => i.parentElement?.textContent?.includes('A lend sign-in'))!;
+    expect(signIn.disabled).toBe(true);
+    expect(signIn.checked).toBe(false);
+    expect(editor().querySelector('[data-testid="lend-signin-not-yet"]')!.textContent).toBe('Codex signed in with ChatGPT is not supported yet. Only an OpenAI API key can be lent.');
+    // No sign-in picker and no "Add a lend sign-in": the key is the way.
+    expect(buttonByText(editor(), 'Add a lend sign-in')).toBeUndefined();
+    expect(editor().querySelector('[aria-label="Lend sign-in"]')).toBeNull();
+    expect(buttonByText(editor(), 'Save profile')!.disabled).toBe(true);
+    await typeInto(input(editor(), 'API key'), 'sk-FAKE-OPENAI');
+    expect(buttonByText(editor(), 'Save profile')!.disabled).toBe(false);
+    await click(buttonByText(editor(), 'Save profile'));
+    await settle(3);
+    const save = api.calls.find((c) => c.startsWith('profileSave('))!;
+    expect(save).toContain('"agent_ids":["codex"]');
+    expect(save).toContain('"account":{"kind":"main"}');
+    expect(api.calls.join(' ')).not.toContain('sk-FAKE-OPENAI');
+    expect(api.calls).toContain('keySet("prof-1","(key)")');
+  });
+
+  it('one agent without a lendable sign-in turns the sign-in off for the whole profile, and picking Claude alone brings it back', async () => {
+    await mount({ profiles: [] });
+    await click(buttonByText(host, 'New profile'));
+    await click(checkbox(editor(), 'Claude'));
+    const signIn = () => [...editor().querySelectorAll<HTMLInputElement>('input[type="radio"]')].find((i) => i.parentElement?.textContent?.includes('A lend sign-in'))!;
+    expect(signIn().disabled).toBe(false);
+    expect(signIn().checked).toBe(true);
+    await click(checkbox(editor(), 'Gemini'));
+    expect(signIn().disabled).toBe(true);
+    expect(editor().querySelector('[data-testid="lend-signin-not-yet"]')!.textContent).toContain('Gemini signed in with Google is not supported yet.');
+    expect(editor().querySelector('input[aria-label="API key"]')).not.toBeNull();
+    await click(checkbox(editor(), 'Gemini'));
+    expect(signIn().disabled).toBe(false);
+    expect(signIn().checked).toBe(true);
+    expect(editor().querySelector('[data-testid="lend-signin-not-yet"]')).toBeNull();
   });
 
   it('"Add a lend sign-in" adds one, picks it, and says to sign in to it once in a pane', async () => {

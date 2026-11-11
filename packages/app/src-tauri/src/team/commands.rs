@@ -22,6 +22,15 @@ pub async fn team_state() -> Result<Value, String> {
     blocking(service::view).await
 }
 
+/// Settings > Team > People: how far away each computer of the team is. Only a relay team has a mailbox to time.
+#[tauri::command]
+pub async fn team_ping() -> Result<Vec<crate::capacity_proxy::ping::DevicePing>, String> {
+    if service::transport_kind() != Some("relay") {
+        return Err("Pings need a team on a relay.".into());
+    }
+    crate::capacity_proxy::ping_team().await
+}
+
 #[tauri::command]
 pub async fn team_config_get() -> Result<Value, String> {
     blocking(service::config_get).await

@@ -107,6 +107,9 @@ pub struct AgentRunView {
     /// Present when "Helper agents" made the run a background one (same as `receipt.headless_forced`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_forced: Option<String>,
+    /// Present when the model is the person's helper default (same as `receipt.model_note`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_note: Option<String>,
     /// True when an app restart ended this run but it kept a provider session, so
     /// `followup_task` resumes the conversation. `status` reads `interrupted`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -330,6 +333,7 @@ impl From<OperationSnapshot> for AgentRunView {
             run_mode: snapshot.worker.run_mode.clone(),
             headless_ignored: snapshot.worker.headless_ignored.clone(),
             headless_forced: snapshot.worker.headless_forced.clone(),
+            model_note: snapshot.worker.model_note.clone(),
             resumable: snapshot.worker.resumable,
             next: snapshot
                 .worker

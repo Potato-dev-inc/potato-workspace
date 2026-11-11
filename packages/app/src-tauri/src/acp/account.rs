@@ -20,8 +20,12 @@ pub fn supporting_agent_ids() -> Vec<String> {
     accounts::supporting_agents().into_iter().map(|a| a.agent_id).collect()
 }
 
-/// The environment that points `agent_id`'s adapter at account `account`.
+/// The environment that points `agent_id`'s adapter at account `account`. A borrowed sign-in (`lend:<grant id>`) points it
+/// at the local lend shim (the spec's `[chat]` hookup).
 pub fn launch_env(store: &Store, agent_id: &str, account: &str) -> Result<LaunchEnv, AccountProblem> {
+    if let Some(grant) = account.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX) {
+        return crate::capacity_proxy::borrowed_chat(agent_id, grant).map(|chat| chat.env).map_err(|message| AccountProblem { code: "ACCOUNT_NOT_FOUND", message, supported: Vec::new() });
+    }
     let has_scheme = crate::tui::is_registered(agent_id) && crate::tui::profile_for(agent_id).account_scheme().is_some();
     if !has_scheme {
         let supported = supporting_agent_ids();
@@ -36,6 +40,15 @@ pub fn launch_env(store: &Store, agent_id: &str, account: &str) -> Result<Launch
         message: format!("{why}. Pick an account of {agent_id} from Settings > Agents > Accounts, or leave out account."),
         supported: Vec::new(),
     })
+}
+
+/// What a chat on a borrowed sign-in needs besides its env: the adapter's extra arguments and the `authenticate`
+/// method it must be told to use. Nothing for any other account.
+pub fn apply_lend_extras(cfg: &mut crate::acp::config::AgentConfig, account: &str) {
+    let Some(grant) = account.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX) else { return };
+    if let Ok(chat) = crate::capacity_proxy::borrowed_chat(&cfg.id, grant) {
+        crate::acp::config::with_borrowed_chat(cfg, &chat);
+    }
 }
 
 #[cfg(test)]

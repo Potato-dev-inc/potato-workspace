@@ -8,6 +8,7 @@ import { AgentVersions } from '../blocks/AgentVersions';
 import { CHAT_ADDONS_LABEL, ChatAddonRows } from '../blocks/ChatAddonRows';
 import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings';
 import { CloseHelpersWithAgentToggle, HelperAgentsChoice, KeepHelpersOpenToggle } from '../blocks/HelperAgents';
+import { HELPER_MODELS_HINT, HELPER_MODELS_LABEL, HelperDefaultModels } from '../blocks/HelperModels';
 import { HiddenAgentsRow } from '../blocks/HiddenAgentsRow';
 import { PreloadSettings } from '../blocks/PreloadSettings';
 import { HANDOFF_MODE_HINT, HANDOFF_MODE_LABEL, QuickHandoffRows } from '../blocks/QuickHandoffRows';
@@ -146,6 +147,14 @@ export const agentsRows: RowDef[] = [
     keywords: 'hidden helper helpers headless background invisible no window pane subagent sub-agent agent hide show visible watch inbox always show choose',
     group: 'Helpers',
     render: (env) => <HelperAgentsChoice onSaved={env.markSaved} />,
+  },
+  {
+    id: 'helper-default-models',
+    label: HELPER_MODELS_LABEL,
+    hint: HELPER_MODELS_HINT,
+    keywords: 'helper helpers model default models subagent sub-agent agent choose pick gpt sonnet opus haiku opencode which',
+    group: 'Helpers',
+    render: (env) => <HelperDefaultModels saved={env.settings.helper_default_models} onChange={(next) => void env.patch({ helper_default_models: next })} />,
   },
   {
     id: 'keep-helpers-open',

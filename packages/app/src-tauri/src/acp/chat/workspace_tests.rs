@@ -104,7 +104,7 @@ impl Rig {
         let conversations = conversations_in(&dir, opts);
         let deps = deps_for(&dir, &conversations);
         let cfg = agents(opts, &dir).0["fake"].as_ref().clone();
-        let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None }).expect("the fake agent starts");
+        let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None, ..Default::default() }).expect("the fake agent starts");
         Rig { dir, opts: opts.to_string(), conversations, deps, chat, panes: Panes::default() }
     }
 
@@ -227,7 +227,7 @@ fn a_failed_first_start_leaves_no_conversation_behind() {
     let conversations = conversations_in(&dir, "auth=1");
     let deps = deps_for(&dir, &conversations);
     let cfg = agents("auth=1", &dir).0["fake"].as_ref().clone();
-    let failed = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None });
+    let failed = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None, ..Default::default() });
     assert!(failed.is_err());
     assert!(conversations.list().is_empty(), "{:?}", conversations.list());
     let _ = std::fs::remove_dir_all(&dir);
@@ -746,7 +746,7 @@ fn when_the_agent_cannot_bring_the_conversation_back_the_words_stay_and_a_note_s
 
 fn start_helper_of(rig: &Rig, parent: &str) -> String {
     let cfg = agents(&rig.opts, &rig.dir).0["fake"].as_ref().clone();
-    let helper = start(&rig.deps, cfg, StartRequest { agent_id: "fake".into(), folder: rig.dir.clone(), explicit: true, account: None }).expect("the helper chat starts");
+    let helper = start(&rig.deps, cfg, StartRequest { agent_id: "fake".into(), folder: rig.dir.clone(), explicit: true, account: None, ..Default::default() }).expect("the helper chat starts");
     let id = helper.pane_id().to_string();
     assert!(crate::pty::pane_parent::set_parent(&rig.deps.registry, &id, parent));
     id

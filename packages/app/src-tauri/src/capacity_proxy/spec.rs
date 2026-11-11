@@ -86,7 +86,23 @@ pub struct AuthSpecs {
     pub api_key: Option<AuthSpec>,
     #[serde(default)]
     pub account: Option<AuthSpec>,
+    /// A sign-in the agent has that is NOT lendable yet, in plain words for the lend screens
+    /// ("Codex signed in with ChatGPT is not supported yet."). Only shown; nothing is ever sent for it.
+    #[serde(default)]
+    pub account_not_yet: Option<String>,
 }
+
+/// A small text file written into the borrowed pane's own scratch folder (`home_env`).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct HookupFile {
+    /// Relative to the scratch folder, `/` separated, no `..`.
+    pub path: String,
+    /// `{base_url}` is replaced with the shim's address. Never holds a secret: the placeholder only.
+    pub content: String,
+}
+
+pub const MAX_HOOKUP_FILES: usize = 4;
+pub const MAX_HOOKUP_FILE_BYTES: usize = 8 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Hookup {
@@ -97,10 +113,50 @@ pub struct Hookup {
     pub remove_prefixes: Vec<String>,
     #[serde(default)]
     pub remove: Vec<String>,
+    /// The variable that names the agent's own config folder. With `files`, the pane gets a fresh folder of this
+    /// lend (never the borrower's real one), so nothing is read from the borrower's own agent setup.
+    #[serde(default)]
+    pub home_env: Option<String>,
+    #[serde(default)]
+    pub files: Vec<HookupFile>,
+    /// Chat only: extra arguments for the adapter's program.
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Chat only: the adapter is told to use its `authenticate` method with this id before a session opens
+    /// (the key it then uses is the placeholder from `set`).
+    #[serde(default)]
+    pub authenticate: Option<String>,
+}
+
+impl Hookup {
+    fn check(&self) -> Result<(), String> {
+        if self.files.len() > MAX_HOOKUP_FILES {
+            return Err("lend proxy spec: too many hookup files".into());
+        }
+        if !self.files.is_empty() && self.home_env.is_none() {
+            return Err("lend proxy spec: hookup files need home_env".into());
+        }
+        if self.home_env.as_deref().is_some_and(|n| n.is_empty() || !n.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')) {
+            return Err("lend proxy spec: bad home_env".into());
+        }
+        for f in &self.files {
+            let bad = f.path.is_empty()
+                || f.path.starts_with('/')
+                || f.path.contains(['\\', ':'])
+                || f.path.split('/').any(|part| part.is_empty() || part == "." || part == "..")
+                || f.content.len() > MAX_HOOKUP_FILE_BYTES;
+            if bad {
+                return Err(format!("lend proxy spec: bad hookup file {:?}", f.path));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ProxySpec {
+    /// Set from the profile that serves the spec (a definition's `[lend]` table does not repeat it).
+    #[serde(default)]
     pub agent_id: String,
     pub support: Support,
     /// Protocol shape, for usage metering (`anthropic_messages_sse`).
@@ -111,8 +167,19 @@ pub struct ProxySpec {
     pub paths: Vec<String>,
     #[serde(default = "default_max_body")]
     pub max_body_bytes: usize,
+    /// Request headers of the borrower that are dropped on top of the always-dropped ones (organisation or project
+    /// headers that would steer the lender's key).
+    #[serde(default)]
+    pub strip_headers: Vec<String>,
+    /// Query parameters dropped (a key sent in the URL).
+    #[serde(default)]
+    pub strip_query: Vec<String>,
     pub auth: AuthSpecs,
+    /// How a terminal pane is pointed at the shim.
     pub hookup: Hookup,
+    /// How a chat (ACP) session is pointed at it. Absent: chat is not lendable for this agent.
+    #[serde(default)]
+    pub chat: Option<Hookup>,
 }
 
 fn default_max_body() -> usize {
@@ -123,6 +190,13 @@ impl ProxySpec {
     /// Parses and checks a spec. A bad one is refused, never half used.
     pub fn parse(text: &str) -> Result<Self, String> {
         let mut spec: ProxySpec = toml::from_str(text).map_err(|e| format!("lend proxy spec: {e}"))?;
+        spec.validate()?;
+        Ok(spec)
+    }
+
+    /// The checks `parse` makes, for a spec that came from somewhere else (a definition's `[lend]` table).
+    pub fn validate(&mut self) -> Result<(), String> {
+        let spec = self;
         spec.max_body_bytes = spec.max_body_bytes.min(MAX_BODY_CAP);
         check_upstream(&spec.upstream)?;
         if spec.paths.is_empty() {
@@ -130,9 +204,13 @@ impl ProxySpec {
         }
         for p in &spec.paths {
             let (method, path) = p.split_once(' ').ok_or_else(|| format!("lend proxy spec: bad path {p:?}"))?;
-            if method.is_empty() || !method.bytes().all(|b| b.is_ascii_uppercase()) || !path.starts_with('/') || path.contains("..") {
+            if method.is_empty() || !method.bytes().all(|b| b.is_ascii_uppercase()) || !path.starts_with('/') || path.contains("..") || path.contains("//") {
                 return Err(format!("lend proxy spec: bad path {p:?}"));
             }
+        }
+        spec.hookup.check()?;
+        if let Some(chat) = &spec.chat {
+            chat.check()?;
         }
         if spec.auth.api_key.is_none() && spec.auth.account.is_none() {
             return Err("lend proxy spec: no auth".into());
@@ -140,13 +218,42 @@ impl ProxySpec {
         if let Some(account) = spec.auth.account.as_mut() {
             check_expiry(account)?;
         }
-        Ok(spec)
+        Ok(())
     }
 
-    /// Whether `method` + `path` (without the query) is one of the allowed pairs.
+    /// Whether `method` + `path` (without the query) is one of the allowed pairs. A `*` in a pair stands for any
+    /// characters inside ONE path segment (a model name), never across a `/`.
     pub fn allows(&self, method: &str, path: &str) -> bool {
-        self.paths.iter().any(|p| p.split_once(' ').is_some_and(|(m, q)| m == method && q == path))
+        self.paths.iter().any(|p| p.split_once(' ').is_some_and(|(m, q)| m == method && path_matches(q, path)))
     }
+
+    /// Whether a query parameter (`name=value` or `name`) is dropped before forwarding.
+    pub fn strips_query(&self, param: &str) -> bool {
+        let name = param.split('=').next().unwrap_or(param);
+        self.strip_query.iter().any(|q| q.eq_ignore_ascii_case(name))
+    }
+
+    pub fn strips_header(&self, name: &str) -> bool {
+        self.strip_headers.iter().any(|h| h.eq_ignore_ascii_case(name))
+    }
+}
+
+/// `pattern` against `path`, segment by segment (both start with `/`).
+fn path_matches(pattern: &str, path: &str) -> bool {
+    let (mut want, mut have) = (pattern.split('/'), path.split('/'));
+    loop {
+        match (want.next(), have.next()) {
+            (None, None) => return true,
+            (Some(w), Some(h)) if segment_matches(w, h) => {}
+            _ => return false,
+        }
+    }
+}
+
+/// One `*` per segment (`head*tail`), standing for at least one character.
+fn segment_matches(pattern: &str, segment: &str) -> bool {
+    let Some((head, tail)) = pattern.split_once('*') else { return pattern == segment };
+    !tail.contains('*') && segment.len() > head.len() + tail.len() && segment.starts_with(head) && segment.ends_with(tail)
 }
 
 /// The expiry fields go together, the unit is `ms` or `s`, and a refresh needs an expiry and something to run.
@@ -190,8 +297,7 @@ pub fn all() -> Vec<ProxySpec> {
     crate::tui::registry::snapshot()
         .iter()
         .filter_map(|profile| {
-            let text = profile.lend_proxy_toml()?;
-            match ProxySpec::parse(text) {
+            match profile.lend_proxy_spec()? {
                 Ok(spec) if spec.agent_id == profile.id() => Some(spec),
                 Ok(_) => {
                     tracing::warn!(agent = profile.id(), "lend proxy spec names another agent; ignored");
@@ -258,6 +364,45 @@ timeout_secs = 99999");
     #[test]
     fn a_registered_profile_serves_the_spec() {
         assert!(for_agent("claude").is_some());
+        assert!(for_agent("codex").is_some());
+    }
+
+    const CODEX: &str = include_str!("../tui/codex/lend_proxy.toml");
+
+    #[test]
+    fn the_codex_spec_lends_an_api_key_only_and_says_why_chatgpt_is_out() {
+        let spec = ProxySpec::parse(CODEX).unwrap();
+        assert_eq!((spec.upstream.as_str(), spec.shape.as_str()), ("https://api.openai.com", "openai_responses_sse"));
+        assert!(spec.auth.api_key.is_some() && spec.auth.account.is_none());
+        assert!(spec.auth.account_not_yet.as_deref().unwrap().contains("ChatGPT is not supported yet"));
+        assert!(spec.allows("POST", "/v1/responses") && spec.allows("GET", "/v1/models"));
+        assert!(!spec.allows("POST", "/v1/chat/completions") && !spec.allows("POST", "/backend-api/codex/responses"));
+        assert!(spec.strips_header("OpenAI-Organization") && spec.strips_header("openai-project"));
+        // WebSockets are off in the terminal config; the chat has its own table with the authenticate method.
+        assert!(spec.hookup.files[0].content.contains("supports_websockets = false"));
+        let chat = spec.chat.unwrap();
+        assert_eq!(chat.authenticate.as_deref(), Some("api-key"));
+        assert!(spec.hookup.authenticate.is_none());
+    }
+
+    #[test]
+    fn a_star_stands_for_one_name_inside_one_segment() {
+        let spec = ProxySpec::parse(&CODEX.replace("paths = [\"POST /v1/responses\"", "paths = [\"POST /v1/models/*:go\", \"POST /v1/responses\"")).unwrap();
+        assert!(spec.allows("POST", "/v1/models/gemini-2.5-flash:go"));
+        for no in ["/v1/models/:go", "/v1/models/a/b:go", "/v1/models/a:stop", "/v1/models/a:go/x"] {
+            assert!(!spec.allows("POST", no), "{no}");
+        }
+        assert!(!spec.allows("GET", "/v1/models/a:go"));
+    }
+
+    #[test]
+    fn hookup_files_stay_inside_their_folder() {
+        for bad in ["../x", "/abs", "a//b", r"a\b", "C:/x", "./x"] {
+            let text = CODEX.replace("path = \"config.toml\"", &format!("path = {bad:?}"));
+            assert!(ProxySpec::parse(&text).is_err(), "{bad}");
+        }
+        let no_home = CODEX.replacen("home_env = \"CODEX_HOME\"", "", 1);
+        assert!(ProxySpec::parse(&no_home).is_err());
     }
 
     #[test]

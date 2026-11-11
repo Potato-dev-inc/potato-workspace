@@ -261,6 +261,22 @@
   overflow-wrap: anywhere;
 }
 
+/* Test link on a lend row: the button, and what it found under it. */
+.lend-test {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  max-width: 220px;
+}
+.lend-test small {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.lend-test-ok {
+  color: var(--label-2, #666);
+}
+
 /* Settings > Lend page. */
 .lend-page {
   padding: 12px 14px;

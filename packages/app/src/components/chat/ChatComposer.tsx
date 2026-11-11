@@ -9,6 +9,7 @@ import { MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_CHARS } from '../../lib/paneOutbox
 import { clearDraft, DRAFT_SAVE_MS, readDraftState, writeDraft, type ComposerDraft } from '../../lib/composerDraft';
 import { insertAtCursor } from '../../lib/voice';
 import { pickFolder, pickImages, prepareAttachments, savePastedImage, type ChatAttachment } from '../../lib/attachFiles';
+import { fileClipboard } from '../../lib/pasteFiles';
 import { AttachMenu } from './AttachMenu';
 import { AttachmentChips } from './AttachmentChips';
 import { ContextMeter } from './ContextMeter';
@@ -331,20 +332,34 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     }
   };
 
+  /** Attaches the files on the clipboard that the paste event did not give as paths (files copied in Explorer). */
+  const addClipboardFiles = async () => {
+    let paths: string[];
+    try {
+      paths = await fileClipboard().filePaths();
+    } catch {
+      setError('Could not read the files on the clipboard.');
+      return;
+    }
+    await addPaths(paths);
+  };
+
   // Pasting an image makes a chip (the image is saved for this pane). A file with a path on this PC makes a chip too.
-  // Anything else, plain text included, pastes as it always did: the default is left alone.
+  // A file the webview gives without a path, or a paste with no text and no files, asks the desktop app for the files
+  // on the clipboard. Plain text pastes as it always did: the default is left alone.
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     if (!draftKey || blocked || !attachFiles) return;
     const files = Array.from(event.clipboardData?.files ?? []);
+    if (files.length === 0 && (event.clipboardData?.getData('text/plain') ?? '') !== '') return;
+    event.preventDefault();
     const images = files.filter((file) => file.type.startsWith('image/'));
-    const paths = files
-      .filter((file) => !file.type.startsWith('image/'))
+    const others = files.filter((file) => !file.type.startsWith('image/'));
+    const paths = others
       .map((file) => (file as File & { path?: string }).path)
       .filter((path): path is string => typeof path === 'string' && path !== '');
-    if (images.length === 0 && paths.length === 0) return;
-    event.preventDefault();
     if (paths.length > 0) void addPaths(paths);
     for (const image of images) void savePasted(image);
+    if (others.length > paths.length || files.length === 0) void addClipboardFiles();
   };
 
   // Files dropped on the box become paths in the message. The desktop app reports the drop in window coordinates,

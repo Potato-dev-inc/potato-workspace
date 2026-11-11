@@ -169,6 +169,13 @@ describe('the line a turn ends with, in the chat view', () => {
     expect(invoke).toHaveBeenCalledWith('pane_message_send', { paneId: 'p1', text: 'please do 1' });
   });
 
+  it('a model that needs credit says which model, what to pick and which setting to change', async () => {
+    const text = "OpenCode's model opencode/gemini-4-carbon needs credit. Pick another model in the chat, or set Settings › Orchestrator & Models › OpenCode model.";
+    items = turn(1, 'failed', text);
+    await mount();
+    expect(lines()[0].textContent).toBe(`${text} · Retry`);
+  });
+
   it('a Retry that the backend refuses shows the reason', async () => {
     items = turn(1, 'failed', 'Something went wrong: the pipe broke');
     const base = invoke.getMockImplementation()!;

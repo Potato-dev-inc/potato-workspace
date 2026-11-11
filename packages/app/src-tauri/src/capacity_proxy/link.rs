@@ -25,7 +25,7 @@ use super::shim::{OpenError, Opener};
 use super::wire::NodeHint;
 use crate::keys::KeyStore;
 use crate::p2p::capability::{self, Capability, CapabilityHandler, MemoryPermissions, Permissions, RelayPolicy, Registry, RoutedPermissions};
-use crate::p2p::endpoint::{BiStream, Link, NodeId, P2pError, PeerAddr, TransportFactory};
+use crate::p2p::endpoint::{BiStream, Link, NodeId, P2pError, PathKind, PeerAddr, TransportFactory};
 use crate::p2p::identity::DeviceIdentity;
 use crate::p2p::{alpn, P2p};
 use crate::secure_core::crypto::{hmac, same_mac};
@@ -35,8 +35,40 @@ pub const CLOSE_LEND_ENDED: u32 = 0x4c45;
 /// The handshake did not prove the grant.
 pub const CLOSE_REFUSED: u32 = 0x4c46;
 
+/// The lender's wait for the first message of a link.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_HELLO: usize = 4096;
+/// How long `start` waits for the endpoint to reach its relay before it hands out the hint without one.
+const RELAY_SETTLE: Duration = Duration::from_secs(4);
+/// A probe (Test link) closed its link on purpose; not an end of the lend.
+pub const CLOSE_PROBE: u32 = 0x4c50;
+
+/// The borrower's waits. A path between continents through a relay needs seconds, not the LAN's milliseconds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Timeouts {
+    /// One dial attempt (finding the lender through the relay and the QUIC handshake).
+    pub connect: Duration,
+    /// The handshake exchange on a dialed link.
+    pub hello: Duration,
+    /// The pause before the one retry.
+    pub pause: Duration,
+    /// The most one request waits for a link, retries included.
+    pub open: Duration,
+    /// After a failed open, further requests fail at once with the same words for this long (no pile-up of redials).
+    pub fail_memory: Duration,
+}
+
+impl Default for Timeouts {
+    fn default() -> Self {
+        Self {
+            connect: Duration::from_secs(25),
+            hello: Duration::from_secs(15),
+            pause: Duration::from_millis(500),
+            open: Duration::from_secs(60),
+            fail_memory: Duration::from_secs(3),
+        }
+    }
+}
 
 /// The handshake MAC (plan 3.4): binds the grant to both node ids.
 pub fn handshake_mac(secret: &[u8], grant_id: &str, lender: &NodeId, borrower: &NodeId) -> [u8; 32] {
@@ -210,8 +242,45 @@ pub async fn serve_lender(book: Arc<dyn LenderBook>, me: NodeId, peer: NodeId, l
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConnectError {
     Ended,
+    /// The PC answered but does not have this lend (it restarted, or the lend is gone).
     Refused,
+    /// The dial failed outright.
     Unreachable(String),
+    /// No answer in time.
+    Timeout,
+}
+
+impl ConnectError {
+    /// The words a person (or an agent's error line) gets. `via_relay`: the lender is reached through a relay.
+    pub fn plain(&self, via_relay: bool) -> String {
+        match self {
+            Self::Ended => "This lend ended".into(),
+            Self::Refused => "The lender's PC no longer has this lend; ask again".into(),
+            Self::Unreachable(_) => "The lender's PC isn't answering (is the app open?)".into(),
+            Self::Timeout if via_relay => "Network timeout via relay".into(),
+            Self::Timeout => "Network timeout".into(),
+        }
+    }
+
+    /// Worth one more try: the network may have been slow. A refusal or an end will not change.
+    fn transient(&self) -> bool {
+        matches!(self, Self::Unreachable(_) | Self::Timeout)
+    }
+}
+
+fn classify(e: P2pError) -> ConnectError {
+    match e {
+        P2pError::Net(m) if m.contains("timed out") => ConnectError::Timeout,
+        P2pError::NoSharedAlpn | P2pError::Closed => ConnectError::Refused,
+        other => ConnectError::Unreachable(other.to_string()),
+    }
+}
+
+/// What a probe found: the handshake round trip and how the link runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Probe {
+    pub rtt: Duration,
+    pub path: PathKind,
 }
 
 /// The lend endpoint of this app: one `P2p` with only the `agents/lend` capability.
@@ -219,6 +288,7 @@ pub struct LendNet {
     p2p: Arc<P2p>,
     keys: KeyStore,
     book: BookSlot,
+    timeouts: RwLock<Timeouts>,
 }
 
 impl LendNet {
@@ -234,7 +304,7 @@ impl LendNet {
             .register(Capability::new(capability::AGENTS_LEND, alpn::LEND, RelayPolicy::Allowed, handler))
             .map_err(|e| e.to_string())?;
         routed.route(capability::AGENTS_LEND, Arc::new(LendPermissions { book: book.clone() }));
-        Ok(Arc::new(Self { p2p, keys, book }))
+        Ok(Arc::new(Self { p2p, keys, book, timeouts: RwLock::new(Timeouts::default()) }))
     }
 
     /// The app's real one: the iroh network and a node key of its own in the OS credential store.
@@ -261,8 +331,10 @@ impl LendNet {
     pub async fn start(&self) -> Result<NodeHint, P2pError> {
         self.p2p.want(capability::AGENTS_LEND).await?;
         let id = self.p2p.node_id().ok_or(P2pError::Closed)?;
+        // The relay is what lets a borrower in another country in: wait (briefly) until the endpoint has one.
+        let relay = self.p2p.home_relay_within(RELAY_SETTLE).await.unwrap_or_default();
         let lan = self.p2p.local_addrs().iter().take(4).map(|a| a.to_string()).collect();
-        Ok(NodeHint { id: id.to_hex(), relay: self.p2p.home_relay().unwrap_or_default(), lan })
+        Ok(NodeHint { id: id.to_hex(), relay, lan })
     }
 
     /// Nothing needs the endpoint any more.
@@ -270,26 +342,68 @@ impl LendNet {
         self.p2p.unwant(capability::AGENTS_LEND).await;
     }
 
-    /// Borrower: dial the lender and prove the grant.
+    pub fn timeouts(&self) -> Timeouts {
+        self.timeouts.read().map(|t| *t).unwrap_or_default()
+    }
+
+    /// Tests set short waits.
+    #[cfg(test)]
+    pub fn set_timeouts(&self, t: Timeouts) {
+        if let Ok(mut w) = self.timeouts.write() {
+            *w = t;
+        }
+    }
+
+    /// Borrower: dial the lender and prove the grant. A slow or failed dial gets one more try.
     pub async fn connect(&self, hint: &NodeHint, grant_id: &str, secret: &[u8]) -> Result<Arc<dyn Link>, ConnectError> {
+        self.connect_timed(hint, grant_id, secret).await.map(|(link, _)| link)
+    }
+
+    /// `connect`, plus the round trip of the handshake exchange (what Test link reports).
+    async fn connect_timed(&self, hint: &NodeHint, grant_id: &str, secret: &[u8]) -> Result<(Arc<dyn Link>, Duration), ConnectError> {
+        let t = self.timeouts();
+        match self.connect_once(hint, grant_id, secret, t).await {
+            Err(e) if e.transient() => {
+                tracing::debug!(error = ?e, "lend: connect failed, trying once more");
+                tokio::time::sleep(t.pause).await;
+                self.connect_once(hint, grant_id, secret, t).await
+            }
+            other => other,
+        }
+    }
+
+    async fn connect_once(&self, hint: &NodeHint, grant_id: &str, secret: &[u8], t: Timeouts) -> Result<(Arc<dyn Link>, Duration), ConnectError> {
         let lender = node_from_hex(&hint.id).ok_or(ConnectError::Refused)?;
         let mut addr = PeerAddr::new(lender).with_relay(&hint.relay);
         addr.direct = hint.lan.iter().filter_map(|a| a.parse().ok()).collect();
-        let link = self.p2p.dial(&addr, capability::AGENTS_LEND).await.map_err(|e| ConnectError::Unreachable(e.to_string()))?;
+        let link = tokio::time::timeout(t.connect, self.p2p.dial(&addr, capability::AGENTS_LEND))
+            .await
+            .map_err(|_| ConnectError::Timeout)?
+            .map_err(classify)?;
         let me = self.p2p.node_id().ok_or(ConnectError::Unreachable("no endpoint".into()))?;
-        let reply = tokio::time::timeout(HELLO_TIMEOUT, async {
-            let mut s = link.open_bi().await.map_err(|e| ConnectError::Unreachable(e.to_string()))?;
+        let started = std::time::Instant::now();
+        let reply = tokio::time::timeout(t.hello, async {
+            let mut s = link.open_bi().await.map_err(|_| ConnectError::Refused)?;
             let mac = to_hex(&handshake_mac(secret, grant_id, &lender, &me));
             write_msg(&mut s.send, &Hello { v: 1, grant_id: grant_id.to_string(), mac }).await.map_err(|_| ConnectError::Refused)?;
             read_msg::<_, HelloReply>(&mut s.recv).await.map_err(|_| ConnectError::Refused)
         })
         .await
-        .map_err(|_| ConnectError::Unreachable("the lending PC did not answer".into()))??;
+        .map_err(|_| ConnectError::Timeout)??;
+        let rtt = started.elapsed();
         match reply {
-            HelloReply { ok: true, .. } => Ok(link),
+            HelloReply { ok: true, .. } => Ok((link, rtt)),
             HelloReply { ended: true, .. } => Err(ConnectError::Ended),
             _ => Err(ConnectError::Refused),
         }
+    }
+
+    /// Test link: the real `pm/lend/1` handshake, then the link is closed again. Nothing is forwarded.
+    pub async fn probe(&self, hint: &NodeHint, grant_id: &str, secret: &[u8]) -> Result<Probe, ConnectError> {
+        let (link, rtt) = self.connect_timed(hint, grant_id, secret).await?;
+        let path = link.path();
+        link.close(CLOSE_PROBE, "probe");
+        Ok(Probe { rtt, path })
     }
 }
 
@@ -308,11 +422,13 @@ pub struct LinkOpener {
     net: Arc<LendNet>,
     grant: Arc<dyn BorrowerGrant>,
     link: tokio::sync::Mutex<Option<Arc<dyn Link>>>,
+    /// The last failed open and when: the requests right after it fail with the same words, without dialing again.
+    failed: std::sync::Mutex<Option<(std::time::Instant, String)>>,
 }
 
 impl LinkOpener {
     pub fn new(net: Arc<LendNet>, grant: Arc<dyn BorrowerGrant>) -> Arc<Self> {
-        Arc::new(Self { net, grant, link: tokio::sync::Mutex::new(None) })
+        Arc::new(Self { net, grant, link: tokio::sync::Mutex::new(None), failed: std::sync::Mutex::new(None) })
     }
 
     /// Drops the link (the grant ended here).
@@ -321,14 +437,22 @@ impl LinkOpener {
             link.close(CLOSE_LEND_ENDED, "lend_ended");
         }
     }
-}
 
-#[async_trait]
-impl Opener for LinkOpener {
-    async fn open(&self) -> Result<BiStream, OpenError> {
+    fn remember_failure(&self, why: &str) {
+        if let Ok(mut f) = self.failed.lock() {
+            *f = Some((std::time::Instant::now(), why.to_string()));
+        }
+    }
+
+    fn recent_failure(&self, within: Duration) -> Option<String> {
+        self.failed.lock().ok().and_then(|f| f.as_ref().filter(|(at, _)| at.elapsed() < within).map(|(_, why)| why.clone()))
+    }
+
+    async fn open_inner(&self) -> Result<BiStream, OpenError> {
         if self.grant.ended() {
             return Err(OpenError::Ended);
         }
+        let via_relay = !self.grant.hint().relay.is_empty();
         let mut slot = self.link.lock().await;
         if let Some(link) = slot.as_ref() {
             if let Ok(s) = link.open_bi().await {
@@ -344,17 +468,42 @@ impl Opener for LinkOpener {
                 }
             }
         }
+        if let Some(why) = self.recent_failure(self.net.timeouts().fail_memory) {
+            return Err(OpenError::Unavailable(why));
+        }
         let link = match self.net.connect(&self.grant.hint(), &self.grant.grant_id(), &self.grant.secret()).await {
             Ok(link) => link,
             Err(ConnectError::Ended) => {
                 self.grant.lender_ended();
                 return Err(OpenError::Ended);
             }
-            Err(ConnectError::Refused) => return Err(OpenError::Unavailable("refused".into())),
-            Err(ConnectError::Unreachable(why)) => return Err(OpenError::Unavailable(why)),
+            Err(e) => {
+                let why = e.plain(via_relay);
+                self.remember_failure(&why);
+                return Err(OpenError::Unavailable(why));
+            }
         };
-        let s = link.open_bi().await.map_err(|e| OpenError::Unavailable(e.to_string()))?;
+        let Ok(s) = link.open_bi().await else {
+            let why = ConnectError::Refused.plain(via_relay);
+            self.remember_failure(&why);
+            return Err(OpenError::Unavailable(why));
+        };
         *slot = Some(link);
+        if let Ok(mut f) = self.failed.lock() {
+            *f = None;
+        }
         Ok(s)
+    }
+}
+
+#[async_trait]
+impl Opener for LinkOpener {
+    async fn open(&self) -> Result<BiStream, OpenError> {
+        // A request never waits for reconnects without end.
+        let via_relay = !self.grant.hint().relay.is_empty();
+        match tokio::time::timeout(self.net.timeouts().open, self.open_inner()).await {
+            Ok(r) => r,
+            Err(_) => Err(OpenError::Unavailable(ConnectError::Timeout.plain(via_relay))),
+        }
     }
 }

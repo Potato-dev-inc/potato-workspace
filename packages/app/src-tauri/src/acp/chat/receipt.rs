@@ -172,6 +172,7 @@ pub fn build(inputs: &ReceiptInputs) -> RunReceipt {
         run_mode: None,
         headless_ignored: None,
         headless_forced: None,
+        model_note: None,
         lane_used: note("lane_used"),
         lane_reason: note("lane_reason"),
         lane_fallback: inputs.lane_note.and_then(|n| n.get("lane_fallback")).cloned(),

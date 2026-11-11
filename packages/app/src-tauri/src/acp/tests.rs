@@ -586,6 +586,21 @@ fn a_sign_in_error_is_reported_with_the_agents_methods_and_leaves_no_process() {
     assert!(rig.session.connection().is_none());
 }
 
+/// A chat on a borrowed sign-in: the config says which `authenticate` method to use, and it is called before the session opens.
+#[test]
+fn an_adapter_that_needs_authenticate_is_told_the_method_before_the_session_opens() {
+    let without = Rig::new("needs_authenticate=1");
+    assert!(matches!(without.session.ensure_running().unwrap_err(), AcpError::AuthRequired { .. }), "the adapter refuses a session until it is told");
+
+    let rig = Rig::with("needs_authenticate=1", |cfg| cfg.authenticate_with = Some("login".to_string()));
+    rig.session.ensure_running().expect("it opens after authenticate");
+    let marker = std::fs::read_to_string(rig.dir.join("store").join("authenticated")).unwrap();
+    assert_eq!(marker, "login", "the method id the config named");
+    assert_eq!(rig.run_turn("hello").stop_reason.as_deref(), Some("end_turn"));
+    rig.session.close();
+    without.session.close();
+}
+
 #[test]
 fn a_start_that_fails_with_a_known_message_is_retried() {
     let rig = Rig::with("fail_init_once=1", |cfg| {

@@ -108,11 +108,23 @@ export function chatAvailable(lanes: LaneView | null, agentId: string | null): b
   return !!found && !found.disabled;
 }
 
-/** The way the agent runs unless the person flips the switch: its saved choice. */
-export function defaultRunAs(lanes: LaneView | null, agentId: string | null): RunAs {
-  if (!chatAvailable(lanes, agentId)) return 'terminal';
-  const found = lanes!.agents.find((a) => a.id.toLowerCase() === agentId!.toLowerCase());
-  return found?.lane === 'acp' ? 'chat' : 'terminal';
+/**
+ * The way the agent runs unless the person flips the switch: Chat when the agent has one that can start now (the
+ * same default as the "+" menu), else Terminal. The saved "how to run" lane does not change this default.
+ */
+export function defaultRunAs(lanes: LaneView | null, agentId: string | null, chatReady: boolean = true): RunAs {
+  return chatReady && chatAvailable(lanes, agentId) ? 'chat' : 'terminal';
+}
+
+/** The model the picker can show: a remembered id the agent no longer lists is dropped (blank = the agent's default). */
+export function usableModel(remembered: string, list: { models: readonly string[] } | null): string {
+  if (!remembered || !list || list.models.length === 0) return remembered;
+  return list.models.includes(remembered) ? remembered : '';
+}
+
+/** The "Terminal | Chat" choice last made on the page, or null when none was made (or storage is blocked). */
+export function parseRunAs(raw: unknown): RunAs | null {
+  return raw === 'terminal' || raw === 'chat' ? raw : null;
 }
 
 // ---------- the request ----------
@@ -128,6 +140,8 @@ export interface StartRequest {
   runAs: RunAs;
   /** What to tell the agent first (already trimmed, never empty). */
   prompt: string;
+  /** The model to start on; absent: the agent's own default. */
+  model?: string;
 }
 
 /** Why Send is off right now, or null when the person can send. */

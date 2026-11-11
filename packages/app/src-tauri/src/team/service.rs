@@ -1310,6 +1310,17 @@ pub struct MemberView {
     pub github: Option<String>,
     pub github_confirmed: bool,
     pub devices: usize,
+    /// The member's computers by name (Request usage and the pings list them).
+    pub device_list: Vec<DeviceView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceView {
+    pub id: String,
+    pub name: String,
+    /// This computer.
+    pub current: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1375,6 +1386,7 @@ pub struct ConfigView {
 fn config_view(svc: &Service, inner: &Inner) -> ConfigView {
     let session = inner.session.as_ref();
     let me = session.and_then(|s| s.my_member().ok()).unwrap_or_default();
+    let my_device = session.and_then(|s| s.my_device().ok()).unwrap_or_default();
     let roster = session.map(|s| &s.roster);
     let members = roster
         .map(|r| {
@@ -1389,6 +1401,7 @@ fn config_view(svc: &Service, inner: &Inner) -> ConfigView {
                     github: m.github.clone(),
                     github_confirmed: m.github_confirmed,
                     devices: m.devices.len(),
+                    device_list: m.devices.iter().map(|d| DeviceView { id: d.id.clone(), name: d.name.clone(), current: d.id == my_device }).collect(),
                 })
                 .collect()
         })
@@ -1878,6 +1891,13 @@ pub(crate) fn capacity_session() -> Result<Session, String> {
     let svc = service()?;
     let inner = svc.inner.lock();
     inner.session.clone().ok_or_else(|| "Team is off. Turn it on in Settings first.".to_string())
+}
+
+/// Which transport the running team uses (`relay` or `folder`); None while Team is off.
+pub(crate) fn transport_kind() -> Option<&'static str> {
+    let svc = service().ok()?;
+    let inner = svc.inner.lock();
+    inner.transport.as_ref().map(|t| t.kind())
 }
 
 /// Share an agent: seal one `Payload::Capacity` with the team key and hand it to the relay.

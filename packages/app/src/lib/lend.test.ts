@@ -17,6 +17,7 @@ import {
   otherPersonWarning,
   problemText,
   requestTitle,
+  signInProblem,
   urgencyOf,
   usageText,
 } from './lend';
@@ -60,14 +61,24 @@ describe('lend rules', () => {
     expect(urgencyOf(60_000)).toBe('now');
   });
 
-  it('offers verified and lab agents only, and lists Codex as coming soon', () => {
-    expect(offerable(LEND_DRIVERS).map((d) => d.agent_id)).toEqual(['claude']);
-    expect(offerable([...LEND_DRIVERS, { agent_id: 'cursor', label: 'Cursor', support: 'no' }]).map((d) => d.agent_id)).toEqual(['claude']);
-    expect(comingSoonAgents(LEND_DRIVERS).map((c) => c.label)).toEqual(['Codex']);
-    // Once Codex has a driver it is offered, not "coming soon".
-    expect(comingSoonAgents([...LEND_DRIVERS, { agent_id: 'codex', label: 'Codex', support: 'lab' }])).toEqual([]);
+  it('offers verified and lab agents only, Codex and Gemini included, and nothing is coming soon', () => {
+    expect(offerable(LEND_DRIVERS).map((d) => d.agent_id)).toEqual(['claude', 'codex', 'gemini']);
+    const cursor = { agent_id: 'cursor', label: 'Cursor', support: 'no' as const, api_key: false, account: false, chat: false };
+    expect(offerable([...LEND_DRIVERS, cursor]).map((d) => d.agent_id)).toEqual(['claude', 'codex', 'gemini']);
+    expect(comingSoonAgents(LEND_DRIVERS)).toEqual([]);
     expect(agentLabel({ drivers: LEND_DRIVERS }, 'claude')).toBe('Claude');
     expect(agentLabel(null, 'zed')).toBe('Zed');
+  });
+
+  it('says in plain words why a sign-in cannot be lent for an agent, and only then', () => {
+    expect(signInProblem(LEND_DRIVERS, ['claude'])).toBeNull();
+    expect(signInProblem(LEND_DRIVERS, [])).toBeNull();
+    expect(signInProblem(LEND_DRIVERS, ['codex'])).toBe('Codex signed in with ChatGPT is not supported yet. Only an OpenAI API key can be lent.');
+    // One agent without a lendable sign-in is enough to turn it off for the whole profile.
+    expect(signInProblem(LEND_DRIVERS, ['claude', 'gemini'])).toContain('Google is not supported yet');
+    // No note from the backend: a generic sentence, never a blank.
+    const bare = [{ agent_id: 'x', label: 'Xcli', support: 'lab' as const, api_key: true, account: false, chat: false }];
+    expect(signInProblem(bare, ['x'])).toBe('Xcli can only be lent with an API key.');
   });
 
   it('words the request, the member row, the menu entry and the chip', () => {

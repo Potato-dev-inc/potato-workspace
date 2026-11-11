@@ -781,6 +781,51 @@
   color: var(--label);
 }
 
+/* Chat starting: a grey chat-shaped skeleton in the same slot as the terminal's starting view. */
+.cockpit .ck-chat-start-body {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.cockpit .ck-chat-start-row {
+  height: 10px;
+  width: 100%;
+  border-radius: 5px;
+  background: var(--label-4);
+  animation: ck-chat-pulse 1.6s ease-in-out infinite;
+}
+.cockpit .ck-chat-start-row--mid {
+  width: 70%;
+}
+.cockpit .ck-chat-start-row--short {
+  width: 40%;
+}
+.cockpit .ck-chat-start-composer {
+  width: 320px;
+  margin-top: 6px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--label-4);
+  color: var(--label-3);
+  font-size: 12px;
+}
+@keyframes ck-chat-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-chat-start-row {
+    animation: none;
+  }
+}
+
 /* ---------- palette, sheet, toast ---------- */
 .cockpit .ck-scrim {
   position: absolute;

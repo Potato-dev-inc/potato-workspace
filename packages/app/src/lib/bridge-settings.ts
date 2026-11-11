@@ -36,6 +36,7 @@ export type PublicSettings = Pick<
   | 'away_minutes'
   | 'agent_hooks_mode'
   | 'agent_hooks_agents'
+  | 'helper_default_models'
 >;
 
 export function toPublicSettings(settings: Settings): PublicSettings {
@@ -56,6 +57,7 @@ export function toPublicSettings(settings: Settings): PublicSettings {
     away_minutes: clampAwayMinutes(settings.away_minutes),
     agent_hooks_mode: settings.agent_hooks_mode ?? 'shadow',
     agent_hooks_agents: settings.agent_hooks_agents ?? {},
+    helper_default_models: settings.helper_default_models ?? {},
   };
 }
 
@@ -76,4 +78,5 @@ export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
   away_minutes: 5,
   agent_hooks_mode: 'shadow',
   agent_hooks_agents: {},
+  helper_default_models: {},
 };

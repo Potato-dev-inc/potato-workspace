@@ -31,10 +31,10 @@ fn now() -> u64 {
     crate::team::transport::now_ms()
 }
 
-struct TestTeam {
-    session: Session,
-    transport: Arc<dyn TeamTransport>,
-    seq: AtomicU64,
+pub(super) struct TestTeam {
+    pub(super) session: Session,
+    pub(super) transport: Arc<dyn TeamTransport>,
+    pub(super) seq: AtomicU64,
 }
 
 impl TeamPort for TestTeam {
@@ -84,22 +84,29 @@ impl AwakePort for FakeAwake {
     }
 }
 
-struct Side {
+pub(super) struct Side {
     awake: Arc<FakeAwake>,
-    dir: std::path::PathBuf,
+    pub(super) dir: std::path::PathBuf,
     refresh: Arc<FakeRefresh>,
-    lend: Arc<Lend>,
-    team: Arc<TestTeam>,
-    secrets: Arc<MemoryBackend>,
+    pub(super) lend: Arc<Lend>,
+    pub(super) pinger: Arc<super::ping::Pinger>,
+    pub(super) team: Arc<TestTeam>,
+    pub(super) secrets: Arc<MemoryBackend>,
     rx: Mutex<Receiver<Inbound>>,
     tracker: Mutex<SeqTracker>,
+}
+
+impl World2 {
+    pub(super) fn mem(&self) -> &MemoryNet {
+        &self._mem
+    }
 }
 
 impl Side {
     /// Delivers every envelope that arrived for this PC, through every check, to the lend service.
     /// Waits (the folder is rescanned every few seconds) until at least one item for this device was handled, then
     /// takes whatever else is already there.
-    fn pump(&self) {
+    pub(super) fn pump(&self) {
         let rx = self.rx.lock().unwrap();
         let me = self.device();
         let deadline = std::time::Instant::now() + Duration::from_secs(8);
@@ -112,37 +119,44 @@ impl Side {
                 if cin.to == me {
                     mine += 1;
                 }
-                let _ = self.lend.on_item(&cin);
+                if !self.pinger.handle(&cin) {
+                    let _ = self.lend.on_item(&cin);
+                }
             }
         }
     }
 
-    fn member(&self) -> String {
+    pub(super) fn member(&self) -> String {
         self.team.session.my_member().unwrap()
     }
 
-    fn device(&self) -> String {
+    pub(super) fn device(&self) -> String {
         self.team.session.my_device().unwrap()
     }
 }
 
-struct World2 {
-    maya: Side,
-    leo: Side,
-    sam: Side,
-    up: Upstream,
-    _mem: MemoryNet,
+pub(super) struct World2 {
+    pub(super) maya: Side,
+    pub(super) leo: Side,
+    pub(super) sam: Side,
+    pub(super) up: Upstream,
+    pub(super) _mem: MemoryNet,
 }
 
 fn side(name: &str, session: Session, transport: &Arc<dyn TeamTransport>, mem: &MemoryNet, upstream: Option<String>) -> Side {
+    side_on(name, session, transport, mem.factory(), upstream)
+}
+
+fn side_on(name: &str, session: Session, transport: &Arc<dyn TeamTransport>, net_factory: Arc<dyn crate::p2p::endpoint::TransportFactory>, upstream: Option<String>) -> Side {
     let secrets = Arc::new(MemoryBackend::new());
     let backend: Arc<dyn SecretBackend> = secrets.clone();
-    let net = LendNet::new(LinkKeys::with_backend(backend.clone(), name), mem.factory()).unwrap();
+    let net = LendNet::new(LinkKeys::with_backend(backend.clone(), name), net_factory).unwrap();
     let dir = temp_dir(&format!("lend-{name}"));
     let team = Arc::new(TestTeam { session, transport: transport.clone(), seq: AtomicU64::new(0) });
     let refresh = Arc::new(FakeRefresh::default());
     let fake = refresh.clone();
     let awake = Arc::new(FakeAwake::default());
+    let pinger = super::ping::Pinger::new(team.clone(), Arc::new(now));
     let deps = Deps {
         awake: awake.clone(),
         dir: dir.join("lend"),
@@ -150,9 +164,14 @@ fn side(name: &str, session: Session, transport: &Arc<dyn TeamTransport>, mem: &
         team: team.clone(),
         net,
         accounts: crate::accounts::Store::at(&dir),
-        specs: vec![ProxySpec::parse(include_str!("../tui/claude/lend_proxy.toml")).unwrap()],
+        specs: vec![
+            ProxySpec::parse(include_str!("../tui/claude/lend_proxy.toml")).unwrap(),
+            ProxySpec::parse(include_str!("../tui/codex/lend_proxy.toml")).unwrap(),
+            crate::tui::declarative::lend_overlay::spec_for("gemini").unwrap().unwrap(),
+        ],
         now: Arc::new(now),
         changed: Arc::new(|| {}),
+        pinger: pinger.clone(),
         spawn: Arc::new(|f| {
             tokio::spawn(f);
         }),
@@ -166,16 +185,21 @@ fn side(name: &str, session: Session, transport: &Arc<dyn TeamTransport>, mem: &
                 }
             })
         }),
-        env_names: Arc::new(|| vec!["ANTHROPIC_API_KEY".to_string(), "PATH".to_string()]),
+        env_names: Arc::new(|| ["ANTHROPIC_API_KEY", "OPENAI_MODEL", "CODEX_HOME", "PATH"].map(String::from).to_vec()),
         test_upstream: upstream,
     };
     let lend = Lend::new(deps);
     lend.apply_settings(&json!({ "lend_enabled": true }));
     let rx = Mutex::new(transport.subscribe(0).unwrap());
-    Side { awake, dir, refresh, lend, team, secrets, rx, tracker: Mutex::new(SeqTracker::default()) }
+    Side { awake, dir, refresh, lend, pinger, team, secrets, rx, tracker: Mutex::new(SeqTracker::default()) }
 }
 
-async fn world2(script: Script) -> World2 {
+pub(super) async fn world2(script: Script) -> World2 {
+    world2_with(script, |mem, _| mem.factory()).await
+}
+
+/// `world2` where the borrowers' (Leo, Sam) network is chosen by the test: `net(mem, name)`.
+pub(super) async fn world2_with(script: Script, net: impl Fn(&MemoryNet, &str) -> Arc<dyn crate::p2p::endpoint::TransportFactory>) -> World2 {
     let up = Upstream::start(script).await;
     let dir = temp_dir("lend-e2e");
     let t = folder(&dir);
@@ -183,8 +207,8 @@ async fn world2(script: Script) -> World2 {
     let roster = w.roster.clone();
     let mem = MemoryNet::new();
     let maya = side("maya", Session::new(roster.clone(), w.maya.clone()), &t, &mem, Some(format!("http://127.0.0.1:{}", up.port)));
-    let leo = side("leo", Session::new(roster.clone(), w.others[0].1.clone()), &t, &mem, None);
-    let sam = side("sam", Session::new(roster, w.others[1].1.clone()), &t, &mem, None);
+    let leo = side_on("leo", Session::new(roster.clone(), w.others[0].1.clone()), &t, net(&mem, "leo"), None);
+    let sam = side_on("sam", Session::new(roster, w.others[1].1.clone()), &t, net(&mem, "sam"), None);
     // Nothing old in the inboxes (the team's own setup traffic).
     for s in [&maya, &leo, &sam] {
         while s.rx.lock().unwrap().recv_timeout(Duration::from_millis(300)).is_ok() {}
@@ -222,7 +246,7 @@ fn profile_with(w: &World2, keep_awake: bool) -> String {
 }
 
 /// Leo asks, Maya says yes; returns the grant id once Leo's shim is up, and its base URL.
-async fn lend_one(w: &World2, secs: u64) -> (String, String) {
+pub(super) async fn lend_one(w: &World2, secs: u64) -> (String, String) {
     let profile_id = profile(w);
     lend_one_with(w, secs, &profile_id).await
 }
@@ -250,7 +274,7 @@ async fn lend_one_with(w: &World2, secs: u64, profile_id: &str) -> (String, Stri
 }
 
 /// POST to the shim at `base` + `path`, as Claude would (with the placeholder token).
-async fn post(base: &str, path: &str) -> super::proxy_tests::Reply {
+pub(super) async fn post(base: &str, path: &str) -> super::proxy_tests::Reply {
     let rest = base.strip_prefix("http://127.0.0.1:").unwrap();
     let (port, secret) = rest.split_once('/').unwrap();
     http(
@@ -422,7 +446,7 @@ async fn the_profile_needs_a_credential_and_a_cap_holds_for_another_person() {
     // Another person can ask for 24 hours at most.
     assert!(w.leo.lend.request(&w.maya.member(), None, "claude", 25 * 3600, "").is_err());
     // An agent with no proxy spec can't be asked for.
-    assert!(w.leo.lend.request(&w.maya.member(), None, "codex", 3600, "").is_err());
+    assert!(w.leo.lend.request(&w.maya.member(), None, "cursor", 3600, "").is_err());
     // A profile on the main login with no pasted key can't lend: the main login is never read.
     let p = w
         .maya

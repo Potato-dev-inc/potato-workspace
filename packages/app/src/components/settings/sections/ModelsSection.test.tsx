@@ -35,6 +35,13 @@ describe('Orchestrator & Models: every control renders', () => {
     for (const id of ids) expect(m.host.querySelector(`[data-row="${id}"]`), `no row ${id}`).not.toBeNull();
   });
 
+  it('says the OpenCode model also applies to OpenCode chats, in 90 characters or fewer', async () => {
+    await mount({});
+    const hint = 'The model used with the provider above. Also applies to OpenCode chats.';
+    expect(hasText(m.host, hint)).toBe(true);
+    expect(hint.length).toBeLessThanOrEqual(90);
+  });
+
   it('shows every control by its label and aria-label', async () => {
     await mount({ custom_models: [CUSTOM_CLAUDE, CUSTOM_OR] });
     for (const label of ['Default orchestrator', 'Project index builder', 'OpenCode provider', 'OpenCode model', 'Provider', 'Model', 'Custom models']) {

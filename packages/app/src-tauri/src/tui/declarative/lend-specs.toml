@@ -1,0 +1,43 @@
+# Trusted lend specs, compiled into the app (never read from a user or store folder). For an agent id that is a
+# declarative (installed) agent, "Lend through my PC" (`crate::capacity_proxy`) takes its spec from here. A built-in
+# agent serves its own `lend_proxy.toml`. Each table is a `ProxySpec` (capacity_proxy/spec.rs); the key is the agent id.
+# The upstream host is fixed here and nowhere else: a definition a user installs can never point the lender's key
+# somewhere else. Every entry is parsed by a test.
+
+# Gemini CLI with a Gemini API key (AI Studio). Proven in the lend lab (2026-11-11, gemini-cli 0.64.0, fake upstream):
+# GOOGLE_GEMINI_BASE_URL + GEMINI_API_KEY (placeholder) in a scratch GEMINI_CLI_HOME whose settings pick the API-key
+# sign-in. Not run against Google with a real key, so "lab". "Login with Google" is out: the CLI checks its token at
+# Google directly.
+[gemini]
+support = "lab"
+shape = "gemini_generate_content"
+upstream = "https://generativelanguage.googleapis.com"
+paths = [
+  "POST /v1beta/models/*:streamGenerateContent",
+  "POST /v1beta/models/*:generateContent",
+  "POST /v1beta/models/*:countTokens",
+  "POST /v1beta/models/*:embedContent",
+  "POST /v1/models/*:generateContent",
+  "GET /v1beta/models",
+  "GET /v1beta/models/*",
+]
+# A key sent in the URL, and a project header that would bill another project.
+strip_query = ["key"]
+strip_headers = ["x-goog-user-project"]
+
+[gemini.auth]
+account_not_yet = "Gemini signed in with Google is not supported yet. Only a Gemini API key can be lent."
+
+[gemini.auth.api_key]
+header = "x-goog-api-key"
+scheme = ""
+
+[gemini.hookup]
+set = [
+  { name = "GOOGLE_GEMINI_BASE_URL", value = "{base_url}" },
+  { name = "GEMINI_API_KEY", value = "pm-lend" },
+]
+home_env = "GEMINI_CLI_HOME"
+remove_prefixes = ["GEMINI_", "GOOGLE_", "CODE_ASSIST_"]
+remove = ["GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_GENAI_USE_GCA", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION", "GOOGLE_APPLICATION_CREDENTIALS", "CODE_ASSIST_ENDPOINT"]
+files = [{ path = ".gemini/settings.json", content = '{"security":{"auth":{"selectedType":"gemini-api-key"}}}' }]

@@ -75,6 +75,10 @@ pub struct TurnFacts<'a> {
     /// The chat is a key-based add-on: it has no sign-in of its own, so a failure is never "signed out" and the
     /// agent's own short message (redacted) is shown instead of a guess.
     pub own_cause: bool,
+    /// The agent's words for a model that needs credit (or does not exist), from its definition.
+    pub credit: Option<&'a crate::acp::config::DefaultModel>,
+    /// The model in use when the turn ended, for that sentence.
+    pub model: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,6 +89,9 @@ pub struct Ending {
 
 /// The ending of a turn the session reported.
 pub fn ending_of(summary: &TurnSummary, facts: &TurnFacts) -> Ending {
+    if let Some(text) = credit_text(summary, facts) {
+        return Ending { reason: EndReason::Failed, text };
+    }
     let reason = reason_of(summary, facts);
     let text = match reason {
         EndReason::Done => done_line(facts),
@@ -107,6 +114,20 @@ pub fn ending_of(summary: &TurnSummary, facts: &TurnFacts) -> Ending {
 /// closed). `cause` is the plain sentence the mapper already had.
 pub fn ending_without_report(cause: &str, facts: &TurnFacts) -> Ending {
     Ending { reason: EndReason::Failed, text: format!("Something went wrong: {}", plain_cause(Some(cause), facts.own_cause)) }
+}
+
+/// The sentence for a failure the agent's definition calls "needs credit" (a billing error, an unknown model).
+fn credit_text(summary: &TurnSummary, facts: &TurnFacts) -> Option<String> {
+    let rule = facts.credit?;
+    if summary.stop != StopKind::Failed || rule.credit_message.trim().is_empty() {
+        return None;
+    }
+    let error = summary.error.as_deref()?.to_lowercase();
+    if !rule.credit_patterns.iter().any(|p| !p.trim().is_empty() && error.contains(&p.to_lowercase())) {
+        return None;
+    }
+    let model = facts.model.map(str::trim).filter(|m| !m.is_empty()).unwrap_or("in use");
+    Some(rule.credit_message.replace("{model}", model))
 }
 
 fn reason_of(summary: &TurnSummary, facts: &TurnFacts) -> EndReason {
@@ -307,7 +328,23 @@ mod tests {
     }
 
     fn facts() -> TurnFacts<'static> {
-        TurnFacts { files: 0, visible: true, duration_ms: None, agent: Some("Fake A"), quiet_minutes: 5, own_cause: false }
+        TurnFacts { files: 0, visible: true, duration_ms: None, agent: Some("Fake A"), quiet_minutes: 5, own_cause: false, credit: None, model: None }
+    }
+
+    #[test]
+    fn a_billing_error_names_the_model_and_what_to_do() {
+        let rule = crate::acp::config::find_builtin("opencode").and_then(|c| c.default_model).expect("OpenCode has a default-model rule");
+        let mut s = summary(StopKind::Failed);
+        s.error_code = Some(-32000);
+        s.error = Some("Insufficient balance. Top up at opencode.ai/console/x/billing".into());
+        let e = ending_of(&s, &TurnFacts { credit: Some(&rule), model: Some("opencode/gemini-4-carbon"), ..facts() });
+        assert_eq!(e.reason, EndReason::Failed, "not read as signed out");
+        assert_eq!(e.text, "OpenCode's model opencode/gemini-4-carbon needs credit. Pick another model in the chat, or set Settings \u{203a} Orchestrator & Models \u{203a} OpenCode model.");
+        s.error = Some("ProviderModelNotFoundError: model not found".into());
+        assert!(ending_of(&s, &TurnFacts { credit: Some(&rule), model: None, ..facts() }).text.contains("model in use needs credit"));
+        s.error = Some("connection reset".into());
+        s.error_code = None;
+        assert!(ending_of(&s, &TurnFacts { credit: Some(&rule), ..facts() }).text.starts_with("Something went wrong"));
     }
 
     #[test]

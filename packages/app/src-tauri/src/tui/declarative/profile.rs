@@ -376,6 +376,10 @@ impl TuiProfile for DeclarativeProfile {
         }
     }
 
+    fn lend_proxy_spec(&self) -> Option<Result<crate::capacity_proxy::spec::ProxySpec, String>> {
+        super::lend_overlay::spec_for(&self.def.agent.id)
+    }
+
     fn account_scheme(&self) -> Option<AccountScheme> {
         let a = self.def.accounts.as_ref()?;
         Some(AccountScheme {

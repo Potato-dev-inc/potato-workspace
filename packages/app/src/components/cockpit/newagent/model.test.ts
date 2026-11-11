@@ -16,8 +16,10 @@ import {
   moveCard,
   nextExample,
   parseCards,
+  parseRunAs,
   removeCard,
   sendBlock,
+  usableModel,
   withPaths,
   type AgentChoice,
   type HomeCard,
@@ -99,10 +101,27 @@ describe('run as', () => {
     expect(chatAvailable(null, 'alpha')).toBe(false);
     expect(chatAvailable(lanes(true), null)).toBe(false);
   });
-  it('starts on the way the agent is set to run', () => {
+  it('starts on Chat whenever the agent has a chat that can start, whatever its saved lane says', () => {
     expect(defaultRunAs(lanes(true, false, 'acp'), 'alpha')).toBe('chat');
-    expect(defaultRunAs(lanes(true), 'alpha')).toBe('terminal');
+    expect(defaultRunAs(lanes(true), 'alpha')).toBe('chat');
     expect(defaultRunAs(lanes(false, false, 'acp'), 'alpha')).toBe('terminal');
+    expect(defaultRunAs(lanes(true, true), 'alpha')).toBe('terminal');
+  });
+  it('falls back to Terminal when the chat add-on is not in place yet', () => {
+    expect(defaultRunAs(lanes(true), 'alpha', false)).toBe('terminal');
+  });
+  it('drops a remembered model the agent no longer lists, and keeps one it does', () => {
+    expect(usableModel('gpt-5-mini', { models: ['gpt-5.1', 'gpt-5-mini'] })).toBe('gpt-5-mini');
+    expect(usableModel('old-model', { models: ['gpt-5.1'] })).toBe('');
+    expect(usableModel('typed-id', { models: [] })).toBe('typed-id');
+    expect(usableModel('', { models: ['gpt-5.1'] })).toBe('');
+    expect(usableModel('x', null)).toBe('x');
+  });
+  it('reads only the two run-as words back from storage', () => {
+    expect(parseRunAs('chat')).toBe('chat');
+    expect(parseRunAs('terminal')).toBe('terminal');
+    expect(parseRunAs('acp')).toBeNull();
+    expect(parseRunAs(null)).toBeNull();
   });
 });
 

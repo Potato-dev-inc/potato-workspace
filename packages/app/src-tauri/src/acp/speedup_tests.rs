@@ -151,3 +151,49 @@ fn the_codex_definition_names_its_config_files() {
     assert!(!cfg.mcp_config.list_cache_files.is_empty());
     assert!(config::problems(&cfg).is_empty(), "{:?}", config::problems(&cfg));
 }
+
+/// The environment a chat start needs from the host, with no real agent installed (the fake agent is used).
+struct ChatEnv {
+    root: PathBuf,
+}
+
+impl HostEnv for ChatEnv {
+    fn var(&self, name: &str) -> Option<OsString> {
+        std::env::var_os(name)
+    }
+    fn which(&self, _: &str) -> Option<PathBuf> {
+        None
+    }
+    fn adapters_dir(&self) -> PathBuf {
+        self.root.join("adapters")
+    }
+    fn homes_dir(&self) -> PathBuf {
+        self.root.join("homes")
+    }
+}
+
+#[test]
+fn chat_start_records_its_stages() {
+    use crate::acp::chat::{start, QuietHost, StartDeps, StartRequest};
+    let dir = temp_dir("chat-stages");
+    let cfg = crate::acp::fake_agent::agent_config("", &dir.join("store"));
+    let deps = StartDeps {
+        registry: Arc::new(parking_lot::Mutex::new(crate::pty::PaneRegistry::new())),
+        host: Arc::new(QuietHost),
+        env: Arc::new(ChatEnv { root: dir.clone() }),
+        conversations: None,
+    };
+    let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None, ..Default::default() }).expect("the fake agent starts");
+    let pane = chat.pane_id().to_string();
+    let stages = crate::startup_timing::stages(&pane);
+    let names: Vec<&str> = stages.iter().map(|(name, _)| name.as_str()).collect();
+    // No warm session is set up in this test, so the claim is a miss; a hit would also be a valid start.
+    assert_eq!(names.len(), 4, "{names:?}");
+    assert_eq!(names[0], "chat_start_begin");
+    assert!(names[1] == "chat_warm_miss" || names[1] == "chat_warm_hit", "{names:?}");
+    assert_eq!(names[2], "chat_pane_registered");
+    assert_eq!(names[3], "chat_session_ready");
+    assert!(stages.windows(2).all(|pair| pair[0].1 <= pair[1].1), "elapsed times go up: {stages:?}");
+    chat.retire();
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -26,6 +26,10 @@
 //!
 //! The reader keeps the parts of a message together, reads a whole chat in time order and only then maps it, so
 //! `map_messages` sees the same data it sees over HTTP (turn lengths depend on the order of messages).
+//!
+//! OpenCode 2.x writes another layout into the same file (`session_v2` and `session_message`, read by `history_v2.rs`).
+//! `layout` picks the one that is there, and 2.x wins when both are: on the PC checked (2.2.7), the old tables stopped
+//! getting new rows when 2.x started, so reading them would show stale chats.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -35,6 +39,7 @@ use rusqlite::{params, Connection, ErrorCode, OpenFlags};
 use serde_json::{json, Value};
 
 use super::chat::map::map_messages;
+use super::history_v2;
 use crate::session_chat::history::{
     resume_args_from, valid_session_id, HistoryChat, HistoryEnv, ListLimits, Listing, ReadError, ReadLimits,
     ReadOutcome, SessionHistory,
@@ -49,6 +54,25 @@ const DATA_FOLDER: &str = "opencode";
 const BUSY: Duration = Duration::from_millis(500);
 /// The tables a chat is read from. A database without all three is another layout.
 const TABLES: [&str; 3] = ["session", "message", "part"];
+/// The tables of OpenCode 2.x's layout.
+const V2_TABLES: [&str; 2] = ["session_v2", "session_message"];
+
+/// Which layout a database has. `Current` is OpenCode 2.x (`history_v2.rs`); `Legacy` is 1.x (this file).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Layout {
+    Current,
+    Legacy,
+}
+
+impl Layout {
+    /// The table that holds one row per chat.
+    fn session_table(self) -> &'static str {
+        match self {
+            Layout::Current => "session_v2",
+            Layout::Legacy => "session",
+        }
+    }
+}
 /// The resume template: OpenCode's `--session <id>`.
 const RESUME: [&str; 2] = ["--session", "{session}"];
 
@@ -92,16 +116,17 @@ impl SessionHistory for OpenCodeHistory {
         }
         let path = database(env).ok_or(ReadError::Missing)?;
         let conn = open(&path).map_err(|err| read_error(&err))?;
-        if !has_layout(&conn).map_err(|err| read_error(&err))? {
-            return Err(ReadError::Format);
-        }
+        let layout = layout(&conn).map_err(|err| read_error(&err))?.ok_or(ReadError::Format)?;
         let known: i64 = conn
-            .query_row("SELECT COUNT(*) FROM session WHERE id = ?1", [session], |row| row.get(0))
+            .query_row(&format!("SELECT COUNT(*) FROM {} WHERE id = ?1", layout.session_table()), [session], |row| row.get(0))
             .map_err(|err| read_error(&err))?;
         if known == 0 {
             return Err(ReadError::Missing);
         }
-        let (messages, mut cut_short) = load_messages(&conn, session, limits.max_decompressed)?;
+        let (messages, mut cut_short) = match layout {
+            Layout::Current => history_v2::load_messages(&conn, session, limits.max_decompressed)?,
+            Layout::Legacy => load_messages(&conn, session, limits.max_decompressed)?,
+        };
         let mut items = map_messages(&messages, &no_window);
         if items.len() > limits.max_items {
             items.truncate(limits.max_items);
@@ -195,19 +220,32 @@ fn file_uri(path: &Path, query: &str) -> String {
     uri
 }
 
-/// True when the database has the three tables this reader needs.
-fn has_layout(conn: &Connection) -> rusqlite::Result<bool> {
-    let found: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN (?1, ?2, ?3)",
-        TABLES,
-        |row| row.get(0),
-    )?;
-    Ok(found == TABLES.len() as i64)
+/// The layout of the database, 2.x first. `None` when it has neither set of tables.
+fn layout(conn: &Connection) -> rusqlite::Result<Option<Layout>> {
+    if has_tables(conn, &V2_TABLES)? {
+        return Ok(Some(Layout::Current));
+    }
+    if has_tables(conn, &TABLES)? {
+        return Ok(Some(Layout::Legacy));
+    }
+    Ok(None)
+}
+
+/// True when every named table is in the database.
+fn has_tables(conn: &Connection, names: &[&str]) -> rusqlite::Result<bool> {
+    for name in names {
+        let found: i64 =
+            conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [name], |row| row.get(0))?;
+        if found == 0 {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 /// A query that fails on a missing table or column (SQLite's generic error) is another layout: `Format`. A busy,
 /// locked or damaged file is `Unreadable`.
-fn read_error(err: &rusqlite::Error) -> ReadError {
+pub(super) fn read_error(err: &rusqlite::Error) -> ReadError {
     match err {
         // A statement that does not compile (rusqlite reports SQLite's generic error with the SQL and an offset).
         rusqlite::Error::SqlInputError { .. } => ReadError::Format,
@@ -219,10 +257,12 @@ fn read_error(err: &rusqlite::Error) -> ReadError {
 /// The listing of one database file. A layout that is not the expected one is an empty listing with one unreadable chat.
 fn list_from(path: &Path, env: &HistoryEnv, limits: &ListLimits) -> rusqlite::Result<Listing> {
     let conn = open(path)?;
-    if !has_layout(&conn)? {
-        return Ok(Listing { unreadable: 1, ..Listing::default() });
-    }
     let home = env.home().map(|home| home.to_string_lossy().into_owned());
+    match layout(&conn)? {
+        None => return Ok(Listing { unreadable: 1, ..Listing::default() }),
+        Some(Layout::Current) => return history_v2::list_chats(&conn, home.as_deref(), limits),
+        Some(Layout::Legacy) => {}
+    }
     let started = Instant::now();
     let since = limits.since_ms.unwrap_or(i64::MIN);
     let mut out = Listing::default();
@@ -312,12 +352,12 @@ fn load_messages(conn: &Connection, session: &str, max_bytes: u64) -> Result<(Ve
 }
 
 /// A JSON object from one stored value, or `None` when it is not one.
-fn object(data: &str) -> Option<Value> {
+pub(super) fn object(data: &str) -> Option<Value> {
     serde_json::from_str::<Value>(data).ok().filter(Value::is_object)
 }
 
 /// Adds string fields to a JSON object.
-fn with_fields(mut value: Value, fields: &[(&str, &str)]) -> Value {
+pub(super) fn with_fields(mut value: Value, fields: &[(&str, &str)]) -> Value {
     if let Value::Object(map) = &mut value {
         for (key, field) in fields {
             map.insert(key.to_string(), Value::String(field.to_string()));

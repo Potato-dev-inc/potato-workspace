@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant, UNIX_EPOCH};
 
 use super::file_head::{head_lines, pointer_text};
+use super::file_paths;
 use super::file_walk::collect;
 use super::{resume_args_from, valid_session_id, HistoryChat, HistoryEnv, Listing, ListLimits, ReadError, ReadLimits, ReadOutcome, SessionHistory};
 use crate::session_chat::declared::path::{expand, Names};
@@ -119,11 +120,24 @@ impl FileHistory {
     /// session id is tried first, so a store that keeps the id inside the file (and must open each file to read it) is
     /// not opened file by file for every chat; the rest are looked at only when no name matched.
     fn locate(&self, roots: &[PathBuf], session: &str) -> Option<PathBuf> {
+        let key = file_paths::roots_key(roots);
+        if let Some(path) = file_paths::lookup(&key, session) {
+            // A remembered file counts only if it is still there, still a plain file (a compressed copy might have
+            // gained a plain one beside it) and still holds this chat. Anything else is forgotten and walked for.
+            if !is_zst(&path) && path.is_file() && self.id_of(&path).as_deref() == Some(session) {
+                return Some(path);
+            }
+            file_paths::forget(&key, session);
+        }
         let caps = ListLimits::default();
         let walked = collect(&self.spec, roots, caps.max_entries, caps.budget);
         let (named, others): (Vec<PathBuf>, Vec<PathBuf>) =
             walked.files.into_iter().partition(|path| path.file_name().is_some_and(|name| name.to_string_lossy().contains(session)));
-        self.first_with_id(&named, session).or_else(|| self.first_with_id(&others, session))
+        let found = self.first_with_id(&named, session).or_else(|| self.first_with_id(&others, session));
+        if let Some(path) = &found {
+            file_paths::remember(&key, session, path);
+        }
+        found
     }
 
     /// The first of `paths` (a plain file before a compressed one) whose chat id is `session`.
@@ -150,6 +164,7 @@ impl SessionHistory for FileHistory {
         let home = env.home().map(|home| home.to_string_lossy().into_owned());
         let mut out = Listing { cut_short: walked.cut_short, ..Listing::default() };
         let mut found: Vec<(bool, HistoryChat)> = Vec::new();
+        let mut paths: HashMap<String, (bool, PathBuf)> = HashMap::new();
         // Newest first, so a time budget that runs out loses the oldest chats and never the ones just written.
         let mut dated: Vec<(i64, &PathBuf, fs::Metadata)> = Vec::with_capacity(walked.files.len());
         for path in &walked.files {
@@ -191,6 +206,12 @@ impl SessionHistory for FileHistory {
                 bytes: meta.len(),
                 stamp: format!("{}:{updated_ms}", meta.len()),
             };
+            match paths.get(&chat.session) {
+                Some((kept_zst, _)) if !(*kept_zst && !is_zst(path)) => {}
+                _ => {
+                    paths.insert(chat.session.clone(), (is_zst(path), path.clone()));
+                }
+            }
             found.push((is_zst(path), chat));
         }
         out.chats = one_per_session(found);
@@ -198,6 +219,12 @@ impl SessionHistory for FileHistory {
         if out.chats.len() > limits.max_chats {
             out.chats.truncate(limits.max_chats);
             out.cut_short = true;
+        }
+        let key = file_paths::roots_key(&roots);
+        for chat in &out.chats {
+            if let Some((_, path)) = paths.get(&chat.session) {
+                file_paths::remember(&key, &chat.session, path);
+            }
         }
         out
     }

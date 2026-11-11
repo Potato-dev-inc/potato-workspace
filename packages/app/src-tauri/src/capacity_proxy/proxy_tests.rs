@@ -18,17 +18,17 @@ use crate::capacity_proxy::spec::ProxySpec;
 use crate::p2p::endpoint::BiStream;
 
 const CLAUDE: &str = include_str!("../tui/claude/lend_proxy.toml");
-const LENDER_KEY: &str = "sk-lender-FAKE";
+pub(super) const LENDER_KEY: &str = "sk-lender-FAKE";
 const LENDER_TOKEN: &str = "tok-lender-FAKE";
 
 // ---------------------------------------------------------------- fake upstream
 
 #[derive(Clone, Debug)]
 pub(super) struct Recorded {
-    method: String,
+    pub(super) method: String,
     pub(super) path: String,
     pub(super) headers: Vec<(String, String)>,
-    body: Vec<u8>,
+    pub(super) body: Vec<u8>,
 }
 
 impl Recorded {
@@ -152,7 +152,7 @@ pub(super) fn sse_script() -> Script {
     Script::Sse(cuts.windows(2).map(|w| (bytes[w[0]..w[1]].to_vec(), 20)).collect())
 }
 
-fn json_script(status: u16, body: &str) -> Script {
+pub(super) fn json_script(status: u16, body: &str) -> Script {
     Script::Json { status, body: body.to_string() }
 }
 
@@ -189,10 +189,10 @@ impl Opener for EndedOpener {
     }
 }
 
-struct Rig {
-    up: Upstream,
-    gate: Arc<Gate>,
-    shim: Arc<Shim>,
+pub(super) struct Rig {
+    pub(super) up: Upstream,
+    pub(super) gate: Arc<Gate>,
+    pub(super) shim: Arc<Shim>,
     opener: Arc<TestOpener>,
     secret: String,
     /// What the lender's forwarder / the borrower's shim were told about the sign-in (`true`: a problem).
@@ -209,11 +209,17 @@ enum AuthKind {
     File(String),
 }
 
-struct RigOptions {
+pub(super) struct RigOptions {
     auth: AuthKind,
-    deadline: Duration,
-    limits: Limits,
-    max_body: usize,
+    pub(super) deadline: Duration,
+    pub(super) limits: Limits,
+    pub(super) max_body: usize,
+}
+
+impl RigOptions {
+    pub(super) fn standard() -> Self {
+        Self::default()
+    }
 }
 
 impl Default for RigOptions {
@@ -223,8 +229,13 @@ impl Default for RigOptions {
 }
 
 async fn rig(script: Script, options: RigOptions) -> Rig {
+    rig_with_spec(ProxySpec::parse(CLAUDE).unwrap(), script, options).await
+}
+
+/// The same rig for any agent's spec (an API key as the lender's auth).
+pub(super) async fn rig_with_spec(spec: ProxySpec, script: Script, options: RigOptions) -> Rig {
     let up = Upstream::start(script).await;
-    let spec = Arc::new(ProxySpec::parse(CLAUDE).unwrap());
+    let spec = Arc::new(spec);
     let auth = match options.auth {
         AuthKind::ApiKey => InjectedAuth::from_spec(spec.auth.api_key.as_ref().unwrap(), LENDER_KEY).into(),
         AuthKind::Account => InjectedAuth::from_spec(spec.auth.account.as_ref().unwrap(), LENDER_TOKEN).into(),
@@ -246,16 +257,16 @@ async fn rig(script: Script, options: RigOptions) -> Rig {
 
 impl Rig {
     /// The path a client uses: the secret segment, then the real path.
-    fn path(&self, real: &str) -> String {
+    pub(super) fn path(&self, real: &str) -> String {
         format!("/{}{}", self.secret, real)
     }
 
-    async fn post(&self, real: &str, body: &[u8]) -> Reply {
+    pub(super) async fn post(&self, real: &str, body: &[u8]) -> Reply {
         http(self.shim.port(), "POST", &self.path(real), &[("content-type", "application/json")], body).await
     }
 
     /// Waits for every forwarder run so far and returns how each ended.
-    async fn outcomes(&self) -> Vec<Outcome> {
+    pub(super) async fn outcomes(&self) -> Vec<Outcome> {
         let handles: Vec<_> = self.opener.handles.lock().unwrap().drain(..).collect();
         let mut out = Vec::new();
         for h in handles {
@@ -270,7 +281,7 @@ impl Rig {
 #[derive(Debug)]
 pub(super) struct Reply {
     pub(super) status: u16,
-    headers: Vec<(String, String)>,
+    pub(super) headers: Vec<(String, String)>,
     pub(super) body: Vec<u8>,
     /// Whether the reply ended properly (final 0-chunk, or the full Content-Length).
     pub(super) complete: bool,
@@ -535,7 +546,8 @@ async fn an_unavailable_lender_is_a_502() {
     let secret = shim.base_url().rsplit('/').next().unwrap().to_string();
     let reply = http(shim.port(), "POST", &format!("/{secret}/v1/messages"), &[], b"{}").await;
     assert_eq!(reply.status, 502);
-    assert_eq!(reply.text(), frame::UNAVAILABLE);
+    // The agent gets the plain reason, not a bare timeout.
+    assert_eq!(reply.text(), frame::unavailable_body("no route"));
 }
 
 #[tokio::test]

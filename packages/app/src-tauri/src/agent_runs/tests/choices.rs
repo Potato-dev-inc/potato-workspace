@@ -111,3 +111,25 @@ fn a_claude_error_result_reaches_the_receipt_in_the_agents_own_words() {
     assert!(message.contains("issue with the selected model"), "{message}");
     assert!(profile.classify_headless_failure(r#"{"result":"fine"}"#, 0).is_none());
 }
+
+#[test]
+fn the_receipt_notes_a_model_that_came_from_the_helper_default() {
+    let mut snapshot = parked_snapshot(OperationStatus::Completed, "none");
+    snapshot.agent_type = "claude".into();
+    snapshot.worker.requested_model = Some("sonnet".into());
+    snapshot.worker.model_note = Some(crate::agent_run_mode::HELPER_MODEL_NOTE.to_string());
+    let view = AgentRunView::from(snapshot);
+    assert_eq!(view.requested_model.as_deref(), Some("sonnet"));
+    assert_eq!(view.model_note.as_deref(), Some(crate::agent_run_mode::HELPER_MODEL_NOTE));
+    assert_eq!(view.receipt.unwrap().model_note.as_deref(), Some(crate::agent_run_mode::HELPER_MODEL_NOTE));
+}
+
+#[test]
+fn a_requested_model_carries_no_helper_default_note() {
+    let mut snapshot = parked_snapshot(OperationStatus::Completed, "none");
+    snapshot.agent_type = "claude".into();
+    snapshot.worker.requested_model = Some("opus".into());
+    let view = AgentRunView::from(snapshot);
+    assert!(view.model_note.is_none());
+    assert!(view.receipt.unwrap().model_note.is_none());
+}

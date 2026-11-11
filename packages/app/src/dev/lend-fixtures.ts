@@ -8,8 +8,12 @@ import type { Grant, LendApi, LendDriver, LendProfile, LendRequest, LendState } 
 const now = Date.now();
 const MIN = 60_000;
 
-/** What the real backend lists today: Claude only (a lab driver). Codex has no driver, the screens say "coming soon". */
-export const LEND_DRIVERS: LendDriver[] = [{ agent_id: 'claude', label: 'Claude', support: 'lab' }];
+/** What the real backend lists: Claude (key or sign-in), Codex and Gemini (API key only; the other sign-in says why not). */
+export const LEND_DRIVERS: LendDriver[] = [
+  { agent_id: 'claude', label: 'Claude', support: 'lab', api_key: true, account: true, chat: true, account_note: null },
+  { agent_id: 'codex', label: 'Codex', support: 'lab', api_key: true, account: false, chat: true, account_note: 'Codex signed in with ChatGPT is not supported yet. Only an OpenAI API key can be lent.' },
+  { agent_id: 'gemini', label: 'Gemini CLI', support: 'lab', api_key: true, account: false, chat: false, account_note: 'Gemini signed in with Google is not supported yet. Only a Gemini API key can be lent.' },
+];
 
 export const MY_PROFILE: LendProfile = {
   id: 'prof-mine',

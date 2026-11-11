@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { agentLabel, chipText, chipLabelOf, errText, grantLine, isActiveIn, isActiveOut, leftText, lendApi, problemText, urgencyOf, usageText, WARN_ONE, WARN_TEN, type Grant, type LendApi } from '../../lib/lend';
 import { useLend, type LendHandle } from './useLend';
+import { TestLink } from './TestLink';
 import '../../styles/lend.css';
 
 /** Active lends with this member, both ways, as short lines with Revoke or Give back. Used in Settings > Team's People list. */
@@ -36,6 +37,7 @@ export function MemberLends({ memberId, lend, api = lendApi }: { memberId: strin
                 </small>
               )}
             </span>
+            <TestLink grantId={g.id} api={api} />
             <button type="button" className="lend-btn is-small" disabled={busy === g.id} onClick={() => void act(g)}>
               {g.direction === 'out' ? 'Revoke' : 'Give back'}
             </button>
