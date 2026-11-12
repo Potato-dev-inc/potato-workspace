@@ -5,7 +5,7 @@ export const meta = {
   id: 'companion.sleep-wake',
   title: 'Sleep puts the companion to sleep and Wake up brings it back',
   area: 'companion',
-  tags: ['smoke'],
+  tags: ['basic'],
 };
 
 export const run = guarded(async (t) => {

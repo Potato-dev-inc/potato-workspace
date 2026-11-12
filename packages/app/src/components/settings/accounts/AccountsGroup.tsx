@@ -2,11 +2,11 @@
 // accounts: its accounts, "Add account", and "Open login pane" (starts the agent under that
 // account so the user logs in once). Potato Workspace only points the CLI at a folder the user
 // controls; it never reads or shares the credentials inside.
+import { errorSentence } from '../../../lib/sayError';
 import { SIGN_IN } from '../../../lib/glossary';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   accountsFor,
-  errorText,
   tauriAccountsApi,
   type AccountsApi,
   type AccountsOverview,
@@ -33,7 +33,7 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
     } catch (err) {
       // Never loaded: no desktop shell or an old backend, so there is nothing to configure.
       // Loaded before: keep what we have and say the refresh failed.
-      if (loaded.current) setError(`Could not refresh the sign-ins: ${errorText(err)}`);
+      if (loaded.current) setError(`Could not refresh the sign-ins: ${errorSentence(err)}`);
     }
   }, [api]);
 
@@ -52,7 +52,7 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
       await refresh();
       return true;
     } catch (err) {
-      setError(errorText(err));
+      setError(errorSentence(err));
       return false;
     } finally {
       setBusy(false);

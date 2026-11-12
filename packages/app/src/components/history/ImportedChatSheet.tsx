@@ -2,6 +2,7 @@
 // stored, so the chat is read again from the agent's own file when it opens. It shows in the normal chat view with
 // no message box, and a banner says it is old and read-only. "Continue in a pane" starts the agent on this chat with
 // the agent's own resume option, when the agent has one. The plan comes from the backend; nothing is typed.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useId, useMemo, useState } from 'react';
 import {
   chatImportApi,
@@ -31,7 +32,7 @@ export function bannerText(label: string, updatedMs: number, now?: number): stri
 }
 
 function errorText(error: unknown, fallback: string): string {
-  const text = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  const text = errorSentence(error);
   return text.trim() || fallback;
 }
 

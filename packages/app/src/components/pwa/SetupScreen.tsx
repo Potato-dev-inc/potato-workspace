@@ -1,4 +1,5 @@
 // Connection setup screen of the mobile PWA: pair via invite code / legacy QR JSON, or enter a bridge URL by hand.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { LS_BRIDGE_URL, resolveBridgeBaseUrl, shouldUseSameOriginBridgeProxy } from '../../lib/bridge-url';
 import { ngrokRequestHeaders } from '../../lib/bridge-ngrok';
@@ -58,7 +59,7 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
       localStorage.setItem(LS_BRIDGE_URL, base);
       onConnect(base);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errorSentence(e));
     } finally {
       setTesting(false);
     }
@@ -77,7 +78,7 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
       setUrl(creds.bridgeUrl);
       await handleConnect(creds.bridgeUrl);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errorSentence(e));
     } finally {
       setPairing(false);
     }
@@ -94,7 +95,7 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
       setQrJson(json);
       await handleConnect(creds.bridgeUrl);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errorSentence(e));
     } finally {
       setPairing(false);
     }

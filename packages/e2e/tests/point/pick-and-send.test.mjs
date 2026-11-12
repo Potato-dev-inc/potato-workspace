@@ -7,7 +7,7 @@ export const meta = {
   id: 'point.pick-and-send',
   title: 'Pointing at a button in the preview sends the agent the element, the picture and your words',
   area: 'point',
-  tags: ['point', 'smoke'],
+  tags: ['point', 'basic'],
   timeout: 90000,
 };
 

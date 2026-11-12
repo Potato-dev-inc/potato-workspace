@@ -190,6 +190,8 @@ pub(super) fn open_pty_child(cmd: CommandBuilder, rows: u16, cols: u16) -> Resul
         .spawn_command(cmd)
         .map_err(|e| format!("spawn_command: {e}"))?;
     let pid = child.process_id().unwrap_or(0);
+    // The app-wide kill-on-exit job takes it before the agent has started anything.
+    crate::pty::term_job::adopt(pid);
     // Slave handle is now owned by the child; drop our copy so the master
     // gets EOF when the child exits.
     drop(pair.slave);
@@ -331,6 +333,7 @@ pub fn spawn_pane(
     let PtyChild { master, child, pid } = open_pty_child(cmd, rows, cols)?;
     // From here on a failure must not leave the new process running with no pane.
     cleanup.pid = pid;
+    crate::pty::orphans::record(pid);
     cleanup.killer = Some(child.clone_killer());
     crate::pty::launch_session::set(&pane_id, session_id);
 
@@ -374,6 +377,7 @@ pub fn spawn_pane(
         account_label,
         title: None,
         parent_pane_id: None,
+        origin: None,
         place: linux.as_ref().map(crate::wsl::place::pane_place),
         lane: None,
     };
@@ -770,6 +774,19 @@ mod generation_tests {
         assert!(exited, "the leaked child must have been killed");
         assert!(is_current_generation(id, generation));
         assert!(!generations().lock().contains_key(id), "the generation entry is gone");
+    }
+
+    /// Every terminal agent is born into the app-wide kill-on-exit job (Windows).
+    #[cfg(windows)]
+    #[test]
+    fn a_pty_child_is_put_in_the_app_job_at_spawn() {
+        let mut cmd = CommandBuilder::new("ping");
+        cmd.args(["-n", "60", "127.0.0.1"]);
+        let mut started = open_pty_child(cmd, 3, 10).expect("start child");
+        assert!(started.pid > 0);
+        assert!(crate::pty::term_job::holds(started.pid), "the PTY child must be in the app job");
+        crate::pty::proc_tree::kill_process_tree(started.pid);
+        let _ = started.child.kill();
     }
 
     #[test]

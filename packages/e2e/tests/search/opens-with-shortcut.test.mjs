@@ -5,7 +5,7 @@ export const meta = {
   id: 'search.opens-with-shortcut',
   title: 'Ctrl+Shift+F opens Search all chats and Escape closes it',
   area: 'search',
-  tags: ['search', 'smoke'],
+  tags: ['search', 'basic'],
 };
 
 export async function run(t) {

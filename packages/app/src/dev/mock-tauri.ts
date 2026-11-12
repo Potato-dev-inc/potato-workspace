@@ -342,6 +342,10 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { on: true };
         case 'close_helpers_with_agent_set':
           return { on: Boolean(a.on) };
+        case 'most_helpers_at_once_get':
+          return { value: 8 };
+        case 'most_helpers_at_once_set':
+          return { value: Number(a.value) };
         case 'hidden_runs_list':
           return [];
         case 'hidden_runs_dismiss':

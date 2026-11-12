@@ -81,6 +81,10 @@ export interface KeepOpenView {
   on: boolean;
 }
 
+export interface MostHelpersView {
+  value: number;
+}
+
 export const tauriHelperAgentsApi = {
   get: () => call<HelperVisibilityView>('helper_visibility_get'),
   set: (mode: HelperVisibility) => call<HelperVisibilityView>('helper_visibility_set', { mode }),
@@ -88,6 +92,8 @@ export const tauriHelperAgentsApi = {
   setKeepOpen: (on: boolean) => call<KeepOpenView>('keep_helpers_open_set', { on }),
   getCloseWithAgent: () => call<KeepOpenView>('close_helpers_with_agent_get'),
   setCloseWithAgent: (on: boolean) => call<KeepOpenView>('close_helpers_with_agent_set', { on }),
+  getMostAtOnce: () => call<MostHelpersView>('most_helpers_at_once_get'),
+  setMostAtOnce: (value: number) => call<MostHelpersView>('most_helpers_at_once_set', { value }),
 };
 
 export type HelperAgentsApi = typeof tauriHelperAgentsApi;
@@ -108,3 +114,8 @@ export const KEEP_OPEN_HINT =
 export const CLOSE_WITH_AGENT_LABEL = 'Close helpers when their agent closes';
 export const CLOSE_WITH_AGENT_HINT =
   'On: when you close an agent, the helpers it started close too. Off: they stay open until you close them. Quitting the app never closes your chats for good.';
+
+export const MOST_HELPERS_LABEL = 'Most helpers at once';
+export const MOST_HELPERS_HINT =
+  'When an agent starts several helpers in one call, this many run together. The rest wait their turn and start as others finish.';
+export const MOST_HELPERS_CHOICES = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32];

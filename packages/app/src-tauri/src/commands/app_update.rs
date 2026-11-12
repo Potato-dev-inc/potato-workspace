@@ -19,6 +19,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 use crate::commands::AppState;
+use super::update_channel::{self, Channel};
 
 static FOUND: Mutex<Option<Update>> = Mutex::new(None);
 /// A downloaded and verified update, kept while the person decides about the agents that are still working.
@@ -114,10 +115,30 @@ fn busy_now(app: &AppHandle) -> UpdateBusy {
     }
 }
 
+/// One read of one address. Only an update newer than the running app comes back.
+async fn check_channel(app: &AppHandle, channel: Channel) -> Result<Option<(String, Update)>, String> {
+    let url = tauri::Url::parse(update_channel::endpoint(channel)).map_err(|e| plain_update_error(&e.to_string()))?;
+    let updater = app
+        .updater_builder()
+        .endpoints(vec![url])
+        .and_then(|b| b.build())
+        .map_err(|e| plain_update_error(&e.to_string()))?;
+    let found = updater.check().await.map_err(|e| plain_update_error(&e.to_string()))?;
+    Ok(found.map(|u| (u.version.clone(), u)))
+}
+
+/// Looks for an update: the stable address, and with "Get early versions (beta)" on, the beta address too, then the
+/// newer of the two. Off reads only the stable address, as before.
+async fn find_update(app: &AppHandle) -> Result<Option<Update>, String> {
+    let early = update_channel::early_versions_on(&crate::settings_store::read_public_settings(app));
+    let stable = check_channel(app, Channel::Stable).await;
+    let beta = if update_channel::channels_to_check(early).contains(&Channel::Beta) { Some(check_channel(app, Channel::Beta).await) } else { None };
+    update_channel::combine(stable, beta)
+}
+
 #[tauri::command]
 pub async fn app_update_check(app: AppHandle) -> Result<Option<UpdateOffer>, String> {
-    let updater = app.updater().map_err(|e| plain_update_error(&e.to_string()))?;
-    match updater.check().await {
+    match find_update(&app).await {
         Ok(Some(update)) => {
             let offer = UpdateOffer { current_version: update.current_version.clone(), version: update.version.clone(), notes: update.body.clone().filter(|n| !n.trim().is_empty()) };
             *FOUND.lock().unwrap_or_else(|p| p.into_inner()) = Some(update);
@@ -128,7 +149,7 @@ pub async fn app_update_check(app: AppHandle) -> Result<Option<UpdateOffer>, Str
             *FOUND.lock().unwrap_or_else(|p| p.into_inner()) = None;
             Ok(None)
         }
-        Err(e) => Err(plain_update_error(&e.to_string())),
+        Err(e) => Err(e),
     }
 }
 
@@ -153,8 +174,7 @@ pub async fn app_update_install(app: AppHandle, confirm_running: bool, reopen_ch
             let update = match found {
                 Some(update) => update,
                 None => {
-                    let updater = app.updater().map_err(|e| plain_update_error(&e.to_string()))?;
-                    updater.check().await.map_err(|e| plain_update_error(&e.to_string()))?.ok_or_else(|| "There is no update to install.".to_string())?
+                    find_update(&app).await?.ok_or_else(|| "There is no update to install.".to_string())?
                 }
             };
             // Download first and check the signature; nothing has been stopped yet, so a failure here changes nothing.

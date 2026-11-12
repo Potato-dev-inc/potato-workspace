@@ -7,7 +7,7 @@ export const meta = {
   id: 'panes.fake-agent-in-sidebar',
   title: 'A new agent pane appears in the sidebar and shows its terminal',
   area: 'panes',
-  tags: ['smoke'],
+  tags: ['basic', 'smoke'],
 };
 
 export async function run(t) {

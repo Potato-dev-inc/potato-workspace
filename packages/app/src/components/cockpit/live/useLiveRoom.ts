@@ -1,5 +1,6 @@
 // The Live Room status, kept fresh: one read on mount, then every `live://state` event. Outside the desktop
 // shell the reads fail and the status stays null, so the LIVE bar and chips simply do not show.
+import { errorSentence } from '../../../lib/sayError';
 import { createContext, useCallback, useEffect, useState } from 'react';
 import { liveRoomApi, onLiveState, type LiveRoomApi, type LiveStatus } from '../../../lib/live-room';
 
@@ -12,7 +13,7 @@ export const LiveStatusContext = createContext<LiveStatus | null | undefined>(un
 export type LiveSubscribe = (cb: (status: LiveStatus) => void) => Promise<() => void>;
 
 /** A readable sentence for an error from the app or from a test double. */
-export const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+export const errorText = (err: unknown): string => (errorSentence(err));
 
 /** Copies the full link to the clipboard. The link is fetched here and never stored in React state. */
 export async function copyRoomLink(api: Pick<LiveRoomApi, 'copyLink'>): Promise<void> {

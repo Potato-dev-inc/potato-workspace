@@ -5,7 +5,7 @@ export const meta = {
   id: 'work.files-add-edit-delete-in-history',
   title: 'A turn that adds, edits and deletes files is listed in History with one row per file',
   area: 'work',
-  tags: ['work', 'files', 'smoke'],
+  tags: ['work', 'files', 'basic'],
   timeout: 120000,
 };
 

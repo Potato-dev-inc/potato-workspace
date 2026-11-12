@@ -1,6 +1,7 @@
 // Settings > General > Discord alerts: the commands behind the block (`src-tauri/src/discord_alerts`). The webhook
 // link goes IN to `discord_alerts_set_url` and never comes back: the status holds only whether one is saved and
 // its last four characters.
+import { errorSentence } from './sayError';
 import { invoke } from '@tauri-apps/api/core';
 
 /** Which alerts to post. */
@@ -44,5 +45,5 @@ export const tauriDiscordAlertsApi: DiscordAlertsApi = {
 
 /** A command error as a sentence. */
 export function discordErrorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
+  return errorSentence(e);
 }

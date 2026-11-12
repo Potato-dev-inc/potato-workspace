@@ -1,8 +1,9 @@
+import { errorSentence } from '../../../lib/sayError';
 import { useState } from 'react';
 import { whoDid, type TeamCard } from '../../../lib/team';
 import { Sheet } from '../Sheet';
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 /**
  * "Bring feat/auth into feat/billing": which agent does it, and when. The work happens in a

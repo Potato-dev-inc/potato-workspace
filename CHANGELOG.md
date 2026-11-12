@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.19
+
+This is a beta.
+
+- New: Settings > Agents > Default model. Pick the model each agent starts on, in chats and terminals. The New agent page starts on it, and the Default model for helpers still wins for helpers.
+- New: Get early versions (beta) in Settings > Updates. Settings are backed up (the last five), and Restore the last good settings brings them back.
+- Terminal agents now close with the app instead of running on unseen. After a crash, the next start cleans them up, and a run that was ended offers Reopen.
+- A chat no longer gets stuck at "Waiting for you" with nothing to press. A permission question is always shown with buttons, and one that can't be shown is turned down so the agent moves on.
+- Borrowed Claude sign-ins work in chats, not only in terminals. The lend note explains that a borrowed sign-in is billed like an API key on the lender's side.
+- A background-task message from Claude Code shows once as a small notice, not twice as raw text.
+- OpenCode helpers: chats survive an app restart for the agent that started them, a stale helper model is dropped with a note instead of failing, and OpenCode's own errors are shown in plain words.
+- Helpers (MCP): run several at once with run_agents (up to 8 by default, a setting), ask another agent to review a result with review_by, and the app can answer a helper's read and search questions for it (edits and commands still wait for you). Read-only runs prove the project folder did not change.
+- Helpers (MCP): the lane is now a hint. If a chat can't honour read-only or a model, the terminal runs it and the answer says what changed. Every refusal includes a call that works.
+- Helpers (MCP): the MCP can start the app in the tray when it isn't running. Results can be brief, and every answer says what was and wasn't checked.
+- Errors show as plain sentences everywhere, and the app keeps a private log file (secrets removed) that goes into the diagnostic zip.
+
 ## 1.0.18
 
 This is a beta.

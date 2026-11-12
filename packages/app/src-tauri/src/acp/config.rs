@@ -141,6 +141,9 @@ pub struct AgentConfig {
     /// How a read-only chat is enforced for this agent (`[acp.read_only]`). Absent: the agent cannot run a chat
     /// read-only, and `run_agent(read_only: true)` says so instead of starting one.
     pub read_only: Option<ReadOnlyChat>,
+    /// The terminal is no way out for this agent (its terminal screen cannot be driven reliably). A chat that cannot
+    /// start is then an error the caller reads, and is never quietly run in a terminal instead.
+    pub chat_only: bool,
     /// Set for one session only (never from a table): the `authenticate` method to call right after `initialize`. A chat on
     /// a borrowed sign-in (`capacity_proxy`) uses it, because the adapter then has no login of its own, only a placeholder key.
     #[serde(skip)]
@@ -1444,6 +1447,8 @@ mod tests {
         let opencode = find_builtin("opencode").expect("opencode has its own [acp] table (its own `opencode acp`)");
         assert_eq!(opencode.args, vec!["acp".to_string()]);
         assert!(!opencode.disabled);
+        assert!(opencode.chat_only, "OpenCode's terminal takes no typed prompt: a failed chat is never rerun there");
+        assert!(!find_builtin("codex").unwrap().chat_only);
     }
 
     #[test]

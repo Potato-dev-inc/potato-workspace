@@ -1,8 +1,9 @@
 // Settings > Agents > Keep going: the agents a task can move to when the agent it runs on runs out of usage,
 // in order, and whether to ask to move it back after the reset. Saved through the keep-going settings command
 // (not settings.json). Agent names come from the registry and the saved logins; nothing here names an agent.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
-import { accountsFor, errorText, tauriAccountsApi, type Account } from '../../../lib/accounts';
+import { accountsFor, tauriAccountsApi, type Account } from '../../../lib/accounts';
 import { useAgentRegistry, type AgentDescriptor } from '../../../lib/agentRegistry';
 import {
   keepGoingSettingsGet,
@@ -53,8 +54,7 @@ export function keepGoingLabel(target: KeepGoingTarget, agents: AgentDescriptor[
 
 /** The text a failed save shows: the server's plain sentence, without its `CODE:` prefix. */
 export function keepGoingSaveError(err: unknown): string {
-  const text = errorText(err).replace(/^[A-Z][A-Z0-9_]*:\s*/, '').trim();
-  return text || "Couldn't save. Try again.";
+  return errorSentence(err, "Couldn't save. Try again.");
 }
 
 const HEADING = {

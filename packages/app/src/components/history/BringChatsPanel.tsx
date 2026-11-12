@@ -1,6 +1,7 @@
 // "Bring my chats": pick an agent, see its 10 newest chats, pick some or bring a whole time range. It is the content
 // only; the caller wraps it in a Sheet (Escape and Tab come from there). Opening it is the person's own press, so it
 // looks at the agents' chat folders then and not before. Nothing leaves this computer.
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatIndexSetEnabled } from '../../lib/chatIndex';
 import {
@@ -38,10 +39,6 @@ export const BRING_REMOVE_BODY = "This removes the chats Potato Workspace brough
 export const PAGE_SIZE = 10;
 /** How often the panel asks for the progress of a run, on top of the events it listens to. */
 const POLL_MS = 500;
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function BringChatsPanel({
   api = chatImportApi,
@@ -85,7 +82,7 @@ export function BringChatsPanel({
     try {
       setFound(await api.look(null));
     } catch (e) {
-      setError(errorText(e));
+      setError(errorSentence(e));
       setFound([]);
     }
   }, [api]);
@@ -102,7 +99,7 @@ export function BringChatsPanel({
         if (next.progress.phase === 'reading' || next.progress.phase === 'looking') setWorking(true);
         if (next.indexEnabled) void look();
       })
-      .catch((e: unknown) => live && setError(errorText(e)));
+      .catch((e: unknown) => live && setError(errorSentence(e)));
     const stop = onImportProgress((next) => live && setProgress(next));
     return () => {
       live = false;
@@ -125,7 +122,7 @@ export function BringChatsPanel({
         setMore(page.more);
         setNext(page.next);
       } catch (e) {
-        if (ticket === wanted.current) setError(errorText(e));
+        if (ticket === wanted.current) setError(errorSentence(e));
       } finally {
         if (ticket === wanted.current) setLoadingRows(false);
       }
@@ -179,7 +176,7 @@ export function BringChatsPanel({
       setPicked(new Set());
     } catch (e) {
       setWorking(false);
-      setError(errorText(e));
+      setError(errorSentence(e));
     }
   };
 
@@ -187,7 +184,7 @@ export function BringChatsPanel({
     try {
       setProgress(await api.cancel());
     } catch (e) {
-      setError(errorText(e));
+      setError(errorSentence(e));
     }
   };
 
@@ -198,7 +195,7 @@ export function BringChatsPanel({
       setState((prev) => prev && { ...prev, indexEnabled: status.enabled });
       if (status.enabled) void look();
     } catch (e) {
-      setError(errorText(e));
+      setError(errorSentence(e));
     } finally {
       setBusy(false);
     }
@@ -215,7 +212,7 @@ export function BringChatsPanel({
       await look();
       setNotice("Brought chats removed. Your agents' own chat files are not touched.");
     } catch (e) {
-      setError(errorText(e));
+      setError(errorSentence(e));
     } finally {
       setBusy(false);
     }

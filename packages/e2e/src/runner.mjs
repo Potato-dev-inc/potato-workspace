@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { RESULTS_DIR, newRunId } from './paths.mjs';
-import { startApp, ensureCockpit, findCockpit, waitUntil, DEFAULT_SCRIPT } from './launcher.mjs';
+import { startWithCockpit, findCockpit, waitUntil, DEFAULT_SCRIPT } from './launcher.mjs';
 import { sleep } from './cdp.mjs';
 import { makeContext, SkipTest } from './testctx.mjs';
 import { Recorder } from './recorder.mjs';
@@ -162,23 +162,15 @@ export async function runTests(tests, opts = {}, emit = () => {}) {
   };
   const openApp = async (settings) => {
     const tStart = Date.now();
-    // One retry: a start whose cockpit window never shows up on the debugging port is rare but happens.
-    for (let attempt = 1; ; attempt++) {
-      // Every start gets a folder of its own (-r2, -r3 ... next to the first): a restarted app never reads the bridge
-      // port/secret files, settings or webview data a previous instance left behind.
-      starts += 1;
-      try {
-        app = await startApp({ runId: starts === 1 ? runId : `${runId}-r${starts}`, headless: opts.headless, anchor: opts.anchor, settings });
-        conn = await ensureCockpit(app);
-        await prepareWindow(app, conn);
-        break;
-      } catch (e) {
-        try { conn?.close(); } catch { /* closed */ }
-        conn = null;
-        if (app) { await app.stop().catch(() => {}); app = null; }
-        if (attempt >= 2) throw e;
-      }
-    }
+    // A start whose cockpit window never shows up on the debugging port is retried on a new data folder (-r2, -r3 ... next to
+    // the first): a restarted app never reads the bridge port/secret files, settings or webview data an earlier instance left.
+    const started = await startWithCockpit({ runId, headless: opts.headless, anchor: opts.anchor, settings }, {
+      runIdFor: () => { starts += 1; return starts === 1 ? runId : `${runId}-r${starts}`; },
+      onLost: (n, e) => emit({ type: 'log', line: `app start ${n} lost its cockpit: ${String(e.message).slice(0, 200)}` }),
+    });
+    app = started.app;
+    conn = started.conn;
+    await prepareWindow(app, conn);
     conn.on((m) => {
       if (m.method === 'Runtime.exceptionThrown') consoleErrors.push(String(m.params.exceptionDetails?.exception?.description || m.params.exceptionDetails?.text).slice(0, 300));
       else if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 300));
@@ -242,8 +234,9 @@ export async function runTests(tests, opts = {}, emit = () => {}) {
           try { conn?.close(); } catch { /* closed */ }
           conn = null;
           await app.stop();
-          app = await startApp({ runId: sameRun, headless: opts.headless, anchor: opts.anchor, reuse: true });
-          conn = await ensureCockpit(app);
+          const restarted = await startWithCockpit({ runId: sameRun, headless: opts.headless, anchor: opts.anchor, reuse: true });
+          app = restarted.app;
+          conn = restarted.conn;
           await prepareWindow(app, conn);
           conn.on((m) => {
             if (m.method === 'Runtime.exceptionThrown') consoleErrors.push(String(m.params.exceptionDetails?.exception?.description || m.params.exceptionDetails?.text).slice(0, 300));

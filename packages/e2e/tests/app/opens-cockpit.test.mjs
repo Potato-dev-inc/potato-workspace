@@ -5,7 +5,7 @@ export const meta = {
   id: 'app.opens-cockpit',
   title: 'The cockpit opens with an empty sidebar and an empty inbox',
   area: 'app',
-  tags: ['smoke'],
+  tags: ['basic', 'smoke'],
 };
 
 export async function run(t) {
@@ -19,5 +19,5 @@ export async function run(t) {
   await t.expect.text('Nothing needs you');
 
   await t.step('The bottom buttons are there');
-  for (const name of ['Set up agents', 'Project', 'Your plans', 'Scores', 'Review', 'Settings']) await t.expect.visible(`exact=${name}`);
+  for (const name of ['Set up agents', 'Project', 'Review', 'More', 'Settings']) await t.expect.visible(`exact=${name}`);
 }

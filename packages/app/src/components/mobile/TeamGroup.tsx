@@ -5,6 +5,7 @@
 // War Room: PR and default-branch push cards get their one-sentence copy from lib/team.ts here too.
 // TODO(war-room): the red-default-branch banner and its Claim it are desktop only for now; on the
 // phone a red main shows as a plain "Checks failed on main" card (the bridge has no claim route yet).
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BridgeClient, TeamCardsReply } from '../../lib/bridge-types';
 import { ago } from '../../lib/mobile-agent-tabs';
@@ -20,7 +21,7 @@ type Confirm =
 
 /** The plain sentence for a failed call. The bridge puts `{ error }` after the status code. */
 function plainError(err: unknown): string {
-  const text = err instanceof Error ? err.message : String(err);
+  const text = errorSentence(err);
   const m = / -> (\d+): ([\s\S]*)$/.exec(text);
   if (!m) return "Couldn't reach your PC. Try again.";
   if (m[1] === '403') return "This phone isn't allowed to do that. Change it on your PC: Settings › Phone.";

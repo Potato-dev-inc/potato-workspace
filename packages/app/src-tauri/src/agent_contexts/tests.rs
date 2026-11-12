@@ -61,6 +61,7 @@ fn builds_complete_pane_agent_context() {
         account_label: None,
         title: None,
         parent_pane_id: None,
+origin: None,
         place: None,
         lane: None,
     };

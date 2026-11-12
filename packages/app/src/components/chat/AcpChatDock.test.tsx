@@ -289,6 +289,23 @@ describe('AcpChatDock', () => {
       ...over,
     });
 
+    it('a waiting chat with no card says so and offers a way out', async () => {
+      vi.useFakeTimers();
+      try {
+        const { c } = cockpit([]);
+        const { api, cancel } = fakeApi(state({ phase: 'needs_input', permissions: [] }));
+        await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Codex" api={api} />));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2500);
+        });
+        expect(host.querySelector('[data-testid="acp-orphan-wait"]')?.textContent).toContain("waiting but didn't say what for");
+        await act(async () => button('Deny and stop')!.click());
+        expect(cancel).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('shows the kind, the command, the first yes filled, and sends the choice', async () => {
       const { c, answerQuestion } = cockpit([question()]);
       const { api } = fakeApi(state({ phase: 'needs_input', permissions: [permission()] }));

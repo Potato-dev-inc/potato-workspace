@@ -6,7 +6,7 @@ export const meta = {
   id: 'keepgoing.limit-card-offers-continue',
   title: 'A usage limit shows a card that offers another agent and moves nothing by itself',
   area: 'keepgoing',
-  tags: ['keepgoing', 'smoke'],
+  tags: ['keepgoing', 'basic'],
   timeout: 90000,
 };
 

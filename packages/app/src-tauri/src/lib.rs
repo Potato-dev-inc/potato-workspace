@@ -53,6 +53,8 @@ mod opencode;
 pub mod operations;
 pub mod wait_reasons;
 #[cfg(test)]
+mod sleep_budget_tests;
+#[cfg(test)]
 mod operations_contract_tests;
 mod pane_activity;
 mod pane_jobs;
@@ -92,6 +94,8 @@ mod pane_wait_notify;
 mod platform;
 pub mod redirection_trust;
 mod project_ir;
+#[cfg(windows)]
+pub mod proc_job;
 pub mod proc_util;
 mod path_limit;
 mod project_path;
@@ -114,6 +118,7 @@ mod scores;
 mod secrets;
 mod settings_store;
 mod settings_patch;
+mod settings_safety;
 mod global_shortcuts;
 mod shell_env;
 mod startup_timing;
@@ -170,9 +175,11 @@ pub fn run() {
     if redirection == redirection_trust::Outcome::Exit {
         std::process::exit(0);
     }
+    startup_timing::mark("app", "app_start");
     worker_launch::init_from_env();
     shell_env::apply_to_process();
 
+    flight::logfile::init(&app_paths::app_data_dir());
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
@@ -510,6 +517,9 @@ pub fn run() {
             commands::diagnostic_preview,
             commands::diagnostic_show,
             commands::diagnostic_save,
+            commands::log_ui_error,
+            commands::perf_summary,
+            commands::last_run_status,
             commands::app_log_lines,
             app_lifecycle::get_app_install_info,
             app_lifecycle::open_external_url,
@@ -566,6 +576,9 @@ pub fn run() {
             commands::one_brain_set_project_enabled,
             commands::open_settings,
             settings_patch::settings_patch,
+            settings_safety::settings_recovery_status,
+            settings_safety::settings_restore_last_good,
+            settings_safety::settings_recovery_dismiss,
             global_shortcuts::global_shortcut_set,
             global_shortcuts::global_shortcuts_status,
             commands::pane_prompt,
@@ -753,6 +766,8 @@ pub fn run() {
             commands::keep_helpers_open_set,
             commands::close_helpers_with_agent_get,
             commands::close_helpers_with_agent_set,
+            commands::most_helpers_at_once_get,
+            commands::most_helpers_at_once_set,
             commands::hidden_runs_list,
             commands::hidden_runs_dismiss,
             commands::audit_recent,
@@ -792,7 +807,11 @@ pub fn run() {
             app_paths::migrate_legacy_app_data();
             // First, so a panic anywhere below leaves a file behind (the console and the in-memory
             // log tail die with the process).
+            flight::lastrun::check_at_start(&app_paths::app_data_dir());
             crash::install(app_paths::app_data_dir());
+            // Terminal agents die with the app (job object); anything a crashed run left behind is ended now.
+            pty::term_job::init();
+            pty::orphans::init(&app_paths::app_data_dir());
             // Before the first window: an older version's desktop service worker would serve its UI.
             webview_service_worker::remove_at_startup(app.path().app_local_data_dir().ok());
             // Register approved declarative agent definitions before anything resolves a profile.
@@ -846,6 +865,7 @@ pub fn run() {
                 tracing::info!(path = %binary.display(), "bundled Rust MCP server");
             }
 
+            app_paths::write_app_exe_file();
             let port_file = app_paths::bridge_port_file();
             let pairing_file = app_paths::pairing_file();
             if let Err(err) = event_log::init_global_event_log(event_log::event_log_path()) {
@@ -924,6 +944,7 @@ pub fn run() {
             #[cfg(not(test))]
             checkpoints::bisect::live::live().sweep_stale();
             settings_store::load_saved_public_settings(app.handle());
+            agent_run_mode::migrate_legacy_defaults_once(app.handle());
             // With the Labs switch on (known now), each conversation that came back is a chat pane in the pane list.
             // Nothing starts yet: the adapter starts when the chat is read or a message is sent.
             if acp::chat_enabled() {
@@ -996,6 +1017,7 @@ pub fn run() {
                 }
             });
 
+            startup_timing::mark("app", "app_setup_done");
             Ok(())
         })
         .build(context)

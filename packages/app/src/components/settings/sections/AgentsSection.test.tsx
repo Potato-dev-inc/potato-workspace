@@ -199,10 +199,10 @@ describe('Agents: every row renders', () => {
     expect(buttonByText(m.host, 'Save changes')).toBeUndefined();
   });
 
-  it('groups the rows: Sign in, Your chats, Speed, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
+  it('groups the rows: Sign in, Your chats, Speed, Models, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
     await mount();
     const heads = [...m.host.querySelectorAll('section.st-group')].map((g) => g.querySelector(':scope > h2')?.textContent?.trim() ?? '');
-    expect(heads).toEqual(['Check my setup', 'Sign in', 'Your chats', 'Speed', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Linux', 'Same file', '']);
+    expect(heads).toEqual(['Check my setup', 'Sign in', 'Your chats', 'Speed', 'Models', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Linux', 'Same file', '']);
   });
 
   it('mounts the same-file switch under Same file and it is found by search', async () => {

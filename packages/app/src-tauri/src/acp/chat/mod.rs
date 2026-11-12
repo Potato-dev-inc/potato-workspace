@@ -27,6 +27,7 @@
 pub mod api;
 pub mod cards;
 mod choice;
+pub mod decide;
 pub mod default_model;
 pub mod ending;
 pub mod lanes;
@@ -44,6 +45,8 @@ mod tests;
 mod workspace_tests;
 #[cfg(test)]
 mod auto_lane_tests;
+#[cfg(test)]
+mod decide_tests;
 
 use crate::attach::ChatAttachment;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -635,6 +638,8 @@ impl AcpChat {
         let mut raised: Vec<Question> = Vec::new();
         // Asks the person's "don't ask again" answers: sent after the lock is let go.
         let mut automatic: Vec<(u64, String)> = Vec::new();
+        // Asks no card could be made for: answered "no" after the lock is let go.
+        let mut unshowable: Vec<u64> = Vec::new();
         {
             let mut cards = self.cards.lock();
             for wait in &waits {
@@ -667,16 +672,40 @@ impl AcpChat {
                 }
                 let (mut new, options) = cards::new_question(&self.pane_id, &self.label, wait, title.as_deref(), kind.as_deref(), &paths);
                 new.timeout_s = Some(self.card_timeout_s.load(Ordering::SeqCst));
-                match questions::store().create(new, now) {
-                    Ok(question) => {
+                let made = match questions::store().create(new, now) {
+                    Ok(question) => Some((question, options)),
+                    Err(error) => {
+                        // Never leave the agent waiting with nothing on screen: try the plain Allow / Deny card.
+                        tracing::warn!(pane = %self.pane_id, code = error.code, message = %error.message, "acp chat: the permission card was refused, raising the plain one");
+                        let (plain, plain_options) = cards::fallback_question(&self.pane_id, &self.label, wait, title.as_deref());
+                        let mut plain = plain;
+                        plain.timeout_s = Some(self.card_timeout_s.load(Ordering::SeqCst));
+                        match questions::store().create(plain, now) {
+                            Ok(question) => Some((question, plain_options)),
+                            Err(error) => {
+                                tracing::warn!(pane = %self.pane_id, code = error.code, "acp chat: no card could be raised, the agent is told no");
+                                None
+                            }
+                        }
+                    }
+                };
+                match made {
+                    Some((question, options)) => {
                         cards.insert(wait.ask_id, Card { question_id: question.id.clone(), options, title: title.clone(), resolved: false });
                         raised.push(question);
                     }
-                    Err(error) => {
-                        // The store is full: the agent keeps waiting and the next look tries again.
-                        tracing::warn!(pane = %self.pane_id, code = error.code, "acp chat: could not raise a permission card");
-                    }
+                    None if !cards.contains_key(&wait.ask_id) => unshowable.push(wait.ask_id),
+                    None => {}
                 }
+            }
+        }
+        // A question nobody can see is answered "cancelled" (no), with a line in the chat saying so.
+        for ask_id in unshowable {
+            if self.session.cancel_permission(ask_id).is_ok() {
+                let at = now_iso();
+                let mut mapper = self.mapper.lock();
+                let items = mapper.permission_refused("the app could not show the question, so the agent was told no", &at);
+                self.push(items);
             }
         }
         for (ask_id, option_id) in automatic {
@@ -695,6 +724,7 @@ impl AcpChat {
     fn card_resolved(&self, question: &Question) {
         enum Send {
             Option(u64, String),
+            CancelAsk(u64),
             Cancel,
             Nothing,
         }
@@ -710,6 +740,10 @@ impl AcpChat {
                     let choice = question.answer.as_ref().and_then(|a| a.choice_id.as_deref());
                     let option_id = choice.and_then(|id| card.option_for_choice(id)).map(|o| o.option_id.clone());
                     match option_id {
+                        Some(option_id) if option_id.is_empty() => {
+                            card.resolved = true;
+                            Send::CancelAsk(ask_id)
+                        }
                         Some(option_id) => {
                             card.resolved = true;
                             Send::Option(ask_id, option_id)
@@ -721,6 +755,7 @@ impl AcpChat {
                 QuestionState::Cancelled => {
                     card.resolved = true;
                     match card.rejection().map(|o| o.option_id.clone()) {
+                        Some(option_id) if option_id.is_empty() => Send::CancelAsk(ask_id),
                         Some(option_id) => Send::Option(ask_id, option_id),
                         None => Send::Cancel,
                     }
@@ -734,6 +769,7 @@ impl AcpChat {
         };
         let result = match plan {
             Send::Option(ask_id, option_id) => self.session.answer_permission(ask_id, &option_id, by),
+            Send::CancelAsk(ask_id) => self.session.cancel_permission(ask_id),
             Send::Cancel => self.session.cancel().map(|_| ()),
             Send::Nothing => Ok(()),
         };
@@ -827,6 +863,7 @@ impl AcpChat {
             return Err(SendError::Gone);
         }
         let Some(_gate) = self.send_gate.try_lock() else { return Err(SendError::Busy) };
+        self.begin_read_only_look();
         *self.pending_user.lock() = Some((text.to_string(), attachments.to_vec()));
         match self.session.prompt_message(text, attachments) {
             Ok(_) => {
@@ -947,6 +984,7 @@ impl AcpChat {
         if self.closed.swap(true, Ordering::SeqCst) {
             return;
         }
+        crate::agent_runs::tree_proof::forget(&self.pane_id);
         // Cards still open are taken down without an answer: nobody is waiting any more.
         let open: Vec<Card> = std::mem::take(&mut *self.cards.lock()).into_values().collect();
         for card in &open {

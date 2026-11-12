@@ -1,5 +1,6 @@
 // Settings › General › Live Room: the relay address, the default length and viewers for a new room.
 // The relay is checked by the app when saved (https for a remote host); its refusal is shown as is.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { durationLabel, liveRoomApi, type LiveRoomApi, type LiveRoomConfig } from '../../../lib/live-room';
 import { FieldInput, FieldSelect, Note, SettingRow } from '../settings-ui';
@@ -7,7 +8,7 @@ import { FieldInput, FieldSelect, Note, SettingRow } from '../settings-ui';
 const MINUTES = [30, 60, 120, 240, 480];
 const VIEWERS = [5, 10, 25, 50];
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 export function LiveRoomSettings({
   api = liveRoomApi,

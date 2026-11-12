@@ -16,6 +16,7 @@
 //! falls back to the visible pane and the receipt says so (`fallback: {from: "one_task",
 //! reason: "not_verified"}`).
 
+mod agent_model;
 mod helper_model;
 mod store;
 #[cfg(test)]
@@ -26,8 +27,9 @@ use crate::operations::{RunFallback, RunModeNote};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+pub use agent_model::{agent_default_for, apply_agent_default_model, migrate_legacy_defaults_once, terminal_default_flags};
 pub use helper_model::{apply_helper_model, helper_default_for, HELPER_MODEL_NOTE};
-pub use store::{close_helpers_with_agent, helper_visibility, keep_helpers_open, set_close_helpers_with_agent, set_for_agent, set_helper_visibility, set_keep_helpers_open, setting_for};
+pub use store::{close_helpers_with_agent, helper_visibility, keep_helpers_open, most_helpers_at_once, set_close_helpers_with_agent, set_most_helpers_at_once, set_for_agent, set_helper_visibility, set_keep_helpers_open, setting_for};
 #[cfg(test)]
 pub use store::{with_test_env, TestEnv};
 #[cfg(feature = "dev-fake-tui")]

@@ -13,12 +13,12 @@ import { NewAgentMenu } from './NewAgentMenu';
 
 const ENTRIES = [{ type: 'claude', label: 'Claude' }];
 const lane = (): AcpLaneAgent => ({ id: 'claude', label: 'Claude', lane: 'acp', effective_lane: 'acp', disabled: false, disabled_note: null });
-const withBorrowed = (borrowed: boolean): AccountsApi =>
+const withBorrowed = (borrowed: boolean, chat?: boolean): AccountsApi =>
   ({
     list: async () => ({
       agents: [],
       accounts: [{ id: 'acct-work', agent_id: 'claude', label: 'Work', home: 'C:\\work' }],
-      borrowed: borrowed ? [{ id: 'lend:g1', agent_id: 'claude', label: "Leo's PC (lent)", ends_ms: Date.now() + 134 * 60_000, grant_id: 'g1' }] : [],
+      borrowed: borrowed ? [{ id: 'lend:g1', agent_id: 'claude', label: "Leo's PC (lent)", ends_ms: Date.now() + 134 * 60_000, grant_id: 'g1', ...(chat === undefined ? {} : { chat }) }] : [],
     }),
   }) as unknown as AccountsApi;
 
@@ -34,7 +34,7 @@ afterEach(async () => {
   host.remove();
 });
 
-async function mount(borrowed: boolean) {
+async function mount(borrowed: boolean, chatOk?: boolean) {
   const onStart = vi.fn(async () => undefined);
   const onStartTerminal = vi.fn(async () => undefined);
   const onClose = vi.fn();
@@ -45,7 +45,7 @@ async function mount(borrowed: boolean) {
         readyAgents={new Set()}
         onStart={vi.fn()}
         onClose={onClose}
-        accountsApi={withBorrowed(borrowed)}
+        accountsApi={withBorrowed(borrowed, chatOk)}
         chat={{ mode: 'chat', onMode: vi.fn(), agents: [lane()], onStart, onStartTerminal, terminalChat: [] }}
       />,
     );
@@ -81,5 +81,19 @@ describe('Chat on a borrowed sign-in', () => {
     const { onStart } = await mount(false);
     await click(item('Claude'));
     expect(onStart).toHaveBeenCalledWith('claude');
+  });
+});
+
+describe('A borrowed sign-in with no chat for its agent', () => {
+  it('is shown off with the reason, and clicking it starts nothing', async () => {
+    const { onStart } = await mount(true, false);
+    await click(item('Claude'));
+    const lent = item("Leo's PC");
+    expect(lent.disabled).toBe(true);
+    expect(lent.title).toContain("Chat can't use a lent sign-in");
+    await click(lent);
+    expect(onStart).not.toHaveBeenCalled();
+    // My own sign-ins are not affected.
+    expect(item('Work').disabled).toBe(false);
   });
 });

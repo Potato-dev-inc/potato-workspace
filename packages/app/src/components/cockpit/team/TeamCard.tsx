@@ -1,3 +1,4 @@
+import { errorSentence } from '../../../lib/sayError';
 import { useState } from 'react';
 import { cardActions, cardMeta, cardTitle, githubUrl, warRoomLine, type TeamApi, type TeamCard as Card } from '../../../lib/team';
 import { tauri } from '../../../lib/tauri';
@@ -5,7 +6,7 @@ import { CardButton, InboxCard } from '../InboxCard';
 import { MergeSheet } from './MergeSheet';
 import { QueueSheet } from './QueueSheet';
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 /**
  * A teammate's push or PR, in Inbox › Team. Everything in `card.event` came from a teammate and is

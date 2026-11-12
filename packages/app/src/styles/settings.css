@@ -425,6 +425,19 @@
   line-height: 1.5;
   color: var(--label-3);
 }
+.settings .st-damaged {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--bg-side);
+}
+.settings .st-damaged .st-note {
+  margin: 0;
+  color: var(--label-2);
+}
 .settings .st-field-label {
   display: block;
   margin-bottom: 4px;
@@ -1590,3 +1603,4 @@
   left: auto;
   right: 0;
 }
+.st-helper-model-note { color: var(--label-3); font-size: 11px; }

@@ -8,6 +8,7 @@ mod claims;
 mod continuity;
 mod definitions;
 mod fixtures;
+mod guarantees;
 mod followups;
 mod interrupt;
 mod native_completion;

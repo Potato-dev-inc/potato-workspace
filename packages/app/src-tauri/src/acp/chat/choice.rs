@@ -28,6 +28,8 @@ pub struct Applied {
 pub struct ChoiceError {
     pub code: &'static str,
     pub message: String,
+    /// For `ACP_MODEL_NOT_OFFERED`: the model values the agent offers (the surface turns this into `UNKNOWN_MODEL`).
+    pub known: Vec<String>,
 }
 
 impl std::fmt::Display for ChoiceError {
@@ -48,14 +50,17 @@ pub fn apply(chat: &AcpChat, model: Option<&str>, reasoning: Option<&str>) -> Re
         let group = group(&options, MODEL_CATEGORY, MODEL_IDS).ok_or_else(|| ChoiceError {
             code: "ACP_MODEL_NOT_OFFERED",
             message: "This agent does not offer a model setting, so the requested model was not applied.".to_string(),
+            known: Vec::new(),
         })?;
         let (value, name) = select(group, requested).map_err(|offered| ChoiceError {
             code: "ACP_MODEL_NOT_OFFERED",
             message: format!("This agent does not offer the model {requested:?}. It offers: {offered}."),
+            known: choices(group).into_iter().map(|(value, _)| value).collect(),
         })?;
         chat.set_config("model", &value).map_err(|error| ChoiceError {
             code: "ACP_MODEL_FAILED",
             message: format!("The agent did not accept the model {value:?}: {error}"),
+            known: Vec::new(),
         })?;
         if !same_name(&value, requested) {
             warnings.push(format!("Asked for the model {requested}; the agent is using {value} ({name})."));
@@ -67,15 +72,18 @@ pub fn apply(chat: &AcpChat, model: Option<&str>, reasoning: Option<&str>) -> Re
         let group = group(&options, REASONING_CATEGORY, REASONING_IDS).ok_or_else(|| ChoiceError {
             code: "ACP_REASONING_NOT_OFFERED",
             message: "This agent does not offer a reasoning effort setting, so the requested effort was not applied.".to_string(),
+            known: Vec::new(),
         })?;
         let id = group.get("id").and_then(Value::as_str).unwrap_or("effort").to_string();
         let (value, name) = select(group, requested).map_err(|offered| ChoiceError {
             code: "ACP_REASONING_NOT_OFFERED",
             message: format!("This agent does not offer the reasoning effort {requested:?}. It offers: {offered}."),
+            known: Vec::new(),
         })?;
         chat.set_config(&id, &value).map_err(|error| ChoiceError {
             code: "ACP_REASONING_FAILED",
             message: format!("The agent did not accept the reasoning effort {value:?}: {error}"),
+            known: Vec::new(),
         })?;
         if !same_name(&value, requested) {
             warnings.push(format!("Asked for the reasoning effort {requested}; the agent is using {value} ({name})."));
@@ -241,6 +249,13 @@ mod tests {
 
     fn group_with(options: Value) -> Value {
         json!({ "id": "model", "category": "model", "currentValue": "sonnet", "options": options })
+    }
+
+    #[test]
+    fn a_provider_prefixed_id_matches_in_any_case_but_a_different_version_does_not() {
+        let g = group_with(json!([{"value": "opencode-go/deepseek-v4.1-flash", "name": "DeepSeek V4.1 Flash"}]));
+        assert_eq!(select(&g, "OpenCode-Go/Deepseek-V4.1-Flash").unwrap().0, "opencode-go/deepseek-v4.1-flash");
+        assert!(select(&g, "opencode-go/Deepseek-V4.1-Flash-1017").is_err(), "a different snapshot is not silently swapped in");
     }
 
     #[test]

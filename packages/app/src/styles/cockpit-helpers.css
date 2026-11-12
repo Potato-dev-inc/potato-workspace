@@ -61,6 +61,17 @@
   text-overflow: ellipsis;
   transition: color 160ms var(--ease);
 }
+.cockpit .ck-started-by {
+  min-width: 0;
+  max-width: 320px;
+  align-self: center;
+  flex: 0 1 auto;
+  color: var(--label-2);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cockpit .ck-helper-of:hover {
   color: var(--label);
 }

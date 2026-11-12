@@ -5,7 +5,7 @@ export const meta = {
   id: 'review.package-lookalike-high-risk',
   title: 'An install of a look-alike package name shows a High risk card with a Package check row',
   area: 'review',
-  tags: ['package-check', 'smoke'],
+  tags: ['package-check', 'basic'],
 };
 
 export async function run(t) {

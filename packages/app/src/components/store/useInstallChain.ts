@@ -2,6 +2,7 @@
 // A step runs, the chain waits until its command ends, then PATH is refreshed (`agents_install_finish`).
 // The chain stops at the first problem. A script step never runs after another step: the chain stops and
 // asks the person to press Install again, so they see the script and confirm it on the sheet.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useReducer, useRef } from 'react';
 import {
   agentInstallApi,
@@ -41,7 +42,7 @@ export function chainReducer(_state: ChainState, event: ChainEvent): ChainState 
 
 /** The error text the app's commands send: "CODE: sentence" becomes the sentence. */
 export function errText(e: unknown): string {
-  return (e instanceof Error ? e.message : String(e)).replace(/^[A-Z_]+: /, '');
+  return (errorSentence(e)).replace(/^[A-Z_]+: /, '');
 }
 
 export interface ChainDeps {

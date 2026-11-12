@@ -25,7 +25,7 @@ fn watches_cancel_itself(name: &str) -> bool {
 
 /// Tools that block on a run for a long time; they send a progress heartbeat while they do.
 fn sends_heartbeat(name: &str) -> bool {
-    matches!(name, "run_agent" | "quick_ask" | "followup_task" | "send_agent")
+    matches!(name, "run_agent" | "run_agents" | "review_agent" | "quick_ask" | "followup_task" | "send_agent")
 }
 
 #[cfg(not(test))]
@@ -112,6 +112,7 @@ pub(crate) fn call_tool_with_sink(
         .get("project_path")
         .and_then(Value::as_str)
         .map(str::to_string);
+    let shape = brief::take_shape(name, &mut args)?;
     ensure_tool_mode(name)?;
     let call = dispatch_cancellable(name, &args, cancel_rx, sink);
 
@@ -131,7 +132,11 @@ pub(crate) fn call_tool_with_sink(
         text = apply_shell_hint(&text, hint, project_hint);
     }
 
-    let structured = serde_json::from_str::<Value>(&text).ok();
+    let mut structured = serde_json::from_str::<Value>(&text).ok();
+    if let (Some(shape), Some(value)) = (shape, structured.as_mut()) {
+        brief::apply(value, shape);
+        text = value.to_string();
+    }
     let mut result = json!({ "content": [{ "type": "text", "text": text }] });
     if let Some(value) = structured {
         if let Some(object) = result.as_object_mut() {

@@ -1,8 +1,9 @@
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import type { MergePlan, TeamApi, TeamCard } from '../../../lib/team';
 import { Sheet } from '../Sheet';
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 /**
  * "Merge #142 when its checks pass?" The plan is read from GitHub when the sheet opens (repository, title,

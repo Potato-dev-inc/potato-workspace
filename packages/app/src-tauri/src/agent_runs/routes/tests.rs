@@ -31,6 +31,7 @@ fn pane_worker_entry_exposes_adoption_fields() {
         account_label: None,
         title: None,
         parent_pane_id: None,
+origin: None,
         place: None,
         lane: None,
     };

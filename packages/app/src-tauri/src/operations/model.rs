@@ -451,7 +451,7 @@ pub struct WorkerPersist {
     /// "Keep helpers open when they finish" kept this run's pane open although the agent did not ask for that.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kept_open_note: Option<String>,
-    /// The model came from the person's "Default model for helpers" (Settings > Agents > Helper agents), not from the request.
+    /// The model came from the person's settings ("Default model for helpers", else the agent's "Default model"), not from the request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_note: Option<String>,
     /// Programs pre-authorised for allow-once on Cursor shell prompts (see approval_policy).
@@ -464,6 +464,10 @@ pub struct WorkerPersist {
     /// `project_path` stays the origin repo; only the spawn cwd moves (see `work_dir`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree: Option<crate::worktrees::WorktreeRef>,
+    /// For a `read_only` run: whether the folder looked the same before and after (`agent_runs::tree_proof`).
+    /// Absent until the turn finishes, and on runs that are not read-only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_only_proof: Option<crate::agent_runs::tree_proof::ReadOnlyProof>,
 }
 
 impl OperationSnapshot {
@@ -485,6 +489,9 @@ pub struct LaneNoteRecord {
     pub reason: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback: Option<Value>,
+    /// What the lane resolver changed from the request (`[{field, asked, used, why}]`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjusted: Option<Value>,
 }
 
 impl LaneNoteRecord {

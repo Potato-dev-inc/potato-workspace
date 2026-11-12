@@ -27,6 +27,8 @@ import type {
   CoordinationStorageInfo,
   DiagnosticPreview,
   DiagnosticSaved,
+  LastRun,
+  PerfSummary,
   OpenCodeKeyStatus,
   RotateOpenCodeKeyResult,
   AppInstallInfo,
@@ -330,6 +332,10 @@ export const tauri = {
   diagnosticShow: (path: string) => safeInvoke<string>('diagnostic_show', { path }),
   diagnosticSave: (path: string, exclude: string[]) =>
     safeInvoke<DiagnosticSaved>('diagnostic_save', { path, exclude }),
+  perfSummary: () => safeInvoke<PerfSummary | null>('perf_summary', undefined, null, true),
+  lastRunStatus: () => safeInvoke<LastRun | null>('last_run_status', undefined, null, true),
+  logUiError: (message: string, source?: string, stack?: string) =>
+    safeInvoke<boolean>('log_ui_error', { message, source, stack }, false, true),
   appLogLines: (needle: string, max: number) => safeInvoke<string[]>('app_log_lines', { needle, max }, [], true),
   getAppInstallInfo: () =>
     safeInvoke<AppInstallInfo>(

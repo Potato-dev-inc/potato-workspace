@@ -4,13 +4,19 @@
 use serde_json::Value;
 
 /// The sentence the result and receipt carry when the model came from the setting.
-pub const HELPER_MODEL_NOTE: &str = "model: this agent's helper default (Settings > Agents > Helper agents); the request named no model.";
+pub const HELPER_MODEL_NOTE: &str = "model: this agent's default model from the person's settings (Settings > Agents); the request named no model.";
 
 /// The saved helper default for `agent_id`, if any. A blank value, a non-text value, or a missing map means none.
 pub fn helper_default_for(settings: &Value, agent_id: &str) -> Option<String> {
+    saved_model(settings, "helper_default_models", agent_id)
+}
+
+/// The saved model for `agent_id` in the settings map `key` (agent id -> model id), matched without regard to case.
+/// A blank value, a non-text value, a flag lookalike, or a missing map means none.
+pub(super) fn saved_model(settings: &Value, key: &str, agent_id: &str) -> Option<String> {
     let wanted = agent_id.trim();
     settings
-        .get("helper_default_models")?
+        .get(key)?
         .as_object()?
         .iter()
         .find(|(id, _)| id.trim().eq_ignore_ascii_case(wanted))

@@ -5,7 +5,7 @@ export const meta = {
   id: 'review.turn-listed',
   title: 'A finished agent turn that changed files is listed on the Review desk as low risk with no flags',
   area: 'review',
-  tags: ['review', 'smoke'],
+  tags: ['review', 'basic'],
   timeout: 90000,
 };
 

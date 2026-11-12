@@ -500,7 +500,7 @@ export function NewAgentMenu({
           <span>{SIGN_IN.defaultOne}</span>
         </button>
         {accountsFor(live, picking.type).map((a) => (
-          <button key={a.id} type="button" role="menuitem" className="ck-menu-item" onClick={() => (pickingChat ? chooseForChat(a.id) : start(picking.type, a.id))}>
+          <button key={a.id} type="button" role="menuitem" className="ck-menu-item" disabled={!!pickingChat && a.borrowed && a.chat === false} title={pickingChat && a.borrowed && a.chat === false ? "Chat can't use a lent sign-in for this agent yet. Use a terminal." : undefined} onClick={() => (pickingChat ? chooseForChat(a.id) : start(picking.type, a.id))}>
             <span>{signInLabel(a, now)}</span>
           </button>
         ))}

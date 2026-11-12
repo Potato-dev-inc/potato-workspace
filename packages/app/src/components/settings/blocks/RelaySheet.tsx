@@ -1,11 +1,12 @@
 // "Create team relay": a Cloudflare token in, the relay deployed into the person's own account (the Rust side does
 // the upload, src-tauri/src/team/relay_deploy.rs), its address out. The token is sent once and not kept here.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { tauri } from '../../../lib/tauri';
 import type { CloudflareAccount, RelayDeployStep, TeamApi } from '../../../lib/team';
 import { Btn, FieldInput, FieldSelect, Note } from '../settings-ui';
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 export const CLOUDFLARE_TOKENS_URL = 'https://dash.cloudflare.com/profile/api-tokens';
 

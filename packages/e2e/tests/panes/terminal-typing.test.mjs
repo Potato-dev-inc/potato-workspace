@@ -6,7 +6,7 @@ export const meta = {
   id: 'panes.terminal-typing',
   title: 'Typing in the terminal reaches the agent and its answer comes back',
   area: 'panes',
-  tags: ['smoke', 'terminal'],
+  tags: ['basic', 'terminal'],
 };
 
 export async function run(t) {

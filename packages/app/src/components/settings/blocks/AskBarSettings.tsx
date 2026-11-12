@@ -1,5 +1,6 @@
 // Settings > General > Labs > Ask bar: the global shortcut that opens a small bar to ask an agent a quick question.
 // It saves through its own commands (`askbar_settings_get/set`), then flashes the row's "Saved" tick.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { ASKBAR_SHORTCUTS, tauriAskbarApi, type AskbarAgent, type AskbarApi, type AskbarSettings } from '../../../lib/askbar';
 import { FieldSelect, SettingRow, SettingToggle } from '../settings-ui';
@@ -25,7 +26,7 @@ export function AskBarSettingsBlock({ api = tauriAskbarApi, onSaved }: { api?: A
       })
       .catch((e: unknown) => {
         setS(before); // put the old value back: it was not saved
-        setError('Not saved: ' + (e instanceof Error ? e.message : String(e)));
+        setError('Not saved: ' + (errorSentence(e)));
       });
   };
   return (

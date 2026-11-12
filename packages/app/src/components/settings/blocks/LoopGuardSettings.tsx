@@ -1,4 +1,5 @@
 // Settings > General: stuck-agent warnings and the "Stop all agents" shortcut.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { tauriLoopApi, type LoopGuardApi, type LoopGuardSettings } from '../../../lib/loop-guard';
 import { bindingLabel } from '../../../lib/shortcuts';
@@ -23,7 +24,7 @@ export function LoopGuardSettingsBlock({ api = tauriLoopApi, onSaved }: { api?: 
       })
       .catch((e: unknown) => {
         setS(before); // put the old value back: it was not saved
-        setError('Not saved: ' + (e instanceof Error ? e.message : String(e)));
+        setError('Not saved: ' + (errorSentence(e)));
       });
   };
   return (

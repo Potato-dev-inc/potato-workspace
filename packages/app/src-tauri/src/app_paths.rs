@@ -11,6 +11,9 @@ const APP_ID: &str = "com.potatodev.workspace";
 pub const PROFILE_ENV: &str = "POTATO_WORKSPACE_PROFILE";
 pub const BRIDGE_PORT_FILE_NAME: &str = "potato-workspace.bridge.port";
 pub const PAIRING_FILE_NAME: &str = "potato-workspace.pairing.json";
+/// Beside the bridge port file: one line, the path of the app that wrote it. The MCP shim starts the app from it when a
+/// call finds the app not running (`write_app_exe_file`).
+pub const APP_EXE_FILE_NAME: &str = "potato-workspace.app-exe";
 pub const BRIDGE_PORT_FILE_ENV: &str = "POTATO_WORKSPACE_BRIDGE_PORT_FILE";
 /// Per-project storage folder (`<project>/.potato-workspace`).
 pub const PROJECT_DIR_NAME: &str = ".potato-workspace";
@@ -320,6 +323,24 @@ pub fn agents_dir() -> PathBuf {
 
 pub fn bridge_port_file() -> PathBuf {
     app_data_dir().join(BRIDGE_PORT_FILE_NAME)
+}
+
+/// Writes where this app lives, beside the port file, so the MCP shim can start it later. A development build
+/// (`debug_assertions`) writes nothing: it must never become the app an installed copy's callers start.
+pub fn write_app_exe_file() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else { return };
+    let file = bridge_port_file().with_file_name(APP_EXE_FILE_NAME);
+    if std::fs::read_to_string(&file).is_ok_and(|old| old.trim() == exe.to_string_lossy()) {
+        return;
+    }
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&file, format!("{}
+", exe.display()));
 }
 
 pub fn pairing_file() -> PathBuf {

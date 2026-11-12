@@ -187,6 +187,8 @@ pub fn authorize(
                     && rest != "wait"
                     && rest != "send"
                     && rest != "followup"
+                    && rest != "review"
+                    && rest != "batch"
                     && rest != "answer"
                     && rest != "cancel"
                     && rest != "close"

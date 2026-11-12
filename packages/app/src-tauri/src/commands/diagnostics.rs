@@ -73,3 +73,17 @@ pub fn app_log_lines(needle: String, max: usize) -> Vec<String> {
     let hits: Vec<String> = crate::flight::applog::tail().into_iter().filter(|l| l.contains(&needle)).collect();
     hits[hits.len().saturating_sub(max)..].to_vec()
 }
+
+/// "Speed on this PC": numbers from the log file on disk. Nothing is uploaded.
+#[tauri::command]
+pub async fn perf_summary() -> crate::flight::perf::PerfSummary {
+    let dir = crate::app_paths::app_data_dir().join(crate::flight::logfile::LOG_DIR);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    tauri::async_runtime::spawn_blocking(move || crate::flight::perf::summarize_dir(&dir, now)).await.unwrap_or_default()
+}
+
+/// Did the last run end with a crash report? (Checked once at start.)
+#[tauri::command]
+pub fn last_run_status() -> crate::flight::lastrun::LastRun {
+    crate::flight::lastrun::found()
+}

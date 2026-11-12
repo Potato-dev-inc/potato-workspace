@@ -1,5 +1,6 @@
 // Settings > General: the search index of your chats (Ctrl+Shift+F). A switch to keep it or not, what it holds,
 // and a button that clears it. Clearing asks first and never touches the chats themselves.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { chatIndexClear, chatIndexSetEnabled, chatIndexStatus, indexStatusText, type ChatIndexStatus } from '../../../lib/chatIndex';
 import { bindingLabel } from '../../../lib/shortcuts';
@@ -7,10 +8,6 @@ import type { SettingsEnv } from '../model';
 import { Btn, SettingRow, SettingToggle } from '../settings-ui';
 
 export const CHAT_INDEX_CLEAR_BODY = 'This removes the saved search text. Chats themselves are not touched.';
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function ChatIndexSettings({ env }: { env: SettingsEnv }) {
   const [status, setStatus] = useState<ChatIndexStatus | null>(null);
@@ -35,7 +32,7 @@ export function ChatIndexSettings({ env }: { env: SettingsEnv }) {
       setStatus(await chatIndexSetEnabled(value));
       env.markSaved();
     } catch (error) {
-      env.setError(errorText(error));
+      env.setError(errorSentence(error));
     }
   };
 
@@ -48,7 +45,7 @@ export function ChatIndexSettings({ env }: { env: SettingsEnv }) {
       setStatus(await chatIndexClear());
       env.markSaved();
     } catch (error) {
-      env.setError(errorText(error));
+      env.setError(errorSentence(error));
     } finally {
       setBusy(false);
     }

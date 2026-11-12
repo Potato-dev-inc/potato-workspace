@@ -19,6 +19,7 @@ import {
   parseRunAs,
   removeCard,
   sendBlock,
+  startingModel,
   usableModel,
   withPaths,
   type AgentChoice,
@@ -188,5 +189,30 @@ describe('home cards', () => {
     expect(moveCard(three, 'a', -1).map((c) => c.id)).toEqual(['a', 'b', 'c']);
     expect(moveCard(three, 'c', 1).map((c) => c.id)).toEqual(['a', 'b', 'c']);
     expect(moveCard(three, 'zzz', 1)).toEqual(three);
+  });
+
+  it('startingModel: last pick, then the saved default (any case, listed spelling), else blank', () => {
+    const list = { models: ['gpt-5.1', 'GPT-5-mini'] };
+    expect(startingModel('gpt-5.1', 'GPT-5-mini', list)).toBe('gpt-5.1');
+    expect(startingModel('', 'gpt-5-mini', list)).toBe('GPT-5-mini');
+    expect(startingModel('old', 'gpt-5.1', list)).toBe('gpt-5.1');
+    expect(startingModel('', 'gone', list)).toBe('');
+    expect(startingModel('', 'typed-id', { models: [] })).toBe('typed-id');
+    expect(startingModel('', '', list)).toBe('');
+  });
+});
+
+describe('a lent sign-in with no chat', () => {
+  it('marks only that borrowed choice as having no chat', () => {
+    const lent: Account = { id: 'lend:g1', agent_id: 'alpha', label: "Leo's PC (lent)", home: '', borrowed: true, chat: false };
+    const mine: Account = { id: 'a1', agent_id: 'alpha', label: 'Work', home: 'x' };
+    const lentOk: Account = { ...lent, id: 'lend:g2', chat: true };
+    const list = agentChoices([agent('alpha')], [lent, mine, lentOk]);
+    expect(list.map((c) => [c.key, !!c.noChat])).toEqual([
+      ['alpha', false],
+      ['alpha:lend:g1', true],
+      ['alpha:a1', false],
+      ['alpha:lend:g2', false],
+    ]);
   });
 });

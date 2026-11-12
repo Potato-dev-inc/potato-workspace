@@ -1,3 +1,4 @@
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { PaneMoreMenu } from './PaneMoreMenu';
 import { rememberSelectedTab } from './session-memory';
@@ -38,7 +39,7 @@ import { useLastTurn } from './away-context';
 import { SegTabs } from './SegTabs';
 import { Sheet } from './Sheet';
 import { paneHeading } from './titles';
-import { helperOfLabel } from '../../lib/pane-helpers';
+import { helperOfLabel, startedByLabel } from '../../lib/pane-helpers';
 import { placeLabel, placeTooltip } from '../../lib/wsl-place';
 import { isProseStream, transcriptSpeaker } from '../../lib/transcript-labels';
 import { UntestedChip } from './UntestedChip';
@@ -113,7 +114,7 @@ export function useRunData(paneId: string, active: boolean, status: string) {
         setTranscript(t);
         setError(null);
       })
-      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) => !cancelled && setError(errorSentence(err)));
     return () => {
       cancelled = true;
     };
@@ -335,6 +336,7 @@ export function PaneView({
   const heading = paneHeading(info, name);
   const projectLine = [heading.secondary, projectWithCopy(info.cwd)].filter(Boolean).join(' · ');
   // A pane an agent started through Potato Workspace: names its parent and opens it.
+  const startedBy = startedByLabel(info);
   const helperOf = helperOfLabel(c.registry.paneList, paneId, (p) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary);
   const waiting = pane.status === 'waiting_input';
   const elapsed = waiting && since ? formatElapsed(c.now - since) : null;
@@ -419,6 +421,11 @@ export function PaneView({
           {placeLabel(info.place) && (
             <span className="ck-sub-inline" data-testid="pane-place" title={placeTooltip(info.place)}>
               {placeLabel(info.place)}
+            </span>
+          )}
+          {startedBy && (
+            <span className="ck-started-by" data-testid="pane-started-by" title={startedBy.title}>
+              {startedBy.text}
             </span>
           )}
           {helperOf && (

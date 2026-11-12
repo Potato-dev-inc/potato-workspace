@@ -5,7 +5,7 @@ export const meta = {
   id: 'chat.export-menu-preview',
   title: 'Save as Markdown shows the chat as the file will hold it, and Close leaves',
   area: 'chat',
-  tags: ['export', 'smoke'],
+  tags: ['export', 'basic'],
 };
 
 export async function run(t) {

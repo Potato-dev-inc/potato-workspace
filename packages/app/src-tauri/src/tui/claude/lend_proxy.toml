@@ -11,7 +11,8 @@ support = "lab"
 # How usage is counted from the replies (message_start / message_delta `usage` in the SSE stream).
 shape = "anthropic_messages_sse"
 upstream = "https://api.anthropic.com"
-paths = ["POST /v1/messages", "POST /v1/messages/count_tokens"]
+# The model list is read-only and costs nothing; the Claude chat adapter and the CLI model picker ask for it.
+paths = ["POST /v1/messages", "POST /v1/messages/count_tokens", "GET /v1/models", "GET /v1/models/*"]
 max_body_bytes = 16777216
 
 # A pasted Anthropic API key (kept in the OS credential store, never in a file).
@@ -54,4 +55,24 @@ remove_prefixes = ["ANTHROPIC_", "CLAUDE_"]
 remove = [
   "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL", "ANTHROPIC_CUSTOM_HEADERS",
   "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CONFIG_DIR",
+]
+
+# A chat (the Claude Agent SDK adapter, which starts the claude program) on a borrowed sign-in. Without this table the
+# chat was refused ("Open it in a terminal") while the terminal worked. Same placeholder token as the terminal; the
+# adapter needs no `authenticate` call for it (lab, 2026-11-11: initialize, session/new and prompt all pass). The chat
+# gets a fresh config folder of its own (never the borrower's real one, whose settings could add another key or URL),
+# and the program's non-essential traffic (telemetry, update checks) is off so nothing goes around the shim.
+# Claude's own screens call this an API sign-in ("API Usage Billing") because it is wired with a token; what the
+# lender's PC sends upstream is the lender's subscription token (see `[auth.account]`). The lend screens say so.
+[chat]
+set = [
+  { name = "ANTHROPIC_BASE_URL", value = "{base_url}" },
+  { name = "ANTHROPIC_AUTH_TOKEN", value = "pm-lend" },
+  { name = "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", value = "1" },
+]
+home_env = "CLAUDE_CONFIG_DIR"
+remove_prefixes = ["ANTHROPIC_", "CLAUDE_"]
+remove = [
+  "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "ANTHROPIC_CUSTOM_HEADERS",
+  "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
 ]

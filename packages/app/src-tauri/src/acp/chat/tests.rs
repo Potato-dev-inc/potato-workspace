@@ -387,6 +387,48 @@ fn answering_the_card_sends_that_option_to_the_agent_and_the_turn_goes_on() {
     assert_eq!(rig.pane_status(), "idle");
 }
 
+fn reply_of(rig: &Rig) -> String {
+    rig.items().iter().find(|i| i["kind"] == "assistant").map(|i| i["text"].as_str().unwrap_or("").to_string()).unwrap_or_default()
+}
+
+#[test]
+fn a_very_long_option_label_still_becomes_a_card_the_person_can_answer() {
+    let rig = Rig::new("");
+    rig.chat.send("permshape long").unwrap();
+    let card = rig.wait_card();
+    assert_eq!(card.choices.len(), 3, "all three of the agent's options");
+    assert!(card.choices.iter().all(|c| c.label.chars().count() <= 100));
+    assert_eq!(card.choices[1].id, "accept_execpolicy_amendment");
+    questions::store().answer(&card.id, Some("accept_execpolicy_amendment"), None, "desktop", now_ms()).unwrap();
+    rig.wait_phase(Phase::Idle);
+    assert_eq!(reply_of(&rig), "shape:long outcome:selected option:accept_execpolicy_amendment");
+}
+
+#[test]
+fn a_request_with_no_options_shows_a_deny_card_and_denying_answers_the_agent() {
+    let rig = Rig::new("");
+    rig.chat.send("permshape none").unwrap();
+    let card = rig.wait_card();
+    assert_eq!(card.question, "Fake agent is waiting but didn't say what for.");
+    let labels: Vec<&str> = card.choices.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(labels, ["Deny"]);
+    questions::store().answer(&card.id, Some("deny"), None, "desktop", now_ms()).unwrap();
+    rig.wait_phase(Phase::Idle);
+    assert_eq!(reply_of(&rig), "shape:none outcome:cancelled option:-");
+    assert!(rig.cards().is_empty());
+}
+
+#[test]
+fn options_the_card_cannot_name_fall_back_to_a_plain_card_and_dismissing_it_answers_the_agent() {
+    let rig = Rig::new("");
+    rig.chat.send("permshape blank").unwrap();
+    let card = rig.wait_card();
+    assert!(card.choices.iter().any(|c| c.label == "Deny"));
+    questions::store().dismiss(&card.id, now_ms()).unwrap();
+    rig.wait_phase(Phase::Idle);
+    assert!(reply_of(&rig).starts_with("shape:blank outcome:cancelled"), "{}", reply_of(&rig));
+}
+
 #[test]
 fn dont_ask_again_answers_later_asks_of_that_kind_with_allow_once_and_says_so() {
     let rig = Rig::new("");
@@ -1028,6 +1070,18 @@ fn a_model_the_agent_does_not_offer_is_an_error_not_a_quiet_substitution() {
 }
 
 #[test]
+fn a_model_typo_becomes_unknown_model_with_the_closest_name_and_a_try_that_works() {
+    let rig = Rig::new("");
+    let choice = rig.chat.apply_choices(Some("bb"), None).unwrap_err();
+    assert_eq!(choice.known, vec!["a".to_string(), "b".to_string()]);
+    let error = crate::acp::chat::surface::choice_failure(choice, rig.chat.agent_id(), Some("bb"));
+    assert_eq!(error.code, "UNKNOWN_MODEL");
+    assert_eq!(error.context["closest"], json!("b"));
+    let fixed = error.context["try"]["change"]["model"].as_str().unwrap().to_string();
+    assert!(rig.chat.apply_choices(Some(&fixed), None).is_ok(), "the suggested try is accepted by the agent");
+}
+
+#[test]
 fn an_effort_the_agent_does_not_offer_is_an_error() {
     let rig = Rig::new("");
     let error = rig.chat.apply_choices(None, Some("extreme")).unwrap_err();
@@ -1176,7 +1230,7 @@ fn the_starting_model_is_request_then_helper_then_setting_then_last_picked() {
     assert_eq!(all(Some("r"), Some("h"), Some("s"), Some("l")), Some(("r".into(), Source::Request)), "the request beats every default");
     assert_eq!(all(None, Some("h"), Some("s"), Some("l")), Some(("h".into(), Source::Helper)), "the helper default beats the setting");
     assert_eq!(all(Some(" "), Some("h"), Some("s"), Some("l")), Some(("h".into(), Source::Helper)), "a blank request names nothing");
-    assert_eq!(all(None, None, Some("s"), Some("l")), Some(("s".into(), Source::Setting)), "the setting beats the last pick");
+    assert_eq!(all(None, None, Some("s"), Some("l")), Some(("s".into(), Source::AgentDefault)), "the agent default beats the last pick");
     assert_eq!(all(None, Some(""), None, Some("l")), Some(("l".into(), Source::LastPicked)), "the last pick beats the agent's default");
     assert_eq!(all(None, None, None, None), None, "then the agent's own default stays");
 }
@@ -1273,5 +1327,55 @@ fn an_agent_without_a_default_model_rule_is_left_alone() {
     let store = picked_store(&rig);
     store.set("fake", "b");
     crate::acp::chat::default_model::apply_with(&rig.chat, &json!({"starting_model": "b"}), &store, None, false);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("a"));
+}
+
+// ---- the agent default (Settings > Agents > Default model) ----------------------------------------------------------
+
+#[test]
+fn an_agent_without_a_default_model_rule_starts_on_its_agent_default() {
+    let rig = Rig::new("");
+    crate::acp::chat::default_model::apply_with(&rig.chat, &json!({"agent_default_models": {"fake": "b"}}), &picked_store(&rig), None, false);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("b"));
+}
+
+#[test]
+fn the_agent_default_matches_the_agent_and_the_model_in_any_case() {
+    let rig = Rig::new("");
+    crate::acp::chat::default_model::apply_with(&rig.chat, &json!({"agent_default_models": {"FAKE": " B "}}), &picked_store(&rig), None, false);
+    assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("b"));
+}
+
+#[test]
+fn every_rung_of_the_starting_model_order_in_a_chat() {
+    let rig = Rig::with("", |cfg| cfg.default_model = Some(start_rule()));
+    let store = picked_store(&rig);
+    store.set("fake", "a");
+    let rule = rig.chat.session().config().default_model.clone();
+    let settings = json!({"agent_default_models": {"fake": "b"}, "helper_default_models": {"fake": "a"}, "starting_model": "a"});
+    let plan = |settings: &serde_json::Value, request: Option<&str>, helper: bool| crate::acp::chat::default_model::plan(&rig.chat, rule.as_ref(), settings, &store, request, helper);
+    assert_eq!(plan(&settings, Some("a"), true), Ok(None), "1. the request is applied by the caller, strictly");
+    assert_eq!(plan(&settings, None, true), Ok(Some("a".into())), "2. a helper chat: the helper default beats the agent default");
+    assert_eq!(plan(&settings, None, false), Ok(Some("b".into())), "3. any other chat: the agent default beats the older setting and the last pick");
+    assert_eq!(plan(&json!({"starting_model": "b"}), None, false), Ok(Some("b".into())), "3b. the older setting still counts when no agent default is saved");
+    assert_eq!(plan(&json!({}), None, false), Ok(Some("a".into())), "4. the last pick");
+    store.set("fake", "");
+    assert_eq!(plan(&json!({}), None, false), Ok(None), "5. then the agent's own default");
+}
+
+#[test]
+fn a_stale_agent_default_is_ignored_with_a_warning_and_never_fails_the_start() {
+    let rig = Rig::new("");
+    crate::acp::chat::default_model::apply_with(&rig.chat, &json!({"agent_default_models": {"fake": "gone/model"}}), &picked_store(&rig), None, false);
+    let view = crate::acp::chat::surface::view(&rig.chat);
+    assert_eq!(view["model"], json!("a"), "the agent keeps its own choice");
+    let note = view["warnings"][0].as_str().unwrap_or_default();
+    assert!(note.contains("'gone/model' isn't available here"), "{note}");
+}
+
+#[test]
+fn another_agents_default_is_not_used() {
+    let rig = Rig::new("");
+    crate::acp::chat::default_model::apply_with(&rig.chat, &json!({"agent_default_models": {"someone-else": "b"}}), &picked_store(&rig), None, false);
     assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("a"));
 }

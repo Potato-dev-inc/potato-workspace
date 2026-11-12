@@ -11,6 +11,7 @@ mod panes;
 mod questions;
 mod tasks;
 mod team;
+mod multi;
 mod waits;
 
 use super::types::ToolDefinition;
@@ -70,6 +71,8 @@ pub fn tools() -> Vec<ToolDefinition> {
     all.extend(questions::tools());
     all.extend(team::tools());
     all.extend(companion::tools());
+    all.extend(multi::tools());
+    multi::add_review_by(&mut all);
     all
 }
 

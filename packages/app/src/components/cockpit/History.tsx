@@ -1,3 +1,4 @@
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   cockpitApi,
@@ -18,7 +19,7 @@ import { BranchSheet } from "./BranchSheet";
 import type { BranchFrom } from "../../lib/branch-from";
 
 const errText = (e: unknown): string =>
-  e instanceof Error ? e.message : String(e);
+  errorSentence(e);
 
 /**
  * The History tab: one row per checkpoint, newest first. "Restore" puts the project's files back

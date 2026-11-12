@@ -5,6 +5,7 @@
 // paired phone cannot flip them over the bridge. UX-PHASE1 13.3 places "merge" under Orchestrator &
 // Models and the list under General until Security has a section of its own; they sit together here
 // so the three belong to one story. Moving a row is a one-line change in the section files.
+import { errorSentence } from '../../../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import {
   agentAuthorityApi,
@@ -45,7 +46,7 @@ function useAuthority(api: AgentAuthorityApi) {
         onSaved();
       } catch (e) {
         setValue(before);
-        onError(`Not saved: ${e instanceof Error ? e.message : String(e)}`);
+        onError(`Not saved: ${errorSentence(e)}`);
       }
     },
     [api, value],

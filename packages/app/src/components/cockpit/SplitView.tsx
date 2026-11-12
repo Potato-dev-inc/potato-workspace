@@ -1,6 +1,7 @@
 // Split view: two agent chats side by side (like split editors). The left side is the selected pane, the
 // right side is the pane opened "to the side". The side with focus is full strength; the other is dimmed.
 // The session rail on the right follows the focused side. Each side has its own message box (SessionChatPanel).
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { SessionChatPanel, type ScreenAsk } from '../chat/SessionChatPanel';
@@ -70,8 +71,11 @@ export function SplitView({
   return (
     <div className="ck-split">
       <div ref={colsRef} className="ck-split-cols" style={{ ['--ck-split-ratio' as string]: String(ratio) } as CSSProperties}>
-        <SplitSideView c={c} paneId={leftId} side="left" focused={focus === 'left'} onFocus={onFocus} onClose={onClose} />
+        <ErrorBoundary where="Pane" resetKeys={[leftId]}>
+          <SplitSideView c={c} paneId={leftId} side="left" focused={focus === 'left'} onFocus={onFocus} onClose={onClose} />
+        </ErrorBoundary>
         <SplitDivider colsRef={colsRef} ratio={ratio} onRatio={onRatio} />
+        <ErrorBoundary where="Pane" resetKeys={[rightId]}>
         <SplitSideView
           c={c}
           paneId={rightId}
@@ -94,6 +98,7 @@ export function SplitView({
             ) : null
           }
         />
+        </ErrorBoundary>
       </div>
       {rail.visible && fp && (
         <SessionRail

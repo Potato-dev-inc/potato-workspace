@@ -1,7 +1,8 @@
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useRef, useState } from 'react';
 import { cardMeta, cardTitle, draftTitle, MAX_NOTE, tellLabel, teamApi, type TeamApi, type TeamDraft } from '../../../lib/team';
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 /** How long the toast stays when nobody touches it. The draft stays in Inbox › Team › Unsent. */
 export const TOAST_MS = 8_000;

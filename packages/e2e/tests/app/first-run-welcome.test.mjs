@@ -1,9 +1,9 @@
-// A fresh profile shows the welcome once; Skip setup closes it. (Every other test starts with the welcome kept off, see calm().)
+// A fresh profile shows the welcome once; Skip for now closes it. (Every other test starts with the welcome kept off, see calm().)
 export const meta = {
   id: 'app.first-run-welcome',
-  title: 'A fresh profile shows the welcome and Skip setup closes it',
+  title: 'A fresh profile shows the welcome and Skip for now closes it',
   area: 'app',
-  tags: ['first-run'],
+  tags: ['first-run', 'smoke'],
 };
 
 export async function run(t) {
@@ -17,13 +17,14 @@ export async function run(t) {
 
   await t.step('The welcome is on screen');
   await t.expect.text('Welcome to Potato Workspace');
-  await t.expect.text('How do you work?');
-  await t.expect.visible('Skip setup');
+  await t.expect.text('Your agents work here.');
+  await t.expect.text('Step 1 of 5');
+  await t.expect.visible('Skip for now');
 
-  await t.step('Skip setup');
-  await t.click('Skip setup');
+  await t.step('Skip for now');
+  await t.click('Skip for now');
 
   await t.step('The welcome is gone and the cockpit is free');
-  await t.expect.noText('How do you work?');
+  await t.expect.noText('Step 1 of 5');
   await t.expect.text('No agents running.');
 }

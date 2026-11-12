@@ -1,4 +1,5 @@
 // Standalone terminal window (?terminal=1 / detached pane / worker host): pane dashboard or a single pane.
+import { errorSentence } from './lib/sayError';
 import { useNudgeOnAction } from './lib/desktop-nudge';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -78,7 +79,7 @@ export default function TerminalApp() {
       });
       setSelectedPaneId(paneId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setBusy(false);
     }
@@ -262,7 +263,7 @@ export default function TerminalApp() {
       });
       setSelectedPaneId(paneId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setBusy(false);
     }
@@ -279,7 +280,7 @@ export default function TerminalApp() {
         await registry.writeInput(selectedPaneId, draft, appendNewline);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setBusy(false);
     }
@@ -295,7 +296,7 @@ export default function TerminalApp() {
         : await tauri.readBuffer(selectedPaneId, 120);
       setBuffer(content);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setBusy(false);
     }
@@ -311,7 +312,7 @@ export default function TerminalApp() {
         : await tauri.readSnapshot(selectedPaneId);
       setSnapshot(content);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setBusy(false);
     }
@@ -325,7 +326,7 @@ export default function TerminalApp() {
       await registry.killPane(selectedPaneId);
       setSelectedPaneId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setBusy(false);
     }

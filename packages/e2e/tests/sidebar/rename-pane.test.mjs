@@ -5,7 +5,7 @@ export const meta = {
   id: 'sidebar.rename-pane',
   title: 'Renaming a pane shows the new name in the header, sidebar and palette',
   area: 'sidebar',
-  tags: ['smoke', 'rename'],
+  tags: ['basic', 'rename'],
 };
 
 export async function run(t) {

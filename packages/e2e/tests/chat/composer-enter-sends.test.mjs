@@ -6,7 +6,7 @@ export const meta = {
   id: 'chat.composer-enter-sends',
   title: 'Enter sends the message and empties the box',
   area: 'chat',
-  tags: ['composer', 'smoke'],
+  tags: ['composer', 'basic'],
 };
 
 export async function run(t) {

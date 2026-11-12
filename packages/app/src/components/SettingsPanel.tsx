@@ -4,6 +4,7 @@
 // keys that control changed (`patchSettings` -> the Rust `settings_patch` command), so this window can
 // never write an old copy of the settings over newer values. The window reloads its state whenever the
 // settings change anywhere else, and whenever it is shown again (it is hidden, not destroyed, on close).
+import { errorSentence } from '../lib/sayError';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Settings } from '@potato-workspace/shared';
 import { findBridgeUrl } from '../lib/bridge';
@@ -12,6 +13,7 @@ import { subscribeSettingsRefresh, type SettingsRefreshInfo } from '../lib/setti
 import { resolveSettingsTarget } from '../lib/settings-target';
 import { LATER_ITEMS, SECTIONS } from './settings/catalog';
 import { ConfirmSheet } from './settings/controls';
+import { ErrorBoundary } from './common/ErrorBoundary';
 import { LevelledRows, SectionRows, type RowChrome } from './settings/SectionView';
 import { readAdvancedOpen, writeAdvancedOpen } from './settings/levels';
 import {
@@ -27,6 +29,7 @@ import {
   visibleSections,
 } from './settings/model';
 import '../styles/settings.css';
+import { SettingsDamagedBanner } from './settings/SettingsDamagedBanner';
 
 /** What the panel needs from the outside. Tests pass fakes; the app uses the defaults. */
 export interface SettingsApi {
@@ -70,10 +73,6 @@ function withoutNulls(patch: SettingsPatch): Partial<Settings> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) if (value !== null && value !== undefined) out[key] = value;
   return out as Partial<Settings>;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 const IconBack = () => (
@@ -326,7 +325,7 @@ export function SettingsPanel({
         markSaved(rowId);
         onSaved?.();
       } catch (error) {
-        setRowError(rowId, `Not saved: ${errorText(error)}`);
+        setRowError(rowId, `Not saved: ${errorSentence(error)}`);
         reloadAfter.current = true; // drop the optimistic value and show what is really saved
         throw error; // callers must not run their saved path (clear a draft, show Saved) on failure
       } finally {
@@ -462,6 +461,7 @@ export function SettingsPanel({
         </header>
         <div className="st-scroll" ref={scrollRef}>
           <div className="st-page">
+            <SettingsDamagedBanner />
             {trimmed ? (
               settings === null ? (
                 <Skeleton />
@@ -499,6 +499,7 @@ export function SettingsPanel({
               <Skeleton />
             ) : (
               section && (
+                <ErrorBoundary where="Settings page" resetKeys={[section.id]}>
                 <LevelledRows
                   key={section.id}
                   rows={section.rows}
@@ -508,6 +509,7 @@ export function SettingsPanel({
                   onToggleAdvanced={() => toggleAdvanced(section)}
                   showDeveloper={Boolean(settings?.show_developer_settings) || developerRevealed}
                 />
+                </ErrorBoundary>
               )
             )}
           </div>

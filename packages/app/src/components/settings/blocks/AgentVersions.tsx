@@ -3,6 +3,7 @@
 // Potato Workspace fail to recognise. Backed by the `canary_*` commands (src-tauri/src/canary).
 //
 // Copy follows UX-PHASE1 §0: "Untested version" is the only chip, no code names or raw ids.
+import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useState } from 'react';
 import { changeLine, lastCheckLine, tauriCanaryApi, useCanary, type CanaryApi } from '../../../lib/canary';
 import { Btn, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
@@ -21,7 +22,7 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now() }: 
       try {
         await api.check(agent);
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(errorSentence(e));
       } finally {
         setRunning((cur) => {
           const next = new Set(cur);
@@ -95,7 +96,7 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now() }: 
             : `${status.captures} ${status.captures === 1 ? 'screen' : 'screens'} saved on this computer, with secrets removed. Nothing is sent anywhere.`
         }
       >
-        <Btn small onClick={() => void api.openCaptures().catch((e) => setError(e instanceof Error ? e.message : String(e)))}>
+        <Btn small onClick={() => void api.openCaptures().catch((e) => setError(errorSentence(e)))}>
           Open folder
         </Btn>
       </SettingRow>

@@ -66,13 +66,6 @@ export function onPaneOutbox(cb: (event: PaneOutboxEvent) => void): Promise<Unli
   return listen<PaneOutboxEvent>('pane-outbox', (e) => cb({ paneId: e.payload.paneId, messages: Array.isArray(e.payload.messages) ? e.payload.messages : [] }));
 }
 
-/** The words of an error the backend or the bridge threw (they are already plain sentences). */
-export function errorText(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (error instanceof Error) return error.message;
-  return 'Could not send the message.';
-}
-
 /** Why the message box is switched off, or null when the person can write. Plain words. */
 export function composerBlock(pane: { status: string } | undefined, isShell: boolean, isChatSession = false): string | null {
   if (isShell) return 'Chat replies need an agent pane.';

@@ -1,6 +1,7 @@
 // "Your plans" on the phone (read only): one card per plan (agent · account) with its turns, time, files and limits,
 // a month switcher and the plain notes. The numbers come from the PC's `/plans` route (`bridgePlansApi`), the same
 // report the desktop page reads. No folder and no chat text: the report has none.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
 import {
   filesText,
@@ -13,10 +14,6 @@ import {
 } from '../../lib/plans-report';
 import { Sheet } from './MobileSheet';
 import '../../styles/ph-plans.css';
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 function turnsWord(n: number): string {
   return n === 1 ? '1 turn' : `${n} turns`;
@@ -51,7 +48,7 @@ export function PhonePlans({ api, onClose }: { api: PlansApi; onClose: () => voi
         setReport(next);
         setError(null);
       })
-      .catch((e: unknown) => live && setError(errText(e)));
+      .catch((e: unknown) => live && setError(errorSentence(e)));
     return () => {
       live = false;
     };

@@ -5,6 +5,7 @@
 // - Setup: "The mission can't go on" · [Try again] · Stop mission.
 // The budget card is the budgets module's own (it is already in the Inbox). Answers are the person's
 // only: they go through `mission_decide`, never through a pane.
+import { errorSentence } from '../../../lib/sayError';
 import { useState } from 'react';
 import { isActive, tauriMissionsApi, type CardChoice, type MissionView, type MissionsApi } from '../../../lib/missions';
 import { Sheet } from '../Sheet';
@@ -55,7 +56,7 @@ export function MissionCard({
         onChanged?.(next);
         onNotify?.(sentence);
       })
-      .catch((err) => onNotify?.(err instanceof Error ? err.message : String(err)))
+      .catch((err) => onNotify?.(errorSentence(err)))
       .finally(() => setBusy(false));
   };
   const agent = m.current_agent ?? 'The agent';

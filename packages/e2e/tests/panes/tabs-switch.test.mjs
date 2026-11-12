@@ -5,7 +5,7 @@ export const meta = {
   id: 'panes.tabs-switch',
   title: 'The Terminal, Chat, Transcript, Receipt and History tabs each open their page',
   area: 'panes',
-  tags: ['smoke', 'tabs'],
+  tags: ['basic', 'tabs'],
 };
 
 export async function run(t) {

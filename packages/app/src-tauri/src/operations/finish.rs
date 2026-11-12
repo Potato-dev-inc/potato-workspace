@@ -119,6 +119,11 @@ fn finish_operation(
             false,
         ));
     }
+    // A read-only run is looked at again before the checks run (a check may write files of its own).
+    let read_only_proof = get_operation(project, id)
+        .ok()
+        .filter(|peek| peek.read_only && !peek.status.terminal())
+        .and_then(|peek| crate::agent_runs::tree_proof::finish(id, std::path::Path::new(peek.work_dir())));
     // Command checks can run for minutes; execute them before taking the global update lock.
     let command_results = match get_operation(project, id) {
         Ok(peek) if !peek.status.terminal() && !peek.checks.is_empty() => {
@@ -170,6 +175,9 @@ fn finish_operation(
     };
     op.progress_pct = None;
     op.required_action = None;
+    if read_only_proof.is_some() {
+        op.worker.read_only_proof = read_only_proof;
+    }
     if let (Some(summary), Some(worktree)) = (worktree_changes, op.worker.worktree.as_mut()) {
         worktree.changes = Some(summary);
     }

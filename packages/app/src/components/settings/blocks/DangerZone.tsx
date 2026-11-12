@@ -1,6 +1,7 @@
 // Settings > Danger zone: "Reset settings" (confirm built into the row) and "Uninstall everything" (a three-step
 // flow: check the list, confirm, watch it happen). Monochrome. The commands are Rust (uninstall::commands); the
 // block takes an `UninstallApi` so tests use a fake. Nothing here removes anything by itself.
+import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import '../../../styles/uninstall.css';
 import {
@@ -22,7 +23,7 @@ export const NOT_IN_DEV_TEXT = 'Not in the dev build';
 export const CONFIRM_WORD = 'UNINSTALL';
 const MAX_ITEMS_SHOWN = 8;
 
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const errorText = (error: unknown) => (errorSentence(error));
 
 // ---------- Reset settings ----------
 

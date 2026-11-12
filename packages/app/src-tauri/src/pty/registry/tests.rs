@@ -385,6 +385,7 @@ fn windows_pane_json_is_unchanged_by_place_field() {
         account_label: None,
         title: None,
         parent_pane_id: None,
+origin: None,
         place: None,
         lane: None,
     };
@@ -421,6 +422,7 @@ fn linux_pane_json_carries_place() {
         account_label: None,
         title: None,
         parent_pane_id: None,
+origin: None,
         place: None,
         lane: None,
     };

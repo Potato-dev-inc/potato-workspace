@@ -51,6 +51,15 @@ fn err(code: &str, message: impl Into<String>, recoverable: bool) -> OperationEr
     OperationError::new(code, message, recoverable)
 }
 
+/// A refused model or effort as the caller sees it. A model the agent does not offer is `UNKNOWN_MODEL` with the names it does
+/// offer, the closest one and a `try`; everything else keeps its code.
+pub(crate) fn choice_failure(choice: super::ChoiceError, agent: &str, model: Option<&str>) -> OperationError {
+    match (choice.code, model) {
+        ("ACP_MODEL_NOT_OFFERED", Some(asked)) if !choice.known.is_empty() => crate::agent_runs::model_check::unknown_model(agent, asked, &choice.known),
+        _ => err(choice.code, choice.message, true),
+    }
+}
+
 // ---- the views ----------------------------------------------------------------------------------------------
 
 /// `completed`, `failed`, `cancelled`, `waiting_input`, `running` or `idle` (nothing was asked yet).
@@ -149,6 +158,8 @@ pub fn view(chat: &AcpChat) -> Value {
     let checks_total = chat.checks_configured();
     let checks_failed = results.as_ref().is_some_and(|r| r.iter().any(|c| !c.passed));
     let (requested_model, account, account_source) = chat.run_meta_snapshot();
+    let read_only_proof = chat.read_only_proof(is_final(status), snapshot.turn);
+    let read_only_enforcement = if chat.session().config().read_only.as_ref().is_some_and(|rule| !rule.mode.trim().is_empty()) { "plan_mode" } else { "permission_reject" };
     let receipt = super::receipt::build(&super::receipt::ReceiptInputs {
         status: if in_terminal && !is_final(status) { "idle" } else { status },
         final_turn: is_final(status),
@@ -162,9 +173,13 @@ pub fn view(chat: &AcpChat) -> Value {
         lane_note: chat.lane_note().as_ref(),
         warm: chat.warm_claimed(),
         read_only: chat.session().is_read_only(),
+        read_only_enforcement,
+        read_only_proof: read_only_proof.as_ref(),
+        checks: &chat.run_checks(),
     });
-    let verified = results.as_deref().is_some_and(|r| !r.is_empty() && r.iter().all(|c| c.passed));
-    let verified_note = if verified { Value::Null } else { json!(unverified_reason(checks_total, results.as_deref(), is_final(status))) };
+    let guarantees = receipt.guarantees.clone();
+    let verified = guarantees.as_ref().and_then(|g| g.verified());
+    let verified_reason = guarantees.as_ref().and_then(|g| g.verified_reason());
     let running: Vec<&crate::acp::state::BackgroundTask> = snapshot.background_tasks.iter().filter(|t| t.is_running()).collect();
     let tracking = match chat.session().caps() {
         Some(caps) if caps.background_tasks => "reported",
@@ -177,6 +192,10 @@ pub fn view(chat: &AcpChat) -> Value {
         "reason": end.reason,
         "at_ms": end.at_ms,
     })).unwrap_or(Value::Null);
+    let mut warnings = chat.choice_warnings();
+    if read_only_proof.as_ref().is_some_and(|p| p.changed()) {
+        warnings.push("READ_ONLY_VIOLATED: this run was read-only, but the project folder changed while it ran (see guarantees.read_only.changed_paths). Nothing was reverted.".to_string());
+    }
     let mut shown = json!({
         "handle": chat.pane_id(),
         "pane_id": chat.pane_id(),
@@ -203,7 +222,9 @@ pub fn view(chat: &AcpChat) -> Value {
         "checks_configured": checks_total,
         "checks": results.clone().unwrap_or_default(),
         "verified": verified,
-        "verified_note": verified_note,
+        "verified_reason": verified_reason,
+        "verified_note": verified_reason,
+        "guarantees": guarantees,
         "not_verified": receipt.not_verified.clone(),
         "receipt": super::receipt::receipt_value(&receipt),
         "pane_open": !chat.is_closed(),
@@ -220,24 +241,19 @@ pub fn view(chat: &AcpChat) -> Value {
         "turn": snapshot.turn,
         "revision": snapshot.revision,
         "next_cursor": snapshot.revision,
-        "warnings": chat.choice_warnings(),
+        "warnings": warnings,
+        "auto_approve": if chat.session().auto_approve_reads() { "reads" } else { "ask" },
+        "auto_approved": chat.session().auto_approved(),
     });
     if let Some(note) = chat.lane_note() {
         lanes::merge_note(&mut shown, &note);
     }
-    shown
-}
-
-/// Why `verified` is false, in a sentence. `verified` means the checks the caller asked for ran and all passed: the agent's own
-/// report of a finished turn is a result, not a proof (a headless terminal run counts its CLI's result event instead).
-fn unverified_reason(checks_total: usize, results: Option<&[crate::agent_runs::checks::CheckResult]>, final_turn: bool) -> &'static str {
-    if checks_total == 0 {
-        "No checks were asked for, so nothing was checked independently; the result is the agent's own report. Pass checks (file_exists, command_exits, ...) to get verified: true."
-    } else if !final_turn || results.is_none() {
-        "The checks have not run yet: they run when the turn completes."
-    } else {
-        "At least one check did not pass."
+    // The receipt says what the app answered for the caller, so it can be checked afterwards.
+    let approved = shown.get("auto_approved").cloned().unwrap_or(Value::Null);
+    if let Some(receipt) = shown.get_mut("receipt").and_then(Value::as_object_mut) {
+        receipt.insert("auto_approved".into(), approved);
     }
+    shown
 }
 
 fn inspect(chat: &AcpChat) -> Value {
@@ -258,7 +274,7 @@ fn body_json(body: &[u8]) -> Option<Value> {
     serde_json::from_slice(body).ok()
 }
 
-fn text_of(value: &Value, key: &str) -> Option<String> {
+pub(super) fn text_of(value: &Value, key: &str) -> Option<String> {
     value.get(key).and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty()).map(str::to_string)
 }
 
@@ -278,13 +294,17 @@ fn who(session: Option<&str>) -> Who {
 fn owned(chat: &AcpChat, session: Option<&str>) -> Result<(), OperationError> {
     match (session, chat.started_by()) {
         (None, _) => Ok(()),
-        (Some(me), Some(owner)) if me == owner => Ok(()),
-        (Some(_), _) => Err(err(
-            "NOT_YOUR_CHAT",
-            "This chat session was not started by you, so you may read it but not steer, answer, stop or close it. Start your own with run_agent(lane: \"acp\"), or ask the person.",
-            false,
-        )),
+        (Some(me), Some(owner)) if me == owner || crate::mcp_sessions::same_coordinator(me, &owner) => Ok(()),
+        (Some(_), _) => Err(not_your_chat("This chat session was not started by you, so you may read it but not steer, answer, stop or close it.")),
     }
+}
+
+/// The refusal for a chat another connection started. A caller that restarted proves it is the same one with the attach
+/// token it was given, so the refusal says how.
+fn not_your_chat(what: &str) -> OperationError {
+    let mut e = err("NOT_YOUR_CHAT", format!("{what} If you started it before the app or your connection restarted, call attach_agents with the attach_token you were given, then try again. Otherwise start your own with run_agent(lane: \"acp\"), or ask the person."), false);
+    e.context = json!({ "try": "attach_agents(attach_token) if this chat was yours before a restart; else run_agent(lane: \"acp\")" });
+    e
 }
 
 fn chat_for(handle: &str) -> Result<std::sync::Arc<AcpChat>, OperationError> {
@@ -374,6 +394,14 @@ pub trait LaneLookup {
     /// The installed OpenCode's major version, when known (2.x has no native terminal agent).
     fn opencode_major(&self) -> Option<u32> {
         None
+    }
+    /// The terminal (or a background run) can enforce `read_only` for this agent.
+    fn terminal_read_only(&self, agent: &str) -> bool {
+        crate::agent_runs::read_only_supported(agent, false)
+    }
+    /// The terminal knows this id as an agent.
+    fn registered(&self, agent: &str) -> bool {
+        crate::tui::is_registered(agent)
     }
 }
 
@@ -476,8 +504,8 @@ fn reopen(handle: &str, deps: &StartDeps, session: Option<&str>) -> Option<Resul
     }
     // Only the agent that started the chat may bring it back (a caller without a session, the command line, may).
     if let (Some(me), owner) = (session, record.started_by.as_deref()) {
-        if owner != Some(me) {
-            return Some(Err(err("NOT_YOUR_CHAT", "This chat session was not started by you, so you may not reopen it. Start your own with run_agent(lane: \"acp\"), or ask the person.", false)));
+        if owner != Some(me) && !owner.is_some_and(|o| crate::mcp_sessions::same_coordinator(me, o)) {
+            return Some(Err(not_your_chat("This chat session was not started by you, so you may not reopen it.")));
         }
     }
     if record.session_id.as_deref().is_none_or(str::is_empty) {
@@ -518,7 +546,7 @@ fn abandon_chat(deps: &StartDeps, chat: &AcpChat, why: &str) {
 }
 
 /// The ids a chat session can be asked for: agents with an ACP definition.
-fn chat_agent_ids() -> Vec<String> {
+pub(super) fn chat_agent_ids() -> Vec<String> {
     let mut ids: Vec<String> = crate::acp::config::builtin_agents().into_iter().map(|c| c.id).collect();
     for cfg in crate::acp::overlay::overlay_agents(&crate::acp::overlay::OverlayStore::in_app_data()) {
         if !ids.contains(&cfg.id) {
@@ -646,69 +674,26 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         }
         return (Some(Ok(view(&chat))), None);
     }
-    let mut lane = text_of(&value, "lane");
-    let mut agent = text_of(&value, "agent_type");
-    // OpenCode 2.x has no native terminal agent: its runs go to the OpenCode chat lane, and say so.
-    let mut routed: Option<String> = None;
-    if agent.as_deref() == Some("opencode_native") {
-        match crate::opencode::edition::route_native_run(lane.as_deref(), lookup.opencode_major()) {
-            Ok(Some(why)) => {
-                routed = Some(why);
-                agent = Some("opencode".to_string());
-                lane = Some("acp".to_string());
-            }
-            Ok(None) => {}
-            Err(why) => return (Some(Err(err("OPENCODE_NATIVE_UNAVAILABLE", why, false))), None),
-        }
-    }
+    // One resolver picks the way (`decide`): what the request needs decides, `lane` is a hint, and a refusal carries the call
+    // that works.
     let account = text_of(&value, "account");
-    let headless = value.get("headless").and_then(Value::as_bool) == Some(true);
-    let saved = agent.as_deref().and_then(|a| lookup.saved(a));
-    let config = agent.as_deref().and_then(|a| lookup.config_for(a));
-    let labs_on = lookup.labs_on();
-    // A chat can run read-only when the agent's definition says how (`[acp.read_only]`). The terminal keeps the run when it can enforce
-    // read-only itself (the lane was not insisted on), so an agent that worked before still runs the way it did.
+    let adapter_installed = |cfg: &crate::acp::config::AgentConfig| lookup.adapter_installed(cfg, &*deps.env);
+    let ctx = super::decide::Ctx { lookup, adapter_installed: &adapter_installed, chat_ids: chat_agent_ids(), chat_broken: false };
+    let decided = super::decide::decide(&value, &ctx);
+    let super::decide::Decided { agent, config, labs_on, hint: cannot_chat_hint, route } = decided;
     let read_only_requested = value.get("read_only").and_then(Value::as_bool) == Some(true);
-    let mut terminal_only = chat_cannot_do(&value);
-    if read_only_requested && config.as_ref().is_some_and(super::read_only::supported) {
-        let terminal_can = agent.as_deref().is_some_and(|a| crate::agent_runs::read_only_supported(a, false));
-        if lane.as_deref() == Some("acp") || !terminal_can {
-            terminal_only.retain(|field| *field != "read_only");
-        }
-    }
-    let facts = lanes::Facts {
-        labs_on,
-        has_definition: config.is_some(),
-        adapter_installed: config.as_ref().is_some_and(|cfg| lookup.adapter_installed(cfg, &*deps.env)),
-        headless,
-        terminal_only,
+    let (explicit, reason, adjusted) = match route {
+        super::decide::Route::Refused(error) => return (Some(Err(error)), None),
+        super::decide::Route::Terminal { reason, adjusted } => return (None, Some(lanes::LaneNote::terminal(&reason).with_adjusted(adjusted))),
+        super::decide::Route::Chat { explicit, reason, adjusted } => (explicit, reason, adjusted),
     };
-    let plan = match lanes::plan(lane.as_deref(), saved, facts) {
-        Ok(plan) => plan,
-        Err(why) => return (Some(Err(err("INVALID_ARGUMENT", why, false))), None),
-    };
-    let cannot_chat_hint = lanes::CannotChatHint { agent: agent.clone(), chat_read_only: config.as_ref().is_some_and(super::read_only::supported), terminal_read_only: agent.as_deref().is_some_and(|a| crate::agent_runs::read_only_supported(a, false)) };
-    let (explicit, mut reason) = match plan {
-        lanes::Plan::Terminal { reason } => return (None, Some(lanes::LaneNote::terminal(&reason))),
-        lanes::Plan::CannotChat { fields } => return (Some(Err(lanes::cannot_chat(&fields, &cannot_chat_hint))), None),
-        lanes::Plan::Chat { explicit, reason } => (explicit, reason),
-    };
-    if let Some(why) = routed {
-        reason = why;
-    }
     let Some(agent) = agent else {
         return (Some(Err(err("INVALID_ARGUMENT", "agent_type is required with lane: \"acp\"", false))), None);
     };
-    // An id that is no agent at all: the ids that can be asked for. (The terminal says UNKNOWN_AGENT_TYPE.)
-    if explicit && config.is_none() && !crate::tui::is_registered(&agent) {
-        return (Some(Err(lanes::unknown_agent(&agent, &chat_agent_ids()))), None);
-    }
-    if explicit && !labs_on {
-        return (Some(Err(lanes::acp_off())), None);
-    }
     let Some(task) = task else { return (Some(Err(err("INVALID_TASK", "task is required", false))), None) };
     // Whether a failure to start gives the terminal a go (auto and the saved choice), or is the caller's error (lane: "acp").
-    let fallback = !explicit;
+    let chat_only = config.as_ref().is_some_and(|c| c.chat_only);
+    let fallback = !explicit && !chat_only;
     let folder = text_of(&value, "project_path").or_else(|| query.trim_start_matches('?').split('&').find_map(|p| p.strip_prefix("project_path=").map(str::to_string))).unwrap_or_else(|| deps.registry.lock().project_path.clone());
     let folder = std::path::PathBuf::from(folder);
     // Checks are validated before anything starts: a bad check is the caller's mistake, never a reason for the terminal.
@@ -716,12 +701,20 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         Ok(checks) => checks,
         Err(e) => return (Some(Err(e)), None),
     };
+    // `auto_approve` is checked before anything starts, like the checks: a value that is not allowed is the caller's mistake.
+    let auto_approve = match crate::agent_runs::auto_approve::parse(&value) {
+        Ok(mode) => mode,
+        Err(e) => return (Some(Err(e)), None),
+    };
     // The plan already decided on a chat, so the gate left is the Labs switch and a definition. (`start_gated` would
     // read the agent's saved choice again, which is the terminal when nothing is saved, and refuse auto's choice.)
+    // A model that came from "Default model for helpers" is a default, not a request: a stale one is dropped with a note (default_model::plan).
+    let model_from_helper = value.get("model_from_helper_default").and_then(Value::as_bool) == Some(true);
+    let requested_model = if model_from_helper { None } else { text_of(&value, "model") };
     let started = match super::start::check_gate(labs_on, config.is_some(), crate::acp::lane::RunLane::Acp, true) {
         Err(gate) => Err(gate.into()),
         Ok(()) => match config {
-            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: text_of(&value, "model"), is_helper: session.is_some() }),
+            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: requested_model.clone(), is_helper: session.is_some() || model_from_helper }),
             None => Err(super::start::GateError::NoDefinition.into()),
         },
     };
@@ -731,12 +724,12 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         Err(error) if fallback && error.fallback => return (None, Some(lanes::LaneNote::fell_back(error.code, &error.message))),
         Err(error) => {
             let mut e = err(error.code, error.message.clone(), error.fallback);
-            e.context = if error.fallback {
+            e.context = if error.fallback && !chat_only {
                 json!({ "fallback": "terminal", "hint": "Retry with lane: \"terminal\" to run it in a terminal." })
             } else {
                 json!({ "fix": error.message })
             };
-            return (Some(Err(e)), None);
+            return (Some(Err(super::decide::with_try(e, &value, &ctx, true))), None);
         }
     };
     chat.set_started_by(session);
@@ -745,13 +738,21 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     if read_only_requested {
         if let Err(super::read_only::Unsupported(why)) = super::read_only::enable(&chat) {
             abandon_chat(deps, &chat, "read-only could not be enforced");
-            return (Some(Err(lanes::read_only_refused(&why, &cannot_chat_hint))), None);
+            // The terminal can enforce it: it runs the task, and the answer says the lane changed (unless `strict`).
+            if cannot_chat_hint.terminal_read_only && !chat_only && value.get("strict").and_then(Value::as_bool) != Some(true) {
+                let adjusted = vec![super::decide::adjusted("lane", "acp", "terminal", &format!("{why} The terminal can enforce read_only for this agent."))];
+                return (None, Some(lanes::LaneNote::terminal("The chat could not be made read-only, so the terminal ran it.").with_adjusted(adjusted)));
+            }
+            return (Some(Err(super::decide::with_try(lanes::read_only_refused(&why, &cannot_chat_hint), &value, &ctx, true))), None);
         }
+    }
+    if auto_approve == crate::agent_runs::auto_approve::AutoApprove::Reads {
+        chat.session().set_auto_approve_reads(true);
     }
     // The model and effort the caller asked for, applied before the first message. A request the
     // agent cannot honour is an error (explicit lane) or the terminal way (the saved choice); it
     // never quietly runs on another model.
-    let model = text_of(&value, "model");
+    let model = requested_model;
     let reasoning = text_of(&value, "reasoning");
     if model.is_some() || reasoning.is_some() {
         if let Err(choice) = chat.apply_choices(model.as_deref(), reasoning.as_deref()) {
@@ -759,11 +760,21 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
             if fallback {
                 return (None, Some(lanes::LaneNote::fell_back(choice.code, &choice.message)));
             }
+            let unknown = choice_failure(choice.clone(), chat.agent_id(), model.as_deref());
+            if unknown.code == "UNKNOWN_MODEL" {
+                return (Some(Err(unknown)), None);
+            }
+            if !chat_only && value.get("strict").and_then(Value::as_bool) != Some(true) {
+                let adjusted = vec![super::decide::adjusted("lane", "acp", "terminal", &format!("The chat could not use the requested model ({}).", choice.message))];
+                return (None, Some(lanes::LaneNote::terminal("The chat could not use the requested model, so the terminal ran it.").with_adjusted(adjusted)));
+            }
             let mut e = err(choice.code, choice.message, true);
-            e.context = json!({ "fallback": "terminal", "hint": "The terminal way can run a requested model. Retry with lane: \"terminal\"." });
-            return (Some(Err(e)), None);
+            e.context = if chat_only { json!({ "fix": e.message.clone() }) } else { json!({ "fallback": "terminal", "hint": "The terminal way can run a requested model. Retry with lane: \"terminal\"." }) };
+            return (Some(Err(super::decide::with_try(e, &value, &ctx, true))), None);
         }
     }
+    // Who asked and what for, for the pane header ("Started by Claude Code").
+    crate::pty::pane_origin::note(chat.pane_id(), session, &task);
     // Nested under the pane of the agent that asked for it, exactly like a terminal helper. The
     // pane id the session's tool server sends is a hint; the process tree confirms it.
     crate::bridge::pane_util::note_pane_parent(
@@ -777,7 +788,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     deps.host.panes_changed();
     deps.host.state_changed(chat.pane_id(), &chat.state());
     // Which lane and why (and the account) stay with the chat, so inspect_agent and wait_agents still say it.
-    let mut kept = lanes::LaneNote::acp(&reason).to_value();
+    let mut kept = lanes::LaneNote::acp(&reason).with_adjusted(adjusted).to_value();
     if let (Some(account), Some(map)) = (&account, kept.as_object_mut()) {
         map.insert("account".into(), json!(account));
     }
@@ -941,7 +952,7 @@ fn followup(chat: &AcpChat, value: &Value, session: Option<&str>, next_turn: boo
     let model = text_of(value, "model");
     let reasoning = text_of(value, "reasoning");
     if model.is_some() || reasoning.is_some() {
-        chat.apply_choices(model.as_deref(), reasoning.as_deref()).map_err(|choice| err(choice.code, choice.message, true))?;
+        chat.apply_choices(model.as_deref(), reasoning.as_deref()).map_err(|choice| choice_failure(choice, chat.agent_id(), model.as_deref()))?;
         if model.is_some() {
             chat.note_requested_model(model.clone());
         }

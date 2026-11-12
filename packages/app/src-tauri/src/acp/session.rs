@@ -24,6 +24,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use parking_lot::{Condvar, Mutex, RwLock};
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::config::{self, AgentConfig, HistoryLostPolicy, HostEnv, ResumePreference};
@@ -193,6 +194,18 @@ struct Turn {
     clock: TurnClock,
 }
 
+/// A question the app answered "allow once" for the caller (`auto_approve: "reads"`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AutoApproved {
+    /// The tool kind the agent named (`read`, `search`, `fetch`, `think`).
+    pub kind: String,
+    /// The agent's own words for the tool call, cut short.
+    pub what: String,
+}
+
+/// At most this many auto-approvals are kept for the receipt.
+const MAX_AUTO_APPROVED: usize = 50;
+
 struct Parked {
     rpc_id: Value,
     options: Vec<String>,
@@ -217,6 +230,11 @@ struct Core {
     desired_mode: Option<String>,
     /// Read-only chat: every permission question that is not a read is rejected here, and no file write is served.
     read_only: bool,
+    /// A permission question whose tool is a read, search, fetch or think is answered "allow once" here (the caller
+    /// asked for `auto_approve: "reads"`). Nothing else is ever answered by this module.
+    auto_approve_reads: bool,
+    /// What was answered that way, oldest first (capped).
+    auto_approved: Vec<AutoApproved>,
     idle_since: Option<Instant>,
     stats: SessionStats,
 }
@@ -303,6 +321,8 @@ impl AcpSession {
                 desired_config: BTreeMap::new(),
                 desired_mode: None,
                 read_only: false,
+                auto_approve_reads: false,
+                auto_approved: Vec::new(),
                 idle_since: None,
                 stats: SessionStats::default(),
             }),
@@ -1023,6 +1043,24 @@ impl AcpSession {
         conn.respond(&rpc_id, selected_outcome(option_id))
     }
 
+    /// Answers one open question "cancelled" without ending the turn: the agent is told no for this one thing. Used
+    /// when a question cannot be shown to the person, so the agent never hangs on it.
+    pub fn cancel_permission(&self, ask_id: u64) -> Result<(), AcpError> {
+        let (conn, rpc_id) = self.with_core(|core, ev| {
+            let conn = core.conn.clone().filter(AcpConnection::is_alive).ok_or(AcpError::Closed)?;
+            let parked = core.parked.remove(&ask_id).ok_or(AcpError::NoSuchAsk)?;
+            core.state.on_permission_resolved(ask_id);
+            if core.parked.is_empty() {
+                if let Some(turn) = core.turn.as_mut() {
+                    turn.clock.resume(Instant::now());
+                }
+            }
+            ev.push(SessionEvent::PermissionResolved { ask_id, how: Resolution::Cancelled, reason: PromptEndReason::Cancelled });
+            Ok::<_, AcpError>((conn, parked.rpc_id))
+        })?;
+        conn.respond(&rpc_id, cancelled_outcome())
+    }
+
     /// Sends text into the turn that runs, when the agent takes that (`AgentCaps::steering`, the adapters' own
     /// `_session/steering`). The answer tells whether the turn took it; with no turn running the answer is
     /// `PromptRequired` and nothing was sent. An agent that does not take it gets `Unsupported`: the caller
@@ -1100,6 +1138,21 @@ impl AcpSession {
     /// This is the app's half of the guard; the agent's own read-only mode is picked with [`AcpSession::set_session_mode`].
     pub fn set_read_only(&self, on: bool) {
         self.with_core(|core, _| core.read_only = on);
+    }
+
+    /// Answers every read, search, fetch or think permission question "allow once" from now on, and nothing else. An
+    /// edit, a command or a question that names no kind still parks as a question for the person.
+    pub fn set_auto_approve_reads(&self, on: bool) {
+        self.with_core(|core, _| core.auto_approve_reads = on);
+    }
+
+    pub fn auto_approve_reads(&self) -> bool {
+        self.with_core(|core, _| core.auto_approve_reads)
+    }
+
+    /// What was answered by `auto_approve_reads`, oldest first.
+    pub fn auto_approved(&self) -> Vec<AutoApproved> {
+        self.with_core(|core, _| core.auto_approved.clone())
     }
 
     pub fn is_read_only(&self) -> bool {
@@ -1372,6 +1425,8 @@ impl AcpSession {
             Refuse(Option<AcpConnection>),
             /// Read-only chat: answered "reject" here, with the option the agent offered for it (if any).
             Reject(Option<AcpConnection>, Option<String>),
+            /// `auto_approve: "reads"`: a read-type tool, answered "allow once".
+            Allow(Option<AcpConnection>, String),
             Ignore,
         }
         let parsed = serde_json::from_value::<RequestPermissionRequest>(params);
@@ -1407,6 +1462,19 @@ impl AcpSession {
                 let option = request.options.iter().find(|o| o.kind == "reject_once").or_else(|| request.options.iter().find(|o| o.kind == "reject_always")).map(|o| o.option_id.clone());
                 return Decision::Reject(conn, option);
             }
+            if core.auto_approve_reads && read_only_allows(request.tool_call.kind.as_deref()) {
+                if let Some(option) = super::auto_approve::read_option(&request) {
+                    if let Some(turn) = core.turn.as_mut() {
+                        turn.clock.frame(Instant::now(), false);
+                    }
+                    let what: String = request.tool_call.title.clone().unwrap_or_default().chars().take(120).collect();
+                    if core.auto_approved.len() >= MAX_AUTO_APPROVED {
+                        core.auto_approved.remove(0);
+                    }
+                    core.auto_approved.push(AutoApproved { kind: request.tool_call.kind.clone().unwrap_or_default(), what });
+                    return Decision::Allow(conn, option);
+                }
+            }
             let ask_id = core.state.on_permission_request(&request, now_ms());
             core.parked.insert(ask_id, Parked { rpc_id: rpc_id.clone(), options: request.options.iter().map(|o| o.option_id.clone()).collect() });
             if let Some(turn) = core.turn.as_mut() {
@@ -1424,6 +1492,9 @@ impl AcpSession {
             }
             Decision::Reject(Some(conn), option) => {
                 let _ = conn.respond(&rpc_id, option.as_deref().map(selected_outcome).unwrap_or_else(cancelled_outcome));
+            }
+            Decision::Allow(Some(conn), option) => {
+                super::auto_approve::respond(&conn, &rpc_id, &option);
             }
             _ => {}
         }

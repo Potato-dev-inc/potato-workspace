@@ -125,6 +125,7 @@ pub fn insert_virtual_pane(registry: &Mutex<PaneRegistry>, spec: VirtualPaneSpec
         account_label: None,
         title: None,
         parent_pane_id: None,
+        origin: None,
         place: None,
         lane: Some(spec.lane),
     };
@@ -184,6 +185,7 @@ mod tests {
             account: None,
             account_label: None,
             title: None,
+            origin: None,
             parent_pane_id: None,
             place: None,
             lane: None,

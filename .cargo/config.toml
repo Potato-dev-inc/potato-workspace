@@ -1,0 +1,3 @@
+# rust-lld links the Windows test and dev binaries faster than link.exe (see docs/DEV-SPEED.md).
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"

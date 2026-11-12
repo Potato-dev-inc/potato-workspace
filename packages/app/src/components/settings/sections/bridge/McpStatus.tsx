@@ -1,10 +1,11 @@
 // Runtime status: the local bridge, the MCP runtime, Node.js and each agent's config. It owns its state and
 // re-checks when the project folder changes or when an install or uninstall announces a change.
+import { errorSentence } from '../../../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { getMcpStatus, type EnsureMcpResult, type McpStatusReport } from '../../../../lib/mcp-config';
 import type { SettingsEnv } from '../../model';
 import { Btn, Note, SettingBlock } from '../../settings-ui';
-import { MCP_CHANGED_EVENT, RESTART_NOTE, ResultLines, StatusLine, errorText, installPathOf, runtimeName } from './shared';
+import { MCP_CHANGED_EVENT, RESTART_NOTE, ResultLines, StatusLine, installPathOf, runtimeName } from './shared';
 
 const OK = 'OK';
 const NEEDS_ATTENTION = 'Needs attention';
@@ -46,7 +47,7 @@ export function McpStatusBlock({ env }: { env: SettingsEnv }) {
         if (report.repairResults.length > 0) setRepairs(report.repairResults);
       } catch (e) {
         setStatus(null);
-        setError(errorText(e));
+        setError(errorSentence(e));
       } finally {
         setChecking(false);
       }

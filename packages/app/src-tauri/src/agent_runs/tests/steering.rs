@@ -32,7 +32,7 @@ fn inferred_pane_result_without_checks_is_marked_unverified() {
     let view =
         crate::agent_runs::runtime::inspect_agent(&project_path, "pane", Some("persist-session"))
             .unwrap();
-    assert_eq!(view["verified"], false);
+    assert!(view["verified"].is_null(), "nothing was checked: {view}");
     assert!(view["warnings"].to_string().contains("PROVENANCE_INFERRED"));
 
     // An authoritative result is stored untouched.

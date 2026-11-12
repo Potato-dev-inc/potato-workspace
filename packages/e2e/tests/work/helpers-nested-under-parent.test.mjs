@@ -6,7 +6,7 @@ export const meta = {
   id: 'work.helpers-nested-under-parent',
   title: 'A helper started from inside an agent\'s pane is nested under it with a "1 helper" count; other panes are not',
   area: 'work',
-  tags: ['work', 'helpers', 'smoke'],
+  tags: ['work', 'helpers', 'basic'],
   timeout: 120000,
 };
 

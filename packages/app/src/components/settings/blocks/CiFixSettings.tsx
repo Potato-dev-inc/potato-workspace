@@ -1,6 +1,7 @@
 // Settings > General > Labs > Red to Green. Off by default. Shows the GitHub sign-in, the four caps (tries per
 // pull request, turns and minutes per try, fixes a day) and the pull requests Potato Workspace watches, with their
 // buttons. Every change is one `ciFixSaveSettings` or one `ciFixAct`; the backend clamps the numbers again.
+import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ciFixAct,
@@ -29,7 +30,7 @@ export const CAPS = {
 export const FOOTER =
   "Potato Workspace only watches pull requests it opened. It asks before the agent reads the log, and again before anything is pushed. The agent can't push during a fix. Potato Workspace never re-runs CI, merges or force-pushes.";
 
-const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+const errText = (e: unknown): string => (errorSentence(e));
 
 /** The GitHub line under the switch: whose sign-in it is, or what to install. */
 export function ciGhLine(gh: GhView): string {

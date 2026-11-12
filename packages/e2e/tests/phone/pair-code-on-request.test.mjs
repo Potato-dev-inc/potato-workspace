@@ -6,7 +6,7 @@ export const meta = {
   id: 'phone.pair-code-on-request',
   title: 'The pairing code and QR appear only after "Pair a phone"; no secret is shown',
   area: 'phone',
-  tags: ['smoke', 'security', 'needs-external'], // a real phone has to scan the QR; this checks everything the PC shows
+  tags: ['basic', 'security', 'needs-external', 'smoke'], // a real phone has to scan the QR; this checks everything the PC shows
 };
 
 const QR = 'css=canvas[aria-label="Mobile pairing QR code"]';
@@ -22,7 +22,16 @@ export const run = guarded(async (t) => {
   t.expect.equal(await t.page.count(QR), 0, 'no QR picture is on screen');
 
   await t.step('Press Pair a phone');
-  await t.click('css=[data-testid="pair-a-phone"]');
+  // The cockpit can redraw right after Settings opens and drop the page (seen once in a smoke run): if the code does not
+  // show, open the page again and press once more. A person would do the same.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (!(await t.page.has('css=[data-testid="pair-a-phone"]'))) {
+      await openSettingsPage(t, 'Phone', 'Pair a phone');
+      await reveal(t, '[data-testid="pair-a-phone"]');
+    }
+    await t.click('css=[data-testid="pair-a-phone"]');
+    try { await t.expect.text('Pairing code', { timeout: 6000 }); break; } catch (e) { if (attempt === 3) throw e; t.log(`the code did not show (try ${attempt}), pressing again`); }
+  }
 
   await t.step('A code with an expiry and the QR picture show');
   await t.expect.text('Pairing code');

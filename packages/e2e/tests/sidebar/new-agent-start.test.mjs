@@ -6,7 +6,7 @@ export const meta = {
   id: 'sidebar.new-agent-start',
   title: 'Picking Nimbus in the + menu starts a pane that opens in the cockpit',
   area: 'sidebar',
-  tags: ['smoke', 'spawn'],
+  tags: ['basic', 'spawn'],
 };
 
 export async function run(t) {

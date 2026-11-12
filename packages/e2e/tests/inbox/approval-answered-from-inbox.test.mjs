@@ -7,7 +7,7 @@ export const meta = {
   id: 'inbox.approval-answered-from-inbox',
   title: 'An approval is answered from the Inbox and the agent carries on',
   area: 'inbox',
-  tags: ['inbox', 'approval', 'smoke'],
+  tags: ['inbox', 'approval', 'basic', 'smoke'],
 };
 
 export async function run(t) {

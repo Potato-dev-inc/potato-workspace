@@ -9,7 +9,7 @@ use std::time::SystemTime;
 use serde_json::{json, Value};
 
 use super::session_extra::{context_window, note_line, plan_call, plan_result, system_line, tool_detail};
-use crate::session_chat::{cut, ChatItem, SessionFormat, ToolDetail, TurnOutcome};
+use crate::session_chat::{cut, cut_to, ChatItem, SessionFormat, ToolDetail, TurnOutcome};
 
 /// Longest first line of a tool call's input kept as its summary, in characters.
 const SUMMARY_CHARS: usize = 200;
@@ -18,7 +18,15 @@ const SUMMARY_CHARS: usize = 200;
 const SUMMARY_KEYS: [&str; 7] = ["command", "file_path", "path", "pattern", "url", "description", "prompt"];
 
 /// User text that the CLI injects rather than the person typing it.
-const INJECTED: [&str; 4] = ["<command-name>", "<local-command-", "<system-reminder>", "Caveat:"];
+const INJECTED: [&str; 7] = [
+    "<command-name>",
+    "<command-message>",
+    "<local-command-",
+    "<system-reminder>",
+    "<user-prompt-submit-hook>",
+    "<task-notification>",
+    "Caveat:",
+];
 
 const INTERRUPTED: &str = "[Request interrupted by user";
 
@@ -101,6 +109,8 @@ fn user_text(text: &str, value: &Value, out: &mut Line) {
     let text = text.trim();
     if text.starts_with(INTERRUPTED) {
         out.push(|id, at| ChatItem::TurnEnd { id, at, outcome: TurnOutcome::Interrupted, duration_ms: None });
+    } else if text.starts_with("<task-notification>") {
+        task_notification(text, out);
     } else if text.starts_with("<bash-input>") {
         shell_call(tagged(text, "bash-input").unwrap_or(""), value, out);
     } else if text.starts_with("<bash-stdout>") || text.starts_with("<bash-stderr>") {
@@ -109,6 +119,19 @@ fn user_text(text: &str, value: &Value, out: &mut Line) {
         let text = text.to_string();
         out.push(|id, at| ChatItem::User { id, at, text, attachments: Vec::new() });
     }
+}
+
+/// Longest summary kept for a background task notice, in characters.
+const TASK_NOTICE_CHARS: usize = 160;
+
+/// A background task the host finished (`<task-notification>`): one thin line, never the task's result. The
+/// notice kind is `background:<task id>` so a view shows a notification the CLI wrote twice once.
+fn task_notification(text: &str, out: &mut Line) {
+    let field = |tag: &str| tagged(text, tag).map(str::trim).filter(|t| !t.is_empty());
+    let summary = field("summary").unwrap_or("A background task finished");
+    let kind = format!("background:{}", field("task-id").unwrap_or(&out.offset.to_string()));
+    let text = format!("Background task: {}", cut_to(summary.lines().next().unwrap_or(summary), TASK_NOTICE_CHARS));
+    out.push(|id, at| ChatItem::Notice { id, at, notice_kind: kind, text, url: None });
 }
 
 /// A `!` command the person ran: a `Shell` tool call with the command as its summary and input. The output line that

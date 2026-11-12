@@ -1,5 +1,6 @@
 // Agent Store: search, filter chips and a grid of agent cards. Lists what the catalog ships; installing happens in the detail sheet.
 // The grid only reads the list (agentStoreApi.list) and hands a card's button to onOpenAgent.
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { agentStoreApi, type AgentStoreApi, type StoreCard } from '../../lib/agent-store';
 import { matchesFilter, searchCards, sortCards, STORE_FILTERS, type StoreFilter } from '../../lib/agent-store-model';
@@ -15,7 +16,7 @@ export interface AgentStoreProps {
   revision?: number;
 }
 
-const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^[A-Z_]+: /, '');
+const errText = (e: unknown) => (errorSentence(e)).replace(/^[A-Z_]+: /, '');
 
 export function AgentStore({ api = agentStoreApi, onOpenAgent, onBack, revision = 0 }: AgentStoreProps) {
   const [cards, setCards] = useState<StoreCard[] | null>(null);

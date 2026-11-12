@@ -2,6 +2,7 @@
 
 pub(crate) mod approval_policy;
 mod answer_guard;
+pub(crate) mod auto_approve;
 mod capabilities;
 pub(crate) mod checks;
 pub(crate) mod completion;
@@ -9,6 +10,7 @@ pub(crate) mod delivery;
 pub(crate) mod headless;
 pub(crate) mod helper_login;
 mod messaging;
+pub(crate) mod model_check;
 mod native;
 pub(crate) mod pane_close;
 pub(crate) mod pane_lease;
@@ -16,6 +18,9 @@ pub(crate) mod pane_api;
 pub(crate) mod persist;
 pub(crate) mod quick;
 pub(crate) mod structured;
+pub(crate) mod tree_proof;
+#[cfg(test)]
+mod tree_proof_tests;
 pub mod readiness;
 mod recovery;
 mod routes;
@@ -55,6 +60,8 @@ pub(crate) use runtime::{convert_to_fallback, start_fallback_headless};
 pub use runtime::{record_user_task, run_agent, supervise_existing, AgentRunRequest, AgentRunView};
 pub(crate) use runtime::{cancel_agent, send_agent};
 pub(crate) use runtime::RunReceipt;
+pub(crate) use runtime::guarantees;
+pub(crate) use runtime::timing::RunTiming;
 pub use capabilities::{read_only_supported, read_only_supported_for, read_only_unsupported_message};
 
 /// Seams for `handoff::tests` into private modules of this one.

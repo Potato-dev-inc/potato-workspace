@@ -2,6 +2,7 @@
 // through the request stores in lib/chatImport.ts; this host watches both and shows the sheet while a request waits.
 // Closing a sheet clears its request, so no request means no sheet. "Continue in a pane" starts a pane with exactly the
 // backend's plan, selects it and opens its Chat tab.
+import { errorSentence } from '../../lib/sayError';
 import { useRef } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import {
@@ -60,7 +61,7 @@ export function ImportHost({ c, api = chatImportApi }: { c: PaneHost; api?: Impo
         c.select(paneId);
         close();
       })
-      .catch((error: unknown) => c.notify(`Could not start the agent: ${error instanceof Error ? error.message : String(error)}`))
+      .catch((error: unknown) => c.notify(`Could not start the agent: ${errorSentence(error)}`))
       .finally(() => {
         starting.current = false;
       });
@@ -77,7 +78,7 @@ export function ImportHost({ c, api = chatImportApi }: { c: PaneHost; api?: Impo
             c.select(paneId);
             close();
           })
-          .catch((error: unknown) => c.notify(`Could not open the chat: ${error instanceof Error ? error.message : String(error)}`))
+          .catch((error: unknown) => c.notify(`Could not open the chat: ${errorSentence(error)}`))
           .finally(() => {
             starting.current = false;
           });

@@ -125,6 +125,23 @@ describe('useSessionMemory', () => {
     expect(readSessionMemory().terminals.map((t) => t.id)).toEqual(['p1']);
   });
 
+  it('a run that was killed (panes never closed) still leaves the ended line and Reopen for the next start', async () => {
+    // First run: two terminals open, stored at once. The app is then killed, so no pane ever vanishes in the list.
+    render({ ready: true, selectedId: null, panes: paneMap(info('p1'), info('p2', { agent_type: 'codex' })) });
+    expect(readSessionMemory().terminals.map((t) => t.id)).toEqual(['p1', 'p2']);
+    act(() => root.unmount());
+    host.remove();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    // Next start: the agents were ended by the job object, the pane list is empty.
+    render({ ready: true, selectedId: null, panes: paneMap() });
+    expect(host.textContent).toContain('2 terminal agents ended with the last restart.');
+    await act(async () => press('Reopen'));
+    expect(newAgent).toHaveBeenNthCalledWith(1, 'claude', undefined, false, 'C:\\p1');
+    expect(newAgent).toHaveBeenNthCalledWith(2, 'codex', undefined, false, 'C:\\p2');
+  });
+
   it('writes the selection only after the restore ran', () => {
     writeSessionMemory({ selected: { id: 'p1', tab: 'chat' }, terminals: [] });
     render({ ready: true, selectedId: null, panes: paneMap(info('p1')) });

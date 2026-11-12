@@ -1,6 +1,7 @@
 // State for the cockpit window: panes (via usePaneRegistry), selection, prompts, mode, theme,
 // warm-ready agents and the spawn flow. Backend data only; nothing is invented client-side
 // except "status entered at" timestamps, which are measured from what this window observed.
+import { errorSentence } from '../lib/sayError';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePaneRegistry, type PaneRegistryApi } from './usePaneRegistry';
 import { paneMenuEntries, useAgentRegistry, agentLabel, type LaunchEntry } from '../lib/agentRegistry';
@@ -48,10 +49,6 @@ export interface Toast {
   text: string;
   /** A button on the toast (for example "Undo"). The toast stays longer so it can be reached. */
   action?: { label: string; run: () => void };
-}
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 export interface CockpitApi {
@@ -392,7 +389,7 @@ export function useCockpit(): CockpitApi {
         await cockpitApi.setUiMode(next, clickedMsAgo);
       } catch (err) {
         setModeState(prev);
-        notify(errText(err));
+        notify(errorSentence(err));
       }
     },
     [mode, notify],
@@ -449,7 +446,7 @@ export function useCockpit(): CockpitApi {
     try {
       await patchSettings({ theme: next });
     } catch (err) {
-      notify(`Theme not saved: ${errText(err)}`);
+      notify(`Theme not saved: ${errorSentence(err)}`);
     }
   }, [theme, notify]);
 
@@ -464,7 +461,7 @@ export function useCockpit(): CockpitApi {
         if (spawnRef.current === null) setSelectedId(paneId);
         return paneId;
       } catch (err) {
-        setSpawn((s) => (s && s.agentId === agentId ? { ...s, failed: errText(err) } : s));
+        setSpawn((s) => (s && s.agentId === agentId ? { ...s, failed: errorSentence(err) } : s));
         return null;
       }
     },
@@ -499,7 +496,7 @@ export function useCockpit(): CockpitApi {
         }, ANSWER_CHECK_MS);
       } catch (err) {
         answering.current.delete(key);
-        notify(errText(err));
+        notify(errorSentence(err));
       }
     },
     [names, notify],
@@ -511,7 +508,7 @@ export function useCockpit(): CockpitApi {
         await cockpitApi.interruptPane(paneId);
         notify('Sent Ctrl+C');
       } catch (err) {
-        notify(errText(err));
+        notify(errorSentence(err));
       }
     },
     [notify],
@@ -524,7 +521,7 @@ export function useCockpit(): CockpitApi {
         forgetTerminal(paneId);
         setSelectedId((cur) => (cur === paneId ? null : cur));
       } catch (err) {
-        notify(errText(err));
+        notify(errorSentence(err));
       }
     },
     [registry, notify],
@@ -536,7 +533,7 @@ export function useCockpit(): CockpitApi {
         await cockpitApi.paneSetTitle(paneId, title);
         await registry.refresh();
       } catch (err) {
-        notify(errText(err));
+        notify(errorSentence(err));
       }
     },
     [registry, notify],
@@ -547,7 +544,7 @@ export function useCockpit(): CockpitApi {
       await cockpitApi.openSettings(tab);
     } catch (err) {
       console.error('open_settings failed', err);
-      notify(`Settings did not open: ${errText(err)}`);
+      notify(`Settings did not open: ${errorSentence(err)}`);
     }
   }, [notify]);
 

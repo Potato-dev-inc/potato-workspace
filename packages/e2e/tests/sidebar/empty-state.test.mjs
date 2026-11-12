@@ -6,7 +6,7 @@ export const meta = {
   id: 'sidebar.empty-state',
   title: 'With no agents the sidebar says "No agents running." and the Inbox is open',
   area: 'sidebar',
-  tags: ['smoke', 'empty'],
+  tags: ['basic', 'empty'],
   edge: true,
 };
 

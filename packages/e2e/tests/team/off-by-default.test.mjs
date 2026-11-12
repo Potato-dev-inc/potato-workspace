@@ -6,7 +6,7 @@ export const meta = {
   id: 'team.off-by-default',
   title: 'Team is off by default: no Inbox section, the team tools say so, Settings offers create or join',
   area: 'team',
-  tags: ['smoke', 'needs-external'], // teammates and a relay need a network; this is the offline side
+  tags: ['basic', 'needs-external'], // teammates and a relay need a network; this is the offline side
 };
 
 export const run = guarded(async (t) => {

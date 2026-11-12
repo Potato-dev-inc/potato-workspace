@@ -104,6 +104,11 @@ impl Drop for Rig {
     }
 }
 
+/// The warm pool is one process-wide slot (`warm::install`). Each test that installs a pool holds this lock for its whole
+/// run, so no other test can swap or remove the pool it is claiming from (a parallel test's `install(None)` made a
+/// ready session unclaimable).
+static WARM_SLOT: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
 /// Puts the pool where `start` finds it, and takes it away (and kills what it holds) when dropped.
 struct Installed(Arc<Pool<LiveHost>>);
 
@@ -120,6 +125,8 @@ fn item_kinds(chat: &AcpChat) -> Vec<String> {
 
 #[test]
 fn a_chat_from_a_warm_session_is_ready_at_once_and_is_the_same_chat() {
+    // Declared first, so it is released after `_installed` has removed the pool.
+    let _slot = WARM_SLOT.lock();
     let mut rig = Rig::new("init_delay_ms=300;new_delay_ms=500");
 
     // Cold: the adapter starts inside start().
@@ -174,6 +181,7 @@ fn a_chat_from_a_warm_session_is_ready_at_once_and_is_the_same_chat() {
 
 #[test]
 fn a_warm_session_whose_agent_definition_changed_is_not_used() {
+    let _slot = WARM_SLOT.lock();
     let mut rig = Rig::new("init_delay_ms=50;new_delay_ms=50");
     let host = Arc::new(LiveHost { conversations: rig.conversations.clone() });
     let pool = Pool::new(host);

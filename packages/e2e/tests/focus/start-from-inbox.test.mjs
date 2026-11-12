@@ -5,7 +5,7 @@ export const meta = {
   id: 'focus.start-from-inbox',
   title: 'The 45 min chip starts Focus and the note and sidebar pill count down',
   area: 'focus',
-  tags: ['focus', 'smoke'],
+  tags: ['focus', 'basic'],
 };
 
 export async function run(t) {

@@ -1,6 +1,7 @@
 // "+" → Start a mission… (DESIGN-MISSIONS 6.2): the goal, the checks it ends on, who works on it
 // (one at a time, in this order), the budget and where. "Start mission" stays disabled with a line
 // that says why. Every agent works in a visible pane; nothing merges on its own.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useMemo, useState } from 'react';
 import {
   commandText,
@@ -118,7 +119,7 @@ export function StartMissionSheet({
       });
       onStarted(mission);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
       setBusy(false);
     }
   };

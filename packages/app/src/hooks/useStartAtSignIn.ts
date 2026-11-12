@@ -1,5 +1,6 @@
 // "Start Potato Workspace when I sign in": reads the OS switch once and writes it through the Tauri commands.
 // `ready` is false outside the desktop shell (or when the read fails), so callers can hide the control.
+import { errorSentence } from '../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../lib/tauri';
 
@@ -42,7 +43,7 @@ export function useStartAtSignIn(): StartAtSignIn {
       setEnabled(now);
       return now === value;
     } catch (e) {
-      setError(`Could not change it: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Could not change it: ${errorSentence(e)}`);
       return false;
     }
   }, []);

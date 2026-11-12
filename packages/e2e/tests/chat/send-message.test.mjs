@@ -5,7 +5,7 @@ export const meta = {
   id: 'chat.send-message',
   title: 'A message sent from Chat reaches the agent and the reply comes back',
   area: 'chat',
-  tags: ['smoke'],
+  tags: ['basic', 'smoke'],
 };
 
 export async function run(t) {
@@ -14,7 +14,7 @@ export async function run(t) {
 
   await t.step('Open the Chat tab');
   await openChat(t);
-  await t.expect.text('Messages wait until the agent is free.');
+  await t.expect.visible('exact=Send');
 
   await t.step('Send a message');
   await sendChat(t, 'hello fake agent');

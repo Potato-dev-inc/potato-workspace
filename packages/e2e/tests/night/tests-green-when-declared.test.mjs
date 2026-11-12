@@ -6,7 +6,7 @@ export const meta = {
   id: 'night.tests-green-when-declared',
   title: 'A declared test that passes makes the task ready with green tests',
   area: 'night',
-  tags: ['night', 'smoke'],
+  tags: ['night', 'basic'],
   timeout: 120000,
 };
 

@@ -5,7 +5,7 @@ export const meta = {
   id: 'sidebar.groups-by-state',
   title: 'Panes are grouped as Needs you, Working and Idle, and the Inbox counts what waits',
   area: 'sidebar',
-  tags: ['smoke', 'status'],
+  tags: ['basic', 'status'],
   timeout: 90000,
 };
 

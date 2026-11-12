@@ -54,6 +54,8 @@ pub fn mark(key: &str, stage: &str) -> u64 {
 pub fn carry(from: &str, to: &str) {
     let mut tracks = TRACKS.lock();
     if let Some(track) = tracks.remove(from) {
+        // So the log can join the stages of a temporary key to the pane (`flight::perf`).
+        tracing::info!("startup_carry from={from} to={to}");
         if tracks.len() >= MAX_TRACKS && !tracks.contains_key(to) {
             tracks.clear();
         }

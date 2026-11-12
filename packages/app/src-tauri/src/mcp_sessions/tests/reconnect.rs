@@ -132,3 +132,16 @@ fn caller_supplied_coordinator_name_does_not_grant_authority() {
     assert!(check_run_access(&owner, "named-worker").is_ok());
     assert!(check_run_access(&other, "named-worker").is_err());
 }
+
+#[test]
+fn a_reconnect_with_the_token_is_the_same_coordinator_and_a_stranger_is_not() {
+    let original = id();
+    let identity = session_identity(&original);
+    let replacement = id();
+    assert!(!same_coordinator(&replacement, &original), "before the token is shown, a new connection is a stranger");
+    attach_coordinator(&replacement, Some(&identity.attach_token), None).unwrap();
+    assert!(same_coordinator(&replacement, &original));
+    assert!(same_coordinator(&original, &replacement));
+    assert!(!same_coordinator(&id(), &original));
+    assert!(!same_coordinator("never-seen", &original));
+}

@@ -61,6 +61,8 @@ export interface AgentChoice {
   /** `ready`: can start now. `missing`: the program is not installed. `unavailable`: cannot open a pane. */
   state: 'ready' | 'missing' | 'unavailable';
   hint: string;
+  /** A lent sign-in of an agent that cannot chat on one: Chat is off for this choice. */
+  noChat?: boolean;
 }
 
 /**
@@ -79,7 +81,7 @@ export function agentChoices(agents: readonly AgentDescriptor[], accounts: reado
     const logins = accounts.filter((a) => a.agent_id === agent.id);
     out.push({ key: agent.id, agentId: agent.id, label, state, hint });
     for (const login of logins) {
-      out.push({ key: `${agent.id}:${login.id}`, agentId: agent.id, accountId: login.id, label: `${label} · ${signInLabel(login)}`, state, hint });
+      out.push({ key: `${agent.id}:${login.id}`, agentId: agent.id, accountId: login.id, label: `${label} · ${signInLabel(login)}`, state, hint, noChat: login.borrowed && login.chat === false });
     }
   }
   return out;
@@ -120,6 +122,20 @@ export function defaultRunAs(lanes: LaneView | null, agentId: string | null, cha
 export function usableModel(remembered: string, list: { models: readonly string[] } | null): string {
   if (!remembered || !list || list.models.length === 0) return remembered;
   return list.models.includes(remembered) ? remembered : '';
+}
+
+/**
+ * The model the picker starts on: the last pick for this agent and sign-in when it is still usable, else the agent's
+ * saved Default model (Settings > Agents), else blank (the agent's own default). A saved default the agent no longer
+ * lists is ignored, and a listed one is matched in any case and used as listed.
+ */
+export function startingModel(remembered: string, saved: string, list: { models: readonly string[] } | null): string {
+  const picked = usableModel(remembered, list);
+  if (picked) return picked;
+  const wanted = saved.trim();
+  if (!wanted) return '';
+  if (!list || list.models.length === 0) return wanted;
+  return list.models.find((m) => m.toLowerCase() === wanted.toLowerCase()) ?? '';
 }
 
 /** The "Terminal | Chat" choice last made on the page, or null when none was made (or storage is blocked). */

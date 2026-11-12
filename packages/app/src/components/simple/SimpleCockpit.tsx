@@ -4,6 +4,7 @@
 // Screens: Home (her projects), Make something, and one project. The project being looked at is
 // the cockpit's own selection, so a pane that closes (Keep, Throw away) lands back on Home.
 import { useEffect, useState } from 'react';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { NeedsYouContext } from '../../hooks/useNeedsYou';
 import type { NeedsYouItem } from '../../lib/attention';
@@ -84,7 +85,9 @@ export function SimpleCockpit({
                   <button type="button" className="sx-back" onClick={() => c.select(null)}>
                     ‹ {T.helpersBack}
                   </button>
-                  <PaneView c={c} paneId={selected} key={selected} />
+                  <ErrorBoundary where="Pane" resetKeys={[selected]}>
+                    <PaneView c={c} paneId={selected} key={selected} />
+                  </ErrorBoundary>
                 </div>
               ) : screen === 'helpers' ? (
                 <HelpersScreen c={c} onClose={() => setScreen('home')} />

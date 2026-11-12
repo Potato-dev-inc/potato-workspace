@@ -1,6 +1,7 @@
 // "Scores on your code": which agent works best in this project, from your own history.
 // One dense table, a scope and window switcher, and plain notes about what is counted.
 // No folder path, pane id or chat text: the backend never sends them (`scores`). No ranking, no stars, no overall score.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
 import {
   AHEAD_TITLE,
@@ -51,10 +52,6 @@ const HOW_TO_READ_END = [
   'New versions of an agent change its numbers; this shows your past.',
   'Agents never see this page.',
 ];
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 function cls(...names: (string | false | null | undefined)[]): string | undefined {
   const out = names.filter(Boolean).join(' ');
@@ -152,7 +149,7 @@ export function AgentScores({
         setReport(next);
         setError(null);
       })
-      .catch((e) => live && setError(errText(e)));
+      .catch((e) => live && setError(errorSentence(e)));
     return () => {
       live = false;
     };

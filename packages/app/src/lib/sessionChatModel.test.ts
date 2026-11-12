@@ -162,6 +162,16 @@ describe('groupTurns notices', () => {
     expect(grouped.turns[0]!.steps).toHaveLength(2);
   });
 
+  it('shows a background-task notification the CLI wrote twice once', () => {
+    const grouped = groupTurns([
+      user('1', 'hi'),
+      notice('2', 'background:t-1', 'Background task: wait_agents completed'),
+      notice('3', 'background:t-1', 'Background task: wait_agents completed'),
+      notice('4', 'background:t-2', 'Background task: wait_agents completed'),
+    ]);
+    expect(grouped.turns[0]!.steps).toHaveLength(2);
+  });
+
   it('a chat with a title and no messages has no empty turn', () => {
     const grouped = groupTurns([notice('1', 'title', 'Only a title')]);
     expect(grouped.turns).toEqual([]);

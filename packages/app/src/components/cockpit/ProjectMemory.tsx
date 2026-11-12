@@ -1,6 +1,7 @@
 // The Project view: the project's name as a constant title, then Memory and Copies tabs.
 // Memory is the one text every agent in a project reads. It is saved to
 // `<project>/.potato-workspace/memory.md` and rendered into each agent's own instruction file.
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { memoryApi, type MemoryApi, type MemoryTargetStatus, type MemoryView } from '../../lib/memory-api';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
@@ -18,10 +19,6 @@ const STATUS_TEXT: Record<MemoryTargetStatus, string> = {
   nothing: 'Nothing to write',
   blocked: 'Markers damaged',
 };
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 /** The count of memory lines, shown when nothing else is: "3 lines". */
 function lineCount(text: string): string {
@@ -58,7 +55,7 @@ export function ProjectMemory({
     api
       .get(project)
       .then((v) => live && apply(v))
-      .catch((e) => live && setError(errText(e)));
+      .catch((e) => live && setError(errorSentence(e)));
     return () => {
       live = false;
     };
@@ -76,7 +73,7 @@ export function ProjectMemory({
       if (problems.length > 0) setError(problems.join(' '));
       else setNote(done);
     } catch (e) {
-      setError(errText(e));
+      setError(errorSentence(e));
     } finally {
       setBusy(false);
     }

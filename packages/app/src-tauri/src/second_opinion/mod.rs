@@ -11,6 +11,8 @@
 //! the reviewers on offer are whatever the registry says can answer a headless read-only run
 //! (`tui::read_only_backends`).
 
+pub mod mcp;
+pub mod mcp_live;
 pub mod parse;
 pub mod prompt;
 pub mod route;

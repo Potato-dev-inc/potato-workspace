@@ -1,13 +1,13 @@
 // Settings > Agents > Agent definitions: declarative agent definitions (list, errors, reload, approve/revoke),
 // sources, consented projects and extra directories. One settings row made of several blocks.
 // Every string from a definition file is rendered as React text, never as HTML (UI-4).
+import { errorCode, errorSentence, GENERIC_ERROR } from '../../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import {
   approvalWarnings,
   argvDiff,
   baseName,
   canReview,
-  errorMessage,
   fileName,
   folderOf,
   formatCommand,
@@ -65,10 +65,10 @@ type Purging = { kind: 'one'; item: RemovedAgent } | { kind: 'all'; total: numbe
 /** An error as a sentence a person can read: a known run code gets its sentence, a code bug never shows its text. */
 export function shownError(e: unknown): string {
   const text = plainError(e);
-  const code = /^([A-Z][A-Z0-9_]+):/.exec(errorMessage(e))?.[1];
+  const code = errorCode(e) ?? undefined;
   const known = explainError(code, 'The agent');
   if (known) return `${known.title}. ${known.sentence}`;
-  if (/cannot read propert|is not a function|is not defined|undefined|null/i.test(text)) {
+  if (text === GENERIC_ERROR) {
     return 'That did not load. Your agents are safe. Try again.';
   }
   return text;
@@ -113,7 +113,7 @@ export function AgentDefinitions({
       apply(await api.list());
       setError(null);
     } catch (e) {
-      setError(errorMessage(e));
+      setError(errorSentence(e));
     }
   }, [api, apply]);
 
@@ -160,7 +160,7 @@ export function AgentDefinitions({
     try {
       await action();
     } catch (e) {
-      setError(errorMessage(e));
+      setError(errorSentence(e));
     } finally {
       setBusy(false);
     }
@@ -221,7 +221,7 @@ export function AgentDefinitions({
     try {
       setReviewing({ row, preview: await api.preview(row.file), error: null });
     } catch (e) {
-      setReviewing({ row, preview: null, error: errorMessage(e) });
+      setReviewing({ row, preview: null, error: errorSentence(e) });
     }
   };
 

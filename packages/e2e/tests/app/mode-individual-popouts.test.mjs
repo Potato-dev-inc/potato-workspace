@@ -6,7 +6,7 @@ export const meta = {
   id: 'app.mode-individual-popouts',
   title: 'Individual mode opens one window per pane and Orchestration takes them back',
   area: 'app',
-  tags: ['smoke', 'mode'],
+  tags: ['basic', 'mode'],
 };
 
 async function body(t) {

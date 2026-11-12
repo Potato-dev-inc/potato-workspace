@@ -5,7 +5,7 @@ export const meta = {
   id: 'chat.outbox-queued-while-busy',
   title: 'A message written while the agent works waits, then goes in when the turn ends',
   area: 'chat',
-  tags: ['outbox', 'smoke'],
+  tags: ['outbox', 'basic'],
   timeout: 90000,
 };
 

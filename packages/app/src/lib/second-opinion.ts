@@ -1,5 +1,6 @@
 // "Second opinion": ask another agent to review what this one just did (Rust: second_opinion).
 // Own file so it adds nothing to the shared cockpit-api.ts. Every call needs the desktop shell.
+import { errorSentence } from './sayError';
 import { invoke } from '@tauri-apps/api/core';
 import type { ReviewFinding } from '../components/cockpit/review-diff';
 
@@ -72,7 +73,7 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 
 /** Errors from the backend read `CODE: message`; show only the message. */
 export function plainError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
+  const raw = errorSentence(err);
   return raw.replace(/^[A-Z_]{3,}:\s*/, '');
 }
 

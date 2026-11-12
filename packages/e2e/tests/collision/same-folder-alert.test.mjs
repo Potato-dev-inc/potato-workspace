@@ -5,7 +5,7 @@ export const meta = {
   id: 'collision.same-folder-alert',
   title: 'Two agents changing one file in one folder raise an Inbox card that pauses nothing',
   area: 'collision',
-  tags: ['collision', 'smoke'],
+  tags: ['collision', 'basic'],
   timeout: 120000,
 };
 

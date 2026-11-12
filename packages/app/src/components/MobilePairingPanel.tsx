@@ -1,3 +1,4 @@
+import { errorSentence } from '../lib/sayError';
 import {
   buildPairingInviteUrl,
   DEVICE_CAPS,
@@ -118,7 +119,7 @@ export function MobilePairingPanel({
         });
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errorSentence(e));
     } finally {
       setBusy(false);
     }

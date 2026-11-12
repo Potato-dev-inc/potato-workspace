@@ -1,6 +1,7 @@
 // Settings > General: project folder, appearance, safety nets (confirm close, loop guard, checkpoints,
 // project memory, away digest), coordination storage, version and updates, export and uninstall.
 // This section is the reference for the others: rows are plain data (`RowDef`), each control saves itself.
+import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
@@ -32,6 +33,8 @@ import { T as WELCOME } from '../../firstrun/copy';
 import { reopenPatch } from '../../firstrun/model';
 import { Btn, FieldSelect, InfoRow, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
 import { LabsSwitch } from '../LabsSwitch';
+import { RECOVERY_HINT, RECOVERY_LABEL } from '../../../lib/settings-recovery';
+import { SettingsRecoveryRow } from './SettingsRecoveryRow';
 import { UpdateRow } from './UpdateRow';
 
 function useInstallInfo(): AppInstallInfo | null {
@@ -40,10 +43,6 @@ function useInstallInfo(): AppInstallInfo | null {
     void tauri.getAppInstallInfo().then(setInfo).catch(() => undefined);
   }, []);
   return info;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 // ---------- project folder ----------
@@ -57,7 +56,7 @@ function ProjectFolder({ env }: { env: SettingsEnv }) {
       else await env.patch({ project_path: path || null });
       env.markSaved();
     } catch (error) {
-      env.setError(`Not saved: ${errorText(error)}`);
+      env.setError(`Not saved: ${errorSentence(error)}`);
     }
   };
   const browse = async () => {
@@ -93,7 +92,7 @@ function StorageInfo({ env }: { env: SettingsEnv }) {
       setError(null);
       setInfo(await tauri.getCoordinationStorageInfo());
     } catch (e) {
-      setError(errorText(e));
+      setError(errorSentence(e));
     }
   }, []);
   useEffect(() => {
@@ -167,7 +166,7 @@ function UninstallRow({ env }: { env: SettingsEnv }) {
     try {
       await tauri.launchUninstall();
     } catch (error) {
-      env.setError(errorText(error));
+      env.setError(errorSentence(error));
       setBusy(false);
     }
   };
@@ -623,13 +622,29 @@ export const generalRows: RowDef[] = [
   },
   { id: 'live-room', label: 'Live Room', hint: 'Let people with a link watch a chat. Pick the relay address, how long and how many.', keywords: 'live room share stream watch link relay viewers broadcast default length', group: 'Live Room', render: (env) => <LiveRoomRow onSaved={env.markSaved} /> },
   { id: 'version', label: 'Version', hint: 'Check for updates and download the installer.', keywords: 'app version update release download install', group: 'About', render: () => <VersionRow /> },
+  {
+    id: 'early-versions',
+    label: 'Get early versions (beta)',
+    hint: 'Try new versions before everyone else. They may have bugs. Turn off to stay on stable.',
+    keywords: 'beta early preview prerelease pre-release channel update updates test new versions',
+    group: 'About',
+    render: (env) => (
+      <SettingToggle
+        label="Get early versions (beta)"
+        description="Try new versions before everyone else. They may have bugs. Turn off to stay on stable."
+        checked={env.settings.early_versions_enabled ?? false}
+        onChange={(value) => void env.patch({ early_versions_enabled: value })}
+      />
+    ),
+  },
   { id: 'whats-new', label: WHATS_NEW_LABEL, hint: 'The short version of what changed, with a link to each place.', keywords: 'release notes changelog new features changes version update 0.2.0', group: 'About', render: (env) => <WhatsNew env={env} /> },
+  { id: 'settings-recovery', label: RECOVERY_LABEL, hint: RECOVERY_HINT, keywords: 'restore recover backup damaged broken lost reset settings copy last good', group: 'About', render: (env) => <SettingsRecoveryRow onSaved={env.markSaved} /> },
   { id: 'settings-file', label: 'Settings file', hint: 'Where your settings are saved. Export a copy with keys removed.', keywords: 'export json backup path', group: 'About', render: (env) => <SettingsFile env={env} /> },
   {
     id: 'diagnostic-file',
     label: 'Save a diagnostic file',
     hint: 'A zip of settings (no keys), recent messages and failed runs. Nothing is sent anywhere.',
-    keywords: 'diagnostic bug report support logs recording flight zip help',
+    keywords: 'diagnostic bug report support logs recording flight zip help speed on this pc slow fast start time closed unexpectedly last crash',
     group: 'About',
     render: (env) => <DiagnosticFile onSaved={env.markSaved} />,
   },

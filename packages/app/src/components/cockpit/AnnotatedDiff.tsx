@@ -1,3 +1,4 @@
+import { errorSentence } from '../../lib/sayError';
 import { Fragment, useState } from 'react';
 import { lineKind } from './diff';
 import { newLineNumbers, severityGlyph, severityLabel, type ReviewFinding, type Severity } from './review-diff';
@@ -16,7 +17,7 @@ const RANK: Record<Severity, number> = { high: 3, medium: 2, low: 1, info: 0 };
 
 type SendState = { status: 'sending' } | { status: 'sent' } | { status: 'error'; message: string };
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 /**
  * A file's diff with the second opinion's findings pinned under the lines they point at, and a quiet

@@ -2,6 +2,7 @@
 // (lib/sideQuestion), shown here as Markdown with Copy, Ask again and Remember. Nothing is written into the pane and
 // nothing is saved to disk: closing the box keeps only the pane's last few answers in memory (useSideQuestion), listed
 // under "Earlier". The box does not know any agent by name; the backend says who answers.
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { rememberApi, rememberErrorMessage, type RememberApi } from '../../lib/chat-remember';
 import type { ChatTurn } from '../../lib/sessionChatModel';
@@ -92,7 +93,7 @@ export function SideQuestionBox({ paneId, api, turns, recent = NO_RECENT, onAnsw
         })
         .catch((error: unknown) => {
           if (current.current !== askId || !alive.current) return;
-          setPhase({ kind: 'error', question: q, message: error instanceof Error ? error.message : String(error) });
+          setPhase({ kind: 'error', question: q, message: errorSentence(error) });
         });
     },
     [api, paneId, target, onAnswer],

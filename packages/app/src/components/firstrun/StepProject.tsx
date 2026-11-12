@@ -1,6 +1,7 @@
 // Step 3: the folder of the first project. Recent first, then the system picker. Every folder passes
 // Simple mode's broad-folder guard (`plain_check_folder`, Rust) before it counts; a folder without Git
 // is offered "Set up Git here" with the exact commands shown first, like the "+" menu.
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import type { GitInitPlan, RecentProject, ShipApi } from '../../lib/ship-api';
 import { stateHint } from '../../lib/ship-model';
@@ -37,7 +38,7 @@ export function withoutNested<T extends { path: string; state: string }>(list: T
   return list.filter((p) => { const me = norm(p.path); return !roots.some((r) => r !== me && me.startsWith(r + '/')); });
 }
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err)).replace(/^[A-Z_]+: /, '');
+const errText = (err: unknown): string => (errorSentence(err)).replace(/^[A-Z_]+: /, '');
 
 export function StepProject({
   project,

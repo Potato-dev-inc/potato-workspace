@@ -252,6 +252,14 @@ describe('Time-left chip', () => {
     expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("The lender's sign-in expired. Ask them to sign in again.");
   });
 
+  it('says in the details that the agent may say API billing but the lender pays', async () => {
+    await chip(50 * 60_000);
+    await click(el());
+    const note = host.querySelector('[data-testid="lend-billing-note"]')!.textContent!;
+    expect(note).toContain('may say "API billing"');
+    expect(note).toContain("charged to Leo's plan");
+  });
+
   it('opens its details, and Give back now ends the lend', async () => {
     const api = await chip(50 * 60_000);
     await click(el());

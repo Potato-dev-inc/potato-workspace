@@ -532,6 +532,22 @@ fn an_agent_may_steer_only_a_chat_it_started() {
 }
 
 #[test]
+fn a_caller_that_reconnected_with_its_token_still_steers_its_chat_and_a_stranger_gets_a_way_in() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    let before = format!("owner-{}", uuid::Uuid::new_v4());
+    let identity = crate::mcp_sessions::session_identity(&before);
+    rig.chat.set_started_by(Some(&before));
+    let after = format!("restarted-{}", uuid::Uuid::new_v4());
+    let stranger = call(&rig, "POST", "agents/interrupt", json!({ "handle": id }), Some(&after)).unwrap().unwrap_err();
+    assert_eq!(stranger.code, "NOT_YOUR_CHAT");
+    assert!(stranger.message.contains("attach_agents"), "the refusal says how to get the chat back: {}", stranger.message);
+    assert!(stranger.context["try"].as_str().unwrap().contains("attach_agents"));
+    crate::mcp_sessions::attach_coordinator(&after, Some(&identity.attach_token), None).unwrap();
+    assert!(call(&rig, "POST", "agents/interrupt", json!({ "handle": id }), Some(&after)).unwrap().is_ok());
+}
+
+#[test]
 fn lane_acp_with_the_labs_switch_off_is_acp_off_and_auto_and_a_missing_lane_run_in_the_terminal() {
     // The switch is off in the test process unless a test of the settings turned it on; this one needs it off.
     if crate::acp::chat_enabled() {
@@ -550,7 +566,7 @@ fn lane_acp_with_the_labs_switch_off_is_acp_off_and_auto_and_a_missing_lane_run_
     let error = answer.expect("ours").expect_err("refused");
     assert_eq!((error.code.as_str(), error.recoverable), ("ACP_OFF", false));
     assert_eq!(error.message, "Chat (ACP) is off. Turn on Settings > Labs > Chat (ACP), or leave out lane.");
-    assert!(error.context["fix"].as_str().is_some());
+    assert_eq!(error.context["try"]["tool"], "run_agent");
     assert!(note.is_none());
     // Auto and a missing lane: not ours, and the note says the terminal and why.
     for lane in [Some("auto"), None] {

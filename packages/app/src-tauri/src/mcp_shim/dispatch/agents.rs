@@ -46,6 +46,9 @@ fn run(
         }
         "run_agent" => {
             let mut body = args.clone();
+            // `review_by` is not a run field: the second opinion is asked for once the run has finished.
+            let review_by = super::super::review::take_review_by(&mut body);
+            let project = body.get("project_path").cloned();
             let caller_key = caller_gave_idempotency_key(&body);
             let key = ensure_stable_idempotency_key("run_agent", &mut body);
             // With a derived key, an earlier run may already own it: this call then replays that run,
@@ -56,7 +59,14 @@ fn run(
             inject_budget_parent(&mut body, std::env::var(PARENT_RUN_ENV).ok());
             super::super::long_wait::launch_and_wait("/agents/run", body, cancel_rx)
                 .map(|response| mark_replayed(response, earlier.as_ref()))
+                .map(|response| {
+                    super::super::review::attach_review(response, review_by.as_ref(), project.as_ref(), |request| {
+                        bridge_request("POST", "/agents/review", Some(request))
+                    })
+                })
         }
+        "run_agents" => super::super::batch_live::run_live(args, cancel_rx),
+        "review_agent" => bridge_request("POST", "/agents/review", Some(args.clone())),
         "quick_ask" => {
             let mut body = args.clone();
             ensure_idempotency_key(&mut body);

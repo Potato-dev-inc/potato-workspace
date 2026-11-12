@@ -5,7 +5,7 @@ export const meta = {
   id: 'app.theme-toggle',
   title: 'The theme button switches dark and light and the choice survives a reload',
   area: 'app',
-  tags: ['smoke', 'theme'],
+  tags: ['basic', 'theme'],
 };
 
 export async function run(t) {

@@ -64,10 +64,11 @@ async function loadRouteFor(search: string) {
   await vi.waitFor(() => {
     expect(rendered.element).not.toBeNull();
   });
-  const outer = rendered.element as { props: { children: { props: { children: { type: Lazyish } } } } } | null;
+  const outer = rendered.element as { props: { children: { props: { children: { props: { children: { type: Lazyish } } } } } } } | null;
   if (!outer) throw new Error('main.tsx rendered nothing');
   // main.tsx lazy-loads the other roots, so a chosen root sits behind React.lazy inside Suspense. 
-  const chosen = outer.props.children.props.children.type;
+  // StrictMode > Suspense > ErrorBoundary > Root.
+  const chosen = outer.props.children.props.children.props.children.type;
   const Root = chosen._init ? await vi.waitFor(() => chosen._init!(chosen._payload)) : chosen;
   return { Root, PointBoxApp, CockpitApp, PwaApp, AskBarApp };
 }

@@ -3,11 +3,12 @@
 import { SIGN_IN } from '../../../lib/glossary';
 import { AccountsGroup } from '../accounts/AccountsGroup';
 import { AgentDefinitions } from '../blocks/AgentDefinitions';
+import { AGENT_MODELS_HINT, AGENT_MODELS_LABEL, AgentDefaultModels } from '../blocks/AgentDefaultModels';
 import { AgentLaneRows } from '../blocks/AgentLaneRows';
 import { AgentVersions } from '../blocks/AgentVersions';
 import { CHAT_ADDONS_LABEL, ChatAddonRows } from '../blocks/ChatAddonRows';
 import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings';
-import { CloseHelpersWithAgentToggle, HelperAgentsChoice, KeepHelpersOpenToggle } from '../blocks/HelperAgents';
+import { CloseHelpersWithAgentToggle, HelperAgentsChoice, KeepHelpersOpenToggle, MostHelpersAtOnce } from '../blocks/HelperAgents';
 import { HELPER_MODELS_HINT, HELPER_MODELS_LABEL, HelperDefaultModels } from '../blocks/HelperModels';
 import { HiddenAgentsRow } from '../blocks/HiddenAgentsRow';
 import { PreloadSettings } from '../blocks/PreloadSettings';
@@ -126,6 +127,14 @@ export const agentsRows: RowDef[] = [
     render: (env) => <PreloadSettings onSaved={env.markSaved} />,
   },
   {
+    id: 'agent-default-models',
+    label: AGENT_MODELS_LABEL,
+    hint: AGENT_MODELS_HINT,
+    keywords: 'default model models agent agents start starting choose pick which gpt sonnet opus haiku opencode terminal chat',
+    group: 'Models',
+    render: (env) => <AgentDefaultModels saved={env.settings.agent_default_models} onChange={(next) => void env.patch({ agent_default_models: next })} />,
+  },
+  {
     id: 'helper-tools',
     label: 'Potato Workspace helpers inside agents',
     hint: 'Give every agent you open here the Potato Workspace helper tools, ready with no setup.',
@@ -171,6 +180,14 @@ export const agentsRows: RowDef[] = [
     keywords: 'close closed closing helper helpers subagent sub-agent parent orchestrator agent pane leftover orphan stop with together',
     group: 'Helpers',
     render: (env) => <CloseHelpersWithAgentToggle onSaved={env.markSaved} />,
+  },
+  {
+    id: 'most-helpers-at-once',
+    label: 'Most helpers at once',
+    hint: 'How many helpers run together when one call starts several.',
+    keywords: 'most helpers at once how many parallel batch limit cap queue several many same time subagents',
+    group: 'Helpers',
+    render: (env) => <MostHelpersAtOnce onSaved={env.markSaved} />,
   },
   {
     id: 'handoff-mode',

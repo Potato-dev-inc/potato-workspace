@@ -1,5 +1,6 @@
 // Pieces shared by the Bridge & MCP rows: the "MCP changed" event, one install/uninstall action at a
 // time, and small status lines. Monochrome: status is words, never colour.
+import { errorSentence } from '../../../../lib/sayError';
 import { useState, type ReactNode } from 'react';
 import type { EnsureMcpResult } from '../../../../lib/mcp-config';
 import type { SettingsEnv } from '../../model';
@@ -13,10 +14,6 @@ export const RESTART_NOTE =
 /** Tell the other Bridge & MCP rows that agent configs were written or removed. */
 export function announceMcpChanged(): void {
   window.dispatchEvent(new Event(MCP_CHANGED_EVENT));
-}
-
-export function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** The project folder the MCP rows act on: the open project, else the saved default. */
@@ -45,7 +42,7 @@ export function useMcpAction() {
       setResults(await action());
     } catch (e) {
       setResults(null);
-      setError(errorText(e));
+      setError(errorSentence(e));
     } finally {
       setBusy(null);
       announceMcpChanged();

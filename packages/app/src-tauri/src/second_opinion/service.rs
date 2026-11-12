@@ -78,10 +78,22 @@ pub fn label_of(agent: &str) -> String {
 /// agent whose headless mode enforces it (`quick::select_backend` refuses any other), and the
 /// request carries `read_only: true`, no shell, no trust grant. `run_agent` itself refuses to
 /// start a read-only run it cannot enforce.
+#[cfg(test)]
 pub fn build_run_request(
     reviewer: &str,
     project: &str,
     prompt: &str,
+    installed: &dyn Fn(&str) -> bool,
+) -> Result<AgentRunRequest, OperationError> {
+    build_run_request_with_model(reviewer, project, prompt, None, installed)
+}
+
+/// [`build_run_request`] with an optional model for the reviewer (MCP `review_by.model`).
+pub fn build_run_request_with_model(
+    reviewer: &str,
+    project: &str,
+    prompt: &str,
+    model: Option<&str>,
     installed: &dyn Fn(&str) -> bool,
 ) -> Result<AgentRunRequest, OperationError> {
     if reviewer.trim().is_empty() {
@@ -103,6 +115,10 @@ pub fn build_run_request(
         "wait_ms": 0,
         "idempotency_key": uuid::Uuid::new_v4().to_string(),
     });
+    let mut body = body;
+    if let Some(model) = model.map(str::trim).filter(|m| !m.is_empty()) {
+        body["model"] = json!(model);
+    }
     serde_json::from_value(body).map_err(|e| OperationError::new("INVALID_ARGUMENT", e.to_string(), false))
 }
 
@@ -183,12 +199,29 @@ pub fn start(pane_id: &str, reviewer: &str, registry: Registry, app: tauri::AppH
         })?;
         (pane.info.cwd.clone(), pane.info.agent_type.clone())
     };
-    let diff = source::select(&LiveSources { registry: &registry, pane_id, cwd: &cwd })?;
-    let origin = crate::worktrees::origin_of_cwd(&cwd).unwrap_or_else(|| cwd.clone());
+    start_target(pane_id, &cwd, &author_agent, reviewer, None, registry, app, None)
+}
+
+/// Start the reviewer for work done in `cwd` by `author_agent`. `pane_id` may name a pane that is already
+/// closed (a run whose pane went away): the worktree and checkpoint sources then have nothing and the plain
+/// `git diff HEAD` of the folder is used. `session` makes the reviewer run the caller's own (MCP).
+#[allow(clippy::too_many_arguments)]
+pub fn start_target(
+    pane_id: &str,
+    cwd: &str,
+    author_agent: &str,
+    reviewer: &str,
+    model: Option<&str>,
+    registry: Registry,
+    app: tauri::AppHandle,
+    session: Option<String>,
+) -> Result<StartInfo, OperationError> {
+    let diff = source::select(&LiveSources { registry: &registry, pane_id, cwd })?;
+    let origin = crate::worktrees::origin_of_cwd(cwd).unwrap_or_else(|| cwd.to_string());
     let memory = crate::one_brain::read_memory(Path::new(&origin));
     let (sentence, facts) = facts_of(pane_id);
     let task = author_task(&registry, pane_id);
-    let author_label = label_of(&author_agent);
+    let author_label = label_of(author_agent);
     let prompt = build_prompt(
         &PromptInput {
             task: task.as_deref(),
@@ -201,9 +234,9 @@ pub fn start(pane_id: &str, reviewer: &str, registry: Registry, app: tauri::AppH
     );
     // The run is keyed on the origin project, like an isolated run's own operation (never on the
     // worktree folder, which a merge or discard deletes).
-    let request = build_run_request(reviewer, &origin, &prompt, &|id| crate::tui::profile_for(id).is_installed())?;
+    let request = build_run_request_with_model(reviewer, &origin, &prompt, model, &|id| crate::tui::profile_for(id).is_installed())?;
     let backend = request.agent_type.clone();
-    let view = crate::agent_runs::run_agent(request, registry, app, None)?;
+    let view = crate::agent_runs::run_agent(request, registry, app, session)?;
     Ok(info_of(pane_id, view, &backend, &origin, diff, author_label))
 }
 

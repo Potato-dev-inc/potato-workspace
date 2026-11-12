@@ -9,11 +9,13 @@
 mod access;
 mod control;
 mod followup;
+pub(crate) mod guarantees;
 mod present;
 mod queue;
 mod receipt;
 mod request;
 mod steer;
+pub(crate) mod timing;
 mod view;
 
 use parking_lot::Mutex;

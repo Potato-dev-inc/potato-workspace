@@ -244,6 +244,9 @@ pub fn start_failure_sentence(label: &str, error: &crate::acp::error::AcpError) 
         AcpError::Pin(_) => format!("The chat add-on for {label} is not the version this app was tested with. Install it again in Settings, under Agents, or run the agent in a terminal."),
         AcpError::Timeout { .. } => format!("{label} did not answer in time. It may still be starting or may need a sign-in. Try again, or run the agent in a terminal."),
         AcpError::Closed => format!("The chat program for {label} closed right away. Run the agent in a terminal once to see why (it may need a sign-in or an update)."),
+        // The agent's own service answered "internal error" (JSON-RPC -32603). It is the agent's server failing (it often does when its
+        // model service is slow to boot or the machine is busy), not this app: say so, and what helps.
+        AcpError::Rpc { code: -32603, message, .. } => format!("{label}'s own model service failed ({}). This comes from {label}, not from Potato Workspace. Wait a moment and try again; if it keeps happening, open {label} once on its own to see its error.", message.trim().trim_end_matches('.')),
         other => format!("The agent could not start: {other}"),
     }
 }
@@ -338,6 +341,9 @@ mod tests {
         assert!(start_failure_sentence("Kilo", &AcpError::Timeout { method: "session/new".into(), secs: 30 }).contains("did not answer in time"));
         assert!(start_failure_sentence("Kilo", &AcpError::Closed).contains("closed right away"));
         assert!(start_failure_sentence("Kilo", &AcpError::QueueFull).starts_with("The agent could not start"));
+        let internal = start_failure_sentence("OpenCode", &AcpError::Rpc { code: -32603, message: "Internal error: Internal service failure".into(), data: None });
+        assert!(internal.starts_with("OpenCode's own model service failed (Internal error: Internal service failure)"), "{internal}");
+        assert!(!internal.contains("-32603") && !internal.contains("terminal"));
     }
 
     #[test]

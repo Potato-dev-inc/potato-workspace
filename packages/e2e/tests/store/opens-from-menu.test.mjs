@@ -5,7 +5,7 @@ export const meta = {
   id: 'store.opens-from-menu',
   title: 'More agents in the plus menu opens the Agent Store with its cards',
   area: 'store',
-  tags: ['store', 'smoke'],
+  tags: ['store', 'basic'],
   timeout: 90000,
 };
 

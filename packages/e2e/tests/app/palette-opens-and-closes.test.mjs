@@ -5,7 +5,7 @@ export const meta = {
   id: 'app.palette-opens-and-closes',
   title: 'Ctrl+K opens the command palette and Esc or a click outside closes it',
   area: 'app',
-  tags: ['smoke', 'palette', 'keyboard'],
+  tags: ['basic', 'palette', 'keyboard'],
 };
 
 export async function run(t) {

@@ -63,6 +63,19 @@ pub fn close_helpers_with_agent_set(on: bool) -> Result<Value, String> {
     Ok(close_helpers_with_agent_get())
 }
 
+/// `{value: number}`: "Most helpers at once" for `run_agents` (default 8).
+#[tauri::command]
+pub fn most_helpers_at_once_get() -> Value {
+    serde_json::json!({ "value": agent_run_mode::most_helpers_at_once() })
+}
+
+/// Saves "Most helpers at once"; only the Settings window writes it, so an agent cannot raise its own limit.
+#[tauri::command]
+pub fn most_helpers_at_once_set(value: u32) -> Result<Value, String> {
+    agent_run_mode::set_most_helpers_at_once(value)?;
+    Ok(most_helpers_at_once_get())
+}
+
 /// The helpers that ran hidden (no pane), newest first, for the Inbox.
 #[tauri::command]
 pub fn hidden_runs_list() -> Vec<crate::hidden_runs::HiddenRunView> {

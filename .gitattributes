@@ -87,3 +87,11 @@ packages/app/src-tauri/src/ci_fix/fixtures/gh/*.json text eol=lf
 packages/app/src-tauri/src/ci_fix/fixtures/logs/* text eol=lf
 # Hash-pinned files: git must not change their line endings.
 packages/app/src-tauri/resources/adapters/** -text
+
+# Shell scripts must stay LF so bash can run them on Windows checkouts.
+scripts/dev/*.sh text eol=lf
+# Node dev and release scripts: keep LF on every checkout. A CRLF shebang line breaks vitest's import of
+# sibling scripts (SyntaxError: Invalid or unexpected token), and the release tests compare text byte for byte.
+scripts/dev/*.mjs text eol=lf
+scripts/release/*.mjs text eol=lf
+scripts/release/*.sh text eol=lf

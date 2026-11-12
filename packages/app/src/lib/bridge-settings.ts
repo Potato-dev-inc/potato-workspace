@@ -34,6 +34,7 @@ export type PublicSettings = Pick<
   | 'agent_hooks_mode'
   | 'agent_hooks_agents'
   | 'helper_default_models'
+  | 'agent_default_models'
 >;
 
 export function toPublicSettings(settings: Settings): PublicSettings {
@@ -52,6 +53,7 @@ export function toPublicSettings(settings: Settings): PublicSettings {
     agent_hooks_mode: settings.agent_hooks_mode ?? 'shadow',
     agent_hooks_agents: settings.agent_hooks_agents ?? {},
     helper_default_models: settings.helper_default_models ?? {},
+    agent_default_models: settings.agent_default_models ?? {},
   };
 }
 
@@ -70,4 +72,5 @@ export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
   agent_hooks_mode: 'shadow',
   agent_hooks_agents: {},
   helper_default_models: {},
+  agent_default_models: {},
 };

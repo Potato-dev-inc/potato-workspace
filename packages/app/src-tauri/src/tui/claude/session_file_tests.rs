@@ -505,3 +505,24 @@ fn a_message_the_cli_made_itself_carries_no_model() {
     let kept = ClaudeSessionFile.parse_line(&real, 0);
     assert!(kept.iter().any(|item| matches!(item, ChatItem::Assistant { model: Some(m), .. } if m == "claude-sonnet-5-5")));
 }
+
+#[test]
+fn a_background_task_notification_is_a_thin_notice_not_a_user_message() {
+    let note = "<task-notification>\n<task-id>t-1</task-id>\n<status>completed</status>\n<summary>MCP task \"x\" (potato-workspace/wait_agents) completed</summary>\n<result>{\"agents\":[{\"handle\":\"h\"}]}</result>\n</task-notification>";
+    let line = json!({"type": "user", "timestamp": "2026-01-01T00:00:00Z", "message": {"role": "user", "content": note}}).to_string();
+    let items = ClaudeSessionFile.parse_line(&line, 7);
+    assert_eq!(items.len(), 1, "{items:?}");
+    match &items[0] {
+        ChatItem::Notice { notice_kind, text, .. } => {
+            assert_eq!(notice_kind, "background:t-1");
+            assert_eq!(text, "Background task: MCP task \"x\" (potato-workspace/wait_agents) completed");
+            assert!(!text.contains("handle"), "the result stays out of the line");
+        }
+        other => panic!("expected a notice, got {other:?}"),
+    }
+    // Other host-injected wrappers never become the person's words either.
+    for wrapper in ["<command-message>x</command-message>", "<user-prompt-submit-hook>y</user-prompt-submit-hook>"] {
+        let line = json!({"type": "user", "message": {"role": "user", "content": wrapper}}).to_string();
+        assert!(ClaudeSessionFile.parse_line(&line, 0).is_empty(), "{wrapper}");
+    }
+}

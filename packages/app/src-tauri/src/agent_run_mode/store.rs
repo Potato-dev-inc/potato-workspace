@@ -30,6 +30,17 @@ pub(super) struct StoreFile {
     keep_helpers_open: Option<bool>,
     /// "Close helpers when their agent closes": absent means on.
     close_helpers_with_agent: Option<bool>,
+    /// "Most helpers at once" for `run_agents`: absent means [`DEFAULT_MOST_HELPERS`].
+    most_helpers_at_once: Option<u32>,
+}
+
+/// How many helpers one `run_agents` call runs together unless the person changed it.
+pub const DEFAULT_MOST_HELPERS: u32 = 8;
+/// The range the setting is kept in.
+pub const MOST_HELPERS_RANGE: std::ops::RangeInclusive<u32> = 1..=32;
+
+fn most_helpers_in(file: &StoreFile) -> u32 {
+    file.most_helpers_at_once.unwrap_or(DEFAULT_MOST_HELPERS).clamp(*MOST_HELPERS_RANGE.start(), *MOST_HELPERS_RANGE.end())
 }
 
 fn visibility_in(file: &StoreFile) -> HelperVisibility {
@@ -79,6 +90,8 @@ pub struct TestEnv {
     pub keep_helpers_open: Option<bool>,
     /// `None` = the default (on).
     pub close_helpers_with_agent: Option<bool>,
+    /// `None` = the default ([`DEFAULT_MOST_HELPERS`]).
+    pub most_helpers_at_once: Option<u32>,
 }
 
 #[cfg(test)]
@@ -183,6 +196,61 @@ pub fn set_keep_helpers_open(on: bool) -> Result<(), String> {
     #[cfg(not(test))]
     {
         let file = save_keep_open_at(&path(), on)?;
+        *CACHE.write() = Some(file);
+        Ok(())
+    }
+}
+
+/// "Most helpers at once": how many helpers one `run_agents` call runs together (the rest queue).
+pub fn most_helpers_at_once() -> u32 {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| {
+            slot.borrow().as_ref().and_then(|env| env.most_helpers_at_once).unwrap_or(DEFAULT_MOST_HELPERS)
+        })
+    }
+    #[cfg(not(test))]
+    {
+        most_helpers_in(&loaded())
+    }
+}
+
+/// Writes "Most helpers at once" into the file at `target`.
+pub(super) fn save_most_helpers_at(target: &Path, value: u32) -> Result<StoreFile, String> {
+    if !MOST_HELPERS_RANGE.contains(&value) {
+        return Err(format!("INVALID_ARGUMENT: most helpers at once must be between {} and {}", MOST_HELPERS_RANGE.start(), MOST_HELPERS_RANGE.end()));
+    }
+    let mut file = read_file(target);
+    file.version = FILE_VERSION;
+    file.most_helpers_at_once = Some(value);
+    let text = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
+    crate::settings_patch::write_atomic(target, &text).map_err(|e| format!("could not save: {e}"))?;
+    Ok(file)
+}
+
+/// The "Most helpers at once" choice of the file at `target` (default 8).
+#[cfg(test)]
+pub(super) fn most_helpers_at(target: &Path) -> u32 {
+    most_helpers_in(&read_file(target))
+}
+
+/// Saves "Most helpers at once".
+pub fn set_most_helpers_at_once(value: u32) -> Result<(), String> {
+    #[cfg(test)]
+    {
+        if !MOST_HELPERS_RANGE.contains(&value) {
+            return Err("INVALID_ARGUMENT: most helpers at once is out of range".into());
+        }
+        TEST_ENV.with(|slot| {
+            if let Some(env) = slot.borrow_mut().as_mut() {
+                env.most_helpers_at_once = Some(value);
+            }
+        });
+        Ok(())
+    }
+    #[cfg(not(test))]
+    {
+        let file = save_most_helpers_at(&path(), value)?;
         *CACHE.write() = Some(file);
         Ok(())
     }

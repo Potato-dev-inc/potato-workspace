@@ -3,7 +3,7 @@
 
 use super::model::*;
 use super::store::{bump, now_ms};
-use super::{conflicting_pane_operation, get_operation};
+use super::{conflicting_pane_operation, get_operation, list_operations_lenient};
 use parking_lot::Mutex;
 use serde_json::Value;
 use super::store::update_lock;
@@ -61,6 +61,19 @@ pub fn run_operation_dispatch<F>(
 where
     F: FnOnce(&mut OperationSnapshot) -> Result<(), OperationError>,
 {
+    // A read-only run is looked at before it starts (see `agent_runs::tree_proof`); git runs outside the lock.
+    if let Ok(peek) = get_operation(project, id) {
+        if peek.status == OperationStatus::Queued {
+            let others_active = list_operations_lenient(project).map_or(false, |(list, _)| {
+                list.iter().any(|other| {
+                    other.operation_id != id
+                        && matches!(other.status, OperationStatus::Starting | OperationStatus::Running | OperationStatus::WaitingInput)
+                        && other.work_dir() == peek.work_dir()
+                })
+            });
+            crate::agent_runs::tree_proof::begin(id, std::path::Path::new(peek.work_dir()), peek.read_only, others_active);
+        }
+    }
     {
         let _update = update_lock();
         let mut op = get_operation(project, id)?;

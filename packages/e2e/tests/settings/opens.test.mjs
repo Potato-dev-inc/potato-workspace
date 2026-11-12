@@ -5,7 +5,7 @@ export const meta = {
   id: 'settings.opens',
   title: 'Settings opens on the Agents page with all its sections',
   area: 'settings',
-  tags: ['smoke'],
+  tags: ['basic'],
 };
 
 export async function run(t) {

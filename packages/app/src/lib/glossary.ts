@@ -60,3 +60,63 @@ export const BANNED_TERMS: { pattern: RegExp; use: string; where: 'everywhere' |
   { pattern: /\bAgent Client Protocol\b/i, use: RUN_WAYS.chat, where: 'everywhere' },
   { pattern: /Puppet Master/, use: 'Potato Workspace', where: 'everywhere' },
 ];
+
+/**
+ * One thing, one name. Each group lists the different words that were used for the same thing; a screen
+ * that shows two of them calls one thing by two names. `use` is the name to keep. The screen scan
+ * (scripts/roam.mjs) reports a screen that shows more than one variant of a group.
+ */
+export interface SynonymVariant {
+  /** The label as people read it, for messages. */
+  label: string;
+  pattern: RegExp;
+  /** Screens (harness scenario names) where this variant is meant to be used, so it is not counted there. */
+  exceptScreens?: RegExp;
+}
+export interface SynonymGroup {
+  concept: string;
+  /** The label to keep. Must be one of the variants. */
+  use: string;
+  variants: SynonymVariant[];
+}
+
+export const SYNONYMS: SynonymGroup[] = [
+  {
+    concept: 'give another person use of one of your agents',
+    use: 'Lend',
+    variants: [
+      { label: 'Lend', pattern: /\bLend(ing)?\b/ },
+      { label: 'Share an agent', pattern: /\bShare an agent\b/i },
+    ],
+  },
+  {
+    concept: 'close a card without acting on it',
+    use: 'Dismiss',
+    variants: [
+      { label: 'Dismiss', pattern: /\bDismiss\b/ },
+      { label: 'Discard', pattern: /\bDiscard\b/ },
+    ],
+  },
+  {
+    concept: 'start a new agent',
+    use: 'New agent',
+    variants: [
+      { label: 'New agent', pattern: /\bNew agent\b/i },
+      // Simple mode has its own wording for the same action.
+      { label: 'Make something', pattern: /\bMake something\b/i, exceptScreens: /^simple-/ },
+    ],
+  },
+];
+
+/** Groups with more than one variant present in `texts` (the text of one screen). `screen` is the scenario name. */
+export function findSynonymClashes(texts: string[], screen = ''): { concept: string; use: string; found: string[] }[] {
+  const clashes: { concept: string; use: string; found: string[] }[] = [];
+  for (const group of SYNONYMS) {
+    const found = group.variants
+      .filter((v) => !(v.exceptScreens && v.exceptScreens.test(screen)))
+      .filter((v) => texts.some((t) => v.pattern.test(t)))
+      .map((v) => v.label);
+    if (found.length > 1) clashes.push({ concept: group.concept, use: group.use, found });
+  }
+  return clashes;
+}

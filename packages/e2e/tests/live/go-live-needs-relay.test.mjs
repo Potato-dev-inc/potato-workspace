@@ -5,7 +5,7 @@ export const meta = {
   id: 'live.go-live-needs-relay',
   title: 'Go live without a relay address says what is missing and cannot start',
   area: 'live',
-  tags: ['smoke', 'needs-external'], // a real room needs a relay on a network; this tests everything before that
+  tags: ['basic', 'needs-external'], // a real room needs a relay on a network; this tests everything before that
 };
 
 export const run = guarded(async (t) => {

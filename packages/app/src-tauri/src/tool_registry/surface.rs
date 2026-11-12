@@ -79,6 +79,9 @@ const ADVANCED: &[&str] = &[
     "team_notify",
     // Companions only: listed by the shim for an agent started in a companion pane, callable by name elsewhere (and refused there).
     "companion_recall",
+    // More than one agent, and a second opinion by another agent: callable by name, listed in mode all.
+    "run_agents",
+    "review_agent",
     // Prompt rendering only; run_agent / delegate_work start the work.
     "delegate_task",
 ];

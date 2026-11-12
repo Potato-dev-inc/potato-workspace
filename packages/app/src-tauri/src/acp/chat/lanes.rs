@@ -49,14 +49,21 @@ pub struct LaneNote {
     pub reason: String,
     /// Set when a chat was tried first and did not start: its error code and message.
     pub fallback: Option<(String, String)>,
+    /// What the resolver changed from the request (`[{field, asked, used, why}]`), see `decide`.
+    pub adjusted: Vec<Value>,
 }
 
 impl LaneNote {
     pub fn acp(reason: &str) -> Self {
-        LaneNote { used: "acp", reason: reason.to_string(), fallback: None }
+        LaneNote { used: "acp", reason: reason.to_string(), fallback: None, adjusted: Vec::new() }
     }
     pub fn terminal(reason: &str) -> Self {
-        LaneNote { used: "terminal", reason: reason.to_string(), fallback: None }
+        LaneNote { used: "terminal", reason: reason.to_string(), fallback: None, adjusted: Vec::new() }
+    }
+    /// The same note, saying what the resolver changed.
+    pub fn with_adjusted(mut self, adjusted: Vec<Value>) -> Self {
+        self.adjusted = adjusted;
+        self
     }
     /// A chat was tried and could not start: the terminal ran it instead.
     pub fn fell_back(code: &str, message: &str) -> Self {
@@ -64,6 +71,7 @@ impl LaneNote {
             used: "terminal",
             reason: format!("Chat (ACP) could not start ({code}), so the terminal ran it instead."),
             fallback: Some((code.to_string(), message.to_string())),
+            adjusted: Vec::new(),
         }
     }
 }
@@ -197,12 +205,15 @@ impl LaneNote {
         if let (Some(fallback), Some(map)) = (self.fallback_json(), value.as_object_mut()) {
             map.insert("lane_fallback".into(), fallback);
         }
+        if let (false, Some(map)) = (self.adjusted.is_empty(), value.as_object_mut()) {
+            map.insert("adjusted".into(), Value::Array(self.adjusted.clone()));
+        }
         value
     }
 
     /// The same for a terminal run, kept on its worker.
     pub fn record(&self) -> crate::operations::LaneNoteRecord {
-        crate::operations::LaneNoteRecord { used: self.used.to_string(), reason: self.reason.clone(), fallback: self.fallback_json() }
+        crate::operations::LaneNoteRecord { used: self.used.to_string(), reason: self.reason.clone(), fallback: self.fallback_json(), adjusted: (!self.adjusted.is_empty()).then(|| Value::Array(self.adjusted.clone())) }
     }
 }
 

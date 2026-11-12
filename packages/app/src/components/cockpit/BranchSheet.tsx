@@ -2,6 +2,7 @@
 // person pick Before or After this turn (chat only), pick an agent and say what it should do. Nothing is written
 // until Start: then Potato Workspace makes a separate copy from the save point and starts the agent in it
 // (src/lib/branch-from.ts). Only the agents the server marks ok can be picked; the others say why not.
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   branchPreview,
@@ -30,7 +31,7 @@ const TOO_LONG = 'Make your message shorter (4,000 characters at most).';
 
 /** Backend errors read `CODE: message`. The person sees only the message, in plain words. */
 function friendlyError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  const raw = errorSentence(err);
   const text = raw.replace(/^[A-Z][A-Z0-9_]{2,}:\s*/, '').trim();
   if (!text || /^[A-Z][A-Z0-9_]+$/.test(text)) return GENERIC_ERROR;
   return text;

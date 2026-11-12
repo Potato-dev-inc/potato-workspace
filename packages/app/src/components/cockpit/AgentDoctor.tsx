@@ -2,6 +2,7 @@
 // Monochrome list; the glyph reuses DotSpinner's static patterns:
 //   idle = installed or missing but not tested, exited (check) = ready,
 //   waiting_input (plus) = needs you to sign in, error (cross) = problem.
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentHealthApi, type AgentHealth, type AgentHealthApi, type HealthState } from '../../lib/agent-health';
 import { agentInstallApi, type AgentInstallApi, type InstallPlan } from '../../lib/agent-install';
@@ -167,7 +168,7 @@ export function AgentDoctor({
     api
       .check()
       .then(setRows)
-      .catch((e) => setLoadError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setLoadError(errorSentence(e)));
   }, [api]);
 
   useEffect(load, [load]);
@@ -186,7 +187,7 @@ export function AgentDoctor({
         setRows((cur) =>
           (cur ?? []).map((r) =>
             r.id === id
-              ? { ...r, state: 'error', reason: `The test could not run: ${e instanceof Error ? e.message : String(e)}` }
+              ? { ...r, state: 'error', reason: `The test could not run: ${errorSentence(e)}` }
               : r,
           ),
         ),
@@ -208,7 +209,7 @@ export function AgentDoctor({
       return copy;
     });
 
-  const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^[A-Z_]+: /, '');
+  const errText = (e: unknown) => (errorSentence(e)).replace(/^[A-Z_]+: /, '');
 
   /** Install: fetch the exact commands and show them. Nothing runs yet. */
   const openInstall = (id: string) => {

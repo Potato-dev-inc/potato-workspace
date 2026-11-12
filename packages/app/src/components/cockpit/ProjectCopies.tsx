@@ -3,11 +3,12 @@
 //   Copy these files  files copied in from the project, never committed
 //   Start with        the command that starts the project (kept for later)
 // The settings live in the project, in `.potato-workspace/project.toml`. A `conductor.json` can be imported.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { shipApi, type PresetView, type ShipApi } from '../../lib/ship-api';
 import '../../styles/cockpit-ship.css';
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 const lines = (text: string): string[] =>
   text

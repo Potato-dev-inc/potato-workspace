@@ -5,7 +5,7 @@ export const meta = {
   id: 'point.preview-chip-appears',
   title: 'A local address printed by an agent gives the pane a Preview chip and palette actions',
   area: 'point',
-  tags: ['point', 'smoke'],
+  tags: ['point', 'basic'],
 };
 
 export async function run(t) {

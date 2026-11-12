@@ -65,6 +65,45 @@ export function useModelOptions(agentId: string | null, api: ModelOptionsApi = t
   return agentId && state.agentId === agentId ? state.value : { status: 'loading' };
 }
 
+// ----- the person's Default model per agent (Settings > Agents) -----
+
+export interface AgentDefaultsApi {
+  get: () => Promise<Record<string, string>>;
+}
+
+/** The saved map as text values only, keyed by lower-case agent id. */
+export function defaultsFromSettings(saved: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return out;
+  for (const [id, model] of Object.entries(saved as Record<string, unknown>)) {
+    if (typeof model === 'string' && model.trim() !== '') out[id.trim().toLowerCase()] = model.trim();
+  }
+  return out;
+}
+
+export const tauriAgentDefaultsApi: AgentDefaultsApi = {
+  get: async () => {
+    const { loadSettings } = await import('./settings');
+    return defaultsFromSettings((await loadSettings()).agent_default_models);
+  },
+};
+
+/** The saved Default models, read when the page opens. Until then (or when unreadable) there are none. */
+export function useAgentDefaults(api: AgentDefaultsApi = tauriAgentDefaultsApi): Record<string, string> {
+  const [map, setMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let live = true;
+    api
+      .get()
+      .then((m) => live && setMap(m))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [api]);
+  return map;
+}
+
 // ----- the last model picked on the New agent page, per agent (and sign-in) -----
 
 const KEY = 'pm.newagent.model';

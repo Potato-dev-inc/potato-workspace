@@ -1,4 +1,5 @@
 // Coordination board (tasks, locks, audit, session context, agent contexts, delegation preview) shown in the sidebar Tools tab.
+import { errorSentence } from '../lib/sayError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   AuditEntryProjection,
@@ -93,7 +94,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
       setSelectedTaskId((current) => current && tasks.some((task) => task.id === current) ? current : tasks[0]?.id ?? null);
       setSelectedLockId((current) => current && locks.some((lock) => lock.resource_id === current) ? current : locks[0]?.resource_id ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setLoading(false);
     }
@@ -114,7 +115,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
       await refresh();
       setTab('tasks');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setActionBusy(false);
     }
@@ -128,7 +129,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
       await refresh();
       setTab('tasks');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setActionBusy(false);
     }
@@ -145,7 +146,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
       await refresh();
       setTab('tasks');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setActionBusy(false);
     }
@@ -162,7 +163,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
       await refresh();
       setTab('tasks');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setActionBusy(false);
     }
@@ -181,7 +182,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
       await refresh();
       setTab('locks');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setActionBusy(false);
     }
@@ -201,7 +202,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
       await refresh();
       setTab('locks');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setActionBusy(false);
     }
@@ -220,7 +221,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
       setContextPack(pack);
       setTab('context');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setActionBusy(false);
     }
@@ -240,7 +241,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
       setTab('context');
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setActionBusy(false);
     }

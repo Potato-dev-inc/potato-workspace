@@ -1,9 +1,12 @@
 // The message box of one pane's Chat tab: the pane's waiting and just-finished messages (the list from the
 // transport, then its change events), and the two things a person does: send and cancel. The transport is the
 // desktop's Tauri commands or the phone's bridge (lib/paneOutbox.ts, lib/paneOutbox-bridge.ts).
+import { errorSentence } from '../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
-import { errorText, withSent, type OutboxMessage, type OutboxTransport } from '../lib/paneOutbox';
+import { withSent, type OutboxMessage, type OutboxTransport } from '../lib/paneOutbox';
 import type { ChatAttachment } from '../lib/attachFiles';
+
+const SEND_FAILED = 'Could not send the message.';
 
 export interface PaneOutboxHook {
   messages: OutboxMessage[];
@@ -47,7 +50,7 @@ export function usePaneOutbox(transport: OutboxTransport | null, paneId: string,
         setMessages((prev) => withSent(prev, sent));
         return null;
       } catch (error) {
-        return errorText(error);
+        return errorSentence(error, SEND_FAILED);
       }
     },
     [transport, paneId],
@@ -61,7 +64,7 @@ export function usePaneOutbox(transport: OutboxTransport | null, paneId: string,
         setMessages((prev) => prev.map((m) => (m.id === done.id ? done : m)));
         return null;
       } catch (error) {
-        return errorText(error);
+        return errorSentence(error, SEND_FAILED);
       }
     },
     [transport, paneId],

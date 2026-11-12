@@ -6,7 +6,7 @@ export const meta = {
   id: 'keepgoing.order-list-edit',
   title: 'The agents offered at a usage limit can be added, reordered and removed',
   area: 'keepgoing',
-  tags: ['keepgoing', 'smoke'],
+  tags: ['keepgoing', 'basic'],
 };
 
 export async function run(t) {

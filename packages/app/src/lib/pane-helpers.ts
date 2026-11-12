@@ -110,6 +110,15 @@ export function helperOfLabel<T extends PaneLike>(
   return parent && parentId ? { parentId, text: `Helper of ${titleOf(parent)}` } : null;
 }
 
+/** The pane header's "Started by Claude Code" and the first line of its task, or null when the app does not know who asked. */
+export function startedByLabel(info: { origin?: { host?: string | null; task?: string | null } | null }): { text: string; title: string } | null {
+  const host = info.origin?.host?.trim();
+  const task = info.origin?.task?.trim();
+  if (!host && !task) return null;
+  const who = host ? `Started by ${host}` : 'Started by an agent';
+  return { text: task ? `${who}: ${task}` : who, title: task ? `${who}. Task: ${task}` : who };
+}
+
 /** localStorage key: the ids of parents whose helpers the person folded away. */
 export const LS_HELPERS_FOLDED = 'pm.sidebar.helpersFolded';
 const MAX_FOLDED = 200;

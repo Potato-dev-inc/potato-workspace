@@ -1,6 +1,7 @@
 // "Create a draft pull request" from a separate copy's Changes tab. Opens with a title and body made
 // from the receipt (what changed, checks, second opinion). When `gh` is missing, not signed in, or
 // the project has no GitHub remote, it says so in plain words and offers the command to copy.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
 import type { WorktreeItem } from '../../lib/cockpit-api';
 import { shipApi, type PrPrepared, type PrRef, type ShipApi } from '../../lib/ship-api';
@@ -8,7 +9,7 @@ import { cannotCreate, copyCommands } from '../../lib/ship-model';
 import { Sheet } from './Sheet';
 import '../../styles/cockpit-ship.css';
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 export function CreatePrSheet({
   item,

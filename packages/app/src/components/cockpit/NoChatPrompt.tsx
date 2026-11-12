@@ -5,6 +5,7 @@
 //   "Add chat…"                    opens the add-chat dialog for any other way;
 //   "Use terminal"                 always: starts the agent in a terminal, once.
 // A failed install says why in a few words and keeps every choice. Nothing here names an agent.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useRef, useState } from 'react';
 import { addonFor, plainMessage, type AcpAddonApi, type AddonStatus } from '../../lib/acpAddon';
 import { normalizeOptions, type AcpChatApi, type OverlayOption } from '../../lib/acpChat';
@@ -39,7 +40,7 @@ const sizeLabel = (mb: number | null | undefined): string => (mb && mb > 0 ? ` (
 
 /** A few words: the first sentence of the reason, cut at 120 characters. */
 export function shortReason(error: unknown): string {
-  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  const raw = errorSentence(error);
   const text = plainMessage(raw).trim() || 'It did not finish.';
   const first = text.split(/(?<=[.!?])\s/)[0] ?? text;
   return first.length > 120 ? `${first.slice(0, 117)}…` : first;

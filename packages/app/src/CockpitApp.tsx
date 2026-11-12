@@ -74,6 +74,7 @@ import { useTeamRelay } from './components/cockpit/live/useTeamRelay';
 import { sharePanes } from './components/cockpit/live/sharePanes';
 import { useLiveStopToast } from './components/cockpit/live/stopToast';
 import { GO_LIVE_EVENT } from './lib/live-room';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import './styles/cockpit.css';
 import './styles/night.css';
 import { registerSettingsOpener } from './lib/openSettingsAt';
@@ -592,7 +593,9 @@ export default function CockpitApp() {
         ) : view === 'pane' && c.selectedId && splitOn && split ? (
           <SplitView c={nav} leftId={c.selectedId} rightId={split} focus={side} ratio={ratio} onFocus={setSide} onRatio={setRatio} onClose={toggleSplit} />
         ) : view === 'pane' && c.selectedId ? (
-          <PaneView c={c} paneId={c.selectedId} key={c.selectedId} onWhatBroke={setWhatBrokePane} handoff={handoff} />
+          <ErrorBoundary where="Pane" resetKeys={[c.selectedId]}>
+            <PaneView c={c} paneId={c.selectedId} key={c.selectedId} onWhatBroke={setWhatBrokePane} handoff={handoff} />
+          </ErrorBoundary>
         ) : (
           <Inbox
             c={nav}

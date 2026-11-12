@@ -148,10 +148,13 @@ fn call_wait_agents_with<F>(
 where
     F: FnMut(&Value) -> Result<String, String>,
 {
-    let args = params
+    let mut args = params
         .get("arguments")
         .cloned()
         .unwrap_or_else(|| json!({}));
+    // `detail` / `max_result_chars` are the shim's own: the bridge never sees them.
+    let asked_detail = args.get("detail").is_some();
+    let shape = brief::take_shape("wait_agents", &mut args)?;
     let timeout_ms = requested_wait_ms(&args);
     let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
     let mut body = args.clone();
@@ -174,7 +177,7 @@ where
             let notification = json!({
                 "jsonrpc":"2.0",
                 "method":"notifications/progress",
-                "params":{"progressToken":token,"progress":chunk,"message":value}
+                "params":{"progressToken":token,"progress":chunk,"message":brief_copy(&value)}
             })
             .to_string();
             let _ = sender.send(notification);
@@ -198,6 +201,19 @@ where
         if terminal || any_needs_input || std::time::Instant::now() >= deadline {
             // The bridge only saw the last <=4s slice; report the caller's whole wait instead.
             let mut value = value;
+            // Agents still running need only their handle and state: brief unless the caller chose.
+            let still_waiting = !asked_detail && !terminal && !any_needs_input;
+            match shape {
+                Some(shape) if asked_detail || shape.max_result_chars.is_some() => brief::apply(&mut value, shape),
+                _ if still_waiting => {
+                    brief::apply(&mut value, brief::Shape { brief: true, max_result_chars: None });
+                    if let Some(object) = value.as_object_mut() {
+                        object.insert("detail".into(), json!("brief"));
+                        object.insert("note".into(), json!("Agents still running are listed briefly. Pass detail \"full\" for receipts."));
+                    }
+                }
+                _ => {}
+            }
             if let Some(object) = value.as_object_mut() {
                 object.insert("requested_wait_ms".into(), json!(timeout_ms));
                 object.insert(
@@ -229,6 +245,13 @@ where
             fast_rounds = 0;
         }
     }
+}
+
+/// A progress message needs the state, not every receipt.
+fn brief_copy(value: &Value) -> Value {
+    let mut copy = value.clone();
+    brief::apply(&mut copy, brief::Shape { brief: true, max_result_chars: None });
+    copy
 }
 
 #[cfg(test)]
@@ -346,5 +369,21 @@ mod tests {
         assert_eq!(calls, 1);
         assert!(started.elapsed() < Duration::from_millis(1_000));
         assert_eq!(result["structuredContent"]["reason"], "matched_state");
+    }
+
+    #[test]
+    fn a_timeout_lists_running_agents_briefly_unless_the_caller_asks_for_full() {
+        let big = json!({"agents": [{"handle": "h1", "status": "running", "stage": "working", "name": "a", "next_cursor": 4, "receipt": {"build_id": "b"}, "operation_id": "op"}], "reason": "timeout"});
+        let run = |args: Value| {
+            let params = json!({"name": "wait_agents", "arguments": args});
+            call_wait_agents_with(params, None, None, None, |_| Ok(big.to_string())).expect("ok")["structuredContent"].clone()
+        };
+        let brief = run(json!({"handles": ["h1"], "timeout_ms": 50}));
+        assert_eq!(brief["detail"], "brief");
+        assert!(brief["agents"][0].get("receipt").is_none() && brief["agents"][0].get("operation_id").is_none());
+        assert_eq!(brief["agents"][0]["next_cursor"], 4);
+        assert_eq!(brief["agents"][0]["name"], "a");
+        let full = run(json!({"handles": ["h1"], "timeout_ms": 50, "detail": "full"}));
+        assert!(full["agents"][0].get("receipt").is_some() && full.get("note").is_none());
     }
 }

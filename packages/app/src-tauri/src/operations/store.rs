@@ -502,6 +502,10 @@ pub(super) fn bump(op: &mut OperationSnapshot) -> Result<(), OperationError> {
     op.revision = op.revision.saturating_add(1);
     op.worker.event_cursor = op.worker.event_cursor.max(op.revision);
     op.updated_at_ms = now_ms();
+    if op.read_only && op.status.terminal() {
+        // A read-only run that ended without a finishing look must not leave its folder marked busy.
+        crate::agent_runs::tree_proof::forget(&op.operation_id);
+    }
     if let Some(stage) = op.stage.clone() {
         if op.worker.stage_log.last().map(|mark| mark.stage.as_str()) != Some(stage.as_str()) {
             if op.worker.stage_log.len() >= 32 {

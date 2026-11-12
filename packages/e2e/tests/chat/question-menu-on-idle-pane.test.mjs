@@ -5,7 +5,7 @@ export const meta = {
   id: 'chat.question-menu-on-idle-pane',
   title: 'A menu on an idle pane becomes a card and a click on a row answers it',
   area: 'chat',
-  tags: ['questions', 'smoke'],
+  tags: ['questions', 'basic'],
 };
 
 export async function run(t) {

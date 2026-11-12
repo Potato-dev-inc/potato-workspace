@@ -1,5 +1,6 @@
 // "Undo last turn" from the palette. It does not restore silently: it finds the start of the last
 // turn, then asks with the same sheet the History tab uses (shared-folder warning included).
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useRef, useState } from 'react';
 import { cockpitApi, type Checkpoint, type CheckpointsApi } from '../../lib/cockpit-api';
 import { lastTurnStart } from './history-model';
@@ -38,7 +39,7 @@ export function UndoSheet({
       },
       (e) => {
         if (!alive.current) return;
-        notify(e instanceof Error ? e.message : String(e));
+        notify(errorSentence(e));
         onClose();
       },
     );

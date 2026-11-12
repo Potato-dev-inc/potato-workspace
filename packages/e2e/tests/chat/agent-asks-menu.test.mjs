@@ -5,7 +5,7 @@ export const meta = {
   id: 'chat.agent-asks-menu',
   title: 'A numbered menu from the agent becomes a card and a click answers it',
   area: 'chat',
-  tags: ['smoke', 'questions'],
+  tags: ['basic', 'questions'],
 };
 
 /** Exported so the Deny test plays the same agent. (TOML inline tables must stay on one line.) */

@@ -4,6 +4,8 @@ import ReactDOM from 'react-dom/client';
 import { tauri } from './lib/tauri';
 import { isTauriWindow, setupServiceWorker } from './lib/service-worker';
 import { isSettingsEntry } from './lib/settings-entry';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { installGlobalErrorHandlers } from './lib/globalErrors';
 import './styles/index.css';
 
 // The other windows and modes load their own code only when they open, so the first screen stays small.
@@ -16,6 +18,9 @@ const PwaApp = lazy(() => import('./PwaApp'));
 const SettingsApp = lazy(() => import('./SettingsApp'));
 const TerminalApp = lazy(() => import('./TerminalApp'));
 const WorkerHostBootstrap = lazy(() => import('./WorkerHostBootstrap'));
+
+// Anything no screen caught goes to the app log (rate-limited).
+installGlobalErrorHandlers();
 
 // Phone PWA only; inside the desktop app a service worker left by an older version is removed.
 void setupServiceWorker({
@@ -67,7 +72,9 @@ void resolveRoot().then((Root) => {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <Suspense fallback={null}>
-        <Root />
+        <ErrorBoundary where="Window">
+          <Root />
+        </ErrorBoundary>
       </Suspense>
     </StrictMode>,
   );

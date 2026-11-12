@@ -78,8 +78,8 @@ fn run(args: &[String]) -> i32 {
     let (argv0, payload) = (rest[3].as_str(), &rest[4..]);
     match argv0 {
         "probe" => probe(&distro, payload),
-        "puppet-master-stop" => stop(&distro, payload),
-        "puppet-master" => launch(&distro, cd.as_deref(), payload),
+        "potato-workspace-stop" | "puppet-master-stop" => stop(&distro, payload),
+        "potato-workspace" | "puppet-master" => launch(&distro, cd.as_deref(), payload),
         other => {
             eprintln!("pm-fake-wsl: unknown script {other}");
             2

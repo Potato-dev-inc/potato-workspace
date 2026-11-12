@@ -13,6 +13,8 @@ export interface Account {
   borrowed?: boolean;
   /** Borrowed only: when the lend ends, in epoch milliseconds. */
   ends_ms?: number;
+  /** Borrowed only: false when this agent has no way to chat on a lent sign-in (use a terminal). Absent: assume it can. */
+  chat?: boolean;
 }
 
 /** What `accounts_overview` lists in `borrowed`: a grant lent to this PC, one more sign-in each. */
@@ -22,6 +24,7 @@ export interface BorrowedSignIn {
   label: string;
   ends_ms: number;
   grant_id: string;
+  chat?: boolean;
 }
 
 /** An agent whose profile declares how it is pointed at another account. */
@@ -75,7 +78,7 @@ export function pickableAccounts(overview: Pick<AccountsOverview, 'accounts' | '
   const own = overview.accounts.filter((a) => !a.lend_only);
   const borrowed = (overview.borrowed ?? [])
     .filter((b) => b.ends_ms > now)
-    .map((b): Account => ({ id: b.id, agent_id: b.agent_id, label: b.label, home: '', borrowed: true, ends_ms: b.ends_ms }));
+    .map((b): Account => ({ id: b.id, agent_id: b.agent_id, label: b.label, home: '', borrowed: true, ends_ms: b.ends_ms, chat: b.chat }));
   return [...own, ...borrowed];
 }
 
@@ -92,10 +95,6 @@ export function accountsFor(accounts: Account[], agentId: string): Account[] {
 /** The cockpit "+" menu asks for an account only when the agent has one to choose. */
 export function needsAccountStep(accounts: Account[], agentId: string): boolean {
   return accountsFor(accounts, agentId).length > 0;
-}
-
-export function errorText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 // ---------------------------------------------------------------- the sign-in used last, per agent

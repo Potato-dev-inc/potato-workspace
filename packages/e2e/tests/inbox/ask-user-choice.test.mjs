@@ -5,7 +5,7 @@ export const meta = {
   id: 'inbox.ask-user-choice',
   title: 'A question with choices from an agent is answered with one click',
   area: 'inbox',
-  tags: ['inbox', 'ask-user', 'smoke'],
+  tags: ['inbox', 'ask-user', 'basic'],
 };
 
 export async function run(t) {

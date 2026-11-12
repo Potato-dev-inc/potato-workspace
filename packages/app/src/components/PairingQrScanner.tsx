@@ -1,3 +1,4 @@
+import { errorSentence } from '../lib/sayError';
 import { parsePairingInviteFromQr, parsePairingQrPayload } from '@potato-workspace/shared';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Html5Qrcode } from 'html5-qrcode';
@@ -80,7 +81,7 @@ export function PairingQrScanner({ open, onClose, onScan, onScanInvite }: Props)
         () => {},
       );
     } catch (e) {
-      setCameraErr(e instanceof Error ? e.message : String(e));
+      setCameraErr(errorSentence(e));
     } finally {
       setStarting(false);
     }

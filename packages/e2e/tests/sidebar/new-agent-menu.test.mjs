@@ -5,7 +5,7 @@ export const meta = {
   id: 'sidebar.new-agent-menu',
   title: 'The + button opens the New agent menu and Esc or a click outside closes it',
   area: 'sidebar',
-  tags: ['smoke', 'spawn'],
+  tags: ['basic', 'spawn'],
 };
 
 export async function run(t) {

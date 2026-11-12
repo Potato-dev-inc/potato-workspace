@@ -1,5 +1,6 @@
 // Pending `ask_user` questions for the cockpit: loaded once, refreshed on `questions://changed`,
 // with a slow poll as a safety net (events are fire-and-forget).
+import { errorSentence } from '../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { cockpitApi } from '../lib/cockpit-api';
 import { isLive, type Question, type QuestionAnswer } from '../lib/questions';
@@ -42,7 +43,7 @@ export function useQuestions(notify: (text: string) => void, now: number): Quest
         const res = await action;
         notify(res.accepted ? done : 'Already resolved');
       } catch (err) {
-        notify(err instanceof Error ? err.message : String(err));
+        notify(errorSentence(err));
       }
       setAll((cur) => cur.filter((q) => q.id !== id));
       refresh();

@@ -6,6 +6,7 @@
 //     Options (Use Team, projects), and Leave team at the bottom.
 // Messages are end-to-end encrypted; the relay (or the shared folder) only moves ciphertext. No ids are shown:
 // people are names, the team is its name.
+import { errorSentence } from '../../../lib/sayError';
 import { lendApi, type LendApi } from "../../../lib/lend";
 import { useLend } from "../../lend/useLend";
 import QRCode from "qrcode";
@@ -28,7 +29,7 @@ import { ExternalLink, RelaySheet } from "./RelaySheet";
 import { useTeamPings } from "./useTeamPings";
 
 const errText = (err: unknown): string =>
-  err instanceof Error ? err.message : String(err);
+  errorSentence(err);
 const splitLines = (text: string) =>
   text
     .split("\n")

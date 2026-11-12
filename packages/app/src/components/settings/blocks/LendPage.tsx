@@ -14,6 +14,7 @@ import {
   endedWords,
   errText,
   grantLine,
+  borrowedBillingNote,
   isActiveIn,
   isActiveOut,
   lendApi,
@@ -508,6 +509,7 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
               <span>{grantLine(g, agentLabel(state, g.agent_id), lend.now)}</span>
               {g.peer_device_name && <small>{g.peer_device_name}</small>}
               {usageText(g) && <small className="lend-usage">Used so far: {usageText(g)}</small>}
+              {g.direction === 'in' && <small className="lend-note">{borrowedBillingNote(g.peer_name)}</small>}
               {problemText(g) && (
                 <small className="lend-problem" role="status">
                   {problemText(g)}

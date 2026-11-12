@@ -195,6 +195,17 @@ fn wait_for_bridge_restart() -> Result<(), String> {
 }
 
 /// A transport failure that has not been turned into a contract body yet.
+/// Adds `app_started: true` to an answer that came after this shim started the app, so the caller knows why it was slow.
+fn mark_app_started(body: String) -> String {
+    match serde_json::from_str::<Value>(&body) {
+        Ok(mut value) if value.is_object() => {
+            value["app_started"] = Value::Bool(true);
+            value.to_string()
+        }
+        _ => body,
+    }
+}
+
 fn is_raw_connect_failure(error: &str) -> bool {
     is_connect_failure(error) && !error.starts_with('{')
 }
@@ -203,6 +214,17 @@ fn is_raw_connect_failure(error: &str) -> bool {
 /// for it (up to 30 s) and runs once more. Anything else is returned as a contract error body.
 pub(crate) fn with_restart_retry(
     safe: bool,
+    attempt: impl FnMut() -> Result<String, String>,
+) -> Result<String, String> {
+    with_restart_retry_using(&app_start::start_app_once, BRIDGE_SEEN_UP.load(Ordering::Acquire), safe, attempt)
+}
+
+/// [`with_restart_retry`] with the way the app is started and whether a bridge was ever reachable passed in (a seam for tests,
+/// which never start an app).
+pub(crate) fn with_restart_retry_using(
+    start_app: &dyn Fn() -> app_start::StartOutcome,
+    seen_up: bool,
+    safe: bool,
     mut attempt: impl FnMut() -> Result<String, String>,
 ) -> Result<String, String> {
     let first = match attempt() {
@@ -210,9 +232,18 @@ pub(crate) fn with_restart_retry(
         other => return other,
     };
     let was_reset = first.starts_with(BRIDGE_RESET);
-    if !(BRIDGE_SEEN_UP.load(Ordering::Acquire) || was_reset) {
-        // The app was never reachable from this process: say so now instead of waiting.
-        return Err(bridge_unavailable(&first));
+    if !(seen_up || was_reset) {
+        // The app was never reachable from this process. A connection that failed has sent nothing, so after the app is
+        // started the call is made once more, whatever it is. If the app cannot be started, say so now instead of waiting.
+        let outcome = start_app();
+        if outcome != app_start::StartOutcome::Started {
+            return Err(bridge_unavailable(&format!("{first} The app was not started: {}.", outcome.note())));
+        }
+        return match attempt() {
+            Ok(body) => Ok(mark_app_started(body)),
+            Err(error) if is_raw_connect_failure(&error) => Err(bridge_unavailable(&format!("{error} The app was started but did not take the call."))),
+            other => other,
+        };
     }
     if !safe {
         return Err(bridge_restarting(&first, was_reset));
@@ -407,7 +438,8 @@ pub(crate) fn bridge_read_timeout_secs(method: &str, path: &str, body: Option<&V
             || path == "/agents/wait"
             || path == "/agents/run"
             || path == "/agents/quick"
-            || path == "/agents/followup")
+            || path == "/agents/followup"
+            || path == "/agents/review")
     {
         if path == "/agents/quick" {
             // quick_ask waits wait_ms (default 90s, clamped to 120s) like the bridge does.
@@ -427,7 +459,7 @@ pub(crate) fn bridge_read_timeout_secs(method: &str, path: &str, body: Option<&V
             return 30;
         }
         let default_timeout_ms = DEFAULT_AGENT_WAIT_MS;
-        let timeout_key = if path == "/agents/run" || path == "/agents/followup" {
+        let timeout_key = if path == "/agents/run" || path == "/agents/followup" || path == "/agents/review" {
             "wait_ms"
         } else {
             "timeout_ms"

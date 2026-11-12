@@ -17,7 +17,7 @@ use std::process::{Child, Command};
 pub struct Containment {
     pid: u32,
     #[cfg(windows)]
-    job: Option<win::Job>,
+    job: Option<crate::proc_job::Job>,
 }
 
 /// Which mechanism holds the adapter (for diagnostics and tests).
@@ -46,7 +46,7 @@ impl Containment {
         let pid = child.id();
         #[cfg(windows)]
         {
-            let job = match win::Job::new() {
+            let job = match crate::proc_job::Job::new() {
                 Ok(job) => match job.assign(child) {
                     Ok(()) => Some(job),
                     Err(e) => {
@@ -86,6 +86,10 @@ impl Containment {
         #[cfg(windows)]
         {
             if let Some(job) = &self.job {
+                // The adapter is put in the job a moment AFTER it starts. Under load that moment is long
+                // enough for it to start a helper first, and that helper is not in the job. So walk the
+                // tree by pid first (it finds such a helper through its parent), then end the job.
+                crate::pty::proc_tree::kill_process_tree(self.pid);
                 job.terminate();
                 return;
             }
@@ -102,98 +106,6 @@ impl Containment {
         #[cfg(not(windows))]
         {
             None
-        }
-    }
-}
-
-#[cfg(windows)]
-mod win {
-    use std::io;
-    use std::os::windows::io::AsRawHandle;
-    use std::process::Child;
-
-    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
-    use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
-        QueryInformationJobObject, SetInformationJobObject, TerminateJobObject, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-    };
-
-    #[derive(Debug)]
-    pub struct Job(HANDLE);
-
-    // SAFETY: a job handle is a kernel object handle; the calls used on it are thread-safe.
-    unsafe impl Send for Job {}
-    unsafe impl Sync for Job {}
-
-    impl Job {
-        pub fn new() -> io::Result<Job> {
-            // SAFETY: plain Win32 calls with valid pointers; the handle is owned by the returned Job.
-            unsafe {
-                let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-                if handle == 0 {
-                    return Err(io::Error::last_os_error());
-                }
-                let job = Job(handle);
-                let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-                let ok = SetInformationJobObject(
-                    job.0,
-                    JobObjectExtendedLimitInformation,
-                    &info as *const _ as *const core::ffi::c_void,
-                    std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-                );
-                if ok == 0 {
-                    return Err(io::Error::last_os_error());
-                }
-                Ok(job)
-            }
-        }
-
-        pub fn assign(&self, child: &Child) -> io::Result<()> {
-            // SAFETY: both handles are valid for the duration of the call.
-            let ok = unsafe { AssignProcessToJobObject(self.0, child.as_raw_handle() as HANDLE) };
-            if ok == 0 {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(())
-            }
-        }
-
-        pub fn terminate(&self) {
-            // SAFETY: valid job handle. Failure means the job is already empty.
-            unsafe {
-                TerminateJobObject(self.0, 1);
-            }
-        }
-
-        pub fn active_processes(&self) -> Option<u32> {
-            // SAFETY: the out structure is zeroed, correctly sized and lives across the call.
-            unsafe {
-                let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = std::mem::zeroed();
-                let ok = QueryInformationJobObject(
-                    self.0,
-                    JobObjectBasicAccountingInformation,
-                    &mut info as *mut _ as *mut core::ffi::c_void,
-                    std::mem::size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
-                    std::ptr::null_mut(),
-                );
-                if ok == 0 {
-                    None
-                } else {
-                    Some(info.ActiveProcesses)
-                }
-            }
-        }
-    }
-
-    impl Drop for Job {
-        fn drop(&mut self) {
-            // Closing the last handle kills whatever is still in the job (KILL_ON_JOB_CLOSE).
-            // SAFETY: the handle is owned and closed once.
-            unsafe {
-                CloseHandle(self.0);
-            }
         }
     }
 }

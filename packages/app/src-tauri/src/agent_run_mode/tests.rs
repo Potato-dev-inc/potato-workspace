@@ -432,3 +432,30 @@ fn list_agents_rows_carry_lanes_accounts_and_read_only_support() {
     }
     assert!(claude["read_only_supported"].is_boolean());
 }
+
+#[test]
+fn most_helpers_at_once_defaults_to_8_survives_a_restart_and_stays_in_range() {
+    let dir = std::env::temp_dir().join(format!("pm-run-mode-{}-most", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let target = dir.join(store::file_name());
+    assert_eq!(store::most_helpers_at(&target), 8, "no file: 8");
+    store::save_most_helpers_at(&target, 3).unwrap();
+    assert_eq!(store::most_helpers_at(&target), 3);
+    store::save_keep_open_at(&target, false).unwrap();
+    assert_eq!(store::most_helpers_at(&target), 3, "the other settings do not reset it");
+    assert!(store::save_most_helpers_at(&target, 0).unwrap_err().starts_with("INVALID_ARGUMENT"));
+    assert!(store::save_most_helpers_at(&target, 33).is_err());
+    assert_eq!(store::most_helpers_at(&target), 3, "a refused value changes nothing");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn most_helpers_at_once_reads_the_test_environment() {
+    store::with_test_env(TestEnv::default(), || assert_eq!(most_helpers_at_once(), 8));
+    store::with_test_env(TestEnv { most_helpers_at_once: Some(2), ..TestEnv::default() }, || {
+        assert_eq!(most_helpers_at_once(), 2);
+        set_most_helpers_at_once(5).unwrap();
+        assert_eq!(most_helpers_at_once(), 5);
+        assert!(set_most_helpers_at_once(99).is_err());
+    });
+}

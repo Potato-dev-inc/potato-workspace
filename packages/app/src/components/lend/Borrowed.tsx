@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { agentLabel, chipText, chipLabelOf, errText, grantLine, isActiveIn, isActiveOut, leftText, lendApi, problemText, urgencyOf, usageText, WARN_ONE, WARN_TEN, type Grant, type LendApi } from '../../lib/lend';
+import { agentLabel, borrowedBillingNote, chipText, chipLabelOf, errText, grantLine, isActiveIn, isActiveOut, leftText, lendApi, problemText, urgencyOf, usageText, WARN_ONE, WARN_TEN, type Grant, type LendApi } from '../../lib/lend';
 import { useLend, type LendHandle } from './useLend';
 import { TestLink } from './TestLink';
 import '../../styles/lend.css';
@@ -110,6 +110,9 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
         <div className="lend-pop" role="dialog" aria-label="Borrowed sign-in">
           <p className="lend-pop-title">{chipLabelOf(grant, agent)}</p>
           <p>{leftText(left)} left. When it ends, this agent stops.</p>
+          <p className="lend-note" data-testid="lend-billing-note">
+            {borrowedBillingNote(grant.peer_name)}
+          </p>
           {used && (
             <p className="lend-usage" data-testid="lend-usage">
               Used so far: {used}

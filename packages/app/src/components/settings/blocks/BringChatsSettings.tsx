@@ -1,5 +1,6 @@
 // Settings > General: "Bring my chats". Shows how many old chats are in search, a button that opens the Bring
 // panel, and a button that removes them (asks first). Reading this status touches no agent folder.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { chatCount, chatImportClear, chatImportState, requestBringChats } from '../../../lib/chatImport';
 import type { SettingsEnv } from '../model';
@@ -11,10 +12,6 @@ export const BRING_CHATS_REMOVE_BODY = "This removes the chats Potato Workspace 
 export function bringChatsStatusText(chats: number): string {
   if (chats <= 0) return 'Not added';
   return chatCount(chats);
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export function BringChatsSettings({ env }: { env: SettingsEnv }) {
@@ -42,7 +39,7 @@ export function BringChatsSettings({ env }: { env: SettingsEnv }) {
       setChats(status.importedChats ?? 0);
       env.markSaved();
     } catch (error) {
-      env.setError(errorText(error));
+      env.setError(errorSentence(error));
     } finally {
       setBusy(false);
     }

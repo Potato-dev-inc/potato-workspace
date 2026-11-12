@@ -1,6 +1,7 @@
 // The Tauri commands of the first-run welcome (`commands/first_run.rs`), typed. The UI never says where
 // the first task runs or whether it may write: Rust always makes a separate copy, read-only when the
 // agent can be locked to it. The folder check and picker are Simple mode's (`plain_check_folder`).
+import { errorSentence } from '../../lib/sayError';
 import { invoke } from '@tauri-apps/api/core';
 import type { FirstRunState } from './model';
 
@@ -40,7 +41,7 @@ export const isFinalStatus = (status: string): boolean => status === 'completed'
 
 /** Mirrors `agent_runs::pane_api`: the code at the front of "CODE: message", or null. */
 export function codeOf(err: unknown): string | null {
-  const text = err instanceof Error ? err.message : String(err);
+  const text = errorSentence(err);
   const match = /^([A-Z][A-Z_]+):/.exec(text);
   return match ? match[1] : null;
 }

@@ -1,6 +1,7 @@
 // "Other agent…": the sheet a usage-limit card opens for a pane that is not a companion's. The person picks another
 // agent; Potato Workspace stops this pane's agent first, then starts the picked one in the same folder with a short
 // brief (src/lib/keep-going.ts). Only the rows the server marks ok can be picked; the others say why not.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { keepGoingContinue, keepGoingSettingsGet, keepGoingTargetKey, keepGoingTargets, type KeepGoingOffer, type KeepGoingSettings } from '../../lib/keep-going';
 import '../../styles/cockpit-keep-going.css';
@@ -10,7 +11,7 @@ const GENERIC_ERROR = 'Something went wrong. Try again.';
 
 /** Backend errors read `CODE: message`. The person sees only the message, in plain words. */
 function friendlyError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  const raw = errorSentence(err);
   const text = raw.replace(/^[A-Z][A-Z0-9_]{2,}:\s*/, '').trim();
   if (!text || /^[A-Z][A-Z0-9_]+$/.test(text)) return GENERIC_ERROR;
   return text;

@@ -5,7 +5,7 @@ export const meta = {
   id: 'inbox.nothing-needs-you',
   title: 'The Inbox says nothing needs you once the agents are closed',
   area: 'inbox',
-  tags: ['inbox', 'smoke'],
+  tags: ['inbox', 'basic'],
   edge: true,
 };
 

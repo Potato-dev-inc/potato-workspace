@@ -6,7 +6,7 @@ export const meta = {
   id: 'sidebar.select-pane-and-inbox',
   title: 'Clicking a pane opens it and clicking Inbox goes back to the Inbox',
   area: 'sidebar',
-  tags: ['smoke'],
+  tags: ['basic'],
 };
 
 export async function run(t) {

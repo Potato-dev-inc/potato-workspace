@@ -9,7 +9,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { ownStrings as firstRunStrings } from '../components/firstrun/copy';
 import { ownStrings as simpleStrings } from '../components/simple/copy';
-import { BANNED_TERMS, RUN_WAYS, SIGN_IN, TERMS } from './glossary';
+import { BANNED_TERMS, findSynonymClashes, RUN_WAYS, SIGN_IN, SYNONYMS, TERMS } from './glossary';
 
 const SRC = fileURLToPath(new URL('..', import.meta.url));
 
@@ -133,5 +133,29 @@ describe('glossary: no banned word in rendered text', () => {
       const texts = renderedTexts(readFileSync(join(SRC, rel), 'utf8'), rel);
       expect(texts.flatMap((t) => bannedIn(t)).length, rel).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('glossary: synonyms', () => {
+  it('every group keeps one of its own variants and has at least two', () => {
+    for (const g of SYNONYMS) {
+      expect(g.variants.length, g.concept).toBeGreaterThan(1);
+      expect(g.variants.map((v) => v.label), g.concept).toContain(g.use);
+      for (const v of g.variants) expect(v.pattern.test(v.label), v.label).toBe(true);
+    }
+  });
+
+  it('finds two names for one thing on one screen', () => {
+    expect(findSynonymClashes(['Lend an agent', 'Share an agent'])).toEqual([
+      { concept: expect.any(String), use: 'Lend', found: ['Lend', 'Share an agent'] },
+    ]);
+    expect(findSynonymClashes(['Dismiss', 'Discard changes']).map((c) => c.use)).toEqual(['Dismiss']);
+    expect(findSynonymClashes(['Dismiss', 'Later'])).toEqual([]);
+  });
+
+  it('Make something is fine in Simple mode and a second name elsewhere', () => {
+    const texts = ['New agent', 'Make something'];
+    expect(findSynonymClashes(texts, 'simple-home-empty')).toEqual([]);
+    expect(findSynonymClashes(texts, 'cockpit-empty').map((c) => c.use)).toEqual(['New agent']);
   });
 });

@@ -48,11 +48,22 @@ pub(super) fn operation_snapshot_schema() -> Value {
     },"required":["operation_id","project_path","task","idempotency_key","status","revision","created_at_ms","updated_at_ms","source"]})
 }
 
+/// The `guarantees` block, the same on every lane.
+fn guarantees_schema() -> Value {
+    json!({"type":"object","description":"What this run guarantees. read_only: asked (requested), what enforces it (permission_reject, plan_mode, sandbox, cli_flag, none) and a before/after proof of the project folder (tree_unchanged or tree_changed; null with proof_reason when it could not be checked; it proves nothing about writes outside the folder). isolation: worktree or project_folder. checks: state passed, failed, pending, not_run or none, run by the app. model: asked and confirmed.","properties":{
+        "read_only":{"type":"object","properties":{"requested":{"type":"boolean"},"enforcement":{"type":"string","enum":["permission_reject","plan_mode","sandbox","cli_flag","none"]},"proof":{"type":["string","null"],"enum":["tree_unchanged","tree_changed",null]},"proof_reason":{"type":"string"},"changed_paths":{"type":"array","items":{"type":"string"}},"changed_total":{"type":"integer"}}},
+        "isolation":{"type":"object","properties":{"mode":{"type":"string","enum":["worktree","project_folder"]},"branch":{"type":"string"}}},
+        "checks":{"type":"object","properties":{"state":{"type":"string","enum":["passed","failed","pending","not_run","none"]},"ran":{"type":"array","items":{"type":"string"}},"by":{"type":"string"}}},
+        "model":{"type":"object","properties":{"asked":{"type":["string","null"]},"confirmed":{"type":"boolean"}}}}})
+}
+
 pub(super) fn receipt_schema() -> Value {
     json!({"type":"object","description":"What this run verified and what it did not. not_verified entries are derived from recorded facts only.","properties":{
         "backend":{"type":"string"},"model":{"type":"string","description":"Resolved model when confirmed, else the requested one."},
-        "read_only":{"type":"string","enum":["enforced","unenforced","off"]},
-        "checks":{"type":"string","description":"`none configured` or `<passed>/<total> passed`."},
+        "read_only":{"type":"string","enum":["enforced","unenforced","off"],"description":"Deprecated: read guarantees.read_only."},
+        "checks":{"type":"string","description":"Deprecated: read guarantees.checks. `none configured` or `<passed>/<total> passed`."},
+        "guarantees":guarantees_schema(),
+        "timing":{"type":"object","description":"Where the time went, in ms: queue_ms (created to start), start_ms (start to prompt written), first_output_ms (prompt to first output, headless only), total_ms; warm is true when a warm standby worker ran the turn. A part the lane does not mark is absent.","properties":{"queue_ms":{"type":"integer"},"start_ms":{"type":"integer"},"first_output_ms":{"type":"integer"},"total_ms":{"type":"integer"},"warm":{"type":"boolean"}}},
         "result_capture":{"type":"string","enum":["authoritative","inferred","missing","pending","structured"]},
         "structured_result":{"type":"object","description":"Present when the worker ended its reply with a valid potato-result block: summary, files_changed, checks_run, open_questions. result_capture is then structured."},
         "not_verified":{"type":"array","items":{"type":"string"}},"outcome":{"type":"string","enum":["passed_checks","completed_unchecked","failed_checks","failed","cancelled","needs_input","in_progress"],"description":"The one field for did-it-work. Only passed_checks means the requested behaviour was proven by acceptance checks; completed_unchecked means the worker finished but nothing verified it."},"build_id":{"type":"string","description":"Potato Workspace build that produced this run."},
@@ -70,7 +81,9 @@ pub(super) fn agent_run_schema() -> Value {
         "result":{"type":["string","null"]},"result_capture":{"type":"string","enum":["authoritative","inferred","missing","pending","structured"]},
         "watch_command":{"type":"string"},
         "acceptance_status":{"type":"string","enum":["not_checked","passed","failed","blocked"]},
-        "verified":{"type":"boolean"},
+        "verified":{"type":["boolean","null"],"description":"One meaning on every lane: true only when the app ran the run's checks and all passed; false when one failed; null when nothing was verified (no checks set, or not run yet). Read verified_reason and guarantees."},
+        "verified_reason":{"type":["string","null"],"description":"Why verified is not true."},
+        "guarantees":guarantees_schema(),
         "prompt":{"type":["object","null"]},"error":{"type":["object","null"]},
         "pane_id":{"type":["string","null"]},"duration_ms":{"type":["integer","null"],"description":"Prompt sent to completion."},"total_ms":{"type":["integer","null"],"description":"Run created to completion, including pane spawn and readiness."},"setup_ms":{"type":["integer","null"]},"pane_closing":{"type":"boolean"},"standby_used":{"type":"boolean","description":"Present and true when a warm standby worker ran this turn; the stage log then shows standby_claimed."},"revision":{"type":"integer"},
         "next_cursor":{"type":"integer","minimum":0},
@@ -105,8 +118,8 @@ pub(super) fn agent_run_schema() -> Value {
         properties.insert("waited_ms".into(), json!({"type":"integer","minimum":0,"description":"Total milliseconds this call waited."}));
         properties.insert("reopened".into(), json!({"type":"object","description":"Present when followup_task reopened a closed or stale handle: how (resumed_session | new_pane_with_summary | new_chat_resumed), previous_pane_id, previous_handle, note.","properties":{"how":{"type":"string"},"previous_pane_id":{"type":["string","null"]},"previous_handle":{"type":["string","null"]},"note":{"type":"string"}}}));
         properties.insert("wake_reason".into(), json!({"type":"string"}));
-        properties.insert("result_verified".into(), json!({"type":"boolean"}));
-        properties.insert("model_verified".into(), json!({"type":["boolean","null"]}));
+        properties.insert("result_verified".into(), json!({"type":"boolean","description":"Deprecated: a native completion event was seen. Read verified and guarantees."}));
+        properties.insert("model_verified".into(), json!({"type":["boolean","null"],"description":"Deprecated: read guarantees.model.confirmed."}));
         properties.insert("recovery".into(), json!({"type":["object","null"]}));
         properties.insert("receipt".into(), receipt_schema());
     }

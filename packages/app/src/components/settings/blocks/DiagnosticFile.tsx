@@ -1,9 +1,11 @@
 // Settings > General: "Save a diagnostic file". Shows what the zip would hold before anything is written;
 // the person can leave any file out and read one before saving. Nothing is uploaded.
+import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { tauri, type DiagnosticPreview } from '../../../lib/tauri';
 import { Btn, Note, SettingBlock, SettingRow } from '../settings-ui';
+import { SpeedReadout } from './SpeedReadout';
 
 function size(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -16,10 +18,6 @@ function fileName(now = new Date()): string {
   return `potato-workspace-diagnostic-${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.zip`;
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /** While the list is open it re-reads itself this often, and whenever the window is focused again. */
 export const DIAGNOSTIC_REFRESH_MS = 5000;
 
@@ -29,6 +27,18 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
   const [shown, setShown] = useState<{ path: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+
+  const [crashed, setCrashed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    tauri
+      .lastRunStatus()
+      .then((run) => live && setCrashed(run?.closedUnexpectedly === true))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const busyRef = useRef(false);
   busyRef.current = busy;
@@ -41,7 +51,7 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
       setLeft(new Set());
       setShown(null);
     } catch (e) {
-      setMessage({ text: `Could not look at what to include: ${errorText(e)}`, error: true });
+      setMessage({ text: `Could not look at what to include: ${errorSentence(e)}`, error: true });
     } finally {
       setBusy(false);
     }
@@ -90,7 +100,7 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
     try {
       setShown({ path, text: await tauri.diagnosticShow(path) });
     } catch (e) {
-      setMessage({ text: errorText(e), error: true });
+      setMessage({ text: errorSentence(e), error: true });
     }
   };
 
@@ -103,9 +113,10 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
       const saved = await tauri.diagnosticSave(target, [...left]);
       setMessage({ text: `Saved to ${saved.path} (${size(saved.bytes)}). Nothing was sent anywhere.`, error: false });
       setPreview(null);
+      setCrashed(false);
       onSaved?.();
     } catch (e) {
-      setMessage({ text: `Not saved: ${errorText(e)}`, error: true });
+      setMessage({ text: `Not saved: ${errorSentence(e)}`, error: true });
     } finally {
       setBusy(false);
     }
@@ -113,6 +124,19 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
 
   return (
     <>
+      {crashed && (
+        <SettingRow
+          label="Potato Workspace closed unexpectedly last time"
+          description="A report was kept on this PC. A diagnostic file helps whoever looks into it."
+        >
+          <Btn disabled={busy} onClick={() => void save()}>
+            Save a diagnostic file
+          </Btn>
+          <Btn small onClick={() => setCrashed(false)}>
+            Dismiss
+          </Btn>
+        </SettingRow>
+      )}
       <SettingRow
         label="Save a diagnostic file"
         description="One .zip with your settings (keys removed), recent app messages and recordings of runs that failed. Nothing is sent anywhere."
@@ -149,6 +173,7 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
           </div>
         </SettingBlock>
       )}
+      <SpeedReadout />
       {message && <Note role={message.error ? 'alert' : 'status'}>{message.text}</Note>}
     </>
   );

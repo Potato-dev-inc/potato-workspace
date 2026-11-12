@@ -7,7 +7,7 @@ export const meta = {
   id: 'keepgoing.pick-for-me-panel',
   title: 'Pick for me names one agent, gives one sentence and offers Start or Choose myself',
   area: 'keepgoing',
-  tags: ['pick-for-me', 'smoke'],
+  tags: ['pick-for-me', 'basic'],
 };
 
 export async function run(t) {

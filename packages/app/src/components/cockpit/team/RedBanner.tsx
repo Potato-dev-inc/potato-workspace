@@ -1,9 +1,10 @@
+import { errorSentence } from '../../../lib/sayError';
 import { useState } from 'react';
 import { githubUrl, isRedBanner, redBannerText, type TeamApi, type TeamCard, type TeamState } from '../../../lib/team';
 import { tauri } from '../../../lib/tauri';
 import { CardButton, InboxCard } from '../InboxCard';
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 /**
  * War Room: "main is red in acme/app · CI", on top of the Inbox. One per red default branch (a

@@ -6,7 +6,7 @@ import { rowMatches } from '../model';
 import { agentsRows } from '../sections/AgentsSection';
 import { click, hasText, mountRows, pickOption, settle, type Mounted } from '../test-utils';
 
-const saved = vi.hoisted(() => ({ mode: 'always_show', keepOpen: true, closeWithAgent: true }));
+const saved = vi.hoisted(() => ({ mode: 'always_show', keepOpen: true, closeWithAgent: true, mostAtOnce: 8 }));
 
 vi.mock('../../../lib/agentRunMode', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/agentRunMode')>();
@@ -22,6 +22,11 @@ vi.mock('../../../lib/agentRunMode', async (importOriginal) => {
       setKeepOpen: vi.fn(async (on: boolean) => {
         saved.keepOpen = on;
         return { on };
+      }),
+      getMostAtOnce: vi.fn(async () => ({ value: saved.mostAtOnce })),
+      setMostAtOnce: vi.fn(async (value: number) => {
+        saved.mostAtOnce = value;
+        return { value };
       }),
       getCloseWithAgent: vi.fn(async () => ({ on: saved.closeWithAgent })),
       setCloseWithAgent: vi.fn(async (on: boolean) => {
@@ -44,6 +49,7 @@ beforeEach(() => {
   saved.mode = 'always_show';
   saved.keepOpen = true;
   saved.closeWithAgent = true;
+  saved.mostAtOnce = 8;
 });
 
 afterEach(async () => {
@@ -170,6 +176,45 @@ describe('Close helpers when their agent closes', () => {
   it('is found by the words a person would type', () => {
     for (const words of ['close helpers', 'orchestrator', 'subagent', 'parent']) {
       expect(rowMatches(closeRow[0], words), words).toBe(true);
+    }
+  });
+});
+
+describe('Most helpers at once', () => {
+  const mostRow = agentsRows.filter((r) => r.id === 'most-helpers-at-once');
+  const select = () => m.host.querySelector<HTMLSelectElement>('select[aria-label="Most helpers at once"]');
+
+  it('is a row in the Helpers group and defaults to 8', async () => {
+    expect(mostRow).toHaveLength(1);
+    expect(mostRow[0].group).toBe('Helpers');
+    m = await mountRows(mostRow);
+    await settle(10);
+    expect(select()?.value).toBe('8');
+    expect(hasText(m.host, 'wait their turn')).toBe(true);
+  });
+
+  it('saves through its own command, not the phone-patchable settings', async () => {
+    const { tauriHelperAgentsApi } = await import('../../../lib/agentRunMode');
+    m = await mountRows(mostRow);
+    await settle(10);
+    await pickOption(select()!, '3');
+    await settle(5);
+    expect(tauriHelperAgentsApi.setMostAtOnce).toHaveBeenCalledWith(3);
+    expect(saved.mostAtOnce).toBe(3);
+    expect(select()?.value).toBe('3');
+    expect(m.env.patches).toEqual([]);
+  });
+
+  it('shows a saved number that is not one of the usual steps', async () => {
+    saved.mostAtOnce = 5;
+    m = await mountRows(mostRow);
+    await settle(10);
+    expect(select()?.value).toBe('5');
+  });
+
+  it('is found by the words a person would type', () => {
+    for (const words of ['how many', 'parallel', 'batch', 'at once']) {
+      expect(rowMatches(mostRow[0], words), words).toBe(true);
     }
   });
 });

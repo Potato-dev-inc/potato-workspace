@@ -199,6 +199,7 @@ fn disposable_powershell_registry() -> Arc<Mutex<PaneRegistry>> {
                 account_label: None,
                 title: None,
                 parent_pane_id: None,
+origin: None,
                 place: None,
                 lane: None,
             },

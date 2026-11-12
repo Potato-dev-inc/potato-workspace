@@ -35,6 +35,7 @@ pub(super) fn operation_http_error(
         | "INVALID_FIELD"
         | "SESSION_REQUIRED"
         | "READ_ONLY_UNSUPPORTED"
+        | "NO_LANE_FITS"
         | "AGENT_NOT_DISPATCHABLE"
         | "WORKER_MCP_TOOLS_UNAVAILABLE" => 400,
         "RESOURCE_LOCKED"
@@ -72,6 +73,10 @@ pub(super) fn operation_http_error(
     if let Some(fix) = error.context.get("fix").filter(|fix| fix.is_string()) {
         body["fix"] = fix.clone();
         body["retryable"] = json!(error.recoverable);
+    }
+    // A refusal that names the call that works (`context.try`) says so at the top too.
+    if let Some(call) = error.context.get("try").filter(|call| call.is_object()) {
+        body["try"] = call.clone();
     }
     (status, body)
 }

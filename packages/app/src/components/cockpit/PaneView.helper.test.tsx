@@ -68,6 +68,22 @@ describe('helper pane header', () => {
     expect(c.select).toHaveBeenCalledWith('p');
   });
 
+  it('says who started a helper and the first line of its task', async () => {
+    const h = mk('h', 'Check tests');
+    (h.info as Record<string, unknown>).origin = { host: 'Claude Code', task: 'Check the login tests' };
+    const c = cockpit([h], 'h');
+    await act(async () => root.render(<PaneView c={c} paneId="h" />));
+    await flush();
+    expect(host.querySelector('[data-testid="pane-started-by"]')!.textContent).toBe('Started by Claude Code: Check the login tests');
+  });
+
+  it('shows no started-by line for a pane the person opened', async () => {
+    const c = cockpit([mk('p', 'Refactor auth')], 'p');
+    await act(async () => root.render(<PaneView c={c} paneId="p" />));
+    await flush();
+    expect(host.querySelector('[data-testid="pane-started-by"]')).toBeNull();
+  });
+
   it('shows nothing for a pane with no live parent', async () => {
     const c = cockpit([mk('p', 'Refactor auth'), mk('h', 'Check tests', 'gone')], 'h');
     await act(async () => root.render(<PaneView c={c} paneId="h" />));

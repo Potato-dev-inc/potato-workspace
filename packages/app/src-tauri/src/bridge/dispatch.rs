@@ -406,6 +406,7 @@ fn assign_pane(
     if pane_created {
         // Nested under the pane of the agent that asked for this run, when it ran from one.
         note_pane_parent(registry, operation.owner_session_id.as_deref(), operation.parent_pane_id.as_deref(), &pane_id);
+        crate::pty::pane_origin::note(&pane_id, operation.owner_session_id.as_deref(), &operation.task);
     }
     if pane_created && standby_claim.is_none() {
         present_spawned_pane(registry, app, &pane_id, operation.placement.as_deref());

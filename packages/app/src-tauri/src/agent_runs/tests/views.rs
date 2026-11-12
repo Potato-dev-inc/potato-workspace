@@ -38,7 +38,7 @@ fn agent_view_uses_compact_statuses_and_exposes_timeout() {
     let queued = operations::create_operation(request).unwrap().0;
     let queued_view = crate::agent_runs::runtime::AgentRunView::from(queued.clone());
     assert_eq!(queued_view.status, "running");
-    assert!(!queued_view.verified);
+    assert_eq!(queued_view.verified, None);
 
     let mut timed_out = queued;
     timed_out.status = OperationStatus::Failed;

@@ -72,7 +72,7 @@ pub fn options_of(offered: &[OptionBrief]) -> Vec<CardOption> {
     for (at, o) in list {
         let fits = !o.id.trim().is_empty() && o.id.chars().count() <= MAX_LABEL_CHARS && !out.iter().any(|known| known.choice_id == o.id.trim());
         let choice_id = if fits { o.id.trim().to_string() } else { format!("opt{at}") };
-        let name = if o.name.trim().is_empty() { o.kind.clone() } else { cut_to(o.name.trim(), MAX_LABEL_CHARS) };
+        let name = if o.name.trim().is_empty() { o.kind.clone() } else { cut_to(o.name.trim(), MAX_LABEL_CHARS - 1) };
         out.push(CardOption { choice_id, option_id: o.id.clone(), name, kind: o.kind.clone() });
     }
     out
@@ -104,6 +104,39 @@ pub fn new_question(pane_id: &str, label: &str, wait: &PermissionWait, title: Op
         choices: options.iter().map(|o| Choice { id: o.choice_id.clone(), label: o.name.clone() }).collect(),
         allow_free_text: Some(false),
         context: Some(cut_to(&context.join("\n"), 900)),
+        timeout_s: Some(CARD_TIMEOUT_S),
+        urgency: Some("high".into()),
+        kind: Some(ACP_KIND_PERMISSION.to_string()),
+        consent: None,
+        limit: None,
+    };
+    (new, options)
+}
+
+/// The card of last resort, for a question whose own card could not be made (a label the store refuses, an odd
+/// option list, nothing offered at all). Always an "Allow" (only when the agent offered a yes) and a "Deny". A
+/// "Deny" with no option of the agent behind it (`option_id` empty) is answered as a cancel of this one question.
+pub fn fallback_question(pane_id: &str, label: &str, wait: &PermissionWait, title: Option<&str>) -> (NewQuestion, Vec<CardOption>) {
+    let find = |kinds: &[&str]| kinds.iter().find_map(|kind| wait.options.iter().find(|o| o.kind == *kind));
+    let mut options = Vec::new();
+    if let Some(yes) = find(&["allow_once", "allow_always"]) {
+        options.push(CardOption { choice_id: "allow".into(), option_id: yes.id.clone(), name: "Allow".into(), kind: yes.kind.clone() });
+    }
+    let no = find(&["reject_once", "reject_always"]);
+    options.push(CardOption { choice_id: "deny".into(), option_id: no.map(|o| o.id.clone()).unwrap_or_default(), name: "Deny".into(), kind: "reject_once".into() });
+    let what = title.map(str::trim).filter(|t| !t.is_empty()).map(|t| cut_to(t, 300));
+    let question = match what {
+        Some(what) => format!("{label} is waiting for you: {what}"),
+        None => format!("{label} is waiting but didn't say what for."),
+    };
+    let new = NewQuestion {
+        asker: None,
+        agent: Some(label.to_string()),
+        pane_id: Some(pane_id.to_string()),
+        question,
+        choices: options.iter().map(|o| Choice { id: o.choice_id.clone(), label: o.name.clone() }).collect(),
+        allow_free_text: Some(false),
+        context: Some("The app could not show the details of this question. Deny tells the agent no. Nothing is allowed for you.".into()),
         timeout_s: Some(CARD_TIMEOUT_S),
         urgency: Some("high".into()),
         kind: Some(ACP_KIND_PERMISSION.to_string()),
@@ -237,6 +270,24 @@ mod tests {
         assert_eq!(verdict_text("allow_always", "Allow for Session", Some("Write notes.txt")), "Allowed · Write notes.txt");
         assert_eq!(verdict_text("reject_once", "Reject", None), "Denied");
         assert_eq!(verdict_text("other", "Plan B", Some(" ls ")), "Answered: Plan B · ls");
+    }
+
+    #[test]
+    fn a_label_never_goes_over_what_the_store_accepts() {
+        let long = format!("Allow Commands Starting With `{}`", "x".repeat(300));
+        let options = options_of(&offered(&[("a", &long, "allow_always")]));
+        assert!(options[0].name.chars().count() <= MAX_LABEL_CHARS);
+    }
+
+    #[test]
+    fn the_last_resort_card_always_has_a_deny_even_when_nothing_was_offered() {
+        let (new, options) = fallback_question("p", "Codex", &wait(vec![]), None);
+        assert_eq!(new.question, "Codex is waiting but didn't say what for.");
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].name, "Deny");
+        assert!(options[0].option_id.is_empty());
+        let (_, with_yes) = fallback_question("p", "Codex", &wait(offered(&[("a", "Allow Once", "allow_once"), ("r", "No", "reject_once")])), Some("ls"));
+        assert_eq!(with_yes.iter().map(|o| o.option_id.as_str()).collect::<Vec<_>>(), ["a", "r"]);
     }
 
     #[test]

@@ -29,6 +29,8 @@ struct Lookup {
     major: Option<u32>,
     /// The fake agent's options (`acp::fake_agent`, plus `read_only=` of `workspace_tests::agents`).
     opts: String,
+    /// The definition says the terminal is no way out (`chat_only`).
+    chat_only: bool,
 }
 
 impl LaneLookup for Lookup {
@@ -36,7 +38,11 @@ impl LaneLookup for Lookup {
         self.labs
     }
     fn config_for(&self, agent: &str) -> Option<AgentConfig> {
-        ((agent == "fake" || (agent == "opencode" && self.major.is_some())) && self.definition).then(|| agents(&self.opts, &self.dir).0["fake"].as_ref().clone())
+        ((agent == "fake" || (agent == "opencode" && self.major.is_some())) && self.definition).then(|| {
+            let mut cfg = agents(&self.opts, &self.dir).0["fake"].as_ref().clone();
+            cfg.chat_only = self.chat_only;
+            cfg
+        })
     }
     fn saved(&self, _: &str) -> Option<RunLane> {
         self.saved
@@ -66,7 +72,7 @@ impl Fx {
         std::fs::create_dir_all(&dir).unwrap();
         let conversations = conversations_in(&dir, opts);
         let deps = deps_for(&dir, &conversations);
-        let lookup = Lookup { dir: dir.clone(), labs: true, definition: true, installed: true, saved: None, major: None, opts: opts.to_string() };
+        let lookup = Lookup { dir: dir.clone(), labs: true, definition: true, installed: true, saved: None, major: None, opts: opts.to_string(), chat_only: false };
         Fx { dir, deps, lookup, _conversations: conversations }
     }
 
@@ -127,7 +133,6 @@ fn it_falls_back_to_the_terminal_and_says_why() {
         ("no definition", Box::new(|fx| fx.lookup.definition = false), json!({}), "no chat (ACP) way"),
         ("add-on missing", Box::new(|fx| fx.lookup.installed = false), json!({}), "add-on"),
         ("labs off", Box::new(|fx| fx.lookup.labs = false), json!({}), "off in Labs"),
-        ("read_only", Box::new(|_| {}), json!({ "read_only": true }), "read_only"),
         ("headless", Box::new(|_| {}), json!({ "headless": true }), "background"),
         ("isolation", Box::new(|_| {}), json!({ "isolation": "worktree" }), "isolation"),
         ("saved terminal", Box::new(|fx| fx.lookup.saved = Some(RunLane::Terminal)), json!({}), "terminal"),
@@ -146,18 +151,41 @@ fn it_falls_back_to_the_terminal_and_says_why() {
 }
 
 #[test]
+fn a_model_the_agent_does_not_offer_falls_back_unless_the_definition_says_chat_only() {
+    let fx = Fx::new();
+    let (reply, note) = fx.run(json!({ "model": "no-such-model-1017" }));
+    assert!(reply.is_none() && note.is_some_and(|n| n.used == "terminal" && n.reason.contains("could not start")), "an ordinary agent still gets the terminal");
+    let mut only = Fx::new();
+    only.lookup.chat_only = true;
+    let (reply, note) = only.run(json!({ "model": "no-such-model-1017" }));
+    let error = reply.expect("the chat answers").expect_err("a plain error, not the terminal");
+    assert!(note.is_none());
+    assert_eq!(error.code, "UNKNOWN_MODEL");
+    assert!(error.context.get("fallback").is_none(), "{:?}", error.context);
+}
+
+#[test]
+fn a_stale_helper_default_model_is_dropped_with_a_note_and_the_chat_still_starts() {
+    let mut fx = Fx::new();
+    fx.lookup.chat_only = true;
+    let view = answer(fx.run(json!({ "model": "no-such-model-1017", "model_from_helper_default": true })));
+    assert_eq!(view["status"], "completed", "{view}");
+    assert!(get(view["handle"].as_str().unwrap()).is_some());
+}
+
+#[test]
 fn several_terminal_only_options_are_all_named_in_the_reason() {
     let fx = Fx::new();
-    let (reply, note) = fx.run(json!({ "read_only": true, "locks": ["file:a"], "budget_turns": 3, "allow_shell": true }));
+    let (reply, note) = fx.run(json!({ "isolation": "worktree", "locks": ["file:a"], "budget_turns": 3, "allow_shell": true }));
     assert!(reply.is_none());
     let reason = note.unwrap().reason;
-    for field in ["read_only", "locks", "budget_turns", "allow_shell"] {
+    for field in ["isolation", "locks", "budget_turns", "allow_shell"] {
         assert!(reason.contains(field), "{reason}");
     }
 }
 
 #[test]
-fn asking_for_a_chat_with_a_terminal_only_option_is_chat_cannot_do() {
+fn asking_for_a_chat_with_a_terminal_only_option_is_chat_cannot_do_when_strict() {
     let fx = Fx::new();
     for (extra, field) in [
         (json!({ "read_only": true }), "read_only"),
@@ -167,15 +195,35 @@ fn asking_for_a_chat_with_a_terminal_only_option_is_chat_cannot_do() {
     ] {
         let mut extra = extra;
         extra["lane"] = json!("acp");
+        extra["strict"] = json!(true);
         let (reply, note) = fx.run(extra);
         let error = reply.expect("ours").expect_err("refused");
         assert_eq!(error.code, "CHAT_CANNOT_DO");
         assert!(!error.recoverable);
         assert!(error.message.contains(field), "{}", error.message);
-        assert!(error.context["fix"].as_str().unwrap().contains("terminal"));
+        assert_eq!(error.context["try"]["tool"], "run_agent");
+        assert_eq!(error.context["try"]["tool"], "run_agent");
         assert!(note.is_none());
     }
     assert_eq!(fx.panes(), 0, "nothing was started");
+}
+
+#[test]
+fn asking_for_a_chat_with_a_terminal_only_option_runs_in_the_terminal_and_says_so() {
+    let fx = Fx::new();
+    for (extra, field) in [(json!({ "isolation": "worktree" }), "isolation"), (json!({ "backup_agents": ["claude"] }), "backup_agents")] {
+        let mut extra = extra;
+        extra["lane"] = json!("acp");
+        let (reply, note) = fx.run(extra);
+        assert!(reply.is_none(), "the terminal runs it");
+        let note = note.expect("explained");
+        assert_eq!(note.used, "terminal");
+        let adjusted = &note.adjusted[0];
+        assert_eq!((adjusted["field"].as_str(), adjusted["asked"].as_str(), adjusted["used"].as_str()), (Some("lane"), Some("acp"), Some("terminal")));
+        assert!(adjusted["why"].as_str().unwrap().contains(field), "{adjusted}");
+        assert_eq!(note.to_value()["adjusted"][0]["used"], "terminal");
+    }
+    assert_eq!(fx.panes(), 0);
 }
 
 #[test]
@@ -292,6 +340,9 @@ fn the_receipt_lists_a_requested_model_the_agent_did_not_confirm() {
         lane_note: None,
         warm: false,
         read_only: false,
+        read_only_enforcement: "permission_reject",
+        read_only_proof: None,
+        checks: &[],
     };
     let unconfirmed = "model not confirmed".to_string();
     assert!(build(&inputs(Some("fast-1"), Some("slow-2"))).not_verified.contains(&unconfirmed));
@@ -317,6 +368,9 @@ fn a_potato_result_block_in_the_reply_is_the_structured_result() {
         lane_note: None,
         warm: false,
         read_only: false,
+        read_only_enforcement: "permission_reject",
+        read_only_proof: None,
+        checks: &[],
     });
     assert_eq!(receipt.result_capture, "structured");
     assert_eq!(receipt.structured_result.unwrap()["summary"], "ok");
@@ -335,13 +389,25 @@ fn with_opencode_2_a_native_run_goes_to_the_opencode_chat_and_says_so() {
 }
 
 #[test]
-fn with_opencode_2_a_demanded_terminal_for_the_native_agent_is_a_clear_error() {
+fn with_opencode_2_a_demanded_terminal_for_the_native_agent_is_a_clear_error_when_strict() {
     let mut fx = Fx::new();
     fx.lookup.major = Some(2);
-    let (reply, _) = fx.run(json!({ "agent_type": "opencode_native", "lane": "terminal" }));
+    let (reply, _) = fx.run(json!({ "agent_type": "opencode_native", "lane": "terminal", "strict": true }));
     let error = reply.expect("answered").unwrap_err();
     assert_eq!(error.code, "OPENCODE_NATIVE_UNAVAILABLE");
     assert!(error.message.contains("not available with OpenCode 2.x"), "{}", error.message);
+    assert_eq!(error.context["try"]["args"]["agent_type"], "opencode_native");
+    assert!(error.context["try"]["args"].get("lane").is_none() || error.context["try"]["args"]["lane"] == "acp", "{}", error.context);
+}
+
+#[test]
+fn with_opencode_2_a_demanded_terminal_for_the_native_agent_runs_as_a_chat_and_says_so() {
+    let mut fx = Fx::new();
+    fx.lookup.major = Some(2);
+    let view = answer(fx.run(json!({ "agent_type": "opencode_native", "lane": "terminal" })));
+    assert_eq!(view["lane_used"], "acp");
+    assert_eq!(view["adjusted"][0]["asked"], "terminal");
+    assert_eq!(view["adjusted"][0]["used"], "acp");
 }
 
 #[test]
@@ -401,6 +467,57 @@ fn a_chat_that_is_not_read_only_still_parks_an_edit_question() {
     let _ = fx.call("POST", &["agents", "cancel"], json!({ "handle": handle_of(&view) }));
 }
 
+// ---- auto_approve: "reads" -------------------------------------------------------------------------------------
+
+#[test]
+fn auto_approve_reads_answers_reads_allow_once_and_logs_them_in_the_receipt() {
+    let fx = Fx::with_opts("read_only=plan_ask");
+    let view = answer(fx.run(json!({ "auto_approve": "reads", "task": "permkind read", "wait_ms": 20000 })));
+    assert_eq!(view["status"], "completed", "a read did not park the turn: {view}");
+    assert_eq!(view["result"], "asked:read outcome:selected option:allow_once");
+    assert_eq!(view["auto_approve"], "reads");
+    assert_eq!(view["receipt"]["auto_approved"][0]["kind"], "read", "{view}");
+    let handle = handle_of(&view);
+    for kind in ["search", "fetch", "think"] {
+        let next = follow(&fx, &handle, &format!("permkind {kind}"));
+        assert_eq!(next["result"], format!("asked:{kind} outcome:selected option:allow_once"), "{kind}");
+    }
+    assert_eq!(follow(&fx, &handle, "permkind read")["auto_approved"].as_array().unwrap().len(), 5);
+}
+
+#[test]
+fn auto_approve_reads_never_answers_an_edit_or_a_command_they_still_park() {
+    let fx = Fx::with_opts("read_only=plan_ask");
+    for kind in ["edit", "execute", "delete", "move", "other"] {
+        let view = answer(fx.run(json!({ "auto_approve": "reads", "task": format!("permkind {kind}"), "wait_ms": 3000 })));
+        assert_eq!(view["status"], "waiting_input", "{kind} must wait for a person: {view}");
+        assert_eq!(view["prompt"]["tool_kind"], kind);
+        assert_eq!(view["auto_approved"], json!([]));
+        let _ = fx.call("POST", &["agents", "cancel"], json!({ "handle": handle_of(&view) }));
+    }
+}
+
+#[test]
+fn without_auto_approve_a_read_still_parks_and_a_bigger_ask_is_refused() {
+    let fx = Fx::with_opts("read_only=plan_ask");
+    let view = answer(fx.run(json!({ "task": "permkind read", "wait_ms": 3000 })));
+    assert_eq!(view["status"], "waiting_input", "{view}");
+    assert_eq!(view["auto_approve"], "ask");
+    let _ = fx.call("POST", &["agents", "cancel"], json!({ "handle": handle_of(&view) }));
+    let fx = Fx::with_opts("read_only=plan_ask");
+    let (reply, _) = fx.run(json!({ "auto_approve": "project_edits", "task": "hi" }));
+    let error = reply.expect("ours").expect_err("refused");
+    assert_eq!(error.code, "INVALID_ARGUMENT");
+    assert_eq!(fx.panes(), 0, "nothing was started");
+}
+
+#[test]
+fn a_read_only_chat_with_auto_approve_reads_still_rejects_edits() {
+    let fx = Fx::with_opts("read_only=ask");
+    let view = answer(fx.run(json!({ "read_only": true, "auto_approve": "reads", "task": "permkind execute" })));
+    assert_eq!(view["result"], "asked:execute outcome:selected option:reject_once");
+}
+
 #[test]
 fn the_agents_session_modes_are_used_when_it_has_no_mode_setting() {
     let fx = Fx::with_opts("modes=2;read_only=plan");
@@ -428,11 +545,19 @@ fn an_agent_that_runs_tools_unasked_and_has_no_read_only_mode_is_refused_and_not
 #[test]
 fn an_agent_with_no_read_only_chat_is_never_started_read_only_and_the_refusal_says_what_works() {
     let fx = Fx::new();
-    let (reply, _) = fx.run(json!({ "read_only": true, "lane": "acp" }));
+    let (reply, _) = fx.run(json!({ "read_only": true, "lane": "acp", "strict": true }));
     let error = reply.expect("ours").expect_err("refused");
     assert_eq!(error.code, "CHAT_CANNOT_DO");
-    let fix = error.context["fix"].as_str().unwrap();
-    assert!(fix.contains("cannot enforce read_only") && fix.contains("list_agents"), "{fix}");
+    assert!(error.message.contains("cannot enforce read_only") && error.message.contains("list_agents"), "{}", error.message);
+    // The only call that starts it drops read_only, and says it weakens the run.
+    assert_eq!(error.context["try"]["weakens"], json!(["read_only"]), "{}", error.context);
+    assert!(error.context["try"]["args"].get("read_only").is_none());
+    assert_eq!(fx.panes(), 0);
+    // Without strict, nothing can run it read-only: NO_LANE_FITS names what blocks each way.
+    let (reply, _) = fx.run(json!({ "read_only": true, "lane": "acp" }));
+    let error = reply.expect("ours").expect_err("refused");
+    assert_eq!(error.code, "NO_LANE_FITS");
+    assert_eq!(error.context["tried"].as_array().unwrap().len(), 2, "{}", error.context);
     assert_eq!(fx.panes(), 0);
 }
 
@@ -440,13 +565,16 @@ fn an_agent_with_no_read_only_chat_is_never_started_read_only_and_the_refusal_sa
 fn verified_is_true_only_when_a_check_passed_and_otherwise_says_why() {
     let fx = Fx::new();
     let view = answer(fx.run(json!({})));
-    assert_eq!(view["verified"], false);
-    assert!(view["verified_note"].as_str().unwrap().contains("No checks were asked for"), "{view}");
+    assert_eq!(view["verified"], Value::Null, "no checks ran, so nothing was verified: not false");
+    assert!(view["verified_reason"].as_str().unwrap().contains("No checks were configured"), "{view}");
+    assert_eq!(view["verified_note"], view["verified_reason"]);
+    assert_eq!(view["guarantees"]["checks"]["state"], "none");
     assert_eq!(view["not_verified"], json!(["no checks configured"]));
     let checked = answer(fx.run(json!({ "checks": [{ "type": "result_contains", "text": "w1" }] })));
     assert_eq!(checked["verified"], true, "{checked}");
-    assert_eq!(checked["verified_note"], Value::Null);
+    assert_eq!(checked["verified_reason"], Value::Null);
+    assert_eq!(checked["guarantees"]["checks"]["state"], "passed");
     let failed = answer(fx.run(json!({ "checks": [{ "type": "result_contains", "text": "nope" }] })));
     assert_eq!(failed["verified"], false);
-    assert!(failed["verified_note"].as_str().unwrap().contains("did not pass"));
+    assert!(failed["verified_reason"].as_str().unwrap().contains("did not pass"));
 }

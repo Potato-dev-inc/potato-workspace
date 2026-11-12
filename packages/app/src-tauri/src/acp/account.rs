@@ -24,7 +24,7 @@ pub fn supporting_agent_ids() -> Vec<String> {
 /// at the local lend shim (the spec's `[chat]` hookup).
 pub fn launch_env(store: &Store, agent_id: &str, account: &str) -> Result<LaunchEnv, AccountProblem> {
     if let Some(grant) = account.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX) {
-        return crate::capacity_proxy::borrowed_chat(agent_id, grant).map(|chat| chat.env).map_err(|message| AccountProblem { code: "ACCOUNT_NOT_FOUND", message, supported: Vec::new() });
+        return crate::capacity_proxy::borrowed_chat(agent_id, grant).map(|chat| chat.env).map_err(|message| AccountProblem { code: if message == crate::capacity_proxy::service::NO_CHAT { "LEND_CHAT_UNSUPPORTED" } else { "ACCOUNT_NOT_FOUND" }, message, supported: Vec::new() });
     }
     let has_scheme = crate::tui::is_registered(agent_id) && crate::tui::profile_for(agent_id).account_scheme().is_some();
     if !has_scheme {

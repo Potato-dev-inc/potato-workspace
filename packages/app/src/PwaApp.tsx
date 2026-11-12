@@ -1,5 +1,6 @@
 // Mobile PWA root: watch and reply to the agents running on the PC, one tab per agent pane (like
 // terminal tabs) plus an "All" overview. The older orchestrator-centric phone app is gone: `?pwa=legacy` opens this one.
+import { errorSentence } from './lib/sayError';
 import { NudgeScheduler } from './lib/nudge-scheduler';
 import { blockingCount, newerSnapshot, type AttentionItem, type AttentionSnapshot } from './lib/attention';
 import { COPY } from './lib/attention-copy';
@@ -570,7 +571,7 @@ export default function PwaApp() {
         setActive(pane_id);
         setSheet(null);
       } catch (e) {
-        setSpawnError(e instanceof Error ? e.message : String(e));
+        setSpawnError(errorSentence(e));
       } finally {
         setSpawning(false);
       }
@@ -592,7 +593,7 @@ export default function PwaApp() {
         }
         else setSpawnError('Could not read the agent list from your PC.');
       })
-      .catch((e) => setSpawnError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setSpawnError(errorSentence(e)));
   }, [bridge]);
 
   // The refusal line stays while the person is looking at it, then goes (typing again brings it back).
@@ -616,7 +617,7 @@ export default function PwaApp() {
       setSheet(null);
       applyPanes(await bridge.listPanes());
     } catch (e) {
-      setToast(e instanceof Error ? e.message : String(e));
+      setToast(errorSentence(e));
     }
   }, [bridge, active, applyPanes]);
 
@@ -822,7 +823,7 @@ export default function PwaApp() {
             bridge
               .stopAllPanes()
               .then((r) => setToast(r.stopped.length === 0 ? 'Nothing was running.' : `Stopped ${r.stopped.length} agent${r.stopped.length === 1 ? '' : 's'}.`))
-              .catch((e) => setToast(e instanceof Error ? e.message : String(e)));
+              .catch((e) => setToast(errorSentence(e)));
           }}
           onEditConnection={() => {
             setEditingUrl(true);

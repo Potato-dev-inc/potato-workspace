@@ -3,6 +3,7 @@
 // only what changed since the last one; `reset` drops the list held. It never touches the pane's size (the
 // terminal under it keeps its own lease rules). The message box at the bottom sends through the PC's bridge
 // (`paneOutbox-bridge.ts`) and needs the `type` cap; without it the box is replaced by one plain line.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BridgeClient } from '../../lib/bridge-types';
 import { bridgeOutboxTransport } from '../../lib/paneOutbox-bridge';
@@ -48,7 +49,7 @@ function usePageVisible(): boolean {
 
 /** The PC refused this phone (no `watch`) or the pane is gone: asking again changes nothing. */
 function refusalOf(error: unknown): string | null {
-  const text = error instanceof Error ? error.message : String(error);
+  const text = errorSentence(error);
   if (/ -> 403/.test(text)) return NO_WATCH_NOTE;
   if (/ -> 404/.test(text)) return 'This agent is not running any more.';
   return null;

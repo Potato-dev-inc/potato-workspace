@@ -1,3 +1,4 @@
+import { errorSentence } from '../../../lib/sayError';
 import { useMemo, useState } from 'react';
 import type { WorktreeItem } from '../../../lib/cockpit-api';
 import { jobSub, jobTitle, type TeamApi, type TeamJob } from '../../../lib/team';
@@ -5,7 +6,7 @@ import { Changes, type ChangesApi } from '../Changes';
 import { CardButton, InboxCard, type CardGlyphKind } from '../InboxCard';
 import { Sheet } from '../Sheet';
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 function glyph(state: TeamJob['state']): CardGlyphKind {
   switch (state) {

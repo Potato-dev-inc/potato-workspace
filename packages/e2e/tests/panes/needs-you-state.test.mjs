@@ -5,7 +5,7 @@ export const meta = {
   id: 'panes.needs-you-state',
   title: 'A pane that waits for an answer shows Needs you and goes back to Idle after it',
   area: 'panes',
-  tags: ['states', 'smoke'],
+  tags: ['states', 'basic'],
 };
 
 export async function run(t) {

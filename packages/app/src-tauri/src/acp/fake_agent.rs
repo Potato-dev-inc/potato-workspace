@@ -30,6 +30,7 @@
 //! | `permkind K` | a tool of kind K (`edit`, `read`, ...) asks permission; says what the client answered (`asked:K outcome:selected option:reject_once`) |
 //! | `fswrite` | asks the client to write a file; says the error it got back |
 //! | `mode` | says the session mode (`modes=1`: a `mode` config option; `modes=2`: session modes set with `session/set_mode`) |
+//! | `permshape V` | a command that needs permission, with an odd option list: V = `long` (a label of 400 characters, like a long command pattern), `none` (no options), `blank` (options with no name and no kind); says what the client answered |
 //! | `badperm` | a malformed permission request (the app must refuse it, not park it) |
 //! | `empty` | `end_turn` with no output |
 //! | `weird` | an update of a kind nobody knows, then text |
@@ -597,6 +598,30 @@ fn run_prompt_inner(shared: &Arc<Shared>, id: &Value, params: &Value) {
             let outcome = answer.pointer("/result/outcome/outcome").and_then(Value::as_str).unwrap_or("?").to_string();
             let option = answer.pointer("/result/outcome/optionId").and_then(Value::as_str).unwrap_or("-").to_string();
             shared.chunk(&session_id, &format!("asked:{kind} outcome:{outcome} option:{option}"));
+            done("end_turn");
+        }
+        "permshape" => {
+            let variant = text.split_whitespace().nth(1).unwrap_or("long").to_string();
+            let options = match variant.as_str() {
+                "none" => json!([]),
+                "blank" => json!([{"optionId": "x1", "name": "", "kind": ""}]),
+                _ => json!([
+                    {"optionId": "allow_once", "name": "Allow Once", "kind": "allow_once"},
+                    {"optionId": "accept_execpolicy_amendment", "name": format!("Allow Commands Starting With `{}`", "Get-CimInstance ".repeat(30)), "kind": "allow_always"},
+                    {"optionId": "reject_once", "name": "Reject", "kind": "reject_once"}
+                ]),
+            };
+            shared.update(&session_id, json!({"sessionUpdate": "tool_call", "toolCallId": "s1", "kind": "execute", "status": "pending"}));
+            let ask_id = shared.next_request.fetch_add(1, Ordering::SeqCst);
+            let rx = shared.ask(
+                ask_id,
+                "session/request_permission",
+                json!({"sessionId": session_id, "toolCall": {"toolCallId": "s1", "kind": "execute", "status": "pending"}, "options": options}),
+            );
+            let Ok(answer) = rx.recv() else { return };
+            let outcome = answer.pointer("/result/outcome/outcome").and_then(Value::as_str).unwrap_or("?").to_string();
+            let option = answer.pointer("/result/outcome/optionId").and_then(Value::as_str).unwrap_or("-").to_string();
+            shared.chunk(&session_id, &format!("shape:{variant} outcome:{outcome} option:{option}"));
             done("end_turn");
         }
         "fswrite" => {

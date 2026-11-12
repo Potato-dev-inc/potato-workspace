@@ -85,6 +85,8 @@ const PATCHABLE_KEYS: &[&str] = &[
     "lend_enabled",
     "keep_awake_while_working",
     "helper_default_models",
+    "agent_default_models",
+    "early_versions_enabled",
 ];
 
 pub fn default_public_settings() -> Value {
@@ -130,6 +132,10 @@ pub fn default_public_settings() -> Value {
         "keep_awake_while_working": true,
         // Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none.
         "helper_default_models": {},
+        // Settings > Agents: the model each agent starts on when nothing names one (agent id -> model id).
+        "agent_default_models": {},
+        // Get early versions (beta): the updater also reads the beta address and takes the newer. Off until chosen; not a Labs flag.
+        "early_versions_enabled": false,
     })
 }
 
@@ -226,6 +232,8 @@ pub fn public_settings_from_store_file(file: &Value) -> Value {
 /// Load the saved public settings into `AppState` (no-op when the file is missing or unreadable).
 pub fn load_saved_public_settings(app: &AppHandle) {
     let path = crate::app_paths::app_data_dir().join("settings.json");
+    // A good file gets its backup; a damaged one is kept aside and the page offers "Restore the last good settings".
+    crate::settings_safety::check_on_start(&path, std::time::SystemTime::now());
     let Some(file) = std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else {
         return;
     };
@@ -409,6 +417,23 @@ mod spaces_labs_tests {
 }
 
 #[cfg(test)]
+mod early_versions_tests {
+    use super::{default_public_settings, merge_public_settings, with_dev_labs, DEV_LABS_KEYS, PATCHABLE_KEYS};
+    use serde_json::json;
+
+    #[test]
+    fn early_versions_start_off_can_be_patched_and_is_not_a_labs_flag() {
+        assert_eq!(default_public_settings()["early_versions_enabled"], json!(false));
+        assert!(PATCHABLE_KEYS.contains(&"early_versions_enabled"));
+        // A development build must not move itself onto the beta address.
+        assert!(!DEV_LABS_KEYS.contains(&"early_versions_enabled"));
+        assert_eq!(with_dev_labs(&default_public_settings(), true)["early_versions_enabled"], json!(false));
+        let on = merge_public_settings(&default_public_settings(), &json!({"early_versions_enabled": true}));
+        assert!(crate::commands::update_channel::early_versions_on(&on));
+    }
+}
+
+#[cfg(test)]
 mod helper_default_models_tests {
     use super::{default_public_settings, merge_public_settings, PATCHABLE_KEYS};
     use serde_json::json;
@@ -425,5 +450,20 @@ mod helper_default_models_tests {
     fn a_saved_map_is_kept() {
         let merged = merge_public_settings(&json!({}), &json!({ "helper_default_models": { "claude": "sonnet" } }));
         assert_eq!(merged["helper_default_models"]["claude"], json!("sonnet"));
+    }
+}
+
+#[cfg(test)]
+mod agent_default_models_tests {
+    use super::{default_public_settings, merge_public_settings, PATCHABLE_KEYS};
+    use serde_json::json;
+
+    #[test]
+    fn agent_default_models_start_empty_are_patchable_and_old_settings_load_with_that() {
+        assert!(PATCHABLE_KEYS.contains(&"agent_default_models"));
+        assert_eq!(default_public_settings()["agent_default_models"], json!({}));
+        assert_eq!(merge_public_settings(&json!({ "orchestrator_backend": "api" }), &json!({}))["agent_default_models"], json!({}));
+        let merged = merge_public_settings(&json!({}), &json!({ "agent_default_models": { "claude": "sonnet" } }));
+        assert_eq!(merged["agent_default_models"]["claude"], json!("sonnet"));
     }
 }

@@ -288,7 +288,8 @@ describe('AgentDefinitions source toggle / extra dir / consent controls', () => 
     (api.sourceSet as ReturnType<typeof vi.fn>).mockRejectedValueOnce('INVALID_ARGUMENT: nope');
     await render(api);
     await click(host.querySelector('[data-source="extra"] [role="switch"]'));
-    expect(host.textContent).toContain('INVALID_ARGUMENT');
+    expect(host.textContent).toContain('nope');
+    expect(host.textContent).not.toContain('INVALID_ARGUMENT');
   });
 
   it('bundled has no switch', async () => {

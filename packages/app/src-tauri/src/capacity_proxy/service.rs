@@ -47,6 +47,9 @@ pub const ACCOUNT_PREFIX: &str = "lend:";
 pub const MODE: &str = "proxy";
 pub const NOT_IN_THIS_MODE: &str = "Not available in this mode";
 pub const ENDED: &str = "This lend ended";
+/// Why a chat cannot start on a borrowed sign-in of an agent whose spec has no `[chat]` hookup. The chat lane gives it its own
+/// code (`LEND_CHAT_UNSUPPORTED`), not "sign-in not found".
+pub const NO_CHAT: &str = "Chat can't be borrowed through a PC for this agent yet. Open it in a terminal.";
 /// What both PCs show on a grant whose lend sign-in can't be used.
 pub const SIGNIN_PROBLEM: &str = "The lender's sign-in expired. Ask them to sign in again.";
 
@@ -1132,7 +1135,7 @@ impl Lend {
         }
         let live = inner.inn.get(grant_id).ok_or("The borrowed sign-in is still starting. Try again in a moment.")?;
         let spec = self.spec(agent_id).ok_or("This agent can't be borrowed through a PC.")?;
-        let hookup = if chat { spec.chat.as_ref().ok_or("Chat can't be borrowed through a PC for this agent yet. Open it in a terminal.")? } else { &spec.hookup };
+        let hookup = if chat { spec.chat.as_ref().ok_or(NO_CHAT)? } else { &spec.hookup };
         let base_url = live.shim.base_url();
         let mut env = hookup_env(hookup, &base_url, &(self.deps.env_names)());
         // The agent's own config folder for THIS lend (a fresh one, never the borrower's real one).
@@ -1168,6 +1171,7 @@ impl Lend {
                     "label": format!("{}'s PC (lent)", g.view.peer_name),
                     "ends_ms": g.view.ends_ms,
                     "grant_id": g.view.id,
+                    "chat": self.spec(&g.view.agent_id).is_some_and(|s| s.chat.is_some()),
                 })
             })
             .collect()

@@ -1,3 +1,4 @@
+import { errorSentence } from './lib/sayError';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getDefaultTerminalAgentType, type AgentType } from '@potato-workspace/shared';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -127,7 +128,7 @@ export default function WorkerHostBootstrap() {
         await launchDetachedWorker(config, spawnPaneRef.current, defaultAgent);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(errorSentence(err));
         }
       }
     })();

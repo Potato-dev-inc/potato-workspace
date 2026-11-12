@@ -300,3 +300,12 @@ describe('the docked card under the conversation', () => {
     }
   });
 });
+
+describe('background task notifications', () => {
+  it('shows one thin line for a notification written twice, not a message from the person', () => {
+    const line = (id: string): ChatItem => ({ kind: 'notice', id, at: null, noticeKind: 'background:t-1', text: 'Background task: wait_agents completed' });
+    render({ state: 'ready', turns: turnsFrom([{ kind: 'user', id: '1:0', at: null, text: 'go' }, line('2:0'), line('3:0')]) });
+    expect(host.querySelectorAll('[data-notice^="background"]').length).toBe(1);
+    expect(text()).not.toContain('task-notification');
+  });
+});

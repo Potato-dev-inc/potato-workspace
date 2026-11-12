@@ -7,7 +7,7 @@ import { ModelPicker } from '../../common/ModelPicker';
 import { SettingBlock } from '../settings-ui';
 
 export const HELPER_MODELS_LABEL = 'Default model for helpers';
-export const HELPER_MODELS_HINT = "Helpers use this model when the agent asking doesn't name one.";
+export const HELPER_MODELS_HINT = "Helpers use this instead of the agent's Default model.";
 
 /** The saved map as the settings hold it: only non-blank text values survive. */
 export function cleanHelperModels(value: unknown): Record<string, string> {

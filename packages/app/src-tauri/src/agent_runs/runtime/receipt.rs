@@ -1,6 +1,7 @@
 //! What a finished run proved and did not (`RunReceipt`) and the caveats on it (`RunWarning`),
 //! derived only from recorded facts on the snapshot.
 
+use super::guarantees::{checks_guarantee, read_only_guarantee, Guarantees, IsolationGuarantee, ModelGuarantee};
 use crate::operations::{OperationSnapshot, OperationStatus, ResultCapture};
 use serde::{Deserialize, Serialize};
 
@@ -21,9 +22,10 @@ pub struct RunReceipt {
     /// The model that ran when the backend confirmed it, else the one requested.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
-    /// `enforced`, `unenforced` (requested but the backend cannot enforce it) or `off`.
+    /// Deprecated: read `guarantees.read_only`. `enforced`, `unenforced` (requested but the backend
+    /// cannot enforce it) or `off`.
     pub read_only: String,
-    /// `none configured` or `<passed>/<total> passed`.
+    /// Deprecated: read `guarantees.checks`. `none configured` or `<passed>/<total> passed`.
     pub checks: String,
     pub result_capture: String,
     /// The worker's `potato-result` block when it ended its reply with a valid one.
@@ -88,6 +90,13 @@ pub struct RunReceipt {
     /// person chose to stop there (`state: "stopped"`). `outcome` stays `needs_input` / `cancelled`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage_limit: Option<ReceiptLimit>,
+    /// What this run guarantees, the same on every lane: read-only (asked, enforced by, proof), isolation,
+    /// checks (run by the app) and model (asked, confirmed). `verified` on the result is derived from `checks`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guarantees: Option<super::guarantees::Guarantees>,
+    /// Where the time went (queue, start, first output, total) and whether a warm worker was used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timing: Option<super::timing::RunTiming>,
 }
 
 /// The usage limit a run stopped at (`crate::handoff`), as the receipt shows it:
@@ -247,6 +256,27 @@ pub(super) fn build_receipt(
     }
     let outcome = receipt_outcome(snapshot, total);
     let lane = lane_report(snapshot);
+    let enforcement = if read_only != "enforced" {
+        "none"
+    } else if held.read_only_headless || (held.read_only_visible_flags && snapshot.pane_id.is_some()) {
+        "cli_flag"
+    } else {
+        "plan_mode"
+    };
+    let results = (terminal && !snapshot.check_results.is_empty()).then_some(snapshot.check_results.as_slice());
+    let model_confirmed = !snapshot.worker.model_unconfirmed && model_verified == Some(true);
+    let guarantees = Guarantees {
+        read_only: read_only_guarantee(snapshot.read_only, enforcement, snapshot.worker.read_only_proof.as_ref(), terminal),
+        isolation: IsolationGuarantee {
+            mode: if snapshot.worker.worktree.is_some() { "worktree" } else { "project_folder" }.into(),
+            branch: snapshot.worker.worktree.as_ref().map(|w| w.branch.clone()),
+        },
+        checks: checks_guarantee(&snapshot.checks, results, terminal),
+        model: ModelGuarantee { asked: snapshot.worker.requested_model.clone(), confirmed: model_confirmed },
+    };
+    if guarantees.read_only.proof.as_deref() == Some(crate::agent_runs::tree_proof::TREE_CHANGED) {
+        not_verified.push("a read-only run changed files in the folder".to_string());
+    }
     RunReceipt {
         backend: snapshot.agent_type.clone(),
         model: snapshot
@@ -291,6 +321,8 @@ pub(super) fn build_receipt(
             }),
         }),
         usage_limit: usage_limit_of(snapshot),
+        guarantees: Some(guarantees),
+        timing: Some(super::timing::of(snapshot)),
     }
 }
 
@@ -390,6 +422,13 @@ pub(super) fn run_warnings(snapshot: &OperationSnapshot) -> Vec<RunWarning> {
     }
     if let Some(warning) = model_choice_warning(snapshot) {
         warnings.push(warning);
+    }
+    if snapshot.worker.read_only_proof.as_ref().is_some_and(|proof| proof.changed()) {
+        warnings.push(RunWarning {
+            code: "READ_ONLY_VIOLATED".into(),
+            source: "capture".into(),
+            detail: "This run was read-only, but the project folder changed while it ran (see guarantees.read_only.changed_paths). Nothing was reverted.".into(),
+        });
     }
     warnings
 }

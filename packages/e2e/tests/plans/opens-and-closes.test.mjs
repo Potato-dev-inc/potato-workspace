@@ -5,7 +5,7 @@ export const meta = {
   id: 'plans.opens-and-closes',
   title: 'Your plans opens a month page with its notes and Close leaves it',
   area: 'plans',
-  tags: ['plans', 'smoke'],
+  tags: ['plans', 'basic'],
 };
 
 export async function run(t) {

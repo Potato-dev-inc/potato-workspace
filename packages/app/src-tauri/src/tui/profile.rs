@@ -189,6 +189,17 @@ pub trait TuiProfile: Send + Sync {
         Vec::new()
     }
 
+    /// The complete list of model names a run's `model` is checked against, when the profile knows it without
+    /// shelling out. `None` (the default): any text passes, as before.
+    fn model_check_list(&self) -> Option<Vec<String>> {
+        None
+    }
+
+    /// A spelling outside `model_check_list` that the CLI still takes (a full model id, a context suffix).
+    fn model_spelling_valid(&self, _model: &str) -> bool {
+        false
+    }
+
     /// Final machine-readable result after a successful exit; never a human-readable fallback.
     fn extract_result(&self, _output: &str, _exit_code: i32) -> Option<String> {
         None

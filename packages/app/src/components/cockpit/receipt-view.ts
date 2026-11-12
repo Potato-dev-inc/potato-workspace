@@ -103,6 +103,8 @@ function labelled(receipt: unknown, now: number): { rows: RawLine[]; limitLine: 
   const rows = receiptRows(receipt)
     // The limit's own fields fold into one line below.
     .filter(({ key }) => !(limitLine && key.startsWith('usage_limit.')))
+    // `guarantees` and `timing` are for tools (the MCP result); a person reads the rows above.
+    .filter(({ key }) => !key.startsWith('guarantees') && !key.startsWith('timing'))
     .map(({ key, value }): RawLine => {
       const tail = key.includes('.') ? key.slice(key.lastIndexOf('.') + 1) : key;
       const label = LABELS[key] ?? sentence(tail.replace(/\[\d+\]$/, ''));

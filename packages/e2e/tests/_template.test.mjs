@@ -9,7 +9,7 @@ export const meta = {
   id: 'area.what-it-does', // area.name, lowercase, dashes; the area is the first part and the folder name
   title: 'One sentence a person would say',
   area: 'area',
-  tags: [], // 'smoke' for the quick set; any other labels for filtering
+  tags: [], // 'basic' for the quick set; any other labels for filtering
   edge: false, // true for an edge case
   // fresh: true, // restart the app first (settings, UI mode or other persisted state changes)
   // timeout: 60000,

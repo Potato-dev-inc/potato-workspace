@@ -33,6 +33,8 @@ pub fn tool_visible_in_mode(name: &str, mode: McpMode) -> bool {
     }
     const AGENT_TOOLS: &[&str] = &[
         "run_agent",
+        "run_agents",
+        "review_agent",
         "review_worktree",
         "quick_ask",
         "wait_agents",

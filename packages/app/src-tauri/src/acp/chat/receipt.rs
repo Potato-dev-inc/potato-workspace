@@ -15,6 +15,8 @@ use serde_json::{json, Value};
 
 use super::AcpChat;
 use crate::agent_runs::checks::{self, Check, CheckResult};
+use crate::agent_runs::guarantees::{checks_guarantee, read_only_guarantee, Guarantees, IsolationGuarantee, ModelGuarantee};
+use crate::agent_runs::RunTiming;
 use crate::agent_runs::RunReceipt;
 
 /// The results of one turn's checks.
@@ -37,6 +39,8 @@ pub struct RunMeta {
     pub account_source: Option<String>,
     /// The results of the newest completed turn. Shared so one evaluation runs at a time.
     pub cache: Arc<Mutex<Option<CheckedTurn>>>,
+    /// The folder look of the newest read-only turn, taken once when the turn ended: `(turn, proof)`.
+    pub proof: Option<(u64, crate::agent_runs::tree_proof::ReadOnlyProof)>,
 }
 
 impl AcpChat {
@@ -58,6 +62,10 @@ impl AcpChat {
 
     pub(crate) fn run_folder(&self) -> Option<PathBuf> {
         self.run_meta.lock().folder.clone()
+    }
+
+    pub(crate) fn run_checks(&self) -> Vec<Check> {
+        self.run_meta.lock().checks.clone()
     }
 
     pub fn checks_configured(&self) -> usize {
@@ -83,6 +91,40 @@ impl AcpChat {
         let results = checks::evaluate_with_commands(&folder, &checks, reply, &commands);
         *cached = Some(CheckedTurn { turn, results: results.clone() });
         Some(results)
+    }
+
+    /// A read-only run is looked at as each turn starts (`agent_runs::tree_proof`); a chat the person started is not.
+    pub(crate) fn begin_read_only_look(&self) {
+        let folder = {
+            let mut meta = self.run_meta.lock();
+            meta.proof = None;
+            meta.folder.clone()
+        };
+        if let Some(folder) = folder.filter(|_| self.session().is_read_only()) {
+            crate::agent_runs::tree_proof::begin(self.pane_id(), &folder, true, false);
+        }
+    }
+
+    /// The folder look for turn `turn` of a read-only run, once it ended: compared once and kept.
+    pub(crate) fn read_only_proof(&self, final_turn: bool, turn: u64) -> Option<crate::agent_runs::tree_proof::ReadOnlyProof> {
+        if !self.session().is_read_only() {
+            return None;
+        }
+        let folder = {
+            let meta = self.run_meta.lock();
+            if let Some((seen, proof)) = meta.proof.as_ref().filter(|(seen, _)| *seen == turn) {
+                let _ = seen;
+                return Some(proof.clone());
+            }
+            meta.folder.clone()?
+        };
+        if !final_turn {
+            return None;
+        }
+        let proof = crate::agent_runs::tree_proof::finish(self.pane_id(), &folder)
+            .unwrap_or_else(|| crate::agent_runs::tree_proof::ReadOnlyProof::not_checked("app_restarted"));
+        self.run_meta.lock().proof = Some((turn, proof.clone()));
+        Some(proof)
     }
 
     pub(crate) fn run_meta_snapshot(&self) -> (Option<String>, Option<String>, Option<String>) {
@@ -123,6 +165,11 @@ pub struct ReceiptInputs<'a> {
     pub warm: bool,
     /// The chat's read-only guards are on (`chat::read_only::enable` succeeded).
     pub read_only: bool,
+    /// How they hold: `plan_mode` when the agent also took its own read-only mode, else `permission_reject`.
+    pub read_only_enforcement: &'a str,
+    /// The before/after look at the folder for this turn, once the turn ended (`agent_runs::tree_proof`).
+    pub read_only_proof: Option<&'a crate::agent_runs::tree_proof::ReadOnlyProof>,
+    pub checks: &'a [Check],
 }
 
 pub fn build(inputs: &ReceiptInputs) -> RunReceipt {
@@ -157,6 +204,15 @@ pub fn build(inputs: &ReceiptInputs) -> RunReceipt {
     let account_source = inputs.account_source.map(str::to_string).unwrap_or_else(|| {
         if inputs.account.is_some() { crate::accounts::helper::SOURCE_EXPLICIT } else { crate::accounts::helper::SOURCE_CLI_LOGIN }.to_string()
     });
+    let guarantees = Guarantees {
+        read_only: read_only_guarantee(inputs.read_only, inputs.read_only_enforcement, inputs.read_only_proof, inputs.final_turn),
+        isolation: IsolationGuarantee { mode: "project_folder".into(), branch: None },
+        checks: checks_guarantee(inputs.checks, inputs.results, inputs.final_turn),
+        model: ModelGuarantee { asked: inputs.requested_model.map(str::to_string), confirmed: model_confirmed },
+    };
+    if guarantees.read_only.proof.as_deref() == Some(crate::agent_runs::tree_proof::TREE_CHANGED) {
+        not_verified.push("a read-only run changed files in the folder".to_string());
+    }
     RunReceipt {
         backend: "acp".into(),
         model: inputs.model_in_use.map(str::to_string).or_else(|| inputs.requested_model.map(str::to_string)),
@@ -181,6 +237,8 @@ pub fn build(inputs: &ReceiptInputs) -> RunReceipt {
         agent_definition: None,
         worktree: None,
         usage_limit: None,
+        guarantees: Some(guarantees),
+        timing: Some(RunTiming { queue_ms: None, start_ms: None, first_output_ms: None, total_ms: None, warm: inputs.warm }),
     }
 }
 

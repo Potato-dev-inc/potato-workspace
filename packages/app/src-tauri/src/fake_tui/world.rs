@@ -85,6 +85,10 @@ impl World {
                 }
             }
         }
+        // "Helper agents" now defaults to showing every helper, which ignores `headless: true`. The tests drive
+        // headless runs themselves, so the agent chooses (the earlier rule).
+        crate::agent_run_mode::set_helper_visibility(crate::agent_run_mode::HelperVisibility::AgentChooses)
+            .expect("save the helper visibility");
         // No test in this process may reach the real `wsl.exe` (Linux Inside; see `linux.rs`).
         super::linux::block_real_wsl();
         let exe = locate_fake_exe();
@@ -162,6 +166,8 @@ impl World {
         git(&project, &["add", "."]);
         git(&project, &["-c", "user.name=pm", "-c", "user.email=pm@example.invalid", "commit", "-q", "-m", "init"]);
 
+        // A limit note lasts until its reset; one an earlier test left would decide what this test is offered.
+        crate::handoff::forget_limit_notes_for_e2e();
         let registry = crate::tui::registry::registry();
         let saved = registry.snapshot();
         let mut with_fakes: Vec<Arc<dyn TuiProfile>> = saved.iter().cloned().collect();

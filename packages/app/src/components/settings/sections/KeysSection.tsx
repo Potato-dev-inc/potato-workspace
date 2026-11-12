@@ -1,6 +1,7 @@
 // Settings > Keys: provider API keys, OpenCode A/B key profiles, rate-limit key automation, and removing keys.
 // Secrets save on blur / Enter (never per keystroke, never on a Save button). OpenCode keys and the
 // automation settings save through their own Tauri commands and tick the row when they succeed.
+import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import type { SettingsPatch } from '../../../lib/settings';
 import { secretsApi, type ProviderSecretName } from '../../../lib/secrets';
@@ -21,10 +22,6 @@ const AUTOMATION_HINT = 'Off: Potato Workspace only says a key needs swapping. N
 const RESTART_HINT = 'Restart the OpenCode pane after a key switch so it picks up the new key.';
 const REMOVE_ALL_HINT = 'Deletes Anthropic, OpenAI and OpenRouter keys here. Agents lose access. OpenCode stays.';
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 // ---------- OpenCode key status (each row keeps its own copy) ----------
 
 function useOpenCodeKeyStatus() {
@@ -35,7 +32,7 @@ function useOpenCodeKeyStatus() {
       setError(null);
       setStatus(await tauri.getOpenCodeKeyStatus());
     } catch (e) {
-      setError(errorText(e));
+      setError(errorSentence(e));
     }
   }, []);
   useEffect(() => {
@@ -124,7 +121,7 @@ function OpenCodeKeys({ env }: { env: SettingsEnv }) {
       await refresh();
       env.markSaved();
     } catch (e) {
-      env.setError(`Not saved: ${errorText(e)}`);
+      env.setError(`Not saved: ${errorSentence(e)}`);
     }
   };
 
@@ -163,7 +160,7 @@ function AutomationMode({ env }: { env: SettingsEnv }) {
       setStatus(await tauri.setOpenCodeAutomationSettings(on ? 'auto_if_backup' : 'notify_only', status?.restart_pane_on_rotate ?? true));
       env.markSaved();
     } catch (e) {
-      env.setError(`Not saved: ${errorText(e)}`);
+      env.setError(`Not saved: ${errorSentence(e)}`);
     } finally {
       setBusy(false);
     }
@@ -195,7 +192,7 @@ function RestartPane({ env }: { env: SettingsEnv }) {
       setStatus(await tauri.setOpenCodeAutomationSettings(mode, restart));
       env.markSaved();
     } catch (e) {
-      env.setError(`Not saved: ${errorText(e)}`);
+      env.setError(`Not saved: ${errorSentence(e)}`);
     } finally {
       setBusy(false);
     }
@@ -233,7 +230,7 @@ function RemoveAllKeys({ env }: { env: SettingsEnv }) {
       await env.patch({ anthropic_api_key: null, openai_api_key: null, openrouter_api_key: null });
       env.markSaved();
     } catch (e) {
-      env.setError(`Not removed: ${errorText(e)}`);
+      env.setError(`Not removed: ${errorSentence(e)}`);
     } finally {
       setBusy(false);
     }

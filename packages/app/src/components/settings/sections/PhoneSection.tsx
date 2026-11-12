@@ -1,5 +1,6 @@
 // Settings > Phone: how the phone reaches this computer, typing on the phone, pairing and paired devices.
 // The public address saves through its own command (TunnelSection), because saving restarts the tunnel.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { clampMobileInputDelayMs } from '../../../lib/bridge-settings';
 import { parseDevServerPort } from '../../../lib/public-bridge-url';
@@ -13,10 +14,6 @@ import { PairedDevices } from '../blocks/PairedDevices';
 import { TelegramSetup } from '../blocks/TelegramSetup';
 
 type PairedDevice = Awaited<ReturnType<typeof tauri.listPairedMobileDevices>>[number];
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 // ---------- revoke all devices ----------
 
@@ -43,7 +40,7 @@ function RevokeAllRow({ env }: { env: SettingsEnv }) {
       window.dispatchEvent(new Event(DEVICES_CHANGED_EVENT));
       env.markSaved();
     } catch (error) {
-      env.setError(`Not revoked: ${errorText(error)}`);
+      env.setError(`Not revoked: ${errorSentence(error)}`);
     } finally {
       setBusy(false);
       setDevices(await tauri.listPairedMobileDevices());

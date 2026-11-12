@@ -5,7 +5,7 @@ export const meta = {
   id: 'clip.make-from-chat-turn',
   title: 'Make clip on a finished chat turn draws a short video and shows it with a warning to look first',
   area: 'clip',
-  tags: ['clip', 'smoke'],
+  tags: ['clip', 'basic'],
   timeout: 120000,
 };
 

@@ -1,6 +1,7 @@
 // Settings > Phone > Telegram (early). Step 1 saves the bot token in the OS credential store; the app never
 // shows it again, not even its last digits. Step 2 pairs one chat. Then the person turns the bot on and
 // picks what it may do. Telegram is a third party, so the warning at the top always shows.
+import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
 import {
   onTelegramChanged,
@@ -89,7 +90,7 @@ export const telegramApi: TelegramApi = {
   },
 };
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const errText = (err: unknown): string => (errorSentence(err));
 
 export function TelegramSetup({ env, api = telegramApi }: { env: SettingsEnv; api?: TelegramApi }) {
   const [status, setStatus] = useState<TelegramStatus | null>(null);

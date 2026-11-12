@@ -5,7 +5,7 @@ export const meta = {
   id: 'chat.turns-markdown-and-code',
   title: 'An answer written in Markdown shows as formatted text with a code block',
   area: 'chat',
-  tags: ['turns', 'smoke'],
+  tags: ['turns', 'basic'],
 };
 
 export async function run(t) {

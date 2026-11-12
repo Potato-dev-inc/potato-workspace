@@ -4,6 +4,7 @@
 // Nothing here forks the cockpit's logic: the run data is `useRunData` (the Transcript tab's),
 // What changed is the `Changes` component in plain mode, Go back restores through `restoreWithUndo`
 // (the History tab's), and the agent's screen is the same `TerminalViewport`.
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useRef, useState } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
@@ -220,7 +221,7 @@ export function SimpleProject({
       onBack();
     } catch (err) {
       setSheet(null);
-      const text = err instanceof Error ? err.message : String(err);
+      const text = errorSentence(err);
       c.notify(
         /RUN_ACTIVE/.test(text) ? T.keepWorking : /CONFLICT|OVERLAP|DIRTY/.test(text) ? T.keepConflict : action === 'throw' ? T.throwFailed : T.keepFailed,
       );

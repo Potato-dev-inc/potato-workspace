@@ -60,6 +60,7 @@
 #![allow(dead_code)]
 
 pub mod account;
+mod auto_approve;
 pub mod adapter_catalog;
 pub mod adapter_health;
 pub mod adapter_keys;

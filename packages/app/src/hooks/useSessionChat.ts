@@ -1,5 +1,6 @@
 // Read-only chat of one terminal pane: opens the backend's session-file reader while `enabled`, merges the
 // item batches for this pane, and closes the reader again on unmount or when disabled.
+import { errorSentence } from '../lib/sayError';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   closeSessionChat,
@@ -109,7 +110,7 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
         if (!live) return;
         setStatus({
           state: 'unavailable',
-          reason: error instanceof Error ? error.message : String(error),
+          reason: errorSentence(error),
           waitingFor: null,
           source: null,
         });

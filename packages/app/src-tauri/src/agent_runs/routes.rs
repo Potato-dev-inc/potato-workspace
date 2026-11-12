@@ -6,6 +6,7 @@
 mod answer;
 mod handles;
 mod list;
+mod review;
 #[cfg(test)]
 mod tests;
 mod wait;
@@ -92,7 +93,22 @@ pub fn handle_request_as(
     let result = match (method, segments) {
         ("POST", ["agents", "run"]) => match prepared {
             Some(mut request) => {
+                // This run is in the terminal (the chat lane did not take it): there are no tool kinds to sort questions by.
+                if let Ok(wanted) = serde_json::from_slice::<Value>(body) {
+                    match super::auto_approve::parse(&wanted) {
+                        Ok(super::auto_approve::AutoApprove::Reads) => return Some(Err(super::auto_approve::needs_chat())),
+                        Ok(super::auto_approve::AutoApprove::Ask) => {}
+                        Err(error) => return Some(Err(error)),
+                    }
+                }
+                // A model the agent has a list for must be on it; the person's own helper default is not the caller's typo.
+                if let Some(model) = request.model.as_deref().filter(|_| !request.model_from_helper_default) {
+                    if let Err(error) = super::model_check::check_for_agent(&request.agent_type, model) {
+                        return Some(Err(error));
+                    }
+                }
                 request.lane_note = lane_note.as_ref().map(|note| note.record());
+                let adjusted = lane_note.as_ref().map(|note| note.adjusted.clone()).filter(|list| !list.is_empty());
                 runtime::run_agent(
                     request,
                     registry.clone(),
@@ -100,6 +116,13 @@ pub fn handle_request_as(
                     session_id.map(str::to_string),
                 )
                 .map(|view| serde_json::to_value(view).unwrap_or(Value::Null))
+                // What the lane resolver changed from the request (`adjusted`) is said on the answer.
+                .map(|mut answer| {
+                    if let (Some(list), Some(map)) = (adjusted, answer.as_object_mut()) {
+                        map.insert("adjusted".into(), Value::Array(list));
+                    }
+                    answer
+                })
             }
             None => parse::<AgentRunRequest>(body).map(|_| Value::Null),
         },
@@ -182,6 +205,10 @@ pub fn handle_request_as(
             )
             .map(|view| serde_json::to_value(view).unwrap_or(Value::Null))
         }),
+        // `run_agents` is run by the MCP shim (it starts each task through `/agents/run`); this route tells it the
+        // person's "Most helpers at once".
+        ("POST", ["agents", "batch"]) => Ok(serde_json::json!({ "limit": crate::agent_run_mode::most_helpers_at_once() })),
+        ("POST", ["agents", "review"]) => review::review_agent(body, query, session_id, registry, app),
         ("POST", ["agents", "answer"]) => parse::<AnswerPromptRequest>(body)
             .and_then(|request| {
                 let by = crate::agent_authority::gate::AnsweredBy::for_bridge(session_id, remote_device);
@@ -287,13 +314,12 @@ fn prepare_run(
     {
         request.project_path = query_value(query, "project_path");
     }
-    // No model named: the person's "Default model for helpers" for this agent decides. A named model always wins.
+    // No model named: the person's "Default model for helpers", then the agent's "Default model", decides. A named model always wins.
     if request.turn_index == 0 && request.pane_id.is_none() && request.worker_id.is_none() && request.handle.is_none() && request.agent_run_id.is_none() {
-        request.model_from_helper_default = crate::agent_run_mode::apply_helper_model(
-            &crate::settings_store::read_public_settings(app),
-            &request.agent_type,
-            &mut request.model,
-        );
+        // The person's defaults, in order: this agent's helper default, then its default model.
+        let settings = crate::settings_store::read_public_settings(app);
+        request.model_from_helper_default = crate::agent_run_mode::apply_helper_model(&settings, &request.agent_type, &mut request.model)
+            || crate::agent_run_mode::apply_agent_default_model(&settings, &request.agent_type, &mut request.model);
     }
     // An agent starting a helper without naming an account: the person's choice decides, or a card asks.
     Some(
@@ -323,6 +349,7 @@ fn chat_view_of(body: &[u8], request: &AgentRunRequest) -> Vec<u8> {
         if let Some(model) = &request.model {
             map.insert("model".into(), Value::String(model.clone()));
         }
+        map.insert("model_from_helper_default".into(), Value::Bool(true));
     }
     if let Some(account) = &request.account {
         map.insert("account".into(), Value::String(account.clone()));

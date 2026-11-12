@@ -8,7 +8,7 @@ export const meta = {
   id: 'companion.make-first',
   title: 'Making a companion wakes it up, opens its page and gives it a folder of its own',
   area: 'companion',
-  tags: ['smoke'],
+  tags: ['basic'],
 };
 
 export const run = guarded(async (t) => {

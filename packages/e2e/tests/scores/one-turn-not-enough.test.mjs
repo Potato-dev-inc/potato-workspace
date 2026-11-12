@@ -6,7 +6,7 @@ export const meta = {
   id: 'scores.one-turn-not-enough',
   title: 'After one turn the agent has a row that says there are not enough runs yet',
   area: 'scores',
-  tags: ['scores', 'smoke'],
+  tags: ['scores', 'basic'],
 };
 
 export async function run(t) {

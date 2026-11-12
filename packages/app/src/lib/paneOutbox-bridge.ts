@@ -1,6 +1,7 @@
 // The phone's message box transport: the same OutboxTransport the desktop has, over the PC's bridge. Sends and
 // cancels are the `/panes/{id}/messages` routes. Changes arrive as the `pane-outbox` SSE event (PwaApp hands it to
 // `publishBridgeOutbox`); while the box is on screen the list is also read every few seconds, as a fallback.
+import { errorSentence } from './sayError';
 import type { BridgeClient } from './bridge-types';
 import type { OutboxMessage, OutboxTransport } from './paneOutbox';
 
@@ -25,7 +26,7 @@ export function publishBridgeOutbox(paneId: string, messages: OutboxMessage[]): 
  * the person only sees the `error` sentence. A network failure (no status) says the PC could not be reached.
  */
 export function bridgeRefusalText(error: unknown, fallback: string): string {
-  const text = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  const text = errorSentence(error);
   const at = text.match(/ -> \d{3}: ([\s\S]*)$/);
   if (!at) return REACH_FAILED;
   const body = at[1]!.trim();

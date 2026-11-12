@@ -31,9 +31,19 @@ pub struct AgentRunView {
     pub checks_configured: usize,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checks: Vec<crate::agent_runs::checks::CheckResult>,
-    pub verified: bool,
+    /// True only when the app ran the run's checks and all passed; false when one failed; null when nothing
+    /// was verified (see `verified_reason`). The same on every lane. Lane-specific facts are in `guarantees`.
+    pub verified: Option<bool>,
+    /// Why `verified` is not true. Absent when it is true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_reason: Option<String>,
+    /// What this run guarantees (read-only enforcement and proof, isolation, checks, model); same as `receipt.guarantees`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guarantees: Option<super::guarantees::Guarantees>,
+    /// Deprecated: the worker reported a native completion. Read `verified` and `guarantees`.
     #[serde(default, skip_serializing_if = "is_false")]
     pub result_verified: bool,
+    /// Deprecated: read `guarantees.model.confirmed`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_verified: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -233,6 +243,7 @@ impl From<OperationSnapshot> for AgentRunView {
         };
         let mut receipt = build_receipt(&snapshot, &warnings, model_verified, &result_capture);
         receipt.structured_result = structured_result;
+        let guarantees = receipt.guarantees.clone();
         let lane = super::receipt::lane_report(&snapshot);
         Self {
             handle,
@@ -275,7 +286,9 @@ impl From<OperationSnapshot> for AgentRunView {
             },
             checks_configured: snapshot.checks.len(),
             checks: snapshot.check_results.clone(),
-            verified: snapshot.verified,
+            verified: guarantees.as_ref().and_then(|g| g.verified()),
+            verified_reason: guarantees.as_ref().and_then(|g| g.verified_reason()),
+            guarantees,
             result_verified: snapshot.verified,
             model_verified,
             recovery: snapshot.required_action.as_ref().and_then(|value| {

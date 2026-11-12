@@ -71,10 +71,25 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
   const turnBackOn = (kind: string) => {
     api.setAutoAllow?.(paneId, kind, false).catch(() => undefined);
   };
+  // A waiting state with no card to answer is a bug state: after a short grace (the card is on its way) say so and
+  // give the person a way out, instead of a chat that waits for nothing.
+  const waitingNoCard = !!state && !state.closed && state.phase === 'needs_input' && cards.length === 0;
+  const [orphan, setOrphan] = useState(false);
+  useEffect(() => {
+    if (!waitingNoCard) {
+      setOrphan(false);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      console.warn('acp chat: waiting for an answer with no card on screen', paneId);
+      setOrphan(true);
+    }, 2000);
+    return () => window.clearTimeout(t);
+  }, [waitingNoCard, paneId]);
   const quiet = quietStrip(state, asked);
   const strip = quiet ? null : runStrip(state, asked);
   const signIn = state && !state.closed && state.signIn?.needed ? state : null;
-  if (cards.length === 0 && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0) return null;
+  if (cards.length === 0 && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0 && !orphan) return null;
   const keepWaiting = () => {
     api.keepWaiting?.(paneId).catch(() => undefined);
   };
@@ -127,6 +142,16 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
               {restarting ? 'Restarting…' : restartError ? 'Retry' : 'Restart chat'}
             </button>
           )}
+        </div>
+      )}
+      {orphan && waitingNoCard && (
+        <div className="ck-acp-strip" data-testid="acp-orphan-wait">
+          <span className="ck-acp-strip-text" role="status">
+            The agent is waiting but didn't say what for.
+          </span>
+          <button type="button" className="ck-btn ck-btn--secondary ck-acp-stop" onClick={stop}>
+            Deny and stop
+          </button>
         </div>
       )}
       {quiet && (

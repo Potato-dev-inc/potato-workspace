@@ -1,3 +1,4 @@
+import { errorSentence } from '../lib/sayError';
 import { parsePairingInvitePath } from '@potato-workspace/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LS_BRIDGE_URL } from '../lib/bridge-url';
@@ -46,7 +47,7 @@ export function PairInviteScreen({ pairingCode, onConnected, onGiveUp }: Props) 
     } catch (e) {
       if (attemptRef.current !== attempt) return;
       setBusy(false);
-      const message = e instanceof Error ? e.message : String(e);
+      const message = errorSentence(e);
       setErr(
         message.includes('no active pairing session')
           ? `${message} Refresh QR on desktop, then scan again immediately.`

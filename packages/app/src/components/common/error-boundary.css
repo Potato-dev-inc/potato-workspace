@@ -1,0 +1,55 @@
+/* The calm card shown when a screen part fails to draw. Monochrome, no colour. */
+.pm-eb {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 420px;
+  margin: 24px auto;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: rgba(127, 127, 127, 0.1);
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  color: inherit;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI Variable Text', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.pm-eb.is-compact {
+  margin: 8px 0;
+  padding: 10px 12px;
+  max-width: none;
+}
+.pm-eb-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.pm-eb-body {
+  margin: 0;
+  opacity: 0.7;
+}
+.pm-eb-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.pm-eb-btn {
+  font: inherit;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 127, 127, 0.4);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.pm-eb-btn:hover {
+  background: rgba(127, 127, 127, 0.15);
+}
+.pm-eb-btn.is-primary {
+  background: rgba(127, 127, 127, 0.28);
+}
+.pm-eb-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}

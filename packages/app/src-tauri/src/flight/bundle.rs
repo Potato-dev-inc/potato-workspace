@@ -18,6 +18,18 @@ const MAX_CASTS: usize = 5;
 /// Log lines included.
 const LOG_LINES: usize = 400;
 
+/// Most log text included, newest first (the log folder itself is capped at 25 MB).
+const MAX_LOG_BYTES: usize = 8 * 1024 * 1024;
+/// Crash reports included, and the most read from each.
+const MAX_CRASH_FILES: usize = 10;
+const MAX_CRASH_BYTES: usize = 256 * 1024;
+
+/// A text file read from the app data folder (a log or a crash report), not yet redacted.
+pub struct TextFile {
+    pub name: String,
+    pub text: String,
+}
+
 /// One frozen recording read from the project folder.
 pub struct CastFile {
     pub operation_id: String,
@@ -31,6 +43,8 @@ pub struct Inputs {
     pub settings: Value,
     pub log_lines: Vec<String>,
     pub casts: Vec<CastFile>,
+    pub log_files: Vec<TextFile>,
+    pub crash_files: Vec<TextFile>,
     pub now_ms: u64,
 }
 
@@ -151,6 +165,20 @@ pub fn build(inputs: Inputs) -> Bundle {
         label: format!("The last {} lines of the app's log", log.len()),
         body: compose(&parts),
     });
+    for file in inputs.log_files {
+        files.push(BundleFile {
+            path: format!("logs/{}", file.name),
+            label: format!("Log file {}", file.name),
+            body: redact::strict(&file.text),
+        });
+    }
+    for file in inputs.crash_files {
+        files.push(BundleFile {
+            path: format!("crash/{}", file.name),
+            label: format!("Crash report {}", file.name),
+            body: redact::strict(&file.text),
+        });
+    }
     let mut casts = inputs.casts;
     casts.sort_by_key(|c| std::cmp::Reverse(c.modified_ms));
     for cast in casts.into_iter().take(MAX_CASTS) {
@@ -208,6 +236,48 @@ pub fn collect_casts(projects: &[String]) -> Vec<CastFile> {
         .collect()
 }
 
+/// The end of a file as text, at most `max` bytes (cut on a character boundary).
+fn read_tail(path: &Path, max: usize) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    let start = bytes.len().saturating_sub(max);
+    Some(String::from_utf8_lossy(&bytes[start..]).into_owned())
+}
+
+/// The app's log files (newest first), up to [`MAX_LOG_BYTES`] of text in all.
+pub fn collect_logs(log_dir: &Path) -> Vec<TextFile> {
+    let mut left = MAX_LOG_BYTES;
+    let mut out = Vec::new();
+    for path in super::logfile::files_in(log_dir) {
+        if left == 0 {
+            break;
+        }
+        let Some(text) = read_tail(&path, left) else { continue };
+        left -= text.len().min(left);
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        out.push(TextFile { name, text });
+    }
+    out
+}
+
+/// The newest [`MAX_CRASH_FILES`] files in `<data_dir>/crash`.
+pub fn collect_crashes(data_dir: &Path) -> Vec<TextFile> {
+    let Ok(entries) = std::fs::read_dir(data_dir.join("crash")) else { return Vec::new() };
+    let mut found: Vec<(std::time::SystemTime, std::path::PathBuf)> = entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .map(|e| (e.metadata().and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH), e.path()))
+        .collect();
+    found.sort_by_key(|(t, _)| std::cmp::Reverse(*t));
+    found
+        .into_iter()
+        .take(MAX_CRASH_FILES)
+        .filter_map(|(_, path)| {
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            Some(TextFile { name, text: read_tail(&path, MAX_CRASH_BYTES)? })
+        })
+        .collect()
+}
+
 /// Read the live app state into [`Inputs`]. `settings` is the public settings mirror.
 pub fn gather(project: &str, settings: Value) -> Inputs {
     let info = crate::app_lifecycle::get_app_install_info();
@@ -227,7 +297,16 @@ pub fn gather(project: &str, settings: Value) -> Inputs {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
-    Inputs { version, settings, log_lines: super::applog::tail(), casts, now_ms }
+    let data_dir = crate::app_paths::app_data_dir();
+    Inputs {
+        version,
+        settings,
+        log_lines: super::applog::tail(),
+        casts,
+        log_files: collect_logs(&data_dir.join(super::logfile::LOG_DIR)),
+        crash_files: collect_crashes(&data_dir),
+        now_ms,
+    }
 }
 
 /// Write the zip to `dest` (via a temp file, so a failed save never leaves half a file).

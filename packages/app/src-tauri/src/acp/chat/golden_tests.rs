@@ -137,6 +137,25 @@ fn a_codex_turn_with_a_failed_edit_becomes_one_message_a_tool_row_and_a_turn_end
 }
 
 #[test]
+fn a_command_that_never_ran_shows_plain_words_never_the_raw_output_object() {
+    let mut run = Run::new();
+    run.started(StartKind::New);
+    run.turn(1, "list chrome");
+    run.updates(
+        &[
+            json!({"sessionUpdate": "tool_call", "toolCallId": "c1", "title": "Run command", "kind": "execute", "status": "in_progress"}),
+            json!({"sessionUpdate": "tool_call_update", "toolCallId": "c1", "status": "failed", "rawOutput": {"exit_code": null, "formatted_output": ""}}),
+            json!({"sessionUpdate": "tool_call", "toolCallId": "c2", "title": "Run command", "kind": "execute", "status": "in_progress"}),
+            json!({"sessionUpdate": "tool_call_update", "toolCallId": "c2", "status": "completed", "rawOutput": {"exit_code": 0, "formatted_output": ""}}),
+        ],
+        false,
+    );
+    let items = run.json();
+    let outputs: Vec<&str> = items.as_array().unwrap().iter().filter(|i| i["kind"] == "toolResult").map(|i| i["output"].as_str().unwrap_or("?")).collect();
+    assert_eq!(outputs, ["The command didn't run.", ""]);
+}
+
+#[test]
 fn a_claude_turn_whose_write_was_refused_shows_the_title_that_arrived_late_and_the_refusal() {
     let mut run = Run::new();
     run.started(StartKind::New);

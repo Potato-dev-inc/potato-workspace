@@ -797,6 +797,68 @@ async fn a_chat_on_a_borrowed_sign_in_gets_the_proxy_env_and_is_listed_on_the_gr
     assert_eq!((mine.requests, mine.input_tokens, mine.output_tokens), (1, 25, 42), "the borrower's own count matches the lender's");
 }
 
+/// The field report (2026-11-12): a lent Claude sign-in worked in a terminal but a chat on it was refused, because the
+/// Claude spec had no `[chat]` table. The chat's own environment (not the terminal's) points the adapter at the shim with
+/// the placeholder token, in a fresh config folder; a turn it sends reaches the provider with the LENDER'S SUBSCRIPTION
+/// token (a bearer plus the oauth flag, never an API key), is metered, and the model list is allowed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_chat_on_a_borrowed_claude_subscription_starts_and_sends_a_turn_through_the_shim() {
+    use crate::acp::config::{build_env, find_builtin, with_borrowed_chat, HostEnv};
+    use std::ffi::OsString;
+    struct Host;
+    impl HostEnv for Host {
+        fn var(&self, name: &str) -> Option<OsString> {
+            ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR"].contains(&name).then(|| OsString::from("borrower-own-FAKE"))
+        }
+        fn which(&self, program: &str) -> Option<std::path::PathBuf> {
+            (program == "claude").then(|| std::path::PathBuf::from("claude-bin"))
+        }
+        fn adapters_dir(&self) -> std::path::PathBuf {
+            "adapters".into()
+        }
+        fn homes_dir(&self) -> std::path::PathBuf {
+            "homes".into()
+        }
+    }
+    let lookup = |env: &[(OsString, OsString)], name: &str| env.iter().find(|(n, _)| n.to_string_lossy().eq_ignore_ascii_case(name)).map(|(_, v)| v.to_string_lossy().into_owned());
+
+    let w = world2(sse_script()).await;
+    let (profile_id, _home) = sign_in_profile(&w, hour_from_now());
+    let (grant_id, base) = lend_one_with(&w, 3600, &profile_id).await;
+
+    let chat = w.leo.lend.borrowed_chat("claude", &grant_id).expect("a chat on a borrowed Claude sign-in is offered");
+    assert_eq!(chat.authenticate, None, "the adapter needs no authenticate call for the placeholder token");
+    let mut cfg = find_builtin("claude").expect("claude has a chat adapter");
+    with_borrowed_chat(&mut cfg, &chat);
+    let env = build_env(&cfg, &Host, None);
+    assert_eq!(lookup(&env, "ANTHROPIC_BASE_URL"), Some(base.clone()));
+    assert_eq!(lookup(&env, "ANTHROPIC_AUTH_TOKEN").as_deref(), Some("pm-lend"));
+    assert_eq!(lookup(&env, "ANTHROPIC_API_KEY"), None);
+    assert_eq!(lookup(&env, "CLAUDE_CODE_EXECUTABLE").as_deref(), Some("claude-bin"), "the program the adapter starts is still found");
+    let config_dir = lookup(&env, "CLAUDE_CONFIG_DIR").expect("a config folder of this lend");
+    assert!(config_dir.contains(&grant_id) && config_dir.ends_with("chat"), "{config_dir}");
+    assert!(env.iter().all(|(_, v)| !v.to_string_lossy().contains("borrower-own")), "none of the borrower's own values reach the adapter: {env:?}");
+
+    // The adapter's turn: the placeholder goes to the shim, the lender's subscription token comes out the other side.
+    let reply = post(&base, "/v1/messages").await;
+    assert_eq!(reply.status, 200);
+    let models = {
+        let (port, secret) = base.strip_prefix("http://127.0.0.1:").unwrap().split_once('/').unwrap();
+        http(port.parse().unwrap(), "GET", &format!("/{secret}/v1/models"), &[("authorization", "Bearer pm-lend")], b"").await
+    };
+    assert_eq!(models.status, 200, "the model list is allowed");
+    let seen = w.up.requests();
+    assert_eq!(seen[0].header("authorization"), Some("Bearer tok-one-FAKE"), "the lender's subscription token, not a key");
+    assert!(seen[0].header("anthropic-beta").is_some_and(|b| b.contains("oauth-2025-04-20")));
+    assert_eq!(seen[0].header("x-api-key"), None);
+    assert!(!seen.iter().any(|r| r.header("authorization").is_some_and(|a| a.contains("pm-lend"))), "the placeholder never reaches the provider");
+    w.leo.lend.note_pane(&grant_id, "chat-pane-claude");
+    let mine = w.leo.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(mine.pane_ids, vec!["chat-pane-claude".to_string()]);
+    // The fake upstream answers the model list with the same usage stream, so both requests are counted.
+    assert_eq!((mine.requests, mine.input_tokens, mine.output_tokens), (2, 50, 84), "the turn is metered to the lend");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn an_outgoing_lend_holds_the_pc_awake_until_the_last_one_ends() {
     let w = world2(sse_script()).await;

@@ -5,7 +5,7 @@ export const meta = {
   id: 'labs.index-lists-features',
   title: 'The Labs list names every early feature with a plain sentence',
   area: 'labs',
-  tags: ['labs', 'smoke'],
+  tags: ['labs', 'basic'],
 };
 
 const FEATURES = [

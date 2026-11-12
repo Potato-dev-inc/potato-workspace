@@ -73,6 +73,8 @@ export const SettingsSchema = z.object({
   spaces_enabled: z.boolean().optional(),
   /** Share an agent (Settings > General > Labs): lend an agent sign-in to another PC, or borrow one. Off unless chosen. Rust: lend. */
   lend_enabled: z.boolean().optional(),
+  /** Get early versions (beta): the updater also reads the beta address and takes the newer version. Off unless chosen. Rust: commands/update_channel. */
+  early_versions_enabled: z.boolean().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
   individual_explained: z.boolean().optional(),
   /** How the windows move when the mode switches between Orchestration and Individual: Domino (default), Ink, or Off (a quick fade). Rust reads it (switch_anim). */
@@ -103,5 +105,7 @@ export const SettingsSchema = z.object({
   opencode_model_id: z.string().optional(),
   /** Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none. Absent: none. Rust reads it (agent_run_mode::helper_model). */
   helper_default_models: z.record(z.string().max(120)).optional(),
+  /** Settings > Agents > Default model: the model each agent starts on per agent id when nothing names one. Absent: none. Rust reads it (agent_run_mode::agent_model). */
+  agent_default_models: z.record(z.string().max(120)).optional(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;

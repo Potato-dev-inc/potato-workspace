@@ -28,7 +28,7 @@ import {
   nextExample,
   parseRunAs,
   sendBlock,
-  usableModel,
+  startingModel,
   withPaths,
   type AgentChoice,
   type HomeCard,
@@ -38,7 +38,7 @@ import {
 } from './model';
 import { AgentLogo } from '../../common/AgentLogo';
 import { ModelPicker } from '../../common/ModelPicker';
-import { readPickedModel, tauriModelOptionsApi, useModelOptions, writePickedModel, type ModelOptionsApi } from '../../../lib/modelOptions';
+import { readPickedModel, tauriAgentDefaultsApi, tauriModelOptionsApi, useAgentDefaults, useModelOptions, writePickedModel, type AgentDefaultsApi, type ModelOptionsApi } from '../../../lib/modelOptions';
 import { isStartBlock } from './start';
 import '../../../styles/cockpit-newagent.css';
 import { BringChatsLink } from '../../history/BringChatsLink';
@@ -129,6 +129,8 @@ export interface NewAgentPageProps {
   addonApi?: AcpAddonApi;
   /** The models each agent can start on. */
   modelApi?: ModelOptionsApi;
+  /** The Default model saved per agent in Settings; the picker starts on it when there is no last pick. */
+  defaultsApi?: AgentDefaultsApi;
   /** Opens the agent's own terminal pane in `folder`, where the person signs in. Absent: the card only explains. */
   onSignIn?: (agentId: string, folder?: string) => Promise<unknown> | void;
   /** Hand the request to whoever starts agents. May resolve later; the page is busy until then. */
@@ -140,7 +142,7 @@ export interface NewAgentPageProps {
 
 type Menu = 'plus' | 'folder' | 'agent' | null;
 
-export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, onSignIn, onStart, onOpenPane, onSetUp }: NewAgentPageProps) {
+export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, onSignIn, onStart, onOpenPane, onSetUp }: NewAgentPageProps) {
   const [prompt, setPrompt] = useState('');
   const [exampleIdx, setExampleIdx] = useState(0);
   const [menu, setMenu] = useState<Menu>(null);
@@ -264,18 +266,22 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const choices = useMemo(() => agentChoices(agents, accounts), [agents, accounts]);
   // The remembered agent and sign-in (the key holds both). A key that is gone, or not ready, falls back to the first ready one.
   const choice: AgentChoice | null = (pickKey ? choices.find((c) => c.key === pickKey) : undefined) ?? defaultChoice(choices, remembered());
-  const canChat = chatAvailable(lanes, choice?.agentId ?? null);
+  const chatLane = chatAvailable(lanes, choice?.agentId ?? null);
+  // A lent sign-in of an agent with no chat on one: Chat is shown off, with the reason, instead of failing after the click.
+  const lendNoChat = chatLane && !!choice?.noChat;
+  const canChat = chatLane && !lendNoChat;
   // Chat is the default when the agent's chat add-on is in place; otherwise the page starts a terminal.
   const chatAddon = addonFor(addons.byAgent, choice?.agentId);
   const runAs: RunAs = canChat ? (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null, !needsInstall(chatAddon))) : 'terminal';
   const isolated = copyDefault(storedCopy) && copiesOk && runAs === 'terminal';
 
-  // ----- the model: remembered per agent and sign-in (this page only; helper defaults live in Settings) -----
+  // ----- the model: the last pick per agent and sign-in (this page only), else the agent's Default model from Settings -----
   const modelList = useModelOptions(choice?.agentId ?? null, modelApi);
   const modelSlot = choice ? `${choice.agentId}|${choice.accountId ?? ''}` : '';
   const [modelPick, setModelPick] = useState<{ slot: string; value: string } | null>(null);
   const storedModel = choice ? readPickedModel(choice.agentId, choice.accountId) : '';
-  const model = modelPick?.slot === modelSlot ? modelPick.value : usableModel(storedModel, modelList.status === 'ready' ? modelList.options : null);
+  const agentDefaults = useAgentDefaults(defaultsApi);
+  const model = modelPick?.slot === modelSlot ? modelPick.value : startingModel(storedModel, choice ? (agentDefaults[choice.agentId.toLowerCase()] ?? '') : '', modelList.status === 'ready' ? modelList.options : null);
   // A chat sets its model once it starts, so it always can. A terminal pane needs the agent's own launch flag.
   const showModel = !!choice && (runAs === 'chat' || (modelList.status === 'ready' && modelList.options.terminal));
 
@@ -561,7 +567,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 )}
               </Pop>
 
-              {canChat && (
+              {chatLane && (
                 <div className="ck-na-seg" role="radiogroup" aria-label="Run as">
                   {(['terminal', 'chat'] as const).map((mode) => (
                     <button
@@ -569,6 +575,8 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                       type="button"
                       role="radio"
                       aria-checked={runAs === mode}
+                      disabled={mode === 'chat' && lendNoChat}
+                      title={mode === 'chat' && lendNoChat ? "Chat can't use a lent sign-in for this agent yet. Use Terminal." : undefined}
                       className="ck-na-seg-btn"
                       onClick={() => {
                         setRunPick(mode);

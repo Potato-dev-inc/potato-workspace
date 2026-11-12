@@ -1,5 +1,6 @@
 // "Closed chats": the chats the person closed, newest first. Reopen brings one back into the sidebar with its history;
 // Delete removes it for good (after asking). Shown from the sidebar's "Closed chats" row.
+import { errorSentence } from '../../lib/sayError';
 import { useState } from 'react';
 import { folderName, type ClosedChat, type ClosedChatsApi } from '../../lib/closedChats';
 import '../../styles/cockpit-closed-chats.css';
@@ -29,7 +30,7 @@ export function ClosedChatsSheet({
 }) {
   const [ask, setAsk] = useState<Ask | null>(null);
   const [busy, setBusy] = useState(false);
-  const fail = (e: unknown) => notify(e instanceof Error ? e.message : String(e));
+  const fail = (e: unknown) => notify(errorSentence(e));
 
   const reopen = async (chat: ClosedChat) => {
     setBusy(true);

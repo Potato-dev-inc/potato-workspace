@@ -4,6 +4,7 @@
 // The lender's sign-in never leaves the lender's PC: a grant says who, which agent and until when. A borrowed grant is
 // one more sign-in for the borrower (`lend:<grant id>`, see lib/accounts.ts). A request that arrives from a teammate is
 // untrusted data (rendered as plain text, the reason always in quotes).
+import { errorSentence } from './sayError';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { Account } from './accounts';
@@ -327,7 +328,7 @@ export function otherPersonWarning(agent: string): { head: string; lines: string
   };
 }
 
-export const errText = (err: unknown): string => (err instanceof Error ? err.message : typeof err === 'string' ? err : String(err));
+export const errText = (err: unknown): string => (errorSentence(err));
 
 /** A reason from another PC, always shown in quotes. */
 export const quoted = (text: string): string => `“${text}”`;
@@ -335,4 +336,12 @@ export const quoted = (text: string): string => `“${text}”`;
 /** The first line of the chip's details: "Borrowed Claude from Leo's PC". */
 export function chipLabelOf(g: Grant, agent: string): string {
   return `Borrowed ${agent} from ${ownerOf(g.peer_name, g.peer_device_name || 'PC')}`;
+}
+
+/**
+ * The line shown on a borrowed sign-in (pane chip, Active lends). The agent can only see a placeholder key and the lender's
+ * address, so it may say "API billing" or "API key" even when the lender lends a plan: say what is true.
+ */
+export function borrowedBillingNote(peerName: string): string {
+  return `This is ${peerName}'s sign-in, lent through their PC. The agent may say "API billing"; that is only how it is connected. Use is charged to ${peerName}'s plan, not yours.`;
 }

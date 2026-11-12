@@ -1,6 +1,7 @@
 // Restoring files and the safety net around it, shared by the History tab and the "Undo last turn"
 // palette action: one code path, so both show the same toast with an Undo that puts back what the
 // restore replaced.
+import { errorSentence } from '../../lib/sayError';
 import type { Checkpoint, CheckpointsApi, RestoreReport } from '../../lib/cockpit-api';
 import { checkpointTitle } from './history-model';
 
@@ -11,7 +12,7 @@ export interface ToastAction {
 
 export type Notify = (text: string, action?: ToastAction) => void;
 
-const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+const errText = (e: unknown): string => (errorSentence(e));
 
 /** Other words for the same toasts (Simple mode says "went back", never "restored"). */
 export interface RestoreWords {

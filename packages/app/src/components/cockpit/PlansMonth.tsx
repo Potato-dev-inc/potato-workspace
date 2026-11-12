@@ -1,6 +1,7 @@
 // "Your plans this month": what each subscription (an agent under one account) did, side by side.
 // One dense table, a month switcher, and the plain notes about what is and is not counted.
 // No folder, no chat text: the backend never sends them (`plans_report`).
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
 import {
   filesText,
@@ -15,10 +16,6 @@ import {
 } from '../../lib/plans-report';
 import { NO_TURNS_TEXT, plansCsv, plansSummaryText } from '../../lib/plans-copy';
 import '../../styles/cockpit-plans.css';
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 type CopyKind = 'csv' | 'text';
 
@@ -38,7 +35,7 @@ export function PlansMonth({ api = plansApi, onClose }: { api?: PlansApi; onClos
         setReport(next);
         setError(null);
       })
-      .catch((e) => live && setError(errText(e)));
+      .catch((e) => live && setError(errorSentence(e)));
     return () => {
       live = false;
     };

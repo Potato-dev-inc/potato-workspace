@@ -8,6 +8,12 @@ import type { Settings } from '@potato-workspace/shared';
 import { BASE_SETTINGS, blur, click, settle, type as typeInto } from './settings/test-utils';
 import type { SettingsRefreshInfo } from '../lib/settings-sync';
 
+const recovery = vi.hoisted(() => ({ status: { damaged: false, hasBackup: true }, restore: vi.fn(async () => undefined), dismiss: vi.fn(async () => undefined) }));
+vi.mock('../lib/settings-recovery', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('../lib/settings-recovery')>();
+  return { ...orig, settingsRecoveryApi: { status: async () => recovery.status, restore: recovery.restore, dismiss: recovery.dismiss } };
+});
+
 vi.mock('./settings/catalog', async () => {
   const { SettingRow, SettingToggle, Btn } = await import('./settings/settings-ui');
   const { NumberControl, TextControl } = await import('./settings/controls');
@@ -149,6 +155,25 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.useRealTimers();
+});
+
+describe('a damaged settings file', () => {
+  it('shows the restore line at the top of the page, and nothing when the file was fine', async () => {
+    recovery.status = { damaged: false, hasBackup: true };
+    await mount();
+    expect(host.querySelector('.st-damaged')).toBeNull();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    recovery.status = { damaged: true, hasBackup: true };
+    await mount();
+    const line = host.querySelector('.st-damaged') as HTMLElement;
+    expect(line.textContent).toContain('Your settings file was damaged');
+    await click([...line.querySelectorAll('button')].find((b) => b.textContent === 'Restore the last good settings')!);
+    await settle(3);
+    expect(recovery.restore).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.st-damaged')).toBeNull();
+    recovery.status = { damaged: false, hasBackup: true };
+  });
 });
 
 describe('shell', () => {

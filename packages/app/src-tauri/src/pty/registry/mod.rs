@@ -85,6 +85,10 @@ pub struct PaneInfo {
     /// when the pane is proven to hold the caller (`bridge::pane_parent`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_pane_id: Option<String>,
+    /// Who started this pane and what for (the calling host, the task's first line); display-only, set for helpers
+    /// started over MCP (`pty::pane_origin`). Filled from the origin store by `PaneState::info()`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<crate::pty::pane_origin::PaneOrigin>,
     /// Where a Linux pane runs (`wsl::model::PanePlace`, WSL-11). Windows panes keep `None`, and the
     /// field is then left out of the JSON, so their JSON stays byte-identical.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -136,6 +140,7 @@ impl PaneState {
         info.viewer_held = crate::pty::viewer_size::is_held(&info.id);
         info.reprints_on_resize = crate::tui::profile_for(&info.agent_type).reprints_on_resize();
         info.title = crate::ambient::store::get(&info.id);
+        info.origin = crate::pty::pane_origin::get(&info.id);
         info
     }
 }
@@ -240,6 +245,7 @@ pub(crate) fn shutdown_pane(mut pane: PaneState) {
     crate::opencode::kill_serve_if_present(&mut pane);
     if let Some(pid) = pane.child.process_id().filter(|pid| *pid > 0) {
         super::proc_tree::kill_process_tree(pid);
+        super::orphans::forget(pid);
     }
     let _ = pane.child.kill();
     // A pane that ran inside Linux: its `wsl.exe` tree is gone, now stop what it left in the distro.
@@ -417,6 +423,7 @@ impl PaneRegistry {
             account_label: None,
             title: None,
             parent_pane_id: None,
+origin: None,
             place: None,
             lane: None,
         };

@@ -5,7 +5,7 @@ export const meta = {
   id: 'app.shortcuts-question-mark',
   title: 'The ? key opens the keyboard shortcuts sheet and Esc closes it',
   area: 'app',
-  tags: ['smoke', 'keyboard'],
+  tags: ['basic', 'keyboard'],
 };
 
 export async function run(t) {

@@ -404,7 +404,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "73-f1324947d459fab1");
+    assert_eq!(catalog_version(), "75-2d4c3cc55c21df4a");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one
@@ -625,7 +625,9 @@ fn run_agent_is_short_and_leads_with_the_launch_and_wait_example() {
         let text = run.input_schema["properties"][field]["description"].as_str().unwrap();
         assert!(text.starts_with("Advanced:"), "{field}: {text}");
     }
-    assert!(run.input_schema.to_string().len() < 6_000);
+    // 6_000 before review_by (about 300 more bytes) joined the schema; trust's `detail` field
+    // and the merged schema measured 6_405 bytes; auto_approve and the model note bring it to 6_790; `strict` and the lane hint make 6_840, so the limit is 6_850.
+    assert!(run.input_schema.to_string().len() < 6_850, "{} bytes", run.input_schema.to_string().len());
 }
 
 #[test]
@@ -634,4 +636,25 @@ fn agent_run_output_schema_describes_the_wait_and_reopen_fields() {
     assert_eq!(schema["properties"]["wait_extended"]["type"], "boolean");
     assert_eq!(schema["properties"]["waited_ms"]["type"], "integer");
     assert_eq!(schema["properties"]["reopened"]["type"], "object");
+}
+
+#[test]
+fn review_by_is_on_run_agent_and_the_multi_agent_tools_are_listed_only_in_mode_all() {
+    let registry = tools();
+    let run = registry.iter().find(|tool| tool.name == "run_agent").unwrap();
+    let review_by = &run.input_schema["properties"]["review_by"];
+    assert_eq!(review_by["type"], "object");
+    for field in ["agent_type", "model", "allow_same"] {
+        assert!(review_by["properties"].get(field).is_some(), "review_by.{field}");
+    }
+    for name in ["review_agent", "run_agents"] {
+        let tool = registry.iter().find(|tool| tool.name == name).unwrap_or_else(|| panic!("{name}"));
+        assert!(tool.description.len() < 500, "{name}: {} chars", tool.description.len());
+        assert!(!tool_listed_in_mode(name, McpMode::Agent), "{name} must not be in the default list");
+        assert!(tool_listed_in_mode(name, McpMode::All), "{name} is listed in mode all");
+        assert!(tool_visible_in_mode(name, McpMode::Agent), "{name} is callable in agent mode");
+    }
+    let batch = registry.iter().find(|tool| tool.name == "run_agents").unwrap();
+    assert_eq!(batch.input_schema["properties"]["until"]["enum"], serde_json::json!(["all", "any", "first_success"]));
+    assert_eq!(batch.input_schema["required"], serde_json::json!(["tasks"]));
 }

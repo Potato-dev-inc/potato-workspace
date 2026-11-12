@@ -5,7 +5,7 @@ export const meta = {
   id: 'branch.sheet-opens',
   title: 'Branch from here on a History row opens the sheet with the save point and the agents',
   area: 'branch',
-  tags: ['branch', 'smoke'],
+  tags: ['branch', 'basic'],
   timeout: 90000,
 };
 

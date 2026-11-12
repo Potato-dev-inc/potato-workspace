@@ -3,6 +3,7 @@
 // an iframe with an empty sandbox (no scripts) and the page as srcdoc, so the page cannot run code or reach anything.
 // The Markdown preview is plain text.
 // "Go live…" asks the cockpit to open the Go live sheet with this pane checked (the cockpit owns that sheet).
+import { errorSentence } from '../../lib/sayError';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { chatExportHtml, chatExportMarkdown, chatExportSave, chatPageFileName, type ExportFormat } from '../../lib/chatExport';
@@ -50,10 +51,6 @@ interface Made {
   format: ExportFormat;
   text: string;
   token: string;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export function ChatExportMenu({ paneId, api = tauriChatExportApi }: { paneId: string; api?: ChatExportApi }) {
@@ -154,7 +151,7 @@ export function SavePagePreview({
       .catch((error: unknown) => {
         if (!alive) return;
         setMade(null);
-        setLoadError(errorText(error));
+        setLoadError(errorSentence(error));
       });
     return () => {
       alive = false;
@@ -178,7 +175,7 @@ export function SavePagePreview({
     try {
       path = await api.pickPath(chatPageFileName(new Date(), format), format);
     } catch (error) {
-      setMessage({ text: `Not saved: ${errorText(error)}`, error: true });
+      setMessage({ text: `Not saved: ${errorSentence(error)}`, error: true });
       return;
     }
     if (!path) return;
@@ -189,7 +186,7 @@ export function SavePagePreview({
       setMade(null);
       setRound((n) => n + 1);
     } catch (error) {
-      setMessage({ text: `Not saved: ${errorText(error)}`, error: true });
+      setMessage({ text: `Not saved: ${errorSentence(error)}`, error: true });
     } finally {
       setBusy(false);
     }

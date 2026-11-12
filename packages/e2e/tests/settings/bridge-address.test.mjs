@@ -5,11 +5,21 @@ export const meta = {
   id: 'settings.bridge-address',
   title: 'Bridge & MCP shows the real address of the running bridge',
   area: 'settings',
-  tags: ['bridge'],
+  tags: ['bridge', 'smoke'],
 };
+
+const patch = (t, value) => t.page.eval(`window.__TAURI_INTERNALS__.invoke('settings_patch', { patch: { show_developer_settings: ${value} } }).then(() => true)`);
 
 export async function run(t) {
   await calm(t);
+  // The address row is a developer row: show those for this test and put the setting back at the end.
+  await patch(t, 'true');
+  try { await check(t); } finally { await patch(t, 'null').catch(() => {}); }
+}
+
+async function check(t) {
+  await t.page.reload();
+  await t.expect.text('Potato Workspace');
   await openSettings(t, 'Bridge & MCP');
 
   await t.step('The bridge address is shown');

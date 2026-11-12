@@ -1,3 +1,4 @@
+import { errorSentence } from '../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri, type OpenCodeKeyStatus } from '../lib/tauri';
 
@@ -26,7 +27,7 @@ export function WorkerOpenCodeAuthPanel({
       setError(null);
       setKeyStatus(await tauri.getOpenCodeKeyStatus());
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     }
   }, []);
 
@@ -48,7 +49,7 @@ export function WorkerOpenCodeAuthPanel({
       setKeyB('');
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setBusy(false);
     }
@@ -61,7 +62,7 @@ export function WorkerOpenCodeAuthPanel({
       await tauri.captureOpenCodeKeyProfile(profileId, profileId === 'a' ? 'Primary' : 'Secondary');
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setBusy(false);
     }
@@ -74,7 +75,7 @@ export function WorkerOpenCodeAuthPanel({
       await tauri.rotateOpenCodeKey(profile, paneId ?? undefined);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     } finally {
       setBusy(false);
     }

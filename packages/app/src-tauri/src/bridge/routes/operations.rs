@@ -54,13 +54,11 @@ fn delegate(cx: &Ctx) -> RouteResult {
     if req.pane_id.is_none() && crate::agent_run_mode::apply_keep_open(&mut req.keep_pane) {
         req.worker.kept_open_note = Some(crate::agent_run_mode::KEPT_OPEN_NOTE.to_string());
     }
-    // No model named: the person's "Default model for helpers" for this agent decides.
+    // No model named: the person's "Default model for helpers", then the agent's "Default model", decides.
+    let settings = crate::settings_store::read_public_settings(&app);
     if req.pane_id.is_none()
-        && crate::agent_run_mode::apply_helper_model(
-            &crate::settings_store::read_public_settings(&app),
-            &req.agent_type,
-            &mut req.worker.requested_model,
-        )
+        && (crate::agent_run_mode::apply_helper_model(&settings, &req.agent_type, &mut req.worker.requested_model)
+            || crate::agent_run_mode::apply_agent_default_model(&settings, &req.agent_type, &mut req.worker.requested_model))
     {
         req.worker.model_note = Some(crate::agent_run_mode::HELPER_MODEL_NOTE.to_string());
     }

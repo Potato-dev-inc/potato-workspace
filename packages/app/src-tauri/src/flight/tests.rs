@@ -438,6 +438,8 @@ fn bundle_inputs(casts: Vec<bundle::CastFile>, log: Vec<String>) -> bundle::Inpu
         }),
         log_lines: log,
         casts,
+        log_files: Vec::new(),
+        crash_files: Vec::new(),
         now_ms: 10_000_000,
     }
 }
@@ -542,4 +544,49 @@ fn sample_files_for_real_tools() {
         vec!["INFO started".into()],
     ));
     bundle::save(&b, &[], &std::path::Path::new(&dir).join("sample-diagnostic.zip")).unwrap();
+}
+
+#[test]
+fn logs_and_crash_reports_are_in_the_diagnostic_zip_with_secrets_masked() {
+    let secret = "sk-ant-api03-LogPlanted0123456789";
+    let mut inputs = bundle_inputs(Vec::new(), vec!["INFO hi".into()]);
+    inputs.log_files = vec![
+        bundle::TextFile { name: "app.log".into(), text: format!("INFO using {secret}
+INFO fine
+") },
+        bundle::TextFile { name: "app.log.1".into(), text: "INFO older
+".into() },
+    ];
+    inputs.crash_files = vec![bundle::TextFile { name: "panic-1.log".into(), text: format!("message: {secret}
+") }];
+    let b = bundle::build(inputs);
+    let files = zip::read_back(&b.zip(&[]).unwrap()).unwrap();
+    let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(
+        names,
+        ["manifest.json", "README.txt", "version.json", "settings.json", "app-log.txt", "logs/app.log", "logs/app.log.1", "crash/panic-1.log"]
+    );
+    for (name, data) in &files {
+        assert!(!String::from_utf8_lossy(data).contains("LogPlanted"), "{name} still holds the key");
+    }
+    let log = files.iter().find(|(n, _)| n == "logs/app.log").unwrap();
+    assert!(String::from_utf8_lossy(&log.1).contains("INFO fine"));
+}
+
+#[test]
+fn collect_reads_the_log_folder_newest_first_and_the_newest_crash_reports() {
+    let dir = std::env::temp_dir().join(format!("pw-collect-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let logs = dir.join("logs");
+    std::fs::create_dir_all(&logs).unwrap();
+    std::fs::create_dir_all(dir.join("crash")).unwrap();
+    std::fs::write(logs.join("app.log"), "new").unwrap();
+    std::fs::write(logs.join("app.log.1"), "old").unwrap();
+    std::fs::write(dir.join("crash").join("panic-9.log"), "boom").unwrap();
+    let got = bundle::collect_logs(&logs);
+    assert_eq!(got.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["app.log", "app.log.1"]);
+    let crashes = bundle::collect_crashes(&dir);
+    assert_eq!(crashes.len(), 1);
+    assert_eq!(crashes[0].text, "boom");
+    let _ = std::fs::remove_dir_all(&dir);
 }

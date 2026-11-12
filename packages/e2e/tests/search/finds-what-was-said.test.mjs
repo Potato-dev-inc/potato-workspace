@@ -5,7 +5,7 @@ export const meta = {
   id: 'search.finds-what-was-said',
   title: 'Searching a word finds both your message and the answer',
   area: 'search',
-  tags: ['search', 'smoke'],
+  tags: ['search', 'basic'],
 };
 
 export async function run(t) {

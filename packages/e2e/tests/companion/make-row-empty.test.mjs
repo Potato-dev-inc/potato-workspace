@@ -5,7 +5,7 @@ export const meta = {
   id: 'companion.make-row-empty',
   title: 'With no companion the sidebar offers "Make a companion" and it opens the setup sheet',
   area: 'companion',
-  tags: ['smoke'],
+  tags: ['basic'],
 };
 
 export const run = guarded(async (t) => {

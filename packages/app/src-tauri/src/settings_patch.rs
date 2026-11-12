@@ -76,6 +76,7 @@ pub fn merge_into_file(file: &Value, patch: &Map<String, Value>) -> Value {
         out[SETTINGS_KEY] = json!({});
     }
     merge_patch(&mut out[SETTINGS_KEY], &Value::Object(patch.clone()));
+    crate::settings_safety::stamp(&mut out);
     out
 }
 
@@ -140,6 +141,11 @@ pub(crate) fn patch_file_locked(path: &Path, patch: &Map<String, Value>) -> Resu
     Ok(next[SETTINGS_KEY].clone())
 }
 
+/// Held while a restore replaces the file, so no patch writes in between.
+pub(crate) fn lock_for_restore() -> parking_lot::MutexGuard<'static, ()> {
+    PATCH_LOCK.lock()
+}
+
 fn settings_path() -> PathBuf {
     crate::app_paths::app_data_dir().join(SETTINGS_FILE)
 }
@@ -155,12 +161,16 @@ fn patch_via_store(app: &AppHandle, patch: &Map<String, Value>) -> Result<Value,
     let mut next = if current.is_object() { current } else { json!({}) };
     merge_patch(&mut next, &Value::Object(patch.clone()));
     store.set(SETTINGS_KEY, next.clone());
+    // The file's version number (see settings_safety): the store keeps it, so a later autosave writes it too.
+    let version = crate::settings_safety::version_to_write(&Value::Object(store.entries().into_iter().collect()));
+    store.set(crate::settings_safety::SCHEMA_KEY, json!(version));
     let mut file = Map::new();
     for (key, value) in store.entries() {
         file.insert(key, value);
     }
     let bytes = serde_json::to_vec_pretty(&Value::Object(file)).map_err(|e| e.to_string())?;
     write_atomic(&path, &bytes).map_err(|e| e.to_string())?;
+    crate::settings_safety::after_save(&path);
     Ok(next)
 }
 
@@ -197,7 +207,9 @@ pub fn apply(app: &AppHandle, patch: &Value) -> Result<Value, String> {
             }
             patch_via_store(app, clean).or_else(|store_err| {
                 tracing::warn!(error = %store_err, "settings_patch: store plugin unusable, patching the file directly");
-                patch_file_locked(&settings_path(), clean)
+                let saved = patch_file_locked(&settings_path(), clean);
+                crate::settings_safety::after_save(&settings_path());
+                saved
             })
         },
         |public| {

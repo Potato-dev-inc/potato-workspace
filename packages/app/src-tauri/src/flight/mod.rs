@@ -10,6 +10,7 @@
 //! - `cast`: ring -> asciicast v2, redacted.
 //! - `freeze`: where casts are written and the failure hook.
 //! - `applog`: a tail of the app's own log for the diagnostic bundle.
+//! - `logfile`: the app's log on disk (`<app data>/logs`), redacted at write time, 25 MB at most.
 //! - `bundle` / `zip`: the "Save a diagnostic file" bundle.
 //!
 //! ## Input tags and `WriteOrigin`
@@ -37,6 +38,9 @@ pub mod applog;
 pub mod bundle;
 pub mod cast;
 pub mod freeze;
+pub mod lastrun;
+pub mod logfile;
+pub mod perf;
 pub mod ring;
 pub mod zip;
 

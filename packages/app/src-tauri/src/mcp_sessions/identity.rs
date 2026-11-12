@@ -52,6 +52,20 @@ pub fn session_identity(session_id: &str) -> SessionIdentity {
     }
 }
 
+/// True when both connections are the same coordinator: one is the other after a reconnect with its attach
+/// token (`attach_agents`). A name never counts, only the token-proven link, and a connection this table
+/// has never seen (or forgot) is nobody's.
+pub fn same_coordinator(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    let state = lock_state();
+    match (state.sessions.get(a), state.sessions.get(b)) {
+        (Some(x), Some(y)) => x.coordinator_id == y.coordinator_id,
+        _ => false,
+    }
+}
+
 pub fn inspect_lease(handle: &str) -> Option<LeaseView> {
     lock_state().agents.get(handle).map(|agent| LeaseView {
         owner: agent.owner.clone(),

@@ -23,6 +23,8 @@ export type PaneInfo = {
   title?: string | null;
   /** The pane of the agent that started this one over MCP (a helper); display-only, absent for the person's own panes. */
   parent_pane_id?: string | null;
+  /** Who started this pane over MCP and what for: the calling host ("Claude Code") and the first line of the task. Display-only. */
+  origin?: { host?: string | null; task?: string | null } | null;
   /** Where a Linux (WSL) pane runs; absent for a Windows pane. Display only. */
   place?: PanePlace;
   /** `acp`: a chat session over the Agent Client Protocol (no terminal behind the pane). Absent for a terminal pane. */
@@ -253,6 +255,25 @@ export interface DiagnosticEntry {
 export interface DiagnosticPreview {
   files: DiagnosticEntry[];
   totalBytes: number;
+}
+
+export interface PerfStat {
+  count: number;
+  medianMs: number | null;
+  lastMs: number | null;
+}
+
+/** "Speed on this PC": worked out from the app's own log file. */
+export interface PerfSummary {
+  appStart: PerfStat;
+  chatWarm: PerfStat;
+  chatCold: PerfStat;
+  handshake: PerfStat;
+}
+
+export interface LastRun {
+  closedUnexpectedly: boolean;
+  crashedAtMs: number | null;
 }
 
 export interface DiagnosticSaved {

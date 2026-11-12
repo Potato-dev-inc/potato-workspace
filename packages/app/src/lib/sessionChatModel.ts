@@ -367,6 +367,11 @@ export function groupTurns(items: readonly ChatItem[]): GroupedChat {
           title = item.text || title;
           break;
         }
+        // The CLI can write one background-task notification twice; the kind carries its task id.
+        if (item.noticeKind.startsWith('background:')) {
+          if (seenLinks.has(item.noticeKind)) break;
+          seenLinks.add(item.noticeKind);
+        }
         if (item.url) {
           if (seenLinks.has(item.url)) break;
           seenLinks.add(item.url);

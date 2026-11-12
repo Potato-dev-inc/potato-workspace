@@ -2,7 +2,7 @@
 //!
 //! Order, decided in one place (`choose`): the request's model (applied by the caller afterwards, strictly,
 //! `choice::apply`), then the helper default model (`helper_default_models`, only when an agent started this chat as its
-//! helper), then the app setting the agent's definition names (`[acp.default_model]`), then the model the person last
+//! helper), then the agent default (`agent_default_models`, Settings > Agents; an older app setting named by `[acp.default_model]` when none is saved), then the model the person last
 //! picked in a chat of this agent, then the agent's own default. A model the agent does not offer is never sent: the agent keeps its own choice and the result
 //! carries a note. Generic: which setting and which words come from the definition.
 
@@ -32,18 +32,18 @@ fn settings() -> Value {
 pub enum Source {
     Request,
     Helper,
-    Setting,
+    AgentDefault,
     LastPicked,
 }
 
-/// The resolver: the first of request, helper default, setting, last picked that says something. `None`: keep the
+/// The resolver: the first of request, helper default, agent default, last picked that says something. `None`: keep the
 /// agent's own default.
-pub fn choose(request: Option<&str>, helper: Option<&str>, setting: Option<&str>, last_picked: Option<&str>) -> Option<(String, Source)> {
+pub fn choose(request: Option<&str>, helper: Option<&str>, agent_default: Option<&str>, last_picked: Option<&str>) -> Option<(String, Source)> {
     let pick = |v: Option<&str>| v.map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
     pick(request)
         .map(|v| (v, Source::Request))
         .or_else(|| pick(helper).map(|v| (v, Source::Helper)))
-        .or_else(|| pick(setting).map(|v| (v, Source::Setting)))
+        .or_else(|| pick(agent_default).map(|v| (v, Source::AgentDefault)))
         .or_else(|| pick(last_picked).map(|v| (v, Source::LastPicked)))
 }
 
@@ -103,10 +103,10 @@ impl LastPicked {
 
 /// The value to send (one the agent offers), nothing when no model is chosen (or the request names one: the caller
 /// applies that, strictly), or the note to show when the chosen model is not offered. The helper default counts only
-/// when `is_helper`; the setting and the last pick only when the definition has a `[acp.default_model]` rule.
+/// when `is_helper`; the agent default for every agent, the last pick only when the definition has a `[acp.default_model]` rule.
 pub fn plan(chat: &AcpChat, rule: Option<&DefaultModel>, settings: &Value, store: &LastPicked, request: Option<&str>, is_helper: bool) -> Result<Option<String>, String> {
     let helper = if is_helper { crate::agent_run_mode::helper_default_for(settings, chat.agent_id()) } else { None };
-    let setting = rule.and_then(|rule| setting_value(rule, settings));
+    let setting = crate::agent_run_mode::agent_default_for(settings, chat.agent_id()).or_else(|| rule.and_then(|rule| setting_value(rule, settings)));
     let last = rule.and_then(|_| store.get(chat.agent_id()));
     let Some((wanted, source)) = choose(request, helper.as_deref(), setting.as_deref(), last.as_deref()) else { return Ok(None) };
     if source == Source::Request {

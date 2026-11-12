@@ -1,6 +1,7 @@
 // Pending `ask_user` questions at the top of the phone All tab: the question, choice buttons and
 // a text field. Refetches when the bridge `questions` event changes `revision` (the event-driven
 // path), fetches once on mount, and keeps a slow 30s poll only as a fallback for a missed event.
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BridgeClient } from '../../lib/bridge';
 import { askerName, isLive, waitCaption, type Question } from '../../lib/questions';
@@ -82,7 +83,7 @@ export function QuestionsView({
       await action;
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorSentence(err));
     }
     refresh();
   };

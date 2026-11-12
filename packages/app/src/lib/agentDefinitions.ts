@@ -1,5 +1,6 @@
 // Declarative agent definitions for Settings > Agents (SPEC 7.5): typed wrappers over the Tauri
 // commands in commands/agents.rs. The webview is the "app session" the mutating routes require.
+import { errorSentence } from './sayError';
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 
@@ -354,10 +355,6 @@ export function approvalWarnings(row: DefinitionRow, preview: DefinitionPreview 
   return warnings;
 }
 
-export function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 /** The folder a definition file sits in (works for `/` and `\` paths). */
 export function folderOf(path: string): string {
   const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
@@ -386,7 +383,7 @@ export function removability(row: DefinitionRow): 'own' | 'elsewhere' | 'none' {
 
 /** The backend's "CODE: message" errors as a plain sentence. */
 export function plainError(e: unknown): string {
-  return errorMessage(e).replace(/^[A-Z][A-Z0-9_]+:\s*/, '');
+  return errorSentence(e);
 }
 
 /** One line for a finished restore. */

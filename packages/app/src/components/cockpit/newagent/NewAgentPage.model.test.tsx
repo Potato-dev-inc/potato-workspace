@@ -46,9 +46,9 @@ afterEach(async () => {
   host.remove();
 });
 
-async function mount(lanes: 'chat' | 'terminal', onStart = vi.fn(async (_r: StartRequest) => undefined), agents = [agent('alpha', 'Alpha'), agent('beta', 'Beta')]) {
+async function mount(lanes: 'chat' | 'terminal', onStart = vi.fn(async (_r: StartRequest) => undefined), agents = [agent('alpha', 'Alpha'), agent('beta', 'Beta')], defaults: Record<string, string> = {}) {
   await act(async () => {
-    root.render(<NewAgentPage agents={agents} panes={[]} needs={[]} api={api(lanes)} modelApi={modelApi} onStart={onStart} onOpenPane={() => undefined} />);
+    root.render(<NewAgentPage agents={agents} panes={[]} needs={[]} api={api(lanes)} modelApi={modelApi} defaultsApi={{ get: async () => defaults }} onStart={onStart} onOpenPane={() => undefined} />);
   });
   await act(async () => {});
   return onStart;
@@ -141,6 +141,40 @@ describe('New agent page: model picker', () => {
     await click(chip());
     await click(option('Default'));
     expect(localStorage.getItem('pm.newagent.model.alpha')).toBeNull();
+    expect(chip()?.textContent).toContain('Default (Gpt-5.1)');
+  });
+
+  it("starts on the agent's saved Default model when there is no last pick, and sends it", async () => {
+    const onStart = await mount('terminal', undefined, undefined, { alpha: 'gpt-5-mini' });
+    expect(chip()?.textContent).toContain('Gpt-5-mini');
+    await send();
+    expect(onStart.mock.calls[0][0].model).toBe('gpt-5-mini');
+  });
+
+  it('matches the saved Default in any case and uses the listed spelling', async () => {
+    const onStart = await mount('terminal', undefined, undefined, { alpha: 'GPT-5-MINI' });
+    expect(chip()?.textContent).toContain('Gpt-5-mini');
+    await send();
+    expect(onStart.mock.calls[0][0].model).toBe('gpt-5-mini');
+  });
+
+  it('a last pick beats the saved Default', async () => {
+    localStorage.setItem('pm.newagent.model.alpha', 'gpt-5.1');
+    const onStart = await mount('terminal', undefined, undefined, { alpha: 'gpt-5-mini' });
+    expect(chip()?.textContent).toContain('Gpt-5.1');
+    await send();
+    expect(onStart.mock.calls[0][0].model).toBe('gpt-5.1');
+  });
+
+  it('a saved Default the agent no longer lists is ignored, so the start carries no model', async () => {
+    const onStart = await mount('terminal', undefined, undefined, { alpha: 'gone-model' });
+    expect(chip()?.textContent).toContain('Default (Gpt-5.1)');
+    await send();
+    expect('model' in onStart.mock.calls[0][0]).toBe(false);
+  });
+
+  it('a saved Default for another agent does not leak in', async () => {
+    await mount('terminal', undefined, undefined, { beta: 'gpt-5-mini' });
     expect(chip()?.textContent).toContain('Default (Gpt-5.1)');
   });
 });

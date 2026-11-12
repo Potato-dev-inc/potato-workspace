@@ -229,6 +229,7 @@ pub fn spawn_native_pane(
         account_label: None,
         title: None,
         parent_pane_id: None,
+        origin: None,
         place: None,
         lane: None,
     };

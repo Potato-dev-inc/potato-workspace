@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bubblesFor, composerBlock, errorText, SENT_BUBBLE_MS, withSent, type OutboxMessage } from './paneOutbox';
+import { bubblesFor, composerBlock, SENT_BUBBLE_MS, withSent, type OutboxMessage } from './paneOutbox';
 
 function msg(id: string, state: OutboxMessage['state'], text = id, createdAt = 1): OutboxMessage {
   return { id, text, createdAt, state, waitingFor: null, error: state === 'failed' ? 'It failed.' : null };
@@ -50,7 +50,7 @@ describe('composerBlock', () => {
   });
 });
 
-describe('withSent and errorText', () => {
+describe('withSent', () => {
   it('adds a message it does not know and never overwrites a newer state', () => {
     const queued = msg('a', 'queued', 'a', 5);
     const sentAlready = msg('a', 'sent', 'a', 5);
@@ -59,9 +59,4 @@ describe('withSent and errorText', () => {
     expect(withSent([msg('z', 'queued', 'z', 9)], msg('y', 'queued', 'y', 3)).map((m) => m.id)).toEqual(['y', 'z']);
   });
 
-  it('reads the words of whatever was thrown', () => {
-    expect(errorText('Too many waiting messages.')).toBe('Too many waiting messages.');
-    expect(errorText(new Error('boom'))).toBe('boom');
-    expect(errorText({})).toBe('Could not send the message.');
-  });
 });

@@ -17,6 +17,10 @@ use std::path::{Path, PathBuf};
 /// to `src/`, with `/` separators.
 const EXCEPTIONS: &[(&str, &str)] = &[
     (
+        "mcp_shim/app_start.rs",
+        "starts the desktop app detached (DETACHED_PROCESS) so it outlives the MCP shim and takes no console; the app has no console window to hide",
+    ),
+    (
         "proc_util.rs",
         "the helper itself: it is where the flag is set",
     ),
@@ -348,8 +352,9 @@ fn exceptions_are_real_and_still_set_the_flag_themselves() {
             // A file that spawns on its own must hide the window on its own.
             let raw = fs::read_to_string(src_dir().join(path)).expect("exception file");
             assert!(
-                raw.contains("creation_flags(0x0800_0000)"),
-                "{path} starts processes itself but does not set CREATE_NO_WINDOW"
+                // CREATE_NO_WINDOW, or DETACHED_PROCESS (0x8) for a launch that must outlive us; both start with no console.
+                raw.contains("creation_flags(0x0800_0000)") || raw.contains("creation_flags(0x0000_0008"),
+                "{path} starts processes itself but does not set CREATE_NO_WINDOW or DETACHED_PROCESS"
             );
         }
     }

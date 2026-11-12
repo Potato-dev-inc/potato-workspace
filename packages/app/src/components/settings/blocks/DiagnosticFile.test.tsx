@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
     ],
   },
   target: 'C:\out\diag.zip' as string | null,
+  lastRun: { closedUnexpectedly: false, crashedAtMs: null as number | null },
+  perf: null as unknown,
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ save: vi.fn(async () => mocks.target) }));
@@ -20,6 +22,8 @@ vi.mock('../../../lib/tauri', () => ({
   tauri: {
     diagnosticPreview: vi.fn(async () => mocks.preview),
     diagnosticShow: vi.fn(async (path: string) => `contents of ${path}`),
+    lastRunStatus: vi.fn(async () => mocks.lastRun),
+    perfSummary: vi.fn(async () => mocks.perf),
     diagnosticSave: vi.fn(async (path: string) => ({ path, files: 3, bytes: 2048 })),
   },
 }));
@@ -116,5 +120,54 @@ describe('the open list keeps itself current', () => {
     vi.useFakeTimers();
     await act(async () => void (await vi.advanceTimersByTimeAsync(DIAGNOSTIC_REFRESH_MS * 3)));
     expect(tauri.diagnosticPreview).not.toHaveBeenCalled();
+  });
+});
+
+describe('Speed on this PC and the closed-unexpectedly line', () => {
+  const stat = (count: number, medianMs: number | null, lastMs: number | null) => ({ count, medianMs, lastMs });
+  const none = stat(0, null, null);
+
+  afterEach(() => {
+    mocks.lastRun = { closedUnexpectedly: false, crashedAtMs: null };
+    mocks.perf = null;
+  });
+
+  async function remount() {
+    await m.unmount();
+    m = await mountRows(row);
+    await settle();
+  }
+
+  it('is part of the screen: shows typical and latest times in plain words', async () => {
+    mocks.perf = { appStart: stat(3, 1500, 1400), chatWarm: stat(2, 400, 350), chatCold: stat(1, 2100, 2100), handshake: none };
+    await remount();
+    expect(m.host.textContent).toContain('Speed on this PC');
+    expect(m.host.textContent).toContain('Starting a chat that was ready ahead of time');
+    expect(m.host.textContent).toContain('usually 1.5 s, last time 1.4 s (3 times)');
+    expect(m.host.textContent).toContain('usually 400 ms');
+    expect(m.host.textContent).not.toContain('Waiting for the agent to say hello');
+  });
+
+  it('says so when nothing has been measured yet', async () => {
+    mocks.perf = { appStart: none, chatWarm: none, chatCold: none, handshake: none };
+    await remount();
+    expect(m.host.textContent).toContain('Nothing measured yet');
+  });
+
+  it('shows no closed-unexpectedly line after a normal run', async () => {
+    await remount();
+    expect(m.host.textContent).not.toContain('closed unexpectedly');
+  });
+
+  it('after a crash, offers to save a diagnostic file, and goes away once saved', async () => {
+    mocks.lastRun = { closedUnexpectedly: true, crashedAtMs: 123 };
+    await remount();
+    expect(m.host.textContent).toContain('Potato Workspace closed unexpectedly last time');
+    const buttons = [...m.host.querySelectorAll('button')].filter((b) => b.textContent === 'Save a diagnostic file');
+    expect(buttons).toHaveLength(1);
+    await click(buttons[0]);
+    await settle();
+    expect(tauri.diagnosticSave).toHaveBeenCalledWith('C:\out\diag.zip', []);
+    expect(m.host.textContent).not.toContain('closed unexpectedly');
   });
 });

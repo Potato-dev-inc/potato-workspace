@@ -11,6 +11,10 @@ command = "opencode"
 args = ["acp"]
 env_allow = []
 
+# OpenCode 2.x: the terminal screen starts a background server and takes no typed prompt (the prompt is never
+# submitted), so a chat that cannot start is reported as it is and never rerun in a terminal.
+chat_only = true
+
 # Added to the normal terminal launch: `opencode --session <session id>`.
 resume_command = ["--session", "{session}"]
 

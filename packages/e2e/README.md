@@ -29,6 +29,7 @@ npm run e2e                                 # all tests, with video
 npm run e2e -- --only chat.send-message     # one test
 npm run e2e -- --only "chat.*,settings"     # a glob, an area, several (comma separated)
 npm run e2e -- --only tag:smoke             # by tag
+npm run e2e:smoke                           # the 12-test gate: headless, off-screen, no video (about 3-5 min)
 npm run e2e -- --only panes --no-video      # faster: no recording
 npm run e2e -- --only chat.send-message --keep-app   # leave the app running to look at it
 ```
@@ -40,6 +41,7 @@ npm run e2e -- --only chat.send-message --keep-app   # leave the app running to 
 | `--known-bugs` | also run tests whose `meta.skip` is set (known product bugs); same as `E2E_RUN_KNOWN_BUGS=1` |
 | `--keep-app` | leave the app running after the run (prints the pid and how to stop it) |
 | `--headless` | put the window off-screen (`-32000,-32000`) |
+| (always) | an `--anchor` / `PM_WINDOW_ANCHOR` that would put a window on the primary screen is replaced by the off-screen anchor, with a warning |
 | `--anchor x,y` | where the window opens (default `PM_WINDOW_ANCHOR`, else the left monitor, `-1852,121`) |
 | `--run-id <id>` | name of the results folder |
 
@@ -48,6 +50,10 @@ Exit code: 0 all passed, 1 a test failed, 2 could not run.
 Results: `e2e-results/<run-id>/<test-id>/{video.mp4,result.json,failure.png,thumb.jpg}` and `e2e-results/<run-id>/run.json` (ignored by git). `result.json` holds the status, duration, the named steps with their time in the video, the error and a screenshot on failure, the test's own log lines and the page's console errors.
 
 Environment: `E2E_CARGO_TARGET`, `E2E_APP_EXE`, `E2E_FAKE_TUI_EXE` (use other binaries), `E2E_RESULTS_DIR`, `E2E_VIEWPORT` (default `1280x800`, also the video size), `E2E_CRF` (video quality, default 28), `E2E_PROFILE` (default `e2e`), `E2E_HEADLESS=1`, `FFMPEG` (path to ffmpeg if it is not on PATH).
+
+### The smoke gate (`tag:smoke`)
+
+Twelve tests, one command (`npm run e2e:smoke` from the repo root, after `npm run e2e:build`), run before a batch is merged: the app starts, the first-run welcome, a chat message and its reply, a terminal agent, an Inbox card answered, every Settings page, a chat restored after a restart, the bridge `/health`, an MCP `run_agent` with the fake agent, the phone pairing page, Bring my old chats, and quitting leaves no child process. The command is headless (window off-screen, never on the primary screen) and records no video. The older `basic` tag is the wider set of quick checks that used to be called `smoke`. Keep the gate at 12: a new test joins it only when an old one leaves.
 
 ## Dashboard
 
@@ -112,6 +118,8 @@ The fake agent plays a `pm-fake-tui` script: see `tools/pm-fake-tui/README.md` (
 - **Isolation.** The launcher starts the app binary with `POTATO_WORKSPACE_PROFILE=e2e` (its own app id, its own bridge port, never 17321 or 17322), `APPDATA`, `LOCALAPPDATA`, `HOME`, `USERPROFILE` and the WebView2 data folder pointing into `%TEMP%/pm-e2e/<run-id>/`, and a random free debugging port (never 9333). It refuses forbidden ports and the real app's data folder. Only the process tree it started is stopped, also on failure, Ctrl+C or a crash of the runner; a run that was killed hard leaves a record the next run uses to stop the leftover app (by pid, only if it is still a `puppet_master_app`). The run folders under `%TEMP%/pm-e2e` are kept for debugging (delete old ones by hand).
 - **Fake agents.** The app gets a declarative agent definition (`fixtures/agents/nimbus.toml`) and copies of `pm-fake-tui` named after it. On Windows the app rebuilds its PATH from the registry, so the dev-only feature `dev-fake-tui` adds `PM_E2E_PATH_PREPEND` (see `src-tauri/src/shell_env.rs`); a normal or release build ignores it. The script a fake agent plays is the file named in `PM_FAKE_TUI_SCRIPT`; `t.fake.script()` rewrites it before each pane starts.
 - **The window.** The launcher starts the app with `POTATO_WORKSPACE_NO_WINDOW=1` (a normal start now opens the cockpit by itself, but that startup window is not reachable on the debugging port in the harness: the run then times out with "timed out waiting for the cockpit window"; `E2E_STARTUP_WINDOW=1` turns this off). It then spawns a shell pane through the bridge and detaches it, which opens the cockpit unfocused at the window anchor, then closes that pane.
+- **The cockpit must be the first window.** The launcher asks for the cockpit (a shell pane, detached) the moment the bridge answers. The app builds a hidden helper web view about a second later; if that one is created first, WebView2 never opens the debugging port and the cockpit cannot be reached. A start that loses this race is stopped after 20 s (`E2E_PORT_DEAD_MS`) and tried again on a new folder, up to 4 tries (`startWithCockpit`). A busy PC makes the race more likely, not different.
+- **Never on the primary screen.** `--headless` puts the window at `-32000,-32000`; without it the anchor is the left monitor. An anchor that would land a window inside the primary screen (the other monitor is unplugged) is replaced by the off-screen one, with a warning.
 - **Restarts.** Every start of the app (`fresh`, `seed`) gets a folder of its own (`<run-id>-r2`, ...) and waits for the new bridge port file, so a restart never talks to a previous instance. The settings file starts with `onboarding_done: true` and `away_minutes: 0`; between tests the runner says it again through the app's `settings_patch` (the app keeps its own copy of the settings once any window patches them, and that copy would bring the welcome back).
 - **Video.** CDP screencast frames (JPEG) with their timestamps become one H.264 file at 25 fps (ffmpeg). The page gets a visible cursor, click ripples, key caps, the step label (bottom left) and the test id (bottom right) from an overlay that never touches the app's own DOM.
 - **Reset between tests.** Close all panes, default script, clear what earlier tests left in the app's own stores (a Night Shift run and its history, a Focus summary, every pending question and card such as a usage limit or a spent budget), clear localStorage, navigate to a fresh cockpit page. Roughly 1.5 s. If the Inbox still holds something after that, the app restarts (new data folder) before the next test.

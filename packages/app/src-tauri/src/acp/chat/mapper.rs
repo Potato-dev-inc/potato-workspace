@@ -208,11 +208,20 @@ impl Tool {
         match &self.raw_output {
             Some(Value::String(text)) => unfence(text.trim()),
             Some(Value::Null) | None => String::new(),
-            Some(Value::Object(map)) => ["stdout", "output", "formatted_output", "aggregated_output", "text"]
-                .iter()
-                .find_map(|key| map.get(*key).and_then(Value::as_str).filter(|t| !t.trim().is_empty()))
-                .map(|t| t.trim().to_string())
-                .unwrap_or_else(|| Value::Object(map.clone()).to_string()),
+            Some(Value::Object(map)) => {
+                const KEYS: [&str; 5] = ["stdout", "output", "formatted_output", "aggregated_output", "text"];
+                if let Some(text) = KEYS.iter().find_map(|key| map.get(*key).and_then(Value::as_str).filter(|t| !t.trim().is_empty())) {
+                    return text.trim().to_string();
+                }
+                // A command that printed nothing: the object only carries an empty output (and maybe an exit code).
+                // Never show that object as raw JSON.
+                let empty_output = KEYS.iter().any(|key| map.get(*key).is_some_and(Value::is_string));
+                let only_status = map.keys().all(|key| KEYS.contains(&key.as_str()) || key == "exit_code");
+                if empty_output && only_status {
+                    return if map.get("exit_code").is_some_and(Value::is_null) { "The command didn't run.".to_string() } else { String::new() };
+                }
+                Value::Object(map.clone()).to_string()
+            }
             Some(other) => other.to_string(),
         }
     }

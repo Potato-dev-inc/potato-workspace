@@ -1,5 +1,6 @@
 // One provider API key: masked when stored, with Replace / Remove. The copy matches where the key really is.
 // Typing a key saves it when the field loses focus or on Enter (never per keystroke, no Save button).
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   NO_SECURE_STORAGE_WARNING,
@@ -28,10 +29,6 @@ interface Props {
   onConfirmRemove?: () => Promise<boolean>;
 }
 
-function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileValue, onFileChange, onSaved, onConfirmRemove }: Props) {
   const [info, setInfo] = useState<SecretStorageInfo | null>(null);
   const [mask, setMask] = useState<SecretMask | null>(null);
@@ -48,7 +45,7 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
       setInfo(i);
       setMask(i.secure ? await api.getMasked(name) : null);
     } catch (e) {
-      setError(errorText(e));
+      setError(errorSentence(e));
     }
   }, [api, name]);
 
@@ -78,7 +75,7 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
     try {
       await action();
     } catch (e) {
-      setError(errorText(e));
+      setError(errorSentence(e));
     } finally {
       setBusy(false);
     }

@@ -1,4 +1,5 @@
 // Settings > Mobile PWA > Public address: pick how the phone reaches this computer.
+import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../../lib/tauri';
 import type { TunnelConfigInput, TunnelConnectionTest, TunnelStatus } from '../../lib/tauri-types';
@@ -50,7 +51,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
       setStatus(next);
       setDraft(draftFromConfig(next?.config));
     } catch (e) {
-      setError(`Could not read the address: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Could not read the address: ${errorSentence(e)}`);
     }
   }, [api]);
 
@@ -65,7 +66,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
       api
         .getStatus()
         .then((next) => next && setStatus(next))
-        .catch((e: unknown) => setError(`Could not check the address: ${e instanceof Error ? e.message : String(e)}`));
+        .catch((e: unknown) => setError(`Could not check the address: ${errorSentence(e)}`));
     }, 1500);
     return () => window.clearInterval(id);
   }, [api, status?.state]);
@@ -76,7 +77,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorSentence(e));
     } finally {
       setBusy(null);
     }

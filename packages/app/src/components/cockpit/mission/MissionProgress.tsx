@@ -1,6 +1,7 @@
 // A mission's Progress (DESIGN-MISSIONS 6.3, 6.4, 6.6): the state line and budget, the one 2px
 // progress bar, the timeline (one hairline row per turn or event, newest first), the card when it
 // needs you, and the Done review when it is finished. Notes renders MISSION.md's agents' notes.
+import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { barText, isActive, tauriMissionsApi, type MissionView, type MissionsApi, type TimelineRow } from '../../../lib/missions';
 import { SegTabs } from '../SegTabs';
@@ -158,7 +159,7 @@ export function MissionProgress({
         onChanged?.(next);
         if (sentence) onNotify?.(sentence);
       })
-      .catch((err) => onNotify?.(err instanceof Error ? err.message : String(err)));
+      .catch((err) => onNotify?.(errorSentence(err)));
 
   return (
     <div className="ck-mission" data-testid="mission-progress">

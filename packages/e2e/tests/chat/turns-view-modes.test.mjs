@@ -5,7 +5,7 @@ export const meta = {
   id: 'chat.turns-view-modes',
   title: 'Summary, Normal and Verbose show more and more of a turn',
   area: 'chat',
-  tags: ['turns', 'smoke'],
+  tags: ['turns', 'basic'],
 };
 
 const pressed = (t, name) =>

@@ -1,8 +1,7 @@
 //! A tail of the app's own log, kept in memory for the diagnostic bundle.
 //!
-//! The app logs to the console only. `Tee` is the `tracing` writer that keeps doing that and also
-//! keeps the last few hundred lines here. Nothing is written to disk until the person saves a
-//! diagnostic file (and then it is redacted).
+//! `Tee` is the `tracing` writer: it prints to the console, keeps the last few hundred lines here,
+//! and hands each line to `logfile`, which redacts it and writes it to the rolling log on disk.
 
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
@@ -29,6 +28,7 @@ fn keep(line: &str) {
         text.truncate(cut);
         text.push_str(" ...");
     }
+    super::logfile::write(&text);
     let mut tail = TAIL.lock();
     if tail.len() == MAX_LINES {
         tail.pop_front();

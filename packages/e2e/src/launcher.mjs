@@ -17,6 +17,8 @@ import { BridgeClient } from './bridge.mjs';
 
 const DEFAULT_ANCHOR = '-1852,121'; // the secondary (left) monitor, where the dev app opens its windows
 const OFFSCREEN_ANCHOR = '-32000,-32000';
+// A busy PC (other builds running) can take over a minute to bring the web view up; waiting longer costs nothing when it is quick.
+const COCKPIT_WAIT_MS = +process.env.E2E_COCKPIT_WAIT_MS || 90000;
 
 const live = new Set();
 let hooksInstalled = false;
@@ -27,6 +29,40 @@ function installHooks() {
   process.on('exit', killAll);
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGBREAK']) process.on(sig, () => { killAll(); process.exit(130); });
   process.on('uncaughtException', (e) => { console.error(e); killAll(); process.exit(1); });
+}
+
+/** Bounds of the primary screen as [x, y, w, h], or null when it cannot be read (not Windows, no PowerShell). Cached. */
+let primaryBounds;
+export function primaryScreen() {
+  if (primaryBounds !== undefined) return primaryBounds;
+  primaryBounds = null;
+  if (process.platform !== 'win32') return primaryBounds;
+  try {
+    const script = 'Add-Type -AssemblyName System.Windows.Forms; $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; "$($b.X) $($b.Y) $($b.Width) $($b.Height)"';
+    const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, timeout: 15000 });
+    const n = (r.stdout || '').trim().split(/\s+/).map(Number);
+    if (n.length === 4 && n.every(Number.isFinite)) primaryBounds = n;
+  } catch { /* unknown */ }
+  return primaryBounds;
+}
+
+/**
+ * The window must never open on the primary screen. The app puts its first window at the anchor plus a small offset (40,60),
+ * then cascades the next ones (28 px steps, 8 slots). An anchor that would land a window on the primary screen (the secondary
+ * monitor is unplugged and the primary now covers it, or a wrong value was given) becomes the off-screen anchor. When the
+ * primary screen cannot be read the anchor is used as given.
+ */
+export function safeAnchor(anchor) {
+  const primary = primaryScreen();
+  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(anchor || '');
+  if (!primary || !m) return anchor;
+  const [px, py, pw, ph] = primary;
+  const x = +m[1], y = +m[2];
+  const inside = (cx, cy) => cx >= px && cx < px + pw && cy >= py && cy < py + ph;
+  const reaches = [[40, 60], [40 + 7 * 28, 60 + 7 * 28]].some(([dx, dy]) => inside(x + dx, y + dy));
+  if (!reaches) return anchor;
+  console.error(`! window anchor ${anchor} would open on the primary screen; using ${OFFSCREEN_ANCHOR} instead`);
+  return OFFSCREEN_ANCHOR;
 }
 
 export async function freePort() {
@@ -116,7 +152,7 @@ export async function startApp(opts) {
   const cdpPort = await freePort();
   assertSafePort(cdpPort, 'debugging port');
   const headless = opts.headless || process.env.E2E_HEADLESS === '1';
-  const anchor = opts.anchor || process.env.PM_WINDOW_ANCHOR || (headless ? OFFSCREEN_ANCHOR : DEFAULT_ANCHOR);
+  const anchor = safeAnchor(opts.anchor || process.env.PM_WINDOW_ANCHOR || (headless ? OFFSCREEN_ANCHOR : DEFAULT_ANCHOR));
   const pathKey = Object.keys(process.env).find((k) => k.toLowerCase() === 'path') || 'PATH';
   const env = {
     ...process.env,
@@ -184,7 +220,9 @@ export async function startApp(opts) {
     app.secret = fs.readFileSync(secretFile, 'utf8').trim();
     app.bridge = new BridgeClient(app.bridgePort, app.secret);
     await waitUntil(async () => { try { return (await app.bridge.get('/health')).status === 200; } catch { return false; } }, 30000, 'the bridge /health');
-    // 2. approve the fake agents' definitions (the app asks for approval of every definition it did not write itself)
+    // 2. ask for the cockpit right away (see requestCockpit), then
+    if (process.env.E2E_STARTUP_WINDOW !== '1') app.helperPane = await requestCockpit(app);
+    // 3. approve the fake agents' definitions (the app asks for approval of every definition it did not write itself)
     await approveDefinitions(app);
   } catch (e) {
     await app.stop();
@@ -261,28 +299,77 @@ export async function findCockpit(app) {
 }
 
 /**
- * Make sure a cockpit window exists and return a CDP connection to it. If the app already opened one (it may do
- * that at start), use it. Otherwise open it the supported way without taking focus: spawn a plain shell pane and
- * ask the bridge to detach it, which opens the cockpit unfocused at the window anchor; the helper pane is closed.
+ * Ask the app for its cockpit window without taking focus: spawn a plain shell pane and ask the bridge to detach it, which
+ * opens the cockpit unfocused at the window anchor. Returns the helper pane's id (closed once the cockpit is reached).
+ *
+ * This has to happen as early as possible. The app builds a hidden helper web view (the mode-switch overlay) about a second
+ * after the bridge is up; if that web view is created before the cockpit, WebView2 starts its browser without ever opening
+ * the debugging port and the cockpit can never be reached (a product quirk, found 2026-11-12). `startApp` therefore calls
+ * this right after the bridge answers, before anything else; `ensureCockpit` only waits.
+ */
+async function requestCockpit(app) {
+  const sp = await app.bridge.post('/panes', { agent_type: 'powershell', cwd: app.dirs.projects, cols: 100, rows: 30 });
+  if (sp.status >= 300) throw new Error(`could not open the cockpit (spawn): ${sp.status} ${JSON.stringify(sp.body).slice(0, 300)}`);
+  const id = sp.body?.snapshot?.pane_id || sp.body?.pane_id;
+  await app.bridge.post(`/panes/${encodeURIComponent(id)}/detach`, {});
+  return id;
+}
+
+/** How long a debugging port may stay closed after the cockpit was asked for before the start counts as lost (see above). */
+const PORT_DEAD_MS = +process.env.E2E_PORT_DEAD_MS || 20000;
+
+/**
+ * Make sure a cockpit window exists and return a CDP connection to it. If the app already opened one (E2E_STARTUP_WINDOW=1)
+ * use it; otherwise wait for the one `startApp` asked for. A start that lost the race described at `requestCockpit` (the port
+ * never opens) fails after PORT_DEAD_MS, so the runner can start the app again instead of waiting for nothing.
  */
 export async function ensureCockpit(app) {
-  // A newer app opens its cockpit by itself at start: give it a moment before opening one ourselves.
   let t = null;
-  for (let i = 0; i < 16 && !t; i++) {
-    t = await findCockpit(app);
-    if (!t) await sleep(250);
+  if (process.env.E2E_STARTUP_WINDOW === '1') {
+    for (let i = 0; i < 16 && !t; i++) { t = await findCockpit(app); if (!t) await sleep(250); }
   }
   if (!t) {
-    const sp = await app.bridge.post('/panes', { agent_type: 'powershell', cwd: app.dirs.projects, cols: 100, rows: 30 });
-    if (sp.status >= 300) throw new Error(`could not open the cockpit (spawn): ${sp.status} ${JSON.stringify(sp.body).slice(0, 300)}`);
-    const id = sp.body?.snapshot?.pane_id || sp.body?.pane_id;
-    await app.bridge.post(`/panes/${encodeURIComponent(id)}/detach`, {});
-    await waitUntil(async () => (t = await findCockpit(app)), 30000, 'the cockpit window');
+    const helper = app.helperPane || (await requestCockpit(app));
+    const asked = Date.now();
+    let portSeen = false;
+    try {
+      await waitUntil(async () => {
+        try { const all = await listTargets(app.cdpPort); portSeen = true; t = all.find((x) => x.type === 'page' && /cockpit=1/.test(x.url)) || null; return !!t; } catch {
+          if (!portSeen && Date.now() - asked > PORT_DEAD_MS) throw new Error('exited at start: the debugging port never opened');
+          return false;
+        }
+      }, COCKPIT_WAIT_MS, 'the cockpit window');
+    } catch (e) {
+      let seen = 'none'; try { seen = JSON.stringify((await listTargets(app.cdpPort)).map((x) => `${x.type} ${String(x.url).slice(0, 70)}`)); } catch (err) { seen = 'unreadable: ' + err.message; }
+      throw new Error(`timed out waiting for the cockpit window: ${e.message} (debugging port ${app.cdpPort} lists: ${seen})`);
+    }
     await sleep(1000);
-    await app.bridge.del(`/panes/${encodeURIComponent(id)}`);
+    await app.bridge.del(`/panes/${encodeURIComponent(helper)}`);
   }
   const c = await connect(t.webSocketDebuggerUrl);
   await c.send('Page.enable');
   await c.send('Runtime.enable');
   return c;
+}
+
+/**
+ * Start the app and reach its cockpit. A start that loses the race described at `requestCockpit` is stopped and tried again
+ * (the app is cheap to start: about 6 s); `runIdFor(n)` names the data folder of try n, `onLost` is told about each lost try.
+ * @returns {Promise<{ app: object, conn: object }>}
+ */
+export async function startWithCockpit(startOpts, { tries = 4, runIdFor = (n) => startOpts.runId, onLost = () => {} } = {}) {
+  let lastError;
+  for (let n = 1; n <= tries; n++) {
+    let app = null;
+    try {
+      app = await startApp({ ...startOpts, runId: runIdFor(n) });
+      const conn = await ensureCockpit(app);
+      return { app, conn };
+    } catch (e) {
+      lastError = e;
+      if (app) await app.stop().catch(() => {});
+      onLost(n, e);
+    }
+  }
+  throw lastError;
 }

@@ -5,7 +5,7 @@ export const meta = {
   id: 'branch.makes-separate-copy',
   title: 'Branching starts a new agent in a separate copy and leaves the original folder as it was',
   area: 'branch',
-  tags: ['branch', 'smoke'],
+  tags: ['branch', 'basic'],
   timeout: 90000,
 };
 

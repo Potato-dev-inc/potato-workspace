@@ -6,7 +6,7 @@ export const meta = {
   id: 'companion.chat-message',
   title: 'A message typed on the companion page reaches its agent and the reply shows',
   area: 'companion',
-  tags: ['smoke'],
+  tags: ['basic'],
 };
 
 export const run = guarded(async (t) => {

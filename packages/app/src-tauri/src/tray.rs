@@ -573,7 +573,8 @@ mod runtime {
             Some(model) => Some(crate::tui::pane_model_args(agent, model).ok_or_else(|| {
                 format!("MODEL_NOT_SUPPORTED: {agent} cannot take a model when it starts (or {model:?} is not a usable model id).")
             })?),
-            None => None,
+            // Nobody named a model: the person's default for this agent, where the agent can take one at start.
+            None => default_model_flags(app, agent),
         };
         emit_stage(app, agent, None, "claiming", false, None);
         let result = open_new_pane(app, agent, origin, account, isolated, project, flags);
@@ -581,6 +582,21 @@ mod runtime {
             emit_stage(app, agent, None, "failed", false, Some(e));
         }
         result
+    }
+
+    /// The launch flags of the agent's saved default model (Settings > Agents), or none: no default, an agent that takes
+    /// no model flag (its default is for chats only), or a stale default (logged, never a failed start).
+    fn default_model_flags(app: &AppHandle, agent: &str) -> Option<Vec<String>> {
+        let settings = crate::settings_store::read_public_settings(app);
+        crate::agent_run_mode::agent_default_for(&settings, agent)?;
+        let listed = crate::tui::profile_for(agent).model_choices();
+        match crate::agent_run_mode::terminal_default_flags(&settings, agent, &listed, |model| crate::tui::pane_model_args(agent, model)) {
+            Ok(flags) => flags,
+            Err(warning) => {
+                tracing::warn!(%agent, "{warning}");
+                None
+            }
+        }
     }
 
     fn open_new_pane(

@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 const FAKE_PS1: &str = r#"
 if ($args.Count -gt 0 -and $args[0] -eq 'about') { 'Model               Composer 2.5'; exit 0 }
-if ($args -contains 'linger') { Start-Sleep -Seconds 60; exit 0 }
+if (($args -join ' ') -like '*linger*') { Start-Sleep -Seconds 60; exit 0 }
 '{"type":"result","subtype":"success","is_error":false,"result":"pong","session_id":"fake-chat-1"}'
 "#;
 

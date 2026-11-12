@@ -6,7 +6,7 @@ export const meta = {
   id: 'telegram.setup-warning-and-step1',
   title: 'The Telegram block warns about the third party and starts with the bot token',
   area: 'telegram',
-  tags: ['telegram', 'smoke'],
+  tags: ['telegram', 'basic'],
 };
 
 const TOKEN = 'input[aria-label="Bot token"]';

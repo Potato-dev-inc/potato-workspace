@@ -58,7 +58,11 @@ function UnknownScenario({ name }: { name: string }) {
 
 /** Installs the mocks, shapes the URL the app reads, and returns the root component. */
 export async function bootHarness(name: string): Promise<() => JSX.Element> {
-  const scenario: HarnessScenario | undefined = scenarios[name];
+  const found: HarnessScenario | undefined = scenarios[name];
+  // The screen scan (scripts/roam.mjs) renders every scenario in both themes with `&theme=light|dark`.
+  const themeOverride = new URLSearchParams(window.location.search).get('theme');
+  const scenario: HarnessScenario | undefined =
+    found && (themeOverride === 'light' || themeOverride === 'dark') ? { ...found, theme: themeOverride } : found;
   if (!scenario) return () => <UnknownScenario name={name} />;
 
   blockNetwork();

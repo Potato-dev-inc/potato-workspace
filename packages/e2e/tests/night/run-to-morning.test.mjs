@@ -5,7 +5,7 @@ export const meta = {
   id: 'night.run-to-morning',
   title: 'A one-task night runs on a fake agent and the Morning page shows the result',
   area: 'night',
-  tags: ['night', 'smoke'],
+  tags: ['night', 'basic'],
   timeout: 90000,
 };
 

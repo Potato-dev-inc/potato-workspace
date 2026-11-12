@@ -17,6 +17,8 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(async () => 'C:\\picke
 vi.mock('../../../lib/settings', () => ({ resolveSettingsFilePath: vi.fn(async () => 'C:\\cfg\\settings.json') }));
 vi.mock('../../../lib/tauri', () => ({
   tauri: {
+    lastRunStatus: vi.fn(async () => null),
+    perfSummary: vi.fn(async () => null),
     getAppInstallInfo: vi.fn(async () => mocks.install),
     getCoordinationStorageInfo: vi.fn(async () => mocks.storage),
     launchUninstall: vi.fn(async () => undefined),
@@ -179,6 +181,13 @@ describe('General: each control saves a partial patch', () => {
     expect(switchFor('Keep this PC awake while agents work')!.getAttribute('aria-checked')).toBe('true');
     await click(switchFor('Keep this PC awake while agents work'));
     expect(m.env.patches).toEqual([{ keep_awake_while_working: false }]);
+  });
+
+  it('Get early versions (beta) is off by default and saves only {early_versions_enabled}', async () => {
+    await mount();
+    expect(switchFor('Get early versions (beta)')!.getAttribute('aria-checked')).toBe('false');
+    await click(switchFor('Get early versions (beta)'));
+    expect(m.env.patches).toEqual([{ early_versions_enabled: true }]);
   });
 
   it('Checkpoints saves immediately; Keep last N clamps on blur and is disabled when checkpoints are off', async () => {

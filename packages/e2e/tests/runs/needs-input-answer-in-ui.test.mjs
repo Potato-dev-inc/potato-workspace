@@ -6,7 +6,7 @@ export const meta = {
   id: 'runs.needs-input-answer-in-ui',
   title: 'A run that needs an answer shows a card and a click on Allow once finishes it',
   area: 'runs',
-  tags: ['smoke', 'mcp'],
+  tags: ['basic', 'mcp'],
 };
 
 export const run = guarded(async (t) => {

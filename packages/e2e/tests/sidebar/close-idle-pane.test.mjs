@@ -6,7 +6,7 @@ export const meta = {
   id: 'sidebar.close-idle-pane',
   title: 'Closing an idle pane removes it at once and returns to the Inbox',
   area: 'sidebar',
-  tags: ['smoke', 'close'],
+  tags: ['basic', 'close'],
 };
 
 export async function run(t) {

@@ -1,5 +1,6 @@
 // Settings > Preload: keep a warm agent (CLI at its input box + a hidden pane window) per ticked
 // provider, so opening a pane for it is instant. Backed by the standby pool (`standby-pool.json`).
+import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri, type StandbyConfig, type StandbyStatus } from '../../../lib/tauri';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
@@ -42,7 +43,7 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
     try {
       setStatus(await api.getStatus());
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorSentence(e));
     }
   }, [api]);
 
@@ -59,7 +60,7 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
       setStatus(await api.setConfig(next));
       onSaved?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorSentence(e));
     }
   };
   const providers = preloadProviders(registry.agents);

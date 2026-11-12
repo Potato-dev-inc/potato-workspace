@@ -1,5 +1,6 @@
 // Settings › Phone › Devices: every paired phone, what it may do (one switch per ability), when it
 // signs out if unused, and Revoke. The bridge enforces the abilities on every request.
+import { errorSentence } from '../../../lib/sayError';
 import { DEVICE_CAPS, type DeviceCap, type PairedDeviceInfo } from '@potato-workspace/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../../../lib/tauri';
@@ -103,7 +104,7 @@ export function PairedDevices() {
       await refresh();
       window.dispatchEvent(new Event(DEVICES_CHANGED_EVENT));
     } catch (e) {
-      setErr(`Not saved: ${e instanceof Error ? e.message : String(e)}`);
+      setErr(`Not saved: ${errorSentence(e)}`);
     } finally {
       setBusy(null);
     }

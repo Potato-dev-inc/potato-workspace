@@ -5,7 +5,7 @@ export const meta = {
   id: 'night.sheet-defaults',
   title: 'The Tonight sheet opens with one task, the plans and Start switched off',
   area: 'night',
-  tags: ['night', 'smoke'],
+  tags: ['night', 'basic'],
 };
 
 export async function run(t) {
