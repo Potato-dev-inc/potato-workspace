@@ -207,8 +207,8 @@ fn a_web_page_in_the_users_browser_cannot_use_the_loopback_bridge_as_the_app() {
         let (status, body) = send(r.bridge, &request);
         assert_eq!(status, 401, "Origin {origin}: {body}");
     }
-    // the desktop webview and the dev server are loopback origins and stay trusted
-    for origin in ["tauri://localhost", "http://tauri.localhost", "http://localhost:1420"] {
+    // the desktop webview stays trusted
+    for origin in ["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost"] {
         let request = format!("GET /panes HTTP/1.1\r\nHost: 127.0.0.1:17321\r\nOrigin: {origin}\r\n\r\n");
         let (status, body) = send(r.bridge, &request);
         assert_eq!(status, 200, "Origin {origin}: {body}");
@@ -386,4 +386,113 @@ fn log_sample_for_the_report() {
         }
     }
     println!("SAMPLE: 300 proxied phone requests + 300 local pane reads + 100 local POST /mcp/mode, counter {} -> {}", before, local_secret::status().missing_count);
+}
+
+/// The whole response (status line, headers, body) for a raw request.
+fn send_full(addr: SocketAddr, request: &str) -> String {
+    let mut stream = TcpStream::connect(addr).expect("connect");
+    stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    stream.write_all(request.as_bytes()).unwrap();
+    let mut raw = Vec::new();
+    let _ = stream.read_to_end(&mut raw);
+    String::from_utf8_lossy(&raw).into_owned()
+}
+
+fn status_of(response: &str) -> u16 {
+    response.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0)
+}
+
+fn has_allow_origin(response: &str) -> bool {
+    let head = response.split("\r\n\r\n").next().unwrap_or("");
+    head.lines().any(|l| l.to_ascii_lowercase().starts_with("access-control-allow-origin"))
+}
+
+/// Review 2026-11-12: any loopback origin used to count as the app, so a page served from any local
+/// dev server (`localhost:5173`, a previewed site) could drive the bridge and read the answers.
+#[test]
+fn another_local_web_page_is_not_the_app_and_gets_no_cors_header() {
+    let r = rig();
+    for origin in [
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://foo.localhost",
+        "http://foo.localhost:8080",
+        "http://[::1]:4173",
+        "http://localhost:1420",
+        "http://tauri.localhost:8080",
+    ] {
+        for (method, path) in [("GET", "/panes"), ("POST", "/panes/p1/input")] {
+            let request = format!(
+                "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:17421\r\nOrigin: {origin}\r\nContent-Length: 2\r\n\r\n{{}}"
+            );
+            let response = send_full(r.bridge, &request);
+            assert_eq!(status_of(&response), 401, "{method} {path} Origin {origin}: {response}");
+            assert!(!has_allow_origin(&response), "Origin {origin} must get no CORS header: {response}");
+        }
+        // a paired device token still works from any origin (it is the credential)
+        let request = format!(
+            "GET /panes HTTP/1.1\r\nHost: 127.0.0.1:17421\r\nOrigin: {origin}\r\nAuthorization: Bearer {}\r\n\r\n",
+            r.token
+        );
+        let response = send_full(r.bridge, &request);
+        assert_eq!(status_of(&response), 200, "{response}");
+        assert!(!has_allow_origin(&response), "Origin {origin}: {response}");
+        // a form-style post (no preflight) carries an Origin and is refused the same way
+        let form = format!(
+            "POST /panes/p1/input HTTP/1.1\r\nHost: 127.0.0.1:17421\r\nOrigin: {origin}\r\n\
+             Content-Type: text/plain\r\nContent-Length: 2\r\n\r\n{{}}"
+        );
+        assert_eq!(status_of(&send_full(r.bridge, &form)), 401, "form post, Origin {origin}");
+    }
+}
+
+#[test]
+fn the_apps_own_origins_are_trusted_and_get_cors_but_a_request_with_no_origin_stays_trusted() {
+    let r = rig();
+    for origin in ["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost"] {
+        let request = format!("GET /panes HTTP/1.1\r\nHost: 127.0.0.1:17421\r\nOrigin: {origin}\r\n\r\n");
+        let response = send_full(r.bridge, &request);
+        assert_eq!(status_of(&response), 200, "{response}");
+        assert!(response.contains(&format!("Access-Control-Allow-Origin: {origin}")), "{response}");
+    }
+    // no Origin at all (MCP shim, CLI): unchanged
+    let response = send_full(r.bridge, "GET /panes HTTP/1.1\r\nHost: 127.0.0.1:17421\r\n\r\n");
+    assert_eq!(status_of(&response), 200, "{response}");
+    assert!(!has_allow_origin(&response));
+}
+
+/// Debug builds trust the exact Vite dev origin named by `devUrl` in tauri.conf.json, and nothing else.
+#[test]
+fn the_dev_origin_from_tauri_conf_is_trusted_in_debug_builds_only() {
+    let r = rig();
+    let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+    let dev_url = config["build"]["devUrl"].as_str().expect("devUrl");
+    let port = dev_url.rsplit(':').next().unwrap();
+    for origin in [format!("http://127.0.0.1:{port}"), format!("http://localhost:{port}")] {
+        let request = format!("GET /panes HTTP/1.1\r\nHost: 127.0.0.1:17421\r\nOrigin: {origin}\r\n\r\n");
+        let response = send_full(r.bridge, &request);
+        let expect = if cfg!(debug_assertions) { 200 } else { 401 };
+        assert_eq!(status_of(&response), expect, "{origin}: {response}");
+    }
+    let other = format!("http://127.0.0.1:{}", port.parse::<u32>().unwrap() + 1);
+    let request = format!("GET /panes HTTP/1.1\r\nHost: 127.0.0.1:17421\r\nOrigin: {other}\r\n\r\n");
+    assert_eq!(status_of(&send_full(r.bridge, &request)), 401);
+}
+
+#[test]
+fn websocket_and_sse_with_another_local_origin_are_refused() {
+    let r = rig();
+    for origin in ["http://localhost:5173", "http://foo.localhost", "http://127.0.0.1:3000"] {
+        let origin_header = format!("Origin: {origin}");
+        let ws = upgrade("/events/ws", &[&origin_header]).replace("Host: tunnel.example", "Host: 127.0.0.1:17421");
+        let response = send_full(r.bridge, &ws);
+        assert_eq!(status_of(&response), 401, "ws, Origin {origin}: {response}");
+        assert!(!has_allow_origin(&response), "{response}");
+        for path in ["/events", "/events/poll?wait_ms=0"] {
+            let request = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:17421\r\nOrigin: {origin}\r\n\r\n");
+            let response = send_full(r.bridge, &request);
+            assert_eq!(status_of(&response), 401, "{path}, Origin {origin}: {response}");
+            assert!(!has_allow_origin(&response), "{response}");
+        }
+    }
 }

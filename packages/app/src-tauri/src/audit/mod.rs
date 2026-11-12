@@ -89,8 +89,6 @@ pub enum Kind {
     /// Review Desk (`crate::review_desk`): one `review_desk.action` line per Keep, Throw away or unmark the
     /// person did. The detail holds the action, source, key, file count and tier; never a title or a path.
     ReviewDesk,
-    /// Focus (`crate::attention::focus`): one kind for its lines (start, change, end). Counts only.
-    Focus,
     /// What broke it (`crate::checkpoints::bisect`): the person undid one agent turn.
     WhatBrokeIt,
     /// Branch from here (`crate::branch_from`): `branch.started`.
@@ -133,7 +131,6 @@ impl Kind {
             Self::CiFix => "ci.fix",
             Self::NightShift => "night_shift",
             Self::ReviewDesk => "review_desk.action",
-            Self::Focus => "focus",
             Self::WhatBrokeIt => "what_broke_it.undone",
             Self::Branch => "branch.started",
         }

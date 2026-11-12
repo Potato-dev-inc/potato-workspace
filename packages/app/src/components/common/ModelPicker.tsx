@@ -7,9 +7,14 @@ import '../../styles/model-picker.css';
 
 export const LONG_LIST = 8;
 
+/** A model id as shown: capital first letter. The value itself is never changed. */
+export function modelName(id: string): string {
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
 /** What the closed picker says. */
 export function pickerText(value: string, defaultWord: string, defaultModel: string | null): string {
-  return value || (defaultModel ? `${defaultWord} (${defaultModel})` : defaultWord);
+  return value ? modelName(value) : defaultModel ? `${defaultWord} (${modelName(defaultModel)})` : defaultWord;
 }
 
 /** The models a search keeps: every word typed must appear in the id, any case. */
@@ -105,13 +110,13 @@ export function ModelPicker({ state, value, onChange, defaultWord = 'Default', l
           )}
           <button type="button" role="option" aria-selected={value === ''} className="mp-item" onClick={() => choose('')}>
             <span>{defaultWord}</span>
-            {defaultModel && <span className="mp-item-hint">{defaultModel}</span>}
+            {defaultModel && <span className="mp-item-hint">{modelName(defaultModel)}</span>}
           </button>
           {state.status === 'loading' && <p className="mp-note">Loading models…</p>}
           {state.status === 'failed' && <p className="mp-note">Could not load the list.</p>}
           {shown.map((m) => (
             <button key={m} type="button" role="option" aria-selected={value === m} className="mp-item" onClick={() => choose(m)}>
-              <span className="mp-item-id">{m}</span>
+              <span className="mp-item-id">{modelName(m)}</span>
             </button>
           ))}
           {searchable && custom && shown.length === 0 && (
@@ -121,7 +126,7 @@ export function ModelPicker({ state, value, onChange, defaultWord = 'Default', l
           )}
           {value !== '' && !models.includes(value) && (
             <button type="button" role="option" aria-selected className="mp-item" onClick={() => choose(value)}>
-              <span className="mp-item-id">{value}</span>
+              <span className="mp-item-id">{modelName(value)}</span>
             </button>
           )}
         </div>

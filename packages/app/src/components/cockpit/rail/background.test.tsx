@@ -42,8 +42,8 @@ describe('pane-jobs helpers', () => {
   it('formats the time, the count and the sentence', () => {
     expect(runTime(0, 125_000)).toBe('2m');
     expect(jobCount({ a: [job(1), job(2)], b: [job(3)] })).toBe(3);
-    expect(jobsRunning(1)).toBe('1 job running');
-    expect(jobsRunning(3)).toBe('3 jobs running');
+    expect(jobsRunning(1)).toBe('1 background task');
+    expect(jobsRunning(3)).toBe('3 background tasks');
   });
 });
 
@@ -118,7 +118,7 @@ describe('JobsChip', () => {
     const all = { p1: [job(1), job(2, { name: 'node', command: 'node vite.js', ports: [5173] })], p2: [job(3)] };
     act(() => root.render(<JobsChip names={names} onOpenPane={onOpenPane} api={api(all)} />));
     await flush();
-    expect(host.querySelector('[data-testid="jobs-chip"]')?.textContent).toBe('3 jobs running');
+    expect(host.querySelector('[data-testid="jobs-chip"]')?.textContent).toBe('3 background tasks');
     click(host.querySelector('[data-testid="jobs-chip"]'));
     const sheet = document.querySelector('.ck-sheet--jobs');
     expect(sheet).not.toBeNull();

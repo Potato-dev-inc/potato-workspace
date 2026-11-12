@@ -91,15 +91,15 @@ export function ClosedChatsSheet({
           {chats.map((chat) => (
             <li key={chat.id} className="ck-closed-row" data-testid="closed-chat-row">
               <div className="ck-closed-main">
-                <span className="ck-closed-title">{chat.title ?? 'No messages'}</span>
+                <span className="ck-closed-title">{chat.title ?? 'Untitled chat'}</span>
                 <span className="ck-closed-meta">
                   {chat.label} · {folderName(chat.cwd)} · {formatAgo(Math.max(0, now - chat.updated_ms))}
                 </span>
               </div>
-              <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} aria-label={`Reopen ${chat.title ?? 'chat'}`} onClick={() => void reopen(chat)}>
+              <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} aria-label={`Reopen ${chat.title ?? 'Untitled chat'}`} onClick={() => void reopen(chat)}>
                 Reopen
               </button>
-              <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" disabled={busy} aria-label={`Delete ${chat.title ?? 'chat'}`} onClick={() => setAsk({ kind: 'one', chat })}>
+              <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" disabled={busy} aria-label={`Delete ${chat.title ?? 'Untitled chat'}`} onClick={() => setAsk({ kind: 'one', chat })}>
                 Delete
               </button>
             </li>

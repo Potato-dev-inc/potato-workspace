@@ -64,7 +64,7 @@ export function useBootGate(input: {
       },
       {
         id: 'orchestrator',
-        label: 'Preparing orchestrator',
+        label: 'Getting ready',
         status: next(orchestratorDone, panesDone && !orchestratorDone),
       },
     ];

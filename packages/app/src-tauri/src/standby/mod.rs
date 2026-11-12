@@ -146,6 +146,14 @@ pub fn set_strict_agents(agents: &[String]) {
     }
 }
 
+/// An agent's account changed (signed in, account added, removed or chosen for helpers): a warm start that
+/// was blocked at a login screen may try again.
+pub fn note_account_changed(agent_type: &str) {
+    if let Some(pool) = pool() {
+        pool.note_account_changed(agent_type);
+    }
+}
+
 /// Save new settings and apply them at once (standbys that are no longer allowed are shut down).
 pub fn set_config(config: StandbyConfig) -> Result<StandbyConfig, String> {
     let pool = pool().ok_or("the standby pool is not running")?;

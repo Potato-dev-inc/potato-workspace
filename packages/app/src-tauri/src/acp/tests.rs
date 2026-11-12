@@ -388,11 +388,20 @@ fn closing_a_session_with_a_prompt_open_marks_it_session_ended() {
     let rig = Rig::new("");
     rig.session.prompt_text("perm").unwrap();
     rig.wait_phase(Phase::NeedsInput);
+    // The events of close() are queued and delivered by whichever thread is delivering the prompt's
+    // own event, so they can reach the log a moment after close() returns. Wait for them.
+    let from = rig.mark();
     rig.session.close();
-    assert!(rig.events().iter().any(|e| matches!(
-        e,
-        SessionEvent::PermissionResolved { reason: super::session::PromptEndReason::SessionEnded, .. }
-    )));
+    assert!(
+        rig.wait_event(
+            from,
+            |e| matches!(e, SessionEvent::PermissionResolved { reason: super::session::PromptEndReason::SessionEnded, .. }),
+            10,
+        )
+        .is_some(),
+        "no SessionEnded resolution; events: {:#?}",
+        rig.events().iter().map(brief).collect::<Vec<_>>()
+    );
 }
 
 #[test]

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaneInfo } from '../../lib/tauri-types';
 import { EndedAgentsLine } from './EndedAgentsLine';
@@ -91,6 +93,18 @@ describe('useSessionMemory', () => {
     render({ ready: true, selectedId: null, panes: paneMap() });
     await act(async () => press('Reopen'));
     expect(host.textContent).toContain('1 terminal agent ended');
+  });
+
+  it('the ended line is inset from the sidebar edge, so its first character is not clipped', () => {
+    writeSessionMemory({ selected: null, terminals: [{ id: 'a', agent: 'claude', cwd: 'C:\\a' }] });
+    render({ ready: true, selectedId: null, panes: paneMap() });
+    const line = host.querySelector<HTMLElement>('.ck-ended');
+    expect(line?.textContent).toContain('1 terminal agent ended with the last restart.');
+    const css = readFileSync(join(__dirname, '../../styles/ended-agents-line.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = /\.cockpit \.ck-ended \{([^}]*)\}/.exec(css);
+    expect(rule).not.toBeNull();
+    const left = Number(/padding:\s*\d+px\s+(\d+)px/.exec(rule![1])?.[1] ?? 0);
+    expect(left).toBeGreaterThanOrEqual(12);
   });
 
   it('Dismiss hides the line and later forgets those agents', () => {

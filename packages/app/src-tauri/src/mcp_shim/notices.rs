@@ -2,10 +2,12 @@
 //!
 //! A shim whose tool catalog differs from the running app's is the usual cause of confusing
 //! argument rejections and missing tools. `bridge_health` always said so, but nothing else did.
-//! Now every tool result carries the warning while the mismatch lasts, so the agent (and the
-//! person reading its transcript) sees the fix without having to call anything.
+//! The warning rides on the first result of each affected tool in this MCP process (or on the
+//! first result overall when only the catalog is known), so the agent sees the fix without a
+//! repeat on every call. It is also in `instructions` and in `bridge_health`.
 
 use super::*;
+use std::collections::BTreeSet;
 #[cfg(not(test))]
 use std::sync::Mutex;
 use std::time::Instant;
@@ -48,10 +50,20 @@ impl DriftCache {
 #[cfg(not(test))]
 static DRIFT_CACHE: Mutex<DriftCache> = Mutex::new(DriftCache::new());
 
+/// Keys whose drift warning already went out in this MCP process: a tool name, or `OVERALL_KEY`
+/// when the mismatch is known only as a whole (no per-tool hashes).
+#[cfg(not(test))]
+static DRIFT_WARNED: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
+/// The key for the warn-once-overall case.
+const OVERALL_KEY: &str = "*";
+
 #[cfg(test)]
 thread_local! {
     /// Tests never reach a real bridge: a test sets the `/health` body it wants here.
     pub(crate) static TEST_HEALTH: RefCell<Option<Value>> = const { RefCell::new(None) };
+    /// Each test runs on its own thread, so this is that test's own "already warned" memory.
+    pub(crate) static TEST_DRIFT_WARNED: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
 }
 
 #[cfg(not(test))]
@@ -73,6 +85,39 @@ pub(crate) fn current_schema_drift() -> Option<Value> {
         let mut cache = DRIFT_CACHE.lock().ok()?;
         cache.lookup(Instant::now(), fetch_drift)
     }
+}
+
+/// Records that `key` is about to be warned about. Returns `true` the first time in this process.
+fn mark_drift_warned(key: &str) -> bool {
+    #[cfg(test)]
+    {
+        TEST_DRIFT_WARNED.with(|set| set.borrow_mut().insert(key.to_string()))
+    }
+    #[cfg(not(test))]
+    {
+        match DRIFT_WARNED.lock() {
+            Ok(mut set) => set.insert(key.to_string()),
+            Err(_) => true,
+        }
+    }
+}
+
+/// Whether a drift notice rides on this call's result to `tool`, and records that it did.
+///
+/// A notice that names tools (from per-tool hashes) warns once per differing tool, and never for a
+/// tool whose schema matches. A notice that names none (only the catalog hash or version is known)
+/// warns once for the whole process. A tool never gets the same warning twice.
+pub(crate) fn drift_warning_due(tool: &str, drift: &Value) -> bool {
+    let named: Vec<&str> = ["changed_tools", "only_in_app", "only_in_shim"]
+        .iter()
+        .filter_map(|key| drift.get(*key).and_then(Value::as_array))
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    if named.is_empty() {
+        return mark_drift_warned(OVERALL_KEY);
+    }
+    named.contains(&tool) && mark_drift_warned(tool)
 }
 
 /// One human-readable line for a notice.
@@ -126,7 +171,9 @@ pub(crate) fn annotate_tool_result(name: &str, result: &mut Value) {
         }
     }
     if let Some(drift) = current_schema_drift() {
-        apply_notices(result, &[drift]);
+        if drift_warning_due(name, &drift) {
+            apply_notices(result, &[drift]);
+        }
     }
 }
 

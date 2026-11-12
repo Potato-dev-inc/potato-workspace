@@ -2,7 +2,7 @@ use super::*;
 
 use crate::redact::RedactContext;
 use crate::session_chat::detail::{PlanItem, PlanStatus, ToolDetail};
-use crate::session_chat::export_text::{escape, plain, strip_paths};
+use crate::session_chat::export_text::{cut_paths, escape, strip_paths};
 use crate::session_chat::model::{ChatItem, TurnOutcome};
 use serde_json::json;
 
@@ -390,7 +390,7 @@ fn text_with_an_at_sign_that_is_not_an_address_stays() {
 #[test]
 fn plain_text_drops_the_key_and_the_user_folder() {
     let text = format!(r"key {FAKE_TOKEN} in C:\Users\you\proj\a.rs");
-    let out = plain(&text, &ctx());
+    let out = cut_paths(&text, &ctx());
     assert!(!out.contains("sk-ant-api03"), "{out}");
     assert!(!out.contains("Users"), "{out}");
     assert!(!out.contains("you"), "{out}");
@@ -399,6 +399,6 @@ fn plain_text_drops_the_key_and_the_user_folder() {
 
 #[test]
 fn plain_text_is_not_html_escaped() {
-    let out = plain(r#"a <b> & "c" C:\Users\you\x\y.rs"#, &ctx());
+    let out = cut_paths(r#"a <b> & "c" C:\Users\you\x\y.rs"#, &ctx());
     assert!(out.contains("<b>") && out.contains('&') && out.contains("\"c\""), "{out}");
 }

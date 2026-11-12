@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentHealthApi, type AgentHealth, type AgentHealthApi, type HealthState } from '../../lib/agent-health';
 import { agentInstallApi, type AgentInstallApi, type InstallPlan } from '../../lib/agent-install';
+import { CodeText } from '../common/CodeText';
 import { DotSpinner, type DotSpinnerProps } from './DotSpinner';
 import { InstallSheet } from './InstallSheet';
 import '../../styles/agent-doctor.css';
@@ -440,7 +441,11 @@ export function AgentDoctor({
                                   <code className="ck-doctor-cmd">{r.install_fallback}</code>
                                 </p>
                               )}
-                              {r.state !== 'not_installed' && r.login_hint && <p className="ck-doctor-hint">{r.login_hint}</p>}
+                              {r.state !== 'not_installed' && r.login_hint && (
+                                <p className="ck-doctor-hint">
+                                  <CodeText text={r.login_hint} />
+                                </p>
+                              )}
                             </details>
                           )}
                         </div>

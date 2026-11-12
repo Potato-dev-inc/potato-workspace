@@ -1,6 +1,6 @@
 // Bridge event stream: native EventSource (SSE) for loopback, long-polling `/events/poll` for remote
 // hosts (Cloudflare quick tunnels do not pass SSE through at all).
-import type { McpLogEntry, OrchestratorChatEvent, PaneInfo } from '@potato-workspace/shared';
+import type { McpLogEntry, PaneInfo } from '@potato-workspace/shared';
 import type { PublicSettings } from './bridge-settings';
 import { isNgrokHost, ngrokRequestHeaders } from './bridge-ngrok';
 import { mergeBridgeHeaders, mobilePairingAuthHeaders } from './mobile-pairing-auth';
@@ -10,7 +10,6 @@ import type { PreviewUrl } from './pane-preview';
 import type { AttentionSnapshot } from './attention';
 import type { OutboxMessage } from './paneOutbox';
 import type { CompanionView } from './companion';
-import type { PhoneFocus } from './focus';
 
 /** Decode a base64 terminal chunk into raw bytes. */
 export function decodeBase64(text: string): Uint8Array {
@@ -31,8 +30,6 @@ function dispatchBridgeEvent(eventName: string, data: string, onEvent: (e: Bridg
     onEvent({ type: 'panes', panes: parsed as PaneInfo[] });
   } else if (eventName === 'log') {
     onEvent({ type: 'log', entry: parsed as McpLogEntry });
-  } else if (eventName === 'chat') {
-    onEvent({ type: 'chat', event: parsed as OrchestratorChatEvent });
   } else if (eventName === 'terminal') {
     // Current servers send `b64`; older builds sent a `data` byte array.
     const payload = parsed as { pane_id: string; b64?: string; data?: number[]; offset?: number };
@@ -55,9 +52,6 @@ function dispatchBridgeEvent(eventName: string, data: string, onEvent: (e: Bridg
   } else if (eventName === 'questions') {
     const payload = parsed as { revision?: number };
     onEvent({ type: 'questions', revision: payload.revision ?? 0 });
-  } else if (eventName === 'focus') {
-    // The PC's Focus changed (start, extend, end, a held ping counted). Counts only; the phone bar reads again.
-    onEvent({ type: 'focus', view: parsed as PhoneFocus });
   } else if (eventName === 'opencode-worker') {
     onEvent({ type: 'opencode-worker', event: parsed as OpenCodeWorkerEvent });
   } else if (eventName === 'pane-resize') {
@@ -78,14 +72,6 @@ function dispatchBridgeEvent(eventName: string, data: string, onEvent: (e: Bridg
     // `{ v: 1, companions }` (SPEC-1028 section 11): every companion, without folders.
     const payload = parsed as { companions?: CompanionView[] };
     onEvent({ type: 'companion', companions: Array.isArray(payload.companions) ? payload.companions : [] });
-  } else if (eventName === 'orchestrator-viewport') {
-    const payload = parsed as { width: number; height: number; active: boolean };
-    onEvent({
-      type: 'orchestrator-viewport',
-      width: payload.width,
-      height: payload.height,
-      active: payload.active,
-    });
   }
 }
 
@@ -240,12 +226,10 @@ const BRIDGE_EVENT_NAMES = [
   'pane-resize',
   'loop-signal',
   'settings',
-  'orchestrator-viewport',
   'questions',
   'attention',
   'pane-outbox',
   'companion',
-  'focus',
 ] as const;
 
 function shouldUseFetchBridgeSse(baseUrl: string): boolean {

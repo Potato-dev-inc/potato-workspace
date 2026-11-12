@@ -80,6 +80,10 @@
 }
 /* Several sign-ins of one agent: a tiny tag after the mark (the full label is in the tooltip). */
 .cockpit .ck-usage-suffix {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin-left: -2px;
   color: var(--label-3);
   font-size: 9px;

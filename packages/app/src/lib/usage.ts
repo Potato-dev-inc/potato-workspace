@@ -101,7 +101,7 @@ export function chipText(row: UsageRow, now: number): string {
     return row.limited_until_ms && row.limited_until_ms > now ? `Limited · ${formatLeft(row.limited_until_ms - now)}` : 'Limited';
   }
   const top = headline(row);
-  if (row.state === 'unknown' || !top) return 'Unknown';
+  if (row.state === 'unknown' || !top) return 'Not shared';
   const pct = `${Math.round(top.used_percent)}%`;
   return top.resets_at_ms && top.resets_at_ms > now ? `${pct} ${formatLeft(top.resets_at_ms - now)}` : pct;
 }

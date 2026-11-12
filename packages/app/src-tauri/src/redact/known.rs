@@ -133,6 +133,9 @@ fn gather() -> RedactContext {
             values.push(v);
         }
     }
+    if let Some(v) = crate::secrets::read_secret(crate::secrets::CUSTOM_AI_SECRET) {
+        values.push(v);
+    }
     // Keys an approved adapter receives (per-adapter slots; the shared ones are read above too).
     values.extend(crate::acp::adapter_keys::all_secret_values());
     // Tests must not read the real user's toolbelt or key profiles.

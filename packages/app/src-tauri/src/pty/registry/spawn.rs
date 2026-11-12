@@ -516,7 +516,6 @@ pub fn spawn_pane(
                                 }
                             };
 
-                            super::recorder_tap(&pane_id, *status.lock(), &snapshot);
                             last_snapshot = snapshot.clone();
                             let _ = app.emit(
                                 "terminal-snapshot",

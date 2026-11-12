@@ -19,8 +19,6 @@ export interface PushPayload {
   prompt_id?: string;
   act?: PushAct;
   target?: 'questions';
-  /** Focus Time: a card that waits for the person but should not buzz. Only the exact value `true` counts. */
-  quiet?: boolean;
 }
 
 export interface NotificationPlan {
@@ -29,8 +27,6 @@ export interface NotificationPlan {
     body: string;
     tag: string;
     renotify: boolean;
-    /** No sound or vibration where the OS allows it (Focus Time). */
-    silent: boolean;
     icon: string;
     badge: string;
     data: { pane_id?: string; item_id?: string; act?: PushAct; target?: 'questions' };
@@ -67,7 +63,6 @@ export function parsePushPayload(text: string | null | undefined): PushPayload {
       prompt_id: str(raw.prompt_id, 80),
       act: actUrl && actToken && actUrl.startsWith('/') ? { url: actUrl, token: actToken } : undefined,
       target: raw.target === 'questions' ? 'questions' : undefined,
-      quiet: raw.quiet === true ? true : undefined,
     };
   } catch {
     return FALLBACK;
@@ -80,9 +75,7 @@ export function planNotification(payload: PushPayload, iconBase = '/'): Notifica
     options: {
       body: payload.body,
       tag: payload.tag,
-      // A quiet card replaces nothing and makes no sound; every other card renotifies as before.
-      renotify: payload.quiet !== true,
-      silent: payload.quiet === true,
+      renotify: true,
       icon: `${iconBase}icon-192.png`,
       badge: `${iconBase}icon-192.png`,
       data: { pane_id: payload.pane_id, item_id: payload.item_id, act: payload.act, target: payload.target },

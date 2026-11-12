@@ -1,6 +1,4 @@
-import type { OrchestratorBackend } from '@potato-workspace/shared';
 import { tauri } from './tauri';
-import { type CliOrchestratorBackend, isCliOrchestratorBackend } from './orchestrator-panes';
 
 export const POTATO_WORKSPACE_MCP_NAME = 'potato-workspace';
 
@@ -40,13 +38,6 @@ export interface McpStatusReport {
   repairResults: EnsureMcpResult[];
 }
 
-export async function ensureOrchestratorMcp(
-  backend: CliOrchestratorBackend,
-  projectPath: string,
-): Promise<EnsureMcpResult> {
-  return tauri.ensureOrchestratorMcp(backend, projectPath);
-}
-
 export async function installNpmMcpConfigs(projectPath: string): Promise<EnsureMcpResult[]> {
   return tauri.installNpmMcpConfigs(projectPath);
 }
@@ -68,10 +59,4 @@ export async function getMcpStatus(
   autoRepair = false,
 ): Promise<McpStatusReport> {
   return tauri.getMcpStatus(projectPath, autoRepair);
-}
-
-export function isOrchestratorMcpBackend(
-  backend: OrchestratorBackend,
-): backend is CliOrchestratorBackend {
-  return isCliOrchestratorBackend(backend);
 }

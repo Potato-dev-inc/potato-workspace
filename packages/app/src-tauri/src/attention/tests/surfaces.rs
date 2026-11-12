@@ -2,7 +2,6 @@
 //! counted "needs you" four ways (5 / 5 / 3 / 3 on this very fixture). Now each of them reads the
 //! store's one number.
 
-use crate::ambient::glyph::Aggregate;
 use crate::attention::model::*;
 use crate::attention::store::{PromptRec, Store};
 
@@ -52,10 +51,8 @@ fn one_count_everywhere() {
     // are "Ready for you": they carry no number.
     assert_eq!(counts, Counts { blocking: 5, ready: 2 });
 
-    // The tray badge and tooltip. Both read the same attention count.
+    // The tray tooltip (and the taskbar badge, `ambient::badge`) read the same attention count.
     let statuses: Vec<&str> = facts.panes.iter().map(|p| p.status.as_str()).collect();
-    let tray = crate::ambient::tray_icon::aggregate_for(statuses.iter().copied(), counts.blocking);
-    assert_eq!(tray.attention(), counts.blocking, "tray badge");
     assert_eq!(
         crate::tray::summary_line(&statuses, &[], counts.blocking),
         "Potato Workspace \u{b7} 5 need you \u{b7} 1 error \u{b7} 1 working",
@@ -75,8 +72,8 @@ fn one_count_everywhere() {
 fn the_old_status_count_would_have_said_three() {
     // What the tray and the digest used to say: waiting_input + error panes only.
     let (_, facts) = mixed();
-    let by_status = Aggregate::from_statuses(facts.panes.iter().map(|p| p.status.as_str()));
-    assert_eq!(by_status.attention(), 3);
+    let by_status = facts.panes.iter().filter(|p| matches!(p.status.as_str(), "waiting_input" | "error")).count();
+    assert_eq!(by_status, 3);
 }
 
 #[test]

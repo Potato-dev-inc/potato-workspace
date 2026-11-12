@@ -192,7 +192,7 @@ pub(super) fn route(
             404,
             json!({
                 "error": "not found",
-                "hint": "Unknown bridge route. Mobile UI is served by Vite on port 1420/4173; API lives under /health, /events, /panes, /orchestrator/message, /orchestrator/viewport.",
+                "hint": "Unknown bridge route. Mobile UI is served by Vite on port 1420/4173; API lives under /health, /events, /panes.",
             }),
         ))
     })

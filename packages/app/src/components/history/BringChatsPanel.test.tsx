@@ -164,10 +164,14 @@ describe('BringChatsPanel: the agents', () => {
     await render(api);
     expect(text()).toContain('Alpha · 25 chats');
     expect(text()).toContain('Beta · 3 chats');
-    expect(text()).toContain('Gamma · No chats found');
+    expect(text()).toContain('Gamma');
+    expect(text()).toContain('No chats found on this PC');
     expect(agentButton('Gamma')!.disabled).toBe(true);
     expect(text()).toContain("Delta");
-    expect(text()).toContain("Can't read its chats yet");
+    expect(text()).toContain("This agent's chats can't be read yet");
+    // A plain reason, no folder paths (the folders are never shown to the person).
+    expect(text()).toContain('No chats found on this PC');
+    expect(text()).not.toMatch(/~\/|\.local|\/sessions/);
     expect(api.look).toHaveBeenCalledTimes(1);
     expect(api.browse).not.toHaveBeenCalled();
   });

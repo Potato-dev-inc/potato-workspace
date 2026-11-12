@@ -53,6 +53,18 @@ pub fn hide_window(command: &mut Command) -> &mut Command {
     command
 }
 
+/// Like [`hide_window`], and the child also outlives this process and shares nothing with its console
+/// (`DETACHED_PROCESS`). Used by the uninstall helper, which must keep running after the app exits.
+pub fn detach(command: &mut Command) -> &mut Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        command.creation_flags(hidden_creation_flags() | DETACHED_PROCESS);
+    }
+    command
+}
+
 /// A `tokio::process::Command` for `program` that never opens a console window.
 #[allow(dead_code)] // no async spawn exists yet; the guard test points the next one here
 #[track_caller]

@@ -229,6 +229,8 @@ fn registry_contains_primary_agent_controls_and_legacy_wrappers() {
         wait.input_schema["properties"]["timeout_ms"]["default"],
         120000
     );
+    // One hour, the same cap run_agent allows; the shim serves it in short slices.
+    assert_eq!(wait.input_schema["properties"]["timeout_ms"]["maximum"], 3600000);
     assert!(wait.description.contains("until"));
 }
 
@@ -402,7 +404,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "73-c6fae36f34b7944c");
+    assert_eq!(catalog_version(), "73-f1324947d459fab1");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one

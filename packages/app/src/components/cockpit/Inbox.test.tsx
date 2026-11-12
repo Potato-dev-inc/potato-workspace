@@ -362,11 +362,12 @@ describe('empty and first-run states', () => {
     expect(doctor).toHaveBeenCalledTimes(1);
   });
 
-  it('hides the Focus timer until an agent has run', () => {
+  it('has no Focus note, with or without an agent that has run', () => {
     window.localStorage.clear();
     const { api } = fixture({ panes: [] });
     mount(api, () => {});
     expect(host.querySelector('.ck-focus-note')).toBeNull();
+    expect(host.textContent).not.toContain('Focus');
   });
 
   it('is not a welcome once something was ever opened', () => {

@@ -176,6 +176,7 @@ export function BringChatsPanel({
     setProgress({ ...idleProgress(), phase: 'looking' });
     try {
       setProgress(await api.bring({ agent, sessions, fromMs: sessions ? null : rangeFrom, toMs: sessions ? null : rangeTo }));
+      setPicked(new Set());
     } catch (e) {
       setWorking(false);
       setError(errorText(e));
@@ -255,6 +256,16 @@ export function BringChatsPanel({
   const why = whyLines(progress);
   const chosen = agent ? label(agent) : '';
   const sample = rows.slice(0, 3);
+  const rangeCount = rangeKey !== null && customReady ? total : 0;
+  const canBring = picked.size > 0 || rangeCount > 0;
+  const bringLabel =
+    picked.size > 0
+      ? `Bring these (${picked.size})`
+      : rangeCount > 0
+        ? rangeKey === 'all'
+          ? `Bring all ${chatCount(total)}`
+          : `Bring all ${chatCount(total)} from this range`
+        : 'Bring these';
 
   return (
     <section className="bc-panel" aria-labelledby={BRING_CHATS_TITLE_ID}>
@@ -342,11 +353,9 @@ export function BringChatsPanel({
               Show more
             </button>
           )}
-          {rangeKey !== null && customReady && total > 0 && (
+          {rangeCount > 0 && (
             <div className="bc-range">
-              <button type="button" className="ck-btn ck-btn--primary" onClick={() => void bring(null)}>
-                {rangeKey === 'all' ? `Bring all ${chatCount(total)}` : `Bring all ${chatCount(total)} from this range`}
-              </button>
+              <span>{`${chatCount(total)} in this range. A few of them:`}</span>
               <ul aria-label="A few of them">
                 {sample.map((row) => (
                   <li key={row.session}>{row.title}</li>
@@ -356,8 +365,9 @@ export function BringChatsPanel({
           )}
           <div className="bc-actions">
             {closeButton}
-            <button type="button" className="ck-btn ck-btn--primary" disabled={picked.size === 0} onClick={() => void bring([...picked])}>
-              {picked.size > 0 ? `Bring these (${picked.size})` : 'Bring these'}
+            {/* One primary button: the picked chats, or else the whole range (when a range chip is on). */}
+            <button type="button" className="ck-btn ck-btn--primary" disabled={!canBring} onClick={() => void bring(picked.size > 0 ? [...picked] : null)}>
+              {bringLabel}
             </button>
           </div>
         </>

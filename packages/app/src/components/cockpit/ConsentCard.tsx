@@ -76,7 +76,7 @@ export function ConsentCard({
             )}
             {has('always') && (
               <CardButton tone="plain" role="answer" data-choice="always" onClick={() => onAnswer({ choice_id: 'always' })}>
-                Always for this pane
+                Always for this agent
               </CardButton>
             )}
           </>
@@ -84,7 +84,7 @@ export function ConsentCard({
         more={
           onOpenPane ? (
             <CardButton tone="plain" role="open" onClick={onOpenPane}>
-              Open terminal
+              Open
             </CardButton>
           ) : null
         }

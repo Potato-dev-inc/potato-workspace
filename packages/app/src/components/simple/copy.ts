@@ -140,7 +140,7 @@ export const T = {
   makeSeeLead: 'You can change the words.',
   makeRulesTitle: 'The app also asks it to',
   makeStarting: 'Starting',
-  makeNoAgent: 'No agent is ready on this computer. Add Claude or Codex first.',
+  makeNoAgent: 'No agent is ready on this computer. Set up Claude or Codex first.',
   makeAddAgent: 'Set up an agent',
   makeFolder: 'Use a folder I already have',
   makeFolderChoose: 'Choose a folder',
@@ -207,7 +207,7 @@ export const F = {
   stepOf: (n: number) => `Question ${n} of 3`,
   folderMade: (name: string) => `The app made the folder ${name}.`,
   madeChanges: (agent: string) => `${agent} made changes.`,
-  agentMissing: (agent: string) => `${agent} is not on this computer. Add it first. Your work is safe.`,
+  agentMissing: (agent: string) => `${agent} is not on this computer. Set it up first. Your work is safe.`,
   messageLost: (agent: string) => `Your message did not reach ${agent}. Your work is safe.`,
   trustDeclined: (agent: string) => `${agent} closed because you said No to a question. Your work is saved.`,
 };

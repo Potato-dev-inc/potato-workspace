@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Inbox card of a companion that keeps stopping: "Try again" restarts it, "Open terminal" opens its pane.
+// The Inbox card of a companion that keeps stopping: "Try again" restarts it, "Open" opens its agent.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +29,7 @@ const view: CompanionView = {
   agentLabel: 'Claude',
   folderName: 'companion-test',
   state: 'stopped',
-  stateLine: 'Mochi keeps stopping. Open the terminal to see why.',
+  stateLine: 'Mochi keeps stopping. Open it to see why.',
   paneId: null,
   needs: null,
   pendingMemory: 0,
@@ -58,9 +58,9 @@ describe('CompanionStoppedCard', () => {
   it('offers the terminal only when there is a pane to open', async () => {
     const open = vi.fn();
     await act(async () => root.render(<CompanionStoppedCard companion={view} onTryAgain={() => {}} onOpenPane={open} />));
-    await act(async () => button('Open terminal')!.click());
+    await act(async () => button('Open')!.click());
     expect(open).toHaveBeenCalled();
     await act(async () => root.render(<CompanionStoppedCard companion={view} onTryAgain={() => {}} />));
-    expect(button('Open terminal')).toBeUndefined();
+    expect(button('Open')).toBeUndefined();
   });
 });

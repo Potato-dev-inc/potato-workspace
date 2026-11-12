@@ -89,7 +89,7 @@ describe('row search over the real catalog', () => {
     ['idle timeout', 'preload'],
     ['tunnel', 'tunnel'],
     ['loop', 'loop-guard'],
-    ['tray', 'animated-tray'],
+    ['discord', 'discord-alerts'],
     ['away', 'away-minutes'],
   ])('"%s" finds the %s row', (query, id) => {
     const ids = SECTIONS.flatMap((s) => s.rows.filter((r) => rowMatches(r, query)).map((r) => r.id));

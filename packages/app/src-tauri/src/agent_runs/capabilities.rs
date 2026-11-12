@@ -66,8 +66,14 @@ pub fn read_only_supported_for(agent_type: &str, pane_id: Option<&str>) -> bool 
 /// Clear error for `read_only=true` on a backend/mode that cannot enforce it.
 pub fn read_only_unsupported_message(agent_type: &str, has_pane: bool) -> String {
     let mode = if has_pane { " in a shared terminal pane" } else { "" };
+    // An agent whose definition says how to run a chat read-only (`[acp.read_only]`) has a call that works.
+    let chat_way = if crate::acp::config::find_builtin(agent_type).is_some_and(|cfg| cfg.read_only.is_some()) {
+        format!(" {agent_type} can run read-only as a chat: call run_agent(agent_type: \"{agent_type}\", read_only: true) with lane left out or lane: \"acp\" (Settings > Labs > Chat (ACP) on).")
+    } else {
+        String::new()
+    };
     format!(
-        "read_only=true cannot be enforced for backend '{agent_type}'{mode}; read_only is supported only for headless runs on: {}, and for a pane the run spawns itself on: {}. Retry with read_only=false or a supported backend",
+        "read_only=true cannot be enforced for backend '{agent_type}'{mode}; read_only is supported only for headless runs on: {}, and for a pane the run spawns itself on: {}. Retry with read_only=false or a supported backend.{chat_way}",
         crate::tui::read_only_backends().join(", "),
         crate::tui::read_only_spawned_pane_backends()
             .into_iter()
@@ -184,6 +190,13 @@ mod read_only_tests {
         assert!(read_only_supported_for("opencode_native", Some("cap-test-pane")));
         assert!(!read_only_supported_for("codex", Some("cap-test-pane")));
         crate::tui::opencode::read_only::set_enforced("cap-test-pane", false);
+    }
+
+    #[test]
+    fn the_unsupported_message_names_the_chat_way_for_an_agent_that_has_one() {
+        let msg = read_only_unsupported_message("opencode", false);
+        assert!(msg.contains("can run read-only as a chat") && msg.contains("read_only: true"), "{msg}");
+        assert!(!read_only_unsupported_message("no_such_agent", false).contains("as a chat"));
     }
 
     #[test]

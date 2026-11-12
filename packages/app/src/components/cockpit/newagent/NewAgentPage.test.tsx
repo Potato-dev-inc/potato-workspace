@@ -381,12 +381,12 @@ describe('add files', () => {
 });
 
 describe('home cards', () => {
-  it('shows no card until one is added, then Add card pins it and saves the list', async () => {
+  it('shows no card until one is added, then Add shortcut pins it and saves the list', async () => {
     const r = rig();
     await mount(r);
     expect(host.querySelector('.ck-na-hc')).toBeNull();
     expect(byLabel('Customize')).toBeUndefined();
-    await click(byLabel('Add card'));
+    await click(byLabel('Add shortcut'));
     await click(byLabel('Recent projects'));
     expect(host.querySelector('.ck-na-hc')!.textContent).toContain('alpha-app');
     expect(r.saveCards).toHaveBeenCalledTimes(1);
@@ -397,7 +397,7 @@ describe('home cards', () => {
   it('pins a saved prompt, and a click on it fills the box', async () => {
     const r = rig();
     await mount(r);
-    await click(byLabel('Add card'));
+    await click(byLabel('Add shortcut'));
     await click(byLabel('A saved prompt'));
     await type(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Saved prompt text"]')!, 'Write short commit messages.');
     await click(byLabel(/^Pin$/));
@@ -466,10 +466,10 @@ describe('page words', () => {
     expect(host.querySelector('h2[data-testid="na-ask"]')).not.toBeNull();
   });
 
-  it('explains Add card in one line on first use, and the line goes once a card is pinned', async () => {
+  it('explains Add shortcut in one line on first use, and the line goes once a card is pinned', async () => {
     await mount(rig());
-    expect(host.querySelector('[data-testid="na-cards-hint"]')?.textContent).toContain('Pin shortcuts here');
-    await click(byLabel('Add card'));
+    expect(host.querySelector('[data-testid="na-cards-hint"]')?.textContent).toContain('Add a shortcut for a project');
+    await click(byLabel('Add shortcut'));
     expect(host.querySelector('[data-testid="na-cards-hint"]')).toBeNull();
     await click(byLabel('Recent projects'));
     expect(host.querySelector('[data-testid="na-cards-hint"]')).toBeNull();

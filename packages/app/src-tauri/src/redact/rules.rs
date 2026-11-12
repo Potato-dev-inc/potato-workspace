@@ -1,7 +1,6 @@
 //! The redaction engine: which text is secret or personal, found as byte spans of the input.
 //!
-//! Promoted from `agent_definitions_recorder/redact.rs` (which now re-exports this file's public
-//! items). Finding *spans* instead of rewriting the text lets one pass cover text that arrives in
+//! Finding *spans* instead of rewriting the text lets one pass cover text that arrives in
 //! pieces: a secret split across two PTY chunks is found in the joined text and each chunk is masked
 //! for the part it holds (`mask_pieces`, used by the flight cast).
 //!

@@ -527,3 +527,33 @@ describe('on a team as a member', () => {
     expect(buttonByText(host, 'Leave team')).toBeDefined();
   });
 });
+
+describe('pinging the people of a relay team', () => {
+  it('a ping that answers with nothing says it plainly, never a raw JS error', async () => {
+    const api = fakeApi(teamConfig());
+    api.ping = async () => null as unknown as Awaited<ReturnType<NonNullable<TeamApi['ping']>>>;
+    await act(async () => root.render(<TeamPage api={api} />));
+    await settle(5);
+    expect(hasText(host, "Couldn't check who is online. Try Ping again.")).toBe(true);
+    expect(host.textContent).not.toContain('reading');
+    expect(host.textContent).not.toContain('Cannot read properties');
+    expect(hasText(host, 'Leo (you)')).toBe(true);
+  });
+
+  it('a ping that throws shows the same plain sentence, and Ping again clears it when it works', async () => {
+    const api = fakeApi(teamConfig());
+    let fail = true;
+    api.ping = async () => {
+      if (fail) throw new TypeError("Cannot read properties of null (reading 'map')");
+      return [];
+    };
+    await act(async () => root.render(<TeamPage api={api} />));
+    await settle(5);
+    expect(hasText(host, "Couldn't check who is online. Try Ping again.")).toBe(true);
+    expect(host.textContent).not.toContain('Cannot read properties');
+    fail = false;
+    await click(buttonByText(host, 'Ping'));
+    await settle();
+    expect(hasText(host, "Couldn't check who is online")).toBe(false);
+  });
+});

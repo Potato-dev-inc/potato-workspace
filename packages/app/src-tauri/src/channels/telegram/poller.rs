@@ -9,7 +9,7 @@
 
 use super::api::{Api, ApiError, POLL_TIMEOUT_S};
 use crate::audit;
-use crate::channels::engine::{to_wire, Effect, Engine, GroupJob};
+use crate::channels::engine::{to_wire, Effect, Engine};
 use crate::channels::host::Host;
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -85,9 +85,6 @@ impl Timing {
         tick: Duration::from_millis(200),
     };
 }
-
-/// While a group question is being answered, "typing…" is shown again this often (Telegram clears it after 5 s).
-const TYPING_EVERY: Duration = Duration::from_secs(4);
 
 /// Retries for a send that Telegram rate-limited, before the message is dropped.
 const SEND_RETRIES: u32 = 2;
@@ -268,8 +265,6 @@ fn run_poll(ctx: &Ctx, outbox: &Sender<Effect>) {
                             ctx.halt.store(true, Ordering::SeqCst);
                             break;
                         }
-                        // A group question takes seconds to a minute: it never runs on the poll thread.
-                        Effect::Ask(job) => spawn_ask(ctx, outbox, job),
                         other => {
                             let _ = outbox.send(other);
                         }
@@ -292,51 +287,6 @@ fn run_poll(ctx: &Ctx, outbox: &Sender<Effect>) {
                 }
                 backoff = (backoff * 2).min(ctx.timing.backoff_max);
             }
-        }
-    }
-}
-
-/// Starts the thread that answers one group question. If the thread cannot start, the question's place
-/// is freed and nothing is said to the group.
-fn spawn_ask(ctx: &Ctx, outbox: &Sender<Effect>, job: GroupJob) {
-    let engine = ctx.engine.clone();
-    let (ctx, outbox) = (ctx.clone(), outbox.clone());
-    let started = thread::Builder::new().name("telegram-ask".into()).spawn(move || run_ask(ctx, outbox, job));
-    if started.is_err() {
-        engine.abandon_job();
-    }
-}
-
-/// Asks on a helper thread and keeps "typing…" showing in the group until the reply is queued. A poller
-/// that was replaced in the meantime lets the answer go.
-fn run_ask(ctx: Ctx, outbox: Sender<Effect>, job: GroupJob) {
-    if !ctx.current() {
-        ctx.engine.abandon_job();
-        return;
-    }
-    let chat_id = job.chat_id;
-    let (done, result) = mpsc::channel::<Vec<Effect>>();
-    let (engine, host) = (ctx.engine.clone(), ctx.host.clone());
-    let worker = thread::Builder::new().name("telegram-ask-run".into()).spawn(move || {
-        let _ = done.send(engine.answer_job(&*host, job));
-    });
-    if worker.is_err() {
-        ctx.engine.abandon_job();
-        return;
-    }
-    loop {
-        let _ = ctx.api.typing(chat_id);
-        match result.recv_timeout(TYPING_EVERY) {
-            Ok(effects) => {
-                if ctx.current() {
-                    for effect in effects {
-                        let _ = outbox.send(effect);
-                    }
-                }
-                return;
-            }
-            Err(RecvTimeoutError::Timeout) if ctx.current() => {}
-            Err(_) => return,
         }
     }
 }
@@ -378,7 +328,7 @@ fn run_sender(ctx: Ctx, rx: Receiver<Effect>) {
 fn deliver(ctx: &Ctx, effect: Effect) {
     let paired = ctx.host.config().paired.map(|p| p.chat_id);
     // Everything but `SendTo` goes to the paired chat only; `SendTo` names its own chat (pairing replies).
-    if paired.is_none() && !matches!(effect, Effect::SendTo { .. } | Effect::Reply { .. }) {
+    if paired.is_none() && !matches!(effect, Effect::SendTo { .. }) {
         return;
     }
     let chat_id = paired.unwrap_or_default();
@@ -387,11 +337,10 @@ fn deliver(ctx: &Ctx, effect: Effect) {
         let result: Result<Option<i64>, ApiError> = match &effect {
             Effect::Send { out, reply_to, .. } => ctx.api.send(chat_id, &to_wire(out), *reply_to).map(Some),
             Effect::SendTo { chat_id: to, out } => ctx.api.send(*to, &to_wire(out), None).map(Some),
-            Effect::Reply { chat_id: to, reply_to, out } => ctx.api.send(*to, &to_wire(out), Some(*reply_to)).map(Some),
             Effect::Edit { message_id, out } => ctx.api.edit(chat_id, *message_id, &to_wire(out)).map(|()| None),
             Effect::AnswerCallback { id, text } => ctx.api.answer_callback(id, text.as_ref()).map(|()| None),
             // Never queued: the poller handles them.
-            Effect::Stop | Effect::Ask(_) => return,
+            Effect::Stop => return,
         };
         match result {
             Ok(sent_id) => {
@@ -407,12 +356,8 @@ fn deliver(ctx: &Ctx, effect: Effect) {
                 }
             }
             Err(err) => {
-                // A refusal for one group (the bot was removed, or may not write there) says nothing about
-                // the paired chat, so it never stops the poller.
-                if !matches!(effect, Effect::Reply { .. }) {
-                    if let Some(fatal) = fatal_for(err) {
-                        ctx.fail(fatal);
-                    }
+                if let Some(fatal) = fatal_for(err) {
+                    ctx.fail(fatal);
                 }
                 return;
             }

@@ -12,15 +12,3 @@ pub async fn pane_set_title(app: AppHandle, state: State<'_, AppState>, pane_id:
     crate::ambient::announce_title_change(&app, &pane_id);
     Ok(stored)
 }
-
-#[tauri::command]
-pub async fn ambient_get_prefs() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({ "animated_tray_icon": crate::ambient::prefs::animated() }))
-}
-
-#[tauri::command]
-pub async fn ambient_set_animated_tray(enabled: bool) -> Result<(), String> {
-    crate::ambient::prefs::set_animated(enabled).map_err(|e| e.to_string())?;
-    crate::ambient::notify_changed();
-    Ok(())
-}

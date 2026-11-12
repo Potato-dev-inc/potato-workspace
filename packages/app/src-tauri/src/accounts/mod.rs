@@ -152,6 +152,7 @@ impl Store {
         let account = Account { id, agent_id, label, home, lend_only: false };
         file.accounts.push(account.clone());
         self.write(&file)?;
+        crate::standby::note_account_changed(&account.agent_id);
         Ok(account)
     }
 
@@ -189,6 +190,7 @@ impl Store {
         let account = file.accounts.remove(index);
         file.helper_logins.retain(|_, value| value != id);
         self.write(&file)?;
+        crate::standby::note_account_changed(&account.agent_id);
         if !delete_home {
             return Ok(false);
         }
@@ -253,6 +255,7 @@ impl Store {
         };
         let _guard = WRITE_LOCK.lock();
         let mut file = self.read();
+        let changed_agent = agent_id.clone();
         match &choice {
             HelperLogin::Ask => {
                 file.helper_logins.remove(&agent_id);
@@ -262,6 +265,7 @@ impl Store {
             }
         }
         self.write(&file)?;
+        crate::standby::note_account_changed(&changed_agent);
         Ok(choice)
     }
 

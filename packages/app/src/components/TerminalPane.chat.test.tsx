@@ -25,15 +25,6 @@ vi.mock('../hooks/useTerminalSession', async () => {
 vi.mock('./chat/SessionChatPanel', () => ({
   SessionChatPanel: ({ paneId }: { paneId: string }) => <div data-testid="chat-panel">{paneId}</div>,
 }));
-vi.mock('../lib/agentDefinitions', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/agentDefinitions')>()),
-  tauriRecorderApi: {
-    start: vi.fn(async () => ({})),
-    status: vi.fn(async () => ({ recording: false })),
-    stop: vi.fn(async () => ({ path: '' })),
-  },
-}));
-
 import { TerminalPane } from './TerminalPane';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -113,5 +104,15 @@ describe('TerminalPane Terminal | Chat toggle', () => {
     expect(terminalHost().className).not.toContain('invisible');
     expect(life.mounts).toBe(1);
     expect(life.unmounts).toBe(0);
+  });
+});
+
+describe('TerminalPane header after the Recorder was cut', () => {
+  it('has no Rec button, for an agent pane or a plain shell', async () => {
+    for (const agent of ['claude', 'powershell']) {
+      await render(agent);
+      const labels = [...host.querySelectorAll<HTMLButtonElement>('button')].map((b) => `${b.textContent} ${b.title}`);
+      expect(labels.some((l) => /rec|record/i.test(l)), `${agent}: ${labels.join(' | ')}`).toBe(false);
+    }
   });
 });

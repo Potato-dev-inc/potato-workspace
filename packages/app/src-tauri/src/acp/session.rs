@@ -213,6 +213,10 @@ struct Core {
     parked: BTreeMap<u64, Parked>,
     turn: Option<Turn>,
     desired_config: BTreeMap<String, Value>,
+    /// A session mode picked with `session/set_mode` (put back after a restart, like `desired_config`).
+    desired_mode: Option<String>,
+    /// Read-only chat: every permission question that is not a read is rejected here, and no file write is served.
+    read_only: bool,
     idle_since: Option<Instant>,
     stats: SessionStats,
 }
@@ -297,6 +301,8 @@ impl AcpSession {
                 parked: BTreeMap::new(),
                 turn: None,
                 desired_config: BTreeMap::new(),
+                desired_mode: None,
+                read_only: false,
                 idle_since: None,
                 stats: SessionStats::default(),
             }),
@@ -662,14 +668,25 @@ impl AcpSession {
             core.idle_since = Some(Instant::now());
             core.stats.last_start = Some(StartTiming { resolve_ms, spawn_ms, initialize_ms, open_ms, restored: matches!(kind, StartKind::Resumed | StartKind::Loaded), ..StartTiming::default() });
             ev.push(SessionEvent::Started { how: kind, caps: Box::new(caps.clone()) });
-            Some(core.desired_config.clone())
+            Some((core.desired_config.clone(), core.desired_mode.clone()))
         });
-        let Some(desired) = reapply else {
+        let Some((desired, desired_mode)) = reapply else {
             // Closed (or replaced) while the handshake ran: the adapter must not outlive that.
             conn.kill();
             return Err(AcpError::SessionClosed);
         };
-        self.reapply_config(&conn, &session_id, &desired);
+        let mut restored = self.reapply_config(&conn, &session_id, &desired);
+        if let Some(mode) = desired_mode {
+            if let Err(e) = conn.request("session/set_mode", json!({ "sessionId": session_id, "modeId": mode }), self.cfg.timeouts.request()) {
+                tracing::warn!(session = %self.key, error = %e, "acp: could not restore the session mode after restart");
+                restored = false;
+            }
+        }
+        // A read-only chat whose guard could not be put back must not run: the receipt would say read-only while the agent can edit.
+        if !restored && self.with_core(|core, _| core.read_only) {
+            conn.kill();
+            return Err(AcpError::Protocol("the read-only setting of this chat could not be restored, so it was not started".into()));
+        }
         Ok(kind)
     }
 
@@ -786,7 +803,8 @@ impl AcpSession {
     }
 
     /// After a restart the agent forgets what the person picked (model, mode): put it back.
-    fn reapply_config(&self, conn: &AcpConnection, session_id: &str, desired: &BTreeMap<String, Value>) {
+    fn reapply_config(&self, conn: &AcpConnection, session_id: &str, desired: &BTreeMap<String, Value>) -> bool {
+        let mut all = true;
         for (id, value) in desired {
             let current = self.with_core(|core, _| {
                 core.state.config_options().iter().find(|o| o.get("id").and_then(Value::as_str) == Some(id)).and_then(|o| o.get("currentValue").cloned())
@@ -802,9 +820,13 @@ impl AcpSession {
                         self.with_core(|core, _| core.state.set_config_options(options));
                     }
                 }
-                Err(e) => tracing::warn!(session = %self.key, config = %id, error = %e, "acp: could not restore a setting after restart"),
+                Err(e) => {
+                    tracing::warn!(session = %self.key, config = %id, error = %e, "acp: could not restore a setting after restart");
+                    all = false;
+                }
             }
         }
+        all
     }
 
     // ---- turns -----------------------------------------------------------------------------------------
@@ -1073,6 +1095,34 @@ impl AcpSession {
         Ok(())
     }
 
+    /// Makes this chat read-only (or not): from now on each permission question whose tool is not a read, search, fetch or
+    /// think is answered "reject" here, and file writes and commands are never served (this client offers neither).
+    /// This is the app's half of the guard; the agent's own read-only mode is picked with [`AcpSession::set_session_mode`].
+    pub fn set_read_only(&self, on: bool) {
+        self.with_core(|core, _| core.read_only = on);
+    }
+
+    pub fn is_read_only(&self) -> bool {
+        self.with_core(|core, _| core.read_only)
+    }
+
+    /// Picks a session mode with `session/set_mode` (the agent lists them in `modes.availableModes`). Refused while a turn
+    /// runs. The pick is put back after a restart.
+    pub fn set_session_mode(&self, mode_id: &str) -> Result<(), AcpError> {
+        self.ensure_running()?;
+        let (conn, session_id) = self.with_core(|core, _| {
+            if core.turn.is_some() {
+                return Err(AcpError::Busy);
+            }
+            let conn = core.conn.clone().filter(AcpConnection::is_alive).ok_or(AcpError::Closed)?;
+            let session_id = core.state.session_id().ok_or_else(|| AcpError::Protocol("no session id".into()))?.to_string();
+            Ok((conn, session_id))
+        })?;
+        conn.request("session/set_mode", json!({ "sessionId": session_id, "modeId": mode_id }), self.cfg.timeouts.request())?;
+        self.with_core(|core, _| core.desired_mode = Some(mode_id.to_string()));
+        Ok(())
+    }
+
     // ---- stopping --------------------------------------------------------------------------------------
 
     /// Stops the adapter to free its memory. The conversation stays and comes back on the next prompt.
@@ -1320,6 +1370,8 @@ impl AcpSession {
         enum Decision {
             Parked,
             Refuse(Option<AcpConnection>),
+            /// Read-only chat: answered "reject" here, with the option the agent offered for it (if any).
+            Reject(Option<AcpConnection>, Option<String>),
             Ignore,
         }
         let parsed = serde_json::from_value::<RequestPermissionRequest>(params);
@@ -1345,6 +1397,16 @@ impl AcpSession {
                 ev.push(SessionEvent::PermissionRefused { reason: reason.into() });
                 return Decision::Refuse(conn);
             }
+            if core.read_only && !read_only_allows(request.tool_call.kind.as_deref()) {
+                core.stats.refused_questions += 1;
+                if let Some(turn) = core.turn.as_mut() {
+                    turn.clock.frame(Instant::now(), false);
+                }
+                let kind = request.tool_call.kind.as_deref().unwrap_or("other");
+                ev.push(SessionEvent::PermissionRefused { reason: format!("this chat is read-only, so a request to use a tool of kind \"{kind}\" was rejected") });
+                let option = request.options.iter().find(|o| o.kind == "reject_once").or_else(|| request.options.iter().find(|o| o.kind == "reject_always")).map(|o| o.option_id.clone());
+                return Decision::Reject(conn, option);
+            }
             let ask_id = core.state.on_permission_request(&request, now_ms());
             core.parked.insert(ask_id, Parked { rpc_id: rpc_id.clone(), options: request.options.iter().map(|o| o.option_id.clone()).collect() });
             if let Some(turn) = core.turn.as_mut() {
@@ -1356,25 +1418,32 @@ impl AcpSession {
             Decision::Parked
         });
         // A question that cannot be shown is answered "cancelled": the agent never proceeds on a guess.
-        if let Decision::Refuse(Some(conn)) = decision {
-            let _ = conn.respond(&rpc_id, cancelled_outcome());
+        match decision {
+            Decision::Refuse(Some(conn)) => {
+                let _ = conn.respond(&rpc_id, cancelled_outcome());
+            }
+            Decision::Reject(Some(conn), option) => {
+                let _ = conn.respond(&rpc_id, option.as_deref().map(selected_outcome).unwrap_or_else(cancelled_outcome));
+            }
+            _ => {}
         }
     }
 
     fn reject_request(&self, epoch: u64, id: &Value, method: &str) {
-        let conn = self.with_core(|core, _| {
+        let (conn, read_only) = self.with_core(|core, _| {
             if core.state.epoch() != epoch {
-                return None;
+                return (None, false);
             }
             core.stats.unsupported_requests += 1;
             if let Some(turn) = core.turn.as_mut() {
                 turn.clock.frame(Instant::now(), false);
             }
-            core.conn.clone()
+            (core.conn.clone(), core.read_only)
         });
         if let Some(conn) = conn {
-            // We offered no file access and no terminal: say so instead of leaving the agent waiting.
-            let _ = conn.respond_error(id, RPC_METHOD_NOT_FOUND, &format!("this client does not support {method}"));
+            // We offered no file access and no terminal (writes least of all): say so instead of leaving the agent waiting.
+            let why = if read_only { format!("this chat is read-only and this client does not support {method}") } else { format!("this client does not support {method}") };
+            let _ = conn.respond_error(id, RPC_METHOD_NOT_FOUND, &why);
         }
     }
 
@@ -1420,6 +1489,12 @@ fn restore_order(preference: ResumePreference, caps: &AgentCaps) -> Vec<Restore>
         ResumePreference::PreferLoad => order.extend(load.into_iter().chain(resume)),
     }
     order
+}
+
+/// The tool kinds a read-only chat may use. Anything else (edit, delete, move, execute, switch_mode, other, or a request
+/// that names no kind) is rejected.
+fn read_only_allows(kind: Option<&str>) -> bool {
+    matches!(kind, Some("read" | "search" | "fetch" | "think"))
 }
 
 fn is_auth_error(error: &AcpError) -> bool {

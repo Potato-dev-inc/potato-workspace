@@ -74,14 +74,14 @@ fn texts(effects: &[Effect]) -> Vec<String> {
     let mut all = Vec::new();
     for effect in effects {
         match effect {
-            Effect::Send { out, .. } | Effect::SendTo { out, .. } | Effect::Edit { out, .. } | Effect::Reply { out, .. } => {
+            Effect::Send { out, .. } | Effect::SendTo { out, .. } | Effect::Edit { out, .. } => {
                 all.push(out.text.as_str().to_string());
                 for button in out.keyboard.iter().flatten() {
                     all.push(button.label.clone());
                 }
             }
             Effect::AnswerCallback { text: Some(t), .. } => all.push(t.as_str().to_string()),
-            Effect::AnswerCallback { text: None, .. } | Effect::Stop | Effect::Ask(_) => {}
+            Effect::AnswerCallback { text: None, .. } | Effect::Stop => {}
         }
     }
     all

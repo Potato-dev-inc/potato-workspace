@@ -82,7 +82,6 @@ fn spaces_is_not_reachable_from_the_bridge_mcp_or_the_phone() {
         pk.join("cli/src"),
         pk.join("app/src/pwa"),
         pk.join("app/src/PwaApp.tsx"),
-        pk.join("app/src/PwaLegacyApp.tsx"),
     ];
     let words = ["spaces::", "space_send", "spaces_view", "space_join", "SpaceNet", "fish_bridge", "bot_bridge", "lib/spaces"];
     for root in roots {

@@ -4,12 +4,10 @@ import type {
   AgentContextProfile,
   AgentModelInspection,
   McpLogEntry,
-  OrchestratorChatEvent,
   PaneInfo,
 } from '@potato-workspace/shared';
 import type { PublicSettings } from './bridge-settings';
 import type { PreviewUrl } from './pane-preview';
-import type { PhoneFocus } from './focus';
 import type { AttentionAnswerBody, AttentionAnswerOutcome, AttentionSnapshot } from './attention';
 import type { Question, QuestionAnswer } from './questions';
 import type { PhoneChatReply } from './sessionChatModel';
@@ -317,14 +315,6 @@ export interface BridgeClient {
   listAgentTypes(): Promise<unknown>;
   /** `GET /digest`: what happened since `since` (default: this device's last visit); `seen` stores now as the last visit. */
   digest?(opts?: { since?: number; seen?: boolean }): Promise<import('./cockpit-api').Digest & { empty: boolean; previousSeenMs: number | null }>;
-  /** `GET /focus` (needs `watch`): the redacted Focus view for the phone bar. Absent on old bridges. */
-  focus?(): Promise<PhoneFocus>;
-  /** `POST /focus/start {minutes}` (needs `control`). Refused with 400 `FOCUS_BAD_MINUTES` outside 5..240. */
-  focusStart?(minutes: number): Promise<PhoneFocus>;
-  /** `POST /focus/extend` (needs `control`): +15 minutes while on. */
-  focusExtend?(): Promise<PhoneFocus>;
-  /** `POST /focus/end` (needs `control`): ends Focus now; the summary comes back on `GET /focus` as `last`. */
-  focusEnd?(): Promise<PhoneFocus>;
   /** `GET /team/cards` (needs `watch`): teammates' updates and my queued ones. Absent on old bridges. */
   teamCards?(): Promise<TeamCardsReply>;
   /** The team action routes (`/team/cards/{id}/dismiss|pull|queue`, `/team/jobs/{id}/apply|discard`). */
@@ -457,12 +447,6 @@ export interface BridgeClient {
   /** "Your plans" (`GET /plans?month=2026-10`, read only). Absent on old PCs. */
   plansReport?(month?: string): Promise<PlansReport>;
   patchSettings(patch: Partial<PublicSettings>): Promise<PublicSettings>;
-  postOrchestratorMessage(text: string, messageId: string): Promise<void>;
-  postOrchestratorViewport(viewport: {
-    width: number;
-    height: number;
-    active: boolean;
-  }): Promise<void>;
 }
 
 /** What the phone shows for a stuck agent (a subset of the loop guard's signal). */
@@ -475,7 +459,6 @@ export interface LoopSignalInfo {
 export type BridgeEvent =
   | { type: 'panes'; panes: PaneInfo[] }
   | { type: 'log'; entry: McpLogEntry }
-  | { type: 'chat'; event: OrchestratorChatEvent }
   /** `offset`: where the chunk starts in the pane's byte stream (absent from older backends). */
   | { type: 'terminal'; pane_id: string; data: Uint8Array | number[]; offset?: number }
   | { type: 'terminal-snapshot'; pane_id: string; snapshot: string }
@@ -487,11 +470,8 @@ export type BridgeEvent =
   /** A pane looks stuck (`signal`) or the warning cleared (`null`). Sent by the loop guard. */
   | { type: 'loop-signal'; pane_id: string; signal: LoopSignalInfo | null }
   | { type: 'settings'; settings: PublicSettings }
-  | { type: 'orchestrator-viewport'; width: number; height: number; active: boolean }
   /** Pending `ask_user` questions changed; refetch the list. `revision` increases with each change. */
   | { type: 'questions'; revision: number }
-  /** Focus changed on the PC (`event: focus`, needs `watch`): the phone's redacted view. The Focus bar reads again. */
-  | { type: 'focus'; view: PhoneFocus }
   /** The full attention snapshot (what needs the person); apply it only when its `rev` is newer. */
   | { type: 'attention'; snapshot: AttentionSnapshot }
   /** The PC refused typed input over the socket (`input-error` frame): `error` is its reason. */

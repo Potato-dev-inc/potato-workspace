@@ -120,19 +120,48 @@ fn needs_terminal_reason(prefix: &str, fields: &[&str]) -> String {
     format!("{prefix} {} {verb} the terminal way (a chat cannot honour {it}).", fields.join(", "))
 }
 
+/// What `cannot_chat` and `read_only_refused` need to know to suggest a call that works.
+#[derive(Debug, Clone, Default)]
+pub struct CannotChatHint {
+    pub agent: Option<String>,
+    /// The agent's definition says how to run a chat read-only (`[acp.read_only]`).
+    pub chat_read_only: bool,
+    /// The terminal can enforce `read_only` for this agent.
+    pub terminal_read_only: bool,
+}
+
 /// `lane: "acp"` with options only the terminal honours.
-pub fn cannot_chat(fields: &[&str]) -> OperationError {
+pub fn cannot_chat(fields: &[&str], hint: &CannotChatHint) -> OperationError {
     let list = fields.join(", ");
-    let mut error = OperationError::new(
-        "CHAT_CANNOT_DO",
-        format!("A chat session cannot honour {list}. Nothing was started. Leave lane out (or pass lane: \"terminal\") to run it in a terminal, or drop {list}."),
-        false,
-    );
-    error.context = json!({
-        "fields": fields,
-        "fix": "Pass lane: \"terminal\" to run it in a terminal, or leave the listed options out to run it as a chat.",
-        "retryable": false,
-    });
+    let agent = hint.agent.as_deref().unwrap_or("this agent");
+    let rest: Vec<&str> = fields.iter().copied().filter(|f| *f != "read_only").collect();
+    let mut fixes: Vec<String> = Vec::new();
+    if !rest.is_empty() {
+        fixes.push("Pass lane: \"terminal\" to run it in a terminal, or leave the listed options out to run it as a chat.".to_string());
+    }
+    if rest.len() != fields.len() {
+        fixes.push(if hint.terminal_read_only {
+            format!("read_only is enforced in a terminal for {agent}: pass lane: \"terminal\" (or drop read_only to run it as a chat).")
+        } else {
+            format!("{agent} cannot enforce read_only as a chat or in a terminal. Drop read_only, or pick an agent that lists read_only_supported in list_agents.")
+        });
+    }
+    let fix = fixes.join(" ");
+    let mut error = OperationError::new("CHAT_CANNOT_DO", format!("A chat session cannot honour {list}. Nothing was started. {fix}"), false);
+    error.context = json!({ "fields": fields, "fix": fix, "retryable": false });
+    error
+}
+
+/// A read-only chat that could not be made read-only: nothing was started.
+pub fn read_only_refused(why: &str, hint: &CannotChatHint) -> OperationError {
+    let agent = hint.agent.as_deref().unwrap_or("this agent");
+    let fix = if hint.terminal_read_only {
+        format!("read_only is enforced in a terminal for {agent}: pass lane: \"terminal\".")
+    } else {
+        "Retry with read_only: false, or pick an agent that lists read_only_supported in list_agents.".to_string()
+    };
+    let mut error = OperationError::new("READ_ONLY_UNSUPPORTED", format!("{why} {fix}"), false);
+    error.context = json!({ "fix": fix, "retryable": false });
     error
 }
 
@@ -281,5 +310,25 @@ mod tests {
         assert_eq!(error.code, "UNKNOWN_AGENT");
         assert!(error.message.contains("claude, codex"));
         assert_eq!(error.context["valid"], json!(["claude", "codex"]));
+    }
+}
+
+#[cfg(test)]
+mod hint_tests {
+    use super::*;
+
+    #[test]
+    fn a_lane_refusal_names_the_call_that_works() {
+        let terminal_ok = CannotChatHint { agent: Some("claude".into()), chat_read_only: false, terminal_read_only: true };
+        let error = cannot_chat(&["read_only"], &terminal_ok);
+        assert!(error.message.contains("pass lane: \"terminal\""), "{}", error.message);
+        let neither = CannotChatHint { agent: Some("kilo".into()), chat_read_only: false, terminal_read_only: false };
+        let error = cannot_chat(&["read_only"], &neither);
+        assert!(error.message.contains("kilo cannot enforce read_only") && error.message.contains("list_agents"), "{}", error.message);
+        let mixed = cannot_chat(&["read_only", "locks"], &terminal_ok);
+        assert!(mixed.message.contains("locks") && mixed.message.contains("lane: \"terminal\""));
+        let refused = read_only_refused("OpenCode did not take its read-only mode.", &terminal_ok);
+        assert_eq!(refused.code, "READ_ONLY_UNSUPPORTED");
+        assert!(refused.message.contains("lane: \"terminal\""));
     }
 }

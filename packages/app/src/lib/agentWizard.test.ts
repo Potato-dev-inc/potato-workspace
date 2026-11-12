@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   agentErrorMessage,
   isRealErrorMessage,
-  askOpenRouter,
   chooseDefaultDrafter,
   commandLine,
   reviewCommandLine,
@@ -203,10 +202,10 @@ describe('small helpers', () => {
       prompt_version: PROMPT_VERSION,
       rounds: 2,
     });
-    const or = provenanceOf({ kind: 'openrouter', model: 'google/gemini-2.5-flash', label: 'Gemini' }, 1);
-    expect(or).toMatchObject({ drafter: 'OpenRouter google/gemini-2.5-flash', drafter_kind: 'openrouter', model: 'google/gemini-2.5-flash' });
+    const custom = provenanceOf({ kind: 'custom_ai', model: 'google/gemini-2.5-flash', label: 'Gemini' }, 1);
+    expect(custom).toMatchObject({ drafter: 'Custom AI service google/gemini-2.5-flash', drafter_kind: 'custom_ai', model: 'google/gemini-2.5-flash' });
     expect(promptBudget({ kind: 'local_agent', id: 'claude', label: 'C' })).toBe(LOCAL_PROMPT_BUDGET);
-    expect(promptBudget({ kind: 'openrouter', model: 'm', label: 'M' })).toBe(REMOTE_PROMPT_BUDGET);
+    expect(promptBudget({ kind: 'custom_ai', model: 'm', label: 'M' })).toBe(REMOTE_PROMPT_BUDGET);
   });
 
   it('turns the start and probe answers into prompt facts', () => {
@@ -545,25 +544,5 @@ describe("the program's own error", () => {
     expect(await retryLiveTest({ api: { livetest }, session: 's', toml: GOOD, rounds: 1, verify })).toMatchObject({ status: 'agent_error', error });
     expect((await retryLiveTest({ api: { livetest }, session: 's', toml: GOOD, rounds: 1, verify })).status).toBe('failed');
     await expect(retryLiveTest({ api: { livetest }, session: 's', toml: GOOD, rounds: 1, verify: { ...verify, planned: undefined } })).rejects.toThrow('WIZARD_PLAN_REQUIRED');
-  });
-});
-
-describe('askOpenRouter', () => {
-  it('sends the prompt through the existing client and returns the text', async () => {
-    const stream = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'hello' }, { type: 'text' as const, text: 'world' }], stop_reason: 'end_turn' as const }));
-    const text = await askOpenRouter({ apiKey: 'k', model: 'google/gemini', prompt: 'the prompt', stream });
-    expect(text).toBe('hello\nworld');
-    expect(stream).toHaveBeenCalledTimes(1);
-    const [provider, key, req] = stream.mock.calls[0] as unknown as [string, string, { model: string; messages: Array<{ content: string }>; tools: unknown[] }];
-    expect(provider).toBe('openrouter');
-    expect(key).toBe('k');
-    expect(req.model).toBe('google/gemini');
-    expect(req.messages[0].content).toBe('the prompt');
-    expect(req.tools).toEqual([]);
-  });
-
-  it('refuses an empty answer', async () => {
-    const stream = vi.fn(async () => ({ content: [], stop_reason: 'end_turn' as const }));
-    await expect(askOpenRouter({ apiKey: 'k', model: 'm', prompt: 'p', stream })).rejects.toThrow('empty');
   });
 });

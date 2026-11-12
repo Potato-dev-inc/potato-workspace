@@ -198,6 +198,9 @@ async function main() {
   assert.equal(waited.result.structuredContent.snapshot.status, 'waiting_input');
   assert.ok(requests.some((item) => item.url.includes(encodeURIComponent(project))), 'project path should be forwarded');
 
+  // A cancelled request gets no response (MCP spec; the shim's resilience tests pin it). The wait
+  // below would time out at 800 ms, so a response for id 9 after that means cancellation was ignored.
+  const cancelledWaitStarted = Date.now();
   send(client, { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'wait_for_operation', arguments: { operation_id: 'op-smoke', after_revision: 3, timeout_ms: 800 } } });
   await new Promise((resolve) => setTimeout(resolve, 40));
   const readStarted = Date.now();
@@ -205,9 +208,11 @@ async function main() {
   assert.equal(concurrentRead.result.structuredContent.operation_id, 'op-smoke');
   assert.ok(Date.now() - readStarted < 350, 'get_operation should not queue behind a long wait');
   send(client, { jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 9, reason: 'smoke cancellation' } });
-  const cancelledWait = await rpc(client, messages, 9, 'tools/call', { name: 'wait_for_operation', arguments: { operation_id: 'op-smoke', after_revision: 3, timeout_ms: 800 } });
-  assert.equal(cancelledWait.result.isError, true);
-  assert.equal(cancelledWait.result.structuredContent.code, 'REQUEST_CANCELLED');
+  await new Promise((resolve) => setTimeout(resolve, Math.max(0, cancelledWaitStarted + 1_200 - Date.now())));
+  assert.equal(messages.filter((entry) => entry.id === 9).length, 0, 'a cancelled wait must not answer');
+  // The same call without a cancel still gets its answer, so the check above is not vacuous.
+  const uncancelled = await rpc(client, messages, 13, 'tools/call', { name: 'wait_for_operation', arguments: { operation_id: 'op-smoke', after_revision: 3, timeout_ms: 120 } });
+  assert.equal(uncancelled.result.structuredContent.reason, 'timeout');
 
   const timeoutWait = await rpc(client, messages, 12, 'tools/call', { name: 'wait_for_operation', arguments: { operation_id: 'op-smoke', after_revision: 3, timeout_ms: 120 } });
   assert.equal(timeoutWait.result.structuredContent.reason, 'timeout', JSON.stringify(timeoutWait));

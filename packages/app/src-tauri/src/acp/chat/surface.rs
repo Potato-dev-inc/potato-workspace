@@ -161,7 +161,10 @@ pub fn view(chat: &AcpChat) -> Value {
         account_source: account_source.as_deref(),
         lane_note: chat.lane_note().as_ref(),
         warm: chat.warm_claimed(),
+        read_only: chat.session().is_read_only(),
     });
+    let verified = results.as_deref().is_some_and(|r| !r.is_empty() && r.iter().all(|c| c.passed));
+    let verified_note = if verified { Value::Null } else { json!(unverified_reason(checks_total, results.as_deref(), is_final(status))) };
     let running: Vec<&crate::acp::state::BackgroundTask> = snapshot.background_tasks.iter().filter(|t| t.is_running()).collect();
     let tracking = match chat.session().caps() {
         Some(caps) if caps.background_tasks => "reported",
@@ -199,7 +202,9 @@ pub fn view(chat: &AcpChat) -> Value {
         },
         "checks_configured": checks_total,
         "checks": results.clone().unwrap_or_default(),
-        "verified": results.as_deref().is_some_and(|r| !r.is_empty() && r.iter().all(|c| c.passed)),
+        "verified": verified,
+        "verified_note": verified_note,
+        "not_verified": receipt.not_verified.clone(),
         "receipt": super::receipt::receipt_value(&receipt),
         "pane_open": !chat.is_closed(),
         "pane_policy": "stays_open_until_you_close_it",
@@ -221,6 +226,18 @@ pub fn view(chat: &AcpChat) -> Value {
         lanes::merge_note(&mut shown, &note);
     }
     shown
+}
+
+/// Why `verified` is false, in a sentence. `verified` means the checks the caller asked for ran and all passed: the agent's own
+/// report of a finished turn is a result, not a proof (a headless terminal run counts its CLI's result event instead).
+fn unverified_reason(checks_total: usize, results: Option<&[crate::agent_runs::checks::CheckResult]>, final_turn: bool) -> &'static str {
+    if checks_total == 0 {
+        "No checks were asked for, so nothing was checked independently; the result is the agent's own report. Pass checks (file_exists, command_exits, ...) to get verified: true."
+    } else if !final_turn || results.is_none() {
+        "The checks have not run yet: they run when the turn completes."
+    } else {
+        "At least one check did not pass."
+    }
 }
 
 fn inspect(chat: &AcpChat) -> Value {
@@ -492,8 +509,8 @@ fn with_reopened(mut answer: Value, handle: &str) -> Value {
 }
 
 /// A chat that could not take the requested settings is closed and its unused conversation dropped.
-fn abandon_chat(deps: &StartDeps, chat: &AcpChat) {
-    let _ = crate::pty::registry_kill_pane_and_wait(&deps.registry, chat.pane_id(), Some("the requested model could not be used"));
+fn abandon_chat(deps: &StartDeps, chat: &AcpChat, why: &str) {
+    let _ = crate::pty::registry_kill_pane_and_wait(&deps.registry, chat.pane_id(), Some(why));
     if let Some(conversations) = &deps.conversations {
         conversations.discard(chat.pane_id());
     }
@@ -511,7 +528,8 @@ fn chat_agent_ids() -> Vec<String> {
     ids
 }
 
-/// Request fields a chat session cannot honour. A chat has no read-only mode, worktree, lock, budget, backup agent,
+/// Request fields a chat session cannot honour. (`read_only` is listed here; `run` drops it when the agent's definition has an
+/// `[acp.read_only]` table and the chat is the way to run it.) A chat has no worktree, lock, budget, backup agent,
 /// shell allow-list or context packet, so a request that uses them must not quietly run as a chat. (`checks` and
 /// `structured_result` are honoured; `role` is only a label and is ignored; `scope` only shapes a packet prompt a
 /// chat does not build, so it counts.)
@@ -648,20 +666,31 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     let saved = agent.as_deref().and_then(|a| lookup.saved(a));
     let config = agent.as_deref().and_then(|a| lookup.config_for(a));
     let labs_on = lookup.labs_on();
+    // A chat can run read-only when the agent's definition says how (`[acp.read_only]`). The terminal keeps the run when it can enforce
+    // read-only itself (the lane was not insisted on), so an agent that worked before still runs the way it did.
+    let read_only_requested = value.get("read_only").and_then(Value::as_bool) == Some(true);
+    let mut terminal_only = chat_cannot_do(&value);
+    if read_only_requested && config.as_ref().is_some_and(super::read_only::supported) {
+        let terminal_can = agent.as_deref().is_some_and(|a| crate::agent_runs::read_only_supported(a, false));
+        if lane.as_deref() == Some("acp") || !terminal_can {
+            terminal_only.retain(|field| *field != "read_only");
+        }
+    }
     let facts = lanes::Facts {
         labs_on,
         has_definition: config.is_some(),
         adapter_installed: config.as_ref().is_some_and(|cfg| lookup.adapter_installed(cfg, &*deps.env)),
         headless,
-        terminal_only: chat_cannot_do(&value),
+        terminal_only,
     };
     let plan = match lanes::plan(lane.as_deref(), saved, facts) {
         Ok(plan) => plan,
         Err(why) => return (Some(Err(err("INVALID_ARGUMENT", why, false))), None),
     };
+    let cannot_chat_hint = lanes::CannotChatHint { agent: agent.clone(), chat_read_only: config.as_ref().is_some_and(super::read_only::supported), terminal_read_only: agent.as_deref().is_some_and(|a| crate::agent_runs::read_only_supported(a, false)) };
     let (explicit, mut reason) = match plan {
         lanes::Plan::Terminal { reason } => return (None, Some(lanes::LaneNote::terminal(&reason))),
-        lanes::Plan::CannotChat { fields } => return (Some(Err(lanes::cannot_chat(&fields))), None),
+        lanes::Plan::CannotChat { fields } => return (Some(Err(lanes::cannot_chat(&fields, &cannot_chat_hint))), None),
         lanes::Plan::Chat { explicit, reason } => (explicit, reason),
     };
     if let Some(why) = routed {
@@ -711,6 +740,14 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         }
     };
     chat.set_started_by(session);
+    // Read-only comes before anything else: the guards are on before the first message, and a chat that cannot be made read-only is
+    // never started (and never falls back to a run that is not).
+    if read_only_requested {
+        if let Err(super::read_only::Unsupported(why)) = super::read_only::enable(&chat) {
+            abandon_chat(deps, &chat, "read-only could not be enforced");
+            return (Some(Err(lanes::read_only_refused(&why, &cannot_chat_hint))), None);
+        }
+    }
     // The model and effort the caller asked for, applied before the first message. A request the
     // agent cannot honour is an error (explicit lane) or the terminal way (the saved choice); it
     // never quietly runs on another model.
@@ -718,7 +755,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     let reasoning = text_of(&value, "reasoning");
     if model.is_some() || reasoning.is_some() {
         if let Err(choice) = chat.apply_choices(model.as_deref(), reasoning.as_deref()) {
-            abandon_chat(deps, &chat);
+            abandon_chat(deps, &chat, "the requested model could not be used");
             if fallback {
                 return (None, Some(lanes::LaneNote::fell_back(choice.code, &choice.message)));
             }

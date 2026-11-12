@@ -136,7 +136,7 @@ pub async fn launch_uninstall(app: tauri::AppHandle) -> Result<(), String> {
     }
 }
 
-fn is_packaged_install() -> bool {
+pub(crate) fn is_packaged_install() -> bool {
     std::env::current_exe()
         .map(|path| {
             let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();

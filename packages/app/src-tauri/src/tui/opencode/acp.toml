@@ -26,3 +26,12 @@ provider_fallback = "opencode-go"
 separator = "/"
 credit_patterns = ["insufficient balance", "insufficient credit", "top up at", "/billing", "model not found", "unknown model", "providermodelnotfound"]
 credit_message = "OpenCode's model {model} needs credit. Pick another model in the chat, or set Settings › Orchestrator & Models › OpenCode model."
+
+# A read-only chat. OpenCode runs most tools (edit, write) without asking, so the permission guard alone is not enough: its
+# own "plan" agent (a session mode) has editing switched off, and it is selected before the first message. Every
+# permission question for an edit, delete, move or command is also rejected by this app. If OpenCode does not take the
+# mode, no read-only chat is started.
+[read_only]
+mode = "plan"
+mode_option = "mode"
+asks_before_tools = false

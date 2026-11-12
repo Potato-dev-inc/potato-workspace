@@ -113,6 +113,29 @@ describe('patchSettings in the app', () => {
   });
 });
 
+describe('a settings file from before the built-in orchestrator was removed', () => {
+  it('loads, keeps everything else, and the removed keys do nothing', async () => {
+    h.state.server = {
+      theme: 'light', away_minutes: 9,
+      default_provider: 'openrouter', default_model: 'x/y', custom_models: [{ provider: 'openrouter', model_id: 'x/y', label: 'X' }],
+      orchestrator_backend: 'codex_cli',
+    };
+    const loaded = await loadSettings();
+    expect(loaded.theme).toBe('light');
+    expect(loaded.away_minutes).toBe(9);
+    expect(loaded.checkpoints_keep).toBe(50);
+    expect(loaded.custom_ai).toBeUndefined();
+    // Saving something else still works with the old keys in the file.
+    const saved = await patchSettings({ away_minutes: 10 });
+    expect(saved.away_minutes).toBe(10);
+  });
+
+  it('saves the custom AI service address and model as settings', async () => {
+    const saved = await patchSettings({ custom_ai: { preset: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'm' } });
+    expect(saved.custom_ai).toEqual({ preset: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'm' });
+  });
+});
+
 describe('patchSettings in a plain browser (no Tauri)', () => {
   it('merges into the stored settings and keeps every other key', async () => {
     delete win.__TAURI_INTERNALS__;

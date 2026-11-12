@@ -1,51 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { findBridgeUrl, makeBridgeClient, subscribeBridgeEvents, type BridgeClient } from '../lib/bridge';
 import { loadBridgeLocalSecret } from '../lib/bridge-local-secret';
-import type { McpLogEntry, OrchestratorChatEvent, OrchestratorUserMessage, PaneInfo } from '@potato-workspace/shared';
-import type { MobileOrchestratorViewport } from './useTerminalAuthorityCss';
-
-const MOBILE_VIEWPORT_STALE_MS = 15_000;
+import type { McpLogEntry, PaneInfo } from '@potato-workspace/shared';
 
 export interface BridgeApi {
   client: BridgeClient | null;
   panesFromBridge: PaneInfo[];
   externalLogs: McpLogEntry[];
-  chatEvents: OrchestratorChatEvent[];
   isReady: boolean;
   error: string | null;
-  mobileOrchestratorViewport: MobileOrchestratorViewport | null;
-  /** Subscribe to user messages posted from the mobile PWA. Returns unlisten fn. */
-  onRemoteOrchestratorMessage: (cb: (msg: OrchestratorUserMessage) => void) => () => void;
+  /** True when a bridge that was reachable stops answering. Clears on the next event. */
+  connectionLost: boolean;
 }
 
 export function useBridge(bridgeUrl?: string): BridgeApi {
   const [client, setClient] = useState<BridgeClient | null>(null);
   const [panesFromBridge, setPanesFromBridge] = useState<PaneInfo[]>([]);
   const [externalLogs, setExternalLogs] = useState<McpLogEntry[]>([]);
-  const [chatEvents, setChatEvents] = useState<OrchestratorChatEvent[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mobileOrchestratorViewport, setMobileOrchestratorViewport] =
-    useState<MobileOrchestratorViewport | null>(null);
+  const [connectionLost, setConnectionLost] = useState(false);
   const clientRef = useRef<BridgeClient | null>(null);
-  const remoteListeners = useRef(new Set<(msg: OrchestratorUserMessage) => void>());
-  const mobileViewportUpdatedAt = useRef(0);
-
-  const onRemoteOrchestratorMessage = (cb: (msg: OrchestratorUserMessage) => void): (() => void) => {
-    remoteListeners.current.add(cb);
-    return () => { remoteListeners.current.delete(cb); };
-  };
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (mobileViewportUpdatedAt.current <= 0) return;
-      if (Date.now() - mobileViewportUpdatedAt.current > MOBILE_VIEWPORT_STALE_MS) {
-        mobileViewportUpdatedAt.current = 0;
-        setMobileOrchestratorViewport(null);
-      }
-    }, 2000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,34 +46,15 @@ export function useBridge(bridgeUrl?: string): BridgeApi {
       unsub = subscribeBridgeEvents(
         url,
         (ev) => {
+          setConnectionLost(false);
           if (ev.type === 'panes') setPanesFromBridge(ev.panes);
           if (ev.type === 'log') {
             setExternalLogs((prev) => [ev.entry, ...prev].slice(0, 500));
           }
-          if (ev.type === 'chat') {
-            setChatEvents((prev) => [...prev, ev.event].slice(-200));
-            if (ev.event.type === 'user') {
-              const userMsg = ev.event as Extract<OrchestratorChatEvent, { type: 'user' }>;
-              const msg: OrchestratorUserMessage = { text: userMsg.text, message_id: userMsg.message_id };
-              for (const cb of remoteListeners.current) cb(msg);
-            }
-          }
-          if (ev.type === 'orchestrator-viewport') {
-            mobileViewportUpdatedAt.current = Date.now();
-            if (ev.active && ev.width > 0) {
-              setMobileOrchestratorViewport({
-                width: ev.width,
-                height: ev.height,
-                active: true,
-              });
-            } else {
-              mobileViewportUpdatedAt.current = 0;
-              setMobileOrchestratorViewport(null);
-            }
-          }
         },
         () => {
-          /* swallow — SSE retries internally */
+          // SSE retries internally; this only records that the live connection dropped.
+          setConnectionLost(true);
         },
       );
     }
@@ -108,8 +64,6 @@ export function useBridge(bridgeUrl?: string): BridgeApi {
       cancelled = true;
       unsub?.();
       if (pollTimer) clearTimeout(pollTimer);
-      mobileViewportUpdatedAt.current = 0;
-      setMobileOrchestratorViewport(null);
     };
   }, [bridgeUrl]);
 
@@ -117,10 +71,8 @@ export function useBridge(bridgeUrl?: string): BridgeApi {
     client,
     panesFromBridge,
     externalLogs,
-    chatEvents,
     isReady,
     error,
-    mobileOrchestratorViewport,
-    onRemoteOrchestratorMessage,
+    connectionLost,
   };
 }

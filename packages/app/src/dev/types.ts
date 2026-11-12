@@ -77,8 +77,6 @@ export interface HarnessScenario {
   headlessOnlyAgent?: boolean;
   /** Cockpit: start with the "While you were away" digest showing (as after a return). */
   awayDigest?: boolean;
-  /** Cockpit: start with the end-of-Focus digest showing ("While you focused"). Needs no `awayDigest`. */
-  awayFocus?: boolean;
   /** Run info the mocked `pane_run_info` returns per pane id (default: only the example Claude pane has one). */
   runs?: Record<string, import('../lib/cockpit-api').PaneRunInfo>;
   /** Cockpit History: make `checkpoints_list` answer with this state instead of the example list. */
@@ -107,8 +105,6 @@ export interface HarnessScenario {
   missions?: import('./mission-fixtures').MissionScenario;
   /** Keep going: the picker rows, the hand-over lines per pane and the brief the mocked `keep_going_*` commands answer. */
   keepGoing?: import('./keep-going-fixtures').KeepGoingScenario;
-  /** Focus Time: start with a Focus running, or a just-ended summary; the mocked `focus_*` commands then start, extend and end it (see focus-fixtures.ts). */
-  focus?: import('./focus-fixtures').FocusScenario;
   /** Branch from here: what the mocked `branch_lineage` and `branch_brief` commands answer (see branch-fixtures.ts). */
   branch?: import('./branch-fixtures').BranchScenario;
   /** Collision Alert: the alerts and the switch the mocked `collision_*` commands answer (see collision-fixtures.ts). */

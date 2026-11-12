@@ -42,3 +42,10 @@ sha256 = "9d73d1f0f121fb96cc8badb28c22d5bff02d8582eb2e40360a81c189e1b9422a"
 [addon]
 size_mb = 59
 signin_hint = "In the terminal that opens, follow the sign-in steps (type /login if it does not ask). Chat uses the same sign-in as the terminal."
+
+# A read-only chat. Claude asks before every edit and command; its "plan" mode (when the adapter lists it) is added
+# on top. This app rejects each permission question that is not a read, search, fetch or think.
+[read_only]
+mode = "plan"
+mode_option = "mode"
+asks_before_tools = true

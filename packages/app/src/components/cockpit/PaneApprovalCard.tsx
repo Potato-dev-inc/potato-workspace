@@ -22,11 +22,11 @@ export function PaneApprovalCard({
   paneId: string;
   /** High risk: move the keyboard to Deny when the card appears. */
   autoFocus?: boolean;
-  /** The "Open terminal" button. Absent in the pane itself, where the terminal is already open. */
+  /** The "Open" button. Absent in the pane itself, where the terminal is already open. */
   onOpen?: () => void;
   /** A helper's question shown in its parent's Chat: "Claude helper asks" leads the title. */
   asks?: string;
-  /** The open button's words (default "Open terminal"). */
+  /** The open button's words (default "Open"). */
   openLabel?: string;
 }) {
   const pane = c.registry.panes.get(paneId);
@@ -78,7 +78,7 @@ export function PaneApprovalCard({
       more={
         onOpen ? (
           <CardButton tone="plain" role="open" onClick={onOpen}>
-            {openLabel ?? 'Open terminal'}
+            {openLabel ?? 'Open'}
           </CardButton>
         ) : null
       }

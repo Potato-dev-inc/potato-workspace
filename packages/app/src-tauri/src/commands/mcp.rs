@@ -1,19 +1,6 @@
-//! Tauri commands for installing, uninstalling and inspecting the MCP registration of CLI backends.
+//! Tauri commands for installing, uninstalling and inspecting the MCP registration of the CLI agents.
 
 use super::*;
-
-#[tauri::command]
-pub async fn ensure_orchestrator_mcp(
-    state: State<'_, AppState>,
-    backend: String,
-    project_path: String,
-) -> Result<crate::mcp_install::EnsureMcpResult, String> {
-    crate::mcp_install::ensure_orchestrator_mcp_with_preference(
-        &backend,
-        std::path::Path::new(&project_path),
-        developer_use_rust_mcp(&state),
-    )
-}
 
 #[tauri::command]
 pub async fn install_npm_mcp_configs(

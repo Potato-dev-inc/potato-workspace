@@ -4,7 +4,7 @@
 //
 //   row 1   glyph · what it wants, verb first · project            risk word · age
 //   row 2   one reason line, then (high risk) the caution line
-//   row 3   ONE action row: the answers on the left, the plain buttons (Open terminal, Dismiss) on the right
+//   row 3   ONE action row: the answers on the left, the plain buttons (Open, Dismiss) on the right
 //
 // Kind-specific content goes in `body`. Cards sit in a list 12px apart; the list is ordered, not grouped.
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
@@ -68,7 +68,7 @@ export interface InboxCardProps {
   note?: ReactNode;
   /** The answers, left. Primary first, then secondary, then plain. */
   actions?: ReactNode;
-  /** Plain buttons that are not answers (Open terminal, Dismiss, Details), right. */
+  /** Plain buttons that are not answers (Open, Dismiss, Details), right. */
   more?: ReactNode;
   /** Extra attributes for tests and deep links (`data-consent-id`). */
   data?: Record<string, string | undefined>;

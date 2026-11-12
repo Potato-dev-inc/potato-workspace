@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use super::model::{BRIEF_MAX_BYTES, MESSAGE_MAX_CHARS};
 use super::point::Cut;
-use crate::clip::window::item_ms;
+use crate::branch_from::window::item_ms;
 use crate::context_pack::{fence, FENCE_CLOSE, FENCE_OPEN};
 use crate::session_chat::model::ChatItem;
 use crate::turn_summary::TurnSummary;

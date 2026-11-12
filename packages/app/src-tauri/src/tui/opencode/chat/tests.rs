@@ -14,6 +14,10 @@ use super::*;
 
 const TURN: &str = include_str!("../fixtures/api_messages_turn.json");
 
+/// The tests of this file share the process-wide pane table (`ports`) and the per-server maps (`silent`, known sessions).
+/// Each test takes this lock, so a test never sees another test's panes as its neighbours.
+static SHARED_PANES: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
 /// Answers `GET <path>` with the body `routes` gives for it (404 for other paths), until dropped.
 struct FakeServer {
     base_url: String,
@@ -67,6 +71,7 @@ fn endpoint(server: &FakeServer, session: Option<&str>) -> ApiEndpoint {
 
 #[test]
 fn a_native_pane_reads_its_own_session_and_the_model_window() {
+    let _shared = SHARED_PANES.lock();
     let providers = json!({"providers": [{"id": "opencode-go", "key": "never-kept", "models": {"deepseek-v4.1-flash": {"limit": {"context": 128000}}}}]});
     let server = FakeServer::start(move |path| match path {
         "/session/ses_mine/message" => Some(TURN.to_string()),
@@ -82,6 +87,7 @@ fn a_native_pane_reads_its_own_session_and_the_model_window() {
 
 #[test]
 fn a_server_that_has_no_model_list_still_gives_the_conversation() {
+    let _shared = SHARED_PANES.lock();
     let server = FakeServer::start(|path| (path == "/session/s1/message").then(|| TURN.to_string()));
     let items = API.fetch(&pane(), &endpoint(&server, Some("s1"))).unwrap();
     assert!(items.iter().any(|item| matches!(item, ChatItem::Usage { context_window: None, .. })));
@@ -89,6 +95,7 @@ fn a_server_that_has_no_model_list_still_gives_the_conversation() {
 
 #[test]
 fn a_tui_pane_finds_its_session_among_the_folders_sessions() {
+    let _shared = SHARED_PANES.lock();
     let started = pane().started_at.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
     let sessions = json!([
         {"id": "ses_old", "time": {"created": 1, "updated": started - 60_000}},
@@ -107,6 +114,7 @@ fn a_tui_pane_finds_its_session_among_the_folders_sessions() {
 
 #[test]
 fn a_tui_pane_with_no_session_of_its_own_yet_is_an_error_so_the_screen_is_read() {
+    let _shared = SHARED_PANES.lock();
     let started = pane().started_at.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
     let sessions = json!([{"id": "ses_old", "time": {"created": 1, "updated": started - 60_000}}]);
     let server = FakeServer::start(move |path| (path == "/session").then(|| sessions.to_string()));
@@ -116,6 +124,7 @@ fn a_tui_pane_with_no_session_of_its_own_yet_is_an_error_so_the_screen_is_read()
 
 #[test]
 fn the_session_that_is_working_wins_over_a_newer_one_of_another_pane() {
+    let _shared = SHARED_PANES.lock();
     let started = pane().started_at.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
     let sessions = json!([
         {"id": "ses_other", "time": {"created": started, "updated": started + 9_000}},
@@ -132,6 +141,7 @@ fn the_session_that_is_working_wins_over_a_newer_one_of_another_pane() {
 
 #[test]
 fn a_server_that_is_not_there_is_an_error() {
+    let _shared = SHARED_PANES.lock();
     let dead = {
         let server = FakeServer::start(|_| None);
         server.base_url.clone()
@@ -143,6 +153,7 @@ fn a_server_that_is_not_there_is_an_error() {
 
 #[test]
 fn the_tui_is_told_a_port_unless_the_person_chose_one() {
+    let _shared = SHARED_PANES.lock();
     let args = prepare("pane-chat-api-1", &[]);
     assert_eq!(args[0], "--port");
     let port: u16 = args[1].parse().unwrap();
@@ -157,6 +168,7 @@ fn the_tui_is_told_a_port_unless_the_person_chose_one() {
 
 #[test]
 fn only_the_context_size_is_kept_of_the_model_list() {
+    let _shared = SHARED_PANES.lock();
     let table = window_table(&json!({"providers": [
         {"id": "a", "models": {"m1": {"limit": {"context": 1000}}, "m2": {"limit": {"context": 0}}, "m3": {}}},
         {"id": "b", "options": {"apiKey": "secret"}, "models": {"m1": {"limit": {"context": 2000}}}},
@@ -197,12 +209,17 @@ impl Drop for Served {
 
 fn serve_pane(pane_id: &'static str, server: &FakeServer) -> Served {
     let port: u16 = server.base_url.rsplit(':').next().unwrap().parse().unwrap();
+    // A port that an earlier server used may still carry its "silent" or known-session entry: start clean.
+    let base = normalize_base_url(&format!("http://127.0.0.1:{port}"));
+    silent().lock().remove(&base);
+    known_sessions().lock().remove(&base);
     ports().lock().insert(pane_id.to_string(), port);
     Served(pane_id)
 }
 
 #[test]
 fn a_pane_that_has_not_sent_anything_does_not_show_the_session_a_working_pane_next_to_it_holds() {
+    let _shared = SHARED_PANES.lock();
     let started = started_ms();
     let list = json!([{"id": "ses_b1", "time": {"created": started + 100, "updated": started + 9_000}}]);
     // B works on ses_b1; A's server knows no work at all. Both list the same shared folder.
@@ -218,6 +235,7 @@ fn a_pane_that_has_not_sent_anything_does_not_show_the_session_a_working_pane_ne
 
 #[test]
 fn two_panes_with_a_session_each_read_their_own_whoever_touched_theirs_last() {
+    let _shared = SHARED_PANES.lock();
     let started = started_ms();
     let list = json!([
         {"id": "ses_b2", "time": {"created": started + 100, "updated": started + 9_000}},
@@ -237,6 +255,7 @@ fn two_panes_with_a_session_each_read_their_own_whoever_touched_theirs_last() {
 
 #[test]
 fn the_session_another_pane_showed_before_is_not_taken_by_a_pane_with_none() {
+    let _shared = SHARED_PANES.lock();
     let started = started_ms();
     let list = json!([{"id": "ses_b3", "time": {"created": started + 100, "updated": started + 4_000}}]);
     let server_a = pane_server(list.clone(), json!({}), &["ses_b3"]);
@@ -251,6 +270,7 @@ fn the_session_another_pane_showed_before_is_not_taken_by_a_pane_with_none() {
 
 #[test]
 fn the_tui_launch_args_follow_the_installed_edition() {
+    let _shared = SHARED_PANES.lock();
     // 1.x (and an unknown version) keep today's flags; 2.x has neither flag, so it gets none.
     for major in [Some(1), None] {
         let args = prepare_for("pane-edition-1", &[], major);

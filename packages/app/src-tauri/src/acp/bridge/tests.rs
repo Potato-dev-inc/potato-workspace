@@ -119,7 +119,9 @@ fn headless_child() {
             let mut grandchild = crate::proc_util::hidden_command(exe);
             grandchild.args(HARNESS).env(ROLE, "sleeper").stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
             let grandchild = grandchild.spawn().expect("grandchild");
-            let _ = std::fs::write(dir.join("slow.pids"), format!("{} {}", std::process::id(), grandchild.id()));
+            // Written whole: the test reads this file while it is being made, and must never see half of a pid.
+            let _ = std::fs::write(dir.join("slow.pids.tmp"), format!("{} {}", std::process::id(), grandchild.id()));
+            let _ = std::fs::rename(dir.join("slow.pids.tmp"), dir.join("slow.pids"));
             for _ in 0..600 {
                 println!("tick");
                 let _ = std::io::stdout().flush();

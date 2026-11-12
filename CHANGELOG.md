@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.18
+
+This is a beta.
+
+- Security: the app's local connection now trusts only the app's own window. Before, a web page served from any localhost address (for example a project's dev server) could control agents without a token.
+- Helpers asked to be read-only now really are in chats too. OpenCode switches to its plan mode, and file edits and commands are refused. When a request can't be done, the message says which call works instead.
+- The MCP tool list is about 70% smaller, the "app and MCP are different builds" warning shows once per changed tool instead of on every call, and waiting for helpers can last up to an hour in one call.
+- A pre-started agent stuck at a sign-in screen is no longer restarted every 30 seconds. It tries 3 times, then waits until you sign in.
+- Settings is simpler. Focus Time, the Recorder, Clip It, Tag Your Agent, the moving tray icon and the old built-in orchestrator are gone. New: Discord alerts, and Uninstall everything in a Danger zone.
+- Team shows "Couldn't check who is online" instead of a raw error when a ping fails.
+- Plainer words: "Always for this agent", "Untitled chat", "background tasks", "replies" instead of "turns", "New PowerShell terminal", capitalised model names.
+- Bring my chats has one Bring button and says why an agent's chats can't be read. The usage bar says "Not shared" instead of "Unknown".
+- "Connection lost" only shows after a real drop, not on a fresh install.
+
 ## 1.0.17
 
 This is a beta.

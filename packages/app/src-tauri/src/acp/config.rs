@@ -138,10 +138,40 @@ pub struct AgentConfig {
     /// Which model a new chat starts on when nobody asked for one, and what a "needs credit" failure says
     /// (`[acp.default_model]`). Absent: the agent's own default is kept.
     pub default_model: Option<DefaultModel>,
+    /// How a read-only chat is enforced for this agent (`[acp.read_only]`). Absent: the agent cannot run a chat
+    /// read-only, and `run_agent(read_only: true)` says so instead of starting one.
+    pub read_only: Option<ReadOnlyChat>,
     /// Set for one session only (never from a table): the `authenticate` method to call right after `initialize`. A chat on
     /// a borrowed sign-in (`capacity_proxy`) uses it, because the adapter then has no login of its own, only a placeholder key.
     #[serde(skip)]
     pub authenticate_with: Option<String>,
+}
+
+/// `[acp.read_only]`: what makes a chat of this agent read-only. This app always answers the agent's permission
+/// questions for edit, delete, move, execute and any other non-read tool with "reject", and never serves file writes
+/// or commands itself. That alone is enough only for an agent that asks before every such tool (`asks_before_tools`).
+/// An agent that runs some tools without asking needs its own read-only session mode as well (`mode`), selected
+/// before the first message; when it does not take the mode, no chat is started.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ReadOnlyChat {
+    /// The value of the session mode that cannot edit (`plan`). Empty: the agent has no such mode.
+    pub mode: String,
+    /// The settings option (or session mode list) that holds it. Empty means `mode`.
+    pub mode_option: String,
+    /// The agent asks (`session/request_permission`) before every edit, delete, move and command, so rejecting the
+    /// questions is a full guard on its own.
+    pub asks_before_tools: bool,
+}
+
+impl ReadOnlyChat {
+    pub fn option_id(&self) -> &str {
+        if self.mode_option.is_empty() {
+            "mode"
+        } else {
+            &self.mode_option
+        }
+    }
 }
 
 /// `[acp.default_model]`: the app setting that picks the starting model of a chat, and the words for a model that
@@ -952,6 +982,14 @@ pub fn problems(cfg: &AgentConfig) -> Vec<(String, String)> {
     }
     if cfg.pin_policy == PinPolicy::Enforce && !cfg.pins.is_empty() && cfg.pins.iter().all(|p| p.sha256.is_none()) {
         add("pins", "with pin_policy \"enforce\" at least one pin needs a sha256".into());
+    }
+    if let Some(ro) = &cfg.read_only {
+        if ro.mode.trim().is_empty() && !ro.asks_before_tools {
+            add("read_only", "needs a mode, or asks_before_tools = true (otherwise nothing makes the chat read-only)".into());
+        }
+        if !plain_text(&ro.mode) || !plain_text(&ro.mode_option) {
+            add("read_only", "mode and mode_option are short plain text".into());
+        }
     }
     let t = &cfg.timeouts;
     let secs = [t.request_secs, t.new_session_secs, t.load_secs, t.stdin_write_secs, t.inactivity_secs, t.progress_secs, t.hung_grace_secs, t.idle_ttl_secs];

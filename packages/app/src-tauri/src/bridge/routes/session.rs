@@ -1,28 +1,13 @@
 //! Session-context routes: goal, pane roles and digests, delegation prompts, and the
-//! orchestrator standby policy plus the mobile orchestrator message/viewport relays.
+//! orchestrator standby policy.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
-use tauri::Emitter;
 
 use super::{Ctx, RouteResult};
 use crate::bridge::http::{normalize_optional_string, parse_json};
-use crate::bridge::sse::push_sse;
 use crate::bridge::store::rebuild_read_models;
 use crate::events::{SystemEvent, TaskId};
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct OrchestratorMessageBody {
-    pub text: String,
-    pub message_id: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct OrchestratorViewportBody {
-    pub width: f64,
-    pub height: f64,
-    pub active: bool,
-}
 
 #[derive(Debug, Deserialize)]
 struct SessionContextPatchBody {
@@ -53,8 +38,6 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
         ("POST", ["delegate-task"]) => delegate_task(cx),
         ("GET", ["orchestrator", "state"]) => orchestrator_state_get(),
         ("PATCH", ["orchestrator", "state"]) => orchestrator_state_patch(cx),
-        ("POST", ["orchestrator", "message"]) => orchestrator_message(cx),
-        ("POST", ["orchestrator", "viewport"]) => orchestrator_viewport(cx),
         _ => return None,
     })
 }
@@ -132,29 +115,6 @@ fn orchestrator_state_patch(cx: &Ctx) -> RouteResult {
         200,
         serde_json::to_value(read_models.session.orchestrator).unwrap(),
     ))
-}
-
-fn orchestrator_message(cx: &Ctx) -> RouteResult {
-    let body = cx.body;
-    let app = cx.app;
-    let req: OrchestratorMessageBody = parse_json(body)?;
-    let user_event = json!({
-        "type": "user",
-        "message_id": req.message_id,
-        "text": req.text,
-    });
-    push_sse(format!("event: chat\ndata: {user_event}\n\n"));
-    let _ = app.emit("orchestrator://message", req);
-    Ok((200, json!({ "ok": true })))
-}
-
-fn orchestrator_viewport(cx: &Ctx) -> RouteResult {
-    let body = cx.body;
-    let req: OrchestratorViewportBody = parse_json(body)?;
-    if let Ok(json) = serde_json::to_string(&req) {
-        push_sse(format!("event: orchestrator-viewport\ndata: {json}\n\n"));
-    }
-    Ok((200, json!({ "ok": true })))
 }
 
 pub(super) fn set_pane_role(cx: &Ctx, pane_id: &str) -> RouteResult {

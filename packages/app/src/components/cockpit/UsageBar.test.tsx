@@ -166,7 +166,7 @@ describe('the Used bar at the bottom of the cockpit', () => {
     expect(chips.map((c) => c.querySelector('.ck-usage-text')?.textContent)).toEqual([
       '⚠ 87% 10h',
       '⚠ Limited · 3h',
-      'Unknown',
+      'Not shared',
       '⚠ Sign-in expired',
     ]);
     // Codex, Claude and Cursor have a logo, so none of them gets a letter badge.
@@ -174,7 +174,7 @@ describe('the Used bar at the bottom of the cockpit', () => {
     expect(chips.map((c) => c.querySelector('[data-mark="logo"]')?.getAttribute('data-logo'))).toEqual(['OpenAI', 'OpenAI', 'Claude', 'Cursor']);
     // Numbers only: no names in the bar. The two Codex sign-ins are told apart by a tiny tag of the account label;
     // the agent with one sign-in gets none.
-    expect(chips.map((c) => c.querySelector('.ck-usage-suffix')?.textContent ?? null)).toEqual([null, 'Wo', null, null]);
+    expect(chips.map((c) => c.querySelector('.ck-usage-suffix')?.textContent ?? null)).toEqual([null, 'Work', null, null]);
     expect(strip!.textContent).not.toContain('Codex CLI');
     expect(strip!.textContent).not.toContain('Cursor Agent CLI');
     expect(chips.some((c) => c.querySelector('[data-mark="letters"]'))).toBe(false);
@@ -195,11 +195,11 @@ describe('the Used bar at the bottom of the cockpit', () => {
     expect(narrow.left + narrow.width).toBeLessThanOrEqual(300);
   });
 
-  it('a sign-in label is a two-letter tag in the chip and whole in its tooltip and the popover', async () => {
+  it('a sign-in label is a short tag in the chip (never a clipped word) and whole in its tooltip and the popover', async () => {
     const lend = { ...SNAP.rows[1], account_label: 'Lend Claude for the whole team' };
     await render({ ...SNAP, rows: [SNAP.rows[0], lend] });
     const chip = chipsIn(host)[1];
-    expect(chip.querySelector('.ck-usage-suffix')?.textContent).toBe('Le');
+    expect(chip.querySelector('.ck-usage-suffix')?.textContent).toBe('Lend Claude…');
     expect(chip.title).toContain('Sign-in: Lend Claude for the whole team');
     await act(async () => chip.click());
     const names = [...document.querySelectorAll('.ck-usage-pop-name')].map((n) => n.textContent);

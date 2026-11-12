@@ -36,7 +36,7 @@ pub struct ExportMarkdown {
 }
 
 /// The items of a pane's chat, read once, with the pane's agent type and folder. `holder` names the lease that keeps
-/// the reader open while it reads; it lets go at once. Shared by the chat exports and Clip It.
+/// the reader open while it reads; it lets go at once. Shared by the chat exports.
 pub(crate) async fn read_items(
     app: &AppHandle,
     state: &AppState,

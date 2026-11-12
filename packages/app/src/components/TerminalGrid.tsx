@@ -3,7 +3,6 @@ import type { AgentType } from '@potato-workspace/shared';
 import { launchMenuEntries, useAgentRegistry } from '../lib/agentRegistry';
 import { TerminalPane } from './TerminalPane';
 import type { PaneRegistryApi } from '../hooks/usePaneRegistry';
-import { isOrchestratorPaneId } from '../lib/orchestrator-panes';
 import { detachedWindowSizeFromGrid, openDetachedPaneWindow } from '../lib/detached-pane-window';
 
 interface Props {
@@ -28,10 +27,7 @@ export function TerminalGrid({
 }: Props) {
   const { paneList, spawnPane, replacePaneAgent } = registry;
   const workerPanes = useMemo(
-    () => paneList.filter((pane) => (
-      !isOrchestratorPaneId(pane.info.id) &&
-      !detachedPaneIds.has(pane.info.id)
-    )),
+    () => paneList.filter((pane) => !detachedPaneIds.has(pane.info.id)),
     [detachedPaneIds, paneList],
   );
   const workerPaneIds = useMemo(
@@ -62,7 +58,7 @@ export function TerminalGrid({
     const before = previousDetached.current;
     previousDetached.current = detachedPaneIds;
     if (before === detachedPaneIds) return;
-    const returned = [...before].filter((id) => !detachedPaneIds.has(id) && !isOrchestratorPaneId(id));
+    const returned = [...before].filter((id) => !detachedPaneIds.has(id));
     if (returned.length === 0) return;
     setReattach((prev) => {
       const next = { ...prev };

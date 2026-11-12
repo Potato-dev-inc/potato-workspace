@@ -665,7 +665,7 @@ pub fn resize(
     // The flight recorder gets the new grid BEFORE the PTY changes. ConPTY repaints the screen at
     // the new size the moment it is resized, and that output can reach the reader thread before
     // this call returns. Recording the resize afterwards put the repaint in front of its own
-    // resize, so a replay (the Clip It video) drew it on the old grid and garbled it.
+    // resize, so a replay drew it on the old grid and garbled it.
     crate::flight::resized(pane_id, cols, rows);
     // ponytail: ConPTY resize can block; holding PaneRegistry across it
     // freezes list_panes and keyboard input the same way write_all did.

@@ -24,15 +24,6 @@ pub fn dev_labs_override_active() -> bool {
     settings_store::dev_labs_override_active()
 }
 
-/// Push a JSON chat event to all SSE clients (mobile PWA and any desktop browser).
-/// The frontend calls this after each LLM chunk so the mobile PWA receives it.
-#[tauri::command]
-pub async fn push_chat_event(event_json: String) -> Result<(), String> {
-    let payload = format!("event: chat\ndata: {event_json}\n\n");
-    crate::bridge::push_sse(payload);
-    Ok(())
-}
-
 /// Push public settings to mobile SSE clients after desktop-side changes.
 #[tauri::command]
 pub async fn push_settings_event(settings_json: String) -> Result<(), String> {

@@ -121,6 +121,8 @@ pub struct ReceiptInputs<'a> {
     pub account_source: Option<&'a str>,
     pub lane_note: Option<&'a Value>,
     pub warm: bool,
+    /// The chat's read-only guards are on (`chat::read_only::enable` succeeded).
+    pub read_only: bool,
 }
 
 pub fn build(inputs: &ReceiptInputs) -> RunReceipt {
@@ -158,7 +160,7 @@ pub fn build(inputs: &ReceiptInputs) -> RunReceipt {
     RunReceipt {
         backend: "acp".into(),
         model: inputs.model_in_use.map(str::to_string).or_else(|| inputs.requested_model.map(str::to_string)),
-        read_only: "off".into(),
+        read_only: if inputs.read_only { "enforced" } else { "off" }.into(),
         checks,
         result_capture: result_capture.into(),
         structured_result: structured,

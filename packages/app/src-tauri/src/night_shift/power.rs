@@ -216,6 +216,11 @@ fn keep_awake_windows() -> Result<Guard, String> {
     }
 }
 
+/// The holds table is one process-wide map, and `release_all` drains all of it. Any test that reads or
+/// changes the table takes this lock, so no other test sees its holds disappear in the middle.
+#[cfg(test)]
+pub(crate) static TABLE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,6 +294,7 @@ mod tests {
 
     #[test]
     fn a_hold_is_kept_by_run_and_the_exit_hook_lets_go_of_every_one() {
+        let _table = TABLE_TEST_LOCK.lock();
         let (a, b) = (long_sleeper(), long_sleeper());
         let (pid_a, pid_b) = (a.id(), b.id());
         adopt("ns-test-hold-a", Guard { held: Held::Child(a) });
@@ -309,6 +315,7 @@ mod tests {
 
     #[test]
     fn a_lend_hold_and_a_night_shift_hold_are_separate_keys() {
+        let _table = TABLE_TEST_LOCK.lock();
         let (run, lend) = (long_sleeper(), long_sleeper());
         let (pid_run, pid_lend) = (run.id(), lend.id());
         adopt("ns-test-run-x", Guard { held: Held::Child(run) });

@@ -100,8 +100,6 @@ vi.mock('../../../lib/agentDefinitions', async (importOriginal) => {
       importDefinition: vi.fn(async () => listing),
       checkFile: vi.fn(async () => ({ status: 'ran', dir: 'C:/data/agents/kilo', explicit: false, generic: false, reason: null, name: 'kilo', results: [] })),
       createFixturesDir: vi.fn(async () => 'C:/data/agents/kilo'),
-      draftsList: vi.fn(async () => ({ dir: 'C:/data/agents/drafts', drafts: [] })),
-      draftValidate: vi.fn(async () => result),
     },
   };
 });
@@ -187,7 +185,7 @@ describe('Agents: every row renders', () => {
     expect(buttonByText(m.host, 'Import')).toBeTruthy();
     expect(byLabel(m.host, 'Command name')).toBeTruthy();
     expect(buttonByText(m.host, 'Add as generic agent')).toBeTruthy();
-    expect(buttonByText(m.host, 'Refresh drafts')).toBeTruthy();
+    expect(buttonByText(m.host, 'Refresh drafts')).toBeFalsy();
     expect(hasText(m.host, 'Sources')).toBe(true);
     expect(hasText(m.host, 'Consented projects')).toBe(true);
     expect(hasText(m.host, 'Extra directories')).toBe(true);

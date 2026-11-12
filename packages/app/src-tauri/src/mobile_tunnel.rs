@@ -128,6 +128,11 @@ fn tunnel_state() -> Arc<Mutex<TunnelState>> {
         .clone()
 }
 
+/// Stop the tunnel program (cloudflared) so an uninstall can delete it. Own child only.
+pub fn stop_for_uninstall() {
+    tunnel_state().lock().kill_child();
+}
+
 pub fn is_tunnel_enabled() -> bool {
     match std::env::var("POTATO_WORKSPACE_TUNNEL") {
         Ok(value) => value.trim() != "0",

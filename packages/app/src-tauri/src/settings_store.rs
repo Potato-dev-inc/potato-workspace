@@ -59,9 +59,6 @@ pub fn with_dev_labs(stored: &Value, active: bool) -> Value {
 }
 
 const PATCHABLE_KEYS: &[&str] = &[
-    "orchestrator_backend",
-    "default_provider",
-    "default_model",
     "opencode_model_provider",
     "opencode_model_id",
     "mobile_input_delay_ms",
@@ -92,9 +89,6 @@ const PATCHABLE_KEYS: &[&str] = &[
 
 pub fn default_public_settings() -> Value {
     json!({
-        "orchestrator_backend": "api",
-        "default_provider": "anthropic",
-        "default_model": "claude-sonnet-4-6",
         "opencode_model_provider": null,
         "opencode_model_id": null,
         "mobile_input_delay_ms": 60,
@@ -208,12 +202,6 @@ pub fn mirror_public_patch(app: &AppHandle, patch: &Value) -> Value {
     let effective = with_dev_labs(&merged, dev_labs_override_active());
     apply_public_settings(&effective);
 
-    if let Some(backend) = effective.get("orchestrator_backend").and_then(Value::as_str) {
-        if backend != "api" {
-            let _ = app.emit("orchestrator://ensure", json!({ "backend": backend }));
-        }
-    }
-
     effective
 }
 
@@ -257,24 +245,38 @@ mod tests {
     #[test]
     fn saved_settings_override_defaults_and_ignore_unknown_or_null_keys() {
         let file = json!({"settings": {
-            "mobile_input_delay_ms": 400, "default_model": "m1", "opencode_model_id": null,
+            "mobile_input_delay_ms": 400, "opencode_model_id": null,
             "api_key": "secret", "pane_window_position": {"x": 1, "y": 2}
         }});
         let out = public_settings_from_store_file(&file);
         assert_eq!(out["mobile_input_delay_ms"], 400);
-        assert_eq!(out["default_model"], "m1");
-        assert_eq!(out["default_provider"], "anthropic");
         assert_eq!(out["mobile_keyboard_resizes_agent"], false);
         assert!(out.get("api_key").is_none() && out.get("pane_window_position").is_none());
         assert_eq!(public_settings_from_store_file(&json!({})), default_public_settings());
     }
 
     #[test]
+    fn a_settings_file_from_before_the_orchestrator_was_removed_still_loads() {
+        // These keys were settings once. An old file still carries them; they are ignored, nothing else changes.
+        let file = json!({"settings": {
+            "orchestrator_backend": "claude_cli", "default_provider": "openrouter", "default_model": "m1",
+            "custom_models": [{"id": "x"}], "mobile_input_delay_ms": 400
+        }});
+        let out = public_settings_from_store_file(&file);
+        assert_eq!(out["mobile_input_delay_ms"], 400);
+        for gone in ["orchestrator_backend", "default_provider", "default_model", "custom_models"] {
+            assert!(out.get(gone).is_none(), "{gone} is no longer a public setting");
+        }
+        let patched = merge_public_settings(&out, &json!({"default_model": "m2"}));
+        assert!(patched.get("default_model").is_none(), "a patch cannot bring a removed key back");
+    }
+
+    #[test]
     fn a_null_in_a_patch_resets_the_mirror_key_to_its_default() {
-        let base = json!({"away_minutes": 30, "default_model": "m1"});
-        let out = merge_public_settings(&base, &json!({"away_minutes": null, "default_model": "m2"}));
+        let base = json!({"away_minutes": 30, "mobile_input_delay_ms": 100});
+        let out = merge_public_settings(&base, &json!({"away_minutes": null, "mobile_input_delay_ms": 200}));
         assert_eq!(out["away_minutes"], 5, "null removes the key, so the default shows");
-        assert_eq!(out["default_model"], "m2");
+        assert_eq!(out["mobile_input_delay_ms"], 200);
         assert_eq!(default_public_settings()["mobile_input_delay_ms"], 60);
     }
 
@@ -328,7 +330,7 @@ mod tests {
         // Not a Labs switch: unchanged (on by default, Settings › Agents).
         assert_eq!(effective["pane_mcp_enabled"], true);
         assert_eq!(effective["checkpoints_enabled"], stored["checkpoints_enabled"]);
-        assert_eq!(effective["default_model"], stored["default_model"]);
+        assert_eq!(effective["mobile_input_delay_ms"], stored["mobile_input_delay_ms"]);
         // Inactive: the stored value passes through untouched.
         assert_eq!(with_dev_labs(&stored, false), stored);
         assert_eq!(with_dev_labs(&stored, false)["night_shift_enabled"], false);

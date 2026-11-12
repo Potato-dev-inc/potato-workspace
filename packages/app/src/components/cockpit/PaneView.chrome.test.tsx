@@ -226,7 +226,7 @@ describe('the dock', () => {
     expect(host.querySelector('.ck-dock [data-ib-card]')).not.toBeNull();
   });
 
-  it('docks the Inbox card itself: its words, its age, no "Open terminal" (the terminal is right here)', async () => {
+  it('docks the Inbox card itself: its words, its age, no "Open" (the agent is right here)', async () => {
     const c = cockpit('C:\\work\\shop', true);
     await act(async () => root.render(<PaneView c={c} paneId="p1" />));
     await flush();
@@ -235,7 +235,7 @@ describe('the dock', () => {
     const labels = Array.from(card.querySelectorAll('button')).map((b) => b.textContent);
     expect(labels).toContain('Allow once');
     expect(labels).toContain('Deny');
-    expect(labels).not.toContain('Open terminal');
+    expect(labels).not.toContain('Open');
     expect(card.textContent).toContain('10s');
     const allow = Array.from(card.querySelectorAll('button')).find((b) => b.textContent === 'Allow once')!;
     await act(async () => allow.click());

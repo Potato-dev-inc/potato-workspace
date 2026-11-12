@@ -149,13 +149,13 @@ describe('New agent page: remembers the last five choices', () => {
     await click(chip('folder'));
     await click(menuItem("beta-site", "menuitem"));
     await click(chip('model'));
-    await click(option('m2'));
+    await click(option('M2'));
 
     await remount(setup);
     expect(chip('agent')?.textContent).toContain('Beta · Work');
     expect(runAs('Terminal')?.getAttribute('aria-checked')).toBe('true');
     expect(chip('folder')?.textContent).toContain('beta-site');
-    expect(chip('model')?.textContent).toContain('m2');
+    expect(chip('model')?.textContent).toContain('M2');
   });
 
   it('a Chat choice is remembered too, and a later Terminal choice replaces it', async () => {
@@ -200,7 +200,7 @@ describe('New agent page: remembers the last five choices', () => {
   it('a remembered model the agent no longer lists shows the agent default', async () => {
     localStorage.setItem('pm.newagent.model.alpha', 'retired-model');
     await mount();
-    expect(chip('model')?.textContent).toContain('Default (gpt-5.1)');
+    expect(chip('model')?.textContent).toContain('Default (Gpt-5.1)');
   });
 
   it('the agent choice is remembered as soon as it is picked, not only on send', async () => {

@@ -129,6 +129,13 @@ fn a_web_page_origin_on_a_loopback_peer_requires_a_token() {
         "null",
         "https://localhost.evil.example",
         "file://",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://foo.localhost",
+        "http://localhost:1420",
+        "http://[::1]:4173",
+        "http://tauri.localhost:8080",
+        "tauri://localhost:1",
     ] {
         let headers = format!("POST /panes/p1/input HTTP/1.1
 Host: 127.0.0.1:17321
@@ -140,9 +147,6 @@ Origin: {origin}
         "tauri://localhost",
         "http://tauri.localhost",
         "https://tauri.localhost",
-        "http://localhost:1420",
-        "http://127.0.0.1:1420",
-        "http://[::1]:4173",
     ] {
         let headers = format!("POST /panes/p1/input HTTP/1.1
 Host: 127.0.0.1:17321
@@ -193,4 +197,21 @@ fn a_pairing_code_is_dropped_after_too_many_wrong_guesses() {
     let req = PairRequestBody { pairing_code: session.pairing_code, device_name: "p".into(), device_public_key: session.server_public_key };
     assert!(store.pair_device(req).is_err());
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn dev_origins_come_from_the_tauri_config_devurl() {
+    let conf = |url: &str| format!(r#"{{"build":{{"devUrl":"{url}"}}}}"#);
+    assert_eq!(
+        super::auth::dev_origins_from_config(&conf("http://127.0.0.1:1442")),
+        ["http://127.0.0.1:1442", "http://localhost:1442"]
+    );
+    for bad in ["https://127.0.0.1:1442", "http://evil.example:1442", "http://127.0.0.1", "http://localhost:x"] {
+        assert!(super::auth::dev_origins_from_config(&conf(bad)).is_empty(), "{bad}");
+    }
+    assert!(super::auth::dev_origins_from_config("{}").is_empty());
+    assert!(super::auth::dev_origins_from_config("nope").is_empty());
+    assert!(is_app_origin("tauri://localhost"));
+    assert!(!is_app_origin("http://localhost:5173"));
+    assert!(!is_app_origin("http://foo.localhost"));
 }

@@ -40,8 +40,8 @@ export const runTime = (startedAtMs: number, now: number): string => formatElaps
 
 export const jobCount = (map: JobsMap): number => Object.values(map).reduce((sum, list) => sum + list.length, 0);
 
-/** "1 job running", "3 jobs running". */
-export const jobsRunning = (n: number): string => `${n} ${n === 1 ? 'job' : 'jobs'} running`;
+/** "1 background task", "3 background tasks": the processes agents left running, not agents. */
+export const jobsRunning = (n: number): string => `${n} background ${n === 1 ? 'task' : 'tasks'}`;
 
 const same = (a: JobsMap, b: JobsMap): boolean => JSON.stringify(a) === JSON.stringify(b);
 

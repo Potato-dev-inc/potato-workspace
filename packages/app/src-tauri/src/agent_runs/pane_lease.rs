@@ -192,20 +192,20 @@ mod tests {
     #[test]
     fn second_caller_gets_pane_leased_with_owner_and_expiry() {
         let pane = "lease-test-conflict";
-        acquire_at(pane, "session-a", 1_000).unwrap();
+        acquire_at(pane, "holder-zeta", 1_000).unwrap();
         let error = acquire_at(pane, "session-b", 11_000).unwrap_err();
         assert_eq!(error.code, "PANE_LEASED");
         assert!(error.recoverable);
         assert!(error.context.get("owner_session").is_none(), "the holder's session id is a credential");
         let label = error.context["owner"].as_str().unwrap().to_string();
-        assert!(label.starts_with("other-session-") && !label.contains("session-a"), "{label}");
-        assert!(!error.message.contains("session-a") && !error.context.to_string().contains("\"session-a\""));
+        assert!(label.starts_with("other-session-") && !label.contains("holder-zeta"), "{label}");
+        assert!(!error.message.contains("holder-zeta") && !error.context.to_string().contains("\"holder-zeta\""));
         let again = acquire_at(pane, "session-b", 11_500).unwrap_err();
         assert_eq!(again.context["owner"], label.as_str(), "the label is stable");
         assert_eq!(error.context["expires_in_ms"], 50_000);
         assert_eq!(error.retry_after_ms, Some(50_000));
         // The owner re-adopting its own pane is fine.
-        acquire_at(pane, "session-a", 12_000).unwrap();
+        acquire_at(pane, "holder-zeta", 12_000).unwrap();
     }
 
     #[test]

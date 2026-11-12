@@ -12,7 +12,6 @@ pub mod copy;
 pub mod answer;
 pub mod derive;
 pub mod fingerprint;
-pub mod focus;
 pub mod layout;
 pub mod model;
 pub mod routes;

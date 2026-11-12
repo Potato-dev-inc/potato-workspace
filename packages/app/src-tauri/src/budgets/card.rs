@@ -1,4 +1,4 @@
-//! The pause card: an Inbox card that says an agent used its budget and offers "Add 10 turns /
+//! The pause card: an Inbox card that says an agent used its budget and offers "Add 10 replies /
 //! Stop here". It rides on the existing questions plumbing (the Inbox list, the paired phone, the
 //! push), as a question of kind `budget` that only Potato Workspace can raise.
 
@@ -38,10 +38,19 @@ fn plural(n: u32, unit: &str) -> String {
     }
 }
 
-/// "Claude used its 20 turns." / "Claude used its 60 minutes." / "... its budget."
+/// "1 reply" / "20 replies": the person sees replies, not turns.
+fn replies(n: u32) -> String {
+    if n == 1 {
+        "1 reply".to_string()
+    } else {
+        format!("{n} replies")
+    }
+}
+
+/// "Claude used its 20 replies." / "Claude used its 60 minutes." / "... its budget."
 pub fn headline(agent: &str, record: &BudgetRecord, reason: Reason) -> String {
     match (reason, record.turns, record.minutes) {
-        (Reason::Turns, Some(turns), _) => format!("{agent} used its {}.", plural(turns, "turn")),
+        (Reason::Turns, Some(turns), _) => format!("{agent} used its {}.", replies(turns)),
         (Reason::Time, _, Some(minutes)) => format!("{agent} used its {}.", plural(minutes, "minute")),
         _ => format!("{agent} used its budget."),
     }
@@ -50,7 +59,7 @@ pub fn headline(agent: &str, record: &BudgetRecord, reason: Reason) -> String {
 fn choices(record: &BudgetRecord) -> Vec<Choice> {
     let mut out = Vec::new();
     if let Some(step) = adjust::step_turns(record).filter(|_| record.turns.is_some()) {
-        out.push(Choice { id: CHOICE_ADD_TURNS.into(), label: format!("Add {}", plural(step, "turn")) });
+        out.push(Choice { id: CHOICE_ADD_TURNS.into(), label: format!("Add {}", replies(step)) });
     }
     if let Some(step) = adjust::step_minutes(record).filter(|_| record.minutes.is_some()) {
         out.push(Choice { id: CHOICE_ADD_MINUTES.into(), label: format!("Add {step} min") });
@@ -89,7 +98,7 @@ pub fn raise(record: &BudgetRecord, standing: &Standing, reason: Reason) -> Opti
         Reason::Time => format!("{} of {} min", standing.elapsed_ms / 60_000, standing.minutes_limit.unwrap_or(0)),
         _ => {
             let limit = standing.turns_limit.unwrap_or(standing.committed());
-            format!("{} of {}", standing.committed(), plural(limit, "turn"))
+            format!("{} of {}", standing.committed(), replies(limit))
         }
     };
     let pane_id = operations::latest_agent_run(&record.project, &record.handle).ok().and_then(|turn| turn.pane_id);
@@ -102,7 +111,7 @@ pub fn raise(record: &BudgetRecord, standing: &Standing, reason: Reason) -> Opti
                 question: headline(&agent, record, reason),
                 choices: choices(record),
                 allow_free_text: Some(false),
-                context: Some(format!("{used}. It's paused after its last turn. Nothing was lost.")),
+                context: Some(format!("{used}. It's paused after its last reply. Nothing was lost.")),
                 timeout_s: Some(questions::MAX_BUDGET_TIMEOUT_S),
                 urgency: Some("normal".into()),
                 kind: Some(KIND.into()),

@@ -45,6 +45,40 @@ pub(crate) fn ensure_stable_idempotency_key(tool: &str, args: &mut Value) -> Str
     key
 }
 
+/// Whether the caller named its own idempotency key. A derived key (`false`) can match a run started
+/// earlier, which is then replayed rather than started again.
+pub(crate) fn caller_gave_idempotency_key(args: &Value) -> bool {
+    args.get("idempotency_key")
+        .and_then(Value::as_str)
+        .is_some_and(|key| !key.is_empty())
+}
+
+/// The earlier operation a derived key already names, if any: the run this call would replay.
+pub(crate) fn earlier_operation_for_key(args: &Value, key: &str) -> Option<Value> {
+    let project = args.get("project_path").and_then(Value::as_str);
+    lookup_operation_by_key(project, key)
+        .ok()
+        .filter(|operation| operation.get("operation_id").is_some())
+}
+
+/// Adds `replayed: true` and `started_at_ms` to an answer that came from an earlier operation.
+/// A fresh run (`earlier` is `None`) is returned unchanged.
+pub(crate) fn mark_replayed(response: String, earlier: Option<&Value>) -> String {
+    let Some(earlier) = earlier else {
+        return response;
+    };
+    let Ok(mut value) = serde_json::from_str::<Value>(&response) else {
+        return response;
+    };
+    if let Some(object) = value.as_object_mut() {
+        object.insert("replayed".into(), json!(true));
+        if let Some(started) = earlier.get("created_at_ms") {
+            object.insert("started_at_ms".into(), started.clone());
+        }
+    }
+    value.to_string()
+}
+
 /// A random key, for calls where repeating the same arguments is a new request (quick_ask, send_message).
 pub(crate) fn ensure_idempotency_key(args: &mut Value) -> String {
     if let Some(key) = args

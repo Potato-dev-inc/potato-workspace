@@ -239,11 +239,6 @@ fn review_desk_kind_has_a_stable_name() {
 }
 
 #[test]
-fn focus_kind_has_a_stable_name() {
-    assert_eq!(Kind::Focus.as_str(), "focus");
-}
-
-#[test]
 fn what_broke_it_kind_has_a_stable_name() {
     assert_eq!(Kind::WhatBrokeIt.as_str(), "what_broke_it.undone");
 }

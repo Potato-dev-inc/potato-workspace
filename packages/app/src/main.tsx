@@ -2,7 +2,6 @@
 import { lazy, StrictMode, Suspense, type ComponentType } from 'react';
 import ReactDOM from 'react-dom/client';
 import { tauri } from './lib/tauri';
-import App from './App';
 import { isTauriWindow, setupServiceWorker } from './lib/service-worker';
 import { isSettingsEntry } from './lib/settings-entry';
 import './styles/index.css';
@@ -14,7 +13,6 @@ const MiniBarApp = lazy(() => import('./components/minibar/MiniBarApp'));
 const SwitchOverlayApp = lazy(() => import('./components/switchoverlay/SwitchOverlayApp'));
 const CockpitApp = lazy(() => import('./CockpitApp'));
 const PwaApp = lazy(() => import('./PwaApp'));
-const PwaLegacyApp = lazy(() => import('./PwaLegacyApp'));
 const SettingsApp = lazy(() => import('./SettingsApp'));
 const TerminalApp = lazy(() => import('./TerminalApp'));
 const WorkerHostBootstrap = lazy(() => import('./WorkerHostBootstrap'));
@@ -31,8 +29,6 @@ const params = new URLSearchParams(window.location.search);
 const isTerminalApp = params.has('terminal') || params.has('cmd') || window.location.hash === '#terminal';
 const isStandaloneWorker =
   params.has('worker') || import.meta.env.VITE_POTATO_WORKSPACE_WORKER === '1';
-/** Backup of the old orchestrator-centric mobile UI. */
-const isLegacyPwa = params.get('pwa') === 'legacy';
 const isMobileOrPwa =
   params.has('pwa') ||
   window.matchMedia('(display-mode: standalone)').matches ||
@@ -54,14 +50,14 @@ async function resolveRoot(): Promise<RootComponent> {
   if (params.get('switchoverlay') === '1') return SwitchOverlayApp;
   if (isTerminalApp) return TerminalApp;
   if (isStandaloneWorker) return WorkerHostBootstrap;
-  if (isMobileOrPwa) return isLegacyPwa ? PwaLegacyApp : PwaApp;
+  if (isMobileOrPwa) return PwaApp;
   try {
     const workerLaunch = await tauri.getWorkerLaunch();
     if (workerLaunch) return WorkerHostBootstrap;
   } catch {
     /* browser preview */
   }
-  return App;
+  return CockpitApp;
 }
 
 // StrictMode is safe: TerminalSession defers terminal creation to the next

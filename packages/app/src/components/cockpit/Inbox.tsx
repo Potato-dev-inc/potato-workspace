@@ -33,8 +33,6 @@ import { teamApi } from '../../lib/team';
 import { MissionsSection, readyMissions } from './mission/MissionCards';
 import { CollisionSection } from './CollisionSection';
 import { useMissions } from '../../lib/missions';
-import { useFocus } from '../../hooks/useFocus';
-import { FocusNote } from './FocusNote';
 import type { CompanionTransport, CompanionView } from '../../lib/companion';
 import { COMPANION_PANE_PREFIX, isCompanionPaneId } from './companion/model';
 import { CompanionStoppedCard } from './companion/StoppedCard';
@@ -86,10 +84,6 @@ export function Inbox({
   const missions = useMissions();
   // One Team read for the red-branch banner on top and the Team section below.
   const team = useTeam();
-  // Focus on: finished missions wait out of sight until Focus ends. "Show" unfolds them for this Focus only.
-  const focus = useFocus();
-  const [shownSession, setShownSession] = useState<string | null>(null);
-  const folding = focus.view?.on === true && !(shownSession !== null && shownSession === focus.view.sessionId);
   const count = blockingItems(needs).length;
   const waiting = c.registry.paneList.filter((p) => !isCompanionPaneId(p.info.id) && itemsOfKind(needs, 'approval').some((i) => i.paneId === p.info.id));
   const errored = c.registry.paneList.filter((p) => !isCompanionPaneId(p.info.id) && itemsOfKind(needs, 'error').some((i) => i.paneId === p.info.id));
@@ -295,14 +289,6 @@ export function Inbox({
         if (root.current) handleInboxKey(e.nativeEvent, root.current);
       }}
     >
-      <FocusNote
-        hasRun={!noPanes || hasEverSpawned()}
-        view={focus.view}
-        now={focus.now}
-        foldedCount={folding ? readyMissions(missions.missions).length : 0}
-        onShowFinished={() => setShownSession(focus.view?.sessionId ?? null)}
-        onChange={focus.set}
-      />
       <RedBanners state={team.state} api={teamApi} now={c.now} onDone={team.refresh} />
       <header className="ck-inbox-hero">
         {!firstRun && (
@@ -316,7 +302,7 @@ export function Inbox({
             ? 'Your agents work here. First, check which ones this PC has.'
             : count === 0
             ? 'Agents that stop to ask a question will show up here.'
-            : 'Answer here, or open the terminal.'}
+            : 'Answer here, or open the agent.'}
         </p>
         {entries.length > 0 && (
           <p className="ib-hint" aria-label="Keyboard shortcuts">
@@ -368,7 +354,7 @@ export function Inbox({
         </ul>
       )}
 
-      <MissionsSection missions={missions.missions} onChanged={missions.reload} onOpenPane={(id) => c.select(id)} onNotify={c.notify} foldReady={folding} />
+      <MissionsSection missions={missions.missions} onChanged={missions.reload} onOpenPane={(id) => c.select(id)} onNotify={c.notify} />
       <CollisionSection select={(id) => c.select(id)} hasPane={(id) => c.registry.panes.has(id)} />
 
       <AskNotices />

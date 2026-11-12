@@ -2,8 +2,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FinishResult, OpenRouterSupport, PlannedRun, ProbeInfo, StartInfo, VerifyResult, WizardApi, LiveResult } from '../../../lib/agentWizard';
+import type { FinishResult, PlannedRun, ProbeInfo, StartInfo, VerifyResult, WizardApi, LiveResult } from '../../../lib/agentWizard';
 import type { AcpDetectResult } from '../../../lib/agentWizardAcp';
+import type { CustomAiSupport } from '../../../lib/custom-ai';
 import { AgentWizard } from './AgentWizard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -112,18 +113,18 @@ function mockApi(over: Record<string, unknown> = {}): MockApi {
   } as unknown as MockApi;
 }
 
-const openRouter = {
-  models: vi.fn(async () => []),
-  hasKey: vi.fn(async () => false),
+const customAi = {
+  load: vi.fn(async () => ({ service: { preset: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'm' }, keySet: false, last4: null })),
+  save: vi.fn(async () => undefined),
   ask: vi.fn(),
-} as unknown as OpenRouterSupport;
+} as unknown as CustomAiSupport;
 
 let host: HTMLDivElement;
 let root: Root;
 
 async function render(api: WizardApi, onApprove: (d: FinishResult) => void = () => undefined) {
   await act(async () => {
-    root.render(<AgentWizard api={api} openRouter={openRouter} onClose={() => undefined} onApprove={onApprove} />);
+    root.render(<AgentWizard api={api} customAi={customAi} onClose={() => undefined} onApprove={onApprove} />);
   });
 }
 

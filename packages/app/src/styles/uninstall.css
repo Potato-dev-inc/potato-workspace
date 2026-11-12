@@ -1,0 +1,273 @@
+/* Settings > Danger zone > Uninstall everything. Grayscale only; uses the Settings tokens. */
+.settings .st-un-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings .st-un-flow h3 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--label);
+}
+.settings .st-un-lead {
+  margin: 0 0 12px;
+  color: var(--label-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.settings .st-un-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.settings .st-un-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings .st-un-steps li.is-on {
+  color: var(--label);
+}
+.settings .st-un-steps b {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.settings .st-un-steps li.is-on b {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  box-shadow: none;
+}
+
+.settings .st-un-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.settings .st-un-group {
+  border-radius: 10px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.settings .st-un-group.is-kept {
+  background: transparent;
+}
+.settings .st-un-group.is-cant {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--sep);
+  border: 1px dashed var(--sep);
+}
+.settings .st-un-grouphead {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.settings .st-un-group.is-cant .st-un-grouphead {
+  cursor: default;
+}
+.settings .st-un-grouphead input[type='checkbox'] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--label);
+}
+.settings .st-un-grouptext {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.settings .st-un-title {
+  font-weight: 500;
+  color: var(--label);
+}
+.settings .st-un-grouptext small {
+  color: var(--label-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.settings .st-un-size {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--label-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.settings .st-un-items summary {
+  padding: 0 12px 8px 38px;
+  color: var(--label-3);
+  font-size: 12px;
+  cursor: pointer;
+}
+.settings .st-un-items ul,
+.settings .st-un-cant {
+  margin: 0;
+  padding: 0 12px 10px 38px;
+  list-style: none;
+  color: var(--label-2);
+  font: 11.5px/1.5 var(--font-mono);
+}
+.settings .st-un-cant {
+  font-family: inherit;
+  font-size: 12.5px;
+}
+.settings .st-un-items li,
+.settings .st-un-cant li {
+  padding: 1px 0;
+  overflow-wrap: anywhere;
+}
+.settings .st-un-more {
+  color: var(--label-3);
+}
+
+.settings .st-un-notes {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: var(--label-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.settings .st-un-typelabel {
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+.settings .st-un-confirmbox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.settings .st-un-confirmbox .st-field {
+  width: 170px;
+  letter-spacing: 0.06em;
+}
+.settings .st-un-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.settings .st-un-bar {
+  height: 6px;
+  margin: 4px 0 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--fill);
+}
+.settings .st-un-bar i {
+  display: block;
+  height: 100%;
+  background: var(--label);
+  transition: width 350ms var(--ease);
+}
+.settings .st-un-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings .st-un-checks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  color: var(--label-2);
+  font-size: 13.5px;
+}
+.settings .st-un-checks li.is-run {
+  color: var(--label);
+}
+.settings .st-un-checks small {
+  display: block;
+  color: var(--label-3);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.settings .st-un-ic {
+  position: relative;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--sep);
+}
+.settings .st-un-checks li.is-run .st-un-ic {
+  box-shadow: inset 0 0 0 1.5px var(--label);
+  border-top: 1.5px solid transparent;
+  animation: st-un-spin 800ms linear infinite;
+}
+.settings .st-un-checks li.is-done .st-un-ic {
+  background: var(--label);
+  box-shadow: none;
+}
+.settings .st-un-checks li.is-done .st-un-ic::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  width: 7px;
+  height: 4px;
+  border-left: 1.6px solid var(--bg, #000);
+  border-bottom: 1.6px solid var(--bg, #000);
+  transform: rotate(-45deg);
+}
+.settings .st-un-checks li.is-failed .st-un-ic {
+  box-shadow: inset 0 0 0 1.5px var(--label);
+}
+.settings .st-un-checks li.is-failed .st-un-ic::after {
+  content: '!';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--label);
+}
+@keyframes st-un-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings .st-un-checks li.is-run .st-un-ic {
+    animation: none;
+  }
+  .settings .st-un-bar i {
+    transition: none;
+  }
+}
+.settings .st-un-left {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+.settings .st-un-left ul {
+  margin: 6px 0;
+  padding-left: 18px;
+  line-height: 1.55;
+}
+.settings .st-un-left small {
+  color: var(--label-3);
+}

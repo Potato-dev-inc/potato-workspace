@@ -33,11 +33,9 @@ vi.mock('react-dom/client', () => ({
 }));
 
 // Heavy roots and desktop plumbing are replaced by empty components: only the route choice matters here.
-vi.mock('./App', () => ({ default: () => null }));
 vi.mock('./components/askbar/AskBarApp', () => ({ default: () => null }));
 vi.mock('./CockpitApp', () => ({ default: () => null }));
 vi.mock('./PwaApp', () => ({ default: () => null }));
-vi.mock('./PwaLegacyApp', () => ({ default: () => null }));
 vi.mock('./SettingsApp', () => ({ default: () => null }));
 vi.mock('./TerminalApp', () => ({ default: () => null }));
 vi.mock('./WorkerHostBootstrap', () => ({ default: () => null }));
@@ -59,7 +57,8 @@ async function loadRouteFor(search: string) {
   dom.location.search = search;
   rendered.element = null;
   const { PointBoxApp } = await import('./components/point/PointBoxApp');
-  const { default: App } = await import('./App');
+  const { default: CockpitApp } = await import('./CockpitApp');
+  const { default: PwaApp } = await import('./PwaApp');
   const { default: AskBarApp } = await import('./components/askbar/AskBarApp');
   await import('./main');
   await vi.waitFor(() => {
@@ -67,10 +66,10 @@ async function loadRouteFor(search: string) {
   });
   const outer = rendered.element as { props: { children: { props: { children: { type: Lazyish } } } } } | null;
   if (!outer) throw new Error('main.tsx rendered nothing');
-  // main.tsx lazy-loads the other roots, so a chosen root sits behind React.lazy inside Suspense. The plain App is not lazy.
+  // main.tsx lazy-loads the other roots, so a chosen root sits behind React.lazy inside Suspense. 
   const chosen = outer.props.children.props.children.type;
   const Root = chosen._init ? await vi.waitFor(() => chosen._init!(chosen._payload)) : chosen;
-  return { Root, PointBoxApp, App, AskBarApp };
+  return { Root, PointBoxApp, CockpitApp, PwaApp, AskBarApp };
 }
 
 describe('main.tsx point box route', () => {
@@ -90,9 +89,16 @@ describe('main.tsx point box route', () => {
     expect(Root).toBe(PointBoxApp);
   });
 
-  it('a plain window still renders the main app', async () => {
-    const { Root, App } = await loadRouteFor('');
-    expect(Root).toBe(App);
+  it('a plain window renders the cockpit (there is no older main window any more)', async () => {
+    const { Root, CockpitApp } = await loadRouteFor('');
+    expect(Root).toBe(CockpitApp);
+  });
+
+  it('?pwa=legacy no longer loads the old phone app: it falls through to the current phone app', async () => {
+    const { Root, PwaApp } = await loadRouteFor('?pwa=legacy');
+    expect(Root).toBe(PwaApp);
+    const plain = await loadRouteFor('?pwa=1');
+    expect(plain.Root).toBe(plain.PwaApp);
   });
 
   it('pointbox=0 does not switch to the Point box', async () => {

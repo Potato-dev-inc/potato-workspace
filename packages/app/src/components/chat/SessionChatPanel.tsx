@@ -14,13 +14,12 @@ import { BranchSheet } from '../cockpit/BranchSheet';
 import { BranchBanner } from './BranchBanner';
 import { ChatComposer } from './ChatComposer';
 import { ChatExportMenu } from './ChatExportMenu';
-import { ClipSheet, type ClipApi } from './ClipSheet';
 import { CollisionBanner } from './CollisionBanner';
 import { KeepGoingBanner, plainKeepGoingError } from './KeepGoingBanner';
 import type { EndingActions } from './TurnEndingButtons';
 import { PendingMessages } from './PendingMessages';
 import { ScreenQuestionCard } from './ScreenQuestionCard';
-import { lastClippableId, SessionChatView } from './SessionChatView';
+import { lastBranchableId, SessionChatView } from './SessionChatView';
 import { useSideQuestion } from './useSideQuestion';
 import { useChatJump } from '../../lib/chatJump';
 import type { ChatHelper } from '../../lib/chat-helpers';
@@ -103,21 +102,18 @@ export interface ScreenAsk {
   answerable?: string | null;
 }
 
-export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOpenPane, screenAsk, helpers, slashCommands, composerTop }: { paneId: string; dock?: ReactNode; reply?: ChatReply; emptyNote?: ReactNode; clipApi?: ClipApi; onOpenPane?: (paneId: string) => void; screenAsk?: ScreenAsk; /** The helpers this pane started through Potato Workspace (rows in the turn they began in). */ helpers?: readonly ChatHelper[]; /** A chat session over ACP: the agent's slash commands for the message box (typing "/" opens a menu). */ slashCommands?: readonly AcpCommand[]; /** Drawn right above the message box (a chat session's settings chips). */ composerTop?: ReactNode }) {
+export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, screenAsk, helpers, slashCommands, composerTop }: { paneId: string; dock?: ReactNode; reply?: ChatReply; emptyNote?: ReactNode; onOpenPane?: (paneId: string) => void; screenAsk?: ScreenAsk; /** The helpers this pane started through Potato Workspace (rows in the turn they began in). */ helpers?: readonly ChatHelper[]; /** A chat session over ACP: the agent's slash commands for the message box (typing "/" opens a menu). */ slashCommands?: readonly AcpCommand[]; /** Drawn right above the message box (a chat session's settings chips). */ composerTop?: ReactNode }) {
   const chat = useSessionChat(paneId, true);
   const outbox = usePaneOutbox(tauriOutboxTransport, paneId, !!reply);
   const userTexts = useMemo(() => chat.turns.flatMap((turn) => (turn.user ? [turn.user.text] : [])), [chat.turns]);
   const { bubbles, hide } = usePendingBubbles(outbox.messages, userTexts);
   const side = useSideQuestion(paneId, chat.turns);
   const jump = useChatJump(paneId);
-  // "Make clip": the id of the message that started the turn the sheet is open for, or null.
-  const [clipFor, setClipFor] = useState<string | null>(null);
   // "Branch": the id of the message that started the turn the branch sheet is open for, or null.
   const [branchFor, setBranchFor] = useState<string | null>(null);
   const hasChat = chat.state !== 'unavailable';
   // A chat with no message box is read-only (the terminal pane's chat): no Branch there.
   const canBranch = hasChat && !!reply;
-  const lastClippable = useMemo(() => lastClippableId(chat.turns), [chat.turns]);
   // The Point and Fix draft ('Edit in Chat') for this pane's box: taken only while the box is shown.
   const draft = useComposerDraft(reply ? paneId : null);
   // The buttons on the newest turn's ending line.
@@ -151,7 +147,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOp
         remember
         emptyNote={emptyNote}
         headerExtra={chat.state === 'unavailable' ? undefined : side.button}
-        headerMenu={hasChat ? <ChatExportMenu paneId={paneId} onMakeClip={lastClippable ? () => setClipFor(lastClippable) : undefined} /> : undefined}
+        headerMenu={hasChat ? <ChatExportMenu paneId={paneId} /> : undefined}
         banner={
           <>
             <CollisionBanner paneId={paneId} onOpenPane={onOpenPane} />
@@ -159,8 +155,6 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOp
             <BranchBanner paneId={paneId} onOpenPane={onOpenPane} />
           </>
         }
-        canClip={hasChat}
-        onMakeClip={setClipFor}
         canBranch={canBranch}
         onBranch={setBranchFor}
         overlay={side.box}
@@ -185,7 +179,6 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, clipApi, onOp
           <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} status={reply.status} attachFiles={pickFiles} contextUsage={contextReading} />
         ) : undefined}
       />
-      {clipFor !== null && <ClipSheet paneId={paneId} userItemId={clipFor} api={clipApi} onClose={() => setClipFor(null)} />}
       {branchFor !== null && (
         <BranchSheet paneId={paneId} from={{ kind: 'message', user_item_id: branchFor, when: 'after' }} onClose={() => setBranchFor(null)} />
       )}

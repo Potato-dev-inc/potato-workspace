@@ -18,9 +18,6 @@ import {
   type Sample,
 } from './agentWizardPrompt';
 import type { AcpDetectResult, AcpValue } from './agentWizardAcp';
-import { streamLlm } from './llm';
-import { resolveApiKey } from './secrets';
-import { listModels, loadSettings } from './settings';
 
 export { PROMPT_VERSION };
 
@@ -320,7 +317,8 @@ function realAgentError(error: AgentError | null | undefined): AgentError | null
 
 export interface Provenance {
   drafter: string;
-  drafter_kind: 'local_agent' | 'openrouter' | 'other';
+  /** `openrouter` is what older versions wrote for a remote writer; it is still read, never written. */
+  drafter_kind: 'local_agent' | 'custom_ai' | 'openrouter' | 'other';
   model: string | null;
   prompt_version: string;
   rounds: number;
@@ -460,7 +458,7 @@ export function splitError(e: unknown): { code: string; message: string } {
 
 export type Drafter =
   | { kind: 'local_agent'; id: string; label: string }
-  | { kind: 'openrouter'; model: string; label: string };
+  | { kind: 'custom_ai'; model: string; label: string };
 
 /** Claude first, then Codex, then whatever else can answer a read-only question. */
 export function chooseDefaultDrafter(list: LocalDrafter[]): LocalDrafter | null {
@@ -477,69 +475,18 @@ export function orderDrafters(list: LocalDrafter[]): LocalDrafter[] {
 }
 
 export function promptBudget(drafter: Drafter): number {
-  return drafter.kind === 'openrouter' ? REMOTE_PROMPT_BUDGET : LOCAL_PROMPT_BUDGET;
+  return drafter.kind === 'custom_ai' ? REMOTE_PROMPT_BUDGET : LOCAL_PROMPT_BUDGET;
 }
 
 export function provenanceOf(drafter: Drafter, rounds: number): Provenance {
   return {
-    drafter: drafter.kind === 'openrouter' ? `OpenRouter ${drafter.model}` : `${drafter.label} (local)`,
+    drafter: drafter.kind === 'custom_ai' ? `Custom AI service ${drafter.model}` : `${drafter.label} (local)`,
     drafter_kind: drafter.kind,
-    model: drafter.kind === 'openrouter' ? drafter.model : null,
+    model: drafter.kind === 'custom_ai' ? drafter.model : null,
     prompt_version: PROMPT_VERSION,
     rounds,
   };
 }
-
-const OPENROUTER_SYSTEM = 'You write agent definition files for Potato Workspace. Follow the instructions in the user message exactly.';
-
-type StreamFn = typeof streamLlm;
-
-/** One OpenRouter chat call through the app's own client; the key is read at call time and never stored here. */
-export async function askOpenRouter(opts: {
-  apiKey: string;
-  model: string;
-  prompt: string;
-  signal?: AbortSignal;
-  stream?: StreamFn;
-}): Promise<string> {
-  const stream = opts.stream ?? streamLlm;
-  const res = await stream(
-    'openrouter',
-    opts.apiKey,
-    { model: opts.model, system: OPENROUTER_SYSTEM, messages: [{ role: 'user', content: opts.prompt }], tools: [], max_tokens: 8000 },
-    { onTextDelta: () => undefined, signal: opts.signal },
-  );
-  const text = res.content
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map((b) => b.text)
-    .join('\n')
-    .trim();
-  if (!text) throw new Error('OpenRouter returned an empty answer.');
-  return text;
-}
-
-export interface OpenRouterSupport {
-  /** Models to offer. Empty when none are set up. */
-  models(): Promise<Array<{ id: string; label: string }>>;
-  /** True when a key is saved (Settings > Keys). */
-  hasKey(): Promise<boolean>;
-  ask(model: string, prompt: string, signal?: AbortSignal): Promise<string>;
-}
-
-export const openRouterSupport: OpenRouterSupport = {
-  models: async () => {
-    const settings = await loadSettings();
-    return listModels(settings)
-      .filter((m) => m.provider === 'openrouter')
-      .map((m) => ({ id: m.model_id, label: m.label ?? m.model_id }));
-  },
-  hasKey: async () => Boolean(await resolveApiKey(await loadSettings(), 'openrouter')),
-  ask: async (model, prompt, signal) => {
-    const key = await resolveApiKey(await loadSettings(), 'openrouter');
-    if (!key) throw new Error('Add your OpenRouter key in Settings > Keys first.');
-    return askOpenRouter({ apiKey: key, model, prompt: maskEmails(prompt), signal });
-  },
-};
 
 // ---- reading the drafter's reply -------------------------------------------------------------
 

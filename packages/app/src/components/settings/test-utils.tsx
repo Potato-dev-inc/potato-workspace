@@ -10,10 +10,6 @@ import { SectionRows } from './SectionView';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 export const BASE_SETTINGS: Settings = {
-  default_provider: 'anthropic',
-  default_model: 'claude-sonnet-4-6',
-  custom_models: [],
-  orchestrator_backend: 'api',
   mobile_input_delay_ms: 60,
   mobile_input_visible: true,
   mobile_keyboard_resizes_agent: false,

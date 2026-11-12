@@ -4128,61 +4128,19 @@ var DEFAULT_BRIDGE_PORT_FILE = "potato-workspace.bridge.port";
 var BRIDGE_LOCAL_SECRET_FILE = "potato-workspace.bridge.secret";
 var BRIDGE_LOCAL_SECRET_HEADER = "X-Potato-Workspace-Local-Secret";
 var BRIDGE_HTTP_PORT_RANGE = { min: 17421, max: 17499 };
-var OrchestratorUserMessageSchema = external_exports.object({
-  text: external_exports.string(),
-  message_id: external_exports.string()
-});
-var OrchestratorChatEventSchema = external_exports.discriminatedUnion("type", [
-  external_exports.object({ type: external_exports.literal("user"), message_id: external_exports.string(), text: external_exports.string() }),
-  external_exports.object({ type: external_exports.literal("text"), message_id: external_exports.string(), text: external_exports.string() }),
-  external_exports.object({ type: external_exports.literal("tool"), message_id: external_exports.string(), tool: external_exports.string(), result: external_exports.string().optional(), error: external_exports.string().optional() }),
-  external_exports.object({ type: external_exports.literal("done"), message_id: external_exports.string() }),
-  external_exports.object({ type: external_exports.literal("error"), message_id: external_exports.string(), error: external_exports.string() })
-]);
 
 // packages/shared/dist/schemas.js
-var ChatMessageSchema = external_exports.object({
-  id: external_exports.string(),
-  role: external_exports.enum(["user", "assistant", "system", "tool"]),
-  content: external_exports.string(),
-  tool_calls: external_exports.array(external_exports.object({
-    id: external_exports.string(),
-    name: external_exports.string(),
-    args: external_exports.unknown()
-  })).optional(),
-  tool_call_id: external_exports.string().optional(),
-  timestamp: external_exports.number()
-});
-var LlmProviderSchema = external_exports.enum(["anthropic", "openai", "openrouter"]);
-var LlmModelSchema = external_exports.object({
-  provider: LlmProviderSchema,
-  model_id: external_exports.string().min(1),
-  label: external_exports.string().min(1)
-});
-var OrchestratorBackendSchema = external_exports.enum([
-  "api",
-  // Direct LLM API + in-process MCP tool loop (current)
-  "claude_cli",
-  // Dedicated Claude Code pane with MCP configured
-  "codex_cli",
-  // Dedicated Codex CLI pane with MCP configured
-  "opencode_cli"
-  // Dedicated OpenCode pane with MCP configured
-]);
 var SettingsSchema = external_exports.object({
   anthropic_api_key: external_exports.string().optional(),
   openai_api_key: external_exports.string().optional(),
   openrouter_api_key: external_exports.string().optional(),
-  default_provider: LlmProviderSchema.default("anthropic"),
-  default_model: external_exports.string().default("claude-sonnet-4-6"),
-  /** User-defined models merged with presets in the sidebar picker. */
-  custom_models: external_exports.array(LlmModelSchema).default([]),
-  /** Sidebar orchestration backend. API runs an in-process tool loop; CLI modes delegate to live agent panes. */
-  orchestrator_backend: OrchestratorBackendSchema.default("api"),
-  /** Stable pane id for the dedicated orchestrator CLI pane (CLI backends). */
-  orchestrator_pane_id: external_exports.string().optional(),
+  /**
+   * The person's own AI service for the agent wizard's writer ("Custom AI service"): which service, its base URL and
+   * model. The key is never here: it lives in the OS credential store (secret `custom_ai_key`).
+   */
+  custom_ai: external_exports.object({ preset: external_exports.string(), baseUrl: external_exports.string(), model: external_exports.string() }).optional(),
   /** Mobile terminal text buffer delay before committing to the PTY (autocorrect settling). */
-  mobile_input_delay_ms: external_exports.number().int().min(0).max(1e3).default(250),
+  mobile_input_delay_ms: external_exports.number().int().min(0).max(1e3).default(60),
   /** Show the mobile terminal command input bar. When false, the tap target remains invisible. */
   mobile_input_visible: external_exports.boolean().default(true),
   /** Phone: let the keyboard shrink the agent (PTY redraw per open/close). Off keeps the agent at its size. */
@@ -4200,6 +4158,12 @@ var SettingsSchema = external_exports.object({
   ui_mode: external_exports.enum(["orchestration", "individual"]).default("orchestration"),
   /** Ask before closing a pane window, a cockpit pane or the app while an agent is working. */
   confirm_close_running_pane: external_exports.boolean().default(true),
+  /** Keep the PC awake (the screen may still turn off) while an agent works, so locking it does not stop the agents (Rust: keep_awake). */
+  keep_awake_while_working: external_exports.boolean().default(true),
+  /** The "Used" strip at the bottom of the sidebar: plan usage per signed-in agent (Rust: usage). */
+  show_usage_bar: external_exports.boolean().default(true),
+  /** The strip may read Claude's plan usage with the person's own Claude login (on by default, like Orca; Rust: usage::oauth). */
+  usage_login_reads: external_exports.boolean().default(true),
   /** Developer option: install MCP configs to launch the bundled Rust binary instead of npm. */
   developer_use_rust_mcp: external_exports.boolean().default(false),
   /** Save the project's files at each agent turn so a turn can be undone (Rust: checkpoints). */
@@ -4208,6 +4172,8 @@ var SettingsSchema = external_exports.object({
   checkpoints_keep: external_exports.number().int().min(5).max(500).default(50),
   /** Minutes without keyboard or mouse before you count as away (the "While you were away" digest); 0 = off. */
   away_minutes: external_exports.number().int().min(0).max(1440).default(5),
+  /** The person's own keyboard shortcuts: { actionId: combo }, "none" = turned off. A missing id keeps its default (lib/shortcuts.ts in the app; Rust: global_shortcuts). */
+  keybindings: external_exports.record(external_exports.string(), external_exports.string()).optional(),
   /** Budget every agent run that agents start gets, in turns; 0 = no budget (the default). Rust: budgets. */
   budget_default_turns: external_exports.number().int().min(0).max(1e4).default(0),
   /** Same, in wall-clock minutes; 0 = no limit. */
@@ -4218,6 +4184,10 @@ var SettingsSchema = external_exports.object({
   agent_hooks_agents: external_exports.record(external_exports.string(), external_exports.enum(["off", "shadow", "evidence"])).optional(),
   /** Potato Workspace's helper tools (run_agent, wait_agents) given to every agent pane for its launch. On unless false. Rust: pane_mcp. */
   pane_mcp_enabled: external_exports.boolean().optional(),
+  /** What Settings › Agents › "Hand off does" picks: `file` (Quick handoff: save HANDOFF.md) or `new_agent` (Handoff to new agent; the default when absent). App: lib/handoff.ts. */
+  handoff_mode: external_exports.enum(["file", "new_agent"]).optional(),
+  /** Text added to every quick handoff under "Always remember". */
+  handoff_fixed_notes: external_exports.string().optional(),
   /** Missions (Preview, Settings › General › Labs): goal + checks + budget, worked on in rounds. Off unless chosen. Rust: missions. */
   missions_enabled: external_exports.boolean().optional(),
   /** Night Shift (Settings › General › Labs): plan tasks for tonight, review them in the morning. Off unless chosen. Rust: night_shift. */
@@ -4230,6 +4200,14 @@ var SettingsSchema = external_exports.object({
   model_bridge_enabled: external_exports.boolean().optional(),
   /** Spaces (Settings › General › Labs): chat with friends in small groups, computer to computer. Off unless chosen. Rust: spaces. */
   spaces_enabled: external_exports.boolean().optional(),
+  /** Share an agent (Settings > General > Labs): lend an agent sign-in to another PC, or borrow one. Off unless chosen. Rust: lend. */
+  lend_enabled: external_exports.boolean().optional(),
+  /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
+  individual_explained: external_exports.boolean().optional(),
+  /** How the windows move when the mode switches between Orchestration and Individual: Domino (default), Ink, or Off (a quick fade). Rust reads it (switch_anim). */
+  mode_switch_animation: external_exports.enum(["domino", "ink", "off"]).optional(),
+  /** Where the pop-out windows go when the mode switches to Individual: side by side in an even grid (default), or cascaded one step down and right each. Rust reads it (window_layout). */
+  individual_window_layout: external_exports.enum(["side_by_side", "cascade"]).optional(),
   /** Simple mode: the cockpit with fewer buttons and plain words, for people who do not write code. Off unless chosen. */
   simple_mode: external_exports.boolean().optional(),
   /** Shows the developer rows in Settings (bridge, MCP, storage, file paths). Off unless chosen. Read by the app only. */
@@ -4251,7 +4229,9 @@ var SettingsSchema = external_exports.object({
   /** Default OpenCode provider for opencode_native API prompts (write_terminal_input). */
   opencode_model_provider: external_exports.string().optional(),
   /** Default OpenCode model for opencode_native API prompts (write_terminal_input). */
-  opencode_model_id: external_exports.string().optional()
+  opencode_model_id: external_exports.string().optional(),
+  /** Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none. Absent: none. Rust reads it (agent_run_mode::helper_model). */
+  helper_default_models: external_exports.record(external_exports.string().max(120)).optional()
 });
 
 // packages/shared/dist/mobile-pairing.js
@@ -4349,13 +4329,22 @@ function defaultAppDataBridgePortFile() {
       return join(home, ".local", "share", APP_ID, DEFAULT_BRIDGE_PORT_FILE);
   }
 }
+function isLoopbackHost(host) {
+  const h = host.toLowerCase();
+  return h === "localhost" || h === "::1" || /^127(\.\d{1,3}){3}$/.test(h);
+}
 function parseBridgePort(raw) {
   const trimmed = raw.trim();
+  let host = "127.0.0.1";
+  let portStr = trimmed;
   if (trimmed.includes(":")) {
-    const [host, portStr] = trimmed.split(":");
-    return { host: host || "127.0.0.1", port: Number(portStr) };
+    const [h, p] = trimmed.split(":");
+    host = h || "127.0.0.1";
+    portStr = p ?? "";
   }
-  return { host: "127.0.0.1", port: Number(trimmed) };
+  if (!isLoopbackHost(host))
+    return null;
+  return { host: host.toLowerCase() === "localhost" ? "127.0.0.1" : host, port: Number(portStr) };
 }
 function expandEnvVars(input, env = process.env) {
   return input.replace(/%([^%]+)%/g, (match, name) => env[name] ?? match);
@@ -4366,7 +4355,7 @@ function bridgePortCandidates(filePath) {
   const envPath = process.env[BRIDGE_PORT_FILE_ENV];
   if (envPath)
     return [expandEnvVars(envPath)];
-  return [DEFAULT_BRIDGE_PORT_FILE, defaultAppDataBridgePortFile()];
+  return [defaultAppDataBridgePortFile()];
 }
 async function readAllBridgePorts(filePath) {
   const found = [];
@@ -4374,7 +4363,7 @@ async function readAllBridgePorts(filePath) {
   for (const fp of [...new Set(bridgePortCandidates(filePath))]) {
     try {
       const parsed = parseBridgePort(await readFile(fp, "utf-8"));
-      if (!Number.isFinite(parsed.port) || parsed.port <= 0)
+      if (!parsed || !Number.isFinite(parsed.port) || parsed.port <= 0)
         continue;
       const key = `${parsed.host}:${parsed.port}`;
       if (seen.has(key))
@@ -4413,7 +4402,7 @@ async function readLocalSecretHeaders(filePath) {
 
 // packages/cli/src/launch-worker.ts
 var __dirname = dirname2(fileURLToPath(import.meta.url));
-var VITE_DEV_PORT = 1420;
+var VITE_DEV_PORT = 1442;
 function repoRoot() {
   return resolve(__dirname, "..", "..", "..");
 }
@@ -4836,8 +4825,8 @@ function validateWatchFlags(flags) {
 }
 
 // packages/cli/src/pair-link.ts
-var PWA_INFO_URL = "http://127.0.0.1:1420/__puppet_master_dev__.json";
-function isLoopbackHost(origin) {
+var PWA_INFO_URL = "http://127.0.0.1:1442/__puppet_master_dev__.json";
+function isLoopbackHost2(origin) {
   try {
     const host = new URL(origin).hostname;
     return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
@@ -4854,10 +4843,10 @@ function publicOriginForPublicUrl(publicUrl) {
   return bridgeUrlForPublicUrl(publicUrl).replace(/\/bridge$/, "");
 }
 function publicOriginFromTunnelInfo(info) {
-  if (info?.tunnelUrl && !isLoopbackHost(info.tunnelUrl)) {
+  if (info?.tunnelUrl && !isLoopbackHost2(info.tunnelUrl)) {
     return publicOriginForPublicUrl(info.tunnelUrl);
   }
-  if (info?.bridgeProxyUrl && !isLoopbackHost(info.bridgeProxyUrl)) {
+  if (info?.bridgeProxyUrl && !isLoopbackHost2(info.bridgeProxyUrl)) {
     return publicOriginForPublicUrl(info.bridgeProxyUrl);
   }
   return null;

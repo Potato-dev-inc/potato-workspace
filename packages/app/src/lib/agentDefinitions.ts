@@ -126,25 +126,6 @@ export interface FixtureCheck {
   results: FixtureResult[];
 }
 
-export interface DraftFile {
-  name: string;
-  path: string;
-  modified_ms: number;
-  size: number;
-}
-
-export interface DraftsListing {
-  dir: string;
-  drafts: DraftFile[];
-}
-
-export interface RecorderStopResult {
-  path: string;
-  id: string;
-  notes: string[];
-  snapshots: number;
-}
-
 /** One agent in `.removed/`, as "Recently removed" lists it. */
 export interface RemovedAgent {
   removed_id: string;
@@ -209,10 +190,6 @@ export interface AgentDefinitionsApi {
   purge?(removedId: string): Promise<PurgeResult>;
   /** Clear all: permanently deletes every "Recently removed" entry. */
   purgeAll?(): Promise<PurgeAllResult>;
-  /** Draft definitions written by the session recorder (never loaded, never approved). */
-  draftsList?(): Promise<DraftsListing>;
-  /** Validates a draft through the same checks as /agents/definitions/validate. */
-  draftValidate?(path: string): Promise<DefinitionPreview>;
   /** Writes an UNAPPROVED experimental generic definition for a bare command name, then rescans. */
   addGeneric(command: string): Promise<DefinitionsListing>;
   /** Sharing (P5-6): asks for a .toml target, writes the definition (+ fixtures zip). null = cancelled. */
@@ -269,21 +246,6 @@ export const tauriAgentDefinitionsApi: AgentDefinitionsApi = {
   extraDir: (action, path) => invoke('agents_extra_dir', { action, path }),
   projectPath: () => invoke<string>('get_project_path_cmd', undefined),
   projectScan: (project) => invoke<ProjectScan>('agents_project_scan', { project }),
-  draftsList: () => invoke<DraftsListing>('agents_drafts_list', undefined),
-  draftValidate: (path) => invoke<DefinitionPreview>('agents_draft_validate', { path }),
-};
-
-/** Pane toolbar: record a session, then stop to get a draft file path (REC-1, REC-4). */
-export interface RecorderApi {
-  start(paneId: string): Promise<{ recording: boolean; snapshots: number }>;
-  status(paneId: string): Promise<{ recording: boolean; snapshots: number }>;
-  stop(paneId: string): Promise<RecorderStopResult>;
-}
-
-export const tauriRecorderApi: RecorderApi = {
-  start: (paneId) => invoke('recorder_start', { paneId }),
-  status: (paneId) => invoke('recorder_status', { paneId }),
-  stop: (paneId) => invoke('recorder_stop', { paneId }),
 };
 
 const STATE_LABELS: Record<string, string> = {

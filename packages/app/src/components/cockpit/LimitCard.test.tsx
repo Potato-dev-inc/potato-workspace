@@ -104,7 +104,7 @@ describe('LimitCard', () => {
     const open = vi.fn();
     render(usage, { paneName: 'Claude 1', onOpenPane: open });
     expect(host.querySelector('.ib-meta')?.textContent).toBe('Claude 1');
-    act(() => button('Open terminal')!.click());
+    act(() => button('Open')!.click());
     expect(open).toHaveBeenCalledOnce();
   });
 

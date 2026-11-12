@@ -1,13 +1,13 @@
 //! "Screens I didn't recognise": a screen that stayed unreadable on a live pane, saved so it can
 //! become a fixture and a rule. Everything is redacted BEFORE it touches disk, with the same
-//! helper the session recorder uses (`agent_definitions_recorder::redact`), so no secret, token
+//! app-wide redaction (`crate::redact`), so no secret, token
 //! or user-folder name reaches the file.
 //!
 //! Layout: `<app data>/captures/<agent>/<version>/<stamp>_<hash>.txt` (the screen, plain text, the
 //! shape the fixtures use) with a `.json` beside it (agent, version, when, how long it stayed
 //! unreadable). Nothing is ever uploaded.
 
-use crate::agent_definitions_recorder::redact::{redact, RedactContext};
+use crate::redact::rules::{redact, RedactContext};
 use once_cell::sync::Lazy;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

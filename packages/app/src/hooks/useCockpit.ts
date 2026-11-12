@@ -9,7 +9,7 @@ import { cockpitApi, type PanePrompt, type SpawnStageEvent, type UiMode } from '
 import { applyTheme, loadSettings, patchSettings, type AppTheme } from '../lib/settings';
 import { subscribeSettingsTheme } from '../lib/settings-sync';
 import { tauri } from '../lib/tauri';
-import { useBridge } from './useBridge';
+import { useBridge, type BridgeApi } from './useBridge';
 import { useQuestions, type QuestionsApi } from './useQuestions';
 import { paneNames } from '../components/cockpit/model';
 import { visibleSelection } from '../components/cockpit/selection';
@@ -100,6 +100,11 @@ export interface CockpitApi {
   bridgeLine: string;
 }
 
+/** "Not connected" while a live bridge has dropped, '' otherwise (including before anything was set up). */
+export function bridgeLineFor(bridge: Pick<BridgeApi, 'connectionLost'>): string {
+  return bridge.connectionLost ? 'Not connected' : '';
+}
+
 export function useCockpit(): CockpitApi {
   const registry = usePaneRegistry();
   const activities = usePaneActivity();
@@ -122,9 +127,9 @@ export function useCockpit(): CockpitApi {
   // `individual_explained` from settings: the sheet was dismissed for good.
   const explainedRef = useRef(false);
   const bridge = useBridge();
-  // Said only when something is wrong: a healthy bridge shows nothing, and its address is never shown
-  // here (it is in Settings > Bridge & MCP).
-  const bridgeLine = bridge.isReady ? '' : bridge.error ? 'Not connected' : '';
+  // Said only when a bridge that was up has stopped answering. A fresh install has no bridge yet and shows nothing;
+  // the address is never shown here (it is in Settings > Bridge & MCP).
+  const bridgeLine = bridgeLineFor(bridge);
 
   const spawnRef = useRef(spawn);
   spawnRef.current = spawn;

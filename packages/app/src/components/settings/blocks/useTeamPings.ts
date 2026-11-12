@@ -4,6 +4,9 @@ import type { DevicePing, TeamApi } from "../../../lib/team";
 /** How often the page pings again while it is open. */
 export const PING_EVERY_MS = 30_000;
 
+/** The plain sentence shown when the check fails. Never the raw error text. */
+export const PING_FAILED_TEXT = "Couldn't check who is online. Try Ping again.";
+
 export interface TeamPings {
   /** The newest result per computer, by device id. */
   byDevice: Record<string, DevicePing>;
@@ -33,10 +36,15 @@ export function useTeamPings(api: TeamApi, active: boolean): TeamPings {
       .ping()
       .then((list) => {
         if (!alive.current) return;
+        // A backend that answers with nothing (or not a list) is a failed check, not a crash.
+        if (!Array.isArray(list)) {
+          setError(PING_FAILED_TEXT);
+          return;
+        }
         setError(null);
-        setBy(Object.fromEntries(list.map((p) => [p.device_id, p])));
+        setBy(Object.fromEntries(list.filter((p) => p && typeof p.device_id === "string").map((p) => [p.device_id, p])));
       })
-      .catch((err) => alive.current && setError(err instanceof Error ? err.message : String(err)))
+      .catch(() => alive.current && setError(PING_FAILED_TEXT))
       .finally(() => {
         running.current = false;
         if (alive.current) setBusy(false);

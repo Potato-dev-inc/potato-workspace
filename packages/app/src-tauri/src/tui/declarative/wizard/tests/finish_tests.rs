@@ -194,6 +194,11 @@ fn provenance_input_is_checked() {
             rounds: 2
         }
     );
+    // The custom AI service writer, and the value older versions wrote for a remote writer, are both accepted.
+    for kind in ["custom_ai", "openrouter"] {
+        let remote = json!({"provenance": {"drafter": "Custom AI service google/gemini-2.5-flash", "drafter_kind": kind, "model": "google/gemini-2.5-flash", "prompt_version": "1", "rounds": 1}});
+        assert_eq!(parse_provenance(&remote).unwrap().drafter_kind, kind);
+    }
     let bad = |p: Value| parse_provenance(&json!({"provenance": p})).unwrap_err();
     assert_eq!(parse_provenance(&json!({})).unwrap_err().code, "INVALID_ARGUMENT");
     assert!(bad(json!({"drafter": "x\\y", "prompt_version": "1", "rounds": 1})).message.contains("drafter"));

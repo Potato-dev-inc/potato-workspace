@@ -1,6 +1,6 @@
 // "Bring my chats": the one first-start card in the Inbox. It shows once, after the welcome is done and
 // chat search is on. It reads nothing: "Bring my chats" opens the Bring panel (the first step that looks at an
-// agent folder), and "Not now" remembers the answer. Nothing leaves this computer.
+// agent folder), and "Dismiss" remembers the answer. Nothing leaves this computer.
 import { useCallback, useEffect, useState } from 'react';
 import { chatImportApi, type ImportApi, type ImportState } from '../../lib/chatImport';
 import { loadSettings } from '../../lib/settings';
@@ -88,7 +88,7 @@ export function ImportChatsCard({ api = chatImportApi, isWelcomeDone = welcomeDo
             }
             more={
               <CardButton tone="plain" role="dismiss" onClick={() => void notNow()}>
-                Not now
+                Dismiss
               </CardButton>
             }
           />

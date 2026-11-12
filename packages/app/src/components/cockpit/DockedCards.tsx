@@ -22,7 +22,7 @@ export function DockedCards({
   return (
     <div className="ck-dock">
       {dockNow === 'stuck' && <PaneStuckCard c={c} paneId={paneId} />}
-      {/* The Inbox's card, docked: same words, same order, same keyboard rules; no "Open terminal" here. */}
+      {/* The Inbox's card, docked: same words, same order, same keyboard rules; no "Open" button here. */}
       {dockNow === 'ask' && prompt && (
         <div className="ib-dock" role="group" aria-label="Agent question">
           <PaneApprovalCard c={c} paneId={paneId} />

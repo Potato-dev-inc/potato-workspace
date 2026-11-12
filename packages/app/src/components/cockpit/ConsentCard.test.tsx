@@ -27,7 +27,7 @@ const takeOver: Question = {
   context: 'It would type into the pane and answer its questions. It did not start this pane.',
   choices: [
     { id: 'allow_once', label: 'Allow once' },
-    { id: 'always', label: 'Always for this pane' },
+    { id: 'always', label: 'Always for this agent' },
     { id: 'deny', label: 'Deny' },
   ],
   allow_free_text: false,
@@ -58,10 +58,10 @@ describe('ConsentCard', () => {
     expect(host.querySelector('.ib-title')?.textContent).toBe('Allow Claude to control Codex 1?');
     expect(button('Deny')?.className).toContain('ck-btn--primary');
     expect(button('Allow once')?.className).toContain('ck-btn--secondary');
-    expect(button('Always for this pane')?.className).toContain('ck-btn--plain');
+    expect(button('Always for this agent')?.className).toContain('ck-btn--plain');
     expect(host.textContent).toContain('It did not start this pane.');
     // Deny first, and no number key may answer a consent
-    expect(Array.from(host.querySelectorAll('[data-ib="answer"]')).map((b) => b.textContent)).toEqual(['Deny', 'Allow once', 'Always for this pane']);
+    expect(Array.from(host.querySelectorAll('[data-ib="answer"]')).map((b) => b.textContent)).toEqual(['Deny', 'Allow once', 'Always for this agent']);
     expect(host.querySelector('[data-ib-card]')?.hasAttribute('data-guard')).toBe(true);
     expect(host.textContent).not.toMatch(/asked \d/);
   });
@@ -69,7 +69,7 @@ describe('ConsentCard', () => {
   it('sends the choice id for each button', () => {
     const onAnswer = render(takeOver);
     act(() => button('Allow once')!.click());
-    act(() => button('Always for this pane')!.click());
+    act(() => button('Always for this agent')!.click());
     act(() => button('Deny')!.click());
     expect(onAnswer.mock.calls.map((c) => c[0])).toEqual([{ choice_id: 'allow_once' }, { choice_id: 'always' }, { choice_id: 'deny' }]);
   });
@@ -83,7 +83,7 @@ describe('ConsentCard', () => {
     };
     render(answer);
     expect(host.querySelector('.ib-title')?.textContent).toBe('Allow another agent to answer a question in Claude?');
-    expect(button('Always for this pane')).toBeUndefined();
+    expect(button('Always for this agent')).toBeUndefined();
     expect(host.querySelector('input')).toBeNull();
   });
 

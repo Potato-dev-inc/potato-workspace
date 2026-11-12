@@ -45,9 +45,6 @@ pub enum Kind {
     /// The one morning push of a Night Shift run (`push/night.rs`). Counts only. Built there, never by
     /// `copy_for_view`.
     NightShift,
-    /// The end of a Focus session, or its one reminder (`push/focus.rs`). Counts only. Built there, never
-    /// by `copy_for_view`.
-    Focus,
 }
 
 impl Kind {
@@ -64,7 +61,6 @@ impl Kind {
             Self::Limit => "limit",
             Self::CompanionReply => "companion_reply",
             Self::NightShift => "night_shift",
-            Self::Focus => "focus",
         }
     }
 
@@ -77,7 +73,7 @@ impl Kind {
     /// Kinds that wake a phone at once and may be held back by the rate limit (a finished run is
     /// neither).
     pub fn is_urgent(self) -> bool {
-        !matches!(self, Self::RunFinished | Self::RunFailed | Self::CompanionReply | Self::NightShift | Self::Focus)
+        !matches!(self, Self::RunFinished | Self::RunFailed | Self::CompanionReply | Self::NightShift)
     }
 }
 
@@ -382,8 +378,6 @@ pub fn copy_for_view(kind: Kind, label: &str, heading: Option<&str>, prompt: Opt
         Kind::CompanionReply => Words { title: label.clone(), body: "New reply".to_string() },
         // Night Shift's morning push is worded by `night::Message`; this arm only keeps the match whole.
         Kind::NightShift => Words { title: super::night::TITLE.to_string(), body: crate::night_shift::report::HIDDEN_PUSH.to_string() },
-        // Focus's end message and reminder are worded by `focus::Message`; this arm only keeps the match whole.
-        Kind::Focus => Words { title: super::focus::SUMMARY_TITLE.to_string(), body: super::focus::HIDDEN_BODY.to_string() },
         Kind::RunFinished => Words { title: format!("{who} · Done"), body: format!("{label} finished") },
         Kind::RunFailed => Words { title: needs_you, body: format!("Run failed · {label}") },
         Kind::Question => {

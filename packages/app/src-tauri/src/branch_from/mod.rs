@@ -18,6 +18,7 @@ pub mod brief;
 pub mod offers;
 pub mod copy;
 pub mod view;
+pub mod window;
 pub mod live;
 pub mod live_io;
 pub mod live_app;

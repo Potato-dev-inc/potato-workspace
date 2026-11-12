@@ -9,13 +9,13 @@ import type {
   CaptureStepId,
   FinishResult,
   LiveResult,
-  OpenRouterSupport,
   PlannedRun,
   ProbeInfo,
   StartInfo,
   VerifyResult,
   WizardApi,
 } from '../../../lib/agentWizard';
+import { serviceForPreset, type CustomAiSupport } from '../../../lib/custom-ai';
 import { AgentWizard } from './AgentWizard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -167,11 +167,14 @@ function mockApi(replies: string[] = [`${F}toml\n${GOOD}${F}`]): MockApi {
   } as unknown as MockApi;
 }
 
-function mockOpenRouter(over: Partial<OpenRouterSupport> = {}): OpenRouterSupport & { ask: ReturnType<typeof vi.fn> } {
+type MockCustomAi = CustomAiSupport & { ask: ReturnType<typeof vi.fn>; save: ReturnType<typeof vi.fn> };
+
+function mockCustomAi(over: Partial<CustomAiSupport> = {}): MockCustomAi {
   return {
-    models: vi.fn(async () => [{ id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' }]),
-    hasKey: vi.fn(async () => true),
-    ask: vi.fn(async () => `${F}toml\n${GOOD}${F}`),
+    load: vi.fn(async () => ({ service: serviceForPreset('openrouter'), keySet: true, last4: '1234' })),
+    save: vi.fn(async () => undefined),
+    ask: vi.fn(async () => `${F}toml
+${GOOD}${F}`),
     ...over,
   } as never;
 }
@@ -179,9 +182,9 @@ function mockOpenRouter(over: Partial<OpenRouterSupport> = {}): OpenRouterSuppor
 let host: HTMLDivElement;
 let root: Root;
 
-async function render(api: WizardApi, openRouter: OpenRouterSupport, props: { onClose?: () => void; onApprove?: (d: FinishResult) => void } = {}) {
+async function render(api: WizardApi, customAi: CustomAiSupport, props: { onClose?: () => void; onApprove?: (d: FinishResult) => void } = {}) {
   await act(async () => {
-    root.render(<AgentWizard api={api} openRouter={openRouter} onClose={props.onClose ?? (() => undefined)} onApprove={props.onApprove ?? (() => undefined)} />);
+    root.render(<AgentWizard api={api} customAi={customAi} onClose={props.onClose ?? (() => undefined)} onApprove={props.onApprove ?? (() => undefined)} />);
   });
 }
 
@@ -236,7 +239,7 @@ afterEach(async () => {
 
 describe('AgentWizard', () => {
   it('asks which command starts the agent, in plain words', async () => {
-    await render(mockApi(), mockOpenRouter());
+    await render(mockApi(), mockCustomAi());
     expect(text()).toContain('Which command starts it?');
     expect(text()).toContain('isolated temporary folder');
     expect(text()).not.toMatch(/sandbox/i);
@@ -245,7 +248,7 @@ describe('AgentWizard', () => {
 
   it('shows where the program was found and its version, then asks who writes the profile', async () => {
     const api = mockApi();
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     expect(api.start).toHaveBeenCalledWith('fake-agent', true);
     expect(api.probe).toHaveBeenCalledWith('wz_1');
@@ -265,7 +268,7 @@ describe('AgentWizard', () => {
   it('shows the error when the program is not found and keeps the command box', async () => {
     const api = mockApi();
     api.start.mockRejectedValueOnce('AGENT_NOT_INSTALLED: `nope` was not found on PATH.');
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt('nope', { skipCapture: false });
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('`nope` was not found on PATH.');
     expect(host.querySelector('#wizard-command')).toBeTruthy();
@@ -275,7 +278,7 @@ describe('AgentWizard', () => {
   it('drives the whole flow with a stand-in drafter: fix round, confirm, review, approve', async () => {
     const api = mockApi([`${F}toml\n${BAD}${F}`, `${F}toml\n${GOOD}${F}`]);
     const approved: FinishResult[] = [];
-    await render(api, mockOpenRouter(), { onApprove: (d) => approved.push(d) });
+    await render(api, mockCustomAi(), { onApprove: (d) => approved.push(d) });
     await findIt();
     await click(button('Start'));
     await flush();
@@ -321,7 +324,7 @@ describe('AgentWizard', () => {
 
   it('shows the exact commands the live test will run, in a monospace block', async () => {
     const api = mockApi();
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await click(button('Start'));
     await flush();
@@ -341,7 +344,7 @@ describe('AgentWizard', () => {
     api.livetest
       .mockResolvedValueOnce({ ...liveOk(), ok: false, state: 'verified', text: 'LIVE FAILED', errors: [], stages: [] })
       .mockResolvedValueOnce(liveOk());
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await click(button('Start'));
     await flush();
@@ -364,7 +367,7 @@ describe('AgentWizard', () => {
     api.livetest
       .mockResolvedValueOnce({ ...liveOk(), ok: false, state: 'verified', text: 'LIVE FAILED', errors: [], stages: [] })
       .mockResolvedValueOnce(liveOk());
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await click(button('Start'));
     await flush();
@@ -387,7 +390,7 @@ describe('AgentWizard', () => {
       agent_error: { stage: 'pong', message: 'No endpoints found that support tool use. Try disabling "search".', external: true },
     };
     api.livetest.mockResolvedValueOnce(broken).mockResolvedValueOnce(liveOk());
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await click(button('Start'));
     await flush();
@@ -415,7 +418,7 @@ describe('AgentWizard', () => {
     const api = mockApi([`${F}toml\n${GOOD}${F}`, `${F}toml\n${GOOD}# fixed\n${F}`]);
     const banner = { ...liveOk(), ok: false, state: 'verified', stages: [], errors: [], text: 'LIVE FAILED', agent_error: { stage: 'pong', message: '\u2584\u2580 Fake CLI 1.4.2.', external: true } };
     api.livetest.mockResolvedValueOnce(banner).mockResolvedValueOnce(liveOk());
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await click(button('Start'));
     await flush();
@@ -430,7 +433,7 @@ describe('AgentWizard', () => {
     const api = mockApi();
     const broken = { ...liveOk(), ok: false, state: 'verified', stages: [], errors: [], text: 'x', agent_error: { stage: 'pong', message: 'not logged in', external: true } };
     api.livetest.mockResolvedValue(broken);
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await click(button('Start'));
     await flush();
@@ -444,7 +447,7 @@ describe('AgentWizard', () => {
 
   it('does not run the live test when the person says not now', async () => {
     const api = mockApi();
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await click(button('Start'));
     await flush();
@@ -457,7 +460,7 @@ describe('AgentWizard', () => {
 
   it('says so after five tries and shows what the checker last said', async () => {
     const api = mockApi([`${F}toml\n${BAD}${F}`]);
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await click(button('Start'));
     await flush();
@@ -470,7 +473,7 @@ describe('AgentWizard', () => {
   it('Discard cancels the session and closes', async () => {
     const api = mockApi();
     const closed = vi.fn();
-    await render(api, mockOpenRouter(), { onClose: closed });
+    await render(api, mockCustomAi(), { onClose: closed });
     await findIt();
     await click(button('Start'));
     await flush();
@@ -484,7 +487,7 @@ describe('AgentWizard', () => {
 
   it('Retry goes back to the writer choice and can draft again', async () => {
     const api = mockApi();
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await click(button('Start'));
     await flush();
@@ -498,67 +501,100 @@ describe('AgentWizard', () => {
     expect(host.querySelector('[data-testid="live-confirm"]')).toBeTruthy();
   });
 
-  it('an OpenRouter model needs a preview and an explicit opt-in before anything is sent', async () => {
+  it('the Custom AI service shows its three fields with the OpenRouter preset', async () => {
+    await render(mockApi(), mockCustomAi());
+    await findIt();
+    const radios = Array.from(host.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
+    expect(radios).toHaveLength(3);
+    expect(text()).toContain('Custom AI service');
+    expect(host.querySelector('[data-testid="custom-ai-box"]')).toBeNull();
+    await click(radios[2]);
+    const box = host.querySelector('[data-testid="custom-ai-box"]');
+    expect(box).toBeTruthy();
+    expect((box?.querySelector('select[aria-label="AI service"]') as HTMLSelectElement).value).toBe('openrouter');
+    expect((box?.querySelector('input[aria-label="Service address"]') as HTMLInputElement).value).toBe('https://openrouter.ai/api/v1');
+    expect(box?.querySelector('input[aria-label="Service key"]')).toBeTruthy();
+    expect((box?.querySelector('input[aria-label="Service key"]') as HTMLInputElement).type).toBe('password');
+    expect((box?.querySelector('input[aria-label="Model name"]') as HTMLInputElement).value).toBe('google/gemini-2.5-flash');
+    expect(text()).not.toContain('An OpenRouter model');
+  });
+
+  it('a Custom AI service needs a preview and an explicit opt-in before anything is sent', async () => {
     const api = mockApi();
-    const or = mockOpenRouter();
-    await render(api, or);
+    const ai = mockCustomAi();
+    await render(api, ai);
     await findIt();
     const radios = Array.from(host.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
     await click(radios[2]);
-    const preview = host.querySelector('[data-testid="openrouter-preview"]');
+    const preview = host.querySelector('[data-testid="custom-ai-preview"]');
     expect(preview?.textContent).toContain('Command typed by the person: fake-agent');
     expect(preview?.textContent).toContain('Usage: fake-agent <COMMAND>');
-    expect(text()).toContain('This is exactly what will be sent to OpenRouter');
+    expect(text()).toContain('This is exactly what will be sent to your AI service');
     expect(button('Start')?.disabled).toBe(true);
     await click(button('Start'));
-    expect(or.ask).not.toHaveBeenCalled();
+    expect(ai.ask).not.toHaveBeenCalled();
     const optIn = host.querySelector('input[type="checkbox"]') as HTMLInputElement;
     await click(optIn);
     expect(button('Start')?.disabled).toBe(false);
     await click(button('Start'));
     await flush();
-    expect(or.ask).toHaveBeenCalledTimes(1);
-    expect(or.ask.mock.calls[0][0]).toBe('google/gemini-2.5-flash');
+    // the address and model are kept, nothing new was typed for the key
+    expect(ai.save).toHaveBeenCalledWith(expect.objectContaining({ preset: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'google/gemini-2.5-flash' }), '');
+    expect(ai.ask).toHaveBeenCalledTimes(1);
     expect(api.ask).not.toHaveBeenCalled();
     // the larger remote budget: the first prompt equals the previewed text
-    expect(or.ask.mock.calls[0][1]).toBe(preview?.textContent);
+    expect(ai.ask.mock.calls[0][0]).toBe(preview?.textContent);
     await click(button('Run the live test'));
     await flush();
     await click(button('Approve'));
-    expect(api.finish.mock.calls[0][1]).toMatchObject({ drafter: 'OpenRouter google/gemini-2.5-flash', drafter_kind: 'openrouter', model: 'google/gemini-2.5-flash' });
+    expect(api.finish.mock.calls[0][1]).toMatchObject({ drafter: 'Custom AI service google/gemini-2.5-flash', drafter_kind: 'custom_ai', model: 'google/gemini-2.5-flash' });
   });
 
-  it('without an OpenRouter key the opt-in is not enough', async () => {
-    const or = mockOpenRouter({ hasKey: vi.fn(async () => false) });
-    await render(mockApi(), or);
+  it('without a saved key the opt-in is not enough, and a typed key is saved before the first send', async () => {
+    const ai = mockCustomAi({ load: vi.fn(async () => ({ service: serviceForPreset('openrouter'), keySet: false, last4: null })) });
+    await render(mockApi(), ai);
     await findIt();
     await click((Array.from(host.querySelectorAll('input[type="radio"]')) as HTMLInputElement[])[2]);
-    expect(text()).toContain('Add your OpenRouter key in Settings > Keys first.');
+    expect(text()).toContain('Paste the key for your service.');
     await click(host.querySelector('input[type="checkbox"]'));
+    expect(button('Start')?.disabled).toBe(true);
+    await type(host.querySelector('input[aria-label="Service key"]') as HTMLInputElement, 'sk-test-abcdef123456');
+    expect(button('Start')?.disabled).toBe(false);
+    await click(button('Start'));
+    await flush();
+    expect(ai.save).toHaveBeenCalledWith(expect.objectContaining({ baseUrl: 'https://openrouter.ai/api/v1' }), 'sk-test-abcdef123456');
+    expect(ai.ask).toHaveBeenCalledTimes(1);
+    // the key is never put into the dialog text
+    expect(host.innerHTML).not.toContain('sk-test-abcdef123456');
+  });
+
+  it('an unsafe address stops the Start button and says why', async () => {
+    await render(mockApi(), mockCustomAi());
+    await findIt();
+    await click((Array.from(host.querySelectorAll('input[type="radio"]')) as HTMLInputElement[])[2]);
+    await click(host.querySelector('input[type="checkbox"]'));
+    expect(button('Start')?.disabled).toBe(false);
+    await type(host.querySelector('input[aria-label="Service address"]') as HTMLInputElement, 'http://example.com/v1');
+    expect(text()).toContain('must start with https://');
     expect(button('Start')?.disabled).toBe(true);
   });
 
-  it('offers only OpenRouter when no local agent is installed, and says what to install when nothing is', async () => {
+  it('offers the Custom AI service when no local agent is installed, and says so', async () => {
     const api = mockApi();
     api.drafters.mockResolvedValue([]);
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     expect(host.querySelectorAll('input[type="radio"]')).toHaveLength(1);
     expect((host.querySelector('input[type="radio"]') as HTMLInputElement).checked).toBe(true);
-    await act(async () => root.unmount());
-    root = createRoot(host);
-    const empty = mockApi();
-    empty.drafters.mockResolvedValue([]);
-    await render(empty, mockOpenRouter({ models: vi.fn(async () => []) }));
-    await findIt();
-    expect(text()).toContain('No writer is available.');
+    expect(text()).toContain('use a custom AI service');
+    expect(host.querySelector('[data-testid="custom-ai-box"]')).toBeTruthy();
     expect(button('Start')?.disabled).toBe(true);
   });
 
   it('shows what the program printed as text, never as HTML', async () => {
     const api = mockApi();
     api.start.mockResolvedValue({ ...start, program: { ...start.program, display: '<img src=x onerror="window.__pwned=1">' } });
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     expect(host.querySelector('img')).toBeNull();
     expect(text()).toContain('<img src=x onerror="window.__pwned=1">');
@@ -566,7 +602,7 @@ describe('AgentWizard', () => {
 
   it('cancels the session when the dialog goes away without finishing', async () => {
     const api = mockApi();
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     await act(async () => root.unmount());
     expect(api.cancel).toHaveBeenCalledWith('wz_1');
@@ -576,7 +612,7 @@ describe('AgentWizard', () => {
   it('says the launcher is a script when the program is an npm wrapper', async () => {
     const api = mockApi();
     api.start.mockResolvedValue({ ...start, program: { ...start.program, kind: 'shim' } });
-    await render(api, mockOpenRouter());
+    await render(api, mockCustomAi());
     await findIt();
     expect(text()).toContain('npm launcher script');
   });

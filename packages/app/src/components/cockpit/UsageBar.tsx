@@ -60,8 +60,9 @@ export function AgentMark({ row }: { row: UsageRow }) {
 /** A tiny tag that tells several sign-ins of one agent apart: the account label's first two letters. */
 export function signInSuffix(row: UsageRow, agentHasSeveral: boolean): string | null {
   if (!agentHasSeveral || !row.account_label) return null;
-  const letters = [...row.account_label.trim()].filter((c) => /\p{L}|\p{N}/u.test(c));
-  return letters.length ? letters.slice(0, 2).join('') : '·';
+  // The whole short name ("Work"), never a clipped piece of it. Long names end in "…"; the tooltip has the full one.
+  const label = row.account_label.trim();
+  return label.length > 12 ? `${label.slice(0, 11)}…` : label;
 }
 
 function Chip({
@@ -108,7 +109,7 @@ function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }
         <AgentMark row={row} />
         <span className="ck-usage-pop-name">{rowName(row)}</span>
         {row.plan && <span className="ck-usage-pop-plan">{row.plan}</span>}
-        <span className="ck-usage-pop-state">{warns(row) ? `⚠ ${chipText(row, now)}` : row.state === 'unknown' ? 'Unknown' : ''}</span>
+        <span className="ck-usage-pop-state">{warns(row) ? `⚠ ${chipText(row, now)}` : row.state === 'unknown' ? 'Usage not shared by this agent' : ''}</span>
       </div>
       {row.windows.map((w) => {
         const pct = Math.max(0, Math.min(100, Math.round(w.used_percent)));

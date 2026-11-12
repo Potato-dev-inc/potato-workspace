@@ -12,14 +12,13 @@ import { cockpitApi } from '../../../lib/cockpit-api';
 import { parseSwitchStyle, parseWindowLayout, STYLE_LABELS, WINDOW_LAYOUT_LABELS, WINDOW_LAYOUTS, type SwitchStyle } from '../../../lib/mode-switch/model';
 import { tauri, type AppInstallInfo, type CoordinationStorageInfo } from '../../../lib/tauri';
 import { budgetRows } from './BudgetRows';
-import { AmbientSettings } from '../blocks/AmbientSettings';
 import { AskBarSettingsBlock } from '../blocks/AskBarSettings';
 import { AssignIssueSettings } from '../blocks/AssignIssueSettings';
 import { BringChatsSettings } from '../blocks/BringChatsSettings';
 import { ChatIndexSettings } from '../blocks/ChatIndexSettings';
 import { CiFixSettings } from '../blocks/CiFixSettings';
 import { DiagnosticFile } from '../blocks/DiagnosticFile';
-import { FocusSettingsBlock } from '../blocks/FocusSettings';
+import { DiscordAlertsBlock } from '../blocks/DiscordAlerts';
 import { LiveRoomRow } from '../blocks/LiveRoomRow';
 import { LoopGuardSettingsBlock } from '../blocks/LoopGuardSettings';
 import { SharedMemoryToggle } from '../blocks/SharedMemoryToggle';
@@ -354,14 +353,6 @@ export const generalRows: RowDef[] = [
     ),
   },
   {
-    id: 'animated-tray',
-    label: 'Animated tray icon',
-    hint: 'A moving dot pattern on the tray icon while agents work. Off for a still icon.',
-    keywords: 'ambient motion menu bar',
-    group: 'Appearance',
-    render: (env) => <AmbientSettings onSaved={env.markSaved} />,
-  },
-  {
     id: 'confirm-close',
     label: 'Ask before closing a working agent',
     hint: 'Asks first when you close a pane or quit from the tray while an agent works.',
@@ -432,12 +423,12 @@ export const generalRows: RowDef[] = [
   },
   ...budgetRows,
   {
-    id: 'focus-time',
-    label: 'Focus Time',
-    hint: 'How long a Focus runs by default, and whether cards that wait for you go quiet during it.',
-    keywords: 'focus time default length minutes quiet blocking cards wait make during held inbox phone telegram buzz pause',
-    group: 'Focus Time',
-    render: (env) => <FocusSettingsBlock onSaved={env.markSaved} />,
+    id: 'discord-alerts',
+    label: 'Discord alerts',
+    hint: 'Post agent alerts to a Discord channel. Paste a webhook link.',
+    keywords: 'discord webhook alerts notify channel post needs you finished failed message chat',
+    group: 'Discord alerts',
+    render: (env) => <DiscordAlertsBlock onSaved={env.markSaved} />,
   },
   {
     id: 'ask-bar',

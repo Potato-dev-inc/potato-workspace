@@ -44,7 +44,8 @@ describe('ClosedChatsSheet', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('Fix the cart bug');
     expect(rows[0].textContent).toContain('Claude · shop · 2 h ago');
-    expect(rows[1].textContent).toContain('No messages');
+    expect(rows[1].textContent).toContain('Untitled chat');
+    expect(rows[1].textContent).not.toContain('No messages');
     expect(rows[1].textContent).toContain('Codex · site · 3 d ago');
     expect(document.body.textContent).not.toContain('Claude Code');
   });

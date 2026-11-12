@@ -481,6 +481,37 @@ fn the_drift_notice_names_the_tools_whose_schema_differs() {
     assert!(schema_drift_with(&health, &shim).is_none());
 }
 
+// ---- 6b. replay honesty: a derived key that names an earlier run says so ----
+
+#[test]
+fn a_derived_key_answer_from_an_earlier_run_is_marked_replayed() {
+    let mut caller = json!({"task": "t"});
+    assert!(!caller_gave_idempotency_key(&caller));
+    caller["idempotency_key"] = json!("mine");
+    assert!(caller_gave_idempotency_key(&caller));
+    let mut empty = json!({"idempotency_key": ""});
+    assert!(!caller_gave_idempotency_key(&empty));
+    empty["idempotency_key"] = json!(null);
+    assert!(!caller_gave_idempotency_key(&empty));
+
+    let answer = json!({"handle": "h1", "status": "running"}).to_string();
+    let earlier = json!({"operation_id": "op-1", "created_at_ms": 1_700_000_000_000u64});
+    let replayed: Value = serde_json::from_str(&mark_replayed(answer.clone(), Some(&earlier))).unwrap();
+    assert_eq!(replayed["replayed"], true);
+    assert_eq!(replayed["started_at_ms"], 1_700_000_000_000u64);
+    assert_eq!(replayed["handle"], "h1", "the answer itself is kept");
+}
+
+#[test]
+fn a_fresh_run_gets_no_replay_marker_and_an_unparsable_answer_passes_through() {
+    let answer = json!({"handle": "h1", "status": "running"}).to_string();
+    assert_eq!(mark_replayed(answer.clone(), None), answer, "fresh runs are unchanged");
+    let text = "not json at all";
+    assert_eq!(mark_replayed(text.to_string(), Some(&json!({"operation_id": "op-1"}))), text);
+    let fresh: Value = serde_json::from_str(&answer).unwrap();
+    assert!(fresh.get("replayed").is_none());
+}
+
 // ---- 7. heartbeats ----
 
 #[test]

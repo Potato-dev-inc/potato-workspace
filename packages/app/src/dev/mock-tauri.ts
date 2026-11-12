@@ -4,7 +4,6 @@ import type { HarnessScenario } from './types';
 import {
   EXAMPLE_CHECKPOINTS,
   EXAMPLE_DIGEST,
-  EXAMPLE_FOCUS_DIGEST,
   EXAMPLE_TURN_SUMMARIES,
   EXAMPLE_FILE_CHANGES,
   EXAMPLE_PANES,
@@ -37,10 +36,10 @@ import { firstRunMock, firstRunStore } from './first-run-fixtures';
 import { missionMock } from './mission-fixtures';
 import { keepGoingMock } from './keep-going-fixtures';
 import { branchMock } from './branch-fixtures';
+import { FAKE_UNINSTALL_PLAN, runFakeUninstall } from './uninstall-fixtures';
 import { nightMock } from './night-fixtures';
 import { packageCheckMock } from './package-check-fixtures';
 import { reviewDeskMock } from './review-desk-fixtures';
-import { createFocusMock } from './focus-fixtures';
 import { wslMock } from './wsl-fixtures';
 import { closedChatsMock } from './closed-chats-fixtures';
 import { bringChatsMock, newBringChatsState } from './bring-chats-fixtures';
@@ -57,8 +56,6 @@ const DOCTOR_ROWS = [
 ];
 
 export function installTauriMock(scenario: HarnessScenario): void {
-  // Focus keeps its state for the page's life (start, +15 min and End Focus work in the harness).
-  const focusMock = createFocusMock(scenario.focus);
   const lendMock = createLendMock(scenario.lend);
   const closedState: { chats: ClosedChat[] | null } = { chats: null };
   const bringState = newBringChatsState();
@@ -102,8 +99,6 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (reviewDesk.handled) return reviewDesk.value;
       const lend = lendMock(cmd, a);
       if (lend.handled) return lend.value;
-      const focus = focusMock(cmd, a);
-      if (focus.handled) return focus.value;
       const closed = closedChatsMock(scenario.closedChats, closedState, cmd, a);
       if (closed.handled) return closed.value;
       const bringChats = bringChatsMock(scenario.bringChats, bringState, cmd, a);
@@ -167,7 +162,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'turn_summaries':
           return a.paneId === PANE_CLAUDE ? EXAMPLE_TURN_SUMMARIES : [];
         case 'away_digest_pending':
-          return scenario.awayFocus ? EXAMPLE_FOCUS_DIGEST : scenario.awayDigest ? EXAMPLE_DIGEST : null;
+          return scenario.awayDigest ? EXAMPLE_DIGEST : null;
         case 'away_digest_dismiss':
         case 'presence_cockpit_focus':
           return null;
@@ -312,6 +307,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { secure: true, label: 'Windows Credential Manager' };
         case 'secret_get_masked':
           return a.name === 'anthropic_api_key' ? { set: true, last4: 'WXYZ' } : { set: false, last4: null };
+        case 'secret_get_custom_ai_key':
+          return null;
         case 'get_opencode_key_status':
           return { active_profile: 'a', profiles: [{ id: 'a', label: 'Primary', configured: true }, { id: 'b', label: 'Secondary', configured: false }], key_automation_mode: 'notify_only', restart_pane_on_rotate: true };
         // Chat sessions (ACP) are off in the preview: no agent offers Chat, and no terminal holds a conversation.
@@ -419,9 +416,13 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return (a.options as { directory?: boolean } | undefined)?.directory ? 'C:\\Users\\dev\\.agy\\skills' : 'C:\\Users\\dev\\.agy\\settings.json';
         case 'agent_pack_undo':
           return { restored: [], removed: ['a', 'b'], skipped: [], recorded: 0 };
-        case 'ambient_get_prefs':
-          return { animated_tray_icon: true };
-        case 'ambient_set_animated_tray':
+        case 'discord_alerts_status':
+        case 'discord_alerts_set_url':
+        case 'discord_alerts_clear':
+        case 'discord_alerts_set_kinds':
+          return { saved: false, tail: null, kinds: { needs_you: true, finished: false, failed: true }, active: false };
+        case 'discord_alerts_test':
+          return { ok: false, message: 'Paste a webhook link and save it first.' };
         case 'toolbelt_list':
           return TOOLBELT_LISTING;
         case 'toolbelt_sync_preview':
@@ -584,6 +585,17 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return false;
         case 'autostart_set':
           return Boolean(a.enabled);
+        case 'uninstall_allowed': {
+          // `?uninstall=blocked` shows the dev-build refusal.
+          const blocked = typeof location !== 'undefined' && new URLSearchParams(location.search).get('uninstall') === 'blocked';
+          return { allowed: !blocked, reason: blocked ? 'Not in the dev build' : null };
+        }
+        case 'uninstall_plan':
+          return FAKE_UNINSTALL_PLAN;
+        case 'uninstall_run':
+          return runFakeUninstall();
+        case 'settings_reset':
+          return {};
         case 'get_app_install_info':
           return {
             version: '0.9.0',

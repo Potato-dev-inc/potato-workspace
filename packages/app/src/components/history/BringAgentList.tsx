@@ -24,10 +24,10 @@ export function BringAgentList({
             <button type="button" className="bc-agent-pick" disabled={empty} onClick={() => onPick(agent.id)}>
               <span className="bc-agent-main">
                 <span className="bc-agent-name">
-                  {agent.label} · {empty ? 'No chats found' : chatCount(agent.chats)}
+                  {empty ? agent.label : `${agent.label} · ${chatCount(agent.chats)}`}
                 </span>
                 {!empty && agent.newestMs !== null && <span className="bc-agent-sub">Newest chat {agoText(agent.newestMs, now)}</span>}
-                {empty && agent.places.length > 0 && <span className="bc-agent-sub">Looked in {agent.places.join(', ')}</span>}
+                {empty && <span className="bc-agent-sub">No chats found on this PC</span>}
                 {agent.fromDefinition && <span className="bc-agent-sub">From your agent definition</span>}
               </span>
               {!empty && <span aria-hidden="true">›</span>}
@@ -39,7 +39,7 @@ export function BringAgentList({
         <li key={agent.id} className="bc-agent is-off">
           <div className="bc-agent-main">
             <div className="bc-agent-name">{agent.label}</div>
-            <div className="bc-agent-sub">Can't read its chats yet</div>
+            <div className="bc-agent-sub">This agent's chats can't be read yet</div>
           </div>
         </li>
       ))}

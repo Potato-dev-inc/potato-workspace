@@ -40,6 +40,8 @@ describe('Simple: no agent is ready', () => {
     expect(button('Open settings')).toBeUndefined();
     const go = button(T.makeAddAgent)!;
     expect(go.textContent).toBe('Set up an agent');
+    // The help line names the same step as the button: "Set up", not "Add".
+    expect(host.querySelector('[data-testid="no-agent"]')?.textContent).toContain('Set up Claude or Codex first');
     await act(async () => go.click());
     expect(open).toHaveBeenCalledTimes(1);
   });

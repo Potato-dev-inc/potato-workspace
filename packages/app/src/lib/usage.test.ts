@@ -43,7 +43,7 @@ describe('usage strip words', () => {
     expect(chipText(row({ state: 'limited', limited_until_ms: NOW + 2 * H }), NOW)).toBe('Limited · 2h');
     expect(chipText(row({ state: 'limited' }), NOW)).toBe('Limited');
     expect(chipText(row({ state: 'expired', windows: [] }), NOW)).toBe('Sign-in expired');
-    expect(chipText(row({ state: 'unknown', windows: [], reason: 'no numbers' }), NOW)).toBe('Unknown');
+    expect(chipText(row({ state: 'unknown', windows: [], reason: 'no numbers' }), NOW)).toBe('Not shared');
   });
 
   it('names the sign-in and lists every window, the plan and the reason in the tooltip', () => {

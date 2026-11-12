@@ -1,4 +1,4 @@
-// Settings > Agents > Agent definitions: declarative agent definitions (list, errors, reload, approve/revoke), drafts,
+// Settings > Agents > Agent definitions: declarative agent definitions (list, errors, reload, approve/revoke),
 // sources, consented projects and extra directories. One settings row made of several blocks.
 // Every string from a definition file is rendered as React text, never as HTML (UI-4).
 import { useCallback, useEffect, useState } from 'react';
@@ -23,7 +23,6 @@ import {
   type DefinitionPreview,
   type DefinitionRow,
   type DefinitionsListing,
-  type DraftsListing,
   type ProgramInfo,
   type FixtureCheck,
   type ProjectScan,
@@ -94,8 +93,6 @@ export function AgentDefinitions({
   const [fixturesDir, setFixturesDir] = useState('');
   const [genericCommand, setGenericCommand] = useState('');
   const [checks, setChecks] = useState<{ file: string; check: FixtureCheck } | null>(null);
-  const [drafts, setDrafts] = useState<DraftsListing | null>(null);
-  const [draftCheck, setDraftCheck] = useState<{ path: string; preview: DefinitionPreview } | null>(null);
   const [projectScan, setProjectScan] = useState<ProjectScan | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [extraPath, setExtraPath] = useState('');
@@ -119,15 +116,6 @@ export function AgentDefinitions({
       setError(errorMessage(e));
     }
   }, [api, apply]);
-
-  const loadDrafts = useCallback(async () => {
-    if (!api.draftsList) return;
-    try {
-      setDrafts(await api.draftsList());
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  }, [api]);
 
   const loadRemoved = useCallback(async () => {
     if (!api.removedList) return;
@@ -153,12 +141,11 @@ export function AgentDefinitions({
 
   useEffect(() => {
     void load();
-    void loadDrafts();
     void loadRemoved();
     void loadProjectScan();
     // The backend pushes a change when a definition file is saved: no polling.
     return onAgentDefinitionsChanged(() => void load());
-  }, [load, loadDrafts, loadRemoved, loadProjectScan]);
+  }, [load, loadRemoved, loadProjectScan]);
 
   // The undo toast goes away by itself; "Recently removed" keeps the way back.
   useEffect(() => {
@@ -228,12 +215,6 @@ export function AgentDefinitions({
     run(async () => {
       await api.createFixturesDir(row.file, fixturesDir.trim() || undefined);
       setChecks({ file: row.file, check: await api.checkFile(row.file, fixturesDir.trim() || undefined) });
-    });
-
-  const validateDraft = (path: string) =>
-    run(async () => {
-      if (!api.draftValidate) return;
-      setDraftCheck({ path, preview: await api.draftValidate(path) });
     });
 
   const openReview = async (row: DefinitionRow) => {
@@ -525,45 +506,6 @@ export function AgentDefinitions({
                   >
                     Dismiss
                   </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </SettingBlock>
-      )}
-      {api.draftsList && (
-        <SettingBlock
-          label="Drafts"
-          description="Definitions drafted from a recorded pane session (the Rec button in a pane header). A draft is never loaded or approved: review it, copy it to the agents folder, then approve it above."
-        >
-          <div className="mb-3 flex items-center gap-2">
-            <button type="button" className={BTN} disabled={busy} onClick={() => void loadDrafts()}>
-              Refresh drafts
-            </button>
-            {drafts && <span className="break-all text-xs text-pm-muted">{drafts.dir}</span>}
-          </div>
-          {drafts && drafts.drafts.length === 0 && <p className="text-sm text-pm-muted">No drafts yet.</p>}
-          <ul className="space-y-2">
-            {drafts?.drafts.map((draft) => (
-              <li key={draft.path} data-testid="draft-row" className="rounded-lg border border-pm-border p-3">
-                <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{draft.name}</span>
-                  <button type="button" className={BTN} disabled={busy} onClick={() => void validateDraft(draft.path)}>
-                    Validate draft
-                  </button>
-                </div>
-                <p className="mt-1 break-all text-xs text-pm-muted">{draft.path}</p>
-                {draftCheck?.path === draft.path && (
-                  <div role="status" className="mt-2 text-xs">
-                    <p className={draftCheck.preview.ok ? 'text-pm-muted' : 'font-semibold text-pm-text'}>
-                      {draftCheck.preview.ok ? 'Draft is valid.' : 'Draft has errors:'}
-                    </p>
-                    {draftCheck.preview.errors.map((err, i) => (
-                      <p key={i} className="text-pm-text">
-                        {err.code} {err.path ?? ''}: {err.message}
-                      </p>
-                    ))}
-                  </div>
                 )}
               </li>
             ))}

@@ -160,7 +160,6 @@ const ROUTES: &[(&str, &str, &str)] = &[
     ("POST", "/panes/stop-all", "control"),
     ("POST", "/shell/exec", "control"),
     ("POST", "/agents/run", "control"),
-    ("POST", "/orchestrator/message", "control"),
     ("PATCH", "/settings", "control"),
     ("POST", "/accounts", "control"),
     ("POST", "/pair/invite", "control"),
@@ -489,7 +488,7 @@ fn header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
 #[test]
 fn a_web_page_on_another_origin_gets_no_cors_and_no_answer() {
     let r = rig();
-    for origin in ["https://evil.example", "http://192.168.1.20:8080", "null"] {
+    for origin in ["https://evil.example", "http://192.168.1.20:8080", "null", "http://localhost:5173", "http://foo.localhost"] {
         let o = format!("Origin: {origin}");
         // The preflight a browser sends before a JSON POST: no allow-origin, so it stops here.
         let pre = request(
@@ -509,7 +508,7 @@ fn a_web_page_on_another_origin_gets_no_cors_and_no_answer() {
 #[test]
 fn the_apps_own_origins_get_their_origin_back_never_a_wildcard() {
     let r = rig();
-    for origin in ["http://tauri.localhost", "https://tauri.localhost", "tauri://localhost", "http://localhost:1420"] {
+    for origin in ["http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"] {
         let o = format!("Origin: {origin}");
         let pre = request("OPTIONS", "/panes", &["Host: 127.0.0.1:17321", &o, "Access-Control-Request-Method: POST"]);
         let (_, head, _) = send(r.bridge, &pre);

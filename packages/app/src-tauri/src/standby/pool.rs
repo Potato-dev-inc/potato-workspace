@@ -11,7 +11,9 @@
 //! - a standby unused for `idle_timeout_secs` is shut down and its key stays cold until the next run
 //!   of that key (`note_run`), so an idle app does not keep CLIs alive or respawn them forever;
 //! - a standby that shows a dialog / login / update, dies, or never becomes ready is discarded and
-//!   its key backs off (and goes cold after 3 failures), so an untrusted folder is simply not pooled.
+//!   its key backs off (and goes cold after 3 failures), so an untrusted folder is simply not pooled;
+//! - a warm start that stops at a login or update screen blocks its agent's refills (3 tries at most)
+//!   until a sign-in or account change, a settings change, or an app restart (`note_account_changed`).
 
 use super::config::{self, CurrentProject, FollowWhy, RecentUse, StandbyConfig, MAX_RECENT};
 use super::key::PoolKey;
@@ -120,6 +122,15 @@ struct AgentBackoff {
     cold: bool,
 }
 
+/// A slot (agent, across keys and folders) held back because its warm starts stop at a login or update
+/// screen. Separate from `AgentBackoff`, which runs and settings saves lift: see `LOGIN_BLOCK_MAX_TRIES`.
+struct LoginBlock {
+    tries: u32,
+    retry_at_ms: i64,
+    cold: bool,
+    last: String,
+}
+
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct Stats {
     pub spawned: u64,
@@ -153,6 +164,13 @@ const BACKOFF_MAX_MS: i64 = 300_000;
 const MAX_FAILS: u32 = 3;
 /// After this many failures in a row across ALL keys of one agent, the agent stops being warmed.
 const MAX_AGENT_FAILS: u32 = 3;
+/// A warm start that stops at a login or update screen (`needs_attention`) is tried at most this many
+/// times (waits of 1 min, then 2 min). Then the agent stays blocked until a sign-in or account change,
+/// a settings change, or an app restart. Runs do not lift it: a run that needs a login gets its own
+/// worker and shows the screen to the person, so refilling a warm one would only churn processes.
+const LOGIN_BLOCK_BASE_MS: i64 = 60_000;
+const LOGIN_BLOCK_MAX_MS: i64 = 1_800_000;
+const LOGIN_BLOCK_MAX_TRIES: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MissReason {
@@ -231,6 +249,8 @@ struct Inner {
     backoff: HashMap<PoolKey, Backoff>,
     /// Failure state per agent type (lowercase), across keys.
     agent_backoff: HashMap<String, AgentBackoff>,
+    /// Agents (lowercase) held back after warm starts stopped at a login or update screen.
+    login_blocks: HashMap<String, LoginBlock>,
     /// Keys left cold until their next run (idle expiry, repeated failure).
     suppressed: HashSet<PoolKey>,
     spawning: HashSet<PoolKey>,
@@ -394,6 +414,7 @@ impl Pool {
                     next_id: 1,
                     backoff: HashMap::new(),
                     agent_backoff: HashMap::new(),
+                    login_blocks: HashMap::new(),
                     suppressed: HashSet::new(),
                     spawning: HashSet::new(),
                     strict: HashSet::new(),
@@ -509,6 +530,7 @@ impl Pool {
                 inner.backoff.clear();
                 inner.suppressed.clear();
                 lift_agents(&mut inner, None);
+                lift_login_blocks(&mut inner);
             }
             (doomed, (inner.config.clone(), inner.recent.clone(), inner.current.clone()))
         };
@@ -631,6 +653,7 @@ impl Pool {
             let mut inner = self.shared.inner.lock();
             inner.backoff.remove(&entry.key);
             inner.agent_backoff.remove(&agent_id(&entry.key.agent_type));
+            inner.login_blocks.remove(&agent_id(&entry.key.agent_type));
         }
         // The slot is empty now: have the replacement spawned.
         self.shared.wake.notify();
@@ -779,6 +802,7 @@ impl Pool {
                             let key = entry.key.clone();
                             inner.backoff.remove(&key);
                             inner.agent_backoff.remove(&agent_id(&key.agent_type));
+                            inner.login_blocks.remove(&agent_id(&key.agent_type));
                         }
                     }
                     Health::Starting => {
@@ -901,6 +925,28 @@ impl Pool {
         doomed.len()
     }
 
+    /// The account a worker of `agent_type` runs under changed (a sign-in, an account added, removed or
+    /// chosen for helpers). An agent blocked at a login screen may try again now, and its per-folder
+    /// holds for that reason are cleared too.
+    pub fn note_account_changed(&self, agent_type: &str) {
+        let id = agent_id(agent_type);
+        {
+            let mut inner = self.shared.inner.lock();
+            inner.login_blocks.remove(&id);
+            let held: Vec<PoolKey> = inner
+                .backoff
+                .iter()
+                .filter(|(key, backoff)| agent_id(&key.agent_type) == id && backoff.last == Health::NeedsAttention.as_str())
+                .map(|(key, _)| key.clone())
+                .collect();
+            for key in held {
+                inner.backoff.remove(&key);
+                inner.suppressed.remove(&key);
+            }
+        }
+        self.shared.wake.notify();
+    }
+
     /// Shut every standby down and refuse new ones (app exit).
     pub fn shutdown(&self) {
         let entries = {
@@ -1014,6 +1060,17 @@ impl Pool {
                 cold: true,
             });
         }
+        for (agent, block) in &inner.login_blocks {
+            agents_blocked.retain(|blocked| blocked.agent_type != *agent);
+            agents_blocked.push(AgentBlockedView {
+                agent_type: agent.clone(),
+                reason: block.last.clone(),
+                message: reason_text(&block.last),
+                fails: block.tries,
+                retry_in_ms: (block.retry_at_ms - now_ms).max(0),
+                cold: block.cold,
+            });
+        }
         agents_blocked.sort_by(|a, b| a.agent_type.cmp(&b.agent_type));
         StatusView {
             enabled: inner.config.enabled || inner.config.preload.enabled,
@@ -1089,6 +1146,11 @@ fn fail(inner: &mut Inner, key: &PoolKey, reason: &str, now_ms: i64) {
     if backoff.fails >= MAX_FAILS {
         inner.suppressed.insert(key.clone());
     }
+    if reason == Health::NeedsAttention.as_str() {
+        // A login or update screen: its own slot, lifted only by a sign-in, a settings change or a restart.
+        fail_login(inner, key, reason, now_ms);
+        return;
+    }
     // The agent-level schedule: same exponential delay, counted over every key of the agent.
     let agent = inner.agent_backoff.entry(agent_id(&key.agent_type)).or_insert(AgentBackoff {
         fails: 0,
@@ -1102,6 +1164,35 @@ fn fail(inner: &mut Inner, key: &PoolKey, reason: &str, now_ms: i64) {
     agent.last = reason.to_string();
     if agent.fails >= MAX_AGENT_FAILS {
         agent.cold = true;
+    }
+}
+
+/// One more warm start of `key`'s agent stopped at a login or update screen. After
+/// `LOGIN_BLOCK_MAX_TRIES` such starts the agent is blocked (cold) until something outside the pool changes.
+fn fail_login(inner: &mut Inner, key: &PoolKey, reason: &str, now_ms: i64) {
+    let block = inner.login_blocks.entry(agent_id(&key.agent_type)).or_insert(LoginBlock {
+        tries: 0,
+        retry_at_ms: now_ms,
+        cold: false,
+        last: String::new(),
+    });
+    block.tries += 1;
+    block.last = reason.to_string();
+    if block.tries >= LOGIN_BLOCK_MAX_TRIES {
+        block.cold = true;
+    } else {
+        let delay = (LOGIN_BLOCK_BASE_MS << (block.tries - 1).min(8)).min(LOGIN_BLOCK_MAX_MS);
+        block.retry_at_ms = now_ms + delay;
+    }
+}
+
+/// A settings change gives a blocked agent one more try (like `lift_agents`); a repeat failure blocks it again.
+fn lift_login_blocks(inner: &mut Inner) {
+    for block in inner.login_blocks.values_mut() {
+        if block.cold {
+            block.cold = false;
+            block.tries = LOGIN_BLOCK_MAX_TRIES - 1;
+        }
     }
 }
 
@@ -1155,6 +1246,10 @@ fn wanted(inner: &Inner, now_ms: i64, default_project: Option<&str>) -> Option<(
                 .agent_backoff
                 .get(&agent_id(&key.agent_type))
                 .map_or(true, |agent| !agent.cold && agent.retry_at_ms <= now_ms)
+            && inner
+                .login_blocks
+                .get(&agent_id(&key.agent_type))
+                .map_or(true, |block| !block.cold && block.retry_at_ms <= now_ms)
             && inner
                 .backoff
                 .get(key)

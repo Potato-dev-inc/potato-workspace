@@ -1,5 +1,5 @@
 // The Inbox card for a companion that keeps stopping (Rust key `companion:<id>`, kind setup). One action,
-// "Try again", asks the keeper to start it again; "Open terminal" shows the pane so the person can see why.
+// "Try again", asks the keeper to start it again; "Open" shows the agent so the person can see why.
 import { useState } from 'react';
 import type { CompanionView } from '../../../lib/companion';
 import { CardButton, InboxCard } from '../InboxCard';
@@ -29,7 +29,7 @@ export function CompanionStoppedCard({
       glyph="error"
       title={`${companion.name} stopped 3 times`}
       meta={companion.agentLabel}
-      reason={failed ? "Could not start it. Open the terminal to see why." : 'Open the terminal to see why.'}
+      reason={failed ? "Could not start it. Open it to see why." : 'Open it to see why.'}
       data={{ 'data-companion-id': companion.id }}
       actions={
         <CardButton tone="primary" role="answer" disabled={busy} onClick={tryAgain}>
@@ -39,7 +39,7 @@ export function CompanionStoppedCard({
       more={
         onOpenPane ? (
           <CardButton tone="plain" role="open" onClick={onOpenPane}>
-            Open terminal
+            Open
           </CardButton>
         ) : null
       }

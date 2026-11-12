@@ -71,6 +71,21 @@ describe('Ctrl+K: New agent', () => {
   });
 });
 
+describe('Ctrl+K: plain shells say they are terminals', () => {
+  it('labels a shell entry as a terminal, by its kind, and leaves an agent name alone', () => {
+    const c = cockpit({
+      launchEntries: [
+        { type: 'claude', label: 'Claude', icon: null },
+        { type: 'powershell', label: 'PowerShell', icon: null, shell: true },
+      ],
+    } as unknown as Partial<CockpitApi>);
+    act(() => root.render(<Palette c={c} onClose={vi.fn()} />));
+    expect(rowFor('New PowerShell terminal')).toBeTruthy();
+    expect(rowFor('New Claude')).toBeTruthy();
+    expect(rowFor('New PowerShell')).toBeUndefined();
+  });
+});
+
 describe('palette commands for features that hide', () => {
   it('lists Simple mode, Live updates, Budgets, Team, Pair a phone and Save a diagnostic file', () => {
     act(() => root.render(<Palette c={cockpit()} onClose={vi.fn()} />));

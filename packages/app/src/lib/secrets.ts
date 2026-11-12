@@ -1,12 +1,14 @@
 // Provider API keys live in the OS credential store (Rust `secrets.rs`). The UI only ever sees
-// "is it set" plus the last 4 characters. The one exception is `resolveApiKey`, used by the
-// sidebar's API orchestrator whose LLM loop runs in this webview (documented in docs/features/trust-fixes.md).
+// "is it set" plus the last 4 characters. The one exception is `readCustomAiKey`: the wizard's
+// "Custom AI service" writer calls its service from this webview and needs that one key. The provider keys
+// are never handed back.
 import { invoke } from '@tauri-apps/api/core';
-import type { LlmProvider, Settings } from '@potato-workspace/shared';
 
 /** The three provider keys, which also have a fallback field in the settings file. */
 export type ProviderSecretName = 'anthropic_api_key' | 'openai_api_key' | 'openrouter_api_key';
-export type SecretName = ProviderSecretName | 'discord_bot_token';
+/** The key of the person's own AI service (Settings and the agent wizard); kept in the credential store only. */
+export const CUSTOM_AI_SECRET = 'custom_ai_key';
+export type SecretName = ProviderSecretName | typeof CUSTOM_AI_SECRET;
 
 export interface SecretMask {
   set: boolean;
@@ -32,11 +34,14 @@ export const secretsApi: SecretsApi = {
   remove: (name) => invoke<void>('secret_delete', { name }),
 };
 
-const PROVIDER_SECRET: Record<LlmProvider, ProviderSecretName> = {
-  anthropic: 'anthropic_api_key',
-  openai: 'openai_api_key',
-  openrouter: 'openrouter_api_key',
-};
+/** The custom AI service key, or '' when none is set or no credential store is there. */
+export async function readCustomAiKey(): Promise<string> {
+  try {
+    return (await invoke<string | null>('secret_get_custom_ai_key')) ?? '';
+  } catch {
+    return '';
+  }
+}
 
 /** Mask a key held in the plain settings file (fallback when no credential store exists). */
 export function maskLocal(value: string | undefined): SecretMask {
@@ -58,18 +63,6 @@ export function describeKeyState(mask: SecretMask, info: SecretStorageInfo): str
 
 export const NO_SECURE_STORAGE_WARNING =
   'Secure storage is not available on this computer. Keys you enter are saved in a plain file in the app folder.';
-
-/** The key for an LLM call: credential store first, then the settings file (fallback mode). */
-export async function resolveApiKey(settings: Settings, provider: LlmProvider): Promise<string> {
-  const name = PROVIDER_SECRET[provider];
-  try {
-    const raw = await invoke<string | null>('secret_get_for_llm', { name });
-    if (raw) return raw;
-  } catch {
-    /* no Tauri, or no store: fall back to the file value */
-  }
-  return (settings[name] as string | undefined) ?? '';
-}
 
 const SECRET_KEY_PATTERN = /(api_?key|token|secret|password)/i;
 

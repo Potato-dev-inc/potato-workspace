@@ -12,6 +12,35 @@ fn start_session(mode: &str) {
     mcp_sessions::set_mode(&session, mode).unwrap();
     set_mcp_session_id(session);
     TEST_HEALTH.with(|health| *health.borrow_mut() = None);
+    TEST_DRIFT_WARNED.with(|warned| warned.borrow_mut().clear());
+}
+
+/// The `/health` body of a bridge whose catalog differs from this shim's: `changed` names the one
+/// tool whose schema the app has changed (its hash is replaced).
+fn health_with_one_changed_tool(changed: &str) -> Value {
+    let shim = tool_registry::tool_schema_hashes();
+    let mut app = shim.clone();
+    app.insert(changed.to_string(), "ffffffffffffffff".into());
+    json!({
+        "ok": true,
+        "build_id": "build-under-test",
+        "catalog_version": "other",
+        "catalog_hash": tool_registry::catalog_hash_of(&app),
+        "tool_hashes": app,
+    })
+}
+
+/// How many results in a `tools/call` reply carry the SCHEMA_DRIFT warning block.
+fn drift_warnings_in(result: &Value) -> usize {
+    result["content"]
+        .as_array()
+        .map(|blocks| {
+            blocks
+                .iter()
+                .filter(|block| block["text"].as_str().is_some_and(|text| text.starts_with("WARNING [SCHEMA_DRIFT]")))
+                .count()
+        })
+        .unwrap_or(0)
 }
 
 fn end_session() {
@@ -151,7 +180,7 @@ fn drift_message_names_both_catalogs_the_build_and_the_fix() {
 }
 
 #[test]
-fn every_tool_result_carries_the_warning_while_the_versions_differ() {
+fn a_catalog_only_mismatch_warns_once_per_process_not_on_every_call() {
     ensure_questions_bridge();
     start_session("agent");
     set_health(OLD_CATALOG);
@@ -169,12 +198,33 @@ fn every_tool_result_carries_the_warning_while_the_versions_differ() {
     assert_eq!(structured["fix"], "Rebuild or reinstall the Potato Workspace MCP, then reconnect (Claude: /mcp).");
     assert_eq!(structured["bridge_catalog_version"], OLD_CATALOG);
     assert_eq!(structured["shim_catalog_version"], tool_registry::catalog_version());
-    // A second, different tool carries it too (not only the first call).
-    let again = call("list_panes", json!({}));
-    assert!(again["content"].as_array().unwrap().last().unwrap()["text"]
-        .as_str()
-        .unwrap()
-        .contains("SCHEMA_DRIFT"));
+    // Only the catalog is known, so the rest of the process gets no repeat, from any tool.
+    assert_eq!(drift_warnings_in(&call("list_agents", json!({}))), 0);
+    assert_eq!(drift_warnings_in(&call("list_panes", json!({}))), 0);
+    end_session();
+}
+
+#[test]
+fn a_changed_tool_warns_once_and_unchanged_tools_never() {
+    ensure_questions_bridge();
+    start_session("agent");
+    TEST_HEALTH.with(|health| *health.borrow_mut() = Some(health_with_one_changed_tool("list_panes")));
+    // Ten calls to tools whose schema matches: no warning at all.
+    let mut unchanged = 0;
+    for _ in 0..5 {
+        unchanged += drift_warnings_in(&call("list_agents", json!({})));
+        unchanged += drift_warnings_in(&call("inspect_agent", json!({"handle":"h"})));
+    }
+    assert_eq!(unchanged, 0);
+    // Three calls to the changed tool: exactly one warning, on the first of them.
+    let first = call("list_panes", json!({}));
+    assert_eq!(drift_warnings_in(&first), 1, "{first}");
+    assert_eq!(first["structuredContent"]["potato_workspace_warnings"][0]["changed_tools"], json!(["list_panes"]));
+    let mut later = 0;
+    for _ in 0..2 {
+        later += drift_warnings_in(&call("list_panes", json!({})));
+    }
+    assert_eq!(later, 0);
     end_session();
 }
 
@@ -247,4 +297,40 @@ fn drift_check_asks_the_bridge_once_per_minute_and_never_caches_silence() {
     let mut cache = DriftCache::new();
     assert_eq!(cache.lookup(t0, || None), None);
     assert_eq!(cache.lookup(t0, || Some(Some(drift.clone()))), Some(drift));
+}
+
+// ---- the default tool list stays small ----
+
+/// The default list (agent mode, the one a new connection sees) was 61 544 bytes before the diet.
+/// The budget is set just above what it measures now; a change that grows it past this fails.
+const DEFAULT_LIST_BUDGET_BYTES: usize = 22_000;
+
+#[test]
+fn the_default_tools_list_stays_under_its_size_budget() {
+    start_session("agent");
+    let response = rpc("tools/list", json!({}));
+    end_session();
+    let tools = response["result"]["tools"].as_array().unwrap();
+    let bytes = response["result"]["tools"].to_string().len();
+    assert!(
+        bytes <= DEFAULT_LIST_BUDGET_BYTES,
+        "default tools/list is {bytes} bytes, budget {DEFAULT_LIST_BUDGET_BYTES}"
+    );
+    for tool in tools {
+        let text = tool["description"].as_str().unwrap_or_default();
+        assert!(text.len() <= 500, "{}: description is {} bytes (max 500)", tool["name"], text.len());
+    }
+}
+
+#[test]
+fn the_default_list_leaves_out_output_schemas_and_mode_all_keeps_them() {
+    start_session("agent");
+    let narrow = rpc("tools/list", json!({}));
+    end_session();
+    assert!(narrow["result"]["tools"].as_array().unwrap().iter().all(|tool| tool.get("outputSchema").is_none()));
+    start_session("all");
+    let full = rpc("tools/list", json!({}));
+    end_session();
+    let run = full["result"]["tools"].as_array().unwrap().iter().find(|tool| tool["name"] == "run_agent").unwrap().clone();
+    assert!(run.get("outputSchema").is_some(), "mode=all lists output schemas");
 }

@@ -27,6 +27,9 @@
 //! | `permend` | a permission request, then `end_turn` while it is still open (reason: turn_ended) |
 //! | `bg` | starts a background task, ends the turn, then reports the task finished ~0.8 s later |
 //! | `bgreply` | like `bg`, then (after the task ends) sends the real follow-up reply `pong` |
+//! | `permkind K` | a tool of kind K (`edit`, `read`, ...) asks permission; says what the client answered (`asked:K outcome:selected option:reject_once`) |
+//! | `fswrite` | asks the client to write a file; says the error it got back |
+//! | `mode` | says the session mode (`modes=1`: a `mode` config option; `modes=2`: session modes set with `session/set_mode`) |
 //! | `badperm` | a malformed permission request (the app must refuse it, not park it) |
 //! | `empty` | `end_turn` with no output |
 //! | `weird` | an update of a kind nobody knows, then text |
@@ -116,6 +119,8 @@ struct Shared {
     /// The settings this session currently has (the config options a real agent reports back).
     model: Mutex<String>,
     effort: Mutex<String>,
+    /// The session mode (`modes=1` makes the fake offer `default` and `plan`).
+    mode: Mutex<String>,
 }
 
 impl Shared {
@@ -154,6 +159,21 @@ impl Shared {
         let _ = std::fs::write(self.store.join(session_id), "x");
     }
 
+    /// The config options the agent reports: model and effort, and the mode with `modes=1` (as a config option) or
+    /// `modes=2` (offered only as session modes, set with `session/set_mode`).
+    fn options(&self) -> Value {
+        let mut options = config_options(&self.model.lock(), &self.effort.lock());
+        if self.opts.number("modes") == 1 {
+            if let Some(list) = options.as_array_mut() {
+                list.push(json!({
+                    "id": "mode", "name": "Mode", "category": "mode", "type": "select", "currentValue": *self.mode.lock(),
+                    "options": [{"value": "default", "name": "Default"}, {"value": "plan", "name": "Plan"}]
+                }));
+            }
+        }
+        options
+    }
+
     fn knows(&self, session_id: &str) -> bool {
         self.store.join(session_id).exists()
     }
@@ -187,6 +207,7 @@ pub fn run_agent() {
         store,
         model: Mutex::new("a".to_string()),
         effort: Mutex::new("medium".to_string()),
+        mode: Mutex::new("default".to_string()),
     });
     // The test harness leaves "test ... " unterminated on stdout; start on a fresh line.
     {
@@ -292,8 +313,12 @@ fn handle_request(shared: &Arc<Shared>, method: &str, id: &Value, params: Value)
             if shared.opts.flag("grandchild", false) {
                 spawn_grandchild(&shared.store);
             }
-            let options = config_options(&shared.model.lock(), &shared.effort.lock());
-            shared.reply(id, json!({"sessionId": session_id, "configOptions": options}));
+            let options = shared.options();
+            let mut result = json!({"sessionId": session_id, "configOptions": options});
+            if shared.opts.number("modes") == 2 {
+                result["modes"] = json!({"currentModeId": *shared.mode.lock(), "availableModes": [{"id": "default", "name": "Default"}, {"id": "plan", "name": "Plan"}]});
+            }
+            shared.reply(id, result);
             shared.update(
                 &session_id,
                 json!({"sessionUpdate": "available_commands_update", "availableCommands": [{"name": "review", "description": "Review changes", "input": {"hint": "branch"}}]}),
@@ -322,7 +347,7 @@ fn handle_request(shared: &Arc<Shared>, method: &str, id: &Value, params: Value)
             if shared.opts.flag("bare_restore", false) {
                 shared.reply(id, json!({}));
             } else {
-                let options = config_options(&shared.model.lock(), &shared.effort.lock());
+                let options = shared.options();
                 shared.reply(id, json!({"configOptions": options}));
             }
         }
@@ -331,11 +356,18 @@ fn handle_request(shared: &Arc<Shared>, method: &str, id: &Value, params: Value)
             let value = params.get("value").and_then(Value::as_str).unwrap_or("a").to_string();
             if id_of == "effort" {
                 *shared.effort.lock() = value;
+            } else if id_of == "mode" {
+                *shared.mode.lock() = value;
             } else {
                 *shared.model.lock() = value;
             }
-            let options = config_options(&shared.model.lock(), &shared.effort.lock());
+            let options = shared.options();
             shared.reply(id, json!({"configOptions": options}));
+        }
+        "session/set_mode" => {
+            let mode = params.get("modeId").and_then(Value::as_str).unwrap_or("default").to_string();
+            *shared.mode.lock() = mode;
+            shared.reply(id, json!({}));
         }
         "_session/steering" => {
             let session_id = params.get("sessionId").and_then(Value::as_str).unwrap_or_default().to_string();
@@ -542,6 +574,44 @@ fn run_prompt_inner(shared: &Arc<Shared>, id: &Value, params: &Value) {
             // Let the client park the request before the turn ends (the reported case: a turn that
             // ends with the prompt still open).
             std::thread::sleep(Duration::from_millis(60));
+            done("end_turn");
+        }
+        "permkind" => {
+            // `permkind <kind>`: asks permission for a tool of that kind and says what the client answered.
+            let kind = text.split_whitespace().nth(1).unwrap_or("edit").to_string();
+            shared.update(&session_id, json!({"sessionUpdate": "tool_call", "toolCallId": "k1", "title": "A tool", "kind": kind, "status": "pending"}));
+            let ask_id = shared.next_request.fetch_add(1, Ordering::SeqCst);
+            let rx = shared.ask(
+                ask_id,
+                "session/request_permission",
+                json!({
+                    "sessionId": session_id,
+                    "toolCall": {"toolCallId": "k1", "kind": kind, "status": "pending", "title": "A tool"},
+                    "options": [
+                        {"optionId": "allow_once", "name": "Allow Once", "kind": "allow_once"},
+                        {"optionId": "reject_once", "name": "Reject", "kind": "reject_once"}
+                    ]
+                }),
+            );
+            let Ok(answer) = rx.recv() else { return };
+            let outcome = answer.pointer("/result/outcome/outcome").and_then(Value::as_str).unwrap_or("?").to_string();
+            let option = answer.pointer("/result/outcome/optionId").and_then(Value::as_str).unwrap_or("-").to_string();
+            shared.chunk(&session_id, &format!("asked:{kind} outcome:{outcome} option:{option}"));
+            done("end_turn");
+        }
+        "fswrite" => {
+            // A file write the client was never offered: it must be refused.
+            let ask_id = shared.next_request.fetch_add(1, Ordering::SeqCst);
+            let rx = shared.ask(ask_id, "fs/write_text_file", json!({"sessionId": session_id, "path": "work/notes.txt", "content": "x"}));
+            let reply = rx.recv().unwrap_or(Value::Null);
+            let code = reply.pointer("/error/code").and_then(Value::as_i64).unwrap_or(0);
+            let message = reply.pointer("/error/message").and_then(Value::as_str).unwrap_or("").to_string();
+            shared.chunk(&session_id, &format!("fs-error:{code} {message}"));
+            done("end_turn");
+        }
+        "mode" => {
+            let mode = shared.mode.lock().clone();
+            shared.chunk(&session_id, &format!("mode:{mode}"));
             done("end_turn");
         }
         "badperm" => {

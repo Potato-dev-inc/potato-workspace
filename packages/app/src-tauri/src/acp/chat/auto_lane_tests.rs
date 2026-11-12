@@ -27,6 +27,8 @@ struct Lookup {
     saved: Option<RunLane>,
     /// The installed OpenCode's major version; `opencode` then stands for the fake agent.
     major: Option<u32>,
+    /// The fake agent's options (`acp::fake_agent`, plus `read_only=` of `workspace_tests::agents`).
+    opts: String,
 }
 
 impl LaneLookup for Lookup {
@@ -34,7 +36,7 @@ impl LaneLookup for Lookup {
         self.labs
     }
     fn config_for(&self, agent: &str) -> Option<AgentConfig> {
-        ((agent == "fake" || (agent == "opencode" && self.major.is_some())) && self.definition).then(|| agents("", &self.dir).0["fake"].as_ref().clone())
+        ((agent == "fake" || (agent == "opencode" && self.major.is_some())) && self.definition).then(|| agents(&self.opts, &self.dir).0["fake"].as_ref().clone())
     }
     fn saved(&self, _: &str) -> Option<RunLane> {
         self.saved
@@ -56,11 +58,15 @@ struct Fx {
 
 impl Fx {
     fn new() -> Fx {
+        Fx::with_opts("")
+    }
+
+    fn with_opts(opts: &str) -> Fx {
         let dir = std::env::temp_dir().join(format!("pm-acp-auto-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
-        let conversations = conversations_in(&dir, "");
+        let conversations = conversations_in(&dir, opts);
         let deps = deps_for(&dir, &conversations);
-        let lookup = Lookup { dir: dir.clone(), labs: true, definition: true, installed: true, saved: None, major: None };
+        let lookup = Lookup { dir: dir.clone(), labs: true, definition: true, installed: true, saved: None, major: None, opts: opts.to_string() };
         Fx { dir, deps, lookup, _conversations: conversations }
     }
 
@@ -285,6 +291,7 @@ fn the_receipt_lists_a_requested_model_the_agent_did_not_confirm() {
         account_source: None,
         lane_note: None,
         warm: false,
+        read_only: false,
     };
     let unconfirmed = "model not confirmed".to_string();
     assert!(build(&inputs(Some("fast-1"), Some("slow-2"))).not_verified.contains(&unconfirmed));
@@ -309,6 +316,7 @@ fn a_potato_result_block_in_the_reply_is_the_structured_result() {
         account_source: Some("helper_default"),
         lane_note: None,
         warm: false,
+        read_only: false,
     });
     assert_eq!(receipt.result_capture, "structured");
     assert_eq!(receipt.structured_result.unwrap()["summary"], "ok");
@@ -343,4 +351,102 @@ fn with_opencode_1_the_native_agent_is_left_to_the_terminal_path() {
     let (reply, note) = fx.run(json!({ "agent_type": "opencode_native" }));
     assert!(reply.is_none() || note.is_some(), "untouched: no chat was started for opencode_native");
     assert_eq!(fx.panes(), 0);
+}
+
+// ---- read-only chats ------------------------------------------------------------------------------------------
+
+fn handle_of(view: &Value) -> String {
+    view["handle"].as_str().unwrap().to_string()
+}
+
+fn follow(fx: &Fx, handle: &str, task: &str) -> Value {
+    fx.call("POST", &["agents", "followup"], json!({ "handle": handle, "task": task, "wait_ms": 20000 }))
+}
+
+#[test]
+fn a_read_only_chat_rejects_edits_and_file_writes_allows_reads_and_the_receipt_says_enforced() {
+    let fx = Fx::with_opts("modes=1;read_only=plan");
+    let (reply, note) = fx.run(json!({ "read_only": true, "task": "mode" }));
+    assert!(note.is_none(), "an agent with no terminal read-only runs read-only as a chat");
+    let view = reply.expect("a chat took it").expect("and answered");
+    assert_eq!(view["lane_used"], "acp");
+    assert_eq!(view["result"], "mode:plan", "the agent's own read-only mode was picked before the first message");
+    assert_eq!(view["receipt"]["read_only"], "enforced");
+    let handle = handle_of(&view);
+
+    // Every tool that is not a read is rejected by this app, without a question to anyone.
+    for kind in ["edit", "delete", "move", "execute", "other", "switch_mode"] {
+        let view = follow(&fx, &handle, &format!("permkind {kind}"));
+        assert_eq!(view["status"], "completed", "{kind}: the agent was answered, not parked: {view}");
+        assert_eq!(view["result"], format!("asked:{kind} outcome:selected option:reject_once"), "{kind}");
+    }
+    // A file write is never served.
+    let view = follow(&fx, &handle, "fswrite");
+    let result = view["result"].as_str().unwrap();
+    assert!(result.starts_with("fs-error:-32601") && result.contains("read-only"), "{result}");
+    // A read is not rejected: it is the normal question, open for an answer.
+    let view = follow(&fx, &handle, "permkind read");
+    assert_eq!(view["status"], "waiting_input", "{view}");
+    assert_eq!(view["prompt"]["tool_kind"], "read");
+    assert_eq!(view["receipt"]["read_only"], "enforced");
+    let _ = fx.call("POST", &["agents", "cancel"], json!({ "handle": handle }));
+}
+
+#[test]
+fn a_chat_that_is_not_read_only_still_parks_an_edit_question() {
+    let fx = Fx::with_opts("read_only=plan_ask");
+    let view = answer(fx.run(json!({ "task": "permkind edit", "wait_ms": 3000 })));
+    assert_eq!(view["status"], "waiting_input", "{view}");
+    assert_eq!(view["receipt"]["read_only"], "off");
+    let _ = fx.call("POST", &["agents", "cancel"], json!({ "handle": handle_of(&view) }));
+}
+
+#[test]
+fn the_agents_session_modes_are_used_when_it_has_no_mode_setting() {
+    let fx = Fx::with_opts("modes=2;read_only=plan");
+    let view = answer(fx.run(json!({ "read_only": true, "task": "mode" })));
+    assert_eq!(view["result"], "mode:plan");
+    assert_eq!(view["receipt"]["read_only"], "enforced");
+}
+
+#[test]
+fn an_agent_that_runs_tools_unasked_and_has_no_read_only_mode_is_refused_and_nothing_starts() {
+    // Needs its own mode (it does not ask before every tool), and the fake offers none.
+    let fx = Fx::with_opts("read_only=plan");
+    let (reply, _) = fx.run(json!({ "read_only": true }));
+    let error = reply.expect("ours").expect_err("refused");
+    assert_eq!(error.code, "READ_ONLY_UNSUPPORTED");
+    assert!(error.message.contains("nothing was started"), "{}", error.message);
+    assert_eq!(fx.panes(), 0);
+    // An agent that asks before every tool is guarded by the permission rejection alone.
+    let fx = Fx::with_opts("read_only=ask");
+    let view = answer(fx.run(json!({ "read_only": true, "task": "permkind execute" })));
+    assert_eq!(view["receipt"]["read_only"], "enforced");
+    assert_eq!(view["result"], "asked:execute outcome:selected option:reject_once");
+}
+
+#[test]
+fn an_agent_with_no_read_only_chat_is_never_started_read_only_and_the_refusal_says_what_works() {
+    let fx = Fx::new();
+    let (reply, _) = fx.run(json!({ "read_only": true, "lane": "acp" }));
+    let error = reply.expect("ours").expect_err("refused");
+    assert_eq!(error.code, "CHAT_CANNOT_DO");
+    let fix = error.context["fix"].as_str().unwrap();
+    assert!(fix.contains("cannot enforce read_only") && fix.contains("list_agents"), "{fix}");
+    assert_eq!(fx.panes(), 0);
+}
+
+#[test]
+fn verified_is_true_only_when_a_check_passed_and_otherwise_says_why() {
+    let fx = Fx::new();
+    let view = answer(fx.run(json!({})));
+    assert_eq!(view["verified"], false);
+    assert!(view["verified_note"].as_str().unwrap().contains("No checks were asked for"), "{view}");
+    assert_eq!(view["not_verified"], json!(["no checks configured"]));
+    let checked = answer(fx.run(json!({ "checks": [{ "type": "result_contains", "text": "w1" }] })));
+    assert_eq!(checked["verified"], true, "{checked}");
+    assert_eq!(checked["verified_note"], Value::Null);
+    let failed = answer(fx.run(json!({ "checks": [{ "type": "result_contains", "text": "nope" }] })));
+    assert_eq!(failed["verified"], false);
+    assert!(failed["verified_note"].as_str().unwrap().contains("did not pass"));
 }

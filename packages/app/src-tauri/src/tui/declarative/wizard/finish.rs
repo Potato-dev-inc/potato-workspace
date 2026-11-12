@@ -52,8 +52,9 @@ pub fn parse_provenance(body: &Value) -> Result<Provenance, WizardError> {
     let p = body.get("provenance").filter(|p| p.is_object()).ok_or_else(|| WizardError::bad_request("provenance is required"))?;
     let drafter = short_text(p, "drafter")?.ok_or_else(|| WizardError::bad_request("provenance.drafter is required"))?;
     let kind = short_text(p, "drafter_kind")?.unwrap_or_else(|| "other".into());
-    if !["local_agent", "openrouter", "other"].contains(&kind.as_str()) {
-        return Err(WizardError::bad_request("provenance.drafter_kind must be local_agent, openrouter or other"));
+    // "openrouter" is what older versions of the wizard wrote for a remote writer; it stays accepted.
+    if !["local_agent", "custom_ai", "openrouter", "other"].contains(&kind.as_str()) {
+        return Err(WizardError::bad_request("provenance.drafter_kind must be local_agent, custom_ai, openrouter or other"));
     }
     let prompt_version =
         short_text(p, "prompt_version")?.ok_or_else(|| WizardError::bad_request("provenance.prompt_version is required"))?;

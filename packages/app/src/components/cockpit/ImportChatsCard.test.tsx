@@ -110,29 +110,29 @@ describe('first-start card: Bring my chats', () => {
     expect(el.matches('[data-ib-card][data-kind="note"][data-info]')).toBe(true);
     expect(el.querySelector('.ib-title')?.textContent).toBe(IMPORT_CARD_TITLE);
     expect(el.querySelector('.ib-reason')?.textContent).toBe(IMPORT_CARD_BODY);
-    expect(Array.from(el.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Bring my chats', 'Not now']);
+    expect(Array.from(el.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Bring my chats', 'Dismiss']);
     expect(api.state).toHaveBeenCalled();
     expect(api.look).not.toHaveBeenCalled();
     expect(api.start).not.toHaveBeenCalled();
     expect(api.dismiss).not.toHaveBeenCalled();
   });
 
-  it('"Not now" remembers the answer, hides the card, and reads nothing', async () => {
+  it('"Dismiss" remembers the answer, hides the card, and reads nothing', async () => {
     const api = fakeApi();
     await mount(api, true);
-    await act(async () => buttonNamed('Not now')!.click());
+    await act(async () => buttonNamed('Dismiss')!.click());
     expect(api.dismiss).toHaveBeenCalledTimes(1);
     expect(card()).toBeNull();
     expect(api.look).not.toHaveBeenCalled();
   });
 
-  it('keeps the card and says why when "Not now" fails', async () => {
+  it('keeps the card and says why when "Dismiss" fails', async () => {
     const api = fakeApi();
     api.dismiss = vi.fn(async () => {
       throw new Error('The settings file is locked.');
     });
     await mount(api, true);
-    await act(async () => buttonNamed('Not now')!.click());
+    await act(async () => buttonNamed('Dismiss')!.click());
     expect(card()).not.toBeNull();
     expect(card()!.querySelector('.ib-note')?.textContent).toBe('The settings file is locked.');
   });

@@ -79,7 +79,6 @@ fn p2p_is_not_reachable_from_the_bridge_mcp_or_the_phone() {
         pkgs.join("cli").join("src"),
         pkgs.join("app").join("src").join("pwa"),
         pkgs.join("app").join("src").join("PwaApp.tsx"),
-        pkgs.join("app").join("src").join("PwaLegacyApp.tsx"),
     ];
     roots.retain(|r| r.exists());
     assert!(roots.len() >= 8, "the guard must actually find the places it guards: {roots:?}");

@@ -68,10 +68,6 @@ export interface SessionChatViewProps {
   overlay?: ReactNode;
   /** A search result asked for this message: the chat scrolls to it once it is there. */
   jump?: ChatJump | null;
-  /** Show `Make clip` on finished turns (desktop Chat tab only). Needs `onMakeClip`. */
-  canClip?: boolean;
-  /** `Make clip` was pressed on the turn that the message with this id starts. */
-  onMakeClip?: (userItemId: string) => void;
   /** An old chat with no live pane behind it: the "Messages wait…" note would be wrong there, so it is left out. */
   readOnly?: boolean;
   /** Show `Branch` on finished turns (desktop Chat tab only). Needs `onBranch`. Never shown when `readOnly`. */
@@ -86,26 +82,20 @@ export interface SessionChatViewProps {
   endings?: EndingActions;
 }
 
-/** The button on a finished turn's end line. `always`: shown without hover (the newest finished turn). */
-interface TurnClip {
-  onMake: () => void;
-  always: boolean;
-}
-
-/** The `Branch` button on a finished turn's end line. Same rules as `TurnClip`. */
+/** The `Branch` button on a finished turn's end line. `always`: shown without hover (the newest finished turn). */
 interface TurnBranch {
   onBranch: () => void;
   always: boolean;
 }
 
-/** A finished turn that a message started: the only kind a clip can be made of. */
-export function isClippable(turn: ChatTurn): turn is ChatTurn & { user: NonNullable<ChatTurn['user']> } {
+/** A finished turn that a message started: the only kind a branch can start from. */
+export function isBranchable(turn: ChatTurn): turn is ChatTurn & { user: NonNullable<ChatTurn['user']> } {
   return turn.end !== null && turn.user !== null;
 }
 
-/** The id of the newest clippable turn, or null. */
-export function lastClippableId(turns: readonly ChatTurn[]): string | null {
-  for (let i = turns.length - 1; i >= 0; i--) if (isClippable(turns[i])) return turns[i].id;
+/** The id of the newest branchable turn, or null. */
+export function lastBranchableId(turns: readonly ChatTurn[]): string | null {
+  for (let i = turns.length - 1; i >= 0; i--) if (isBranchable(turns[i])) return turns[i].id;
   return null;
 }
 
@@ -129,7 +119,7 @@ function TextStep({ step, markdown, mode, actions }: { step: Extract<TurnStep, {
   );
 }
 
-function TurnEndDivider({ turn, clip, branch, endings }: { turn: ChatTurn; clip?: TurnClip; branch?: TurnBranch; endings?: EndingActions }) {
+function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: TurnBranch; endings?: EndingActions }) {
   const parts: string[] = [];
   if (turn.outcome === 'interrupted' || turn.outcome === 'failed') parts.push(turn.outcome);
   if (turn.durationMs !== null) parts.push(`Worked for ${formatDuration(turn.durationMs)}`);
@@ -152,16 +142,11 @@ function TurnEndDivider({ turn, clip, branch, endings }: { turn: ChatTurn; clip?
           Branch
         </button>
       )}
-      {clip && (
-        <button type="button" className={`ck-chat-clip-btn${clip.always ? ' is-always' : ''}`} onClick={clip.onMake}>
-          Make clip
-        </button>
-      )}
     </div>
   );
 }
 
-function TurnView({ turn, fromScreen, markdown, mode, clip, branch, helpers, onOpenPane, endings }: { turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; clip?: TurnClip; branch?: TurnBranch; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
+function TurnView({ turn, fromScreen, markdown, mode, branch, helpers, onOpenPane, endings }: { turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; branch?: TurnBranch; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
   const verbose = mode === 'verbose';
   // A turn with no end yet is still running: its rows without a result are live.
   const live = turn.end === null;
@@ -206,22 +191,20 @@ function TurnView({ turn, fromScreen, markdown, mode, clip, branch, helpers, onO
         return <TextStep key={step.id} step={step} markdown={markdown} mode={mode} actions={finished ? retry : undefined} />;
       })}
       {helpers && helpers.length > 0 && <PaneHelperRows helpers={helpers} onOpen={onOpenPane} />}
-      {turn.end && <TurnEndDivider turn={turn} clip={clip} branch={branch} endings={endings} />}
+      {turn.end && <TurnEndDivider turn={turn} branch={branch} endings={endings} />}
     </section>
   );
 }
 
-export function SessionChatView({ state, reason, waitingFor, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, banner, overlay, aside, jump, readOnly, canClip, onMakeClip, canBranch, onBranch, helpers, onOpenPane, endings }: SessionChatViewProps) {
+export function SessionChatView({ state, reason, waitingFor, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings }: SessionChatViewProps) {
   const fromScreen = source === 'screen';
   // Markdown only for what the agent itself wrote (its session file or its API); an unknown source keeps the text as it is.
   const markdown = source === 'file' || source === 'api' || source === 'acp';
   const [mode, setMode] = useChatViewMode(paneId);
   const plan = useMemo(() => currentPlan(turns), [turns]);
-  // The newest finished turn that a message started keeps its `Make clip` button in view; the others show it on hover.
-  const newestClippable = useMemo(() => (canClip && onMakeClip ? lastClippableId(turns) : null), [canClip, onMakeClip, turns]);
   // The same rule for `Branch`.
   const showBranch = !!canBranch && !!onBranch && !readOnly;
-  const newestBranchable = useMemo(() => (showBranch ? lastClippableId(turns) : null), [showBranch, turns]);
+  const newestBranchable = useMemo(() => (showBranch ? lastBranchableId(turns) : null), [showBranch, turns]);
   const placedHelpers = useMemo(() => placeHelpers(turns, helpers ?? []), [turns, helpers]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -319,8 +302,7 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
               fromScreen={fromScreen}
               markdown={markdown}
               mode={mode}
-              clip={canClip && onMakeClip && isClippable(turn) ? { onMake: () => onMakeClip(turn.user.id), always: turn.id === newestClippable } : undefined}
-              branch={canBranch && !readOnly && onBranch && isClippable(turn) ? { onBranch: () => onBranch(turn.user.id), always: turn.id === newestBranchable } : undefined}
+              branch={canBranch && !readOnly && onBranch && isBranchable(turn) ? { onBranch: () => onBranch(turn.user.id), always: turn.id === newestBranchable } : undefined}
               helpers={placedHelpers.get(turn.id)}
               onOpenPane={onOpenPane}
               endings={endings && turn.id === turns[turns.length - 1]?.id ? endings : undefined}

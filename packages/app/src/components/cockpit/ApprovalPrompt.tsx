@@ -25,7 +25,7 @@ export function ApprovalPrompt({
   age,
   onOpen,
   asks,
-  openLabel = 'Open terminal',
+  openLabel = 'Open',
   hints = false,
 }: {
   prompt: PanePrompt;
@@ -40,7 +40,7 @@ export function ApprovalPrompt({
   who?: string;
   /** Card: how long it has waited, in ms. */
   age?: number | null;
-  /** Card: the "Open terminal" button. */
+  /** Card: the "Open" button. */
   onOpen?: () => void;
   /** Card: a helper's question shown in its parent's Chat: "Claude helper asks" leads the title. */
   asks?: string;

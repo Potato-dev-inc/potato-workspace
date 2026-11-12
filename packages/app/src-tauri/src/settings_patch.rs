@@ -26,7 +26,7 @@ pub const CHANGED_EVENT: &str = "settings://changed";
 pub const OWNED_ELSEWHERE: &[&str] = &["ui_mode"];
 
 /// Provider keys. They live in the OS credential store when there is one; then they never touch the file.
-pub const SECRET_KEYS: &[&str] = &["anthropic_api_key", "openai_api_key", "openrouter_api_key"];
+pub const SECRET_KEYS: &[&str] = &["anthropic_api_key", "openai_api_key", "openrouter_api_key", "custom_ai_key"];
 
 /// One patch at a time: read-merge-write is not safe to interleave.
 static PATCH_LOCK: Mutex<()> = Mutex::new(());

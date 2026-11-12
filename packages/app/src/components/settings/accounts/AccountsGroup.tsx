@@ -13,6 +13,7 @@ import {
 } from '../../../lib/accounts';
 import { agentLabel, useAgentRegistry } from '../../../lib/agentRegistry';
 import { SettingBlock } from '../settings-ui';
+import { CodeText } from '../../common/CodeText';
 
 const BTN = 'rounded-lg border border-pm-border px-3 py-1.5 text-xs font-medium hover:bg-pm-border/40 disabled:opacity-50';
 
@@ -82,7 +83,9 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
           return (
             <section key={agent.agent_id} aria-label={`${agent.agent_id} sign-ins`} data-testid={`accounts-${agent.agent_id}`}>
               <h4 className="text-sm font-medium">{agentLabel(registry, agent.agent_id)}</h4>
-              <p className="mt-0.5 text-xs text-pm-muted">{agent.login_hint}</p>
+              <p className="mt-0.5 text-xs text-pm-muted">
+                <CodeText text={agent.login_hint} />
+              </p>
               {mine.length === 0 && <p className="mt-2 text-xs text-pm-muted">No extra sign-ins yet. It uses its own.</p>}
               <ul className="mt-2 divide-y divide-pm-border rounded-lg border border-pm-border">
                 {mine.map((a) => (

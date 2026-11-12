@@ -271,6 +271,57 @@ pub fn unexclude_file(project: &Path, rel_file: &str) {
     }
 }
 
+/// The exclude text without our block (or the old plain line); every other line is kept byte for byte.
+/// `None`: nothing of ours in it.
+fn without_block(existing: &str) -> Option<String> {
+    let lines: Vec<&str> = existing.split_inclusive('\n').collect();
+    let ours = |l: &str| {
+        let t = l.trim_end();
+        t.ends_with(".potato-workspace/*")
+            || (t.starts_with('!') && (t.ends_with(".potato-workspace/memory.md") || t.ends_with(".potato-workspace/agents/")))
+    };
+    let mut out = String::new();
+    let mut changed = false;
+    let mut i = 0;
+    while i < lines.len() {
+        let here = lines[i].trim_end();
+        if here == BLOCK_HEADER {
+            changed = true;
+            i += 1;
+            while i < lines.len() && ours(lines[i]) {
+                i += 1;
+            }
+            continue;
+        }
+        if here.trim() == LEGACY_LINE {
+            changed = true;
+            i += 1;
+            continue;
+        }
+        out.push_str(lines[i]);
+        i += 1;
+    }
+    changed.then_some(out)
+}
+
+/// Is our block (or the old plain line) in the repository's `info/exclude`?
+pub fn has_our_block(project: &Path) -> bool {
+    let Some(repo) = find_repo(project) else { return false };
+    std::fs::read_to_string(repo.common_dir.join("info").join("exclude")).is_ok_and(|t| without_block(&t).is_some())
+}
+
+/// Take our block out of `info/exclude`; every other line stays. `.gitignore` is never touched.
+/// Returns true when a line was removed.
+pub fn remove_block(project: &Path) -> bool {
+    let Some(repo) = find_repo(project) else { return false };
+    let exclude = repo.common_dir.join("info").join("exclude");
+    let Ok(existing) = std::fs::read_to_string(&exclude) else { return false };
+    match without_block(&existing) {
+        Some(next) => std::fs::write(&exclude, next).is_ok(),
+        None => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

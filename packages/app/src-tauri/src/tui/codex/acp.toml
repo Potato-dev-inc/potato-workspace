@@ -72,3 +72,8 @@ sha256 = "7534a0ad3cc4c9affd0b2da5007fa53ea0f1d6fcd71b2c5ef202e2056a976a97"
 [addon]
 size_mb = 17
 signin_hint = "In the terminal that opens, choose Sign in with ChatGPT and follow the steps. Chat uses the same sign-in as the terminal."
+
+# A read-only chat. The adapter starts in its read-only mode (INITIAL_AGENT_MODE above) and asks before a write or
+# command; this app rejects each such question.
+[read_only]
+asks_before_tools = true

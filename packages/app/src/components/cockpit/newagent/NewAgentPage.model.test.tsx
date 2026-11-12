@@ -72,9 +72,19 @@ async function send(text = 'fix it') {
 describe('New agent page: model picker', () => {
   it('shows for an agent with models, with Default naming the default model', async () => {
     await mount('terminal');
-    expect(chip()?.textContent).toContain('Default (gpt-5.1)');
+    expect(chip()?.textContent).toContain('Default (Gpt-5.1)');
     await click(chip());
-    expect([...host.querySelectorAll('[role=option]')].map((o) => o.textContent)).toEqual(['Defaultgpt-5.1', 'gpt-5.1', 'gpt-5-mini']);
+    expect([...host.querySelectorAll('[role=option]')].map((o) => o.textContent)).toEqual(['DefaultGpt-5.1', 'Gpt-5.1', 'Gpt-5-mini']);
+  });
+
+  it('shows model names with a capital first letter, while the start request keeps the id', async () => {
+    const onStart = await mount('terminal');
+    expect(chip()?.textContent).toContain('Gpt-5.1');
+    await click(chip());
+    await click(option('Gpt-5-mini'));
+    expect(chip()?.textContent).toContain('Gpt-5-mini');
+    await send();
+    expect(onStart.mock.calls[0][0].model).toBe('gpt-5-mini');
   });
 
   it('is hidden for an agent that cannot take a model when it starts', async () => {
@@ -99,7 +109,7 @@ describe('New agent page: model picker', () => {
   it('a terminal start carries the picked model', async () => {
     const onStart = await mount('terminal');
     await click(chip());
-    await click(option('gpt-5-mini'));
+    await click(option('Gpt-5-mini'));
     await send();
     expect(onStart.mock.calls[0][0]).toMatchObject({ agentId: 'alpha', runAs: 'terminal', model: 'gpt-5-mini' });
   });
@@ -107,7 +117,7 @@ describe('New agent page: model picker', () => {
   it('a chat start carries the picked model', async () => {
     const onStart = await mount('chat');
     await click(chip());
-    await click(option('gpt-5-mini'));
+    await click(option('Gpt-5-mini'));
     await send();
     expect(onStart.mock.calls[0][0]).toMatchObject({ agentId: 'alpha', runAs: 'chat', model: 'gpt-5-mini' });
   });
@@ -115,11 +125,11 @@ describe('New agent page: model picker', () => {
   it('remembers the last choice for the agent and pre-selects it next time', async () => {
     await mount('terminal');
     await click(chip());
-    await click(option('gpt-5-mini'));
+    await click(option('Gpt-5-mini'));
     await act(async () => root.unmount());
     root = createRoot(host);
     const onStart = await mount('terminal');
-    expect(chip()?.textContent).toContain('gpt-5-mini');
+    expect(chip()?.textContent).toContain('Gpt-5-mini');
     await send();
     expect(onStart.mock.calls[0][0].model).toBe('gpt-5-mini');
   });
@@ -127,10 +137,10 @@ describe('New agent page: model picker', () => {
   it('choosing Default again forgets the remembered model', async () => {
     await mount('terminal');
     await click(chip());
-    await click(option('gpt-5-mini'));
+    await click(option('Gpt-5-mini'));
     await click(chip());
     await click(option('Default'));
     expect(localStorage.getItem('pm.newagent.model.alpha')).toBeNull();
-    expect(chip()?.textContent).toContain('Default (gpt-5.1)');
+    expect(chip()?.textContent).toContain('Default (Gpt-5.1)');
   });
 });

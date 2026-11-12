@@ -6,7 +6,7 @@
 //! start, so a forged or stale id from the window is refused here.
 
 use crate::checkpoints::Checkpoint;
-use crate::clip::window::{find_turn, item_ms, window_for, STILL_RUNNING};
+use crate::branch_from::window::{find_turn, item_ms, window_for, STILL_RUNNING};
 use crate::session_chat::model::ChatItem;
 use crate::turn_summary::TurnSummary;
 

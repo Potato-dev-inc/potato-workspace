@@ -50,7 +50,7 @@ export function BudgetCard({
       more={
         onOpenPane ? (
           <CardButton tone="plain" role="open" onClick={onOpenPane}>
-            Open terminal
+            Open
           </CardButton>
         ) : (
           <CardButton tone="plain" role="dismiss" onClick={onDismiss}>

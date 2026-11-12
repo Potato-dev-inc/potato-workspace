@@ -198,7 +198,7 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         ("POST", ["team", "cards", _, "dismiss"]) => Need::AnyOf(Answer, Control),
 
         // Holding a pane at this phone's size while it is on screen is part of watching.
-        ("POST", ["panes", _, "viewport"] | ["orchestrator", "viewport"]) => Need::Cap(Watch),
+        ("POST", ["panes", _, "viewport"]) => Need::Cap(Watch),
         // Long-poll waits are reads sent as POST.
         ("POST", ["agents", "wait"] | ["operations", _, "wait"]) => Need::Cap(Watch),
         // Exactly the four wait routes (`bridge/routes/wait.rs`): anything else under
@@ -226,7 +226,6 @@ const NO_WATCH_AS_IS: &[&str] = &[
     "pane-preview",              // dev-server URLs
     "questions",                 // a revision number; the cards come from `GET /questions`
     "opencode-worker",           // status, counts and permission ids
-    "orchestrator-viewport",     // geometry
     "agent_definitions_changed", // agent names
     "turn-summary",              // counts, file paths and the approval questions (answer cards)
 ];
@@ -583,7 +582,6 @@ data: {list}
             ("pane-preview", r#"{"pane_id":"p","urls":[]}"#),
             ("questions", r#"{"revision":3}"#),
             ("opencode-worker", r#"{"pane_id":"p","event":"updated"}"#),
-            ("orchestrator-viewport", r#"{"width":1,"height":1,"active":true}"#),
             ("agent_definitions_changed", r#"{"added":[]}"#),
             ("turn-summary", r#"{"pane_id":"p","sentence":"Claude edited 1 file"}"#),
         ];

@@ -103,35 +103,62 @@ fn names_foreign_host(headers: &str) -> bool {
 }
 
 /// True when an `Origin` header says the request was made by a web page that is not the desktop
-/// app: any site open in the user's browser can fetch `http://127.0.0.1:<port>` (the bridge sends
-/// `Access-Control-Allow-Origin: *`), so a loopback peer alone does not make it the app. The app's
-/// own webview (`tauri://localhost`, `http(s)://tauri.localhost`) and the dev server on localhost
-/// are loopback origins; CLI and MCP clients send no `Origin`.
+/// app. A browser always sends `Origin` on a cross-origin fetch, form post or WebSocket upgrade, so
+/// any page open on this machine (a user's dev server on `localhost:5173`, a previewed site) can
+/// reach `http://127.0.0.1:<port>`. A loopback peer alone does not make it the app: only the app's
+/// own webview origins (see `is_app_origin`) are trusted, every other `Origin` (other localhost
+/// ports, `*.localhost`, `null`) is foreign. CLI and MCP clients send no `Origin`.
 fn names_foreign_origin(headers: &str) -> bool {
     headers.lines().any(|line| {
         line.split_once(':').is_some_and(|(key, value)| {
-            if !key.trim().eq_ignore_ascii_case("origin") {
-                return false;
-            }
-            let value = value.trim();
-            let authority = value.split_once("://").map(|(_, rest)| rest);
-            match authority {
-                // `null` (sandboxed frames, file://) and anything unparsable is foreign
-                None => true,
-                Some(rest) => !is_loopback_host(rest.split('/').next().unwrap_or("")),
-            }
+            key.trim().eq_ignore_ascii_case("origin") && !is_app_origin(value)
         })
     })
 }
 
+/// The webview origins Tauri uses for the packaged app.
+const WEBVIEW_ORIGINS: [&str; 3] =
+    ["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost"];
+
+/// The Vite dev origins (`devUrl` in `tauri.conf.json`, on `127.0.0.1` and `localhost`). Empty in
+/// release builds: a shipped app never has a dev server.
+fn dev_origins() -> &'static [String] {
+    static ORIGINS: once_cell::sync::Lazy<Vec<String>> = once_cell::sync::Lazy::new(|| {
+        if cfg!(debug_assertions) {
+            dev_origins_from_config(include_str!("../../tauri.conf.json"))
+        } else {
+            Vec::new()
+        }
+    });
+    &ORIGINS
+}
+
+/// `http://127.0.0.1:<port>` and `http://localhost:<port>` for the `build.devUrl` of a Tauri config.
+/// Only a loopback `http` devUrl with an explicit port counts; anything else yields nothing.
+pub(super) fn dev_origins_from_config(config: &str) -> Vec<String> {
+    let url = serde_json::from_str::<serde_json::Value>(config)
+        .ok()
+        .and_then(|v| v["build"]["devUrl"].as_str().map(str::to_string));
+    let Some(authority) = url.as_deref().and_then(|u| u.strip_prefix("http://")) else {
+        return Vec::new();
+    };
+    let authority = authority.split('/').next().unwrap_or("");
+    let Some((host, port)) = authority.rsplit_once(':') else {
+        return Vec::new();
+    };
+    if !matches!(host, "127.0.0.1" | "localhost") || port.is_empty() || !port.bytes().all(|b| b.is_ascii_digit()) {
+        return Vec::new();
+    }
+    vec![format!("http://127.0.0.1:{port}"), format!("http://localhost:{port}")]
+}
+
 /// True for an `Origin` value of the desktop app itself: its webview (`tauri://localhost`,
-/// `http(s)://tauri.localhost`) or a dev server on this machine. These are the only origins the
-/// bridge answers with CORS headers.
+/// `http(s)://tauri.localhost`) or, in debug builds, the exact Vite dev origin from
+/// `tauri.conf.json`. Exact match only: no other localhost port or `*.localhost` name qualifies.
+/// These are the only origins the bridge answers with CORS headers.
 pub fn is_app_origin(origin: &str) -> bool {
-    origin
-        .trim()
-        .split_once("://")
-        .is_some_and(|(_, rest)| is_loopback_host(rest.split('/').next().unwrap_or("")))
+    let origin = origin.trim().trim_end_matches('/').to_ascii_lowercase();
+    WEBVIEW_ORIGINS.contains(&origin.as_str()) || dev_origins().iter().any(|o| *o == origin)
 }
 
 /// Whether the caller must present a paired-device bearer token. Fails closed: only a loopback

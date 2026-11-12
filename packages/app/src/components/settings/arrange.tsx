@@ -31,7 +31,7 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
   general: [
     { group: 'Project', rows: ['project-folder'] },
     { group: 'Startup', rows: ['start-at-sign-in'] },
-    { group: 'Appearance', rows: ['theme', 'mode-switch-animation', 'individual-window-layout', 'your-name', 'animated-tray', 'usage-bar', 'usage-login-reads', 'welcome'] },
+    { group: 'Appearance', rows: ['theme', 'mode-switch-animation', 'individual-window-layout', 'your-name', 'usage-bar', 'usage-login-reads', 'welcome'] },
     {
       group: 'Safety',
       rows: ['security-ask-before-control', 'security-agents-merge', 'confirm-close', 'keep-awake', 'loop-guard', 'package-check', 'security-recent-approvals'],
@@ -39,7 +39,7 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
     { group: 'Budgets', rows: ['budget-turns', 'budget-minutes'] },
     { group: 'Undo and memory', rows: ['checkpoints', 'checkpoints-keep', 'shared-memory'] },
     { group: 'When you are away', rows: ['away-minutes'] },
-    { group: 'Focus Time', rows: ['focus-time'] },
+    { group: 'Discord alerts', rows: ['discord-alerts'] },
     { group: LABS_GROUP, rows: [LABS_INDEX_ID, '@labs'] },
     { group: 'Live Room', rows: ['live-room'] },
     { group: 'Storage', rows: ['storage', 'chat-search-index', 'bring-old-chats'] },
@@ -58,9 +58,8 @@ export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
     { group: 'Your own agents', rows: ['definitions'] },
   ],
   models: [
-    { group: 'Orchestrator', rows: ['orchestrator-backend', 'librarian-indexer'] },
+    { group: 'Project index', rows: ['librarian-indexer'] },
     { group: 'OpenCode', rows: ['opencode-provider', 'opencode-model'] },
-    { group: 'Model for the API orchestrator', rows: ['default-provider', 'default-model', 'custom-models'] },
     { group: 'Model Bridge', rows: ['model-bridge'] },
   ],
   keys: [

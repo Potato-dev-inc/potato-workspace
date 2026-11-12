@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // "Branch" on a turn's end line: only on a finished turn that a message started, only when the view is given
 // `canBranch` and `onBranch`, never in a read-only chat. It names the message that starts the turn. The newest
-// finished turn keeps it in view; the others show it on hover. It does not touch the Make clip buttons.
+// finished turn keeps it in view; the others show it on hover.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,7 +50,6 @@ function render(items: ChatItem[], props: Partial<SessionChatViewProps> = {}) {
 }
 
 const branchButtons = () => [...host.querySelectorAll<HTMLButtonElement>('button.ck-chat-branch-btn')];
-const clipButtons = () => [...host.querySelectorAll<HTMLButtonElement>('button.ck-chat-clip-btn')];
 
 describe('Branch on the turn end line', () => {
   it('shows on each finished turn, and not on a running one', () => {
@@ -101,10 +100,10 @@ describe('Branch on the turn end line', () => {
     expect(newest.classList.contains('is-always')).toBe(true);
   });
 
-  it('sits next to Make clip and leaves the clip buttons as they were', () => {
-    render([...FINISHED_1, ...FINISHED_2], { canBranch: true, onBranch: () => {}, canClip: true, onMakeClip: () => {} });
+  it('has no Make clip button next to Branch (Clip It was cut)', () => {
+    render([...FINISHED_1, ...FINISHED_2], { canBranch: true, onBranch: () => {} });
     expect(branchButtons()).toHaveLength(2);
-    expect(clipButtons()).toHaveLength(2);
-    expect(clipButtons().every((b) => b.textContent === 'Make clip')).toBe(true);
+    expect(host.querySelector('button.ck-chat-clip-btn')).toBeNull();
+    expect(host.textContent).not.toContain('Make clip');
   });
 });

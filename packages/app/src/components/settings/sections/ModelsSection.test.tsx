@@ -3,13 +3,10 @@
 import { unsearchableLabels } from '../test-utils';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LlmModel, Settings } from '@potato-workspace/shared';
-import { rowMatches, searchSections, type SectionDef } from '../model';
-import { BASE_SETTINGS, blur, buttonByText, byLabel, click, hasText, mountRows, pickOption, settle, type as typeInto, type Mounted } from '../test-utils';
+import type { Settings } from '@potato-workspace/shared';
+import { rowMatches } from '../model';
+import { BASE_SETTINGS, blur, buttonByText, byLabel, hasText, mountRows, settle, type as typeInto, type Mounted } from '../test-utils';
 import { modelsRows } from './ModelsSection';
-
-const CUSTOM_CLAUDE: LlmModel = { provider: 'anthropic', model_id: 'my-claude', label: 'My Claude' };
-const CUSTOM_OR: LlmModel = { provider: 'openrouter', model_id: 'x/y', label: 'X model' };
 
 let m: Mounted;
 
@@ -29,8 +26,8 @@ const ids = modelsRows.map((r) => r.id);
 
 describe('Orchestrator & Models: every control renders', () => {
   it('has one row per control, each in its own [data-row] wrapper', async () => {
-    await mount({ custom_models: [CUSTOM_CLAUDE, CUSTOM_OR] });
-    expect(ids).toEqual(['orchestrator-backend', 'librarian-indexer', 'opencode-provider', 'opencode-model', 'default-provider', 'default-model', 'custom-models']);
+    await mount();
+    expect(ids).toEqual(['librarian-indexer', 'opencode-provider', 'opencode-model']);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(m.host.querySelector(`[data-row="${id}"]`), `no row ${id}`).not.toBeNull();
   });
@@ -43,31 +40,23 @@ describe('Orchestrator & Models: every control renders', () => {
   });
 
   it('shows every control by its label and aria-label', async () => {
-    await mount({ custom_models: [CUSTOM_CLAUDE, CUSTOM_OR] });
-    for (const label of ['Default orchestrator', 'Project index builder', 'OpenCode provider', 'OpenCode model', 'Provider', 'Model', 'Custom models']) {
+    await mount();
+    for (const label of ['Project index builder', 'OpenCode provider', 'OpenCode model']) {
       expect(hasText(m.host, label), `missing label: ${label}`).toBe(true);
     }
     for (const aria of [
-      'Default orchestrator',
       'Project index builder',
       'OpenCode provider ID',
       'OpenCode model ID',
-      'Default provider',
-      'Default model',
-      'Custom model provider',
-      'Custom model display label',
-      'Custom model ID',
-      'Remove My Claude',
     ]) {
       expect(byLabel(m.host, aria), `missing control: ${aria}`).not.toBeNull();
     }
-    expect(buttonByText(m.host, 'Add')).toBeTruthy();
   });
 
   it('groups the rows under their headings in order', async () => {
     await mount();
     const heads = [...m.host.querySelectorAll('section.st-group h2')].map((h) => h.textContent);
-    expect(heads).toEqual(['Orchestrator', 'OpenCode', 'Model for the API orchestrator']);
+    expect(heads).toEqual(['Project index', 'OpenCode']);
   });
 
   it('has no Save button, no planned controls and no destructive list', async () => {
@@ -81,56 +70,11 @@ describe('Orchestrator & Models: every control renders', () => {
 });
 
 describe('Orchestrator & Models: each control saves a partial patch', () => {
-  it('Default orchestrator saves only {orchestrator_backend}', async () => {
+  it('the removed orchestrator and API-model rows are gone', async () => {
     await mount();
-    await pickOption(byLabel<HTMLSelectElement>(m.host, 'Default orchestrator')!, 'codex_cli');
-    expect(m.env.patches).toEqual([{ orchestrator_backend: 'codex_cli' }]);
-  });
-
-  it('Provider saves the provider and its first model', async () => {
-    await mount();
-    await pickOption(byLabel<HTMLSelectElement>(m.host, 'Default provider')!, 'openai');
-    expect(m.env.patches).toEqual([{ default_provider: 'openai', default_model: 'gpt-4.1' }]);
-    await m.rerender();
-    await pickOption(byLabel<HTMLSelectElement>(m.host, 'Default provider')!, 'openrouter');
-    expect(m.env.patches.at(-1)).toEqual({ default_provider: 'openrouter', default_model: 'anthropic/claude-sonnet-4' });
-  });
-
-  it('Model lists only the current provider and saves only {default_model}', async () => {
-    await mount({ default_provider: 'openai', default_model: 'gpt-4.1' });
-    const model = byLabel<HTMLSelectElement>(m.host, 'Default model')!;
-    expect([...model.options].map((o) => o.value)).toEqual(['gpt-4.1', 'gpt-4.1-mini']);
-    await pickOption(model, 'gpt-4.1-mini');
-    expect(m.env.patches).toEqual([{ default_model: 'gpt-4.1-mini' }]);
-  });
-
-  it('Custom models: Add is disabled until label and id are filled, then saves the three keys and clears the draft', async () => {
-    await mount();
-    expect(buttonByText(m.host, 'Add')!.disabled).toBe(true);
-    await pickOption(byLabel<HTMLSelectElement>(m.host, 'Custom model provider')!, 'openrouter');
-    await typeInto(byLabel<HTMLInputElement>(m.host, 'Custom model display label')!, 'My router');
-    expect(buttonByText(m.host, 'Add')!.disabled).toBe(true);
-    await typeInto(byLabel<HTMLInputElement>(m.host, 'Custom model ID')!, 'acme/router-1');
-    expect(buttonByText(m.host, 'Add')!.disabled).toBe(false);
-    await click(buttonByText(m.host, 'Add'));
-    await settle();
-    expect(m.env.patches).toEqual([
-      {
-        custom_models: [{ provider: 'openrouter', model_id: 'acme/router-1', label: 'My router' }],
-        default_provider: 'openrouter',
-        default_model: 'acme/router-1',
-      },
-    ]);
-    expect(byLabel<HTMLInputElement>(m.host, 'Custom model ID')!.value).toBe('');
-    expect(byLabel<HTMLInputElement>(m.host, 'Custom model display label')!.value).toBe('');
-  });
-
-  it('Remove saves only {custom_models} with the rest of the list and asks nothing', async () => {
-    await mount({ custom_models: [CUSTOM_CLAUDE, CUSTOM_OR] });
-    await click(byLabel(m.host, 'Remove My Claude'));
-    await settle();
-    expect(m.env.patches).toEqual([{ custom_models: [CUSTOM_OR] }]);
-    expect(m.env.confirm).not.toHaveBeenCalled();
+    for (const gone of ['orchestrator-backend', 'default-provider', 'default-model', 'custom-models']) {
+      expect(m.host.querySelector(`[data-row="${gone}"]`), gone).toBeNull();
+    }
   });
 
   it('Librarian indexer clears to null after a pause in typing', async () => {
@@ -167,26 +111,8 @@ describe('Orchestrator & Models: each control saves a partial patch', () => {
 });
 
 describe('Orchestrator & Models: search', () => {
-  const section: SectionDef = { id: 'models', title: 'Orchestrator & Models', blurb: '', rows: modelsRows };
-
-  it('finds custom models for "openrouter"', () => {
-    const hits = searchSections([section], 'openrouter');
-    expect(hits[0].rows.map((r) => r.id)).toContain('custom-models');
-  });
-
   it('finds rows by their old words', () => {
     const row = (id: string) => modelsRows.find((r) => r.id === id)!;
     expect(rowMatches(row('librarian-indexer'), 'indexer')).toBe(true);
-    expect(rowMatches(row('orchestrator-backend'), 'codex')).toBe(true);
-    expect(rowMatches(row('orchestrator-backend'), 'opencode cli')).toBe(true);
-    expect(rowMatches(row('custom-models'), 'custom model')).toBe(true);
-    expect(rowMatches(row('librarian-indexer'), 'openrouter')).toBe(false);
-  });
-});
-
-describe('Models: search covers what the section shows', () => {
-  it('every word of every label a row shows finds that row', async () => {
-    await mount();
-    expect(unsearchableLabels(m.host, modelsRows)).toEqual([]);
   });
 });

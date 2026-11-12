@@ -140,20 +140,13 @@ describe('payload v2 and the card deep link', () => {
   });
 });
 
-describe('quiet payload (Focus Time)', () => {
-  it('a quiet payload is silent and does not renotify', () => {
-    const plan = planNotification(parsePushPayload('{"v":1,"kind":"waiting_input","title":"Kilo needs you","body":"Run command: ls","tag":"pm-p1","pane_id":"p1","quiet":true}'));
-    expect(plan.options.silent).toBe(true);
-    expect(plan.options.renotify).toBe(false);
-  });
-
-  it('no quiet flag gives exactly today\'s options', () => {
+describe('payload options', () => {
+  it('a payload gives exactly these options', () => {
     const plan = planNotification(parsePushPayload('{"title":"Codex finished","body":"The run is done","tag":"pm-1","pane_id":"p1"}'));
     expect(plan.options).toEqual({
       body: 'The run is done',
       tag: 'pm-1',
       renotify: true,
-      silent: false,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       data: { pane_id: 'p1', item_id: undefined, act: undefined, target: undefined },
@@ -161,20 +154,16 @@ describe('quiet payload (Focus Time)', () => {
     });
   });
 
-  it('reads quiet only when it is exactly true; any other value is ignored', () => {
-    for (const value of ['"yes"', '1', '"true"', 'false', 'null']) {
-      const payload = parsePushPayload(`{"title":"t","body":"b","tag":"x","quiet":${value}}`);
-      expect(payload.quiet).toBeUndefined();
-      const plan = planNotification(payload);
-      expect(plan.options.silent).toBe(false);
-      expect(plan.options.renotify).toBe(true);
-    }
-    expect(parsePushPayload('{"quiet":true}').quiet).toBe(true);
+  it('the cut Focus "quiet" flag is ignored: the card still sounds and renotifies', () => {
+    const payload = parsePushPayload('{"title":"t","body":"b","tag":"x","quiet":true}');
+    expect('quiet' in payload).toBe(false);
+    const plan = planNotification(payload);
+    expect(plan.options.renotify).toBe(true);
+    expect('silent' in plan.options).toBe(false);
   });
 
-  it('a focus payload with no pane opens the app', () => {
-    const payload = parsePushPayload('{"v":1,"kind":"focus","title":"Focus is over","body":"4 turns done.","tag":"pm-focus"}');
-    expect(payload.kind).toBe('focus');
+  it('a payload with no pane opens the app', () => {
+    const payload = parsePushPayload('{"v":1,"kind":"night_shift","title":"Night Shift","body":"4 of 5 done.","tag":"pm-night"}');
     const plan = planNotification(payload);
     expect(plan.options.data.pane_id).toBeUndefined();
     expect(clickIntent('', plan.options.data)).toMatchObject({ type: 'open', paneId: null });

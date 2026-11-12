@@ -55,7 +55,7 @@ describe('new agent page styles', () => {
     }
   });
 
-  it('keeps the Add card row dashed', () => {
+  it('keeps the Add shortcut row dashed', () => {
     const start = css.indexOf('.cockpit .ck-na-addrow {');
     expect(start).toBeGreaterThan(-1);
     expect(css.slice(start, css.indexOf('}', start))).toMatch(/border:\s*1px dashed/);

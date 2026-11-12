@@ -18092,17 +18092,6 @@ var BRIDGE_PORT_FILE_ENV = "POTATO_WORKSPACE_BRIDGE_PORT_FILE";
 var DEFAULT_BRIDGE_PORT_FILE = "potato-workspace.bridge.port";
 var BRIDGE_LOCAL_SECRET_FILE = "potato-workspace.bridge.secret";
 var BRIDGE_LOCAL_SECRET_HEADER = "X-Potato-Workspace-Local-Secret";
-var OrchestratorUserMessageSchema = external_exports.object({
-  text: external_exports.string(),
-  message_id: external_exports.string()
-});
-var OrchestratorChatEventSchema = external_exports.discriminatedUnion("type", [
-  external_exports.object({ type: external_exports.literal("user"), message_id: external_exports.string(), text: external_exports.string() }),
-  external_exports.object({ type: external_exports.literal("text"), message_id: external_exports.string(), text: external_exports.string() }),
-  external_exports.object({ type: external_exports.literal("tool"), message_id: external_exports.string(), tool: external_exports.string(), result: external_exports.string().optional(), error: external_exports.string().optional() }),
-  external_exports.object({ type: external_exports.literal("done"), message_id: external_exports.string() }),
-  external_exports.object({ type: external_exports.literal("error"), message_id: external_exports.string(), error: external_exports.string() })
-]);
 
 // packages/shared/dist/bridge-port.js
 var APP_ID = "com.potatodev.workspace";
@@ -18117,13 +18106,22 @@ function defaultAppDataBridgePortFile() {
       return (0, import_node_path.join)(home, ".local", "share", APP_ID, DEFAULT_BRIDGE_PORT_FILE);
   }
 }
+function isLoopbackHost(host) {
+  const h = host.toLowerCase();
+  return h === "localhost" || h === "::1" || /^127(\.\d{1,3}){3}$/.test(h);
+}
 function parseBridgePort(raw) {
   const trimmed = raw.trim();
+  let host = "127.0.0.1";
+  let portStr = trimmed;
   if (trimmed.includes(":")) {
-    const [host, portStr] = trimmed.split(":");
-    return { host: host || "127.0.0.1", port: Number(portStr) };
+    const [h, p] = trimmed.split(":");
+    host = h || "127.0.0.1";
+    portStr = p ?? "";
   }
-  return { host: "127.0.0.1", port: Number(trimmed) };
+  if (!isLoopbackHost(host))
+    return null;
+  return { host: host.toLowerCase() === "localhost" ? "127.0.0.1" : host, port: Number(portStr) };
 }
 function expandEnvVars(input, env = process.env) {
   return input.replace(/%([^%]+)%/g, (match, name) => env[name] ?? match);
@@ -18134,7 +18132,7 @@ function bridgePortCandidates(filePath) {
   const envPath = process.env[BRIDGE_PORT_FILE_ENV];
   if (envPath)
     return [expandEnvVars(envPath)];
-  return [DEFAULT_BRIDGE_PORT_FILE, defaultAppDataBridgePortFile()];
+  return [defaultAppDataBridgePortFile()];
 }
 async function readAllBridgePorts(filePath) {
   const found = [];
@@ -18142,7 +18140,7 @@ async function readAllBridgePorts(filePath) {
   for (const fp of [...new Set(bridgePortCandidates(filePath))]) {
     try {
       const parsed = parseBridgePort(await (0, import_promises.readFile)(fp, "utf-8"));
-      if (!Number.isFinite(parsed.port) || parsed.port <= 0)
+      if (!parsed || !Number.isFinite(parsed.port) || parsed.port <= 0)
         continue;
       const key = `${parsed.host}:${parsed.port}`;
       if (seen.has(key))
@@ -18308,10 +18306,10 @@ var AGENT_TYPE_SCHEMA = {
 var FALLBACK_AGENT_TOOLS = [
   { name: "set_mode", description: "Choose agent, shell, or both for this MCP connection.", inputSchema: { type: "object", properties: { mode: { type: "string", enum: ["agent", "shell", "both"] } }, required: ["mode"] }, method: "POST", path: "/mcp/mode", visibility: { external_mcp: true } },
   { name: "quick_ask", description: "Ask a tiny one-shot question; runs a fresh headless read-only worker and returns {answer, receipt}. Still running after wait_ms: returns {status, handle}; call wait_agents.", inputSchema: { type: "object", properties: { task: { type: "string" }, project_path: { type: "string" }, backend: AGENT_TYPE_SCHEMA, model: { type: "string" }, wait_ms: { type: "integer" } }, required: ["task"] }, method: "POST", path: "/agents/quick", visibility: { external_mcp: true } },
-  { name: "run_agent", description: "Start or adopt a worker with a task and return a stable handle. Pass worker_id from list_workers to adopt a UI pane; the pane directory is used automatically. Runs are visible by default: the worker gets its own pane in the app's sidebar next to the other agents, so the person can watch it (no window pops up, nothing takes focus). Use this for helpers and subagents, including simple, read-only and low-effort ones; do not pass headless by habit. Whether helpers are shown is the person's choice (Settings > Agents > Helper agents): shown by default, so headless: true is then ignored (the result carries headless_ignored); the person can let the agent choose or run helpers in the background (headless_forced). A finished helper's pane stays open by default (Settings > Agents > Keep helpers open when they finish); the result says so in pane_note. A run still falls back to headless automatically (reported as fallback) when the agent has no visible mode or the pane fails before the turn starts. read_only works with a visible pane on agents that can start one read-only; others refuse instead of hiding the run. model and reasoning are passed to the agent, and the receipt reports the model that actually ran.", inputSchema: { type: "object", properties: { task: { type: "string" }, headless: { type: "boolean", default: false, description: "Leave this out for a helper: the person needs to see it. true is ignored unless the person chose Settings > Agents > Helper agents > Let the agent choose." }, keep_pane: { type: "boolean", default: false, description: "true keeps the pane open after the run finishes (until close_agent). The person's setting Keep helpers open when they finish keeps it open even when this is false." }, placement: { type: "string", enum: ["auto", "grid", "window"], default: "window" }, lane: { type: "string", enum: ["acp", "terminal"], description: "How the worker runs: 'acp' = a chat session (Labs: Chat (ACP)); 'terminal' = today's way; omit to follow the agent's own setting." }, name: { type: "string" }, handle: { type: "string" }, worker_id: { type: "string" }, project_path: { type: "string" }, context_mode: { type: "string" }, model: { type: "string" }, agent_type: AGENT_TYPE_SCHEMA, background: { type: "boolean" }, wait_ms: { type: "integer" } }, required: ["task"] }, method: "POST", path: "/agents/run", visibility: { external_mcp: true } },
+  { name: "run_agent", description: `Launch and wait: run_agent({agent_type:"codex", project_path:"D:/repo", task:"...", wait_ms:1800000}) returns the result in this call when the turn ends within wait_ms (default 120000, max 3600000; hosts like Claude Code move a long call to the background and hand you the result when it ends). If it is still running you get a handle plus a watch_command to run in a background shell. Use it instead of a built-in subagent for anything beyond quick_ask. Pass worker_id from list_workers to adopt a UI pane. The worker gets its own visible pane: do not pass headless (the person chooses in Settings > Agents). Next: followup_task(handle, task), wait_agents(handles), send_message(handle) to steer. On WAIT_TIMEOUT retry with the same idempotency_key; never start a duplicate turn. Cleanup: close_agent(handle); with isolation=worktree use review_worktree(handle, action:"diff"|"merge"|"discard"). keep_pane=true keeps the pane open; pane_note says when the person's Keep helpers open setting did.`, inputSchema: { type: "object", properties: { task: { type: "string" }, headless: { type: "boolean", default: false, description: "Leave this out for a helper: the person needs to see it. true is ignored unless the person chose Settings > Agents > Helper agents > Let the agent choose." }, keep_pane: { type: "boolean", default: false, description: "true keeps the pane open after the run finishes (until close_agent). The person's setting Keep helpers open when they finish keeps it open even when this is false." }, placement: { type: "string", enum: ["auto", "grid", "window"], default: "window" }, lane: { type: "string", enum: ["auto", "acp", "terminal"], description: "Advanced: left out = a chat when the agent has one, else the terminal; read_only, isolation, locks and other terminal-only options use the terminal. The result reports lane_used." }, account: { type: "string", description: "Optional account id (Settings > Agents > Accounts) to run the agent under. A chat session runs its adapter under it too. ACCOUNT_NOT_FOUND / ACCOUNT_UNSUPPORTED otherwise." }, name: { type: "string" }, handle: { type: "string" }, worker_id: { type: "string" }, project_path: { type: "string" }, context_mode: { type: "string" }, model: { type: "string" }, agent_type: AGENT_TYPE_SCHEMA, background: { type: "boolean" }, wait_ms: { type: "integer", minimum: 0, maximum: 36e5, default: 12e4 } }, required: ["task"] }, method: "POST", path: "/agents/run", visibility: { external_mcp: true } },
   { name: "wait_agents", description: "Wait for worker handles to report a meaningful change and return the turn result. A completed turn with background_running true is not finished work: the call keeps waiting unless wait_for_background is false. Pass confirm_prompt_ms to require the same prompt_id to stay open before reporting waiting_input. If the call fails with bridge_unreachable, the app may still be running and the helper may already have replied: retry, then read agent_transcript or the pane before saying you got no reply.", inputSchema: { type: "object", properties: { handles: { type: "array", items: { type: "string" } }, after_cursor: { type: "integer" }, timeout_ms: { type: "integer" }, wait_for_background: { type: "boolean", default: true }, confirm_prompt_ms: { type: "integer", minimum: 0, maximum: 6e4, default: 0 } }, required: ["handles"] }, method: "POST", path: "/agents/wait", visibility: { external_mcp: true } },
   { name: "send_message", description: "Deliver a correction or steering message to a worker.", inputSchema: { type: "object", properties: { handle: { type: "string" }, message: { type: "string" } }, required: ["handle"] }, method: "POST", path: "/agents/send", visibility: { external_mcp: true } },
-  { name: "followup_task", description: "Give the same worker a new task as the next turn. Waits up to 120 seconds and returns status/result; call wait_agents only if still queued or running.", inputSchema: { type: "object", properties: { handle: { type: "string" }, task: { type: "string" } }, required: ["handle", "task"] }, method: "POST", path: "/agents/followup", visibility: { external_mcp: true } },
+  { name: "followup_task", description: "Give the same worker a new task as the next turn. wait_ms (default 120000, max 3600000) waits inside this call and returns status/result; call wait_agents only if still queued or running.", inputSchema: { type: "object", properties: { handle: { type: "string" }, task: { type: "string" }, wait_ms: { type: "integer", minimum: 0, maximum: 36e5, default: 12e4 } }, required: ["handle", "task"] }, method: "POST", path: "/agents/followup", visibility: { external_mcp: true } },
   { name: "interrupt_agent", description: "Stop the current turn without disposing the worker.", inputSchema: { type: "object", properties: { handle: { type: "string" } }, required: ["handle"] }, method: "POST", path: "/agents/cancel", visibility: { external_mcp: true } },
   { name: "inspect_agent", description: "Inspect a worker handle: status, task, capabilities.", inputSchema: { type: "object", properties: { handle: { type: "string" } }, required: ["handle"] }, method: "GET", path: "/agents/{handle}", visibility: { external_mcp: true } },
   { name: "agent_transcript", description: "Read typed transcript events for a worker.", inputSchema: { type: "object", properties: { handle: { type: "string" }, after: { type: "integer" } }, required: ["handle"] }, method: "GET", path: "/agents/{handle}/transcript", visibility: { external_mcp: true } },
@@ -18369,48 +18367,17 @@ async function readRegistryTools(clientRef) {
 }
 
 // packages/shared/dist/schemas.js
-var ChatMessageSchema = external_exports.object({
-  id: external_exports.string(),
-  role: external_exports.enum(["user", "assistant", "system", "tool"]),
-  content: external_exports.string(),
-  tool_calls: external_exports.array(external_exports.object({
-    id: external_exports.string(),
-    name: external_exports.string(),
-    args: external_exports.unknown()
-  })).optional(),
-  tool_call_id: external_exports.string().optional(),
-  timestamp: external_exports.number()
-});
-var LlmProviderSchema = external_exports.enum(["anthropic", "openai", "openrouter"]);
-var LlmModelSchema = external_exports.object({
-  provider: LlmProviderSchema,
-  model_id: external_exports.string().min(1),
-  label: external_exports.string().min(1)
-});
-var OrchestratorBackendSchema = external_exports.enum([
-  "api",
-  // Direct LLM API + in-process MCP tool loop (current)
-  "claude_cli",
-  // Dedicated Claude Code pane with MCP configured
-  "codex_cli",
-  // Dedicated Codex CLI pane with MCP configured
-  "opencode_cli"
-  // Dedicated OpenCode pane with MCP configured
-]);
 var SettingsSchema = external_exports.object({
   anthropic_api_key: external_exports.string().optional(),
   openai_api_key: external_exports.string().optional(),
   openrouter_api_key: external_exports.string().optional(),
-  default_provider: LlmProviderSchema.default("anthropic"),
-  default_model: external_exports.string().default("claude-sonnet-4-6"),
-  /** User-defined models merged with presets in the sidebar picker. */
-  custom_models: external_exports.array(LlmModelSchema).default([]),
-  /** Sidebar orchestration backend. API runs an in-process tool loop; CLI modes delegate to live agent panes. */
-  orchestrator_backend: OrchestratorBackendSchema.default("api"),
-  /** Stable pane id for the dedicated orchestrator CLI pane (CLI backends). */
-  orchestrator_pane_id: external_exports.string().optional(),
+  /**
+   * The person's own AI service for the agent wizard's writer ("Custom AI service"): which service, its base URL and
+   * model. The key is never here: it lives in the OS credential store (secret `custom_ai_key`).
+   */
+  custom_ai: external_exports.object({ preset: external_exports.string(), baseUrl: external_exports.string(), model: external_exports.string() }).optional(),
   /** Mobile terminal text buffer delay before committing to the PTY (autocorrect settling). */
-  mobile_input_delay_ms: external_exports.number().int().min(0).max(1e3).default(250),
+  mobile_input_delay_ms: external_exports.number().int().min(0).max(1e3).default(60),
   /** Show the mobile terminal command input bar. When false, the tap target remains invisible. */
   mobile_input_visible: external_exports.boolean().default(true),
   /** Phone: let the keyboard shrink the agent (PTY redraw per open/close). Off keeps the agent at its size. */
@@ -18428,6 +18395,12 @@ var SettingsSchema = external_exports.object({
   ui_mode: external_exports.enum(["orchestration", "individual"]).default("orchestration"),
   /** Ask before closing a pane window, a cockpit pane or the app while an agent is working. */
   confirm_close_running_pane: external_exports.boolean().default(true),
+  /** Keep the PC awake (the screen may still turn off) while an agent works, so locking it does not stop the agents (Rust: keep_awake). */
+  keep_awake_while_working: external_exports.boolean().default(true),
+  /** The "Used" strip at the bottom of the sidebar: plan usage per signed-in agent (Rust: usage). */
+  show_usage_bar: external_exports.boolean().default(true),
+  /** The strip may read Claude's plan usage with the person's own Claude login (on by default, like Orca; Rust: usage::oauth). */
+  usage_login_reads: external_exports.boolean().default(true),
   /** Developer option: install MCP configs to launch the bundled Rust binary instead of npm. */
   developer_use_rust_mcp: external_exports.boolean().default(false),
   /** Save the project's files at each agent turn so a turn can be undone (Rust: checkpoints). */
@@ -18436,6 +18409,8 @@ var SettingsSchema = external_exports.object({
   checkpoints_keep: external_exports.number().int().min(5).max(500).default(50),
   /** Minutes without keyboard or mouse before you count as away (the "While you were away" digest); 0 = off. */
   away_minutes: external_exports.number().int().min(0).max(1440).default(5),
+  /** The person's own keyboard shortcuts: { actionId: combo }, "none" = turned off. A missing id keeps its default (lib/shortcuts.ts in the app; Rust: global_shortcuts). */
+  keybindings: external_exports.record(external_exports.string(), external_exports.string()).optional(),
   /** Budget every agent run that agents start gets, in turns; 0 = no budget (the default). Rust: budgets. */
   budget_default_turns: external_exports.number().int().min(0).max(1e4).default(0),
   /** Same, in wall-clock minutes; 0 = no limit. */
@@ -18446,6 +18421,10 @@ var SettingsSchema = external_exports.object({
   agent_hooks_agents: external_exports.record(external_exports.string(), external_exports.enum(["off", "shadow", "evidence"])).optional(),
   /** Potato Workspace's helper tools (run_agent, wait_agents) given to every agent pane for its launch. On unless false. Rust: pane_mcp. */
   pane_mcp_enabled: external_exports.boolean().optional(),
+  /** What Settings › Agents › "Hand off does" picks: `file` (Quick handoff: save HANDOFF.md) or `new_agent` (Handoff to new agent; the default when absent). App: lib/handoff.ts. */
+  handoff_mode: external_exports.enum(["file", "new_agent"]).optional(),
+  /** Text added to every quick handoff under "Always remember". */
+  handoff_fixed_notes: external_exports.string().optional(),
   /** Missions (Preview, Settings › General › Labs): goal + checks + budget, worked on in rounds. Off unless chosen. Rust: missions. */
   missions_enabled: external_exports.boolean().optional(),
   /** Night Shift (Settings › General › Labs): plan tasks for tonight, review them in the morning. Off unless chosen. Rust: night_shift. */
@@ -18458,6 +18437,14 @@ var SettingsSchema = external_exports.object({
   model_bridge_enabled: external_exports.boolean().optional(),
   /** Spaces (Settings › General › Labs): chat with friends in small groups, computer to computer. Off unless chosen. Rust: spaces. */
   spaces_enabled: external_exports.boolean().optional(),
+  /** Share an agent (Settings > General > Labs): lend an agent sign-in to another PC, or borrow one. Off unless chosen. Rust: lend. */
+  lend_enabled: external_exports.boolean().optional(),
+  /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
+  individual_explained: external_exports.boolean().optional(),
+  /** How the windows move when the mode switches between Orchestration and Individual: Domino (default), Ink, or Off (a quick fade). Rust reads it (switch_anim). */
+  mode_switch_animation: external_exports.enum(["domino", "ink", "off"]).optional(),
+  /** Where the pop-out windows go when the mode switches to Individual: side by side in an even grid (default), or cascaded one step down and right each. Rust reads it (window_layout). */
+  individual_window_layout: external_exports.enum(["side_by_side", "cascade"]).optional(),
   /** Simple mode: the cockpit with fewer buttons and plain words, for people who do not write code. Off unless chosen. */
   simple_mode: external_exports.boolean().optional(),
   /** Shows the developer rows in Settings (bridge, MCP, storage, file paths). Off unless chosen. Read by the app only. */
@@ -18479,7 +18466,9 @@ var SettingsSchema = external_exports.object({
   /** Default OpenCode provider for opencode_native API prompts (write_terminal_input). */
   opencode_model_provider: external_exports.string().optional(),
   /** Default OpenCode model for opencode_native API prompts (write_terminal_input). */
-  opencode_model_id: external_exports.string().optional()
+  opencode_model_id: external_exports.string().optional(),
+  /** Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none. Absent: none. Rust reads it (agent_run_mode::helper_model). */
+  helper_default_models: external_exports.record(external_exports.string().max(120)).optional()
 });
 
 // packages/shared/dist/mobile-pairing.js
@@ -19014,7 +19003,7 @@ async function routeToolCall(clientRef, name, args, extra) {
 }
 
 // packages/mcp-server/src/index.ts
-var MCP_INSTRUCTIONS = "Potato Workspace MCP (agent mode). Sequence: list_agents \u2192 run_agent(worker_id or pane_id, task) \u2192 handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup.";
+var MCP_INSTRUCTIONS = "For a subagent or delegated task beyond a one-shot lookup, use run_agent instead of a built-in subagent tool; fall back only when this MCP is unreachable. Potato Workspace MCP (agent mode). Sequence: list_agents \u2192 run_agent(worker_id or pane_id, task) \u2192 handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup.";
 var SET_MODE_NOTE = "Sent notifications/tools/list_changed. Hosts that read tools/list only once at startup ignore it and keep the old tool list; if tool_count differs from what you can see, restart the MCP server with --mode <mode> or reconnect.";
 function withSetModeNote(text) {
   const parsed = tryJson(text);

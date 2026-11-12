@@ -865,25 +865,90 @@ fn an_unhealthy_agent_backs_off_then_stops_and_says_why() {
     assert_eq!(blocked.len(), 1);
     assert_eq!((blocked[0].fails, blocked[0].cold), (1, false));
     assert_eq!(blocked[0].reason, "needs_attention");
-    // Schedule: 15s after the first failure, 30s after the second.
+    // Schedule for a login screen: 1 min after the first failure, 2 min after the second.
     now = 14_000;
-    assert_eq!(cycle(&pool, &host, now), 0, "still inside the 15s backoff");
-    now = 16_000;
-    assert_eq!(cycle(&pool, &host, now), 1, "second spawn after 15s");
+    assert_eq!(cycle(&pool, &host, now), 0, "still inside the 1 min wait");
+    now = 62_000;
+    assert_eq!(cycle(&pool, &host, now), 1, "second spawn after 1 min");
     let retry = pool.status(now + 1).agents_blocked[0].retry_in_ms;
-    assert!((29_000..=30_000).contains(&retry), "30s backoff, got {retry}");
-    now = 40_000;
-    assert_eq!(cycle(&pool, &host, now), 0, "inside the 30s backoff");
-    now = 47_000;
-    assert_eq!(cycle(&pool, &host, now), 1, "third spawn after 30s");
-    // Cap: three unhealthy workers in a row and the agent stops being warmed.
+    assert!((118_000..=120_000).contains(&retry), "2 min wait, got {retry}");
+    now = 180_000;
+    assert_eq!(cycle(&pool, &host, now), 0, "inside the 2 min wait");
+    now = 183_000;
+    assert_eq!(cycle(&pool, &host, now), 1, "third spawn after 2 min");
+    // Cap: three login-screen starts in a row and the agent is blocked until something changes.
     let blocked = pool.status(now + 1).agents_blocked[0].clone();
     assert!(blocked.cold, "gave up: {blocked:?}");
     assert!(blocked.message.contains("login or update"), "{}", blocked.message);
     for hours in 1..=5 {
-        assert_eq!(cycle(&pool, &host, now + hours * 3_600_000), 0, "cold agents are not respawned");
+        assert_eq!(cycle(&pool, &host, now + hours * 3_600_000), 0, "blocked agents are not respawned");
     }
     assert_eq!(host.spawn_count(), 3);
+}
+
+/// Runs pool passes every 5 seconds for `hours` and returns how many workers were started in all.
+fn login_starts_over(hours: i64, pool: &Pool, host: &Arc<FakeHost>) -> usize {
+    let mut now = 0;
+    while now < hours * 3_600_000 {
+        pool.reconcile(now);
+        pool.reconcile(now + 1);
+        now += 5_000;
+    }
+    host.spawn_count()
+}
+
+#[test]
+fn a_worker_stuck_at_a_login_screen_is_started_at_most_three_times_over_twelve_hours() {
+    let host = Arc::new(FakeHost::default());
+    *host.default_health.lock() = Some(Health::NeedsAttention);
+    let pool = pool(&host, config(&[("codex", true, false)]));
+    assert_eq!(login_starts_over(12, &pool, &host), 3, "three tries, then blocked for the whole period");
+    let status = pool.status(12 * 3_600_000);
+    assert!(status.agents_blocked[0].cold);
+    assert_eq!(status.agents_blocked[0].reason, "needs_attention");
+}
+
+#[test]
+fn a_run_does_not_lift_a_login_block_but_an_account_change_does() {
+    let host = Arc::new(FakeHost::default());
+    *host.default_health.lock() = Some(Health::NeedsAttention);
+    let pool = pool(&host, config(&[("codex", true, false)]));
+    let mut now = 0;
+    for _ in 0..3 {
+        cycle(&pool, &host, now);
+        now += 400_000;
+    }
+    assert_eq!(host.spawn_count(), 3);
+    assert!(pool.status(now).agents_blocked[0].cold);
+    // A run of the agent (it gets its own worker and shows the login screen) does not refill the warm slot.
+    pool.note_run(&key("codex", "/w"), "/w", now);
+    assert_eq!(cycle(&pool, &host, now), 0, "a run does not lift the login block");
+    // The person signs in: the slot may refill, and a worker that comes up ready stays.
+    *host.default_health.lock() = Some(Health::Ready);
+    pool.note_account_changed("codex");
+    assert_eq!(cycle(&pool, &host, now), 1, "an account change refills the slot");
+    assert!(pool.status(now + 2).agents_blocked.is_empty(), "a healthy start clears the block");
+    assert_eq!(host.spawn_count(), 4);
+}
+
+#[test]
+fn a_settings_change_gives_a_login_blocked_agent_one_more_try_only() {
+    let host = Arc::new(FakeHost::default());
+    *host.default_health.lock() = Some(Health::NeedsAttention);
+    let cfg = config(&[("codex", true, false)]);
+    let pool = pool(&host, cfg.clone());
+    let mut now = 0;
+    for _ in 0..3 {
+        cycle(&pool, &host, now);
+        now += 400_000;
+    }
+    assert_eq!(host.spawn_count(), 3);
+    let mut changed = cfg;
+    changed.max_total += 1;
+    pool.set_config(changed);
+    assert_eq!(cycle(&pool, &host, now), 1, "one more try after a settings change");
+    assert!(pool.status(now + 2).agents_blocked[0].cold, "and it is blocked again at once");
+    assert_eq!(cycle(&pool, &host, now + 400_000), 0);
 }
 
 #[test]

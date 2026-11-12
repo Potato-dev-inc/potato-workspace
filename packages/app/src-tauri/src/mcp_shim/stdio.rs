@@ -323,7 +323,9 @@ fn mcp_tools_for_pane(pane: Option<String>) -> Vec<Value> {
                 "description": tool.description,
                 "inputSchema": tool.input_schema,
             });
-            if let Some(schema) = tool.output_schema {
+            // Output schemas are most of the list's bytes. A narrow mode leaves them out (results
+            // still carry structuredContent); mode=all lists them in full.
+            if let Some(schema) = tool.output_schema.filter(|_| matches!(mode, tool_registry::McpMode::All)) {
                 value["outputSchema"] = schema;
             }
             value

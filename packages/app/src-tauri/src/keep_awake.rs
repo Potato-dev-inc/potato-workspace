@@ -187,8 +187,9 @@ mod tests {
 
     #[test]
     fn coexists_with_the_lend_and_night_shift_holds() {
-        use crate::night_shift::power::{adopt, is_held, keep_awake, release};
+        use crate::night_shift::power::{adopt, is_held, keep_awake, release, TABLE_TEST_LOCK};
         // Three keys in the real shared table: letting go of one leaves the others on.
+        let _table = TABLE_TEST_LOCK.lock();
         let busy = KeyedHold::new("agents:busy-test", "test");
         let lend = KeyedHold::new("lend:out-test2", "test");
         busy.hold().unwrap();

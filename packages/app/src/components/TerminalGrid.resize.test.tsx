@@ -89,10 +89,6 @@ vi.mock('../lib/tauri', () => ({
     reclaimPaneSize: vi.fn(async () => undefined),
   },
 }));
-vi.mock('../lib/agentDefinitions', () => ({
-  errorMessage: (e: unknown) => String(e),
-  tauriRecorderApi: { status: async () => ({ recording: false }), start: async () => undefined, stop: async () => ({ path: '' }) },
-}));
 vi.mock('../lib/detached-pane-window', () => ({
   detachedWindowSizeFromGrid: () => ({ width: 800, height: 600 }),
   openDetachedPaneWindow: vi.fn(async () => undefined),

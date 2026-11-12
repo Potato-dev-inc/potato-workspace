@@ -19,7 +19,6 @@ const AGENT_SCREENS = [
   'components/simple/',
   'components/cockpit/QuestionCard.tsx',
   'components/cockpit/Inbox.tsx',
-  'components/cockpit/FocusNote.tsx',
   'components/cockpit/SidebarFooter.tsx',
   'components/settings/sections/AgentsSection.tsx',
   'components/settings/sections/BridgeSection.tsx',

@@ -210,24 +210,11 @@ describe('AgentDefinitions', () => {
     expect(host.querySelectorAll('[data-testid="experimental-badge"]')).toHaveLength(1);
   });
 
-  it('lists recorder drafts and validates one through the api', async () => {
-    const api = mockApi();
-    api.draftsList = vi.fn(async () => ({
-      dir: 'C:/data/agents/drafts',
-      drafts: [{ name: 'kilo_draft.toml', path: 'C:/data/agents/drafts/kilo_draft.toml', modified_ms: 1, size: 10 }],
-    }));
-    api.draftValidate = vi.fn(async () => ({
-      ok: false,
-      errors: [{ code: 'AGENT_DEF_BAD_REGEX', message: 'bad', path: 'tui.busy', line: null, column: null }],
-      rendered: { headless_argv: null, tui_argv: null },
-    }));
-    await render(api);
-    const row = host.querySelector('[data-testid="draft-row"]');
-    expect(row?.textContent).toContain('kilo_draft.toml');
-    expect(host.textContent).toContain('C:/data/agents/drafts');
-    await click(button('Validate draft'));
-    expect(api.draftValidate).toHaveBeenCalledWith('C:/data/agents/drafts/kilo_draft.toml');
-    expect(host.querySelector('[role="status"]')?.textContent).toContain('AGENT_DEF_BAD_REGEX');
+  it('has no Drafts block and no Validate draft button any more', async () => {
+    await render(mockApi());
+    expect(host.querySelector('[data-testid="draft-row"]')).toBeNull();
+    expect(host.textContent).not.toContain('Drafts');
+    expect(button('Refresh drafts')).toBeFalsy();
   });
 
   it('escapes hostile label', async () => {
@@ -1000,12 +987,11 @@ describe('AgentDefinitions: a failed approve stays in its dialog', () => {
       ...fixture(),
       definitions: [{ id: 'fakeagent', file: BUNDLED, source: 'bundled', state: 'active', errors: [], fingerprint: null, shadowed_by: null }],
     };
-    // Like the backend: only the listing, the drafts, the removed list and the project scan run on open; a bundled path
+    // Like the backend: only the listing, the removed list and the project scan run on open; a bundled path
     // is never a real file, so anything that tried to read it from disk would fail with this message.
     const disk = (what: string) => Promise.reject(new Error(`AGENT_DEF_NOT_FOUND: ${BUNDLED}: The system cannot find the path specified. (os error 3) [${what}]`));
     const api = {
       ...mockApi(listing),
-      draftsList: vi.fn(async () => ({ dir: 'C:/data/drafts', drafts: [] })),
       removedList: vi.fn(async () => ({ removed: [], total: 0 })),
       preview: vi.fn(async (file: string) => (file.startsWith('bundled/') ? { ok: true, errors: [], rendered: { headless_argv: [], tui_argv: [] } } : disk('preview'))),
       checkFile: vi.fn(async (file: string) =>
@@ -1014,7 +1000,6 @@ describe('AgentDefinitions: a failed approve stays in its dialog', () => {
     };
     await render(api as unknown as AgentDefinitionsApi);
     expect(api.list).toHaveBeenCalledTimes(1);
-    expect(api.draftsList).toHaveBeenCalledTimes(1);
     expect(api.removedList).toHaveBeenCalledTimes(1);
     expect(api.projectPath).toHaveBeenCalledTimes(1);
     expect(api.checkFile).not.toHaveBeenCalled();

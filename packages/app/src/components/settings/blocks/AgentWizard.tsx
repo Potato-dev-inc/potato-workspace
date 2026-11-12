@@ -13,7 +13,6 @@ import {
   factsFrom,
   MAX_ROUNDS,
   offersOneTaskMode,
-  openRouterSupport,
   orderDrafters,
   promptBudget,
   provenanceOf,
@@ -27,7 +26,6 @@ import {
   type FinishResult,
   type LocalDrafter,
   type LoopResult,
-  type OpenRouterSupport,
   type PlannedRun,
   type PlannedVisible,
   type ProbeInfo,
@@ -54,6 +52,8 @@ import {
   emptyFields,
   type AcpValue,
 } from '../../../lib/agentWizardAcp';
+import { customAiSupport, problemWithService, serviceForPreset, type CustomAiService, type CustomAiSupport } from '../../../lib/custom-ai';
+import { CustomAiFields } from '../CustomAiFields';
 import { buildPrompt, REMOTE_PROMPT_BUDGET, type CaptureFacts } from '../../../lib/agentWizardPrompt';
 import { AcpStep, type AcpDraft } from './AcpStep';
 import { AgentWizardCapture, AnsweredList, agentName, BTN, INPUT } from './AgentWizardCapture';
@@ -90,10 +90,12 @@ interface Found {
 }
 
 interface Choice {
-  kind: 'local_agent' | 'openrouter';
-  /** Local agent id, or the OpenRouter model id. */
+  kind: 'local_agent' | 'custom_ai';
+  /** The local agent's id. For the custom AI service it is just a name; the service itself is in state. */
   id: string;
 }
+
+const CUSTOM_CHOICE: Choice = { kind: 'custom_ai', id: 'custom' };
 
 const KIND_CHOICES: Array<[Kind, string, string]> = [
   ['terminal', 'Terminal', 'The agent runs in a pane, like today.'],
@@ -124,13 +126,13 @@ function statusWord(e: ProgressEvent | undefined, waiting = 'Waiting'): string {
 
 export function AgentWizard({
   api = tauriWizardApi,
-  openRouter = openRouterSupport,
+  customAi = customAiSupport,
   onClose,
   onApprove,
   autoTimings,
 }: {
   api?: WizardApi;
-  openRouter?: OpenRouterSupport;
+  customAi?: CustomAiSupport;
   /** Shorter waits for "Finish without me" (tests). */
   autoTimings?: Partial<AutoTimings>;
   onClose: () => void;
@@ -151,8 +153,10 @@ export function AgentWizard({
   const [found, setFound] = useState<Found | null>(null);
   const [captures, setCaptures] = useState<CaptureFacts | null>(null);
   const [locals, setLocals] = useState<LocalDrafter[]>([]);
-  const [models, setModels] = useState<Array<{ id: string; label: string }>>([]);
-  const [hasKey, setHasKey] = useState(false);
+  // The custom AI service: its address and model, a key being typed, and whether a key is already saved.
+  const [service, setService] = useState<CustomAiService>(() => serviceForPreset('openrouter'));
+  const [keyDraft, setKeyDraft] = useState('');
+  const [keyState, setKeyState] = useState<{ set: boolean; last4: string | null }>({ set: false, last4: null });
   const [choice, setChoice] = useState<Choice | null>(null);
   const [optIn, setOptIn] = useState(false);
   const [events, setEvents] = useState<ProgressEvent[]>([]);
@@ -204,13 +208,16 @@ export function AgentWizard({
 
   const drafter: Drafter | null = useMemo(() => {
     if (!choice) return null;
-    if (choice.kind === 'openrouter') {
-      const model = models.find((m) => m.id === choice.id);
-      return { kind: 'openrouter', model: choice.id, label: model?.label ?? choice.id };
-    }
+    if (choice.kind === 'custom_ai') return { kind: 'custom_ai', model: service.model.trim(), label: 'Custom AI service' };
     const local = locals.find((d) => d.id === choice.id);
     return local ? { kind: 'local_agent', id: local.id, label: local.label } : null;
-  }, [choice, locals, models]);
+  }, [choice, locals, service.model]);
+
+  const loadCustom = useCallback((saved: { service: CustomAiService; keySet: boolean; last4: string | null }) => {
+    setService(saved.service);
+    setKeyState({ set: saved.keySet, last4: saved.last4 });
+    setKeyDraft('');
+  }, []);
 
   const previewPrompt = useMemo(
     () => (found ? buildPrompt(factsFrom(found.start, found.probe, captures), { maxChars: REMOTE_PROMPT_BUDGET }) : null),
@@ -312,13 +319,11 @@ export function AgentWizard({
       if (kind !== 'terminal') {
         // Chat: the ACP step comes first. With "both" the capture, the writer and the tests follow it.
         const chatList = kind === 'both' ? orderDrafters(await api.drafters().catch(() => [])) : [];
-        const orModels = kind === 'both' ? await openRouter.models().catch(() => []) : [];
-        const key = kind === 'both' ? await openRouter.hasKey().catch(() => false) : false;
+        const saved = kind === 'both' ? await customAi.load().catch(() => null) : null;
         setLocals(chatList);
-        setModels(orModels);
-        setHasKey(key);
+        if (saved) loadCustom(saved);
         const firstChat = chooseDefaultDrafter(chatList);
-        setChoice(firstChat ? { kind: 'local_agent', id: firstChat.id } : orModels[0] ? { kind: 'openrouter', id: orModels[0].id } : null);
+        setChoice(firstChat ? { kind: 'local_agent', id: firstChat.id } : kind === 'both' ? CUSTOM_CHOICE : null);
         setOptIn(false);
         setCaptures(null);
         setAcp(null);
@@ -345,13 +350,11 @@ export function AgentWizard({
         void startAutonomous({ start, probe }, { kind: 'local_agent', id: pick.id, label: pick.label });
         return;
       }
-      const orModels = await openRouter.models().catch(() => []);
-      const key = await openRouter.hasKey().catch(() => false);
+      const saved = await customAi.load().catch(() => null);
       setLocals(list);
-      setModels(orModels);
-      setHasKey(key);
+      if (saved) loadCustom(saved);
       const first = chooseDefaultDrafter(list);
-      setChoice(first ? { kind: 'local_agent', id: first.id } : orModels[0] ? { kind: 'openrouter', id: orModels[0].id } : null);
+      setChoice(first ? { kind: 'local_agent', id: first.id } : CUSTOM_CHOICE);
       setOptIn(false);
       setCaptures(null);
       setFound({ start, probe });
@@ -362,7 +365,7 @@ export function AgentWizard({
       setError(splitError(e).message);
       setPhase('command');
     }
-  }, [api, autoAnswer, command, discardSession, finishWithoutMe, kind, openRouter, startAutonomous]);
+  }, [api, autoAnswer, command, discardSession, finishWithoutMe, kind, customAi, loadCustom, startAutonomous]);
 
   /** Draft, check, fix and test. With \`oneTask\`, the visible file in \`result\` is kept and only the one-task mode is added. */
   const startDrafting = useCallback(
@@ -383,8 +386,22 @@ export function AgentWizard({
         ...(captures ? [{ step: 'capture', status: 'done', round: 0 } as ProgressEvent] : []),
       ]);
       setPhase('running');
+      if (drafter.kind === 'custom_ai') {
+        // Remember the address and model, and keep a newly typed key in the credential store, before anything is sent.
+        try {
+          await customAi.save(service, keyDraft);
+        } catch (e) {
+          setError(splitError(e).message);
+          setPhase('drafter');
+          return;
+        }
+        if (keyDraft.trim()) {
+          setKeyState({ set: true, last4: keyDraft.trim().length >= 12 ? keyDraft.trim().slice(-4) : null });
+          setKeyDraft('');
+        }
+      }
       const ask = (prompt: string) =>
-        drafter.kind === 'openrouter' ? openRouter.ask(drafter.model, prompt, abort.signal) : api.ask(session, drafter.id, prompt);
+        drafter.kind === 'custom_ai' ? customAi.ask(prompt, abort.signal) : api.ask(session, drafter.id, prompt);
       try {
         const outcome = await runDraftLoop({
           api,
@@ -443,7 +460,7 @@ export function AgentWizard({
         setPhase('stopped');
       }
     },
-    [acp, api, captures, drafter, found, kind, openRouter],
+    [acp, api, captures, drafter, found, kind, customAi, service, keyDraft],
   );
 
   // Retry after the program's own error: only the tests run again, for the draft that is kept.
@@ -528,8 +545,10 @@ export function AgentWizard({
     }
   }, [acp, api, found, onApprove]);
 
-  const orSelected = choice?.kind === 'openrouter';
-  const canStart = Boolean(drafter) && (!orSelected || (hasKey && optIn));
+  const customSelected = choice?.kind === 'custom_ai';
+  const customProblem = problemWithService(service);
+  const hasKey = keyState.set || keyDraft.trim() !== '';
+  const canStart = Boolean(drafter) && (!customSelected || (customProblem === null && hasKey && optIn));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -742,59 +761,52 @@ export function AgentWizard({
                     </span>
                   </label>
                 ))}
-                {models.length > 0 && (
-                  <label className="flex cursor-pointer items-start gap-2 text-xs">
-                    <input
-                      type="radio"
-                      name="wizard-drafter"
-                      checked={orSelected}
-                      onChange={() => setChoice({ kind: 'openrouter', id: choice?.kind === 'openrouter' ? choice.id : models[0].id })}
-                    />
-                    <span>
-                      <span className="font-medium">An OpenRouter model</span>
-                      <span className="block text-pm-muted">Free to try. You see exactly what is sent before it goes.</span>
-                    </span>
-                  </label>
-                )}
-                {locals.length === 0 && models.length === 0 && (
+                <label className="flex cursor-pointer items-start gap-2 text-xs">
+                  <input
+                    type="radio"
+                    name="wizard-drafter"
+                    checked={customSelected}
+                    onChange={() => setChoice(CUSTOM_CHOICE)}
+                  />
+                  <span>
+                    <span className="font-medium">Custom AI service</span>
+                    <span className="block text-pm-muted">Your own AI service and key. You see exactly what is sent before it goes.</span>
+                  </span>
+                </label>
+                {locals.length === 0 && (
                   <p className="text-xs text-pm-muted">
-                    No writer is available. Install Claude or Codex, or add an OpenRouter key in Settings &gt; Keys.
+                    No agent on this computer can write it. Install Claude or Codex, or use a custom AI service.
                   </p>
                 )}
               </div>
             </fieldset>
 
-            {orSelected && (
-              <div className="mt-3 space-y-2" data-testid="openrouter-box">
-                <label className="block text-xs text-pm-muted">
-                  Model
-                  <select
-                    className="mt-1 block w-full rounded-lg border border-pm-border bg-transparent px-2 py-1 text-xs"
-                    value={choice?.id}
-                    onChange={(e) => setChoice({ kind: 'openrouter', id: e.target.value })}
-                  >
-                    {models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {!hasKey && <p className="text-xs text-pm-text">Add your OpenRouter key in Settings &gt; Keys first.</p>}
+            {customSelected && (
+              <div className="mt-3 space-y-2" data-testid="custom-ai-box">
+                <CustomAiFields
+                  value={service}
+                  onChange={setService}
+                  keyDraft={keyDraft}
+                  onKeyDraft={setKeyDraft}
+                  keySet={keyState.set}
+                  last4={keyState.last4}
+                />
+                {customProblem && <p className="text-xs text-pm-text">{customProblem}</p>}
+                {!hasKey && <p className="text-xs text-pm-text">Paste the key for your service. It is kept in your computer&apos;s secure store.</p>}
                 <p className="text-xs text-pm-muted">
-                  This is exactly what will be sent to OpenRouter ({previewPrompt?.chars.toLocaleString()} characters).
+                  This is exactly what will be sent to your AI service ({previewPrompt?.chars.toLocaleString()} characters).
                   Secrets were removed from the program&apos;s output and screens, and your test words are hidden. Later
                   tries send the same text plus the checker&apos;s notes and what the program really did in the test.
                 </p>
                 <pre
-                  data-testid="openrouter-preview"
+                  data-testid="custom-ai-preview"
                   className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-pm-bg p-2 text-[11px]"
                 >
                   {previewPrompt?.text}
                 </pre>
                 <label className="flex items-start gap-2 text-xs">
                   <input type="checkbox" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} />
-                  <span>I agree to send this text to OpenRouter{drafter ? ` (${drafter.label})` : ''}.</span>
+                  <span>I agree to send this text to my custom AI service ({service.model.trim() || 'no model yet'}).</span>
                 </label>
               </div>
             )}

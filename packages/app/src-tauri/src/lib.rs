@@ -7,7 +7,6 @@ mod agent_authority;
 mod agent_run_mode;
 mod audit;
 mod ambient;
-mod agent_definitions_recorder;
 mod agent_adapters;
 mod agent_contexts;
 pub mod agent_runs;
@@ -25,7 +24,6 @@ mod canary;
 mod channels;
 mod branch_from;
 pub mod checkpoints;
-mod clip;
 mod commands;
 mod context_pack;
 mod crash;
@@ -46,9 +44,11 @@ mod mobile_pairing;
 mod mobile_tunnel;
 pub mod night_shift;
 mod tunnel_config;
+mod uninstall;
 mod one_brain;
 mod companion;
 mod crews;
+mod discord_alerts;
 mod opencode;
 pub mod operations;
 pub mod wait_reasons;
@@ -155,7 +155,11 @@ use tauri::{Listener, Manager};
 /// adapter for an agent that has no ACP). `Some(exit code)` when one ran; `main` exits with it. `None`:
 /// start the app as usual.
 pub fn run_cli_subcommand() -> Option<i32> {
-    acp::bridge::run_cli(&std::env::args().skip(1).collect::<Vec<_>>())
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args.first().map(String::as_str) == Some(uninstall::HELPER_FLAG) {
+        return uninstall::helper::run_cli(&args);
+    }
+    acp::bridge::run_cli(&args)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -216,7 +220,6 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::new())
         .manage(commands::SessionChatState::default())
-        .manage(clip::store::ClipState::default())
         .manage(live_room::service::LiveRoomState::default())
         .manage(commands::ChatImportState::default())
         .invoke_handler(tauri::generate_handler![
@@ -295,9 +298,6 @@ pub fn run() {
             commands::lend_start_agent,
             commands::lend_export_pm,
             commands::lend_import_pm,
-            commands::clip_plan,
-            commands::clip_stage,
-            commands::clip_save,
             commands::keep_going_targets,
             commands::keep_going_continue,
             commands::keep_going_lineage,
@@ -371,6 +371,10 @@ pub fn run() {
             commands::spawn_pane_in_linux,
             commands::kill_pane_cmd,
             commands::kill_all_panes,
+            uninstall::commands::uninstall_allowed,
+            uninstall::commands::uninstall_plan,
+            uninstall::commands::uninstall_run,
+            uninstall::commands::settings_reset,
             commands::write_pane_input,
             commands::read_pane_buffer,
             commands::read_pane_snapshot,
@@ -452,11 +456,6 @@ pub fn run() {
             commands::agent_wizard_acp_detect,
             commands::agent_wizard_acp_finish,
             commands::agent_wizard_ask,
-            commands::recorder_start,
-            commands::recorder_status,
-            commands::recorder_stop,
-            commands::agents_drafts_list,
-            commands::agents_draft_validate,
             commands::list_agent_contexts,
             commands::read_agent_context,
             commands::inspect_agent_model,
@@ -474,7 +473,6 @@ pub fn run() {
             commands::reclaim_pane_size,
             commands::set_project_path,
             commands::get_project_path_cmd,
-            commands::ensure_orchestrator_mcp,
             commands::install_npm_mcp_configs,
             commands::install_global_npm_mcp_configs,
             commands::uninstall_npm_mcp_configs,
@@ -494,7 +492,6 @@ pub fn run() {
             commands::agent_pack_inspect,
             commands::agent_pack_custom_save,
             commands::agent_pack_custom_forget,
-            commands::push_chat_event,
             commands::push_settings_event,
             commands::sync_public_settings,
             commands::dev_labs_override_active,
@@ -529,7 +526,7 @@ pub fn run() {
             commands::secret_set,
             commands::secret_get_masked,
             commands::secret_delete,
-            commands::secret_get_for_llm,
+            commands::secret_get_custom_ai_key,
             commands::confirm_pane_window_close,
             commands::set_opencode_automation_settings,
             commands::set_opencode_key_settings,
@@ -558,8 +555,6 @@ pub fn run() {
             commands::take_individual_fallback,
             commands::open_cockpit,
             commands::pane_set_title,
-            commands::ambient_get_prefs,
-            commands::ambient_set_animated_tray,
             commands::memory_get,
             commands::memory_save,
             commands::memory_sync,
@@ -578,12 +573,6 @@ pub fn run() {
             commands::terminal_chat_prompt,
             commands::terminal_chat_answer,
             commands::attention_snapshot,
-            commands::focus_state,
-            commands::focus_start,
-            commands::focus_extend,
-            commands::focus_end,
-            commands::focus_settings_set,
-            commands::focus_summary_dismiss,
             commands::checkpoints_list,
             commands::checkpoint_diff,
             commands::checkpoint_restore,
@@ -716,13 +705,11 @@ pub fn run() {
             commands::telegram_set_enabled,
             commands::telegram_set_options,
             commands::telegram_forget,
-            commands::telegram_tag_bot,
-            commands::telegram_tag_set_enabled,
-            commands::telegram_tag_set_caps,
-            commands::telegram_tag_approve,
-            commands::telegram_tag_ignore,
-            commands::telegram_tag_update_group,
-            commands::telegram_tag_remove,
+            commands::discord_alerts_status,
+            commands::discord_alerts_set_url,
+            commands::discord_alerts_clear,
+            commands::discord_alerts_set_kinds,
+            commands::discord_alerts_test,
             commands::acp_chat_start,
             commands::acp_chat_cancel,
             commands::acp_chat_keep_waiting,
@@ -898,6 +885,7 @@ pub fn run() {
 
             // Text your agents: starts only if the person turned Telegram on before.
             channels::start(app.handle().clone(), app.state::<AppState>().registry.clone());
+            discord_alerts::init();
 
             #[cfg(debug_assertions)]
             let _ = &bridge_url;
@@ -982,8 +970,6 @@ pub fn run() {
             mini_bar::init_mode_shortcut(app.handle());
             turn_summary::start_presence();
             attention::init();
-            // Focus: load the saved state (resume or end it), then start the tick thread. Once, here.
-            attention::focus::live::start(app.handle());
             askbar::glue::init(app.handle());
             // The mode-switch overlay is built hidden now and reused, so the first switch has no startup lag.
             switch_anim::glue::init(app.handle());

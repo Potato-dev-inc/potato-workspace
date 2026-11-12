@@ -46,11 +46,16 @@ fn run(
         }
         "run_agent" => {
             let mut body = args.clone();
-            ensure_stable_idempotency_key("run_agent", &mut body);
+            let caller_key = caller_gave_idempotency_key(&body);
+            let key = ensure_stable_idempotency_key("run_agent", &mut body);
+            // With a derived key, an earlier run may already own it: this call then replays that run,
+            // and the answer says so (a fresh run gets no marker).
+            let earlier = (!caller_key).then(|| earlier_operation_for_key(&body, &key)).flatten();
             // A run Potato Workspace started under a budget names itself in this process's environment;
             // a helper it starts then draws from that budget.
             inject_budget_parent(&mut body, std::env::var(PARENT_RUN_ENV).ok());
             super::super::long_wait::launch_and_wait("/agents/run", body, cancel_rx)
+                .map(|response| mark_replayed(response, earlier.as_ref()))
         }
         "quick_ask" => {
             let mut body = args.clone();

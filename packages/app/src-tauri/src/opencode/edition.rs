@@ -105,7 +105,7 @@ pub fn route_native_run(lane: Option<&str>, major: Option<u32>) -> Result<Option
         return Ok(None);
     }
     if lane.map(str::trim) == Some("terminal") {
-        return Err("agent_type opencode_native is not available with OpenCode 2.x (it has no terminal attach). Leave lane out, or use agent_type opencode with lane \"acp\".".to_string());
+        return Err("agent_type opencode_native is not available with OpenCode 2.x (it has no terminal attach). OpenCode 2 runs as a chat: use agent_type \"opencode\" (leave lane out, or pass lane \"acp\"); with read_only: true it runs as a read-only chat.".to_string());
     }
     Ok(Some("OpenCode 2.x has no native terminal agent, so this run went to the OpenCode chat (ACP) lane.".to_string()))
 }
@@ -149,7 +149,9 @@ mod tests {
         assert_eq!(route_native_run(Some("terminal"), Some(1)), Ok(None));
         assert!(route_native_run(None, Some(2)).unwrap().unwrap().contains("chat (ACP) lane"));
         assert!(route_native_run(Some("acp"), Some(2)).unwrap().is_some());
-        assert!(route_native_run(Some("terminal"), Some(2)).unwrap_err().contains("not available with OpenCode 2.x"));
+        let refused = route_native_run(Some("terminal"), Some(2)).unwrap_err();
+        assert!(refused.contains("not available with OpenCode 2.x"));
+        assert!(refused.contains("use agent_type \"opencode\""), "the refusal names the call that works: {refused}");
     }
 
     #[test]

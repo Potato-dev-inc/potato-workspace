@@ -197,10 +197,10 @@ fn the_pause_card_appears_when_the_last_turn_ends_once_and_says_what_to_do() {
         }
     }
     let card = pending_card_of(&project, &h).expect("the card is in the Inbox");
-    assert!(card.question.ends_with("used its 20 turns."), "{}", card.question);
+    assert!(card.question.ends_with("used its 20 replies."), "{}", card.question);
     let labels: Vec<&str> = card.choices.iter().map(|c| c.label.as_str()).collect();
-    assert_eq!(labels, ["Add 10 turns", "Stop here"]);
-    assert!(card.context.as_deref().unwrap().contains("20 of 20 turns"));
+    assert_eq!(labels, ["Add 10 replies", "Stop here"]);
+    assert!(card.context.as_deref().unwrap().contains("20 of 20 replies"));
     assert!(!card.allow_free_text);
     // Asking again does not stack cards.
     assert_eq!(code(check_next_turn_at(&project, &h, T0)), "BUDGET_EXHAUSTED");

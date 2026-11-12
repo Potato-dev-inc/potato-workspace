@@ -429,7 +429,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               />
               {!prompt && (
                 <span className="ck-na-tabhint" aria-hidden="true">
-                  <kbd>Tab</kbd> to use
+                  <kbd>Tab</kbd> for an example
                 </span>
               )}
             </div>

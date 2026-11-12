@@ -20,7 +20,7 @@ import { shortcutsRows } from './sections/ShortcutsSection';
 const RAW_SECTIONS: SectionDef[] = [
   { id: 'general', title: 'General', blurb: 'Project, appearance, safety, early features and updates.', rows: generalRows },
   { id: 'agents', title: 'Agents', blurb: 'Sign in, keeping agents ready, versions and your own agents.', rows: agentsRows },
-  { id: 'models', title: 'Orchestrator & Models', blurb: 'Choose the AI that coordinates your other agents, and which models it can use.', rows: [...modelsRows, ...modelBridgeRows] },
+  { id: 'models', title: 'Orchestrator & Models', blurb: 'The project index, OpenCode defaults and Model Bridge.', rows: [...modelsRows, ...modelBridgeRows] },
   { id: 'keys', title: 'Keys', blurb: 'API keys. They are kept in your system keychain when there is one.', rows: keysRows },
   { id: 'bridge', title: 'Bridge & MCP', blurb: 'How other tools and agents connect to Potato Workspace.', rows: bridgeRows },
   { id: 'phone', title: 'Phone', blurb: 'Pair a phone to watch and steer your agents.', rows: phoneRows },

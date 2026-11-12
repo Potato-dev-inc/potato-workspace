@@ -195,28 +195,6 @@ describe('the Inbox section', () => {
     expect(host.textContent).toBe('');
   });
 
-  it('folds the finished missions while Focus is on, and never a card that needs you', () => {
-    const done = { ...MISSION_DONE, title: 'Round the totals' };
-    act(() => root.render(<MissionsSection missions={[MISSION_TAMPER, MISSION_WORKING, done]} api={fakeApi()} foldReady />));
-    // The card that needs you stays on screen; the working mission stays; the finished row is folded away.
-    expect(host.querySelectorAll('[data-mission-card="tamper"]').length).toBe(1);
-    expect(host.textContent).toContain(MISSION_WORKING.title);
-    expect([...host.querySelectorAll('.ck-mission-cap')].map((c) => c.textContent)).toEqual(['Missions']);
-    expect(host.textContent).not.toContain('Round the totals');
-  });
-
-  it('folds the finished missions even when no card needs you', () => {
-    act(() => root.render(<MissionsSection missions={[MISSION_DONE]} api={fakeApi()} foldReady />));
-    expect(host.textContent).toBe('');
-  });
-
-  it('shows the finished missions again when the fold is off', () => {
-    const done = { ...MISSION_DONE, title: 'Round the totals' };
-    act(() => root.render(<MissionsSection missions={[done]} api={fakeApi()} foldReady={false} />));
-    expect(host.textContent).toContain('Ready for you');
-    expect(host.textContent).toContain('Round the totals');
-  });
-
   it('lists at most five finished missions', () => {
     const many = Array.from({ length: 7 }, (_, i) => ({ ...MISSION_DONE, id: `done-${i}`, title: `Done ${i}` }));
     expect(readyMissions(many).map((m) => m.title)).toEqual(['Done 0', 'Done 1', 'Done 2', 'Done 3', 'Done 4']);

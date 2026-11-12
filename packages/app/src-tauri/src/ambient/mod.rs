@@ -1,19 +1,16 @@
 //! Ambient state and auto-titles (docs/features/ambient-and-titles.md).
 //!
-//! * `glyph` / `raster` / `tray_icon`: a 3x3 dot-matrix tray icon mirroring the aggregate pane state,
-//!   the tooltip and the taskbar badge.
+//! * `badge`: the taskbar badge with the attention count. (The tray icon is a plain static icon; the old
+//!   moving dot-grid icon is gone.)
 //! * `title` / `store`: human titles for panes, derived from the first task or typed line.
 
-pub mod glyph;
-pub mod prefs;
-pub mod raster;
+pub mod badge;
 pub mod store;
 pub mod title;
 #[cfg(test)]
 mod title_tests;
-pub mod tray_icon;
 
-pub use tray_icon::notify_changed;
+pub use badge::notify_changed;
 
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -57,9 +54,8 @@ pub fn announce_title_change(app: &AppHandle, pane_id: &str) {
 /// Call once at startup, after the tray exists.
 pub fn init(app: &AppHandle) {
     use tauri::Listener;
-    prefs::load();
     app.listen("pty://panes-changed", |_| notify_changed());
-    tray_icon::start(app);
+    badge::start(app);
 }
 
 #[cfg(test)]

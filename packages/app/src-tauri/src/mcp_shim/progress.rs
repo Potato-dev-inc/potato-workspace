@@ -8,6 +8,16 @@ use puppet_master_app_lib::wait_reasons;
 const MIN_REQUEST_GAP: Duration = Duration::from_millis(250);
 /// The longest that gap grows to: a normal 4-second long poll is never slowed down.
 const MAX_REQUEST_GAP: Duration = Duration::from_millis(4_000);
+/// The longest `wait_agents` may wait. It is served as 4-second bridge slices, so no single request
+/// comes near the bridge's per-request cap.
+pub(crate) const MAX_WAIT_AGENTS_MS: u64 = 3_600_000;
+
+/// How long `wait_agents` waits: `timeout_ms`, default 120 s, never more than `MAX_WAIT_AGENTS_MS`.
+fn requested_wait_ms(args: &Value) -> u64 {
+    optional_number(args, "timeout_ms")
+        .unwrap_or(DEFAULT_AGENT_WAIT_MS)
+        .min(MAX_WAIT_AGENTS_MS)
+}
 
 pub(crate) fn call_tool_with_progress(
     params: Value,
@@ -142,7 +152,7 @@ where
         .get("arguments")
         .cloned()
         .unwrap_or_else(|| json!({}));
-    let timeout_ms = optional_number(&args, "timeout_ms").unwrap_or(DEFAULT_AGENT_WAIT_MS);
+    let timeout_ms = requested_wait_ms(&args);
     let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
     let mut body = args.clone();
     let mut chunk = 0_u64;
@@ -298,6 +308,26 @@ mod tests {
         assert_eq!(calls, 2);
         assert_eq!(value["agents"][0]["result"], "pong");
         assert_eq!(value["reason"], "matched_state");
+    }
+
+    #[test]
+    fn a_wait_of_up_to_an_hour_is_sliced_into_short_bridge_requests() {
+        assert_eq!(requested_wait_ms(&json!({})), DEFAULT_AGENT_WAIT_MS);
+        assert_eq!(requested_wait_ms(&json!({"timeout_ms": 3_600_000})), 3_600_000);
+        assert_eq!(requested_wait_ms(&json!({"timeout_ms": 99_000_000})), MAX_WAIT_AGENTS_MS);
+        // Two slices come back unfinished, the third finishes: one call, three bridge requests, each
+        // at most one 4-second slice, so the bridge cap never applies to the hour.
+        let answers = [unfinished("timeout"), unfinished("timeout"), finished("matched_state")];
+        let mut slices: Vec<u64> = Vec::new();
+        let result = call_wait_agents_with(params(3_600_000), None, None, None, |body| {
+            slices.push(body["timeout_ms"].as_u64().unwrap_or(0));
+            Ok(answers[(slices.len() - 1).min(answers.len() - 1)].to_string())
+        })
+        .expect("the wait succeeds");
+        assert_eq!(slices.len(), 3, "{slices:?}");
+        assert!(slices.iter().all(|ms| (1..=4_000).contains(ms)), "{slices:?}");
+        assert_eq!(result["structuredContent"]["reason"], "matched_state");
+        assert_eq!(result["structuredContent"]["requested_wait_ms"], 3_600_000);
     }
 
     #[test]

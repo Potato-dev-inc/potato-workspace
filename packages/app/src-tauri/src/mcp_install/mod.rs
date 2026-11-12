@@ -1,4 +1,4 @@
-//! Install / verify Potato Workspace MCP registration for CLI orchestrator backends.
+//! Install / verify Potato Workspace MCP registration for the CLI agents (Claude, Codex, OpenCode).
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -39,18 +39,6 @@ pub fn launch_source_from_developer_setting(use_rust_mcp: bool) -> McpLaunchSour
     }
 }
 
-pub fn ensure_orchestrator_mcp_with_preference(
-    backend: &str,
-    cwd: &Path,
-    use_rust_mcp: bool,
-) -> Result<EnsureMcpResult, String> {
-    ensure_orchestrator_mcp_with_source(
-        backend,
-        cwd,
-        launch_source_from_developer_setting(use_rust_mcp),
-    )
-}
-
 #[cfg(test)]
 pub fn install_npm_mcp_configs(cwd: &Path) -> Result<Vec<EnsureMcpResult>, String> {
     install_mcp_configs_with_preference(cwd, false)
@@ -63,7 +51,7 @@ pub fn install_mcp_configs_with_preference(
     let mut results = Vec::new();
     let source = launch_source_from_developer_setting(use_rust_mcp);
     for backend in ["claude_cli", "codex_cli", "opencode_cli"] {
-        results.push(ensure_orchestrator_mcp_with_source(backend, cwd, source)?);
+        results.push(ensure_cli_mcp_with_source(backend, cwd, source)?);
     }
     Ok(results)
 }
@@ -95,7 +83,7 @@ pub fn uninstall_global_npm_mcp_configs() -> Result<Vec<EnsureMcpResult>, String
     Ok(results)
 }
 
-fn ensure_orchestrator_mcp_with_source(
+fn ensure_cli_mcp_with_source(
     backend: &str,
     cwd: &Path,
     source: McpLaunchSource,
@@ -106,7 +94,7 @@ fn ensure_orchestrator_mcp_with_source(
         "claude_cli" => ensure_claude_mcp(&cwd, source),
         "codex_cli" => ensure_codex_mcp(&cwd, source),
         "opencode_cli" => ensure_opencode_mcp(&cwd, source),
-        other => Err(format!("unsupported orchestrator backend: {other}")),
+        other => Err(format!("unsupported CLI backend: {other}")),
     }
 }
 

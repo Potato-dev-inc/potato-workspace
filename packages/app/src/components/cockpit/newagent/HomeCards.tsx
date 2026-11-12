@@ -1,5 +1,5 @@
 // The cards under the New agent box: what the person pinned (recent projects, running agents, what needs them, a
-// saved prompt). "+ Add card" pins one, "Customize" shows move and remove buttons. The list is saved in settings by
+// saved prompt). "+ Add shortcut" pins one, "Customize" shows move and remove buttons. The list is saved in settings by
 // the page (`onChange`); this file only edits it in memory.
 import { useState } from 'react';
 import type { RecentProject } from '../../../lib/ship-api';
@@ -129,13 +129,13 @@ export function HomeCards({
 
       {cards.length === 0 && adding === null && kinds.length > 0 && (
         <p className="ck-na-note" data-testid="na-cards-hint">
-          Pin shortcuts here: your recent projects, running agents, or a prompt you reuse.
+          Add a shortcut for a project, a running agent, or a prompt you use often.
         </p>
       )}
       <div className="ck-na-foot">
         {adding === null && kinds.length > 0 && (
           <button type="button" className="ck-na-addrow" onClick={() => setAdding('list')}>
-            <span aria-hidden="true">+</span> Add card
+            <span aria-hidden="true">+</span> Add shortcut
           </button>
         )}
         {adding !== null && (

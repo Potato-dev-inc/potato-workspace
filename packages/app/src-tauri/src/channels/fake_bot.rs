@@ -35,8 +35,6 @@ pub struct FakeBot {
     pub silent: Mutex<Vec<bool>>,
     /// One entry per message sent, in the same order as `sent`: the message it was a reply to.
     pub reply_tos: Mutex<Vec<Option<i64>>>,
-    /// How many times "typing…" was shown, and in which chats.
-    pub typing: Mutex<Vec<i64>>,
     pub menus: AtomicUsize,
     /// Every token `api_for` was asked to build a client for.
     pub tokens: Mutex<Vec<String>>,
@@ -54,7 +52,6 @@ impl FakeBot {
             sent: Mutex::new(Vec::new()),
             silent: Mutex::new(Vec::new()),
             reply_tos: Mutex::new(Vec::new()),
-            typing: Mutex::new(Vec::new()),
             menus: AtomicUsize::new(0),
             tokens: Mutex::new(Vec::new()),
         })
@@ -87,11 +84,6 @@ impl Api for FakeBot {
             return Err(err);
         }
         Ok(self.inbox.lock().pop_front().unwrap_or_default())
-    }
-
-    fn typing(&self, chat_id: i64) -> Result<(), ApiError> {
-        self.typing.lock().push(chat_id);
-        Ok(())
     }
 
     fn send(&self, chat_id: i64, out: &WireMessage, reply_to: Option<i64>) -> Result<i64, ApiError> {

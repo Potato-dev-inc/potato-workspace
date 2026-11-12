@@ -206,7 +206,7 @@ fn claude_mcp_remove_not_found_matches_cli_errors() {
 fn all_cli_backends_reject_root_project_path() {
     for backend in ["claude_cli", "codex_cli", "opencode_cli"] {
         let err =
-            ensure_orchestrator_mcp_with_preference(backend, Path::new("/"), false).unwrap_err();
+            ensure_cli_mcp_with_source(backend, Path::new("/"), McpLaunchSource::NpmPackage).unwrap_err();
         assert!(
             err.contains("Pick a project folder"),
             "backend {backend}: {err}"

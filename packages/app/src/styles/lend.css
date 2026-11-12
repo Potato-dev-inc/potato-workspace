@@ -278,11 +278,12 @@
 }
 
 /* Settings > Lend page. */
+/* Same wrapper as Settings > Team (.st-team.tp): same padding and gap, so the two pages line up. */
 .lend-page {
-  padding: 12px 14px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 .lend-block {
   display: flex;

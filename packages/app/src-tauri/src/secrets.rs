@@ -3,9 +3,9 @@
 //!
 //! - The UI never receives a full key: `mask` returns "is it set" plus the last 4 characters.
 //! - Rust code reads keys with `read_secret`.
-//! - The only path that hands a raw key to the webview is `secret_get_for_llm`
-//!   (commands/secrets.rs): the sidebar's API orchestrator still runs its LLM tool loop in the
-//!   webview and needs the key for its request headers. It is restricted to the provider keys.
+//! - The only path that hands a raw key to the webview is `secret_get_custom_ai_key`
+//!   (commands/secrets.rs): the wizard's "Custom AI service" writer calls the service from the
+//!   webview and needs that one key for its request header. The provider keys are never handed back.
 //! - `migrate_settings_file` moves keys that an older version wrote into `settings.json`.
 //! - If the credential store is unavailable nothing here claims otherwise: callers fall back to
 //!   the file and the UI says so.
@@ -28,17 +28,17 @@ pub fn is_provider_secret(name: &str) -> bool {
     PROVIDER_SECRETS.contains(&name)
 }
 
-/// Secrets a sidecar reads (a chat app's bot token). The UI may set, read masked and delete them like a
-/// provider key; but they are NEVER handed to the webview: `secret_get_for_llm` stays provider-only.
-pub const SIDECAR_SECRETS: &[&str] = &["discord_bot_token"];
+/// The key of the person's "Custom AI service" (the wizard's writer). It is the one secret the webview may
+/// read back whole, through `secret_get_custom_ai_key`; its address and model are normal settings.
+pub const CUSTOM_AI_SECRET: &str = "custom_ai_key";
 
-pub fn is_sidecar_secret(name: &str) -> bool {
-    SIDECAR_SECRETS.contains(&name)
+pub fn is_custom_ai_secret(name: &str) -> bool {
+    name == CUSTOM_AI_SECRET
 }
 
 /// Names the UI may set, read masked and delete.
 pub fn is_ui_secret(name: &str) -> bool {
-    is_provider_secret(name) || is_sidecar_secret(name)
+    is_provider_secret(name) || is_custom_ai_secret(name)
 }
 
 pub trait SecretBackend: Send + Sync {
@@ -365,18 +365,6 @@ mod tests {
         assert!(is_provider_secret("openrouter_api_key"));
         assert!(!is_provider_secret("opencode_profile_a"));
         assert!(!is_provider_secret("../etc"));
-    }
-
-    #[test]
-    fn sidecar_secrets_are_ui_addressable_but_not_provider_secrets() {
-        for name in SIDECAR_SECRETS {
-            assert!(is_sidecar_secret(name), "{name}");
-            assert!(is_ui_secret(name), "{name}");
-            assert!(!is_provider_secret(name), "{name} must not be a provider key");
-        }
-        assert!(is_ui_secret("anthropic_api_key"));
-        assert!(!is_ui_secret("../deepseek_api_key"));
-        assert!(!is_sidecar_secret("openai_api_key"));
     }
 
     #[test]

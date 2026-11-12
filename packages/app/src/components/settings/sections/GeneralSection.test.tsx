@@ -32,8 +32,6 @@ vi.mock('../../../lib/loop-guard', () => ({
 }));
 vi.mock('../../../lib/cockpit-api', () => ({
   cockpitApi: {
-    ambientGetPrefs: vi.fn(async () => ({ animated_tray_icon: true })),
-    ambientSetAnimatedTray: vi.fn(async () => undefined),
     modeSwitchPreview: vi.fn(async () => undefined),
   },
 }));
@@ -53,20 +51,9 @@ vi.mock('../../../lib/live-room', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../lib/focus', async (importOriginal) => {
-  const orig = await importOriginal<typeof import('../../../lib/focus')>();
-  return {
-    ...orig,
-    focusState: vi.fn(async () => ({ settings: { default_minutes: 45, quiet_blocking: true } })),
-    focusSettingsSet: vi.fn(async (settings: unknown) => ({ settings })),
-  };
-});
-
-import { focusSettingsSet } from '../../../lib/focus';
 import { liveRoomApi } from '../../../lib/live-room';
 import { tauri } from '../../../lib/tauri';
 import { tauriLoopApi } from '../../../lib/loop-guard';
-import { cockpitApi } from '../../../lib/cockpit-api';
 import { memoryApi } from '../../../lib/memory-api';
 
 let m: Mounted;
@@ -92,7 +79,7 @@ describe('General: every control renders', () => {
       'Default project folder',
       'Theme',
       'Mode switch animation',
-      'Animated tray icon',
+      'Discord alerts',
       'Ask before closing a working agent',
       'Warn when an agent seems stuck',
       'Stuck warning sensitivity',
@@ -272,18 +259,15 @@ describe('General: each control saves a partial patch', () => {
     expect(m.env.setError).toHaveBeenCalledWith('Not saved: not a folder');
   });
 
-  it('Loop guard, animated tray and shared memory save through their own commands and tick the row', async () => {
+  it('Loop guard and shared memory save through their own commands and tick the row', async () => {
     await mount();
     await click(switchFor('Global shortcut: stop all agents'));
     await settle();
     expect(tauriLoopApi.settingsSet).toHaveBeenCalledWith({ ...mocks.loop, panic_shortcut: true });
-    await click(switchFor('Animated tray icon'));
-    await settle();
-    expect(cockpitApi.ambientSetAnimatedTray).toHaveBeenCalledWith(false);
     await click(switchFor('Shared project memory'));
     await settle();
     expect(memoryApi.setGlobalEnabled).toHaveBeenCalledWith(false);
-    expect(m.env.markSaved).toHaveBeenCalledTimes(3);
+    expect(m.env.markSaved).toHaveBeenCalledTimes(2);
     expect(m.env.patches).toEqual([]); // none of these touch settings.json
   });
 });
@@ -299,21 +283,6 @@ describe('General: Live Room', () => {
     await settle();
     expect(liveRoomApi.configSet).toHaveBeenCalledWith({ relay: 'https://relay.example.test', minutes: 60, maxViewers: 10 });
     expect(m.env.markSaved).toHaveBeenCalled();
-  });
-});
-
-describe('General: Focus Time', () => {
-  it('is its own group with the default length and the quiet switch, and the quiet switch saves through focusSettingsSet', async () => {
-    await mount();
-    const lists = [...m.host.querySelectorAll('section.st-group')];
-    const focus = lists.find((s) => s.textContent?.includes('Make cards that wait for you quiet during Focus'));
-    expect(focus?.textContent).toContain('Default length');
-    expect(hasText(m.host, 'Cards that wait for you are never held.')).toBe(true);
-    await click(switchFor('Make cards that wait for you quiet during Focus'));
-    await settle();
-    expect(focusSettingsSet).toHaveBeenCalledExactlyOnceWith({ default_minutes: 45, quiet_blocking: false });
-    expect(m.env.markSaved).toHaveBeenCalled();
-    expect(m.env.patches).toEqual([]); // Focus is saved by its own command, not settings.json
   });
 });
 

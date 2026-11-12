@@ -32,8 +32,6 @@ import { multiLoginAgents, paneHeading, paneSubline } from './titles';
 import type { CompanionView } from '../../lib/companion';
 import { stateWord } from '../../lib/companion';
 import { Avatar } from '../companion/Avatar';
-import { focusPaletteItems, lastFocusMinutes } from './palette-focus';
-import { useFocusView } from './useFocusView';
 
 interface Item {
   id: string;
@@ -133,8 +131,6 @@ export function Palette({
   const liveStatus = useContext(LiveStatusContext);
   const liveOn = liveStatus?.live === true;
   const nightOn = useNightEnabled();
-  // Focus rows: the start lengths while off; End Focus and +15 min while on.
-  const [focus] = useFocusView();
   // The panes that need you list first, then the one you used last. The hints follow the keys you chose.
   const needsYou = useContext(NeedsYouContext) ?? NO_ITEMS;
   const keysVersion = useKeybindingsVersion();
@@ -177,7 +173,8 @@ export function Palette({
       out.push({
         id: `new:${e.type}`,
         group: 'New agent',
-        title: `New ${e.label}`,
+        // A plain shell is a terminal (its kind says so), so the row says that next to its name.
+        title: e.shell ? `New ${e.label} terminal` : `New ${e.label}`,
         desc: c.readyAgents.has(e.type) ? 'Opens instantly' : undefined,
         icon: <IconPlus />,
         hint: c.readyAgents.has(e.type) ? 'ready' : undefined,
@@ -449,7 +446,6 @@ export function Palette({
         run: onOpenStore,
       });
     }
-    out.push(...focusPaletteItems(focus, Date.now(), lastFocusMinutes(), c.notify));
     out.push(...settingsShortcuts(c, { missionsOn, nightOn, onOpenMorning, projectPath: c.selectedId ? (c.registry.panes.get(c.selectedId)?.info?.cwd ?? null) : null }));
     out.push(
       {
@@ -485,7 +481,7 @@ export function Palette({
       },
     );
     return out;
-  }, [c, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, keysVersion, missionsOn, nightOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn, focus]);
+  }, [c, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, keysVersion, missionsOn, nightOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn]);
 
   const filtered = useMemo(
     () => items.filter((i) => matchesQuery(`${i.title} ${i.desc ?? ''} ${i.keywords ?? ''} ${i.group}`, query)),

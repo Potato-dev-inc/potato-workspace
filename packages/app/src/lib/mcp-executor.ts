@@ -1,5 +1,5 @@
-// Tool executors for the built-in orchestrator: the McpToolExecutor contract plus its two backings,
-// direct Tauri/PTY calls (desktop sidebar) and the HTTP bridge (external hosts / remote UI).
+// Tool executors: the McpToolExecutor contract plus its two backings, direct Tauri/PTY calls (desktop)
+// and the HTTP bridge (external hosts / remote UI).
 import type { AgentContextProfile, AgentModelInspection, PaneInfo } from '@potato-workspace/shared';
 import type {
   BridgeClient,
@@ -10,12 +10,10 @@ import type {
   PaneRole,
   WaitForPanesResult,
 } from './bridge';
-import type { ToolDef } from './llm';
 import { tauri } from './tauri';
 
 /** Executes the 5 MCP tools — via Tauri in the desktop app, or HTTP bridge externally. */
 export interface McpToolExecutor {
-  listToolDefinitions?(): Promise<ToolDef[]>;
   listPanes(): Promise<PaneInfo[]>;
   spawnPane(args: {
     agent_type: string;
@@ -148,16 +146,6 @@ export function makeTauriExecutor(): McpToolExecutor {
 /** HTTP bridge path — for external MCP clients and optional fallback. */
 export function makeBridgeExecutor(bridge: BridgeClient): McpToolExecutor {
   return {
-    listToolDefinitions: async () => {
-      const tools = await bridge.listMcpTools();
-      return tools
-        .filter((tool) => tool.visibility.sidebar)
-        .map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          input_schema: tool.inputSchema,
-        }));
-    },
     listPanes: () => bridge.listPanes(),
     spawnPane: (args) => bridge.spawnPane(args),
     killPane: (id) => bridge.killPane(id),

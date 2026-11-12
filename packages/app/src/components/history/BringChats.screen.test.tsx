@@ -175,7 +175,7 @@ describe('Bring my chats: the entry points', () => {
     await click(host.querySelector('[data-testid="bring-chats-link"]'));
     expect(panelTitle()).toBe('Bring my chats');
     expect(document.body.textContent).toContain('Alpha · 23 chats');
-    expect(document.body.textContent).toContain('Beta · No chats found');
+    expect(document.body.textContent).toContain('No chats found on this PC');
   });
 
   it('Settings > Agents has a "Bring my chats" row that opens the same panel', async () => {
@@ -220,7 +220,7 @@ describe('Bring my chats: agent, 10 newest, range, bring, bring again', () => {
 
     // 1. The agents, with a count each; the one with none is greyed.
     expect(panelTitle()).toBe('Bring my chats');
-    const beta = [...document.querySelectorAll<HTMLButtonElement>('.bc-agent-pick')].find((b) => b.textContent?.includes('Beta · No chats found'));
+    const beta = [...document.querySelectorAll<HTMLButtonElement>('.bc-agent-pick')].find((b) => b.textContent?.includes('Beta') && b.textContent.includes('No chats found on this PC'));
     expect(beta!.disabled).toBe(true);
 
     // 2. Pick an agent: its 10 newest chats, each with folder, date and message count.
@@ -236,6 +236,12 @@ describe('Bring my chats: agent, 10 newest, range, bring, bring again', () => {
     expect(rowTitles()).toHaveLength(6);
     expect(button('Bring all 6 chats from this range')).toBeTruthy();
     expect(q('.bc-range')!.textContent).toContain('Alpha chat 1');
+    // One primary button in the panel, not two: the range and the picks share it.
+    expect(document.querySelectorAll('.bc-panel .ck-btn--primary')).toHaveLength(1);
+    await click(document.querySelector('.bc-row input[type="checkbox"]'));
+    expect(button('Bring these (1)')).toBeTruthy();
+    expect(document.querySelectorAll('.bc-panel .ck-btn--primary')).toHaveLength(1);
+    await click(document.querySelector('.bc-row input[type="checkbox"]'));
 
     // 4. Bring it. The progress line, then the result.
     await click(button('Bring all 6 chats from this range'));

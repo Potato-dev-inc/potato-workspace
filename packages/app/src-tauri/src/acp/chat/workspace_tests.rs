@@ -85,6 +85,11 @@ struct Rig {
 pub(super) fn agents(opts: &str, dir: &Path) -> Arc<Agents> {
     let mut cfg = fake_agent::agent_config(opts, &dir.join("agent-sessions"));
     cfg.resume_command = vec!["resume".into(), "{session}".into()];
+    // `read_only=plan` (its own read-only mode only), `read_only=ask` (asks before every tool), `read_only=plan_ask` (both): the fake's `[acp.read_only]`.
+    if let Some(kind) = opts.split(';').find_map(|pair| pair.trim().strip_prefix("read_only=")) {
+        let mode = if kind.starts_with("plan") { "plan" } else { "" };
+        cfg.read_only = Some(crate::acp::config::ReadOnlyChat { mode: mode.into(), mode_option: if mode.is_empty() { String::new() } else { "mode".into() }, asks_before_tools: kind.ends_with("ask") });
+    }
     Arc::new(Agents(BTreeMap::from([("fake".to_string(), Arc::new(cfg))])))
 }
 

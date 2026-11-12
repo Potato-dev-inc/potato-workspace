@@ -70,7 +70,10 @@ const button = (scope: ParentNode, label: string) =>
 describe('AccountsGroup', () => {
   it('lists only agents that support accounts, with their login hint', async () => {
     await render(fakeApi());
-    expect(host.querySelector('[data-testid="accounts-claude"]')?.textContent).toContain('Run `claude` and log in');
+    const claude = host.querySelector('[data-testid="accounts-claude"]')!;
+    expect(claude.textContent).toContain('Run claude and log in');
+    expect(claude.textContent).not.toContain('`');
+    expect(claude.querySelector('code')?.textContent).toBe('claude');
     expect(host.querySelector('[data-testid="accounts-codex"]')).toBeTruthy();
     expect(host.querySelector('[data-testid="accounts-opencode"]')).toBeNull();
     expect(host.textContent).toContain('never reads or shares');

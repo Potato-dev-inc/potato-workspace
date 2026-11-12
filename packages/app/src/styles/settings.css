@@ -949,17 +949,23 @@
 }
 .st-team-member {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   min-height: 36px;
   padding: 4px 0;
   border-bottom: 1px solid var(--sep);
 }
+/* The name column takes the room it needs; a lend line wraps under the name instead of squeezing the buttons. */
 .st-team-who {
   display: flex;
-  flex: 1;
+  flex: 1 1 180px;
   flex-direction: column;
   min-width: 0;
+}
+.st-team-who .lend-chip-wrap,
+.st-team-who .lend-lends {
+  max-width: 100%;
 }
 .st-team-who small {
   color: var(--label-3);

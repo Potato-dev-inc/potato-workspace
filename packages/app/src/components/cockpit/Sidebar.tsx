@@ -41,7 +41,6 @@ import type { CompanionView } from '../../lib/companion';
 import { CompanionRow, MakeCompanionRow } from './companion/CompanionRow';
 import { isCompanionPaneId } from './companion/model';
 import { useReviewCount } from './review/useReviewCount';
-import { FocusPill } from './FocusPill';
 import { ClosedChatsSheet } from './ClosedChatsSheet';
 import { tauriClosedChatsApi, useClosedChats, type ClosedChatsApi } from '../../lib/closedChats';
 
@@ -525,8 +524,6 @@ export function Sidebar({
       <div className="ck-side-head">
         <span className="ck-wordmark">Potato Workspace</span>
       </div>
-
-      <FocusPill notify={c.notify} />
 
       <div className="ck-side-top">
         <div className="ck-menu-wrap" ref={menuRef}>

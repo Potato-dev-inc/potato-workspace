@@ -58,7 +58,7 @@ describe('Default model for helpers', () => {
   it('draws one dropdown per installed agent, starting at the agent default', async () => {
     m = await mountRows(row);
     await settle(10);
-    expect(chipFor('alpha')?.textContent).toContain("Agent's default (gpt-5.1)");
+    expect(chipFor('alpha')?.textContent).toContain("Agent's default (Gpt-5.1)");
     expect(chipFor('beta')?.textContent).toContain("Agent's default");
     expect(chipFor('gone')).toBeNull();
   });
@@ -86,12 +86,12 @@ describe('Default model for helpers', () => {
     m = await mountRows(row);
     await settle(10);
     await click(chipFor('alpha'));
-    await click([...m.host.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent === 'gpt-5-mini'));
+    await click([...m.host.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent === 'Gpt-5-mini'));
     await settle(5);
     expect(m.env.patches).toEqual([{ helper_default_models: { alpha: 'gpt-5-mini' } }]);
     await m.rerender();
     await settle(5);
-    expect(chipFor('alpha')?.textContent).toContain('gpt-5-mini');
+    expect(chipFor('alpha')?.textContent).toContain('Gpt-5-mini');
     await click(chipFor('alpha'));
     await click([...m.host.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent?.startsWith("Agent's default")));
     await settle(5);
