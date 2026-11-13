@@ -422,3 +422,28 @@ describe('Agents: search covers what the section shows', () => {
     expect(unsearchableLabels(m.host, agentsRows)).toEqual([]);
   });
 });
+
+describe('Agents: Show terminals', () => {
+  it('is off by default and says so in plain words', async () => {
+    await mount();
+    expect(rowOf('show-terminals')).toBeTruthy();
+    expect(switchFor('Show terminals')!.getAttribute('aria-checked')).toBe('false');
+    expect(m.host.textContent).toContain('Off: agents start as a chat. Terminals already open keep working.');
+  });
+
+  it('saves only {show_terminals} and shows the new value after a re-render (it persists)', async () => {
+    await mount();
+    await click(switchFor('Show terminals'));
+    expect(m.env.patches).toEqual([{ show_terminals: true }]);
+    await m.rerender();
+    expect(switchFor('Show terminals')!.getAttribute('aria-checked')).toBe('true');
+    await click(switchFor('Show terminals'));
+    expect(m.env.patches).toEqual([{ show_terminals: true }, { show_terminals: false }]);
+  });
+
+  it('search finds it by the words people use', async () => {
+    const sections = [{ id: 'agents', title: 'Agents', rows: agentsRows }] as unknown as SectionDef[];
+    const hits = searchSections(sections, 'terminal').flatMap((s) => s.rows.map((r) => r.id));
+    expect(hits).toContain('show-terminals');
+  });
+});

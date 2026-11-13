@@ -116,7 +116,7 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
           label={signIn.label}
           hint={signIn.signIn?.hint ?? ''}
           // The agent's own terminal, in a normal pane (the same sign-in the terminal uses).
-          onOpen={() => c.newAgent(signIn.agent, undefined, false, c.registry.panes.get(paneId)?.info.cwd)}
+          onOpen={() => c.newAgent(signIn.agent, undefined, false, c.registry.panes.get(paneId)?.info.cwd, undefined, 'terminal')}
           onRetry={() => api.retrySignIn?.(paneId)}
         />
       )}

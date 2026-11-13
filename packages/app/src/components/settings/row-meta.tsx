@@ -64,6 +64,7 @@ export const ROW_META: Record<string, Meta> = {
   missions: { keys: ['missions_enabled'] },
   'night-shift': { keys: ['night_shift_enabled'] },
   'acp-chat-labs': { keys: ['acp_chat_enabled'] },
+  'show-terminals': { keys: ['show_terminals'] },
   'model-bridge-labs': { keys: ['model_bridge_enabled'] },
   'spaces-labs': { keys: ['spaces_enabled'] },
   'lend-labs': { keys: ['lend_enabled'] },

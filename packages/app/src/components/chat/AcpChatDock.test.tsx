@@ -437,7 +437,7 @@ describe('AcpChatDock', () => {
     expect(card.textContent).toContain('Type /login in the terminal.');
 
     await act(async () => button('Open sign-in')!.click());
-    expect(newAgent).toHaveBeenCalledWith('claude', undefined, false, '/work/app');
+    expect(newAgent).toHaveBeenCalledWith('claude', undefined, false, '/work/app', undefined, 'terminal');
     await act(async () => buttons().find((b) => /signed in — try again/.test(b.textContent ?? ''))!.click());
     expect(retrySignIn).toHaveBeenCalledWith('p1');
 

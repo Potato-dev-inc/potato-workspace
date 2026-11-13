@@ -62,7 +62,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: SIGN_IN.group, rows: ['accounts'] },
     { group: 'Where agents start', rows: ['project-folder', 'linux'] },
     { group: 'Moving work', rows: ['handoff-mode', 'keep-going'] },
-    { group: 'All agents', rows: ['preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions'] },
+    { group: 'All agents', rows: ['show-terminals', 'preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions'] },
     { group: 'Your chats', rows: ['bring-chats-agents'] },
     {
       group: 'Rules for all agents',

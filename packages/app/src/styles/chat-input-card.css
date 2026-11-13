@@ -380,3 +380,23 @@
 .cockpit .ck-pill-caption::after {
   content: ':';
 }
+
+/* Editing a waiting message in place. */
+.ck-chat-pending-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 100%;
+  min-width: 12rem;
+}
+.ck-chat-pending-edit-box {
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--label);
+  background: var(--bg);
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  resize: vertical;
+}

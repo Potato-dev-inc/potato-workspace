@@ -38,7 +38,7 @@ describe('PendingMessages', () => {
     const { onCancel } = render([message({ waitingFor: 'The agent is working. Sends when the turn ends.' })]);
     expect(host.textContent).toContain('run the tests');
     expect(host.querySelector('[data-testid="chat-pending-waiting"]')?.textContent).toBe('Waiting for the agent to finish.');
-    act(() => buttons('Cancel')[0].click());
+    act(() => buttons('Remove')[0].click());
     await flush();
     expect(onCancel).toHaveBeenCalledWith('m1');
   });
@@ -51,7 +51,7 @@ describe('PendingMessages', () => {
 
   it('shows why a message could not be cancelled', async () => {
     render([message({})], vi.fn(async (_id: string): Promise<string | null> => 'It is already being sent.'));
-    act(() => buttons('Cancel')[0].click());
+    act(() => buttons('Remove')[0].click());
     await flush();
     expect(host.querySelector('[data-testid="chat-pending-note"]')?.textContent).toBe('It is already being sent.');
   });
@@ -59,7 +59,7 @@ describe('PendingMessages', () => {
   it('has no Cancel link once typing started', () => {
     render([message({ state: 'sending' })]);
     expect(host.textContent).toContain('Sending…');
-    expect(buttons('Cancel')).toHaveLength(0);
+    expect(buttons('Remove')).toHaveLength(0);
   });
 
   it('shows a failed message with its error, Copy text and Hide', async () => {
@@ -67,7 +67,7 @@ describe('PendingMessages', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const { onHide } = render([message({ state: 'failed', error: 'The agent is not running in this pane.' })]);
     expect(host.querySelector('[data-testid="chat-pending-error"]')?.textContent).toBe('The agent is not running in this pane.');
-    expect(buttons('Cancel')).toHaveLength(0);
+    expect(buttons('Remove')).toHaveLength(0);
     act(() => buttons('Copy text')[0].click());
     await flush();
     expect(writeText).toHaveBeenCalledWith('run the tests');

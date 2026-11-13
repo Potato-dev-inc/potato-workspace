@@ -193,6 +193,7 @@ export const settings: Partial<Record<EnglishKey, string>> = {
   'settings.row.preload.label': '讓 AI 助理隨時待命',
   'settings.row.agent-default-models.label': '預設模型',
   'settings.row.agent-lane.label': '執行方式',
+  'settings.row.show-terminals.label': '顯示終端機',
   'settings.row.chat-addons.label': '對話附加元件',
   'settings.row.hidden-agents.label': '「新增 AI 助理」選單中的 AI 助理',
   'settings.row.versions.label': 'AI 助理版本',

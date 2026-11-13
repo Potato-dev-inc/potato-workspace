@@ -52,6 +52,7 @@ import { UntestedChip } from './UntestedChip';
 import { AcpChatDock } from '../chat/AcpChatDock';
 import { acpBadge, ACP_LANE, isTerminalChatLane, quietStrip, runStrip, tauriAcpChatApi, terminalChatCapable, terminalChatBadge, type AcpChatApi } from '../../lib/acpChat';
 import { useAcpLanes } from '../../hooks/useAcpLanes';
+import { useShowTerminals } from '../../lib/showTerminals';
 import { AcpConfigChips } from '../chat/AcpConfigChips';
 import { HandedToTerminal, handedBlock } from '../chat/HandedToTerminal';
 import { HandOverSheet } from '../chat/HandOverSheet';
@@ -252,7 +253,9 @@ export function PaneView({
   const handOver = useHandOver({ api: acp, select: c.select, notify: c.notify, resetOn: paneId });
   const inTerminal = isAcp ? (acpState?.inTerminal ?? null) : null;
   // The chat is a saved conversation unless the backend says it is not (an older backend says nothing: then it is).
-  const canHandOver = isAcp && !!acpState && !inTerminal && acpState.conversation !== null;
+  // "Open in terminal" is a terminal control: hidden while terminals are (a chat that is already in a terminal still shows its way back).
+  const showTerminals = useShowTerminals();
+  const canHandOver = showTerminals && isAcp && !!acpState && !inTerminal && acpState.conversation !== null;
 
   useEffect(() => {
     setTabRaw(rememberedTabs.get(paneId) ?? 'terminal');
@@ -359,6 +362,13 @@ export function PaneView({
   runPaneActionRef.current = runPaneAction;
   useEffect(() => subscribePaneActions(paneId, (action) => runPaneActionRef.current(action)), [paneId]);
 
+  // The agent's bell (how much it may interrupt). Hooks must run on every render, before the "opening" return below,
+  // or a pane that shows up a moment later crashes its window (React #310). A helper keeps its own, quieter bell.
+  const bellIsHelper =
+    !!pane && !!helperOfLabel(c.registry.paneList, paneId, (p) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary);
+  const bellAgent = pane?.info.agent_type ?? '';
+  const [bell, setBell] = useBellLevel(bellIsHelper ? `helper:${bellAgent}` : bellAgent, bellIsHelper);
+
   if (!pane) {
     return (
       <div className="ck-spawn">
@@ -440,9 +450,7 @@ export function PaneView({
       </>
     ) : null;
 
-  // The agent's bell (how much it may interrupt): the ⋯ menu carries its four levels. A helper starts quieter.
-  // Helpers keep their own bell (a helper is quieter by default, and its choice does not change the plain agent).
-  const [bell, setBell] = useBellLevel(helperOf ? `helper:${info.agent_type}` : info.agent_type, !!helperOf);
+  // The ⋯ menu carries the bell's four levels (the hook runs above the early return).
   const bellActions = bellMenuActions(bell, setBell, t);
 
   const copyTotals = worktree?.summary ?? null;

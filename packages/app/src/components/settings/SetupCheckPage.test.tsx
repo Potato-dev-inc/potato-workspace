@@ -66,4 +66,46 @@ describe('SetupCheckPage', () => {
     expect(hasText(m.host, 'Report copied')).toBe(true);
     await m.unmount();
   });
+
+  const row = (id: string, label: string, over: Partial<AgentHealth> = {}): AgentHealth => ({
+    id, label, state: 'unchecked', installed: true, version: '1', reason: 'Installed.', install_hint: null, login_hint: null, can_test: true, ...over,
+  });
+  const many = (): SetupCheckDeps =>
+    deps({
+      agentHealth: async () => [
+        row('claude', 'Claude'),
+        row('opencode', 'OpenCode', { can_test: false }),
+        row('gemini', 'Gemini', { installed: false, state: 'not_installed' }),
+      ],
+    });
+
+  it('every row has a button, an untestable one opens the agent, a missing one offers Install, nothing counts it as to check', async () => {
+    const a = { ...actions(), test: vi.fn(), open: vi.fn(), install: vi.fn() };
+    const m = await mountRows([pageRow(many(), a)]);
+    await settle(6);
+    expect(hasText(m.host, 'Claude is not tested yet')).toBe(true);
+    expect(hasText(m.host, 'OpenCode is installed')).toBe(true);
+    expect(hasText(m.host, 'Gemini is not installed')).toBe(true);
+    expect(hasText(m.host, '1 to check')).toBe(true);
+    await click(buttonByText(m.host, 'Open it'));
+    expect(a.open).toHaveBeenCalledWith('opencode');
+    await click(buttonByText(m.host, 'Install'));
+    expect(a.install).toHaveBeenCalledWith('gemini');
+    await click(buttonByText(m.host, 'Test'));
+    expect(a.test).toHaveBeenCalledWith('claude');
+    await m.unmount();
+  });
+
+  it('Check again tests every agent that can be tested, then reads the list', async () => {
+    const a = { ...actions(), test: vi.fn(async () => {}) };
+    const d = deps({ agentHealth: async () => [row('claude', 'Claude'), row('codex', 'Codex'), row('aider', 'Aider', { can_test: false })] });
+    const m = await mountRows([pageRow(d, a)]);
+    await settle(6);
+    await click(buttonByText(m.host, 'Check again'));
+    await settle(6);
+    expect(a.test).toHaveBeenCalledTimes(2);
+    expect(a.test).toHaveBeenNthCalledWith(1, 'claude');
+    expect(a.test).toHaveBeenNthCalledWith(2, 'codex');
+    await m.unmount();
+  });
 });

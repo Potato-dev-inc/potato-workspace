@@ -92,13 +92,13 @@ describe('SessionChatPanel with a message box', () => {
 
     emit('pane-outbox', { paneId: 'p1', messages: [message({ state: 'sending' })] });
     expect(pending()[0].getAttribute('data-state')).toBe('sending');
-    expect([...host.querySelectorAll('button')].some((b) => b.textContent === 'Cancel')).toBe(false);
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent === 'Remove')).toBe(false);
   });
 
   it('cancels a waiting message from the bubble', async () => {
     await open();
     emit('pane-outbox', { paneId: 'p1', messages: [message({ waitingFor: WAIT })] });
-    const cancel = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!;
+    const cancel = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!;
     act(() => cancel.click());
     await flush();
     expect(invoke).toHaveBeenCalledWith('pane_message_cancel', { paneId: 'p1', messageId: 'm1' });

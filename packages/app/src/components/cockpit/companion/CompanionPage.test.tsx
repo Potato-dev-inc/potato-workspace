@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeCompanionTransport, type CompanionView, type FeedItem } from '../../../lib/companion';
+import { forceShowTerminals } from '../../../lib/showTerminals';
 import { CompanionPage, type CompanionPageProps } from './CompanionPage';
 
 // The chat is the Chat tab's panel, tested with the pane; here it only needs to show which pane it was given.
@@ -155,6 +156,17 @@ describe('CompanionPage', () => {
     const { props } = await render(view());
     await act(async () => button('Show terminal')!.click());
     expect(props.onShowTerminal).toHaveBeenCalledWith('companion-mochi');
+  });
+
+  it('Show terminal is hidden while terminals are hidden, and the chat stays', async () => {
+    forceShowTerminals(false);
+    try {
+      await render(view());
+      expect(button('Show terminal')).toBeUndefined();
+      expect(host.querySelector('[data-testid="chat"]')).not.toBeNull();
+    } finally {
+      forceShowTerminals(true);
+    }
   });
 
   it('the rail shows the memory and the setup, and hides and shows again', async () => {

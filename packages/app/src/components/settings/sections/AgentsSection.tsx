@@ -248,6 +248,21 @@ export const agentsRows: RowDef[] = [
     render: () => <AgentVersions />,
   },
   {
+    id: 'show-terminals',
+    label: 'Show terminals',
+    hint: 'Off: agents start as a chat. Terminals already open keep working.',
+    keywords: 'terminal terminals show hide chat only console shell lane command line',
+    group: 'Chat',
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.show-terminals.label')}
+        description={t('settings.row.show-terminals.hint')}
+        checked={env.settings.show_terminals ?? false}
+        onChange={(value) => void env.patch({ show_terminals: value })}
+      />
+    ),
+  },
+  {
     id: 'agent-lane',
     label: 'How to run',
     hint: 'Helpers run as a chat when the agent can, else in a terminal.',

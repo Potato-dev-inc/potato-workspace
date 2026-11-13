@@ -178,7 +178,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
             />
           )
         }
-        pending={reply ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHide={hide} onSendNow={reply.onInterrupt} /> : undefined}
+        pending={reply ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHold={outbox.hold} onEdit={outbox.edit} onHide={hide} onSendNow={reply.onInterrupt} /> : undefined}
         composer={reply ? (
           <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} status={reply.status} attachFiles={pickFiles} contextUsage={contextReading} footnote={branch ? <>Work lands on <span className="ck-chat-where-branch">{branch}</span></> : undefined} />
         ) : undefined}

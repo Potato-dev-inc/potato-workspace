@@ -26,6 +26,9 @@ import { requestPaneAction } from '../../lib/pane-actions';
 import { matchesQuery, stateText } from './model';
 import { settingsShortcuts } from './palette-shortcuts';
 import { useMissionsEnabled } from '../../lib/missions';
+import { chatAgentIds } from '../../lib/chatFirst';
+import { useShowTerminals } from '../../lib/showTerminals';
+import { useAcpLanes } from '../../hooks/useAcpLanes';
 import { useNightEnabled } from '../../lib/night';
 import { projectWithCopy } from './shell-labels';
 import { multiLoginAgents, paneHeading, paneSubline } from './titles';
@@ -127,6 +130,9 @@ export function Palette({
   const listRef = useRef<HTMLDivElement>(null);
 
   const missionsOn = useMissionsEnabled();
+  // Terminals hidden: "New <agent>" rows are for agents that can chat, and there are no shell rows.
+  const terminals = useShowTerminals();
+  const laneView = useAcpLanes(!terminals);
   // The Live Room status the cockpit shares (undefined: no Live Room host, so no Live Room rows).
   const liveStatus = useContext(LiveStatusContext);
   const liveOn = liveStatus?.live === true;
@@ -169,9 +175,12 @@ export function Palette({
       });
     }
     // Plain shells (PowerShell, bash) go in their own group under the agents, not next to them.
-    const terminals: Item[] = [];
+    const shellRows: Item[] = [];
+    const chatIds = !terminals && laneView?.labs_enabled ? chatAgentIds(laneView) : null;
     for (const e of c.launchEntries) {
       if (e.disabled) continue;
+      if (!terminals && e.shell) continue;
+      if (chatIds && !chatIds.has(e.type.toLowerCase())) continue;
       const row: Item = {
         id: `new:${e.type}`,
         group: e.shell ? 'Terminals' : 'New agent',
@@ -181,7 +190,7 @@ export function Palette({
         hint: c.readyAgents.has(e.type) ? 'ready' : undefined,
         run: () => void c.newAgent(e.type),
       };
-      if (e.shell) terminals.push(row);
+      if (e.shell) shellRows.push(row);
       else out.push(row);
     }
     if (onNewCompanion) {
@@ -195,7 +204,7 @@ export function Palette({
         run: onNewCompanion,
       });
     }
-    out.push(...terminals);
+    out.push(...shellRows);
     // Moving around: the same actions as the keys, with the keys you chose shown on the right.
     const listed = c.registry.paneList.map((p) => p.info.id).filter((id) => !isCompanionPaneId(id));
     if (onOpenInbox) {
@@ -485,7 +494,7 @@ export function Palette({
       },
     );
     return out;
-  }, [c, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, keysVersion, missionsOn, nightOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn]);
+  }, [c, terminals, laneView, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, keysVersion, missionsOn, nightOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn]);
 
   const filtered = useMemo(
     () => items.filter((i) => matchesQuery(`${i.title} ${i.desc ?? ''} ${i.keywords ?? ''} ${i.group}`, query)),

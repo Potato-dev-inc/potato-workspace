@@ -28,6 +28,7 @@ import { DotSpinner } from './DotSpinner';
 import { useT } from '../../i18n';
 import { PotatoMark, IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
 import { RowMark } from './RowMark';
+import { PlanLine } from '../common/PlanLine';
 import { ProjectHeader, ProjectMeta, type ProjectSignal } from './ProjectHeader';
 import { groupByBranch, primaryBranch, projectChanges, usePaneCards } from './useProjectCard';
 import { SidebarFooter } from './SidebarFooter';
@@ -365,6 +366,7 @@ export function Sidebar({
           <span className="ck-row-main" title={[...new Set([heading.primary, entry?.label, subline, projectWithCopy(p.info.cwd)])].filter(Boolean).join(' · ')}>
             <span className="ck-row-title">{heading.primary}</span>
             <span className="ck-row-sub">{subline}</span>
+            <PlanLine paneId={id} />
           </span>
           {preview && (
             <span className="ck-row-preview" title={t('sidebar.hasPreviewAt', { address: previewAddress(preview) })} role="img" aria-label={t('sidebar.hasPreview')}>

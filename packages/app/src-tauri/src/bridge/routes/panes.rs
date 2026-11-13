@@ -102,6 +102,8 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
         ("POST", ["messages"]) => message_send(cx, pane_id),
         ("GET", ["messages"]) => messages_list(cx, pane_id),
         ("DELETE", ["messages", message_id]) => message_cancel(cx, pane_id, message_id),
+        ("POST", ["messages", message_id, "hold"]) => message_hold(cx, pane_id, message_id),
+        ("POST", ["messages", message_id, "edit"]) => message_edit(cx, pane_id, message_id),
         ("POST", ["key", ..]) => key(cx, pane_id),
         ("POST", ["detach", ..]) => detach(cx, pane_id),
         ("POST", ["role", ..]) => session::set_pane_role(cx, pane_id),
@@ -395,6 +397,32 @@ fn message_cancel(cx: &Ctx, pane_id: &str, message_id: &str) -> RouteResult {
     let message = crate::pane_outbox::global(cx.registry, cx.app)
         .cancel(pane_id, message_id)
         .map_err(|error| (409, json!({ "error": error, "code": "MESSAGE_NOT_CANCELLABLE" })))?;
+    Ok((200, json!({ "message": crate::pane_outbox::redacted(&message) })))
+}
+
+/// `POST /panes/{id}/messages/{messageId}/hold` `{ hold }`: keeps a waiting message back while it is edited, or lets it go on.
+fn message_hold(cx: &Ctx, pane_id: &str, message_id: &str) -> RouteResult {
+    #[derive(Deserialize)]
+    struct Body {
+        hold: bool,
+    }
+    let req: Body = parse_json(cx.body)?;
+    let message = crate::pane_outbox::global(cx.registry, cx.app)
+        .hold(pane_id, message_id, req.hold)
+        .map_err(|error| (409, json!({ "error": error, "code": "MESSAGE_NOT_EDITABLE" })))?;
+    Ok((200, json!({ "message": crate::pane_outbox::redacted(&message) })))
+}
+
+/// `POST /panes/{id}/messages/{messageId}/edit` `{ text }`: new text for a waiting message, in the same place in the list.
+fn message_edit(cx: &Ctx, pane_id: &str, message_id: &str) -> RouteResult {
+    #[derive(Deserialize)]
+    struct Body {
+        text: String,
+    }
+    let req: Body = parse_json(cx.body)?;
+    let message = crate::pane_outbox::global(cx.registry, cx.app)
+        .edit(pane_id, message_id, &req.text)
+        .map_err(|error| (409, json!({ "error": error, "code": "MESSAGE_NOT_EDITABLE" })))?;
     Ok((200, json!({ "message": crate::pane_outbox::redacted(&message) })))
 }
 

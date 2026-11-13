@@ -38,8 +38,8 @@ describe('the message queue', () => {
     act(() => root.render(<PendingMessages messages={[message('a', 'first one'), message('b', 'second one')]} onCancel={onCancel} onHide={vi.fn()} onSendNow={onSendNow} />));
     const rows = [...host.querySelectorAll('[data-testid="chat-pending"]')];
     const buttons = (row: Element, label: string) => [...row.querySelectorAll('button')].filter((b) => b.textContent === label);
-    expect(rows.every((r) => buttons(r, 'Send now').length === 1 && buttons(r, 'Cancel').length === 1)).toBe(true);
-    await act(async () => buttons(rows[1], 'Cancel')[0].click());
+    expect(rows.every((r) => buttons(r, 'Send now').length === 1 && buttons(r, 'Remove').length === 1)).toBe(true);
+    await act(async () => buttons(rows[1], 'Remove')[0].click());
     expect(onCancel).toHaveBeenCalledWith('b');
     act(() => buttons(rows[0], 'Send now')[0].click());
     expect(onSendNow).toHaveBeenCalledTimes(1);

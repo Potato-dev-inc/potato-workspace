@@ -147,4 +147,9 @@ export const newAgent = {
   "newAgent.continueFresh": "Start fresh with a short brief",
   "newAgent.continueHide": "Hide",
   "newAgent.freshBrief": "Carry on from the earlier chat \"{title}\" in {folder}. First say where it stopped and what is left, then go on.",
+  "chatFirst.need_one": "{count} agent needs a terminal",
+  "chatFirst.need_other": "{count} agents need terminals",
+  "chatFirst.show": "Show terminals",
+  "chatFirst.addonFirst": "This chat needs its small add-on first. Install it in Settings, under Agents.",
+  "chatFirst.modelNotSet": "{model} was not set. The chat uses its default model.",
 } as const;

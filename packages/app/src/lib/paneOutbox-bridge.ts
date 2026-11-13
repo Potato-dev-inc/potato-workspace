@@ -12,6 +12,7 @@ const REACH_FAILED = 'Could not reach your PC.';
 const OLD_PC = 'This PC is too old to take messages from the phone.';
 const SEND_FAILED = 'Could not send the message.';
 const CANCEL_FAILED = 'Could not cancel the message.';
+const EDIT_FAILED = 'Could not change the message.';
 
 type Watcher = (messages: OutboxMessage[]) => void;
 const watchers = new Map<string, Set<Watcher>>();
@@ -57,6 +58,22 @@ export function bridgeOutboxTransport(bridge: BridgeClient): OutboxTransport {
         return await bridge.cancelPaneMessage(paneId, messageId);
       } catch (error) {
         throw new Error(bridgeRefusalText(error, CANCEL_FAILED));
+      }
+    },
+    async hold(paneId, messageId, hold) {
+      if (!bridge.holdPaneMessage) throw new Error(OLD_PC);
+      try {
+        return await bridge.holdPaneMessage(paneId, messageId, hold);
+      } catch (error) {
+        throw new Error(bridgeRefusalText(error, EDIT_FAILED));
+      }
+    },
+    async edit(paneId, messageId, text) {
+      if (!bridge.editPaneMessage) throw new Error(OLD_PC);
+      try {
+        return await bridge.editPaneMessage(paneId, messageId, text);
+      } catch (error) {
+        throw new Error(bridgeRefusalText(error, EDIT_FAILED));
       }
     },
     list,

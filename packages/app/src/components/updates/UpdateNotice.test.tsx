@@ -106,6 +106,62 @@ describe('the notice', () => {
     expect(hasText(h, 'Installing the update.')).toBe(true);
   });
 
+  it('shows MB of MB, speed and time left, then "Installing…" once everything is in', async () => {
+    const MB = 1024 * 1024;
+    let send: (p: { downloaded: number; total: number | null }) => void = () => undefined;
+    const t = transport({
+      onProgress: vi.fn(async (cb) => {
+        send = cb;
+        return () => undefined;
+      }),
+      install: vi.fn(() => new Promise<void>(() => undefined)),
+    });
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const h = await mount(<AppUpdateHost transport={t} />);
+      await click(buttonByText(h, 'Update'));
+      await settle();
+      await act(async () => send({ downloaded: 10 * MB, total: 138 * MB }));
+      expect(hasText(h, '10.0 MB of 138 MB')).toBe(true); // no speed yet: one reading
+      vi.setSystemTime(Date.now() + 2000);
+      await act(async () => send({ downloaded: 16 * MB, total: 138 * MB }));
+      const detail = h.querySelector('[data-testid="update-detail"]')?.textContent ?? '';
+      expect(detail).toContain('16.0 MB of 138 MB');
+      expect(detail).toContain('3.0 MB/s');
+      expect(detail).toMatch(/about \d+ (seconds|minutes) left/);
+      await act(async () => send({ downloaded: 138 * MB, total: 138 * MB }));
+      expect(hasText(h, 'Installing…')).toBe(true);
+      expect(h.querySelector('progress')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says so when the download stops moving', async () => {
+    let send: (p: { downloaded: number; total: number | null }) => void = () => undefined;
+    const t = transport({
+      onProgress: vi.fn(async (cb) => {
+        send = cb;
+        return () => undefined;
+      }),
+      install: vi.fn(() => new Promise<void>(() => undefined)),
+    });
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    try {
+      const h = await mount(<AppUpdateHost transport={t} />);
+      await click(buttonByText(h, 'Update'));
+      await settle();
+      await act(async () => send({ downloaded: 1000, total: 100000 }));
+      expect(hasText(h, 'slow or has stopped')).toBe(false);
+      await act(async () => vi.advanceTimersByTime(18_000));
+      expect(hasText(h, 'slow or has stopped')).toBe(true);
+      await act(async () => send({ downloaded: 2000, total: 100000 }));
+      expect(hasText(h, 'slow or has stopped')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('with nothing busy there is no ready step: it goes straight on', async () => {
     const t = transport();
     const h = await mount(<AppUpdateHost transport={t} />);

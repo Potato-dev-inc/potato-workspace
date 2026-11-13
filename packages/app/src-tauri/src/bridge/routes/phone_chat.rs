@@ -97,16 +97,7 @@ pub(crate) fn merge_agents(chat_agents: &[(String, String)], terminal_agents: &[
 }
 
 fn chat_agents() -> Vec<(String, String)> {
-    if !crate::acp::chat_enabled() {
-        return Vec::new();
-    }
-    let overlay = crate::acp::overlay::OverlayStore::in_app_data();
-    let mut all = crate::acp::config::builtin_agents();
-    all.extend(crate::acp::overlay::overlay_agents(&overlay));
-    all.into_iter()
-        .filter(|cfg| !cfg.disabled && !crate::acp::install::is_missing(cfg, &crate::acp::config::RealHost))
-        .map(|cfg| (cfg.id, cfg.label))
-        .collect()
+    crate::show_terminals::chat_agents()
 }
 
 fn terminal_agents() -> Vec<(String, String)> {
@@ -128,10 +119,30 @@ fn terminal_agents() -> Vec<(String, String)> {
         .unwrap_or_default()
 }
 
+/// The agents the new-chat screen lists, and how many were left out because they only run in a terminal. With terminals
+/// off (Settings > General > Show terminals) only agents that can chat are listed, and none says it can run in a terminal.
+pub(crate) fn offered_agents(chat_agents: &[(String, String)], terminal_agents: &[(String, String)], terminals: bool) -> (Vec<Value>, usize) {
+    let all = merge_agents(chat_agents, terminal_agents);
+    if terminals {
+        return (all, 0);
+    }
+    let hidden = all.iter().filter(|row| row["chat"] != true).count();
+    let listed = all
+        .into_iter()
+        .filter(|row| row["chat"] == true)
+        .map(|mut row| {
+            row["terminal"] = json!(false);
+            row
+        })
+        .collect();
+    (listed, hidden)
+}
+
 fn new_chat_options(cx: &Ctx) -> RouteResult {
-    let agents = merge_agents(&chat_agents(), &terminal_agents());
+    let terminals = crate::show_terminals::shown();
+    let (agents, need_terminals) = offered_agents(&chat_agents(), &terminal_agents(), terminals);
     let projects: Vec<Value> = known_projects(cx).into_iter().map(|(path, name, state)| json!({ "id": project_id(&path), "name": name, "state": state })).collect();
-    Ok((200, json!({ "agents": agents, "projects": projects })))
+    Ok((200, json!({ "agents": agents, "projects": projects, "terminals": terminals, "need_terminals": need_terminals })))
 }
 
 /// The word the phone sends for the lane, as `(chat, terminal)`.
@@ -149,6 +160,9 @@ fn start_chat(cx: &Ctx) -> RouteResult {
     let project = text("project").ok_or_else(|| bad("INVALID_ARGUMENT", "project is required"))?;
     let lane = text("lane").unwrap_or_else(|| "chat".to_string());
     let as_chat = parse_lane(&lane).ok_or_else(|| bad("INVALID_ARGUMENT", "lane must be chat or terminal"))?;
+    if !as_chat && !crate::show_terminals::shown() {
+        return Err((409, json!({ "code": "TERMINALS_OFF", "error": "Terminals are hidden on the PC. Start a chat instead, or turn on Show terminals in Settings." })));
+    }
     let Some(folder) = resolve_project(&known_projects(cx), &project) else {
         return Err((404, json!({ "code": "UNKNOWN_PROJECT", "error": "The PC does not know that project. Open it on the PC first." })));
     };

@@ -3,7 +3,7 @@
 import { maskPaths } from '../../components/cockpit/what-broke-it-result-text';
 import type { CheckRow } from './types';
 
-const MARK: Record<CheckRow['status'], string> = { ok: 'OK', warn: 'CHECK', fail: 'PROBLEM' };
+const MARK: Record<CheckRow['status'], string> = { ok: 'OK', warn: 'CHECK', fail: 'PROBLEM', quiet: 'OFF' };
 
 /** Removes folder paths that show a user name, and key-looking strings. */
 export function redactReport(text: string): string {

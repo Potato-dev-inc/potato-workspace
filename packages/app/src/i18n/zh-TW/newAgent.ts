@@ -149,4 +149,9 @@ export const newAgent: Partial<Record<EnglishKey, string>> = {
   'newAgent.continueFresh': '用簡短說明重新開始',
   'newAgent.continueHide': '隱藏',
   'newAgent.freshBrief': '請接續之前在 {folder} 的對話「{title}」。先說明停在哪裡、還剩什麼，再繼續做。',
+  'chatFirst.need_one': '{count} 個 AI 助理需要終端機',
+  'chatFirst.need_other': '{count} 個 AI 助理需要終端機',
+  'chatFirst.show': '顯示終端機',
+  'chatFirst.addonFirst': '這個對話需要先安裝小型附加元件。請到「設定」的「AI 助理」安裝。',
+  'chatFirst.modelNotSet': '沒有設定成 {model}，這個對話會使用預設模型。',
 };

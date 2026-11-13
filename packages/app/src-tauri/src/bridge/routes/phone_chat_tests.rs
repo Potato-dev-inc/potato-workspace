@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::{merge_agents, needs_hold, parse_lane, project_id, resolve_project};
+use super::{merge_agents, needs_hold, offered_agents, parse_lane, project_id, resolve_project};
 use crate::mobile_pairing::pane_rules::{self, Level, PaneRule};
 use crate::mobile_pairing::{authorize_caller, init_pairing_store, pairing_store, route_need, Cap, Caps, Need, PairRequestBody};
 
@@ -168,4 +168,27 @@ fn a_mode_with_no_questions_asked_needs_a_press_and_hold() {
     assert!(!needs_hold(&options, "model", "yolo-fast"));
     // Unknown settings are not held here; the chat itself refuses them.
     assert!(!needs_hold(&options, "nope", "bypassPermissions"));
+}
+
+#[test]
+fn with_terminals_off_the_phone_is_offered_chat_agents_only_and_told_how_many_were_left_out() {
+    let chat = vec![("claude".to_string(), "Claude".to_string()), ("codex".to_string(), "Codex".to_string())];
+    let terminal = vec![("claude".to_string(), "Claude".to_string()), ("codex".to_string(), "Codex".to_string()), ("aider".to_string(), "Aider".to_string())];
+    // On: today's list, nothing hidden.
+    let (all, hidden) = offered_agents(&chat, &terminal, true);
+    assert_eq!(all.len(), 3);
+    assert_eq!(hidden, 0);
+    assert_eq!(all.iter().find(|a| a["id"] == "claude").unwrap()["terminal"], json!(true));
+    // Off: no terminal-only agent and no agent says it can run in a terminal, so the phone draws no Terminal pill.
+    let (listed, hidden) = offered_agents(&chat, &terminal, false);
+    assert_eq!(listed.iter().map(|a| a["id"].as_str().unwrap()).collect::<Vec<_>>(), vec!["claude", "codex"]);
+    assert_eq!(hidden, 1);
+    assert!(listed.iter().all(|a| a["chat"] == true && a["terminal"] == false));
+}
+
+#[test]
+fn the_terminal_lane_is_refused_while_terminals_are_off() {
+    // The route refuses `lane: terminal` with TERMINALS_OFF exactly when `show_terminals::allowed` says no.
+    assert!(!crate::show_terminals::allowed(false, true));
+    assert!(crate::show_terminals::allowed(true, true));
 }

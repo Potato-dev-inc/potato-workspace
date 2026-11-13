@@ -59,7 +59,7 @@ export function NewAgentHost({
         onReopened: (paneIds, split) => (onReopenedRun ? onReopenedRun(paneIds, split) : paneIds[0] && c.select(paneIds[0])),
       }}
       // The agent's own terminal pane, in the folder: the person signs in there (the same login Chat uses).
-      onSignIn={(agentId, folder) => c.newAgent(agentId, undefined, false, folder)}
+      onSignIn={(agentId, folder) => c.newAgent(agentId, undefined, false, folder, undefined, 'terminal')}
       onStart={(request) => runStart(request, realStartDeps({ newAgent: c.newAgent, select: c.select, notify: c.notify }))}
     />
   );

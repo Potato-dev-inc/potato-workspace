@@ -19,6 +19,8 @@ export const phoneChat: Partial<Record<EnglishKey, string>> = {
   'phone.nc.tryAgain': '再試一次',
   'phone.nc.noProjects': '你的電腦還沒有專案，請先在電腦上開啟一個。',
   'phone.nc.noAgents': '目前沒有 AI 助理可以從這支手機啟動。',
+  'phone.nc.needTerminals_one': '有 {count} 個 AI 助理需要終端機。請在電腦上開啟「顯示終端機」才能使用。',
+  'phone.nc.needTerminals_other': '有 {count} 個 AI 助理需要終端機。請在電腦上開啟「顯示終端機」才能使用。',
   'phone.nc.starting': '啟動中…',
   'phone.nc.needControl': '這支手機不能開始新對話。你可以在電腦上更改。',
   'phone.nc.firstFailed': '對話已開始，但第一則訊息沒有送出，請再送一次。',

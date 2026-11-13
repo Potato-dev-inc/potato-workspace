@@ -70,7 +70,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
   // In-memory plugin-store (one store, rid 1), keyed as the app writes it.
   // The two agent-authority switches, at the shipped defaults unless the scenario says otherwise.
   let authority = scenario.authority ?? { ask_before_agent_control: true, agents_may_merge: false };
-  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}) }]]);
+  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}), show_terminals: !scenario.chatFirst }]]);
   // Settings > Phone > Devices: one phone with full control in daily use, one watch-and-answer.
   const now = Math.floor(Date.now() / 1000);
   const day = 24 * 60 * 60;
@@ -123,6 +123,9 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (whatBroke.handled) return whatBroke.value;
       const wbResult = whatBrokeItResultMock(scenario.whatBrokeItResult, cmd, a); if (wbResult.handled) return wbResult.value;
       switch (cmd) {
+        // No phone has asked for control in the preview (a null answer crashed the control-ask notice).
+        case 'list_control_asks':
+          return [];
         case 'list_panes':
           return panes;
         case 'accounts_set_helper_login':
@@ -339,6 +342,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'agent_lane_get':
           // A scenario can turn Chat on for Claude (`window.__chatLane`), e.g. to show the live model list.
           if ((window as unknown as { __chatLane?: boolean }).__chatLane) return { labs_enabled: true, agents: [{ id: 'claude', lane: 'acp', disabled: false }] };
+          if (scenario.chatFirst) return { labs_enabled: true, agents: ['claude', 'codex'].map((id) => ({ id, label: id, lane: 'terminal', effective_lane: 'terminal', saved: false, helper_lane: 'acp', disabled: false, disabled_note: null })), can_add_chat: [], terminal_chat: [] };
           return { labs_enabled: false, agents: [] };
         // The Chat tab opens the pane's session file; the preview has none, so it says "not available" (a null answer blanked the page).
         case 'session_chat_open':

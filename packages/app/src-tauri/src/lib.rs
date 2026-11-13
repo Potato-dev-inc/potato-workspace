@@ -119,6 +119,7 @@ mod session_chat;
 mod scores;
 mod secrets;
 mod settings_store;
+mod show_terminals;
 mod settings_patch;
 mod settings_safety;
 mod global_shortcuts;
@@ -328,6 +329,8 @@ pub fn run() {
             commands::branch_brief,
             commands::pane_message_send,
             commands::pane_message_cancel,
+            commands::pane_message_hold,
+            commands::pane_message_edit,
             commands::pane_messages_list,
             commands::attachments::attachment_prepare,
             commands::attachments::attachment_save_pasted,

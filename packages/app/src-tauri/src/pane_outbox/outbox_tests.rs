@@ -862,3 +862,41 @@ mod scripted {
         assert!(racing.0.writes.is_empty(), "{:?}", racing.0.writes);
     }
 }
+
+// ---- editing a waiting message ----------------------------------------------------------------------------------
+
+#[test]
+fn a_held_message_is_not_sent_when_the_agent_gets_ready_and_goes_in_after_the_edit_is_saved() {
+    let host = Fake::new(busy());
+    let outbox = outbox(&host);
+    let first = outbox.send("p", "first").unwrap();
+    let second = outbox.send("p", "second").unwrap();
+    outbox.hold("p", &first.id, true).unwrap();
+    host.set(ready());
+    // Watch for a while (a deadline, not a bare wait): the worker must not type while the first message is held.
+    let deadline = Instant::now() + Duration::from_millis(80);
+    while Instant::now() < deadline {
+        assert!(host.typed().is_empty(), "nothing is sent while the first message is open for edit, nor the one behind it");
+        std::thread::yield_now();
+    }
+    let saved = outbox.edit("p", &first.id, "  first, better ").unwrap();
+    assert_eq!(saved.text, "first, better");
+    until_state(&outbox, &first.id, State::Sent);
+    until_state(&outbox, &second.id, State::Sent);
+    assert_eq!(host.typed(), ["first, better", "second"], "same place in the list, edited text");
+}
+
+#[test]
+fn letting_a_hold_go_sends_the_old_text_and_an_empty_or_late_edit_is_refused() {
+    let host = Fake::new(busy());
+    let outbox = outbox(&host);
+    let message = outbox.send("p", "keep me").unwrap();
+    outbox.hold("p", &message.id, true).unwrap();
+    assert_eq!(outbox.edit("p", &message.id, "   ").unwrap_err(), EMPTY);
+    outbox.hold("p", &message.id, false).unwrap();
+    host.set(ready());
+    until_state(&outbox, &message.id, State::Sent);
+    assert_eq!(host.typed(), ["keep me"]);
+    assert_eq!(outbox.edit("p", &message.id, "too late").unwrap_err(), NO_SUCH_MESSAGE);
+    assert_eq!(outbox.hold("p", "nope", true).unwrap_err(), NO_SUCH_MESSAGE);
+}

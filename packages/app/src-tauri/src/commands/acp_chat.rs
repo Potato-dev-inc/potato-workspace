@@ -53,11 +53,22 @@ pub fn start_error_text(error: &StartError) -> String {
     format!("{}: {}{}", error.code, error.message, tail)
 }
 
+/// The folder a chat starts in: the one named, or (a start from the palette, the board, the inbox...: places that have no
+/// folder of their own) the app's default project folder.
+pub(crate) fn resolve_folder(named: &str, default_project: impl FnOnce() -> String) -> String {
+    if named.trim().is_empty() {
+        default_project()
+    } else {
+        named.to_string()
+    }
+}
+
 /// Starts a chat session: `{pane_id, agent, lane: "acp"}`. Needs the Labs switch, and the agent's choice to be Chat
 /// unless `explicit` is true. The adapter is started before the pane exists, so a failure leaves nothing behind.
 #[tauri::command]
 pub async fn acp_chat_start(app: AppHandle, state: State<'_, AppState>, agent_id: String, folder: String, explicit: Option<bool>, account_id: Option<String>) -> Result<Value, String> {
     let deps = live_deps(&app, &state.registry);
+    let folder = resolve_folder(&folder, || crate::standby::default_project(&state.registry));
     let request = StartRequest { agent_id, folder: PathBuf::from(folder), explicit: explicit.unwrap_or(false), account: account_id.filter(|a| !a.trim().is_empty()), ..Default::default() };
     let started = tauri::async_runtime::spawn_blocking(move || chat::start_gated(&deps, request)).await.map_err(|e| format!("ACP_START_FAILED: {e}"))?;
     match started {
@@ -156,5 +167,17 @@ pub async fn acp_chat_retry_sign_in(pane_id: String) -> Result<(), String> {
         Err(chat::SendError::Refused(why)) => Err(format!("ACP_SIGN_IN_NEEDED: {why}")),
         Err(chat::SendError::Busy) => Err("ACP_BUSY: The agent is working. Try again when the turn ends.".to_string()),
         Err(chat::SendError::Gone) => Err("PANE_NOT_FOUND: The chat was closed.".to_string()),
+    }
+}
+
+#[cfg(test)]
+mod folder_tests {
+    use super::resolve_folder;
+
+    #[test]
+    fn a_start_with_no_folder_uses_the_default_project_and_a_named_folder_is_kept() {
+        assert_eq!(resolve_folder("", || "C:/work/default".to_string()), "C:/work/default");
+        assert_eq!(resolve_folder("   ", || "C:/work/default".to_string()), "C:/work/default");
+        assert_eq!(resolve_folder("C:/work/shop", || panic!("not asked")), "C:/work/shop");
     }
 }

@@ -465,6 +465,10 @@ export interface BridgeClient {
   paneResult?(paneId: string, withPatch?: boolean): Promise<PaneResult>;
   /** `DELETE /panes/{id}/messages/{messageId}`: cancels a message that has not started to be typed (needs `type`). */
   cancelPaneMessage?(paneId: string, messageId: string): Promise<OutboxMessage>;
+  /** `POST /panes/{id}/messages/{messageId}/hold`: keeps a waiting message back while it is edited (needs `type`). Absent on old PCs. */
+  holdPaneMessage?(paneId: string, messageId: string, hold: boolean): Promise<OutboxMessage>;
+  /** `POST /panes/{id}/messages/{messageId}/edit`: new text for a waiting message (needs `type`). Absent on old PCs. */
+  editPaneMessage?(paneId: string, messageId: string, text: string): Promise<OutboxMessage>;
   /** `GET /panes/{id}/messages`: the pane's waiting messages and the ones that just finished (needs `watch`). */
   listPaneMessages?(paneId: string): Promise<OutboxMessage[]>;
   /** The companion routes (`/companions`, needs `watch`; wake and sleep need `control`). Absent on old PCs. */
@@ -532,6 +536,10 @@ export interface PhoneNewChatProject {
 export interface PhoneNewChatOptions {
   agents: PhoneNewChatAgent[];
   projects: PhoneNewChatProject[];
+  /** The PC's "Show terminals" setting. `false`: no Terminal pill, and a terminal start is refused. Absent (an older PC): terminals are allowed. */
+  terminals?: boolean;
+  /** How many agents the PC left out because they only run in a terminal (only while `terminals` is false). */
+  need_terminals?: number;
 }
 
 /** A closed chat the drawer lists (`GET /acp/closed`). `folder` is the folder's name only. */

@@ -297,6 +297,15 @@ pub fn ready_decision(alive: bool, has_output: bool, elapsed_ms: u64) -> ReadyDe
     }
 }
 
+/// The agents the "New pane" submenu lists while terminals are hidden: only those a chat can start for (a shell has none).
+pub fn chat_first_agents(agents: &[Value], chat_ids: &[String]) -> Vec<Value> {
+    agents
+        .iter()
+        .filter(|a| a.get("id").and_then(Value::as_str).is_some_and(|id| chat_ids.iter().any(|c| c.eq_ignore_ascii_case(id))))
+        .cloned()
+        .collect()
+}
+
 pub fn build_model(agents: &[Value], panes: &[PaneRow], ready: &[String], mode: UiMode) -> Vec<Item> {
     vec![
         Item::Submenu { label: "New pane".into(), items: new_pane_items(agents, ready) },
@@ -371,6 +380,11 @@ mod runtime {
                     .collect()
             })
             .unwrap_or_default();
+        let agents = if crate::show_terminals::shown() {
+            agents
+        } else {
+            chat_first_agents(&agents, &crate::show_terminals::chat_agents().into_iter().map(|(id, _)| id).collect::<Vec<_>>())
+        };
         let model = build_model(&agents, &panes, &crate::standby::ready_agents(), crate::ui_mode::current());
         with_needs(model, &current_needs(app))
     }
@@ -495,6 +509,18 @@ mod runtime {
     /// for that provider is claimed when one is warm (its hidden window is just shown); otherwise
     /// the pane is spawned cold. A person asked for it, so the window takes focus.
     pub fn new_pane(app: &AppHandle, agent: &str) -> Result<String, String> {
+        // Terminals hidden (Settings > Agents > Show terminals is off): an agent that can chat starts as a chat, in the
+        // default project folder. An agent with no chat still opens as before (it is not offered while terminals are hidden).
+        if !crate::show_terminals::shown() && crate::show_terminals::can_chat(agent) {
+            let state = app.state::<AppState>();
+            let folder = crate::standby::default_project(&state.registry);
+            let deps = crate::commands::acp_chat::live_deps(app, &state.registry);
+            let body = serde_json::json!({ "agent": agent, "folder": folder, "lane": "acp" });
+            return match crate::acp::chat::api::start(&body, &deps) {
+                Ok((_, reply)) => Ok(reply["pane_id"].as_str().unwrap_or_default().to_string()),
+                Err((_, reply)) => Err(reply["error"].as_str().unwrap_or("The chat could not start.").to_string()),
+            };
+        }
         new_pane_for(app, agent, crate::cockpit::Origin::Tray)
     }
 
@@ -927,6 +953,15 @@ mod tests {
 
     fn job(ports: &[u16]) -> Job {
         Job { pid: 1, parent_pid: 0, name: "node".into(), command: "node server.js".into(), started_at_ms: 0, ports: ports.to_vec() }
+    }
+
+    #[test]
+    fn with_terminals_hidden_the_new_pane_menu_lists_only_agents_that_can_chat() {
+        let agents = vec![json!({"id": "claude", "label": "Claude"}), json!({"id": "aider", "label": "Aider"}), json!({"id": "powershell", "label": "PowerShell"})];
+        let kept = chat_first_agents(&agents, &["Claude".to_string()]);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0]["id"], "claude");
+        assert!(chat_first_agents(&agents, &[]).is_empty());
     }
 
     #[test]

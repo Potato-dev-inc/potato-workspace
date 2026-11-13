@@ -356,7 +356,7 @@ async function runNewAgent(paneId: string, pane: HandoffPane, deps: HandoffDeps,
 /** The real calls. `cockpit` supplies what only the window knows. */
 export function realHandoffDeps(cockpit: {
   pane: HandoffDeps['pane'];
-  newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string) => Promise<string | null>;
+  newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string, model?: string, how?: 'terminal') => Promise<string | null>;
   select: (paneId: string) => void;
   titleOf: HandoffDeps['titleOf'];
 }): HandoffDeps {
@@ -365,7 +365,8 @@ export function realHandoffDeps(cockpit: {
     chatState: (id) => tauriAcpChatApi.state(id),
     send: sendPaneMessage,
     stat: (id, stamp) => invoke<HandoffFileStat>('handoff_file_stat', stamp ? { paneId: id, stamp } : { paneId: id }),
-    startTerminal: (agent, cwd, accountId) => cockpit.newAgent(agent, accountId, false, cwd),
+    // The old pane is a terminal, so the new one is too: the brief is typed into its screen.
+    startTerminal: (agent, cwd, accountId) => cockpit.newAgent(agent, accountId, false, cwd, undefined, 'terminal'),
     startChat: (agent, cwd, accountId) => startChatSession(agent, cwd, accountId),
     startTerminalChat: (agent, cwd, accountId) => startTerminalChat(agent, cwd, accountId),
     setConfig: (id, option, value) => tauriAcpChatApi.setConfig(id, option, value),

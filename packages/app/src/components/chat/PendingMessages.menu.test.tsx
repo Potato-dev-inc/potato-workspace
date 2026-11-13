@@ -53,7 +53,7 @@ describe('a message that waits behind a menu', () => {
     act(() => root.render(<PendingMessages messages={[message()]} onCancel={onCancel} onHide={vi.fn()} />));
     expect(host.querySelector('[data-testid="chat-pending-waiting"]')?.textContent).toBe(WAIT_MENU);
     expect(host.textContent).not.toContain('The agent is working');
-    const cancel = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!;
+    const cancel = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!;
     await act(async () => cancel.click());
     expect(onCancel).toHaveBeenCalledWith('m1');
   });

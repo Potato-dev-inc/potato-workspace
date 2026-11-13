@@ -5,8 +5,10 @@ import { tauriAcpAddonApi } from '../../lib/acpAddon';
 import { agentHealthApi } from '../../lib/agent-health';
 import { useT } from '../../i18n';
 import { openSettingsAt } from '../../lib/openSettingsAt';
+import { requestAddAgentAction } from '../../lib/addAgentActions';
 import {
   buildReport,
+  rememberTest,
   runAllChecks,
   tauriSetupDeps,
   type CheckRow,
@@ -23,13 +25,20 @@ export interface SetupCheckActions {
   installAddon: (agentId: string) => Promise<void> | void;
   /** Runs the deep check of one agent ("Test", "Try again"). */
   test?: (agentId: string) => Promise<void> | void;
+  /** "Install" on a not-installed agent: shows where it is added. */
+  install?: (agentId: string) => void;
+  /** "Open it" on an agent that cannot be tested: opens it so the person can say hello. */
+  open?: (agentId: string) => void;
 }
 
 /** Where each fix button goes. Settings-page defaults; tests pass fakes. */
 export const DEFAULT_SETUP_ACTIONS: SetupCheckActions = {
   signIn: () => openSettingsAt('agents', 'agent-lane'),
   installAddon: (agentId) => tauriAcpAddonApi.install(agentId).then(() => undefined),
-  test: (agentId) => agentHealthApi.test(agentId).then(() => undefined),
+  // The answer is kept (with the time) so the row says what happened, now and the next time Settings opens.
+  test: (agentId) => agentHealthApi.test(agentId).then((result) => rememberTest(result)),
+  install: () => openSettingsAt('agents', 'add-agent'),
+  open: (agentId) => requestAddAgentAction('terminal', agentId),
 };
 
 /** Runs the button's action. */
@@ -41,10 +50,14 @@ export function runFix(fix: FixAction, actions: SetupCheckActions): Promise<void
       return actions.installAddon(fix.agentId ?? '');
     case 'test':
       return actions.test?.(fix.agentId ?? '');
+    case 'install':
+      return actions.install?.(fix.agentId ?? '');
+    case 'open':
+      return actions.open?.(fix.agentId ?? '');
   }
 }
 
-const GLYPH: Record<CheckRow['status'], string> = { ok: '✓', warn: '!', fail: '×' };
+const GLYPH: Record<CheckRow['status'], string> = { ok: '✓', warn: '!', fail: '×', quiet: '–' };
 
 /** The header line's left side: how the checks came out, in the same words as the Overview card. */
 function summary(rows: CheckRow[] | null, t: ReturnType<typeof useT>): string {
@@ -79,12 +92,14 @@ export function SetupCheckPage({
   const actions = actionsProp ?? shared?.actions ?? DEFAULT_SETUP_ACTIONS;
   const rows = source.result.state === 'ready' ? source.result.rows : source.result.state === 'failed' ? [] : null;
   const [message, setMessage] = useState<{ tone: 'status' | 'alert'; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  // The row whose button is running. Only that row waits; the others stay pressable.
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [testingAll, setTestingAll] = useState(false);
   const refresh = source.refresh;
 
   const fix = useCallback(
-    async (f: FixAction) => {
-      setBusy(true);
+    async (rowId: string, f: FixAction) => {
+      setBusyId(rowId);
       setMessage(null);
       try {
         await runFix(f, actions);
@@ -92,11 +107,31 @@ export function SetupCheckPage({
       } catch (error) {
         setMessage({ tone: 'alert', text: error instanceof Error ? error.message : t('overview.setup.didNotWork') });
       } finally {
-        setBusy(false);
+        setBusyId(null);
       }
     },
     [actions, refresh, t],
   );
+
+  // "Check again": ask every agent that can be tested to answer once more, one after the other, then read the list.
+  const checkAgain = async () => {
+    const todo = (rows ?? []).filter((r) => r.fix?.kind === 'test');
+    if (todo.length === 0) return refresh();
+    setTestingAll(true);
+    setMessage({ tone: 'status', text: t('overview.setup.testsRunning') });
+    for (const r of todo) {
+      setBusyId(r.id);
+      try {
+        await runFix(r.fix as FixAction, actions);
+      } catch {
+        /* one agent failing must not stop the others; its row says what happened */
+      }
+    }
+    setBusyId(null);
+    setTestingAll(false);
+    setMessage(null);
+    refresh();
+  };
 
   const copyReport = async () => {
     if (!rows) return;
@@ -117,7 +152,7 @@ export function SetupCheckPage({
           <Btn small disabled={rows === null} onClick={() => void copyReport()}>
             {t('overview.setup.copyReport')}
           </Btn>
-          <Btn small disabled={rows === null} onClick={refresh}>
+          <Btn small disabled={rows === null || testingAll} onClick={() => void checkAgain()}>
             {t('overview.setup.checkAgain')}
           </Btn>
         </div>
@@ -131,8 +166,8 @@ export function SetupCheckPage({
             </span>
             <span className="st-label">{r.sentence}</span>
             {r.fix && (
-              <Btn small disabled={busy} onClick={() => void fix(r.fix as FixAction)}>
-                {r.fix.label}
+              <Btn small disabled={busyId === r.id || testingAll} onClick={() => void fix(r.id, r.fix as FixAction)}>
+                {busyId === r.id && r.fix.kind === 'test' ? t('overview.fix.testing') : r.fix.label}
               </Btn>
             )}
           </div>

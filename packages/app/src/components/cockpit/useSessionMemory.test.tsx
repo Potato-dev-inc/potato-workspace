@@ -82,8 +82,8 @@ describe('useSessionMemory', () => {
     render({ ready: true, selectedId: null, panes: paneMap(info('live')) });
     expect(host.textContent).toContain('2 terminal agents ended with the last restart.');
     await act(async () => press('Reopen'));
-    expect(newAgent).toHaveBeenNthCalledWith(1, 'claude', undefined, false, 'C:\\a');
-    expect(newAgent).toHaveBeenNthCalledWith(2, 'codex', 'acc1', false, 'C:\\b');
+    expect(newAgent).toHaveBeenNthCalledWith(1, 'claude', undefined, false, 'C:\\a', undefined, 'terminal');
+    expect(newAgent).toHaveBeenNthCalledWith(2, 'codex', 'acc1', false, 'C:\\b', undefined, 'terminal');
     expect(host.textContent).not.toContain('ended with the last restart');
   });
 
@@ -138,8 +138,8 @@ describe('useSessionMemory', () => {
     render({ ready: true, selectedId: null, panes: paneMap() });
     expect(host.textContent).toContain('2 terminal agents ended with the last restart.');
     await act(async () => press('Reopen'));
-    expect(newAgent).toHaveBeenNthCalledWith(1, 'claude', undefined, false, 'C:\\p1');
-    expect(newAgent).toHaveBeenNthCalledWith(2, 'codex', undefined, false, 'C:\\p2');
+    expect(newAgent).toHaveBeenNthCalledWith(1, 'claude', undefined, false, 'C:\\p1', undefined, 'terminal');
+    expect(newAgent).toHaveBeenNthCalledWith(2, 'codex', undefined, false, 'C:\\p2', undefined, 'terminal');
   });
 
   it('writes the selection only after the restore ran', () => {

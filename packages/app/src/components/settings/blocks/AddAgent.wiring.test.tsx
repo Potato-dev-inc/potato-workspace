@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AddAgentApi, AddAgentRun, FoundAgent } from '../../../lib/addAgent';
 import { SCENARIOS, mockAddAgentApi } from '../../../lib/addAgent.mocks';
+import { forceShowTerminals } from '../../../lib/showTerminals';
 import { AddAgentActionHost } from '../../cockpit/AddAgentActionHost';
 import { agentsRows } from '../sections/AgentsSection';
 import { buttonByText, click, mountRows, settle, type as typeInto } from '../test-utils';
@@ -102,6 +103,36 @@ describe('Add an agent: result buttons reach a pane', () => {
       expect(w.startChat).not.toHaveBeenCalled();
     } finally {
       await w.close();
+    }
+  });
+
+  it('with terminals hidden an added agent offers Start a chat only, and a terminal-only one says how to turn terminals on', async () => {
+    forceShowTerminals(false);
+    try {
+      fakeBackend('native_ok');
+      let w = await withHost();
+      try {
+        await typeInto(box(w.m), 'fakenat');
+        await click(buttonByText(w.m.host, 'Add'));
+        await settle();
+        expect(buttonByText(w.m.host, 'Start a chat')).toBeTruthy();
+        expect(buttonByText(w.m.host, 'Open in a terminal')).toBeUndefined();
+      } finally {
+        await w.close();
+      }
+      fakeBackend('terminal_only');
+      w = await withHost();
+      try {
+        await typeInto(box(w.m), 'faketerm');
+        await click(buttonByText(w.m.host, 'Add'));
+        await settle();
+        expect(buttonByText(w.m.host, 'Open Faketerm')).toBeUndefined();
+        expect(buttonByText(w.m.host, 'Show terminals')).toBeTruthy();
+      } finally {
+        await w.close();
+      }
+    } finally {
+      forceShowTerminals(true);
     }
   });
 

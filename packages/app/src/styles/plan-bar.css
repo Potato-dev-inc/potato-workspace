@@ -1,0 +1,110 @@
+/* The plan bar: one slim line of text over a thin progress line; the checklist opens under it. */
+:is(.cockpit, .ph) .ck-planbar {
+  padding: 4px 8px 0;
+  border-bottom: 1px solid var(--sep);
+  background: var(--bg);
+}
+:is(.cockpit, .ph) .ck-planbar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 0 4px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--label-2);
+}
+:is(.cockpit, .ph) .ck-planbar-count {
+  flex: none;
+  font-weight: 600;
+  color: var(--label);
+  font-variant-numeric: tabular-nums;
+}
+:is(.cockpit, .ph) .ck-planbar-current {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:is(.cockpit, .ph) .ck-planbar-head svg {
+  flex: none;
+  margin-left: auto;
+}
+:is(.cockpit, .ph) .ck-planbar-line {
+  height: 2px;
+  margin: 0 -8px;
+  background: var(--sep);
+}
+:is(.cockpit, .ph) .ck-planbar-fill {
+  display: block;
+  height: 100%;
+  background: var(--label-2);
+  transition: width 240ms var(--ease, ease);
+}
+:is(.cockpit, .ph) .ck-planbar[data-done='true'] .ck-planbar-fill {
+  background: var(--label);
+}
+:is(.cockpit, .ph) .ck-planbar-list {
+  max-height: 11rem;
+  margin: 0;
+  padding: 6px 4px 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+:is(.cockpit, .ph) .ck-planbar-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 3px 2px;
+  font-size: 12px;
+  color: var(--label-3);
+}
+:is(.cockpit, .ph) .ck-planbar-item--in_progress {
+  color: var(--label);
+  font-weight: 600;
+}
+:is(.cockpit, .ph) .ck-planbar-item--completed {
+  color: var(--label-2);
+}
+:is(.cockpit, .ph) .ck-planbar-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The same thin line under a name in the sidebar and on a board tile. */
+.cockpit .ck-plan-line {
+  display: block;
+  height: 2px;
+  margin-top: 3px;
+  border-radius: 1px;
+  background: var(--sep);
+  overflow: hidden;
+}
+.cockpit .ck-plan-line > span {
+  display: block;
+  height: 100%;
+  background: var(--label-2);
+  transition: width 240ms var(--ease, ease);
+}
+
+/* A slim sidebar row is one line: the thin line sits along the bottom of the row, under the name. */
+.cockpit .ck-row--slim {
+  position: relative;
+}
+.cockpit .ck-row--slim .ck-plan-line {
+  position: absolute;
+  right: 10px;
+  bottom: 2px;
+  left: 34px;
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.cockpit, .ph) .ck-planbar-fill,
+  .cockpit .ck-plan-line > span {
+    transition: none;
+  }
+}

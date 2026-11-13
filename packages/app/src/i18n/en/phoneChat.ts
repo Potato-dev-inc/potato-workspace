@@ -17,6 +17,8 @@ export const phoneChat = {
   'phone.nc.tryAgain': 'Try again',
   'phone.nc.noProjects': 'Your PC has no projects yet. Open one on your PC first.',
   'phone.nc.noAgents': 'No agent can start from this phone right now.',
+  'phone.nc.needTerminals_one': '{count} agent needs a terminal. Turn on Show terminals on your PC to use it.',
+  'phone.nc.needTerminals_other': '{count} agents need terminals. Turn on Show terminals on your PC to use them.',
   'phone.nc.starting': 'Starting…',
   'phone.nc.needControl': 'This phone may not start chats. You can change that on your PC.',
   'phone.nc.firstFailed': 'The chat started, but the first message did not go. Send it again.',

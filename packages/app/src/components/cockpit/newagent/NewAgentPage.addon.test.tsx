@@ -104,9 +104,11 @@ async function type(value: string) {
 }
 
 describe('Chat needs the add-on', () => {
-  it('asks to install it only when Chat is chosen, with the size, and Send waits', async () => {
+  it('Chat is the way even before its add-on is installed: the card asks to install it, with the size, and Send waits; Terminal does not ask', async () => {
     const r = addonRig({ labsEnabled: true, addons: [status()] });
     await mount(r.api);
+    expect(host.querySelector('[data-testid="addon-prompt"]')).not.toBeNull();
+    await chooseTerminal();
     expect(host.querySelector('[data-testid="addon-prompt"]')).toBeNull();
     await chooseChat();
     expect(host.querySelector('[data-testid="addon-prompt"]')?.textContent).toContain('Chat needs a small add-on for Claude (about 48 MB).');

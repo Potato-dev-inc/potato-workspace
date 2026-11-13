@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { AcpChatApi, AcpChatState, HandOver, OpenedInTerminal, BackInChat } from '../../lib/acpChat';
+import { forceShowTerminals } from '../../lib/showTerminals';
 import { fakeAcpApi } from '../../lib/acpChatFake';
 import type { ChatItem } from '../../lib/sessionChat';
 import { PaneView } from './PaneView';
@@ -119,6 +120,29 @@ describe('Open in terminal', () => {
     await flush();
     expect(openInTerminal).toHaveBeenCalledWith('p1', false);
     expect(select).toHaveBeenCalledWith('t1');
+  });
+
+  it('is not drawn while terminals are hidden (Show terminals is off)', async () => {
+    forceShowTerminals(false);
+    try {
+      const { c } = cockpit('acp');
+      await mount(c, fakeAcpApi({ state: async () => state() }));
+      expect(testId('open-in-terminal')).toBeNull();
+    } finally {
+      forceShowTerminals(true);
+    }
+  });
+
+  it('a terminal pane that is already open keeps its Terminal tab when terminals are hidden', async () => {
+    forceShowTerminals(false);
+    try {
+      const { c } = cockpit(undefined);
+      await mount(c, fakeAcpApi());
+      const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].map((t) => t.textContent);
+      expect(tabs).toContain('Terminal');
+    } finally {
+      forceShowTerminals(true);
+    }
   });
 
   it('is not drawn for a chat that is not a saved conversation, nor on a terminal pane', async () => {

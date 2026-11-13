@@ -23,7 +23,9 @@ import { PermissionTrace } from './PermissionTrace';
 import { ResponseActions } from './ResponseActions';
 import { ThinkingBlock } from './ThinkingBlock';
 import { RememberSelection } from './RememberSelection';
-import { currentPlan, PlanCard } from './PlanCard';
+import { currentPlan } from './PlanCard';
+import { PlanBar } from './PlanBar';
+import { planProgress, publishPlanProgress } from '../../lib/planProgress';
 import { ToolRow } from './ToolRow';
 import { TurnEndingButtons, type EndingActions } from './TurnEndingButtons';
 import { ViewModeToggle } from './ViewModeToggle';
@@ -210,6 +212,10 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
   turnsNow.current = turns;
   useEffect(() => (paneId ? registerPaneTurns(paneId, () => turnsNow.current) : undefined), [paneId]);
   const plan = useMemo(() => currentPlan(turns), [turns]);
+  // The sidebar and the board draw a thin line from the same list.
+  useEffect(() => {
+    if (paneId) publishPlanProgress(paneId, planProgress(plan));
+  }, [paneId, plan]);
   // The same rule for `Branch`.
   const showBranch = !!canBranch && !!onBranch && !readOnly;
   const newestBranchable = useMemo(() => (showBranch ? lastBranchableId(turns) : null), [showBranch, turns]);
@@ -294,7 +300,7 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
         </p>
       )}
       {banner}
-      <PlanCard items={plan} />
+      <PlanBar items={plan} />
       <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 py-2 ck-chat-body">
         {state === 'unavailable' && (
           <div className="ck-empty ck-chat-empty">

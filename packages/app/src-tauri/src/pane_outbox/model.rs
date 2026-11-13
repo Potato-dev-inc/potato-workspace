@@ -18,6 +18,8 @@ pub const RUN_CONTROLS: &str = "An agent run controls this pane. Use Terminal, o
 pub const NOT_SUPPORTED: &str = "Chat replies are not available for this agent yet.";
 pub const NO_SUCH_MESSAGE: &str = "That message is not waiting any more.";
 pub const ALREADY_SENDING: &str = "It is already being sent.";
+/// How long a message the person is editing is kept back. A window that closed mid-edit cannot block the queue for ever.
+pub const HOLD_LIMIT: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 pub const WAIT_BUSY: &str = "The agent is working. Sends when the turn ends.";
 /// The pane is not working (idle, or waiting on a question) and shows no input box: a menu or a setup screen is up.
@@ -80,14 +82,22 @@ pub(super) struct Entry {
     pub created: std::time::Instant,
     /// When it reached a final state.
     pub finished: Option<std::time::Instant>,
+    /// Since when the person has it open to edit: it (and so the queue behind it) is not sent meanwhile.
+    pub held: Option<std::time::Instant>,
 }
 
 impl Entry {
+    /// The person is editing it, and has not been at it for longer than `HOLD_LIMIT`.
+    pub fn is_held(&self) -> bool {
+        self.held.is_some_and(|at| at.elapsed() < HOLD_LIMIT)
+    }
+
     pub fn finish(&mut self, state: State, error: Option<&str>) {
         self.message.state = state;
         self.message.waiting_for = None;
         self.message.error = error.map(str::to_string);
         self.finished = Some(std::time::Instant::now());
+        self.held = None;
     }
 
     pub fn wait(&mut self, why: &str) {

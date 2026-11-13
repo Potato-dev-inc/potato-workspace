@@ -33,8 +33,8 @@ export interface NoChatPromptProps {
   onStartChat: (agentId: string) => Promise<void>;
   /** Open the add-chat dialog; `prefer` picks that way when it is offered. */
   onAddChat: (agent: NoChatAgent, prefer?: AddChatKind) => void;
-  /** Start this agent in a terminal, once. */
-  onUseTerminal: () => void;
+  /** Start this agent in a terminal, once. Absent (terminals are hidden): the way is not offered. */
+  onUseTerminal?: () => void;
 }
 
 /** "Install chat add-on (17 MB)" for the button, or without the size when it is not known. */
@@ -166,7 +166,7 @@ export function NoChatPrompt({ agent, addons, resolve, canAdd, onStartChat, onAd
   if (needsAddon && addons) ways.push({ label: addonLabel(addon?.size_mb), disabled: busy, onClick: () => void install() });
   if (adapter) ways.push({ label: t('inbox.useAdapter'), disabled: busy, onClick: () => onAddChat(agent, 'adapter') });
   if (others) ways.push({ label: t('inbox.addChat'), disabled: busy, onClick: () => onAddChat(agent) });
-  ways.push({ label: t('inbox.useTerminal'), disabled: phase === 'starting', onClick: onUseTerminal });
+  if (onUseTerminal) ways.push({ label: t('inbox.useTerminal'), disabled: phase === 'starting', onClick: onUseTerminal });
 
   return (
     <div className="ck-nochat" data-testid={`nochat-${agent.id}`} role="group" aria-label={t('inbox.chatFor', { agent: agent.label })}>

@@ -222,11 +222,11 @@ describe('a message waiting for the turn to end', () => {
     const row = host.querySelector('[data-testid="chat-pending"]')!;
     expect(row.textContent).toContain('Waiting for the turn to end');
     expect(row.textContent).toContain('Send now');
-    expect(row.textContent).toContain('Cancel');
+    expect(row.textContent).toContain('Remove');
     await act(async () => button('Send now')!.click());
     expect(interrupt).toHaveBeenCalledTimes(1);
     expect(invoke).not.toHaveBeenCalledWith('pane_message_cancel', expect.anything());
-    await act(async () => button('Cancel')!.click());
+    await act(async () => button('Remove')!.click());
     expect(invoke).toHaveBeenCalledWith('pane_message_cancel', { paneId: 'p1', messageId: 'm1' });
   });
 

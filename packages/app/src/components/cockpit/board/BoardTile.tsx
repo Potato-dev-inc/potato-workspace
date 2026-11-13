@@ -2,6 +2,7 @@
 // approval also gets its two answers beside it (a separate row, so no button sits inside another button).
 import type { MouseEvent } from 'react';
 import { useT } from '../../../i18n';
+import { PlanLine } from '../../common/PlanLine';
 import { AgentLogo } from '../../common/AgentLogo';
 import type { PromptChoice } from '../../../lib/cockpit-api';
 import { elapsedParts, type BoardTile as Tile } from './boardModel';
@@ -25,6 +26,7 @@ export function BoardTile({ tile, now, onOpen, onAnswer }: BoardTileProps) {
           <AgentLogo id={tile.agentType} name={tile.name} size={13} decorative />
           <span className="ck-board-name">{tile.name}</span>
         </span>
+        <PlanLine paneId={tile.paneId} />
         <span className="ck-board-project">{tile.project}</span>
         {tile.activity && <span className="ck-board-activity">{tile.activity}</span>}
         {age && <span className="ck-board-age">{age}</span>}

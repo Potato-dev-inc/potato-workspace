@@ -4,7 +4,7 @@ import { PHONE_AGENT_TYPES, PHONE_BUFFER, PHONE_DIGEST, PHONE_PANES, PHONE_PREVI
 import { DEFAULT_PUBLIC_SETTINGS } from '../lib/bridge-settings';
 import { LS_BRIDGE_URL } from '../lib/bridge-url';
 import { PANE_CODEX } from './fixtures';
-import { PHONE_ASKING_REPLY, PHONE_CHAT_REPLY, phoneLiveReply } from './phone-chat-fixtures';
+import { PHONE_ASKING_REPLY, PHONE_CHAT_REPLY, PHONE_QUEUED_MESSAGES, phoneLiveReply, phonePlanReply } from './phone-chat-fixtures';
 import { PHONE_TEAM_JOB, PHONE_TEAM_OFF, phoneTeamReply } from './phone-team-fixtures';
 import type { HarnessScenario } from './types';
 
@@ -84,7 +84,7 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
   if (route === '/agents/types') return json(PHONE_AGENT_TYPES);
   const chatRoute = /^\/panes\/([^/]+)\/chat$/.exec(route);
   if (chatRoute && method === 'GET') {
-    const served = phone.chat === 'live' ? phoneLiveReply(Date.now()) : phone.chat === 'asking' ? PHONE_ASKING_REPLY : PHONE_CHAT_REPLY;
+    const served = phone.chat === 'plan' ? phonePlanReply(Date.now()) : phone.chat === 'live' ? phoneLiveReply(Date.now()) : phone.chat === 'asking' ? PHONE_ASKING_REPLY : PHONE_CHAT_REPLY;
     return json(path.includes('since=') ? { ...served, items: [] } : served);
   }
   // Phone compose: what the last turn did (P10) and a file sent from the phone (P14).
@@ -115,7 +115,7 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
   if (/^\/panes\/[^/]+\/uploads$/.test(route) && method === 'POST') {
     return json({ attachment: { name: 'photo.jpg', path: 'C:/Potato/phone-uploads/2026-11-13/photo.jpg', kind: 'image', size: 1_258_291, mime: 'image/jpeg' } });
   }
-  if (/^\/panes\/[^/]+\/messages$/.test(route) && method === 'GET') return json({ messages: [] });
+  if (/^\/panes\/[^/]+\/messages$/.test(route) && method === 'GET') return json({ messages: phone.chat === 'plan' ? PHONE_QUEUED_MESSAGES : [] });
   const acpState = /^\/acp\/sessions\/([^/]+)$/.exec(route);
   if (acpState && method === 'GET' && phone.acp) {
     const busy = phone.acp.busy === true;

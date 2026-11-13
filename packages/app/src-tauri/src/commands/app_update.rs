@@ -54,6 +54,16 @@ struct Progress {
     total: Option<u64>,
 }
 
+/// No new data for this long: the download counts as stopped.
+pub const STALL_AFTER_MS: u64 = 45_000;
+/// The sentence for a download that stopped moving.
+pub const STALLED_SENTENCE: &str = "The download stopped moving. Check your internet and try again. Your current version keeps working.";
+
+/// True when nothing has arrived for `limit_ms` (times are milliseconds since the download began).
+pub fn is_stalled(now_ms: u64, last_chunk_ms: u64, limit_ms: u64) -> bool {
+    now_ms.saturating_sub(last_chunk_ms) >= limit_ms
+}
+
 /// A plain sentence for what went wrong (the page shows it as it is). Pure, so tests can pin the words.
 pub fn plain_update_error(raw: &str) -> String {
     let lower = raw.to_lowercase();
@@ -191,20 +201,36 @@ pub async fn app_update_install(app: AppHandle, confirm_running: bool, reopen_ch
             let mut downloaded: u64 = 0;
             let mut last_sent: Option<u8> = None;
             let progress_app = app.clone();
-            let bytes = update
-                .download(
-                    move |chunk, total| {
-                        downloaded += chunk as u64;
-                        let percent = total.filter(|t| *t > 0).map(|t| (downloaded.saturating_mul(100) / t).min(100) as u8);
-                        if percent.is_none() || percent != last_sent {
-                            last_sent = percent;
-                            let _ = progress_app.emit(PROGRESS_EVENT, Progress { downloaded, total });
-                        }
-                    },
-                    || {},
-                )
-                .await
-                .map_err(|e| plain_update_error(&e.to_string()))?;
+            // A download that stops moving must not hang for ever: with no new data for STALL_AFTER_MS it ends with a
+            // plain sentence and the page offers Try again (the unfinished download is dropped, nothing was installed).
+            let started = std::time::Instant::now();
+            let last_chunk = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+            let touch = last_chunk.clone();
+            let download = update.download(
+                move |chunk, total| {
+                    touch.store(started.elapsed().as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
+                    downloaded += chunk as u64;
+                    let percent = total.filter(|t| *t > 0).map(|t| (downloaded.saturating_mul(100) / t).min(100) as u8);
+                    if percent.is_none() || percent != last_sent {
+                        last_sent = percent;
+                        let _ = progress_app.emit(PROGRESS_EVENT, Progress { downloaded, total });
+                    }
+                },
+                || {},
+            );
+            let watchdog = async {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    let now = started.elapsed().as_millis() as u64;
+                    if is_stalled(now, last_chunk.load(std::sync::atomic::Ordering::Relaxed), STALL_AFTER_MS) {
+                        break;
+                    }
+                }
+            };
+            let bytes = tokio::select! {
+                done = download => done.map_err(|e| plain_update_error(&e.to_string()))?,
+                () = watchdog => return Err(STALLED_SENTENCE.to_string()),
+            };
             (update, bytes)
         }
     };
@@ -281,6 +307,16 @@ mod tests {
     fn a_bad_signature_is_said_as_a_safety_check_and_nothing_is_installed() {
         let s = plain_update_error("the signature could not be verified: Invalid signature");
         assert!(s.contains("safety check") && s.contains("keeps working"), "{s}");
+    }
+
+    #[test]
+    fn a_download_that_stops_moving_is_called_stalled_and_says_so_in_plain_words() {
+        assert!(!is_stalled(10_000, 0, STALL_AFTER_MS));
+        assert!(!is_stalled(44_999, 0, STALL_AFTER_MS));
+        assert!(is_stalled(45_000, 0, STALL_AFTER_MS));
+        // Data arriving keeps resetting the clock.
+        assert!(!is_stalled(100_000, 70_000, STALL_AFTER_MS));
+        assert!(STALLED_SENTENCE.contains("try again") && STALLED_SENTENCE.contains("keeps working"));
     }
 
     #[test]

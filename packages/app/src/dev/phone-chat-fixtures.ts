@@ -44,6 +44,31 @@ export function phoneLiveReply(now: number): PhoneChatReply {
   return { available: true, reason: null, source: 'file', waitingFor: null, rev: 1, reset: false, items };
 }
 
+/** A turn that works through a task list: 3 of 6 steps done (the plan bar), and two messages waiting behind it. */
+export function phonePlanReply(now: number): PhoneChatReply {
+  const reply = phoneLiveReply(now);
+  const plan: ChatItem = {
+    kind: 'plan',
+    id: 'p1',
+    at: null,
+    replace: true,
+    items: [
+      { text: 'Read the bridge routes', status: 'completed' },
+      { text: 'Add the loopback check', status: 'completed' },
+      { text: 'Write the tests', status: 'completed' },
+      { text: 'Run the full test suite', status: 'in_progress' },
+      { text: 'Fix anything that fails', status: 'pending' },
+      { text: 'Write the summary', status: 'pending' },
+    ],
+  };
+  return { ...reply, items: [reply.items[0]!, plan, ...reply.items.slice(1)] };
+}
+
+export const PHONE_QUEUED_MESSAGES = [
+  { id: 'q1', text: 'Also update the changelog when you are done.', createdAt: 1, state: 'queued', waitingFor: 'The agent is working. Sends when the turn ends.', error: null },
+  { id: 'q2', text: 'Then open a pull request.', createdAt: 2, state: 'queued', waitingFor: 'Waits for the messages before it.', error: null },
+];
+
 /** The finished turn, but the agent ends by asking the person something (the quick replies are made from it). */
 export const PHONE_ASKING_REPLY: PhoneChatReply = {
   ...({ available: true, reason: null, source: 'file', waitingFor: null, rev: 1, reset: false } as const),

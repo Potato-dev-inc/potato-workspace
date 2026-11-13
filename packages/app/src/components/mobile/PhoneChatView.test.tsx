@@ -302,9 +302,26 @@ describe('PhoneChatView message box', () => {
     } as Partial<BridgeClient>);
     await mount({ bridge });
     await act(async () => { await Promise.resolve(); });
-    const cancel = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Cancel') as HTMLButtonElement;
+    const cancel = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Remove') as HTMLButtonElement;
     await act(async () => { cancel.click(); await Promise.resolve(); });
     expect(cancelPaneMessage).toHaveBeenCalledWith('p1', 'm1');
+  });
+
+  it('a queued bubble on the phone can be edited: Edit holds it on the PC, Save sends the new text', async () => {
+    const holdPaneMessage = vi.fn(async () => queued());
+    const editPaneMessage = vi.fn(async () => queued({ text: 'fix the login test, please' }));
+    const { bridge } = bridgeWithBox({ listPaneMessages: vi.fn(async () => [queued()]), holdPaneMessage, editPaneMessage } as Partial<BridgeClient>);
+    await mount({ bridge });
+    await act(async () => { await Promise.resolve(); });
+    const button = (label: string) => [...host.querySelectorAll('button')].find((b) => b.textContent === label) as HTMLButtonElement;
+    await act(async () => { button('Edit').click(); await Promise.resolve(); });
+    expect(holdPaneMessage).toHaveBeenCalledWith('p1', 'm1', true);
+    const area = host.querySelector('[data-testid="chat-pending-editor"] textarea') as HTMLTextAreaElement;
+    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => { set.call(area, 'fix the login test, please'); area.dispatchEvent(new Event('input', { bubbles: true })); });
+    await act(async () => { button('Save').click(); await Promise.resolve(); });
+    expect(editPaneMessage).toHaveBeenCalledWith('p1', 'm1', 'fix the login test, please');
+    expect(host.querySelector('[data-testid="chat-pending-editor"]')).toBeNull();
   });
 
   it('shows the messages the PC pushes with pane-outbox', async () => {

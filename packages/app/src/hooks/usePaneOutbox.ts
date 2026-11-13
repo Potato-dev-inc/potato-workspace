@@ -14,6 +14,10 @@ export interface PaneOutboxHook {
   send: (text: string, attachments?: readonly ChatAttachment[]) => Promise<string | null>;
   /** Cancels a waiting message. Resolves to null, or to the reason it could not be cancelled. */
   cancel: (messageId: string) => Promise<string | null>;
+  /** Keeps a waiting message back while it is edited (`hold` true), or lets it go on. Resolves to null, or the reason. */
+  hold: (messageId: string, hold: boolean) => Promise<string | null>;
+  /** Saves new text for a waiting message, in the same place. Resolves to null, or the reason. */
+  edit: (messageId: string, text: string) => Promise<string | null>;
 }
 
 const NOT_CONNECTED = 'Could not reach your PC.';
@@ -70,5 +74,28 @@ export function usePaneOutbox(transport: OutboxTransport | null, paneId: string,
     [transport, paneId],
   );
 
-  return { messages, send, cancel };
+  const replace = useCallback(
+    async (change: () => Promise<OutboxMessage>) => {
+      try {
+        const done = await change();
+        setMessages((prev) => prev.map((m) => (m.id === done.id ? done : m)));
+        return null;
+      } catch (error) {
+        return errorSentence(error, SEND_FAILED);
+      }
+    },
+    [],
+  );
+
+  const hold = useCallback(
+    async (messageId: string, on: boolean) => (transport ? replace(() => transport.hold(paneId, messageId, on)) : NOT_CONNECTED),
+    [transport, paneId, replace],
+  );
+
+  const edit = useCallback(
+    async (messageId: string, text: string) => (transport ? replace(() => transport.edit(paneId, messageId, text)) : NOT_CONNECTED),
+    [transport, paneId, replace],
+  );
+
+  return { messages, send, cancel, hold, edit };
 }

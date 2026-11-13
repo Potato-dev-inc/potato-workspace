@@ -655,3 +655,13 @@
 .cockpit .ck-na-cards .ck-na-foot:empty {
   display: none;
 }
+
+/* "N agents need terminals · Show terminals": one quiet line under an agent list, with the link inline. */
+.cockpit .ck-na-need-terminals .ck-menu-setup {
+  display: inline;
+  width: auto;
+  height: auto;
+  padding: 0 2px;
+  background: none;
+  text-decoration: underline;
+}

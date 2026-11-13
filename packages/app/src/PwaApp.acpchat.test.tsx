@@ -331,7 +331,7 @@ describe('a chat over ACP on the phone', () => {
     await flush();
     expect(host.querySelector('[data-testid="thinking-block"] [aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
     expect(host.querySelector('[data-testid="phone-fold"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="chat-plan"]')?.textContent).toContain('Write the file');
+    expect(host.querySelector('[data-testid="plan-bar"]')?.textContent).toContain('Write the file');
     expect(host.textContent).toContain('Writing it now.');
     for (const name of ['Allow Once', 'Allow for Session', 'Reject']) expect(buttonNamed(name)).toBeTruthy();
     await click(buttonNamed('Allow Once'));

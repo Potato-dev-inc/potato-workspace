@@ -33,6 +33,30 @@ pub async fn pane_message_cancel(
     pane_outbox::global(&state.registry, &app).cancel(&pane_id, &message_id)
 }
 
+/// Holds a waiting message back while the person edits it (`hold` true), or lets it go on (false).
+#[tauri::command]
+pub async fn pane_message_hold(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    pane_id: String,
+    message_id: String,
+    hold: bool,
+) -> Result<OutboxMessage, String> {
+    pane_outbox::global(&state.registry, &app).hold(&pane_id, &message_id, hold)
+}
+
+/// Saves new text for a waiting message, in the same place in the list.
+#[tauri::command]
+pub async fn pane_message_edit(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    pane_id: String,
+    message_id: String,
+    text: String,
+) -> Result<OutboxMessage, String> {
+    pane_outbox::global(&state.registry, &app).edit(&pane_id, &message_id, &text)
+}
+
 #[tauri::command]
 pub async fn pane_messages_list(
     app: AppHandle,

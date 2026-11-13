@@ -46,13 +46,14 @@ describe('setup checks: mapping', () => {
     expect(checkBridge(ctx({ bridgeUrl: null }))[0].status).toBe('fail');
   });
 
-  it('agents: ready is ok, needs login has a Sign in fix, skips not installed', () => {
+  it('agents: ready is ok, needs login has a Sign in fix, not installed is quiet', () => {
     const rows = checkAgents([
       agent({}),
       agent({ id: 'claude', label: 'Claude', state: 'needs_login', reason: 'Sign in first.' }),
       agent({ id: 'gemini', label: 'Gemini', installed: false, state: 'not_installed' }),
     ]);
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
+    expect(rows[2]).toMatchObject({ id: 'agentoff-gemini', status: 'quiet', sentence: 'Gemini is not installed' });
     expect(rows[0]).toMatchObject({ status: 'ok', sentence: 'Codex is signed in', fix: null });
     expect(rows[1]).toMatchObject({
       status: 'warn',
@@ -137,5 +138,50 @@ describe('Copy report redaction', () => {
     expect(report).toContain('[PROBLEM]');
     expect(report).not.toContain('someone');
     expect(report).not.toContain('sk-test');
+  });
+});
+
+describe('agent rows: every agent has an action and the last Test is remembered', () => {
+  const unchecked = (over: Partial<AgentHealth>) => agent({ state: 'unchecked', ...over });
+
+  it('an untested agent has Test; one that cannot be tested says why and offers Open it', () => {
+    const rows = checkAgents([
+      unchecked({ id: 'claude', label: 'Claude' }),
+      unchecked({ id: 'opencode', label: 'OpenCode', can_test: false }),
+      unchecked({ id: 'aider', label: 'Aider', can_test: false }),
+    ]);
+    expect(rows[0]).toMatchObject({ status: 'warn', sentence: 'Claude is not tested yet', fix: { kind: 'test', agentId: 'claude' } });
+    for (const r of rows.slice(1)) {
+      expect(r.status).toBe('ok'); // not a "to check"
+      expect(r.sentence).toContain('cannot be tested here');
+      expect(r.fix).toMatchObject({ kind: 'open' });
+    }
+  });
+
+  it('a remembered good Test shows the time and Test again; a bad one shows the reason and Try again', () => {
+    const at = new Date(2026, 10, 13, 14, 5).getTime();
+    const rows = checkAgents(
+      [unchecked({ id: 'claude', label: 'Claude' }), unchecked({ id: 'codex', label: 'Codex' }), unchecked({ id: 'x', label: 'X' })],
+      {
+        claude: { state: 'ready', reason: 'Ready.', at },
+        codex: { state: 'error', reason: 'It failed: boom.', at },
+        x: { state: 'needs_login', reason: 'sign in', at },
+      },
+    );
+    expect(rows[0]).toMatchObject({ status: 'ok', fix: { kind: 'test', label: 'Test again' } });
+    expect(rows[0].sentence).toMatch(/^Claude works \(tested .*\d.*\)$/);
+    expect(rows[1]).toMatchObject({ status: 'fail', fix: { kind: 'test', label: 'Try again' } });
+    expect(rows[1].sentence).toContain('It failed: boom (');
+    expect(rows[2]).toMatchObject({ status: 'warn', fix: { kind: 'signin' } });
+  });
+
+  it('runAllChecks reads the remembered results from deps', async () => {
+    const d: SetupCheckDeps = {
+      agentHealth: async () => [unchecked({ id: 'claude', label: 'Claude' })],
+      addons: async () => ({ labsEnabled: false, addons: [] }),
+      tests: () => ({ claude: { state: 'ready', reason: 'Ready.', at: Date.now() } }),
+    };
+    const rows = await runAllChecks(d, ctx());
+    expect(rows.find((r) => r.id === 'agent-claude')?.status).toBe('ok');
   });
 });

@@ -67,6 +67,8 @@ export const SettingsSchema = z.object({
   acp_chat_enabled: z.boolean().optional(),
   /** What the "+" menu starts: a chat or a terminal. Absent: chat. Shown only while Chat is on. */
   new_agent_start: z.enum(['chat', 'terminal']).optional(),
+  /** Show terminals (Settings > General): off = every agent starts as a chat and terminal-only controls are hidden. Absent: off. Open terminals keep working. Rust: show_terminals. */
+  show_terminals: z.boolean().optional(),
   /** Model Bridge (Settings › General › Labs): connect a model service with a key and add it to Codex. Off unless chosen. Rust: model_bridge. */
   model_bridge_enabled: z.boolean().optional(),
   /** Spaces (Settings › General › Labs): chat with friends in small groups, computer to computer. Off unless chosen. Rust: spaces. */

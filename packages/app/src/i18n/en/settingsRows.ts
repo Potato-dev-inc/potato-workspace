@@ -9,6 +9,7 @@ export const settingsRows = {
   "settings.row.keep-going.hint": "Pick the agents a task can move to when the agent it runs on runs out of usage.",
   "settings.row.preload.hint": "Keep an agent started and waiting, so opening a pane feels instant.",
   "settings.row.agent-default-models.hint": "The model each agent starts on, unless you pick another when you start it.",
+  "settings.row.show-terminals.hint": "Off: agents start as a chat. Terminals already open keep working.",
   "settings.row.agent-lane.hint": "Helpers run as a chat when the agent can, else in a terminal.",
   "settings.row.chat-addons.hint": "The small helper each agent needs to run as a chat. Install or remove it here.",
   "settings.row.hidden-agents.hint": "Hide the agents you never use from the New agent menu.",

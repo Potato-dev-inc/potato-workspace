@@ -17,6 +17,8 @@ import {
 } from '../../../lib/addAgent';
 import type { WizardApi } from '../../../lib/agentWizard';
 import { errorCode, errorSentence } from '../../../lib/sayError';
+import { openSettingsAt } from '../../../lib/openSettingsAt';
+import { useShowTerminals } from '../../../lib/showTerminals';
 import { takeAddAgentPrefill } from '../agents/agentTarget';
 import { Btn } from '../settings-ui';
 import { AddAgentAdvanced } from './AddAgentAdvanced';
@@ -98,6 +100,8 @@ export interface AddAgentProps {
 
 export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerminal, onOpenAgent, onShowInstall, onRestartApp, onOpenLabs, projectDir }: AddAgentProps) {
   const t = useT();
+  // Terminals hidden: an added agent that can chat offers only Start chat, and one that cannot says how to open it.
+  const terminals = useShowTerminals();
   // "Install" on an agent's page brings the name here, typed in.
   const [text, setText] = useState(() => takeAddAgentPrefill() ?? '');
   const [run, setRun] = useState<AddAgentRun | null>(null);
@@ -376,9 +380,15 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
               <h3 className="aa-title"><AgentLogo id={run.result.agent_id} name={run.result.label} size={16} decorative className="aa-logo" /> {t('addAgent.terminalOnly', { name: run.result.label })}</h3>
               <p className="aa-sub">{t('addAgent.cannotChat')}</p>
               <div className="aa-actions">
-                <Btn primary onClick={() => onOpenTerminal?.(run.result!.agent_id)}>
-                  {t('addAgent.open', { name: run.result.label })}
-                </Btn>
+                {terminals ? (
+                  <Btn primary onClick={() => onOpenTerminal?.(run.result!.agent_id)}>
+                    {t('addAgent.open', { name: run.result.label })}
+                  </Btn>
+                ) : (
+                  <Btn primary onClick={() => openSettingsAt('agents', 'show-terminals')}>
+                    {t('chatFirst.show')}
+                  </Btn>
+                )}
                 <button type="button" className="aa-link" onClick={() => { setText(''); toIdle(null); }}>
                   {t('addAgent.addAnother')}
                 </button>
@@ -393,7 +403,7 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
                 <Btn primary onClick={() => onStartChat?.(run.result!.agent_id)}>
                   {t('addAgent.startChat')}
                 </Btn>
-                <Btn onClick={() => onOpenTerminal?.(run.result!.agent_id)}>{t('addAgent.openTerminal')}</Btn>
+                {terminals && <Btn onClick={() => onOpenTerminal?.(run.result!.agent_id)}>{t('addAgent.openTerminal')}</Btn>}
                 <button type="button" className="aa-link" onClick={() => { setText(''); toIdle(null); }}>
                   {t('addAgent.addAnother')}
                 </button>

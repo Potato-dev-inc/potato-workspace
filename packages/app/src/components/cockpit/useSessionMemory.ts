@@ -30,7 +30,7 @@ export function useSessionMemory(opts: {
   selectedId: string | null;
   panes: ReadonlyMap<string, { info: PaneInfo }>;
   select: (id: string) => void;
-  newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string) => Promise<string | null>;
+  newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string, model?: string, how?: 'terminal') => Promise<string | null>;
 }): SessionMemoryApi {
   const { ready, selectedId, panes, select, newAgent } = opts;
   // Read once, before anything is written: this is the last run.
@@ -81,7 +81,8 @@ export function useSessionMemory(opts: {
   const dismiss = useCallback(() => setEnded([]), []);
   const reopen = useCallback(async () => {
     for (const t of keep) {
-      const id = await newAgent(t.agent, t.account, false, t.cwd || undefined);
+      // These were terminals: they come back as terminals, whatever "Show terminals" says.
+      const id = await newAgent(t.agent, t.account, false, t.cwd || undefined, undefined, 'terminal');
       if (id) setEnded((cur) => (cur ?? []).filter((x) => x.id !== t.id));
     }
   }, [keep, newAgent]);

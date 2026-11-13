@@ -71,8 +71,10 @@ export function PhoneNewChat({
 
   const agent = options?.agents.find((a) => a.id === agentId) ?? null;
   const project = options?.projects.find((p) => p.id === projectId) ?? null;
-  const both = !!agent && agent.chat && agent.terminal;
-  const lane: Lane = both ? (laneChoice ?? 'chat') : agent?.chat ? 'chat' : 'terminal';
+  // The PC hides terminals (its "Show terminals" setting is off): there is no Chat | Terminal choice, only a chat.
+  const terminalsOk = options?.terminals !== false;
+  const both = terminalsOk && !!agent && agent.chat && agent.terminal;
+  const lane: Lane = both ? (laneChoice ?? 'chat') : agent?.chat || !terminalsOk ? 'chat' : 'terminal';
 
   const send = useCallback(
     async (text: string): Promise<string | null> => {
@@ -165,13 +167,18 @@ export function PhoneNewChat({
                   <AgentLogo id={a.id} name={a.label} size={22} decorative />
                   <span className="ph-txt">
                     <span className="ph-t">{a.label}</span>
-                    <span className="ph-s">{[a.chat && t('phone.nc.laneChat'), a.terminal && t('phone.nc.laneTerminal')].filter(Boolean).join(' · ')}</span>
+                    <span className="ph-s">{[a.chat && t('phone.nc.laneChat'), a.terminal && terminalsOk && t('phone.nc.laneTerminal')].filter(Boolean).join(' · ')}</span>
                   </span>
                   {a.id === agentId && <span aria-hidden="true">✓</span>}
                 </button>
               </li>
             ))}
           </ul>
+          {(options.need_terminals ?? 0) > 0 && (
+            <p className="ph-nc-hint" data-testid="nc-need-terminals">
+              {t('phone.nc.needTerminals', { count: options.need_terminals ?? 0 })}
+            </p>
+          )}
         </Sheet>
       )}
       {picking === 'project' && options && (

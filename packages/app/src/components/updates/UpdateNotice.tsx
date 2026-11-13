@@ -5,7 +5,32 @@
 import { useT } from '../../i18n';
 import type { AppUpdateState } from './useAppUpdate';
 import { checkFailureLine, runningJobWarning } from '../../lib/app-update';
+import { downloadLine } from '../../lib/update-progress';
 import '../../styles/app-update.css';
+
+/** "Downloading 42%", the bar, and under it "58 MB of 138 MB · 3.1 MB/s · about 30 seconds left". Full: "Installing…". */
+function DownloadingView({ state }: { state: AppUpdateState }) {
+  const t = useT();
+  const { percent, reading, stalled } = state;
+  const full = reading !== null && reading.total !== null && reading.downloaded >= reading.total;
+  if (full) return <span>{t('overview.update.installingStep')}</span>;
+  return (
+    <>
+      <span>{percent === null ? t('overview.update.downloading') : t('overview.update.downloadingPercent', { percent })}</span>
+      {percent !== null && <progress className="app-update-bar" max={100} value={percent} aria-label={t('overview.update.progress')} />}
+      {reading && (
+        <span className="app-update-detail" data-testid="update-detail">
+          {downloadLine(reading)}
+        </span>
+      )}
+      {stalled && (
+        <span className="app-update-detail" role="alert">
+          {t('overview.update.stalled')}
+        </span>
+      )}
+    </>
+  );
+}
 
 export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
   const t = useT();
@@ -22,12 +47,7 @@ export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
           </button>
         </>
       )}
-      {phase === 'downloading' && (
-        <>
-          <span>{state.percent === null ? t('overview.update.downloading') : t('overview.update.downloadingPercent', { percent: state.percent })}</span>
-          {state.percent !== null && <progress className="app-update-bar" max={100} value={state.percent} aria-label={t('overview.update.progress')} />}
-        </>
-      )}
+      {phase === 'downloading' && <DownloadingView state={state} />}
       {phase === 'ready' && (
         <>
           <span>{busy ? t('overview.update.ready', { warning: runningJobWarning(state.busyAgents, state.busy) }) : t('overview.update.readyRestart')}</span>
@@ -49,7 +69,11 @@ export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
           </button>
         </>
       )}
-      {phase === 'installing' && <span>{t('overview.update.installing')}</span>}
+      {phase === 'installing' && (
+        <span>
+          <strong>{t('overview.update.installingStep')}</strong> {t('overview.update.installing')}
+        </span>
+      )}
       {phase === 'failed' && state.failure && <span>{checkFailureLine(state.failure)}</span>}
       {phase === 'stopped' && (
         <>

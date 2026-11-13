@@ -10,7 +10,8 @@ import { HelperRow } from '../chat/HelperRow';
 import { NoticeLine } from '../chat/NoticeLine';
 import { PermissionTrace } from '../chat/PermissionTrace';
 import { ThinkingBlock } from '../chat/ThinkingBlock';
-import { currentPlan, PlanCard } from '../chat/PlanCard';
+import { currentPlan } from '../chat/PlanCard';
+import { PlanBar } from '../chat/PlanBar';
 import { ToolRow } from '../chat/ToolRow';
 import { clockOf } from '../../lib/phone-link';
 import { FoldedSteps } from './FoldedSteps';
@@ -146,7 +147,7 @@ export function PhoneConversation({
         </p>
       )}
       {progress}
-      <PlanCard items={plan} />
+      <PlanBar items={plan} />
       <div
         ref={scrollRef}
         className="ph-conv-body"

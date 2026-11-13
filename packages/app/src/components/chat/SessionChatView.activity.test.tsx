@@ -217,15 +217,18 @@ describe('the task card, notices and modes', () => {
     { kind: 'turnEnd', id: '6:0', at: null, outcome: 'completed', durationMs: 3_000 },
   ];
 
-  it('pins the task card with the count and a glyph per task', () => {
+  it('pins the plan bar with the count and the current step; the checklist opens on a click', () => {
     render(PLAN);
-    const card = host.querySelector('[data-testid="chat-plan"]')!;
-    expect(card.querySelector('h3')?.textContent).toBe('Plan · 3 steps1 of 3');
-    const statuses = [...card.querySelectorAll('li')].map((li) => li.getAttribute('data-status'));
+    const bar = host.querySelector('[data-testid="plan-bar"]')!;
+    expect(bar.querySelector('[data-testid="plan-bar-count"]')?.textContent).toBe('1 of 3');
+    expect(bar.querySelector('[data-testid="plan-bar-current"]')?.textContent).toBe('· Write the fix');
+    expect(bar.querySelector('[data-testid="plan-bar-list"]')).toBeNull();
+    click(bar.querySelector('button')!);
+    const statuses = [...bar.querySelectorAll('li')].map((li) => li.getAttribute('data-status'));
     expect(statuses).toEqual(['completed', 'in_progress', 'pending']);
-    expect(card.querySelector('[aria-label="In progress"]')).not.toBeNull();
-    // The card is outside the scrolling conversation.
-    expect(host.querySelector('.ck-chat-body')!.contains(card)).toBe(false);
+    expect(bar.querySelector('[aria-label="In progress"]')).not.toBeNull();
+    // The bar is outside the scrolling conversation.
+    expect(host.querySelector('.ck-chat-body')!.contains(bar)).toBe(false);
   });
 
   it('shows a notice as a thin line with its text', () => {

@@ -79,6 +79,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "missions_enabled",
     "night_shift_enabled",
     "acp_chat_enabled",
+    "show_terminals",
     "model_bridge_enabled",
     "spaces_enabled",
     "handoff_mode",
@@ -123,6 +124,9 @@ pub fn default_public_settings() -> Value {
         // On until the person turns it off (the "+" menu starts chats by default); it is also the kill switch
         // (off closes every ACP session). Rust: acp.
         "acp_chat_enabled": true,
+        // Terminals (Settings > General): off = every agent starts as a chat and terminal-only controls are hidden; open
+        // terminals keep working. Off for new and existing profiles. Rust: show_terminals.
+        "show_terminals": false,
         // Model Bridge (Labs): plug a model service into an app such as Codex. Off until chosen. Rust: model_bridge.
         "model_bridge_enabled": false,
         // Spaces (Labs): small-group chat between people's own computers. Off until chosen. Rust: spaces.
@@ -196,6 +200,7 @@ fn apply_public_settings(effective: &Value) {
     crate::agent_hooks::apply_settings(effective);
     crate::pane_mcp::apply_settings(effective);
     crate::acp::apply_settings(effective);
+    crate::show_terminals::apply_settings(effective);
     crate::model_bridge::apply_settings(effective);
     crate::spaces::runtime::apply_settings(effective);
     crate::capacity_proxy::apply_settings(effective);

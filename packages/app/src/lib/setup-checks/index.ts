@@ -6,14 +6,17 @@ import { agentHealthApi } from '../agent-health';
 import { checkAddons } from './addons';
 import { checkAgents } from './agents';
 import { checkBridge } from './bridge';
+import { loadTestMemory } from './test-memory';
 import type { CheckRow, SetupCheckContext, SetupCheckDeps } from './types';
 
 export type { CheckRow, CheckStatus, FixAction, FixKind, SetupCheckContext, SetupCheckDeps } from './types';
 export { buildReport, redactReport } from './report';
+export { loadTestMemory, rememberTest, type TestMemory } from './test-memory';
 
 export const tauriSetupDeps: SetupCheckDeps = {
   agentHealth: () => agentHealthApi.check(),
   addons: () => tauriAcpAddonApi.list(),
+  tests: loadTestMemory,
 };
 
 /** The English sentence (kept for tests and for matching); the row itself carries `cantCheckText()`. */
@@ -41,7 +44,7 @@ async function step(id: string, run: () => Promise<CheckRow[]> | CheckRow[]): Pr
 export async function runAllChecks(deps: SetupCheckDeps, ctx: SetupCheckContext): Promise<CheckRow[]> {
   const rows: CheckRow[] = [];
   rows.push(...(await step('bridge', () => checkBridge(ctx))));
-  rows.push(...(await step('agents', async () => checkAgents(await deps.agentHealth()))));
+  rows.push(...(await step('agents', async () => checkAgents(await deps.agentHealth(), deps.tests?.() ?? {}))));
   if (ctx.labs.acp_chat_enabled === true) {
     rows.push(...(await step('addons', async () => checkAddons(await deps.addons()))));
   }

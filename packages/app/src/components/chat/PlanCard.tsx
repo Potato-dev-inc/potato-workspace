@@ -21,7 +21,7 @@ const GLYPH_LABEL: Record<PlanStatus, string> = {
   completed: 'Done',
 };
 
-function Mark({ status }: { status: PlanStatus }) {
+export function PlanMark({ status }: { status: PlanStatus }) {
   return (
     <span role="img" aria-label={GLYPH_LABEL[status]} className={`ck-agc-plan-mark ck-chat-plan-glyph--${status}`}>
       {status === 'completed' ? <CheckIcon /> : status === 'in_progress' ? <SpinMark /> : <span className="ck-agc-dot" aria-hidden="true" />}
@@ -58,7 +58,7 @@ export function PlanCard({ items }: { items: readonly PlanItem[] }) {
                 data-status={item.status}
                 className={`ck-agc-task ck-chat-plan-item ck-chat-plan-item--${item.status}`}
               >
-                <Mark status={item.status} />
+                <PlanMark status={item.status} />
                 <span className="ck-agc-task-text">{item.text}</span>
               </li>
             ))}

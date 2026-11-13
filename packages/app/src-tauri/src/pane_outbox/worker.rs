@@ -125,7 +125,13 @@ fn housekeeping(inner: &Inner, pane_id: &str) -> Housekeeping {
         }
         return Housekeeping::Empty;
     }
-    let head = queue.entries.iter().find(|e| e.message.state.active()).map(|e| (e.message.id.clone(), e.message.text.clone(), e.message.attachments.clone()));
+    // A first waiting message the person has open to edit holds the whole queue back (the order stays).
+    let head = queue
+        .entries
+        .iter()
+        .find(|e| e.message.state.active())
+        .filter(|e| !e.is_held())
+        .map(|e| (e.message.id.clone(), e.message.text.clone(), e.message.attachments.clone()));
     let list = changed.then(|| snapshot(queue));
     drop(panes);
     if let Some(list) = list {
@@ -210,7 +216,7 @@ fn deliver(inner: &Inner, pane_id: &str, id: &str, text: &str, attachments: &[Ch
         let Some(queue) = panes.get_mut(pane_id) else { return };
         let Some(entry) = queue.entries.iter_mut().find(|e| e.message.id == id) else { return };
         // A cancel between the look and now wins.
-        if entry.message.state != State::Queued {
+        if entry.message.state != State::Queued || entry.is_held() {
             return;
         }
         entry.message.state = State::Sending;

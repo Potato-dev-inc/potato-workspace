@@ -9,6 +9,7 @@ import { useCompanionMemory } from '../../../hooks/useCompanions';
 import { Avatar } from '../../companion/Avatar';
 import { SessionChatPanel } from '../../chat/SessionChatPanel';
 import { IconInfo, IconMore } from '../Icons';
+import { useShowTerminals } from '../../../lib/showTerminals';
 import { Sheet } from '../Sheet';
 import { CheckInsCard } from './CheckInsCard';
 import { MemoryCard } from './MemoryCard';
@@ -38,6 +39,8 @@ export interface CompanionPageProps {
 
 export function CompanionPage(props: CompanionPageProps) {
   const { companion, transport, onShowTerminal, onOpenCard, onNotify, onChanged, onArchived } = props;
+  // The companion's own terminal view is a terminal control: hidden while terminals are.
+  const showTerminals = useShowTerminals();
   const [railOpen, setRailOpen] = useState(true);
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -136,7 +139,7 @@ export function CompanionPage(props: CompanionPageProps) {
             <button type="button" className="ck-btn ck-btn--secondary" onClick={() => void toggleSleep()} disabled={busy}>
               {sleeping ? `Wake up` : 'Sleep'}
             </button>
-            {companion.paneId && (
+            {companion.paneId && showTerminals && (
               <button type="button" className="ck-btn ck-btn--plain" onClick={() => onShowTerminal(companion.paneId!)}>
                 Show terminal
               </button>

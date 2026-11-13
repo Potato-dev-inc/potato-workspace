@@ -62,7 +62,7 @@ export interface HarnessScenario {
      * `live`: the agent is in the middle of a turn (the progress line); `asking`: the turn ended with a question
      * (quick replies).
      */
-    chat?: 'finished' | 'live' | 'asking';
+    chat?: 'finished' | 'live' | 'asking' | 'plan';
   };
   /** Phone route: the abilities this phone was paired with (`GET /pair/me`); default: all four. */
   phoneCaps?: string[];
@@ -143,6 +143,8 @@ export interface HarnessScenario {
   whatBroke?: import('./what-broke-it-fixtures').WhatBrokeItScenario;
   /** What broke it: the result card. What the mocked `wb_*` result commands answer (see what-broke-it-result-fixtures.ts). */
   whatBrokeItResult?: import('./what-broke-it-result-fixtures').WhatBrokeItResultScenario;
+  /** Chat first: "Show terminals" is off and Claude and Codex can chat (Aider and the rest cannot). Absent: terminals are shown, as before. */
+  chatFirst?: boolean;
   /** Share an agent (Labs `lend_enabled`): the state the mocked `lend_*` commands start from. Absent = the switch is off and nothing shows. */
   lend?: import('./lend-fixtures').LendScenario;
   /** Settings > Labs > Team: overrides on top of the example config (on a team as admin) the mocked `team_config_get` returns. */

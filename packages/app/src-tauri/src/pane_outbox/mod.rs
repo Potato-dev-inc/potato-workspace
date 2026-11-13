@@ -176,7 +176,7 @@ impl Outbox {
                 error: None,
                 attachments: attachments.to_vec(),
             };
-            queue.entries.push(Entry { message: message.clone(), created: Instant::now(), finished: None });
+            queue.entries.push(Entry { message: message.clone(), created: Instant::now(), finished: None, held: None });
             let start_worker = !queue.worker;
             queue.worker = true;
             (message, worker::snapshot(queue), start_worker)
@@ -196,7 +196,7 @@ impl Outbox {
             worker::prune(queue, &self.inner.timing);
             let id = format!("m{}-{:x}", self.inner.next_id.fetch_add(1, Ordering::SeqCst), now_ms());
             let message = OutboxMessage { id, text: text.to_string(), created_at: now_ms(), state: State::Sent, waiting_for: None, error: None, attachments: attachments.to_vec() };
-            let mut entry = Entry { message: message.clone(), created: Instant::now(), finished: None };
+            let mut entry = Entry { message: message.clone(), created: Instant::now(), finished: None, held: None };
             entry.finish(State::Sent, None);
             queue.entries.push(entry);
             (message, worker::snapshot(queue))
@@ -217,6 +217,49 @@ impl Outbox {
                 .ok_or_else(|| NO_SUCH_MESSAGE.to_string())?;
             match entry.message.state {
                 State::Queued => entry.finish(State::Cancelled, None),
+                State::Sending => return Err(ALREADY_SENDING.into()),
+                State::Sent | State::Failed | State::Cancelled => return Err(NO_SUCH_MESSAGE.into()),
+            }
+            let message = entry.message.clone();
+            (message, worker::snapshot(queue))
+        };
+        self.inner.host.publish(pane_id, &list);
+        Ok(message)
+    }
+
+    /// Holds a waiting message back while the person edits it (`hold` true), or lets it go on (false). While the
+    /// first waiting message is held nothing behind it is sent either: the order stays as it was.
+    pub fn hold(&self, pane_id: &str, message_id: &str, hold: bool) -> Result<OutboxMessage, String> {
+        self.change_waiting(pane_id, message_id, |entry| {
+            entry.held = hold.then(Instant::now);
+            Ok(())
+        })
+    }
+
+    /// Saves new text for a waiting message, in the same place in the list, and lets it go on.
+    pub fn edit(&self, pane_id: &str, message_id: &str, text: &str) -> Result<OutboxMessage, String> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(EMPTY.into());
+        }
+        if text.chars().count() > MAX_CHARS {
+            return Err(TOO_LONG.into());
+        }
+        self.change_waiting(pane_id, message_id, |entry| {
+            entry.message.text = text.to_string();
+            entry.held = None;
+            Ok(())
+        })
+    }
+
+    /// Applies `change` to a message that still waits (not being typed, not finished) and publishes the list.
+    fn change_waiting(&self, pane_id: &str, message_id: &str, change: impl FnOnce(&mut Entry) -> Result<(), String>) -> Result<OutboxMessage, String> {
+        let (message, list) = {
+            let mut panes = self.inner.panes.lock();
+            let queue = panes.get_mut(pane_id).ok_or_else(|| NO_SUCH_MESSAGE.to_string())?;
+            let entry = queue.entries.iter_mut().find(|e| e.message.id == message_id).ok_or_else(|| NO_SUCH_MESSAGE.to_string())?;
+            match entry.message.state {
+                State::Queued => change(entry)?,
                 State::Sending => return Err(ALREADY_SENDING.into()),
                 State::Sent | State::Failed | State::Cancelled => return Err(NO_SUCH_MESSAGE.into()),
             }

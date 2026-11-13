@@ -18,6 +18,8 @@ import { forgetTerminal } from '../components/cockpit/session-memory';
 import { usePaneActivity, type ActivityMap } from '../lib/pane-activity';
 import type { UserGesture } from '../lib/user-gesture';
 import { useChatStarts, type ChatStartState } from './useChatStarts';
+import { realChatFirstDeps, startChatFirst } from '../lib/chatFirst';
+import { useShowTerminals } from '../lib/showTerminals';
 
 /** How long after an answer landed further clicks on the same card are ignored (the TUI redraws
  *  the dialog away within this; the backend's own window is 5 s). */
@@ -81,7 +83,11 @@ export interface CockpitApi {
   modeExplainer: { open: boolean; confirm: (dontShowAgain: boolean) => Promise<void>; cancel: () => void };
   toggleTheme: () => Promise<void>;
   /** Opens a new agent pane. Resolves to its pane id, or null when it could not start (the starting view says why). */
-  newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string, model?: string) => Promise<string | null>;
+  /**
+   * Opens an agent. While "Show terminals" is off it starts a chat (the default folder when `projectPath` is absent); an agent
+   * with no chat, or `how: 'terminal'` (a sign-in terminal), opens a terminal as before. Resolves to the pane id, or null.
+   */
+  newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string, model?: string, how?: 'terminal') => Promise<string | null>;
   /** A person's answer to a pane prompt; `gesture` is their click (`lib/user-gesture.ts`). */
   answer: (paneId: string, promptId: string, choiceId: string, label: string, gesture: UserGesture) => Promise<void>;
   interrupt: (paneId: string) => Promise<void>;
@@ -128,6 +134,9 @@ export function useCockpit(): CockpitApi {
 
   const spawnRef = useRef(spawn);
   spawnRef.current = spawn;
+  const showTerminals = useShowTerminals();
+  const showTerminalsRef = useRef(showTerminals);
+  showTerminalsRef.current = showTerminals;
   const toastId = useRef(0);
   const lastStatus = useRef(new Map<string, string>());
 
@@ -449,7 +458,22 @@ export function useCockpit(): CockpitApi {
   }, [theme, notify]);
 
   const newAgent = useCallback(
-    async (agentId: string, accountId?: string, isolated = false, projectPath?: string, model?: string) => {
+    async (agentId: string, accountId?: string, isolated = false, projectPath?: string, model?: string, how?: 'terminal') => {
+      // Terminals hidden: start a chat. An agent that has none (or a sign-in terminal) falls through to the terminal below.
+      if (how !== 'terminal' && !showTerminalsRef.current) {
+        const startId = chatStarts.begin(agentId, projectPath ?? '');
+        const result = await startChatFirst({ agentId, accountId, folder: projectPath, model }, realChatFirstDeps());
+        chatStarts.end(startId);
+        if (result.kind === 'started') {
+          setSelectedId(result.paneId);
+          if (result.note) notify(result.note);
+          return result.paneId;
+        }
+        if (result.kind === 'failed') {
+          notify(result.sentence);
+          return null;
+        }
+      }
       setSelectedId(null);
       setSpawn({ agentId, paneId: null, log: [], failed: null });
       try {
@@ -463,7 +487,8 @@ export function useCockpit(): CockpitApi {
         return null;
       }
     },
-    [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [notify, chatStarts.begin, chatStarts.end],
   );
 
   // One answer per card: further clicks on the same prompt while the first is on its way (or just

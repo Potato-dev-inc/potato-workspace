@@ -119,3 +119,23 @@ describe('bridgeRefusalText', () => {
     expect(bridgeRefusalText(new Error('bridge POST /x -> 500: {}'), 'fallback')).toBe('fallback');
   });
 });
+
+describe('bridgeOutboxTransport hold and edit', () => {
+  it('holds and edits through the bridge', async () => {
+    const holdPaneMessage = vi.fn(async () => message());
+    const editPaneMessage = vi.fn(async () => message({ text: 'new' }));
+    const transport = bridgeOutboxTransport({ holdPaneMessage, editPaneMessage } as unknown as BridgeClient);
+    await transport.hold('p1', 'm1', true);
+    expect(holdPaneMessage).toHaveBeenCalledWith('p1', 'm1', true);
+    await expect(transport.edit('p1', 'm1', 'new')).resolves.toEqual(message({ text: 'new' }));
+    expect(editPaneMessage).toHaveBeenCalledWith('p1', 'm1', 'new');
+  });
+
+  it('says so on an old PC, and gives the PC refusal as one sentence', async () => {
+    await expect(bridgeOutboxTransport({} as unknown as BridgeClient).edit('p1', 'm1', 'x')).rejects.toThrow('too old');
+    const editPaneMessage = vi.fn(async () => {
+      throw new Error('bridge POST /panes/p1/messages/m1/edit -> 409: {"error":"That message is not waiting any more."}');
+    });
+    await expect(bridgeOutboxTransport({ editPaneMessage } as unknown as BridgeClient).edit('p1', 'm1', 'x')).rejects.toThrow('That message is not waiting any more.');
+  });
+});

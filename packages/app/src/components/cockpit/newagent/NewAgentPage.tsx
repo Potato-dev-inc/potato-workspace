@@ -14,6 +14,9 @@ import { lastRealFolder, projectOfCwd, readStoredCopyPreference, supportsCopies,
 import { folderName, pathKey, useSidebarProjects } from '../../../lib/sidebarProjects';
 import { IconChevronDown, IconFolder, IconPlus, IconSpark } from '../Icons';
 import { useT } from '../../../i18n';
+import { splitByChat } from '../../../lib/chatFirst';
+import { useShowTerminals } from '../../../lib/showTerminals';
+import { NeedTerminalsLine } from '../NeedTerminalsLine';
 import type { ProjectChoice } from '../NewAgentMenu';
 import { tauriNewAgentApi, type HomeSettings, type NewAgentApi } from './api';
 import { HomeCards, type CardData } from './HomeCards';
@@ -269,7 +272,19 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const copiesOk = supportsCopies(folder?.state);
 
   // ----- the agent -----
-  const choices = useMemo(() => agentChoices(agents, accounts), [agents, accounts]);
+  // Terminals hidden: only agents that can chat are listed (the rest are counted in one quiet line), and every start is a chat.
+  const terminals = useShowTerminals();
+  const chatFirst = !terminals;
+  const chatIds = useMemo(() => (lanes?.labsEnabled ? new Set(lanes.agents.filter((a) => !a.disabled).map((a) => a.id.toLowerCase())) : null), [lanes]);
+  const needTerminals = useMemo(
+    () => (chatFirst ? splitByChat(agents.map((a) => ({ type: a.id, shell: a.kind === 'shell', disabled: !a.modes.visible })), chatIds).needTerminals : 0),
+    [chatFirst, agents, chatIds],
+  );
+  const choices = useMemo(() => {
+    const all = agentChoices(agents, accounts);
+    // A lent sign-in of an agent with no chat on one cannot start a chat either.
+    return chatFirst && chatIds ? all.filter((c) => chatIds.has(c.agentId.toLowerCase()) && !c.noChat) : all;
+  }, [agents, accounts, chatFirst, chatIds]);
   // The remembered agent and sign-in (the key holds both). A key that is gone, or not ready, falls back to the first ready one.
   const choice: AgentChoice | null = (pickKey ? choices.find((c) => c.key === pickKey) : undefined) ?? defaultChoice(choices, remembered());
   const chatLane = chatAvailable(lanes, choice?.agentId ?? null);
@@ -278,7 +293,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const canChat = chatLane && !lendNoChat;
   // Chat is the default when the agent's chat add-on is in place; otherwise the page starts a terminal.
   const chatAddon = addonFor(addons.byAgent, choice?.agentId);
-  const runAs: RunAs = canChat ? (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null, !needsInstall(chatAddon))) : 'terminal';
+  // Chat is the default whenever the agent has one (a missing add-on shows its install card; Terminal stays one click away). With
+  // terminals hidden it is the only way.
+  const runAs: RunAs = canChat ? (chatFirst ? 'chat' : (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null))) : 'terminal';
   const isolated = copyDefault(storedCopy) && copiesOk && runAs === 'terminal';
 
   // ----- the model: the last pick per agent and sign-in (this page only), else the agent's Default model from Settings -----
@@ -295,7 +312,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
 
   const addon = runAs === 'chat' ? chatAddon : undefined;
   const installFirst = needsInstall(addon);
-  const block = sendBlock({ prompt, choice, runAs, folder: folder?.path ?? null, busy }) ?? (installFirst ? t('newAgent.installFirst') : null);
+  const block = sendBlock({ prompt, choice, runAs, folder: folder?.path ?? null, busy }) ?? (chatFirst && choice && !canChat ? t('newAgent.blockNoAgent') : null) ?? (installFirst ? t('newAgent.installFirst') : null);
   const signInCard = runAs === 'chat' && choice && signInFor !== null && signInFor.toLowerCase() === choice.agentId.toLowerCase();
   const example = exampleAt(exampleIdx);
 
@@ -556,6 +573,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                     <span className="ck-na-item-hint">{hintOf(c.state)}</span>
                   </button>
                 ))}
+                <NeedTerminalsLine count={needTerminals} className="ck-na-note" onOpen={() => setMenu(null)} />
                 {onSetUp && (
                   <button
                     type="button"
@@ -571,7 +589,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 )}
               </Pop>
 
-              {chatLane && (
+              {chatLane && !chatFirst && (
                 <div className="ck-na-seg" role="radiogroup" aria-label={t('newAgent.runAs')}>
                   {(['terminal', 'chat'] as const).map((mode) => (
                     <button

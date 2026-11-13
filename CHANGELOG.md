@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.26
+
+This is a beta.
+
+- Chat first: every new agent starts as a chat. Terminals are hidden unless you turn on "Show terminals" (Settings > Agents > Advanced). Terminals you already have open keep working.
+- New: a plan progress bar at the top of the chat ("3 of 6 · the current step"). Click it to see the whole checklist. Also on the phone.
+- New: edit or remove a message that is waiting in the queue. Nothing in the queue is sent while you edit. Also on the phone.
+- Check my setup: Test now works and remembers the result and its time. Every agent has an action (Test, Open, Install or Sign in), and agents you have not installed no longer count as problems.
+- Updates: the download shows MB, speed and time left, then "Installing". A download that stops for 45 seconds ends with Try again instead of waiting forever.
+- Fixed: a pane opened in its own window could crash with "Something went wrong" right after it opened.
+
 ## 1.0.25
 
 This is a beta.

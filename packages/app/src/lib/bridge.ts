@@ -248,6 +248,22 @@ export function makeBridgeClient(baseUrl: string): BridgeClient {
           `/panes/${encodeURIComponent(paneId)}/messages/${encodeURIComponent(messageId)}`,
         )
       ).message,
+    holdPaneMessage: async (paneId, messageId, hold) =>
+      (
+        await call<{ message: OutboxMessage }>(
+          'POST',
+          `/panes/${encodeURIComponent(paneId)}/messages/${encodeURIComponent(messageId)}/hold`,
+          { hold },
+        )
+      ).message,
+    editPaneMessage: async (paneId, messageId, text) =>
+      (
+        await call<{ message: OutboxMessage }>(
+          'POST',
+          `/panes/${encodeURIComponent(paneId)}/messages/${encodeURIComponent(messageId)}/edit`,
+          { text },
+        )
+      ).message,
     listPaneMessages: async (paneId) =>
       (await call<{ messages: OutboxMessage[] | null }>('GET', `/panes/${encodeURIComponent(paneId)}/messages`)).messages ?? [],
     companionList: async () => (await call<{ companions: CompanionView[] }>('GET', '/companions')).companions ?? [],

@@ -199,7 +199,7 @@ export function PhoneChatView({
   const outbox = usePaneOutbox(outboxTransport, paneId, canSend);
   const userTexts = useMemo(() => grouped.turns.flatMap((turn) => (turn.user ? [turn.user.text] : [])), [grouped.turns]);
   const { bubbles, hide } = usePendingBubbles(outbox.messages, userTexts);
-  const pending = canSend ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHide={hide} /> : undefined;
+  const pending = canSend ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHold={outbox.hold} onEdit={outbox.edit} onHide={hide} /> : undefined;
   const t = useT();
 
   // Typed while the PC cannot be reached: kept on the phone, asked about when the PC is back.

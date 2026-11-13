@@ -13,6 +13,7 @@ import {
   type UpdateOffer,
   type UpdateTransport,
 } from '../../lib/app-update';
+import { nextSpeed, STALL_HINT_MS, type DownloadReading } from '../../lib/update-progress';
 
 export type UpdatePhase =
   | 'idle'
@@ -41,6 +42,10 @@ export interface AppUpdateState {
   busy: UpdateBusyInfo;
   /** Whole percent of the download, or null while it is not known. */
   percent: number | null;
+  /** The bytes so far with the speed, or null before the first reading. */
+  reading: DownloadReading | null;
+  /** No new data for a while: the page says the download is slow or stopped. */
+  stalled: boolean;
   error: string | null;
   /** The chats were brought back after a failed install. */
   reopened: boolean;
@@ -69,6 +74,10 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
   const [failure, setFailure] = useState<CheckFailure | null>(null);
   const [busy, setBusy] = useState<UpdateBusyInfo>(NO_BUSY);
   const [percent, setPercent] = useState<number | null>(null);
+  const [reading, setReading] = useState<DownloadReading | null>(null);
+  const [stalled, setStalled] = useState(false);
+  const lastReading = useRef<{ downloaded: number; at: number } | null>(null);
+  const speed = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reopened, setReopened] = useState(false);
   const live = useRef(true);
@@ -121,12 +130,22 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
       setError(null);
       setReopened(false);
       setPercent(null);
+      setReading(null);
+      setStalled(false);
+      lastReading.current = null;
+      speed.current = null;
       setPhase(confirmRunning ? 'installing' : 'downloading');
       let stopListening: (() => void) | undefined;
       try {
         if (!confirmRunning && transport.onProgress) {
           stopListening = await transport.onProgress((progress) => {
-            if (live.current) setPercent(progressPercent(progress));
+            if (!live.current) return;
+            setPercent(progressPercent(progress));
+            const at = Date.now();
+            setStalled(false);
+            speed.current = nextSpeed(lastReading.current, { downloaded: progress.downloaded, at }, speed.current);
+            lastReading.current = { downloaded: progress.downloaded, at };
+            setReading({ ...progress, speed: speed.current });
           }).catch(() => undefined);
         }
         await transport.install(confirmRunning);
@@ -149,6 +168,16 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
     },
     [readBusy, transport],
   );
+
+  // While downloading: no new reading for a while means slow or stopped (the backend gives up by itself and says so).
+  useEffect(() => {
+    if (phase !== 'downloading') return;
+    const timer = window.setInterval(() => {
+      const last = lastReading.current;
+      if (last && Date.now() - last.at >= STALL_HINT_MS) setStalled(true);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [phase]);
 
   const update = useCallback(async () => {
     if (working.current) return;
@@ -199,5 +228,5 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
     };
   }, [auto, check]);
 
-  return { phase, failure, offer, busyAgents: busy.agents, busy, percent, error, reopened, check, update, restartNow, restartWhenIdle, reopenChats };
+  return { phase, failure, offer, busyAgents: busy.agents, busy, percent, reading, stalled, error, reopened, check, update, restartNow, restartWhenIdle, reopenChats };
 }

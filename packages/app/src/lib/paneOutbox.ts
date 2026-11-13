@@ -56,6 +56,16 @@ export function cancelPaneMessage(paneId: string, messageId: string): Promise<Ou
   return call<OutboxMessage>('pane_message_cancel', { paneId, messageId });
 }
 
+/** Holds a waiting message back while the person edits it (`hold` true), or lets it go on (false). */
+export function holdPaneMessage(paneId: string, messageId: string, hold: boolean): Promise<OutboxMessage> {
+  return call<OutboxMessage>('pane_message_hold', { paneId, messageId, hold });
+}
+
+/** Saves new text for a waiting message, in the same place in the list. */
+export function editPaneMessage(paneId: string, messageId: string, text: string): Promise<OutboxMessage> {
+  return call<OutboxMessage>('pane_message_edit', { paneId, messageId, text });
+}
+
 export async function listPaneMessages(paneId: string): Promise<OutboxMessage[]> {
   const list = await call<OutboxMessage[] | null>('pane_messages_list', { paneId });
   return Array.isArray(list) ? list : [];
@@ -125,6 +135,10 @@ export function withSent(list: readonly OutboxMessage[], sent: OutboxMessage): O
 export interface OutboxTransport {
   send(paneId: string, text: string, attachments?: readonly ChatAttachment[]): Promise<OutboxMessage>;
   cancel(paneId: string, messageId: string): Promise<OutboxMessage>;
+  /** Keeps a waiting message (and the ones behind it) back while it is edited; `false` lets it go on. */
+  hold(paneId: string, messageId: string, hold: boolean): Promise<OutboxMessage>;
+  /** New text for a waiting message, in the same place in the list. */
+  edit(paneId: string, messageId: string, text: string): Promise<OutboxMessage>;
   list(paneId: string): Promise<OutboxMessage[]>;
   /** Calls `cb` with the pane's whole list on every change. Returns the stop function. */
   watch(paneId: string, cb: (messages: OutboxMessage[]) => void): () => void;
@@ -134,6 +148,8 @@ export interface OutboxTransport {
 export const tauriOutboxTransport: OutboxTransport = {
   send: sendPaneMessage,
   cancel: cancelPaneMessage,
+  hold: holdPaneMessage,
+  edit: editPaneMessage,
   list: listPaneMessages,
   watch(paneId, cb) {
     let live = true;

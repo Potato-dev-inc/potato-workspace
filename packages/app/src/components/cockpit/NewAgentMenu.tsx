@@ -112,6 +112,10 @@ function noGitHint(state: GitState | undefined): string {
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+import { NeedTerminalsLine } from './NeedTerminalsLine';
+import { splitByChat } from '../../lib/chatFirst';
+import { useShowTerminals } from '../../lib/showTerminals';
+
 export function NewAgentMenu({
   entries: allEntries,
   readyAgents,
@@ -152,13 +156,20 @@ export function NewAgentMenu({
   const [addPick, setAddPick] = useState(false);
   // Agents the person hid ("Edit list…"): the menu leaves them out. `allEntries` is the full list for the editor.
   const { hidden } = useHiddenAgents();
-  const entries = visibleAgentEntries(allEntries, hidden);
+  // Terminals hidden: the menu lists only agents that can chat (and no shell), and every click starts a chat.
+  const terminals = useShowTerminals();
+  const chatFirst = !terminals;
+  const visible = visibleAgentEntries(allEntries, hidden);
+  const split = chatFirst ? splitByChat(visible, chat ? new Set(chat.agents.map((a) => a.id.toLowerCase())) : null) : null;
+  const entries = split ? split.offered : visible;
+  const needTerminals = split?.needTerminals ?? 0;
   const entryOf = (agentId: string): LaunchEntry | undefined => entries.find((e) => e.type === agentId);
   // The switch decides: Terminal (or no chat at all) starts a terminal; Chat starts the agent's chat, or asks what to do.
   const routeOf = (agentId: string): Route => {
-    if (!chat || chat.mode === 'terminal' || entryOf(agentId)?.shell) return 'terminal';
-    if (chat.terminalChat?.some((a) => a.id === agentId && a.chosen)) return 'terminal_chat';
+    if (!chat || (chat.mode === 'terminal' && !chatFirst) || entryOf(agentId)?.shell) return 'terminal';
+    if (!chatFirst && chat.terminalChat?.some((a) => a.id === agentId && a.chosen)) return 'terminal_chat';
     if (chat.agents.some((a) => a.id === agentId)) return 'acp';
+    if (chat.terminalChat?.some((a) => a.id === agentId && a.chosen)) return 'terminal_chat';
     return chat.canAdd?.some((a) => a.id === agentId) ? 'prompt' : 'terminal';
   };
 
@@ -540,7 +551,7 @@ export function NewAgentMenu({
           </button>
         )}
       </div>
-      {chat && (
+      {chat && !chatFirst && (
         <div className="ck-menu-startmode" data-testid="start-mode">
           <span id="ck-startmode-label">{t('newAgent.startIn')}</span>
           <div role="group" aria-labelledby="ck-startmode-label" className="ck-lane-seg">
@@ -628,7 +639,7 @@ export function NewAgentMenu({
               canAdd={!!addable && !addable.reason}
               onStartChat={(id) => runChat(id, 'acp')}
               onAddChat={(agent, prefer) => chat?.onAddChat?.(agent, prefer)}
-              onUseTerminal={() => startTerminal(e.type)}
+              onUseTerminal={chatFirst ? undefined : () => startTerminal(e.type)}
             />
           ) : null;
         return (
@@ -641,13 +652,14 @@ export function NewAgentMenu({
       {chatFail && (
         <div className="ck-menu-note ck-menu-note--err ck-menu-note--row" role="alert" data-testid="chat-start-failed">
           <span>{chatFail.sentence}</span>
-          {chatFail.terminalFallback && (
+          {chatFail.terminalFallback && !chatFirst && (
             <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => start(chatFail.agentId)}>
               {t('newAgent.startInTerminal')}
             </button>
           )}
         </div>
       )}
+      <NeedTerminalsLine count={needTerminals} onOpen={onClose} />
       {addPickList.length > 0 && chat?.onAddChat && (
         <>
           <button type="button" className="ck-menu-setup" aria-expanded={addPick} onClick={() => setAddPick((v) => !v)}>

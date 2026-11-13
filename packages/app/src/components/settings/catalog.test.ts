@@ -21,7 +21,7 @@ const PINNED_IDS = [
   'shortcut-agent-board', 'shortcut-ask-aside', 'shortcut-ask-bar', 'shortcut-focus-mode', 'shortcut-mode-toggle', 'shortcut-new-agent', 'shortcut-next-needs-me', 'shortcut-open-inbox',
   'shortcut-palette', 'shortcut-pane-jump', 'shortcut-pane-next', 'shortcut-pane-prev', 'shortcut-remember', 'shortcut-search-chats',
   'shortcut-show-list', 'shortcut-split', 'shortcut-split-focus-left', 'shortcut-split-focus-right', 'shortcut-split-swap', 'shortcut-stop-all',
-  'shortcuts-reset-all', 'show-developer-settings', 'simple-mode', 'snippet-claude-desktop', 'snippet-codex', 'spaces-labs',
+  'shortcuts-reset-all', 'show-developer-settings', 'show-terminals', 'simple-mode', 'snippet-claude-desktop', 'snippet-codex', 'spaces-labs',
   'start-at-sign-in', 'storage', 'team-page', 'telegram', 'theme', 'toolbelt', 'tunnel', 'uninstall', 'usage-bar', 'usage-login-reads',
   'version', 'versions', 'welcome', 'whats-new', 'your-name',
 ];
@@ -35,7 +35,7 @@ const PLACEMENT: [string, string, string[]][] = [
   ['agents', 'Sign in', ['accounts']],
   ['agents', 'Where agents start', ['project-folder', 'linux']],
   ['agents', 'Moving work', ['handoff-mode', 'keep-going']],
-  ['agents', 'All agents', ['preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions']],
+  ['agents', 'All agents', ['show-terminals', 'preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions']],
   ['agents', 'Your chats', ['bring-chats-agents']],
   ['agents', 'Rules for all agents', ['loop-guard', 'package-check', 'security-ask-before-control', 'security-agents-merge', 'security-recent-approvals', 'collision']],
   ['agents', 'Limits', ['budget-turns', 'budget-minutes']],

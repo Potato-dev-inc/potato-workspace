@@ -23,4 +23,6 @@ export const DEFAULT_SETTINGS: Settings = {
   agent_hooks_mode: 'shadow',
   // Chat is on until the person turns it off (the "+" menu starts chats by default). Rust: settings_store.
   acp_chat_enabled: true,
+  // Terminals are hidden until the person turns them on (Settings > General). Rust: show_terminals.
+  show_terminals: false,
 };
