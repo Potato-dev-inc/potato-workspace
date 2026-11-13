@@ -12,8 +12,12 @@ import { AgentLogo } from '../common/AgentLogo';
 import { Avatar } from '../companion/Avatar';
 import { groupByProject, needsPaneIds, rowState, type RowState } from './phoneNav';
 import type { RuleLimit } from '../../lib/pane-rule-view';
+import type { PhoneClosedChat } from '../../lib/bridge-types';
+import { useProgressNote } from '../../lib/phone-progress';
+import { progressWords, useNow } from './PhoneProgress';
 import '../../styles/phone-shell.css';
 import '../../styles/phone-link.css';
+import '../../styles/phone-newchat.css';
 
 /** A press this long on a row opens its small menu (Stop, Close). */
 export const LONG_PRESS_MS = 500;
@@ -89,6 +93,10 @@ function Row({
 }) {
   const t = useT();
   const age = ageWords(t, pane.last_output_at, now);
+  // The progress line of a working agent whose chat this phone reads (P11): the same words as under the header.
+  const note = useProgressNote(pane.id);
+  const progressNow = useNow(note !== null && state === 'working');
+  const progress = note && state === 'working' ? progressWords(t, note, progressNow) : null;
   const press = useRef(0);
   const held = useRef(false);
   const endPress = () => window.clearTimeout(press.current);
@@ -132,9 +140,13 @@ function Row({
         </span>
         <span className="ph-drow-text">
           <span className="ph-drow-title">{title}</span>
-          <span className="ph-drow-state">
-            {t(STATE_KEY[state])}
-            {age ? ` · ${age}` : ''}
+          <span className="ph-drow-state" data-progress={progress ? 'true' : undefined}>
+            {progress ?? (
+              <>
+                {t(STATE_KEY[state])}
+                {age ? ` · ${age}` : ''}
+              </>
+            )}
           </span>
         </span>
         {lock && (
@@ -166,6 +178,9 @@ export function PhoneDrawer({
   locks,
   onStopPane,
   onClosePane,
+  closed,
+  canReopen = false,
+  onReopen,
 }: {
   open: boolean;
   onClose: () => void;
@@ -192,11 +207,19 @@ export function PhoneDrawer({
   onStopPane?: (paneId: string) => Promise<string | null>;
   /** Close one agent (asked about first). Without it the row menu has no Close. */
   onClosePane?: (paneId: string) => void;
+  /** The chats closed on the PC (a "Closed" part under the open ones). Absent or empty: no such part. */
+  closed?: PhoneClosedChat[];
+  /** This phone may bring a closed chat back (`control`). Without it the rows are shown but switched off. */
+  canReopen?: boolean;
+  /** Brings a closed chat back and opens it. Resolves to null, or one plain sentence saying why not. */
+  onReopen?: (id: string) => Promise<string | null>;
 }) {
   const t = useT();
   const [menu, setMenu] = useState<{ paneId: string; title: string } | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [menuError, setMenuError] = useState<string | null>(null);
+  const [closedOpen, setClosedOpen] = useState(false);
+  const [closedNote, setClosedNote] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const [now, setNow] = useState(() => Date.now());
   const drag = useRef<{ x: number; y: number } | null>(null);
@@ -298,6 +321,49 @@ export function PhoneDrawer({
               </ul>
             </section>
           ))}
+          {closed && closed.length > 0 && (
+            <section aria-label={t('phone.closed.title')} data-testid="drawer-closed">
+              <h2 className="ph-dsec">{t('phone.closed.title')}</h2>
+              <button type="button" className="ph-dclosed-toggle" aria-expanded={closedOpen} onClick={() => setClosedOpen((v) => !v)}>
+                {closedOpen ? t('phone.closed.hide') : t('phone.closed.show', { count: closed.length })}
+              </button>
+              {closedOpen && (
+                <ul className="ph-dlist">
+                  {closed.slice(0, 20).map((chat) => (
+                    <li key={chat.id}>
+                      <button
+                        type="button"
+                        className="ph-drow"
+                        data-closed="true"
+                        disabled={!canReopen || !onReopen}
+                        aria-label={t('phone.closed.reopen', { name: chat.title ?? chat.label })}
+                        onClick={() => {
+                          setClosedNote(null);
+                          void onReopen?.(chat.id).then((refused) => {
+                            if (refused) setClosedNote(refused);
+                          });
+                        }}
+                      >
+                        <span className="ph-drow-icon">
+                          <AgentLogo id={chat.agent} name={chat.label} size={22} decorative />
+                        </span>
+                        <span className="ph-drow-text">
+                          <span className="ph-drow-title">{chat.title ?? t('phone.closed.untitled')}</span>
+                          <span className="ph-drow-state">{[chat.folder, ageWords(t, chat.updated_ms, now)].filter(Boolean).join(' · ')}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {closedOpen && !canReopen && <p className="ph-dclosed-note">{t('phone.closed.needControl')}</p>}
+              {closedNote && (
+                <p className="ph-dclosed-note" role="alert">
+                  {closedNote}
+                </p>
+              )}
+            </section>
+          )}
           {companions.length > 0 && (
             <section aria-label={t('phone.companions')}>
               <h2 className="ph-dsec">{t('phone.companions')}</h2>

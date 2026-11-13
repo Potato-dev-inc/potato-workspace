@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.25
+
+This is a beta.
+
+- Phone: start a new chat from the phone. Pick the agent and a project the PC already knows, choose Chat or Terminal, and type the first message.
+- Phone: the model label is now a real picker for model, mode and effort, with a short line about each. Full access shows a yellow shield and needs a press and hold.
+- Phone: reopen closed chats from the drawer, and press and hold a message to copy, select, share, edit and send again, or retry.
+- Phone: attach a photo or file with "+" (Camera, Photos, Files, Paste; up to 10 MB). Files are kept in one folder on the PC and removed after 7 days.
+- Phone: talk instead of typing where the phone supports it. Nothing is sent until you press Send.
+- Phone: quick replies when the agent asks something, saved prompts with "/", a result card when a turn ends (summary, files changed, the diff), and a live progress line while an agent works.
+- Every new phone action is checked on the PC against what that phone may do and the agent's own remote setting.
+
 ## 1.0.24
 
 This is a beta.

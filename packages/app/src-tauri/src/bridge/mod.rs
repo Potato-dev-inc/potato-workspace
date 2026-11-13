@@ -192,6 +192,8 @@ pub fn start_embedded_bridge(
             }
         }
     });
+    // Files a phone sent more than 7 days ago go away (phone compose).
+    let _ = thread::Builder::new().name("phone-uploads-sweep".into()).spawn(routes::phone_upload::clean_on_start);
     // Missions continue where they were, after the operations recovery above.
     let _ = thread::Builder::new().name("missions-resume".into()).spawn(|| {
         let resumed = crate::missions::resume_all();

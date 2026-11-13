@@ -55,6 +55,8 @@ import { InputRefusedNote } from './components/mobile/InputRefusedNote';
 import { TypingNote } from './components/mobile/TypingNote';
 import { PhoneChatView } from './components/mobile/PhoneChatView';
 import { AcpPhoneDock } from './components/mobile/AcpPhoneDock';
+import { PhoneNewChat } from './components/mobile/PhoneNewChat';
+import type { PhoneClosedChat } from './lib/bridge-types';
 import { ACP_LANE } from './lib/acpChat';
 import { composerBlock } from './lib/paneOutbox';
 import { publishBridgeOutbox } from './lib/paneOutbox-bridge';
@@ -656,7 +658,7 @@ export default function PwaApp() {
   const openNewAgentSheet = useCallback(() => {
     setSpawnError(null);
     setSheet('new');
-    if (!bridge) return;
+    if (!bridge || bridge.phoneNewChat) return;
     bridge
       .listAgentTypes()
       .then((body) => {
@@ -694,6 +696,47 @@ export default function PwaApp() {
       setToast(errorSentence(e));
     }
   }, [bridge, active, applyPanes]);
+
+  // Chats closed on the PC: listed in the drawer's "Closed" part, read each time the drawer opens.
+  const [closedChats, setClosedChats] = useState<PhoneClosedChat[]>([]);
+  const loadClosed = useCallback(() => {
+    if (!bridge?.acpClosed) return;
+    bridge.acpClosed().then(setClosedChats, () => undefined);
+  }, [bridge]);
+  useEffect(() => {
+    if (drawer) loadClosed();
+  }, [drawer, loadClosed]);
+  const reopenClosed = useCallback(
+    async (id: string): Promise<string | null> => {
+      if (!bridge?.acpReopen) return t('phone.closed.failed');
+      try {
+        await bridge.acpReopen(id);
+        applyPanes(await bridge.listPanes());
+        loadClosed();
+        selectTab(id);
+        return null;
+      } catch (e) {
+        return / -> 403/.test(errorSentence(e)) ? t('phone.closed.needControl') : t('phone.closed.failed');
+      }
+    },
+    [bridge, applyPanes, loadClosed, selectTab, t],
+  );
+  /** A chat started from the new-chat screen: open it (a terminal is claimed at the phone's size like any new pane). */
+  const newChatStarted = useCallback(
+    async (paneId: string, lane: 'chat' | 'terminal', sent: boolean) => {
+      if (!bridge) return;
+      if (lane === 'terminal') claimOnOpenRef.current = paneId;
+      try {
+        applyPanes(await bridge.listPanes());
+      } catch {
+        /* the next poll lists it */
+      }
+      setSheet(null);
+      selectTab(paneId);
+      if (!sent) setToast(t('phone.nc.firstFailed'));
+    },
+    [bridge, applyPanes, selectTab, t],
+  );
 
   // The open agent's own card: floats over its terminal, or sits under its chat. In the chat, the questions its helpers ask sit under it too.
   const helperAskers = useMemo(() => {
@@ -893,6 +936,8 @@ export default function PwaApp() {
               link={phoneLink.kind}
               working={activePane.status === 'running'}
               ruleLimit={limitOf(paneRules.rules[active])}
+              acp={isAcpPane}
+              canControl={canControl}
               above={
                 <PhoneNeedsPill
                   snapshot={attention}
@@ -938,6 +983,9 @@ export default function PwaApp() {
         locks={locks}
         onStopPane={stopPane}
         onClosePane={(id) => void closePaneById(id)}
+        closed={closedChats}
+        canReopen={canControl}
+        onReopen={reopenClosed}
         onSearch={() => {
           setDrawer(false);
           setSearchOpen(true);
@@ -964,7 +1012,16 @@ export default function PwaApp() {
           onClose={() => setSearchOpen(false)}
         />
       )}
-      {sheet === 'new' && (
+      {sheet === 'new' && bridge && bridge.phoneNewChat && (
+        <PhoneNewChat
+          bridge={bridge}
+          canControl={canControl}
+          grid={lastFitGridRef.current ? { ...lastFitGridRef.current, viewer: VIEWER_ID } : null}
+          onClose={() => setSheet(null)}
+          onStarted={(paneId, lane, sent) => void newChatStarted(paneId, lane, sent)}
+        />
+      )}
+      {sheet === 'new' && !(bridge && bridge.phoneNewChat) && (
         <NewAgentSheet
           entries={launchEntries}
           onClose={() => setSheet(null)}

@@ -55,6 +55,14 @@ export interface HarnessScenario {
     rules?: Record<string, { remote: boolean; level: 'watch' | 'answer' | 'full' }>;
     /** Phone part 2: open as a phone that was just paired (the three setup steps show). */
     setup?: boolean;
+    /** Phone chats (phone-acp): what the mocked PC answers for a chat session over ACP, the new-chat choices and the closed chats. */
+    acp?: { configOptions?: unknown[]; busy?: boolean; closed?: unknown[]; newChat?: unknown };
+    /**
+     * Phone compose: which conversation the mocked bridge serves. `finished` (default): the turn ended with a result;
+     * `live`: the agent is in the middle of a turn (the progress line); `asking`: the turn ended with a question
+     * (quick replies).
+     */
+    chat?: 'finished' | 'live' | 'asking';
   };
   /** Phone route: the abilities this phone was paired with (`GET /pair/me`); default: all four. */
   phoneCaps?: string[];

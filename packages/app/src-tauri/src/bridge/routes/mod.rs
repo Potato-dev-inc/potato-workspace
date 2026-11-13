@@ -12,7 +12,10 @@ mod chat;
 mod companion_mcp;
 mod checkpoints;
 mod chats;
+mod phone_chat;
 mod phone_control;
+mod phone_result;
+pub(super) mod phone_upload;
 mod companions;
 mod digest;
 mod flight;
@@ -105,6 +108,9 @@ pub(super) fn dispatch(cx: &Ctx) -> Option<RouteResult> {
         .or_else(|| chats::handle(cx))
         .or_else(|| acp_chat::handle(cx))
         .or_else(|| phone_control::handle(cx))
+        .or_else(|| phone_chat::handle(cx))
+        .or_else(|| phone_upload::handle(cx))
+        .or_else(|| phone_result::handle(cx))
         .or_else(|| panes::handle(cx))
         .or_else(|| plans::handle(cx))
 }

@@ -184,6 +184,13 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // Stopping the turn of a chat session over ACP is the Stop key of its pane: typing. Starting one is `control`
         // (the default of a POST); its state is a read (`watch`, the default of a GET).
         ("POST", ["acp", "sessions", _, "cancel"]) => Need::Cap(Type),
+        // Phone chats (`bridge/routes/phone_chat.rs`): the new-chat choices and the closed list are reads (`watch`); starting a
+        // chat, changing the agent's model, mode or effort, and bringing a closed chat back act (`control`). Written out so
+        // they stay in the list; the ones about one agent also meet that agent's remote rule (`pane_of_route`).
+        ("GET", ["phone", "new-chat"]) | ("GET", ["acp", "closed"]) => Need::Cap(Watch),
+        ("POST", ["phone", "chats"]) | ("POST", ["acp", "sessions", _, "config"]) | ("POST", ["acp", "closed", _, "reopen"]) => {
+            Need::Cap(Control)
+        }
         // The Chat tab's message box (`pane_outbox`): writing or cancelling a message is typing; the list
         // of a pane's messages is a read of the conversation.
         ("POST", ["panes", _, "messages"]) | ("DELETE", ["panes", _, "messages", _]) => Need::Cap(Type),
@@ -211,6 +218,12 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // agent per 5 minutes). Listed exactly: a later route falls through to watch or control.
         ("POST", ["panes", _, "interrupt"]) => Need::Cap(Type),
         ("GET", ["pane-rules"]) | ("POST", ["control-asks"]) => Need::Device,
+
+        // Phone compose (`bridge/routes/phone_upload.rs`, `phone_result.rs`): sending a photo or a file writes a file on the PC
+        // for the agent to read, which is typing; reading what the last turn did is a read of the agent's work (`watch`). Both
+        // are under `/panes/{id}`, so the agent's own remote rule applies as well. Written out so they stay in this list.
+        ("POST", ["panes", _, "uploads"]) => Need::Cap(Type),
+        ("GET", ["panes", _, "result"]) => Need::Cap(Watch),
 
         ("GET", _) => Need::Cap(Watch),
         _ => Need::Cap(Control),

@@ -95,14 +95,15 @@ describe('PhoneComposer', () => {
     expect(send().disabled).toBe(true);
   });
 
-  it('the plus menu lists photos and files as coming soon', () => {
+  it('the plus menu lists camera, photos, files and paste, and says so when the PC cannot take files', () => {
     mount();
     act(() => (host.querySelector('[aria-label="Add"]') as HTMLButtonElement).click());
     const menu = host.querySelector('[data-testid="phone-plus-menu"]')!;
     expect(menu.textContent).toContain('Camera');
     expect(menu.textContent).toContain('Photos');
     expect(menu.textContent).toContain('Files');
-    expect(menu.textContent).toContain('Coming soon');
+    expect(menu.textContent).toContain('Paste');
+    expect(menu.textContent).toContain('Not on this PC yet');
   });
 
   it('keeps an unsent message per chat', () => {

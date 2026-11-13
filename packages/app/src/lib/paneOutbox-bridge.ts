@@ -43,10 +43,10 @@ export function bridgeOutboxTransport(bridge: BridgeClient): OutboxTransport {
   const list = async (paneId: string): Promise<OutboxMessage[]> => (bridge.listPaneMessages ? bridge.listPaneMessages(paneId) : []);
 
   return {
-    async send(paneId, text) {
+    async send(paneId, text, attachments) {
       if (!bridge.sendPaneMessage) throw new Error(OLD_PC);
       try {
-        return await bridge.sendPaneMessage(paneId, text);
+        return attachments && attachments.length > 0 ? await bridge.sendPaneMessage(paneId, text, attachments) : await bridge.sendPaneMessage(paneId, text);
       } catch (error) {
         throw new Error(bridgeRefusalText(error, SEND_FAILED));
       }

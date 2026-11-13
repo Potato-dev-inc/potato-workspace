@@ -29,6 +29,18 @@ pub(super) struct Request {
 
 /// The largest request body the bridge buffers (413 above it).
 pub(super) const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+/// A phone's file upload (`POST /panes/{id}/uploads`): up to 10 MB of file, which is about 13.4 MB as base64.
+pub(super) const MAX_UPLOAD_BODY_BYTES: usize = 14 * 1024 * 1024;
+
+/// The most body the route may carry: only the phone's upload route is let past [`MAX_BODY_BYTES`] (it still needs the gate).
+pub(super) fn body_limit(method: &str, target: &str) -> usize {
+    let (path, _) = split_target(target);
+    let segments: Vec<&str> = path.trim_start_matches("/bridge").split('/').filter(|s| !s.is_empty()).collect();
+    match (method, segments.as_slice()) {
+        ("POST", ["panes", _, "uploads"]) => MAX_UPLOAD_BODY_BYTES,
+        _ => MAX_BODY_BYTES,
+    }
+}
 /// The largest request head (request line and headers).
 const MAX_HEAD_BYTES: usize = 256 * 1024;
 /// How long a client gets to send its whole request before the connection is dropped.
@@ -282,7 +294,7 @@ pub(super) fn handle_connection(
             return sent;
         }
     };
-    if head.content_length > MAX_BODY_BYTES {
+    if head.content_length > body_limit(&head.req.method, &head.req.target) {
         let sent = write_json_cors(&mut stream, 413, &json!({ "error": "request body too large", "code": "PAYLOAD_TOO_LARGE" }));
         drain_unread_body(&mut *stream.stream, unread);
         return sent;
@@ -616,7 +628,7 @@ fn spawn_test_listener(real_poll: bool) -> std::net::SocketAddr {
                 let cors = cors_lines(&head.req.headers_raw);
                 let gated = gate(&head.req);
                 let unread = head.content_length.saturating_sub(head.leftover.len());
-                if gated.is_ok() && head.content_length > MAX_BODY_BYTES {
+                if gated.is_ok() && head.content_length > body_limit(&head.req.method, &head.req.target) {
                     let mut stream = CorsStream { stream: &mut stream, cors: &cors };
                     let _ = write_json_cors(&mut stream, 413, &json!({ "error": "request body too large" }));
                     drain_unread_body(&mut *stream.stream, unread);

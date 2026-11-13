@@ -55,9 +55,11 @@ import { settingsPhone } from './zh-TW/settingsPhone';
 import { notify } from './zh-TW/notify';
 import { board } from './zh-TW/board';
 import { phone } from './zh-TW/phone';
+import { phoneChat } from './zh-TW/phoneChat';
 import { dnd } from './zh-TW/dnd';
 import { files } from './zh-TW/files';
 import { pet } from './zh-TW/pet';
+import { phoneCompose } from './zh-TW/phoneCompose';
 
 export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...common,
@@ -99,7 +101,9 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...notify,
   ...board,
   ...phone,
+  ...phoneChat,
   ...dnd,
   ...files,
   ...pet,
+  ...phoneCompose,
 };

@@ -17,9 +17,19 @@ import { usePendingBubbles } from '../../hooks/usePendingBubbles';
 import { useOfflineQueue } from '../../hooks/useOfflineQueue';
 import { canReach, type LinkKind } from '../../lib/phone-link';
 import { readChatCache, writeChatCache } from '../../lib/phone-chat-cache';
+import { writeDraft } from '../../lib/composerDraft';
 import type { RuleLimit } from '../../lib/pane-rule-view';
 import { PendingMessages } from '../chat/PendingMessages';
+import { MessageActionsSheet, type PressedMessage } from './MessageActions';
 import { PhoneComposer } from './PhoneComposer';
+import { PhonePicker } from './PhonePicker';
+import type { ChatAttachment } from '../../lib/attachFiles';
+import { publishProgress, progressOf } from '../../lib/phone-progress';
+import { quickRepliesFor } from '../../lib/phone-quick';
+import { lastAnswer } from '../../lib/phone-result';
+import { uploadFile } from '../../lib/phone-upload';
+import { PhoneProgress } from './PhoneProgress';
+import { ResultCard } from './PhoneResult';
 import { PhoneConversation } from './PhoneConversation';
 import { PhoneNoControl } from './PhoneNoControl';
 import { PhoneQueueBar } from './PhoneQueueBar';
@@ -77,6 +87,8 @@ export function PhoneChatView({
   link = 'connected',
   working = false,
   ruleLimit = null,
+  acp = false,
+  canControl = false,
 }: {
   bridge: BridgeClient | null;
   paneId: string;
@@ -96,6 +108,10 @@ export function PhoneChatView({
   working?: boolean;
   /** The PC's remote rule for this agent keeps this phone from typing (`off` and `watch` and `answer`), or null. */
   ruleLimit?: RuleLimit | null;
+  /** This pane is a chat session over ACP: the box gets the settings picker (model, mode, effort). */
+  acp?: boolean;
+  /** This phone may change the agent's settings (`control`). */
+  canControl?: boolean;
 }) {
   const cached = useMemo(() => readChatCache(paneId), [paneId]);
   const [items, setItems] = useState<ChatItem[]>(cached?.items ?? []);
@@ -188,7 +204,41 @@ export function PhoneChatView({
 
   // Typed while the PC cannot be reached: kept on the phone, asked about when the PC is back.
   const queue = useOfflineQueue(paneId, t('phone.queue.full'));
-  const sendOrKeep = useCallback((text: string) => (reach ? outbox.send(text) : Promise.resolve(queue.add(text))), [reach, outbox, queue]);
+  const sendOrKeep = useCallback(
+    (text: string, attachments?: ChatAttachment[]) => {
+      // Files went to the PC when they were added, so a message with files needs the PC now; plain text can wait on the phone.
+      if (attachments && attachments.length > 0) return reach ? outbox.send(text, attachments) : Promise.resolve(t('phone.attach.offline'));
+      return reach ? outbox.send(text) : Promise.resolve(queue.add(text));
+    },
+    [reach, outbox, queue, t],
+  );
+
+  // Photos and files (the "+" menu) go to the PC first; the PC needs to be reachable and to take files.
+  const upload = useMemo(
+    () => (bridge?.uploadPaneFile && reach ? (file: File) => uploadFile(bridge, paneId, file, t('phone.attach.failed')) : null),
+    [bridge, paneId, reach, t],
+  );
+  // Quick replies and "Ask to fix" fill the box; the person presses Send.
+  const [fill, setFill] = useState<{ text: string; nonce: number } | null>(null);
+  const fillBox = useCallback((text: string) => setFill((prev) => ({ text, nonce: (prev?.nonce ?? 0) + 1 })), []);
+  const lastTurn = grouped.turns[grouped.turns.length - 1] ?? null;
+  const idle = !working && lastTurn !== null && lastTurn.end !== null;
+  const quick = useMemo(() => (idle && lastTurn ? quickRepliesFor(status.waitingFor ?? lastAnswer(lastTurn)) : []), [idle, lastTurn, status.waitingFor]);
+
+  // The progress line: what the agent does now. The drawer row shows the same note.
+  const progress = useMemo(() => (working && status.state === 'ready' ? progressOf(grouped.turns, status.source, Date.now()) : null), [working, status.state, status.source, grouped.turns]);
+  useEffect(() => {
+    publishProgress(paneId, progress);
+  }, [paneId, progress]);
+  useEffect(() => () => publishProgress(paneId, null), [paneId]);
+  const readAll = useCallback((turnId: string) => {
+    const node = document.querySelector(`[data-turn-id="${turnId.replace(/["\\]/g, '')}"]`);
+    node?.scrollIntoView?.({ block: 'start' });
+  }, []);
+  const result =
+    idle && lastTurn && status.state === 'ready' ? (
+      <ResultCard key={paneId} bridge={bridge} paneId={paneId} turn={lastTurn} onAskFix={fillBox} onReadAll={readAll} />
+    ) : null;
 
   // Stop: the turn is interrupted on the PC. "Stopped · Continue" stays 10 seconds.
   const [stoppedBar, setStoppedBar] = useState(false);
@@ -209,10 +259,38 @@ export function PhoneChatView({
 
   const askControl = useCallback(() => (bridge?.askControl ? bridge.askControl(paneId) : Promise.reject(new Error('no route -> 404'))), [bridge, paneId]);
 
+  // A long press on a message: Copy, Select text, Share; on yours also Edit and send again, and Retry (a new message).
+  const [pressed, setPressed] = useState<PressedMessage | null>(null);
+  const [editSeed, setEditSeed] = useState(0);
+  const onEdit = useCallback(
+    (text: string) => {
+      writeDraft(paneId, text);
+      setEditSeed((n) => n + 1);
+    },
+    [paneId],
+  );
+  const onRetry = useCallback(
+    async (text: string): Promise<string | null> => {
+      try {
+        const refused = await sendOrKeep(text);
+        return refused ?? null;
+      } catch (error) {
+        return errorSentence(error, t('phone.msg.retryFailed'));
+      }
+    },
+    [sendOrKeep, t],
+  );
+  const actions = canSend ? { onEdit, onRetry } : {};
+
+  const pill =
+    acp && bridge?.acpSession ? (
+      <PhonePicker bridge={bridge} paneId={paneId} canControl={canControl} fallbackLabel={grouped.model ? t('phone.composer.model', { name: grouped.model }) : t('phone.composer.modelUnknown')} />
+    ) : undefined;
+
   const composer = ruleLimit !== null ? (
     <PhoneNoControl limit={ruleLimit} onAsk={askControl} />
   ) : canSend ? (
-    <PhoneComposer key={paneId} onSend={sendOrKeep} blockedReason={sendBlock} draftKey={paneId} model={grouped.model} working={working} onStop={onStop} />
+    <PhoneComposer key={`${paneId}:${editSeed}`} onSend={sendOrKeep} blockedReason={sendBlock} draftKey={paneId} model={grouped.model} working={working} onStop={onStop} pill={pill} upload={upload} quick={quick} fill={fill} />
   ) : (
     <p className="ph-chat-send-off" data-testid="phone-chat-no-send">{t('phone.conv.noSend')}</p>
   );
@@ -243,10 +321,14 @@ export function PhoneChatView({
         turns={grouped.turns}
         dock={dock}
         pending={pending}
+        progress={<PhoneProgress note={progress} />}
+        after={result}
         above={bars}
         composer={composer}
         staleAt={!reach && readAt !== null && grouped.turns.length > 0 ? readAt : null}
+        onPressMessage={setPressed}
       />
+      {pressed && <MessageActionsSheet message={pressed} handlers={actions} onClose={() => setPressed(null)} />}
     </div>
   );
 }

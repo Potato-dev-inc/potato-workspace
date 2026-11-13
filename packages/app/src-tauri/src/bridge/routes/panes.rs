@@ -171,7 +171,7 @@ fn route_names_are_not_pane_ids() {
     assert!(!is_reserved_pane_id("waiter") && !is_reserved_pane_id("p-1"));
 }
 
-fn spawn(cx: &Ctx) -> RouteResult {
+pub(super) fn spawn(cx: &Ctx) -> RouteResult {
     let body = cx.body;
     let registry = cx.registry;
     let app = cx.app;
@@ -365,10 +365,17 @@ fn message_send(cx: &Ctx, pane_id: &str) -> RouteResult {
     #[derive(Deserialize)]
     struct Body {
         text: String,
+        /// Files the phone sent first (`POST /panes/{id}/uploads`). Only paths that route made are taken.
+        #[serde(default)]
+        attachments: Vec<crate::attach::ChatAttachment>,
     }
     let req: Body = parse_json(cx.body)?;
+    if let Some(stranger) = req.attachments.iter().find(|a| !super::phone_upload::is_ours(&a.path)) {
+        let error = format!("{} was not sent from this phone.", stranger.name);
+        return Err((400, json!({ "error": error, "code": "ATTACHMENT_REFUSED" })));
+    }
     let message = crate::pane_outbox::global(cx.registry, cx.app)
-        .send(pane_id, &req.text)
+        .send_with(pane_id, &req.text, &req.attachments)
         .map_err(|error| (400, json!({ "error": error, "code": "MESSAGE_REFUSED" })))?;
     Ok((200, json!({ "message": crate::pane_outbox::redacted(&message) })))
 }

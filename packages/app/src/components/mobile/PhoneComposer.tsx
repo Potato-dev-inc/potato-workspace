@@ -1,12 +1,17 @@
 // The phone's one message box: a large rounded box pinned to the bottom that grows as you type. Under the text: "+" (photos
 // and files come later; the menu says so), the model pill (a read-only label for now), the microphone, and Send. Enter makes
 // a new line (a phone keyboard has no Shift); Send sends. A message that cannot go yet waits in the outbox, as before.
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { useT, type MessageKey } from '../../i18n';
 import { ERROR_NOTES, LISTENING_NOTE, useVoiceInput } from '../../hooks/useVoiceInput';
 import { clearDraft, DRAFT_SAVE_MS, readDraft, writeDraft } from '../../lib/composerDraft';
 import { MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
 import { insertAtCursor, KEYBOARD_MIC_HINT } from '../../lib/voice';
+import type { ChatAttachment } from '../../lib/attachFiles';
+import { MAX_SAVED_PROMPTS, readSavedPrompts, slashFilter, withPrompt, writeSavedPrompts, type QuickKind } from '../../lib/phone-quick';
+import { AttachChips, PlusMenu, readClipboard, useAttachments, type UploadFn } from './PhoneAttach';
+import { QuickReplies, SavedPrompts, starterPrompts } from './PhoneQuick';
+import { PhoneVoiceBar } from './PhoneVoiceBar';
 import '../../styles/phone-shell.css';
 
 /** The box grows with the text up to this many lines, then scrolls. */
@@ -29,9 +34,19 @@ export function PhoneComposer({
   model,
   working = false,
   onStop,
+  pill,
+  upload = null,
+  quick = [],
+  fill = null,
 }: {
-  /** Sends the text. Resolves to null when it was accepted, else one plain sentence saying why not. */
-  onSend: (text: string) => Promise<string | null>;
+  /** Sends the text, with the files that were added when there are some. Resolves to null when it was accepted, else one plain sentence saying why not. */
+  onSend: (text: string, attachments?: ChatAttachment[]) => Promise<string | null>;
+  /** Sends one file to the PC for this chat (the "+" menu). Without it the menu items say the PC cannot take files yet. */
+  upload?: UploadFn | null;
+  /** Quick replies made from what the agent asked: chips above the box that fill it. */
+  quick?: readonly QuickKind[];
+  /** Puts this text in the box (a quick reply, "Ask to fix"). A new `nonce` fills again with the same text. */
+  fill?: { text: string; nonce: number } | null;
   /** Why the box is switched off, or null. */
   blockedReason: string | null;
   /** The chat this box writes to: its unsent text is kept per chat. */
@@ -42,6 +57,8 @@ export function PhoneComposer({
   working?: boolean;
   /** Stops the agent's turn. Resolves to null, or one plain sentence saying why not. Without it there is no Stop button. */
   onStop?: () => Promise<string | null>;
+  /** What sits where the model label does (the settings picker). `undefined`: the read-only model label; `null`: nothing. */
+  pill?: ReactNode;
 }) {
   const t = useT();
   const [text, setText] = useState(() => readDraft(draftKey));
@@ -51,12 +68,17 @@ export function PhoneComposer({
   /** The mic's notes (the keyboard hint, listening, errors) show once the mic was used, not before. */
   const [micUsed, setMicUsed] = useState(false);
   const [interim, setInterim] = useState('');
+  const attach = useAttachments(upload);
+  const [saved, setSaved] = useState<string[] | null>(() => readSavedPrompts());
+  const [slashClosed, setSlashClosed] = useState(false);
+  /** The box as it was when this dictation began: the cross puts it back. */
+  const voiceBase = useRef('');
   const field = useRef<HTMLTextAreaElement>(null);
   const caretAfter = useRef<number | null>(null);
   const blocked = blockedReason !== null;
   const count = [...text].length;
   const tooLong = count > MAX_MESSAGE_CHARS;
-  const empty = text.trim() === '';
+  const empty = text.trim() === '' && attach.ready.length === 0;
   const [stopping, setStopping] = useState(false);
   const stopMode = working && !!onStop && empty && blockedReason === null;
 
@@ -73,6 +95,34 @@ export function PhoneComposer({
     },
   });
   const micOff = blocked || busy || mic.support === 'checking';
+  const slash = slashClosed ? null : slashFilter(text);
+  const prompts = saved ?? starterPrompts(t);
+  const startedRecording = useRef(false);
+  useEffect(() => {
+    // Remember the box as it was when listening began.
+    if (mic.recording && !startedRecording.current) voiceBase.current = field.current?.value ?? '';
+    startedRecording.current = mic.recording;
+  }, [mic.recording]);
+
+  // A quick reply (or "Ask to fix") puts its text in the box and puts the cursor at its end. Nothing is sent.
+  const filled = useRef(-1);
+  useEffect(() => {
+    if (!fill || fill.nonce === filled.current) return;
+    filled.current = fill.nonce;
+    caretAfter.current = fill.text.length;
+    setText(fill.text);
+    field.current?.focus();
+  }, [fill]);
+  const putText = (next: string) => {
+    caretAfter.current = next.length;
+    setText(next);
+    setSlashClosed(false);
+    field.current?.focus();
+  };
+  const changeSaved = (list: string[]) => {
+    setSaved(list);
+    writeSavedPrompts(list);
+  };
 
   // The draft is kept per chat, a moment after the last change.
   const firstRun = useRef(true);
@@ -101,16 +151,17 @@ export function PhoneComposer({
   }, [text]);
 
   const submit = async () => {
-    if (blocked || busy || tooLong || empty) return;
+    if (blocked || busy || tooLong || empty || attach.uploading) return;
     mic.halt();
     setBusy(true);
     setError(null);
-    const refused = await onSend(text.trim());
+    const refused = attach.ready.length > 0 ? await onSend(text.trim(), attach.ready) : await onSend(text.trim());
     setBusy(false);
     if (refused) {
       setError(refused);
     } else {
       setText('');
+      attach.clear();
       clearDraft(draftKey);
     }
     field.current?.focus();
@@ -125,6 +176,10 @@ export function PhoneComposer({
     if (refused) setError(refused);
   };
 
+  const pasteFromClipboard = async () => {
+    const refused = await readClipboard(attach.add, (pasted) => putText(text === '' ? pasted : `${text}${text.endsWith('\n') ? '' : '\n'}${pasted}`), t);
+    if (refused) attach.setNote(refused);
+  };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     // A keyboard with a modifier (a tablet with a keyboard) sends; a plain Enter is a new line.
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) {
@@ -151,7 +206,8 @@ export function PhoneComposer({
     const code = Object.keys(ERROR_NOTES).find((key) => ERROR_NOTES[key] === line);
     return code ? t(`phone.mic.${code}` as MessageKey) : line;
   };
-  const note = blockedReason ?? (tooLong ? t('phone.composer.tooLong', { max: MAX_MESSAGE_CHARS }) : error);
+  const note = blockedReason ?? (tooLong ? t('phone.composer.tooLong', { max: MAX_MESSAGE_CHARS }) : (error ?? attach.note));
+  const voiceLine = mic.support === 'hint' ? t('phone.voice.unavailable') : null;
   return (
     <form
       className="ph-comp"
@@ -161,7 +217,19 @@ export function PhoneComposer({
         void submit();
       }}
     >
+      {!blocked && slash === null && text.trim() === '' && <QuickReplies kinds={quick} onPick={putText} />}
+      {!blocked && slash !== null && (
+        <SavedPrompts
+          prompts={prompts}
+          filter={slash}
+          onPick={putText}
+          onAdd={(added) => changeSaved(withPrompt(prompts, added).slice(0, MAX_SAVED_PROMPTS))}
+          onRemove={(gone) => changeSaved(prompts.filter((p) => p !== gone))}
+          onClose={() => setSlashClosed(true)}
+        />
+      )}
       <div className="ph-comp-box">
+        <AttachChips items={attach.items} onRemove={attach.remove} />
         <textarea
           ref={field}
           rows={1}
@@ -172,11 +240,29 @@ export function PhoneComposer({
           enterKeyHint="enter"
           onChange={(event) => {
             setText(event.target.value);
+            if (slashClosed && slashFilter(event.target.value) === null) setSlashClosed(false);
             if (error) setError(null);
+          }}
+          onPaste={(event) => {
+            const pasted = [...(event.clipboardData?.files ?? [])];
+            if (pasted.length === 0 || !upload) return;
+            event.preventDefault();
+            attach.add(pasted);
           }}
           onKeyDown={onKeyDown}
         />
-        {interim !== '' && <p className="ph-comp-interim" aria-live="polite">{interim}</p>}
+        {mic.recording ? (
+          <PhoneVoiceBar
+            words={interim}
+            onKeep={() => mic.stop()}
+            onDrop={() => {
+              mic.halt();
+              setText(voiceBase.current);
+            }}
+          />
+        ) : (
+          interim !== '' && <p className="ph-comp-interim" aria-live="polite">{interim}</p>
+        )}
         <div className="ph-comp-row">
           <div className="ph-comp-plus">
             <button type="button" className="ph-comp-btn" aria-label={t('phone.composer.add')} aria-haspopup="menu" aria-expanded={plus} disabled={blocked} onClick={() => setPlus((v) => !v)}>
@@ -184,20 +270,15 @@ export function PhoneComposer({
                 <path d="M12 5v14M5 12h14" />
               </svg>
             </button>
-            {plus && (
-              <div className="ph-comp-menu" role="menu" data-testid="phone-plus-menu">
-                {(['camera', 'photos', 'files'] as const).map((item) => (
-                  <button key={item} type="button" role="menuitem" aria-disabled="true" onClick={() => setPlus(false)}>
-                    <span>{t(`phone.composer.${item}`)}</span>
-                    <small>{t('phone.composer.soon')}</small>
-                  </button>
-                ))}
-              </div>
-            )}
+            {plus && <PlusMenu enabled={upload !== null} onFiles={attach.add} onPaste={() => void pasteFromClipboard()} onClose={() => setPlus(false)} />}
           </div>
-          <span className="ph-comp-model" title={model ?? t('phone.composer.modelUnknown')}>
-            {model ? t('phone.composer.model', { name: model }) : t('phone.composer.modelUnknown')}
-          </span>
+          {pill === undefined ? (
+            <span className="ph-comp-model" title={model ?? t('phone.composer.modelUnknown')}>
+              {model ? t('phone.composer.model', { name: model }) : t('phone.composer.modelUnknown')}
+            </span>
+          ) : (
+            (pill ?? <span className="ph-comp-model" aria-hidden="true" />)
+          )}
           <button
             type="button"
             className="ph-comp-btn"
@@ -219,7 +300,7 @@ export function PhoneComposer({
               </svg>
             </button>
           ) : (
-            <button type="submit" className="ph-comp-send" disabled={blocked || busy || empty || tooLong} aria-label={t('phone.composer.send')}>
+            <button type="submit" className="ph-comp-send" disabled={blocked || busy || empty || tooLong || attach.uploading || mic.recording} aria-label={t('phone.composer.send')}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 19V5M5 12l7-7 7 7" />
               </svg>
@@ -227,9 +308,9 @@ export function PhoneComposer({
           )}
         </div>
       </div>
-      {micUsed && mic.note && (
-        <p className="ph-comp-note" role="status">
-          {micWords(mic.note)}
+      {micUsed && mic.note && !mic.recording && (
+        <p className="ph-comp-note" role="status" data-testid="phone-mic-note">
+          {voiceLine ?? micWords(mic.note)}
         </p>
       )}
       {note && (

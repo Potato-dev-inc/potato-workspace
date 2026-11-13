@@ -13,6 +13,8 @@ import type { Question, QuestionAnswer } from './questions';
 import type { PhoneChatReply } from './sessionChatModel';
 import type { ChatSearchAnswer } from './chatSearch';
 import type { OutboxMessage } from './paneOutbox';
+import type { ChatAttachment } from './attachFiles';
+import type { PhoneUploadBody, PaneResult } from './phone-upload';
 import type { CompanionView, FeedItem, MemoryView, PendingDecision } from './companion';
 import type { PlansReport } from './plans-report';
 import type { AcpChatState } from './acpChat';
@@ -443,7 +445,24 @@ export interface BridgeClient {
    * `POST /panes/{id}/messages`: a message for the pane's agent, sent when the agent is free (needs `type`). Rejects
    * with the PC's plain reason when it refuses. Absent on clients that are not a phone.
    */
-  sendPaneMessage?(paneId: string, text: string): Promise<OutboxMessage>;
+  /** `GET /phone/new-chat`: the agents and known projects the new-chat screen offers (needs `watch`). Absent on old PCs and non-phone clients. */
+  phoneNewChat?(): Promise<PhoneNewChatOptions>;
+  /** `POST /phone/chats`: starts a chat or a terminal in a project the PC knows (needs `control`). */
+  phoneStartChat?(args: { agent: string; project: string; lane: 'chat' | 'terminal'; cols?: number; rows?: number; viewer?: string }): Promise<{ pane_id: string; agent: string; lane: string }>;
+  /** `POST /acp/sessions/{pane}/config`: sets the model, mode or effort (needs `control`). `hold` says the person pressed and held for a full-access mode. */
+  acpSetConfig?(paneId: string, optionId: string, value: string, hold?: boolean): Promise<AcpChatState>;
+  /** `GET /acp/closed`: the closed chats (needs `watch`). */
+  acpClosed?(): Promise<PhoneClosedChat[]>;
+  /** `POST /acp/closed/{id}/reopen`: the chat is live again (needs `control`). */
+  acpReopen?(id: string): Promise<{ pane_id: string }>;
+  sendPaneMessage?(paneId: string, text: string, attachments?: readonly ChatAttachment[]): Promise<OutboxMessage>;
+  /**
+   * `POST /panes/{id}/uploads`: a photo or file for the agent, saved in the PC's phone-uploads folder (needs `type`; 10 MB, pictures,
+   * PDF and common text files). Resolves the attachment to send with the next message. Absent on old PCs.
+   */
+  uploadPaneFile?(paneId: string, body: PhoneUploadBody): Promise<ChatAttachment>;
+  /** `GET /panes/{id}/result[?patch=1]`: what the agent's last turn did (needs `watch`). Absent on old PCs. */
+  paneResult?(paneId: string, withPatch?: boolean): Promise<PaneResult>;
   /** `DELETE /panes/{id}/messages/{messageId}`: cancels a message that has not started to be typed (needs `type`). */
   cancelPaneMessage?(paneId: string, messageId: string): Promise<OutboxMessage>;
   /** `GET /panes/{id}/messages`: the pane's waiting messages and the ones that just finished (needs `watch`). */
@@ -494,3 +513,33 @@ export type BridgeEvent =
   /** Every companion changed (SPEC-1028 section 11): the phone's list, without folders. */
   | { type: 'companion'; companions: CompanionView[] }
   | { type: 'resync' };
+
+/** One agent the phone's new-chat screen can start: a chat session, a terminal, or both (`GET /phone/new-chat`). */
+export interface PhoneNewChatAgent {
+  id: string;
+  label: string;
+  chat: boolean;
+  terminal: boolean;
+}
+
+/** A project the PC already knows: an opaque id and the folder's name (the path never reaches the phone). */
+export interface PhoneNewChatProject {
+  id: string;
+  name: string;
+  state: string;
+}
+
+export interface PhoneNewChatOptions {
+  agents: PhoneNewChatAgent[];
+  projects: PhoneNewChatProject[];
+}
+
+/** A closed chat the drawer lists (`GET /acp/closed`). `folder` is the folder's name only. */
+export interface PhoneClosedChat {
+  id: string;
+  agent: string;
+  label: string;
+  folder: string;
+  updated_ms: number;
+  title: string | null;
+}

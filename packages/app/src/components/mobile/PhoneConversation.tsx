@@ -14,6 +14,7 @@ import { currentPlan, PlanCard } from '../chat/PlanCard';
 import { ToolRow } from '../chat/ToolRow';
 import { clockOf } from '../../lib/phone-link';
 import { FoldedSteps } from './FoldedSteps';
+import { Pressable, type PressedMessage } from './MessageActions';
 import { foldTurnSteps } from './foldSteps';
 import '../../styles/phone-shell.css';
 import '../../styles/phone-link.css';
@@ -29,7 +30,7 @@ function TextPiece({ step, markdown }: { step: Extract<TurnStep, { kind: 'text' 
   );
 }
 
-function TurnBlock({ turn, fromScreen, markdown }: { turn: ChatTurn; fromScreen: boolean; markdown: boolean }) {
+function TurnBlock({ turn, fromScreen, markdown, onPress }: { turn: ChatTurn; fromScreen: boolean; markdown: boolean; onPress?: (message: PressedMessage) => void }) {
   const t = useT();
   const live = turn.end === null;
   const lastStepId = turn.steps[turn.steps.length - 1]?.id;
@@ -39,7 +40,11 @@ function TurnBlock({ turn, fromScreen, markdown }: { turn: ChatTurn; fromScreen:
       {turn.user && (
         <div className="ph-you">
           {turn.user.attachments && turn.user.attachments.length > 0 && <AttachmentChips attachments={turn.user.attachments} className="ck-chat-user-files" />}
-          {turn.user.text.trim() !== '' && <div className="ph-you-bubble">{turn.user.text}</div>}
+          {turn.user.text.trim() !== '' && (
+            <Pressable className="ph-you-bubble" message={{ text: turn.user.text, mine: true }} onPress={onPress}>
+              {turn.user.text}
+            </Pressable>
+          )}
         </div>
       )}
       {foldTurnSteps(turn.steps).map((piece) => {
@@ -62,9 +67,9 @@ function TurnBlock({ turn, fromScreen, markdown }: { turn: ChatTurn; fromScreen:
         }
         if (step.kind === 'thinking') return <ThinkingBlock key={step.id} text={step.item.text} durationMs={step.item.durationMs} streaming={live && step.id === lastStepId} />;
         return (
-          <div key={step.id} className="ph-agent-text">
+          <Pressable key={step.id} className="ph-agent-text" message={{ text: step.item.text, mine: false }} onPress={onPress}>
             <TextPiece step={step} markdown={markdown} />
-          </div>
+          </Pressable>
         );
       })}
       {turn.end && ending && <p className="ph-turn-end">{ending}</p>}
@@ -82,7 +87,10 @@ export function PhoneConversation({
   pending,
   composer,
   above,
+  progress,
+  after,
   staleAt = null,
+  onPressMessage,
 }: {
   state: SessionChatState;
   reason: string | null;
@@ -97,8 +105,14 @@ export function PhoneConversation({
   composer?: ReactNode;
   /** Between the dock and the message box (the queue bar, "Stopped", the "needs you" pill). */
   above?: ReactNode;
+  /** The live progress line, under the header, above the conversation. */
+  progress?: ReactNode;
+  /** After the last turn, inside the scrolling conversation (the result card). */
+  after?: ReactNode;
   /** The PC cannot be reached: the time this conversation was last read. It is shown greyed with "as of HH:MM". */
   staleAt?: number | null;
+  /** A long press on a message (yours or the agent's). Absent: messages are plain. */
+  onPressMessage?: (message: PressedMessage) => void;
 }) {
   const t = useT();
   const fromScreen = source === 'screen';
@@ -131,6 +145,7 @@ export function PhoneConversation({
           {t('phone.link.asOf', { time: clockOf(staleAt) })}
         </p>
       )}
+      {progress}
       <PlanCard items={plan} />
       <div
         ref={scrollRef}
@@ -152,7 +167,8 @@ export function PhoneConversation({
             {waitingFor && <p className="ph-conv-sub">{waitingFor}</p>}
           </div>
         )}
-        {state !== 'unavailable' && turns.map((turn) => <TurnBlock key={turn.id} turn={turn} fromScreen={fromScreen} markdown={markdown} />)}
+        {state !== 'unavailable' && turns.map((turn) => <TurnBlock key={turn.id} turn={turn} fromScreen={fromScreen} markdown={markdown} onPress={onPressMessage} />)}
+        {state !== 'unavailable' && after}
         {state !== 'unavailable' && pending}
       </div>
       {dock && <div className="ph-conv-dock">{dock}</div>}

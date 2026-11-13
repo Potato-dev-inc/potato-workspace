@@ -4,12 +4,13 @@ import { BRIDGE_HTTP_PORT_RANGE, type AgentContextProfile } from '@potato-worksp
 import { invoke } from '@tauri-apps/api/core';
 import { ngrokRequestHeaders } from './bridge-ngrok';
 import { decodeBase64, streamOffset } from './bridge-sse';
-import type { BridgeClient, PaneRuleView, PaneViewportResponse } from './bridge-types';
+import type { BridgeClient, PaneRuleView, PaneViewportResponse, PhoneClosedChat } from './bridge-types';
 import type { Question } from './questions';
 import { mergeBridgeHeaders } from './mobile-pairing-auth';
 import { localSecretHeaders } from './bridge-local-secret';
 import type { PreviewUrl } from './pane-preview';
 import type { OutboxMessage } from './paneOutbox';
+import type { ChatAttachment } from './attachFiles';
 import type { CompanionView, FeedItem, MemoryView } from './companion';
 import { AttentionAnswerError, type AttentionAnswerOutcome, type AttentionSnapshot } from './attention';
 
@@ -217,13 +218,29 @@ export function makeBridgeClient(baseUrl: string): BridgeClient {
       call('GET', `/panes/${encodeURIComponent(paneId)}/chat${since === undefined ? '' : `?since=${since}`}`),
     acpSession: (paneId) => call('GET', `/acp/sessions/${encodeURIComponent(paneId)}`),
     acpCancel: (paneId) => call('POST', `/acp/sessions/${encodeURIComponent(paneId)}/cancel`, {}),
+    phoneNewChat: () => call('GET', '/phone/new-chat'),
+    phoneStartChat: (args) => call('POST', '/phone/chats', args),
+    acpSetConfig: (paneId, optionId, value, hold) =>
+      call('POST', `/acp/sessions/${encodeURIComponent(paneId)}/config`, { option_id: optionId, value, ...(hold ? { hold: true } : {}) }),
+    acpClosed: async () => (await call<{ chats?: PhoneClosedChat[] }>('GET', '/acp/closed')).chats ?? [],
+    acpReopen: (id) => call('POST', `/acp/closed/${encodeURIComponent(id)}/reopen`, {}),
     searchChats: (query, limit) => {
       const params = new URLSearchParams({ q: query });
       if (limit != null) params.set('limit', String(limit));
       return call('GET', `/chats/search?${params.toString()}`);
     },
-    sendPaneMessage: async (paneId, text) =>
-      (await call<{ message: OutboxMessage }>('POST', `/panes/${encodeURIComponent(paneId)}/messages`, { text })).message,
+    sendPaneMessage: async (paneId, text, attachments) =>
+      (
+        await call<{ message: OutboxMessage }>(
+          'POST',
+          `/panes/${encodeURIComponent(paneId)}/messages`,
+          attachments && attachments.length > 0 ? { text, attachments } : { text },
+        )
+      ).message,
+    uploadPaneFile: async (paneId, body) =>
+      (await call<{ attachment: ChatAttachment }>('POST', `/panes/${encodeURIComponent(paneId)}/uploads`, body)).attachment,
+    paneResult: (paneId, withPatch) =>
+      call('GET', `/panes/${encodeURIComponent(paneId)}/result${withPatch ? '?patch=1' : ''}`),
     cancelPaneMessage: async (paneId, messageId) =>
       (
         await call<{ message: OutboxMessage }>(

@@ -285,6 +285,8 @@ pub fn pane_of_route<'a>(segments: &[&'a str]) -> Option<&'a str> {
     match segments {
         ["panes", "wait", ..] | ["panes"] | [] => None,
         ["panes", id, ..] => Some(id),
+        // A chat session over ACP is the same pane: its state, cancel and settings, and a closed chat coming back, name it too.
+        ["acp", "sessions", id, ..] | ["acp", "closed", id, ..] => Some(id),
         _ => None,
     }
 }

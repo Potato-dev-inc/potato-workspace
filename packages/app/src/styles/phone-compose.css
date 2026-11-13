@@ -1,0 +1,495 @@
+/* Phone compose: attach chips, voice bar, quick replies and saved prompts, the result card and its full screen, the progress line.
+   Uses the phone tokens from phone.css only (no raw colours). Scoped under `.ph`. Every touch target is at least 44px; motion stops
+   under prefers-reduced-motion (the wave and the dot are still then). */
+
+/* ---------- attach chips (inside the box) ---------- */
+.ph .ph-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ph .ph-chip {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 4px;
+  border: 1px solid var(--sep);
+  border-radius: 14px;
+  background: var(--fill);
+}
+.ph .ph-chip[data-state='failed'] {
+  border-color: var(--danger);
+}
+.ph .ph-chip-pic {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--fill-active);
+}
+.ph .ph-chip-file {
+  display: inline-block;
+}
+.ph .ph-chip-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.ph .ph-chip-name {
+  overflow: hidden;
+  max-width: 160px;
+  font: 500 13px/1.25 var(--font-ui);
+  color: var(--label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-chip-sub {
+  font: 400 12px/1.25 var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-chip[data-state='failed'] .ph-chip-sub {
+  color: var(--danger);
+}
+.ph .ph-chip-x {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  margin: -4px -4px -4px 0;
+  border-radius: 50%;
+  color: var(--label-2);
+}
+.ph .ph-chip-x svg,
+.ph .ph-voice-btn svg,
+.ph .ph-saved-del svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- voice bar ---------- */
+.ph .ph-voice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.ph .ph-wave {
+  display: flex;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+}
+.ph .ph-wave i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleY(0.3);
+  animation: ph-wave 900ms var(--ease) infinite alternate;
+}
+@keyframes ph-wave {
+  to {
+    transform: scaleY(1);
+  }
+}
+.ph .ph-voice-words {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font: 400 14px/1.3 var(--font-ui);
+  color: var(--label-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-voice-time {
+  flex: none;
+  font: 400 13px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--label-3);
+}
+.ph .ph-voice-btn {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--label-2);
+}
+.ph .ph-voice-keep {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+
+/* ---------- quick replies and saved prompts (above the box) ---------- */
+.ph .ph-quick {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 0 8px;
+  scrollbar-width: none;
+}
+.ph .ph-quick-chip {
+  min-height: 44px;
+  flex: none;
+  padding: 0 16px;
+  border: 1px solid var(--sep);
+  border-radius: 22px;
+  background: var(--bg-raised);
+  font: 400 15px var(--font-ui);
+  color: var(--label);
+}
+.ph .ph-quick-chip:active {
+  background: var(--fill-active);
+}
+.ph .ph-saved {
+  display: flex;
+  max-height: 40vh;
+  flex-direction: column;
+  margin-bottom: 8px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid var(--sep);
+  border-radius: 16px;
+  background: var(--bg-raised);
+}
+.ph .ph-saved-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 0 10px;
+  font: 600 13px var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-saved-close,
+.ph .ph-saved-add button {
+  min-height: 44px;
+  padding: 0 12px;
+  font: 500 14px var(--font-ui);
+  color: var(--accent);
+}
+.ph .ph-saved-add button:disabled {
+  color: var(--label-4);
+}
+.ph .ph-saved-empty {
+  margin: 0;
+  padding: 8px 10px;
+  font: 400 14px var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-saved-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ph .ph-saved-list li {
+  display: flex;
+  align-items: center;
+}
+.ph .ph-saved-pick {
+  min-height: 44px;
+  min-width: 0;
+  flex: 1;
+  padding: 0 10px;
+  border-radius: 10px;
+  font: 400 15px/1.3 var(--font-ui);
+  text-align: left;
+  color: var(--label);
+}
+.ph .ph-saved-pick:active {
+  background: var(--fill-active);
+}
+.ph .ph-saved-del {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  color: var(--label-3);
+}
+.ph .ph-saved-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid var(--sep);
+}
+.ph .ph-saved-add input {
+  min-width: 0;
+  min-height: 44px;
+  flex: 1;
+  padding: 0 10px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: 400 15px var(--font-ui);
+  color: var(--label);
+}
+
+/* ---------- result card ---------- */
+.ph .ph-result {
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 4px;
+  border: 1px solid var(--sep);
+  border-radius: 16px;
+  background: var(--bg-raised);
+  box-shadow: var(--raise-hi);
+}
+.ph .ph-result-body {
+  display: flex;
+  min-height: 44px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  text-align: left;
+  color: var(--label);
+}
+.ph .ph-result-head {
+  font: 600 15px var(--font-ui);
+}
+.ph .ph-result-sum {
+  display: -webkit-box;
+  overflow: hidden;
+  font: 400 15px/1.4 var(--font-ui);
+  color: var(--label-2);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ph .ph-result-meta {
+  margin: 0;
+  font: 400 13px/1.4 var(--font-ui);
+  color: var(--label-3);
+  font-variant-numeric: tabular-nums;
+}
+.ph .ph-result-actions {
+  display: flex;
+  gap: 4px;
+  padding: 0 6px 6px;
+}
+.ph .ph-result-actions button,
+.ph .ph-rscreen-actions button {
+  min-height: 44px;
+  flex: 1;
+  border-radius: 12px;
+  background: var(--fill);
+  font: 500 15px var(--font-ui);
+  color: var(--label);
+}
+.ph .ph-result-actions button:active,
+.ph .ph-rscreen-actions button:active {
+  background: var(--fill-active);
+}
+.ph .ph-rfiles {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ph .ph-rfile {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font: 400 13px/1.3 var(--font-mono);
+  color: var(--label-2);
+}
+.ph .ph-rfile-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-rfile-n {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.ph .ph-rfile-more {
+  padding: 4px 0;
+  font: 400 13px var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-add {
+  font-weight: 500;
+  color: var(--live);
+}
+.ph .ph-del {
+  font-weight: 500;
+  color: var(--danger);
+}
+
+/* ---------- result screen (full screen, like a document) ---------- */
+.ph .ph-rscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--label);
+}
+.ph .ph-rscreen-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: env(safe-area-inset-top, 0px) 8px 0 4px;
+  border-bottom: 1px solid var(--sep);
+}
+.ph .ph-rscreen-head h2 {
+  margin: 0;
+  font: 600 17px var(--font-ui);
+}
+.ph .ph-rscreen-back {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  color: var(--label-2);
+}
+.ph .ph-rscreen-back svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ph .ph-rscreen-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+.ph .ph-rscreen-body h3 {
+  margin: 12px 0 0;
+  font: 600 13px var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-rscreen-sum {
+  margin: 0;
+  font: 400 16px/1.5 var(--font-ui);
+  white-space: pre-wrap;
+}
+.ph .ph-result-link {
+  min-height: 44px;
+  align-self: flex-start;
+  font: 500 15px var(--font-ui);
+  color: var(--accent);
+}
+.ph .ph-rscreen-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px calc(10px + var(--safe-b));
+  border-top: 1px solid var(--sep);
+}
+.ph .ph-rscreen-note {
+  width: 100%;
+  margin: 0;
+  font: 400 13px var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-diff {
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  background: var(--bg-raised);
+}
+.ph .ph-diff summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 12px;
+  font: 500 13px var(--font-mono);
+  color: var(--label-2);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.ph .ph-diff pre {
+  margin: 0;
+  padding: 4px 0 8px;
+  overflow-x: auto;
+  font: 400 12px/1.5 var(--font-mono);
+}
+.ph .ph-dl {
+  display: block;
+  padding: 0 12px;
+  white-space: pre;
+}
+.ph .ph-dl-add {
+  background: var(--live-soft);
+}
+.ph .ph-dl-del {
+  background: var(--danger-soft);
+}
+.ph .ph-dl-hunk {
+  color: var(--label-3);
+}
+
+/* ---------- progress line (under the header) ---------- */
+.ph .ph-progress {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--sep);
+  background: var(--bg);
+  font: 400 13px/1.3 var(--font-ui);
+  color: var(--label-2);
+}
+.ph .ph-progress-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--live);
+  animation: ph-progress-pulse 1.6s var(--ease) infinite;
+}
+@keyframes ph-progress-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.ph .ph-progress-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-drow-state[data-progress='true'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph .ph-wave i,
+  .ph .ph-progress-dot {
+    animation: none;
+  }
+  .ph .ph-wave i {
+    transform: scaleY(0.7);
+  }
+}

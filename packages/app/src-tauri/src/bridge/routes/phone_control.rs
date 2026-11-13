@@ -82,7 +82,7 @@ fn control_ask(cx: &Ctx) -> RouteResult {
 }
 
 /// The paired device that is calling, when it is a person's phone (not an agent's MCP session).
-fn paired_device(cx: &Ctx) -> Option<String> {
+pub(super) fn paired_device(cx: &Ctx) -> Option<String> {
     if cx.session.is_some() {
         return None;
     }

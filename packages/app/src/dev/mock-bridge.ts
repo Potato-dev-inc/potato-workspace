@@ -4,7 +4,7 @@ import { PHONE_AGENT_TYPES, PHONE_BUFFER, PHONE_DIGEST, PHONE_PANES, PHONE_PREVI
 import { DEFAULT_PUBLIC_SETTINGS } from '../lib/bridge-settings';
 import { LS_BRIDGE_URL } from '../lib/bridge-url';
 import { PANE_CODEX } from './fixtures';
-import { PHONE_CHAT_REPLY } from './phone-chat-fixtures';
+import { PHONE_ASKING_REPLY, PHONE_CHAT_REPLY, phoneLiveReply } from './phone-chat-fixtures';
 import { PHONE_TEAM_JOB, PHONE_TEAM_OFF, phoneTeamReply } from './phone-team-fixtures';
 import type { HarnessScenario } from './types';
 
@@ -83,8 +83,49 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
   if (route === '/digest') return json(phone.digest === false ? { ...PHONE_DIGEST, empty: true } : PHONE_DIGEST);
   if (route === '/agents/types') return json(PHONE_AGENT_TYPES);
   const chatRoute = /^\/panes\/([^/]+)\/chat$/.exec(route);
-  if (chatRoute && method === 'GET') return json(path.includes('since=') ? { ...PHONE_CHAT_REPLY, items: [] } : PHONE_CHAT_REPLY);
+  if (chatRoute && method === 'GET') {
+    const served = phone.chat === 'live' ? phoneLiveReply(Date.now()) : phone.chat === 'asking' ? PHONE_ASKING_REPLY : PHONE_CHAT_REPLY;
+    return json(path.includes('since=') ? { ...served, items: [] } : served);
+  }
+  // Phone compose: what the last turn did (P10) and a file sent from the phone (P14).
+  if (/^\/panes\/[^/]+\/result$/.test(route) && method === 'GET') {
+    const withPatch = path.includes('patch=1');
+    return json({
+      available: true,
+      turn: 1,
+      sentence: 'Claude edited 2 files (+48 \u221212), now idle.',
+      agent: 'Claude',
+      durationMs: 252_000,
+      files: { count: 2, added: 48, deleted: 12, paths: ['src/pages/Login.tsx', 'src/session.ts'] },
+      tests: 'all checks passed (3/3)',
+      failed: false,
+      changes: [
+        { path: 'src/pages/Login.tsx', status: 'M', added: 30, deleted: 8, binary: false },
+        { path: 'src/session.ts', status: 'M', added: 18, deleted: 4, binary: false },
+      ],
+      ...(withPatch
+        ? {
+            patch:
+              'diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx\n--- a/src/pages/Login.tsx\n+++ b/src/pages/Login.tsx\n@@ -12,7 +12,8 @@\n   const target = readTarget();\n-  navigate(target);\n-  saveSession(user);\n+  saveSession(user);\n+  navigate(target);\n   return null;\n',
+            patchCut: false,
+          }
+        : {}),
+    });
+  }
+  if (/^\/panes\/[^/]+\/uploads$/.test(route) && method === 'POST') {
+    return json({ attachment: { name: 'photo.jpg', path: 'C:/Potato/phone-uploads/2026-11-13/photo.jpg', kind: 'image', size: 1_258_291, mime: 'image/jpeg' } });
+  }
   if (/^\/panes\/[^/]+\/messages$/.test(route) && method === 'GET') return json({ messages: [] });
+  const acpState = /^\/acp\/sessions\/([^/]+)$/.exec(route);
+  if (acpState && method === 'GET' && phone.acp) {
+    const busy = phone.acp.busy === true;
+    return json({
+      lane: 'acp', agent: 'codex', label: 'Codex', phase: busy ? 'working' : 'idle', status: busy ? 'running' : 'idle', turnInFlight: busy,
+      stopping: false, canSteer: false, turn: 1, title: null, usage: null, permissions: [], closed: false, configOptions: phone.acp.configOptions ?? [],
+    });
+  }
+  if (route === '/phone/new-chat' && method === 'GET' && phone.acp?.newChat) return json(phone.acp.newChat);
+  if (route === '/acp/closed' && method === 'GET' && phone.acp) return json({ chats: phone.acp.closed ?? [] });
   if (route === '/pane-rules' && method === 'GET') return json({ rules: phone.rules ?? {} });
   if (/^\/panes\/[^/]+\/interrupt$/.test(route) && method === 'POST') return json({ pane_id: route.split('/')[2], stopped: true });
   if (route === '/control-asks' && method === 'POST') return json({ asked: true, id: 'ask-harness' }, 202);

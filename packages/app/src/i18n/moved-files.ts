@@ -104,4 +104,7 @@ export const MOVED_FILES: readonly string[] = [
   // the phone app's shell
   'components/mobile/PhoneDrawer.tsx', 'components/mobile/PhoneHeader.tsx', 'components/mobile/PhoneConversation.tsx',
   'components/mobile/FoldedSteps.tsx', 'components/mobile/PhoneComposer.tsx', 'components/mobile/PhoneQuiet.tsx',
+  // phone compose: files, voice, quick replies, the result card and the progress line
+  'components/mobile/PhoneAttach.tsx', 'components/mobile/PhoneQuick.tsx', 'components/mobile/PhoneVoiceBar.tsx',
+  'components/mobile/PhoneResult.tsx', 'components/mobile/PhoneProgress.tsx',
 ];
