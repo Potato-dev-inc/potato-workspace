@@ -5,6 +5,7 @@
 //   - Ask to fix: opens the Ask to fix sheet (FixSheet), or calls `onFix` when the caller passes one.
 //   - Throw away: waits in a 10 s Undo window (review-desk-pending.ts) before the call is made.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { markStep } from '../../../lib/getting-started';
 import {
   onReviewDeskRefresh,
   reviewDeskApi,
@@ -179,6 +180,7 @@ export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDet
       return;
     }
     const start = startThrow({ key: item.key, title: item.title, fingerprint: item.fingerprint }, () => runThrow(item), setNotice);
+    if (start.started) markStep('review');
     setNotice(start.started ? '' : start.sentence);
   };
 
@@ -187,6 +189,8 @@ export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDet
       setNotice(item.keep.why ?? 'Keep is off for this item.');
       return;
     }
+    // Deciding on a finished item is a review: the Getting started list ticks it.
+    markStep('review');
     if (item.keep.kind !== 'mark') {
       if (onKeep) onKeep(item);
       else setSheet({ kind: 'keep', item });

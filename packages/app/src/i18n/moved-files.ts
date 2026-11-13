@@ -6,7 +6,7 @@ export const MOVED_FILES: readonly string[] = [
   // sidebar, footer, project cards, usage bar
   `${C}Sidebar.tsx`, `${C}SidebarFooter.tsx`, `${C}ProjectHeader.tsx`, `${C}RowMark.tsx`, `${C}UsageBar.tsx`, `${C}PaneContextMenu.tsx`,
   // inbox, empty states, undo, toasts
-  `${C}Inbox.tsx`, `${C}InboxCard.tsx`, `${C}InboxError.tsx`, `${C}NoChatPrompt.tsx`, `${C}UndoSheet.tsx`, `${C}EndedAgentsLine.tsx`,
+  `${C}Inbox.tsx`, `${C}InboxCard.tsx`, `${C}InboxError.tsx`, `${C}NoChatPrompt.tsx`, `${C}UndoSheet.tsx`, `${C}EndedAgentsLine.tsx`, `${C}UndoBar.tsx`, `${C}PeekCard.tsx`, `${C}newagent/GettingStarted.tsx`,
   'components/common/EmptyState.tsx', 'components/common/ErrorBoundary.tsx', 'components/settings/UndoToast.tsx',
   // inbox cards
   'components/pet/Pet.tsx', 'components/pet/PetMenu.tsx', 'components/pet/PetApp.tsx',

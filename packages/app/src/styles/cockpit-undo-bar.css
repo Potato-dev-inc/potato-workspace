@@ -1,0 +1,47 @@
+/* The undo bar: one calm line above the toasts. Grey, no colour; the button is plain text. */
+.cockpit .ck-undobar {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  z-index: 61;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 8px 8px 8px 16px;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  border: 1px solid var(--sep);
+  box-shadow: var(--float-shadow);
+  color: var(--label);
+  animation: ck-pop 200ms var(--ease-sheet);
+}
+.cockpit .ck-undobar-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-undobar-btn {
+  border: 0;
+  background: transparent;
+  color: var(--label-1);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.cockpit .ck-undobar-btn:hover {
+  background: var(--fill-2, rgba(128, 128, 128, 0.18));
+}
+.cockpit .ck-undobar-btn:focus-visible {
+  outline: 2px solid var(--label-2);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-undobar {
+    animation: none;
+  }
+}

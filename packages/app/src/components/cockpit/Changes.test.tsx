@@ -3,6 +3,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorktreeDiff, WorktreeItem } from '../../lib/cockpit-api';
+import { getState, resetGettingStarted } from '../../lib/getting-started';
+import { currentUndo, resetUndoBar, runUndo, UNDO_BAR_MS } from '../../lib/undo-bar';
 import { Changes, type ChangesApi } from './Changes';
 import { lineKind, splitPatch } from './diff';
 
@@ -73,6 +75,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   act(() => root.unmount());
+  resetUndoBar();
   host.remove();
 });
 
@@ -113,7 +116,7 @@ describe('Changes section', () => {
     expect(outside).not.toContain('pm/run-1');
   });
 
-  it('the merge and discard sheets use plain words and never name the branch', async () => {
+  it('the merge sheet uses plain words and never names the branch', async () => {
     await mount(fakeApi());
     await click(button('Merge'));
     const merge = host.querySelector('[role="alertdialog"]')!.textContent!;
@@ -122,11 +125,6 @@ describe('Changes section', () => {
     expect(merge).toContain('If anything conflicts, nothing is merged.');
     expect(merge).not.toContain('pm/');
     await click(button('Cancel'));
-    await click(button('Discard'));
-    const discard = host.querySelector('[role="alertdialog"]')!.textContent!;
-    expect(discard).toContain('Discard this separate copy?');
-    expect(discard).toContain('Deletes this separate copy and its 2 changed files');
-    expect(discard).not.toContain('pm/');
   });
 
   it('a copy whose setup failed makes Merge secondary and says why', async () => {
@@ -176,24 +174,50 @@ describe('Changes section', () => {
     expect(host.querySelector('.ck-changes')).toBeNull();
   });
 
-  it('cancel in the sheet changes nothing', async () => {
-    const api = fakeApi();
-    await mount(api);
-    await click(button('Discard'));
-    expect(host.querySelector('[role="alertdialog"]')?.textContent).toContain('cannot be undone');
-    await click(button('Cancel'));
-    expect(host.querySelector('[role="alertdialog"]')).toBeNull();
-    expect(api.worktreeDiscard).not.toHaveBeenCalled();
+  it('discard asks nothing: the copy is hidden, the undo bar shows, and the delete waits for the bar to end', async () => {
+    vi.useFakeTimers();
+    try {
+      const api = fakeApi();
+      await mount(api);
+      await click(button('Discard'));
+      expect(host.querySelector('[role="alertdialog"]')).toBeNull();
+      expect(host.textContent).toContain('Discarded');
+      expect(host.querySelector('.ck-changes')).toBeNull();
+      expect(currentUndo()?.text).toContain('Threw away the separate copy of');
+      expect(api.worktreeDiscard).not.toHaveBeenCalled();
+      await act(async () => {
+        vi.advanceTimersByTime(UNDO_BAR_MS + 50);
+      });
+      expect(api.worktreeDiscard).toHaveBeenCalledWith('C:/proj', 'run-1');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('discard confirms, then deletes', async () => {
-    const api = fakeApi();
-    await mount(api);
+  it('discarding a copy ticks "Review a change" in the Getting started list', async () => {
+    resetGettingStarted();
+    await mount(fakeApi());
     await click(button('Discard'));
-    const confirm = Array.from(host.querySelectorAll('.ck-sheet button')).find((b) => b.textContent === 'Discard');
-    await click(confirm ?? null);
-    expect(api.worktreeDiscard).toHaveBeenCalledWith('C:/proj', 'run-1');
-    expect(host.textContent).toContain('Discarded');
+    expect(getState().done).toContain('review');
+  });
+
+  it('Undo on the bar brings the copy back and deletes nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      const api = fakeApi();
+      await mount(api);
+      await click(button('Discard'));
+      await act(async () => {
+        runUndo();
+      });
+      expect(host.querySelector('.ck-changes')).not.toBeNull();
+      await act(async () => {
+        vi.advanceTimersByTime(UNDO_BAR_MS * 2);
+      });
+      expect(api.worktreeDiscard).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a conflict is shown as an alert with the files and the section stays', async () => {

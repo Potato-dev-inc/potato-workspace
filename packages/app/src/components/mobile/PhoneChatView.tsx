@@ -327,6 +327,7 @@ export function PhoneChatView({
         composer={composer}
         staleAt={!reach && readAt !== null && grouped.turns.length > 0 ? readAt : null}
         onPressMessage={setPressed}
+        chatId={paneId}
       />
       {pressed && <MessageActionsSheet message={pressed} handlers={actions} onClose={() => setPressed(null)} />}
     </div>

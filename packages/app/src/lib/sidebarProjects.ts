@@ -166,6 +166,8 @@ export function useSidebarProjects(): {
   rename: (path: string, name: string) => void;
   /** Put the added projects in this order (a list of folders). */
   reorder: (paths: string[]) => void;
+  /** Put the whole list back as it was (the undo of a removal). */
+  restore: (list: SidebarProject[]) => void;
 } {
   const [projects, setProjects] = useState<SidebarProject[]>(readProjects);
   useEffect(() => {
@@ -184,6 +186,7 @@ export function useSidebarProjects(): {
     remove: useCallback((path) => change((l) => withoutProject(l, path)), [change]),
     rename: useCallback((path, name) => change((l) => renamedProject(l, path, name)), [change]),
     reorder: useCallback((paths) => change((l) => withProjectOrder(l, paths)), [change]),
+    restore: useCallback((list) => change(() => list), [change]),
   };
 }
 

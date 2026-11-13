@@ -159,8 +159,10 @@ describe('the last answers of a pane', () => {
     await askAndAnswer(asks, 'private');
     await reopen();
     expect(earlierQuestions()).toEqual(['private']);
-    expect(setItem).not.toHaveBeenCalled();
-    expect(localStorage.length).toBe(0);
+    // Only the chat's own "last looked" moment (a time, no text) may be written by the chat view around the box.
+    const written = setItem.mock.calls.map(([key]) => String(key)).filter((key) => !key.startsWith('pm-chat-seen:'));
+    expect(written).toEqual([]);
+    expect(Object.keys(localStorage).filter((key) => !key.startsWith('pm-chat-seen:'))).toEqual([]);
   });
 
   it('is never sent to the agent: a new question carries only the chat', async () => {

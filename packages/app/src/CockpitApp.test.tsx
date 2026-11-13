@@ -9,6 +9,9 @@ import { setFocusMode } from './lib/focus-mode';
 import { requestGoLive, type LiveStatus } from './lib/live-room';
 import { requestBringChats, requestImportedChat } from './lib/chatImport';
 import { runStoreCheck } from './lib/agentStoreCheck';
+import { tauriClosedChatsApi } from './lib/closedChats';
+import { requestGettingStarted } from './lib/getting-started';
+import { resetUndoBar, showUndo } from './lib/undo-bar';
 
 // Mutable per-test input for the digest (away) path.
 const away = vi.hoisted(() => ({ digest: null as null | object }));
@@ -385,6 +388,7 @@ beforeEach(async () => {
   await act(async () => root.render(createElement(CockpitApp)));
 });
 afterEach(() => {
+  resetUndoBar();
   act(() => root.unmount());
   host.remove();
 });
@@ -405,6 +409,48 @@ describe('CockpitApp: the Used bar', () => {
     expect(bar!.closest('main')).toBeNull();
     expect(bar!.closest('.ck-side')).toBeNull();
     expect(bar!.textContent).toContain('40%');
+  });
+});
+
+describe('CockpitApp: the undo bar', () => {
+  it('is mounted: a bar shown from anywhere appears, and Undo runs its action', async () => {
+    const undo = vi.fn();
+    await act(async () => void showUndo({ text: 'Closed Billing tests', undo }));
+    const bar = host.querySelector('[data-testid="undo-bar"]');
+    expect(bar?.textContent).toContain('Closed Billing tests');
+    await act(async () => host.querySelector<HTMLButtonElement>('.ck-undobar-btn')!.click());
+    expect(undo).toHaveBeenCalledTimes(1);
+  });
+
+  it('Ctrl+Shift+T reopens the last closed chat and opens its pane', async () => {
+    const api = tauriClosedChatsApi as { list: () => Promise<unknown>; reopen: (id: string) => Promise<string> };
+    const list = vi.spyOn(api, 'list').mockResolvedValue([{ id: 'p2', agent: 'claude', label: 'Claude', cwd: '/x', updated_ms: 5, title: 'Old chat' }]);
+    const reopen = vi.spyOn(api, 'reopen').mockResolvedValue('p2');
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'T', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    });
+    expect(list).toHaveBeenCalled();
+    expect(reopen).toHaveBeenCalledWith('p2');
+    list.mockRestore();
+    reopen.mockRestore();
+  });
+});
+
+describe('CockpitApp: the Getting started buttons', () => {
+  it('"Open Review" opens the Review Desk', () => {
+    act(() => requestGettingStarted('review'));
+    expect(mainText()).toContain('REVIEW VIEW first=false');
+  });
+
+  it('"Show me" puts two agents side by side', () => {
+    act(() => requestGettingStarted('side'));
+    expect(mainText()).toContain('SPLIT VIEW p1|p2|left');
+  });
+
+  it('"Open commands" opens the palette', () => {
+    expect(host.querySelector('[data-testid="palette"]')).toBeNull();
+    act(() => requestGettingStarted('undo'));
+    expect(host.querySelector('[data-testid="palette"]')).not.toBeNull();
   });
 });
 

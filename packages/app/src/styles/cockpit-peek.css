@@ -1,0 +1,99 @@
+/* The peek card on a sidebar agent row. Grey, quiet, to the right of the row. No motion when less motion is asked for. */
+.cockpit .ck-peek {
+  position: fixed;
+  z-index: 50;
+  left: var(--peek-left, 280px);
+  top: var(--peek-top, 80px);
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--sep);
+  box-shadow: var(--float-shadow);
+  color: var(--label);
+  font-size: 12px;
+  line-height: 1.4;
+  animation: ck-fade 120ms var(--ease-sheet);
+}
+.cockpit .ck-peek::before {
+  /* An invisible bridge so the pointer can cross the gap between the row and the card. */
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  width: 12px;
+}
+.cockpit .ck-peek-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cockpit .ck-peek-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.cockpit .ck-peek-state {
+  flex: none;
+  color: var(--label-2);
+}
+.cockpit .ck-peek-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--label-2);
+}
+.cockpit .ck-peek-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cockpit .ck-peek-facts > div {
+  display: flex;
+  flex-direction: column;
+}
+.cockpit .ck-peek-facts dt {
+  color: var(--label-2);
+}
+.cockpit .ck-peek-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.cockpit .ck-peek-empty {
+  margin: 0;
+  color: var(--label-2);
+}
+.cockpit .ck-peek-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--sep);
+}
+.cockpit .ck-peek-ask p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.cockpit .ck-peek-ask-label {
+  color: var(--label-2);
+  font-weight: 600;
+}
+.cockpit .ck-peek-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-peek {
+    animation: none;
+  }
+}

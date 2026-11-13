@@ -168,6 +168,8 @@ export interface ChatTurn {
   ending: TurnEnding | null;
   /** The task list as it stood after this turn's last plan update; null when the turn did not update it. */
   plan: PlanItem[] | null;
+  /** Tokens in the conversation window by the end of this turn (input + output of its last `usage` item), when the agent said. */
+  contextTokens?: number;
 }
 
 /** A file the agent's tool calls touched. */
@@ -216,7 +218,8 @@ export interface PhoneChatReply {
  * Add `incoming` to `prev`, one entry per `id`. An item whose `id` is already there is replaced by the newest copy
  * in place, so the order is the order of first arrival (a chat read from the screen sends a growing reply again
  * under the same id). `reset` drops `prev` first (the file was replaced, or an item went away).
- * Only the latest `usage` item is kept: every agent message carries one and only the newest is shown.
+ * Only the latest `usage` item is kept, plus the last one before each `turnEnd` (so a turn can say how much the
+ * window grew): every agent message carries one and only these are used.
  */
 export function mergeItems(prev: readonly ChatItem[], incoming: readonly ChatItem[], reset: boolean): ChatItem[] {
   const byId = new Map<string, ChatItem>();
@@ -224,7 +227,17 @@ export function mergeItems(prev: readonly ChatItem[], incoming: readonly ChatIte
   for (const item of incoming) byId.set(item.id, item);
   const merged = [...byId.values()];
   const latestUsage = merged.map((item) => item.kind).lastIndexOf('usage');
-  return merged.filter((item, index) => item.kind !== 'usage' || index === latestUsage);
+  // The newest usage item before each turn end stays.
+  const endOfTurn = new Set<number>();
+  let lastUsage = -1;
+  merged.forEach((item, index) => {
+    if (item.kind === 'usage') lastUsage = index;
+    else if (item.kind === 'turnEnd' && lastUsage >= 0) {
+      endOfTurn.add(lastUsage);
+      lastUsage = -1;
+    }
+  });
+  return merged.filter((item, index) => item.kind !== 'usage' || index === latestUsage || endOfTurn.has(index));
 }
 
 /**
@@ -346,9 +359,12 @@ export function groupTurns(items: readonly ChatItem[]): GroupedChat {
         current = null;
         break;
       }
-      case 'usage':
+      case 'usage': {
         usage = item;
+        const owner = current ?? turns[turns.length - 1];
+        if (owner) owner.contextTokens = item.inputTokens + item.outputTokens;
         break;
+      }
       case 'session':
         model = item.model ?? model;
         cliVersion = item.cliVersion ?? cliVersion;

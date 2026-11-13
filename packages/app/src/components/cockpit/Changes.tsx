@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { t } from '../../i18n';
+import { showUndo } from '../../lib/undo-bar';
+import { markStep } from '../../lib/getting-started';
 import { cockpitApi, type ChangeBlame, type WorktreeDiff, type WorktreeItem } from '../../lib/cockpit-api';
 import { lineKind, plural, splitPatch, statusMark } from './diff';
 import { blameLine } from './blame-line';
@@ -116,7 +119,9 @@ export function Changes({
       cancelled = true;
     };
   }, [view, paneId, listFiles]);
-  const [sheet, setSheet] = useState<'merge' | 'discard' | null>(null);
+  const [sheet, setSheet] = useState<'merge' | null>(null);
+  // A copy thrown away: hidden at once, deleted when the undo bar ends (lib/undo-bar.ts). Undo brings it back.
+  const discarding = useRef<string | null>(null);
   const [prSheet, setPrSheet] = useState(false);
   const [prRound, setPrRound] = useState(0);
   // The branch this copy was made as, when it is one (Merge warns about it). Null for a normal copy.
@@ -156,6 +161,10 @@ export function Changes({
       .paneWorktree(paneId)
       .then(async (found) => {
         if (cancelled) return;
+        if (found && discarding.current === found.handle) {
+          setItem(null);
+          return;
+        }
         setItem(found);
         if (found && found.exists) {
           const d = await api.worktreeDiff(found.repo, found.handle);
@@ -231,22 +240,46 @@ export function Changes({
   const setupFailed = setup?.status === 'failed';
   const agentName = item.agent_type ? agentLabel(listing, item.agent_type) : 'the agent';
 
-  const run = async (action: 'merge' | 'discard') => {
+  const discardWithUndo = () => {
+    const target = item;
+    markStep('review');
+    discarding.current = target.handle;
+    setError(null);
+    setItem(null);
+    setDiff(null);
+    setNotice('Discarded the separate copy.');
+    showUndo({
+      text: t('undo.copyDiscarded', { name: agentName }),
+      failText: t('undo.commitFailed'),
+      undo: () => {
+        discarding.current = null;
+        setNotice(null);
+        load();
+      },
+      commit: async () => {
+        try {
+          await api.worktreeDiscard(target.repo, target.handle);
+        } catch (err) {
+          discarding.current = null;
+          setError(errText(err));
+          load();
+          throw err;
+        }
+      },
+    });
+  };
+
+  const merge = async () => {
     setBusy(true);
     setError(null);
     try {
-      if (action === 'merge') {
-        const out = await api.worktreeMerge(item.repo, item.handle);
-        if (out.merged) {
-          setNotice(`Merged into ${out.into}.`);
-          setItem(null);
-        } else {
-          setNotice('Nothing to merge: the agent changed no files.');
-        }
-      } else {
-        await api.worktreeDiscard(item.repo, item.handle);
-        setNotice('Discarded. The separate copy and its changes are deleted.');
+      const out = await api.worktreeMerge(item.repo, item.handle);
+      if (out.merged) {
+        markStep('review');
+        setNotice(`Merged into ${out.into}.`);
         setItem(null);
+      } else {
+        setNotice('Nothing to merge: the agent changed no files.');
       }
       setSheet(null);
     } catch (err) {
@@ -462,7 +495,7 @@ export function Changes({
           className="ck-btn ck-btn--secondary"
           disabled={working || busy}
           title={working ? 'The agent is still working' : undefined}
-          onClick={() => setSheet('discard')}
+          onClick={discardWithUndo}
         >
           Discard
         </button>
@@ -488,20 +521,18 @@ export function Changes({
       {sheet && (
         <Sheet labelledBy="ck-wt-t" onClose={busy ? undefined : () => setSheet(null)}>
             <h2 className="ck-section" id="ck-wt-t">
-              {sheet === 'merge' ? `Merge into ${item.base}?` : 'Discard this separate copy?'}
+              {`Merge into ${item.base}?`}
             </h2>
             <p className="ck-sub">
-              {sheet === 'merge'
-                ? `Brings ${plural(total?.files_changed ?? 0, 'changed file')} from this separate copy into ${item.base} and closes ${agentName}. If anything conflicts, nothing is merged.`
-                : `Deletes this separate copy and its ${plural(total?.files_changed ?? 0, 'changed file')}, and closes ${agentName}. This cannot be undone.`}
+              {`Brings ${plural(total?.files_changed ?? 0, 'changed file')} from this separate copy into ${item.base} and closes ${agentName}. If anything conflicts, nothing is merged.`}
             </p>
-            {sheet === 'merge' && keepWarning && <p className="ck-sub ck-changes-keep-warning">{keepWarning}</p>}
+            {keepWarning && <p className="ck-sub ck-changes-keep-warning">{keepWarning}</p>}
             <div className="ck-sheet-actions">
               <button type="button" className="ck-btn ck-btn--secondary" autoFocus disabled={busy} onClick={() => setSheet(null)}>
                 Cancel
               </button>
-              <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => void run(sheet)}>
-                {sheet === 'merge' ? 'Merge' : 'Discard'}
+              <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => void merge()}>
+                Merge
               </button>
             </div>
         </Sheet>

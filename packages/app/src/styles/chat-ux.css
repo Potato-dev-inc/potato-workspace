@@ -1,0 +1,257 @@
+/* Chat extras: find in this chat, the "new since you looked" line, the turn price tag and "my messages".
+   Cockpit tokens only; both themes. Motion is off for reduced motion. */
+
+/* ---- find in this chat ---- */
+.cockpit .ck-find {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px 3px 8px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--sep), 0 4px 14px rgba(0, 0, 0, 0.18);
+  font: 12px var(--font-ui);
+  color: var(--label);
+}
+.cockpit .ck-find.ck-find--below-head {
+  top: 44px;
+}
+.cockpit .ck-find-input {
+  width: 150px;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  outline: none;
+}
+.cockpit .ck-find-count {
+  min-width: 44px;
+  padding: 0 4px;
+  color: var(--label-3);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+.cockpit .ck-find-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-2);
+  font: 13px var(--font-ui);
+  cursor: pointer;
+}
+.cockpit .ck-find-btn:hover:not(:disabled) {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-find-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-find-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+::highlight(pm-find) {
+  background-color: var(--accent-soft);
+  color: inherit;
+}
+::highlight(pm-find-active) {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* ---- new since you looked ---- */
+:is(.cockpit, .ph) .ck-since {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--accent);
+  font: 11px var(--font-ui);
+}
+:is(.cockpit, .ph) .ck-since::before,
+:is(.cockpit, .ph) .ck-since::after {
+  content: '';
+  height: 1px;
+  background: var(--accent);
+  opacity: 0.7;
+}
+:is(.cockpit, .ph) .ck-since::before {
+  width: 12px;
+}
+:is(.cockpit, .ph) .ck-since::after {
+  flex: 1;
+}
+:is(.cockpit, .ph) .ck-since-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:is(.cockpit, .ph) .ck-jump-wrap {
+  position: sticky;
+  bottom: 8px;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  height: 0;
+  margin: 0;
+  overflow: visible;
+}
+:is(.cockpit, .ph) .ck-jump {
+  align-self: flex-end;
+  padding: 4px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--accent-line), 0 4px 14px rgba(0, 0, 0, 0.18);
+  color: var(--accent);
+  font: 11px var(--font-ui);
+  cursor: pointer;
+}
+:is(.cockpit, .ph) .ck-jump:hover {
+  background: var(--accent-soft);
+}
+:is(.cockpit, .ph) .ck-jump:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+/* ---- turn price tag ---- */
+:is(.cockpit, .ph) .ck-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  color: var(--label-3);
+  font: 11px var(--font-ui);
+}
+:is(.cockpit, .ph) .ck-price-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+:is(.cockpit, .ph) .ck-price-line:hover {
+  color: var(--label-2);
+}
+:is(.cockpit, .ph) .ck-price-line:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: 4px;
+}
+:is(.cockpit, .ph) .ck-price-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--risk);
+}
+:is(.cockpit, .ph) .ck-price-tip {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--risk);
+}
+:is(.cockpit, .ph) .ck-price-files {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+}
+
+/* ---- my messages ---- */
+.cockpit .ck-mine {
+  position: absolute;
+  right: 8px;
+  bottom: calc(100% + 6px);
+  left: 8px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--sep), 0 6px 20px rgba(0, 0, 0, 0.22);
+  font: 12px var(--font-ui);
+  color: var(--label);
+}
+.cockpit .ck-mine-input {
+  border: none;
+  border-radius: 6px;
+  padding: 5px 30px 5px 8px;
+  background: var(--fill);
+  color: var(--label);
+  font: inherit;
+  outline: none;
+}
+.cockpit .ck-mine-input:focus-visible {
+  box-shadow: var(--focus);
+}
+.cockpit .ck-mine-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+.cockpit .ck-mine-opt {
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--label-2);
+  cursor: pointer;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cockpit .ck-mine-opt[aria-selected='true'],
+.cockpit .ck-mine-opt:hover {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-mine-note {
+  margin: 0;
+  padding: 2px 8px;
+  color: var(--label-3);
+  font-size: 11px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-find,
+  :is(.cockpit, .ph) .ck-jump {
+    transition: none;
+    animation: none;
+  }
+}
+.cockpit .ck-mine-anchor {
+  position: relative;
+  height: 0;
+}
+.cockpit .ck-mine {
+  right: 0;
+  left: 0;
+}
+.cockpit .ck-mine-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}

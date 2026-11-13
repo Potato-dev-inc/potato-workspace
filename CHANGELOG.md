@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.27
+
+This is a beta.
+
+- New: find in this chat with Ctrl+F. Every match is marked, "1 of 14" counts them, and folded steps that hold a match open by themselves.
+- New: in an empty message box, the up arrow brings back what you sent. Ctrl+R searches everything you sent and puts it in the box (nothing is sent).
+- New: "New since you looked" marks where you stopped reading, with how many answers and files changed since then.
+- New: a quiet line under each answer with its time and steps, and one tip when a turn took far longer than usual. Also on the phone.
+- New: an undo bar. Closing an agent, removing a project, stopping all, throwing away a copy or deleting closed chats shows "Undo" for 8 seconds (Ctrl+Z). Ctrl+Shift+T reopens the last closed chat. Closing an agent that is still working still asks first.
+- New: rest the mouse on an agent in the sidebar (or press Space) to peek at what it is doing, with Open to the side and Stop.
+- New: a "Getting started" list on the New agent page. Its six steps tick themselves as you do them.
+
 ## 1.0.26
 
 This is a beta.

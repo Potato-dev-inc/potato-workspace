@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReviewDesk as ReviewList, ReviewItem } from '../../../lib/review-desk';
 import { undo as undoThrow } from '../../../lib/review-desk-pending';
 import { REVIEW_DESK_EMPTY, REVIEW_DESK_FULL } from '../../../dev/review-desk-fixtures';
+import { getState, resetGettingStarted } from '../../../lib/getting-started';
 import { ReviewDesk, type ReviewDeskProps } from './ReviewDesk';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -183,6 +184,18 @@ describe('Review Desk keys', () => {
     press('z', document.body);
     await act(async () => {});
     expect(api.unmark).toHaveBeenCalledWith('pane-kilo-1');
+  });
+
+  it('deciding on an item ticks "Review a change" in the Getting started list', async () => {
+    resetGettingStarted();
+    await mount();
+    expect(getState().done).not.toContain('review');
+    press('j', document.body);
+    press('j');
+    press('j');
+    press('y');
+    await act(async () => {});
+    expect(getState().done).toContain('review');
   });
 
   it('Y on a merge row hands the item to onKeep and does not call the api', async () => {

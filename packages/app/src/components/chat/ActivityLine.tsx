@@ -19,6 +19,7 @@ import {
 } from './chatActivity';
 import { CheckIcon, Chevron, CrossIcon, PendingMark, SpinMark } from './chatCardIcons';
 import { formatDuration } from './chatFormat';
+import { useStepsFindOpen } from './chatFind';
 import { ToolRow } from './ToolRow';
 
 export interface ActivityLineProps {
@@ -77,7 +78,8 @@ function StepMark({ step, live }: { step: ToolStep; live: boolean }) {
 
 export function ActivityLine({ steps, live, fromScreen, verbose }: ActivityLineProps) {
   const [toggled, setToggled] = useState<boolean | null>(null);
-  const open = toggled ?? verbose;
+  const foundHere = useStepsFindOpen(steps);
+  const open = toggled ?? (verbose || foundHere);
   const running = live ? runningLabel(steps) : null;
   const summary = activitySummary(steps);
   const span = live ? null : activitySpanMs(steps);

@@ -5,6 +5,7 @@ import { t } from '../../i18n';
 import { errorSentence } from '../../lib/sayError';
 import type { Checkpoint, CheckpointsApi, RestoreReport } from '../../lib/cockpit-api';
 import { checkpointTitle } from './history-model';
+import { markStep } from '../../lib/getting-started';
 
 export interface ToastAction {
   label: string;
@@ -36,6 +37,7 @@ export async function restoreWithUndo(
 ): Promise<RestoreReport | null> {
   try {
     const report = await api.checkpointRestore(paneId, target.id);
+    markStep('undo');
     const failed = report.failed.length ? t('risk.restore.failedFiles', { n: report.failed.length }) : '';
     const text = words ? words.restored(target, report) : t('risk.restore.done', { title: checkpointTitle(target), failed });
     const safetyId = report.safetyId;

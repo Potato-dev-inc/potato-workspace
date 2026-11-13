@@ -68,6 +68,11 @@ import { dropSplit, type DropSide } from './components/dnd/drop-split';
 import { focusSideComposer, SplitView, useWindowWidth } from './components/cockpit/SplitView';
 import { useSessionMemory } from './components/cockpit/useSessionMemory';
 import { EndedAgentsLine } from './components/cockpit/EndedAgentsLine';
+import { UndoBar } from './components/cockpit/UndoBar';
+import { useGettingStartedWatch } from './components/cockpit/newagent/useGettingStartedWatch';
+import { GETTING_STARTED_EVENT, type GettingStartedAction } from './lib/getting-started';
+import { offerCarryOn } from './lib/stop-undo';
+import { isReopenChatKey, reopenLastClosedChat } from './lib/reopen-closed';
 import { clearSplitMemory, readSplitMemory, restorableSplit, writeSplitMemory, type SplitMemory } from './components/cockpit/split-memory';
 import { useYesterdaySnapshot } from './components/cockpit/useYesterdaySnapshot';
 import { useCompanions } from './hooks/useCompanions';
@@ -239,10 +244,17 @@ export default function CockpitApp() {
     setView('companion');
   };
   const [stopReport, setStopReport] = useState<StopReport | null>(null);
+  // A stop shows the report sheet and, for anything that was stopped, the undo bar (Undo = ask them to carry on).
+  const showStopReport = (report: StopReport) => {
+    setStopReport(report);
+    offerCarryOn(report);
+  };
+  const showStopReportRef = useRef(showStopReport);
+  showStopReportRef.current = showStopReport;
   const stopAll = () => {
     tauriLoopApi
       .stopAll()
-      .then(setStopReport)
+      .then(showStopReport)
       .catch(() => c.notify('Could not stop the agents'));
   };
   // Tray item and global shortcut stop the agents in Rust and send the result here.
@@ -250,7 +262,7 @@ export default function CockpitApp() {
     let off: (() => void) | undefined;
     let disposed = false;
     tauriLoopApi
-      .onPanic(setStopReport)
+      .onPanic((report) => showStopReportRef.current(report))
       .then((u) => (disposed ? u() : (off = u)))
       .catch(() => {});
     return () => {
@@ -313,6 +325,30 @@ export default function CockpitApp() {
     setSplit(id);
     setSide('left');
   };
+  // The Getting started card: it ticks itself from what happens here, and its buttons ask this window to do the thing.
+  useGettingStartedWatch({ ready: c.registry.initialReady, agentCount: paneIds.filter((id) => !isCompanionPaneId(id)).length, splitOn });
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const action = (e as CustomEvent<{ action: GettingStartedAction }>).detail?.action;
+      if (action === 'review') openReview();
+      else if (action === 'undo') {
+        setPaletteMode('commands');
+        setPaletteOpen(true);
+      } else if (action === 'side') {
+        const ids = paneIds.filter((id) => !isCompanionPaneId(id));
+        if (ids.length < 2) c.notify(t('gs.side.needTwo'));
+        else if (!splitFits(width)) c.notify('The window is too narrow for two chats');
+        else {
+          nav.select(ids[0]);
+          setView('pane');
+          setSplit(ids[1]);
+          setSide('left');
+        }
+      }
+    };
+    window.addEventListener(GETTING_STARTED_EVENT, onAsk);
+    return () => window.removeEventListener(GETTING_STARTED_EVENT, onAsk);
+  });
   // A chat dragged from the sidebar and dropped on the left or right half of the work area (components/dnd).
   const dropChat = (id: string, to: DropSide) => {
     if (!splitFits(width)) {
@@ -367,6 +403,18 @@ export default function CockpitApp() {
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
+
+  // Ctrl+Shift+T (Cmd+Shift+T on a Mac, or your own keys) reopens the chat closed last, like a browser tab.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || !isReopenChatKey(e, isMacPlatform())) return;
+      if (inTerminal(e.target) || isShortcutRecording()) return;
+      e.preventDefault();
+      void reopenLastClosedChat(nav.select, c.notify);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
 
   // Ctrl+N (Cmd+N on a Mac) opens the New agent page. In a terminal the key belongs to the program running there.
   useEffect(() => {
@@ -887,6 +935,7 @@ export default function CockpitApp() {
         working={c.registry.paneList.filter((p) => p.status === 'running' && !needsYou.some((n) => n.paneId === p.info.id)).length}
         needsYou={needsYou.length}
       />
+      <UndoBar />
       <div className="ck-toasts" aria-live="polite">
         {c.toasts.map((t) => (
           <div className="ck-toast" key={t.id}>

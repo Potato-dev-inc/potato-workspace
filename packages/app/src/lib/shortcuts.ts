@@ -350,6 +350,20 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
     { scope: 'global' },
   ),
   {
+    id: 'reopen-chat',
+    group: 'Navigate',
+    label: 'Reopen the chat you closed last',
+    keys: ['Mod+Shift+T'],
+    handlers: [handler('src/lib/reopen-closed.ts', "e.key.toLowerCase() === 't'")],
+  },
+  {
+    id: 'undo-bar',
+    group: 'Navigate',
+    label: 'Undo what the bar at the bottom says (while it shows)',
+    keys: ['Mod+Z'],
+    handlers: [handler('src/components/cockpit/UndoBar.tsx', "e.key.toLowerCase() !== 'z'")],
+  },
+  {
     id: 'close',
     group: 'Navigate',
     label: 'Close the box, sheet or menu that is open',
@@ -455,6 +469,27 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
     label: 'New line in your message',
     keys: ['Shift+Enter'],
     handlers: [handler('src/components/chat/ChatComposer.tsx', "event.key !== 'Enter' || event.shiftKey")],
+  },
+  {
+    id: 'chat-find',
+    group: 'Chat',
+    label: 'Find in this chat',
+    keys: ['Mod+F'],
+    handlers: [handler('src/components/chat/useChatFind.ts', "event.key.toLowerCase() === 'f'")],
+  },
+  {
+    id: 'chat-recall',
+    group: 'Chat',
+    label: 'Bring back what you sent: Up in an empty message box',
+    keys: ['↑', '↓'],
+    handlers: [handler('src/components/chat/ChatComposer.tsx', "event.key === 'ArrowUp' || event.key === 'ArrowDown'")],
+  },
+  {
+    id: 'chat-my-messages',
+    group: 'Chat',
+    label: 'My messages: search what you sent in any chat',
+    keys: ['Mod+R'],
+    handlers: [handler('src/components/chat/ChatComposer.tsx', "event.key.toLowerCase() === 'r'")],
   },
   custom(
     {

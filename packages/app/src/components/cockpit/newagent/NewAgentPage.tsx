@@ -20,6 +20,7 @@ import { NeedTerminalsLine } from '../NeedTerminalsLine';
 import type { ProjectChoice } from '../NewAgentMenu';
 import { tauriNewAgentApi, type HomeSettings, type NewAgentApi } from './api';
 import { HomeCards, type CardData } from './HomeCards';
+import { GettingStarted } from './GettingStarted';
 import { ContinueCard, type ContinueYesterdayProps } from './ContinueCard';
 import {
   EXAMPLE_MS,
@@ -678,6 +679,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               }}
             />
           )}
+          <GettingStarted onStartAgent={() => area.current?.focus()} agentCount={panes.length} />
           <HomeCards
             cards={home.cards}
             data={cardData}

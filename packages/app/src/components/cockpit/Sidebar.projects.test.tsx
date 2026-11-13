@@ -8,6 +8,7 @@ import type { PaneInfo } from '@potato-workspace/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { GitState, ShipApi } from '../../lib/ship-api';
 import { LS_GROUP_BY, LS_PROJECTS_FOLDED, LS_SIDEBAR_PROJECTS } from '../../lib/sidebarProjects';
+import { currentUndo, resetUndoBar, runUndo } from '../../lib/undo-bar';
 import { Sidebar } from './Sidebar';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -29,6 +30,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   act(() => root.unmount());
+  resetUndoBar();
   host.remove();
 });
 
@@ -206,6 +208,19 @@ describe('sidebar: Add project', () => {
     await click(byLabel('More for Docs site'));
     await click([...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent === 'Remove from sidebar')!);
     expect(JSON.parse(localStorage.getItem(LS_SIDEBAR_PROJECTS)!)).toEqual([]);
+  });
+
+  it('Remove from sidebar shows the undo bar, and Undo puts the project back exactly as it was', async () => {
+    localStorage.setItem(LS_SIDEBAR_PROJECTS, JSON.stringify([{ path: DOCS, name: 'Docs site' }, { path: SHOP }]));
+    await render();
+    await click(byLabel('More for Docs site'));
+    await click([...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent === 'Remove from sidebar')!);
+    expect(JSON.parse(localStorage.getItem(LS_SIDEBAR_PROJECTS)!)).toEqual([{ path: SHOP }]);
+    expect(currentUndo()?.text).toBe('Removed Docs site from the sidebar');
+    await act(async () => {
+      runUndo();
+    });
+    expect(JSON.parse(localStorage.getItem(LS_SIDEBAR_PROJECTS)!)).toEqual([{ path: DOCS, name: 'Docs site' }, { path: SHOP }]);
   });
 
   it('the "+" on a project opens the New agent page with that project', async () => {

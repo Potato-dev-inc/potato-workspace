@@ -3,7 +3,7 @@
 // when the agent has a plan, a thin line marks a notice, and a turn ends with how long it worked. The view mode
 // (Summary, Normal, Verbose) is in the header. The agent's text is Markdown when it comes from the session file;
 // text read off the terminal is shown as it is.
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { clearChatJump, turnWithItem, type ChatJump } from '../../lib/chatJump';
 import { registerPaneTurns } from '../../lib/potatoCheck';
@@ -27,6 +27,13 @@ import { currentPlan } from './PlanCard';
 import { PlanBar } from './PlanBar';
 import { planProgress, publishPlanProgress } from '../../lib/planProgress';
 import { ToolRow } from './ToolRow';
+import { ChatFindContext } from './chatFind';
+import { ChatFindBar } from './ChatFindBar';
+import { isFindKey, useChatFind } from './useChatFind';
+import { JumpToLatest, SinceLine } from './SinceLine';
+import { TurnPriceTag } from './TurnPriceTag';
+import { useSinceLine } from './useSinceLine';
+import { hasPrice, turnPrices, type TurnPrice } from '../../lib/turnPrice';
 import { TurnEndingButtons, type EndingActions } from './TurnEndingButtons';
 import { ViewModeToggle } from './ViewModeToggle';
 
@@ -152,7 +159,7 @@ function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: Tu
   );
 }
 
-function TurnView({ turn, fromScreen, markdown, mode, branch, helpers, onOpenPane, endings }: { turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; branch?: TurnBranch; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
+function TurnView({ turn, fromScreen, markdown, mode, branch, helpers, onOpenPane, endings, price }: { price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; branch?: TurnBranch; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
   const verbose = mode === 'verbose';
   // A turn with no end yet is still running: its rows without a result are live.
   const live = turn.end === null;
@@ -198,6 +205,7 @@ function TurnView({ turn, fromScreen, markdown, mode, branch, helpers, onOpenPan
       })}
       {helpers && helpers.length > 0 && <PaneHelperRows helpers={helpers} onOpen={onOpenPane} />}
       {turn.end && <TurnEndDivider turn={turn} branch={branch} endings={endings} />}
+      {turn.end && hasPrice(price) && <TurnPriceTag price={price} />}
     </section>
   );
 }
@@ -221,7 +229,21 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
   const newestBranchable = useMemo(() => (showBranch ? lastBranchableId(turns) : null), [showBranch, turns]);
   const placedHelpers = useMemo(() => placeHelpers(turns, helpers ?? []), [turns, helpers]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
+  const prices = useMemo(() => turnPrices(turns), [turns]);
+
+  // Find in this chat (Ctrl+F): the box, the marks and the count. Esc goes back to the message box.
+  const find = useChatFind(scrollRef, () => rootRef.current?.querySelector<HTMLTextAreaElement>('textarea.ck-chat-composer-field')?.focus());
+  const onKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!isFindKey(event) || state === 'unavailable') return;
+    event.preventDefault();
+    event.stopPropagation();
+    find.show();
+  };
+
+  // "New since you looked": the line above what is new, and the button at the bottom (useSinceLine).
+  const sinceLine = useSinceLine({ chatId: paneId, turns, ready: state === 'ready', scrollRef, atBottom });
 
   // Follow new items only while the person is already at the bottom.
   useLayoutEffect(() => {
@@ -265,11 +287,15 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
 
   const onScroll = () => {
     const el = scrollRef.current;
-    if (el) atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_PX;
+    if (!el) return;
+    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_PX;
+    if (atBottom.current) sinceLine.reachedEnd();
   };
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-pm-bg text-xs text-pm-text ck-chat" data-testid="session-chat" data-view={mode}>
+    <ChatFindContext.Provider value={find.open ? find.query : ''}>
+    <div ref={rootRef} tabIndex={-1} onKeyDownCapture={onKeyDownCapture} className="relative flex h-full min-h-0 flex-col bg-pm-bg text-xs text-pm-text outline-none ck-chat" data-testid="session-chat" data-view={mode}>
+      {find.open && <ChatFindBar find={find} belowHead={!headerSlot} />}
       {headerSlot ? (
         createPortal(
           <>
@@ -321,8 +347,10 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
         )}
         {state !== 'unavailable' &&
           turns.map((turn) => (
+            <Fragment key={`${mode}:${turn.id}`}>
+              {sinceLine.show && sinceLine.report?.firstTurnId === turn.id && <SinceLine report={sinceLine.report} />}
             <TurnView
-              key={`${mode}:${turn.id}`}
+              price={prices.get(turn.id)}
               turn={turn}
               fromScreen={fromScreen}
               markdown={markdown}
@@ -332,8 +360,10 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
               onOpenPane={onOpenPane}
               endings={endings && turn.id === turns[turns.length - 1]?.id ? endings : undefined}
             />
+            </Fragment>
           ))}
         {state !== 'unavailable' && pending}
+        {sinceLine.show && <JumpToLatest onJump={sinceLine.jumpToLatest} />}
       </div>
       {remember && paneId && <RememberSelection paneId={paneId} root={scrollRef} />}
       {dock && <div className="ck-chat-dock">{dock}</div>}
@@ -341,5 +371,6 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
       {state !== 'unavailable' && composer}
       {overlay}
     </div>
+    </ChatFindContext.Provider>
   );
 }

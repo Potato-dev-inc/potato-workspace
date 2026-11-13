@@ -132,11 +132,11 @@ describe('Changes: keeping a branch copy', () => {
     expect(api.worktreeMerge).toHaveBeenCalledWith('C:/proj', 'run-1');
   });
 
-  it('the Discard confirm of a branch copy does not repeat the warning', async () => {
+  it('Discard of a branch copy opens no confirm box, so the warning is not repeated', async () => {
     lineageMock.mockResolvedValue({ from: BRANCH, children: [] });
     await mount(fakeApi());
     await click(button('Discard'));
-    expect(host.querySelector('[role="alertdialog"]')?.textContent).toContain('Discard this separate copy?');
+    expect(host.querySelector('[role="alertdialog"]')).toBeNull();
     expect(warning()).toBeNull();
   });
 

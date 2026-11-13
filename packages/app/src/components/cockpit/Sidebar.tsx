@@ -54,6 +54,9 @@ import { companionMood, useJustFinished, useLocalHour } from '../../lib/companio
 import { isCompanionPaneId } from './companion/model';
 import { useReviewCount } from './review/useReviewCount';
 import { ClosedChatsSheet } from './ClosedChatsSheet';
+import { PeekCard } from './PeekCard';
+import { usePeek } from './usePeek';
+import { showUndo } from '../../lib/undo-bar';
 import { tauriClosedChatsApi, useClosedChats, type ClosedChatsApi } from '../../lib/closedChats';
 
 /** `localhost:5173`: where the preview is, without the scheme. */
@@ -166,7 +169,13 @@ export function Sidebar({
   const unpinned = (items: typeof grouped.needs) => items.filter((n) => n.awayFrom || !pinnedIds.has(n.pane.info.id));
   const groups = { needs: unpinned(grouped.needs), working: unpinned(grouped.working), idle: unpinned(grouped.idle) };
   // Projects view: the folders the person added, which groups are folded, and how the list is grouped.
-  const { projects, add: addProject, remove: removeProject, rename: renameProject, reorder: reorderProjects } = useSidebarProjects();
+  const { projects, add: addProject, remove: removeProjectNow, rename: renameProject, reorder: reorderProjects, restore: restoreProjects } = useSidebarProjects();
+  // Removing a project only takes it off the sidebar; the undo bar puts the list back exactly as it was.
+  const removeProject = (path: string, name: string) => {
+    const before = projects;
+    removeProjectNow(path);
+    showUndo({ text: t('undo.projectRemoved', { name }), failText: t('undo.failed'), undo: () => restoreProjects(before) });
+  };
   // The order the person gave their chats by dragging (Projects view).
   const { order: chatOrder, setGroupOrder } = useChatOrder();
   // A folder dragged in from Windows: "Add as a project?"
@@ -193,6 +202,8 @@ export function Sidebar({
   const asks = itemsOfKind(blockingItems(needs), 'question').length;
   const multiLogin = multiLoginAgents(list.map((p) => p.info));
   const lastTurn = useContext(LastTurnContext);
+  // The quick look at an agent: rest on a row or press Space on it.
+  const peek = usePeek();
   const [menuOpen, setMenuOpen] = useState(false);
   // The right-click menu of a pane row: where it opened, and which pane it is for.
   const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -341,7 +352,7 @@ export function Sidebar({
     const calm = !asking && !broken && !working;
     const preview = mainPreview(c.previews, id);
     return (
-      <div key={id} className="ck-rowwrap">
+      <div key={id} className="ck-rowwrap" {...peek.rowProps(id)}>
         <button
           type="button"
           data-pane-row={id}
@@ -401,6 +412,20 @@ export function Sidebar({
         >
           <IconMore />
         </button>
+        {peek.open?.id === id && (
+          <div style={{ display: 'contents', ['--peek-left' as string]: `${peek.open.left}px`, ['--peek-top' as string]: `${peek.open.top}px` }}>
+            <PeekCard
+              c={c}
+              paneId={id}
+              title={heading.primary}
+              lastTurn={lastTurn.get(id)}
+              onOpenToSide={onOpenToSide}
+              onOpen={(paneId) => c.select(paneId)}
+              onClose={peek.close}
+              onHover={peek.onCardHover}
+            />
+          </div>
+        )}
       </div>
     );
   };
@@ -548,7 +573,7 @@ export function Sidebar({
               onToggle={() => toggleProject(g.key)}
               onNewAgent={() => g.path && newAgentIn(g.path, g.name)}
               onAdd={() => g.path && addProject(g.path)}
-              onRemove={() => g.path && removeProject(g.path)}
+              onRemove={() => g.path && removeProject(g.path, g.name)}
               onRename={(name) => g.path && renameProject(g.path, name)}
             />
             </div>

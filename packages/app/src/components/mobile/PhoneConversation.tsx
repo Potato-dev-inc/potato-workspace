@@ -1,7 +1,7 @@
 // One calm conversation on the phone: the agent's text at full width, your messages in a soft bubble, and the tool steps
 // folded into one line per turn (one tap opens the list; a failed step is never folded). The dock (what waits on you), the
 // queued messages and the composer sit under it. This is the phone's own view: the desktop's chat view stays as it is.
-import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import type { ChatSource, ChatTurn, SessionChatState, TurnStep } from '../../lib/sessionChatModel';
 import { ChatMarkdown } from '../chat/ChatMarkdown';
@@ -14,6 +14,10 @@ import { currentPlan } from '../chat/PlanCard';
 import { PlanBar } from '../chat/PlanBar';
 import { ToolRow } from '../chat/ToolRow';
 import { clockOf } from '../../lib/phone-link';
+import { JumpToLatest, SinceLine } from '../chat/SinceLine';
+import { TurnPriceTag } from '../chat/TurnPriceTag';
+import { useSinceLine } from '../chat/useSinceLine';
+import { hasPrice, turnPrices, type TurnPrice } from '../../lib/turnPrice';
 import { FoldedSteps } from './FoldedSteps';
 import { Pressable, type PressedMessage } from './MessageActions';
 import { foldTurnSteps } from './foldSteps';
@@ -31,7 +35,7 @@ function TextPiece({ step, markdown }: { step: Extract<TurnStep, { kind: 'text' 
   );
 }
 
-function TurnBlock({ turn, fromScreen, markdown, onPress }: { turn: ChatTurn; fromScreen: boolean; markdown: boolean; onPress?: (message: PressedMessage) => void }) {
+function TurnBlock({ turn, fromScreen, markdown, onPress, price }: { price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; onPress?: (message: PressedMessage) => void }) {
   const t = useT();
   const live = turn.end === null;
   const lastStepId = turn.steps[turn.steps.length - 1]?.id;
@@ -74,6 +78,7 @@ function TurnBlock({ turn, fromScreen, markdown, onPress }: { turn: ChatTurn; fr
         );
       })}
       {turn.end && ending && <p className="ph-turn-end">{ending}</p>}
+      {turn.end && hasPrice(price) && <TurnPriceTag price={price} />}
     </section>
   );
 }
@@ -92,7 +97,10 @@ export function PhoneConversation({
   after,
   staleAt = null,
   onPressMessage,
+  chatId,
 }: {
+  /** The chat's id (its pane): the moment it was last read is kept under it, for the "New since you looked" line. */
+  chatId?: string | null;
   state: SessionChatState;
   reason: string | null;
   waitingFor?: string | null;
@@ -122,6 +130,8 @@ export function PhoneConversation({
   const plan = useMemo(() => currentPlan(turns), [turns]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
+  const prices = useMemo(() => turnPrices(turns), [turns]);
+  const sinceLine = useSinceLine({ chatId, turns, ready: state === 'ready', scrollRef, atBottom });
 
   // Follow new items only while the reader is at the bottom.
   useLayoutEffect(() => {
@@ -153,7 +163,9 @@ export function PhoneConversation({
         className="ph-conv-body"
         onScroll={() => {
           const el = scrollRef.current;
-          if (el) atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_PX;
+          if (!el) return;
+          atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_PX;
+          if (atBottom.current) sinceLine.reachedEnd();
         }}
       >
         {state === 'unavailable' && (
@@ -168,9 +180,15 @@ export function PhoneConversation({
             {waitingFor && <p className="ph-conv-sub">{waitingFor}</p>}
           </div>
         )}
-        {state !== 'unavailable' && turns.map((turn) => <TurnBlock key={turn.id} turn={turn} fromScreen={fromScreen} markdown={markdown} onPress={onPressMessage} />)}
+        {state !== 'unavailable' && turns.map((turn) => (
+            <Fragment key={turn.id}>
+              {sinceLine.show && sinceLine.report?.firstTurnId === turn.id && <SinceLine report={sinceLine.report} />}
+              <TurnBlock turn={turn} fromScreen={fromScreen} markdown={markdown} onPress={onPressMessage} price={prices.get(turn.id)} />
+            </Fragment>
+          ))}
         {state !== 'unavailable' && after}
         {state !== 'unavailable' && pending}
+        {sinceLine.show && <JumpToLatest onJump={sinceLine.jumpToLatest} />}
       </div>
       {dock && <div className="ph-conv-dock">{dock}</div>}
       {above}

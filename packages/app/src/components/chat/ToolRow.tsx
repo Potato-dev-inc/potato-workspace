@@ -7,6 +7,7 @@ import '../../styles/chat-agent-cards.css';
 import '../../styles/cockpit-chat-activity.css';
 import { Chevron, CheckIcon, CrossIcon, KindIcon, PendingMark, SpinMark } from './chatCardIcons';
 import { kindOfCall } from './chatActivity';
+import { useStepFindsOpen } from './chatFind';
 import { ToolDetail } from './ToolDetail';
 
 export const STATUS_LABEL: Record<ToolStep['status'], string> = {
@@ -55,7 +56,9 @@ export interface ToolRowProps {
 
 export function ToolRow({ step, fromScreen, defaultOpen = false, live = true }: ToolRowProps) {
   const [toggled, setToggled] = useState<boolean | null>(null);
-  const open = toggled ?? defaultOpen;
+  // Find in this chat: a row whose detail holds the match opens by itself.
+  const foundHere = useStepFindsOpen(step);
+  const open = toggled ?? (defaultOpen || foundHere);
   const { call, status } = step;
   const state = cardState(status, live);
   return (

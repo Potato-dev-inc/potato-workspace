@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-// The Closed chats list: it shows each chat (title, agent, folder, time), Reopen calls the command, and Delete asks first.
+// The Closed chats list: it shows each chat (title, agent, folder, time), Reopen calls the command, and Delete hides the row with an undo bar.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClosedChat } from '../../lib/closedChats';
+import { currentUndo, resetUndoBar, runUndo, UNDO_BAR_MS } from '../../lib/undo-bar';
 import { ClosedChatsSheet } from './ClosedChatsSheet';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -17,6 +18,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   act(() => root.unmount());
+  resetUndoBar();
   host.remove();
 });
 
@@ -66,23 +68,49 @@ describe('ClosedChatsSheet', () => {
     expect(onReopened).not.toHaveBeenCalled();
   });
 
-  it('Delete asks first, inline in that row, and deletes only after the person confirms', async () => {
-    const { api, onChanged } = setup();
-    act(() => button('Delete').click());
-    expect(api.remove).not.toHaveBeenCalled();
-    // The question is in the row itself: no second sheet opens.
-    const row = document.querySelector('[data-testid="closed-chat-row"]')!;
-    expect(row.querySelector('[data-testid="closed-chat-confirm"]')?.textContent).toContain("Delete for good? This can't be undone.");
-    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
-    await act(async () => button('Cancel').click());
-    expect(api.remove).not.toHaveBeenCalled();
-    expect(document.querySelectorAll('[data-testid="closed-chat-row"]')).toHaveLength(2);
-    expect(document.querySelector('[data-testid="closed-chat-confirm"]')).toBeNull();
+  it('Delete hides the row at once, shows the undo bar, and removes the chat only when the bar ends', async () => {
+    vi.useFakeTimers();
+    try {
+      const { api, onChanged } = setup();
+      act(() => button('Delete').click());
+      expect(document.querySelectorAll('[data-testid="closed-chat-row"]')).toHaveLength(1);
+      expect(api.remove).not.toHaveBeenCalled();
+      expect(currentUndo()?.text).toBe('Deleted Fix the cart bug');
+      await act(async () => {
+        vi.advanceTimersByTime(UNDO_BAR_MS + 50);
+      });
+      expect(api.remove).toHaveBeenCalledWith('a');
+      expect(onChanged).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
+  it('Undo brings the row back and the chat is never removed', async () => {
+    vi.useFakeTimers();
+    try {
+      const { api } = setup();
+      act(() => button('Delete').click());
+      await act(async () => {
+        runUndo();
+      });
+      expect(document.querySelectorAll('[data-testid="closed-chat-row"]')).toHaveLength(2);
+      await act(async () => {
+        vi.advanceTimersByTime(UNDO_BAR_MS * 2);
+      });
+      expect(api.remove).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('closing the sheet while the bar waits makes the delete final', async () => {
+    const { api } = setup();
     act(() => button('Delete').click());
-    await act(async () => button('Delete').click());
+    act(() => root.render(<div />));
+    await act(async () => undefined);
     expect(api.remove).toHaveBeenCalledWith('a');
-    expect(onChanged).toHaveBeenCalled();
+    expect(currentUndo()).toBeNull();
   });
 
   it('Delete sits apart from Reopen, and Reopen is never the button that deletes', () => {
@@ -102,12 +130,20 @@ describe('ClosedChatsSheet', () => {
     expect(row.textContent).not.toContain('No messages');
   });
 
-  it('Delete all closed chats asks with the same words and then deletes them all', async () => {
-    const { api } = setup();
-    act(() => button('Delete all closed chats').click());
-    expect(api.removeAll).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("This can't be undone.");
-    await act(async () => button('Delete').click());
-    expect(api.removeAll).toHaveBeenCalledTimes(1);
+  it('Delete all closed chats hides them all and deletes them when the bar ends', async () => {
+    vi.useFakeTimers();
+    try {
+      const { api } = setup();
+      act(() => button('Delete all closed chats').click());
+      expect(document.querySelectorAll('[data-testid="closed-chat-row"]')).toHaveLength(0);
+      expect(currentUndo()?.text).toBe('Deleted 2 closed chats');
+      expect(api.removeAll).not.toHaveBeenCalled();
+      await act(async () => {
+        vi.advanceTimersByTime(UNDO_BAR_MS + 50);
+      });
+      expect(api.removeAll).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

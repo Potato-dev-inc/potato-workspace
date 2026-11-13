@@ -86,8 +86,8 @@ describe('every answer to a pane prompt', () => {
   });
 
   it('every cockpit answer (c.answer) is made in a known place and hands the click on', () => {
-    // The Inbox card and the pane dock (PaneApprovalCard), the agent board's low-risk quick answers (AgentBoard), and the welcome's first task (StepTask).
-    expect(callers('c.answer(')).toEqual(['components/cockpit/PaneApprovalCard.tsx', 'components/cockpit/PaneApprovalCard.tsx', 'components/cockpit/board/AgentBoard.tsx', 'components/firstrun/StepTask.tsx']);
+    // The Inbox card and the pane dock (PaneApprovalCard), the peek card's and the agent board's low-risk quick answers (PeekCard, AgentBoard), and the welcome's first task (StepTask).
+    expect(callers('c.answer(')).toEqual(['components/cockpit/PaneApprovalCard.tsx', 'components/cockpit/PaneApprovalCard.tsx', 'components/cockpit/PeekCard.tsx', 'components/cockpit/board/AgentBoard.tsx', 'components/firstrun/StepTask.tsx']);
     for (const [rel, text] of allCode()) {
       for (const line of text.split('\n').filter((l) => l.includes('c.answer('))) {
         expect(line, rel).toMatch(/c\.answer\([^)]*,\s*(gesture|gestureOf\(event\))\)/);

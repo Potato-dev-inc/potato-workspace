@@ -14,7 +14,11 @@ import { useBridge, type BridgeApi } from './useBridge';
 import { useQuestions, type QuestionsApi } from './useQuestions';
 import { paneNames } from '../components/cockpit/model';
 import { visibleSelection } from '../components/cockpit/selection';
-import { forgetTerminal } from '../components/cockpit/session-memory';
+import { forgetTerminal, rememberableTerminal } from '../components/cockpit/session-memory';
+import { ACP_LANE } from '../lib/acpChat';
+import { tauriClosedChatsApi } from '../lib/closedChats';
+import { showUndo } from '../lib/undo-bar';
+import { t } from '../i18n';
 import { usePaneActivity, type ActivityMap } from '../lib/pane-activity';
 import type { UserGesture } from '../lib/user-gesture';
 import { useChatStarts, type ChatStartState } from './useChatStarts';
@@ -539,15 +543,36 @@ export function useCockpit(): CockpitApi {
 
   const closePane = useCallback(
     async (paneId: string) => {
+      // What the Undo bar needs to bring it back, read before the pane is gone.
+      const before = registry.paneList.find((p) => p.info.id === paneId)?.info;
+      const label = names.get(paneId) ?? before?.agent_type ?? '';
       try {
         await registry.killPane(paneId);
         forgetTerminal(paneId);
         setSelectedId((cur) => (cur === paneId ? null : cur));
+        if (before) {
+          const chat = before.lane === ACP_LANE;
+          const terminal = chat ? null : rememberableTerminal(before);
+          if (chat || terminal) {
+            showUndo({
+              text: t('undo.closed', { name: label }),
+              failText: t('undo.failed'),
+              undo: async () => {
+                if (chat) {
+                  const opened = await tauriClosedChatsApi.reopen(paneId);
+                  setSelectedId(opened);
+                } else if (terminal) {
+                  await newAgent(terminal.agent, terminal.account, false, terminal.cwd || undefined, undefined, 'terminal');
+                }
+              },
+            });
+          }
+        }
       } catch (err) {
         notify(errorSentence(err));
       }
     },
-    [registry, notify],
+    [registry, notify, names, newAgent],
   );
 
   const rename = useCallback(

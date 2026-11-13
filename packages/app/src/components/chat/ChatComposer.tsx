@@ -13,6 +13,8 @@ import { fileClipboard } from '../../lib/pasteFiles';
 import { AttachMenu } from './AttachMenu';
 import { AttachmentChips } from './AttachmentChips';
 import { ContextMeter } from './ContextMeter';
+import { MyMessages } from './MyMessages';
+import { ownMatches, withPicked } from '../../lib/myMessages';
 import type { ContextReading } from '../cockpit/rail/railFormat';
 import { ProjectFilePicker, findMentionQuery, removeMention, type ProjectFilePickerHandle } from './ProjectFilePicker';
 import type { ProjectFileHit } from '../../lib/projectFiles';
@@ -64,6 +66,8 @@ export interface ChatComposerProps {
   contextUsage?: ContextReading | null;
   /** A dim line under the box: where the work lands (the branch). Not drawn when empty. */
   footnote?: ReactNode;
+  /** What the person sent in this chat, oldest first: Up in an empty box brings the last one back, and "My messages" (Ctrl+R) lists them. */
+  history?: readonly string[];
 }
 
 function StopIcon() {
@@ -89,7 +93,7 @@ export function ChatComposer(props: ChatComposerProps) {
   return <ChatComposerBox key={props.draftKey ?? ''} {...props} />;
 }
 
-function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, status, attachFiles, contextUsage, footnote }: ChatComposerProps) {
+function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, status, attachFiles, contextUsage, footnote, history }: ChatComposerProps) {
   const stoppable = running && !!onStop;
   const [restored] = useState(() => (draftKey ? readDraftState(draftKey) : { text: '', attachments: [] as ChatAttachment[] }));
   const [text, setText] = useState(restored.text);
@@ -132,6 +136,11 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   const tooLong = count > MAX_MESSAGE_CHARS;
   const empty = text.trim() === '';
   const hasContent = !empty || attachments.length > 0;
+
+  // Up in an empty box brings back the last message, again for older ones; Down goes forward again. `recall` is how
+  // far back the box is showing (null: the box holds the person's own text).
+  const recall = useRef<number | null>(null);
+  const [mineOpen, setMineOpen] = useState(false);
 
   const mic = useVoiceInput({
     enabled: voice,
@@ -282,6 +291,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     if (refused) setError(refused);
     else {
       setText('');
+      recall.current = null;
       setAttachments([]);
       if (draftKey) clearDraft(draftKey);
     }
@@ -437,6 +447,27 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         return;
       }
     }
+    // Ctrl+R: "My messages". (A chat box has no shell history to search, so the key is free here.)
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'r' && !blocked) {
+      event.preventDefault();
+      event.stopPropagation();
+      setMineOpen(true);
+      return;
+    }
+    // Up and Down walk through what was sent, only while the box is empty or already showing one of those.
+    if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && !event.nativeEvent.isComposing && !blocked) {
+      const sent = ownMatches(history ?? [], '', Number.MAX_SAFE_INTEGER);
+      const shows = recall.current;
+      if (sent.length > 0 && (shows !== null || (event.key === 'ArrowUp' && text === '' && attachments.length === 0))) {
+        event.preventDefault();
+        const next = event.key === 'ArrowUp' ? Math.min((shows ?? -1) + 1, sent.length - 1) : (shows ?? 0) - 1;
+        recall.current = next < 0 ? null : next;
+        const shown = next < 0 ? '' : sent[next];
+        caretAfter.current = shown.length;
+        setText(shown);
+        return;
+      }
+    }
     // Esc while the agent works stops it (the same Interrupt as the pane menu).
     if (event.key === 'Escape' && stoppable && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -483,6 +514,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
           }
         : {})}
       onChange={(event) => {
+        recall.current = null;
         setText(event.target.value);
         setMenuAt(0);
         setMenuShut(false);
@@ -513,6 +545,25 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         void submit();
       }}
     >
+      {mineOpen && (
+        <div className="ck-mine-anchor">
+          <MyMessages
+            history={history ?? []}
+            onPick={(picked) => {
+              const next = withPicked(text, picked);
+              caretAfter.current = next.length;
+              recall.current = null;
+              setText(next);
+              setMineOpen(false);
+              field.current?.focus();
+            }}
+            onClose={() => {
+              setMineOpen(false);
+              field.current?.focus();
+            }}
+          />
+        </div>
+      )}
       {mentionsOn && mention && (
         <ProjectFilePicker
           ref={pickerRef}
