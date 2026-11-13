@@ -5,6 +5,7 @@
 // picker (ContinueOnSheet) for a pane that is not a companion's and has a run to stop. "Wake {name} on…" is the
 // companion's version of the same move. There is no lock-screen version.
 import { useState } from 'react';
+import { useT } from '../../i18n';
 import type { CompanionTransport, CompanionView } from '../../lib/companion';
 import type { Question, QuestionAnswer } from '../../lib/questions';
 import '../../styles/cockpit-questions.css';
@@ -49,6 +50,7 @@ export function LimitCard({
   const [picking, setPicking] = useState(false);
   const [waking, setWaking] = useState(false);
   const [choosing, setChoosing] = useState(false);
+  const t = useT();
   const first = q.choices[0];
   const rest = q.choices.slice(1);
   const canMove = companion !== undefined && companionTransport !== undefined && q.limit?.kind === 'usage_limit';
@@ -79,14 +81,18 @@ export function LimitCard({
             ))}
             {pickerPane !== null && (
               <CardButton tone="plain" onClick={() => setChoosing(true)}>
-                Other agent…
+                {t('inboxCards.limit.otherAgent')}
               </CardButton>
             )}
             {signIns.length > 0 && onUseSignIn && (
               <CardButton
                 tone="plain"
                 aria-expanded={signIns.length > 1 ? picking : undefined}
-                title={signIns.length === 1 ? `Start ${paneName ?? 'this agent'} as ${signIns[0].label}` : undefined}
+                title={
+                  signIns.length === 1
+                    ? t('inboxCards.limit.startAs', { name: paneName ?? t('inboxCards.limit.thisAgent'), label: signIns[0].label })
+                    : undefined
+                }
                 onClick={() => (signIns.length === 1 ? onUseSignIn(signIns[0]) : setPicking((p) => !p))}
               >
                 {SIGN_IN.useAnother}
@@ -99,7 +105,7 @@ export function LimitCard({
             ))}
             {canMove && (
               <CardButton tone="plain" onClick={() => setWaking(true)}>
-                Wake {companion.name} on…
+                {t('inboxCards.limit.wakeOn', { name: companion.name })}
               </CardButton>
             )}
           </>
@@ -107,7 +113,7 @@ export function LimitCard({
         more={
           onOpenPane ? (
             <CardButton tone="plain" role="open" onClick={onOpenPane}>
-              Open
+              {t('inboxCards.open')}
             </CardButton>
           ) : null
         }

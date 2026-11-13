@@ -39,6 +39,10 @@ const MAX_SUMMARY_CHARS: usize = 300;
 /// The fallback reason for a turn closed because the chat was closed.
 const CHAT_CLOSED: &str = "The chat was closed.";
 const TRUNCATED: &str = "\n… (cut: the message was too long)";
+/// Said once per turn when one message was cut at `MAX_TEXT_CHARS`.
+const TOO_BIG_TO_SHOW: &str = "The agent sent one message that is too big to show.";
+/// Most tool cards one turn puts in the chat. The rest are counted in one "more steps hidden" line.
+pub const MAX_TURN_CARDS: usize = 400;
 
 struct Segment {
     id: String,
@@ -327,6 +331,13 @@ pub struct Mapper {
     own_cause: bool,
     /// How a "needs credit" failure reads, from the agent's definition.
     credit: Option<crate::acp::config::DefaultModel>,
+    /// This turn already told the person that one message was cut for size.
+    cut_noted: bool,
+    /// Tool cards shown in this turn, and the calls past `MAX_TURN_CARDS` that are not shown.
+    turn_cards: usize,
+    hidden_tools: BTreeSet<String>,
+    /// The plain sentence an adapter exit gives to the turn it cut short (`exited` sets it for `finish_turn`).
+    plain_end: Option<String>,
 }
 
 impl Default for Mapper {
@@ -364,6 +375,10 @@ impl Mapper {
             quiet_minutes: 5,
             own_cause: false,
             credit: None,
+            cut_noted: false,
+            turn_cards: 0,
+            hidden_tools: BTreeSet::new(),
+            plain_end: None,
         }
     }
 
@@ -399,6 +414,8 @@ impl Mapper {
             return;
         }
         self.emitted = true;
+        // The agent replays its history while it restores the session, before it reports the start.
+        self.ignore_replay = true;
         let number = |s: &str| -> Option<u64> {
             let digits: String = s.chars().take_while(char::is_ascii_digit).collect();
             digits.parse().ok()
@@ -492,6 +509,9 @@ impl Mapper {
         self.last_assistant = None;
         self.turn_files.clear();
         self.turn_visible = false;
+        self.cut_noted = false;
+        self.turn_cards = 0;
+        self.hidden_tools.clear();
         let text = user_text.unwrap_or_default();
         if !text.is_empty() || !attachments.is_empty() {
             out.push(ChatItem::User { id: format!("u{turn}"), at: Some(at.to_string()), text: text.to_string(), attachments: attachments.to_vec() });
@@ -523,6 +543,14 @@ impl Mapper {
         self.note(vec![ChatItem::Notice { id: format!("perm:{ask_id}"), at: Some(at.to_string()), notice_kind: "permission".into(), text, url: None }])
     }
 
+    /// A line with a fixed id: said again, it replaces itself instead of piling up. For things a person did that
+    /// the chat could not act on ("Already answered.", "Still working on the last message.").
+    pub fn side_notice(&mut self, id: &str, text: &str, at: &str) -> Vec<ChatItem> {
+        self.assistant = None;
+        self.thinking = None;
+        self.note(vec![ChatItem::Notice { id: id.to_string(), at: Some(at.to_string()), notice_kind: "note".into(), text: text.to_string(), url: None }])
+    }
+
     /// A permission request the app had to refuse before it could become a prompt.
     pub fn permission_refused(&mut self, reason: &str, at: &str) -> Vec<ChatItem> {
         self.assistant = None;
@@ -550,6 +578,8 @@ impl Mapper {
                 let out = self.update(update, *replay, at, now);
                 self.note(out)
             }
+            // The adapter went away under the turn: its exit report follows at once and says why, in one sentence.
+            SessionEvent::TurnEnded(summary) if self.turn.is_some() && summary.error.as_deref() == Some(crate::acp::session::ADAPTER_GONE) => Vec::new(),
             SessionEvent::TurnEnded(summary) => {
                 let out = self.finish_turn(Some(summary), None, now, at);
                 self.note(out)
@@ -726,12 +756,46 @@ impl Mapper {
         if !replay {
             self.turn_visible = true;
         }
+        let cut = seg.cut;
         let item = ChatItem::Assistant { id: seg.id.clone(), at: Some(at.to_string()), text: shown, model: self.model.clone(), final_answer: false };
         self.last_assistant = Some((item.clone(), seg_n));
-        vec![item]
+        let mut out = vec![item];
+        if cut && !replay && !self.cut_noted {
+            self.cut_noted = true;
+            out.push(self.notice("note", TOO_BIG_TO_SHOW.to_string(), at));
+        }
+        out
+    }
+
+    /// A tool call past the card limit of the turn is counted, not shown. `Some` (maybe empty) when the call is
+    /// hidden: the "more steps hidden" line to show or refresh (same id every time, so the chat holds one).
+    fn hide_tool(&mut self, id: &str, at: &str) -> Option<Vec<ChatItem>> {
+        if self.turn.is_none() || self.tools.contains_key(id) {
+            return None;
+        }
+        if !self.hidden_tools.contains(id) {
+            if self.turn_cards < MAX_TURN_CARDS {
+                return None;
+            }
+            self.hidden_tools.insert(id.to_string());
+            let n = self.hidden_tools.len();
+            if n == 1 || n % 500 == 0 {
+                return Some(vec![self.hidden_line(at)]);
+            }
+        }
+        Some(Vec::new())
+    }
+
+    fn hidden_line(&self, at: &str) -> ChatItem {
+        let n = self.hidden_tools.len();
+        let text = if n == 1 { "1 more step hidden".to_string() } else { format!("{n} more steps hidden") };
+        ChatItem::Notice { id: format!("hidden:{}", self.turn_no), at: Some(at.to_string()), notice_kind: "note".into(), text, url: None }
     }
 
     fn tool_call(&mut self, call: &ToolCall, at: &str) -> Vec<ChatItem> {
+        if let Some(out) = self.hide_tool(&call.tool_call_id, at) {
+            return out;
+        }
         self.assistant = None;
         self.thinking = None;
         let mut tool = self.tools.remove(&call.tool_call_id).unwrap_or_else(|| Tool::new(&call.tool_call_id));
@@ -740,6 +804,9 @@ impl Mapper {
     }
 
     fn tool_update(&mut self, update: &ToolCallUpdate, at: &str) -> Vec<ChatItem> {
+        if let Some(out) = self.hide_tool(&update.tool_call_id, at) {
+            return out;
+        }
         let first_sight = !self.tools.contains_key(&update.tool_call_id);
         if first_sight {
             self.assistant = None;
@@ -768,6 +835,7 @@ impl Mapper {
         let mut out = vec![tool.call_item(at)];
         if !tool.shown {
             tool.shown = true;
+            self.turn_cards += 1;
             if !self.tool_order.contains(&tool.call_id) {
                 self.tool_order.push(tool.call_id.clone());
             }
@@ -812,11 +880,16 @@ impl Mapper {
         self.thinking = None;
         self.user = None;
         let mut out = Vec::new();
+        if !self.hidden_tools.is_empty() {
+            out.push(self.hidden_line(at));
+            self.hidden_tools.clear();
+        }
         let duration_ms = now.checked_duration_since(turn.started).map(|d| d.as_millis() as u64);
         let facts = TurnFacts { files: self.turn_files.len(), visible: self.turn_visible, duration_ms, agent: self.agent_label.as_deref(), quiet_minutes: self.quiet_minutes, own_cause: self.own_cause, credit: self.credit.as_ref(), model: self.model.as_deref() };
         let end = match summary {
             Some(s) => ending::ending_of(s, &facts),
             None if fallback == Some(CHAT_CLOSED) => ending::Ending { reason: EndReason::Stopped, text: "The chat was closed".to_string() },
+            None if self.plain_end.is_some() => ending::Ending { reason: EndReason::Failed, text: self.plain_end.take().unwrap_or_default() },
             None => ending::ending_without_report(fallback.unwrap_or("The turn ended."), &facts),
         };
         let outcome = outcome_of(end.reason);
@@ -850,6 +923,8 @@ impl Mapper {
         let reason = match exit.kind {
             ExitKind::Closed => return self.finish_turn(None, Some(CHAT_CLOSED), now, at),
             ExitKind::Crashed => match exit.code {
+                // A "clean" exit in the middle of a turn is not a finished answer: say what the agent last said.
+                Some(0) => ending::quit_with_words(&exit.stderr_tail).unwrap_or_else(|| "The agent stopped unexpectedly.".to_string()),
                 Some(code) => format!("The agent stopped unexpectedly (exit code {code})."),
                 None => "The agent stopped unexpectedly.".to_string(),
             },
@@ -858,8 +933,12 @@ impl Mapper {
             ExitKind::StartFailed => exit.reason.clone().unwrap_or_else(|| "The agent could not start.".to_string()),
         };
         let had_turn = self.turn.is_some();
+        self.plain_end = Some(reason.clone());
         let mut out = self.finish_turn(None, Some(&reason), now, at);
-        if !had_turn {
+        self.plain_end = None;
+        // An idle agent that went away (an update, an idle kill) is started again by the next message: nothing to say.
+        let quiet = !had_turn && matches!(exit.kind, ExitKind::Crashed);
+        if !had_turn && !quiet {
             // Nothing was running: the notice is the only trace.
             out.push(self.notice("error", reason, at));
         }

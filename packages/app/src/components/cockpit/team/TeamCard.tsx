@@ -1,6 +1,7 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useState } from 'react';
-import { cardActions, cardMeta, cardTitle, githubUrl, warRoomLine, type TeamApi, type TeamCard as Card } from '../../../lib/team';
+import { useT } from '../../../i18n';
+import { cardActions, cardMeta, cardTitle, githubUrl, reviewRequestSpan, reviewRequestUrl, warRoomLine, type TeamApi, type TeamCard as Card } from '../../../lib/team';
 import { tauri } from '../../../lib/tauri';
 import { CardButton, InboxCard } from '../InboxCard';
 import { MergeSheet } from './MergeSheet';
@@ -16,6 +17,7 @@ const errText = (err: unknown): string => (errorSentence(err));
  * is the only loud thing in the Inbox.
  */
 export function TeamCard({ card, api, now, onDone }: { card: Card; api: TeamApi; now: number; onDone?: () => void }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +27,21 @@ export function TeamCard({ card, api, now, onDone }: { card: Card; api: TeamApi;
   const e = card.event;
   // War Room cards (a PR opened, a push to the default branch) link to GitHub.
   const url = warRoomLine(e) ? githubUrl(e) : null;
+  // "Review request 142" is a link to its GitHub page when the card knows it.
+  const title = cardTitle(e);
+  const prUrl = reviewRequestUrl(e);
+  const span = prUrl ? reviewRequestSpan(e, title) : null;
+  const titleNode = span ? (
+    <>
+      {span.before}
+      <button type="button" className="ib-title-link" onClick={() => void tauri.openExternalUrl(prUrl!)}>
+        {span.text}
+      </button>
+      {span.after}
+    </>
+  ) : (
+    title
+  );
 
   const run = async (what: () => Promise<string | void>) => {
     setBusy(true);
@@ -45,7 +62,7 @@ export function TeamCard({ card, api, now, onDone }: { card: Card; api: TeamApi;
       <InboxCard
         kind="team"
         glyph="notice"
-        title={cardTitle(e)}
+        title={titleNode}
         age={now - e.atMs}
         reason={cardMeta(e)}
         data={{ 'data-team-card': card.id }}
@@ -64,29 +81,29 @@ export function TeamCard({ card, api, now, onDone }: { card: Card; api: TeamApi;
           <>
             {actions.primary === 'pull' && (
               <CardButton tone="secondary" role="answer" disabled={busy} onClick={() => void run(() => api.pull(card.id))}>
-                Pull now
+                {t('team.pullNow')}
               </CardButton>
             )}
             {actions.primary === 'queue' && (
               <CardButton tone="secondary" role="answer" disabled={busy} onClick={() => setQueueOpen(true)}>
-                Queue my agent…
+                {t('team.queueMine')}
               </CardButton>
             )}
             {actions.mergeWhenGreen && (
               <CardButton tone="secondary" role="answer" disabled={busy} onClick={() => setMergeOpen(true)}>
-                Merge when green
+                {t('team.mergeWhenGreen')}
               </CardButton>
             )}
             {url && (
               <CardButton tone="plain" role="open" onClick={() => void tauri.openExternalUrl(url)}>
-                Open on GitHub
+                {t('team.openOnGithub')}
               </CardButton>
             )}
           </>
         }
         more={
           <CardButton tone="plain" role="dismiss" disabled={busy} onClick={() => void run(() => api.dismissCard(card.id))}>
-            Dismiss
+            {t('common.dismiss')}
           </CardButton>
         }
       />

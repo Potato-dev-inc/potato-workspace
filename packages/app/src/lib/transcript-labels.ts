@@ -1,30 +1,32 @@
 // Plain-language names for the transcript stream tags the backend writes (`agent_runs/transcript.rs`
 // callers). The raw tags are internal; people read "Answer", not `assistant_final`.
-const LABELS: Record<string, string> = {
-  user_task: 'You',
-  user_steer: 'You',
-  user: 'You',
-  assistant_final: 'Answer',
-  agent: 'Agent',
-  result: 'Result',
-  success: 'Done',
-  stdout: 'Output',
-  stderr: 'Errors',
-  permission: 'Approval',
-  interrupted: 'Stopped',
-  execution_failure: 'Failed',
-  delivery: 'Sending',
-  delivery_trace: 'Sending details',
-  diagnostic: 'Details',
-  startup: 'Starting',
+import { t, type MessageKey } from '../i18n';
+
+const LABELS: Record<string, MessageKey> = {
+  user_task: 'state.stream.you',
+  user_steer: 'state.stream.you',
+  user: 'state.stream.you',
+  assistant_final: 'state.stream.answer',
+  agent: 'state.stream.agent',
+  result: 'state.stream.result',
+  success: 'state.stream.done',
+  stdout: 'state.stream.output',
+  stderr: 'state.stream.errors',
+  permission: 'state.stream.approval',
+  interrupted: 'state.stream.stopped',
+  execution_failure: 'state.stream.failed',
+  delivery: 'state.stream.sending',
+  delivery_trace: 'state.stream.sendingDetails',
+  diagnostic: 'state.stream.details',
+  startup: 'state.stream.starting',
 };
 
 /** A short human label for a transcript stream tag; unknown tags become sentence case (`some_tag` -> "Some tag"). */
 export function transcriptStreamLabel(stream: string): string {
   const known = LABELS[stream];
-  if (known) return known;
+  if (known) return t(known);
   const text = stream.replace(/[_-]+/g, ' ').trim();
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : 'Other';
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : t('state.stream.other');
 }
 
 /** Streams that carry what a person or the agent said; they read as prose. The rest is output and stays monospace. */

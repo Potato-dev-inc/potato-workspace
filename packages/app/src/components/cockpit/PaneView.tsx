@@ -1,6 +1,7 @@
 import { errorSentence } from '../../lib/sayError';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { PaneMoreMenu } from './PaneMoreMenu';
+import { PaneMoreMenu, type MoreAction } from './PaneMoreMenu';
+import { useHeadFold } from './usePaneHeadFold';
 import { rememberSelectedTab } from './session-memory';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { confirmCloseEnabled, needsCloseConfirm } from '../../lib/close-policy';
@@ -17,7 +18,8 @@ import { AgentLogo } from '../common/AgentLogo';
 import { DotSpinner } from './DotSpinner';
 import { mainPreview, openPreview, previewLabel } from '../../lib/pane-preview';
 import { pointApi } from '../../lib/point-api';
-import { dockItems, headerStateLine, DOCK_LABEL } from './pane-chrome';
+import { dockItems, headerStateLine, dockLabel } from './pane-chrome';
+import { useT } from '../../i18n';
 import { IconGlobe, IconRail } from './Icons';
 import { subscribePaneActions, type PaneAction } from '../../lib/pane-actions';
 import { SessionRail } from './rail/SessionRail';
@@ -46,10 +48,10 @@ import { placeLabel, placeTooltip } from '../../lib/wsl-place';
 import { isProseStream, transcriptSpeaker } from '../../lib/transcript-labels';
 import { UntestedChip } from './UntestedChip';
 import { AcpChatDock } from '../chat/AcpChatDock';
-import { ACP_BADGE, ACP_LANE, isTerminalChatLane, quietStrip, runStrip, tauriAcpChatApi, terminalChatCapable, TERMINAL_CHAT_BADGE, type AcpChatApi } from '../../lib/acpChat';
+import { acpBadge, ACP_LANE, isTerminalChatLane, quietStrip, runStrip, tauriAcpChatApi, terminalChatCapable, terminalChatBadge, type AcpChatApi } from '../../lib/acpChat';
 import { useAcpLanes } from '../../hooks/useAcpLanes';
 import { AcpConfigChips } from '../chat/AcpConfigChips';
-import { HandedToTerminal, HANDED_BLOCK } from '../chat/HandedToTerminal';
+import { HandedToTerminal, handedBlock } from '../chat/HandedToTerminal';
 import { HandOverSheet } from '../chat/HandOverSheet';
 import { useAcpChatState } from '../../hooks/useAcpChatState';
 import { useAcpStop } from '../../hooks/useAcpStop';
@@ -174,6 +176,7 @@ export function PaneView({
   /** "Hand off": the cockpit's shared handoff starter (the one "Handoff from here" uses). Absent: no button. */
   handoff?: HandoffControl;
 }) {
+  const t = useT();
   const pane = c.registry.panes.get(paneId);
   const [tabPicked, setTabRaw] = useState<Tab>(() => rememberedTabs.get(paneId) ?? 'terminal');
   // A chat session over ACP has no terminal behind it: its Chat view is the pane, so it never shows a Terminal view.
@@ -213,6 +216,10 @@ export function PaneView({
   const worktree = usePaneWorktree(paneId, pane?.status ?? '');
   const { signals } = useLoopGuard();
   const rail = useRailLayout();
+  // The header folds its lowest-priority actions into the ⋯ menu when the pane is narrow (see usePaneHeadFold).
+  const headRef = useRef<HTMLElement>(null);
+  const [chatSlot, setChatSlot] = useState<HTMLElement | null>(null);
+  const fold = useHeadFold(headRef, `${tab}|${pane?.status}|${pane?.info.title}|${rail.fits}|${rail.open}|${paneId}`);
   const [dockIx, setDockIx] = useState(0);
   const [details, setDetails] = useState(false);
   // "Save this team" (crews): the sheet that turns this pane and its helpers into a saved crew.
@@ -289,16 +296,16 @@ export function PaneView({
   const copySelection = useCallback(async () => {
     const text = tab === 'terminal' ? (getSelectionRef.current?.() ?? '') : (window.getSelection()?.toString() ?? '');
     if (!text) {
-      c.notify('Nothing selected');
+      c.notify(t('pane.nothingSelected'));
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      c.notify('Copied');
+      c.notify(t('pane.copied'));
     } catch {
-      c.notify('Copy failed');
+      c.notify(t('pane.copyFailed'));
     }
-  }, [c, tab]);
+  }, [c, tab, t]);
 
   // The pane's actions (Rename, Reflow, Copy selection, Details, Close) are asked for from the sidebar row's
   // right-click menu and the command palette (lib/pane-actions.ts); this view runs them for its own pane.
@@ -325,8 +332,8 @@ export function PaneView({
   if (!pane) {
     return (
       <div className="ck-spawn">
-        <h1 className="ck-title">Opening pane</h1>
-        <p className="ck-sub">Waiting for the backend to list it.</p>
+        <h1 className="ck-title">{t('pane.opening')}</h1>
+        <p className="ck-sub">{t('pane.openingBody')}</p>
       </div>
     );
   }
@@ -347,7 +354,7 @@ export function PaneView({
       ? `${acpStatusWords(pane.status)} · ${elapsed}`
       : acpStatusWords(pane.status)
     : waiting && elapsed
-      ? `Needs you · ${elapsed}`
+      ? t('pane.needsYouElapsed', { elapsed })
       : stateText(pane.status);
   const headLine = headerStateLine({
     waiting,
@@ -362,7 +369,7 @@ export function PaneView({
   const asking = waiting && !!prompt && prompt.choices.length > 0;
   const dock = dockItems(asking, !!signals[paneId]);
   const dockNow = dock.length > 0 ? dock[dockIx % dock.length] : null;
-  const dockHeadline = asking ? (prompt?.risk?.headline ?? 'Question') : 'Looks stuck';
+  const dockHeadline = asking ? (prompt?.risk?.headline ?? t('pane.question')) : t('pane.looksStuck');
   const cycleDock = () => setDockIx((i) => i + 1);
   // A pane that waits with no card to answer on (a login or setup screen, a question no profile knows): Chat shows
   // "Agent is asking" with what the terminal asks, so the person never has to open the terminal.
@@ -404,11 +411,34 @@ export function PaneView({
     ) : null;
 
   const copyTotals = worktree?.summary ?? null;
+  // What the narrow header moved out: the same buttons, one menu row each (lowest priority first).
+  const moreActions: MoreAction[] = [];
+  if (fold >= 1 && handoff && handoff.allowed(paneId)) {
+    moreActions.push({
+      id: 'handoff',
+      label: handoff.mode === 'file' ? handoffLabel(handoff.mode) : t('pane.handOff'),
+      title: handoff.mode === 'file' ? t('pane.handoffFileTip') : t('pane.handoffAgentTip'),
+      disabled: handoff.busy,
+      onSelect: () => handoff.start(paneId),
+    });
+  }
+  if (fold >= 1 && preview) {
+    moreActions.push({ id: 'preview-browser', label: t('pane.previewBrowserTip'), onSelect: () => void openPreview(preview.url).catch(() => c.notify(t('pane.previewFailed'))) });
+  }
+  if (fold >= 2 && preview) {
+    moreActions.push({ id: 'preview', label: t('pane.preview'), onSelect: () => void pointApi.openPreview(paneId, preview.port).catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('pane.previewFailed'))) });
+  }
+  if (fold >= 2 && canHandOver) {
+    moreActions.push({ id: 'open-in-terminal', label: t('pane.openInTerminal'), title: t('pane.openInTerminalTip'), disabled: handOver.busy, onSelect: () => handOver.start('toTerminal', acpState?.conversation ?? paneId) });
+  }
+  if (fold >= 2 && heldConversation) {
+    moreActions.push({ id: 'back-to-chat', label: t('pane.backToChat'), title: t('pane.backToChatTip'), disabled: handOver.busy, onSelect: () => handOver.start('toChat', heldConversation.conversation) });
+  }
 
   return (
     <div className="ck-pane" data-pane-tile={paneId}>
       <PaneTabs c={c} paneId={paneId} />
-      <header className="ck-pane-head">
+      <header className="ck-pane-head" ref={headRef} data-fold={fold}>
         <div className="ck-pane-id">
           <RenameTitle
             text={heading.primary}
@@ -432,120 +462,122 @@ export function PaneView({
             </span>
           )}
           {helperOf && (
-            <button type="button" className="ck-helper-of" onClick={() => c.select(helperOf.parentId)} title="Open the pane that started this one">
+            <button type="button" className="ck-helper-of" onClick={() => c.select(helperOf.parentId)} title={t('pane.openParent')}>
               {helperOf.text}
             </button>
           )}
         </div>
         <SegTabs
-          label="Pane view"
+          label={t('pane.viewLabel')}
           value={tab}
           onChange={setTab}
           options={[
-            ...(mission ? [{ id: 'mission' as const, label: 'Mission' }] : []),
-            ...(isAcp ? [] : [{ id: 'terminal' as const, label: 'Terminal' }]),
-            ...(chatAllowed ? [{ id: 'chat' as const, label: 'Chat' }] : []),
-            ...(worktree ? [{ id: 'changes' as const, label: 'Changes', badge: worktree.summary?.files_changed || undefined }] : []),
+            ...(mission ? [{ id: 'mission' as const, label: t('pane.tabMission') }] : []),
+            ...(isAcp ? [] : [{ id: 'terminal' as const, label: t('pane.tabTerminal') }]),
+            ...(chatAllowed ? [{ id: 'chat' as const, label: t('pane.tabChat') }] : []),
+            ...(worktree ? [{ id: 'changes' as const, label: t('pane.tabChanges'), badge: worktree.summary?.files_changed || undefined }] : []),
           ]}
         />
         <span className="ck-head-gap" aria-hidden="true" />
+        {tab === 'chat' && chatAllowed && <span className="ck-head-chat" ref={setChatSlot} data-testid="pane-head-chat" />}
         <UntestedChip agent={info.agent_type} />
-        {isAcp && (
-          <span className="ck-lane-chip" data-testid="pane-lane" title="This agent runs as a chat as a chat, not in a terminal.">
-            {ACP_BADGE}
+        {isAcp && fold < 2 && (
+          <span className="ck-chip-label ck-lane-chip" data-testid="pane-lane" title={t('pane.laneChatTip')}>
+            {acpBadge()}
           </span>
         )}
-        {isTerminalChat && (
-          <span className="ck-lane-chip" data-testid="pane-lane" title="This agent runs in a terminal and its chat reads the session file. The Terminal tab shows the same run.">
-            {TERMINAL_CHAT_BADGE}
+        {isTerminalChat && fold < 2 && (
+          <span className="ck-chip-label ck-lane-chip" data-testid="pane-lane" title={t('pane.laneTerminalChatTip')}>
+            {terminalChatBadge()}
           </span>
         )}
-        {canHandOver && (
+        {canHandOver && fold < 2 && (
           <button
             type="button"
             className="ck-handover-btn"
             data-testid="open-in-terminal"
             disabled={handOver.busy}
-            title="Continue this conversation in a terminal. You can come back to the chat."
+            title={t('pane.openInTerminalTip')}
             onClick={() => handOver.start('toTerminal', acpState?.conversation ?? paneId)}
           >
-            Open in terminal
+            {t('pane.openInTerminal')}
           </button>
         )}
-        {heldConversation && (
+        {heldConversation && fold < 2 && (
           <button
             type="button"
             className="ck-handover-btn"
             data-testid="back-to-chat"
             disabled={handOver.busy}
-            title="Stop the terminal and continue this conversation in the chat."
+            title={t('pane.backToChatTip')}
             onClick={() => handOver.start('toChat', heldConversation.conversation)}
           >
-            Back to chat
+            {t('pane.backToChat')}
           </button>
         )}
         <LiveChip paneId={paneId} status={liveStatus} />
         <BudgetChip paneId={paneId} refreshKey={pane.status} onNotify={c.notify} />
         <BorrowedChip paneId={paneId} />
-        <div className="ck-pane-state">
+        <div className="ck-pane-state" data-compact={fold >= 2 ? 'true' : undefined}>
           <DotSpinner status={spinnerStatus(pane.status)} />
           <span className="ck-pane-doing" title={stateLine}>
             {headLine}
           </span>
         </div>
-        {preview && (
+        {preview && fold < 2 && (
           <button
             type="button"
             className="ck-preview-chip"
-            title={`Preview · ${preview.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}. Point at something to fix it.`}
+            title={t('pane.previewTip', { url: preview.url.replace(/^https?:\/\//, '').replace(/\/$/, '') })}
             onClick={() =>
-              void pointApi.openPreview(paneId, preview.port).catch((e: unknown) => c.notify(typeof e === 'string' ? e : 'Could not open the preview'))
+              void pointApi.openPreview(paneId, preview.port).catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('pane.previewFailed')))
             }
           >
             <IconGlobe />
-            <span>Preview</span>
+            <span>{t('pane.preview')}</span>
           </button>
         )}
-        {preview && (
+        {preview && fold < 1 && (
           <button
             type="button"
             className="ck-icon-btn"
-            aria-label="Open the preview in your browser"
-            title="Open in your browser"
-            onClick={() => void openPreview(preview.url).catch(() => c.notify('Could not open the preview'))}
+            aria-label={t('pane.previewBrowserAria')}
+            title={t('pane.previewBrowserTip')}
+            onClick={() => void openPreview(preview.url).catch(() => c.notify(t('pane.previewFailed')))}
           >
             <IconGlobe />
           </button>
         )}
-        {handoff && handoff.allowed(paneId) && (
+        {handoff && handoff.allowed(paneId) && fold < 1 && (
           <button
             type="button"
             className="ck-handover-btn"
             data-testid="pane-handoff"
             disabled={handoff.busy}
-            title={handoff.mode === 'file' ? 'Save a handoff note (HANDOFF.md) for the next agent.' : 'Write a handoff and continue this work in a new agent of the same kind.'}
+            title={handoff.mode === 'file' ? t('pane.handoffFileTip') : t('pane.handoffAgentTip')}
             onClick={() => handoff.start(paneId)}
           >
-            {handoff.busy ? 'Handing off…' : handoff.mode === 'file' ? handoffLabel(handoff.mode) : 'Hand off'}
+            {handoff.busy ? t('pane.handingOff') : handoff.mode === 'file' ? handoffLabel(handoff.mode) : t('pane.handOff')}
           </button>
         )}
         <PaneMoreMenu<'transcript' | 'receipt' | 'history'>
-          label="More"
+          label={t('pane.more')}
           value={tab}
           onPick={setTab}
+          actions={moreActions}
           items={[
-            { id: 'transcript', label: 'Transcript' },
-            { id: 'receipt', label: 'Receipt' },
-            { id: 'history', label: 'History' },
+            { id: 'transcript', label: t('pane.moreTranscript') },
+            { id: 'receipt', label: t('pane.moreReceipt') },
+            { id: 'history', label: t('pane.moreHistory') },
           ]}
         />
         {rail.fits && (
           <button
             type="button"
             className="ck-icon-btn"
-            aria-label={rail.open ? 'Hide session details' : 'Show session details'}
+            aria-label={rail.open ? t('pane.railHide') : t('pane.railShow')}
             aria-pressed={rail.open}
-            title={`${rail.open ? 'Hide' : 'Show'} session details ( ] )`}
+            title={rail.open ? t('pane.railHideTip') : t('pane.railShowTip')}
             onClick={rail.toggle}
           >
             <IconRail />
@@ -554,10 +586,10 @@ export function PaneView({
       </header>
 
       {dockNow && tab !== 'terminal' && tab !== 'chat' && (
-        <button type="button" className="ck-dock-bar" onClick={() => setTab('terminal')} aria-label={`Needs you: ${dockHeadline}. Open the terminal to answer.`}>
+        <button type="button" className="ck-dock-bar" onClick={() => setTab('terminal')} aria-label={t('pane.dockBarAria', { headline: dockHeadline })}>
           <span className="ck-dock-bar-dot" aria-hidden="true" />
-          <span className="ck-dock-bar-text">Needs you · {dockHeadline}</span>
-          <span className="ck-dock-bar-go">{DOCK_LABEL[dockNow]} ›</span>
+          <span className="ck-dock-bar-text">{t('pane.dockBarText', { headline: dockHeadline })}</span>
+          <span className="ck-dock-bar-go">{dockLabel(dockNow)} ›</span>
         </button>
       )}
 
@@ -585,9 +617,10 @@ export function PaneView({
                 paneId={paneId}
                 dock={chatDock}
                 screenAsk={screenAsk}
+                headerSlot={chatSlot ? { el: chatSlot, compact: fold >= 3 } : undefined}
                 helpers={startedHelpers}
                 reply={{
-                  blockedReason: inTerminal ? HANDED_BLOCK : composerBlock(pane, !chatAllowed, isAcp),
+                  blockedReason: inTerminal ? handedBlock() : composerBlock(pane, !chatAllowed, isAcp),
                   // A Chat (terminal) pane: while the agent works, the box shows Stop (the pane menu's Interrupt).
                   // A chat session over ACP: the same Stop the dock's quiet question uses; the words ride in the box footer.
                   running: isAcp ? !!acpState?.turnInFlight : isTerminalChat && pane.status === 'running',
@@ -615,21 +648,21 @@ export function PaneView({
             <div className="ck-scroll ck-fade-in" key="transcript">
               {run.error ? (
                 <div className="ck-empty">
-                  <h2 className="ck-section">Transcript unavailable</h2>
-                  <p className="ck-sub">Couldn't load this run's transcript.</p>
+                  <h2 className="ck-section">{t('pane.transcriptUnavailable')}</h2>
+                  <p className="ck-sub">{t('pane.transcriptLoadFailed')}</p>
                   <button type="button" className="ck-btn ck-btn--secondary" onClick={() => run.refresh()}>
-                    Try again
+                    {t('pane.tryAgain')}
                   </button>
                 </div>
               ) : run.transcript === undefined ? (
-                <p className="ck-sub ck-pad">Loading…</p>
+                <p className="ck-sub ck-pad">{t('pane.loading')}</p>
               ) : run.transcript === null || run.transcript.chunks.length === 0 ? (
                 <Empty
-                  title="No transcript"
+                  title={t('pane.noTranscript')}
                   body={
                     run.info === null
-                      ? 'A transcript is kept for tasks that another agent handed to this one. What you typed here yourself is on the Terminal tab.'
-                      : 'The run has not produced any output yet.'
+                      ? t('pane.noTranscriptHanded')
+                      : t('pane.noTranscriptYet')
                   }
                 />
               ) : (
@@ -694,7 +727,7 @@ export function PaneView({
           onClose={() => setSaveTeam(false)}
           onSaved={(crewName) => {
             setSaveTeam(false);
-            c.notify(`Saved the crew ${crewName}`);
+            c.notify(t('pane.crewSaved', { name: crewName }));
           }}
         />
       )}
@@ -702,35 +735,35 @@ export function PaneView({
       {details && (
         <Sheet labelledBy="ck-details-t" onClose={() => setDetails(false)}>
           <h2 className="ck-section" id="ck-details-t">
-            Details
+            {t('pane.details')}
           </h2>
           <dl className="ck-facts ck-facts--details">
             <div className="ck-facts-row">
-              <dt>Folder</dt>
+              <dt>{t('pane.detailFolder')}</dt>
               <dd className="ck-mono">{info.cwd}</dd>
             </div>
             {worktree && (
               <div className="ck-facts-row">
-                <dt>Separate copy</dt>
+                <dt>{t('pane.detailCopy')}</dt>
                 <dd>
-                  <span className="ck-mono">{worktree.branch}</span> from <span className="ck-mono">{worktree.base}</span> in {projectLabel(worktree.repo)}
+                  <span className="ck-mono">{worktree.branch}</span> {t('pane.detailFrom')} <span className="ck-mono">{worktree.base}</span> {t('pane.detailIn')} {projectLabel(worktree.repo)}
                 </dd>
               </div>
             )}
             <div className="ck-facts-row">
-              <dt>Screen size</dt>
+              <dt>{t('pane.detailScreen')}</dt>
               <dd className="ck-mono">
                 {info.cols}×{info.rows}
               </dd>
             </div>
             <div className="ck-facts-row">
-              <dt>Process ID</dt>
+              <dt>{t('pane.detailPid')}</dt>
               <dd className="ck-mono">{info.pid}</dd>
             </div>
           </dl>
           <div className="ck-sheet-actions">
             <button type="button" className="ck-btn ck-btn--secondary" autoFocus onClick={() => setDetails(false)}>
-              Done
+              {t('pane.done')}
             </button>
           </div>
         </Sheet>
@@ -741,12 +774,12 @@ export function PaneView({
       {confirm && (
         <Sheet labelledBy="ck-close-t" onClose={() => setConfirm(false)}>
             <h2 className="ck-section" id="ck-close-t">
-              Close {name}?
+              {t('pane.closeAsk', { name })}
             </h2>
-            <p className="ck-sub">It is still running. {name} stops, and its conversation ends.</p>
+            <p className="ck-sub">{t('pane.closeBody', { name })}</p>
             <div className="ck-sheet-actions">
               <button type="button" className="ck-btn ck-btn--secondary" autoFocus onClick={() => setConfirm(false)}>
-                Keep running
+                {t('pane.keepRunning')}
               </button>
               <button
                 type="button"
@@ -756,7 +789,7 @@ export function PaneView({
                   void c.closePane(paneId);
                 }}
               >
-                Close agent
+                {t('pane.closeAgent')}
               </button>
             </div>
         </Sheet>

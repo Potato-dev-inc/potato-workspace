@@ -7,12 +7,15 @@
 
 mod build;
 mod facts;
+pub mod drift;
 pub mod live;
 mod store;
 pub mod types;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod added_agent_tests;
 
 pub use build::build;
 pub use types::*;
@@ -54,6 +57,8 @@ pub struct HandshakeFacts {
     pub no_chat_reason: Option<String>,
     /// Added for terminal use on purpose: the chat was never checked, so it stays unknown (not No).
     pub terminal_only: bool,
+    /// Set by a drift check (`drift.rs`): the program changed version and the chat stopped answering.
+    pub drifted: bool,
 }
 
 /// Something observed in a real turn the person started.
@@ -150,6 +155,35 @@ pub fn caps_json(agent_id: &str) -> serde_json::Value {
 
 pub fn caps_to_json(caps: &AgentCaps) -> serde_json::Value {
     serde_json::to_value(caps).unwrap_or(serde_json::Value::Null)
+}
+
+/// The chips of one agent for `list_agents`: the level and each line as `yes`, `no` or `unknown`. The same table the
+/// Add an agent screen draws from, so a helper and the window never say different things.
+pub fn chips_json(agent_id: &str) -> serde_json::Value {
+    let caps = for_agent(agent_id);
+    let word = |c: &Cap| match c.value {
+        Tri::Yes => "yes",
+        Tri::No => "no",
+        Tri::Unknown => "unknown",
+    };
+    let mut out = serde_json::Map::new();
+    out.insert("level".into(), serde_json::to_value(caps.level).unwrap_or_default());
+    for (name, cap) in [
+        ("chat", &caps.chat),
+        ("resume", &caps.resume),
+        ("shows_steps", &caps.shows_steps),
+        ("edits_files", &caps.edits_files),
+        ("asks_before_edit", &caps.asks_before_edit),
+        ("asks_before_shell", &caps.asks_before_shell),
+        ("model_pick", &caps.model_pick),
+        ("stop", &caps.stop),
+        ("images", &caps.images),
+        ("usage", &caps.usage),
+        ("read_only", &caps.read_only),
+    ] {
+        out.insert(name.into(), word(cap).into());
+    }
+    serde_json::Value::Object(out)
 }
 
 type Notifier = Box<dyn Fn(&str) + Send + Sync>;

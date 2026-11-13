@@ -17,7 +17,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 6px 0 12px;
+  /* The first group is never cut at the left edge: the padding stays at least 12px, and nothing before it may shrink. */
+  padding: 0 6px 0 max(12px, env(safe-area-inset-left));
   border-top: 1px solid var(--sep);
   background: var(--bg-side);
   color: var(--label-3);
@@ -29,6 +30,7 @@
 }
 .cockpit .ck-statusbar .ck-usage-cap {
   flex: 0 0 auto;
+  margin-left: 0;
   font-weight: 600;
 }
 .cockpit .ck-sb-chips {

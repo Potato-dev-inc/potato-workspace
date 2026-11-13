@@ -4,7 +4,8 @@
 // else. With only one agent ready, the demo is a plain read-only question instead.
 import { useEffect, useState } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
-import { helperStatus, HELPER_STATUS_LABEL } from '../../lib/chat-helpers';
+import { helperStatus } from '../../lib/chat-helpers';
+import { t, useT } from '../../i18n';
 import { ApprovalPrompt } from '../cockpit/ApprovalPrompt';
 import { QuestionCard } from '../cockpit/QuestionCard';
 import { DotSpinner } from '../cockpit/DotSpinner';
@@ -65,6 +66,7 @@ export function StepTask({
   onGo: (step: StepId) => void;
   onOpenPane: (paneId: string) => void;
 }) {
+  useT();
   const project = flow.project;
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -165,7 +167,7 @@ export function StepTask({
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm fr-ask-toggle" aria-expanded={exact} aria-controls="fr-exact" onClick={() => setExact((v) => !v)}>
             {T.taskExact}
           </button>
-          <blockquote className="fr-ask" id="fr-exact" data-testid="task-prompt" hidden={!exact}>
+          <blockquote className="fr-ask" id="fr-exact" data-testid="task-prompt" data-no-i18n hidden={!exact}>
             {promptFor(plan)}
           </blockquote>
           {!plan.helper && <p className="fr-hint" data-testid="task-solo">{T.taskSolo}</p>}
@@ -225,7 +227,7 @@ export function StepTask({
                   <li key={h.info.id} className="fr-agentrow" data-state={st}>
                     <DotSpinner status={st === 'done' ? 'exited' : st === 'failed' ? 'error' : st === 'needs-you' ? 'waiting_input' : 'running'} size={3} />
                     <span className="fr-agentname">{shortAgentName(c.names.get(h.info.id) ?? h.info.title ?? h.info.agent_type)}</span>
-                    <span className="fr-agentstate">{HELPER_STATUS_LABEL[st]}</span>
+                    <span className="fr-agentstate">{t(`firstRun.helper.${st}` as 'firstRun.helper.working')}</span>
                     <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={() => onOpenPane(h.info.id)}>
                       {T.openPane}
                     </button>

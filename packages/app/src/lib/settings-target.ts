@@ -24,6 +24,11 @@ const ROW_ALIASES: Record<string, string> = {
   security: 'security-ask-before-control',
   plugins: 'agent-pack',
   costs: 'budget-turns',
+  // Connect's cards start closed; the old tab names open the card they used to be.
+  phone: 'pairing',
+  mobile: 'pairing',
+  team: 'team-page',
+  lend: 'lend-page',
 };
 
 /** The page and row a name stands for; null when it names nothing. */

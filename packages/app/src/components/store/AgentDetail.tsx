@@ -212,10 +212,10 @@ export function AgentDetail({
       </h2>
       <p className="ck-sub">{detail.tagline}</p>
       <p className="ck-sub">
-        <span className="ck-chip">
+        <span className="ck-chip-label ck-chip">
           <span className="ck-chip-name">{tierWords(detail)}</span>
         </span>{' '}
-        <span className="ck-chip">
+        <span className="ck-chip-label ck-chip">
           <span className="ck-chip-name">{licenseWords(detail)}</span>
         </span>
       </p>

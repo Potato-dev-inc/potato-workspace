@@ -189,6 +189,46 @@ describe('Add an agent', () => {
     expect(buttonByText(host, 'Install the add-on')).toBeUndefined();
   });
 
+  it('asks before it sends any message to check a program, and only Check it sends them', async () => {
+    const api = mockAddAgentApi('needs_consent');
+    const check = vi.spyOn(api, 'approveCheck');
+    const skip = vi.spyOn(api, 'skipCheck');
+    await mount(api);
+    await addIt('fakeheadless');
+    await advance(1500);
+    expect(text()).toContain('Check Fakeheadless before adding it?');
+    expect(text()).toContain('To check how Fakeheadless answers, Potato will send 2 tiny messages.');
+    expect(text()).toContain('This may use a little of your plan.');
+    expect(text()).toContain('What will run');
+    expect(buttonByText(host, 'Check it')).toBeTruthy();
+    expect(buttonByText(host, 'Skip')).toBeTruthy();
+    // Nothing is asked on its own, however long the screen stays.
+    await advance(20000);
+    expect(check).not.toHaveBeenCalled();
+    expect(skip).not.toHaveBeenCalled();
+    expect(text()).toContain('Check Fakeheadless before adding it?');
+    await click(buttonByText(host, 'Check it'));
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(skip).not.toHaveBeenCalled();
+    await advance(3000);
+    expect(text()).toContain('Fakeheadless is ready.');
+    expect(buttonByText(host, 'Check it')).toBeUndefined();
+  });
+
+  it('Skip adds the program for the terminal and sends nothing', async () => {
+    const api = mockAddAgentApi('needs_consent');
+    const check = vi.spyOn(api, 'approveCheck');
+    const skip = vi.spyOn(api, 'skipCheck');
+    await mount(api);
+    await addIt('fakeheadless');
+    await advance(1500);
+    await click(buttonByText(host, 'Skip'));
+    await advance(100);
+    expect(skip).toHaveBeenCalledTimes(1);
+    expect(check).not.toHaveBeenCalled();
+    expect(text()).toContain('works in a terminal window.');
+  });
+
   it('shows the command to copy when Potato cannot install', async () => {
     const api = mockAddAgentApi('not_installed');
     const write = vi.fn(async () => undefined);

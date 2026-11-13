@@ -1,6 +1,7 @@
 // One-click update. The app asks its own backend (Tauri updater: a signed MSI named in the GitHub release's latest.json);
 // this file is the page's side: what the backend answers, how to read versions, and plain words for what went wrong.
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
 
 /** What the backend found when it checked. `null` means this version is the newest. */
 export interface UpdateOffer {
@@ -94,13 +95,12 @@ export function isVersionNewer(latest: string, current: string): boolean {
   return false;
 }
 
-const FALLBACK = 'The update could not be installed. Your current version keeps working.';
 
 /** A sentence for the page. Backend errors already are sentences; anything else (a code, a stack) becomes the fallback. */
 export function plainUpdateError(error: unknown): string {
   const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
   const text = raw.replace(/^[A-Z_]{3,}:\s*/, '').trim();
-  if (!text || /[\\/]|Error:|at \w/.test(text)) return FALLBACK;
+  if (!text || /[\\/]|Error:|at \w/.test(text)) return t('overview.update.fallback');
   return text;
 }
 
@@ -109,12 +109,12 @@ export function plainUpdateError(error: unknown): string {
  * the restart while terminal agents do not. Without the split (an older backend) it says only that they stop.
  */
 export function runningJobWarning(agents: string[], split?: { chats: string[]; terminals: string[] }): string {
-  const who = agents.length === 1 ? 'An agent is' : `${agents.length} agents are`;
+  const who = agents.length === 1 ? t('overview.update.oneAgent') : t('overview.update.manyAgents', { count: agents.length });
   const names = agents.length > 0 ? ` (${agents.join(', ')})` : '';
-  const lead = `${who} still working or waiting for you${names}. Restarting stops ${agents.length === 1 ? 'it' : 'them'}.`;
+  const lead = t('overview.update.stillWorking', { who, names, them: agents.length === 1 ? t('overview.update.it') : t('overview.update.them') });
   if (!split) return lead;
   const parts = [lead];
-  if (split.chats.length > 0) parts.push(`Chats are saved and come back after the restart: ${split.chats.join(', ')}.`);
-  if (split.terminals.length > 0) parts.push(`Terminal agents stop for good and are not reopened: ${split.terminals.join(', ')}.`);
+  if (split.chats.length > 0) parts.push(t('overview.update.chatsSaved', { list: split.chats.join(', ') }));
+  if (split.terminals.length > 0) parts.push(t('overview.update.terminalsStop', { list: split.terminals.join(', ') }));
   return parts.join(' ');
 }

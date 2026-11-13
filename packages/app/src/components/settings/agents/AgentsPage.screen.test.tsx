@@ -44,9 +44,14 @@ function caps(agentId: string, label: string, over: Partial<AgentCaps> = {}): Ag
 const mocks = vi.hoisted(() => ({
   capsList: [] as AgentCaps[],
   definitions: [] as { id: string; file: string; source: string; state: string }[],
+  recheck: vi.fn(async (_agentId: string) => undefined),
   remove: vi.fn(async () => ({ ok: true, id: 'claude', label: 'Claude', removed_id: 'r1', fixtures: false, wizard: false, was_approved: true })),
 }));
 
+vi.mock('@tauri-apps/api/core', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@tauri-apps/api/core')>();
+  return { ...real, invoke: (cmd: string, args?: { agentId?: string }) => (cmd === 'agent_caps_recheck' ? mocks.recheck(String(args?.agentId)) : real.invoke(cmd, args as never)) };
+});
 vi.mock('../../../lib/agentCaps', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/agentCaps')>();
   return {
@@ -212,6 +217,24 @@ describe('Settings > Agents', () => {
     // Comes with Potato: no Remove row at all.
     expect(p.querySelector('button[aria-label="Remove Kimi"]')).toBeNull();
     expect(p.textContent).not.toContain('Remove Kimi');
+  });
+
+  it('an agent whose chat was turned off after an update says why and offers Check it again', async () => {
+    mocks.recheck.mockClear();
+    const reason = 'Updated to 2.0.0, and its chat did not answer.';
+    const broken = caps('kimi', 'Kimi', { level: 'l5', chat: { ...cap('no', 'check'), proof: reason } }) as AgentCaps & { needs_repair: boolean };
+    broken.needs_repair = true;
+    mocks.capsList = [caps('claude', 'Claude', { chat: cap('yes', 'definition') }), broken];
+    await mount();
+    await click(q('[data-testid="agent-row-claude"] .ag-open'));
+    expect(page()!.textContent).not.toContain('Check it again');
+    await act(async () => setOpenAgent(null));
+    await click(q('[data-testid="agent-row-kimi"] .ag-open'));
+    expect(page()!.textContent).toContain('Chat is off');
+    expect(page()!.textContent).toContain(reason);
+    await click(page()!.querySelector('button[aria-label="Check Kimi again"]'));
+    await settle(4);
+    expect(mocks.recheck).toHaveBeenCalledWith('kimi');
   });
 
   it('deep link opens the agent page', async () => {

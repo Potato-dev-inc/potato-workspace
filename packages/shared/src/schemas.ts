@@ -87,6 +87,8 @@ export const SettingsSchema = z.object({
   show_developer_settings: z.boolean().optional(),
   /** How the New agent page greets you ("What's up next, <name>?"). Empty or absent: no name. Never derived from the computer. */
   display_name: z.string().max(60).optional(),
+  /** App language: follow the system (the default when absent), English or Traditional Chinese. App: i18n/. */
+  ui_language: z.enum(['auto', 'en', 'zh-TW']).optional(),
   /** The cards pinned on the New agent page, in order. Absent: none. */
   home_cards: z.array(z.object({ id: z.string().max(40), kind: z.enum(['recent', 'running', 'needs', 'prompt']), text: z.string().max(2000).optional() })).max(12).optional(),
   /** First-run welcome: absent = never decided (shown once on a fresh profile), true = finished or skipped, false = show it again. Rust reads it (first_run). */

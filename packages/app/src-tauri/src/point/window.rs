@@ -342,8 +342,8 @@ fn place(app: &AppHandle, window: &WebviewWindow, slot: usize) {
         .map(|(p, s)| (p.x, p.y, s.width, s.height))
         .unwrap_or((work_rect.0, work_rect.1, 0, 0));
     let (x, y, w, h) = preview_bounds(work_rect, cockpit_rect, slot, frame_of(window));
-    let _ = window.set_size(PhysicalSize::new(w, h));
-    let _ = window.set_position(PhysicalPosition::new(x, y));
+    let _ = crate::window_layout::own_window::set_size(&window, PhysicalSize::new(w, h));
+    let _ = crate::window_layout::own_window::set_position(&window, PhysicalPosition::new(x, y));
 }
 
 /// The space the OS adds around a window's inner area (title bar and borders), in physical pixels.

@@ -86,7 +86,7 @@ pub fn show_near(app: &AppHandle, screen_rect: Rect4) {
             screen_rect,
             size,
         );
-        let _ = window.set_position(PhysicalPosition::new(x, y));
+        let _ = crate::window_layout::own_window::set_position(&window, PhysicalPosition::new(x, y));
     }
     let _ = window.show();
     let _ = window.set_focus();

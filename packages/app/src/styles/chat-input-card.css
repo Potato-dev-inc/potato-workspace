@@ -371,3 +371,12 @@
     transition: none;
   }
 }
+
+/* The name of a setting whose value alone says little ("Output style" before "Default"). */
+.cockpit .ck-pill-caption {
+  color: var(--label-3);
+  font-weight: 400;
+}
+.cockpit .ck-pill-caption::after {
+  content: ':';
+}

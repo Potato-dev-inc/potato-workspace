@@ -1,0 +1,28 @@
+schema_version = 1
+
+[store]
+id = "codebuff"
+tagline = "Codebuff terminal coding agent."
+tier = "starter"
+builtin = false
+categories = ["general", "open_source"]
+status = "active"
+replaced_by = ""
+ambiguous_name = false
+first_listed = "2026-11-13"
+
+[vendor]
+name = "Codebuff"
+homepage = "https://github.com/CodebuffAI/codebuff"
+license = "Apache-2.0"
+license_kind = "open_source"
+
+[sign_in]
+kind = "either"
+summary = "Start it and follow its own sign-in steps. See the vendor page."
+
+[checked]
+date = "2026-11-13"
+version = "not stated"
+how = "vendor_docs"
+windows_tested = false

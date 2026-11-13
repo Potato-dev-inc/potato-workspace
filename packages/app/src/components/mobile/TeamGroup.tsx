@@ -9,7 +9,7 @@ import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BridgeClient, TeamCardsReply } from '../../lib/bridge-types';
 import { ago } from '../../lib/mobile-agent-tabs';
-import { cardActions, cardMeta, cardTitle, jobSub, jobTitle, type TeamCard, type TeamJob } from '../../lib/team';
+import { cardActions, cardMeta, cardTitle, friendlyBranch, jobSub, jobTitle, type TeamCard, type TeamJob } from '../../lib/team';
 import { ConfirmSheet } from './MobileSheet';
 
 /** The bridge is polled; there is no team event on the phone's stream yet. */
@@ -201,7 +201,7 @@ export function TeamGroup({ bridge, bridgeReady }: { bridge: BridgeClient; bridg
       {confirm?.kind === 'queue' && (
         <ConfirmSheet
           title="Queue my agent"
-          message={`Queue ${confirm.agent} to bring ${confirm.card.event.subject.branch ?? 'their branch'} into ${confirm.card.local?.currentBranch ?? 'your branch'}? It works in a separate copy and asks you before anything lands.`}
+          message={`Queue ${confirm.agent} to merge ${friendlyBranch(confirm.card.event.subject.branch ?? 'their')} work into ${friendlyBranch(confirm.card.local?.currentBranch ?? 'your branch')}? It works in a separate copy and asks you before anything lands.`}
           confirmLabel="Queue it"
           onConfirm={doConfirm}
           onCancel={() => setConfirm(null)}

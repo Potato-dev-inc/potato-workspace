@@ -5,6 +5,7 @@ import { PaneView } from '../cockpit/PaneView';
 import { useCockpit } from '../../hooks/useCockpit';
 import { tauriAcpChatApi, type AcpChatApi } from '../../lib/acpChat';
 import '../../styles/cockpit.css';
+import '../../styles/chips.css';
 import '../../styles/cockpit-acp.css';
 
 export function AcpPaneWindow({ paneId, acp = tauriAcpChatApi }: { paneId: string; /** The chat-session calls. Replaceable in tests. */ acp?: AcpChatApi }) {

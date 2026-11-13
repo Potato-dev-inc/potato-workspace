@@ -3,6 +3,7 @@
 // or the agent lists none) the same box takes a typed model id.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useT } from '../../i18n';
 import type { ModelListState } from '../../lib/modelOptions';
 import '../../styles/model-picker.css';
 
@@ -69,7 +70,9 @@ export interface ModelPickerProps {
   testId?: string;
 }
 
-export function ModelPicker({ state, value, onChange, defaultWord = 'Default', label, className, testId }: ModelPickerProps) {
+export function ModelPicker({ state, value, onChange, defaultWord: defaultWordProp, label, className, testId }: ModelPickerProps) {
+  const t = useT();
+  const defaultWord = defaultWordProp ?? t('state.model.default');
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const root = useRef<HTMLDivElement>(null);
@@ -161,8 +164,8 @@ export function ModelPicker({ state, value, onChange, defaultWord = 'Default', l
               type="text"
               spellCheck={false}
               autoComplete="off"
-              placeholder={models.length === 0 ? 'Type a model id' : 'Search or type a model id'}
-              aria-label={models.length === 0 ? 'Type a model id' : 'Search models'}
+              placeholder={models.length === 0 ? t('state.model.typeId') : t('state.model.searchOrType')}
+              aria-label={models.length === 0 ? t('state.model.typeId') : t('state.model.search')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -184,9 +187,9 @@ export function ModelPicker({ state, value, onChange, defaultWord = 'Default', l
               {m.description && <span className="mp-item-hint">{m.description}</span>}
             </button>
           ))}
-          {state.status === 'loading' && <p className="mp-note">Loading models… you can type a model id.</p>}
-          {state.status === 'failed' && <p className="mp-note">Could not load the list. Type a model id.</p>}
-          {state.status === 'ready' && models.length === 0 && <p className="mp-note">No list for this agent. Type a model id.</p>}
+          {state.status === 'loading' && <p className="mp-note">{t('state.model.loading')}</p>}
+          {state.status === 'failed' && <p className="mp-note">{t('state.model.failed')}</p>}
+          {state.status === 'ready' && models.length === 0 && <p className="mp-note">{t('state.model.noList')}</p>}
           {shown.map((m) => (
             <button key={m} type="button" role="option" aria-selected={value === m} className="mp-item" onClick={() => choose(m)}>
               <span className="mp-item-id">{modelName(m)}</span>
@@ -194,7 +197,7 @@ export function ModelPicker({ state, value, onChange, defaultWord = 'Default', l
           ))}
           {custom && (
             <button type="button" role="option" aria-selected={false} className="mp-item" onClick={() => choose(q)}>
-              <span className="mp-item-id">Use “{q}”</span>
+              <span className="mp-item-id">{t('state.model.use', { q })}</span>
             </button>
           )}
           {value !== '' && value !== 'default' && !models.includes(value) && (

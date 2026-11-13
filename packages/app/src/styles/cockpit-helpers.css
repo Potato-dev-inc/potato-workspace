@@ -10,25 +10,17 @@
   min-height: 30px;
 }
 
-/* "2 helpers" with a caret: folds and unfolds the list. */
+/* "2 helpers" with a caret: a Count chip (chips.css) that folds and unfolds the list. */
 .cockpit .ck-helper-chip {
-  display: inline-flex;
-  align-items: center;
   gap: 5px;
-  height: 20px;
   margin: 2px 0 1px 3px;
-  padding: 0 7px;
-  border-radius: 999px;
-  color: var(--label-3);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
+  cursor: pointer;
   transition:
     background-color var(--dur-fast) var(--ease),
     color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-helper-chip:hover {
-  background: var(--fill);
-  color: var(--label-2);
+  color: var(--label);
 }
 .cockpit .ck-helper-caret {
   width: 5px;

@@ -2,11 +2,13 @@
 // The file downloads first ("Downloading 42%"); if an agent is working then, the notice says which ones stop and asks:
 // Restart now, or When agents finish. A failed update says why in a plain sentence and the app keeps running. If the agents
 // were already stopped, it says so and offers to reopen the chats.
+import { useT } from '../../i18n';
 import type { AppUpdateState } from './useAppUpdate';
 import { runningJobWarning } from '../../lib/app-update';
 import '../../styles/app-update.css';
 
 export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
+  const t = useT();
   const { phase, offer } = state;
   if (phase === 'idle' || phase === 'none' || phase === 'checking') return null;
   const busy = state.busyAgents.length > 0;
@@ -14,51 +16,51 @@ export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
     <div className="app-update-notice" role="status" data-phase={phase}>
       {phase === 'available' && offer && (
         <>
-          <span>Update available: {offer.version}</span>
+          <span>{t('overview.update.available', { version: offer.version })}</span>
           <button type="button" className="app-update-btn" onClick={() => void state.update()}>
-            Update
+            {t('overview.update.update')}
           </button>
         </>
       )}
       {phase === 'downloading' && (
         <>
-          <span>{state.percent === null ? 'Downloading…' : `Downloading ${state.percent}%`}</span>
-          {state.percent !== null && <progress className="app-update-bar" max={100} value={state.percent} aria-label="Download progress" />}
+          <span>{state.percent === null ? t('overview.update.downloading') : t('overview.update.downloadingPercent', { percent: state.percent })}</span>
+          {state.percent !== null && <progress className="app-update-bar" max={100} value={state.percent} aria-label={t('overview.update.progress')} />}
         </>
       )}
       {phase === 'ready' && (
         <>
-          <span>{busy ? `Ready. ${runningJobWarning(state.busyAgents, state.busy)}` : 'Ready. Restart to finish the update.'}</span>
+          <span>{busy ? t('overview.update.ready', { warning: runningJobWarning(state.busyAgents, state.busy) }) : t('overview.update.readyRestart')}</span>
           <button type="button" className="app-update-btn" onClick={() => void state.restartNow()}>
-            Restart now
+            {t('overview.update.restartNow')}
           </button>
           {busy && (
             <button type="button" className="app-update-btn app-update-btn--quiet" onClick={state.restartWhenIdle}>
-              When agents finish
+              {t('overview.update.whenAgentsFinish')}
             </button>
           )}
         </>
       )}
       {phase === 'waiting' && (
         <>
-          <span>Ready. Waiting for your agents to finish. This tells you when it is safe to restart.</span>
+          <span>{t('overview.update.waiting')}</span>
           <button type="button" className="app-update-btn" onClick={() => void state.restartNow()}>
-            Restart now
+            {t('overview.update.restartNow')}
           </button>
         </>
       )}
-      {phase === 'installing' && <span>Installing the update. Potato Workspace will close. Open it again when the installer is done.</span>}
+      {phase === 'installing' && <span>{t('overview.update.installing')}</span>}
       {phase === 'stopped' && (
         <>
-          <span>{state.reopened ? 'Chats reopened. Terminal agents were not reopened.' : `${state.error ?? 'Agents were stopped.'} Reopen them to carry on.`}</span>
+          <span>{state.reopened ? t('overview.update.reopened') : t('overview.update.stopped', { why: state.error ?? t('overview.update.agentsStopped') })}</span>
           {!state.reopened && (
             <button type="button" className="app-update-btn" onClick={() => void state.reopenChats()}>
-              Reopen chats
+              {t('overview.update.reopenChats')}
             </button>
           )}
           {offer && (
             <button type="button" className="app-update-btn app-update-btn--quiet" onClick={() => void state.update()}>
-              Try again
+              {t('overview.update.tryAgain')}
             </button>
           )}
         </>
@@ -68,7 +70,7 @@ export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
           <span>{state.error}</span>
           {offer && (
             <button type="button" className="app-update-btn" onClick={() => void state.update()}>
-              Try again
+              {t('overview.update.tryAgain')}
             </button>
           )}
         </>

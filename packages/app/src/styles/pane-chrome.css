@@ -274,3 +274,86 @@
     max-width: 14ch;
   }
 }
+
+/* ---- Pane header: the chat's own buttons live here (view switch, Ask aside, Share), one row ---- */
+.cockpit .ck-pane .ck-pane-head > .ck-pane-id.ck-pane-id {
+  min-width: 9rem;
+}
+.cockpit .ck-head-chat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.cockpit .ck-head-chat .ck-chat-modes {
+  margin-left: 0;
+}
+.cockpit .ck-head-chat .ck-chat-aside,
+.cockpit .ck-head-chat .ck-chat-share,
+.cockpit .ck-head-chat .ck-chat-mode-pill {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-3);
+  white-space: nowrap;
+}
+.cockpit .ck-head-chat .ck-chat-aside:hover,
+.cockpit .ck-head-chat .ck-chat-share:hover,
+.cockpit .ck-head-chat .ck-chat-aside[aria-expanded='true'],
+.cockpit .ck-head-chat .ck-chat-share[aria-expanded='true'] {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .ck-head-chat .ck-chat-share:focus-visible {
+  box-shadow: var(--focus);
+  outline: none;
+}
+.cockpit .ck-head-chat .ck-chat-modes,
+.cockpit .ck-head-chat .ck-chat-mode-wrap {
+  margin-left: 0;
+}
+/* Tight header: the state words go, the dot stays. */
+.cockpit .ck-pane .ck-pane-state[data-compact='true'] .ck-pane-doing {
+  display: none;
+}
+.cockpit .ck-head-chat .ck-chat-modes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--fill);
+}
+.cockpit .ck-head-chat .ck-chat-mode {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--label-3);
+  white-space: nowrap;
+}
+.cockpit .ck-head-chat .ck-chat-mode:hover {
+  color: var(--label);
+}
+.cockpit .ck-head-chat .ck-chat-mode[aria-pressed='true'] {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-head-chat .ck-chat-mode:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-head-chat .ck-chat-mode-pill {
+  border: 0;
+  background: var(--fill);
+  cursor: pointer;
+}
+/* The state words are never cut: when the header is too narrow they go first (data-compact), then the buttons move into More. */
+.cockpit .ck-pane .ck-pane-head > .ck-pane-state:not([data-compact='true']) {
+  flex-shrink: 0;
+  min-width: auto;
+}

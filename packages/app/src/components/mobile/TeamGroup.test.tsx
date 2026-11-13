@@ -137,7 +137,7 @@ describe('phone TeamGroup', () => {
     expect(bridge.teamQueue).not.toHaveBeenCalled();
     const sheet = host.querySelector('[role="alertdialog"]')!;
     expect(sheet.textContent).toContain(
-      'Queue Claude to bring feat/auth into feat/billing? It works in a separate copy and asks you before anything lands.',
+      'Queue Claude to merge auth work into billing? It works in a separate copy and asks you before anything lands.',
     );
     await click(byText('Queue it', sheet));
     expect(bridge.teamQueue).toHaveBeenCalledWith(MAYA.id, MAYA.panes[0].paneId, 'idle');
@@ -177,7 +177,7 @@ describe('phone TeamGroup', () => {
     reply.jobs = [{ ...PHONE_TEAM_JOB, state: 'working', agentRan: true, conflicts: ['a.ts'] }];
     await mount(fakeBridge(reply));
     expect(host.querySelectorAll('button')).toHaveLength(0);
-    expect(host.textContent).toContain('Claude is merging fix/tax-rounding');
+    expect(host.textContent).toContain('Claude is merging tax-rounding work');
   });
 
   it('says some updates may be missing', async () => {

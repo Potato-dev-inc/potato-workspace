@@ -3,16 +3,17 @@
 // Dots are circles drawn in currentColor. Off dots sit at low opacity, on dots at full opacity.
 // Under prefers-reduced-motion the running sweep is replaced by a static perimeter ring (see dot-spinner.css).
 import type { CSSProperties } from 'react';
+import { useT, type MessageKey } from '../../i18n';
 
 type DotSize = 3 | 5;
 type DotLevel = 'off' | 'dim' | 'on' | 'sweep';
 
-const STATE_LABEL: Record<'running' | 'waiting_input' | 'idle' | 'error' | 'exited', string> = {
-  running: 'Working',
-  waiting_input: 'Needs you',
-  idle: 'Idle',
-  error: 'Error',
-  exited: 'Exited',
+const STATE_LABEL: Record<'running' | 'waiting_input' | 'idle' | 'error' | 'exited', MessageKey> = {
+  running: 'state.working',
+  waiting_input: 'state.needsYou',
+  idle: 'state.idle',
+  error: 'state.error',
+  exited: 'state.exited',
 };
 
 /** Tick mark (check), [row, col] pairs, copied from the mockup's DotMatrix. */
@@ -64,6 +65,7 @@ export interface DotSpinnerProps {
 }
 
 export function DotSpinner({ status, size = 3, className, label }: DotSpinnerProps): JSX.Element {
+  const t = useT();
   const n = size;
   const px = n === 3 ? 12 : 36;
   // Gap is about 40% of the dot size (same formula as the mockup).
@@ -87,7 +89,7 @@ export function DotSpinner({ status, size = 3, className, label }: DotSpinnerPro
     <span
       className={rootClass}
       role="img"
-      aria-label={label ?? STATE_LABEL[status]}
+      aria-label={label ?? t(STATE_LABEL[status])}
       style={{
         width: px,
         height: px,

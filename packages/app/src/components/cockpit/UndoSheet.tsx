@@ -2,6 +2,7 @@
 // turn, then asks with the same sheet the History tab uses (shared-folder warning included).
 import { errorSentence } from '../../lib/sayError';
 import { useEffect, useRef, useState } from 'react';
+import { useT } from '../../i18n';
 import { cockpitApi, type Checkpoint, type CheckpointsApi } from '../../lib/cockpit-api';
 import { lastTurnStart } from './history-model';
 import { RestoreSheet } from './RestoreSheet';
@@ -20,6 +21,7 @@ export function UndoSheet({
   onClose: () => void;
   api?: Pick<CheckpointsApi, 'checkpointsList' | 'checkpointRestore'>;
 }) {
+  const t = useT();
   const [target, setTarget] = useState<Checkpoint | null>(null);
   const [busy, setBusy] = useState(false);
   const alive = useRef(true);
@@ -34,7 +36,7 @@ export function UndoSheet({
           setTarget(start);
           return;
         }
-        notify(listing.state === 'ok' ? "There's nothing to undo yet." : listing.message || 'Checkpoints are not available.');
+        notify(listing.state === 'ok' ? t('inbox.nothingToUndo') : listing.message || t('inbox.checkpointsUnavailable'));
         onClose();
       },
       (e) => {
@@ -53,8 +55,8 @@ export function UndoSheet({
   if (!target) return null;
   return (
     <RestoreSheet
-      title="Undo the last turn?"
-      confirmLabel="Undo last turn"
+      title={t('inbox.undoLastTurnTitle')}
+      confirmLabel={t('inbox.undoLastTurn')}
       sharedWith={sharedWith}
       busy={busy}
       onCancel={onClose}

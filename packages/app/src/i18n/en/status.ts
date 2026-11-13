@@ -1,0 +1,21 @@
+// English messages: status (the usage bar along the bottom of the cockpit). Keys are dotted (`status.something`). Plural: `<key>_one` / `<key>_other`.
+export const status = {
+  'status.usage': 'Usage',
+  'status.planUsage': 'Plan usage',
+  'status.refreshUsage': 'Refresh usage',
+  'status.clickForDetails': 'Click for details',
+  'status.notShared': 'Usage not shared by this agent',
+  'status.today': 'Today',
+  'status.last7Days': 'Last 7 days',
+  'status.costTokens': '{cost} · {tokens} tokens',
+  'status.resetsIn': 'Resets in {time}',
+  'status.startedAgain': 'Started again',
+  'status.percentUsed': '{pct}% used',
+  'status.windowUsed': '{name} used',
+  'status.readAgo': 'Read {time} ago',
+  'status.usagePage': 'Usage page',
+  'status.moreUsage': '{n} more: open usage',
+  'status.working': '{n} working',
+  'status.needsYou_one': '{count} needs you',
+  'status.needsYou_other': '{count} need you',
+} as const;

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { reportUiError } from '../../lib/globalErrors';
+import { useT } from '../../i18n';
 import './error-boundary.css';
 
 export interface ErrorBoundaryProps {
@@ -81,19 +82,25 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, State> {
 
   render(): ReactNode {
     if (!this.state.error) return this.props.children;
-    return (
-      <div className={`pm-eb${this.props.compact ? ' is-compact' : ''}`} role="alert" data-error-boundary={this.props.where ?? 'screen'}>
-        <p className="pm-eb-title">Something went wrong here</p>
-        <p className="pm-eb-body">The rest of the app is fine. Try again, and if it keeps happening, copy the details and send them to us.</p>
-        <div className="pm-eb-actions">
-          <button type="button" className="pm-eb-btn is-primary" onClick={this.reset}>
-            Try again
-          </button>
-          <button type="button" className="pm-eb-btn" onClick={this.copy}>
-            {this.state.copied ? 'Copied' : 'Copy details'}
-          </button>
-        </div>
-      </div>
-    );
+    return <ErrorCard compact={this.props.compact} where={this.props.where} copied={this.state.copied} onTryAgain={this.reset} onCopy={this.copy} />;
   }
+}
+
+/** The fallback card. A function component, so it redraws when the language changes. */
+function ErrorCard({ compact, where, copied, onTryAgain, onCopy }: { compact?: boolean; where?: string; copied: boolean; onTryAgain: () => void; onCopy: () => void }) {
+  const t = useT();
+  return (
+    <div className={`pm-eb${compact ? ' is-compact' : ''}`} role="alert" data-error-boundary={where ?? 'screen'}>
+      <p className="pm-eb-title">{t('common.errorTitle')}</p>
+      <p className="pm-eb-body">{t('common.errorBody')}</p>
+      <div className="pm-eb-actions">
+        <button type="button" className="pm-eb-btn is-primary" onClick={onTryAgain}>
+          {t('common.tryAgain')}
+        </button>
+        <button type="button" className="pm-eb-btn" onClick={onCopy}>
+          {copied ? t('common.copied') : t('common.copyDetails')}
+        </button>
+      </div>
+    </div>
+  );
 }

@@ -341,8 +341,7 @@ fn a_crash_mid_turn_keeps_the_stream_consistent_and_a_late_turn_end_changes_noth
     assert_eq!(list.iter().find(|i| i["kind"] == "toolResult").unwrap()["ok"], false, "the open tool does not keep spinning");
     let notice = list.iter().find(|i| i["kind"] == "notice").unwrap();
     assert_eq!(notice["noticeKind"], "ending:failed");
-    assert!(notice["text"].as_str().unwrap().starts_with("Something went wrong: "));
-    assert!(notice["text"].as_str().unwrap().contains("exit code 3"));
+    assert_eq!(notice["text"], "The agent stopped unexpectedly (exit code 3).");
     // The session's own report of the same end arrives: no second end, nothing new.
     let mut failed = summary(1, StopKind::Failed);
     failed.error = Some("the adapter exited before the turn finished".into());

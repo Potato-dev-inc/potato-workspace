@@ -7,6 +7,7 @@
 // A failed install says why in a few words and keeps every choice. Nothing here names an agent.
 import { errorSentence } from '../../lib/sayError';
 import { useEffect, useRef, useState } from 'react';
+import { t, useT } from '../../i18n';
 import { addonFor, plainMessage, type AcpAddonApi, type AddonStatus } from '../../lib/acpAddon';
 import { EmptyState, type EmptyAction } from '../common/EmptyState';
 import { normalizeOptions, type AcpChatApi, type OverlayOption } from '../../lib/acpChat';
@@ -36,13 +37,13 @@ export interface NoChatPromptProps {
   onUseTerminal: () => void;
 }
 
-/** " (17 MB)" for the button, or nothing when the size is not known. */
-const sizeLabel = (mb: number | null | undefined): string => (mb && mb > 0 ? ` (${mb} MB)` : '');
+/** "Install chat add-on (17 MB)" for the button, or without the size when it is not known. */
+const addonLabel = (mb: number | null | undefined): string => (mb && mb > 0 ? t('inbox.installAddonSize', { mb }) : t('inbox.installAddon'));
 
 /** A few words: the first sentence of the reason, cut at 120 characters. */
 export function shortReason(error: unknown): string {
   const raw = errorSentence(error);
-  const text = plainMessage(raw).trim() || 'It did not finish.';
+  const text = plainMessage(raw).trim() || t('inbox.didNotFinish');
   const first = text.split(/(?<=[.!?])\s/)[0] ?? text;
   return first.length > 120 ? `${first.slice(0, 117)}…` : first;
 }
@@ -56,6 +57,7 @@ const ended = (s: AddonStatus): boolean => s.state === 'installed' || s.state ==
 const INSTALL_LIMIT_MS = 12 * 60 * 1000;
 
 export function NoChatPrompt({ agent, addons, resolve, canAdd, onStartChat, onAddChat, onUseTerminal }: NoChatPromptProps) {
+  const t = useT();
   const [phase, setPhase] = useState<Phase>('loading');
   const [addon, setAddon] = useState<AddonStatus | null>(null);
   const [options, setOptions] = useState<OverlayOption[]>([]);
@@ -142,10 +144,10 @@ export function NoChatPrompt({ agent, addons, resolve, canAdd, onStartChat, onAd
           limit = setTimeout(() => finish(null), INSTALL_LIMIT_MS);
         });
         if (!alive.current) return;
-        if (!end) throw new Error('The install did not finish in 12 minutes.');
+        if (!end) throw new Error(t('inbox.installTimedOut'));
         done = end;
       }
-      if (done.state !== 'installed') throw new Error(done.detail || 'The install did not finish.');
+      if (done.state !== 'installed') throw new Error(done.detail || t('inbox.installNotFinished'));
       if (!alive.current) return;
       setPhase('starting');
       await onStartChat(agent.id);
@@ -161,23 +163,23 @@ export function NoChatPrompt({ agent, addons, resolve, canAdd, onStartChat, onAd
 
   // The first way on offer is the one button; the others are the quiet "or" rows (at most three).
   const ways: EmptyAction[] = [];
-  if (needsAddon && addons) ways.push({ label: `Install chat add-on${sizeLabel(addon?.size_mb)}`, disabled: busy, onClick: () => void install() });
-  if (adapter) ways.push({ label: 'Use adapter', disabled: busy, onClick: () => onAddChat(agent, 'adapter') });
-  if (others) ways.push({ label: 'Add chat…', disabled: busy, onClick: () => onAddChat(agent) });
-  ways.push({ label: 'Use terminal', disabled: phase === 'starting', onClick: onUseTerminal });
+  if (needsAddon && addons) ways.push({ label: addonLabel(addon?.size_mb), disabled: busy, onClick: () => void install() });
+  if (adapter) ways.push({ label: t('inbox.useAdapter'), disabled: busy, onClick: () => onAddChat(agent, 'adapter') });
+  if (others) ways.push({ label: t('inbox.addChat'), disabled: busy, onClick: () => onAddChat(agent) });
+  ways.push({ label: t('inbox.useTerminal'), disabled: phase === 'starting', onClick: onUseTerminal });
 
   return (
-    <div className="ck-nochat" data-testid={`nochat-${agent.id}`} role="group" aria-label={`Chat for ${agent.label}`}>
-      <EmptyState plain className="ck-empty--compact" title={`No chat for ${agent.label} yet`} action={ways[0]} alternatives={ways.slice(1)}>
-      {phase === 'loading' && <div className="ck-nochat-note">Checking…</div>}
+    <div className="ck-nochat" data-testid={`nochat-${agent.id}`} role="group" aria-label={t('inbox.chatFor', { agent: agent.label })}>
+      <EmptyState plain className="ck-empty--compact" title={t('inbox.noChatFor', { agent: agent.label })} action={ways[0]} alternatives={ways.slice(1)}>
+      {phase === 'loading' && <div className="ck-nochat-note">{t('inbox.checking')}</div>}
       {phase === 'installing' && (
         <div className="ck-nochat-note" role="status">
-          {line ? `Installing… ${line}` : 'Installing…'}
+          {line ? t('inbox.installingLine', { line }) : t('inbox.installing')}
         </div>
       )}
       {phase === 'starting' && (
         <div className="ck-nochat-note" role="status">
-          Starting chat…
+          {t('inbox.startingChat')}
         </div>
       )}
       {failure && (

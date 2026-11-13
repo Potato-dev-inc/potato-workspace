@@ -1,5 +1,6 @@
 // Pure helpers behind the approval card: which answers are "don't ask again", and what a
 // high-risk prompt demotes. Kept free of React so the rules are testable on their own.
+import { t } from '../i18n';
 import type { PanePrompt, PromptChoice, PromptRisk, RiskLevel } from './cockpit-api';
 
 const BROAD = /\b(always|allow all|approve all|all commands|all tools|don'?t ask|do not ask|never ask|every time|for this session|remember|yes to all|forever|auto[- ]?(approve|accept))\b|\ball\b/i;
@@ -15,13 +16,20 @@ export function isDenyChoice(choice: PromptChoice): boolean {
   return DENY.test(choice.label.trim()) || DENY.test(choice.id.replace(/[_-]+/g, ' ').trim());
 }
 
+// Getters, so the words follow the language at the moment they are read (never frozen at load).
 export const LEVEL_WORD: Record<RiskLevel, string> = {
-  low: 'Low risk',
-  medium: 'Check first',
-  high: 'High risk',
+  get low() {
+    return t('risk.level.low');
+  },
+  get medium() {
+    return t('risk.level.medium');
+  },
+  get high() {
+    return t('risk.level.high');
+  },
 };
 
-export const CAUTION = 'Read this before you allow it. It may be hard to undo.';
+export const cautionText = (): string => t('risk.caution');
 
 /** What a button says, in Potato Workspace's words and not the agent's own menu text. */
 export interface ChoiceWords {
@@ -80,17 +88,17 @@ export function choiceWords(choices: ReadonlyArray<PromptChoice>): Map<string, C
   for (const choice of choices) {
     const label = cleanLabel(choice.label);
     if (isDenyChoice(choice)) {
-      out.set(choice.id, no ? { text: label } : { text: 'Deny' });
+      out.set(choice.id, no ? { text: label } : { text: t('risk.choice.deny') });
       no = true;
     } else if (isBroadChoice(choice)) {
       const forWhat = ASK_AGAIN_FOR.exec(label)?.[1];
       const prefix = forWhat ? STARTS_WITH.exec(forWhat)?.[1] : undefined;
-      if (prefix && unquote(prefix)) out.set(choice.id, { text: 'Always allow commands starting with', code: unquote(prefix) });
-      else if (forWhat && unquote(forWhat)) out.set(choice.id, { text: 'Always allow', code: unquote(forWhat) });
-      else if (SESSION.test(label)) out.set(choice.id, { text: 'Allow for this session' });
+      if (prefix && unquote(prefix)) out.set(choice.id, { text: t('risk.choice.alwaysAllowStarting'), code: unquote(prefix) });
+      else if (forWhat && unquote(forWhat)) out.set(choice.id, { text: t('risk.choice.alwaysAllow'), code: unquote(forWhat) });
+      else if (SESSION.test(label)) out.set(choice.id, { text: t('risk.choice.allowSession') });
       else out.set(choice.id, { text: label });
     } else {
-      out.set(choice.id, yes ? { text: label } : { text: 'Allow once' });
+      out.set(choice.id, yes ? { text: label } : { text: t('risk.choice.allowOnce') });
       yes = true;
     }
   }

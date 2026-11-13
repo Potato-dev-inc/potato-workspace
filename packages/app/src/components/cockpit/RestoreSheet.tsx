@@ -1,12 +1,13 @@
 // The "Restore ...?" confirmation: what a restore does, the safety copy, and (when another agent
 // works in the same folder) the shared-folder warning. Used by the History tab and by the palette's
 // "Undo last turn", so every way to restore asks the same question.
+import { useT } from '../../i18n';
 import { sharedFolderWarning } from './history-model';
 import { Sheet } from './Sheet';
 
 export function RestoreSheet({
   title,
-  confirmLabel = 'Restore files',
+  confirmLabel,
   sharedWith = [],
   busy,
   onCancel,
@@ -20,6 +21,7 @@ export function RestoreSheet({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useT();
   const warning = sharedFolderWarning(sharedWith);
   return (
     <Sheet labelledBy="ck-restore-t" onClose={busy ? undefined : onCancel}>
@@ -27,17 +29,16 @@ export function RestoreSheet({
           {title}
         </h2>
         <p className="ck-sub">
-          This restores your files. It doesn't change what the agent remembers. Files created since then are removed,
-          and files in .gitignore are left alone.
+          {t('risk.restore.body')}
         </p>
-        <p className="ck-sub">Your current files are saved first, so you can undo this from History.</p>
+        <p className="ck-sub">{t('risk.restore.safe')}</p>
         {warning && <p className="ck-sub">{warning}</p>}
         <div className="ck-sheet-actions">
           <button type="button" className="ck-btn ck-btn--secondary" autoFocus disabled={busy} onClick={onCancel}>
-            Cancel
+            {t('risk.restore.cancel')}
           </button>
           <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={onConfirm}>
-            {busy ? 'Restoring…' : confirmLabel}
+            {busy ? t('risk.restore.busy') : (confirmLabel ?? t('risk.restore.confirm'))}
           </button>
         </div>
     </Sheet>

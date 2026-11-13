@@ -3,6 +3,7 @@
 // no MCP tool. The call sends the folder path and nothing else. There is no task text, and nothing is stored,
 // logged or sent. The answer is one plain sentence and counts, never a verdict.
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
 import type { ScoreSample } from './agent-scores';
 
 /** Why the pick was made. `none_ready` = no agent can run. */
@@ -61,8 +62,8 @@ export type PickState = PickResult | 'loading';
 
 /** The muted hint on the row: "Looking...", the label, or "None ready". */
 export function pickHint(state: PickState): string {
-  if (state === 'loading') return 'Looking...';
-  return state.choice ? state.choice.label : 'None ready';
+  if (state === 'loading') return t('state.pick.looking');
+  return state.choice ? state.choice.label : t('state.pick.noneReady');
 }
 
 /** True only when the deciding numbers come from a few runs (5 to 9). The page shows the `early` chip. */
@@ -72,7 +73,7 @@ export function isEarly(result: PickResult): boolean {
 
 /** The primary button text, "Start Fake A". Plain "Start" when nothing is ready. */
 export function startLabel(result: PickResult): string {
-  return result.choice ? `Start ${result.choice.label}` : 'Start';
+  return result.choice ? t('state.pick.startNamed', { label: result.choice.label }) : t('state.pick.start');
 }
 
 /**
@@ -85,8 +86,10 @@ export function startable(result: PickResult, entries: { type: string; disabled?
   return entries.some((entry) => entry.type === choice.agentId && !entry.disabled);
 }
 
-/** The title of the `early` chip. */
+/** The title of the `early` chip (English; screens call `earlyTitle()` so it follows the language). */
 export const EARLY_TITLE = 'Based on only a few runs. It may change.';
+export const earlyTitle = (): string => t('state.pick.earlyTitle');
 
 /** The footer of "Why this one". */
 export const FOOTER = 'Worked out on your computer. Nothing you type is sent anywhere.';
+export const footerText = (): string => t('state.pick.footer');

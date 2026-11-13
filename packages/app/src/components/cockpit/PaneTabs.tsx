@@ -7,6 +7,7 @@ import { AgentLogo } from '../common/AgentLogo';
 import { folderKey } from './history-model';
 import { IconClose } from './Icons';
 import { paneHeading } from './titles';
+import { useT } from '../../i18n';
 import '../../styles/pane-tabs.css';
 
 export type TabDot = 'working' | 'needs' | 'error' | null;
@@ -19,16 +20,16 @@ export function tabDot(status: string, asking: boolean): TabDot {
   return null;
 }
 
-const DOT_LABEL: Record<Exclude<TabDot, null>, string> = { working: 'Working', needs: 'Needs you', error: 'Error' };
-
 export function PaneTabs({ c, paneId }: { c: CockpitApi; paneId: string }) {
+  const t = useT();
+  const dotLabel: Record<Exclude<TabDot, null>, string> = { working: t('pane.working'), needs: t('pane.needsYou'), error: t('pane.error') };
   const list = c.registry.paneList;
   const self = list.find((p) => p.info.id === paneId);
   const key = folderKey(self?.info.cwd);
   const tabs = key ? list.filter((p) => folderKey(p.info.cwd) === key) : [];
   if (tabs.length < 2) return null;
   return (
-    <div className="ck-ptabs" role="tablist" aria-label="Open agents in this project" data-testid="pane-tabs">
+    <div className="ck-ptabs" role="tablist" aria-label={t('pane.tabsLabel')} data-testid="pane-tabs">
       {tabs.map((p) => {
         const id = p.info.id;
         const active = id === paneId;
@@ -50,9 +51,9 @@ export function PaneTabs({ c, paneId }: { c: CockpitApi; paneId: string }) {
               <AgentLogo id={p.info.agent_type} name={agentName} size={14} decorative />
               <span className="ck-ptab-title">{title}</span>
             </button>
-            {dot && <span className={`ck-ptab-dot ck-ptab-dot--${dot}`} role="img" aria-label={DOT_LABEL[dot]} data-testid="pane-tab-dot" />}
+            {dot && <span className={`ck-ptab-dot ck-ptab-dot--${dot}`} role="img" aria-label={dotLabel[dot]} data-testid="pane-tab-dot" />}
             {canClose && (
-              <button type="button" className="ck-ptab-x" aria-label={`Close ${title}`} onClick={() => void c.closePane(id)}>
+              <button type="button" className="ck-ptab-x" aria-label={t('pane.closeTab', { title })} onClick={() => void c.closePane(id)}>
                 <IconClose />
               </button>
             )}

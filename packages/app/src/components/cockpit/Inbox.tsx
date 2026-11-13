@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useT } from '../../i18n';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { projectWithCopy } from './shell-labels';
 import { hasEverSpawned } from '../../lib/agent-health';
@@ -78,6 +79,7 @@ export function Inbox({
   /** "Start an agent" on the empty Inbox: the cockpit opens the New agent page. Absent: Set up agents is the main button. */
   onStartAgent?: () => void;
 }) {
+  const t = useT();
   // One list for every surface: the badge, the Doto counter and the sidebar group use its length.
   const needs = useNeedsYou(c);
   // The mission cards themselves are drawn by MissionsSection; their count is already in `needs`
@@ -298,61 +300,61 @@ export function Inbox({
       {firstRun ? (
         <EmptyState
           page
-          title="Welcome to Potato Workspace"
-          line="Your agents work here. First, see which ones are on this PC."
-          action={noPanes && setUp ? { label: 'Set up your agents', onClick: setUp } : null}
+          title={t('inbox.welcomeTitle')}
+          line={t('inbox.welcomeLine')}
+          action={noPanes && setUp ? { label: t('inbox.setUpYourAgents'), onClick: setUp } : null}
           alternatives={
-            onSetUp !== null ? [{ label: "I don't write code: use Simple mode", onClick: () => void patchSettings({ simple_mode: true }).catch(() => undefined) }] : []
+            onSetUp !== null ? [{ label: t('inbox.simpleMode'), onClick: () => void patchSettings({ simple_mode: true }).catch(() => undefined) }] : []
           }
         />
       ) : (
         <header className="ck-inbox-hero ck-inbox-bar">
           <h1 className="ck-title">
-            Inbox
+            {t('inbox.title')}
             {count > 0 && (
-              <span className="ck-inbox-count" aria-label={`${count} ${count === 1 ? 'thing needs' : 'things need'} you`}>
+              <span className="ck-inbox-count" aria-label={t('inbox.thingsNeedYou', { count })}>
                 {count}
               </span>
             )}
           </h1>
           {entries.length > 0 && (
             <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ib-keys-btn" aria-expanded={keys} onClick={() => setKeys((k) => !k)}>
-              Keys
+              {t('inbox.keys')}
             </button>
           )}
         </header>
       )}
       {!firstRun && keys && entries.length > 0 && (
-        <p className="ib-hint" aria-label="Keyboard shortcuts">
+        <p className="ib-hint" aria-label={t('inbox.keyboardShortcuts')}>
           <span>
-            <kbd className="ib-kbd">J</kbd>
-            <kbd className="ib-kbd">K</kbd> move
+            <kbd className="ck-chip-key ib-kbd">J</kbd>
+            <kbd className="ck-chip-key ib-kbd">K</kbd> {t('inbox.move')}
           </span>
           {quick && (
             <span>
-              <kbd className="ib-kbd">1</kbd>
-              <kbd className="ib-kbd">2</kbd> answer
+              <kbd className="ck-chip-key ib-kbd">1</kbd>
+              <kbd className="ck-chip-key ib-kbd">2</kbd> {t('inbox.answer')}
             </span>
           )}
           <span>
-            <kbd className="ib-kbd">O</kbd> open
+            <kbd className="ck-chip-key ib-kbd">O</kbd> {t('inbox.open')}
           </span>
         </p>
       )}
       <p className="ib-next" role="status" aria-live="polite">
-        {nextCard.next !== null && <>Next: {nextCard.next}</>}
+        {nextCard.next !== null && t('inbox.next', { name: nextCard.next })}
       </p>
       {!firstRun && count === 0 && (
         <EmptyState
-          title="Nothing needs you"
-          line="Agents that stop to ask will show up here."
-          action={noPanes && onStartAgent ? { label: 'Start an agent', onClick: onStartAgent } : noPanes && setUp ? { label: 'Set up agents', onClick: setUp } : null}
-          alternatives={noPanes && onStartAgent && setUp ? [{ label: 'Set up agents', onClick: setUp }] : []}
+          title={t('inbox.nothingNeedsYou')}
+          line={t('inbox.nothingNeedsYouLine')}
+          action={noPanes && onStartAgent ? { label: t('inbox.startAgent'), onClick: onStartAgent } : noPanes && setUp ? { label: t('inbox.setUpAgents'), onClick: setUp } : null}
+          alternatives={noPanes && onStartAgent && setUp ? [{ label: t('inbox.setUpAgents'), onClick: setUp }] : []}
         />
       )}
 
       {entries.length > 0 && (
-        <ul className="ib-list" aria-label="Needs you">
+        <ul className="ib-list" aria-label={t('inbox.needsYouList')}>
           {entries.map((e, i) => (
             <li key={e.key} data-ib-key={e.key}>
               {e.render(i === 0)}

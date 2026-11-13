@@ -155,7 +155,7 @@ pub fn show(app: &AppHandle, fresh: bool) {
             (monitor.position().x, monitor.position().y, monitor.size().width, monitor.size().height),
             (spec.width * scale) as u32,
         );
-        let _ = window.set_position(PhysicalPosition::new(x, y));
+        let _ = crate::window_layout::own_window::set_position(&window, PhysicalPosition::new(x, y));
     }
     SHOWN_AT.store(now_ms(), Ordering::Relaxed);
     let _ = window.show();

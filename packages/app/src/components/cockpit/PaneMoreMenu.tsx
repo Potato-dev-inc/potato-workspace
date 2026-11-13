@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useRef, useState } from 'react';
+import { useT } from '../../i18n';
+import { FloatingMenu } from './FloatingMenu';
 
 /** Space kept between the menu and the window edge (px). */
 export const MENU_EDGE_GAP = 8;
@@ -11,72 +13,44 @@ export function menuShiftX(left: number, right: number, viewport: number, gap = 
   return 0;
 }
 
-/** A "More" menu for the pane's less used views: a ⋯ button; it is lit while one of its views is open. */
+/** An action folded out of the pane header when there is no room for it there. */
+export interface MoreAction {
+  id: string;
+  label: string;
+  title?: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+/** A "More" menu for the pane's less used views and for the header actions that do not fit: a ⋯ button; it is lit while one of its views is open.
+ *  The menu is drawn in the top layer (FloatingMenu), so the pane or the right rail never clips it. */
 export function PaneMoreMenu<T extends string>({
   items,
+  actions = [],
   value,
   onPick,
-  label = 'More',
+  label: labelProp,
 }: {
   items: { id: T; label: string }[];
+  /** Header actions that moved in here because the header is narrow. */
+  actions?: MoreAction[];
   /** The selected view. When it is one of `items`, the button shows its name. */
   value: string;
   onPick: (id: T) => void;
   label?: string;
 }) {
+  const t = useT();
+  const label = labelProp ?? t('pane.more');
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const current = items.find((i) => i.id === value);
-
-  // The menu opens aligned to its button's start edge (CSS), then slides to stay inside the window (collision shift).
-  useLayoutEffect(() => {
-    const el = menuRef.current;
-    if (!open || !el) return;
-    el.style.left = '';
-    const r = el.getBoundingClientRect();
-    const dx = menuShiftX(r.left, r.right, window.innerWidth);
-    if (dx !== 0) el.style.left = `${Math.round(dx)}px`;
-  }, [open, items.length]);
-
-  // Opening puts focus on the first item. Escape closes and returns focus to the button; Tab or a click outside closes.
-  useEffect(() => {
-    if (!open) return;
-    wrapRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-    const close = (returnFocus: boolean) => {
-      setOpen(false);
-      if (returnFocus) buttonRef.current?.focus();
-    };
-    const onDown = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) close(false);
-    };
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        close(true);
-      } else if (e.key === 'Tab') close(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  // Up and Down move between the items, wrapping.
-  const onMenuKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-    const at = items.indexOf(document.activeElement as HTMLElement);
-    const next = e.key === 'ArrowDown' ? (at + 1) % items.length : (at - 1 + items.length) % items.length;
-    e.preventDefault();
-    items[next]?.focus();
+  const close = (returnFocus: boolean) => {
+    setOpen(false);
+    if (returnFocus) buttonRef.current?.focus();
   };
 
   return (
-    <div className="ck-menu-wrap" ref={wrapRef}>
+    <div className="ck-menu-wrap">
       <button
         ref={buttonRef}
         type="button"
@@ -90,7 +64,7 @@ export function PaneMoreMenu<T extends string>({
         <span aria-hidden="true">{'⋯'}</span>
       </button>
       {open && (
-        <div ref={menuRef} className="ck-menu ck-menu--start" role="menu" aria-label={label} onKeyDown={onMenuKey}>
+        <FloatingMenu anchorRef={buttonRef} onClose={close} label={label} align="end">
           {items.map((i) => (
             <button
               key={i.id}
@@ -98,15 +72,31 @@ export function PaneMoreMenu<T extends string>({
               role="menuitem"
               className="ck-menu-item"
               onClick={() => {
-                setOpen(false);
+                close(true);
                 onPick(i.id);
-                buttonRef.current?.focus();
               }}
             >
               {i.label}
             </button>
           ))}
-        </div>
+          {actions.length > 0 && <div className="ck-menu-sep" role="separator" />}
+          {actions.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              role="menuitem"
+              className="ck-menu-item"
+              title={a.title}
+              disabled={a.disabled}
+              onClick={() => {
+                close(false);
+                a.onSelect();
+              }}
+            >
+              {a.label}
+            </button>
+          ))}
+        </FloatingMenu>
       )}
     </div>
   );

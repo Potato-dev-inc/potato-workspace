@@ -23,6 +23,7 @@ import {
   type UsageRow,
 } from '../../lib/usage';
 import { AgentLogo } from '../common/AgentLogo';
+import { useT } from '../../i18n';
 import '../../styles/chips.css';
 import '../../styles/usage-strip.css';
 import '../../styles/cockpit-statusbar.css';
@@ -64,11 +65,12 @@ function Chip({
   onOpen: (e: { currentTarget: HTMLElement }) => void;
   suffix: string | null;
 }) {
+  const t = useT();
   const warn = warns(row);
   const g = groupParts(row, now);
   const full = tooltip(row, now);
   const sentence = groupSentence(row, now);
-  const tip = (sentence ? `${sentence}\n${full.split('\n').slice(1).join('\n')}` : full).replace('Click to open its usage page', 'Click for details');
+  const tip = (sentence ? `${sentence}\n${full.split('\n').slice(1).join('\n')}` : full).replace(t('state.usage.openPage'), t('status.clickForDetails'));
   return (
     <button
       type="button"
@@ -111,31 +113,32 @@ function Chip({
 }
 
 function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }) {
+  const t = useT();
   return (
     <li className={`ck-usage-pop-row is-${row.state}`} data-agent={row.agent_id}>
       <div className="ck-usage-pop-head">
         <AgentMark row={row} />
         <span className="ck-usage-pop-name">{rowName(row)}</span>
         {row.plan && <span className="ck-usage-pop-plan">{row.plan}</span>}
-        <span className="ck-usage-pop-state">{warns(row) ? `⚠ ${chipText(row, now)}` : row.state === 'unknown' ? 'Usage not shared by this agent' : ''}</span>
+        <span className="ck-usage-pop-state">{warns(row) ? `⚠ ${chipText(row, now)}` : row.state === 'unknown' ? t('status.notShared') : ''}</span>
       </div>
       {row.windows.map((w) => {
         const pct = Math.max(0, Math.min(100, Math.round(w.used_percent)));
-        const reset = w.reset_since ? 'Started again' : w.resets_at_ms ? `Resets in ${formatLeftLong(w.resets_at_ms - now)}` : '';
+        const reset = w.reset_since ? t('status.startedAgain') : w.resets_at_ms ? t('status.resetsIn', { time: formatLeftLong(w.resets_at_ms - now) }) : '';
         return (
           <div key={w.name} className="ck-usage-win">
             <span className="ck-usage-win-name">{w.name}</span>
             <span
               className={`ck-usage-bar${pct >= 80 ? ' is-high' : ''}`}
               role="meter"
-              aria-label={`${w.name} used`}
+              aria-label={t('status.windowUsed', { name: w.name })}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={pct}
             >
               <span style={{ width: `${pct}%` }} />
             </span>
-            <span className="ck-usage-win-pct">{pct}% used</span>
+            <span className="ck-usage-win-pct">{t('status.percentUsed', { pct })}</span>
             <span className="ck-usage-win-reset">{reset}</span>
           </div>
         );
@@ -143,22 +146,22 @@ function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }
       {row.totals && (
         <div className="ck-usage-totals" data-testid="usage-totals">
           <div className="ck-usage-win">
-            <span className="ck-usage-win-name">Today</span>
+            <span className="ck-usage-win-name">{t('status.today')}</span>
             <span className="ck-usage-win-pct">
-              {formatCost(row.totals.today.cost)} · {formatTokens(row.totals.today.tokens)} tokens
+              {t('status.costTokens', { cost: formatCost(row.totals.today.cost), tokens: formatTokens(row.totals.today.tokens) })}
             </span>
           </div>
           <div className="ck-usage-win">
-            <span className="ck-usage-win-name">Last 7 days</span>
+            <span className="ck-usage-win-name">{t('status.last7Days')}</span>
             <span className="ck-usage-win-pct">
-              {formatCost(row.totals.week.cost)} · {formatTokens(row.totals.week.tokens)} tokens
+              {t('status.costTokens', { cost: formatCost(row.totals.week.cost), tokens: formatTokens(row.totals.week.tokens) })}
             </span>
           </div>
           {row.totals.models.slice(0, 5).map((m) => (
             <div key={m.model} className="ck-usage-win ck-usage-model">
               <span className="ck-usage-win-name">{m.model}</span>
               <span className="ck-usage-win-pct">
-                {formatCost(m.cost)} · {formatTokens(m.tokens)} tokens
+                {t('status.costTokens', { cost: formatCost(m.cost), tokens: formatTokens(m.tokens) })}
               </span>
             </div>
           ))}
@@ -166,10 +169,10 @@ function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }
       )}
       {row.reason && <p className="ck-usage-pop-reason">{row.reason}</p>}
       <div className="ck-usage-pop-foot">
-        <span>{row.observed_at_ms ? `Read ${formatLeftLong(now - row.observed_at_ms)} ago` : ''}</span>
+        <span>{row.observed_at_ms ? t('status.readAgo', { time: formatLeftLong(now - row.observed_at_ms) }) : ''}</span>
         {row.page && (
           <button type="button" className="ck-usage-link" onClick={() => void api.openPage(row.page as string).catch(() => {})}>
-            Usage page
+            {t('status.usagePage')}
           </button>
         )}
       </div>
@@ -208,6 +211,7 @@ const PLUS_WIDTH = 34;
  * leaves room for it only while it is shown (cockpit-statusbar.css, `:has`).
  */
 export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: UsageApi; working?: number; needsYou?: number }) {
+  const t = useT();
   const { on, loginReads } = useUsageBarOn();
   const { snap, busy, refresh } = useUsage(api, on === true, loginReads);
   const [now, setNow] = useState(() => Date.now());
@@ -276,8 +280,8 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: 
     <button
       type="button"
       className={`ck-usage-refresh${busy ? ' is-busy' : ''}`}
-      aria-label="Refresh usage"
-      title="Refresh usage"
+      aria-label={t('status.refreshUsage')}
+      title={t('status.refreshUsage')}
       onClick={() => void refresh()}
       disabled={busy}
     >
@@ -291,8 +295,8 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: 
   for (const r of rows) perAgent.set(r.agent_id, (perAgent.get(r.agent_id) ?? 0) + 1);
   const suffixOf = (r: UsageRow) => signInSuffix(r, (perAgent.get(r.agent_id) ?? 0) > 1);
   return (
-    <div className="ck-statusbar" ref={bar} role="group" aria-label="Plan usage">
-      <span className="ck-usage-cap">Usage</span>
+    <div className="ck-statusbar" ref={bar} role="group" aria-label={t('status.planUsage')}>
+      <span className="ck-usage-cap">{t('status.usage')}</span>
       <div className="ck-sb-chips" ref={row}>
         {rows.slice(0, count).map((r) => (
           <Chip key={key(r)} row={r} now={now} onOpen={toggle} suffix={suffixOf(r)} />
@@ -301,7 +305,7 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: 
           <button
             type="button"
             className="ck-sb-more"
-            aria-label={`${hidden} more: open usage`}
+            aria-label={t('status.moreUsage', { n: hidden })}
             title={rows.slice(count).map(rowName).join(', ')}
             aria-haspopup="dialog"
             onClick={toggle}
@@ -314,10 +318,10 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: 
         {working > 0 && (
           <span className="ck-sb-count is-working">
             <span className="ck-sb-live" aria-hidden="true" />
-            {working} working
+            {t('status.working', { n: working })}
           </span>
         )}
-        {needsYou > 0 && <span className="ck-sb-count is-needs">{needsYou} {needsYou === 1 ? 'needs' : 'need'} you</span>}
+        {needsYou > 0 && <span className="ck-sb-count is-needs">{t('status.needsYou', { count: needsYou })}</span>}
       </div>
       {/* The same chips, unseen, so their natural widths can be measured. */}
       <div className="ck-sb-measure" ref={measureRow} aria-hidden="true">
@@ -332,11 +336,11 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: 
             ref={pop}
             className="ck-usage-pop"
             role="dialog"
-            aria-label="Usage"
+            aria-label={t('status.usage')}
             style={place ? { left: place.left, bottom: place.bottom, width: place.width } : { visibility: 'hidden' }}
           >
             <div className="ck-usage-pop-top">
-              <span className="ck-usage-pop-title">Usage</span>
+              <span className="ck-usage-pop-title">{t('status.usage')}</span>
               {refreshBtn}
             </div>
             <ul className="ck-usage-pop-list">

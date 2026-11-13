@@ -11,6 +11,8 @@ import { requestGoLive } from '../../lib/live-room';
 import { IconMore } from '../cockpit/Icons';
 import { SegTabs } from '../cockpit/SegTabs';
 import { Sheet } from '../cockpit/Sheet';
+import { FloatingMenu } from '../cockpit/FloatingMenu';
+import { useT } from '../../i18n';
 
 /** What the menu needs from the desktop shell (a fake in tests). */
 export interface ChatExportApi {
@@ -53,36 +55,30 @@ interface Made {
   token: string;
 }
 
-export function ChatExportMenu({ paneId, api = tauriChatExportApi }: { paneId: string; api?: ChatExportApi }) {
+export function ChatExportMenu({ paneId, api = tauriChatExportApi, variant = 'icon' }: { paneId: string; api?: ChatExportApi; /** `text`: a quiet "Share" button (the pane header), so it is not a second ⋯. */ variant?: 'icon' | 'text' }) {
+  const t = useT();
   const [menuOpen, setMenuOpen] = useState(false);
   const [preview, setPreview] = useState<ExportFormat | null>(null);
-  const wrap = useRef<HTMLDivElement>(null);
-
-  // A press outside the menu, or Escape, closes it.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onPress = (event: MouseEvent) => {
-      if (!wrap.current?.contains(event.target as Node)) setMenuOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onPress);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onPress);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
+  const btn = useRef<HTMLButtonElement>(null);
+  const closeMenu = (back: boolean) => {
+    setMenuOpen(false);
+    if (back) btn.current?.focus();
+  };
 
   return (
     <>
-      <div className="ck-menu-wrap" ref={wrap}>
-        <button type="button" className="ck-icon-btn" aria-label="Chat menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
-          <IconMore />
-        </button>
+      <div className="ck-menu-wrap">
+        {variant === 'text' ? (
+          <button ref={btn} type="button" className="ck-chat-share" aria-label={t('pane.shareLabel')} title={t('pane.shareTip')} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+            {t('pane.share')}
+          </button>
+        ) : (
+          <button ref={btn} type="button" className="ck-icon-btn" aria-label="Chat menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+            <IconMore />
+          </button>
+        )}
         {menuOpen && (
-          <div className="ck-menu" role="menu">
+          <FloatingMenu anchorRef={btn} onClose={closeMenu} label={t('pane.shareLabel')}>
             {MENU_ITEMS.map((item) => (
               <button
                 key={item.format}
@@ -108,7 +104,7 @@ export function ChatExportMenu({ paneId, api = tauriChatExportApi }: { paneId: s
             >
               Go live…
             </button>
-          </div>
+          </FloatingMenu>
         )}
       </div>
       {preview !== null && <SavePagePreview paneId={paneId} api={api} initial={preview} onClose={() => setPreview(null)} />}

@@ -175,7 +175,7 @@ describe('Bring my chats: the entry points', () => {
     await click(host.querySelector('[data-testid="bring-chats-link"]'));
     expect(panelTitle()).toBe('Bring my chats');
     expect(document.body.textContent).toContain('Alpha · 23 chats');
-    expect(document.body.textContent).toContain('No chats found on this PC');
+    expect(document.body.textContent).toContain('No chats found');
   });
 
   it('Settings > Agents has a "Bring my chats" row that opens the same panel', async () => {
@@ -220,7 +220,7 @@ describe('Bring my chats: agent, 10 newest, range, bring, bring again', () => {
 
     // 1. The agents, with a count each; the one with none is greyed.
     expect(panelTitle()).toBe('Bring my chats');
-    const beta = [...document.querySelectorAll<HTMLButtonElement>('.bc-agent-pick')].find((b) => b.textContent?.includes('Beta') && b.textContent.includes('No chats found on this PC'));
+    const beta = [...document.querySelectorAll<HTMLButtonElement>('.bc-agent-pick')].find((b) => b.textContent?.includes('Beta') && b.textContent.includes('No chats found'));
     expect(beta!.disabled).toBe(true);
 
     // 2. Pick an agent: its 10 newest chats, each with folder, date and message count.

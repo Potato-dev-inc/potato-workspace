@@ -77,7 +77,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Connect your agents', rows: ['agent-pack'] },
   ],
   look: [
-    { group: 'Appearance', rows: ['theme', 'mode-switch-animation', 'individual-window-layout', 'usage-bar', 'usage-login-reads'] },
+    { group: 'Appearance', rows: ['theme', 'language', 'mode-switch-animation', 'individual-window-layout', 'usage-bar', 'usage-login-reads'] },
     { group: 'You', rows: ['your-name'] },
     { group: 'Startup', rows: ['start-at-sign-in'] },
     { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes'] },

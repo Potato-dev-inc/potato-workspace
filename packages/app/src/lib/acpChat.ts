@@ -8,6 +8,7 @@ import type { Question } from './questions';
 import type { AcpInitCheck } from './agentWizardAcp';
 import { blockOf } from './acpAddon';
 import { RUN_WAYS } from './glossary';
+import { t } from '../i18n';
 import { sendPaneMessage } from './paneOutbox';
 
 /** `PaneInfo.lane` of a chat session. */
@@ -16,6 +17,8 @@ export const ACP_LANE = 'acp';
 export const ACP_PERMISSION_KIND = 'acp_permission';
 /** The badge on the pane (the name of the way to run, never an agent's product name). */
 export const ACP_BADGE = RUN_WAYS.chat;
+/** The same badge in the current language (screens call this at render). */
+export const acpBadge = (): string => t('state.chat.badge');
 
 /** One permission question of the agent, as the session reports it. */
 export interface AcpPermission {
@@ -158,8 +161,10 @@ export interface TerminalChatAgent {
 export const TERMINAL_CHAT_LANE = 'terminal_chat';
 /** The name of this way to run, in the switch and the "How to run" popup. Never the agent's product name, never "ACP". */
 export const TERMINAL_CHAT_WORD = 'Chat (terminal)';
+export const terminalChatWord = (): string => t('state.chat.terminal');
 /** The grey badge on a Chat (terminal) pane's header. */
 export const TERMINAL_CHAT_BADGE = 'Chat (terminal)';
+export const terminalChatBadge = (): string => t('state.chat.terminal');
 
 export interface AcpLaneView {
   labs_enabled: boolean;

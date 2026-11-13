@@ -3,6 +3,7 @@
 // (approval-card.test.ts) and drawn by components/mobile/ApprovalCard.tsx.
 import type { AttentionChoice, AttentionItem } from './attention';
 import { LEVEL_WORD, choiceWords, keepsOwnWords, ownWords, splitRuns } from './approval-risk';
+import { t } from '../i18n';
 import { COPY, agentName, formatAge, formatClock, sendingPhase, sendingText } from './attention-copy';
 
 /** The dot glyph: `(+)` a person is needed, `(~)` happening, `(v)` done, `(:)` gone, `(x)` failed. */
@@ -154,12 +155,12 @@ export function cardView(item: AttentionItem, { canAnswer, local, now }: Options
 
   // The list says it is over: that wins over whatever the request is doing.
   if (item.state === 'resolved') {
-    const label = res?.choice_label ?? (local.phase === 'sending' || local.phase === 'failed' ? local.label : undefined) ?? 'Answered';
+    const label = res?.choice_label ?? (local.phase === 'sending' || local.phase === 'failed' ? local.label : undefined) ?? t('inboxCards.attention.answeredWord');
     if (res?.state === 'answered') {
       const fromHere = local.phase === 'sending' || local.phase === 'answered' || local.phase === 'failed';
       if (fromHere) return settledView(view, 'answered', 'exited', COPY.answered(label, formatClock(res.at_ms)));
       if (res.by === 'desktop') return settledView(view, 'already', 'exited', COPY.alreadyPc(label));
-      return settledView(view, 'already', 'exited', COPY.alreadyPhone(res.device_name?.trim() || 'another phone', label));
+      return settledView(view, 'already', 'exited', COPY.alreadyPhone(res.device_name?.trim() || t('inboxCards.attention.anotherPhone'), label));
     }
     if (res?.state === 'expired') return settledView(view, 'expired', 'idle', COPY.expired(agent, formatClock(res.at_ms)), true);
     return settledView(view, 'gone', 'idle', COPY.gone(agent), true);
@@ -169,8 +170,8 @@ export function cardView(item: AttentionItem, { canAnswer, local, now }: Options
     case 'answered':
       return settledView(view, 'answered', 'exited', COPY.answered(local.label, formatClock(local.at)));
     case 'already': {
-      const label = local.label ?? 'Answered';
-      const text = local.by === 'pc' ? COPY.alreadyPc(label) : local.by === 'you' ? COPY.alreadyYou(label) : COPY.alreadyPhone(local.deviceName?.trim() || 'another phone', label);
+      const label = local.label ?? t('inboxCards.attention.answeredWord');
+      const text = local.by === 'pc' ? COPY.alreadyPc(label) : local.by === 'you' ? COPY.alreadyYou(label) : COPY.alreadyPhone(local.deviceName?.trim() || t('inboxCards.attention.anotherPhone'), label);
       return settledView(view, 'already', 'exited', text);
     }
     case 'changed':

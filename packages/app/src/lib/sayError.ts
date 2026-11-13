@@ -2,6 +2,9 @@
 // all) into a sentence a person can read. The raw text goes in `details` for a Details area or a log, never
 // in `text` when it looks like a programmer's message ("Cannot read properties of null", "[object Object]").
 
+import { t, type MessageKey } from '../i18n';
+
+// The English sentinel: some screens compare with it by identity. The sentence a person sees is t('common.err.generic').
 export const GENERIC_ERROR = 'Something went wrong. Try again.';
 
 export interface SaidError {
@@ -12,12 +15,12 @@ export interface SaidError {
 }
 
 /** Backend codes that have a plain sentence. A code not listed here shows the backend's own sentence. */
-const CODE_SENTENCES: Readonly<Record<string, string>> = {
-  WORKSPACE_TRUST_DECLINED: 'You chose not to trust this folder, so nothing was sent.',
-  AGENT_EXITED: 'The agent closed unexpectedly. Your files are as it left them.',
-  AGENT_NOT_INSTALLED: 'That agent is not installed on this PC yet.',
-  PANE_NOT_READY: 'The agent was not ready, so nothing was typed.',
-  PROMPT_NOT_SUBMITTED: 'The task was typed, but the agent did not start on it.',
+const CODE_KEYS: Readonly<Record<string, MessageKey>> = {
+  WORKSPACE_TRUST_DECLINED: 'common.err.trustDeclined',
+  AGENT_EXITED: 'common.err.agentExited',
+  AGENT_NOT_INSTALLED: 'common.err.notInstalled',
+  PANE_NOT_READY: 'common.err.notReady',
+  PROMPT_NOT_SUBMITTED: 'common.err.promptNotSubmitted',
 };
 
 /** Things only a programmer should read: JS engine messages, stack lines, serialised objects. */
@@ -62,16 +65,16 @@ function rawOf(e: unknown): { raw: string; code: string | null } {
  * The sentence for a caught value. `where` names the part of the app ("saving the key"); it only goes into
  * `details`. `fallback` replaces the generic sentence when the screen knows better ("Could not send the message.").
  */
-export function sayError(e: unknown, where = '', fallback: string = GENERIC_ERROR): SaidError {
+export function sayError(e: unknown, where = '', fallback?: string): SaidError {
   const { raw, code: ownCode } = rawOf(e);
   const prefixed = CODE_PREFIX.exec(raw.trim());
   const code = ownCode ?? prefixed?.[1] ?? null;
   const cleaned = raw.trim().replace(CODE_PREFIX, '').replace(TYPE_PREFIX, '').trim();
   const details = [where && `Where: ${where}`, code && `Code: ${code}`, raw.trim() && `Message: ${raw.trim()}`].filter(Boolean).join('\n');
 
-  if (code && CODE_SENTENCES[code]) return { text: CODE_SENTENCES[code], details };
+  if (code && CODE_KEYS[code]) return { text: t(CODE_KEYS[code]), details };
   if (!cleaned || cleaned.length > MAX_LEN || cleaned.includes('\n') || TECHNICAL.some((re) => re.test(cleaned))) {
-    return { text: fallback, details };
+    return { text: fallback ?? t('common.err.generic'), details };
   }
   return { text: cleaned, details };
 }

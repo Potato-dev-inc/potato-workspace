@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ImportApi, ImportFound, ImportState } from '../../lib/chatImport';
-import { ImportChatsCard, IMPORT_CARD_BODY, IMPORT_CARD_TITLE } from './ImportChatsCard';
+import { ImportChatsCard } from './ImportChatsCard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -108,8 +108,8 @@ describe('first-start card: Bring my chats', () => {
     await mount(api, true);
     const el = card()!;
     expect(el.matches('[data-ib-card][data-kind="note"][data-info]')).toBe(true);
-    expect(el.querySelector('.ib-title')?.textContent).toBe(IMPORT_CARD_TITLE);
-    expect(el.querySelector('.ib-reason')?.textContent).toBe(IMPORT_CARD_BODY);
+    expect(el.querySelector('.ib-title')?.textContent).toBe('Bring your chats here');
+    expect(el.querySelector('.ib-reason')?.textContent).toBe('Bring the chats your other agents kept on this PC. Nothing leaves this computer.');
     expect(Array.from(el.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Bring my chats', 'Dismiss']);
     expect(api.state).toHaveBeenCalled();
     expect(api.look).not.toHaveBeenCalled();

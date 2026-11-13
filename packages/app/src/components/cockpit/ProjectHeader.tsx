@@ -4,22 +4,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { AgentLogo } from '../common/AgentLogo';
 import { IconMore, IconPlus } from './Icons';
+import { useT } from '../../i18n';
 
 export type ProjectSignal = 'needs' | 'error' | 'working' | null;
 
 /** The second line of an open card: the branch the project folder is on. */
 export function ProjectMeta({ branch }: { branch: string }) {
+  const t = useT();
   return (
     <div className="ck-proj-meta">
       <span className="ck-proj-branch" title={branch}>
         {branch}
       </span>
-      <span className="ck-pill-quiet">primary</span>
+      <span className="ck-pill-quiet">{t('sidebar.primary')}</span>
     </div>
   );
 }
-
-const SIGNAL_TEXT: Record<Exclude<ProjectSignal, null>, string> = { needs: 'Needs you', error: 'Error', working: 'Working' };
 
 export interface ProjectHeaderProps {
   name: string;
@@ -46,6 +46,7 @@ export interface ProjectHeaderProps {
 }
 
 export function ProjectHeader({ name, count, folded, needs, changes, agents = [], signal = null, added, hasFolder, onToggle, onNewAgent, onAdd, onRemove, onRename }: ProjectHeaderProps) {
+  const t = useT();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -89,7 +90,7 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
       {renaming ? (
         <input
           className="ck-proj-rename"
-          aria-label={`Name of ${name}`}
+          aria-label={t('sidebar.nameOf', { name })}
           value={draft}
           autoFocus
           onChange={(e) => setDraft(e.target.value)}
@@ -100,11 +101,11 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
           }}
         />
       ) : (
-        <button type="button" className="ck-proj-toggle" aria-expanded={!folded} onClick={onToggle} title={folded ? `Show ${name}` : `Hide ${name}`}>
+        <button type="button" className="ck-proj-toggle" aria-expanded={!folded} onClick={onToggle} title={folded ? t('sidebar.showProject', { name }) : t('sidebar.hideProject', { name })}>
           <span className={`ck-proj-caret${folded ? '' : ' is-open'}`} aria-hidden="true" />
           <span className="ck-proj-name">{name}</span>
           {changes && (
-            <span className="ck-proj-changes" title={`${changes.additions} lines added, ${changes.deletions} removed`}>
+            <span className="ck-proj-changes" title={t('sidebar.linesChanged', { added: changes.additions, removed: changes.deletions })}>
               <span className="ck-add">+{changes.additions}</span>
               <span className="ck-del">−{changes.deletions}</span>
             </span>
@@ -119,7 +120,7 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
                   {agents.length > 4 && <span className="ck-proj-more">+{agents.length - 4}</span>}
                 </span>
               )}
-              {signal && <span className={`ck-proj-signal is-${signal}`}>{SIGNAL_TEXT[signal]}</span>}
+              {signal && <span className={`ck-proj-signal is-${signal}`}>{({ needs: t('sidebar.needsYou'), error: t('sidebar.error'), working: t('sidebar.working') })[signal]}</span>}
             </span>
           )}
           {folded && count > 0 && <span className={`ck-proj-count${needs ? ' is-needs' : ''}`}>{count}</span>}
@@ -127,15 +128,15 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
       )}
       {hasFolder && !renaming && (
         <>
-          <button type="button" className="ck-proj-act" aria-label={`New agent in ${name}`} title={`New agent in ${name}`} onClick={onNewAgent}>
+          <button type="button" className="ck-proj-act" aria-label={t('sidebar.newAgentIn', { name })} title={t('sidebar.newAgentIn', { name })} onClick={onNewAgent}>
             <IconPlus />
           </button>
           <button
             type="button"
             ref={moreRef}
             className="ck-proj-act"
-            aria-label={`More for ${name}`}
-            title="More"
+            aria-label={t('sidebar.moreFor', { name })}
+            title={t('sidebar.more')}
             aria-haspopup="menu"
             aria-expanded={menu !== null}
             onClick={(e) => {
@@ -166,7 +167,7 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
                   setRenaming(true);
                 }}
               >
-                Rename
+                {t('sidebar.rename')}
               </button>
               <button
                 type="button"
@@ -177,7 +178,7 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
                   onRemove();
                 }}
               >
-                Remove from sidebar
+                {t('sidebar.removeFromSidebar')}
               </button>
             </>
           ) : (
@@ -190,7 +191,7 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
                 onAdd();
               }}
             >
-              Add to sidebar
+              {t('sidebar.addToSidebar')}
             </button>
           )}
         </div>

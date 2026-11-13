@@ -12,19 +12,10 @@
   justify-content: space-between;
   gap: 8px;
 }
+/* A Label chip (chips.css) that is also a button: only its width cap and focus ring live here. */
 .cockpit .ck-chip {
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
   max-width: 150px;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid var(--sep);
-  font-size: 11px;
-  color: var(--label-2);
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease);
 }
 .cockpit .ck-chip:hover {
   background: var(--fill-active);

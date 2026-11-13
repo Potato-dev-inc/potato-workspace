@@ -60,4 +60,6 @@ pub struct AgentCaps {
     pub images: Cap,
     pub usage: Cap,
     pub read_only: Cap,
+    /// The chat was turned off because the program changed and stopped answering; "Check it again" can clear it.
+    pub needs_repair: bool,
 }

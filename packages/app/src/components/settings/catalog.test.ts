@@ -11,7 +11,7 @@ const PINNED_IDS = [
   'bridge-endpoint', 'bring-chats-agents', 'bring-old-chats', 'budget-minutes', 'budget-turns', 'chat-addons', 'chat-search-index',
   'checkpoints', 'checkpoints-keep', 'close-helpers-with-agent', 'collision', 'confirm-close', 'definitions', 'diagnostic-file',
   'discord-alerts', 'early-versions', 'handoff-mode', 'helper-agents', 'helper-default-models', 'helper-tools', 'hidden-agents',
-  'individual-window-layout', 'keep-awake', 'keep-going', 'keep-helpers-open', 'key-anthropic', 'key-openai', 'key-openrouter',
+  'individual-window-layout', 'keep-awake', 'language', 'keep-going', 'keep-helpers-open', 'key-anthropic', 'key-openai', 'key-openrouter',
   'lend-labs', 'lend-page', 'librarian-indexer', 'linux', 'live-room', 'live-updates', 'loop-guard', 'mcp-install', 'mcp-status',
   'mcp-uninstall', 'missions', 'mobile-input-delay', 'mobile-input-visible', 'mobile-keyboard-resizes', 'mode-switch-animation',
   'model-bridge', 'model-bridge-labs', 'most-helpers-at-once', 'night-shift', 'opencode-automation', 'opencode-keys', 'opencode-model',

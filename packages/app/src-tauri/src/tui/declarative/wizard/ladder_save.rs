@@ -73,7 +73,22 @@ fn taken(agents_dir: &Path, id: &str) -> bool {
 
 /// Write `<id>.toml` (terminal) and `<id>.wizard.json` (who wrote it). Takes its own files back on a failure.
 pub fn write_terminal(env: &WizardEnv, id: &str, label: &str, program: &str) -> Result<Written, String> {
-    let text = terminal_text(id, label, program);
+    write_text(env, id, program, terminal_text(id, label, program))
+}
+
+/// A terminal definition plus the `[headless]` table the probe proved. A table that does not validate is dropped and
+/// the plain terminal definition is written instead.
+pub fn write_headless(env: &WizardEnv, id: &str, label: &str, program: &str, headless_toml: &str) -> Result<Written, String> {
+    // A generic definition is visible-pane only; one with a `[headless]` table is a `cli` one.
+    let base = terminal_text(id, label, program).replace("kind = \"generic\"", "kind = \"cli\"");
+    let text = format!("{base}\n{headless_toml}");
+    if check_text(&text, &env.code_id_refs()).is_err() {
+        return write_terminal(env, id, label, program);
+    }
+    write_text(env, id, program, text)
+}
+
+fn write_text(env: &WizardEnv, id: &str, program: &str, text: String) -> Result<Written, String> {
     check_text(&text, &env.code_id_refs())?;
     if taken(&env.agents_dir, id) {
         return Err(format!("the id `{id}` is already used in the agents folder"));

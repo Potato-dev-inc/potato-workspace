@@ -2,8 +2,8 @@
 // its corner says what: green and breathing while it works, orange when it needs you, red when it is broken, and
 // nothing when idle (the icon dims instead). The state is also spoken (role img) and the row's right side repeats it in words.
 import { AgentLogo } from '../common/AgentLogo';
+import { useT } from '../../i18n';
 
-const LABEL: Record<string, string> = { running: 'Working', waiting_input: 'Needs you', idle: 'Idle', error: 'Error' };
 
 export function RowMark({
   status,
@@ -17,8 +17,10 @@ export function RowMark({
   agentId?: string;
   agentName?: string;
 }) {
+  const t = useT();
+  const LABEL: Record<string, string> = { running: t('sidebar.working'), waiting_input: t('sidebar.needsYou'), idle: t('sidebar.idle'), error: t('sidebar.error') };
   const kind = asking ? 'needs' : status === 'running' ? 'working' : status === 'waiting_input' ? 'needs' : status === 'idle' ? 'idle' : status === 'error' ? 'error' : 'ended';
-  const label = asking ? 'Needs you' : (LABEL[status] ?? 'Ended');
+  const label = asking ? t('sidebar.needsYou') : (LABEL[status] ?? t('sidebar.ended'));
   if (!agentId) {
     return (
       <span className={`ck-mark ck-mark--${kind}`} role="img" aria-label={label}>

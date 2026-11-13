@@ -2,6 +2,7 @@
 // invoke/listen wrapper, and the plain words for every step, chip and error. Nothing here names an agent.
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { t } from '../i18n';
 
 export type Tri = 'yes' | 'no' | 'unknown';
 export type CapSource = 'definition' | 'handshake' | 'check' | 'seen' | 'unknown';
@@ -49,10 +50,12 @@ export interface AddAgentRun {
   input: string;
   agent_id: string | null;
   label: string | null;
-  state: 'checking' | 'needs_install' | 'done' | 'failed' | 'cancelled';
+  state: 'checking' | 'needs_install' | 'needs_consent' | 'done' | 'failed' | 'cancelled';
   started_ms: number;
   steps: AddAgentStep[];
   install: { kind: 'program' | 'chat_addon'; label: string; what_will_run: string[]; source_host: string; can_install: boolean } | null;
+  /** Set while the state is `needs_consent`: the check that sends a few tiny messages, before it runs. */
+  consent?: { label: string; runs: number; what_will_run: string[] } | null;
   result: { agent_id: string; label: string; mode: 'chat' | 'terminal'; caps: AgentCaps; sign_in_needed: boolean; already_added: boolean } | null;
   error: { code: string; message: string; action: AddAgentAction; step: StepId | null } | null;
 }
@@ -73,6 +76,10 @@ export interface AddAgentApi {
   status(runId: string): Promise<AddAgentRun>;
   cancel(runId: string): Promise<AddAgentRun>;
   approveInstall(runId: string): Promise<AddAgentRun>;
+  /** The yes to the check that sends tiny messages (`needs_consent`). Optional: a mock without it just cannot say yes. */
+  approveCheck?(runId: string): Promise<AddAgentRun>;
+  /** The no: the program is added for the terminal and nothing is sent to it. */
+  skipCheck?(runId: string): Promise<AddAgentRun>;
   /** Every step change arrives as the whole run. Resolves to the stop function. */
   onProgress(cb: (run: AddAgentRun) => void): Promise<() => void>;
 }
@@ -86,6 +93,8 @@ export const addAgentApi: AddAgentApi = {
   status: (runId) => invoke<AddAgentRun>('add_agent_status', { runId }),
   cancel: (runId) => invoke<AddAgentRun>('add_agent_cancel', { runId }),
   approveInstall: (runId) => invoke<AddAgentRun>('add_agent_approve_install', { runId }),
+  approveCheck: (runId) => invoke<AddAgentRun>('add_agent_approve_check', { runId }),
+  skipCheck: (runId) => invoke<AddAgentRun>('add_agent_skip_check', { runId }),
   onProgress: async (cb) => {
     try {
       const stop: UnlistenFn = await listen<AddAgentRun>('add-agent://progress', (e) => cb(e.payload));
@@ -134,16 +143,16 @@ export type ChipKey = 'chat' | 'resume' | 'shows_steps' | 'edits_files' | 'asks_
 
 /** The chips, in the order the person sees them. */
 export const CHIPS: ReadonlyArray<{ key: ChipKey; label: string }> = [
-  { key: 'chat', label: 'Can chat' },
-  { key: 'resume', label: 'Remembers the chat' },
-  { key: 'shows_steps', label: 'Shows its steps' },
-  { key: 'edits_files', label: 'Can change files' },
-  { key: 'asks_before_edit', label: 'Asks before changing files' },
-  { key: 'asks_before_shell', label: 'Asks before running commands' },
-  { key: 'model_pick', label: 'Can pick a model' },
-  { key: 'stop', label: 'Can stop' },
-  { key: 'images', label: 'Can read pictures' },
-  { key: 'usage', label: 'Shows usage' },
+  { key: 'chat', get label() { return t('addAgent.chip.chat'); } },
+  { key: 'resume', get label() { return t('addAgent.chip.resume'); } },
+  { key: 'shows_steps', get label() { return t('addAgent.chip.shows_steps'); } },
+  { key: 'edits_files', get label() { return t('addAgent.chip.edits_files'); } },
+  { key: 'asks_before_edit', get label() { return t('addAgent.chip.asks_before_edit'); } },
+  { key: 'asks_before_shell', get label() { return t('addAgent.chip.asks_before_shell'); } },
+  { key: 'model_pick', get label() { return t('addAgent.chip.model_pick'); } },
+  { key: 'stop', get label() { return t('addAgent.chip.stop'); } },
+  { key: 'images', get label() { return t('addAgent.chip.images'); } },
+  { key: 'usage', get label() { return t('addAgent.chip.usage'); } },
 ];
 
 /** The mark is a pure function of the value. It is never upgraded. Unknown has no mark: its dashed outline and the caption say it. */
@@ -152,21 +161,21 @@ export function chipMark(value: Tri): string {
 }
 
 /** The caption above the chips that are not known yet. */
-export const UNKNOWN_CAPTION = 'Fills in after your first chat:';
+export const UNKNOWN_CAPTION = 'Fills in after your first chat:'; // i18n-ok: not used by this box (the agents page has its own)
 
 /** Where a chip's answer came from, for hover and focus. */
 export function sourceText(source: CapSource, name: string): string {
   switch (source) {
     case 'definition':
-      return "From Potato's tested setup";
+      return t('addAgent.source.definition');
     case 'handshake':
-      return `${name} said so`;
+      return t('addAgent.source.handshake', { name });
     case 'check':
-      return 'Checked on this computer';
+      return t('addAgent.source.check');
     case 'seen':
-      return 'Seen in a real chat';
+      return t('addAgent.source.seen');
     default:
-      return 'Fills in after your first chat';
+      return t('addAgent.source.unknown');
   }
 }
 
@@ -179,49 +188,50 @@ export function stepLine(step: AddAgentStep, name: string, caps: AgentCaps | nul
   const skipped = state === 'skipped';
   switch (id) {
     case 'find':
-      return done ? `Found ${name} on this computer` : `Looking for ${name} on this computer`;
+      return done ? t('addAgent.step.findDone', { name }) : t('addAgent.step.find', { name });
     case 'version':
-      if (skipped) return 'Version not shown';
+      if (skipped) return t('addAgent.step.versionNone');
       if (done) {
         // The number is the finished result's, or what the step reported (only a plain version number is shown).
         const detail = step.detail && /^[0-9][0-9A-Za-z.+-]{0,23}$/.test(step.detail.trim()) ? step.detail.trim() : null;
         const v = caps?.program_version || detail;
-        return v ? `Version ${v}` : 'Version not shown';
+        return v ? t('addAgent.step.version', { v }) : t('addAgent.step.versionNone');
       }
-      return 'Reading its version';
+      return t('addAgent.step.versionRun');
     case 'chat_way':
-      if (skipped) return 'It works in a terminal only';
-      return done ? 'It can chat' : 'Checking if it can chat';
+      if (skipped) return t('addAgent.step.chatWayTerminal');
+      return done ? t('addAgent.step.chatWayDone') : t('addAgent.step.chatWay');
     case 'handshake':
       if (skipped) return null;
-      return done ? `${name} answered` : `Saying hello to ${name}`;
+      return done ? t('addAgent.step.handshakeDone', { name }) : t('addAgent.step.handshake', { name });
     case 'models':
-      if (skipped) return 'No model list';
-      if (done) return caps && caps.models_total > 0 ? `${caps.models_total} models found` : 'Model list found';
-      return 'Reading its model list';
+      if (skipped) return t('addAgent.step.modelsNone');
+      if (done) return caps && caps.models_total > 0 ? t('addAgent.step.modelsCount', { n: caps.models_total }) : t('addAgent.step.modelsFound');
+      return t('addAgent.step.modelsRun');
     case 'save':
-      return done ? 'Added' : `Adding ${name} to Potato`;
+      return done ? t('addAgent.step.saveDone') : t('addAgent.step.save', { name });
     case 'install':
       if (skipped || state === 'pending') return null;
-      return done ? 'Installed' : `Installing ${name}`;
+      return done ? t('addAgent.step.installDone') : t('addAgent.step.install', { name });
     default:
       return null;
   }
 }
 
 /** The "terminal only" chat_way step reads as skipped-in-words even when the backend marks it done. */
-export const SLOW_NOTE = 'Some agents start slowly. This is normal.';
+/** Shown when the check takes a while. */
+export const slowNote = () => t('addAgent.slowNote');
 export const SLOW_AFTER_MS = 15_000;
 
 // ---- errors (SPEC 2.4) ----------------------------------------------------------------------------------------------
 
 export const ERROR_ACTIONS: Record<string, { action: AddAgentAction; button: string }> = {
-  retry: { action: 'retry', button: 'Try again' },
-  open_agent: { action: 'open_agent', button: 'Open {Name}' },
-  show_install: { action: 'show_install', button: 'Show the install window' },
-  restart_app: { action: 'restart_app', button: 'Restart Potato' },
-  use_terminal: { action: 'use_terminal', button: 'Use it in a terminal instead' },
-  open_labs: { action: 'open_labs', button: 'Open Labs' },
+  retry: { action: 'retry', get button() { return t('addAgent.action.retry'); } },
+  open_agent: { action: 'open_agent', get button() { return t('addAgent.action.open_agent'); } },
+  show_install: { action: 'show_install', get button() { return t('addAgent.action.show_install'); } },
+  restart_app: { action: 'restart_app', get button() { return t('addAgent.action.restart_app'); } },
+  use_terminal: { action: 'use_terminal', get button() { return t('addAgent.action.use_terminal'); } },
+  open_labs: { action: 'open_labs', get button() { return t('addAgent.action.open_labs'); } },
 };
 
 /** The button text for an error action, or null when there is no button. */
@@ -232,21 +242,21 @@ export function actionButton(action: AddAgentAction, name: string): string | nul
 
 /** Final copy of every error, `{Name}` filled in. Used by the mocks; the backend sends the same words. */
 export const ERROR_COPY: Record<string, { message: string; action: AddAgentAction }> = {
-  ADD_BAD_INPUT: { message: 'Type one agent name, like kimi.', action: 'retry' },
-  ADD_UNKNOWN_NAME: { message: 'Potato could not find {Name} on this computer.', action: 'retry' },
-  ADD_ALREADY_ADDED: { message: '{Name} is already added.', action: 'open_agent' },
-  ADD_INSTALL_FAILED: { message: '{Name} did not finish installing.', action: 'show_install' },
-  ADD_NOT_SEEN_AFTER_INSTALL: { message: '{Name} is installed, but Potato cannot see it yet.', action: 'restart_app' },
-  ADD_HANDSHAKE_SILENT: { message: '{Name} did not answer in time.', action: 'use_terminal' },
-  ADD_HANDSHAKE_BAD: { message: '{Name} answered in a way Potato does not understand.', action: 'use_terminal' },
-  ADD_CHAT_OFF: { message: 'Chat is turned off in Labs.', action: 'open_labs' },
-  ADD_SAVE_FAILED: { message: 'Potato could not save {Name}. Nothing was changed.', action: 'retry' },
-  ADD_BUSY: { message: 'Potato is already adding an agent.', action: 'none' },
-  ADD_RUN_NOT_FOUND: { message: 'That check is gone. Start again.', action: 'retry' },
+  ADD_BAD_INPUT: { get message() { return t('addAgent.error.ADD_BAD_INPUT'); }, action: 'retry' },
+  ADD_UNKNOWN_NAME: { get message() { return t('addAgent.error.ADD_UNKNOWN_NAME'); }, action: 'retry' },
+  ADD_ALREADY_ADDED: { get message() { return t('addAgent.error.ADD_ALREADY_ADDED'); }, action: 'open_agent' },
+  ADD_INSTALL_FAILED: { get message() { return t('addAgent.error.ADD_INSTALL_FAILED'); }, action: 'show_install' },
+  ADD_NOT_SEEN_AFTER_INSTALL: { get message() { return t('addAgent.error.ADD_NOT_SEEN_AFTER_INSTALL'); }, action: 'restart_app' },
+  ADD_HANDSHAKE_SILENT: { get message() { return t('addAgent.error.ADD_HANDSHAKE_SILENT'); }, action: 'use_terminal' },
+  ADD_HANDSHAKE_BAD: { get message() { return t('addAgent.error.ADD_HANDSHAKE_BAD'); }, action: 'use_terminal' },
+  ADD_CHAT_OFF: { get message() { return t('addAgent.error.ADD_CHAT_OFF'); }, action: 'open_labs' },
+  ADD_SAVE_FAILED: { get message() { return t('addAgent.error.ADD_SAVE_FAILED'); }, action: 'retry' },
+  ADD_BUSY: { get message() { return t('addAgent.error.ADD_BUSY'); }, action: 'none' },
+  ADD_RUN_NOT_FOUND: { get message() { return t('addAgent.error.ADD_RUN_NOT_FOUND'); }, action: 'retry' },
 };
 
 /** A message from the backend, or one sentence when the reply is empty. */
-export const FALLBACK_ERROR = 'Potato could not add this agent.';
+export const fallbackError = () => t('addAgent.error.fallback');
 
 /** The name a screen shows: the label, else what was typed. */
 export function nameOf(run: Pick<AddAgentRun, 'label' | 'input'>): string {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.22
+
+This is a beta.
+
+- New: Traditional Chinese (Taiwan). Settings > Look and feel > Language: Automatic, English or 繁體中文. The sidebar, Inbox, panes, status bar, New agent page, Add an agent, first run and the main Settings pages are translated; other screens stay in English for now.
+- New: any agent you add can also work as a helper for your other agents, and Add an agent can learn how to talk to programs that have no chat mode. It asks before it sends the 2 tiny test messages.
+- New: Bring my projects from Orca. After you click, Potato reads Orca's project list on this PC and adds the ones you pick. Five more agents are listed in the store (names and commands from Orca's open-source list, with credit).
+- New: when an agent updates, Potato checks it again. If its chat stops working, its Settings page says so and offers Check it again.
+- When an agent stops unexpectedly you see one clear message instead of several. Very long answers and very long runs say what was hidden instead of cutting it silently. A reopened chat no longer shows an old answer as new. A question answered in another window says "Already answered".
+- The More menus open fully on top of everything, the pane header folds instead of cutting words off, chats have one header row, and the message box chips say what they set.
+- Smaller fixes: one chip style everywhere, Settings > Connect as four cards, plain words on team cards, Bring my chats says why an agent is missing, and the phone address is no longer shown in a text box.
+
 ## 1.0.21
 
 This is a beta.

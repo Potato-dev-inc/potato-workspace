@@ -6,6 +6,7 @@ import type { ChatTurn } from '../../lib/sessionChatModel';
 import { tauriSideQuestionApi, type SideQuestionApi } from '../../lib/sideQuestion';
 import { bindingHint, matchesAction } from '../../lib/shortcuts';
 import { SideQuestionBox } from './SideQuestionBox';
+import { useT } from '../../i18n';
 
 /** How many answers a pane keeps for the "Earlier" list. */
 export const RECENT_LIMIT = 3;
@@ -48,6 +49,7 @@ function isShown(el: Element | null): boolean {
 }
 
 export function useSideQuestion(paneId: string, turns: readonly ChatTurn[], api: SideQuestionApi = tauriSideQuestionApi): { button: ReactNode; box: ReactNode } {
+  const t = useT();
   const [open, setOpen] = useState(false);
   // Bumped when an answer is kept, so the box re-reads the pane's list.
   const [, setVersion] = useState(0);
@@ -80,11 +82,11 @@ export function useSideQuestion(paneId: string, turns: readonly ChatTurn[], api:
       ref={anchor}
       type="button"
       aria-expanded={open}
-      title={`Ask about this session without writing into it${bindingHint('ask-aside')}`}
+      title={`${t('pane.askAsideTip')}${bindingHint('ask-aside')}`}
       onClick={() => (open ? close() : setOpen(true))}
       className="rounded px-1.5 py-0.5 text-[11px] text-pm-muted ck-chat-aside"
     >
-      Ask aside
+      {t('pane.askAside')}
     </button>
   );
   const box = open ? (

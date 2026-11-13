@@ -7,6 +7,7 @@ import { agentHealthApi, type AgentHealth, type AgentHealthApi } from '../../lib
 import type { AgentInstallApi } from '../../lib/agent-install';
 import { AgentDoctor } from '../cockpit/AgentDoctor';
 import { DotSpinner } from '../cockpit/DotSpinner';
+import { useT } from '../../i18n';
 import { T } from './copy';
 import { usableAgents, WATCHED_AGENTS, type ReadyAgent } from './model';
 
@@ -18,6 +19,7 @@ export function watchedRows(rows: AgentHealth[]): AgentHealth[] {
 }
 
 function RowStatus({ row }: { row: Row }) {
+  useT();
   if (row.state === 'not_installed' || !row.installed) return <>{T.agentMissing}</>;
   if (row.state === 'needs_login') return <>{T.agentLogin}</>;
   return <>{T.agentFound}</>;
@@ -44,6 +46,7 @@ export function StepAgents({
   onSignIn: (agentId: string) => void;
   onShowPane: (paneId: string) => void;
 }) {
+  useT();
   const [rows, setRows] = useState<AgentHealth[] | null>(null);
   const [help, setHelp] = useState(false);
   const alive = useRef(true);

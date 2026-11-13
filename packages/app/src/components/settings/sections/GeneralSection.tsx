@@ -10,7 +10,9 @@ import { clampAwayMinutes, clampCheckpointsKeep } from '../../../lib/bridge-sett
 import { redactSettings } from '../../../lib/secrets';
 import { resolveSettingsFilePath } from '../../../lib/settings';
 import { cockpitApi } from '../../../lib/cockpit-api';
-import { parseSwitchStyle, parseWindowLayout, STYLE_LABELS, type SwitchStyle } from '../../../lib/mode-switch/model';
+import { parseSwitchStyle, parseWindowLayout, type SwitchStyle } from '../../../lib/mode-switch/model';
+import { t, useT } from '../../../i18n';
+import { styleLabel } from '../i18n-labels';
 import { tauri, type AppInstallInfo, type CoordinationStorageInfo } from '../../../lib/tauri';
 import { budgetRows } from './BudgetRows';
 import { AskBarSettingsBlock } from '../blocks/AskBarSettings';
@@ -33,6 +35,7 @@ import { T as WELCOME } from '../../firstrun/copy';
 import { reopenPatch } from '../../firstrun/model';
 import { Btn, FieldSelect, InfoRow, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
 import { LabsSwitch } from '../LabsSwitch';
+import { languageRow } from './LanguageRow';
 import { RECOVERY_HINT, RECOVERY_LABEL } from '../../../lib/settings-recovery';
 import { SettingsRecoveryRow } from './SettingsRecoveryRow';
 import { UpdateRow } from './UpdateRow';
@@ -123,8 +126,9 @@ function StorageInfo({ env }: { env: SettingsEnv }) {
 // ---------- version and updates ----------
 
 function VersionRow() {
+  const t = useT();
   const info = useInstallInfo();
-  return <UpdateRow versionLine={info ? `${info.version.replace(/^v/i, '')}${info.isPackaged ? '' : ' (dev build)'}` : '…'} />;
+  return <UpdateRow versionLine={info ? `${info.version.replace(/^v/i, '')}${info.isPackaged ? '' : t('overview.version.devBuild')}` : '…'} />;
 }
 
 // ---------- export and uninstall ----------
@@ -188,26 +192,26 @@ function UninstallRow({ env }: { env: SettingsEnv }) {
 const SIMPLE_LABEL = 'Simple look';
 const SIMPLE_HINT = 'A calmer screen with fewer buttons and plain words.';
 const WELCOME_LABEL = 'Run setup again';
-const WELCOME_BUTTON = 'Run setup';
 
 /** The away setting in words, beside its field. */
-export const awayWords = (minutes: number): string => (minutes <= 0 ? 'Off' : `After ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+export const awayWords = (minutes: number): string => (minutes <= 0 ? t('lookFeel.away.off') : t('lookFeel.away.after', { count: minutes }));
 
 const SWITCH_STYLES: SwitchStyle[] = ['domino', 'ink', 'off'];
 const SWITCH_HINT = 'How windows move when you switch modes. Off is a quick fade.';
 
 function ModeSwitchRow({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const style = parseSwitchStyle(env.settings.mode_switch_animation);
   return (
-    <SettingRow label="Mode switch animation" description={SWITCH_HINT}>
+    <SettingRow label={t('lookFeel.modeSwitch.label')} description={t('lookFeel.modeSwitch.hint')}>
       <FieldSelect
-        aria-label="Mode switch animation"
+        aria-label={t('lookFeel.modeSwitch.label')}
         value={style}
         onChange={(e) => void env.patch({ mode_switch_animation: parseSwitchStyle(e.target.value) })}
       >
         {SWITCH_STYLES.map((value) => (
           <option key={value} value={value}>
-            {STYLE_LABELS[value]}
+            {styleLabel(value)}
           </option>
         ))}
       </FieldSelect>
@@ -218,8 +222,9 @@ function ModeSwitchRow({ env }: { env: SettingsEnv }) {
 const LAYOUT_HINT = 'Where windows go in Individual: side by side in rows, or Cascade.';
 
 function WindowLayoutRow({ env }: { env: SettingsEnv }) {
+  const t = useT();
   return (
-    <SettingRow label="Window layout in Individual" description={LAYOUT_HINT}>
+    <SettingRow label={t('lookFeel.layout.label')} description={t('lookFeel.layout.hint')}>
       <LayoutThumbs
         value={parseWindowLayout(env.settings.individual_window_layout)}
         onPick={(layout) => void env.patch({ individual_window_layout: layout })}
@@ -239,13 +244,13 @@ export const generalRows: RowDef[] = [
     keywords: 'name greeting hello welcome new agent page profile display',
     group: 'Appearance',
     render: (env) => (
-      <SettingRow label="Your name" description="Used in the greeting on the New agent page. Leave it empty for no name.">
+      <SettingRow label={t('lookFeel.yourName.label')} description={t('lookFeel.yourName.hint')}>
         <TextControl
-          aria-label="Your name"
+          aria-label={t('lookFeel.yourName.label')}
           value={env.settings.display_name ?? ''}
           mode="blur"
           maxLength={60}
-          placeholder="Optional"
+          placeholder={t('lookFeel.yourName.placeholder')}
           normalize={(text) => text.replace(/\s+/g, ' ').trim()}
           onCommit={(next) => env.patch({ display_name: next || null })}
         />
@@ -267,11 +272,12 @@ export const generalRows: RowDef[] = [
     keywords: 'appearance dark light',
     group: 'Appearance',
     render: (env) => (
-      <SettingRow label="Theme" description="Dark or light.">
+      <SettingRow label={t('lookFeel.theme.label')} description={t('lookFeel.theme.hint')}>
         <ThemeThumbs value={env.settings.theme === 'light' ? 'light' : 'dark'} onPick={(theme) => void env.patch({ theme })} />
       </SettingRow>
     ),
   },
+  languageRow,
   {
     id: 'mode-switch-animation',
     label: 'Mode switch animation',
@@ -288,8 +294,8 @@ export const generalRows: RowDef[] = [
     group: 'Appearance',
     render: (env) => (
       <SettingToggle
-        label="Show usage bar"
-        description="How much of its plan each signed-in agent has used, at the bottom of the sidebar."
+        label={t('lookFeel.usageBar.label')}
+        description={t('lookFeel.usageBar.hint')}
         checked={env.settings.show_usage_bar ?? true}
         onChange={(value) => void env.patch({ show_usage_bar: value })}
       />
@@ -303,8 +309,8 @@ export const generalRows: RowDef[] = [
     group: 'Appearance',
     render: (env) => (
       <SettingToggle
-        label="Read Claude usage with my Claude sign-in"
-        description="Asks Anthropic for your Claude usage using your Claude sign-in."
+        label={t('lookFeel.usageLogin.label')}
+        description={t('lookFeel.usageLogin.hint')}
         checked={env.settings.usage_login_reads ?? true}
         onChange={(value) => void env.patch({ usage_login_reads: value })}
       />
@@ -341,8 +347,8 @@ export const generalRows: RowDef[] = [
     keywords: 'welcome first run tour setup onboarding start again',
     group: 'Appearance',
     render: (env) => (
-      <SettingRow label={WELCOME_LABEL} description={WELCOME.settingHint}>
-        <Btn onClick={() => void env.patch(reopenPatch())}>{WELCOME_BUTTON}</Btn>
+      <SettingRow label={t('overview.welcome.label')} description={WELCOME.settingHint}>
+        <Btn onClick={() => void env.patch(reopenPatch())}>{t('overview.welcome.button')}</Btn>
       </SettingRow>
     ),
   },
@@ -354,8 +360,8 @@ export const generalRows: RowDef[] = [
     group: 'While agents work',
     render: (env) => (
       <SettingToggle
-        label="Ask before closing a working agent"
-        description="Asks first when you close a pane or quit from the tray while an agent works."
+        label={t('lookFeel.confirmClose.label')}
+        description={t('lookFeel.confirmClose.hint')}
         checked={env.settings.confirm_close_running_pane ?? true}
         onChange={(value) => void env.patch({ confirm_close_running_pane: value })}
       />
@@ -369,8 +375,8 @@ export const generalRows: RowDef[] = [
     group: 'While agents work',
     render: (env) => (
       <SettingToggle
-        label="Keep this PC awake while agents work"
-        description="Your agents keep going when you lock the PC (Win+L). The screen can still turn off."
+        label={t('lookFeel.keepAwake.label')}
+        description={t('lookFeel.keepAwake.hint')}
         checked={env.settings.keep_awake_while_working ?? true}
         onChange={(value) => void env.patch({ keep_awake_while_working: value })}
       />
@@ -399,17 +405,14 @@ export const generalRows: RowDef[] = [
     keywords: 'away minutes digest while you were away idle',
     group: 'While agents work',
     render: (env) => (
-      <SettingRow
-        label="Away digest after"
-        description="Shows what agents did after this many idle minutes. 0 turns it off."
-      >
+      <SettingRow label={t('lookFeel.away.label')} description={t('lookFeel.away.hint')}>
         <NumberControl
-          aria-label="Away digest after (minutes)"
+          aria-label={t('lookFeel.away.aria')}
           min={0}
           max={1440}
           value={env.settings.away_minutes ?? 5}
           normalize={clampAwayMinutes}
-          suffix="min"
+          suffix={t('lookFeel.away.min')}
           onCommit={(minutes) => env.patch({ away_minutes: minutes })}
         />
         <span className="st-aside">{awayWords(env.settings.away_minutes ?? 5)}</span>

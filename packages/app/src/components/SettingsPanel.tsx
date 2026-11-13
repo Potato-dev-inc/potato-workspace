@@ -14,6 +14,7 @@ import { resolveSettingsTarget } from '../lib/settings-target';
 import { SECTIONS } from './settings/catalog';
 import { ConfirmSheet } from './settings/controls';
 import { ErrorBoundary } from './common/ErrorBoundary';
+import { CONNECT_CARDS, isConnectCard } from './settings/connect-cards';
 import { ClosedGroups, LevelledRows, SectionRows, onRowKeyDown, type RowChrome } from './settings/SectionView';
 import { applyPatch, changedRows, resetPatch, sayValue, undoPatch } from './settings/changes';
 import { UndoToast, PUT_BACK_MS, type ToastState } from './settings/UndoToast';
@@ -21,7 +22,9 @@ import { DEFAULT_OVERVIEW_SOURCES, Overview, setupContext, type OverviewSources 
 import { SetupChecksProvider } from './settings/setup-source';
 import { setOpenAgent, useOpenAgent } from './settings/agents/agentTarget';
 import { useAgentRegistry } from '../lib/agentRegistry';
-import { MAX_HITS, limitHits, searchAll } from './settings/search';
+import { MAX_HITS, limitHits } from './settings/search';
+import { groupTitle, localizeSections, searchLocalized } from './settings/i18n-labels';
+import { useT, type MessageKey } from '../i18n';
 import { Btn } from './settings/settings-ui';
 import { readAdvancedOpen, writeAdvancedOpen } from './settings/levels';
 import {
@@ -167,6 +170,7 @@ export function SettingsPanel({
   api = DEFAULT_API,
   overviewSources,
 }: Props) {
+  const t = useT();
   const [page, setPage] = useState<SettingsPageId>(initialTab);
   const [query, setQuery] = useState('');
   // A row to scroll to once its page is showing. `n` makes asking for the same row twice work.
@@ -222,7 +226,16 @@ export function SettingsPanel({
     if (!home || !row) return;
     const level = rowLevel(row);
     // On the Advanced page the closed group that holds the row opens; elsewhere it is the page's Advanced fold.
-    const key = home.closedGroups ? (row.group && home.closedGroups.includes(row.group) ? groupKey(row.group) : null) : level === 'advanced' ? home.id : null;
+    // On Connect, a row inside a card opens that card.
+    const key = home.closedGroups
+      ? row.group && home.closedGroups.includes(row.group)
+        ? groupKey(row.group)
+        : null
+      : home.id === 'connect' && isConnectCard(row.group)
+        ? groupKey(row.group as string)
+        : level === 'advanced'
+          ? home.id
+          : null;
     if (key) {
       writeAdvancedOpen(key, true);
       setAdvancedState((prev) => ({ ...prev, [key]: true }));
@@ -351,7 +364,7 @@ export function SettingsPanel({
 
   useEffect(() => {
     const timers = tickTimers.current;
-    return () => timers.forEach((t) => clearTimeout(t));
+    return () => timers.forEach((timer) => clearTimeout(timer));
   }, []);
 
   const markSaved = useCallback((rowId: string) => {
@@ -394,7 +407,7 @@ export function SettingsPanel({
         markSaved(rowId);
         onSaved?.();
       } catch (error) {
-        setRowError(rowId, `Not saved: ${errorSentence(error)}`);
+        setRowError(rowId, t('settings.notSaved', { reason: errorSentence(error) }));
         reloadAfter.current = true; // drop the optimistic value and show what is really saved
         throw error; // callers must not run their saved path (clear a draft, show Saved) on failure
       } finally {
@@ -405,7 +418,7 @@ export function SettingsPanel({
         }
       }
     },
-    [markSaved, onSaved, reload, setRowError],
+    [markSaved, onSaved, reload, setRowError, t],
   );
 
   // After a good save of a row that owns its keys: "Saved. Theme: Light" with Undo (5 s). Never for danger rows,
@@ -415,11 +428,11 @@ export function SettingsPanel({
       const row = findRowSection(SECTIONS, rowId)?.rows.find((r) => r.id === rowId);
       const patched = Object.keys(patch);
       if (!row?.keys || row.danger || !before || !patched.some((k) => (row.keys as string[]).includes(k)) || patched.some((k) => SECRET_KEY.test(k))) return;
-      const text = `${reset ? 'Reset' : 'Saved'}. ${sayValue(row, applyPatch(before, patch))}`;
+      const text = t(reset ? 'settings.toast.reset' : 'settings.toast.saved', { value: sayValue(row, applyPatch(before, patch)) });
       const back = undoPatch(before, patch);
       setToast({ id: ++toastSeq.current, text, undo: () => save(rowId, back) });
     },
-    [save],
+    [save, t],
   );
 
   const patchFor = useCallback(
@@ -431,16 +444,16 @@ export function SettingsPanel({
     [offerUndo, save],
   );
 
-  const runUndo = useCallback(async (t: ToastState) => {
-    if (!t.undo) return;
+  const runUndo = useCallback(async (state: ToastState) => {
+    if (!state.undo) return;
     setToast(null);
     try {
-      await t.undo();
-      setToast({ id: ++toastSeq.current, text: 'Put back.', ms: PUT_BACK_MS });
+      await state.undo();
+      setToast({ id: ++toastSeq.current, text: t('settings.toast.putBack'), ms: PUT_BACK_MS });
     } catch {
       /* save() already put the error on the row */
     }
-  }, []);
+  }, [t]);
 
   const resetRow = (row: RowDef) => {
     patchFor(row.id, resetPatch(row), true).catch(() => undefined);
@@ -500,8 +513,9 @@ export function SettingsPanel({
   };
 
   const trimmed = query.trim();
-  const shown = visibleSections(SECTIONS, settings);
-  const result = trimmed ? searchAll(shown, trimmed) : null;
+  const shownEnglish = visibleSections(SECTIONS, settings);
+  const shown = localizeSections(shownEnglish);
+  const result = trimmed ? searchLocalized(shownEnglish, shown, trimmed) : null;
   const visibleHits = result ? (showAll ? result.hits : limitHits(result.hits, MAX_HITS)) : [];
   // Everything Up/Down can reach: "Go to page" hits first, then the rows, in the order they are drawn.
   const items: ({ kind: 'page'; page: SectionId } | { kind: 'row'; id: string })[] = [
@@ -538,23 +552,23 @@ export function SettingsPanel({
   // With an agent's page open, the window shows only that page, and the title reads "Agents › Claude".
   const openAgent = !trimmed && !filtering && section?.id === 'agents' ? openAgentId : null;
   const openAgentLabel = openAgent ? (registry.agents.find((a) => a.id === openAgent)?.label ?? openAgent) : null;
-  const title = trimmed ? 'Search results' : filtering ? 'Changed' : (section?.title ?? 'Settings');
+  const title = trimmed ? t('settings.title.search') : filtering ? t('settings.title.changed') : (section?.title ?? t('settings.title.default'));
   const blurb = trimmed
     ? result && result.total + result.names.length > 0
-      ? `${result.total} ${result.total === 1 ? 'setting' : 'settings'} for “${trimmed}”. Up and Down to move, Enter to open.`
+      ? t('settings.blurb.search', { count: result.total, query: trimmed })
       : undefined
     : filtering
       ? changedCount > 0
-        ? `${changedCount} ${changedCount === 1 ? 'setting' : 'settings'} you changed.`
+        ? t('settings.blurb.changed', { count: changedCount })
         : undefined
       : section?.blurb;
 
   return (
-    <div className={inline ? 'settings settings--inline' : 'settings'} role="region" aria-label="Settings">
+    <div className={inline ? 'settings settings--inline' : 'settings'} role="region" aria-label={t('settings.region')}>
       <aside className="st-side">
         <div className="st-side-top">
           {onClose && (
-            <button type="button" className="st-back" aria-label={inline ? 'Back' : 'Close settings'} onClick={onClose}>
+            <button type="button" className="st-back" aria-label={inline ? t('settings.back') : t('settings.close')} onClick={onClose}>
               <IconBack />
             </button>
           )}
@@ -563,8 +577,8 @@ export function SettingsPanel({
             <input
               ref={searchRef}
               type="search"
-              aria-label="Search settings"
-              placeholder="Search settings"
+              aria-label={t('settings.search')}
+              placeholder={t('settings.search')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -602,11 +616,11 @@ export function SettingsPanel({
               aria-pressed={filtering}
               onClick={() => (filtering ? setShowChanged(false) : showChangedRows())}
             >
-              {`Changed (${changedCount})`}
+              {t('settings.changedChip', { count: changedCount })}
             </button>
           )}
         </div>
-        <nav className="st-nav" aria-label="Settings pages">
+        <nav className="st-nav" aria-label={t('settings.pages')}>
           {shown.map((item) => (
             <Fragment key={item.id}>
               {item.id === 'advanced' && <div className="st-navsep" role="separator" />}
@@ -618,7 +632,7 @@ export function SettingsPanel({
               >
                 {SECTION_ICONS[item.id]}
                 <span>{item.title}</span>
-                {changedPages.has(item.id) && <i className="st-nav-dot" role="img" title="Changed from the default" aria-label="Has a changed setting" />}
+                {changedPages.has(item.id) && <i className="st-nav-dot" role="img" title={t('settings.changedFromDefault')} aria-label={t('settings.hasChanged')} />}
               </button>
             </Fragment>
           ))}
@@ -630,7 +644,7 @@ export function SettingsPanel({
           <h1>
             {openAgentLabel ? (
               <>
-                <button type="button" className="st-title-link" aria-label="Back to all agents" onClick={() => setOpenAgent(null)}>
+                <button type="button" className="st-title-link" aria-label={t('settings.backToAgents')} onClick={() => setOpenAgent(null)}>
                   {title}
                 </button>
                 {' › '}
@@ -643,7 +657,7 @@ export function SettingsPanel({
           {blurb && <p>{blurb}</p>}
           {filtering && changedCount > 0 && (
             <button type="button" className="st-linkbtn st-reset-all" onClick={() => changed.forEach((hit) => hit.rows.forEach(resetRow))}>
-              Reset all
+              {t('settings.resetAll')}
             </button>
           )}
         </header>
@@ -657,24 +671,24 @@ export function SettingsPanel({
                 <>
                   <div className="st-emptycard">
                     <p>
-                      <b>{`Nothing found for "${trimmed}"`}</b>
+                      <b>{t('settings.empty.title', { query: trimmed })}</b>
                     </p>
-                    <p className="st-empty-help">{'Try a simpler word, like "theme", "phone" or "sign in".'}</p>
+                    <p className="st-empty-help">{t('settings.empty.help')}</p>
                     <Btn primary onClick={() => setQuery('')}>
-                      Clear search
+                      {t('settings.clearSearch')}
                     </Btn>
                   </div>
                   <p className="st-quiet-links">
                     <button type="button" className="st-linkbtn" onClick={() => openRow('setup-check')}>
-                      Check my setup
+                      {t('settings.checkSetup')}
                     </button>
                     {' · '}
                     <button type="button" className="st-linkbtn" onClick={showChangedRows}>
-                      Show what I changed
+                      {t('settings.showChanged')}
                     </button>
                     {' · '}
                     <button type="button" className="st-linkbtn" onClick={() => goToPage('advanced')}>
-                      Advanced
+                      {t('settings.advanced')}
                     </button>
                   </p>
                 </>
@@ -690,8 +704,8 @@ export function SettingsPanel({
                           data-active={activeItem?.kind === 'page' && activeItem.page === n.page.id && !n.group ? 'true' : undefined}
                           onClick={() => goToPage(n.page.id)}
                         >
-                          <span>{n.group ? `${n.page.title} › ${n.group}` : n.page.title}</span>
-                          <small>Go to page</small>
+                          <span>{n.group ? `${n.page.title} › ${groupTitle(n.group)}` : n.page.title}</span>
+                          <small>{t('settings.goToPage')}</small>
                         </button>
                       ))}
                     </div>
@@ -703,7 +717,7 @@ export function SettingsPanel({
                   ))}
                   {result && !showAll && result.total > MAX_HITS && (
                     <Btn className="st-showall" onClick={() => setShowAll(true)}>
-                      {`Show all ${result.total}`}
+                      {t('settings.showAll', { count: result.total })}
                     </Btn>
                   )}
                 </div>
@@ -714,10 +728,10 @@ export function SettingsPanel({
               changed.length === 0 ? (
                 <div className="st-emptycard">
                   <p>
-                    <b>Nothing changed. Everything is as it came.</b>
+                    <b>{t('settings.nothingChanged')}</b>
                   </p>
                   <Btn primary onClick={() => setShowChanged(false)}>
-                    Show all settings
+                    {t('settings.showAllSettings')}
                   </Btn>
                 </div>
               ) : (
@@ -736,6 +750,19 @@ export function SettingsPanel({
                   {section.id === 'overview' && (
                     <Overview settings={settings} bridgeUrl={bridgeUrl} openRow={openRow} openPage={goToPage} sources={overviewSources} />
                   )}
+                  {section.id === 'connect' && !openAgent && (
+                    <ClosedGroups
+                      key="connect-cards"
+                      rows={section.rows.filter((r) => isConnectCard(r.group))}
+                      closed={[...CONNECT_CARDS]}
+                      lines={Object.fromEntries(CONNECT_CARDS.map((c) => [c, t(`settings.connectLine.${c}` as MessageKey)]))}
+                      envFor={envFor}
+                      chrome={chrome}
+                      isOpen={groupOpen}
+                      onToggle={toggleGroup}
+                      showDeveloper={showDeveloper}
+                    />
+                  )}
                   {section.closedGroups ? (
                     <ClosedGroups
                       key={section.id}
@@ -750,7 +777,7 @@ export function SettingsPanel({
                   ) : (
                     <LevelledRows
                       key={section.id}
-                      rows={openAgent ? section.rows.filter((r) => r.id === 'agent-list').map((r) => ({ ...r, group: undefined })) : section.rows}
+                      rows={openAgent ? section.rows.filter((r) => r.id === 'agent-list').map((r) => ({ ...r, group: undefined })) : section.id === 'connect' ? section.rows.filter((r) => !isConnectCard(r.group)) : section.rows}
                       envFor={envFor}
                       chrome={chrome}
                       advancedOpen={advancedOpenFor(section)}
@@ -761,9 +788,9 @@ export function SettingsPanel({
                   )}
                   {section.id === 'overview' && changedCount > 0 && (
                     <p className="st-quiet-line">
-                      {`You changed ${changedCount} ${changedCount === 1 ? 'setting' : 'settings'}. `}
+                      {t('settings.youChanged', { count: changedCount })}{' '}
                       <button type="button" className="st-linkbtn" onClick={showChangedRows}>
-                        Show them
+                        {t('settings.showThem')}
                       </button>
                     </p>
                   )}
@@ -774,7 +801,7 @@ export function SettingsPanel({
           </div>
         </div>
         {toast && <div className="st-toast-host">
-          <UndoToast key={toast.id} toast={toast} onDone={(id) => setToast((t) => (t?.id === id ? null : t))} onUndo={(t) => void runUndo(t)} />
+          <UndoToast key={toast.id} toast={toast} onDone={(id) => setToast((cur) => (cur?.id === id ? null : cur))} onUndo={(state) => void runUndo(state)} />
         </div>}
       </main>
 
@@ -792,8 +819,9 @@ export function SettingsPanel({
 }
 
 function Skeleton() {
+  const t = useT();
   return (
-    <div className="st-list" aria-busy="true" aria-label="Loading settings">
+    <div className="st-list" aria-busy="true" aria-label={t('settings.loading')}>
       {[0, 1, 2].map((n) => (
         <div key={n} className="st-skel">
           <span style={{ width: 120 + n * 28 }} />

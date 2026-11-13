@@ -2,6 +2,7 @@ use super::*;
 
 #[test]
 fn lists_all_agent_profiles() {
+    let _serial = crate::tui::registry::test_serial();
     let profiles = list_agent_context_profiles();
     assert_eq!(profiles.len(), 9);
     assert!(profiles.iter().any(|profile| profile.agent_type == "codex"));

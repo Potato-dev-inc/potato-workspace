@@ -1,6 +1,7 @@
 // What the cockpit remembers between starts: the selected pane (and the tab it was on), and the terminal agents
 // that were open, so a restart can say which ones ended. Kept in localStorage next to the split memory.
 // Every storage call is wrapped in try/catch: a blocked or full storage just means no memory.
+import { t } from '../../i18n';
 import { ACP_LANE } from '../../lib/acpChat';
 import type { PaneInfo } from '../../lib/tauri-types';
 import { isCompanionPaneId } from './companion/model';
@@ -105,5 +106,5 @@ export function endedTerminals(memory: SessionMemory, hasPane: (id: string) => b
 
 /** The line shown for the terminals that ended with the last restart. */
 export function endedLine(count: number): string {
-  return count === 1 ? '1 terminal agent ended with the last restart.' : `${count} terminal agents ended with the last restart.`;
+  return t('risk.ended', { count });
 }

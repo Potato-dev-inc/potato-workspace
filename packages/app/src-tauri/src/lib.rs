@@ -114,6 +114,7 @@ mod tunnel_auth_tests;
 mod device_caps_tests;
 mod session_context;
 mod chat_index;
+mod import_orca;
 mod session_chat;
 mod scores;
 mod secrets;
@@ -800,11 +801,16 @@ pub fn run() {
             commands::companion_open_folder,
             commands::agent_caps_get,
             commands::agent_caps_list,
+            commands::agent_caps_recheck,
             commands::add_agent_start,
             commands::add_agent_status,
             commands::add_agent_cancel,
             commands::add_agent_approve_install,
+            commands::add_agent_approve_check,
+            commands::add_agent_skip_check,
             commands::agents_detect_installed,
+            commands::orca_import_scan,
+            commands::orca_import_add,
         ])
         .setup(|app| {
             commands::startup_probe(app.handle().clone());
@@ -816,6 +822,8 @@ pub fn run() {
                     let _ = handle.emit("agent-caps://changed", serde_json::json!({ "agent_id": agent_id }));
                 });
             }
+            // An agent that updated itself since the last check gets its free checks again (drift).
+            agent_caps::drift::spawn_startup_check();
             // Agents keep working when the PC is locked: hold it awake while any pane is busy.
             keep_awake::spawn(app.state::<AppState>().registry.clone());
             // Copy (never move) the data release 1.0.3 left under the old names once: the home and

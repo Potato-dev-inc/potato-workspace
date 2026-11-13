@@ -442,6 +442,9 @@ impl QuestionStore {
                 crate::ci_fix::live::on_resolved(&resolution.question);
                 // A permission question of a chat session: the choice goes back to the agent.
                 crate::acp::chat::on_question_resolved(&resolution.question);
+            } else {
+                // Another window or the phone answered first: a chat card says so.
+                crate::acp::chat::on_question_already_answered(&resolution.question);
             }
         }
         result

@@ -591,12 +591,13 @@ mod tests {
 
     #[test]
     fn the_push_says_check_first_where_the_desktop_card_does() {
-        // The desktop card's words are `LEVEL_WORD` in lib/approval-risk.ts. A medium prompt was
-        // "Check first" on the PC and "Medium risk" on the phone.
-        let ts = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/lib/approval-risk.ts")).unwrap();
+        // The desktop card's words are the `risk.level.*` keys of the English dictionary (src/i18n/en/risk.ts,
+        // read through `LEVEL_WORD`). A medium prompt was "Check first" on the PC and "Medium risk" on the phone.
+        let ts = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/i18n/en/risk.ts")).unwrap();
         let word = |level: &str| {
-            let line = ts.lines().find(|l| l.trim_start().starts_with(&format!("{level}:"))).unwrap_or_else(|| panic!("no {level} word"));
-            line.split('\'').nth(1).unwrap().to_string()
+            let key = format!("'risk.level.{level}':");
+            let line = ts.lines().find(|l| l.trim_start().starts_with(&key)).unwrap_or_else(|| panic!("no {level} word"));
+            line.split('\'').nth(3).unwrap().to_string()
         };
         for (level, tag) in [("low", "Low"), ("medium", "Medium"), ("high", "High")] {
             let risk = json!({"level": level, "headline": "Install packages"});

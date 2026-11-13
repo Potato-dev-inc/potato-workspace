@@ -3,6 +3,7 @@
 // small popover with the tasks and Stop; Stop asks once more before it stops anything. Labs off or no run: nothing.
 import { useEffect, useRef, useState } from 'react';
 import { nightApi, nightErrorText, useNight, type NightStateView, type NightTaskView } from '../../../lib/night';
+import { t as tr, useT } from '../../../i18n';
 import { DotSpinner } from '../DotSpinner';
 import '../../../styles/night-chip.css';
 
@@ -24,18 +25,18 @@ export function chipView(state: NightStateView | null): ChipView | null {
   if (!state?.enabled || !run) return null;
   const needsYou = run.needsYou;
   if (run.state === 'done' || run.state === 'stopped') {
-    return { kind: 'finished', text: `${run.done} of ${run.total} done`, needsYou, canStop: false };
+    return { kind: 'finished', text: tr('state.night.done', { done: run.done, total: run.total }), needsYou, canStop: false };
   }
   if (run.state === 'scheduled') {
-    return { kind: 'scheduled', text: `Starts ${run.from}`, needsYou, canStop: true };
+    return { kind: 'scheduled', text: tr('state.night.starts', { from: run.from }), needsYou, canStop: true };
   }
   const waiting = run.tasks.find((task) => task.state === 'waiting');
   if (waiting) {
-    const plan = waiting.plan ?? 'a plan';
-    const until = waiting.until ? ` until ${waiting.until}` : '';
-    return { kind: 'waiting', text: `Waiting for ${plan}${until}`, needsYou, canStop: true };
+    const plan = waiting.plan ?? tr('state.night.aPlan');
+    const text = waiting.until ? tr('state.night.waitingUntil', { plan, until: waiting.until }) : tr('state.night.waitingFor', { plan });
+    return { kind: 'waiting', text, needsYou, canStop: true };
   }
-  return { kind: 'running', text: `${run.done} of ${run.total} until ${state.settings.stopHhmm}`, needsYou, canStop: true };
+  return { kind: 'running', text: tr('state.night.running', { done: run.done, total: run.total, until: state.settings.stopHhmm }), needsYou, canStop: true };
 }
 
 /** The glyph of one task in the popover: `~` working, `:` waiting, `-` queued, then `v` ready, `+` needs a look, `x` the rest. */
@@ -49,6 +50,7 @@ export function taskGlyph(task: NightTaskView): string {
 }
 
 export function NightChip({ onOpenMorning }: { onOpenMorning: () => void }) {
+  const t = useT();
   const { state, reload } = useNight();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -117,23 +119,23 @@ export function NightChip({ onOpenMorning }: { onOpenMorning: () => void }) {
           onClick={finished ? onOpenMorning : toggle}
         >
           {glyph}
-          <span className="ck-night-name">Night Shift</span>
+          <span className="ck-night-name">{t('state.night.name')}</span>
           <span className="ck-night-detail">{view.text}</span>
           {view.needsYou > 0 && (
-            <span className="ck-night-more" title={`${view.needsYou} need you`}>{`+ ${view.needsYou}`}</span>
+            <span className="ck-chip-count ck-night-more" title={t('state.night.needYou', { n: view.needsYou })}>{`+ ${view.needsYou}`}</span>
           )}
-          {finished && <span className="ck-night-open">Open Morning</span>}
+          {finished && <span className="ck-night-open">{t('state.night.openMorning')}</span>}
         </button>
         {view.canStop && (
           <button type="button" className="ck-btn ck-btn--plain ck-night-stop" onClick={askStop}>
-            Stop
+            {t('state.night.stop')}
           </button>
         )}
       </div>
       {open && !finished && (
-        <div className="ck-night-chip-pop" role="dialog" aria-label="Night Shift" data-testid="night-popover">
+        <div className="ck-night-chip-pop" role="dialog" aria-label={t('state.night.name')} data-testid="night-popover">
           <div className="ck-night-chip-pop-head">
-            <span className="ck-night-chip-pop-title">Night Shift</span>
+            <span className="ck-night-chip-pop-title">{t('state.night.name')}</span>
             <span className="ck-night-chip-pop-line">{run.line}</span>
           </div>
           <ul className="ck-night-tasks">
@@ -148,20 +150,20 @@ export function NightChip({ onOpenMorning }: { onOpenMorning: () => void }) {
           {view.canStop &&
             (confirming ? (
               <div className="ck-night-confirm">
-                <p className="ck-night-note">Stops everything now. Copies are kept.</p>
+                <p className="ck-night-note">{t('state.night.stopNote')}</p>
                 <div className="ck-night-actions">
                   <button type="button" className="ck-btn ck-btn--sm ck-btn--primary" disabled={busy} onClick={stop}>
-                    Stop Night Shift
+                    {t('state.night.stopNight')}
                   </button>
                   <button type="button" className="ck-btn ck-btn--plain" disabled={busy} onClick={cancelStop}>
-                    Cancel
+                    {t('state.night.cancel')}
                   </button>
                 </div>
               </div>
             ) : (
               <div className="ck-night-actions">
                 <button type="button" className="ck-btn ck-btn--sm ck-btn--plain" onClick={() => setConfirming(true)}>
-                  Stop Night Shift
+                  {t('state.night.stopNight')}
                 </button>
               </div>
             ))}

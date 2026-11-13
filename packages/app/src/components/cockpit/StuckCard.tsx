@@ -1,4 +1,5 @@
 import type { CockpitApi } from '../../hooks/useCockpit';
+import { useT } from '../../i18n';
 import { projectWithCopy } from './shell-labels';
 import { stuckTitle, useLoopGuard, type LoopSignal } from '../../lib/loop-guard';
 import '../../styles/loop-guard.css';
@@ -35,6 +36,7 @@ export function StuckCard({
   onAsk: () => void;
   onDismiss: () => void;
 }) {
+  const t = useT();
   return (
     <InboxCard
       kind="stuck"
@@ -55,19 +57,19 @@ export function StuckCard({
       actions={
         <>
           <CardButton tone="primary" role="answer" onClick={onHint}>
-            Give it a hint
+            {t('inboxCards.stuck.hint')}
           </CardButton>
           <CardButton tone="secondary" role="answer" onClick={onInterrupt}>
-            Interrupt
+            {t('inboxCards.stuck.interrupt')}
           </CardButton>
           <CardButton tone="secondary" role="answer" onClick={onAsk}>
-            Ask another agent
+            {t('inboxCards.stuck.askAnother')}
           </CardButton>
         </>
       }
       more={
         <CardButton tone="plain" role="dismiss" onClick={onDismiss}>
-          Dismiss
+          {t('inboxCards.dismiss')}
         </CardButton>
       }
     />

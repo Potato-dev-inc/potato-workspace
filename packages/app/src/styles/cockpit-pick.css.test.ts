@@ -60,12 +60,11 @@ describe('pick for me styles', () => {
     }
   });
 
-  it('marks the early chip as an outline, not a fill', () => {
+  it('leaves the early chip shape to the Label chip (no own fill, ring or radius)', () => {
     const start = css.indexOf('.cockpit .ck-pick-chip {');
     expect(start).toBeGreaterThan(-1);
     const body = css.slice(start, css.indexOf('}', start));
-    expect(body).toMatch(/box-shadow:\s*inset 0 0 0 1px/);
-    expect(body).not.toMatch(/background/);
+    expect(body).not.toMatch(/background|box-shadow|border-radius/);
   });
 
   it('has no motion (no transition or animation)', () => {

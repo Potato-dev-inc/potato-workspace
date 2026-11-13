@@ -17,12 +17,15 @@ mod finish;
 mod output;
 mod pane_turn;
 mod process;
+mod read_only_gate;
 mod supervise;
 mod view;
 
 pub use entry::run_agent;
 #[cfg(test)]
 pub(crate) use entry::allow_shell_applies;
+#[cfg(test)]
+pub(crate) use read_only_gate::check as check_read_only;
 pub use supervise::supervise_existing;
 pub(crate) use fallback::{convert as convert_to_fallback, start_headless as start_fallback_headless};
 

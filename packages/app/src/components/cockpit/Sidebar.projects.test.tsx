@@ -291,14 +291,14 @@ describe('sidebar: footer', () => {
     }
     expect(foot.textContent).not.toContain('Your plans');
     await click(byLabel('More'));
-    const item = (label: string) => [...foot.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find((b) => b.textContent === label)!;
-    const seg = (label: string) => [...foot.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')].find((b) => b.textContent === label)!;
-    expect(foot.querySelector('[role="radiogroup"]')?.getAttribute('title')).toBe('Each agent gets its own window; the main window hides.');
+    const item = (label: string) => [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find((b) => b.textContent === label)!;
+    const seg = (label: string) => [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="radiogroup"] [role="radio"]')].find((b) => b.textContent === label)!;
+    expect(document.querySelector('[role="menu"] [role="radiogroup"]')?.getAttribute('title')).toBe('Each agent gets its own window; the main window hides.');
     expect(seg('Orchestration').getAttribute('aria-checked')).toBe('true');
     expect(seg('Individual').getAttribute('aria-checked')).toBe('false');
     await click(seg('Individual'));
     expect(c.setMode).toHaveBeenCalledWith('individual');
-    expect(q('.ck-side-foot [role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
     await click(byLabel('More'));
     await click(item('Scores'));
     expect(onOpenScores).toHaveBeenCalledTimes(1);
@@ -313,9 +313,9 @@ describe('sidebar: footer', () => {
   it('closes More with Escape', async () => {
     await render();
     await click(byLabel('More'));
-    expect(q('.ck-side-foot [role="menu"]')).not.toBeNull();
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
-    expect(q('.ck-side-foot [role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('keeps the Connection lost line with its Fix button', async () => {

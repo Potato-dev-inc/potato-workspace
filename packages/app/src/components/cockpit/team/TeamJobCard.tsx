@@ -1,5 +1,6 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useMemo, useState } from 'react';
+import { useT } from '../../../i18n';
 import type { WorktreeItem } from '../../../lib/cockpit-api';
 import { jobSub, jobTitle, type TeamApi, type TeamJob } from '../../../lib/team';
 import { Changes, type ChangesApi } from '../Changes';
@@ -53,6 +54,7 @@ function changesApiFor(job: TeamJob, api: TeamApi): ChangesApi {
  * (it then opens in a pane I can watch).
  */
 export function TeamJobCard({ job, api, paneName, onDone }: { job: TeamJob; api: TeamApi; paneName?: string; onDone?: () => void }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -127,7 +129,7 @@ export function TeamJobCard({ job, api, paneName, onDone }: { job: TeamJob; api:
         more={
           canDiscard ? (
             <CardButton tone="plain" role="dismiss" disabled={busy} onClick={() => setConfirmDiscard(true)}>
-              Discard
+              {ready ? t('team.discard') : t('common.dismiss')}
             </CardButton>
           ) : null
         }
@@ -135,7 +137,7 @@ export function TeamJobCard({ job, api, paneName, onDone }: { job: TeamJob; api:
       {confirmDiscard && (
         <Sheet labelledBy="ck-team-discard-t" onClose={busy ? undefined : () => setConfirmDiscard(false)}>
           <h2 className="ck-section" id="ck-team-discard-t">
-            Discard this update?
+            {ready ? t('team.discardAsk') : t('team.dismissAsk')}
           </h2>
           <p className="ck-sub">Deletes the separate copy and what the agent did in it. Your branch stays as it is.</p>
           <div className="ck-sheet-actions">
@@ -143,7 +145,7 @@ export function TeamJobCard({ job, api, paneName, onDone }: { job: TeamJob; api:
               Cancel
             </button>
             <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => void run(() => api.discard(job.id))}>
-              Discard
+              {ready ? t('team.discard') : t('common.dismiss')}
             </button>
           </div>
         </Sheet>

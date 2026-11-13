@@ -1,12 +1,13 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
+import { useT } from '../../../i18n';
 import type { MergePlan, TeamApi, TeamCard } from '../../../lib/team';
 import { Sheet } from '../Sheet';
 
 const errText = (err: unknown): string => (errorSentence(err));
 
 /**
- * "Merge #142 when its checks pass?" The plan is read from GitHub when the sheet opens (repository, title,
+ * "Merge review request 142 when its checks pass?" The plan is read from GitHub when the sheet opens (repository, title,
  * author, branch and the commit it is at), never from the card. Confirming arms GitHub's auto-merge at that
  * commit only. GitHub does the merge, not this app.
  */
@@ -22,6 +23,7 @@ export function MergeSheet({
   /** The sentence the backend returns, shown on the card. */
   onDone: (message: string) => void;
 }) {
+  const t = useT();
   const [plan, setPlan] = useState<MergePlan | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export function MergeSheet({
   return (
     <Sheet labelledBy="ck-team-merge-t" role="dialog" onClose={busy ? undefined : onClose} className="ck-team-sheet">
       <h2 className="ck-section" id="ck-team-merge-t">
-        Merge #{plan?.number ?? number} when its checks pass?
+        {t('team.mergeTitle', { n: plan?.number ?? number ?? '' })}
       </h2>
       {plan ? (
         <>
@@ -83,7 +85,7 @@ export function MergeSheet({
           Cancel
         </button>
         <button type="button" className="ck-btn ck-btn--primary" disabled={busy || !plan || plan.autoMergeOff} onClick={() => void submit()}>
-          Merge when green
+          {t('team.mergeWhenGreen')}
         </button>
       </div>
     </Sheet>

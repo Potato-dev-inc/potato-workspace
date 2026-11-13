@@ -621,7 +621,7 @@ export function Palette({
                   <span className="ck-palette-ic">{item.icon}</span>
                   <span className="ck-palette-title">{item.title}</span>
                   {item.desc && <span className="ck-palette-desc">{item.desc}</span>}
-                  {item.hint && <kbd className="ck-kbd">{item.hint}</kbd>}
+                  {item.hint && <kbd className="ck-chip-key ck-kbd">{item.hint}</kbd>}
                 </div>
               </div>
             );

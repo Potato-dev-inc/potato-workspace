@@ -2,6 +2,7 @@
 // inside a grouped inset list (`.st-list`); the panel supplies the list, the groups and the "Saved" tick.
 // Monochrome: no colour, no badges. Styles live in styles/settings.css.
 import { createContext, useContext, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { useT } from '../../i18n';
 import { Popup, Switch } from './controls';
 
 /**
@@ -26,9 +27,10 @@ function Label({ label, description }: { label: ReactNode; description?: ReactNo
 }
 
 /** A small "?" that explains something on hover or focus, so the row itself stays one short line. */
-export function Tip({ text, label = 'More about this' }: { text: string; label?: string }) {
+export function Tip({ text, label }: { text: string; label?: string }) {
+  const t = useT();
   return (
-    <span className="st-tip" role="img" tabIndex={0} title={text} aria-label={`${label}: ${text}`}>
+    <span className="st-tip" role="img" tabIndex={0} title={text} aria-label={`${label ?? t('settings.moreAbout')}: ${text}`}>
       ?
     </span>
   );
@@ -134,11 +136,12 @@ export function Note({ children, role }: { children: ReactNode; role?: 'alert' |
 }
 
 export function CodeBlock({ title, code }: { title: string; code: string }) {
+  const t = useT();
   return (
     <SettingBlock label={title}>
       <div className="st-code">
         <Btn small onClick={() => void navigator.clipboard.writeText(code)}>
-          Copy
+          {t('settings.copy')}
         </Btn>
         <pre>{code}</pre>
       </div>

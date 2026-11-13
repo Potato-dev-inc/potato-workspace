@@ -134,6 +134,11 @@ pub enum TickAction {
     QuietAsked,
 }
 
+/// What a turn failed with when the adapter went away under it. The chat view waits for the exit report to say why.
+pub const ADAPTER_GONE: &str = "the adapter exited before the turn finished";
+/// What a turn failed with when the session was closed under it (the app quit while it ran).
+pub const SESSION_CLOSED: &str = "the session was closed";
+
 #[derive(Debug, Clone)]
 pub enum SessionEvent {
     /// The snapshot changed (revision moved).
@@ -247,7 +252,8 @@ struct Core {
 
 impl Core {
     fn is_running(&self) -> bool {
-        self.conn.as_ref().is_some_and(AcpConnection::is_alive)
+        // The OS is asked too: the reader thread can lag a moment behind a process that was killed from outside.
+        self.conn.as_ref().is_some_and(|c| c.is_alive() && crate::proc_util::pid_alive(c.pid()))
             && !matches!(self.state.phase(), Phase::Dormant | Phase::Exited | Phase::Starting | Phase::Resuming)
     }
 }
@@ -640,7 +646,11 @@ impl AcpSession {
             if core.closed || core.state.epoch() != epoch {
                 return None;
             }
-            let summary = ExitSummary { kind: ExitKind::StartFailed, code: None, stderr_tail, reason: Some(error.to_string()) };
+            // One plain sentence with one thing to do, the same one the first start gives (no raw system text).
+            // A program that is gone from disk closes at once when started through a shell: say it is missing, not "closed right away".
+            let gone = matches!(error, AcpError::Closed) && { let p = std::path::Path::new(&self.cfg.command); p.is_absolute() && !p.exists() };
+            let reason = if gone { crate::acp::chat::start_failure_sentence(&self.cfg.label, &AcpError::Spawn("program missing".into())) } else { crate::acp::chat::start_failure_sentence(&self.cfg.label, error) };
+            let summary = ExitSummary { kind: ExitKind::StartFailed, code: None, stderr_tail, reason: Some(reason) };
             core.state.on_exit(summary.clone());
             ev.push(SessionEvent::Exited(summary));
             core.conn.take()
@@ -945,7 +955,7 @@ impl AcpSession {
                     None => TurnOutcome::Failed { message: "the agent ended the turn without a stop reason".into(), code: None },
                 },
                 Err(AcpError::Rpc { code, message, .. }) => TurnOutcome::Failed { message, code: Some(code) },
-                Err(AcpError::Closed) => TurnOutcome::Failed { message: "the adapter exited before the turn finished".into(), code: None },
+                Err(AcpError::Closed) => TurnOutcome::Failed { message: ADAPTER_GONE.into(), code: None },
                 Err(other) => TurnOutcome::Failed { message: other.to_string(), code: None },
             };
             // `cancelled` is what an agent answers to our stop request. If we never sent one, the agent stopped on its own
@@ -1297,7 +1307,7 @@ impl AcpSession {
             core.state.begin_epoch(true);
             if let Some(turn) = core.turn.take() {
                 let _ = turn;
-                let summary = core.state.on_turn_end(TurnOutcome::Failed { message: "the session was closed".into(), code: None });
+                let summary = core.state.on_turn_end(TurnOutcome::Failed { message: SESSION_CLOSED.into(), code: None });
                 ev.push(SessionEvent::TurnEnded(summary));
             }
             for ask_id in std::mem::take(&mut core.parked).into_keys() {
@@ -1588,7 +1598,7 @@ impl AcpSession {
             core.conn = None;
             if let Some(turn) = core.turn.take() {
                 let _ = turn;
-                let summary = core.state.on_turn_end(TurnOutcome::Failed { message: "the adapter exited before the turn finished".into(), code: None });
+                let summary = core.state.on_turn_end(TurnOutcome::Failed { message: ADAPTER_GONE.into(), code: None });
                 ev.push(SessionEvent::TurnEnded(summary));
             }
             for ask_id in std::mem::take(&mut core.parked).into_keys() {

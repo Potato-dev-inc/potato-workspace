@@ -2,6 +2,7 @@
 // Linux Inside: plain helpers for a pane's place (the chip, its tooltip, and Linux -> Windows paths).
 // `toWindowsPath` is the TypeScript mirror of `wsl::path::to_windows` (spec 3.3) for the pane's own
 // mount root and UNC root. It is display only: nothing here decides where an agent runs.
+import { t } from '../i18n';
 import type { PanePlace } from './wsl';
 
 export const LINUX_LABEL_NAME = 'Linux';
@@ -15,7 +16,7 @@ export function placeLabel(place: PanePlace | null | undefined): string | null {
 /** The chip tooltip: where it runs, then one line per warning. Empty for a Windows pane. */
 export function placeTooltip(place: PanePlace | null | undefined): string {
   if (!place || place.kind !== 'linux') return '';
-  const lines = [`Runs in ${place.distro} (WSL) in ${place.cwd}`];
+  const lines = [t('state.place.runsIn', { distro: place.distro, cwd: place.cwd })];
   for (const warning of place.warnings ?? []) lines.push(warning);
   return lines.join('\n');
 }

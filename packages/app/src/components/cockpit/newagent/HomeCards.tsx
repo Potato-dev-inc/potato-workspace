@@ -4,12 +4,15 @@
 import { useState } from 'react';
 import type { RecentProject } from '../../../lib/ship-api';
 import { stateHint } from '../../../lib/ship-model';
+import { t as tr, useT } from '../../../i18n';
 import {
   CARD_KINDS,
   MAX_PROMPT_CHARS,
   addCard,
   canAdd,
   cardTitle,
+  kindHint,
+  kindLabel,
   moveCard,
   removeCard,
   type CardKind,
@@ -17,7 +20,7 @@ import {
 } from './model';
 
 /** A saved prompt shows its own text in the body, so its heading is the plain name. */
-const cardHeading = (card: HomeCard): string => (card.kind === 'prompt' ? 'Saved prompt' : cardTitle(card));
+const cardHeading = (card: HomeCard): string => (card.kind === 'prompt' ? tr('newAgent.savedPrompt') : cardTitle(card));
 
 interface PaneLine {
   id: string;
@@ -47,6 +50,7 @@ export function HomeCards({
   onOpenPane: (paneId: string) => void;
   onUsePrompt: (text: string) => void;
 }) {
+  const t = useT();
   const [customize, setCustomize] = useState(false);
   const [adding, setAdding] = useState<'list' | 'prompt' | null>(null);
   const [draft, setDraft] = useState('');
@@ -68,13 +72,13 @@ export function HomeCards({
                 <h2 className="ck-na-hc-title">{cardHeading(card)}</h2>
                 {customize && (
                   <span className="ck-na-hc-tools">
-                    <button type="button" className="ck-na-mini" aria-label={`Move ${cardTitle(card)} up`} disabled={i === 0} onClick={() => onChange(moveCard(cards, card.id, -1))}>
+                    <button type="button" className="ck-na-mini" aria-label={t('newAgent.moveUp', { name: cardTitle(card) })} disabled={i === 0} onClick={() => onChange(moveCard(cards, card.id, -1))}>
                       ↑
                     </button>
-                    <button type="button" className="ck-na-mini" aria-label={`Move ${cardTitle(card)} down`} disabled={i === cards.length - 1} onClick={() => onChange(moveCard(cards, card.id, 1))}>
+                    <button type="button" className="ck-na-mini" aria-label={t('newAgent.moveDown', { name: cardTitle(card) })} disabled={i === cards.length - 1} onClick={() => onChange(moveCard(cards, card.id, 1))}>
                       ↓
                     </button>
-                    <button type="button" className="ck-na-mini" aria-label={`Remove ${cardTitle(card)}`} onClick={() => onChange(removeCard(cards, card.id))}>
+                    <button type="button" className="ck-na-mini" aria-label={t('newAgent.removeCard', { name: cardTitle(card) })} onClick={() => onChange(removeCard(cards, card.id))}>
                       ×
                     </button>
                   </span>
@@ -87,7 +91,7 @@ export function HomeCards({
       )}
 
       {adding === 'list' && (
-        <div className="ck-na-add-list" role="menu" aria-label="Add a card">
+        <div className="ck-na-add-list" role="menu" aria-label={t('newAgent.addCardLabel')}>
           {kinds.map((k) => (
             <button
               key={k.kind}
@@ -96,11 +100,11 @@ export function HomeCards({
               className="ck-na-item"
               onClick={() => (k.kind === 'prompt' ? setAdding('prompt') : pin(k.kind))}
             >
-              <span>{k.label}</span>
-              <span className="ck-na-item-hint">{k.hint}</span>
+              <span>{kindLabel(k.kind)}</span>
+              <span className="ck-na-item-hint">{kindHint(k.kind)}</span>
             </button>
           ))}
-          {kinds.length === 0 && <p className="ck-na-note">All the cards are already pinned.</p>}
+          {kinds.length === 0 && <p className="ck-na-note">{t('newAgent.allPinned')}</p>}
         </div>
       )}
 
@@ -108,8 +112,8 @@ export function HomeCards({
         <div className="ck-na-add-prompt">
           <textarea
             className="ck-na-input ck-na-input--small"
-            aria-label="Saved prompt text"
-            placeholder="Text to keep, for example how you like commits written."
+            aria-label={t('newAgent.savedPromptText')}
+            placeholder={t('newAgent.promptPlaceholder')}
             maxLength={MAX_PROMPT_CHARS}
             rows={3}
             autoFocus
@@ -118,10 +122,10 @@ export function HomeCards({
           />
           <div className="ck-na-add-actions">
             <button type="button" className="ck-btn ck-btn--primary ck-btn--sm" disabled={!draft.trim()} onClick={() => pin('prompt', draft)}>
-              Pin
+              {t('newAgent.pin')}
             </button>
             <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => setAdding(null)}>
-              Cancel
+              {t('newAgent.cancel')}
             </button>
           </div>
         </div>
@@ -131,17 +135,17 @@ export function HomeCards({
         {/* Nothing to add to until the first pin (the starters under the box pin one). */}
         {adding === null && cards.length > 0 && kinds.length > 0 && (
           <button type="button" className="ck-na-addrow" onClick={() => setAdding('list')}>
-            <span aria-hidden="true">+</span> Add card
+            <span aria-hidden="true">+</span> {t('newAgent.addCard')}
           </button>
         )}
         {adding !== null && (
           <button type="button" className="ck-na-addrow" onClick={() => setAdding(null)}>
-            Close
+            {t('newAgent.close')}
           </button>
         )}
         {cards.length > 0 && (
           <button type="button" className="ck-na-link" aria-pressed={customize} onClick={() => setCustomize((v) => !v)}>
-            {customize ? 'Done' : 'Customize'}
+            {customize ? t('newAgent.done') : t('newAgent.customize')}
           </button>
         )}
       </div>
@@ -162,16 +166,17 @@ function CardBody({
   onOpenPane: (paneId: string) => void;
   onUsePrompt: (text: string) => void;
 }) {
+  const t = useT();
   if (card.kind === 'prompt') {
     return (
-      <button type="button" className="ck-na-prompt" title="Use this text" onClick={() => onUsePrompt(card.text ?? '')}>
+      <button type="button" className="ck-na-prompt" title={t('newAgent.useThisText')} onClick={() => onUsePrompt(card.text ?? '')}>
         {card.text}
       </button>
     );
   }
   if (card.kind === 'recent') {
     const list = data.recent.filter((p) => p.state !== 'missing').slice(0, 5);
-    if (list.length === 0) return <p className="ck-na-note">No projects yet.</p>;
+    if (list.length === 0) return <p className="ck-na-note">{t('newAgent.noProjects')}</p>;
     return (
       <ul className="ck-na-list">
         {list.map((p) => (
@@ -186,7 +191,7 @@ function CardBody({
     );
   }
   const lines = card.kind === 'running' ? data.running : data.needs;
-  if (lines.length === 0) return <p className="ck-na-note">{card.kind === 'running' ? 'Nothing is running.' : 'Nothing is waiting for you.'}</p>;
+  if (lines.length === 0) return <p className="ck-na-note">{card.kind === 'running' ? t('newAgent.nothingRunning') : t('newAgent.nothingWaiting')}</p>;
   return (
     <ul className="ck-na-list">
       {lines.slice(0, 6).map((p) => (

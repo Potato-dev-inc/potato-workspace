@@ -99,7 +99,7 @@ const openMore = async () => {
   const more = host.querySelector<HTMLButtonElement>('button[aria-label="More"][aria-haspopup="menu"]');
   if (more && more.getAttribute('aria-expanded') !== 'true') await act(async () => more.click());
 };
-const spacesRow = () => [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent?.trim() === 'Spaces') ?? null;
+const spacesRow = () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent?.trim() === 'Spaces') ?? null;
 
 describe('sidebar: Spaces row and page', () => {
   it('the row appears when Labs spaces is on', async () => {

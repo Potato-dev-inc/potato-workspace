@@ -31,7 +31,6 @@ fn next_turn_works(rig: &ChatRig) {
 }
 
 // Person sees: the whole text, or "The agent sent one message that is too big to show."; never a hang or a dead chat.
-#[ignore = "chaos-finding A20: 1 MB line shown cut to about 200 KB with no notice (answer 200036 bytes, notice 'Done · 1 s')"]
 #[test]
 fn chaos_one_megabyte_line() {
     let rig = ChatRig::new("");
@@ -66,8 +65,8 @@ fn chaos_million_character_prompt() {
     next_turn_works(&rig);
 }
 
-// Person sees: "tools done"; no tool card still running; it ends within 60 s.
-#[ignore = "chaos-finding A22: only 1998 of 10000 tool cards reach the chat"]
+// Person sees: "tools done"; no tool card still running; it ends within 60 s. A turn shows at most MAX_TURN_CARDS cards
+// (a chat of 20000 items cannot be read or scrolled); the rest are one line: "9600 more steps hidden".
 #[test]
 fn chaos_ten_thousand_tool_cards() {
     let rig = ChatRig::new("");
@@ -75,7 +74,10 @@ fn chaos_ten_thousand_tool_cards() {
     assert!(wait_until(60, || rig.turn_over()), "not ended within 60 s");
     assert_eq!(rig.last_answer().as_deref(), Some("tools done"), "notices {:?}", rig.notices());
     assert_eq!(open_tool_calls(&rig), 0, "tool cards still running");
-    assert_eq!(rig.items().iter().filter(|i| i["kind"] == "toolCall").count(), 10_000, "a tool card is missing");
+    let shown = crate::acp::chat::mapper::MAX_TURN_CARDS;
+    assert_eq!(rig.items().iter().filter(|i| i["kind"] == "toolCall").count(), shown, "the card limit");
+    let hidden: Vec<String> = rig.notices().into_iter().filter(|n| n.ends_with("more steps hidden")).collect();
+    assert_eq!(hidden, vec![format!("{} more steps hidden", 10_000 - shown)], "one hidden-steps line; notices {:?}", rig.notices());
 }
 
 // Person sees: "after junk"; no junk characters anywhere in the chat.

@@ -1,6 +1,7 @@
 // "Found on this computer": the agents the app can already see, each with one-click Add, plus Add all.
 // Hidden when the call fails or finds nothing. Adding runs the same flow as typing the name (the box's `onAdd`).
 import { useEffect, useState } from 'react';
+import { useT } from '../../../i18n';
 import type { AddAgentApi, FoundAgent } from '../../../lib/addAgent';
 import { Btn } from '../settings-ui';
 
@@ -19,6 +20,7 @@ export function AddAgentFound({
   /** Adds them all, one after the other. */
   onAddAll: (ids: string[]) => void;
 }) {
+  const t = useT();
   const [found, setFound] = useState<FoundAgent[]>([]);
   useEffect(() => {
     let alive = true;
@@ -33,12 +35,12 @@ export function AddAgentFound({
   }, [api, projectDir]);
   if (found.length === 0) return null;
   return (
-    <div className="aa-found" role="group" aria-label="Found on this computer">
+    <div className="aa-found" role="group" aria-label={t('addAgent.found.title')}>
       <div className="aa-found-head">
-        <p className="aa-found-title">Found on this computer</p>
+        <p className="aa-found-title">{t('addAgent.found.title')}</p>
         {found.length > 1 && (
           <button type="button" className="aa-link" disabled={disabled} onClick={() => onAddAll(found.map((f) => f.id))}>
-            Add all
+            {t('addAgent.found.addAll')}
           </button>
         )}
       </div>
@@ -47,8 +49,8 @@ export function AddAgentFound({
           <li key={f.id} className="aa-found-row" data-found={f.id}>
             <span className="aa-found-name">{f.displayName}</span>
             {f.version ? <span className="aa-quiet">{f.version}</span> : null}
-            <Btn small disabled={disabled} aria-label={`Add ${f.displayName}`} onClick={() => onAdd(f.id)}>
-              Add
+            <Btn small disabled={disabled} aria-label={t('addAgent.found.addOne', { name: f.displayName })} onClick={() => onAdd(f.id)}>
+              {t('addAgent.add')}
             </Btn>
           </li>
         ))}

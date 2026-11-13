@@ -5,6 +5,7 @@
 // HTML, cut to length, and never on a button. The buttons are the choices the backend sent, in its order (the
 // first one is the primary). Number keys never answer these cards: starting or publishing work needs a click.
 import { useState } from 'react';
+import { t, useT } from '../../i18n';
 import { isIssueStart, isIssuePush, timeLeftText, type Question, type QuestionAnswer, type QuestionChoice } from '../../lib/questions';
 import '../../styles/issue-card.css';
 import { CardButton, InboxCard } from './InboxCard';
@@ -22,7 +23,6 @@ const CONTEXT_MAX = 1000;
 /** One muted line: at most this many characters. */
 const LINE_MAX = 300;
 
-const HELD = "Potato Workspace won't push this. Check the copy yourself.";
 /** Context lines the backend writes: the repo, who labeled and wrote it, and the text the agent reads. */
 const REPO = /^Repo: (.+) \(issue #\d+\)$/;
 const WHO = /^Labeled by (.+)\. Written by (.+)\.$/;
@@ -32,15 +32,6 @@ const NUMBER = /#(\d+)/;
 
 /** Cut by characters, so an emoji is never split in half. */
 const cut = (text: string, max: number): string => Array.from(text).slice(0, max).join('');
-
-/** Button words. `start` keeps the backend's own words ("Start with Codex"); the rest are the fixed copy. */
-const WORDS: Record<string, string> = {
-  [PUSH]: 'Open draft PR',
-  [LOOK]: 'Look first',
-  [THROW]: 'Throw away',
-  not_now: 'Not now',
-  ignore: 'Ignore this issue',
-};
 
 /**
  * What the card shows, read from the question. The question text says the number (and, for a start card,
@@ -63,11 +54,13 @@ function readCard(q: Question) {
   const facts = start ? null : rest[0] ?? null;
   const muted = (start ? rest : rest.slice(1)).map((l) => cut(l, LINE_MAX));
 
-  const header = ['GitHub issue' + (number ? ` #${number}` : ''), repo ? cut(repo, TITLE_MAX) : null].filter(Boolean).join(' · ');
+  const header = [number ? t('inboxCards.issue.headerNumber', { n: number }) : t('inboxCards.issue.header'), repo ? cut(repo, TITLE_MAX) : null]
+    .filter(Boolean)
+    .join(' · ');
   return {
     title,
     header,
-    reason: who ? `Labeled by ${cut(who[1], TITLE_MAX)} · written by ${cut(who[2], TITLE_MAX)}` : facts,
+    reason: who ? t('inboxCards.issue.byLine', { labeler: cut(who[1], TITLE_MAX), writer: cut(who[2], TITLE_MAX) }) : facts,
     muted,
   };
 }
@@ -84,7 +77,16 @@ export function IssueCard({
   /** Opens the run's pane for "Look first". Absent when the pane is not known: no Look first button then. */
   onOpenPane?: () => void;
 }) {
+  const t = useT();
   const [showText, setShowText] = useState(false);
+  /** Button words. `start` keeps the backend's own words ("Start with Codex"); the rest are the fixed copy. */
+  const WORDS: Record<string, string> = {
+    [PUSH]: t('inboxCards.issue.openDraft'),
+    [LOOK]: t('inboxCards.lookFirst'),
+    [THROW]: t('inboxCards.issue.throwAway'),
+    not_now: t('inboxCards.notNow'),
+    ignore: t('inboxCards.issue.ignore'),
+  };
   const card = readCard(q);
   // A push card with no "Open draft PR" choice is held: the backend found something it will not push.
   const held = isIssuePush(q) && !q.choices.some((c) => c.id === PUSH);
@@ -101,7 +103,7 @@ export function IssueCard({
         </CardButton>
       );
     }
-    const label = c.id === START ? c.label.trim() || 'Start the run' : WORDS[c.id] ?? cut(c.label, 60);
+    const label = c.id === START ? c.label.trim() || t('inboxCards.issue.startFallback') : WORDS[c.id] ?? cut(c.label, 60);
     return (
       <CardButton key={c.id} tone={tone} role="answer" onClick={() => onAnswer({ choice_id: c.id })}>
         {label}
@@ -118,8 +120,8 @@ export function IssueCard({
       age={now - q.created_at_ms}
       guard
       reason={card.reason}
-      caution={held ? HELD : undefined}
-      note={left > 0 ? `Ends in ${timeLeftText(left)} if you do not answer.` : undefined}
+      caution={held ? t('inboxCards.issue.held') : undefined}
+      note={left > 0 ? t('inboxCards.endsIn', { time: timeLeftText(left) }) : undefined}
       data={{
         'data-question-id': q.id,
         'data-issue-card': q.kind,
@@ -136,7 +138,7 @@ export function IssueCard({
               </ul>
             ) : null}
             {showText ? (
-              <pre className="ib-issue-text" aria-label="The text the agent gets">
+              <pre className="ib-issue-text" aria-label={t('inboxCards.issue.textLabel')}>
                 {cut(q.context ?? '', CONTEXT_MAX)}
               </pre>
             ) : null}
@@ -146,7 +148,7 @@ export function IssueCard({
       actions={shown.length > 0 ? <>{shown.map(button)}</> : null}
       more={
         <CardButton tone="plain" aria-expanded={showText} onClick={() => setShowText((v) => !v)}>
-          {showText ? 'Hide issue text' : 'Show issue text'}
+          {showText ? t('inboxCards.issue.hideText') : t('inboxCards.issue.showText')}
         </CardButton>
       }
     />

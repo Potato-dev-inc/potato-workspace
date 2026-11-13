@@ -190,7 +190,21 @@ export function MobilePairingPanel({
           return (
             <p className="text-xs" data-testid="pairing-origin">
               <span className="text-pm-muted">Your phone will connect to </span>
-              <strong className="font-mono break-all">{notice.host}</strong>
+              <strong className="font-mono break-all">{notice.host}</strong>{' '}
+              <button
+                type="button"
+                className="st-linkbtn"
+                data-testid="pairing-origin-copy"
+                onClick={() => {
+                  try {
+                    void navigator.clipboard?.writeText(notice.host);
+                  } catch {
+                    /* no clipboard here */
+                  }
+                }}
+              >
+                Copy
+              </button>
               {notice.warning && <span className="block mt-1 text-pm-muted">{notice.warning}</span>}
             </p>
           );

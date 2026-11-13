@@ -37,4 +37,11 @@ describe('EmptyState', () => {
     expect(render(<EmptyState title="T" />).querySelector('h2')).not.toBeNull();
     expect(render(<EmptyState plain title="T" />).querySelector('h1, h2')).toBeNull();
   });
+
+  it('shows the quiet Potato mark, except in a small menu', () => {
+    const big = render(<EmptyState title="T" />).querySelector('svg[data-mark="potato"]');
+    expect(big?.getAttribute('class')).toBe('ck-potato ck-potato--quiet');
+    expect(big?.getAttribute('width')).toBe('28');
+    expect(render(<EmptyState plain title="T" />).querySelector('svg')).toBeNull();
+  });
 });

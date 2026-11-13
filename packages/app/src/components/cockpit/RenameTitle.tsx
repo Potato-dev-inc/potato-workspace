@@ -2,6 +2,7 @@
 // Enter saves, Escape cancels, a blank name clears it so automatic titling resumes.
 import { useEffect, useRef, useState } from 'react';
 import { cleanTitleInput, MAX_TITLE_CHARS } from './titles';
+import { useT } from '../../i18n';
 
 export interface RenameTitleProps {
   text: string;
@@ -13,6 +14,7 @@ export interface RenameTitleProps {
 }
 
 export function RenameTitle({ text, current, editing, onEditingChange, onSave }: RenameTitleProps) {
+  const t = useT();
   const [draft, setDraft] = useState(current);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -28,7 +30,7 @@ export function RenameTitle({ text, current, editing, onEditingChange, onSave }:
     return (
       <h1
         className="ck-title ck-title--sm ck-title--editable"
-        title="Double-click to rename"
+        title={t('pane.renameTip')}
         onDoubleClick={() => onEditingChange(true)}
       >
         {text}
@@ -46,10 +48,10 @@ export function RenameTitle({ text, current, editing, onEditingChange, onSave }:
     <input
       ref={inputRef}
       className="ck-title-input"
-      aria-label="Pane name"
+      aria-label={t('pane.nameLabel')}
       value={draft}
       maxLength={MAX_TITLE_CHARS}
-      placeholder="Name this pane"
+      placeholder={t('pane.namePlaceholder')}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {

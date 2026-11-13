@@ -9,6 +9,7 @@
 // The first row of step 1 is "Pick for me" (only with a `pick` API and a project). It asks which agent to start
 // here, from the person's own history. It starts nothing: only a press on its Start button does.
 import { SIGN_IN } from '../../lib/glossary';
+import { t as tr, useT } from '../../i18n';
 import { AgentLogo } from '../common/AgentLogo';
 import { Fragment, useEffect, useState } from 'react';
 import { accountsFor, needsAccountStep, pickableAccounts, rememberSignIn, rememberedSignIn, signInLabel, tauriAccountsApi, type Account, type AccountsApi } from '../../lib/accounts';
@@ -23,7 +24,7 @@ import { useHiddenAgents, visibleAgentEntries } from '../../lib/hiddenAgents';
 type Route = 'terminal' | 'acp' | 'terminal_chat' | 'prompt';
 import { shipApi, type GitInitPlan, type GitState, type RecentProject, type ShipApi } from '../../lib/ship-api';
 import { realRecents, stateHint, supportsCopies } from '../../lib/ship-model';
-import { EARLY_TITLE, FOOTER, isEarly, pickHint, startable, startLabel, type PickApi, type PickResult, type PickState } from '../../lib/pick-for-me';
+import { earlyTitle, footerText, isEarly, pickHint, startable, startLabel, type PickApi, type PickResult, type PickState } from '../../lib/pick-for-me';
 import '../../styles/cockpit-ship.css';
 import '../../styles/cockpit-pick.css';
 import '../../styles/cockpit-acp.css';
@@ -104,9 +105,9 @@ interface PickAnswer {
 
 /** The one line under a switch that cannot be turned on: why, in plain words. */
 function noGitHint(state: GitState | undefined): string {
-  if (state === 'no_commits') return 'Needs a first Git snapshot.';
-  if (state === 'missing') return 'This folder was not found.';
-  return 'Needs Git. This folder doesn’t use it yet.';
+  if (state === 'no_commits') return tr('newAgent.noGitFirst');
+  if (state === 'missing') return tr('newAgent.noGitMissing');
+  return tr('newAgent.noGitNone');
 }
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
@@ -128,6 +129,7 @@ export function NewAgentMenu({
   onTonight,
   chat,
 }: Props) {
+  const t = useT();
   const [accounts, setAccounts] = useState<Account[]>([]);
   // A sign-in lent by another PC ("Leo's PC (lent) · 2h 14m left") is listed next to my own, and its time left ticks.
   const [now, setNow] = useState(() => Date.now());
@@ -344,9 +346,9 @@ export function NewAgentMenu({
   if (step === 'projects') {
     return (
       <>
-        <div className="ck-menu-cap">Recent projects</div>
-        {recent === null && <div className="ck-menu-note">Looking…</div>}
-        {recent?.length === 0 && <div className="ck-menu-note">No projects yet. Choose a folder to start.</div>}
+        <div className="ck-menu-cap">{t('newAgent.menuRecent')}</div>
+        {recent === null && <div className="ck-menu-note">{t('newAgent.menuLooking')}</div>}
+        {recent?.length === 0 && <div className="ck-menu-note">{t('newAgent.menuNoProjects')}</div>}
         {recent?.map((p) => (
           <div key={p.path} className="ck-menu-project">
             <button
@@ -364,14 +366,14 @@ export function NewAgentMenu({
               {stateHint(p.state) && <span className="ck-menu-hint">{stateHint(p.state)}</span>}
             </button>
             {p.state === 'missing' && (
-              <button type="button" className="ck-menu-remove" aria-label={`Remove ${p.name} from the list`} onClick={() => forget(p)}>
-                Remove
+              <button type="button" className="ck-menu-remove" aria-label={t('newAgent.menuRemoveAria', { name: p.name })} onClick={() => forget(p)}>
+                {t('newAgent.menuRemove')}
               </button>
             )}
           </div>
         ))}
         <button type="button" role="menuitem" className="ck-menu-item" onClick={() => void pick()}>
-          <span>Choose folder…</span>
+          <span>{t('newAgent.menuChooseFolder')}</span>
         </button>
         {error && (
           <div className="ck-menu-note ck-menu-note--err" role="alert">
@@ -379,7 +381,7 @@ export function NewAgentMenu({
           </div>
         )}
         <button type="button" role="menuitem" className="ck-menu-item" onClick={() => setStep('agents')}>
-          <span>Back</span>
+          <span>{t('newAgent.back')}</span>
         </button>
       </>
     );
@@ -389,19 +391,19 @@ export function NewAgentMenu({
     return (
       <div className="ck-gitstep">
         <div className="ck-menu-cap">{planFor.name}</div>
-        <p className="ck-gitstep-text">This folder doesn&apos;t use Git yet. Undo and separate copies need it.</p>
+        <p className="ck-gitstep-text">{t('newAgent.gitText')}</p>
         {plan ? (
           <>
             <p className="ck-gitstep-fine">
               {plan.too_big
-                ? 'This folder has too many files to save as one snapshot. Pick the project’s own folder instead.'
-                : `Saves ${plan.files} ${plan.files === 1 ? 'file' : 'files'} as the first snapshot.`}
-              {plan.gitignore.length > 0 && !plan.too_big && ' Also adds a .gitignore that keeps node_modules and .env files out.'}{' '}
-              Keeps a private history of changes in this folder. Nothing is uploaded.
+                ? t('newAgent.gitTooBig')
+                : t('newAgent.gitSaves', { count: plan.files })}
+              {plan.gitignore.length > 0 && !plan.too_big && ` ${t('newAgent.gitIgnore')}`}{' '}
+              {t('newAgent.gitPrivate')}
             </p>
             <details className="ck-gitstep-details">
-              <summary>Details</summary>
-              <ul className="ck-gitstep-cmds" aria-label="What will run">
+              <summary>{t('newAgent.details')}</summary>
+              <ul className="ck-gitstep-cmds" aria-label={t('newAgent.whatWillRun')}>
                 {plan.commands.map((c) => (
                   <li key={c}>
                     <code>{c}</code>
@@ -411,7 +413,7 @@ export function NewAgentMenu({
             </details>
           </>
         ) : (
-          !error && <p className="ck-gitstep-fine">Checking the folder…</p>
+          !error && <p className="ck-gitstep-fine">{t('newAgent.checkingFolder')}</p>
         )}
         {error && (
           <p className="ck-menu-note ck-menu-note--err" role="alert">
@@ -420,14 +422,14 @@ export function NewAgentMenu({
         )}
         <div className="ck-gitstep-actions">
           <button type="button" className="ck-btn ck-btn--primary" disabled={!plan || plan.too_big || busy} onClick={() => void setUpGit()}>
-            Set up Git here
+            {t('newAgent.setUpGit')}
           </button>
           <button type="button" className="ck-btn ck-btn--secondary" disabled={busy} onClick={withoutGit}>
-            Not now
+            {t('newAgent.notNow')}
           </button>
         </div>
         <button type="button" role="menuitem" className="ck-menu-item" onClick={() => setStep('projects')}>
-          <span>Back</span>
+          <span>{t('newAgent.back')}</span>
         </button>
       </div>
     );
@@ -439,17 +441,17 @@ export function NewAgentMenu({
     const canStart = startable(pickResult, entries);
     return (
       <div className="ck-pick">
-        <div className="ck-menu-cap">Pick for me</div>
+        <div className="ck-menu-cap">{t('newAgent.pickForMe')}</div>
         {choice && <div className="ck-pick-name">{choice.label}</div>}
         {choice && isEarly(pickResult) && (
-          <span className="ck-pick-chip" title={EARLY_TITLE}>
-            early
+          <span className="ck-chip-label ck-pick-chip" title={earlyTitle()}>
+            {t('newAgent.early')}
           </span>
         )}
         <p className="ck-pick-reason">{pickResult.reason}</p>
         {choice && !canStart && (
           <p className="ck-menu-note ck-menu-note--err" role="alert">
-            {`${choice.label} can't be started from this menu.`}
+            {t('newAgent.cantStartHere', { name: choice.label })}
           </p>
         )}
         <div className="ck-pick-actions">
@@ -459,17 +461,17 @@ export function NewAgentMenu({
                 {startLabel(pickResult)}
               </button>
               <button type="button" className="ck-btn ck-btn--secondary" onClick={() => setStep('agents')}>
-                Choose myself
+                {t('newAgent.chooseMyself')}
               </button>
             </>
           ) : (
             <button type="button" className="ck-btn ck-btn--secondary" autoFocus onClick={() => setStep('agents')}>
-              Back
+              {t('newAgent.back')}
             </button>
           )}
         </div>
         <details className="ck-pick-why">
-          <summary>Why this one</summary>
+          <summary>{t('newAgent.whyThis')}</summary>
           {pickResult.considered.map((c, i) => (
             <div key={`${c.label}-${i}`} className={c.state === 'skipped' ? 'ck-pick-line is-skipped' : 'ck-pick-line'}>
               <span>{c.label}</span>
@@ -481,7 +483,7 @@ export function NewAgentMenu({
               {note}
             </p>
           ))}
-          <p className="ck-pick-foot">{FOOTER}</p>
+          <p className="ck-pick-foot">{footerText()}</p>
         </details>
       </div>
     );
@@ -501,7 +503,7 @@ export function NewAgentMenu({
           <span>{SIGN_IN.defaultOne}</span>
         </button>
         {accountsFor(live, picking.type).map((a) => (
-          <button key={a.id} type="button" role="menuitem" className="ck-menu-item" disabled={!!pickingChat && a.borrowed && a.chat === false} title={pickingChat && a.borrowed && a.chat === false ? "Chat can't use a lent sign-in for this agent yet. Use a terminal." : undefined} onClick={() => (pickingChat ? chooseForChat(a.id) : start(picking.type, a.id))}>
+          <button key={a.id} type="button" role="menuitem" className="ck-menu-item" disabled={!!pickingChat && a.borrowed && a.chat === false} title={pickingChat && a.borrowed && a.chat === false ? t('newAgent.lentNoChatTerminalLower') : undefined} onClick={() => (pickingChat ? chooseForChat(a.id) : start(picking.type, a.id))}>
             <span>{signInLabel(a, now)}</span>
           </button>
         ))}
@@ -509,7 +511,7 @@ export function NewAgentMenu({
             setPicking(null);
             setPickingChat(null);
           }}>
-          <span>Back</span>
+          <span>{t('newAgent.back')}</span>
         </button>
       </>
     );
@@ -521,26 +523,26 @@ export function NewAgentMenu({
   return (
     <>
       <div className="ck-menu-cap ck-menu-cap--row">
-        <span>New agent</span>
+        <span>{t('newAgent.title')}</span>
         {onProject && (
           <button
             type="button"
-            className="ck-chip"
-            aria-label={`Project: ${project?.name ?? 'current'}. Change`}
+            className="ck-chip-label ck-chip"
+            aria-label={t('newAgent.projectLabel', { name: project?.name ?? t('newAgent.currentWord') })}
             aria-haspopup="menu"
             onClick={() => {
               loadRecent();
               setStep('projects');
             }}
           >
-            <span className="ck-chip-name">{project?.name ?? 'Current project'}</span>
+            <span className="ck-chip-name">{project?.name ?? t('newAgent.currentProject')}</span>
             <span aria-hidden="true">▾</span>
           </button>
         )}
       </div>
       {chat && (
         <div className="ck-menu-startmode" data-testid="start-mode">
-          <span id="ck-startmode-label">Start in</span>
+          <span id="ck-startmode-label">{t('newAgent.startIn')}</span>
           <div role="group" aria-labelledby="ck-startmode-label" className="ck-lane-seg">
             {(['chat', 'terminal'] as const).map((m) => (
               <button
@@ -554,7 +556,7 @@ export function NewAgentMenu({
                   chat.onMode(m);
                 }}
               >
-                {m === 'chat' ? 'Chat' : 'Terminal'}
+                {m === 'chat' ? t('newAgent.chat') : t('newAgent.terminal')}
               </button>
             ))}
           </div>
@@ -563,7 +565,7 @@ export function NewAgentMenu({
       {pickState !== null && pickState !== 'failed' && (
         <>
           <button type="button" role="menuitem" className="ck-menu-item" disabled={pickState === 'loading'} onClick={() => setStep('pick')}>
-            <span>Pick for me</span>
+            <span>{t('newAgent.pickForMe')}</span>
             <span className="ck-menu-hint">{pickHint(pickState)}</span>
           </button>
           <div className="ck-menu-sep" />
@@ -583,9 +585,9 @@ export function NewAgentMenu({
             disabled={e.disabled || (route !== 'terminal' && chatBusy)}
             title={
               e.disabled
-                ? `${e.disabledReason ? `${e.disabledReason}. ` : ''}Only for tasks from other agents.`
+                ? `${e.disabledReason ? `${e.disabledReason}. ` : ''}${t('newAgent.onlyForTasks')}`
                 : last
-                  ? `Starts with ${last.label}. Shift+Enter picks another ${SIGN_IN.noun}.`
+                  ? t('newAgent.startsWith', { label: last.label, noun: SIGN_IN.noun })
                   : e.disabledReason
             }
             onClick={(ev) => (hasAccounts && ev.shiftKey ? startTerminal(e.type, true) : launch(e.type))}
@@ -598,8 +600,8 @@ export function NewAgentMenu({
           >
             <AgentLogo id={e.type} name={e.label} size={14} decorative className="ck-menu-logo" />
             <span>{e.label}</span>
-            {!e.disabled && hasAccounts && <span className="ck-menu-hint">{last ? `${last.label} ›` : `${accountsFor(live, e.type).length + 1} sign-ins ›`}</span>}
-            {!e.disabled && !hasAccounts && route === 'terminal' && readyAgents.has(e.type) && <span className="ck-menu-hint">ready</span>}
+            {!e.disabled && hasAccounts && <span className="ck-menu-hint">{last ? `${last.label} ›` : t('newAgent.signIns', { n: accountsFor(live, e.type).length + 1 })}</span>}
+            {!e.disabled && !hasAccounts && route === 'terminal' && readyAgents.has(e.type) && <span className="ck-menu-hint">{t('newAgent.ready')}</span>}
           </button>
         );
         // The remembered sign-in has a small way to pick another (Shift+Enter on the row does the same).
@@ -607,8 +609,8 @@ export function NewAgentMenu({
           last && !e.disabled ? (
             <div key={e.type} className="ck-menu-split">
               {button}
-              <button type="button" role="menuitem" className="ck-menu-change" aria-label={`Change ${SIGN_IN.noun} for ${e.label}`} onClick={() => startTerminal(e.type, true)}>
-                Change
+              <button type="button" role="menuitem" className="ck-menu-change" aria-label={t('newAgent.changeFor', { noun: SIGN_IN.noun, name: e.label })} onClick={() => startTerminal(e.type, true)}>
+                {t('newAgent.change')}
               </button>
             </div>
           ) : (
@@ -641,7 +643,7 @@ export function NewAgentMenu({
           <span>{chatFail.sentence}</span>
           {chatFail.terminalFallback && (
             <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => start(chatFail.agentId)}>
-              Start in terminal
+              {t('newAgent.startInTerminal')}
             </button>
           )}
         </div>
@@ -649,7 +651,7 @@ export function NewAgentMenu({
       {addPickList.length > 0 && chat?.onAddChat && (
         <>
           <button type="button" className="ck-menu-setup" aria-expanded={addPick} onClick={() => setAddPick((v) => !v)}>
-            Set up chat for another agent…
+            {t('newAgent.setUpChatOther')}
           </button>
           {addPick &&
             addPickList.map((a) => (
@@ -671,8 +673,8 @@ export function NewAgentMenu({
       )}
       {onIsolated && (
         <>
-          <div className="ck-menu-toggle" title="Work in a separate copy of the project, so agents never edit the same files. You review and merge it later.">
-            <span id="ck-sepcopy-label">Separate copy</span>
+          <div className="ck-menu-toggle" title={t('newAgent.copyTip')}>
+            <span id="ck-sepcopy-label">{t('newAgent.copy')}</span>
             <button
               type="button"
               role="switch"
@@ -691,41 +693,41 @@ export function NewAgentMenu({
               <span>{noGitHint(project?.state)}</span>
               {project && canSetUpGit && (
                 <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => choose({ ...project, state: project.state as GitState, last_used_ms: 0 })}>
-                  Set up Git here
+                  {t('newAgent.setUpGit')}
                 </button>
               )}
             </div>
           ) : (
             <div
               className="ck-menu-note"
-              title={isolated ? "From the current branch. Your uncommitted changes aren't included." : undefined}
+              title={isolated ? t('newAgent.fromBranchTip') : undefined}
             >
-              {isolated ? 'From the current branch.' : 'Works in this folder.'}
+              {isolated ? t('newAgent.fromBranch') : t('newAgent.worksHere')}
             </div>
           )}
         </>
       )}
       {onOpenStore && (
         <button type="button" role="menuitem" className="ck-menu-item" onClick={onOpenStore}>
-          <span>More agents…</span>
+          <span>{t('newAgent.moreAgents')}</span>
         </button>
       )}
       {(onStartMission || onTonight) && <div className="ck-menu-sep" />}
       {onStartMission && (
         <button type="button" role="menuitem" className="ck-menu-item" onClick={onStartMission}>
-          <span>Start a mission…</span>
-          <span className="ck-menu-hint">Preview</span>
+          <span>{t('newAgent.startMission')}</span>
+          <span className="ck-menu-hint">{t('newAgent.preview')}</span>
         </button>
       )}
       {onTonight && (
         <button type="button" role="menuitem" className="ck-menu-item" onClick={onTonight}>
-          <span>Tonight…</span>
-          <span className="ck-menu-hint">Night Shift</span>
+          <span>{t('newAgent.tonight')}</span>
+          <span className="ck-menu-hint">{t('newAgent.nightShift')}</span>
         </button>
       )}
       <div className="ck-menu-sep" />
       <button type="button" className="ck-menu-edit-agents" onClick={() => setStep('edit')}>
-        Edit list…
+        {t('newAgent.editList')}
       </button>
     </>
   );

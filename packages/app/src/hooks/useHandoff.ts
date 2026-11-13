@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { DEFAULT_OPTIONS, realHandoffDeps, runHandoff, type HandoffDeps, type HandoffMode, type HandoffOptions, type HandoffStatus } from '../lib/handoff';
+import { t } from '../i18n';
 import { loadSettings } from '../lib/settings';
 import type { CockpitApi } from './useCockpit';
 
@@ -66,7 +67,7 @@ export function useHandoff(c: CockpitApi, deps?: HandoffDeps, readOptions: () =>
         select: (id) => cRef.current.select(id),
         titleOf: (id) => cRef.current.names.get(id),
       });
-    setStatus({ kind: 'writing', text: 'Writing handoff…' });
+    setStatus({ kind: 'writing', text: t('state.handoff.writing') });
     void readOptions().then((options) => runHandoff(paneId, real, setStatus, options));
   };
   const allowed = (id: string): boolean => {

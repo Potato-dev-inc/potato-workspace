@@ -205,10 +205,22 @@ impl Rig {
         }
     }
 
-    fn add(&self, input: &str, terminal_only: bool) -> AddAgentRun {
+    /// One add, up to wherever the run stops (a consent screen included).
+    fn ask(&self, input: &str, terminal_only: bool) -> AddAgentRun {
         let started = self.ladder.start(input, terminal_only).expect("start");
         assert_eq!(started.state, RunState::Checking);
         self.wait(&started.run_id)
+    }
+
+    /// One add as a person who skips every check that would send a message: the terminal programs of these tests
+    /// (the fake CLI's help names a `run` command) end the way they always did.
+    fn add(&self, input: &str, terminal_only: bool) -> AddAgentRun {
+        let run = self.ask(input, terminal_only);
+        if run.state == RunState::NeedsConsent {
+            self.ladder.skip_check(&run.run_id).expect("skip");
+            return self.wait(&run.run_id);
+        }
+        run
     }
 
     fn step<'a>(&self, run: &'a AddAgentRun, id: &str) -> &'a crate::tui::declarative::wizard::ladder::StepRun {
@@ -845,4 +857,133 @@ fn cancel_during_install_ends_cancelled_and_stops_the_install() {
     // The next add is not blocked by a run that is gone.
     rig.program(&exe_name("faketerm"));
     assert_eq!(rig.add("faketerm", false).state, RunState::Done);
+}
+
+// ---- the headless probe as step L2 (night 2026-11-13, A4 wired into the ladder) ------------------------------
+
+/// The probe's fake CLI (`tests/fake-probe/fake_probe_cli.rs`), compiled once. The mode is the exe name.
+fn probe_base() -> &'static std::path::Path {
+    static BASE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    BASE.get_or_init(|| {
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tui/declarative/wizard/tests/fake-probe/fake_probe_cli.rs");
+        let dir = std::env::temp_dir().join(format!("pm-ladder-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp folder");
+        let rustc = std::env::var_os("CARGO")
+            .map(|c| PathBuf::from(c).with_file_name(if cfg!(windows) { "rustc.exe" } else { "rustc" }))
+            .filter(|p| p.is_file())
+            .unwrap_or_else(|| PathBuf::from("rustc"));
+        let out = dir.join(exe_name("fake-probe-base"));
+        let status = crate::proc_util::hidden_command(rustc).args(["--edition", "2021", "-C", "opt-level=0", "-o"]).arg(&out).arg(&source).status().expect("rustc");
+        assert!(status.success(), "building the fake probe cli failed");
+        out
+    })
+}
+
+impl Rig {
+    /// The probe's fake CLI as `probe-<mode>` on the temp PATH.
+    fn probe_program(&self, mode: &str) -> PathBuf {
+        let to = self.bin.join(exe_name(&format!("probe-{mode}")));
+        std::fs::copy(probe_base(), &to).expect("copy the fake probe cli");
+        to
+    }
+
+    /// Every start of the fake probe cli, as its argument list.
+    fn probe_calls(&self, exe: &std::path::Path) -> Vec<Vec<String>> {
+        let log = format!("{}.args.log", exe.display());
+        std::fs::read_to_string(log).unwrap_or_default().lines().map(|l| l.split('\t').map(str::to_string).collect()).collect()
+    }
+
+    fn prompts_sent(&self, exe: &std::path::Path) -> usize {
+        self.probe_calls(exe).iter().filter(|c| c.iter().any(|a| a.contains("Reply with exactly"))).count()
+    }
+
+    fn probing(name: &str) -> Self {
+        Self::with(name, |c| c.probe = crate::tui::declarative::wizard::exec::GuardLimits { first_byte: Duration::from_secs(10), idle: Duration::from_secs(10), total: Duration::from_secs(30) })
+    }
+}
+
+#[test]
+fn ladder_uses_probe_free_reading_without_consent() {
+    let rig = Rig::probing("probe-free");
+    let exe = rig.probe_program("json");
+    let run = rig.ask("probe-json", false);
+    // The help text names a headless flag, so the ladder stops and asks. Nothing was sent, nothing was written.
+    assert_eq!(run.state, RunState::NeedsConsent, "{run:?}");
+    let consent = run.consent.as_ref().expect("the consent screen state");
+    assert_eq!((consent.runs, consent.label.as_str()), (2, "Probe-json"));
+    let shown = consent.what_will_run.join(" ");
+    assert!(shown.contains("--print") && shown.contains("Reply with exactly"), "{shown}");
+    assert_eq!(rig.prompts_sent(&exe), 0, "the free reading sends no prompt: {:?}", rig.probe_calls(&exe));
+    assert!(rig.probe_calls(&exe).iter().any(|c| c.iter().any(|a| a == "--help")), "the help text was read");
+    assert!(rig.agents_files().is_empty(), "nothing is added before the yes: {:?}", rig.agents_files());
+    assert_eq!(rig.step(&run, "chat_way").state, StepState::Done);
+    // Waiting is not a busy run, and cancelling it changes nothing.
+    assert_eq!(rig.ladder.live_checking().len(), 0);
+    let cancelled = rig.ladder.cancel(&run.run_id).unwrap();
+    assert_eq!(cancelled.state, RunState::Cancelled);
+    assert_eq!(rig.prompts_sent(&exe), 0);
+    // A program whose help names no way to ask is simply a terminal program: no consent screen.
+    rig.probe_program("nohelp");
+    let plain = rig.ask("probe-nohelp", false);
+    assert_eq!(plain.state, RunState::Done, "{plain:?}");
+    assert_eq!(plain.result.as_ref().unwrap().mode, "terminal");
+}
+
+#[test]
+fn ladder_paid_probe_only_after_consent() {
+    let rig = Rig::probing("probe-paid");
+    let exe = rig.probe_program("json");
+    let asked = rig.ask("probe-json", false);
+    assert_eq!(asked.state, RunState::NeedsConsent, "{asked:?}");
+    assert_eq!(rig.prompts_sent(&exe), 0);
+    // Asking again for the state (a remount of the screen) still sends nothing.
+    assert_eq!(rig.ladder.status(&asked.run_id).unwrap().state, RunState::NeedsConsent);
+    assert_eq!(rig.prompts_sent(&exe), 0);
+    // The yes: at most two tiny runs, and the way is written down.
+    let go = rig.ladder.approve_check(&asked.run_id).unwrap();
+    assert_eq!(go.state, RunState::Checking);
+    assert!(go.consent.is_none());
+    let run = rig.wait(&asked.run_id);
+    assert_eq!(run.state, RunState::Done, "{run:?}");
+    let sent = rig.prompts_sent(&exe);
+    assert!((1..=2).contains(&sent), "{sent} prompts: {:?}", rig.probe_calls(&exe));
+    let result = run.result.as_ref().unwrap();
+    assert_eq!((result.mode, result.agent_id.as_str()), ("chat", "probe_json"));
+    let text = std::fs::read_to_string(rig.tree.agents.join("probe_json.toml")).unwrap();
+    assert!(text.contains("[headless]") && text.contains("--print"), "{text}");
+    assert!(rig.approvals_text().contains("probe_json"));
+    assert_eq!(rig.fakes.records.lock().len(), 1, "the free facts reached the store");
+    // A second yes to a run that is finished does nothing.
+    let again = rig.ladder.approve_check(&asked.run_id).unwrap();
+    assert_eq!(again.state, RunState::Done);
+    assert_eq!(rig.prompts_sent(&exe), sent);
+}
+
+#[test]
+fn ladder_skip_check_adds_the_terminal_and_sends_nothing() {
+    let rig = Rig::probing("probe-skip");
+    let exe = rig.probe_program("json");
+    let asked = rig.ask("probe-json", false);
+    assert_eq!(asked.state, RunState::NeedsConsent);
+    rig.ladder.skip_check(&asked.run_id).unwrap();
+    let run = rig.wait(&asked.run_id);
+    assert_eq!(run.state, RunState::Done, "{run:?}");
+    assert_eq!(run.result.as_ref().unwrap().mode, "terminal");
+    assert_eq!(rig.prompts_sent(&exe), 0);
+    let text = std::fs::read_to_string(rig.tree.agents.join("probe_json.toml")).unwrap();
+    assert!(!text.contains("[headless]"), "{text}");
+}
+
+#[test]
+fn ladder_signed_out_probe_is_not_a_pass() {
+    let rig = Rig::probing("probe-signedout");
+    rig.probe_program("signedout");
+    let asked = rig.ask("probe-signedout", false);
+    assert_eq!(asked.state, RunState::NeedsConsent);
+    rig.ladder.approve_check(&asked.run_id).unwrap();
+    let run = rig.wait(&asked.run_id);
+    assert_eq!(run.state, RunState::Done, "{run:?}");
+    assert_eq!(run.result.as_ref().unwrap().mode, "terminal", "a signed-out CLI proves nothing");
+    let text = std::fs::read_to_string(rig.tree.agents.join("probe_signedout.toml")).unwrap();
+    assert!(!text.contains("[headless]"));
 }

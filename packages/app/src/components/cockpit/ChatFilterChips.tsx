@@ -33,7 +33,7 @@ function Chip({
 }) {
   return (
     <div className="ck-chat-chip-wrap">
-      <button type="button" className={`ck-chat-chip${picked ? ' is-on' : ''}`} aria-haspopup="listbox" aria-expanded={open} onClick={onToggle}>
+      <button type="button" className={`ck-chip-label ck-chat-chip${picked ? ' is-on' : ''}`} aria-haspopup="listbox" aria-expanded={open} onClick={onToggle}>
         {picked ? `${label}: ${picked}` : label} ▾
       </button>
       {open && (

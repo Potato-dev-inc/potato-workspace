@@ -600,7 +600,7 @@ fn run_agent_and_list_agents_describe_the_agent_run_mode() {
     assert!(output.contains("\"run_mode\"") && output.contains("agent_setting") && output.contains("not_verified"), "{output}");
     let list = tools().into_iter().find(|t| t.name == "list_agents").expect("list_agents");
     let types = &list.output_schema.as_ref().unwrap()["properties"]["agent_types"]["items"]["properties"];
-    for field in ["id", "headless_supported", "headless_verified", "run_mode"] {
+    for field in ["id", "headless_supported", "headless_verified", "run_mode", "caps"] {
         assert!(types.get(field).is_some(), "list_agents agent_types lacks {field}");
     }
 }

@@ -2,6 +2,7 @@
 // It stays 5 seconds and waits while the pointer or focus is on it. Ctrl+Z is Undo while it shows and no text
 // field has focus. One toast at a time: a new one replaces the old (the earlier change is then final).
 import { useEffect, useRef, useState } from 'react';
+import { useT } from '../../i18n';
 
 export const TOAST_MS = 5000;
 export const PUT_BACK_MS = 2000;
@@ -17,6 +18,7 @@ export interface ToastState {
 }
 
 export function UndoToast({ toast, onDone, onUndo }: { toast: ToastState; onDone: (id: number) => void; onUndo: (toast: ToastState) => void }) {
+  const t = useT();
   const [held, setHeld] = useState(false);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
@@ -59,7 +61,7 @@ export function UndoToast({ toast, onDone, onUndo }: { toast: ToastState; onDone
       <span className="st-toast-text">{toast.text}</span>
       {toast.undo && (
         <button type="button" className="st-toast-undo" onClick={() => onUndo(toast)}>
-          Undo
+          {t('common.undo')}
         </button>
       )}
     </div>

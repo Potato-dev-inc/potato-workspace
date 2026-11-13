@@ -13,6 +13,7 @@ import { SignInCard } from '../../acp/SignInCard';
 import { lastRealFolder, projectOfCwd, readStoredCopyPreference, supportsCopies, writeCopyPreference, copyDefault } from '../../../lib/ship-model';
 import { folderName, pathKey, useSidebarProjects } from '../../../lib/sidebarProjects';
 import { IconChevronDown, IconFolder, IconPlus, IconSpark } from '../Icons';
+import { useT } from '../../../i18n';
 import type { ProjectChoice } from '../NewAgentMenu';
 import { tauriNewAgentApi, type HomeSettings, type NewAgentApi } from './api';
 import { HomeCards, type CardData } from './HomeCards';
@@ -25,6 +26,7 @@ import {
   defaultChoice,
   defaultRunAs,
   exampleAt,
+  hintOf,
   nextExample,
   parseRunAs,
   sendBlock,
@@ -143,6 +145,7 @@ export interface NewAgentPageProps {
 type Menu = 'plus' | 'folder' | 'agent' | null;
 
 export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, onSignIn, onStart, onOpenPane, onSetUp }: NewAgentPageProps) {
+  const t = useT();
   const [prompt, setPrompt] = useState('');
   const [exampleIdx, setExampleIdx] = useState(0);
   const [menu, setMenu] = useState<Menu>(null);
@@ -289,7 +292,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
 
   const addon = runAs === 'chat' ? chatAddon : undefined;
   const installFirst = needsInstall(addon);
-  const block = sendBlock({ prompt, choice, runAs, folder: folder?.path ?? null, busy }) ?? (installFirst ? 'Install the chat add-on first.' : null);
+  const block = sendBlock({ prompt, choice, runAs, folder: folder?.path ?? null, busy }) ?? (installFirst ? t('newAgent.installFirst') : null);
   const signInCard = runAs === 'chat' && choice && signInFor !== null && signInFor.toLowerCase() === choice.agentId.toLowerCase();
   const example = exampleAt(exampleIdx);
 
@@ -318,7 +321,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
         setSignInFor(null);
       }
     } catch (e) {
-      if (alive.current) setError(e instanceof Error ? e.message : 'Could not start the agent.');
+      if (alive.current) setError(e instanceof Error ? e.message : t('newAgent.errStart'));
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -351,7 +354,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
       const paths = await api.pickPaths();
       if (paths.length > 0) setPrompt((text) => withPaths(text, paths));
     } catch {
-      setError('Could not open the file dialog.');
+      setError(t('newAgent.errFileDialog'));
     }
     area.current?.focus();
   };
@@ -378,7 +381,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
         chooseProject(pick);
       } else chooseFolder(pick);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not open the folder dialog.');
+      setError(e instanceof Error ? e.message : t('newAgent.errFolderDialog'));
     }
   };
   // Folders agents run in now that are not saved projects yet (copies count as their project).
@@ -394,7 +397,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
 
   const setCards = (cards: HomeCard[]) => {
     setHome((h) => ({ ...h, cards }));
-    api.saveCards(cards).catch(() => setError('Your cards were not saved.'));
+    api.saveCards(cards).catch(() => setError(t('newAgent.errCards')));
   };
 
   const cardData: CardData = {
@@ -404,9 +407,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   };
 
   return (
-    <section className="ck-na" aria-label="New agent">
+    <section className="ck-na" aria-label={t('newAgent.title')}>
       <header className="ck-na-top">
-        <span className="ck-na-top-title">New agent</span>
+        <span className="ck-na-top-title">{t('newAgent.title')}</span>
       </header>
       <div className="ck-na-scroll">
         <div className="ck-na-center">
@@ -414,7 +417,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
             <IconSpark />
           </div>
           <h1 className="ck-na-ask" data-testid="na-ask">
-            What should the agent do?
+            {t('newAgent.ask')}
           </h1>
 
           <div className="ck-na-composer" ref={menuRoot}>
@@ -422,7 +425,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               <textarea
                 ref={area}
                 className="ck-na-input"
-                aria-label="What should the agent do?"
+                aria-label={t('newAgent.ask')}
                 placeholder={example}
                 rows={2}
                 autoFocus
@@ -433,7 +436,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               />
               {!prompt && (
                 <span className="ck-na-tabhint" aria-hidden="true">
-                  <kbd>Tab</kbd> for an example
+                  <kbd className="ck-chip-key">Tab</kbd> {t('newAgent.tabHint')} {/* i18n-ok: key name */}
                 </span>
               )}
             </div>
@@ -443,16 +446,16 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 id="plus"
                 open={menu === 'plus'}
                 onToggle={() => setMenu(menu === 'plus' ? null : 'plus')}
-                label="Add to your message"
+                label={t('newAgent.addToMessage')}
                 trigger={<IconPlus />}
                 iconOnly
               >
                 <button type="button" role="menuitem" className="ck-na-item" onClick={() => void addFiles()}>
-                  <span>Add files…</span>
-                  <span className="ck-na-item-hint">their paths go in your message</span>
+                  <span>{t('newAgent.addFiles')}</span>
+                  <span className="ck-na-item-hint">{t('newAgent.addFilesHint')}</span>
                 </button>
-                <div className="ck-na-toggle" title="Work in a separate copy of the project, so agents never edit the same files. You review and merge it later.">
-                  <span id="na-copy-label">Separate copy</span>
+                <div className="ck-na-toggle" title={t('newAgent.copyTip')}>
+                  <span id="na-copy-label">{t('newAgent.copy')}</span>
                   <button
                     type="button"
                     role="switch"
@@ -469,9 +472,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                   </button>
                 </div>
                 {runAs === 'chat' ? (
-                  <p className="ck-na-note">Chat sessions work in the folder itself.</p>
+                  <p className="ck-na-note">{t('newAgent.chatInFolder')}</p>
                 ) : !copiesOk ? (
-                  <p className="ck-na-note">This folder needs Git first.</p>
+                  <p className="ck-na-note">{t('newAgent.needsGit')}</p>
                 ) : null}
               </Pop>
 
@@ -482,30 +485,30 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                   setMenu(menu === 'folder' ? null : 'folder');
                   api.recent().then((list) => alive.current && setRecent(list)).catch(() => undefined);
                 }}
-                label={`Project: ${folder?.name ?? 'none chosen'}. Change`}
+                label={t('newAgent.projectLabel', { name: folder?.name ?? t('newAgent.noneChosen') })}
                 trigger={
                   <>
                     <IconFolder />
-                    <span className="ck-na-chip-text">{folder?.name ?? 'Choose a project'}</span>
+                    <span className="ck-na-chip-text">{folder?.name ?? t('newAgent.chooseProject')}</span>
                     <IconChevronDown />
                   </>
                 }
               >
-                {saved.projects.length > 0 && <div className="ck-na-cap">Projects</div>}
+                {saved.projects.length > 0 && <div className="ck-na-cap">{t('newAgent.projects')}</div>}
                 {saved.projects.map((p) => (
                   <ProjectItem key={p.path} name={p.name?.trim() || folderName(p.path)} path={p.path} inUse={folder?.path === p.path} onPick={() => chooseProject({ path: p.path, name: p.name?.trim() || folderName(p.path) })} />
                 ))}
-                {running.length > 0 && <div className="ck-na-cap">Running now</div>}
+                {running.length > 0 && <div className="ck-na-cap">{t('newAgent.runningNow')}</div>}
                 {running.map((p) => (
                   <ProjectItem key={p.path} name={p.name} path={p.path} inUse={folder?.path === p.path} onPick={() => chooseProject(p)} />
                 ))}
-                {saved.projects.length === 0 && running.length === 0 && <p className="ck-na-note">No projects yet.</p>}
+                {saved.projects.length === 0 && running.length === 0 && <p className="ck-na-note">{t('newAgent.noProjects')}</p>}
                 <div className="ck-na-foot">
                   <button type="button" role="menuitem" className="ck-na-item" onClick={() => void browseFolder(true)}>
-                    <span>Add project…</span>
+                    <span>{t('newAgent.addProject')}</span>
                   </button>
                   <button type="button" role="menuitem" className="ck-na-item" onClick={() => void browseFolder(false)}>
-                    <span>Choose another folder…</span>
+                    <span>{t('newAgent.chooseOtherFolder')}</span>
                   </button>
                 </div>
               </Pop>
@@ -514,12 +517,12 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 id="agent"
                 open={menu === 'agent'}
                 onToggle={() => setMenu(menu === 'agent' ? null : 'agent')}
-                label={`Agent: ${choice?.label ?? 'none'}. Change`}
+                label={t('newAgent.agentLabel', { name: choice?.label ?? t('newAgent.agentNone') })}
                 trigger={
                   <>
                     <span className={`ck-na-dot is-${choice?.state ?? 'missing'}`} aria-hidden="true" />
                     {choice && <AgentLogo id={choice.agentId} name={choice.label} size={13} decorative className="ck-na-logo" />}
-                    <span className="ck-na-chip-text">{choice?.label ?? 'No agent ready'}</span>
+                    <span className="ck-na-chip-text">{choice?.label ?? t('newAgent.noAgentReady')}</span>
                     <IconChevronDown />
                   </>
                 }
@@ -532,7 +535,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                     aria-checked={choice?.key === c.key}
                     className="ck-na-item"
                     disabled={c.state === 'unavailable'}
-                    title={c.state === 'ready' ? undefined : c.hint}
+                    title={c.state === 'ready' ? undefined : hintOf(c.state)}
                     onClick={() => {
                       setPickKey(c.key);
                       remember(c.key);
@@ -547,7 +550,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                         <span>{c.label}</span>
                       </span>
                     </span>
-                    <span className="ck-na-item-hint">{c.hint}</span>
+                    <span className="ck-na-item-hint">{hintOf(c.state)}</span>
                   </button>
                 ))}
                 {onSetUp && (
@@ -560,13 +563,13 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                       onSetUp();
                     }}
                   >
-                    <span>Set up agents…</span>
+                    <span>{t('newAgent.setUpAgents')}</span>
                   </button>
                 )}
               </Pop>
 
               {chatLane && (
-                <div className="ck-na-seg" role="radiogroup" aria-label="Run as">
+                <div className="ck-na-seg" role="radiogroup" aria-label={t('newAgent.runAs')}>
                   {(['terminal', 'chat'] as const).map((mode) => (
                     <button
                       key={mode}
@@ -574,14 +577,14 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                       role="radio"
                       aria-checked={runAs === mode}
                       disabled={mode === 'chat' && lendNoChat}
-                      title={mode === 'chat' && lendNoChat ? "Chat can't use a lent sign-in for this agent yet. Use Terminal." : undefined}
+                      title={mode === 'chat' && lendNoChat ? t('newAgent.lentNoChatTerminal') : undefined}
                       className="ck-na-seg-btn"
                       onClick={() => {
                         setRunPick(mode);
                         rememberRunAs(mode);
                       }}
                     >
-                      {mode === 'terminal' ? 'Terminal' : 'Chat'}
+                      {mode === 'terminal' ? t('newAgent.terminal') : t('newAgent.chat')}
                     </button>
                   ))}
                 </div>
@@ -590,7 +593,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               {showModel && choice && (
                 <ModelPicker
                   testId="na-model"
-                  label={`Model for ${choice.label}`}
+                  label={t('newAgent.modelFor', { name: choice.label })}
                   state={modelList}
                   value={model}
                   onChange={(next) => {
@@ -601,8 +604,8 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               )}
 
               <span className="ck-na-spacer" />
-              <button type="button" className="ck-na-send" aria-label="Start" title={block ?? 'Start (Enter)'} disabled={block !== null} onClick={() => void send()}>
-                Start
+              <button type="button" className="ck-na-send" aria-label={t('newAgent.start')} title={block ?? t('newAgent.startTip')} disabled={block !== null} onClick={() => void send()}>
+                {t('newAgent.start')}
               </button>
             </div>
           </div>
@@ -684,13 +687,14 @@ function writeLastProject(p: ProjectChoice): void {
 }
 
 function ProjectItem({ name, path, inUse, onPick }: { name: string; path: string; inUse: boolean; onPick: () => void }) {
+  const t = useT();
   return (
     <button type="button" role="menuitem" className="ck-na-item" title={path} onClick={onPick}>
       <span className="ck-na-item-main">
         <span>{name}</span>
         <span className="ck-na-item-path">{shortPath(path)}</span>
       </span>
-      {inUse && <span className="ck-na-item-hint">in use</span>}
+      {inUse && <span className="ck-na-item-hint">{t('newAgent.inUse')}</span>}
     </button>
   );
 }

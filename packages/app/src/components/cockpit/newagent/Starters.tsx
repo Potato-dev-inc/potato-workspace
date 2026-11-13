@@ -2,15 +2,15 @@
 // the person presses Start); the last opens "Bring my chats". The two sentences can also be pinned as a saved
 // prompt, which is how the first card gets onto the page (the "Add card" row only shows after that).
 import { BringChatsLink } from '../../history/BringChatsLink';
-
-export const STARTER_PROMPTS: readonly string[] = ['Explain how this project is organised', 'Find and fix one small bug'];
+import { useT } from '../../../i18n';
 
 export function Starters({ onUse, onPin }: { onUse: (text: string) => void; onPin?: (text: string) => void }) {
+  const t = useT();
   return (
     <div className="ck-na-starters" data-testid="na-starters">
-      <p className="ck-na-starters-cap">Try one</p>
+      <p className="ck-na-starters-cap">{t('newAgent.tryOne')}</p>
       <ul className="ck-na-starters-list">
-        {STARTER_PROMPTS.map((text) => (
+        {[t('newAgent.starter0'), t('newAgent.starter1')].map((text) => (
           <li key={text} className="ck-na-starter-row">
             <button type="button" className="ck-na-starter" onClick={() => onUse(text)}>
               <span>{text}</span>
@@ -19,14 +19,14 @@ export function Starters({ onUse, onPin }: { onUse: (text: string) => void; onPi
               </span>
             </button>
             {onPin && (
-              <button type="button" className="ck-na-starter-pin" aria-label={`Pin "${text}" as a shortcut`} title="Pin as a shortcut" onClick={() => onPin(text)}>
-                Pin
+              <button type="button" className="ck-na-starter-pin" aria-label={t('newAgent.pinAria', { text })} title={t('newAgent.pinTip')} onClick={() => onPin(text)}>
+                {t('newAgent.pin')}
               </button>
             )}
           </li>
         ))}
         <li className="ck-na-starter-row">
-          <BringChatsLink className="ck-na-starter" label="Bring my chats from another agent" />
+          <BringChatsLink className="ck-na-starter" label={t('newAgent.bringChats')} />
         </li>
       </ul>
     </div>

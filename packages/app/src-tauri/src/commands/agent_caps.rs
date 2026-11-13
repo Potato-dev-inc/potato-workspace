@@ -28,3 +28,13 @@ pub async fn agent_caps_list() -> Result<Vec<serde_json::Value>, String> {
 pub(crate) fn agent_caps_for_test(agent_id: &str) -> Result<serde_json::Value, String> {
     caps_get(agent_id)
 }
+
+/// "Check it again" on an agent's page: the free checks again (version, handshake, models), then the table as it stands.
+#[tauri::command]
+pub async fn agent_caps_recheck(agent_id: String) -> Result<serde_json::Value, String> {
+    let id = agent_id.trim().to_string();
+    if id.is_empty() {
+        return Err("AGENT_CAPS_BAD_ID: Type an agent name.".into());
+    }
+    tokio::task::spawn_blocking(move || crate::agent_caps::drift::check_again(&id)).await.map_err(|e| e.to_string())?
+}

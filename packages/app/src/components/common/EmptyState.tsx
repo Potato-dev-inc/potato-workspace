@@ -2,6 +2,8 @@
 // down the panel (not in the top-left corner) so every empty screen reads the same. Used by the Inbox, the welcome
 // and the add-chat prompt. Panels with nothing to show are hidden, not explained: they do not use this.
 import type { ReactNode } from 'react';
+import { useT } from '../../i18n';
+import { PotatoMark } from '../cockpit/Icons';
 
 export interface EmptyAction {
   label: string;
@@ -27,9 +29,11 @@ export interface EmptyStateProps {
 }
 
 export function EmptyState({ title, line, action, alternatives = [], page = false, plain = false, children, className }: EmptyStateProps) {
+  const t = useT();
   const Heading = plain ? 'div' : page ? 'h1' : 'h2';
   return (
     <div className={`ck-empty${className ? ` ${className}` : ''}`} data-empty-state="">
+      {plain ? null : <PotatoMark size={28} className="ck-potato ck-potato--quiet" />}
       <Heading className="ck-empty-title">{title}</Heading>
       {line ? <p className="ck-empty-line">{line}</p> : null}
       {action ? (
@@ -38,7 +42,7 @@ export function EmptyState({ title, line, action, alternatives = [], page = fals
         </button>
       ) : null}
       {alternatives.length > 0 ? (
-        <ul className="ck-empty-or" aria-label="Other ways">
+        <ul className="ck-empty-or" aria-label={t('common.otherWays')}>
           {alternatives.slice(0, 3).map((a) => (
             <li key={a.label}>
               <button type="button" className="ck-empty-alt" disabled={a.disabled} onClick={a.onClick}>

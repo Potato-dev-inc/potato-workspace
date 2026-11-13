@@ -4,7 +4,8 @@
 import { accountsFor, type AccountsOverview } from '../../lib/accounts';
 import type { UpdateOffer } from '../../lib/app-update';
 import type { HelperVisibility } from '../../lib/agentRunMode';
-import { CANT_CHECK_YET, type CheckRow } from '../../lib/setup-checks';
+import { t } from '../../i18n';
+import { isCantCheck, type CheckRow } from '../../lib/setup-checks';
 import { problemWords } from './problem-words';
 
 export type CardId = 'agents' | 'signed-in' | 'phone' | 'updates' | 'helpers';
@@ -25,31 +26,38 @@ export interface CardView {
   actions: CardAction[];
 }
 
+/** The card names, read when a card is built so the language switch shows. */
 export const CARD_NAMES: Record<CardId, string> = {
-  agents: 'Agents',
-  'signed-in': 'Signed in',
-  phone: 'Phone',
-  updates: 'Updates',
-  helpers: 'Helpers',
+  get agents() {
+    return t('settings.card.agents');
+  },
+  get 'signed-in'() {
+    return t('settings.card.signed-in');
+  },
+  get phone() {
+    return t('settings.card.phone');
+  },
+  get updates() {
+    return t('settings.card.updates');
+  },
+  get helpers() {
+    return t('settings.card.helpers');
+  },
 };
 
 /** A card whose source has not answered yet. */
 export function loadingCard(id: CardId): CardView {
-  return { id, name: CARD_NAMES[id], glyph: '…', line: 'Checking…', actions: [] };
+  return { id, name: CARD_NAMES[id], glyph: '…', line: t('settings.card.checking'), actions: [] };
 }
 
 /** A card whose source failed. Never a tick. */
 export function cantCheckCard(id: CardId, why?: string): CardView {
-  return { id, name: CARD_NAMES[id], glyph: '…', line: CANT_CHECK_YET, sub: why, actions: [] };
+  return { id, name: CARD_NAMES[id], glyph: '…', line: t('settings.card.cantCheck'), sub: why, actions: [] };
 }
 
 function join(names: string[]): string {
   if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
-
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
+  return t('settings.card.and', { list: names.slice(0, -1).join(t('settings.card.listSep')), last: names[names.length - 1] });
 }
 
 // ---------- Agents ----------
@@ -59,17 +67,17 @@ function plural(n: number, one: string, many: string): string {
  * The sub-line is the worst row first, so the card and the list start with the same sentence.
  */
 export function agentsCard(rows: CheckRow[]): CardView {
-  const unreadable = rows.some((r) => r.id === 'agents' && r.sentence === CANT_CHECK_YET);
+  const unreadable = rows.some((r) => r.id === 'agents' && isCantCheck(r.sentence));
   if (unreadable) return cantCheckCard('agents');
   const agentRows = rows.filter((r) => r.id.startsWith('agent-'));
   const ready = agentRows.filter((r) => r.status === 'ok').length;
   const problems = [...rows.filter((r) => r.status === 'fail'), ...rows.filter((r) => r.status === 'warn')];
-  const check: CardAction = { label: 'Check my setup', kind: 'row', row: 'setup-check' };
+  const check: CardAction = { label: t('settings.checkSetup'), kind: 'row', row: 'setup-check' };
   if (agentRows.length === 0) {
-    return { id: 'agents', name: CARD_NAMES.agents, glyph: '!', line: 'No agent found on this computer', sub: 'Install one, then check again.', actions: [{ ...check, primary: true }] };
+    return { id: 'agents', name: CARD_NAMES.agents, glyph: '!', line: t('settings.card.noAgent'), sub: t('settings.card.noAgentSub'), actions: [{ ...check, primary: true }] };
   }
   if (problems.length === 0) {
-    return { id: 'agents', name: CARD_NAMES.agents, glyph: '✓', line: `${plural(ready, 'agent', 'agents')} ready`, actions: [check] };
+    return { id: 'agents', name: CARD_NAMES.agents, glyph: '✓', line: t('settings.card.agentsReady', { count: ready }), actions: [check] };
   }
   const first = problems[0];
   const worst = first.status === 'fail' ? '×' : '!';
@@ -98,9 +106,9 @@ function titleCase(agentId: string): string {
 export function signedInCard(overview: AccountsOverview, rows: CheckRow[]): CardView {
   const own = overview.accounts.filter((a) => !a.lend_only && !a.borrowed);
   const ids = overview.agents.map((a) => a.agent_id);
-  const signInAction: CardAction = { label: 'Sign in', kind: 'row', row: 'accounts', primary: true };
+  const signInAction: CardAction = { label: t('settings.signIn'), kind: 'row', row: 'accounts', primary: true };
   if (ids.length === 0) {
-    return { id: 'signed-in', name: CARD_NAMES['signed-in'], glyph: '!', line: 'No agent to sign in yet', actions: [signInAction] };
+    return { id: 'signed-in', name: CARD_NAMES['signed-in'], glyph: '!', line: t('settings.card.noAgentToSignIn'), actions: [signInAction] };
   }
   const rowOf = (id: string) => rows.find((r) => r.id === `agent-${id}`);
   const state = (id: string): 'yes' | 'no' | 'unknown' => {
@@ -113,14 +121,14 @@ export function signedInCard(overview: AccountsOverview, rows: CheckRow[]): Card
   const without = ids.filter((id) => state(id) === 'no');
   const unknown = ids.filter((id) => state(id) === 'unknown');
   const many = withSignIn.find((id) => accountsFor(own, id).length > 1);
-  const sub = many ? `${accountsFor(own, many).length} sign-ins for ${titleCase(many)}.` : undefined;
+  const sub = many ? t('settings.card.signIns', { count: accountsFor(own, many).length, name: titleCase(many) }) : undefined;
   if (without.length > 0) {
     const names = without.map(titleCase);
     return {
       id: 'signed-in',
       name: CARD_NAMES['signed-in'],
       glyph: '!',
-      line: `${join(names)} ${names.length === 1 ? 'is' : 'are'} not signed in`,
+      line: t('settings.card.notSignedIn', { count: names.length, names: join(names) }),
       sub,
       actions: [signInAction],
     };
@@ -131,18 +139,18 @@ export function signedInCard(overview: AccountsOverview, rows: CheckRow[]): Card
       id: 'signed-in',
       name: CARD_NAMES['signed-in'],
       glyph: '!',
-      line: `${join(names)} ${names.length === 1 ? 'is' : 'are'} not checked yet`,
+      line: t('settings.card.notChecked', { count: names.length, names: join(names) }),
       sub,
-      actions: [{ label: 'Check my setup', kind: 'row', row: 'setup-check', primary: true }],
+      actions: [{ label: t('settings.checkSetup'), kind: 'row', row: 'setup-check', primary: true }],
     };
   }
   return {
     id: 'signed-in',
     name: CARD_NAMES['signed-in'],
     glyph: '✓',
-    line: `${join(withSignIn.map(titleCase))} ${withSignIn.length === 1 ? 'is' : 'are'} signed in`,
+    line: t('settings.card.signedIn', { count: withSignIn.length, names: join(withSignIn.map(titleCase)) }),
     sub,
-    actions: [{ label: 'Manage', kind: 'row', row: 'accounts' }],
+    actions: [{ label: t('settings.card.manage'), kind: 'row', row: 'accounts' }],
   };
 }
 
@@ -154,17 +162,17 @@ export function phoneCard(paired: number): CardView {
       id: 'phone',
       name: CARD_NAMES.phone,
       glyph: '•',
-      line: 'No phone yet',
-      sub: 'Watch and answer your agents from your phone.',
-      actions: [{ label: 'Pair a phone', kind: 'row', row: 'pairing', primary: true }],
+      line: t('settings.card.noPhone'),
+      sub: t('settings.card.noPhoneSub'),
+      actions: [{ label: t('settings.card.pairPhone'), kind: 'row', row: 'pairing', primary: true }],
     };
   }
   return {
     id: 'phone',
     name: CARD_NAMES.phone,
     glyph: '✓',
-    line: `${plural(paired, 'phone', 'phones')} paired`,
-    actions: [{ label: 'Your phones', kind: 'row', row: 'paired-devices' }],
+    line: t('settings.card.phonesPaired', { count: paired }),
+    actions: [{ label: t('settings.card.yourPhones'), kind: 'row', row: 'paired-devices' }],
   };
 }
 
@@ -177,11 +185,11 @@ export function updatesCard(version: string | null, offer: UpdateOffer | null): 
       id: 'updates',
       name: CARD_NAMES.updates,
       glyph: '!',
-      line: `${offer.version} is ready`,
-      sub: shown ? `You have ${shown}.` : undefined,
+      line: t('settings.card.updateReady', { version: offer.version }),
+      sub: shown ? t('settings.card.youHave', { version: shown }) : undefined,
       actions: [
-        { label: 'Update', kind: 'row', row: 'version', primary: true },
-        { label: "What's new", kind: 'row', row: 'whats-new' },
+        { label: t('settings.card.update'), kind: 'row', row: 'version', primary: true },
+        { label: t('settings.card.whatsNew'), kind: 'row', row: 'whats-new' },
       ],
     };
   }
@@ -190,8 +198,8 @@ export function updatesCard(version: string | null, offer: UpdateOffer | null): 
     id: 'updates',
     name: CARD_NAMES.updates,
     glyph: '✓',
-    line: `Up to date (${shown})`,
-    actions: [{ label: "What's new", kind: 'row', row: 'whats-new' }],
+    line: t('settings.card.upToDate', { version: shown }),
+    actions: [{ label: t('settings.card.whatsNew'), kind: 'row', row: 'whats-new' }],
   };
 }
 
@@ -210,18 +218,18 @@ export function helpersCard(facts: HelpersFacts): CardView {
       id: 'helpers',
       name: CARD_NAMES.helpers,
       glyph: '!',
-      line: "Agents can't ask each other for help yet",
-      sub: 'Connect your agents once, and review what is written first.',
-      actions: [{ label: 'Connect', kind: 'row', row: 'agent-pack', primary: true }],
+      line: t('settings.card.helpersNone'),
+      sub: t('settings.card.helpersNoneSub'),
+      actions: [{ label: t('settings.card.connect'), kind: 'row', row: 'agent-pack', primary: true }],
     };
   }
   const line =
     facts.mode === 'always_background'
-      ? 'Helpers run in the background'
+      ? t('settings.card.helpersBackground')
       : facts.mode === 'agent_chooses'
-        ? 'The agent chooses where helpers show'
+        ? t('settings.card.helpersChoose')
         : facts.keepOpen
-          ? 'Helpers show in a pane and stay open'
-          : 'Helpers show in a pane and close when done';
-  return { id: 'helpers', name: CARD_NAMES.helpers, glyph: '✓', line, actions: [{ label: 'Change', kind: 'page', page: 'helpers' }] };
+          ? t('settings.card.helpersOpen')
+          : t('settings.card.helpersClose');
+  return { id: 'helpers', name: CARD_NAMES.helpers, glyph: '✓', line, actions: [{ label: t('settings.card.change'), kind: 'page', page: 'helpers' }] };
 }

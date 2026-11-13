@@ -2,6 +2,7 @@
 // question Potato Workspace raised (src-tauri/src/budgets), so it arrives through the same list as
 // `ask_user` questions. The agent is not killed and nothing is lost; the person adds turns or
 // stops it here. Only the person can answer it (the bridge refuses a plain loopback answer).
+import { useT } from '../../i18n';
 import type { Question, QuestionAnswer } from '../../lib/questions';
 import '../../styles/cockpit-questions.css';
 import { CardButton, InboxCard } from './InboxCard';
@@ -22,6 +23,7 @@ export function BudgetCard({
   onDismiss: () => void;
   onOpenPane?: () => void;
 }) {
+  const t = useT();
   const stop = q.choices.find((c) => c.id === 'stop');
   const adds = q.choices.filter((c) => c.id !== 'stop');
   return (
@@ -50,11 +52,11 @@ export function BudgetCard({
       more={
         onOpenPane ? (
           <CardButton tone="plain" role="open" onClick={onOpenPane}>
-            Open
+            {t('inboxCards.open')}
           </CardButton>
         ) : (
           <CardButton tone="plain" role="dismiss" onClick={onDismiss}>
-            Dismiss
+            {t('inboxCards.dismiss')}
           </CardButton>
         )
       }

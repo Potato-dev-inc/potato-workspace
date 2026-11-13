@@ -114,7 +114,7 @@ describe('sidebar: nothing raw', () => {
   it('calls the Project view "Project", not "Project memory"', async () => {
     await act(async () => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} onOpenMemory={() => {}} ship={ship('repo')} />));
     act(() => host.querySelector<HTMLButtonElement>('.ck-side-foot button[aria-label="More"]')!.click());
-    const labels = [...host.querySelectorAll('.ck-side-foot [role="menuitem"]')].map((b) => b.textContent?.trim());
+    const labels = [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent?.trim());
     expect(labels).toContain('Project');
     expect(labels).not.toContain('Project memory');
   });

@@ -94,7 +94,6 @@ fn chaos_crash_during_a_permission_question() {
 
 // Person sees (new copy): `The agent stopped. It said: "authentication failed". Sign in, then try again.` Never "done".
 // known-weird A04: exit 0 with an error line.
-#[ignore = "known-weird A04"]
 #[test]
 fn chaos_exit_zero_with_an_error_line() {
     let rig = ChatRig::new("");
@@ -143,7 +142,7 @@ fn chaos_cancelled_without_a_cancel_is_an_error() {
 // Person sees: "You stopped it"; the next message is answered. New copy if history was lost:
 // `The agent forgot this chat when it was stopped. A fresh one is ready.`
 // known-weird A07: a stop can destroy the agent's session.
-#[ignore = "known-weird A07"]
+#[ignore = "known-weird A07: needs a session-level retry; the next message after a destroying Stop fails with Unknown session (not done)"]
 #[test]
 fn chaos_stop_that_destroys_the_session() {
     let rig = ChatRig::with("cancel_kills_session=1", |_| {});

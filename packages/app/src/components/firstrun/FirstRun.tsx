@@ -12,6 +12,7 @@ import { loadSettings, patchSettings } from '../../lib/settings';
 import { shipApi, type ShipApi } from '../../lib/ship-api';
 import { simpleApi, type SimpleApi } from '../simple/simple-api';
 import { DotSpinner } from '../cockpit/DotSpinner';
+import { useT } from '../../i18n';
 import '../../styles/first-run.css';
 import { T } from './copy';
 import { demoApi, type DemoApi } from './demo-api';
@@ -75,6 +76,7 @@ function useWhenChanged<V>(value: V, fn: (value: V) => void): void {
 }
 
 function Progress({ step }: { step: StepId }) {
+  useT();
   const at = stepIndex(step);
   return (
     <ol className="fr-dots" aria-label={T.stepOf(at + 1, STEPS.length)}>
@@ -86,6 +88,7 @@ function Progress({ step }: { step: StepId }) {
 }
 
 export function FirstRun({ c, seed, onFinish, deps }: { c: CockpitApi; seed: Seed; onFinish: () => void; deps?: Partial<FirstRunDeps> }) {
+  useT(); // redraw when the language changes (the words come from `T`)
   const d: FirstRunDeps = { ...defaultDeps(), ...deps };
   const dRef = useRef(d);
   dRef.current = d;

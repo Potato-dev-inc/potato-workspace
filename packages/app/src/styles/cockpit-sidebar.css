@@ -74,9 +74,6 @@
 .cockpit .ck-row-hint {
   flex: none;
   margin-left: auto;
-  font: var(--fw-regular) var(--fs-label)/1 var(--font-mono);
-  color: var(--label-3);
-  white-space: nowrap;
 }
 .cockpit .ck-side-add {
   margin-top: 2px;

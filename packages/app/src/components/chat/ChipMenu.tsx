@@ -21,6 +21,10 @@ interface ControlProps {
   tone?: 'risk';
   /** Shown as plain text: no list, no chevron (the permission chip of an agent that runs in a terminal). */
   readOnly?: boolean;
+  /** What the chip sets, said in words (the hover text). Falls back to `label`. */
+  hint?: string;
+  /** A small dim word before the value, for a setting whose value alone says little ("Default"). */
+  caption?: string;
 }
 
 function Chevron() {
@@ -48,7 +52,7 @@ function Check() {
 }
 
 /** A pill that opens a list above it. The pill shows the name of the current choice. */
-export function ChipMenu({ chipId, label, value, choices, disabled = false, onChange, tone, readOnly = false }: ControlProps & { chipId: string }) {
+export function ChipMenu({ chipId, label, value, choices, disabled = false, onChange, tone, readOnly = false, hint, caption }: ControlProps & { chipId: string }) {
   const uid = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -130,8 +134,9 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
   if (readOnly) {
     return (
       <div className="ck-menu-rel" data-chip-id={chipId} data-chip-kind="readonly" data-value={value} data-tone={tone}>
-        <span className="ck-pill ck-pill--readonly" role="status" aria-label={`${label}: ${current}`} title={label}>
+        <span className="ck-pill ck-pill--readonly" role="status" aria-label={`${label}: ${current}`} title={hint ?? label}>
           {tone === 'risk' && <Shield />}
+          {caption && <span className="ck-pill-caption">{caption}</span>}
           <span className="ck-pill-label">{current}</span>
         </span>
       </div>
@@ -144,7 +149,7 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
         type="button"
         className="ck-pill"
         aria-label={label}
-        title={label}
+        title={hint ?? label}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
@@ -158,6 +163,7 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
         }}
       >
         {tone === 'risk' && <Shield />}
+        {caption && <span className="ck-pill-caption">{caption}</span>}
         <span className="ck-pill-label">{current}</span>
         <Chevron />
       </button>
@@ -189,7 +195,7 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
 }
 
 /** A few short choices side by side; the picked one sits on a sliding thumb. One tab stop, arrows move the pick. */
-export function ChipSegmented({ chipId, label, value, choices, disabled = false, onChange }: ControlProps & { chipId: string }) {
+export function ChipSegmented({ chipId, label, value, choices, disabled = false, onChange, hint }: ControlProps & { chipId: string }) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const index = Math.max(0, choices.findIndex((c) => c.value === value));
   const move = (to: number) => {
@@ -202,6 +208,7 @@ export function ChipSegmented({ chipId, label, value, choices, disabled = false,
       className="ck-seg"
       role="radiogroup"
       aria-label={label}
+      title={hint}
       data-chip-id={chipId}
       data-chip-kind="segmented"
       data-value={value}

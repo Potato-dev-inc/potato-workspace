@@ -34,7 +34,7 @@
   --float-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.45);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
-  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI Variable Text', system-ui, sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI Variable Text', system-ui, 'Microsoft JhengHei UI', 'PingFang TC', 'Noto Sans TC', sans-serif;
   --font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
   --font-doto: 'Doto', 'JetBrains Mono', ui-monospace, monospace;
 }
@@ -153,15 +153,7 @@
   color: var(--label-3);
 }
 .cockpit .ck-kbd {
-  margin-left: auto;
-  padding: 0 5px;
-  min-width: 18px;
-  text-align: center;
-  font: 11px/16px var(--font-mono);
-  color: var(--label-3);
-  border: 1px solid var(--sep);
-  border-radius: 4px;
-  box-shadow: inset 0 -1px 0 var(--sep);
+  margin-left: auto; /* the shape is the Key chip (chips.css) */
 }
 
 /* ---------- buttons ---------- */
@@ -1546,4 +1538,15 @@
 .cockpit .ck-menu-change:focus-visible {
   background: var(--fill-active);
   color: var(--label);
+}
+
+/* A menu drawn by FloatingMenu: fixed in the top layer, placed by script, scrolls when the window is short. */
+.cockpit .ck-menu.ck-menu--float {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  z-index: 1000;
+  box-sizing: border-box;
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
 }

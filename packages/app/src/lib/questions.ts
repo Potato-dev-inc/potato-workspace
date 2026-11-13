@@ -1,6 +1,8 @@
 // Questions an agent asks the human through the `ask_user` MCP tool (see docs/features/ask-user.md).
 // Shape mirrors the Rust `questions::Question` (snake_case, as served by the bridge).
 
+import { t } from '../i18n';
+
 export interface QuestionChoice {
   id: string;
   label: string;
@@ -92,7 +94,7 @@ export type QuestionAnswer = { choice_id: string } | { text: string };
 
 /** "Question from Claude": the agent's own name, else the pane's name, else "an agent". */
 export function askerName(q: Question, paneName?: string): string {
-  return q.agent?.trim() || paneName || 'an agent';
+  return q.agent?.trim() || paneName || t('risk.ask.anAgent');
 }
 
 /** Pending and not past its deadline (the app expires them too; this hides a stale card sooner). */
@@ -102,18 +104,18 @@ export function isLive(q: Question, now: number): boolean {
 
 /** "8 min", "under a minute", "2 h": a short, rounded-up time left. */
 export function timeLeftText(ms: number): string {
-  if (ms <= 60_000) return 'under a minute';
+  if (ms <= 60_000) return t('risk.ask.underMinute');
   const minutes = Math.ceil(ms / 60_000);
-  if (minutes <= 90) return `${minutes} min`;
-  return `${Math.round(minutes / 60)} h`;
+  if (minutes <= 90) return t('risk.ask.minutes', { n: minutes });
+  return t('risk.ask.hours', { n: Math.round(minutes / 60) });
 }
 
 /** "Claude stops waiting in 8 min": how long the asking agent will still wait for an answer. */
 export function waitCaption(q: Question, now: number, paneName?: string): string {
-  const who = q.agent?.trim() || paneName || 'The agent';
+  const who = q.agent?.trim() || paneName || t('risk.ask.theAgent');
   const left = q.expires_at_ms - now;
-  if (left <= 0) return `${who} has stopped waiting`;
-  return `${who} stops waiting in ${timeLeftText(left)}`;
+  if (left <= 0) return t('risk.ask.stoppedWaiting', { who });
+  return t('risk.ask.stopsWaiting', { who, time: timeLeftText(left) });
 }
 
 /** "Which login should this Claude helper use?": raised when an agent starts a helper and the person's choice is "Ask me". */

@@ -92,6 +92,9 @@ pub fn ending_of(summary: &TurnSummary, facts: &TurnFacts) -> Ending {
     if let Some(text) = credit_text(summary, facts) {
         return Ending { reason: EndReason::Failed, text };
     }
+    if summary.error.as_deref() == Some(crate::acp::session::SESSION_CLOSED) {
+        return Ending { reason: EndReason::Failed, text: "The app closed while this was running.".to_string() };
+    }
     let reason = reason_of(summary, facts);
     let text = match reason {
         EndReason::Done => done_line(facts),
@@ -114,6 +117,27 @@ pub fn ending_of(summary: &TurnSummary, facts: &TurnFacts) -> Ending {
 /// closed). `cause` is the plain sentence the mapper already had.
 pub fn ending_without_report(cause: &str, facts: &TurnFacts) -> Ending {
     Ending { reason: EndReason::Failed, text: format!("Something went wrong: {}", plain_cause(Some(cause), facts.own_cause)) }
+}
+
+/// The one sentence for an agent that quit with exit code 0 in the middle of a turn: what it last said on its error
+/// output, in its own words, and one thing to do. `None` when it said nothing.
+pub fn quit_with_words(stderr_tail: &[String]) -> Option<String> {
+    let line = stderr_tail.iter().rev().map(|l| strip_leaked_markup(l)).map(|l| l.trim().to_string()).find(|l| !l.is_empty())?;
+    let mut said = line.as_str();
+    for prefix in ["error:", "fatal:", "error", "fatal"] {
+        if said.len() > prefix.len() && said.is_char_boundary(prefix.len()) && said[..prefix.len()].eq_ignore_ascii_case(prefix) {
+            said = said[prefix.len()..].trim_start_matches([':', ' ']);
+            break;
+        }
+    }
+    // A trailing "(...)" is a code or a tag, not part of the message.
+    let said = match said.rfind(" (") {
+        Some(i) if said.ends_with(')') => &said[..i],
+        _ => said,
+    };
+    let said = plain_cause(Some(said), false);
+    let todo = if says_signed_out(&said) { "Sign in, then try again." } else { "Try again." };
+    Some(format!("The agent stopped. It said: \"{said}\". {todo}"))
 }
 
 /// The sentence for a failure the agent's definition calls "needs credit" (a billing error, an unknown model).

@@ -160,9 +160,33 @@ function registryAddon(): Frame[] {
   ];
 }
 
+/** A program whose help names a way to ask without a screen: the run waits for a yes before it sends anything. */
+function needsConsent(): Frame[] {
+  const id = 'needs_consent';
+  const l = 'Fakeheadless';
+  const marks: Marks = { find: 'done', version: 'done', chat_way: 'done' };
+  const r = (m: Marks, running: StepId) => run(id, 'fakeheadless', l, { steps: steps(m, running) });
+  const waiting = run(id, 'fakeheadless', l, {
+    state: 'needs_consent',
+    steps: steps(marks),
+    consent: { label: l, runs: 2, what_will_run: ['fakeheadless --print -o stream-json -- "Reply with exactly: <check word>"'] },
+  });
+  const caps: AgentCaps = { ...emptyCaps('fakeheadless', l), level: 'l2', level_proof: cap('yes', 'check', 'answered a test message'), chat: cap('yes', 'check', 'answered a test message') };
+  return [
+    { after_ms: 0, run: run(id, 'fakeheadless', null, { steps: steps({}, 'find') }) },
+    { after_ms: 300, run: r({ find: 'done' }, 'version') },
+    { after_ms: 800, run: r({ find: 'done', version: 'done' }, 'chat_way') },
+    { after_ms: 1200, run: waiting },
+    // after the person says yes:
+    { after_ms: 0, run: r({ ...marks, handshake: 'skipped', models: 'skipped' }, 'save') },
+    { after_ms: 2500, run: done(id, 'fakeheadless', l, { ...marks, handshake: 'skipped', models: 'skipped', save: 'done', install: 'skipped' }, caps) },
+  ];
+}
+
 export const SCENARIOS: Record<string, Scenario> = {
   native_ok: { input: 'fakenat', frames: nativeOk('native_ok', 'fakenat', 'Fakenat', NAT) },
   registry_addon: { input: 'fakereg', frames: registryAddon() },
+  needs_consent: { input: 'fakeheadless', frames: needsConsent() },
   terminal_only: {
     input: 'faketerm',
     frames: [
@@ -276,7 +300,7 @@ export function mockAddAgentApi(name: string): AddAgentApi & { starts: Array<{ i
     for (let i = 1; i < frames.length; i++) {
       const f = frames[i];
       timers.push(setTimeout(() => emit(f.run), f.after_ms - base));
-      if (f.run.state === 'needs_install') {
+      if (f.run.state === 'needs_install' || f.run.state === 'needs_consent') {
         queue = frames.slice(i + 1);
         return;
       }
@@ -314,6 +338,23 @@ export function mockAddAgentApi(name: string): AddAgentApi & { starts: Array<{ i
       emit(rest[0].run);
       play(rest);
       return rest[0].run;
+    },
+    async approveCheck(runId) {
+      if (!latest || latest.run_id !== runId) throw new Error('ADD_RUN_NOT_FOUND: That check is gone. Start again.');
+      const rest = queue;
+      queue = [];
+      if (rest.length === 0) return latest;
+      emit(rest[0].run);
+      play(rest);
+      return rest[0].run;
+    },
+    async skipCheck(runId) {
+      if (!latest || latest.run_id !== runId) throw new Error('ADD_RUN_NOT_FOUND: That check is gone. Start again.');
+      queue = [];
+      const last = SCENARIOS.terminal_only.frames[SCENARIOS.terminal_only.frames.length - 1].run;
+      const next = asTyped(last, latest.input, runId);
+      emit(next);
+      return next;
     },
     async onProgress(cb) {
       listeners.push(cb);

@@ -220,7 +220,7 @@ describe('Settings > Lend', () => {
   const main = () => host.querySelector('.st-main') as HTMLElement;
 
   it('is a card on the Connect page, with its sections', async () => {
-    await mount(true, { initialTab: 'connect' });
+    await mount(true, { initialTab: 'connect', initialRow: 'lend-page' });
     expect(navTitles()).not.toContain('Lend');
     // The page loads its state when it opens: poll for what the test needs, no fixed wait.
     for (let i = 0; i < 200 && !(main().querySelector('section[aria-label="Active lends"]') && main().querySelector('[data-row="lend-page"]')); i++) {

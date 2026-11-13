@@ -41,9 +41,9 @@ describe('deep links to every row', () => {
 
   it('the old tab ids still land: pages where there was no row, rows where the page moved', () => {
     for (const old of Object.keys(LEGACY_TABS)) expect(resolveSettingsTarget(old), old).not.toBeNull();
-    expect(resolveSettingsTarget('mobile')).toEqual({ page: 'connect' });
+    expect(resolveSettingsTarget('mobile')).toEqual({ page: 'connect', row: 'pairing' });
     expect(resolveSettingsTarget('preload')).toEqual({ page: 'agents', row: 'preload' });
-    expect(resolveSettingsTarget('team')).toEqual({ page: 'connect' });
+    expect(resolveSettingsTarget('team')).toEqual({ page: 'connect', row: 'team-page' });
     expect(resolveSettingsTarget('general')).toEqual({ page: 'look' });
     expect(resolveSettingsTarget('security')).toEqual({ page: 'agents', row: 'security-ask-before-control' });
     expect(resolveSettingsTarget('plugins')).toEqual({ page: 'helpers', row: 'agent-pack' });

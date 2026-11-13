@@ -93,6 +93,17 @@ describe('MobilePairingPanel: autosaving fields', () => {
 });
 
 describe('MobilePairingPanel: a code is made only on a click', () => {
+  it('shows the address as plain text with a Copy button, not a field', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+    await mount({ publicPwaUrl: 'https://pm.example.com' });
+    const line = host.querySelector('[data-testid="pairing-origin"]')!;
+    expect(line.textContent).toContain('pm.example.com');
+    expect(line.querySelector('input, textarea')).toBeNull();
+    await act(async () => (host.querySelector('[data-testid="pairing-origin-copy"]') as HTMLButtonElement).click());
+    expect(write).toHaveBeenCalledWith('pm.example.com');
+  });
+
   it('opening the panel makes no pairing code, with or without a public address', async () => {
     await mount({ publicPwaUrl: 'https://pm.example.com' });
     await settle(5);

@@ -2,6 +2,7 @@
 // its folder's name, never by the id of a separate copy's folder. Pure, so it is tested on its own.
 import { projectName } from '../../lib/mobile-agent-tabs';
 import { projectOfCwd } from '../../lib/ship-model';
+import { t } from '../../i18n';
 
 /** Where Potato Workspace keeps a separate copy: `<project>/.potato-workspace/worktrees/<id>`. */
 const COPY_MARK = '/.potato-workspace/worktrees/';
@@ -23,7 +24,7 @@ export function projectLabel(cwd: string | undefined | null): string {
 /** `shop` or `separate copy of shop`: the folder the agent works in, or the copy of it. */
 export function projectWithCopy(cwd: string | undefined | null): string {
   const name = projectLabel(cwd);
-  return isSeparateCopyCwd(cwd) ? `separate copy of ${name}` : name;
+  return isSeparateCopyCwd(cwd) ? t('sidebar.separateCopyOf', { name }) : name;
 }
 
 /** The real project folder behind a pane's working directory (a copy maps back), for a hover title. */

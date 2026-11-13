@@ -2,15 +2,16 @@
 // The screens: idle, checking, needs install (asks once), done (chat or terminal) and failed (one message, one button).
 // The run lives in the app; this component only draws the latest copy it was sent. Tests and mocks inject `api`.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { t as translate, useT } from '../../../i18n';
 import { AgentLogo } from '../../common/AgentLogo';
 import {
   actionButton,
   addAgentApi,
   ERROR_COPY,
-  FALLBACK_ERROR,
   nameOf,
   SLOW_AFTER_MS,
-  SLOW_NOTE,
+  slowNote,
+  fallbackError,
   type AddAgentApi,
   type AddAgentRun,
 } from '../../../lib/addAgent';
@@ -20,7 +21,7 @@ import { takeAddAgentPrefill } from '../agents/agentTarget';
 import { Btn } from '../settings-ui';
 import { AddAgentAdvanced } from './AddAgentAdvanced';
 import { AddAgentFound } from './AddAgentFound';
-import { Chips, InstallScreen, StepList } from './AddAgentParts';
+import { Chips, ConsentScreen, InstallScreen, StepList } from './AddAgentParts';
 import '../../../styles/addAgent.css';
 
 const STORE_KEY = 'pm.addAgent.runId';
@@ -46,7 +47,7 @@ function remembered(): string | null {
 function failedRun(e: unknown, input: string): AddAgentRun {
   const code = errorCode(e) ?? 'ADD_SAVE_FAILED';
   const row = ERROR_COPY[code];
-  const message = row ? row.message.replace('{Name}', input.trim() || 'it') : errorSentence(e) || FALLBACK_ERROR;
+  const message = row ? row.message.replace('{Name}', input.trim() || translate('addAgent.it')) : errorSentence(e) || fallbackError();
   return {
     run_id: '',
     input,
@@ -64,9 +65,9 @@ function failedRun(e: unknown, input: string): AddAgentRun {
 /** The failed screen's title. A known code uses the table's words, so the agent's name stays in the line. */
 function failedTitle(run: AddAgentRun): string {
   const code = run.error?.code;
-  const row = code === 'ADD_INSTALL_FAILED' ? ERROR_COPY[code] : undefined;
-  if (row) return row.message.replace('{Name}', nameOf(run) || 'It');
-  return run.error?.message || FALLBACK_ERROR;
+  const row = code ? ERROR_COPY[code] : undefined;
+  if (row) return row.message.replace('{Name}', nameOf(run) || translate('addAgent.It'));
+  return run.error?.message || fallbackError();
 }
 
 /** Why an install failed, in one line: the last line the installer wrote. Empty when it wrote none. */
@@ -96,6 +97,7 @@ export interface AddAgentProps {
 }
 
 export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerminal, onOpenAgent, onShowInstall, onRestartApp, onOpenLabs, projectDir }: AddAgentProps) {
+  const t = useT();
   // "Install" on an agent's page brings the name here, typed in.
   const [text, setText] = useState(() => takeAddAgentPrefill() ?? '');
   const [run, setRun] = useState<AddAgentRun | null>(null);
@@ -209,7 +211,7 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
       }, 900);
       return () => clearTimeout(t);
     }
-    if ((state === 'failed' || state === 'cancelled' || state === 'needs_install') && queueRef.current.length > 0) {
+    if ((state === 'failed' || state === 'cancelled' || state === 'needs_install' || state === 'needs_consent') && queueRef.current.length > 0) {
       queueRef.current = [];
       setQueued(0);
     }
@@ -226,7 +228,7 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
 
   const cancel = () => {
     const id = run?.run_id;
-    toIdle('Stopped. Nothing was added.');
+    toIdle(t('addAgent.stopped'));
     if (id) void api.cancel(id).catch(() => undefined);
   };
 
@@ -241,6 +243,21 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
     setBusy(true);
     try {
       adopt(await api.approveInstall(run.run_id));
+    } catch (e) {
+      adopt(failedRun(e, run.input));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // "Check it" / "Skip" on the consent screen. A missing call (a plain mock) leaves the screen as it is.
+  const answerConsent = async (yes: boolean) => {
+    if (!run) return;
+    const call = yes ? api.approveCheck : api.skipCheck;
+    if (!call) return;
+    setBusy(true);
+    try {
+      adopt(await call.call(api, run.run_id));
     } catch (e) {
       adopt(failedRun(e, run.input));
     } finally {
@@ -279,15 +296,15 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
   const slow = checking && run && now - (seenRef.current?.at ?? now) >= SLOW_AFTER_MS;
 
   return (
-    <section className="aa" aria-label="Add an agent" data-state={run?.state ?? 'idle'}>
+    <section className="aa" aria-label={t('addAgent.title')} data-state={run?.state ?? 'idle'}>
       {!run && (
         <div className="aa-body">
           {/* The agents already on this computer come first: one click each. Typing a name is the second way. */}
           <AddAgentFound api={api} projectDir={projectDir} disabled={busy} onAdd={(id) => void begin(id)} onAddAll={addAll} />
           <div className="aa-head">
-            <p className="aa-sub aa-or">Or type a name, or paste its install command.</p>
+            <p className="aa-sub aa-or">{t('addAgent.orType')}</p>
             <button type="button" className="aa-link" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}>
-              {advanced ? 'Hide advanced' : 'Advanced'}
+              {advanced ? t('addAgent.hideAdvanced') : t('addAgent.advanced')}
             </button>
           </div>
           <form
@@ -300,8 +317,8 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
             <input
               ref={inputRef}
               className="st-field aa-input"
-              aria-label="Agent name"
-              placeholder="kimi"
+              aria-label={t('addAgent.nameLabel')}
+              placeholder="kimi" // i18n-ok: an example agent id
               value={text}
               autoComplete="off"
               spellCheck={false}
@@ -310,7 +327,7 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
             />
             {/* Quiet while the box is empty; the dark button once there is something to add. */}
             <Btn primary={text.trim() !== ''} type="submit" disabled={busy || text.trim() === ''}>
-              Add
+              {t('addAgent.add')}
             </Btn>
           </form>
           {note && (
@@ -323,16 +340,16 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
 
       {run?.state === 'checking' && (
         <div className="aa-body">
-          <h3 className="aa-title">Adding {nameOf(run)}</h3>
+          <h3 className="aa-title">{t('addAgent.adding', { name: nameOf(run) })}</h3>
           <StepList run={run} receivedAt={receivedRef.current} now={now} />
           {slow && (
             <p className="aa-quiet" role="status">
-              {SLOW_NOTE}
+              {slowNote()}
             </p>
           )}
-          {queued > 0 && <p className="aa-quiet">{queued} more to add after this.</p>}
+          {queued > 0 && <p className="aa-quiet">{t('addAgent.queued', { n: queued })}</p>}
           <div className="aa-actions">
-            <Btn onClick={cancel}>Cancel</Btn>
+            <Btn onClick={cancel}>{t('addAgent.cancel')}</Btn>
           </div>
         </div>
       )}
@@ -348,33 +365,37 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
         />
       )}
 
+      {run?.state === 'needs_consent' && run.consent && (
+        <ConsentScreen run={run} busy={busy} onCheck={() => void answerConsent(true)} onSkip={() => void answerConsent(false)} />
+      )}
+
       {run?.state === 'done' && run.result && (
         <div className="aa-body">
           {run.result.mode === 'terminal' ? (
             <>
-              <h3 className="aa-title"><AgentLogo id={run.result.agent_id} name={run.result.label} size={16} decorative className="aa-logo" /> {run.result.label} works in a terminal window.</h3>
-              <p className="aa-sub">It cannot chat here.</p>
+              <h3 className="aa-title"><AgentLogo id={run.result.agent_id} name={run.result.label} size={16} decorative className="aa-logo" /> {t('addAgent.terminalOnly', { name: run.result.label })}</h3>
+              <p className="aa-sub">{t('addAgent.cannotChat')}</p>
               <div className="aa-actions">
                 <Btn primary onClick={() => onOpenTerminal?.(run.result!.agent_id)}>
-                  Open {run.result.label}
+                  {t('addAgent.open', { name: run.result.label })}
                 </Btn>
                 <button type="button" className="aa-link" onClick={() => { setText(''); toIdle(null); }}>
-                  Add another
+                  {t('addAgent.addAnother')}
                 </button>
               </div>
             </>
           ) : (
             <>
-              <h3 className="aa-title"><AgentLogo id={run.result.agent_id} name={run.result.label} size={16} decorative className="aa-logo" /> {run.result.label} is {run.result.sign_in_needed ? 'added' : 'ready'}.</h3>
-              {run.result.sign_in_needed && <p className="aa-signin">Sign in first, then start a chat.</p>}
+              <h3 className="aa-title"><AgentLogo id={run.result.agent_id} name={run.result.label} size={16} decorative className="aa-logo" /> {run.result.sign_in_needed ? t('addAgent.isAdded', { name: run.result.label }) : t('addAgent.isReady', { name: run.result.label })}</h3>
+              {run.result.sign_in_needed && <p className="aa-signin">{t('addAgent.signInFirst')}</p>}
               <Chips caps={run.result.caps} name={run.result.label} />
               <div className="aa-actions">
                 <Btn primary onClick={() => onStartChat?.(run.result!.agent_id)}>
-                  Start a chat
+                  {t('addAgent.startChat')}
                 </Btn>
-                <Btn onClick={() => onOpenTerminal?.(run.result!.agent_id)}>Open in a terminal</Btn>
+                <Btn onClick={() => onOpenTerminal?.(run.result!.agent_id)}>{t('addAgent.openTerminal')}</Btn>
                 <button type="button" className="aa-link" onClick={() => { setText(''); toIdle(null); }}>
-                  Add another
+                  {t('addAgent.addAnother')}
                 </button>
               </div>
             </>
@@ -398,11 +419,11 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
             )}
             {run.error.action === 'show_install' && (
               <Btn disabled={busy} onClick={() => void begin(run.input)}>
-                Try again
+                {t('addAgent.tryAgain')}
               </Btn>
             )}
             <button type="button" className="aa-link" onClick={() => toIdle(null)}>
-              Back
+              {t('addAgent.back')}
             </button>
           </div>
         </div>
@@ -410,9 +431,9 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
 
       {run?.state === 'cancelled' && (
         <div className="aa-body">
-          <h3 className="aa-title">Stopped. Nothing was added.</h3>
+          <h3 className="aa-title">{t('addAgent.stopped')}</h3>
           <div className="aa-actions">
-            <Btn onClick={() => toIdle(null)}>Back</Btn>
+            <Btn onClick={() => toIdle(null)}>{t('addAgent.back')}</Btn>
           </div>
         </div>
       )}

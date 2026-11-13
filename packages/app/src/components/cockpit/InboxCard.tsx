@@ -16,6 +16,7 @@ import { agePhrase, formatAge } from './inbox-age';
 import { formatKey, isMacPlatform } from '../../lib/shortcuts';
 import { AgentLogo } from '../common/AgentLogo';
 import { agentLogoFor } from '../../lib/agentLogos';
+import { t, useT } from '../../i18n';
 
 /** `needs` waits for a person, `error` stopped, `notice` is calm information, `done` finished, the risk levels are approvals. */
 export type CardGlyphKind = 'needs' | 'error' | 'notice' | 'working' | 'done' | RiskLevel;
@@ -46,10 +47,10 @@ function CardGlyph({ kind }: { kind: CardGlyphKind }) {
 export type ChipKind = 'question' | 'permission' | 'stopped' | 'done';
 
 export function chipFor(kind: string, glyph: CardGlyphKind): { kind: ChipKind; label: string } | null {
-  if (glyph === 'done') return { kind: 'done', label: 'Done' };
-  if (kind === 'question') return { kind: 'question', label: 'Question' };
-  if (kind === 'approval' || kind === 'consent') return { kind: 'permission', label: 'Permission' };
-  if ((kind === 'error' && glyph !== 'notice') || kind === 'stuck') return { kind: 'stopped', label: 'Stopped' };
+  if (glyph === 'done') return { kind: 'done', label: t('inbox.chipDone') };
+  if (kind === 'question') return { kind: 'question', label: t('inbox.chipQuestion') };
+  if (kind === 'approval' || kind === 'consent') return { kind: 'permission', label: t('inbox.chipPermission') };
+  if ((kind === 'error' && glyph !== 'notice') || kind === 'stuck') return { kind: 'stopped', label: t('inbox.chipStopped') };
   return null;
 }
 
@@ -101,6 +102,7 @@ export interface InboxCardProps {
 }
 
 export function InboxCard({ kind, glyph, agent, title, meta, status, age, risk, info, guard, reason, caution, body, note, actions, more, data, children }: InboxCardProps) {
+  useT(); // the chip and the age are words: this card redraws when the language changes
   const extra = Object.fromEntries(Object.entries(data ?? {}).filter(([, v]) => v !== undefined));
   const hasAge = age !== undefined && age !== null;
   const chip = chipFor(kind, glyph);
@@ -195,14 +197,15 @@ export interface KeyHint {
  * (a pane's approval card). Same look, same keys.
  */
 export function KeyHints({ hints }: { hints: KeyHint[] }) {
+  const t = useT();
   if (hints.length === 0) return null;
   const mac = isMacPlatform();
   return (
-    <p className="ib-hint ib-hint--card" aria-label="Keyboard shortcuts">
+    <p className="ib-hint ib-hint--card" aria-label={t('inbox.keyboardShortcuts')}>
       {hints.map((h) => (
         <span key={h.label}>
           {h.keys.map((k) => (
-            <kbd key={k} className="ib-kbd">
+            <kbd key={k} className="ck-chip-key ib-kbd">
               {formatKey(k, mac)}
             </kbd>
           ))}{' '}
@@ -216,9 +219,9 @@ export function KeyHints({ hints }: { hints: KeyHint[] }) {
 /** The hints for an approval card in the Inbox: number keys answer (not on high risk), Tab and Enter on high risk, O opens. */
 export function approvalHints({ answers, high, canOpen }: { answers: number; high: boolean; canOpen: boolean }): KeyHint[] {
   const out: KeyHint[] = [];
-  if (high) out.push({ keys: ['Tab'], label: 'move' }, { keys: ['Enter'], label: 'choose' });
-  else if (answers > 0) out.push({ keys: Array.from({ length: Math.min(answers, 3) }, (_, i) => String(i + 1)), label: 'answer' });
-  if (canOpen) out.push({ keys: ['O'], label: 'open' });
+  if (high) out.push({ keys: ['Tab'], label: t('inbox.move') }, { keys: ['Enter'], label: t('inbox.choose') });
+  else if (answers > 0) out.push({ keys: Array.from({ length: Math.min(answers, 3) }, (_, i) => String(i + 1)), label: t('inbox.answer') });
+  if (canOpen) out.push({ keys: ['O'], label: t('inbox.open') });
   return out;
 }
 

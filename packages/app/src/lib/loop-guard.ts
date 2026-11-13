@@ -1,5 +1,6 @@
 // Stuck-agent warnings and the panic button. Backend: src-tauri loop_guard.rs and panic.rs.
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { t } from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -111,5 +112,5 @@ export function useLoopSignals(api: LoopGuardApi = tauriLoopApi): LoopGuardState
 
 /** "Claude seems stuck: the same error 4 times." */
 export function stuckTitle(name: string, signal: LoopSignal): string {
-  return `${name} seems stuck: ${signal.summary}.`;
+  return t('risk.stuck', { name, summary: signal.summary });
 }

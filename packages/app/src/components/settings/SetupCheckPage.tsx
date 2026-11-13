@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { tauriAcpAddonApi } from '../../lib/acpAddon';
 import { agentHealthApi } from '../../lib/agent-health';
+import { useT } from '../../i18n';
 import { openSettingsAt } from '../../lib/openSettingsAt';
 import {
   buildReport,
@@ -46,9 +47,9 @@ export function runFix(fix: FixAction, actions: SetupCheckActions): Promise<void
 const GLYPH: Record<CheckRow['status'], string> = { ok: '✓', warn: '!', fail: '×' };
 
 /** The header line's left side: how the checks came out, in the same words as the Overview card. */
-function summary(rows: CheckRow[] | null): string {
-  if (rows === null) return 'Checks';
-  return problemWords(rows) ?? 'Everything works';
+function summary(rows: CheckRow[] | null, t: ReturnType<typeof useT>): string {
+  if (rows === null) return t('overview.setup.checks');
+  return problemWords(rows) ?? t('overview.setup.everythingWorks');
 }
 
 export interface SetupCheckPageProps {
@@ -71,6 +72,7 @@ export function SetupCheckPage({
 }: SetupCheckPageProps) {
   // The rows come from the one shared source when the page sits under the Settings window (so the Overview cards
   // agree with this list); a page shown alone (a test) runs the checks itself.
+  const t = useT();
   const shared = useSharedSetupChecks();
   const own = useRunSetupChecks(() => runAllChecks(deps, ctx), shared === null);
   const source = shared ?? own;
@@ -88,40 +90,40 @@ export function SetupCheckPage({
         await runFix(f, actions);
         refresh();
       } catch (error) {
-        setMessage({ tone: 'alert', text: error instanceof Error ? error.message : 'That did not work. Try again.' });
+        setMessage({ tone: 'alert', text: error instanceof Error ? error.message : t('overview.setup.didNotWork') });
       } finally {
         setBusy(false);
       }
     },
-    [actions, refresh],
+    [actions, refresh, t],
   );
 
   const copyReport = async () => {
     if (!rows) return;
     const text = buildReport(rows, appVersion, now().toISOString().slice(0, 16).replace('T', ' '));
     try {
-      await (copy ?? ((t: string) => navigator.clipboard.writeText(t)))(text);
-      setMessage({ tone: 'status', text: 'Report copied. Folder paths with a user name and keys are removed.' });
+      await (copy ?? ((s: string) => navigator.clipboard.writeText(s)))(text);
+      setMessage({ tone: 'status', text: t('overview.setup.reportCopied') });
     } catch {
-      setMessage({ tone: 'alert', text: 'Could not copy. Select the list and copy it by hand.' });
+      setMessage({ tone: 'alert', text: t('overview.setup.couldNotCopy') });
     }
   };
 
   return (
     <div className="st-setupcheck" data-testid="setup-check">
       <div className="st-setupcheck-head">
-        <span className="st-setupcheck-summary">{summary(rows)}</span>
+        <span className="st-setupcheck-summary">{summary(rows, t)}</span>
         <div>
           <Btn small disabled={rows === null} onClick={() => void copyReport()}>
-            Copy report
+            {t('overview.setup.copyReport')}
           </Btn>
           <Btn small disabled={rows === null} onClick={refresh}>
-            Check again
+            {t('overview.setup.checkAgain')}
           </Btn>
         </div>
       </div>
       <div className="st-setupcheck-list" role="list">
-        {rows === null && <p className="st-note">Checking…</p>}
+        {rows === null && <p className="st-note">{t('overview.setup.checking')}</p>}
         {rows?.map((r) => (
           <div key={r.id} className="st-row st-setupcheck-row" role="listitem" data-status={r.status}>
             <span className="st-setupcheck-glyph" aria-hidden="true">

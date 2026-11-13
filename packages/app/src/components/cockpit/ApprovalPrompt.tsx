@@ -5,15 +5,18 @@
 // and "Deny", whatever the agent's own menu says (the agent's words stay in the tooltip), and on high
 // risk Deny comes first, is the primary button and is where the keyboard starts.
 import { useEffect, useRef, useState } from 'react';
+import { t, useT } from '../../i18n';
 import type { PanePrompt, PromptChoice } from '../../lib/cockpit-api';
-import { CAUTION, LEVEL_WORD, choiceWords, firstReason, isStartupGate, layoutChoices, ownWords } from '../../lib/approval-risk';
+import { LEVEL_WORD, cautionText, choiceWords, firstReason, isStartupGate, layoutChoices, ownWords } from '../../lib/approval-risk';
 import { gestureOf, type UserGesture } from '../../lib/user-gesture';
 import '../../styles/approval-card.css';
 import { CardButton, InboxCard, InlineCode, KeyHints, RiskGlyph, approvalHints, focusWithRing } from './InboxCard';
 import { PackageFacts } from './PackageFacts';
 
 /** Shown when an answer was sent and the question is still on the screen: press the answer again. */
-export const STALLED_NOTE = 'That answer did not go through. Claude is still asking. Press your answer again.';
+export function stalledNote(): string {
+  return t('inboxCards.stalled');
+}
 
 export function ApprovalPrompt({
   prompt,
@@ -25,7 +28,7 @@ export function ApprovalPrompt({
   age,
   onOpen,
   asks,
-  openLabel = 'Open',
+  openLabel,
   hints = false,
   agentId,
 }: {
@@ -52,6 +55,7 @@ export function ApprovalPrompt({
   /** Card: the asking agent's id, for its brand icon. */
   agentId?: string | null;
 }) {
+  const t = useT();
   const risk = prompt.risk;
   const [details, setDetails] = useState(false);
   const [more, setMore] = useState(false);
@@ -129,7 +133,7 @@ export function ApprovalPrompt({
 
   const moreToggle = layout.more.length > 0 && (
     <CardButton tone="plain" size={small ? 'sm' : undefined} aria-expanded={more} onClick={() => setMore((m) => !m)}>
-      More options
+      {t('inboxCards.moreOptions')}
     </CardButton>
   );
 
@@ -142,18 +146,18 @@ export function ApprovalPrompt({
           glyph={risk.level}
           risk={risk.level}
           guard={high}
-          title={asks ? `${asks}: ${cardTitle}` : cardTitle}
+          title={asks ? t('inboxCards.labelled', { label: asks, text: cardTitle }) : cardTitle}
           meta={who}
           status={asksQuestion ? null : LEVEL_WORD[risk.level]}
           age={age ?? null}
-          reason={prompt.stalled ? STALLED_NOTE : firstReason(risk) || null}
-          caution={high ? CAUTION : null}
+          reason={prompt.stalled ? stalledNote() : firstReason(risk) || null}
+          caution={high ? cautionText() : null}
           body={
             packageFacts || detailsPanel || runs.length > 0 || hints ? (
               <>
                 {runs.map((r) => (
                   <p key={r} className="ib-runs">
-                    Runs: <InlineCode>{r}</InlineCode>
+                    {t('inboxCards.runs')} <InlineCode>{r}</InlineCode>
                   </p>
                 ))}
                 {packageFacts}
@@ -173,12 +177,12 @@ export function ApprovalPrompt({
             <>
               {hasDetails && (
                 <CardButton tone="plain" data-role="details" aria-expanded={details} onClick={() => setDetails((d) => !d)}>
-                  {details ? 'Hide details' : 'Details'}
+                  {details ? t('inboxCards.hideDetails') : t('inboxCards.details')}
                 </CardButton>
               )}
               {onOpen && (
                 <CardButton tone="plain" role="open" onClick={onOpen}>
-                  {openLabel}
+                  {openLabel ?? t('inboxCards.open')}
                 </CardButton>
               )}
             </>
@@ -190,7 +194,7 @@ export function ApprovalPrompt({
 
   // The bar docked inside a pane keeps its own compact shape.
   return (
-    <div ref={root} className={`ck-appr ck-appr--${risk.level} ck-appr--bar`} role="group" aria-label="Approval request">
+    <div ref={root} className={`ck-appr ck-appr--${risk.level} ck-appr--bar`} role="group" aria-label={t('inboxCards.approval.ariaLabel')}>
       <div className="ck-appr-head">
         <span className="ck-appr-glyph">
           <RiskGlyph level={risk.level} />
@@ -198,17 +202,17 @@ export function ApprovalPrompt({
         <span className="ck-appr-headline">{risk.headline}</span>
         <span className="ck-appr-level">{LEVEL_WORD[risk.level]}</span>
       </div>
-      {(prompt.stalled || firstReason(risk)) && <p className="ck-appr-reason">{prompt.stalled ? STALLED_NOTE : firstReason(risk)}</p>}
+      {(prompt.stalled || firstReason(risk)) && <p className="ck-appr-reason">{prompt.stalled ? stalledNote() : firstReason(risk)}</p>}
       {runs.map((r) => (
         <p key={r} className="ck-appr-reason">
-          Runs: <InlineCode>{r}</InlineCode>
+          {t('inboxCards.runs')} <InlineCode>{r}</InlineCode>
         </p>
       ))}
-      {high && <p className="ck-appr-caution">{CAUTION}</p>}
+      {high && <p className="ck-appr-caution">{cautionText()}</p>}
       {packageFacts}
       {hasDetails && (
         <button type="button" data-role="details" className="ck-appr-toggle" aria-expanded={details} onClick={() => setDetails((d) => !d)}>
-          {details ? 'Hide details' : 'Show details'}
+          {details ? t('inboxCards.hideDetails') : t('inboxCards.showDetails')}
         </button>
       )}
       {detailsPanel}

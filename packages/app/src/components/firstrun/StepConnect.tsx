@@ -6,6 +6,7 @@ import { agentPackApi, groupAgents, visibleRows, type AgentPackApi, type PackRep
 import { loadSettings } from '../../lib/settings';
 import { errText } from '../../lib/toolbelt';
 import { DotSpinner } from '../cockpit/DotSpinner';
+import { t, useT } from '../../i18n';
 import { T } from './copy';
 import type { Connected } from './model';
 
@@ -53,7 +54,7 @@ export function changingFiles(rows: PackRow[]): { key: string; agent: string; pa
     }
     if (row.skills?.status === 'ready') {
       const n = row.skills.files.filter((f) => f.kind !== 'unchanged').length;
-      out.push({ key: `${row.key}|skills`, agent, path: row.skills.path, what: `${n} ${n === 1 ? 'skill' : 'skills'}` });
+      out.push({ key: `${row.key}|skills`, agent, path: row.skills.path, what: t('firstRun.skills', { count: n }) });
     }
     return out;
   });
@@ -74,6 +75,7 @@ export function StepConnect({
   /** Reads "Show developer settings": the file paths and the dev build note show only while it is on. */
   load?: typeof loadSettings;
 }) {
+  useT();
   const [developer, setDeveloper] = useState(false);
   const [report, setReport] = useState<PackReport | null>(null);
   const [busy, setBusy] = useState<'add' | 'undo' | null>(null);

@@ -2,6 +2,7 @@
 // choice, pinned home cards, and the request the page hands to whoever starts the agent. No React, no IPC.
 import { signInLabel, type Account } from '../../../lib/accounts';
 import type { AgentDescriptor } from '../../../lib/agentRegistry';
+import { t } from '../../../i18n';
 
 // ---------- greeting ----------
 
@@ -19,12 +20,12 @@ export function cleanName(raw: string | null | undefined): string {
  */
 export function greeting(name: string | null | undefined): string {
   const who = cleanName(name);
-  return who ? `What’s up next, ${who}?` : 'What’s up next?';
+  return who ? t('newAgent.greetingName', { name: who }) : t('newAgent.greeting');
 }
 
 // ---------- example tasks ----------
 
-/** Plain example tasks for the empty box. Tab fills the one on screen. */
+/** Plain example tasks for the empty box (English; the screen shows `exampleAt`, in the language now on). Tab fills the one on screen. */
 export const EXAMPLES: readonly string[] = [
   'Find out why the tests are failing and fix them.',
   'Add a short section to the README on how to run this project.',
@@ -43,10 +44,12 @@ export function nextExample(index: number, count: number = EXAMPLES.length): num
   return (index + 1) % count;
 }
 
-/** The example on screen for `index` (wrapped, so any number is safe). */
+const EXAMPLE_KEYS = ['newAgent.example0', 'newAgent.example1', 'newAgent.example2', 'newAgent.example3', 'newAgent.example4', 'newAgent.example5'] as const;
+
+/** The example on screen for `index` (wrapped, so any number is safe), in the language now on. */
 export function exampleAt(index: number): string {
-  const n = EXAMPLES.length;
-  return EXAMPLES[((Math.trunc(index) % n) + n) % n];
+  const n = EXAMPLE_KEYS.length;
+  return t(EXAMPLE_KEYS[((Math.trunc(index) % n) + n) % n]);
 }
 
 // ---------- agents ----------
@@ -63,6 +66,11 @@ export interface AgentChoice {
   hint: string;
   /** A lent sign-in of an agent that cannot chat on one: Chat is off for this choice. */
   noChat?: boolean;
+}
+
+/** The short note beside an agent that cannot start now (or "ready"), in the language now on. */
+export function hintOf(state: AgentChoice['state']): string {
+  return state === 'ready' ? t('newAgent.hintReady') : state === 'missing' ? t('newAgent.hintMissing') : t('newAgent.hintUnavailable');
 }
 
 /**
@@ -162,11 +170,11 @@ export interface StartRequest {
 
 /** Why Send is off right now, or null when the person can send. */
 export function sendBlock(input: { prompt: string; choice: AgentChoice | null; runAs: RunAs; folder: string | null; busy: boolean }): string | null {
-  if (input.busy) return 'Starting…';
-  if (!input.choice) return 'No agent is ready. Pick one or set one up.';
-  if (input.choice.state !== 'ready') return `${input.choice.label} is ${input.choice.hint}.`;
-  if (input.runAs === 'chat' && !input.folder) return 'Pick a folder for a chat session.';
-  if (!input.prompt.trim()) return 'Write what the agent should do.';
+  if (input.busy) return t('newAgent.blockStarting');
+  if (!input.choice) return t('newAgent.blockNoAgent');
+  if (input.choice.state !== 'ready') return t('newAgent.blockNotReady', { name: input.choice.label, hint: hintOf(input.choice.state) });
+  if (input.runAs === 'chat' && !input.folder) return t('newAgent.blockFolder');
+  if (!input.prompt.trim()) return t('newAgent.blockWrite');
   return null;
 }
 
@@ -193,7 +201,18 @@ export const CARD_KINDS: readonly { kind: CardKind; label: string; hint: string 
   { kind: 'prompt', label: 'A saved prompt', hint: 'Text you use often.' },
 ];
 
-export const cardTitle = (card: HomeCard): string => CARD_KINDS.find((k) => k.kind === card.kind)?.label ?? 'Card';
+const KIND_TEXT = {
+  recent: ['newAgent.cardRecent', 'newAgent.cardRecentHint'],
+  running: ['newAgent.cardRunning', 'newAgent.cardRunningHint'],
+  needs: ['newAgent.cardNeeds', 'newAgent.cardNeedsHint'],
+  prompt: ['newAgent.cardPrompt', 'newAgent.cardPromptHint'],
+} as const;
+
+/** A card kind's name and one-line hint, in the language now on. */
+export const kindLabel = (kind: CardKind): string => t(KIND_TEXT[kind][0]);
+export const kindHint = (kind: CardKind): string => t(KIND_TEXT[kind][1]);
+
+export const cardTitle = (card: HomeCard): string => (CARD_KINDS.some((k) => k.kind === card.kind) ? kindLabel(card.kind) : t('newAgent.cardFallback'));
 
 /** Cards as they were saved, with anything unreadable dropped. Never throws. */
 export function parseCards(raw: unknown): HomeCard[] {

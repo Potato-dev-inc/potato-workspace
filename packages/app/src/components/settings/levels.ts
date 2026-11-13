@@ -8,6 +8,7 @@ export const BASIC_ROW_IDS: readonly string[] = [
   // General
   'your-name',
   'theme',
+  'language',
   'mode-switch-animation',
   'usage-bar',
   'individual-window-layout',

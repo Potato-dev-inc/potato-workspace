@@ -1,6 +1,7 @@
 // The sidebar's Projects view: the folders the person added, which ones are folded, and how the list is grouped.
 // Saved in browser storage (a per-viewer convenience). Pure helpers first, then small hooks. Never throws.
 import { useCallback, useEffect, useState } from 'react';
+import { t } from '../i18n';
 import { projectOfCwd } from './ship-model';
 
 export const LS_SIDEBAR_PROJECTS = 'pm.sidebar.projects';
@@ -96,7 +97,16 @@ export function groupByProject<T>(
 ): ProjectGroup<T>[] {
   const groups: ProjectGroup<T>[] = projects.map((p) => ({ key: pathKey(p.path), path: p.path, name: projectLabel(p), added: true, items: [] }));
   const extra: ProjectGroup<T>[] = [];
-  const other: ProjectGroup<T> = { key: 'other', path: null, name: 'Other', added: false, items: [] };
+  const other: ProjectGroup<T> = {
+    key: 'other',
+    path: null,
+    // A getter: the name is read when it is drawn, so it follows the language.
+    get name() {
+      return t('state.otherGroup');
+    },
+    added: false,
+    items: [],
+  };
   for (const item of items) {
     const cwd = cwdOf(item);
     if (!cwd) {

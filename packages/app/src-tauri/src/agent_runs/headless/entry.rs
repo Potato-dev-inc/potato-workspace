@@ -6,7 +6,7 @@ use super::process::{execute_headless, fail_start, publish};
 use super::view::{present_view, wait_for_run};
 use crate::agent_runs::persist::{self, FollowupOpts, WorkerBind};
 use crate::agent_runs::runtime::{self, AgentRunRequest, AgentRunView};
-use crate::agent_runs::{approval_policy, capabilities, checks};
+use crate::agent_runs::{approval_policy, checks};
 use crate::tui::RunOptionSupport;
 use crate::operations::{self, ContextPolicy, DelegateWorkRequest, OperationError};
 use parking_lot::Mutex;
@@ -222,31 +222,8 @@ pub fn run_agent(
             false,
         ));
     }
-    // A backend that enforces read-only on a pane it spawns itself (opencode_native) may run in a
-    // pane; every other backend needs a headless run. An explicitly named pane must itself have
-    // been spawned read-only, and the dispatch re-checks adopted worker panes.
-    let read_only_ok = if crate::tui::profile_for(&request.agent_type)
-        .features()
-        .read_only_spawned_pane
-    {
-        request.pane_id.as_deref().is_none_or(|pane| {
-            capabilities::read_only_supported_for(&request.agent_type, Some(pane))
-        })
-    } else if request.headless {
-        capabilities::read_only_supported(&request.agent_type, false)
-    } else {
-        // A visible pane the run spawns itself, started read-only by the agent's own launch flags.
-        // A named or adopted pane was started by someone else and is never read-only.
-        request.pane_id.is_none()
-            && crate::tui::enforces_read_only_by_flags(crate::tui::profile_for(&request.agent_type).as_ref())
-    };
-    if request.read_only && !read_only_ok {
-        let mut message = capabilities::read_only_unsupported_message(&request.agent_type, !request.headless);
-        if request.headless_ignored {
-            message.push_str(crate::agent_run_mode::HIDDEN_HELPERS_HINT);
-        }
-        return Err(OperationError::new("READ_ONLY_UNSUPPORTED", message, false));
-    }
+    // `read_only` starts only on a way that enforces it; the refusal carries the call that works (`read_only_gate`).
+    super::read_only_gate::check(&request)?;
     let profile = crate::tui::profile_for(&request.agent_type);
     if !profile.features().dispatchable {
         return Err(OperationError::new(

@@ -4,6 +4,7 @@
 // (Summary, Normal, Verbose) is in the header. The agent's text is Markdown when it comes from the session file;
 // text read off the terminal is shown as it is.
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { clearChatJump, turnWithItem, type ChatJump } from '../../lib/chatJump';
 import type { ChatSource, ChatTurn, SessionChatState, TurnStep } from '../../lib/sessionChatModel';
 import '../../styles/cockpit-chat.css';
@@ -62,6 +63,8 @@ export interface SessionChatViewProps {
   headerExtra?: ReactNode;
   /** The chat menu at the end of the header (Save as page). */
   headerMenu?: ReactNode;
+  /** A place in the pane's own header (PaneView). When given, the view switch, the side question button and the chat menu are drawn there and this chat has no header row of its own. `compact`: the header is tight, so the view switch is one pill. */
+  headerSlot?: { el: HTMLElement; compact: boolean };
   /** A one-line note above the conversation (the Keep going line); it shows nothing when there is nothing to say. */
   banner?: ReactNode;
   /** Something laid over the chat, inside it (the side question box). */
@@ -196,7 +199,7 @@ function TurnView({ turn, fromScreen, markdown, mode, branch, helpers, onOpenPan
   );
 }
 
-export function SessionChatView({ state, reason, waitingFor, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings }: SessionChatViewProps) {
+export function SessionChatView({ state, reason, waitingFor, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings }: SessionChatViewProps) {
   const fromScreen = source === 'screen';
   // Markdown only for what the agent itself wrote (its session file or its API); an unknown source keeps the text as it is.
   const markdown = source === 'file' || source === 'api' || source === 'acp';
@@ -256,14 +259,25 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-pm-bg text-xs text-pm-text ck-chat" data-testid="session-chat" data-view={mode}>
-      <header className="flex h-9 min-w-0 flex-nowrap items-center gap-2 bg-pm-panel px-2 ck-chat-head">
-        <span className="min-w-0 truncate ck-chat-model" title={cliVersion ? `CLI ${cliVersion}` : undefined}>
-          {model ?? 'Model not known yet'}
-        </span>
-        {headerExtra && <span className="ml-auto flex shrink-0 items-center ck-chat-head-extra">{headerExtra}</span>}
-        <ViewModeToggle mode={mode} onChange={setMode} />
-        {headerMenu && <span className="flex shrink-0 items-center ck-chat-head-menu">{headerMenu}</span>}
-      </header>
+      {headerSlot ? (
+        createPortal(
+          <>
+            {headerExtra && <span className="flex shrink-0 items-center ck-chat-head-extra">{headerExtra}</span>}
+            <ViewModeToggle mode={mode} onChange={setMode} compact={headerSlot.compact} />
+            {headerMenu && <span className="flex shrink-0 items-center ck-chat-head-menu">{headerMenu}</span>}
+          </>,
+          headerSlot.el,
+        )
+      ) : (
+        <header className="flex h-9 min-w-0 flex-nowrap items-center gap-2 bg-pm-panel px-2 ck-chat-head">
+          <span className="min-w-0 truncate ck-chat-model" title={cliVersion ? `CLI ${cliVersion}` : undefined}>
+            {model ?? 'Model not known yet'}
+          </span>
+          {headerExtra && <span className="ml-auto flex shrink-0 items-center ck-chat-head-extra">{headerExtra}</span>}
+          <ViewModeToggle mode={mode} onChange={setMode} />
+          {headerMenu && <span className="flex shrink-0 items-center ck-chat-head-menu">{headerMenu}</span>}
+        </header>
+      )}
       {(fromScreen || mode === 'summary') && (
         <p className="px-2 py-1 text-[11px] text-pm-muted ck-chat-note">
           {fromScreen && (

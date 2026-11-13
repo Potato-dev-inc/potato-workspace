@@ -39,7 +39,7 @@
   --scrim: rgba(0, 0, 0, 0.4);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
-  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI Variable Text', system-ui, sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI Variable Text', system-ui, 'Microsoft JhengHei UI', 'PingFang TC', 'Noto Sans TC', sans-serif;
   --font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
   --font-doto: 'Doto', 'JetBrains Mono', ui-monospace, monospace;
   --safe-b: env(safe-area-inset-bottom, 0px);

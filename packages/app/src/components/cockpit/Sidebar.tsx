@@ -25,6 +25,7 @@ import '../../styles/live-preview.css';
 import '../../styles/cockpit-helpers.css';
 import '../../styles/cockpit-sidebar.css';
 import { DotSpinner } from './DotSpinner';
+import { useT } from '../../i18n';
 import { PotatoMark, IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
 import { RowMark } from './RowMark';
 import { ProjectHeader, ProjectMeta, type ProjectSignal } from './ProjectHeader';
@@ -133,6 +134,7 @@ export function Sidebar({
   /** The cockpit's shared handoff (also used by the pane's "Hand off" button). Absent: the sidebar keeps its own. */
   handoff?: HandoffControl;
 }) {
+  const t = useT();
   const list = c.registry.paneList;
   // Closed chats: read again whenever the set of panes changes (a chat was closed or reopened).
   const { chats: closedChats, reload: reloadClosed } = useClosedChats(closedChatsApi, list.map((p) => p.info.id).join('|'));
@@ -303,12 +305,12 @@ export function Sidebar({
     const heading = paneHeading(p.info, c.names.get(id) ?? p.info.agent_type);
     const detail =
       activityText(p.status, c.activities?.[id]) ??
-      (p.status === 'error' ? `Error · ${projectWithCopy(p.info.cwd)}` : projectWithCopy(p.info.cwd));
+      (p.status === 'error' ? t('sidebar.errorIn', { where: projectWithCopy(p.info.cwd) }) : projectWithCopy(p.info.cwd));
     const subline = paneSubline(
       p.info,
       c.names.get(id) ?? p.info.agent_type,
       // Away from its parent (in Needs you) a helper says whose it is.
-      awayFrom ? `Helper of ${paneTitle(awayFrom)} · ${detail}` : detail,
+      awayFrom ? t('sidebar.helperOf', { name: paneTitle(awayFrom), detail }) : detail,
       multiLogin,
     );
     const entry = c.launchEntries.find((e) => e.type === p.info.agent_type);
@@ -335,7 +337,7 @@ export function Sidebar({
           }}
           title={lastTurn.get(id)?.sentence}
           aria-current={active ? 'true' : undefined}
-          aria-label={pill ? `${heading.primary}, needs you` : undefined}
+          aria-label={pill ? t('sidebar.rowNeedsYou', { name: heading.primary }) : undefined}
         >
           <span className="ck-row-glyph">
             <RowMark status={p.status} asking={asking && p.status !== 'error'} agentId={p.info.agent_type} agentName={entry?.label} />
@@ -345,20 +347,20 @@ export function Sidebar({
             <span className="ck-row-sub">{subline}</span>
           </span>
           {preview && (
-            <span className="ck-row-preview" title={`Has a preview · ${previewAddress(preview)}`} role="img" aria-label="Has a preview">
+            <span className="ck-row-preview" title={t('sidebar.hasPreviewAt', { address: previewAddress(preview) })} role="img" aria-label={t('sidebar.hasPreview')}>
               <IconGlobe />
             </span>
           )}
           {pinSet.has(id) && (
-            <span className="ck-row-pin" role="img" aria-label="Pinned" title="Pinned">
+            <span className="ck-row-pin" role="img" aria-label={t('sidebar.pinned')} title={t('sidebar.pinned')}>
               <IconPin />
             </span>
           )}
           {/* The right side says one thing: the chip when it needs you or is broken, the time while it works, else nothing. */}
           {pill ? (
-            <span className="ck-row-pill">Needs you</span>
+            <span className="ck-row-pill">{t('sidebar.needsYou')}</span>
           ) : broken ? (
-            <span className="ck-row-pill ck-row-pill--error">Error</span>
+            <span className="ck-row-pill ck-row-pill--error">{t('sidebar.error')}</span>
           ) : working ? (
             <span className="ck-row-time">{since ? formatElapsed(c.now - since) : ''}</span>
           ) : null}
@@ -366,8 +368,8 @@ export function Sidebar({
         <button
           type="button"
           className="ck-row-more"
-          aria-label={`More for ${heading.primary}`}
-          title="More"
+          aria-label={t('sidebar.moreFor', { name: heading.primary })}
+          title={t('sidebar.more')}
           aria-haspopup="menu"
           onClick={(e) => {
             rowMenuFrom.current = e.currentTarget;
@@ -388,13 +390,13 @@ export function Sidebar({
     return (
       <div key={id} className="ck-node">
         {row(n.pane, n.awayFrom)}
-        <div className="ck-helpers" role="group" aria-label={`Helpers of ${paneTitle(n.pane)}`}>
+        <div className="ck-helpers" role="group" aria-label={t('sidebar.helpersOf', { name: paneTitle(n.pane) })}>
           <button
             type="button"
-            className="ck-helper-chip"
+            className="ck-chip-count ck-helper-chip"
             onClick={() => toggleFolded(id)}
             aria-expanded={open}
-            title={open ? 'Hide helpers' : 'Show helpers'}
+            title={t(open ? 'sidebar.hideHelpers' : 'sidebar.showHelpers')}
           >
             {helperChipText(n)}
             <span className={`ck-helper-caret${open ? ' is-open' : ''}`} aria-hidden="true" />
@@ -411,7 +413,7 @@ export function Sidebar({
         <DotSpinner status="waiting_input" />
       </span>
       <span className="ck-row-main">
-        <span className="ck-row-title">Questions from agents</span>
+        <span className="ck-row-title">{t('sidebar.questionsFromAgents')}</span>
       </span>
       <span className="ck-row-time">{n}</span>
     </button>
@@ -446,22 +448,22 @@ export function Sidebar({
       const found = await ship.pickFolder();
       if (found?.path) addProject(found.path);
     } catch {
-      c.notify('Could not open the folder picker here.');
+      c.notify(t('sidebar.folderPickerFailed'));
     }
   };
   const sectionBar = (
     <div className="ck-sechead">
-      <span className="ck-sechead-text">{groupBy === 'projects' ? 'Projects' : 'Status'}</span>
+      <span className="ck-sechead-text">{t(groupBy === 'projects' ? 'sidebar.projects' : 'sidebar.statusHeading')}</span>
       <button
         type="button"
         className="ck-sechead-btn"
-        aria-label={groupBy === 'projects' ? 'Group by status' : 'Group by project'}
-        title={groupBy === 'projects' ? 'Group by status (Needs you, Working, Idle)' : 'Group by project folder'}
+        aria-label={t(groupBy === 'projects' ? 'sidebar.groupByStatus' : 'sidebar.groupByProject')}
+        title={t(groupBy === 'projects' ? 'sidebar.groupByStatusTip' : 'sidebar.groupByProjectTip')}
         onClick={() => setGroupBy(groupBy === 'projects' ? 'status' : 'projects')}
       >
         <IconSort />
       </button>
-      <button type="button" className="ck-sechead-btn" data-testid="side-add-project-btn" aria-label="Add project" title="Add project" onClick={() => void addFolder()}>
+      <button type="button" className="ck-sechead-btn" data-testid="side-add-project-btn" aria-label={t('sidebar.addProject')} title={t('sidebar.addProject')} onClick={() => void addFolder()}>
         <IconFolderPlus />
       </button>
     </div>
@@ -509,12 +511,12 @@ export function Sidebar({
                 <div className="ck-proj-kids">
                   {branchGroups
                     ? branchGroups.map((bg) => (
-                        <div className="ck-branch-group" key={bg.key} role="group" aria-label={bg.label || 'Project folder'}>
+                        <div className="ck-branch-group" key={bg.key} role="group" aria-label={bg.label || t('sidebar.projectFolder')}>
                           <div className="ck-branch-head">
                             <span className="ck-proj-branch" title={bg.label}>
-                              {bg.label || 'No branch'}
+                              {bg.label || t('sidebar.noBranch')}
                             </span>
-                            <span className="ck-pill-quiet">{bg.copy ? 'copy' : 'primary'}</span>
+                            <span className="ck-pill-quiet">{bg.copy ? t('sidebar.copy') : t('sidebar.primary')}</span>
                             {bg.pr && <span className="ck-branch-pr">{bg.pr}</span>}
                           </div>
                           {bg.items.map(node)}
@@ -524,10 +526,10 @@ export function Sidebar({
                 </div>
               ) : g.path ? (
                 <button type="button" className="ck-proj-newrow" data-testid="proj-new-agent" onClick={() => g.path && newAgentIn(g.path, g.name)}>
-                  New agent
+                  {t('sidebar.newAgent')}
                 </button>
               ) : (
-                <p className="ck-proj-empty">No agents</p>
+                <p className="ck-proj-empty">{t('sidebar.noAgents')}</p>
               ))}
           </div>
         );
@@ -537,7 +539,7 @@ export function Sidebar({
           <IconFolderPlus />
         </span>
         <span className="ck-row-main">
-          <span className="ck-row-title">Add project</span>
+          <span className="ck-row-title">{t('sidebar.addProject')}</span>
         </span>
       </button>
     </div>
@@ -546,7 +548,7 @@ export function Sidebar({
   // The key of a shortcut as the person set it (CockpitApp draws again when they change it).
   const hint = (id: string) => (isMacPlatform() ? bindingLabel(id) : bindingLabel(id).replace('+', ' '));
   return (
-    <aside className="ck-side" aria-label="Agents">
+    <aside className="ck-side" aria-label={t('sidebar.agentsLabel')}>
       {setUpFor && (
         <AddChatDialog
           agent={setUpFor.agent}
@@ -563,7 +565,7 @@ export function Sidebar({
       )}
       <div className="ck-side-head">
         <PotatoMark size={18} className="ck-potato" />
-        <span className="ck-wordmark">Potato Workspace</span>
+        <span className="ck-wordmark">Potato Workspace</span>{/* i18n-ok: brand name */}
       </div>
 
       <div className="ck-side-top">
@@ -573,22 +575,22 @@ export function Sidebar({
             data-testid="side-new-agent"
             className={`ck-side-new ck-side-new--primary ck-side-new--split${newAgentOpen ? ' is-active' : ''}`}
             onClick={() => (onOpenNewAgent ? onOpenNewAgent() : setMenuOpen((v) => !v))}
-            aria-label="New agent"
+            aria-label={t('sidebar.newAgent')}
             title={hint('new-agent')}
           >
             <span className="ck-row-glyph ck-row-glyph--icon">
               <IconNewAgent />
             </span>
             <span className="ck-row-main">
-              <span className="ck-row-title">New agent</span>
+              <span className="ck-row-title">{t('sidebar.newAgent')}</span>
             </span>
           </button>
           <button
             type="button"
             data-testid="side-new-agent-menu"
             className="ck-side-new-chev"
-            aria-label="Quick start menu"
-            title="Quick start"
+            aria-label={t('sidebar.quickStartMenu')}
+            title={t('sidebar.quickStart')}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
@@ -671,9 +673,9 @@ export function Sidebar({
             <IconSearch />
           </span>
           <span className="ck-row-main">
-            <span className="ck-row-title">Search</span>
+            <span className="ck-row-title">{t('sidebar.search')}</span>
           </span>
-          <kbd className="ck-row-hint">{hint('palette')}</kbd>
+          <kbd className="ck-chip-key ck-row-hint">{hint('palette')}</kbd>
         </button>
       </div>
 
@@ -702,28 +704,28 @@ export function Sidebar({
             <IconInbox />
           </span>
           <span className="ck-row-main">
-            <span className="ck-row-title">Inbox</span>
+            <span className="ck-row-title">{t('sidebar.inbox')}</span>
           </span>
           {waiting > 0 && <span className="ck-count">{waiting}</span>}
         </button>
-        {section('Pinned', pinnedNodes)}
+        {section(t('sidebar.pinned'), pinnedNodes)}
         {groupBy === 'projects' ? (
           projectsSection
         ) : (
           <>
             {sectionBar}
-            {section('Needs you', groups.needs, waiting, asks)}
-            {section('Working', groups.working)}
-            {section('Idle', groups.idle)}
+            {section(t('sidebar.needsYou'), groups.needs, waiting, asks)}
+            {section(t('sidebar.working'), groups.working)}
+            {section(t('sidebar.idle'), groups.idle)}
           </>
         )}
         {list.length === 0 && c.registry.initialReady && (
           <>
             <div className="ck-side-empty" data-testid="side-empty">
               <PotatoMark size={28} className="ck-potato ck-potato--quiet" />
-              <p>No agents running.</p>
+              <p>{t('sidebar.noAgentsRunning')}</p>
             </div>
-            <BringChatsLink className="bc-link ck-side-bring" label="Bring my chats from another agent" />
+            <BringChatsLink className="bc-link ck-side-bring" label={t('sidebar.bringChats')} />
           </>
         )}
         {closedChats.length > 0 && (
@@ -732,7 +734,7 @@ export function Sidebar({
               <IconClosedChats />
             </span>
             <span className="ck-row-main">
-              <span className="ck-row-title">Closed chats</span>
+              <span className="ck-row-title">{t('sidebar.closedChats')}</span>
             </span>
             <span className="ck-side-count">{closedChats.length}</span>
           </button>
@@ -747,13 +749,13 @@ export function Sidebar({
               type="button"
               className="ck-handoff-x"
               data-testid="handoff-open-file"
-              onClick={() => void openHandoffFile((hand.status as { paneId: string }).paneId).catch(() => c.notify('Could not open HANDOFF.md'))}
+              onClick={() => void openHandoffFile((hand.status as { paneId: string }).paneId).catch(() => c.notify(t('sidebar.openHandoffFailed')))}
             >
-              Open file
+              {t('sidebar.openFile')}
             </button>
           )}
           {!handoffBusy && (
-            <button type="button" className="ck-handoff-x" aria-label="Dismiss" onClick={hand.dismiss}>
+            <button type="button" className="ck-handoff-x" aria-label={t('sidebar.dismiss')} onClick={hand.dismiss}>
               ×
             </button>
           )}
@@ -811,7 +813,7 @@ export function Sidebar({
         <TonightHost
           c={c}
           onClose={() => setTonightOpen(false)}
-          onStarted={() => c.notify('Night Shift is set. The chip below shows how it goes.')}
+          onStarted={() => c.notify(t('sidebar.nightShiftSet'))}
         />
       )}
       {missionFor && (
@@ -823,7 +825,7 @@ export function Sidebar({
           onStarted={() => {
             setMissionFor(null);
             missions.reload();
-            c.notify('Mission started. It shows in the Inbox while it works.');
+            c.notify(t('sidebar.missionStarted'));
           }}
         />
       )}

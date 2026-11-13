@@ -1,6 +1,7 @@
 // Helper panes nested under the pane of the agent that started them (Potato Workspace's run_agent,
 // delegate_work, spawn_agent). The backend records `parent_pane_id` once, display-only; this file
 // turns the flat pane list into the sidebar's tree. Pure, no React.
+import { t } from '../i18n';
 
 interface PaneLike {
   info: { id: string; parent_pane_id?: string | null };
@@ -96,7 +97,7 @@ export function descendants<T extends PaneLike>(node: HelperNode<T>): HelperNode
 /** "1 helper", "2 helpers": every pane under this row. */
 export function helperChipText(node: HelperNode<PaneLike>): string {
   const n = descendants(node).length;
-  return `${n} ${n === 1 ? 'helper' : 'helpers'}`;
+  return t('state.helpers', { count: n });
 }
 
 /** The pane header's line for a helper: "Helper of <title>", or null when it has no live parent. */
@@ -107,7 +108,7 @@ export function helperOfLabel<T extends PaneLike>(
 ): { parentId: string; text: string } | null {
   const parentId = liveParentId(list, id);
   const parent = parentId ? list.find((p) => p.info.id === parentId) : undefined;
-  return parent && parentId ? { parentId, text: `Helper of ${titleOf(parent)}` } : null;
+  return parent && parentId ? { parentId, text: t('state.helperOf', { title: titleOf(parent) }) } : null;
 }
 
 /** The pane header's "Started by Claude Code" and the first line of its task, or null when the app does not know who asked. */
@@ -115,8 +116,8 @@ export function startedByLabel(info: { origin?: { host?: string | null; task?: s
   const host = info.origin?.host?.trim();
   const task = info.origin?.task?.trim();
   if (!host && !task) return null;
-  const who = host ? `Started by ${host}` : 'Started by an agent';
-  return { text: task ? `${who}: ${task}` : who, title: task ? `${who}. Task: ${task}` : who };
+  const who = host ? t('state.startedBy', { host }) : t('state.startedByAgent');
+  return { text: task ? t('state.startedByTask', { who, task }) : who, title: task ? t('state.startedByTitle', { who, task }) : who };
 }
 
 /** localStorage key: the ids of parents whose helpers the person folded away. */

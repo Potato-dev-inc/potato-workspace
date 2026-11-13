@@ -57,7 +57,7 @@ export function LiveChip({
     <span className="ck-live-chip-wrap" ref={wrap}>
       <button
         type="button"
-        className="ck-live-chip"
+        className="ck-chip-label ck-live-chip"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}

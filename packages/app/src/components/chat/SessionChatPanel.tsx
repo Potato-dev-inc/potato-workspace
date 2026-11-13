@@ -103,7 +103,7 @@ export interface ScreenAsk {
   answerable?: string | null;
 }
 
-export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, screenAsk, helpers, slashCommands, composerTop }: { paneId: string; dock?: ReactNode; reply?: ChatReply; emptyNote?: ReactNode; onOpenPane?: (paneId: string) => void; screenAsk?: ScreenAsk; /** The helpers this pane started through Potato Workspace (rows in the turn they began in). */ helpers?: readonly ChatHelper[]; /** A chat session over ACP: the agent's slash commands for the message box (typing "/" opens a menu). */ slashCommands?: readonly AcpCommand[]; /** Drawn right above the message box (a chat session's settings chips). */ composerTop?: ReactNode }) {
+export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, screenAsk, helpers, slashCommands, composerTop, headerSlot }: { paneId: string; /** A place in the pane's header for the view switch and the chat buttons (the chat then draws no header row). */ headerSlot?: { el: HTMLElement; compact: boolean }; dock?: ReactNode; reply?: ChatReply; emptyNote?: ReactNode; onOpenPane?: (paneId: string) => void; screenAsk?: ScreenAsk; /** The helpers this pane started through Potato Workspace (rows in the turn they began in). */ helpers?: readonly ChatHelper[]; /** A chat session over ACP: the agent's slash commands for the message box (typing "/" opens a menu). */ slashCommands?: readonly AcpCommand[]; /** Drawn right above the message box (a chat session's settings chips). */ composerTop?: ReactNode }) {
   const chat = useSessionChat(paneId, true);
   const outbox = usePaneOutbox(tauriOutboxTransport, paneId, !!reply);
   const userTexts = useMemo(() => chat.turns.flatMap((turn) => (turn.user ? [turn.user.text] : [])), [chat.turns]);
@@ -150,7 +150,8 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
         remember
         emptyNote={emptyNote}
         headerExtra={chat.state === 'unavailable' ? undefined : side.button}
-        headerMenu={hasChat ? <ChatExportMenu paneId={paneId} /> : undefined}
+        headerSlot={headerSlot}
+        headerMenu={hasChat ? <ChatExportMenu paneId={paneId} variant={headerSlot ? 'text' : 'icon'} /> : undefined}
         banner={
           <>
             <CollisionBanner paneId={paneId} onOpenPane={onOpenPane} />

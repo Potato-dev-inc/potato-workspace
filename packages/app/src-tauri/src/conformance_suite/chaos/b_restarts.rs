@@ -22,7 +22,6 @@ fn turn_over(chat: &AcpChat) -> bool {
 
 // B01 "3 chats listed again; no agent process until one is opened; opening one shows its old messages"
 #[test]
-#[ignore = "chaos-finding B01: after reopen and a new message the last answer reads earlier answer, not w0 w1 (not diagnosed)"]
 fn chaos_quit_with_three_chats_then_reopen() {
     let mut rig = ChatRig::with_store("", 3);
     let ids = rig.conversation_ids();
@@ -65,7 +64,6 @@ fn chaos_app_crash_leaves_no_agent_running() {
 
 // B04 "the cut turn reads new copy `The app closed while this was running.` with Try again; not a spinner"
 #[test]
-#[ignore = "chaos-finding B04: after quit and reopen the cut turn reads Something went wrong: the session was closed, not the new copy"]
 fn chaos_turn_cut_by_a_quit_is_marked() {
     let mut rig = ChatRig::with_store("", 1);
     let id = rig.conversation_ids().remove(0);
@@ -86,13 +84,13 @@ fn chaos_turn_cut_by_a_quit_is_marked() {
     );
     assert!(!still_running, "no spinner: nothing is running after the app opened again");
     // The chat is alive: the next message works.
-    rig.say("stream 2");
-    assert_eq!(rig.last_answer().as_deref(), Some("w0 w1 "));
+    // After a reopen the session counts its turns from 1 again, so `turn_over` would see the old `end:1`: wait for the answer itself.
+    rig.send("stream 2").expect("the message is sent");
+    assert!(wait_until(30, || rig.last_answer().as_deref() == Some("w0 w1 ")), "{:#?}", rig.items());
 }
 
 // B05 "the answer arrives; no error (pin off)"
 #[test]
-#[ignore = "chaos-finding B05: after an idle kill the next message shows Something went wrong: the adapter exited before the turn finished"]
 fn chaos_agent_updated_while_running() {
     let dir = temp_dir("version");
     let version = dir.join("version.txt");

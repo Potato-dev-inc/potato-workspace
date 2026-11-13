@@ -8,6 +8,7 @@ import { installMockBridge } from './mock-bridge';
 import { blockNetwork } from './block-network';
 import { installTauriMock } from './mock-tauri';
 import { scenarios } from './scenarios';
+import { setLanguagePref } from '../i18n';
 import type { HarnessDom, HarnessScenario } from './types';
 
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
@@ -64,6 +65,10 @@ export async function bootHarness(name: string): Promise<() => JSX.Element> {
   const scenario: HarnessScenario | undefined =
     found && (themeOverride === 'light' || themeOverride === 'dark') ? { ...found, theme: themeOverride } : found;
   if (!scenario) return () => <UnknownScenario name={name} />;
+
+  // `&lang=zh-TW` shows the screen in Traditional Chinese (evidence shots for the translation).
+  const langOverride = new URLSearchParams(window.location.search).get('lang');
+  if (langOverride === 'zh-TW' || langOverride === 'en') setLanguagePref(langOverride, false);
 
   blockNetwork();
   // Screenshots are taken under virtual time, so a CSS fade can be caught half way. Land every

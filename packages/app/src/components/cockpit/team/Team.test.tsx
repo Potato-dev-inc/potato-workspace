@@ -8,6 +8,7 @@ import { TeamCard } from './TeamCard';
 import { TeamJobCard } from './TeamJobCard';
 import { TeamSection } from './TeamSection';
 import { RedBanners } from './RedBanner';
+import { tauri } from '../../../lib/tauri';
 import { blockingItems, deriveNeedsYou } from '../../../lib/attention';
 import { TellTeamPrompt } from './TellTeam';
 
@@ -93,26 +94,26 @@ function renderCard(card: Card, api = fakeApi()) {
 describe('copy', () => {
   it('names the person and their agent, the branch and the size', () => {
     expect(cardTitle(MAYA_PUSH)).toBe("Maya's Claude pushed feat/auth");
-    expect(cardMeta(MAYA_PUSH)).toBe('billing-service · feat/auth · 3 files +84 −12');
-    expect(cardTitle(SAM_PR)).toBe("Sam's Codex opened PR #142 in acme/billing-service · feat/invoices · 6 files +212 −34");
+    expect(cardMeta(MAYA_PUSH)).toBe('billing-service · auth · 3 files +84 −12');
+    expect(cardTitle(SAM_PR)).toBe("Sam's Codex opened review request 142 in acme/billing-service · invoices · 6 files +212 −34");
     expect(cardTitle({ ...MAYA_PUSH, actor: { ...MAYA_PUSH.actor, agent: undefined } })).toBe('Maya pushed feat/auth');
     expect(cardTitle({ ...MAYA_PUSH, subject: { ...MAYA_PUSH.subject, forced: true } })).toBe("Maya's Claude force-pushed feat/auth");
     expect(tellLabel(['Leo'])).toBe('Tell Leo');
     expect(tellLabel(['Leo', 'Sam'])).toBe('Tell Leo and Sam');
     expect(tellLabel([])).toBe('Tell the team');
-    expect(jobTitle(READY_JOB)).toBe('feat/billing is up to date, in a separate copy');
+    expect(jobTitle(READY_JOB)).toBe('billing is up to date, in a separate copy');
   });
 
   it('words the GitHub facts: merged, closed, checks', () => {
-    expect(cardTitle(SAM_MERGED)).toBe("Sam's #141 merged into main");
-    expect(cardTitle({ ...SAM_MERGED, subject: { ...SAM_MERGED.subject, base: undefined } })).toBe('#141 merged');
-    expect(cardTitle({ ...SAM_MERGED, kind: 'pr_closed' })).toBe('#141 closed without merging');
-    expect(cardTitle(CI_FAILED)).toBe('Checks failed on #142');
-    expect(cardTitle({ ...CI_FAILED, kind: 'ci_passed' })).toBe('Checks passed on #142');
-    expect(cardTitle({ ...CI_FAILED, subject: { ...CI_FAILED.subject, pr: undefined } })).toBe('Checks failed on feat/invoices');
-    expect(cardMeta(CI_FAILED)).toBe('billing-service · Invoice PDF export · feat/invoices · govulncheck failed');
+    expect(cardTitle(SAM_MERGED)).toBe("Sam's review request 141 merged into main");
+    expect(cardTitle({ ...SAM_MERGED, subject: { ...SAM_MERGED.subject, base: undefined } })).toBe('Review request 141 merged');
+    expect(cardTitle({ ...SAM_MERGED, kind: 'pr_closed' })).toBe('Review request 141 closed without merging');
+    expect(cardTitle(CI_FAILED)).toBe('Checks failed on request 142');
+    expect(cardTitle({ ...CI_FAILED, kind: 'ci_passed' })).toBe('Checks passed on request 142');
+    expect(cardTitle({ ...CI_FAILED, subject: { ...CI_FAILED.subject, pr: undefined } })).toBe('Checks failed on invoices');
+    expect(cardMeta(CI_FAILED)).toBe('billing-service · Invoice PDF export · invoices · govulncheck failed');
     expect(cardMeta({ ...CI_FAILED, kind: 'ci_passed' })).not.toContain('failed');
-    expect(cardTitle(GITHUB_PR_OPEN)).toBe('priya-dev opened PR #144 in acme/billing-service · fix/rounding → main');
+    expect(cardTitle(GITHUB_PR_OPEN)).toBe('priya-dev opened review request 144 in acme/billing-service · rounding into main');
   });
 });
 
@@ -155,7 +156,7 @@ describe('TeamCard states', () => {
     // Merged, closed, or not a pull request: nothing to merge.
     renderCard(GITHUB_CARDS[1]);
     expect(button('Merge when green')).toBeUndefined();
-    expect(buttons()).toEqual(['Dismiss']);
+    expect(buttons()).toEqual(['review request 141', 'Dismiss']);
     expect(host.textContent).not.toContain("isn't open here");
     const closed = { ...GITHUB_CARDS[0], event: { ...GITHUB_PR_OPEN, subject: { ...GITHUB_PR_OPEN.subject, pr: { ...GITHUB_PR_OPEN.subject.pr!, state: 'closed' } } } };
     expect(cardActions(closed).mergeWhenGreen).toBe(false);
@@ -179,7 +180,7 @@ describe('TeamCard states', () => {
     const api = renderCard(card);
     expect(api.calls).toEqual([]);
     act(() => button('Queue my agent')!.click());
-    expect(host.textContent).toContain('Bring feat/auth into feat/billing');
+    expect(host.textContent).toContain('Merge auth work into billing');
     expect(host.textContent).toContain('After Claude finishes its current turn');
     expect(api.calls).toEqual([]);
     await act(async () => button('Queue it')!.click());
@@ -196,7 +197,7 @@ describe('Merge when green', () => {
     await act(async () => button('Merge when green')!.click());
     await flush();
     expect(api.calls).toEqual([`mergePlan("${pr.id}")`]);
-    expect(host.textContent).toContain('Merge #144 when its checks pass?');
+    expect(host.textContent).toContain('Merge review request 144 when its checks pass?');
     // GitHub's own facts: repository, author, branches and the commit the arm is bound to.
     expect(host.textContent).toContain('Round invoice totals to cents');
     expect(host.textContent).toContain('acme/billing-service · by priya-dev · fix/rounding → main · at commit e04bc01');
@@ -252,18 +253,18 @@ describe('TeamJobCard states', () => {
     return api;
   };
 
-  it('waiting: says when it starts; only Discard', () => {
+  it('waiting: says when it starts; only Dismiss (nothing finished is lost)', () => {
     render(WAITING_JOB);
     expect(host.textContent).toContain('Starts when Claude finishes its current turn.');
-    expect(buttons()).toEqual(['Discard']);
+    expect(buttons()).toEqual(['Dismiss']);
   });
 
   it('needs start: an agent that runs commands without asking waits for my click', async () => {
     const api = render(NEEDS_START_JOB);
-    expect(host.textContent).toContain('2 conflicts to resolve: feat/auth into feat/billing');
+    expect(host.textContent).toContain('2 conflicts to resolve: merge auth work into billing');
     expect(host.textContent).toContain("Codex can run commands without asking, and it will read Maya's changes. Start it when you can watch.");
     expect(host.textContent).toContain('Conflicts: src/auth.ts, src/session.ts');
-    expect(buttons()).toEqual(['Start Codex', 'Discard']);
+    expect(buttons()).toEqual(['Start Codex', 'Dismiss']);
     expect(api.calls).toEqual([]);
     await act(async () => button('Start Codex')!.click());
     expect(api.calls).toEqual(['startJob("job-needs-start")']);
@@ -271,7 +272,7 @@ describe('TeamJobCard states', () => {
 
   it('working: no buttons while the agent is in the copy', () => {
     render({ ...READY_JOB, state: 'working', message: null, stats: null });
-    expect(host.textContent).toContain('Claude is merging feat/auth');
+    expect(host.textContent).toContain('Claude is merging auth work');
     expect(host.textContent).toContain('Resolving 2 conflicts in a separate copy.');
     expect(buttons()).toEqual([]);
   });
@@ -302,15 +303,15 @@ describe('TeamJobCard states', () => {
     expect(host.textContent).not.toContain(READY_JOB.copyBranch!);
   });
 
-  it('failed: says why; Discard after a confirm', async () => {
+  it('failed: says why; Dismiss after a confirm', async () => {
     const api = render({ ...READY_JOB, state: 'failed', message: 'Your branch changed since. Redo the update?' });
-    expect(host.textContent).toContain("Couldn't bring feat/auth into feat/billing");
+    expect(host.textContent).toContain("Couldn't merge auth work into billing");
     expect(host.textContent).toContain('Your branch changed since. Redo the update?');
-    expect(buttons()).toEqual(['Discard']);
-    act(() => button('Discard')!.click());
+    expect(buttons()).toEqual(['Dismiss']);
+    act(() => button('Dismiss')!.click());
     expect(api.calls).toEqual([]);
-    expect(host.textContent).toContain('Discard this update?');
-    const confirm = [...host.querySelectorAll('.ck-sheet button')].find((b) => b.textContent === 'Discard') as HTMLButtonElement;
+    expect(host.textContent).toContain('Dismiss this update?');
+    const confirm = [...host.querySelectorAll('.ck-sheet button')].find((b) => b.textContent === 'Dismiss') as HTMLButtonElement;
     await act(async () => confirm.click());
     expect(api.calls).toEqual(['discard("job-ready")']);
   });
@@ -341,7 +342,7 @@ describe('Tell the team?', () => {
     act(() => root.render(<TellTeamPrompt draft={AGENT_DRAFT} members={['Maya']} api={api} variant="row" />));
     // The text is on show without opening Preview, and nothing has been sent.
     expect(host.textContent).toContain('Drafted by Claude. Nothing is sent until you click.');
-    expect(host.textContent).toContain("Leo's Claude asks for a review of #143");
+    expect(host.textContent).toContain("Leo's Claude asks for a review of request 143");
     expect(host.textContent).toContain('“Please look at the rounding first”');
     expect((host.querySelector('input') as HTMLInputElement).value).toBe('Please look at the rounding first');
     expect(api.calls).toEqual([]);
@@ -385,8 +386,8 @@ describe('Tell the team?', () => {
   it('titles the drafts of every kind an agent can make', () => {
     const draft = (kind: string, subject: object, note?: string) => ({ ...AGENT_DRAFT, event: { ...AGENT_DRAFT.event, kind, subject, note } });
     const pr = { number: 9, title: 'T', url: '', state: 'open', draft: false };
-    expect(draftTitle(draft('pr_ready', { pr }))).toBe('PR #9 is open · T');
-    expect(draftTitle(draft('please_review', { branch: 'feat/x' }))).toBe('Ask for a review of feat/x');
+    expect(draftTitle(draft('pr_ready', { pr }))).toBe('Review request 9 is open · T');
+    expect(draftTitle(draft('please_review', { branch: 'feat/x' }))).toBe('Ask for a review of x');
     expect(draftTitle(draft('note', {}, 'hi'))).toBe('A note for the team');
   });
 
@@ -447,8 +448,8 @@ describe('cards for review requests and notes', () => {
   const base = { ...MAYA_PUSH, actor: { ...MAYA_PUSH.actor, agent: undefined } };
   it('title them in plain words and offer nothing to pull', () => {
     const review = { ...base, kind: 'please_review', subject: { branch: 'feat/auth', pr: { number: 7, title: 'T', url: '', state: 'open', draft: false } }, note: 'look at the token store' };
-    expect(cardTitle(review)).toBe('Maya asks for a review of #7');
-    expect(cardTitle({ ...review, subject: { branch: 'feat/auth' } })).toBe('Maya asks for a review of feat/auth');
+    expect(cardTitle(review)).toBe('Maya asks for a review of request 7');
+    expect(cardTitle({ ...review, subject: { branch: 'feat/auth' } })).toBe('Maya asks for a review of auth');
     const note = { ...base, kind: 'note', subject: {}, note: 'standup moved to 10' };
     expect(cardTitle(note)).toBe('Maya left a note');
     // Neither carries a commit, so Pull now and Queue my agent are not offered, whatever the project says.
@@ -482,10 +483,21 @@ describe('War Room', () => {
     expect(host.textContent).toContain('Kai pushed 3 commits to main in acme/billing-service');
     expect(buttons()).toContain('Open on GitHub');
     renderCard(TEAM_CARDS[1]);
-    expect(host.textContent).toContain('opened PR #142 in acme/billing-service');
+    expect(host.textContent).toContain('opened review request 142 in acme/billing-service');
     expect(buttons()).toContain('Open on GitHub');
     renderCard(TEAM_CARDS[0]);
     expect(buttons()).not.toContain('Open on GitHub');
+  });
+
+  it('says "review request 142" for a pull request and makes those words the link to its page', () => {
+    const open = vi.spyOn(tauri, 'openExternalUrl').mockResolvedValue(undefined as never);
+    renderCard(TEAM_CARDS[1]);
+    expect(host.textContent).not.toMatch(/PR #|#142/);
+    const link = button('review request 142')!;
+    expect(link.closest('.ib-title')).not.toBeNull();
+    act(() => link.click());
+    expect(open).toHaveBeenCalledWith('https://github.com/acme/billing-service/pull/142');
+    open.mockRestore();
   });
 
   it('shows a red main as a banner with Claim it, and Claim it tells the team', async () => {

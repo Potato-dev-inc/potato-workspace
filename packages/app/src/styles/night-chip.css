@@ -55,7 +55,6 @@
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-.cockpit .ck-night-more,
 .cockpit .ck-night-open {
   color: var(--label);
   font-weight: 600;

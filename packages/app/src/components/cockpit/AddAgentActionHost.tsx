@@ -2,6 +2,7 @@
 // folder, "Open in a terminal" opens the agent's own terminal pane. Both select the new pane, which leaves Settings.
 // Renders nothing. Mounted once in the cockpit window.
 import { useEffect, useRef } from 'react';
+import { t } from '../../i18n';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { useProjectPath } from '../../hooks/useProjectPath';
 import { clearAddAgentActionRequest, registerAddAgentActionHost, useAddAgentActionRequest } from '../../lib/addAgentActions';
@@ -39,7 +40,7 @@ export function AddAgentActionHost({
         if (kind === 'chat') {
           const where = folder ?? projectPath;
           if (!where) {
-            host.notify('Pick a project folder first (Settings > General), then start the chat.');
+            host.notify(t('addAgent.host.pickFolder'));
             return;
           }
           host.select(await startChat(agentId, where));

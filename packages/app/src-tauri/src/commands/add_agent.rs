@@ -273,6 +273,18 @@ pub async fn add_agent_approve_install(app: AppHandle, run_id: String) -> Result
     ladder(&app).approve_install(&run_id)
 }
 
+/// The person's yes to the check of a way to chat without a screen: up to two tiny messages are sent.
+#[tauri::command]
+pub async fn add_agent_approve_check(app: AppHandle, run_id: String) -> Result<AddAgentRun, String> {
+    ladder(&app).approve_check(&run_id)
+}
+
+/// The person's no: the program is added for the terminal and nothing is sent to it.
+#[tauri::command]
+pub async fn add_agent_skip_check(app: AppHandle, run_id: String) -> Result<AddAgentRun, String> {
+    ladder(&app).skip_check(&run_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

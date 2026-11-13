@@ -33,6 +33,7 @@ pub mod ending;
 pub mod lanes;
 pub mod mapper;
 mod start;
+pub(crate) use start::start_failure_sentence;
 pub mod read_only;
 pub mod receipt;
 pub mod surface;
@@ -326,6 +327,18 @@ pub fn on_question_resolved(question: &Question) {
     let Some(chat) = question.pane_id.as_deref().and_then(get) else { return };
     chat.card_resolved(question);
 }
+
+/// A second answer arrived for a card that was answered already (another window, the phone): the chat says so.
+pub fn on_question_already_answered(question: &Question) {
+    if question.kind.as_deref() != Some(ACP_KIND_PERMISSION) {
+        return;
+    }
+    let Some(chat) = question.pane_id.as_deref().and_then(get) else { return };
+    chat.side_line(&format!("answered:{}", question.id), ALREADY_ANSWERED);
+}
+
+const ALREADY_ANSWERED: &str = "Already answered.";
+const STILL_WORKING: &str = "Still working on the last message. Wait, or press Stop.";
 
 /// Terminal input that reached a chat pane. `None`: the pane is not a chat session (write to its terminal).
 /// Ctrl+C and Esc stop the turn; a line of text is a message (a new turn, or steering); other keys are refused.
@@ -855,6 +868,15 @@ impl AcpChat {
     /// `send` with files and pictures: the text may be empty when there are any. They go in as content blocks
     /// (`attach::blocks`), by what the agent says it takes.
     pub fn send_with(&self, text: &str, attachments: &[ChatAttachment]) -> Result<Sent, SendError> {
+        let sent = self.send_quiet(text, attachments);
+        if matches!(sent, Err(SendError::Busy)) {
+            self.side_line("busy", STILL_WORKING);
+        }
+        sent
+    }
+
+    /// `send_with` for callers that queue or steer a message that finds the chat busy: no line in the chat.
+    pub fn send_quiet(&self, text: &str, attachments: &[ChatAttachment]) -> Result<Sent, SendError> {
         let text = text.trim();
         if text.is_empty() && attachments.is_empty() {
             return Err(SendError::Refused("Write a message first.".into()));
@@ -880,6 +902,13 @@ impl AcpChat {
                 Err(send_error(&error))
             }
         }
+    }
+
+    /// One grey line in the chat for something the person did that could not be acted on.
+    fn side_line(&self, id: &str, text: &str) {
+        let at = now_iso();
+        let items = self.mapper.lock().side_notice(id, text, &at);
+        self.push(items);
     }
 
     /// "Restart chat": brings the adapter back after it stopped (a crash, a hang, a start that failed). The
@@ -965,7 +994,7 @@ impl AcpChat {
             }
             "" if append_newline => Ok(()),
             t if control_only(t) => Err(NOT_A_TERMINAL.to_string()),
-            t if append_newline => match self.send(t) {
+            t if append_newline => match self.send_quiet(t, &[]) {
                 Ok(_) => Ok(()),
                 Err(SendError::Busy) => match self.steer(t) {
                     Some(result) => result,

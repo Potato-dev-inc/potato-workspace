@@ -82,6 +82,41 @@ describe('pane header: one row', () => {
   });
 });
 
+describe('pane header: narrow', () => {
+  // jsdom has no layout: make the header report that its content is wider than it is.
+  const width = (over: boolean) => {
+    const sw = vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (this: Element) {
+      return over && this.classList.contains('ck-pane-head') && (this as HTMLElement).dataset.fold !== '3' ? 900 : 100;
+    });
+    const cw = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(100);
+    return () => {
+      sw.mockRestore();
+      cw.mockRestore();
+    };
+  };
+
+  it('moves Hand off into the ⋯ menu before anything is cut, and keeps it reachable', async () => {
+    const restore = width(true);
+    try {
+      await show(cockpit());
+      const head = host.querySelector('.ck-pane-head')!;
+      expect(head.querySelector('[data-testid="pane-handoff"]')).toBeNull();
+      await act(async () => head.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click());
+      const menu = document.querySelector('[role="menu"]')!;
+      expect(head.contains(menu)).toBe(false);
+      const items = [...menu.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent);
+      expect(items).toEqual(expect.arrayContaining(['Transcript', 'Receipt', 'Hand off']));
+    } finally {
+      restore();
+    }
+  });
+
+  it('keeps every action in the header when there is room', async () => {
+    await show(cockpit());
+    expect(host.querySelector('.ck-pane-head [data-testid="pane-handoff"]')).not.toBeNull();
+  });
+});
+
 describe('pane tabs', () => {
   it('shows one tab per open agent of the project, each with its icon; the front tab is selected', async () => {
     await show(cockpit());

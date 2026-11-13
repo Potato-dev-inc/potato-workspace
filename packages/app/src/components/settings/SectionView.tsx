@@ -1,7 +1,9 @@
 // Renders rows as grouped inset lists. Used by the panel for a section page and for search results,
 // and by the section tests (which pass their own `envFor`).
 import type { KeyboardEvent, ReactNode } from 'react';
+import { useT } from '../../i18n';
 import { isChanged } from './changes';
+import { groupTitle } from './i18n-labels';
 import { groupRows, rowLevel, splitByLevel, type RowDef, type SettingsEnv } from './model';
 import { PANEL_ROWS } from './search';
 import { Btn } from './settings-ui';
@@ -25,6 +27,7 @@ export interface RowChrome {
  * differ from the default also shows a grey dot before its label and a "Reset" button (on hover or focus).
  */
 export function RowShell({ row, env, chrome, tag }: { row: RowDef; env: SettingsEnv; chrome?: RowChrome; tag?: boolean }): ReactNode {
+  const t = useT();
   const on = chrome?.saved?.has(row.id) ?? false;
   const error = chrome?.errors?.[row.id];
   const changed = Boolean(env.settings) && isChanged(row, env.settings);
@@ -38,21 +41,21 @@ export function RowShell({ row, env, chrome, tag }: { row: RowDef; env: Settings
       data-target={chrome?.target === row.id ? 'true' : undefined}
       data-active={chrome?.active === row.id ? 'true' : undefined}
     >
-      {changed && <span className="st-dot" role="img" title="Changed from the default" aria-label="Changed from the default" />}
+      {changed && <span className="st-dot" role="img" title={t('settings.changedFromDefault')} aria-label={t('settings.changedFromDefault')} />}
       {tag && rowLevel(row) !== 'basic' && (
         <span className="st-level-tag" data-level={rowLevel(row)}>
-          {rowLevel(row) === 'developer' ? 'Developer' : 'Advanced'}
+          {rowLevel(row) === 'developer' ? t('settings.developer') : t('settings.advanced')}
         </span>
       )}
       {row.render(env)}
       {preview}
       {changed && chrome?.onReset && (
-        <button type="button" className="st-reset" aria-label={`Reset ${row.label}`} onClick={() => chrome.onReset?.(row)}>
-          Reset
+        <button type="button" className="st-reset" aria-label={t('settings.resetRow', { label: row.label })} onClick={() => chrome.onReset?.(row)}>
+          {t('settings.reset')}
         </button>
       )}
       <span className={`st-saved${on ? ' is-on' : ''}`} role="status" aria-live="polite">
-        {on ? 'Saved' : ''}
+        {on ? t('settings.saved') : ''}
       </span>
       {error && (
         <p className="st-rowerr" role="alert">
@@ -86,6 +89,7 @@ export function LevelledRows({
   /** One list, no "Advanced" fold (the Shortcuts page: every row is a shortcut). */
   flat?: boolean;
 }) {
+  const t = useT();
   const parts = splitByLevel(rows, showDeveloper);
   if (flat) return <SectionRows rows={[...parts.basic, ...parts.advanced, ...parts.developer]} envFor={envFor} chrome={chrome} />;
   return (
@@ -94,7 +98,7 @@ export function LevelledRows({
       {parts.advanced.length > 0 && (
         <div className="st-advanced" data-advanced={advancedOpen ? 'open' : 'closed'}>
           <button type="button" className="st-adv-toggle" aria-expanded={advancedOpen} onClick={onToggleAdvanced}>
-            <span>Advanced</span>
+            <span>{t('settings.advanced')}</span>
             <span className="st-adv-count">{parts.advanced.length}</span>
             <span aria-hidden="true">{advancedOpen ? '−' : '+'}</span>
           </button>
@@ -125,12 +129,13 @@ export function SectionRows({
   /** The heading over the destructive list, when the page wants one. */
   dangerHead?: string;
 }) {
+  const t = useT();
   return (
     <>
       {groupRows(rows).map((group, i) => (
         <section key={`${group.head ?? ''}-${i}`} className="st-group" data-danger={group.danger ? 'true' : undefined}>
           {(group.head || pathPrefix || (group.danger && dangerHead)) && (
-            <h2 className={pathPrefix ? 'st-path' : undefined}>{pathPrefix ? (group.head ? `${pathPrefix} › ${group.head}` : pathPrefix) : (group.head ?? dangerHead)}</h2>
+            <h2 className={pathPrefix ? 'st-path' : undefined}>{pathPrefix ? (group.head ? `${pathPrefix} › ${groupTitle(group.head)}` : pathPrefix) : group.head ? groupTitle(group.head) : dangerHead}</h2>
           )}
           <div className="st-list">
             {group.rows.map((row) =>
@@ -140,8 +145,8 @@ export function SectionRows({
                     <div className="st-label">
                       <span>{row.label}</span>
                     </div>
-                    <Btn small aria-label={`Go to ${row.label}`} onClick={() => onGoToRow(row.id)}>
-                      Go to row
+                    <Btn small aria-label={t('settings.goTo', { label: row.label })} onClick={() => onGoToRow(row.id)}>
+                      {t('settings.goToRow')}
                     </Btn>
                   </div>
                 </div>
@@ -171,15 +176,19 @@ export function ClosedGroups({
   isOpen,
   onToggle,
   showDeveloper,
+  lines,
 }: {
   rows: RowDef[];
   closed: string[];
+  /** One plain line per card, shown in its header instead of the row count (the Connect page's cards). */
+  lines?: Record<string, string>;
   envFor: (row: RowDef) => SettingsEnv;
   chrome?: RowChrome;
   isOpen: (group: string) => boolean;
   onToggle: (group: string) => void;
   showDeveloper: boolean;
 }) {
+  const t = useT();
   const shown = rows.filter((r) => showDeveloper || rowLevel(r) !== 'developer');
   // The named groups are always drawn (closed, with the count of what they hold), so the page never reads as "the uninstall page".
   const folded = closed.map((head) => ({ head, rows: shown.filter((r) => !r.danger && r.group === head) })).filter((g) => g.rows.length > 0 || ALWAYS_DRAWN.includes(g.head));
@@ -194,15 +203,15 @@ export function ClosedGroups({
             <div className="st-list">
               <button type="button" className="st-adv-toggle" aria-expanded={open} onClick={() => onToggle(head)}>
                 <span aria-hidden="true">{open ? '⌄' : '›'}</span>
-                <span>{head}</span>
-                <span className="st-adv-count">{groupRowsList.length}</span>
+                <span>{groupTitle(head)}</span>
+                {lines?.[head] ? <span className="st-adv-count st-card-line">{lines[head]}</span> : <span className="st-adv-count">{groupRowsList.length}</span>}
               </button>
               {open && groupRowsList.map((row) => <RowShell key={row.id} row={row} env={envFor(row)} chrome={chrome} />)}
             </div>
           </section>
         );
       })}
-      {rest.length > 0 && <SectionRows rows={rest} envFor={envFor} chrome={chrome} dangerHead="Remove" />}
+      {rest.length > 0 && <SectionRows rows={rest} envFor={envFor} chrome={chrome} dangerHead={t('settings.remove')} />}
     </>
   );
 }

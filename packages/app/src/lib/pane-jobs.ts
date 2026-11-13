@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { formatElapsed } from '../components/cockpit/model';
+import { t } from '../i18n';
 
 export interface PaneJob {
   /** The process to stop; its whole tree goes with it. */
@@ -50,7 +51,7 @@ export function jobsOfPanes(map: JobsMap, paneIds: Iterable<string>): JobsMap {
 }
 
 /** "1 background task", "3 background tasks": the processes agents left running, not agents. */
-export const jobsRunning = (n: number): string => `${n} background ${n === 1 ? 'task' : 'tasks'}`;
+export const jobsRunning = (n: number): string => t('state.jobs.count', { count: n });
 
 const same = (a: JobsMap, b: JobsMap): boolean => JSON.stringify(a) === JSON.stringify(b);
 

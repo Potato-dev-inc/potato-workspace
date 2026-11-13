@@ -172,6 +172,7 @@ fn registered_agents_carry_hints_and_exclude_shells() {
 
 #[test]
 fn check_all_answers_for_every_probe() {
+    let _serial = crate::tui::registry::test_serial();
     let all = check_all();
     assert_eq!(all.len(), collect_probes().len());
     for health in &all {

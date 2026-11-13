@@ -1,4 +1,5 @@
 // Pure helpers for the pane's chrome: the state line in the header and the dock under the tabs.
+import { t } from '../../i18n';
 
 /** `Waiting: allow \`npm test\`?` -> `Waiting: allow npm test?`. Raw backticks are never shown in chrome. */
 export function plainActivity(text: string): string {
@@ -17,7 +18,7 @@ export function headerStateLine(opts: {
   fallback: string;
 }): string {
   const { waiting, headline, elapsed, doing, fallback } = opts;
-  if (waiting && headline) return ['Needs you', headline, elapsed].filter(Boolean).join(' · ');
+  if (waiting && headline) return [t('pane.needsYou'), headline, elapsed].filter(Boolean).join(' · ');
   if (doing) return waiting && elapsed ? `${plainActivity(doing)} · ${elapsed}` : plainActivity(doing);
   return fallback;
 }
@@ -30,4 +31,4 @@ export function dockItems(asking: boolean, stuck: boolean): DockItem[] {
 }
 
 /** The slim bar shown on the other tabs while something waits in the Terminal tab. */
-export const DOCK_LABEL: Record<DockItem, string> = { ask: 'Answer', stuck: 'Open' };
+export const dockLabel = (item: DockItem): string => (item === 'ask' ? t('pane.dockAnswer') : t('pane.dockOpen'));

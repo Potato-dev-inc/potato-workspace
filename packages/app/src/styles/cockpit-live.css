@@ -95,22 +95,15 @@
   display: inline-flex;
   align-items: center;
 }
+/* LIVE is a Label chip (chips.css) with the pulse dot. */
 .cockpit .ck-live-chip {
-  display: inline-flex;
-  align-items: center;
   gap: 5px;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 5px;
-  background: var(--live-ink);
-  color: var(--live-paper);
-  font-size: 10.5px;
-  font-weight: 600;
   letter-spacing: 0.06em;
 }
 .cockpit .ck-live-chip .ck-live-dot {
   width: 5px;
   height: 5px;
+  background: currentColor;
 }
 .cockpit .ck-live-chip-menu {
   position: absolute;

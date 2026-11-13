@@ -46,8 +46,8 @@ pub fn init(app: &AppHandle) {
 }
 
 fn place_overlay(window: &WebviewWindow, monitor: &Monitor) {
-    let _ = window.set_position(PhysicalPosition::new(monitor.x as i32, monitor.y as i32));
-    let _ = window.set_size(PhysicalSize::new(monitor.w.max(1.0) as u32, monitor.h.max(1.0) as u32));
+    let _ = crate::window_layout::own_window::set_position(&window, PhysicalPosition::new(monitor.x as i32, monitor.y as i32));
+    let _ = crate::window_layout::own_window::set_size(&window, PhysicalSize::new(monitor.w.max(1.0) as u32, monitor.h.max(1.0) as u32));
 }
 
 /// Cover `monitor` and show. Placed twice: a monitor with another scale factor may resize the window when it lands on it.

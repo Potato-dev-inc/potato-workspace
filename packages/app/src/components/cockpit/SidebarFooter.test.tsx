@@ -54,7 +54,7 @@ describe('SidebarFooter', () => {
     mount();
     expect(host.querySelector('button[aria-label="Toggle theme"]')).toBeNull();
     act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
-    const items = [...host.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim());
+    const items = [...document.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim());
     expect(items).toEqual(expect.arrayContaining(['Project', 'Set up agents', 'Switch to light']));
   });
 

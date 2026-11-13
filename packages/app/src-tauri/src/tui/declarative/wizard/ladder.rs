@@ -26,7 +26,8 @@ use crate::acp::registry::{self, Choice, Registry};
 use crate::agent_caps::types::{AgentCaps, Level, MAX_MODELS};
 use crate::tui::declarative::approvals::now_rfc3339;
 
-use super::exec::{self, cut_chars, mask_private, RunSpec};
+use super::exec::{self, cut_chars, mask_private, GuardLimits, RunSpec};
+use super::headless_probe::{self as hp, ProbeConsent, ProbeOutcome, ProbeRequest};
 use super::ladder_handshake::{self as hs, HelloError, HelloSpec, NewOutcome};
 use super::ladder_save::{self as save, Written};
 use super::locate;
@@ -42,6 +43,8 @@ pub const KEEP_ENDED: Duration = Duration::from_secs(10 * 60);
 pub enum RunState {
     Checking,
     NeedsInstall,
+    /// A way to chat without a screen was found in the help text; proving it sends tiny messages, so the person says yes first.
+    NeedsConsent,
     Done,
     Failed,
     Cancelled,
@@ -78,6 +81,16 @@ pub struct InstallView {
     pub can_install: bool,
 }
 
+/// What the consent screen shows: the check that costs a little of the person's plan, before it runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ConsentView {
+    pub label: String,
+    /// The most messages the check may send.
+    pub runs: u8,
+    /// The command shape, masked. The check word changes on every run.
+    pub what_will_run: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AddResult {
     pub agent_id: String,
@@ -107,6 +120,7 @@ pub struct AddAgentRun {
     pub started_ms: u64,
     pub steps: Vec<StepRun>,
     pub install: Option<InstallView>,
+    pub consent: Option<ConsentView>,
     pub result: Option<AddResult>,
     pub error: Option<RunError>,
 }
@@ -238,6 +252,8 @@ pub struct LadderCfg {
     pub session_new: Duration,
     pub save: Duration,
     pub install: Duration,
+    /// Limits of each run of the headless probe (reading the help, and the paid check after a yes).
+    pub probe: GuardLimits,
     /// The whole free path.
     pub total: Duration,
 }
@@ -252,6 +268,7 @@ impl Default for LadderCfg {
             session_new: Duration::from_secs(10),
             save: Duration::from_secs(5),
             install: crate::acp::install::INSTALL_LIMIT,
+            probe: GuardLimits::default(),
             total: Duration::from_secs(30),
         }
     }
@@ -286,6 +303,17 @@ struct Pending {
     terminal_only: bool,
 }
 
+/// How far the headless probe may go in this pass of the ladder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProbeMode {
+    /// Read the help text only. A flag that needs a real answer to prove it stops the run for the person's yes.
+    Free,
+    /// The person said yes: at most `hp::MAX_PAID_RUNS` tiny runs.
+    Paid,
+    /// The person said no: the program is added for the terminal.
+    Skip,
+}
+
 struct Inner {
     run: AddAgentRun,
     pending: Option<Pending>,
@@ -303,6 +331,7 @@ enum Stop {
     Cancelled,
     Fail(RunError),
     NeedsInstall,
+    NeedsConsent,
 }
 
 /// Which way the ladder found to chat.
@@ -311,6 +340,8 @@ enum ChatWay {
     /// definition is written by the ladder).
     Acp { level: Level, launch: Launch, command: String, args: Vec<String> },
     Headless,
+    /// The probe proved a way to answer one task without a screen; `toml` is its `[headless]` table.
+    Probed { toml: String },
     /// The person chose "use it in a terminal": the chat was not looked for.
     Terminal,
     /// Every chat step said no.
@@ -381,6 +412,7 @@ impl Ladder {
             started_ms: now_ms(),
             steps: planned_steps(&self.cfg, false),
             install: None,
+            consent: None,
             result: None,
             error: None,
         };
@@ -400,7 +432,7 @@ impl Ladder {
         let me = self.clone();
         let typed = run.input.clone();
         let worker = cell.clone();
-        let spawned = std::thread::Builder::new().name("add-agent".into()).spawn(move || me.execute(&worker, &typed, terminal_only, None));
+        let spawned = std::thread::Builder::new().name("add-agent".into()).spawn(move || me.execute(&worker, &typed, terminal_only, None, ProbeMode::Free));
         if let Err(e) = spawned {
             // A run that never started must not block every later start.
             self.finish_failed(&cell, error_for("ADD_SAVE_FAILED", "", None));
@@ -419,11 +451,12 @@ impl Ladder {
         let state = cell.inner.lock().run.state;
         match state {
             RunState::Done | RunState::Failed | RunState::Cancelled => {}
-            RunState::NeedsInstall => {
+            RunState::NeedsInstall | RunState::NeedsConsent => {
                 cell.cancel.store(true, Ordering::SeqCst);
                 self.update(&cell, |i| {
                     i.pending = None;
                     i.run.install = None;
+                    i.run.consent = None;
                     i.run.state = RunState::Cancelled;
                     i.ended = Some(Instant::now());
                 });
@@ -478,7 +511,7 @@ impl Ladder {
                 match me.be.install_addon(&plan, &agent_id, &label, &c2.cancel) {
                     Ok(chat) => {
                         me.step_end(&c2, "install", StepState::Done, Some("installed".into()));
-                        me.execute(&c2, &input, terminal_only, Some(chat));
+                        me.execute(&c2, &input, terminal_only, Some(chat), ProbeMode::Free);
                     }
                     Err(why) => {
                         if c2.cancel.load(Ordering::SeqCst) {
@@ -494,6 +527,47 @@ impl Ladder {
                 self.finish_failed(&cell, error_for("ADD_INSTALL_FAILED", "", Some("install")));
                 format!("ADD_INSTALL_FAILED: {e}")
             })?;
+        let run = cell.inner.lock().run.clone();
+        Ok(run)
+    }
+
+    /// The person's yes to the check: the ladder runs again and the headless probe may send its tiny messages.
+    pub fn approve_check(self: &Arc<Self>, run_id: &str) -> Result<AddAgentRun, String> {
+        self.resume_after_consent(run_id, ProbeMode::Paid)
+    }
+
+    /// The person's no: the program is added for the terminal and nothing is sent to it.
+    pub fn skip_check(self: &Arc<Self>, run_id: &str) -> Result<AddAgentRun, String> {
+        self.resume_after_consent(run_id, ProbeMode::Skip)
+    }
+
+    fn resume_after_consent(self: &Arc<Self>, run_id: &str, mode: ProbeMode) -> Result<AddAgentRun, String> {
+        let cell = self.cell(run_id)?;
+        let cfg = self.cfg.clone();
+        // One lock, as in `approve_install`: the state flips in the same step, so a double click runs once.
+        let (input, frame) = {
+            let runs = self.runs.lock();
+            let mut i = cell.inner.lock();
+            if i.run.state != RunState::NeedsConsent {
+                return Ok(i.run.clone());
+            }
+            if runs.values().any(|c| !Arc::ptr_eq(c, &cell) && c.inner.lock().run.state == RunState::Checking) {
+                return Err(command_error("ADD_BUSY", ""));
+            }
+            i.run.state = RunState::Checking;
+            i.run.steps = planned_steps(&cfg, false);
+            i.run.consent = None;
+            i.run.error = None;
+            i.ended = None;
+            (i.run.input.clone(), i.run.clone())
+        };
+        (self.emit)(&frame);
+        let me = self.clone();
+        let worker = cell.clone();
+        std::thread::Builder::new().name("add-agent-check".into()).spawn(move || me.execute(&worker, &input, false, None, mode)).map_err(|e| {
+            self.finish_failed(&cell, error_for("ADD_SAVE_FAILED", "", None));
+            format!("ADD_SAVE_FAILED: {e}")
+        })?;
         let run = cell.inner.lock().run.clone();
         Ok(run)
     }
@@ -599,8 +673,8 @@ impl Ladder {
 
     // ---- the ladder ----
 
-    fn execute(self: &Arc<Self>, cell: &Arc<Cell>, input: &str, terminal_only: bool, addon: Option<AgentConfig>) {
-        match self.walk(cell, input, terminal_only, addon) {
+    fn execute(self: &Arc<Self>, cell: &Arc<Cell>, input: &str, terminal_only: bool, addon: Option<AgentConfig>, mode: ProbeMode) {
+        match self.walk(cell, input, terminal_only, addon, mode) {
             Ok(result) => self.update(cell, |i| {
                 if i.run.state == RunState::Cancelled {
                     return;
@@ -617,7 +691,7 @@ impl Ladder {
                 }
                 self.finish_failed(cell, e)
             }
-            Err(Stop::NeedsInstall) => {}
+            Err(Stop::NeedsInstall | Stop::NeedsConsent) => {}
         }
     }
 
@@ -626,7 +700,7 @@ impl Ladder {
         Stop::Fail(error_for(code, name, Some(step)))
     }
 
-    fn walk(self: &Arc<Self>, cell: &Arc<Cell>, input: &str, terminal_only: bool, addon: Option<AgentConfig>) -> Result<AddResult, Stop> {
+    fn walk(self: &Arc<Self>, cell: &Arc<Cell>, input: &str, terminal_only: bool, addon: Option<AgentConfig>, mode: ProbeMode) -> Result<AddResult, Stop> {
         let env = (self.env)();
         let deadline = Instant::now() + self.cfg.total;
         let (mut target, program_path) = self.find(cell, &env, input)?;
@@ -640,7 +714,7 @@ impl Ladder {
             self.step_end(cell, "chat_way", StepState::Done, Some("terminal only, as asked".into()));
             ChatWay::Terminal
         } else {
-            self.chat_way(cell, &env, &target, addon)?
+            self.chat_way(cell, &env, &target, addon, mode)?
         };
         self.check_cancel(cell)?;
 
@@ -779,7 +853,7 @@ impl Ladder {
 
     // ---- step 3: chat_way ----
 
-    fn chat_way(&self, cell: &Arc<Cell>, env: &WizardEnv, t: &Target, addon: Option<AgentConfig>) -> Result<ChatWay, Stop> {
+    fn chat_way(&self, cell: &Arc<Cell>, env: &WizardEnv, t: &Target, addon: Option<AgentConfig>, mode: ProbeMode) -> Result<ChatWay, Stop> {
         self.step_start(cell, "chat_way");
         let chat_off = |me: &Self| me.fail_step(cell, "chat_way", "ADD_CHAT_OFF", &t.label, None);
         // After an add-on install the ladder restarts here with the chat table the install made.
@@ -841,8 +915,69 @@ impl Ladder {
             self.step_end(cell, "chat_way", StepState::Done, Some("shipped one-shot table".into()));
             return Ok(ChatWay::Headless);
         }
+        // (f) the headless probe (L2): the help text says how to ask one thing without a screen
+        if mode != ProbeMode::Skip {
+            self.check_cancel(cell)?;
+            if let Some(way) = self.headless_probe(cell, env, t, mode)? {
+                return Ok(way);
+            }
+        }
         self.step_end(cell, "chat_way", StepState::Skipped, Some("no chat way found".into()));
         Ok(ChatWay::None)
+    }
+
+    /// Step (f) of `chat_way`. Reading the help text is free. Proving the way sends up to two tiny messages, which
+    /// needs the person's yes: without it the run stops in `needs_consent` and nothing has been sent.
+    fn headless_probe(&self, cell: &Cell, env: &WizardEnv, t: &Target, mode: ProbeMode) -> Result<Option<ChatWay>, Stop> {
+        let Some(program) = t.program.as_ref() else { return Ok(None) };
+        let Ok(work_dir) = make_work_dir(&env.temp_root, &Wizard::new_id()) else { return Ok(None) };
+        let req = ProbeRequest { tokens: vec![program.to_string_lossy().into_owned()], helps: Vec::new(), work_dir: work_dir.clone(), limits: self.cfg.probe };
+        let free = hp::probe(&req, None);
+        let result = match (&free.outcome, mode) {
+            (ProbeOutcome::NeedsConsent, ProbeMode::Paid) => {
+                if self.check_cancel(cell).is_err() {
+                    remove_work_dir(&work_dir);
+                    return Err(Stop::Cancelled);
+                }
+                // The one place a prompt can leave: the token exists only because the person said yes.
+                Some(hp::probe(&req, Some(ProbeConsent::granted(hp::MAX_PAID_RUNS))))
+            }
+            (ProbeOutcome::NeedsConsent, _) => {
+                remove_work_dir(&work_dir);
+                let name = program.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| t.name.clone());
+                let shape = free.headless.as_ref().map(|d| {
+                    let mut line = vec![name.clone()];
+                    line.extend(d.argv.iter().cloned());
+                    if let Some(flag) = &d.task_flag {
+                        line.push(flag.clone());
+                    }
+                    if let Some(sep) = &d.task_separator {
+                        line.push(sep.clone());
+                    }
+                    line.push("\"Reply with exactly: <check word>\"".into());
+                    line.join(" ")
+                });
+                let view = ConsentView { label: t.label.clone(), runs: hp::MAX_PAID_RUNS, what_will_run: shape.map(|l| vec![cut_chars(&mask_private(&l), 300)]).unwrap_or_default() };
+                self.step_end(cell, "chat_way", StepState::Done, Some("a way to ask without a screen was found; waiting for a yes to check it".into()));
+                self.update(cell, |i| {
+                    i.run.state = RunState::NeedsConsent;
+                    i.run.consent = Some(view);
+                    i.ended = Some(Instant::now());
+                });
+                return Err(Stop::NeedsConsent);
+            }
+            _ => None,
+        };
+        remove_work_dir(&work_dir);
+        let Some(res) = result else { return Ok(None) };
+        match (&res.outcome, res.headless_toml()) {
+            (ProbeOutcome::Found, Some(toml)) => {
+                let n = res.runs_used;
+                self.step_end(cell, "chat_way", StepState::Done, Some(format!("answers one task without a screen ({n} check message{})", if n == 1 { "" } else { "s" })));
+                Ok(Some(ChatWay::Probed { toml }))
+            }
+            _ => Ok(None),
+        }
     }
 
     fn addon_needed(&self, cell: &Cell, t: &Target, plan: AddonPlan, via: &str) -> Stop {
@@ -935,6 +1070,7 @@ impl Ladder {
         };
         let mut written = match way {
             ChatWay::Acp { level: Level::L0, command, args, .. } => save::write_chat(&wizard, &t.id, &t.label, &t.name, command, args)?,
+            ChatWay::Probed { toml } => save::write_headless(env, &t.id, &t.label, &t.name, toml)?,
             _ => save::write_terminal(env, &t.id, &t.label, &t.name)?,
         };
         cell.inner.lock().written = Some(written.clone());
@@ -962,6 +1098,9 @@ impl Ladder {
         if hello.is_some() {
             checks.push("add_agent:handshake".into());
         }
+        if matches!(way, ChatWay::Probed { .. }) {
+            checks.push("add_agent:headless_probe".into());
+        }
         if models.is_some() {
             checks.push("add_agent:models".into());
         }
@@ -978,7 +1117,7 @@ impl Ladder {
         let sign_in = hello.is_some_and(|h| h.new == NewOutcome::AuthNeeded);
         let level = match way {
             ChatWay::Acp { level, .. } => *level,
-            ChatWay::Headless => Level::L2,
+            ChatWay::Headless | ChatWay::Probed { .. } => Level::L2,
             ChatWay::None | ChatWay::Terminal => Level::L5,
         };
         let record = handshake_record(level, version, hello, models.as_ref(), matches!(way, ChatWay::Terminal));

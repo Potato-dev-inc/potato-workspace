@@ -8,7 +8,7 @@ export interface AddAgentHarness {
   /** A key of SCENARIOS. */
   scenario: string;
   /** Which frame `add_agent_start` answers with: an index, or the last one (default). */
-  frame?: number | 'last' | 'install';
+  frame?: number | 'last' | 'install' | 'consent';
   /** What `agents_detect_installed` lists; absent: the command fails, so the section stays hidden. */
   found?: FoundAgent[];
 }
@@ -21,7 +21,7 @@ export const FOUND_ON_THIS_PC: FoundAgent[] = [
 export function addAgentMock(cfg: AddAgentHarness | undefined, cmd: string, a: Record<string, unknown>): { handled: boolean; value?: unknown } {
   if (!cfg) return { handled: false };
   const frames = SCENARIOS[cfg.scenario]?.frames ?? [];
-  const pick = cfg.frame === 'install' ? frames.findIndex((f) => f.run.state === 'needs_install') : cfg.frame === undefined || cfg.frame === 'last' ? frames.length - 1 : cfg.frame;
+  const pick = cfg.frame === 'install' ? frames.findIndex((f) => f.run.state === 'needs_install') : cfg.frame === 'consent' ? frames.findIndex((f) => f.run.state === 'needs_consent') : cfg.frame === undefined || cfg.frame === 'last' ? frames.length - 1 : cfg.frame;
   const frame = frames[Math.max(0, Math.min(pick, frames.length - 1))]?.run;
   switch (cmd) {
     case 'add_agent_start':
@@ -30,6 +30,8 @@ export function addAgentMock(cfg: AddAgentHarness | undefined, cmd: string, a: R
       return { handled: true, value: null };
     case 'add_agent_cancel':
     case 'add_agent_approve_install':
+    case 'add_agent_approve_check':
+    case 'add_agent_skip_check':
       return { handled: true, value: frame };
     case 'agents_detect_installed':
       if (cfg.found) return { handled: true, value: cfg.found };

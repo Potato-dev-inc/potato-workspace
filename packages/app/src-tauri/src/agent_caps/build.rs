@@ -104,6 +104,7 @@ pub fn build_at(def: &DefFacts, hs: Option<&HandshakeFacts>, seen: &[SeenFact], 
         // Unknown, but the person can see why: the setup is shipped and the chat was never checked here.
         out.chat = Cap { value: Tri::Unknown, source: Source::Definition, proof: if hs.is_some_and(|h| h.terminal_only) { "added for terminal use, chat not checked" } else { "shipped chat setup, not checked yet" }.into(), at: Some(now.to_string()) };
     }
+    out.needs_repair = hs.is_some_and(|h| h.drifted);
     out.program_version = hs.and_then(|h| h.program_version.clone()).filter(|v| !v.trim().is_empty());
 
     // ---- level

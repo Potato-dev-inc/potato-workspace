@@ -1,6 +1,7 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useState } from 'react';
-import { whoDid, type TeamCard } from '../../../lib/team';
+import { useT } from '../../../i18n';
+import { friendlyBranch, whoDid, type TeamCard } from '../../../lib/team';
 import { Sheet } from '../Sheet';
 
 const errText = (err: unknown): string => (errorSentence(err));
@@ -18,6 +19,7 @@ export function QueueSheet({
   onClose: () => void;
   onQueue: (paneId: string, when: 'idle' | 'now') => Promise<void>;
 }) {
+  const t = useT();
   const panes = card.panes;
   const [paneId, setPaneId] = useState(panes[0]?.paneId ?? '');
   const pane = panes.find((p) => p.paneId === paneId);
@@ -25,8 +27,8 @@ export function QueueSheet({
   const [when, setWhen] = useState<'idle' | 'now'>('idle');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const theirs = card.event.subject.branch ?? 'their branch';
-  const mine = card.local?.currentBranch ?? 'your branch';
+  const theirs = friendlyBranch(card.event.subject.branch ?? t('team.theirBranch'));
+  const mine = friendlyBranch(card.local?.currentBranch ?? t('team.yourBranch'));
   const name = (p: (typeof panes)[number]) => (p.title ? `${p.label} · ${p.title}` : p.label);
 
   const submit = async () => {
@@ -44,7 +46,7 @@ export function QueueSheet({
   return (
     <Sheet labelledBy="ck-team-queue-t" role="dialog" onClose={busy ? undefined : onClose} className="ck-team-sheet">
       <h2 className="ck-section" id="ck-team-queue-t">
-        Bring {theirs} into {mine}
+        {t('team.queueTitle', { theirs, mine })}
       </h2>
       <p className="ck-sub">
         From {whoDid(card.event)}. Your agent merges it in a separate copy of your branch. Your files don't change until you apply.

@@ -6,6 +6,7 @@ import { isTauriWindow, setupServiceWorker } from './lib/service-worker';
 import { isSettingsEntry } from './lib/settings-entry';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { installGlobalErrorHandlers } from './lib/globalErrors';
+import { startLanguageSync } from './i18n/sync';
 import './styles/index.css';
 
 // The other windows and modes load their own code only when they open, so the first screen stays small.
@@ -21,6 +22,9 @@ const WorkerHostBootstrap = lazy(() => import('./WorkerHostBootstrap'));
 
 // Anything no screen caught goes to the app log (rate-limited).
 installGlobalErrorHandlers();
+
+// The app language (Settings > Look and feel > Language) follows the saved setting in every window.
+startLanguageSync();
 
 // Phone PWA only; inside the desktop app a service worker left by an older version is removed.
 void setupServiceWorker({

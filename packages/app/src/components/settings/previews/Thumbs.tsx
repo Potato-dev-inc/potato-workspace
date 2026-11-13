@@ -1,6 +1,7 @@
 // Small picture choices for a row: two window thumbnails for the theme, a tiny diagram per window layout.
 // They are the control (a radio group): the chosen one has a 1 px light ring, and the change applies at once.
 import type { ReactNode } from 'react';
+import { t } from '../../../i18n';
 
 export interface ThumbChoice<T extends string> {
   value: T;
@@ -60,12 +61,12 @@ function WindowPicture({ tone }: { tone: 'dark' | 'light' }) {
 export function ThemeThumbs({ value, onPick }: { value: 'dark' | 'light'; onPick: (next: 'dark' | 'light') => void }) {
   return (
     <ThumbChoices
-      label="Theme"
+      label={t('lookFeel.theme.label')}
       value={value}
       onPick={onPick}
       choices={[
-        { value: 'dark', label: 'Dark', picture: <WindowPicture tone="dark" /> },
-        { value: 'light', label: 'Light', picture: <WindowPicture tone="light" /> },
+        { value: 'dark', label: t('lookFeel.theme.dark'), picture: <WindowPicture tone="dark" /> },
+        { value: 'light', label: t('lookFeel.theme.light'), picture: <WindowPicture tone="light" /> },
       ]}
     />
   );
@@ -96,12 +97,12 @@ function LayoutPicture({ kind }: { kind: 'side_by_side' | 'cascade' }) {
 export function LayoutThumbs({ value, onPick }: { value: 'side_by_side' | 'cascade'; onPick: (next: 'side_by_side' | 'cascade') => void }) {
   return (
     <ThumbChoices
-      label="Window layout in Individual"
+      label={t('lookFeel.layout.label')}
       value={value}
       onPick={onPick}
       choices={[
-        { value: 'side_by_side', label: 'Side by side', picture: <LayoutPicture kind="side_by_side" /> },
-        { value: 'cascade', label: 'Cascade', picture: <LayoutPicture kind="cascade" /> },
+        { value: 'side_by_side', label: t('lookFeel.layout.sideBySide'), picture: <LayoutPicture kind="side_by_side" /> },
+        { value: 'cascade', label: t('lookFeel.layout.cascade'), picture: <LayoutPicture kind="cascade" /> },
       ]}
     />
   );

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { cockpitApi, type PaneRunInfo } from '../../lib/cockpit-api';
+import { useT } from '../../i18n';
 import { CardButton, InboxCard } from './InboxCard';
 import { OPEN_NEW_MENU } from './StuckCard';
 import { explainError, unknownError } from './error-sentences';
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function PaneErrorCard({ c, paneId, agentType, name, project, age, onOpenDoctor }: Props) {
+  const t = useT();
   const [run, setRun] = useState<PaneRunInfo | null>(null);
   useEffect(() => {
     let alive = true;
@@ -42,7 +44,7 @@ export function PaneErrorCard({ c, paneId, agentType, name, project, age, onOpen
   };
   const open = (tone: 'primary' | 'plain') => (
     <CardButton tone={tone} role="open" onClick={() => c.select(paneId)}>
-      Open
+      {t('common.open')}
     </CardButton>
   );
   return (
@@ -67,7 +69,7 @@ export function PaneErrorCard({ c, paneId, agentType, name, project, age, onOpen
       }
       more={
         <CardButton tone="plain" onClick={() => window.dispatchEvent(new CustomEvent(OPEN_NEW_MENU))}>
-          Ask another agent
+          {t('inbox.askAnotherAgent')}
         </CardButton>
       }
     />

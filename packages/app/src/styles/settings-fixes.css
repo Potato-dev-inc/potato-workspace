@@ -322,3 +322,14 @@
 .settings section.st-group.st-closed-group[data-group] {
   display: block;
 }
+
+/* A Connect card's header: the name, then one quiet line saying what is inside. */
+.settings .st-closed-group .st-list > .st-adv-toggle .st-card-line {
+  flex: 1;
+  min-width: 0;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}

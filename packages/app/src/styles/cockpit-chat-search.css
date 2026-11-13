@@ -82,14 +82,8 @@
   position: relative;
 }
 .cockpit .ck-chat-chip {
-  padding: 3px 9px;
-  border: 1px solid var(--sep);
-  border-radius: 999px;
-  background: transparent;
-  font-size: 11px;
-  color: var(--label-2);
+  /* the shape is the Label chip (chips.css) */
   cursor: pointer;
-  white-space: nowrap;
 }
 .cockpit .ck-chat-chip:hover,
 .cockpit .ck-chat-chip[aria-expanded="true"] {
@@ -98,7 +92,7 @@
 }
 .cockpit .ck-chat-chip.is-on {
   color: var(--label);
-  border-color: var(--label-3);
+  box-shadow: inset 0 0 0 1px var(--label-3);
 }
 .cockpit .ck-chat-chip-menu {
   position: absolute;

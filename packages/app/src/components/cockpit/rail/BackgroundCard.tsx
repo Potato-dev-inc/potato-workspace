@@ -1,5 +1,6 @@
 // The "Background" card of the Session rail: what the agent left running in this pane. Hidden when
 // nothing is.
+import { useT } from '../../../i18n';
 import { refreshJobs, tauriJobsApi, type JobsApi, type PaneJob } from '../../../lib/pane-jobs';
 import { openPreview } from '../../../lib/pane-preview';
 import { pointApi } from '../../../lib/point-api';
@@ -15,9 +16,10 @@ export const previewJobPort = (paneId: string, port: number, external: boolean, 
   external ? openPreview(`http://localhost:${port}/`) : pointApi.openPreview(paneId, port, armed).then(() => undefined);
 
 export function BackgroundCard({ paneId, jobs, api = tauriJobsApi }: { paneId: string; jobs: readonly PaneJob[]; api?: JobsApi }) {
+  const t = useT();
   if (jobs.length === 0) return null;
   return (
-    <RailCard title="Background" note={String(jobs.length)} testId="rail-background">
+    <RailCard title={t('state.jobs.title')} note={String(jobs.length)} testId="rail-background">
       <BackgroundJobs
         jobs={jobs}
         onStop={(pid, startedAtMs) => stopJob(api, paneId, pid, startedAtMs)}

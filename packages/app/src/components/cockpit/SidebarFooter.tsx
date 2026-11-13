@@ -2,12 +2,14 @@
 // Spaces, Project, Set up agents, Plans, Scores, Theme and the Orchestration | Individual mode.
 // One status line sits above the row and only exists when there is something to say: the lost connection, else the
 // background jobs, else a Night Shift run (plan usage is the bottom bar, UsageBar.tsx).
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { FloatingMenu } from './FloatingMenu';
 import { IconChart, IconCheck, IconGlobe, IconMoon, IconMore, IconNote, IconSun, IconTerminal } from './Icons';
 import { JobsChip } from './rail/JobsChip';
 import { NightChip } from './night/NightChip';
 import '../../styles/individual-mode.css';
 import '../../styles/sidebar-footer.css';
+import { useT } from '../../i18n';
 
 type Mode = 'orchestration' | 'individual';
 
@@ -51,51 +53,25 @@ export interface SidebarFooterProps {
 }
 
 export function SidebarFooter(p: SidebarFooterProps) {
+  const t = useT();
   const [moreOpen, setMoreOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!moreOpen) return;
-    wrapRef.current?.querySelector<HTMLElement>('[role="menu"] [role^="menuitem"], [role="menu"] [role="radio"]')?.focus();
-    const away = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setMoreOpen(false);
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setMoreOpen(false);
-        moreBtn.current?.focus();
-      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        const items = [...(wrapRef.current?.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"], [role="menu"] [role="radio"]') ?? [])];
-        if (items.length === 0) return;
-        e.preventDefault();
-        const at = items.indexOf(document.activeElement as HTMLElement);
-        items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
-      }
-    };
-    window.addEventListener('mousedown', away);
-    window.addEventListener('keydown', key);
-    return () => {
-      window.removeEventListener('mousedown', away);
-      window.removeEventListener('keydown', key);
-    };
-  }, [moreOpen]);
 
   const pick = (run: () => void) => () => {
     setMoreOpen(false);
     run();
   };
-  const reviewLabel = p.reviewCount > 0 ? `Review, ${p.reviewCount} waiting` : 'Review';
+  const reviewLabel = p.reviewCount > 0 ? t('sidebar.reviewWaiting', { n: p.reviewCount }) : t('sidebar.review');
 
   return (
     <div className="ck-side-foot">
       <div className="ck-foot-status">
         {p.bridgeLine && (
           <div className="ck-bridge" role="status">
-            <span>Connection lost</span>
+            <span>{t('sidebar.connectionLost')}</span>
             <span aria-hidden="true"> · </span>
             <button type="button" className="ck-bridge-fix" onClick={() => p.onOpenSettings('bridge')}>
-              Fix
+              {t('sidebar.fix')}
             </button>
           </div>
         )}
@@ -103,25 +79,25 @@ export function SidebarFooter(p: SidebarFooterProps) {
         {p.onOpenMorning && <NightChip onOpenMorning={p.onOpenMorning} />}
       </div>
       <div className="ck-foot-icons">
-        <button type="button" className="ck-icon-btn" aria-label="Settings" title="Settings" onClick={() => p.onOpenSettings()}>
+        <button type="button" className="ck-icon-btn" aria-label={t('sidebar.settings')} title={t('sidebar.settings')} onClick={() => p.onOpenSettings()}>
           <GearIcon />
-          <Label>Settings</Label>
+          <Label>{t('sidebar.settings')}</Label>
         </button>
         {p.onOpenReview && (
           <button type="button" className="ck-icon-btn ck-foot-review" aria-label={reviewLabel} title={reviewLabel} onClick={p.onOpenReview}>
             <IconCheck />
-            <Label>{p.reviewCount > 0 ? `Review · ${p.reviewCount}` : 'Review'}</Label>
+            <Label>{p.reviewCount > 0 ? t('sidebar.reviewCount', { n: p.reviewCount }) : t('sidebar.review')}</Label>
             {p.reviewCount > 0 && <span className="ck-side-count ck-foot-badge">{p.reviewCount}</span>}
           </button>
         )}
         <span className="ck-foot-spacer" />
-        <div className="ck-menu-wrap" ref={wrapRef}>
+        <div className="ck-menu-wrap">
           <button
             type="button"
             ref={moreBtn}
             className="ck-icon-btn"
-            aria-label="More"
-            title="More"
+            aria-label={t('sidebar.more')}
+            title={t('sidebar.more')}
             aria-haspopup="menu"
             aria-expanded={moreOpen}
             onClick={() => setMoreOpen((v) => !v)}
@@ -129,13 +105,13 @@ export function SidebarFooter(p: SidebarFooterProps) {
             <IconMore />
           </button>
           {moreOpen && (
-            <div className="ck-menu ck-menu--up" role="menu" aria-label="More">
+            <FloatingMenu anchorRef={moreBtn} prefer="up" align="start" label={t('sidebar.more')} onClose={(back) => { setMoreOpen(false); if (back) moreBtn.current?.focus(); }}>
               {p.spacesEnabled && p.onOpenSpaces && (
                 <button type="button" role="menuitem" className={`ck-menu-item${p.spacesOpen ? ' is-active' : ''}`} aria-current={p.spacesOpen ? 'page' : undefined} onClick={pick(p.onOpenSpaces)}>
                   <span className="ck-menu-ic">
                     <IconGlobe />
                   </span>
-                  Spaces
+                  {t('sidebar.spaces')}
                 </button>
               )}
               {p.onOpenMemory && (
@@ -143,7 +119,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
                   <span className="ck-menu-ic">
                     <IconNote />
                   </span>
-                  Project
+                  {t('sidebar.project')}
                 </button>
               )}
               {p.onOpenDoctor && (
@@ -151,7 +127,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
                   <span className="ck-menu-ic">
                     <IconTerminal />
                   </span>
-                  Set up agents
+                  {t('sidebar.setUpAgents')}
                 </button>
               )}
               {p.onOpenPlans && (
@@ -159,7 +135,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
                   <span className="ck-menu-ic">
                     <IconChart />
                   </span>
-                  Your plans
+                  {t('sidebar.yourPlans')}
                 </button>
               )}
               {p.onOpenScores && (
@@ -167,16 +143,16 @@ export function SidebarFooter(p: SidebarFooterProps) {
                   <span className="ck-menu-ic">
                     <IconChart />
                   </span>
-                  Scores
+                  {t('sidebar.scores')}
                 </button>
               )}
               <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onToggleTheme)}>
                 <span className="ck-menu-ic">{p.theme === 'dark' ? <IconSun /> : <IconMoon />}</span>
-                {p.theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+                {p.theme === 'dark' ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}
               </button>
               <div className="ck-menu-sep" role="separator" />
-              <div className="ck-menu-cap">Mode</div>
-              <div className="ck-seg" role="radiogroup" aria-label="Mode" title="Each agent gets its own window; the main window hides.">
+              <div className="ck-menu-cap">{t('sidebar.mode')}</div>
+              <div className="ck-seg" role="radiogroup" aria-label={t('sidebar.mode')} title={t('sidebar.modeTip')}>
                 {(['orchestration', 'individual'] as const).map((m) => (
                   <button
                     key={m}
@@ -184,14 +160,14 @@ export function SidebarFooter(p: SidebarFooterProps) {
                     role="radio"
                     aria-checked={p.mode === m}
                     className={`ck-seg-opt${p.mode === m ? ' is-on' : ''}`}
-                    title={m === 'individual' ? 'Each agent gets its own window; the main window hides.' : 'Every agent in this window.'}
+                    title={m === 'individual' ? t('sidebar.modeTip') : t('sidebar.modeEveryAgent')}
                     onClick={pick(() => p.mode !== m && p.onMode(m))}
                   >
-                    {m === 'orchestration' ? 'Orchestration' : 'Individual'}
+                    {m === 'orchestration' ? t('sidebar.modeOrchestration') : t('sidebar.modeIndividual')}
                   </button>
                 ))}
               </div>
-            </div>
+            </FloatingMenu>
           )}
         </div>
       </div>

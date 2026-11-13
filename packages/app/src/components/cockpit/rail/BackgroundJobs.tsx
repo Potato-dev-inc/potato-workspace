@@ -2,6 +2,7 @@
 // on ONE line (the full command is the row's hover text; Point shows on hover or focus) that asks once ("Stop this job?"). Shared by the Session
 // rail's card and the sheet that lists the jobs of every pane.
 import { useEffect, useState } from 'react';
+import { useT } from '../../../i18n';
 import { openPreview } from '../../../lib/pane-preview';
 import { runTime, type PaneJob } from '../../../lib/pane-jobs';
 import '../../../styles/cockpit-jobs.css';
@@ -29,6 +30,7 @@ interface PreviewActions {
 }
 
 function JobRow({ job, now, onStop, onPreview, onPointFix }: { job: PaneJob; now: number; onStop: (pid: number, startedAtMs: number) => Promise<void> } & PreviewActions) {
+  const t = useT();
   const [phase, setPhase] = useState<'idle' | 'asking' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
   const stop = () => {
@@ -36,7 +38,7 @@ function JobRow({ job, now, onStop, onPreview, onPointFix }: { job: PaneJob; now
     setError(null);
     onStop(job.pid, job.startedAtMs)
       .catch((e: unknown) => {
-        setError(reasonOf(e, 'Could not stop this job.'));
+        setError(reasonOf(e, t('state.jobs.couldNotStop')));
         setPhase('idle');
       });
   };
@@ -45,13 +47,13 @@ function JobRow({ job, now, onStop, onPreview, onPointFix }: { job: PaneJob; now
     try {
       await run();
     } catch (e) {
-      setError(reasonOf(e, 'Could not open the preview.'));
+      setError(reasonOf(e, t('state.jobs.couldNotOpen')));
     }
   };
   return (
     <li className="ck-job" data-testid="background-job">
       <div className="ck-job-top" title={job.command}>
-        <span className="ck-job-name" title={`${job.command} (process ${job.pid})`}>
+        <span className="ck-job-name" title={t('state.jobs.processTitle', { command: job.command, pid: job.pid })}>
           {job.name}
         </span>
         {job.ports.map((port) => (
@@ -59,13 +61,13 @@ function JobRow({ job, now, onStop, onPreview, onPointFix }: { job: PaneJob; now
             key={port}
             type="button"
             className="ck-job-port"
-            title={onPreview ? `Preview :${port} (Shift+click: your browser)` : `Open localhost:${port} in your browser`}
+            title={onPreview ? t('state.jobs.previewPort', { port }) : t('state.jobs.openPort', { port })}
             onClick={(e) => void open(() => (onPreview ? onPreview(port, e.shiftKey) : openPreview(portUrl(port))))}
           >
             :{port}
           </button>
         ))}
-        <span className="ck-job-time" title="How long it has run">
+        <span className="ck-job-time" title={t('state.jobs.ranFor')}>
           {runTime(job.startedAtMs, now)}
         </span>
         {/* Hover or keyboard focus on the row shows these; the buttons are always in the tab order. */}
@@ -75,28 +77,28 @@ function JobRow({ job, now, onStop, onPreview, onPointFix }: { job: PaneJob; now
               key={`point-${port}`}
               type="button"
               className="ck-job-point ck-job-hover"
-              title={`Point and fix on localhost:${port}`}
-              aria-label={`Point and fix on localhost:${port}`}
+              title={t('state.jobs.pointFix', { port })}
+              aria-label={t('state.jobs.pointFix', { port })}
               onClick={() => void open(() => onPointFix(port))}
             >
-              Point
+              {t('state.jobs.point')}
             </button>
           ))}
         {phase === 'idle' && (
-          <button type="button" className="ck-job-stop" onClick={() => setPhase('asking')} aria-label={`Stop ${job.name}`}>
-            Stop
+          <button type="button" className="ck-job-stop" onClick={() => setPhase('asking')} aria-label={t('state.jobs.stopNamed', { name: job.name })}>
+            {t('state.jobs.stop')}
           </button>
         )}
-        {phase === 'stopping' && <span className="ck-job-time">Stopping…</span>}
+        {phase === 'stopping' && <span className="ck-job-time">{t('state.jobs.stopping')}</span>}
       </div>
       {phase === 'asking' && (
-        <div className="ck-job-ask" role="group" aria-label="Stop this job?">
-          <span>Stop this job?</span>
+        <div className="ck-job-ask" role="group" aria-label={t('state.jobs.stopAsk')}>
+          <span>{t('state.jobs.stopAsk')}</span>
           <button type="button" className="ck-job-stop is-danger" onClick={stop} autoFocus>
-            Yes
+            {t('state.jobs.yes')}
           </button>
           <button type="button" className="ck-job-stop" onClick={() => setPhase('idle')}>
-            No
+            {t('state.jobs.no')}
           </button>
         </div>
       )}

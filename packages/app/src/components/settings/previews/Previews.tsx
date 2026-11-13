@@ -1,6 +1,7 @@
 // Small frames drawn under a row's control: the mode switch animation, a sample usage bar, and the "Send a test"
 // button. Grey only. Nothing here saves anything.
 import { useEffect, useRef, useState } from 'react';
+import { useT } from '../../../i18n';
 import { errorSentence } from '../../../lib/sayError';
 import { motionFor, parseSwitchStyle, prefersReducedMotion, type SwitchStyle } from '../../../lib/mode-switch/model';
 import { Btn } from '../settings-ui';
@@ -10,6 +11,7 @@ import { Btn } from '../settings-ui';
  * reduced motion it never moves: it stays still and Play does nothing visible.
  */
 export function ModeSwitchFrame({ style }: { style: SwitchStyle | string | undefined }) {
+  const t = useT();
   const chosen = parseSwitchStyle(style);
   const [run, setRun] = useState(0);
   const first = useRef(true);
@@ -25,7 +27,7 @@ export function ModeSwitchFrame({ style }: { style: SwitchStyle | string | undef
   return (
     <div className="st-preview st-mode-preview">
       {/* The picture is the play button: hover shows a small triangle. */}
-      <button type="button" className="st-mode-frame" aria-label="Play the animation" data-motion={motion} data-playing={moving ? motion : undefined} key={run} onClick={() => setRun((n) => n + 1)}>
+      <button type="button" className="st-mode-frame" aria-label={t('lookFeel.preview.play')} data-motion={motion} data-playing={moving ? motion : undefined} key={run} onClick={() => setRun((n) => n + 1)}>
         <i />
         <i />
         <i />
@@ -39,9 +41,10 @@ export function ModeSwitchFrame({ style }: { style: SwitchStyle | string | undef
 
 /** A sample usage bar with fixed numbers, labelled "Example". The row draws it only while its switch is on. */
 export function UsageSample() {
+  const t = useT();
   return (
-    <div className="st-preview st-usage-sample" aria-label="Example of the usage bar">
-      <span className="st-usage-tag">Example</span>
+    <div className="st-preview st-usage-sample" aria-label={t('lookFeel.preview.usage')}>
+      <span className="st-usage-tag">{t('lookFeel.preview.example')}</span>
       {[
         ['Claude', 62],
         ['Codex', 18],

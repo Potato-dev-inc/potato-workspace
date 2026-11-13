@@ -4,6 +4,7 @@
 // cards and the list never disagree. Cards that need a fix come first. The rows under the cards are ordinary rows.
 import { useEffect, useRef, useState } from 'react';
 import type { Settings } from '@potato-workspace/shared';
+import { useT } from '../../i18n';
 import { tauriAccountsApi, type AccountsOverview } from '../../lib/accounts';
 import { tauriHelperAgentsApi, type HelperVisibility } from '../../lib/agentRunMode';
 import { agentPackApi } from '../../lib/agent-pack';
@@ -121,6 +122,7 @@ export function Overview(props: OverviewProps) {
 }
 
 function OverviewCards({ openRow, openPage, sources = DEFAULT_OVERVIEW_SOURCES }: OverviewProps) {
+  useT(); // the cards are built from words that change with the language
   const checks: SetupChecksState = useSharedSetupChecks()?.result ?? { state: 'loading' };
   const accounts = useSource(sources.accounts);
   const phones = useSource(sources.phones);

@@ -8,6 +8,7 @@ import { teamConfig } from '../dev/team-fixtures';
 import { BASE_SETTINGS, click, settle, type as typeInto } from './settings/test-utils';
 import { SECTIONS } from './settings/catalog';
 import { SettingsPanel, type SettingsApi } from './SettingsPanel';
+import { settingsEntryTarget } from '../lib/settings-target';
 
 vi.mock('qrcode', () => ({ default: { toCanvas: vi.fn(async () => undefined) } }));
 
@@ -53,6 +54,8 @@ const nav = () => [...host.querySelectorAll('.st-nav .st-nav-row')].map((b) => b
 const navButton = (title: string) => [...host.querySelectorAll('.st-nav .st-nav-row')].find((b) => b.textContent === title) as HTMLButtonElement;
 const search = () => host.querySelector('input[aria-label="Search settings"]') as HTMLInputElement;
 const main = () => host.querySelector('.st-main') as HTMLElement;
+const cardHeads = () => [...main().querySelectorAll('.st-closed-group')].map((c) => c.getAttribute('data-group'));
+const card = (name: string) => main().querySelector(`.st-closed-group[data-group="${name}"]`) as HTMLElement;
 
 describe('Settings > Connect > Team', () => {
   it('has its own group on the Connect page, and every page has a nav entry with an icon', async () => {
@@ -67,6 +70,12 @@ describe('Settings > Connect > Team', () => {
     await settle(6);
     expect(main().querySelector('h1')!.textContent).toBe('Connect');
     expect(navButton('Connect').getAttribute('aria-current')).toBe('page');
+    // The four cards start closed: the Team card shows one plain line, not its choices.
+    expect(main().textContent).not.toContain('Start a team');
+    expect(cardHeads()).toEqual(['Phone', 'Team', 'Discord']);
+    expect(card('Team').textContent).toContain('Share what your agents did');
+    await click(card('Team').querySelector('.st-adv-toggle') as HTMLElement);
+    await settle(6);
     expect(main().textContent).toContain('Start a team');
     expect(main().textContent).toContain('Join a team');
     // settings.css hides a group whose row has no .st-row or <section> child; the page must be one of them.
@@ -84,9 +93,11 @@ describe('Settings > Connect > Team', () => {
   });
 
   it('opens straight on the page from a deep link (?tab=team and the old Team command)', async () => {
-    await mount({ initialTab: 'connect' });
+    await mount({ initialTab: 'connect', initialRow: 'team-page' });
     expect(main().querySelector('h1')!.textContent).toBe('Connect');
     expect(main().textContent).toContain('Start a team');
+    expect(settingsEntryTarget('?settings=1&tab=team')).toEqual({ page: 'connect', row: 'team-page' });
+    expect(settingsEntryTarget('?settings=1&tab=phone')).toEqual({ page: 'connect', row: 'pairing' });
   });
 
   it('Look and feel shows no team rows: not in its rows, not in Labs, not on the page', async () => {

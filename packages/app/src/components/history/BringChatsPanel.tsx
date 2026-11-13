@@ -28,8 +28,11 @@ import {
   type ImportState,
 } from '../../lib/chatImport';
 import '../../styles/history.css';
-import { BringAgentList } from './BringAgentList';
+import { useAgentRows } from '../settings/agents/useAgentRows';
+import { BringAgentList, type AgentStanding } from './BringAgentList';
 import { BringChatRows } from './BringChatRows';
+import { orcaImportApi, type OrcaImportApi, type OrcaScan } from '../../lib/orcaImport';
+import { BringOrcaProjects, ORCA_BUTTON } from './BringOrcaProjects';
 
 export const BRING_CHATS_TITLE_ID = 'bc-panel-title';
 export const BRING_CHATS_TITLE = 'Bring my chats';
@@ -44,11 +47,14 @@ export function BringChatsPanel({
   api = chatImportApi,
   onClose,
   now = Date.now,
+  orcaApi = orcaImportApi,
 }: {
   api?: ImportApi;
   onClose?: () => void;
   /** The clock, so a test can fix "2 days ago". */
   now?: () => number;
+  /** Orca's project list (read-only). Replaceable in tests. */
+  orcaApi?: OrcaImportApi;
 }) {
   const [state, setState] = useState<ImportState | null>(null);
   const [found, setFound] = useState<ImportFound[] | null>(null);
@@ -69,6 +75,26 @@ export function BringChatsPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const wanted = useRef(0);
+  // Orca's projects: one read-only look when the panel opens (the person's own press). Hidden when Orca is not found.
+  const [orca, setOrca] = useState<OrcaScan | null>(null);
+  const [orcaOpen, setOrcaOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void orcaApi
+      .scan()
+      .then((scan) => live && setOrca(scan))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [orcaApi]);
+  const { rows: agentRows } = useAgentRows();
+  const standing = (id: string): AgentStanding => {
+    const row = agentRows.find((r) => r.id === id);
+    if (!row) return 'unknown';
+    if (!row.installed || row.state === 'not_installed') return 'not_installed';
+    return row.state === 'needs_login' ? 'signed_out' : 'unknown';
+  };
 
   // "Now" is read once, and again when a chip is pressed: a range that moved on every render would reload forever.
   const [when, setWhen] = useState(now);
@@ -286,11 +312,16 @@ export function BringChatsPanel({
         </p>
       )}
 
-      {view === 'off' && (
+      {view === 'off' && !orcaOpen && (
         <>
           <p className="ck-sub">Chat search is off. Turn it on to bring your chats.</p>
           <div className="bc-actions">
             {closeButton}
+            {orca?.found && orca.projects.length > 0 && (
+              <button type="button" className="ck-btn ck-btn--secondary" onClick={() => setOrcaOpen(true)}>
+                {ORCA_BUTTON}
+              </button>
+            )}
             <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => void turnOn()}>
               Turn on
             </button>
@@ -298,20 +329,30 @@ export function BringChatsPanel({
         </>
       )}
 
-      {view === 'agents' && found && (
+      {(view === 'agents' || view === 'off') && orcaOpen && orca && <BringOrcaProjects projects={orca.projects} api={orcaApi} onBack={() => setOrcaOpen(false)} />}
+
+      {view === 'agents' && found && !orcaOpen && (
         <>
           <p className="ck-sub">Pick an agent to see its chats on this PC. Nothing leaves this computer.</p>
           <BringAgentList
             found={found}
             unreadable={(state?.agents ?? []).filter((a) => !found.some((f) => f.id === a.id))}
             now={when}
+            standing={standing}
             onPick={(id) => {
               setRangeKey(null);
               setAgent(id);
             }}
           />
           {found.length === 0 && <p className="ck-sub">No agent has chats to bring.</p>}
-          <div className="bc-actions">{closeButton}</div>
+          <div className="bc-actions">
+            {closeButton}
+            {orca?.found && orca.projects.length > 0 && (
+              <button type="button" className="ck-btn ck-btn--secondary" onClick={() => setOrcaOpen(true)}>
+                {ORCA_BUTTON}
+              </button>
+            )}
+          </div>
         </>
       )}
 

@@ -8,6 +8,8 @@
 //  inbox        where agents that need you wait.
 //  receipt      the record of what an agent did.
 
+import { t } from '../i18n';
+
 export const TERMS = {
   agent: 'agent',
   agents: 'agents',
@@ -19,29 +21,52 @@ export const TERMS = {
   terminal: 'Terminal',
 } as const;
 
-/** Sign-in wording, for every place a login or an account used to be named. */
+/**
+ * Sign-in wording, for every place a login or an account used to be named. The texts people read are getters, so they
+ * follow the language when they are read; `rowKeywords` is search text and stays as it is.
+ */
 export const SIGN_IN = {
   /** Button on a row that needs it. */
-  action: 'Sign in',
+  get action() {
+    return t('risk.signIn.action');
+  },
   /** Status of an agent that is installed but signed out. */
-  needed: 'Needs sign in',
+  get needed() {
+    return t('risk.signIn.needed');
+  },
   /** The Settings group (was "Logins"). */
-  group: 'Sign in',
+  get group() {
+    return t('risk.signIn.group');
+  },
   /** The Settings row (was "Accounts"). */
-  rowLabel: 'Sign in',
-  rowHint: 'Sign in to the same agent more than once, and pick one per pane.',
+  get rowLabel() {
+    return t('risk.signIn.rowLabel');
+  },
+  get rowHint() {
+    return t('risk.signIn.rowHint');
+  },
   rowKeywords: 'sign in login account profile work personal add remove switch',
   /** Add another way to sign in (was "Add account" / "Add another login"). */
-  addAnother: 'Add another sign-in',
+  get addAnother() {
+    return t('risk.signIn.addAnother');
+  },
   /** Open the agent's own sign-in window (was "Open login pane"). */
-  openWindow: 'Open sign-in window',
+  get openWindow() {
+    return t('risk.signIn.openWindow');
+  },
   /** On a usage-limit card: start the same agent under another way to sign in. */
-  useAnother: 'Use another sign-in',
+  get useAnother() {
+    return t('risk.signIn.useAnother');
+  },
   /** The noun inside a sentence ("Change sign-in"). */
-  noun: 'sign-in',
+  get noun() {
+    return t('risk.signIn.noun');
+  },
   /** The sign-in used when none is picked (was "Default login"). */
-  defaultOne: 'Default sign-in',
-} as const;
+  get defaultOne() {
+    return t('risk.signIn.defaultOne');
+  },
+};
 
 /** Names of the two ways to run an agent. */
 export const RUN_WAYS = {

@@ -10,6 +10,8 @@
 use crate::app_windows::{plan_placements, Anchor, PanePlacement, CASCADE_SLOTS, CASCADE_STEP};
 use serde_json::Value;
 
+pub mod own_window;
+
 /// Space between the screen edge (work area) and the windows, and between two windows (logical px).
 pub const OUTER_MARGIN: f64 = 8.0;
 pub const GAP: f64 = 8.0;

@@ -11,4 +11,6 @@ mod runner;
 mod targets;
 mod vector;
 
+mod matrix_doc;
+
 mod chaos;

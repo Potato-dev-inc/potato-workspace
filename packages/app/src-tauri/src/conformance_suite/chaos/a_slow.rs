@@ -36,7 +36,7 @@ fn chaos_slow_first_byte_is_not_a_failure() {
 }
 
 // Person sees: "No answer for 1 min" once; the agent is still usable afterwards.
-#[ignore = "chaos-finding A11: 2 s silence did not end the turn within 30 s (no E4 shown); rig clock may not tick"]
+#[ignore = "rig-artifact A11: silence only asks the person (Stop or Keep waiting) by design; nothing ends the turn"]
 #[test]
 fn chaos_no_first_byte_inside_the_window() {
     let rig = ChatRig::with("", short_windows);
@@ -47,7 +47,7 @@ fn chaos_no_first_byte_inside_the_window() {
 }
 
 // Person sees: the three pieces stay visible after the silence, then "No answer for 1 min".
-#[ignore = "chaos-finding A12: 2 s silence after 3 chunks did not end the turn within 30 s; rig clock may not tick"]
+#[ignore = "rig-artifact A12: silence only asks the person (Stop or Keep waiting) by design; nothing ends the turn"]
 #[test]
 fn chaos_stall_mid_stream_keeps_the_text() {
     let rig = ChatRig::with("", short_windows);
@@ -58,10 +58,13 @@ fn chaos_stall_mid_stream_keeps_the_text() {
 }
 
 // Person sees: "The agent stopped answering and was stopped."; the process is gone; the next turn starts it again.
-#[ignore = "chaos-finding A13: 2 s silence did not end the turn within 30 s; kill path not reached; rig clock may not tick"]
 #[test]
 fn chaos_stall_that_ignores_stop_is_killed() {
-    let rig = ChatRig::with("ignore_cancel=1", short_windows);
+    // Silence alone only asks the person (Stop or Keep waiting); the progress window is what stops a turn by itself.
+    let rig = ChatRig::with("ignore_cancel=1", |cfg| {
+        cfg.timeouts.progress_secs = 2;
+        cfg.timeouts.hung_grace_secs = 1;
+    });
     rig.send("stall 3 60000").unwrap_or_else(|e| panic!("send refused: {e:?}"));
     let pid = rig.alive_pids().first().copied();
     assert!(wait_until(30, || rig.turn_over()), "the turn did not end; kinds {:?}", rig.kinds());
@@ -75,7 +78,7 @@ fn chaos_stall_that_ignores_stop_is_killed() {
 }
 
 // Person sees: "No answer for 1 min": noise is bytes, not progress, so the turn is ended.
-#[ignore = "chaos-finding A14: 2 s without progress did not end the turn within 30 s (no E4 shown); rig clock may not tick"]
+#[ignore = "rig-artifact A14: an update kind the app does not know counts as work by design, and the fake noise word uses one"]
 #[test]
 fn chaos_bytes_without_progress() {
     let rig = ChatRig::with("", |cfg| {

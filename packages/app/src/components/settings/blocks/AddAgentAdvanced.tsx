@@ -1,6 +1,7 @@
 // "Advanced" under the Add-an-agent box: the only place the technical words may appear. It holds the capture wizard
 // (the person answers every question and approves the result), the manual chat command, Import, and Details of the last run.
 import { useState } from 'react';
+import { useT } from '../../../i18n';
 import { CHIPS, type AddAgentRun } from '../../../lib/addAgent';
 import { tauriAgentDefinitionsApi, type AgentDefinitionsApi } from '../../../lib/agentDefinitions';
 import type { WizardApi } from '../../../lib/agentWizard';
@@ -17,13 +18,14 @@ export function AddAgentAdvanced({
   definitionsApi?: Pick<AgentDefinitionsApi, 'importDefinition'>;
   lastRun: AddAgentRun | null;
 }) {
+  const t = useT();
   const [wizard, setWizard] = useState<Kind | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   const importFile = async () => {
     try {
       const next = await definitionsApi.importDefinition();
-      if (next) setNote('Imported. It stays off until you approve it under Agent definitions.');
+      if (next) setNote(t('addAgent.adv.imported'));
     } catch (e) {
       setNote(errorSentence(e));
     }
@@ -32,11 +34,11 @@ export function AddAgentAdvanced({
   const caps = lastRun?.result?.caps ?? null;
   return (
     <div className="aa-adv" data-testid="add-agent-advanced">
-      <p className="aa-quiet">Teach Potato an agent by hand. You answer every question and approve the result yourself.</p>
+      <p className="aa-quiet">{t('addAgent.adv.intro')}</p>
       <div className="aa-actions is-row">
-        <Btn onClick={() => setWizard('terminal')}>Capture wizard</Btn>
-        <Btn onClick={() => setWizard('chat')}>Chat command</Btn>
-        <Btn onClick={() => void importFile()}>Import a file</Btn>
+        <Btn onClick={() => setWizard('terminal')}>{t('addAgent.adv.wizard')}</Btn>
+        <Btn onClick={() => setWizard('chat')}>{t('addAgent.adv.chatCommand')}</Btn>
+        <Btn onClick={() => void importFile()}>{t('addAgent.adv.import')}</Btn>
       </div>
       {note && (
         <p className="aa-note" role="status">
@@ -44,13 +46,12 @@ export function AddAgentAdvanced({
         </p>
       )}
       <details className="aa-details">
-        <summary>Details of the last add</summary>
-        {!lastRun && <p className="aa-quiet">Nothing to show yet. Add an agent first.</p>}
+        <summary>{t('addAgent.adv.details')}</summary>
+        {!lastRun && <p className="aa-quiet">{t('addAgent.adv.nothing')}</p>}
         {lastRun && (
-          <div className="aa-detail-body" data-raw="true">
+          <div className="aa-detail-body" data-raw="true" data-no-i18n>
             <p>
-              Run for {lastRun.input}: {lastRun.state}
-              {caps ? `, level ${caps.level}` : ''}
+              {t('addAgent.adv.runFor', { input: lastRun.input, state: lastRun.state, level: caps ? t('addAgent.adv.level', { level: caps.level }) : '' })}
             </p>
             <ul>
               {lastRun.steps
@@ -81,7 +82,7 @@ export function AddAgentAdvanced({
           onClose={() => setWizard(null)}
           onApprove={() => {
             setWizard(null);
-            setNote('Saved. It stays off until you approve it under Agent definitions.');
+            setNote(t('addAgent.adv.saved'));
           }}
         />
       )}

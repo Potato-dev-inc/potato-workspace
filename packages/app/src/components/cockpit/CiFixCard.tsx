@@ -8,6 +8,7 @@
 // backend found something it will not push, so this card has no push button at all. Number keys never answer these
 // cards: an agent that reads a log or a push needs a click.
 import { useState } from 'react';
+import { t, useT } from '../../i18n';
 import { ciFixLog, type FixLogView } from '../../lib/ci-fix';
 import { isCiFix, isCiPush, timeLeftText, type Question, type QuestionAnswer, type QuestionChoice } from '../../lib/questions';
 import '../../styles/ci-fix-card.css';
@@ -30,8 +31,6 @@ const LINE_MAX = 300;
 /** A button label: at most this many characters. */
 const LABEL_MAX = 60;
 
-const HELD = "Potato Workspace won't push this fix. Check the copy yourself.";
-
 /** "CI failed on #61 (lint, test). Ask Codex to fix it?" (Rust `ci_fix::text::card_question`). */
 const FIX_QUESTION = /^CI failed on #(\d+)(?: \(([\s\S]*)\))?\. (Ask [\s\S]*)$/;
 const NUMBER = /#(\d+)/;
@@ -43,15 +42,6 @@ const LOG_SIZE = /Log: ([^\n]+)/;
 
 /** Cut by characters, so an emoji is never split in half. */
 const cut = (text: string, max: number): string => Array.from(text).slice(0, max).join('');
-
-/** Button words. The fixed copy for every id but `fix`, whose label the backend builds from the agent's name. */
-const WORDS: Record<string, string> = {
-  [PUSH]: 'Push fix',
-  [LOOK]: 'Look first',
-  [KEEP]: "Don't push",
-  [NOT_NOW]: 'Not now',
-  [STOP]: 'Stop watching this PR',
-};
 
 /** The fix this card is about. Only Red to Green cards carry it; without it there is no Show log button. */
 type CiQuestion = Question & { fix_id?: string | null };
@@ -68,11 +58,12 @@ function readFix(q: Question) {
   const route = ROUTE.exec(context)?.[0] ?? null;
   const size = LOG_SIZE.exec(context)?.[1] ?? null;
   return {
-    title: said ? cut(`CI failed on #${said[1]}. ${said[3]}`, TITLE_MAX) : cut(q.question, TITLE_MAX),
-    header: ['CI failed', number ? `#${number}` : null, REPO.exec(context)?.[1] ?? null].filter(Boolean).join(' · '),
-    reason: [tried ? `Try ${tried[1]} of ${tried[2]}` : null, route].filter(Boolean).join(' · ') || null,
+    title: said ? cut(`${t('inboxCards.ci.failedOn', { n: said[1] })} ${said[3]}`, TITLE_MAX) : cut(q.question, TITLE_MAX),
+    header: [t('inboxCards.ci.failed'), number ? `#${number}` : null, REPO.exec(context)?.[1] ?? null].filter(Boolean).join(' · '),
+    reason:
+      [tried ? t('inboxCards.ci.try', { n: tried[1], total: tried[2] }) : null, route].filter(Boolean).join(' · ') || null,
     checks: said?.[2] ? said[2].split(', ').map((name) => cut(name.trim(), CHECK_MAX)).filter(Boolean) : [],
-    size: size ? `Log: ${cut(size, LINE_MAX)}` : null,
+    size: size ? t('inboxCards.ci.logSize', { size: cut(size, LINE_MAX) }) : null,
   };
 }
 
@@ -86,7 +77,7 @@ function readPush(q: Question) {
   const lines = context.split('\n').map((l) => l.trim()).filter((l) => l && !REPO.test(l));
   return {
     title: cut(q.question, TITLE_MAX),
-    header: ['CI fix', number ? `#${number}` : null, REPO.exec(context)?.[1] ?? null].filter(Boolean).join(' · '),
+    header: [t('inboxCards.ci.fix'), number ? `#${number}` : null, REPO.exec(context)?.[1] ?? null].filter(Boolean).join(' · '),
     facts: lines[0] ? cut(lines[0], LINE_MAX) : null,
     reasons: lines.slice(1).map((l) => cut(l, LINE_MAX)),
   };
@@ -94,21 +85,22 @@ function readPush(q: Question) {
 
 /** The log box: the cleaned lines the agent gets, one block per failing check. Plain text only. */
 function LogBox({ log, failed }: { log: FixLogView | null; failed: boolean }) {
-  if (failed) return <p className="ib-ci-log-note">Couldn't load the log.</p>;
-  if (!log) return <p className="ib-ci-log-note">Loading the log...</p>;
-  if (log.checks.length === 0) return <p className="ib-ci-log-note">The log is gone. The fix has ended.</p>;
+  const tr = useT();
+  if (failed) return <p className="ib-ci-log-note">{tr('inboxCards.ci.logFailed')}</p>;
+  if (!log) return <p className="ib-ci-log-note">{tr('inboxCards.ci.logLoading')}</p>;
+  if (log.checks.length === 0) return <p className="ib-ci-log-note">{tr('inboxCards.ci.logGone')}</p>;
   return (
-    <div className="ib-ci-log" aria-label="The log the agent gets">
+    <div className="ib-ci-log" aria-label={tr('inboxCards.ci.logLabel')}>
       {log.checks.map((name) => {
         const lines = log.lines_by_check[name] ?? [];
         return (
           <div key={name} className="ib-ci-log-check">
             <div className="ib-ci-log-name">{name}</div>
-            <pre className="ib-ci-log-text">{lines.length > 0 ? lines.join('\n') : 'No log lines were kept for this check.'}</pre>
+            <pre className="ib-ci-log-text">{lines.length > 0 ? lines.join('\n') : tr('inboxCards.ci.noLines')}</pre>
           </div>
         );
       })}
-      <p className="ib-ci-log-note">Snapshot {log.sha8}</p>
+      <p className="ib-ci-log-note">{tr('inboxCards.ci.snapshot', { sha: log.sha8 })}</p>
     </div>
   );
 }
@@ -125,6 +117,15 @@ export function CiFixCard({
   /** Opens the run's pane for "Look first". Absent when the pane is not known: no Look first button then. */
   onOpenPane?: () => void;
 }) {
+  const t = useT();
+  /** Button words. The fixed copy for every id but `fix`, whose label the backend builds from the agent's name. */
+  const WORDS: Record<string, string> = {
+    [PUSH]: t('inboxCards.ci.push'),
+    [LOOK]: t('inboxCards.lookFirst'),
+    [KEEP]: t('inboxCards.ci.dontPush'),
+    [NOT_NOW]: t('inboxCards.notNow'),
+    [STOP]: t('inboxCards.ci.stopWatching'),
+  };
   const [showLog, setShowLog] = useState(false);
   const [log, setLog] = useState<FixLogView | null>(null);
   const [failed, setFailed] = useState(false);
@@ -161,7 +162,7 @@ export function CiFixCard({
       );
     }
     // The agent's button ("Ask Codex to fix") is the backend's own label, cut to length.
-    const label = c.id === FIX ? cut(c.label.trim(), LABEL_MAX) || 'Ask the agent to fix' : WORDS[c.id] ?? cut(c.label, LABEL_MAX);
+    const label = c.id === FIX ? cut(c.label.trim(), LABEL_MAX) || t('inboxCards.ci.fixFallback') : WORDS[c.id] ?? cut(c.label, LABEL_MAX);
     return (
       <CardButton key={c.id} tone={tone} role="answer" onClick={() => onAnswer({ choice_id: c.id })}>
         {label}
@@ -178,8 +179,8 @@ export function CiFixCard({
       age={now - q.created_at_ms}
       guard
       reason={fix ? fix.reason : push!.facts}
-      caution={held ? HELD : undefined}
-      note={left > 0 ? `Ends in ${timeLeftText(left)} if you do not answer.` : undefined}
+      caution={held ? t('inboxCards.ci.held') : undefined}
+      note={left > 0 ? t('inboxCards.endsIn', { time: timeLeftText(left) }) : undefined}
       data={{
         'data-question-id': q.id,
         'data-ci-card': q.kind,
@@ -189,7 +190,7 @@ export function CiFixCard({
         fix ? (
           <>
             {fix.checks.length > 0 ? (
-              <ul className="ib-ci-checks" aria-label="Failing checks">
+              <ul className="ib-ci-checks" aria-label={t('inboxCards.ci.failingChecks')}>
                 {fix.checks.map((name, i) => (
                   <li key={`${i}-${name}`}>{name}</li>
                 ))}
@@ -210,7 +211,7 @@ export function CiFixCard({
       more={
         fix && fixId ? (
           <CardButton tone="plain" aria-expanded={showLog} onClick={toggleLog}>
-            {showLog ? 'Hide log' : 'Show log'}
+            {showLog ? t('inboxCards.ci.hideLog') : t('inboxCards.ci.showLog')}
           </CardButton>
         ) : null
       }

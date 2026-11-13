@@ -26,7 +26,7 @@ pub fn type_message(chat: &AcpChat, text: &str) -> Attempt {
 
 /// Sends the message with its files and pictures as prompt blocks.
 pub fn type_message_with(chat: &AcpChat, text: &str, attachments: &[ChatAttachment]) -> Attempt {
-    match chat.send_with(text, attachments) {
+    match chat.send_quiet(text, attachments) {
         Ok(_) => Attempt::Sent,
         Err(SendError::Busy) => Attempt::NotTyped,
         Err(SendError::Gone) => Attempt::Gone,

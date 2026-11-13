@@ -27,7 +27,7 @@ export function ShortcutsSheet({ onClose, mac = isMacPlatform() }: { onClose: ()
                 <span className="ck-shortcuts-label">{s.label}</span>
                 <span className="ck-shortcuts-keys">
                   {shortcutKeys(s, mac).map((key) => (
-                    <kbd key={key} className="ck-kbd">
+                    <kbd key={key} className="ck-chip-key ck-kbd">
                       {key}
                     </kbd>
                   ))}

@@ -223,6 +223,7 @@ fn caps_json_shape_is_pinned() {
         "images": hs_cap("said it does not take pictures", "no"),
         "usage": none,
         "read_only": none,
+        "needs_repair": false,
     });
     assert_eq!(caps_to_json(&caps), expected);
 }

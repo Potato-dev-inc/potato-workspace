@@ -1,6 +1,7 @@
 // One `ask_user` question in the Inbox: the agent's question, its choices as buttons, a text field
 // when free text is allowed, and Dismiss. It is an InboxCard like every other card.
 import { useState } from 'react';
+import { useT } from '../../i18n';
 import {
   askerName,
   helperLoginChoice,
@@ -33,6 +34,7 @@ export function QuestionCard({
   onDismiss: () => void;
   onOpenPane?: () => void;
 }) {
+  const t = useT();
   const [text, setText] = useState('');
   const [always, setAlways] = useState(false);
   const helper = isHelperLogin(q);
@@ -58,7 +60,7 @@ export function QuestionCard({
         helper ? (
           <label className="ib-check" data-testid="helper-always">
             <input type="checkbox" checked={always} onChange={(e) => setAlways(e.target.checked)} />
-            <span>Always use this</span>
+            <span>{t('inboxCards.question.alwaysUse')}</span>
           </label>
         ) : q.allow_free_text ? (
           <form
@@ -71,12 +73,12 @@ export function QuestionCard({
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder={q.choices.length > 0 ? 'Or type an answer' : 'Type an answer'}
-              aria-label="Your answer"
+              placeholder={q.choices.length > 0 ? t('inboxCards.question.orType') : t('inboxCards.question.typeAnswer')}
+              aria-label={t('inboxCards.question.yourAnswer')}
               maxLength={4000}
             />
             <button type="submit" className="ck-btn ck-btn--secondary" disabled={!text.trim()}>
-              Send
+              {t('inboxCards.send')}
             </button>
           </form>
         ) : null
@@ -109,11 +111,11 @@ export function QuestionCard({
             </CardButton>
           )}
           <CardButton tone="plain" role="dismiss" onClick={onDismiss}>
-            Dismiss
+            {t('inboxCards.dismiss')}
           </CardButton>
           {onOpenPane && (
             <CardButton tone="plain" role="open" onClick={onOpenPane}>
-              Open
+              {t('inboxCards.open')}
             </CardButton>
           )}
         </>

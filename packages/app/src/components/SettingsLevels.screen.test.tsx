@@ -130,9 +130,9 @@ describe('basic rows across the real catalog', () => {
   });
 
   // Spec 2026-11-13: at most 10 basic rows on a page. Today: Overview 4, Agents 3, Helpers 4, Look and feel 9, Connect 6, Keys 6.
-  it('shows at most 34 basic rows in all, and at most 10 on any one page', () => {
+  it('shows at most 35 basic rows in all, and at most 10 on any one page', () => {
     const counts = SECTIONS.map((s) => s.rows.filter((r) => rowLevel(r) === 'basic').length);
-    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(34);
+    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(35);
     for (const c of counts) expect(c).toBeLessThanOrEqual(10);
   });
 });

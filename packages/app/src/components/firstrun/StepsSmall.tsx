@@ -7,10 +7,12 @@ import { parseDevServerPort } from '../../lib/public-bridge-url';
 import { DotSpinner } from '../cockpit/DotSpinner';
 import { MobilePairingPanel } from '../MobilePairingPanel';
 import { PackSheet } from '../settings/pack/AgentPackGroup';
+import { useT } from '../../i18n';
 import { T } from './copy';
 import { isSimpleLook, LOOKS, type Look, type MoreId } from './model';
 
 export function StepPhone({ load, patch }: { load: typeof loadSettings; patch: typeof patchSettings }) {
+  useT();
   const [settings, setSettings] = useState<Settings | null>(null);
   useEffect(() => {
     let alive = true;
@@ -62,6 +64,7 @@ export function useFound(api: AgentPackApi): string[] | null {
 }
 
 export function StepPack({ api = agentPackApi }: { api?: AgentPackApi }) {
+  useT();
   const found = useFound(api);
   const [reviewing, setReviewing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -100,6 +103,7 @@ export function StepPack({ api = agentPackApi }: { api?: AgentPackApi }) {
  * between them and Tab leaves the group, as for any radio group.
  */
 export function LookPicker({ look, onLook }: { look: Look | null; onLook: (look: Look) => void }) {
+  useT();
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const stop = look ?? LOOKS[0];
   const move = (from: number, by: number) => {
@@ -159,6 +163,7 @@ export function StepDone({
   look: Look | null;
   onLook: (look: Look) => void;
 }) {
+  useT();
   const tips = [
     { term: T.tipKeys, body: T.tipKeysBody, kbd: true },
     { term: T.tipInbox, body: T.tipInboxBody, kbd: false },

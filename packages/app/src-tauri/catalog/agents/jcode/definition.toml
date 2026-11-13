@@ -1,0 +1,17 @@
+# jcode, visible mode only. Name and command first read in the public agent list of Orca
+# (github.com/stablyai/orca, MIT, Copyright (c) 2026 Lovecast Inc.), 2026-11-13. See resources/legal/NOTICE-orca.txt.
+# Vendor homepage and licence read from the vendor's GitHub page the same day. Not installed or run by us.
+# No install command is shipped: Add works only when `jcode` is already on PATH.
+schema_version = 1
+
+[agent]
+id = "jcode"
+label = "jcode"
+icon = "JC"
+description = "jcode, run in a visible pane."
+kind = "generic"
+experimental = true
+
+[binary]
+names = ["jcode"]
+login_hint = "Start jcode and follow its own sign-in steps."

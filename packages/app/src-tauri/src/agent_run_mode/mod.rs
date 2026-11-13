@@ -306,6 +306,7 @@ pub fn types_summary() -> Value {
                         "lanes": lanes_of(a, id),
                         "accounts": crate::accounts::capability_rows(&crate::accounts::Store::default_location(), id),
                         "read_only_supported": crate::agent_runs::read_only_supported(id, false),
+                        "caps": crate::agent_caps::chips_json(id),
                     })
                 })
                 .collect()

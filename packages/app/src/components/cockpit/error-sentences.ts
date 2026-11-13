@@ -3,6 +3,8 @@
 // appears in the text (it goes in a tooltip); the agent's name comes from its label, so nothing
 // here knows an agent.
 
+import { t } from '../../i18n';
+
 export type ErrorFix = 'start_again' | 'install' | 'open_pane';
 
 export interface ErrorExplanation {
@@ -20,14 +22,10 @@ export interface ErrorExplanation {
   glyph: 'error' | 'notice';
 }
 
-const FIX_LABEL: Record<ErrorFix, string> = {
-  start_again: 'Start again',
-  install: 'Install',
-  open_pane: 'Open',
-};
+const fixLabel = (fix: ErrorFix): string => t(fix === 'start_again' ? 'risk.error.startAgain' : fix === 'install' ? 'risk.error.install' : 'risk.error.open');
 
 function explanation(title: string, sentence: string, fix: ErrorFix, glyph: ErrorExplanation['glyph'] = 'error'): ErrorExplanation {
-  return { title, sentence, fix, fixLabel: FIX_LABEL[fix], glyph };
+  return { title, sentence, fix, fixLabel: fixLabel(fix), glyph };
 }
 
 /** The title, sentence and fix for a run error code, or null for a code with no sentence yet. */
@@ -36,19 +34,19 @@ export function explainError(code: string | null | undefined, agent: string): Er
     case 'WORKSPACE_TRUST_DECLINED':
       // Starting again asks about the folder again; Potato Workspace never answers that question for you.
       return explanation(
-        `${agent} didn't start`,
-        "You chose not to trust this folder, so the task wasn't sent. Start again to be asked once more.",
+        t('risk.error.declined.title', { agent }),
+        t('risk.error.declined.sentence'),
         'start_again',
         'notice',
       );
     case 'AGENT_EXITED':
-      return explanation(`${agent} stopped`, 'It closed unexpectedly. Your files are as it left them.', 'start_again');
+      return explanation(t('risk.error.exited.title', { agent }), t('risk.error.exited.sentence'), 'start_again');
     case 'AGENT_NOT_INSTALLED':
-      return explanation(`${agent} isn't installed`, "It isn't on this PC yet, so nothing ran.", 'install');
+      return explanation(t('risk.error.notInstalled.title', { agent }), t('risk.error.notInstalled.sentence'), 'install');
     case 'PANE_NOT_READY':
-      return explanation(`${agent} wasn't ready`, "It didn't reach a ready screen, so Potato Workspace typed nothing.", 'open_pane');
+      return explanation(t('risk.error.notReady.title', { agent }), t('risk.error.notReady.sentence'), 'open_pane');
     case 'PROMPT_NOT_SUBMITTED':
-      return explanation(`${agent} didn't start the task`, "The task was typed, but it didn't start on it.", 'open_pane');
+      return explanation(t('risk.error.notSubmitted.title', { agent }), t('risk.error.notSubmitted.sentence'), 'open_pane');
     default:
       return null;
   }
@@ -56,5 +54,5 @@ export function explainError(code: string | null | undefined, agent: string): Er
 
 /** The title and sentence when the run gave no code we can explain. */
 export function unknownError(agent: string): { title: string; sentence: string } {
-  return { title: `${agent} stopped`, sentence: 'Your files are as it left them. Open it to see what happened.' };
+  return { title: t('risk.error.exited.title', { agent }), sentence: t('risk.error.unknown.sentence') };
 }

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PaneAction } from '../../lib/pane-actions';
 import { IconClose, IconInfo, IconPin, IconReflow, IconRename, IconStop } from './Icons';
+import { useT } from '../../i18n';
 
 /**
  * The one menu of a pane: opened by a right-click (or the context-menu key, Shift+F10) on its row in the
@@ -38,6 +39,7 @@ export function PaneContextMenu({
   /** The menu wants to go away (Escape, Tab, a click outside). `refocus` when the keyboard closed it. */
   onClose: (refocus: boolean) => void;
 }) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
 
@@ -106,7 +108,7 @@ export function PaneContextMenu({
     >
       <span className="ck-menu-ic">{icon}</span>
       <span>{label}</span>
-      {kbd && <kbd className="ck-kbd">{kbd}</kbd>}
+      {kbd && <kbd className="ck-chip-key ck-kbd">{kbd}</kbd>}
     </button>
   );
 
@@ -115,25 +117,25 @@ export function PaneContextMenu({
       ref={ref}
       className="ck-menu ck-menu--fixed ck-menu--compact"
       role="menu"
-      aria-label="Pane actions"
+      aria-label={t('sidebar.paneActions')}
       style={{ left: pos.left, top: pos.top }}
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
     >
       {onSide && (
         <>
-          {item('Open to the side', null, onSide)}
+          {item(t('sidebar.openToSide'), null, onSide)}
           <div className="ck-menu-sep" role="separator" />
         </>
       )}
-      {onPin && item(pinned ? 'Unpin' : 'Pin', <IconPin />, onPin)}
-      {item('Rename', <IconRename />, () => onAction('rename'))}
-      {item('Reflow', <IconReflow />, () => onAction('reflow'))}
-      {item('Interrupt', <IconStop />, onInterrupt, '⌃C')}
-      {onHandoff && item('Handoff from here', null, onHandoff)}
-      {item('Details', <IconInfo />, () => onAction('details'))}
+      {onPin && item(pinned ? t('sidebar.unpin') : t('sidebar.pin'), <IconPin />, onPin)}
+      {item(t('sidebar.rename'), <IconRename />, () => onAction('rename'))}
+      {item(t('sidebar.reflow'), <IconReflow />, () => onAction('reflow'))}
+      {item(t('sidebar.interrupt'), <IconStop />, onInterrupt, '⌃C')}
+      {onHandoff && item(t('sidebar.handoffFromHere'), null, onHandoff)}
+      {item(t('sidebar.details'), <IconInfo />, () => onAction('details'))}
       <div className="ck-menu-sep" role="separator" />
-      {item('Close', <IconClose />, () => onAction('close'))}
+      {item(t('sidebar.close'), <IconClose />, () => onAction('close'))}
     </div>
   );
   // Inside the cockpit root (the theme scope the `ck-menu` styles hang on), but outside the sidebar.

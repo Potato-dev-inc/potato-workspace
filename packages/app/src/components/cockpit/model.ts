@@ -1,6 +1,7 @@
 // Pure helpers for the cockpit: grouping, labels, elapsed text, palette matching.
 import type { PaneData } from '../../hooks/usePaneRegistry';
 import type { SpawnStageEvent } from '../../lib/cockpit-api';
+import { t } from '../../i18n';
 
 export type SpinnerStatus = 'running' | 'waiting_input' | 'idle' | 'error' | 'exited';
 
@@ -19,15 +20,15 @@ export function spinnerStatus(status: string): SpinnerStatus {
 export function stateText(status: string): string {
   switch (status) {
     case 'running':
-      return 'Working';
+      return t('state.working');
     case 'waiting_input':
-      return 'Needs you';
+      return t('state.needsYou');
     case 'idle':
-      return 'Idle';
+      return t('state.idle');
     case 'error':
-      return 'Error';
+      return t('state.error');
     default:
-      return 'Exited';
+      return t('state.exited');
   }
 }
 
@@ -79,15 +80,15 @@ export function spawnLogLine(e: SpawnStageEvent, agentName?: string): string {
   if (e.message) return e.message;
   switch (e.stage) {
     case 'claiming':
-      return 'Getting a ready agent';
+      return t('state.spawn.claiming');
     case 'spawning':
-      return agentName ? `Starting ${agentName}` : 'Starting the agent';
+      return agentName ? t('state.spawn.startingNamed', { name: agentName }) : t('state.spawn.starting');
     case 'attached':
-      return 'Connected';
+      return t('state.spawn.attached');
     case 'ready':
-      return 'Ready';
+      return t('state.spawn.ready');
     case 'failed':
-      return 'Could not start';
+      return t('state.spawn.failed');
   }
 }
 

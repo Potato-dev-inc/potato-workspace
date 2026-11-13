@@ -3,14 +3,12 @@
 // agent folder), and "Dismiss" remembers the answer. Nothing leaves this computer.
 import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
+import { useT } from '../../i18n';
 import { chatImportApi, type ImportApi, type ImportState } from '../../lib/chatImport';
 import { loadSettings } from '../../lib/settings';
 import { BringChatsPanel, BRING_CHATS_TITLE_ID } from '../history/BringChatsPanel';
 import { CardButton, InboxCard } from './InboxCard';
 import { Sheet } from './Sheet';
-
-export const IMPORT_CARD_TITLE = 'Bring your chats here';
-export const IMPORT_CARD_BODY = 'Bring the chats your other agents kept on this PC. Nothing leaves this computer.';
 
 /** True once the first-run welcome was finished or skipped (`onboarding_done: true` in the settings file). */
 async function welcomeDone(): Promise<boolean> {
@@ -24,6 +22,7 @@ export function ImportChatsCard({ api = chatImportApi, isWelcomeDone = welcomeDo
   const [panel, setPanel] = useState(false);
   const [gone, setGone] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const tr = useT();
 
   const refresh = useCallback(() => {
     api
@@ -72,24 +71,24 @@ export function ImportChatsCard({ api = chatImportApi, isWelcomeDone = welcomeDo
 
   return (
     <>
-      <ul className="ib-list" aria-label="Old chats">
+      <ul className="ib-list" aria-label={tr('inboxCards.import.listLabel')}>
         <li>
           <InboxCard
             kind="note"
             glyph="notice"
             info
-            title={IMPORT_CARD_TITLE}
-            reason={IMPORT_CARD_BODY}
+            title={tr('inboxCards.import.title')}
+            reason={tr('inboxCards.import.body')}
             note={note}
             data={{ 'data-testid': 'import-chats-card' }}
             actions={
               <CardButton tone="primary" onClick={() => setPanel(true)}>
-                Bring my chats
+                {tr('inboxCards.import.bring')}
               </CardButton>
             }
             more={
               <CardButton tone="plain" role="dismiss" onClick={() => void notNow()}>
-                Dismiss
+                {tr('inboxCards.dismiss')}
               </CardButton>
             }
           />

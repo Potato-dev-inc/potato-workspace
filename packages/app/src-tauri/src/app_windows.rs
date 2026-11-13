@@ -369,7 +369,7 @@ mod runtime {
             (OpenPlan::Show, Some(window)) => show(&window, focus),
             (OpenPlan::PlaceAndShow, Some(window)) => {
                 if let Some((x, y)) = next_position(app) {
-                    let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+                    let _ = crate::window_layout::own_window::set_position(&window, tauri::LogicalPosition::new(x, y));
                 }
                 show(&window, focus);
                 tracing::info!(pane = %pane_id, focus, "warm pane window shown");
@@ -386,7 +386,7 @@ mod runtime {
             Some(window) => {
                 if !window.is_visible().unwrap_or(true) {
                     if let Some((x, y)) = placement.pos {
-                        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+                        let _ = crate::window_layout::own_window::set_position(&window, tauri::LogicalPosition::new(x, y));
                     }
                     if let Some(phys) = placement.phys {
                         fit_outer(&window, phys);
@@ -418,13 +418,13 @@ mod runtime {
     /// inner size that makes the outer size match. Physical on purpose: a logical position is converted with one
     /// monitor's scale, which is wrong on a window headed for another.
     fn fit_outer(window: &tauri::WebviewWindow, (x, y, w, h): (f64, f64, f64, f64)) {
-        let _ = window.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
+        let _ = crate::window_layout::own_window::set_position(&window, tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
         let frame = match (window.outer_size(), window.inner_size()) {
             (Ok(o), Ok(i)) => (o.width.saturating_sub(i.width), o.height.saturating_sub(i.height)),
             _ => (0, 0),
         };
         let (iw, ih) = crate::window_layout::inner_for_outer((w, h), frame);
-        let _ = window.set_size(tauri::PhysicalSize::new(iw, ih));
+        let _ = crate::window_layout::own_window::set_size(&window, tauri::PhysicalSize::new(iw, ih));
     }
 
     /// Create the hidden window of a warm worker. Nothing is shown and nothing is placed yet.

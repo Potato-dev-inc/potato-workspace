@@ -77,6 +77,7 @@ import { useLiveStopToast } from './components/cockpit/live/stopToast';
 import { GO_LIVE_EVENT } from './lib/live-room';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import './styles/cockpit.css';
+import './styles/chips.css';
 import './styles/night.css';
 import { registerSettingsOpener } from './lib/openSettingsAt';
 import { SpacesPage } from './components/spaces/SpacesPage';

@@ -9,7 +9,6 @@ use crate::questions::{self, now_ms};
 
 // B10 "both see the same items in order; card closes in both; second answer: new copy `Already answered.`"
 #[test]
-#[ignore = "chaos-finding B10: the second answer is refused with no Already answered. notice (chat shows Allowed and Done only)"]
 fn chaos_two_windows_on_one_chat() {
     let rig = ChatRig::new("");
     let viewer = rig.add_viewer();
@@ -31,7 +30,6 @@ fn chaos_two_windows_on_one_chat() {
 
 // B11 "one runs; the other: new copy `Still working on the last message. Wait, or press Stop.` (no internal error text)"
 #[test]
-#[ignore = "chaos-finding B11: the second send is refused as busy, but the chat shows no sentence (notices empty)"]
 fn chaos_two_sends_at_once() {
     let rig = ChatRig::new("");
     rig.send("slow").expect("the first send starts a turn");

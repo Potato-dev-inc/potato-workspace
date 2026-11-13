@@ -10,6 +10,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { chipValueName, configChips, isTerminalChatLane, startTerminalChat, tauriAcpChatApi, type AcpChatState } from './acpChat';
 import { sendPaneMessage } from './paneOutbox';
 import { startChatSession } from '../components/cockpit/newagent/start';
+import { t } from '../i18n';
 
 export const HANDOFF_FILE = 'HANDOFF.md';
 
@@ -84,7 +85,7 @@ export interface QuickDeps {
 export type HandoffMode = 'file' | 'new_agent';
 export const DEFAULT_HANDOFF_MODE: HandoffMode = 'new_agent';
 /** The button's label follows the mode. */
-export const handoffLabel = (mode: HandoffMode): string => (mode === 'file' ? 'Quick handoff' : 'Hand off to new agent');
+export const handoffLabel = (mode: HandoffMode): string => (mode === 'file' ? t('overview.handoff.file') : t('overview.handoff.label.newAgent'));
 
 /** The two settings, read when a handoff starts. */
 export interface HandoffOptions {

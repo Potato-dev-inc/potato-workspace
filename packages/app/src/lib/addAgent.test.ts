@@ -24,7 +24,7 @@ describe('addAgent', () => {
     }
     expect(frames).toBeGreaterThan(40);
     expect(Object.keys(SCENARIOS).sort()).toEqual(
-      ['already_added', 'cancelled', 'chat_off', 'handshake_bad', 'handshake_silent', 'install_failed', 'native_ok', 'not_installed', 'registry_addon', 'sign_in', 'slow', 'terminal_only', 'unknown_name'].sort(),
+      ['already_added', 'cancelled', 'chat_off', 'handshake_bad', 'handshake_silent', 'install_failed', 'native_ok', 'needs_consent', 'not_installed', 'registry_addon', 'sign_in', 'slow', 'terminal_only', 'unknown_name'].sort(),
     );
   });
 

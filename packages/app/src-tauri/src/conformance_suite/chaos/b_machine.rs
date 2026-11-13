@@ -93,7 +93,6 @@ fn chaos_path_with_spaces_cjk_and_emoji() {
 // B21 "running turn unaffected before the kill; after it E10"
 // E10: `The chat program for <Label> was not found or would not run. Check that it is installed, or run the agent in a terminal.`
 #[test]
-#[ignore = "chaos-finding B21: after the program is deleted and the agent killed the person sees Something went wrong and exit code 1 notices, not the E10 copy"]
 fn chaos_agent_program_disappears_while_running() {
     let dir = temp_dir("launch");
     let launcher = launcher_in(&dir);
@@ -210,8 +209,8 @@ fn chaos_models_only_agent_still_gets_chips() {
 }
 
 // B28 "file written with no question: the chat shows `This agent changed a file without asking.`"
+#[ignore = "known-weird B28: not done; a notice for every write would also fire for agents the person set to accept edits"]
 #[test]
-#[ignore = "known-weird B28: the chat shows Done and 1 file, not the writes-without-asking notice"]
 fn chaos_agent_writes_without_asking() {
     let rig = ChatRig::new("");
     rig.say("autowrite new.txt");

@@ -4,12 +4,16 @@
 import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import type { GitInitPlan, RecentProject, ShipApi } from '../../lib/ship-api';
-import { stateHint } from '../../lib/ship-model';
+import { stateHint as rawStateHint } from '../../lib/ship-model';
+import { t, useT } from '../../i18n';
 import type { SimpleApi } from '../simple/simple-api';
 import { T } from './copy';
 import type { ProjectPick } from './model';
 
 type Ship = Pick<ShipApi, 'recent' | 'pickFolder' | 'forget' | 'gitInitPlan' | 'gitInit'>;
+
+/** The hint under a recent folder, in the current language. */
+const stateHint = (state: RecentProject['state']): string => (rawStateHint(state) ? t(`firstRun.hint.${state}` as 'firstRun.hint.missing') : '');
 
 /** What each refusal from Rust says here. */
 export function folderText(code: string | null): string {
@@ -51,6 +55,7 @@ export function StepProject({
   simple: Pick<SimpleApi, 'checkFolder'>;
   onProject: (project: ProjectPick | null) => void;
 }) {
+  useT();
   const [recent, setRecent] = useState<RecentProject[] | null>(null);
   /** Folders the guard refuses, by path (so a row says so before it is clicked). */
   const [broad, setBroad] = useState<Record<string, string>>({});
@@ -167,7 +172,7 @@ export function StepProject({
           <p className="fr-hint">{T.needsGitBody}</p>
           {plan ? (
             <>
-              <ul className="fr-cmds" aria-label="What will run">
+              <ul className="fr-cmds" aria-label={t('firstRun.whatWillRun')}>
                 {plan.commands.map((cmd) => (
                   <li key={cmd}>
                     <code>{cmd}</code>

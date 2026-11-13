@@ -1,20 +1,21 @@
 // Plain-words helpers for the ship features: no React, no IPC. Tested in ship-model.test.ts.
+import { t } from '../i18n';
 import type { ChecksReport, GitState, PrPrepared, RecentProject, SetupReport } from './ship-api';
 
 /** `2 GitHub checks failed: test (ubuntu), lint` and friends. */
 export function checksSentence(report: ChecksReport | undefined | null): string {
-  if (!report) return 'Checking GitHub…';
+  if (!report) return t('state.ship.checking');
   const failed = report.items.filter((i) => i.state === 'fail');
   const pending = report.items.filter((i) => i.state === 'pending');
   switch (report.state) {
     case 'failing':
-      return `${failed.length} GitHub ${failed.length === 1 ? 'check' : 'checks'} failed: ${failed.map((i) => i.name).join(', ')}`;
+      return t('state.ship.failed', { count: failed.length, names: failed.map((i) => i.name).join(', ') });
     case 'pending':
-      return `GitHub checks are running (${pending.length} left)`;
+      return t('state.ship.pending', { count: pending.length });
     case 'passing':
-      return `All ${report.items.length} GitHub checks passed`;
+      return t('state.ship.passed', { count: report.items.length });
     default:
-      return 'GitHub has no checks for this pull request yet';
+      return t('state.ship.none');
   }
 }
 
@@ -22,23 +23,23 @@ export function checksSentence(report: ChecksReport | undefined | null): string 
 export function cannotCreate(p: PrPrepared): { text: string; command?: string; heading?: string; byHand?: boolean } | null {
   if (p.gh === 'missing') {
     return {
-      text: "Create PR uses the GitHub command line, and it isn't installed on this PC. Install it from cli.github.com, then try again.",
+      text: t('state.ship.ghMissing'),
       byHand: true,
     };
   }
   if (p.gh === 'signed_out') {
-    return { text: 'Sign in to GitHub first. Run this in a terminal, then try again.', command: 'gh auth login' };
+    return { text: t('state.ship.ghSignedOut'), command: 'gh auth login' };
   }
   if (!p.has_remote) {
     // Short on purpose: say why, then give the exact commands for whoever adds a remote later.
     return {
-      text: "This project has no GitHub remote yet, so Create PR can't push. Merge into the main branch instead.",
-      heading: 'Once you add a remote (git remote add origin <address>), run:',
+      text: t('state.ship.noRemote'),
+      heading: t('state.ship.noRemoteHeading'),
       byHand: true,
     };
   }
   if (!p.on_github) {
-    return { text: "This project isn't on GitHub. Merge into the main branch instead, or add a GitHub remote." };
+    return { text: t('state.ship.notOnGithub') };
   }
   return null;
 }
@@ -57,24 +58,24 @@ export function setupLine(setup: SetupReport | undefined | null): string | null 
   if (!setup) return null;
   const parts: string[] = [];
   for (const s of setup.steps) {
-    parts.push(s.ok ? `ran ${s.command}` : s.timed_out ? `${s.command} took too long and was stopped` : `${s.command} stopped with an error`);
+    parts.push(s.ok ? t('state.ship.stepRan', { command: s.command }) : s.timed_out ? t('state.ship.stepTimedOut', { command: s.command }) : t('state.ship.stepError', { command: s.command }));
   }
-  if (setup.copied.length > 0) parts.push(`copied ${setup.copied.join(', ')} (never committed)`);
+  if (setup.copied.length > 0) parts.push(t('state.ship.copied', { files: setup.copied.join(', ') }));
   if (parts.length === 0) return null;
-  const text = parts.join('; ');
+  const text = parts.join(t('state.ship.join'));
   const sentence = text.charAt(0).toUpperCase() + text.slice(1);
-  return setup.status === 'failed' ? `Setting up the copy failed: ${text}.` : `${sentence}.`;
+  return setup.status === 'failed' ? t('state.ship.setupFailed', { text }) : t('state.ship.sentence', { text: sentence });
 }
 
 /** The sentence for a folder in the recents list. */
 export function stateHint(state: GitState): string {
   switch (state) {
     case 'missing':
-      return 'Folder not found';
+      return t('state.ship.missing');
     case 'folder':
-      return 'No Git yet';
+      return t('state.ship.folder');
     case 'no_commits':
-      return 'No snapshot yet';
+      return t('state.ship.noCommits');
     default:
       return '';
   }

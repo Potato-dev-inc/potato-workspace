@@ -6,6 +6,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { WorktreeDiff } from './cockpit-api';
+import { t } from '../i18n';
 
 export type TeamEventKind =
   | 'pushed'
@@ -385,6 +386,16 @@ export function unclaimedRed(state: TeamState | null): { id: string; receivedAtM
   return state.cards.filter((c) => isRedBanner(c) && !c.claim).map((c) => ({ id: c.id, receivedAtMs: c.receivedAtMs }));
 }
 
+/** A branch the way a person says it: "feat/invoices" is "invoices". The default branch stays as it is. */
+export function friendlyBranch(branch: string): string {
+  return branch.replace(/^(feat|feature|fix|bugfix|hotfix|chore|docs|refactor|perf|test)\//i, '');
+}
+
+/** "review request 142" (a pull request, in plain words); `start` capitalises it for the start of a line. */
+export function reviewRequest(number: number, start = false): string {
+  return t(start ? 'team.reviewRequestStart' : 'team.reviewRequest', { n: number });
+}
+
 /** "main is red in acme/billing · CI" */
 export function redBannerText(event: TeamEvent): string {
   const workflow = event.subject.ci?.failedJobs?.[0];
@@ -402,9 +413,26 @@ export function githubUrl(event: TeamEvent): string | null {
   return null;
 }
 
+/** The link of the review request a card is about: its GitHub page, only an https GitHub link. */
+export function reviewRequestUrl(event: TeamEvent): string | null {
+  const url = event.subject.pr?.url ?? '';
+  return url.startsWith('https://github.com/') ? url : null;
+}
+
+/** Where the words "review request N" sit in a card's title, so the card can make them a link; null if they don't. */
+export function reviewRequestSpan(event: TeamEvent, title: string): { before: string; text: string; after: string } | null {
+  const n = event.subject.pr?.number;
+  if (n === undefined) return null;
+  for (const text of [reviewRequest(n), reviewRequest(n, true)]) {
+    const at = title.indexOf(text);
+    if (at >= 0) return { before: title.slice(0, at), text, after: title.slice(at + text.length) };
+  }
+  return null;
+}
+
 /**
  * War Room: one sentence for a PR or a push to the default branch, or null for other cards.
- * "Kai opened PR #482 in acme/app · feat/relay-rooms → main · 14 files +612 −88"
+ * "Kai opened review request 482 in acme/app · relay-rooms into main · 14 files +612 −88"
  * "Kai pushed 3 commits to main in acme/app"
  */
 export function warRoomLine(event: TeamEvent): string | null {
@@ -412,12 +440,12 @@ export function warRoomLine(event: TeamEvent): string | null {
   const s = event.subject;
   if (event.kind === 'pr_opened' && s.pr) {
     const pr = s.pr;
-    const branches = s.branch && s.base ? `${s.branch} → ${s.base}` : (s.branch ?? '');
+    const branches = s.branch && s.base ? t('team.branchInto', { from: friendlyBranch(s.branch), to: friendlyBranch(s.base) }) : friendlyBranch(s.branch ?? '');
     const stats = pr.files !== undefined ? statsText({ files: pr.files, additions: pr.additions ?? 0, deletions: pr.deletions ?? 0 }) : statsText(s.stats);
-    return [`${who} opened PR #${pr.number} in ${repoName(event)}`, branches, stats].filter(Boolean).join(' · ');
+    return [t('team.openedIn', { who, what: reviewRequest(pr.number), repo: repoName(event) }), branches, stats].filter(Boolean).join(' · ');
   }
   if (event.kind === 'pushed' && s.commits !== undefined) {
-    return `${who} pushed ${plural(s.commits, 'commit')} to ${s.branch ?? 'main'} in ${repoName(event)}`;
+    return t('team.pushedCommits', { who, count: s.commits, branch: s.branch ?? 'main', repo: repoName(event) });
   }
   return null;
 }
@@ -427,7 +455,7 @@ function warRoomMeta(event: TeamEvent): string {
   const s = event.subject;
   if (event.kind === 'pr_opened') {
     const ci = s.ci?.conclusion;
-    const checks = ci === 'failure' ? 'checks failing' : ci === 'success' ? 'checks passed' : ci === 'pending' ? 'checks running' : '';
+    const checks = ci === 'failure' ? t('team.checksFailing') : ci === 'success' ? t('team.checksPassed') : ci === 'pending' ? t('team.checksRunning') : '';
     return [s.pr?.title, checks].filter(Boolean).join(' · ');
   }
   return [s.firstCommit, s.commit?.slice(0, 7)].filter(Boolean).join(' · ');
@@ -439,31 +467,30 @@ export function cardTitle(event: TeamEvent): string {
   if (line) return line;
   const who = whoDid(event);
   const pr = event.subject.pr;
-  if (pr && (event.kind === 'pr_opened' || event.kind === 'pr_ready')) return `${who} opened #${pr.number}`;
-  if (pr && event.kind === 'pr_updated') return `${who} updated #${pr.number}`;
+  if (pr && (event.kind === 'pr_opened' || event.kind === 'pr_ready')) return t('team.opened', { who, what: reviewRequest(pr.number) });
+  if (pr && event.kind === 'pr_updated') return t('team.updated', { who, what: reviewRequest(pr.number) });
   if (pr && event.kind === 'pr_merged') {
     const base = event.subject.base;
-    return base ? `${who}'s #${pr.number} merged into ${base}` : `#${pr.number} merged`;
+    return base ? t('team.mergedInto', { who, what: reviewRequest(pr.number), base: friendlyBranch(base) }) : t('team.merged', { what: reviewRequest(pr.number, true) });
   }
-  if (pr && event.kind === 'pr_closed') return `#${pr.number} closed without merging`;
+  if (pr && event.kind === 'pr_closed') return t('team.closedNoMerge', { what: reviewRequest(pr.number, true) });
   if (event.kind === 'please_review') {
-    const what = pr ? `#${pr.number}` : (event.subject.branch ?? 'a branch');
-    return `${who} asks for a review of ${what}`;
+    const what = pr ? t('team.requestN', { n: pr.number }) : friendlyBranch(event.subject.branch ?? t('team.aBranch'));
+    return t('team.asksReview', { who, what });
   }
-  if (event.kind === 'note') return `${who} left a note`;
+  if (event.kind === 'note') return t('team.leftNote', { who });
   if (event.kind === 'ci_failed' || event.kind === 'ci_passed') {
-    const verb = event.kind === 'ci_failed' ? 'failed' : 'passed';
-    const on = pr ? `#${pr.number}` : (event.subject.branch ?? 'a branch');
-    return `Checks ${verb} on ${on}`;
+    const on = pr ? t('team.requestN', { n: pr.number }) : friendlyBranch(event.subject.branch ?? t('team.aBranch'));
+    return t(event.kind === 'ci_failed' ? 'team.checksFailedOn' : 'team.checksPassedOn', { on });
   }
-  const branch = event.subject.branch ?? 'a branch';
-  return event.subject.forced ? `${who} force-pushed ${branch}` : `${who} pushed ${branch}`;
+  const branch = event.subject.branch ?? t('team.aBranch');
+  return t(event.subject.forced ? 'team.forcePushed' : 'team.pushed', { who, branch });
 }
 
 /** "3 files +10 −2", or "" when unknown. */
 export function statsText(stats?: { files: number; additions: number; deletions: number } | null): string {
   if (!stats || stats.files === 0) return '';
-  return `${plural(stats.files, 'file')} +${stats.additions} −${stats.deletions}`;
+  return `${t('team.files', { count: stats.files })} +${stats.additions} −${stats.deletions}`;
 }
 
 /** The muted second line: project · branch · files ± · PR title. */
@@ -472,11 +499,11 @@ export function cardMeta(event: TeamEvent): string {
   const parts = [event.project.name];
   const pr = event.subject.pr;
   if (pr?.title) parts.push(pr.title);
-  if (event.subject.branch) parts.push(event.subject.base ? `${event.subject.branch} → ${event.subject.base}` : event.subject.branch);
+  if (event.subject.branch) parts.push(event.subject.base ? t('team.branchInto', { from: friendlyBranch(event.subject.branch), to: friendlyBranch(event.subject.base) }) : friendlyBranch(event.subject.branch));
   const stats = statsText(event.subject.stats);
   if (stats) parts.push(stats);
   const failed = event.subject.ci?.failedJobs ?? [];
-  if (event.kind === 'ci_failed' && failed.length > 0) parts.push(`${failed.join(', ')} failed`);
+  if (event.kind === 'ci_failed' && failed.length > 0) parts.push(t('team.failedJobs', { jobs: failed.join(', ') }));
   return parts.filter(Boolean).join(' · ');
 }
 
@@ -500,12 +527,12 @@ export function tellLabel(members: string[]): string {
 export function draftTitle(draft: TeamDraft): string {
   const e = draft.event;
   const pr = e.subject.pr;
-  if (pr && (e.kind === 'pr_opened' || e.kind === 'pr_ready')) return `PR #${pr.number} is open${pr.title ? ` · ${pr.title}` : ''}`;
-  if (e.kind === 'please_review') return `Ask for a review of ${pr ? `#${pr.number}` : (e.subject.branch ?? 'a branch')}`;
-  if (e.kind === 'note') return 'A note for the team';
-  const who = e.actor.agent?.label ?? 'You';
+  if (pr && (e.kind === 'pr_opened' || e.kind === 'pr_ready')) return `${t('team.draftOpen', { what: reviewRequest(pr.number, true) })}${pr.title ? ` · ${pr.title}` : ''}`;
+  if (e.kind === 'please_review') return t('team.draftAsk', { what: pr ? t('team.requestN', { n: pr.number }) : friendlyBranch(e.subject.branch ?? t('team.aBranch')) });
+  if (e.kind === 'note') return t('team.draftNote');
+  const who = e.actor.agent?.label ?? t('team.you');
   const stats = statsText(e.subject.stats);
-  return `${who} pushed ${e.subject.branch ?? 'a branch'}${stats ? ` · ${stats}` : ''}`;
+  return `${t('team.pushed', { who, branch: e.subject.branch ?? t('team.aBranch') })}${stats ? ` · ${stats}` : ''}`;
 }
 
 /** Which actions a teammate card shows. At most two buttons, plus Dismiss. */
@@ -531,23 +558,28 @@ export function cardActions(card: TeamCard): CardActions {
   return { primary: null, mergeWhenGreen, note: card.local.note };
 }
 
+/** "merge invoices work into billing": what a queued update does, with no git words. */
+export function mergeWork(job: Pick<TeamJob, 'theirBranch' | 'into'>): string {
+  return t('team.mergeWork', { from: friendlyBranch(job.theirBranch), to: friendlyBranch(job.into) });
+}
+
 /** The bold line of a queued update's card. */
 export function jobTitle(job: TeamJob): string {
   switch (job.state) {
     case 'waiting':
-      return `Queued: bring ${job.theirBranch} into ${job.into}`;
+      return t('team.job.queued', { work: mergeWork(job) });
     case 'needs_start':
-      return `${plural(job.conflicts.length, 'conflict')} to resolve: ${job.theirBranch} into ${job.into}`;
+      return t('team.job.conflicts', { count: job.conflicts.length, work: mergeWork(job) });
     case 'working':
-      return job.agentRan ? `${job.agentLabel} is merging ${job.theirBranch}` : `Merging ${job.theirBranch}`;
+      return job.agentRan ? t('team.job.merging', { agent: job.agentLabel, branch: friendlyBranch(job.theirBranch) }) : t('team.job.mergingPlain', { branch: friendlyBranch(job.theirBranch) });
     case 'ready':
-      return `${job.into} is up to date, in a separate copy`;
+      return t('team.job.ready', { into: friendlyBranch(job.into) });
     case 'failed':
-      return `Couldn't bring ${job.theirBranch} into ${job.into}`;
+      return t('team.job.failed', { from: friendlyBranch(job.theirBranch), to: friendlyBranch(job.into) });
     case 'applied':
-      return `Applied to ${job.into}`;
+      return t('team.job.applied', { into: friendlyBranch(job.into) });
     default:
-      return `Discarded the update of ${job.into}`;
+      return t('team.job.discarded', { into: friendlyBranch(job.into) });
   }
 }
 

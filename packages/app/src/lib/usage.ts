@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { getLanguage, t } from '../i18n';
 import { loadSettings } from './settings';
 
 /** The event the desktop sends (`usage::EVENT`). */
@@ -70,7 +71,7 @@ export const usageApi: UsageApi = {
 
 /** "9h 55m", "12d 1h", "45m", "now". */
 export function formatLeft(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) return 'now';
+  if (!Number.isFinite(ms) || ms <= 0) return t('state.usage.now');
   const mins = Math.max(1, Math.round(ms / 60_000));
   const d = Math.floor(mins / 1440);
   const h = Math.floor((mins % 1440) / 60);
@@ -82,13 +83,13 @@ export function formatLeft(ms: number): string {
 
 /** The same wait in words, one unit: "12 days", "9 hours", "40 min". Under a minute: "a moment". */
 export function formatLeftLong(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) return 'a moment';
+  if (!Number.isFinite(ms) || ms <= 0) return t('state.usage.moment');
   const mins = Math.max(1, Math.round(ms / 60_000));
   const days = Math.floor(mins / 1440);
-  if (days >= 1) return `${days} ${days === 1 ? 'day' : 'days'}`;
+  if (days >= 1) return t('state.usage.days', { count: days });
   const hours = Math.floor(mins / 60);
-  if (hours >= 1) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
-  return `${mins} min`;
+  if (hours >= 1) return t('state.usage.hours', { count: hours });
+  return t('state.usage.min', { count: mins });
 }
 
 /** The window the chip shows: the fullest one. */
@@ -139,20 +140,20 @@ export function formatTokens(n: number): string {
 export function totalsText(totals: UsageTotals): string {
   const quiet = totals.today.cost <= 0 && totals.today.tokens <= 0;
   const span = quiet ? totals.week : totals.today;
-  return `${formatCost(span.cost)} ${quiet ? 'this week' : 'today'} · ${formatTokens(span.tokens)} tokens`;
+  return t(quiet ? 'state.usage.totalsWeek' : 'state.usage.totalsToday', { cost: formatCost(span.cost), tokens: formatTokens(span.tokens) });
 }
 
 /** The words after the icon. */
 export function chipText(row: UsageRow, now: number): string {
-  if (row.state === 'expired') return 'Sign-in expired';
+  if (row.state === 'expired') return t('state.usage.signInExpired');
   if (row.state === 'limited') {
-    return row.limited_until_ms && row.limited_until_ms > now ? `Limit reached · resets in ${formatLeftLong(row.limited_until_ms - now)}` : 'Limit reached';
+    return row.limited_until_ms && row.limited_until_ms > now ? t('state.usage.limitResets', { time: formatLeftLong(row.limited_until_ms - now) }) : t('state.usage.limitReached');
   }
   const top = headline(row);
   if (row.state === 'ok' && row.totals && !top) return totalsText(row.totals);
-  if (row.state === 'unknown' || !top) return 'Usage not shared';
-  const pct = `${Math.round(top.used_percent)}% used`;
-  return top.resets_at_ms && top.resets_at_ms > now ? `${pct} · resets in ${formatLeftLong(top.resets_at_ms - now)}` : pct;
+  if (row.state === 'unknown' || !top) return t('state.usage.notShared');
+  const pct = Math.round(top.used_percent);
+  return top.resets_at_ms && top.resets_at_ms > now ? t('state.usage.pctUsedResets', { pct, time: formatLeftLong(top.resets_at_ms - now) }) : t('state.usage.pctUsed', { pct });
 }
 
 /** What a status-bar group shows: icon, percent, a tiny bar, the time to reset. Null `pct` = a word instead (see `chipText`). */
@@ -177,8 +178,9 @@ export function groupSentence(row: UsageRow, now: number): string | null {
   const g = groupParts(row, now);
   if (g.pct === null) return null;
   const top = headline(row) as UsageWindow;
-  const when = top.resets_at_ms && top.resets_at_ms > now ? `, resets in ${formatLeftLong(top.resets_at_ms - now)}` : '';
-  return `${rowName(row)}: ${g.pct}% used${when}`;
+  return top.resets_at_ms && top.resets_at_ms > now
+    ? t('state.usage.sentenceResets', { name: rowName(row), pct: g.pct, time: formatLeftLong(top.resets_at_ms - now) })
+    : t('state.usage.sentence', { name: rowName(row), pct: g.pct });
 }
 
 /** Who the row is: "Codex CLI" or "Codex CLI (Work)". */
@@ -187,27 +189,31 @@ export function rowName(row: UsageRow): string {
 }
 
 function clock(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  return new Date(ms).toLocaleString(getLanguage() === 'zh-TW' ? 'zh-TW' : undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 /** The tooltip: sign-in, plan, each window with its reset, and why when there are no numbers. */
 export function tooltip(row: UsageRow, now: number): string {
-  const lines = [rowName(row), `Sign-in: ${row.account_label ?? 'main login'}`];
-  if (row.plan) lines.push(`Plan: ${row.plan}`);
+  const lines = [rowName(row), t('state.usage.signIn', { name: row.account_label ?? t('state.usage.mainLogin') })];
+  if (row.plan) lines.push(t('state.usage.plan', { plan: row.plan }));
   for (const w of row.windows) {
-    const reset = w.reset_since ? 'started again' : w.resets_at_ms ? `resets in ${formatLeftLong(w.resets_at_ms - now)} (${clock(w.resets_at_ms)})` : 'reset time unknown';
-    lines.push(`${w.name}: ${Math.round(w.used_percent)}% used, ${reset}`);
+    const reset = w.reset_since
+      ? t('state.usage.startedAgain')
+      : w.resets_at_ms
+        ? t('state.usage.resetsAt', { time: formatLeftLong(w.resets_at_ms - now), at: clock(w.resets_at_ms) })
+        : t('state.usage.resetUnknown');
+    lines.push(t('state.usage.windowLine', { name: w.name, pct: Math.round(w.used_percent), reset }));
   }
   if (row.totals) {
-    lines.push(`Today: ${formatCost(row.totals.today.cost)}, ${formatTokens(row.totals.today.tokens)} tokens`);
-    lines.push(`Last 7 days: ${formatCost(row.totals.week.cost)}, ${formatTokens(row.totals.week.tokens)} tokens`);
+    lines.push(t('state.usage.todayLine', { cost: formatCost(row.totals.today.cost), tokens: formatTokens(row.totals.today.tokens) }));
+    lines.push(t('state.usage.weekLine', { cost: formatCost(row.totals.week.cost), tokens: formatTokens(row.totals.week.tokens) }));
   }
   if (row.state === 'limited') {
-    lines.push(row.limited_until_ms && row.limited_until_ms > now ? `Limit reached until ${clock(row.limited_until_ms)}` : 'Limit reached');
+    lines.push(row.limited_until_ms && row.limited_until_ms > now ? t('state.usage.limitUntil', { at: clock(row.limited_until_ms) }) : t('state.usage.limitReached'));
   }
   if (row.reason) lines.push(row.reason);
-  if (row.observed_at_ms) lines.push(`Reported ${formatLeftLong(now - row.observed_at_ms)} ago`);
-  if (row.page) lines.push('Click to open its usage page');
+  if (row.observed_at_ms) lines.push(t('state.usage.reported', { time: formatLeftLong(now - row.observed_at_ms) }));
+  if (row.page) lines.push(t('state.usage.openPage'));
   return lines.join('\n');
 }
 

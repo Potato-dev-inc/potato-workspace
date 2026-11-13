@@ -138,9 +138,9 @@ mod runtime {
         let Some(window) = app.get_webview_window(LABEL) else { return };
         let Some(rect) = monitor_rect(app) else { return };
         let width = fit_width(wanted, rect.2, rect.3);
-        let _ = window.set_size(tauri::LogicalSize::new(width, HEIGHT));
+        let _ = crate::window_layout::own_window::set_size(&window, tauri::LogicalSize::new(width, HEIGHT));
         let (x, y) = top_center_for(rect.0, rect.1, rect.2, rect.3, width);
-        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+        let _ = crate::window_layout::own_window::set_position(&window, tauri::LogicalPosition::new(x, y));
     }
 
     /// Note that the person just switched to Individual: the bar offers Undo for `TOAST_MS`.
@@ -172,7 +172,7 @@ mod runtime {
         std::thread::spawn(move || {
             if let Some(window) = app.get_webview_window(LABEL) {
                 if let Some((x, y)) = position(&app) {
-                    let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+                    let _ = crate::window_layout::own_window::set_position(&window, tauri::LogicalPosition::new(x, y));
                 }
                 let _ = window.show();
                 let _ = window.set_always_on_top(true);
