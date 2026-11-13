@@ -18,6 +18,7 @@ import { HiddenAgentsRow } from '../blocks/HiddenAgentsRow';
 import { PreloadSettings } from '../blocks/PreloadSettings';
 import { HANDOFF_MODE_HINT, HANDOFF_MODE_LABEL, QuickHandoffRows } from '../blocks/QuickHandoffRows';
 import { useEffect, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import { agentHealthApi, type AgentHealth } from '../../../lib/agent-health';
 import { DEV_LABS_KEYS } from '../../../lib/dev-labs';
 import { SETUP_CHECK_ROW_ID } from '../../../lib/openSettingsAt';
@@ -48,6 +49,7 @@ function useOptInAgents(): AgentHealth[] {
 }
 
 function LiveUpdates({ env }: { env: SettingsEnv }) {
+  const t = useT();
   // 'evidence' is a later step that has no control yet; it reads as watch only here.
   const value = env.settings.agent_hooks_mode === 'off' ? 'off' : 'shadow';
   const optIn = useOptInAgents();
@@ -60,22 +62,22 @@ function LiveUpdates({ env }: { env: SettingsEnv }) {
   return (
     <>
       <SettingRow
-        label="Live updates"
-        description="Claude and Codex tell Potato Workspace when they start, ask and finish. For now it is only recorded; Potato Workspace never acts on it."
+        label={t('settings.row.live-updates.label')}
+        description={t('liveUpdates.help')}
       >
         <Popup
-          aria-label="Live updates"
+          aria-label={t('settings.row.live-updates.label')}
           value={value}
           onChange={(event) => void env.patch({ agent_hooks_mode: event.target.value as 'off' | 'shadow' })}
         >
-          <option value="shadow">Watch only</option>
-          <option value="off">Off</option>
+          <option value="shadow">{t('liveUpdates.watchOnly')}</option>
+          <option value="off">{t('telegram.off')}</option>
         </Popup>
       </SettingRow>
       {optIn.map((r) => (
         <SettingToggle
           key={r.id}
-          label={`Live updates from ${r.label}`}
+          label={t('liveUpdates.from', { agent: r.label })}
           description={r.hooks?.opt_in_note ?? undefined}
           checked={value !== 'off' && isOn(r)}
           disabled={value === 'off'}
@@ -145,8 +147,8 @@ export const agentsRows: RowDef[] = [
     keywords: 'bring import old previous chats history agents list',
     group: 'Your chats',
     render: () => (
-      <SettingRow label="Bring my chats" description="Pick an agent, see its newest chats and bring the ones you want. Nothing leaves this computer.">
-        <Btn onClick={() => requestBringChats()}>Bring chats</Btn>
+      <SettingRow label={t('agentsRows.bringLabel')} description={t('agentsRows.bringHelp')}>
+        <Btn onClick={() => requestBringChats()}>{t('agentsRows.bringBtn')}</Btn>
       </SettingRow>
     ),
   },
@@ -174,8 +176,8 @@ export const agentsRows: RowDef[] = [
     group: 'Helpers',
     render: (env) => (
       <SettingToggle
-        label="Potato Workspace helpers inside agents"
-        description="Panes you open here get the helper tools. Your agent settings files are not changed."
+        label={t('agentsRows.helperToolsLabel')}
+        description={t('agentsRows.helperToolsHelp')}
         checked={env.settings.pane_mcp_enabled ?? true}
         onChange={(value) => void env.patch({ pane_mcp_enabled: value })}
       />

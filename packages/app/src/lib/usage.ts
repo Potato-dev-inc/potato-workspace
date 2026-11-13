@@ -183,6 +183,97 @@ export function groupSentence(row: UsageRow, now: number): string | null {
     : t('state.usage.sentence', { name: rowName(row), pct: g.pct });
 }
 
+// ---- Usage forecast (proposal 27): "at this pace you hit the limit at about 15:40". A guess, always said as "about". ----
+
+/** The pace is the change over this many minutes. */
+export const PACE_SPAN_MS = 30 * 60_000;
+/** Less data than this and there is no pace: show nothing. */
+export const PACE_MIN_DATA_MS = 15 * 60_000;
+/** A last sample older than this means no fresh numbers: show nothing. */
+export const PACE_STALE_MS = 10 * 60_000;
+/** Snapshots closer than this replace the last sample instead of adding one. */
+const PACE_SAMPLE_GAP_MS = 60_000;
+
+export interface PaceSample {
+  at: number;
+  pct: number;
+}
+
+/** Recent percent samples per limit window of each sign-in, in memory (the last 30 minutes). */
+const paceHistory = new Map<string, PaceSample[]>();
+
+function paceKeyOf(row: UsageRow, windowName: string): string {
+  return `${row.agent_id}:${row.account_id ?? ''}:${windowName}`;
+}
+
+/** Forget every sample (tests, and a new session). */
+export function resetPaceHistory(): void {
+  paceHistory.clear();
+}
+
+/** Note the fullest window's percent at `now`. A drop in percent (a new window) or no numbers starts the history again. */
+export function notePace(row: UsageRow, now: number): void {
+  const top = row.state === 'ok' ? headline(row) : null;
+  if (!top) return;
+  const key = paceKeyOf(row, top.name);
+  if (top.reset_since) {
+    paceHistory.delete(key);
+    return;
+  }
+  let samples = paceHistory.get(key) ?? [];
+  if (samples.length && top.used_percent < samples[samples.length - 1].pct) samples = [];
+  const last = samples[samples.length - 1];
+  if (last && now - last.at < PACE_SAMPLE_GAP_MS) last.pct = top.used_percent;
+  else samples.push({ at: now, pct: top.used_percent });
+  paceHistory.set(
+    key,
+    samples.filter((s) => s.at >= now - PACE_SPAN_MS),
+  );
+}
+
+/** Percent per minute over the last 30 minutes, or null with less than 15 minutes of fresh data. */
+export function paceOf(samples: PaceSample[], now: number): number | null {
+  const win = samples.filter((s) => s.at >= now - PACE_SPAN_MS && s.at <= now);
+  if (win.length < 2) return null;
+  const first = win[0];
+  const last = win[win.length - 1];
+  if (now - last.at > PACE_STALE_MS) return null;
+  const span = last.at - first.at;
+  if (span < PACE_MIN_DATA_MS) return null;
+  return (last.pct - first.pct) / (span / 60_000);
+}
+
+export interface Forecast {
+  /** When the limit comes at this pace. */
+  hitAt: number;
+  /** When the window resets. The limit must come before it to show. */
+  resetsAt: number;
+}
+
+/** The forecast for the fullest window, or null: no pace, no reset time, a pace that falls, or a limit after the reset. */
+export function forecastOf(row: UsageRow, now: number): Forecast | null {
+  if (row.state !== 'ok') return null;
+  const top = headline(row);
+  if (!top || top.reset_since || !top.resets_at_ms || top.resets_at_ms <= now || top.used_percent >= 100) return null;
+  const rate = paceOf(paceHistory.get(paceKeyOf(row, top.name)) ?? [], now);
+  if (rate === null || rate <= 0) return null;
+  const hitAt = now + ((100 - top.used_percent) / rate) * 60_000;
+  if (hitAt >= top.resets_at_ms) return null;
+  return { hitAt, resetsAt: top.resets_at_ms };
+}
+
+/** "15:40", or "Sat 15:40" when it is not today. */
+function clockAt(ms: number, now: number): string {
+  const lang = getLanguage() === 'zh-TW' ? 'zh-TW' : undefined;
+  const sameDay = new Date(ms).toDateString() === new Date(now).toDateString();
+  return new Date(ms).toLocaleString(lang, sameDay ? { hour: '2-digit', minute: '2-digit' } : { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+/** "At this pace you hit the limit at about 15:40 · resets 17:00". */
+export function forecastText(f: Forecast, now: number): string {
+  return t('state.usage.forecast', { hit: clockAt(f.hitAt, now), reset: clockAt(f.resetsAt, now) });
+}
+
 /** Who the row is: "Codex CLI" or "Codex CLI (Work)". */
 export function rowName(row: UsageRow): string {
   return row.account_label ? `${row.label} (${row.account_label})` : row.label;

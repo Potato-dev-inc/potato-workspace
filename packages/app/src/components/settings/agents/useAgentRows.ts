@@ -1,6 +1,7 @@
 // The data the Agents list and an agent's page draw: the registered agents, how each stands (installed, signed in)
 // and what the app has proof each can do. Each source fails on its own: no desktop shell means no chips, not no list.
 import { useEffect, useState } from 'react';
+import { t } from '../../../i18n';
 import { agentCapsApi, type AgentCaps, type AgentCapsApi } from '../../../lib/agentCaps';
 import { agentHealthApi, type AgentHealth, type AgentHealthApi, type HealthState } from '../../../lib/agent-health';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
@@ -33,16 +34,16 @@ export const defaultRowsApi: AgentRowsApi = {
 
 /** One short phrase for how the agent stands. "Ready" is not "signed in": the check only says it can start. */
 export function standingWords(row: Pick<AgentRow, 'installed' | 'state'>): string {
-  if (!row.installed || row.state === 'not_installed') return 'Not installed';
+  if (!row.installed || row.state === 'not_installed') return t('keepGoing.notInstalled');
   switch (row.state) {
     case 'ready':
-      return 'Ready';
+      return t('agentList.ready');
     case 'needs_login':
-      return 'Not signed in';
+      return t('agentList.notSignedIn');
     case 'error':
-      return 'Did not start';
+      return t('agentList.didNotStart');
     default:
-      return 'Not checked yet';
+      return t('linux.notChecked');
   }
 }
 

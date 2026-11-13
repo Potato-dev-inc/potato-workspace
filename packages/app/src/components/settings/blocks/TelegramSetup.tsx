@@ -2,6 +2,8 @@
 // shows it again, not even its last digits. Step 2 pairs one chat. Then the person turns the bot on and
 // picks what it may do. Telegram is a third party, so the warning at the top always shows.
 import { errorSentence } from '../../../lib/sayError';
+import { en } from '../../../i18n/en';
+import { t, useT } from '../../../i18n';
 import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
 import {
   onTelegramChanged,
@@ -19,13 +21,12 @@ import type { SettingsEnv } from '../model';
 import { Btn, FieldInput, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
 import { nameOf, TelegramPairing } from './TelegramPairing';
 
-export const TELEGRAM_WARNING =
-  "Telegram is a third party. Everything this bot sends and receives is stored on Telegram's servers and is not end-to-end encrypted. Potato Workspace hides secrets, emails and folder names, but agent questions and replies are sent as text. Don't use this for work you must keep private.";
-
-export const TELEGRAM_FOOTER = 'When your PC sleeps or Potato Workspace is closed, the bot is silent.';
-export const TELEGRAM_AUDIT = 'See Telegram actions in Security > Audit.';
-export const NO_STORE = "This computer has no safe place for the token, so Telegram can't be used.";
-export const DISCONNECT_BODY = 'Forget the bot token and the chat? You can connect again later.';
+// The English wording is the catalog's (i18n/en/settingsTelegram.ts); these exports are what the tests compare against.
+export const TELEGRAM_WARNING = en['telegram.warning'];
+export const TELEGRAM_FOOTER = en['telegram.footer'];
+export const TELEGRAM_AUDIT = en['telegram.audit'];
+export const NO_STORE = en['telegram.noStore'];
+export const DISCONNECT_BODY = en['telegram.disconnectBody'];
 
 /** While the link is connecting or on, the block asks the PC again this often, in case an event was missed. */
 export const STATUS_POLL_MS = 3000;
@@ -35,32 +36,32 @@ export const STRANGERS_WARN_AT = 50;
 
 /** What each capability lets the bot do. `control` is not offered: starting agents stays on this PC. */
 export const TELEGRAM_CAPS: { cap: TelegramCap; label: string }[] = [
-  { cap: 'watch', label: 'See status and replies' },
-  { cap: 'answer', label: 'Answer questions' },
-  { cap: 'type', label: 'Send messages to agents' },
+  { cap: 'watch', label: en['telegram.cap.watch'] },
+  { cap: 'answer', label: en['telegram.cap.answer'] },
+  { cap: 'type', label: en['telegram.cap.type'] },
 ];
 
 export const ERROR_TEXT: Record<NonNullable<TelegramStatus['error']>, string> = {
-  token_rejected: 'Telegram no longer accepts this token. Paste a new one.',
-  conflict: 'Another program is using this bot. Make a new token in BotFather (/revoke) and paste it here.',
-  webhook_set: 'This bot already sends its messages to a website. Make a new bot for Potato Workspace.',
-  blocked: "The bot can't write to you. Did you block it?",
-  network: "Can't reach Telegram right now. Potato Workspace keeps trying.",
+  token_rejected: en['telegram.error.token_rejected'],
+  conflict: en['telegram.error.conflict'],
+  webhook_set: en['telegram.error.webhook_set'],
+  blocked: en['telegram.error.blocked'],
+  network: en['telegram.error.network'],
 };
 
 /** "12 s" or "3 min": how long ago the last check was. */
 export function agoText(ms: number): string {
   const secs = Math.max(0, Math.floor(ms / 1000));
-  return secs < 60 ? `${secs} s ago` : `${Math.floor(secs / 60)} min ago`;
+  return secs < 60 ? t('telegram.agoSecs', { n: secs }) : t('telegram.agoMins', { n: Math.floor(secs / 60) });
 }
 
 /** The one status line: the error sentence first, then the state. */
 export function statusLine(s: TelegramStatus, now: number): string {
-  if (s.error) return ERROR_TEXT[s.error];
-  if (s.state === 'on') return s.lastPollAtMs == null ? 'On' : `On · last check ${agoText(now - s.lastPollAtMs)}`;
-  if (s.state === 'connecting') return 'Connecting…';
-  if (s.state === 'error') return 'Stopped. Turn it on again to retry.';
-  return 'Off';
+  if (s.error) return t(`telegram.error.${s.error}`);
+  if (s.state === 'on') return s.lastPollAtMs == null ? t('telegram.on') : t('telegram.onLast', { ago: agoText(now - s.lastPollAtMs) });
+  if (s.state === 'connecting') return t('telegram.connecting');
+  if (s.state === 'error') return t('telegram.stopped');
+  return t('telegram.off');
 }
 
 /** The seam the block talks through: the Tauri wrappers in production, a fake in tests. */
@@ -93,6 +94,7 @@ export const telegramApi: TelegramApi = {
 const errText = (err: unknown): string => (errorSentence(err));
 
 export function TelegramSetup({ env, api = telegramApi }: { env: SettingsEnv; api?: TelegramApi }) {
+  const t = useT();
   const [status, setStatus] = useState<TelegramStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -158,7 +160,7 @@ export function TelegramSetup({ env, api = telegramApi }: { env: SettingsEnv; ap
   };
 
   const disconnect = async () => {
-    const ok = await env.confirm({ title: 'Disconnect Telegram?', body: DISCONNECT_BODY, confirmLabel: 'Disconnect' });
+    const ok = await env.confirm({ title: t('telegram.disconnectTitle'), body: t('telegram.disconnectBody'), confirmLabel: t('telegram.disconnect') });
     if (ok) void change(() => api.forget());
   };
 
@@ -176,43 +178,43 @@ export function TelegramSetup({ env, api = telegramApi }: { env: SettingsEnv; ap
 
   return (
     <>
-      <div className="st-tg-warn">{TELEGRAM_WARNING}</div>
+      <div className="st-tg-warn">{t('telegram.warning')}</div>
       {error && <Note role="alert">{error}</Note>}
       {s && (
         <>
-          <SettingBlock label="Step 1 · Make a bot" description="In Telegram, open @BotFather, send /newbot, pick a name, copy the token.">
+          <SettingBlock label={t('telegram.step1')} description={t('telegram.step1Help')}>
             <div className="st-tg-token">
               <FieldInput
-                aria-label="Bot token"
+                aria-label={t('telegram.tokenAria')}
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
                 disabled={!s.storeAvailable || busy}
                 value={draft}
-                placeholder={s.tokenSet ? 'Paste a new token to replace it' : 'Paste the token here'}
+                placeholder={s.tokenSet ? t('telegram.tokenReplace') : t('telegram.tokenHere')}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === 'Enter') check();
                 }}
               />
               <Btn small disabled={!s.storeAvailable || busy || !draft.trim()} onClick={check}>
-                Check
+                {t('telegram.check')}
               </Btn>
             </div>
             {!s.storeAvailable ? (
-              <Note role="alert">{NO_STORE}</Note>
+              <Note role="alert">{t('telegram.noStore')}</Note>
             ) : (
-              s.tokenSet && <Note role="status">{`${s.botUsername ? `@${s.botUsername} ✓` : 'Token saved'} · kept in ${s.storeLabel}`}</Note>
+              s.tokenSet && <Note role="status">{`${s.botUsername ? `@${s.botUsername} ✓` : t('telegram.tokenSaved')} · ${t('telegram.keptIn', { store: s.storeLabel })}`}</Note>
             )}
           </SettingBlock>
 
           {s.tokenSet && (
             <SettingBlock
-              label="Step 2 · Connect your chat"
-              description={s.paired ? 'Only this chat can talk to Potato Workspace.' : 'Make a code and send it to your bot. Only that chat can talk to Potato Workspace.'}
+              label={t('telegram.step2')}
+              description={s.paired ? t('telegram.step2Paired') : t('telegram.step2Help')}
             >
               {s.paired ? (
-                <Note role="status">{`Connected to ${nameOf(s.paired)}.`}</Note>
+                <Note role="status">{t('telegram.connectedTo', { name: nameOf(s.paired) })}</Note>
               ) : (
                 <TelegramPairing
                   status={s}
@@ -228,35 +230,35 @@ export function TelegramSetup({ env, api = telegramApi }: { env: SettingsEnv; ap
           {s.paired && (
             <>
               <SettingToggle
-                label="Telegram on"
+                label={t('telegram.onLabel')}
                 description={statusLine(s, now)}
                 checked={s.enabled}
                 disabled={busy}
                 onChange={(on) => void change(() => api.setEnabled(on))}
               />
               {s.strangersLastHour >= STRANGERS_WARN_AT && (
-                <Note role="alert">Strangers are writing to your bot. If you didn't share it, make a new token.</Note>
+                <Note role="alert">{t('telegram.strangers')}</Note>
               )}
-              <SettingBlock label="What Telegram may do" description="Starting and stopping agents and settings stay on this PC." />
-              {TELEGRAM_CAPS.map(({ cap, label }) => (
+              <SettingBlock label={t('telegram.mayDo')} description={t('telegram.mayDoHelp')} />
+              {TELEGRAM_CAPS.map(({ cap }) => (
                 <SettingToggle
                   key={cap}
-                  label={label}
+                  label={t(`telegram.cap.${cap}`)}
                   checked={s.caps.includes(cap)}
                   disabled={busy}
                   onChange={(on) => toggleCap(cap, on)}
                 />
               ))}
               <SettingToggle
-                label="Tell me when a run finishes"
-                description="Also sends a message when a run ends or fails."
+                label={t('telegram.notifyRuns')}
+                description={t('telegram.notifyRunsHelp')}
                 checked={s.notifyRuns}
                 disabled={busy}
                 onChange={(on) => saveOptions({ notifyRuns: on })}
               />
               <SettingToggle
-                label="Short messages only (no agent text)"
-                description={'Only "needs you" messages. No agent text is sent.'}
+                label={t('telegram.short')}
+                description={t('telegram.shortHelp')}
                 checked={s.shortMode}
                 disabled={busy}
                 onChange={(on) => saveOptions({ shortMode: on })}
@@ -265,13 +267,13 @@ export function TelegramSetup({ env, api = telegramApi }: { env: SettingsEnv; ap
           )}
 
           {(s.tokenSet || s.paired) && (
-            <SettingRow label="Disconnect" description="Forget the bot token and the chat.">
+            <SettingRow label={t('telegram.disconnect')} description={t('telegram.disconnectHelp')}>
               <Btn small disabled={busy} onClick={() => void disconnect()}>
-                Disconnect
+                {t('telegram.disconnect')}
               </Btn>
             </SettingRow>
           )}
-          <Note>{`${TELEGRAM_FOOTER} ${TELEGRAM_AUDIT}`}</Note>
+          <Note>{`${t('telegram.footer')} ${t('telegram.audit')}`}</Note>
         </>
       )}
     </>

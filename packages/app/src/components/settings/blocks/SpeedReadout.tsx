@@ -1,27 +1,24 @@
 // Settings > General: "Speed on this PC". Typical and latest times for starting the app and a chat,
 // worked out on this PC from the app's own log. Nothing is sent anywhere.
 import { useEffect, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import { tauri, type PerfStat, type PerfSummary } from '../../../lib/tauri';
 import { SettingBlock } from '../settings-ui';
 
 function seconds(ms: number): string {
-  return ms < 950 ? `${Math.round(ms / 10) * 10} ms` : `${(ms / 1000).toFixed(1)} s`;
+  return ms < 950 ? t('speed.ms', { n: Math.round(ms / 10) * 10 }) : t('speed.s', { n: (ms / 1000).toFixed(1) });
 }
 
 function describe(stat: PerfStat): string | null {
   if (stat.count === 0 || stat.medianMs === null) return null;
-  const last = stat.lastMs === null ? '' : `, last time ${seconds(stat.lastMs)}`;
-  return `usually ${seconds(stat.medianMs)}${last} (${stat.count} ${stat.count === 1 ? 'time' : 'times'})`;
+  const last = stat.lastMs === null ? '' : t('speed.last', { time: seconds(stat.lastMs) });
+  return t('speed.usually', { time: seconds(stat.medianMs), last, count: stat.count });
 }
 
-const LINES: { key: keyof PerfSummary; label: string }[] = [
-  { key: 'appStart', label: 'Opening the app' },
-  { key: 'chatWarm', label: 'Starting a chat that was ready ahead of time' },
-  { key: 'chatCold', label: 'Starting a chat from scratch' },
-  { key: 'handshake', label: 'Waiting for the agent to say hello' },
-];
+const LINES: { key: keyof PerfSummary }[] = [{ key: 'appStart' }, { key: 'chatWarm' }, { key: 'chatCold' }, { key: 'handshake' }];
 
 export function SpeedReadout() {
+  const t = useT();
   const [summary, setSummary] = useState<PerfSummary | null | undefined>(undefined);
 
   useEffect(() => {
@@ -36,16 +33,16 @@ export function SpeedReadout() {
   }, []);
 
   if (summary === undefined) return null;
-  const rows = summary ? LINES.map((l) => ({ ...l, text: describe(summary[l.key]) })).filter((r) => r.text) : [];
+  const rows = summary ? LINES.map((l) => ({ ...l, label: t(`speed.line.${l.key}`), text: describe(summary[l.key]) })).filter((r) => r.text) : [];
   return (
     <SettingBlock
-      label="Speed on this PC"
-      description="Worked out here from the last 7 days of the app's own log. Nothing is sent anywhere."
+      label={t('speed.title')}
+      description={t('speed.help')}
     >
       {rows.length === 0 ? (
-        <p className="st-note">Nothing measured yet. Numbers appear after you have used the app for a while.</p>
+        <p className="st-note">{t('speed.none')}</p>
       ) : (
-        <ul className="st-diag-list" aria-label="Speed on this PC">
+        <ul className="st-diag-list" aria-label={t('speed.title')}>
           {rows.map((r) => (
             <li key={r.key} className="st-diag-item">
               <span className="st-diag-main">

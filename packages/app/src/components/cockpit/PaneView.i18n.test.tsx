@@ -75,6 +75,9 @@ const show = async () => {
 const EXTRA = ['fix', 'login', 'tests', 'docs', 'shop', 'work', 'Idle', 'Working', 'Waiting', 'Running', 'workshop'];
 const header = () => host.querySelector('.ck-pane-head')!;
 
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+
 describe('pane header and tabs in Traditional Chinese', () => {
   it('shows the tabs, the view switch and the action buttons in Chinese', async () => {
     await show();
@@ -90,7 +93,8 @@ describe('pane header and tabs in Traditional Chinese', () => {
   it('shows the More menu in Chinese and opens the empty transcript state', async () => {
     await show();
     await act(async () => header().querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click());
-    const items = [...host.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent);
+    // The agent's bell rows (通知：...) share the ⋯ menu; this checks the view rows only.
+    const items = [...host.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent).filter((text) => !text?.startsWith('通知：'));
     expect(items).toEqual([t('pane.moreTranscript'), t('pane.moreReceipt'), t('pane.moreHistory')]);
     await act(async () => (host.querySelectorAll<HTMLElement>('[role="menuitem"]')[0]).click());
     await act(async () => {

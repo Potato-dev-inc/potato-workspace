@@ -65,6 +65,9 @@ const show = async (c: CockpitApi) => {
   await act(async () => { await new Promise((r) => setImmediate(r)); });
 };
 
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+
 describe('pane header: one row', () => {
   it('holds the view tabs, Hand off, a ⋯ More button and no second tab bar', async () => {
     await show(cockpit());

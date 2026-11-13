@@ -4,7 +4,7 @@
 // were already stopped, it says so and offers to reopen the chats.
 import { useT } from '../../i18n';
 import type { AppUpdateState } from './useAppUpdate';
-import { runningJobWarning } from '../../lib/app-update';
+import { checkFailureLine, runningJobWarning } from '../../lib/app-update';
 import '../../styles/app-update.css';
 
 export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
@@ -50,6 +50,7 @@ export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
         </>
       )}
       {phase === 'installing' && <span>{t('overview.update.installing')}</span>}
+      {phase === 'failed' && state.failure && <span>{checkFailureLine(state.failure)}</span>}
       {phase === 'stopped' && (
         <>
           <span>{state.reopened ? t('overview.update.reopened') : t('overview.update.stopped', { why: state.error ?? t('overview.update.agentsStopped') })}</span>

@@ -89,7 +89,7 @@ describe('Settings Overview in Traditional Chinese', () => {
 
 describe('Update notice in Traditional Chinese', () => {
   const base: AppUpdateState = {
-    phase: 'available', offer: { currentVersion: '1.0.0', version: '1.0.1', notes: null }, busyAgents: [], busy: { agents: [], chats: [], terminals: [] },
+    phase: 'available', failure: null, offer: { currentVersion: '1.0.0', version: '1.0.1', notes: null }, busyAgents: [], busy: { agents: [], chats: [], terminals: [] },
     percent: null, error: null, reopened: false, check: async () => undefined, update: async () => undefined, restartNow: async () => undefined,
     restartWhenIdle: () => undefined, reopenChats: async () => undefined,
   };

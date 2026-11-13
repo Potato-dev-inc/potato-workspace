@@ -171,7 +171,7 @@ describe('Inbox error card', () => {
     expect(card).toBeTruthy();
     expect(card.textContent).toContain('PowerShell stopped');
     expect(card.textContent).toContain('Your files are as it left them.');
-    const labels = Array.from(card.querySelectorAll('button')).map((b) => b.textContent);
+    const labels = Array.from(card.querySelectorAll('button:not([data-snooze])')).map((b) => b.textContent);
     expect(labels).toEqual(['Open', 'Ask another agent']);
     act(() => (card.querySelector('button') as HTMLElement).click());
     expect(select).toHaveBeenCalledWith('ps');

@@ -8,6 +8,7 @@
 import { SIGN_IN } from '../../lib/glossary';
 import type { BaseSectionDef, RowDef, SectionDef, SectionId, SettingsEnv } from './model';
 import { useDevLabsOverride, DEV_LABS_NOTE } from '../../lib/dev-labs';
+import { t, type MessageKey } from '../../i18n';
 import { Note, SettingBlock } from './settings-ui';
 
 /**
@@ -80,7 +81,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Appearance', rows: ['theme', 'language', 'mode-switch-animation', 'individual-window-layout', 'usage-bar', 'usage-login-reads'] },
     { group: 'You', rows: ['your-name'] },
     { group: 'Startup', rows: ['start-at-sign-in'] },
-    { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes'] },
+    { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours'] },
   ],
   connect: [
     { group: 'Phone', rows: ['pairing', 'paired-devices', { row: 'phone-notifications', label: 'Phone alerts' }] },
@@ -134,17 +135,24 @@ export function layoutRowIds(layout: Partial<Record<SectionId, LayoutGroup[]>> =
 
 // ---------- the rows this file adds ----------
 
+/** The translation of a Labs name or description, or the English from the row. */
+function labsText(id: string, part: 'name' | 'about', english: string | undefined): string | undefined {
+  const key = `labs.${id}.${part}`;
+  const text = t(key as MessageKey);
+  return text === key ? english : text;
+}
+
 function LabsIndex({ env, labs }: { env: SettingsEnv; labs: RowDef[] }) {
   const devLabs = useDevLabsOverride();
   return (
-    <SettingBlock label="Early features" description="Tap one to jump to its switch.">
+    <SettingBlock label={t('settings.row.labs-index.label')} description={t('settings.row.labs-index.hint')}>
       {devLabs && <Note>{DEV_LABS_NOTE}</Note>}
       <ul className="st-labs-list">
         {labs.map((row) => (
           <li key={row.id}>
             <button type="button" className="st-labs-item" onClick={() => env.openRow?.(row.id)}>
-              <span className="st-labs-name">{row.labs?.name}</span>
-              <span className="st-labs-about">{row.labs?.about}</span>
+              <span className="st-labs-name">{labsText(row.id, 'name', row.labs?.name)}</span>
+              <span className="st-labs-about">{labsText(row.id, 'about', row.labs?.about)}</span>
             </button>
           </li>
         ))}

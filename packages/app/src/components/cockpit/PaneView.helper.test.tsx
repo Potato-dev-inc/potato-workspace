@@ -57,6 +57,9 @@ afterEach(() => {
 
 const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+
 describe('helper pane header', () => {
   it('names the parent and opens it', async () => {
     const c = cockpit([mk('p', 'Refactor auth'), mk('h', 'Check tests', 'p')], 'h');

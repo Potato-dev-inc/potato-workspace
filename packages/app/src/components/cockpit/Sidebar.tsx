@@ -31,6 +31,7 @@ import { RowMark } from './RowMark';
 import { ProjectHeader, ProjectMeta, type ProjectSignal } from './ProjectHeader';
 import { groupByBranch, primaryBranch, projectChanges, usePaneCards } from './useProjectCard';
 import { SidebarFooter } from './SidebarFooter';
+import { dragSourceProps } from '../dnd/dragSourceProps';
 import { bindingLabel, isMacPlatform } from '../../lib/shortcuts';
 import { groupByProject, useFoldedProjects, useGroupBy, useSidebarProjects } from '../../lib/sidebarProjects';
 import { formatElapsed, spinnerStatus } from './model';
@@ -41,6 +42,7 @@ import { LastTurnContext } from './away-context';
 import { projectWithCopy } from './shell-labels';
 import type { CompanionView } from '../../lib/companion';
 import { CompanionRow, MakeCompanionRow } from './companion/CompanionRow';
+import { companionMood, useJustFinished, useLocalHour } from '../../lib/companionMood';
 import { isCompanionPaneId } from './companion/model';
 import { useReviewCount } from './review/useReviewCount';
 import { ClosedChatsSheet } from './ClosedChatsSheet';
@@ -169,6 +171,11 @@ export function Sidebar({
       return next;
     });
   const waiting = blockingItems(needs).length;
+  // The companion's mood: agents waiting or working, a run that just finished, the time of day.
+  const hour = useLocalHour();
+  const workingCount = grouped.working.length;
+  const justFinished = useJustFinished(workingCount);
+  const waitingName = grouped.needs.length === 1 ? (c.names.get(grouped.needs[0].pane.info.id) ?? null) : null;
   // Questions agents asked through ask_user: they belong to no pane row, so they get a row of their own.
   const asks = itemsOfKind(blockingItems(needs), 'question').length;
   const multiLogin = multiLoginAgents(list.map((p) => p.info));
@@ -327,6 +334,7 @@ export function Sidebar({
           data-pane-row={id}
           className={`ck-row ck-row--slim${active ? ' is-active' : ''}${asking ? ' is-needs' : ''}${broken ? ' is-error' : ''}${calm ? (p.status === 'idle' ? ' is-idle' : ' is-ended') : ''}`}
           onClick={() => c.select(id)}
+          {...dragSourceProps({ kind: 'chat', id, label: heading.primary })}
           onContextMenu={(e) => {
             e.preventDefault();
             rowMenuFrom.current = e.currentTarget;
@@ -682,16 +690,24 @@ export function Sidebar({
 
       <nav className="ck-side-scroll">
         {companions &&
-          (companions.length === 0
-            ? onNewCompanion && <MakeCompanionRow onMake={onNewCompanion} />
-            : companions.map((companion) => (
-                <CompanionRow
-                  key={companion.id}
-                  companion={companion}
-                  active={openCompanionId === companion.id}
-                  onOpen={() => onOpenCompanion?.(companion.id)}
-                />
-              )))}
+          companions.map((companion) => (
+            <CompanionRow
+              key={companion.id}
+              companion={companion}
+              mood={companionMood({
+                state: companion.state,
+                waiting,
+                waitingName,
+                working: workingCount,
+                agents: panes.length,
+                notes: companion.pendingMemory,
+                justFinished,
+                hour,
+              })}
+              active={openCompanionId === companion.id}
+              onOpen={() => onOpenCompanion?.(companion.id)}
+            />
+          ))}
         <button
           type="button"
           className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !spacesOpen ? ' is-active' : ''}`}
@@ -728,6 +744,7 @@ export function Sidebar({
             <BringChatsLink className="bc-link ck-side-bring" label={t('sidebar.bringChats')} />
           </>
         )}
+        {companions?.length === 0 && onNewCompanion && <MakeCompanionRow onMake={onNewCompanion} />}
         {closedChats.length > 0 && (
           <button type="button" data-testid="side-closed-chats" className="ck-side-new ck-side-add" onClick={() => setClosedOpen(true)}>
             <span className="ck-row-glyph ck-row-glyph--icon">

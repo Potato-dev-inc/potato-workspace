@@ -13,26 +13,6 @@
   place-items: center;
   flex: none;
 }
-.cockpit .ck-companion-state {
-  margin-left: auto;
-  padding-left: 6px;
-  font-size: 11px;
-  color: var(--label-3);
-  white-space: nowrap;
-}
-.cockpit .ck-companion-row.is-needs .ck-companion-state {
-  color: var(--label);
-  font-weight: 600;
-}
-.cockpit .ck-companion-row .ck-companion-outline {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1px dashed var(--label-4);
-}
-.cockpit .ck-companion-row--empty .ck-row-title {
-  color: var(--label-3);
-}
 
 /* ---------- page header ---------- */
 .cockpit .ck-companion-page {
@@ -554,4 +534,47 @@
   align-items: center;
   gap: 4px 8px;
   font-size: 12px;
+}
+
+/* ---------- sidebar row: the live line under the name, and the quiet "make one" line ---------- */
+.cockpit .ck-companion-row {
+  min-height: 40px;
+}
+.cockpit .ck-companion-row .ck-row-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cockpit .ck-companion-line {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--label-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-companion-row.is-needs .ck-companion-line {
+  color: var(--label);
+  font-weight: 600;
+}
+.cockpit .ck-companion-row .ck-companion-face img {
+  display: block;
+}
+.cockpit .ck-companion-make {
+  display: block;
+  width: 100%;
+  margin: 8px 0 4px;
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  color: var(--label-3);
+  cursor: pointer;
+}
+.cockpit .ck-companion-make:hover,
+.cockpit .ck-companion-make:focus-visible {
+  color: var(--label);
+  text-decoration: underline;
 }

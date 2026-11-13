@@ -100,6 +100,9 @@ const room = (over: Partial<LiveStatus> = {}): LiveStatus => ({
   ...over,
 });
 
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+
 describe('pane header: account chip', () => {
   it('names the saved login a pane runs under, and shows nothing for the own login', async () => {
     const withAccount = cockpit('C:\work\shop', false);

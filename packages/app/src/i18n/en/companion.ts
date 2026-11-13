@@ -1,0 +1,21 @@
+// English messages: the companion row in the sidebar (its face, its live line, the quiet "make one" line).
+export const companion = {
+  'companion.mood.stopped': 'Stopped',
+  'companion.mood.starting': 'Waking up',
+  'companion.mood.needsYou': 'Needs you',
+  'companion.mood.oneNeedsYou': '{name} needs you',
+  'companion.mood.manyNeedYou_one': '{count} agent needs you',
+  'companion.mood.manyNeedYou_other': '{count} agents need you',
+  'companion.mood.done': 'All done',
+  'companion.mood.watching_one': 'Watching {count} agent',
+  'companion.mood.watching_other': 'Watching {count} agents',
+  'companion.mood.working': 'Working',
+  'companion.mood.sleepy': 'Sleepy',
+  'companion.mood.sleepyNotes_one': 'Sleepy · {count} note for you',
+  'companion.mood.sleepyNotes_other': 'Sleepy · {count} notes for you',
+  'companion.mood.here': 'Here',
+  'companion.row.label': '{name}, {line}',
+  'companion.make': 'Make a companion',
+  'companion.makeQuiet': 'Want a companion? Make one',
+  'companion.makeDismiss': 'Hide this',
+} as const;

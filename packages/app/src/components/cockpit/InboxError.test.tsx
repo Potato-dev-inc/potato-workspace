@@ -25,7 +25,7 @@ async function mount() {
   });
 }
 const button = (label: string) => [...host.querySelectorAll('button')].find((b) => b.textContent === label);
-const buttons = () => [...host.querySelectorAll('button')].map((b) => b.textContent);
+const buttons = () => [...host.querySelectorAll('button:not([data-snooze])')].map((b) => b.textContent);
 
 beforeEach(() => {
   host = document.createElement('div');

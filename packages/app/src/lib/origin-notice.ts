@@ -1,4 +1,5 @@
 // What to tell the person about the address their phone will be sent to (shown next to the QR).
+import { t } from '../i18n';
 
 export interface OriginNotice {
   /** The host the phone will connect to, shown prominently. */
@@ -25,13 +26,13 @@ export function originNotice(origin: string): OriginNotice | null {
   const host = url.host;
   const hostname = url.hostname;
   if (url.protocol === 'http:' && !isLoopbackHost(hostname)) {
-    return { host, warning: 'This address uses plain http. Anyone on the network can read the phone token. Use https.' };
+    return { host, warning: t('phone.origin.http') };
   }
   if (isLoopbackHost(hostname)) {
-    return { host, warning: 'This address only works on this computer, not on your phone.' };
+    return { host, warning: t('phone.origin.loopback') };
   }
   if (isIpHost(hostname)) {
-    return { host, warning: 'This is an IP address. Make sure it is yours and reachable from your phone.' };
+    return { host, warning: t('phone.origin.ip') };
   }
   return { host, warning: null };
 }

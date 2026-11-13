@@ -2,6 +2,7 @@
 // session runs by default, "Terminal" (the default) or "Chat (ACP)". The terminal stays a full way to run every agent.
 // The whole block is hidden while the Labs switch is off. An agent that cannot run as a chat shows why instead.
 import { RUN_WAYS } from '../../../lib/glossary';
+import { t, useT } from '../../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import {
   addableChat,
@@ -37,15 +38,16 @@ export function shownLane(agent: AcpLaneAgent): RunLaneWord {
 /** One plain sentence under the agent's name: how its helpers run. */
 export function laneNote(agent: AcpLaneAgent): string {
   if (agent.saved !== false) {
-    if (agent.lane === 'acp') return 'Helpers and new sessions run as a chat.';
-    return 'Helpers and new sessions run in a terminal.';
+    if (agent.lane === 'acp') return t('lane.noteChat');
+    return t('lane.noteTerminal');
   }
-  if (agent.helper_lane === 'acp') return 'Helpers this agent starts run as a chat when it can. Pick Terminal to always use a terminal.';
-  if (agent.addon_installed === false) return 'Helpers this agent starts run in a terminal until its chat add-on is installed.';
-  return 'Helpers this agent starts run in a terminal.';
+  if (agent.helper_lane === 'acp') return t('lane.helperChat');
+  if (agent.addon_installed === false) return t('lane.helperNoAddon');
+  return t('lane.helperTerminal');
 }
 
 export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; api?: Pick<AcpChatApi, 'laneGet' | 'laneSet'> & Pick<AcpChatApi, 'overlayDetect' | 'overlaySet' | 'overlayRemove' | 'chatRemove'> }) {
+  const t = useT();
   const [view, setView] = useState<AcpLaneView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<AcpAddable | null>(null);
@@ -98,10 +100,10 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
         else if (api.overlayRemove && agent.overlay) {
           await api.overlayRemove(agent.id);
           next = normalizeLaneView(await api.laneGet());
-        } else throw new Error('This version of the app cannot remove a chat.');
+        } else throw new Error(t('lane.cannotRemove'));
         setView(next);
         const failed = (next as AcpLaneView & { removal?: { addon_error?: string | null } }).removal?.addon_error;
-        setStatus(failed ? `Chat removed for ${agent.label}. The add-on could not be deleted: ${failed}` : `Chat removed for ${agent.label}.`);
+        setStatus(failed ? t('lane.removedFailed', { label: agent.label, reason: failed }) : t('lane.removed', { label: agent.label }));
         setRemoving(null);
       } catch (e) {
         setRemoveError(errorSentence(e));
@@ -109,7 +111,7 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
         setRemoveBusy(false);
       }
     },
-    [api],
+    [api, t],
   );
 
   const addable = addableChat(view).filter((a) => !only || a.id === only);
@@ -128,10 +130,10 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
       {laneAgents.map((agent) => (
         <SettingRow
           key={agent.id}
-          label={only ? 'How it opens' : agent.label}
+          label={only ? t('agentPage.howOpens') : agent.label}
           description={
             <>
-              {agent.disabled ? <span data-testid="agent-lane-note">{agent.disabled_note ?? 'Chat is not available for this agent.'}</span> : laneNote(agent)}
+              {agent.disabled ? <span data-testid="agent-lane-note">{agent.disabled_note ?? t('lane.notAvailable')}</span> : laneNote(agent)}
               {agent.adapter_note ? <span data-testid="agent-adapter-note"> {agent.adapter_note}</span> : null}
               {terminalChatNote(agent.id)}
             </>
@@ -139,17 +141,17 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
         >
           <Btn
             small
-            aria-label={`Remove chat for ${agent.label}`}
+            aria-label={t('lane.removeFor', { label: agent.label })}
             onClick={() => {
               setRemoveError(null);
               setRemoving(agent);
             }}
           >
-            Remove chat
+            {t('lane.removeChat')}
           </Btn>
           {!agent.disabled && (
-            <Popup aria-label={`How ${agent.label} runs`} value={shownLane(agent)} onChange={(event) => void save(agent.id, event.target.value as RunLaneWord)}>
-              <option value="terminal">{TERMINAL_LABEL}</option>
+            <Popup aria-label={t('lane.howRuns', { label: agent.label })} value={shownLane(agent)} onChange={(event) => void save(agent.id, event.target.value as RunLaneWord)}>
+              <option value="terminal">{t('agentPage.terminal')}</option>
               <option value="acp">{CHAT_LABEL}</option>
               {terminalChat.some((t) => t.id === agent.id) && <option value={TERMINAL_CHAT_LANE}>{TERMINAL_CHAT_WORD}</option>}
             </Popup>
@@ -157,27 +159,27 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
         </SettingRow>
       ))}
       {terminalChat
-        .filter((t) => !laneAgents.some((a) => a.id === t.id))
-        .map((t) => (
+        .filter((tc) => !laneAgents.some((a) => a.id === tc.id))
+        .map((tc) => (
           <SettingRow
-            key={`tc-${t.id}`}
-            label={only ? 'How it opens' : t.label}
-            description={<>New sessions start in a terminal unless you pick {TERMINAL_CHAT_WORD}.{terminalChatNote(t.id)}</>}
+            key={`tc-${tc.id}`}
+            label={only ? t('agentPage.howOpens') : tc.label}
+            description={<>{t('lane.newSessions', { word: TERMINAL_CHAT_WORD })}{terminalChatNote(tc.id)}</>}
           >
-            {t.chosen && (
+            {tc.chosen && (
               <Btn
                 small
-                aria-label={`Remove chat for ${t.label}`}
+                aria-label={t('lane.removeFor', { label: tc.label })}
                 onClick={() => {
                   setRemoveError(null);
-                  setRemoving({ id: t.id, label: t.label });
+                  setRemoving({ id: tc.id, label: tc.label });
                 }}
               >
-                Remove chat
+                {t('lane.removeChat')}
               </Btn>
             )}
-            <Popup aria-label={`How ${t.label} runs`} value={t.chosen ? TERMINAL_CHAT_LANE : 'terminal'} onChange={(event) => void save(t.id, event.target.value as RunLaneWord)}>
-              <option value="terminal">{TERMINAL_LABEL}</option>
+            <Popup aria-label={t('lane.howRuns', { label: tc.label })} value={tc.chosen ? TERMINAL_CHAT_LANE : 'terminal'} onChange={(event) => void save(tc.id, event.target.value as RunLaneWord)}>
+              <option value="terminal">{t('agentPage.terminal')}</option>
               <option value={TERMINAL_CHAT_LANE}>{TERMINAL_CHAT_WORD}</option>
             </Popup>
           </SettingRow>
@@ -186,10 +188,10 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
         <SettingRow
           key={`add-${a.id}`}
           label={a.label}
-          description={a.reason ? <span data-testid="agent-add-chat-note">{a.reason}</span> : 'No chat yet. Add one to run this agent as a chat.'}
+          description={a.reason ? <span data-testid="agent-add-chat-note">{a.reason}</span> : t('lane.noChatYet')}
         >
-          <Btn small primary={!a.reason} disabled={!!a.reason} aria-label={`${ADD_CHAT_LABEL} for ${a.label}`} onClick={() => setAdding(a)}>
-            {ADD_CHAT_LABEL}
+          <Btn small primary={!a.reason} disabled={!!a.reason} aria-label={t('lane.addFor', { add: t('lane.add'), label: a.label })} onClick={() => setAdding(a)}>
+            {t('lane.add')}
           </Btn>
         </SettingRow>
       ))}
@@ -213,7 +215,7 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
           api={api}
           onClose={() => setAdding(null)}
           onAdded={() => {
-            setStatus(`Chat added for ${adding.label}.`);
+            setStatus(t('lane.added', { label: adding.label }));
             setAdding(null);
             void refresh();
           }}

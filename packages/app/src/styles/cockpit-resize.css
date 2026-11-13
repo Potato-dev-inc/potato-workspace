@@ -1,0 +1,143 @@
+/* The drag handle on a panel edge: a 9px grab strip with a 1px line that darkens on hover and focus. */
+.cockpit .ck-resize {
+  position: relative;
+  flex: none;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+  z-index: 6;
+}
+.cockpit .ck-resize::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: transparent;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.cockpit .ck-resize:hover::before,
+.cockpit .ck-resize:focus-visible::before {
+  background: var(--label-3);
+}
+.cockpit .ck-resize:focus-visible::before {
+  width: 2px;
+  left: 3px;
+}
+/* The sidebar's handle sits on its right edge, over the page; it takes no room. */
+.cockpit > .ck-resize--side {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--ck-side-w, 240px) - 5px);
+}
+/* The right panel's handle sits on its left edge: it is a flex item that takes no room. */
+.cockpit .ck-resize--rail {
+  margin-left: -5px;
+  margin-right: -4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-resize::before {
+    transition: none;
+  }
+}
+
+/* The thin icon strip: only the marks, no words. */
+.cockpit[data-side-strip] .ck-side {
+  overflow: hidden;
+}
+.cockpit[data-side-strip] .ck-wordmark,
+.cockpit[data-side-strip] .ck-row-main,
+.cockpit[data-side-strip] .ck-row-hint,
+.cockpit[data-side-strip] .ck-row-pill,
+.cockpit[data-side-strip] .ck-row-time,
+.cockpit[data-side-strip] .ck-row-pin,
+.cockpit[data-side-strip] .ck-row-preview,
+.cockpit[data-side-strip] .ck-row-more,
+.cockpit[data-side-strip] .ck-side-new-chev,
+.cockpit[data-side-strip] .ck-proj-head,
+.cockpit[data-side-strip] .ck-proj-meta,
+.cockpit[data-side-strip] .ck-branch-head,
+.cockpit[data-side-strip] .ck-sechead-text,
+.cockpit[data-side-strip] .ck-sechead-btn,
+.cockpit[data-side-strip] .ck-caption,
+.cockpit[data-side-strip] .ck-row-sub,
+.cockpit[data-side-strip] .ck-helpers,
+.cockpit[data-side-strip] .ck-foot-status,
+.cockpit[data-side-strip] .ck-foot-label,
+.cockpit[data-side-strip] .ck-foot-spacer {
+  display: none;
+}
+.cockpit[data-side-strip] .ck-foot-icons {
+  flex-direction: column;
+  align-items: center;
+}
+.cockpit[data-side-strip] .ck-side-head,
+.cockpit[data-side-strip] .ck-side-top,
+.cockpit[data-side-strip] .ck-side-scroll {
+  padding-left: 0;
+  padding-right: 0;
+}
+.cockpit[data-side-strip] .ck-side-head {
+  justify-content: center;
+}
+.cockpit[data-side-strip] .ck-side .ck-row,
+.cockpit[data-side-strip] .ck-side .ck-side-new {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* The projects' boxes are only noise in a strip: just the marks, one under the other. */
+.cockpit[data-side-strip] .ck-proj {
+  border-color: transparent;
+  background: none;
+}
+
+/* Focus mode: only the one pane is left. */
+.cockpit[data-focus-mode] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cockpit[data-focus-mode] .ck-side,
+.cockpit[data-focus-mode] > .ck-resize--side,
+.cockpit[data-focus-mode] .ck-rail,
+.cockpit[data-focus-mode] .ck-resize--rail,
+.cockpit[data-focus-mode] .ck-ptabs {
+  display: none;
+}
+.cockpit[data-focus-mode] .ck-split-cols > :not(.is-focused):not(.ck-split-divider) {
+  display: none;
+}
+.cockpit[data-focus-mode] .ck-split-divider {
+  display: none;
+}
+.cockpit[data-focus-mode] .ck-split-side.is-focused {
+  flex: 1 1 0;
+  width: auto;
+}
+.cockpit[data-focus-mode] .ck-pane-head,
+.cockpit[data-focus-mode] .ck-split-head {
+  padding-right: 150px;
+}
+.cockpit .ck-focus-exit {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 30;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  background: var(--bg-side);
+  color: var(--label-2);
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.cockpit .ck-focus-exit:hover,
+.cockpit .ck-focus-exit:focus-visible {
+  opacity: 1;
+  color: var(--label);
+}

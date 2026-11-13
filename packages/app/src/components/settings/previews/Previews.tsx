@@ -71,6 +71,7 @@ export interface TestResult {
  * to send to it is disabled, and says why in words next to it.
  */
 export function SendTest({ disabledReason, send }: { disabledReason?: string | null; send?: () => Promise<TestResult> }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
   const blocked = Boolean(disabledReason) || !send;
@@ -89,7 +90,7 @@ export function SendTest({ disabledReason, send }: { disabledReason?: string | n
   return (
     <span className="st-sendtest">
       <Btn small disabled={blocked || busy} onClick={() => void run()}>
-        Send a test
+        {t('phone.sendTest')}
       </Btn>
       {disabledReason && <small className="st-sendtest-why">{disabledReason}</small>}
       {result && (

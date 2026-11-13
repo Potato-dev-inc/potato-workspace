@@ -12,6 +12,7 @@ import type { RiskLevel } from '../../lib/cockpit-api';
 import { riskGlyph } from '../../lib/approval-risk';
 import '../../styles/inbox-card.css';
 import { DotSpinner } from './DotSpinner';
+import { SnoozeButton } from './SnoozeButton';
 import { agePhrase, formatAge } from './inbox-age';
 import { formatKey, isMacPlatform } from '../../lib/shortcuts';
 import { AgentLogo } from '../common/AgentLogo';
@@ -95,13 +96,15 @@ export interface InboxCardProps {
   actions?: ReactNode;
   /** Plain buttons that are not answers (Open, Dismiss, Details), right. */
   more?: ReactNode;
+  /** Keys a 30-minute snooze is set on (pane id, `q-<question id>`). Adds the Snooze button. Never for high risk or consent. */
+  snoozeKeys?: string[];
   /** Extra attributes for tests and deep links (`data-consent-id`). */
   data?: Record<string, string | undefined>;
   /** Content outside the card's grid (a sheet that portals out). */
   children?: ReactNode;
 }
 
-export function InboxCard({ kind, glyph, agent, title, meta, status, age, risk, info, guard, reason, caution, body, note, actions, more, data, children }: InboxCardProps) {
+export function InboxCard({ kind, glyph, agent, title, meta, status, age, risk, info, guard, reason, caution, body, note, actions, more, snoozeKeys, data, children }: InboxCardProps) {
   useT(); // the chip and the age are words: this card redraws when the language changes
   const extra = Object.fromEntries(Object.entries(data ?? {}).filter(([, v]) => v !== undefined));
   const hasAge = age !== undefined && age !== null;
@@ -150,10 +153,15 @@ export function InboxCard({ kind, glyph, agent, title, meta, status, age, risk, 
           {note ? <p className="ib-note">{note}</p> : null}
         </div>
       )}
-      {(actions || more) && (
+      {(actions || more || snoozeKeys) && (
         <div className="ib-actions">
           {actions}
-          {more ? <span className="ib-actions-end">{more}</span> : null}
+          {more || snoozeKeys ? (
+            <span className="ib-actions-end">
+              {snoozeKeys && snoozeKeys.length > 0 ? <SnoozeButton keys={snoozeKeys} /> : null}
+              {more}
+            </span>
+          ) : null}
         </div>
       )}
       {children}

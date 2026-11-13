@@ -1,6 +1,8 @@
 import { errorSentence } from '../../lib/sayError';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { PaneMoreMenu, type MoreAction } from './PaneMoreMenu';
+import { bellMenuActions } from './bell-menu';
+import { useBellLevel } from '../../lib/notify-store';
 import { useHeadFold } from './usePaneHeadFold';
 import { rememberSelectedTab } from './session-memory';
 import type { CockpitApi } from '../../hooks/useCockpit';
@@ -410,6 +412,11 @@ export function PaneView({
       </>
     ) : null;
 
+  // The agent's bell (how much it may interrupt): the ⋯ menu carries its four levels. A helper starts quieter.
+  // Helpers keep their own bell (a helper is quieter by default, and its choice does not change the plain agent).
+  const [bell, setBell] = useBellLevel(helperOf ? `helper:${info.agent_type}` : info.agent_type, !!helperOf);
+  const bellActions = bellMenuActions(bell, setBell, t);
+
   const copyTotals = worktree?.summary ?? null;
   // What the narrow header moved out: the same buttons, one menu row each (lowest priority first).
   const moreActions: MoreAction[] = [];
@@ -564,7 +571,7 @@ export function PaneView({
           label={t('pane.more')}
           value={tab}
           onPick={setTab}
-          actions={moreActions}
+          actions={[...moreActions, ...bellActions]}
           items={[
             { id: 'transcript', label: t('pane.moreTranscript') },
             { id: 'receipt', label: t('pane.moreReceipt') },

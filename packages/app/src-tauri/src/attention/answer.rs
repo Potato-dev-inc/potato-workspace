@@ -262,6 +262,14 @@ pub fn answer(env: &dyn Env, caller: &Caller, item_id: &str, request: &Request) 
 
     let snapshot = env.snapshot();
     let Some(item) = snapshot.items.iter().find(|i| i.id == item_id) else { return gone("unknown") };
+    // A phone may not answer for an agent whose Remote control is off (or capped below "answer").
+    if matches!(caller.via, Via::Card | Via::LockScreen) {
+        if let Some(pane) = &item.pane {
+            if crate::mobile_pairing::pane_rules::refuses(&pane.id, crate::mobile_pairing::Cap::Answer) {
+                return crate::mobile_pairing::pane_rule_error(&pane.id);
+            }
+        }
+    }
     if item.state == State::Resolved {
         return resolved(item, caller);
     }

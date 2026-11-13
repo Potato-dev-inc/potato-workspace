@@ -1,6 +1,7 @@
 // Settings > Phone: how the phone reaches this computer, typing on the phone, pairing and paired devices.
 // The public address saves through its own command (TunnelSection), because saving restarts the tunnel.
 import { errorSentence } from '../../../lib/sayError';
+import { t, useT } from '../../../i18n';
 import { useEffect, useState } from 'react';
 import { clampMobileInputDelayMs } from '../../../lib/bridge-settings';
 import { parseDevServerPort } from '../../../lib/public-bridge-url';
@@ -19,6 +20,7 @@ type PairedDevice = Awaited<ReturnType<typeof tauri.listPairedMobileDevices>>[nu
 // ---------- revoke all devices ----------
 
 function RevokeAllRow({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const [devices, setDevices] = useState<PairedDevice[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -29,9 +31,9 @@ function RevokeAllRow({ env }: { env: SettingsEnv }) {
   const revokeAll = async () => {
     env.setError(null);
     const ok = await env.confirm({
-      title: 'Revoke all devices?',
-      body: 'Every paired phone will be signed out. They can pair again with a new QR code.',
-      confirmLabel: 'Revoke all',
+      title: t('phone.revokeAll.title'),
+      body: t('phone.revokeAll.body'),
+      confirmLabel: t('phone.revokeAll.confirm'),
     });
     if (!ok) return;
     setBusy(true);
@@ -41,7 +43,7 @@ function RevokeAllRow({ env }: { env: SettingsEnv }) {
       window.dispatchEvent(new Event(DEVICES_CHANGED_EVENT));
       env.markSaved();
     } catch (error) {
-      env.setError(`Not revoked: ${errorSentence(error)}`);
+      env.setError(t('phone.revokeAll.failed', { reason: errorSentence(error) }));
     } finally {
       setBusy(false);
       setDevices(await tauri.listPairedMobileDevices());
@@ -49,9 +51,9 @@ function RevokeAllRow({ env }: { env: SettingsEnv }) {
   };
 
   return (
-    <SettingRow label="Revoke all devices" description="Every paired phone is signed out and must pair again.">
+    <SettingRow label={t('settings.row.revoke-all-devices.label')} description={t('settings.row.revoke-all-devices.hint')}>
       <Btn disabled={busy || devices.length === 0} onClick={() => void revokeAll()}>
-        {busy ? 'Revoking…' : 'Revoke…'}
+        {busy ? t('phone.revokeAll.busy') : t('phone.revokeAll.button')}
       </Btn>
     </SettingRow>
   );
@@ -65,14 +67,15 @@ function RevokeAllRow({ env }: { env: SettingsEnv }) {
  * that could only fail would be worse than none). With no phone it says why a test cannot be sent.
  */
 function PhoneAlerts({ sendTest }: { sendTest?: () => Promise<TestResult> }) {
+  const t = useT();
   const [count, setCount] = useState<number | null>(null);
   useEffect(() => {
     void tauri.listPairedMobileDevices().then((list) => setCount(list.length)).catch(() => setCount(null));
   }, []);
   return (
-    <SettingRow label="Phone alerts" description={NOTIFICATIONS}>
-      <span className="st-value">On the phone</span>
-      {count === 0 && <SendTest disabledReason="Pair a phone first" />}
+    <SettingRow label={t('settings.row.phone-notifications.label')} description={t('settings.row.phone-notifications.hint')}>
+      <span className="st-value">{t('phone.alerts.onPhone')}</span>
+      {count === 0 && <SendTest disabledReason={t('phone.alerts.pairFirst')} />}
       {count !== null && count > 0 && sendTest && <SendTest send={sendTest} />}
     </SettingRow>
   );
@@ -106,9 +109,9 @@ export const phoneRows: RowDef[] = [
     keywords: 'mobile input buffer ms delay',
     group: 'Phone app',
     render: (env) => (
-      <SettingRow label="Typing delay" description="How long to wait before sending what you type on the phone to the agent.">
+      <SettingRow label={t('settings.row.mobile-input-delay.label')} description={t('settings.row.mobile-input-delay.hint')}>
         <NumberControl
-          aria-label="Typing delay (ms)"
+          aria-label={t('phone.typingDelay.aria')}
           min={0}
           max={1000}
           step={10}
@@ -128,8 +131,8 @@ export const phoneRows: RowDef[] = [
     group: 'Phone app',
     render: (env) => (
       <SettingToggle
-        label="Keyboard resizes the agent"
-        description="Off: the keyboard covers the top of the agent. On: the agent redraws above it."
+        label={t('settings.row.mobile-keyboard-resizes.label')}
+        description={t('settings.row.mobile-keyboard-resizes.hint')}
         checked={env.settings.mobile_keyboard_resizes_agent ?? false}
         onChange={(value) => void env.patch({ mobile_keyboard_resizes_agent: value })}
       />
@@ -143,8 +146,8 @@ export const phoneRows: RowDef[] = [
     group: 'Phone app',
     render: (env) => (
       <SettingToggle
-        label="Show the typing box on the phone"
-        description="When off, the box under the terminal is hidden, but the terminal still takes your taps."
+        label={t('settings.row.mobile-input-visible.label')}
+        description={t('settings.row.mobile-input-visible.hint')}
         checked={env.settings.mobile_input_visible ?? true}
         onChange={(value) => void env.patch({ mobile_input_visible: value })}
       />

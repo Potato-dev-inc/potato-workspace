@@ -2,6 +2,8 @@
 // pull request, turns and minutes per try, fixes a day) and the pull requests Potato Workspace watches, with their
 // buttons. Every change is one `ciFixSaveSettings` or one `ciFixAct`; the backend clamps the numbers again.
 import { errorSentence } from '../../../lib/sayError';
+import { en } from '../../../i18n/en';
+import { t, useT } from '../../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ciFixAct,
@@ -27,15 +29,14 @@ export const CAPS = {
 } as const;
 
 /** What the block promises. Shown as the footer; the only place "merge", "re-run" and "force" may appear. */
-export const FOOTER =
-  "Potato Workspace only watches pull requests it opened. It asks before the agent reads the log, and again before anything is pushed. The agent can't push during a fix. Potato Workspace never re-runs CI, merges or force-pushes.";
+export const FOOTER = en['ci.footer'];
 
 const errText = (e: unknown): string => (errorSentence(e));
 
 /** The GitHub line under the switch: whose sign-in it is, or what to install. */
 export function ciGhLine(gh: GhView): string {
-  if (gh.state === 'ready') return gh.login ? `Signed in to GitHub as @${gh.login} (gh)` : 'Signed in to GitHub (gh)';
-  return 'Install the GitHub CLI and run gh auth login. Nothing is checked until then.';
+  if (gh.state === 'ready') return gh.login ? t('intake.ghAs', { login: gh.login }) : t('intake.gh');
+  return t('intake.ghInstall');
 }
 
 /** One button of a watched pull request row. `id` is the watch id, or the id of its last fix for "Ask again". */
@@ -48,10 +49,10 @@ export interface WatchButton {
 /** The buttons a watched row offers, in order: Stop watching, Watch again, then Ask again for a declined or expired fix. */
 export function watchButtons(w: WatchView): WatchButton[] {
   const out: WatchButton[] = [];
-  if (w.state === 'watching' || w.state === 'paused') out.push({ label: 'Stop watching', id: w.id, action: 'stop_watching' });
-  if (w.state === 'paused' || w.state === 'stopped') out.push({ label: 'Watch again', id: w.id, action: 'watch_again' });
+  if (w.state === 'watching' || w.state === 'paused') out.push({ label: t('ci.stopWatching'), id: w.id, action: 'stop_watching' });
+  if (w.state === 'paused' || w.state === 'stopped') out.push({ label: t('ci.watchAgain'), id: w.id, action: 'watch_again' });
   const fix = w.lastFix;
-  if (fix && (fix.state === 'declined' || fix.state === 'expired')) out.push({ label: 'Ask again', id: fix.id, action: 'ask_again' });
+  if (fix && (fix.state === 'declined' || fix.state === 'expired')) out.push({ label: t('intake.askAgain'), id: fix.id, action: 'ask_again' });
   return out;
 }
 
@@ -75,6 +76,7 @@ function WatchRow({ watch, busy, onAct }: { watch: WatchView; busy: boolean; onA
 }
 
 export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
+  const t = useT();
   const [view, setView] = useState<CiFixView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -85,7 +87,7 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
       setError(null);
     } catch (e) {
       // No desktop shell (a browser preview) or the backend is not ready: say so, do not crash.
-      setError(`Could not read this setting: ${errText(e)}`);
+      setError(t('intake.readFailed', { reason: errText(e) }));
     }
   }, []);
 
@@ -131,23 +133,23 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
     }
   };
 
-  if (!view) return error ? <Note role="alert">{error}</Note> : <Note role="status">Loading…</Note>;
+  if (!view) return error ? <Note role="alert">{error}</Note> : <Note role="status">{t('teamPage.loading')}</Note>;
 
   const { settings, gh, watches } = view;
   return (
     <>
       {error && <Note role="alert">{error}</Note>}
       <SettingToggle
-        label="Offer to fix failed CI"
-        description="When CI fails on a pull request Potato Workspace opened, you get a card to have the same agent fix it."
+        label={t('ci.offer')}
+        description={t('ci.offerHelp')}
         checked={settings.enabled}
         disabled={busy}
         onChange={(on) => void save({ ...settings, enabled: on })}
       />
-      <SettingRow label="GitHub" description={ciGhLine(gh)} />
-      <SettingRow label="Tries per pull request" description="How many fix tries one pull request may get, 1 to 3.">
+      <SettingRow label="GitHub" /* i18n-ok: product name */ description={ciGhLine(gh)} />
+      <SettingRow label={t('ci.tries')} description={t('ci.triesHelp')}>
         <NumberControl
-          aria-label="Tries per pull request"
+          aria-label={t('ci.tries')}
           min={CAPS.tries.min}
           max={CAPS.tries.max}
           value={settings.tries_per_pr}
@@ -155,9 +157,9 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
           onCommit={(next) => save({ ...settings, tries_per_pr: next })}
         />
       </SettingRow>
-      <SettingRow label="Turns per try" description="How many turns the agent may take in one try, 1 to 50.">
+      <SettingRow label={t('ci.turns')} description={t('ci.turnsHelp')}>
         <NumberControl
-          aria-label="Turns per try"
+          aria-label={t('ci.turns')}
           min={CAPS.turns.min}
           max={CAPS.turns.max}
           value={settings.turns_per_try}
@@ -165,9 +167,9 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
           onCommit={(next) => save({ ...settings, turns_per_try: next })}
         />
       </SettingRow>
-      <SettingRow label="Minutes per try" description="How long one try may run, 5 to 60 minutes.">
+      <SettingRow label={t('ci.minutes')} description={t('ci.minutesHelp')}>
         <NumberControl
-          aria-label="Minutes per try"
+          aria-label={t('ci.minutes')}
           min={CAPS.minutes.min}
           max={CAPS.minutes.max}
           value={settings.minutes_per_try}
@@ -175,9 +177,9 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
           onCommit={(next) => save({ ...settings, minutes_per_try: next })}
         />
       </SettingRow>
-      <SettingRow label="Fixes a day" description="How many fixes Potato Workspace starts in one day, across all pull requests, 1 to 20.">
+      <SettingRow label={t('ci.fixes')} description={t('ci.fixesHelp')}>
         <NumberControl
-          aria-label="Fixes a day"
+          aria-label={t('ci.fixes')}
           min={CAPS.fixes.min}
           max={CAPS.fixes.max}
           value={settings.fixes_per_day}
@@ -186,11 +188,11 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
         />
       </SettingRow>
 
-      <SettingBlock label="Watched pull requests" description="Pull requests Potato Workspace watches, with the state of each one.">
+      <SettingBlock label={t('ci.watched')} description={t('ci.watchedHelp')}>
         {watches.length === 0 ? (
-          <Note>No pull requests yet. Potato Workspace watches one once it opens it.</Note>
+          <Note>{t('ci.noPrs')}</Note>
         ) : (
-          <ul className="st-devices" aria-label="Watched pull requests">
+          <ul className="st-devices" aria-label={t('ci.watched')}>
             {watches.map((w) => (
               <WatchRow key={w.id} watch={w} busy={busy} onAct={(id, action) => void act(id, action)} />
             ))}
@@ -198,7 +200,7 @@ export function CiFixSettings({ onSaved }: { onSaved?: () => void }) {
         )}
       </SettingBlock>
 
-      <Note>{FOOTER}</Note>
+      <Note>{t('ci.footer')}</Note>
     </>
   );
 }

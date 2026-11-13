@@ -17,6 +17,7 @@ import { useT } from '../../../i18n';
 import type { ProjectChoice } from '../NewAgentMenu';
 import { tauriNewAgentApi, type HomeSettings, type NewAgentApi } from './api';
 import { HomeCards, type CardData } from './HomeCards';
+import { ContinueCard, type ContinueYesterdayProps } from './ContinueCard';
 import {
   EXAMPLE_MS,
   addCard,
@@ -140,11 +141,13 @@ export interface NewAgentPageProps {
   onOpenPane: (paneId: string) => void;
   /** "Set up an agent": opens the agent doctor. Absent: no such row. */
   onSetUp?: () => void;
+  /** "Continue where you left off": the chats that were open last time. Absent: no card. */
+  continueYesterday?: Omit<ContinueYesterdayProps, 'onFresh'>;
 }
 
 type Menu = 'plus' | 'folder' | 'agent' | null;
 
-export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, onSignIn, onStart, onOpenPane, onSetUp }: NewAgentPageProps) {
+export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, onSignIn, onStart, onOpenPane, onSetUp, continueYesterday }: NewAgentPageProps) {
   const t = useT();
   const [prompt, setPrompt] = useState('');
   const [exampleIdx, setExampleIdx] = useState(0);
@@ -646,6 +649,15 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 area.current?.focus();
               }}
               onPin={canAdd(home.cards, 'prompt') ? (text) => setCards(addCard(home.cards, 'prompt', text)) : undefined}
+            />
+          )}
+          {continueYesterday && (
+            <ContinueCard
+              {...continueYesterday}
+              onFresh={(text) => {
+                setPrompt(text);
+                area.current?.focus();
+              }}
             />
           )}
           <HomeCards

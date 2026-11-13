@@ -1,6 +1,7 @@
 // Settings > Bridge & MCP: the Toolbelt, the local bridge, the MCP runtime status, install and uninstall of
 // the MCP configs for orchestrator hosts, and copyable snippets. Each block owns its state; installs and
 // uninstalls announce themselves with the `pm-mcp-changed` event so the status re-checks.
+import { t } from '../../../i18n';
 import { POTATO_WORKSPACE_MCP_COMMAND } from '../../../lib/mcp-config';
 import type { RowDef } from '../model';
 import { CodeBlock, InfoRow, SettingToggle } from '../settings-ui';
@@ -38,9 +39,9 @@ export const bridgeRows: RowDef[] = [
     group: 'Bridge',
     render: (env) => (
       <InfoRow
-        label="Local address"
-        description="Where other tools reach this app on this computer. Found by itself."
-        value={env.bridgeUrl ?? 'Not found yet'}
+        label={t('settings.row.bridge-endpoint.label')}
+        description={t('settings.row.bridge-endpoint.hint')}
+        value={env.bridgeUrl ?? t('bridge.notFound')}
       />
     ),
   },
@@ -60,8 +61,8 @@ export const bridgeRows: RowDef[] = [
     group: 'Bridge',
     render: (env) => (
       <SettingToggle
-        label="Use the built-in helper program"
-        description="On: agents start the helper that ships with the app. Off: they use npx."
+        label={t('settings.row.rust-mcp.label')}
+        description={t('settings.row.rust-mcp.hint')}
         checked={Boolean(env.settings.developer_use_rust_mcp)}
         onChange={(value) => void env.patch({ developer_use_rust_mcp: value })}
       />
@@ -81,7 +82,7 @@ export const bridgeRows: RowDef[] = [
     hint: "Copy this into Claude Desktop's settings. The app won't write it.",
     keywords: 'claude desktop config json mcp.json cursor npx manual copy',
     group: 'Install',
-    render: () => <CodeBlock title="Set up Claude Desktop by hand" code={CLAUDE_DESKTOP_MCP} />,
+    render: () => <CodeBlock title={t('settings.row.snippet-claude-desktop.label')} code={CLAUDE_DESKTOP_MCP} />,
   },
   {
     id: 'snippet-codex',
@@ -89,7 +90,7 @@ export const bridgeRows: RowDef[] = [
     hint: 'Copy this if you would rather not use Connect.',
     keywords: 'codex config toml mcp_servers npx node manual copy',
     group: 'Install',
-    render: () => <CodeBlock title="Set up Codex by hand" code={CODEX_MCP} />,
+    render: () => <CodeBlock title={t('settings.row.snippet-codex.label')} code={CODEX_MCP} />,
   },
   ...securityRows,
   {

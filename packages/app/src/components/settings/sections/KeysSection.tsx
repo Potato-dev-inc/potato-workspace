@@ -2,6 +2,7 @@
 // Secrets save on blur / Enter (never per keystroke, never on a Save button). OpenCode keys and the
 // automation settings save through their own Tauri commands and tick the row when they succeed.
 import { errorSentence } from '../../../lib/sayError';
+import { t, useT } from '../../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import type { SettingsPatch } from '../../../lib/settings';
 import { secretsApi, type ProviderSecretName } from '../../../lib/secrets';
@@ -76,12 +77,14 @@ const PROVIDER_KEYS: ProviderKeyDef[] = [
 ];
 
 function ProviderKey({ env, def }: { env: SettingsEnv; def: ProviderKeyDef }) {
+  const t = useT();
+  const label = t(`settings.row.${def.id}.label` as 'settings.row.key-anthropic.label');
   return (
-    <SettingBlock label={def.label} description={def.hint}>
+    <SettingBlock label={label} description={t(`settings.row.${def.id}.hint` as 'settings.row.key-anthropic.hint')}>
       <ApiKeyField
-        label={def.label}
+        label={label}
         name={def.name}
-        placeholder={def.placeholder}
+        placeholder={t('keys.paste')}
         fileValue={env.settings[def.name]}
         onFileChange={(value) => {
           const change: SettingsPatch = {};
@@ -91,9 +94,9 @@ function ProviderKey({ env, def }: { env: SettingsEnv; def: ProviderKeyDef }) {
         onSaved={env.markSaved}
         onConfirmRemove={() =>
           env.confirm({
-            title: `Remove the ${def.label.replace(' API key', '')} key?`,
-            body: 'Agents that use it lose access until you add a key again.',
-            confirmLabel: 'Remove',
+            title: t('keys.removeTitle', { name: def.label.replace(' API key', '') }),
+            body: t('keys.removeBody'),
+            confirmLabel: t('settings.remove'),
           })
         }
       />
@@ -104,14 +107,15 @@ function ProviderKey({ env, def }: { env: SettingsEnv; def: ProviderKeyDef }) {
 // ---------- OpenCode A / B keys ----------
 
 function OpenCodeKeys({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const { status, error, refresh } = useOpenCodeKeyStatus();
 
   const profileLine = (id: 'a' | 'b') => {
-    if (!status) return 'Checking…';
+    if (!status) return t('agentPage.checking');
     const profile = status.profiles.find((entry) => entry.id === id);
-    if (!profile) return 'Unknown';
-    if (!profile.configured) return 'not set';
-    return status.active_profile === id ? 'saved, in use' : 'saved';
+    if (!profile) return t('keys.unknown');
+    if (!profile.configured) return t('keys.notSet');
+    return status.active_profile === id ? t('keys.savedInUse') : t('keys.saved');
   };
 
   const save = async (id: 'a' | 'b', secret: string) => {
@@ -121,27 +125,27 @@ function OpenCodeKeys({ env }: { env: SettingsEnv }) {
       await refresh();
       env.markSaved();
     } catch (e) {
-      env.setError(`Not saved: ${errorSentence(e)}`);
+      env.setError(t('settings.notSaved', { reason: errorSentence(e) }));
     }
   };
 
   return (
-    <SettingBlock label="OpenCode keys (main and spare)" description={OPENCODE_HINT}>
+    <SettingBlock label={t('settings.row.opencode-keys.label')} description={t('settings.row.opencode-keys.hint')}>
       <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
-            <FieldLabel>Main key: {profileLine('a')}</FieldLabel>
-            <SecretControl aria-label="OpenCode key A" placeholder="Paste your key" onCommit={(secret) => save('a', secret)} />
+            <FieldLabel>{t('keys.mainKey', { state: profileLine('a') })}</FieldLabel>
+            <SecretControl aria-label={t('keys.ocA')} placeholder={t('keys.paste')} onCommit={(secret) => save('a', secret)} />
           </div>
           <div className="space-y-1">
-            <FieldLabel>Spare key: {profileLine('b')}</FieldLabel>
-            <SecretControl aria-label="OpenCode key B" placeholder="Paste your key" onCommit={(secret) => save('b', secret)} />
+            <FieldLabel>{t('keys.spareKey', { state: profileLine('b') })}</FieldLabel>
+            <SecretControl aria-label={t('keys.ocB')} placeholder={t('keys.paste')} onCommit={(secret) => save('b', secret)} />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Btn onClick={() => void refresh()}>Check keys</Btn>
+          <Btn onClick={() => void refresh()}>{t('keys.check')}</Btn>
         </div>
-        {error && <Note role="alert">{`Could not read OpenCode key status: ${error}`}</Note>}
+        {error && <Note role="alert">{t('keys.readFailedOc', { error })}</Note>}
       </div>
     </SettingBlock>
   );
@@ -150,6 +154,7 @@ function OpenCodeKeys({ env }: { env: SettingsEnv }) {
 // ---------- key automation ----------
 
 function AutomationMode({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const { status, setStatus, error } = useOpenCodeKeyStatus();
   const [busy, setBusy] = useState(false);
 
@@ -169,18 +174,19 @@ function AutomationMode({ env }: { env: SettingsEnv }) {
   return (
     <>
       <SettingToggle
-        label={AUTOMATION_LABEL}
-        description={AUTOMATION_HINT}
+        label={t('settings.row.opencode-automation.label')}
+        description={t('settings.row.opencode-automation.hint')}
         checked={status?.key_automation_mode === 'auto_if_backup'}
         disabled={!status || busy}
         onChange={(value) => void change(value)}
       />
-      {error && <Note role="alert">{`Could not read key status: ${error}`}</Note>}
+      {error && <Note role="alert">{t('keys.readFailed', { error })}</Note>}
     </>
   );
 }
 
 function RestartPane({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const { status, setStatus } = useOpenCodeKeyStatus();
   const [busy, setBusy] = useState(false);
 
@@ -200,8 +206,8 @@ function RestartPane({ env }: { env: SettingsEnv }) {
 
   return (
     <SettingToggle
-      label="Restart OpenCode after a key switch"
-      description={RESTART_HINT}
+      label={t('settings.row.opencode-restart.label')}
+      description={t('settings.row.opencode-restart.hint')}
       checked={status?.restart_pane_on_rotate ?? true}
       disabled={!status || busy}
       onChange={(value) => void change(value)}
@@ -212,14 +218,15 @@ function RestartPane({ env }: { env: SettingsEnv }) {
 // ---------- remove all ----------
 
 function RemoveAllKeys({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
 
   const run = async () => {
     env.setError(null);
     const ok = await env.confirm({
-      title: 'Remove all keys?',
-      body: 'Deletes the Anthropic, OpenAI and OpenRouter keys from this computer. Agents that use them lose access until you add keys again. OpenCode keys are not removed.',
-      confirmLabel: 'Remove all',
+      title: t('keys.removeAllTitle'),
+      body: t('keys.removeAllBody'),
+      confirmLabel: t('keys.removeAllConfirm'),
     });
     if (!ok) return;
     setBusy(true);
@@ -230,16 +237,16 @@ function RemoveAllKeys({ env }: { env: SettingsEnv }) {
       await env.patch({ anthropic_api_key: null, openai_api_key: null, openrouter_api_key: null });
       env.markSaved();
     } catch (e) {
-      env.setError(`Not removed: ${errorSentence(e)}`);
+      env.setError(t('keys.notRemoved', { reason: errorSentence(e) }));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <SettingRow label="Remove all keys" description={REMOVE_ALL_HINT}>
+    <SettingRow label={t('settings.row.remove-all-keys.label')} description={t('settings.row.remove-all-keys.hint')}>
       <Btn disabled={busy} onClick={() => void run()}>
-        Remove…
+        {t('keys.removeBtn')}
       </Btn>
     </SettingRow>
   );

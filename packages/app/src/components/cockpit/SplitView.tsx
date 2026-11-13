@@ -10,6 +10,7 @@ import { useAgentRegistry } from '../../lib/agentRegistry';
 import { useLoopGuard } from '../../lib/loop-guard';
 import { helperOfLabel } from '../../lib/pane-helpers';
 import { bindingHint } from '../../lib/shortcuts';
+import { setFocusMode } from '../../lib/focus-mode';
 import '../../styles/cockpit-split.css';
 import { DockedCards } from './DockedCards';
 import { DotSpinner } from './DotSpinner';
@@ -183,7 +184,15 @@ function SplitSideView({
       onMouseDownCapture={() => onFocus(side)}
       onFocusCapture={() => onFocus(side)}
     >
-      <header className="ck-split-head">
+      <header
+        className="ck-split-head"
+        onDoubleClick={(e) => {
+          // Double-click on the header (not on a button) fills the window with this side.
+          if ((e.target as HTMLElement).closest('button')) return;
+          onFocus(side);
+          setFocusMode(true);
+        }}
+      >
         <DotSpinner status={spinnerStatus(pane.status)} />
         <span className="ck-split-title">{heading.primary}</span>
         <span className="ck-split-state">{waiting ? 'Needs you' : stateText(pane.status)}</span>

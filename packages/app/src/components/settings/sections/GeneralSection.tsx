@@ -1,6 +1,7 @@
 // Settings > General: project folder, appearance, safety nets (confirm close, loop guard, checkpoints,
 // project memory, away digest), coordination storage, version and updates, export and uninstall.
 // This section is the reference for the others: rows are plain data (`RowDef`), each control saves itself.
+import { QuietHoursRow } from '../NotifyRows';
 import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir } from '@tauri-apps/api/path';
@@ -50,6 +51,9 @@ function useInstallInfo(): AppInstallInfo | null {
 
 // ---------- project folder ----------
 
+/** An example path in the empty field: code, the same in every language. */
+const PROJECT_EXAMPLE = '~/work/my-project';
+
 function ProjectFolder({ env }: { env: SettingsEnv }) {
   const value = env.projectPath ?? env.settings.project_path ?? '';
   const save = async (path: string) => {
@@ -59,7 +63,7 @@ function ProjectFolder({ env }: { env: SettingsEnv }) {
       else await env.patch({ project_path: path || null });
       env.markSaved();
     } catch (error) {
-      env.setError(`Not saved: ${errorSentence(error)}`);
+      env.setError(t('settings.notSaved', { reason: errorSentence(error) }));
     }
   };
   const browse = async () => {
@@ -68,18 +72,18 @@ function ProjectFolder({ env }: { env: SettingsEnv }) {
   };
   return (
     // A block, not a row: a folder path is long, and a 220px field on the right showed "C:\Users\dev\work".
-    <SettingBlock label="Default project folder" description="Where new panes and agents start.">
+    <SettingBlock label={t('settings.row.project-folder.label')} description={t('settings.row.project-folder.hint')}>
       <div className="st-path">
         <TextControl
-          aria-label="Default project folder"
+          aria-label={t('settings.row.project-folder.label')}
           mono
           title={value}
           value={value}
-          placeholder="~/work/my-project"
+          placeholder={PROJECT_EXAMPLE}
           normalize={(text) => text.trim()}
           onCommit={save}
         />
-        <Btn onClick={() => void browse()}>Browse</Btn>
+        <Btn onClick={() => void browse()}>{t('general.browse')}</Btn>
       </div>
     </SettingBlock>
   );
@@ -88,6 +92,7 @@ function ProjectFolder({ env }: { env: SettingsEnv }) {
 // ---------- coordination storage ----------
 
 function StorageInfo({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const [info, setInfo] = useState<CoordinationStorageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(async () => {
@@ -104,19 +109,19 @@ function StorageInfo({ env }: { env: SettingsEnv }) {
   return (
     <>
       <InfoRow
-        label="Task and activity data"
-        description="Tasks, file locks and what happened in each pane are kept per project."
-        value={info ? (info.scope === 'project' ? 'Project folder' : 'Shared fallback') : '…'}
+        label={t('settings.row.storage.label')}
+        description={t('settings.row.storage.hint')}
+        value={info ? (info.scope === 'project' ? t('general.projectFolder') : t('general.sharedFallback')) : '…'}
       />
-      <InfoRow label="Tasks" value={info ? String(info.task_count) : '…'} />
-      <InfoRow label="File locks" value={info ? String(info.lock_count) : '…'} />
+      <InfoRow label={t('general.tasks')} value={info ? String(info.task_count) : '…'} />
+      <InfoRow label={t('general.fileLocks')} value={info ? String(info.lock_count) : '…'} />
       <InfoRow
-        label="Event log"
-        description={info?.event_log_path ?? 'Loading…'}
-        value={info ? `${info.event_count} events${info.exists ? '' : ' (created on first write)'}` : '…'}
+        label={t('general.eventLog')}
+        description={info?.event_log_path ?? t('teamPage.loading')}
+        value={info ? t('general.events', { count: info.event_count, created: info.exists ? '' : ` ${t('general.createdOnWrite')}` }) : '…'}
       />
-      <SettingRow label="Storage folder" description={info?.storage_dir ?? 'Loading…'}>
-        <Btn onClick={() => void refresh()}>Refresh</Btn>
+      <SettingRow label={t('general.storageFolder')} description={info?.storage_dir ?? t('teamPage.loading')}>
+        <Btn onClick={() => void refresh()}>{t('security.refresh')}</Btn>
       </SettingRow>
       {error && <Note role="alert">{error}</Note>}
     </>
@@ -144,26 +149,28 @@ function exportSettings(settings: Settings) {
 }
 
 function SettingsFile({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const [path, setPath] = useState('settings.json');
   useEffect(() => {
     void resolveSettingsFilePath().then(setPath);
   }, []);
   return (
-    <SettingRow label="Settings file" description={path}>
-      <Btn onClick={() => exportSettings(env.settings)}>Export…</Btn>
+    <SettingRow label={t('settings.row.settings-file.label')} description={path}>
+      <Btn onClick={() => exportSettings(env.settings)}>{t('general.export')}</Btn>
     </SettingRow>
   );
 }
 
 function UninstallRow({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const info = useInstallInfo();
   const [busy, setBusy] = useState(false);
   const run = async () => {
     env.setError(null);
     const ok = await env.confirm({
-      title: 'Uninstall Potato Workspace?',
-      body: 'Potato Workspace will close and be removed from this computer. Your app data folder may remain until you delete it yourself.',
-      confirmLabel: 'Uninstall',
+      title: t('general.uninstallTitle'),
+      body: t('general.uninstallBody'),
+      confirmLabel: t('bridge.uninstall'),
     });
     if (!ok) return;
     setBusy(true);
@@ -176,13 +183,13 @@ function UninstallRow({ env }: { env: SettingsEnv }) {
   };
   const description = info
     ? info.uninstallAvailable
-      ? `${info.uninstallInstructions}${info.dataDir ? ` App data: ${info.dataDir}` : ''}`
-      : 'Only available in an installed build. For a dev build, stop the app and delete the project folder.'
-    : 'Loading…';
+      ? `${info.uninstallInstructions}${info.dataDir ? ` ${t('general.appData', { dir: info.dataDir })}` : ''}`
+      : t('general.uninstallDev')
+    : t('teamPage.loading');
   return (
-    <SettingRow label="Uninstall Potato Workspace" description={description}>
+    <SettingRow label={t('settings.row.uninstall.label')} description={description}>
       <Btn disabled={busy || !info?.uninstallAvailable} onClick={() => void run()}>
-        {busy ? 'Uninstalling…' : 'Uninstall…'}
+        {busy ? t('general.uninstalling') : t('general.uninstallDots')}
       </Btn>
     </SettingRow>
   );
@@ -333,8 +340,8 @@ export const generalRows: RowDef[] = [
     labs: { name: 'Simple mode', about: 'Fewer buttons and plain words, for people who do not write code.' },
     render: (env) => (
       <SettingToggle
-        label={SIMPLE_LABEL}
-        description={SIMPLE_HINT}
+        label={t('settings.row.simple-mode.label')}
+        description={t('settings.row.simple-mode.hint')}
         checked={env.settings.simple_mode ?? false}
         onChange={(value) => void env.patch({ simple_mode: value })}
       />
@@ -381,6 +388,14 @@ export const generalRows: RowDef[] = [
         onChange={(value) => void env.patch({ keep_awake_while_working: value })}
       />
     ),
+  },
+  {
+    id: 'quiet-hours',
+    label: 'Quiet hours',
+    hint: 'Pause alerts at night. A high-risk approval still comes through.',
+    keywords: 'quiet hours night sleep do not disturb silence mute notifications alerts snooze bell',
+    group: 'While agents work',
+    render: (env) => <QuietHoursRow onSaved={env.markSaved} />,
   },
   {
     id: 'loop-guard',
@@ -445,8 +460,8 @@ export const generalRows: RowDef[] = [
     group: 'Undo and memory',
     render: (env) => (
       <SettingToggle
-        label="Checkpoints"
-        description="Saves your files at each agent turn, so you can undo one in History. Needs Git."
+        label={t('settings.row.checkpoints.label')}
+        description={t('settings.row.checkpoints.hint')}
         checked={env.settings.checkpoints_enabled ?? true}
         onChange={(value) => void env.patch({ checkpoints_enabled: value })}
       />
@@ -459,9 +474,9 @@ export const generalRows: RowDef[] = [
     keywords: 'checkpoints prune',
     group: 'Undo and memory',
     render: (env) => (
-      <SettingRow label="Keep last N checkpoints" description="Per agent. Older checkpoints are deleted.">
+      <SettingRow label={t('settings.row.checkpoints-keep.label')} description={t('settings.row.checkpoints-keep.hint')}>
         <NumberControl
-          aria-label="Keep last N checkpoints"
+          aria-label={t('settings.row.checkpoints-keep.label')}
           min={5}
           max={500}
           step={5}
@@ -514,8 +529,8 @@ export const generalRows: RowDef[] = [
     labs: { name: 'Missions', about: 'Give agents a goal and checks to work toward.' },
     render: (env) => (
       <LabsSwitch
-        label="Missions"
-        description="Give agents a goal and checks. They work until the checks pass."
+        label={t('settings.row.missions.label')}
+        description={t('settings.row.missions.hint')}
         checked={env.settings.missions_enabled ?? false}
         onChange={(value) => void env.patch({ missions_enabled: value })}
       />
@@ -539,8 +554,8 @@ export const generalRows: RowDef[] = [
     labs: { name: 'Night Shift', about: 'Agents work overnight in copies you keep or drop.' },
     render: (env) => (
       <LabsSwitch
-        label="Night Shift"
-        description="Agents work overnight in copies. You keep or drop each one."
+        label={t('settings.row.night-shift.label')}
+        description={t('settings.row.night-shift.hint')}
         checked={env.settings.night_shift_enabled ?? false}
         onChange={(value) => void env.patch({ night_shift_enabled: value })}
       />
@@ -564,8 +579,8 @@ export const generalRows: RowDef[] = [
     labs: { name: 'Chat view', about: 'Use an agent as a chat instead of a terminal.' },
     render: (env) => (
       <SettingToggle
-        label="Chat view"
-        description="Use an agent as a chat instead of a terminal."
+        label={t('settings.row.acp-chat-labs.label')}
+        description={t('settings.row.acp-chat-labs.hint')}
         checked={env.settings.acp_chat_enabled ?? true}
         onChange={(value) => void env.patch({ acp_chat_enabled: value })}
       />
@@ -580,8 +595,8 @@ export const generalRows: RowDef[] = [
     labs: { name: 'Another model in Codex', about: 'Adds a way to use another model service inside Codex.' },
     render: (env) => (
       <SettingToggle
-        label="Another model in Codex"
-        description="Adds a way to use another model service inside Codex."
+        label={t('settings.row.model-bridge-labs.label')}
+        description={t('settings.row.model-bridge-labs.hint')}
         checked={env.settings.model_bridge_enabled ?? false}
         onChange={(value) => void env.patch({ model_bridge_enabled: value })}
       />
@@ -596,8 +611,8 @@ export const generalRows: RowDef[] = [
     labs: { name: 'Spaces', about: 'Chat with friends in small groups, PC to PC.' },
     render: (env) => (
       <SettingToggle
-        label="Spaces"
-        description="Chat with friends in small groups, PC to PC. No server keeps messages."
+        label={t('settings.row.spaces-labs.label')}
+        description={t('settings.row.spaces-labs.hint')}
         checked={env.settings.spaces_enabled ?? false}
         onChange={(value) => void env.patch({ spaces_enabled: value })}
       />
@@ -612,8 +627,8 @@ export const generalRows: RowDef[] = [
     labs: { name: 'Lend an agent', about: 'Lend a sign-in to another PC, or borrow one.' },
     render: (env) => (
       <SettingToggle
-        label="Lend an agent"
-        description="Lend a sign-in to another PC, or borrow one. Adds a card to Connect."
+        label={t('settings.row.lend-labs.label')}
+        description={t('settings.row.lend-labs.hint')}
         checked={env.settings.lend_enabled ?? false}
         onChange={(value) => void env.patch({ lend_enabled: value })}
       />
@@ -629,8 +644,8 @@ export const generalRows: RowDef[] = [
     group: 'About',
     render: (env) => (
       <SettingToggle
-        label="Get early versions (beta)"
-        description="Try new versions before everyone else. They may have bugs. Turn off to stay on stable."
+        label={t('settings.row.early-versions.label')}
+        description={t('settings.row.early-versions.hint')}
         checked={env.settings.early_versions_enabled ?? false}
         onChange={(value) => void env.patch({ early_versions_enabled: value })}
       />
@@ -655,8 +670,8 @@ export const generalRows: RowDef[] = [
     group: 'Developer',
     render: (env) => (
       <SettingToggle
-        label="Show developer settings"
-        description="Shows the bridge, MCP, storage and file rows meant for developers."
+        label={t('settings.row.show-developer-settings.label')}
+        description={t('settings.row.show-developer-settings.hint')}
         checked={env.settings.show_developer_settings ?? false}
         onChange={(value) => void env.patch({ show_developer_settings: value })}
       />

@@ -82,6 +82,7 @@ export const state: Partial<Record<EnglishKey, string>> = {
   'state.usage.limitUntil': '已達上限，到 {at} 為止',
   'state.usage.reported': '{time}前回報',
   'state.usage.openPage': '點一下開啟它的使用量頁面',
+  'state.usage.forecast': '照這個速度，約 {hit} 會到上限 · {reset} 重設',
   // sidebar
   'state.otherGroup': '其他',
   'state.helpers_one': '{count} 個幫手',

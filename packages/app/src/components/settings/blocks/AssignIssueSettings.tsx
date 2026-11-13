@@ -2,6 +2,7 @@
 // Master watches, who may start a run, how many run at once, and the recent runs. Every change is one
 // `intakeSave` (the backend checks it again) or one `intakeAct`. The copy says what happens and what does not.
 import { useCallback, useEffect, useState, type MouseEvent } from 'react';
+import { t, useT } from '../../../i18n';
 import { tauri } from '../../../lib/tauri';
 import {
   intakeAct,
@@ -29,18 +30,20 @@ export const RECENT_CAP = 20;
 const NAME_RE = /^[a-z0-9-]{1,39}(\[bot\])?$/;
 
 const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+/** An example name in the empty field: the same in every language. */
+const EXAMPLE_NAME = 'someone';
 
 /** One GitHub name, lowercased, with a leading "@" dropped. A bot name is `name[bot]`. */
 export function gitHubName(raw: string): { name: string } | { error: string } {
   const name = raw.trim().replace(/^@/, '').toLowerCase();
-  if (!NAME_RE.test(name)) return { error: 'Type a GitHub name, like someone. Letters, numbers and dashes only.' };
+  if (!NAME_RE.test(name)) return { error: t('intake.nameError') };
   return { name };
 }
 
 /** The GitHub line under the switch: signed in as whom, or what to install. */
 export function ghLine(gh: GhView): string {
-  if (gh.state === 'ready') return gh.login ? `Signed in to GitHub as @${gh.login} (gh)` : 'Signed in to GitHub (gh)';
-  return 'Install the GitHub CLI and run gh auth login. Nothing is checked until then.';
+  if (gh.state === 'ready') return gh.login ? t('intake.ghAs', { login: gh.login }) : t('intake.gh');
+  return t('intake.ghInstall');
 }
 
 /** The number in a pull request link ("/pull/57" -> "57"), only for a github.com link. */
@@ -51,6 +54,7 @@ export function prNumber(url: string | null): string | null {
 }
 
 function RunRow({ run, busy, onAct }: { run: RunView; busy: boolean; onAct: (action: IntakeAction) => void }) {
+  const t = useT();
   const pr = prNumber(run.prUrl);
   const openPr = (e: MouseEvent<HTMLAnchorElement>) => {
     // In the desktop app the system browser opens it; elsewhere the link works as usual.
@@ -65,19 +69,19 @@ function RunRow({ run, busy, onAct }: { run: RunView; busy: boolean; onAct: (act
       <span className="st-audit-what">
         {run.title} · {pr && run.prUrl ? (
           <a className="st-link" href={run.prUrl} target="_blank" rel="noreferrer" onClick={openPr}>
-            Draft PR #{pr}
+            {t('intake.draftPr', { pr })}
           </a>
         ) : (
           stateText(run)
         )}{' '}
         {run.state === 'declined' && (
           <Btn small disabled={busy} onClick={() => onAct('ask_again')}>
-            Ask again
+            {t('intake.askAgain')}
           </Btn>
         )}
         {run.state === 'ignored' && (
           <Btn small disabled={busy} onClick={() => onAct('unignore')}>
-            Stop ignoring
+            {t('intake.stopIgnoring')}
           </Btn>
         )}
       </span>
@@ -87,6 +91,7 @@ function RunRow({ run, busy, onAct }: { run: RunView; busy: boolean; onAct: (act
 }
 
 export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?: () => void; projectPath?: string | null }) {
+  const t = useT();
   const [view, setView] = useState<IntakeView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -103,7 +108,7 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
       setError(null);
     } catch (e) {
       // No desktop shell (a browser preview) or the backend is not ready: say so, do not crash.
-      setError(`Could not read this setting: ${errText(e)}`);
+      setError(t('intake.readFailed', { reason: errText(e) }));
     }
   }, []);
 
@@ -164,16 +169,16 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
     }
   };
 
-  if (!view) return error ? <Note role="alert">{error}</Note> : <Note role="status">Loading…</Note>;
+  if (!view) return error ? <Note role="alert">{error}</Note> : <Note role="status">{t('teamPage.loading')}</Note>;
 
   const { config, gh } = view;
   const names = config.allowed;
   const addName = () => {
     const parsed = gitHubName(naming ?? '');
     if ('error' in parsed) return setNameError(parsed.error);
-    if (gh.login && parsed.name === gh.login.toLowerCase()) return setNameError('That is you already.');
-    if (names.includes(parsed.name)) return setNameError('That name is already on the list.');
-    if (names.length >= NAMES_CAP) return setNameError(`You can add up to ${NAMES_CAP} names.`);
+    if (gh.login && parsed.name === gh.login.toLowerCase()) return setNameError(t('intake.you'));
+    if (names.includes(parsed.name)) return setNameError(t('intake.onList'));
+    if (names.length >= NAMES_CAP) return setNameError(t('intake.namesCap', { n: NAMES_CAP }));
     setNameError(null);
     setNaming(null);
     void change({ ...config, allowed: [...names, parsed.name] });
@@ -183,21 +188,21 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
     <>
       {error && <Note role="alert">{error}</Note>}
       <SettingToggle
-        label="Watch GitHub issues"
-        description="Potato Workspace checks GitHub about once a minute with your own gh sign-in. Nothing is watched until you add a repository below."
+        label={t('intake.watch')}
+        description={t('intake.watchHelp')}
         checked={config.enabled}
         disabled={busy}
         onChange={(on) => void change({ ...config, enabled: on })}
       />
-      <SettingRow label="GitHub" description={ghLine(gh)}>
+      <SettingRow label="GitHub" /* i18n-ok: product name */ description={ghLine(gh)}>
         <Btn small disabled={busy || gh.state !== 'ready'} onClick={() => void pollNow()}>
-          Check now
+          {t('agentPage.checkNow')}
         </Btn>
       </SettingRow>
 
-      <SettingBlock label="Repositories" description="Only these are watched. Each one is a folder on this PC whose GitHub remote is that repository.">
-        {view.repos.length === 0 && <Note>No repositories yet.</Note>}
-        <ul className="st-devices" aria-label="Watched repositories">
+      <SettingBlock label={t('intake.repos')} description={t('intake.reposHelp')}>
+        {view.repos.length === 0 && <Note>{t('intake.noRepos')}</Note>}
+        <ul className="st-devices" aria-label={t('intake.watchedRepos')}>
           {view.repos.map((row) => (
             <li key={row.repo.id} className="st-device" aria-label={row.repo.owner_repo}>
               <div className="st-device-head">
@@ -207,7 +212,7 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
                 </div>
                 <div className="st-control">
                   <Btn small disabled={busy} onClick={() => setSheet(row.repo)}>
-                    Edit
+                    {t('lend.edit')}
                   </Btn>
                   <Btn
                     small
@@ -216,10 +221,10 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
                       void change({ ...config, repos: config.repos.map((r) => (r.id === row.repo.id ? { ...r, paused: !r.paused } : r)) })
                     }
                   >
-                    {row.repo.paused ? 'Resume' : 'Pause'}
+                    {row.repo.paused ? t('intake.resume') : t('intake.pause')}
                   </Btn>
                   <Btn small disabled={busy} onClick={() => setRemoving(row.repo)}>
-                    Remove
+                    {t('settings.remove')}
                   </Btn>
                 </div>
               </div>
@@ -228,20 +233,20 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
           ))}
         </ul>
         <Btn disabled={busy || config.repos.length >= REPOS_CAP} onClick={() => setSheet('new')}>
-          + Add a repository
+          {t('intake.addRepo')}
         </Btn>
-        {config.repos.length >= REPOS_CAP && <Note>You can watch up to {REPOS_CAP} repositories. Remove one to add another.</Note>}
+        {config.repos.length >= REPOS_CAP && <Note>{t('intake.reposCap', { n: REPOS_CAP })}</Note>}
       </SettingBlock>
 
       <SettingBlock
-        label="Who can start a run"
-        description="You can always start a run. Add GitHub names for people you trust. A label from anyone else is shown under Recent and starts nothing."
+        label={t('intake.who')}
+        description={t('intake.whoHelp')}
       >
-        <ul className="st-abilities" aria-label="Who can start a run">
+        <ul className="st-abilities" aria-label={t('intake.who')}>
           <li className="st-ability">
             <div className="st-label">
-              <span>You</span>
-              <small>{gh.login ? `@${gh.login}` : 'Your GitHub sign-in'}</small>
+              <span>{t('security.who.desktop')}</span>
+              <small>{gh.login ? `@${gh.login}` : t('intake.yourGh')}</small>
             </div>
           </li>
           {names.map((name) => (
@@ -250,7 +255,7 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
                 <span>@{name}</span>
               </div>
               <Btn small disabled={busy} onClick={() => void change({ ...config, allowed: names.filter((n) => n !== name) })}>
-                Remove
+                {t('settings.remove')}
               </Btn>
             </li>
           ))}
@@ -263,19 +268,19 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
               setNameError(null);
             }}
           >
-            + Add a GitHub name
+            {t('intake.addName')}
           </Btn>
         ) : (
           <div className="st-path">
             <FieldInput
-              aria-label="GitHub name"
+              aria-label={t('intake.nameAria')}
               className="font-mono"
               value={naming}
-              placeholder="someone"
+              placeholder={EXAMPLE_NAME}
               onChange={(e) => setNaming(e.target.value)}
             />
             <Btn primary disabled={busy} onClick={addName}>
-              Add
+              {t('keepGoing.add')}
             </Btn>
             <Btn
               onClick={() => {
@@ -283,24 +288,24 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
                 setNameError(null);
               }}
             >
-              Cancel
+              {t('lend.cancel')}
             </Btn>
           </div>
         )}
-        {names.length >= NAMES_CAP && <Note>You can add up to {NAMES_CAP} names.</Note>}
+        {names.length >= NAMES_CAP && <Note>{t('intake.namesCap', { n: NAMES_CAP })}</Note>}
         {nameError && <Note role="alert">{nameError}</Note>}
         <SettingToggle
-          label="Anyone with write access to the repo"
-          description="Off is safer. When on, anyone who can push to the repository can start a run by adding the label."
+          label={t('intake.write')}
+          description={t('intake.writeHelp')}
           checked={config.write_access_counts}
           disabled={busy}
           onChange={(on) => void change({ ...config, write_access_counts: on })}
         />
       </SettingBlock>
 
-      <SettingRow label="Runs at once" description="How many issue runs can work at the same time. Extra approved issues wait in line.">
+      <SettingRow label={t('intake.parallel')} description={t('intake.parallelHelp')}>
         <NumberControl
-          aria-label="Runs at once"
+          aria-label={t('intake.parallel')}
           min={1}
           max={3}
           value={config.parallel}
@@ -309,11 +314,11 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
         />
       </SettingRow>
 
-      <SettingBlock label="Recent" description={`The last ${RECENT_CAP} runs and skipped labels.`}>
+      <SettingBlock label={t('intake.recent')} description={t('intake.recentHelp', { n: RECENT_CAP })}>
         {view.runs.length === 0 ? (
-          <Note>No runs yet.</Note>
+          <Note>{t('intake.noRuns')}</Note>
         ) : (
-          <ul className="st-audit" aria-label="Recent runs">
+          <ul className="st-audit" aria-label={t('intake.recentRuns')}>
             {view.runs.slice(0, RECENT_CAP).map((run) => (
               <RunRow key={run.id} run={run} busy={busy} onAct={(action) => void doRun(run, action)} />
             ))}
@@ -321,10 +326,7 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
         )}
       </SettingBlock>
 
-      <Note>
-        Potato Workspace works on an issue only after someone on your list adds the label. The agent can't push; Potato Workspace opens a
-        draft pull request and never merges.
-      </Note>
+      <Note>{t('intake.footer')}</Note>
 
       {sheet !== null && (
         <AddRepoSheet
@@ -341,9 +343,9 @@ export function AssignIssueSettings({ onSaved, projectPath = null }: { onSaved?:
       )}
       {removing && (
         <ConfirmSheet
-          title={`Stop watching ${removing.owner_repo}?`}
-          body="Potato Workspace stops watching this repository. Your folder and its files are not touched."
-          confirmLabel="Stop watching"
+          title={t('intake.stopTitle', { repo: removing.owner_repo })}
+          body={t('intake.stopBody')}
+          confirmLabel={t('ci.stopWatching')}
           onCancel={() => setRemoving(null)}
           onConfirm={() => {
             const gone = removing;

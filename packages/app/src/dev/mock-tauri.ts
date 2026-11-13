@@ -58,6 +58,9 @@ const DOCTOR_ROWS = [
   { id: 'cursor_agent', label: 'Cursor Agent', state: 'error', installed: true, version: null, reason: 'Found it, but it did not start properly: exit code 1', install_hint: null, login_hint: 'Run: agent login', can_test: true, hooks: { state: 'not_supported', mode: 'shadow', sentence: "This agent can't report to Potato Workspace directly. Potato Workspace reads its screen." } },
 ];
 
+/** The notification choices the mock PC keeps (a real PC keeps them on disk). */
+const NOTIFY_PREFS = { bells: {} as Record<string, string>, quiet: { enabled: false, start: 1320, end: 420 }, snoozes: {} as Record<string, number>, imported: true };
+
 export function installTauriMock(scenario: HarnessScenario): void {
   const lendMock = createLendMock(scenario.lend);
   const closedState: { chats: ClosedChat[] | null } = { chats: null };
@@ -70,6 +73,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
   // Settings > Phone > Devices: one phone with full control in daily use, one watch-and-answer.
   const now = Math.floor(Date.now() / 1000);
   const day = 24 * 60 * 60;
+  const paneRemote: Record<string, { remote: boolean; level: string }> = {};
   let pairedDevices = [
     { id: '6f1c2a90-aaaa-4bbb-8ccc-000000000001', name: "Maya's iPhone", public_key: 'pk1', paired_at: now - 40 * day, caps: ['watch', 'answer', 'type', 'control'], expires_at: now + 30 * day - 600, last_seen: now - 600, expired: false, idle_expiry_secs: 30 * day },
     { id: '6f1c2a90-aaaa-4bbb-8ccc-000000000002', name: 'Pixel 8', public_key: 'pk2', paired_at: now - 9 * day, caps: ['watch', 'answer'], expires_at: now + 21 * day, last_seen: now - 9 * day, expired: false, idle_expiry_secs: 30 * day },
@@ -170,6 +174,10 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { safetyId: '7', written: 4, removed: 1, failed: [] };
         case 'turn_summaries':
           return a.paneId === PANE_CLAUDE ? EXAMPLE_TURN_SUMMARIES : [];
+        case 'companion_list':
+          return scenario.companion
+            ? [{ id: 'mochi', name: 'Mochi', avatar: 'mochi', persona: 'calm', agentType: 'claude', agentLabel: 'Claude', folderName: 'home', state: scenario.companion, stateLine: '', paneId: null, needs: null, pendingMemory: 2, nextCheckin: null, restarts: 0, autoStart: true }]
+            : [];
         case 'away_digest_pending':
           return scenario.awayDigest ? EXAMPLE_DIGEST : null;
         case 'away_digest_dismiss':
@@ -408,6 +416,13 @@ export function installTauriMock(scenario: HarnessScenario): void {
             qr_payload: { v: 1, u: url, pk: 'bW9jay1zZXJ2ZXItcHVibGljLWtleQ==', c: 'K7Q2M9XD', e: 1_900_000_000 },
           };
         }
+        case 'get_pane_remote':
+          return paneRemote[a.paneId as string] ?? { remote: true, level: 'full' };
+        case 'set_pane_remote': {
+          const next = { ...(paneRemote[a.paneId as string] ?? { remote: true, level: 'full' }), ...(a.remote === undefined ? {} : { remote: a.remote }), ...(a.level === undefined ? {} : { level: a.level }) };
+          paneRemote[a.paneId as string] = next as { remote: boolean; level: string };
+          return next;
+        }
         case 'list_paired_mobile_devices':
           return pairedDevices;
         case 'set_paired_mobile_device_caps': {
@@ -440,6 +455,18 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return (a.options as { directory?: boolean } | undefined)?.directory ? 'C:\\Users\\dev\\.agy\\skills' : 'C:\\Users\\dev\\.agy\\settings.json';
         case 'agent_pack_undo':
           return { restored: [], removed: ['a', 'b'], skipped: [], recorded: 0 };
+        case 'notify_prefs_get':
+          return NOTIFY_PREFS;
+        case 'notify_bell_set':
+          NOTIFY_PREFS.bells[String(a.key)] = String(a.level);
+          return NOTIFY_PREFS;
+        case 'notify_quiet_set':
+          NOTIFY_PREFS.quiet = a.quiet as typeof NOTIFY_PREFS.quiet;
+          return NOTIFY_PREFS;
+        case 'notify_prefs_import':
+          return NOTIFY_PREFS;
+        case 'notify_snooze':
+          return Date.now() + 30 * 60_000;
         case 'discord_alerts_status':
         case 'discord_alerts_set_url':
         case 'discord_alerts_clear':

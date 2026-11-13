@@ -80,4 +80,7 @@ export const sidebar = {
   'sidebar.handoffFromHere': 'Handoff from here',
   'sidebar.details': 'Details',
   'sidebar.close': 'Close',
+  'sidebar.dragLive': 'Dragging {name}. Drop on the left or right side. Esc cancels.',
+  'sidebar.dropLeft': 'Open on the left',
+  'sidebar.dropRight': 'Open on the right',
 } as const;

@@ -1,10 +1,10 @@
 // Whether the session rail is shown: the person's choice (remembered), the window being wide enough, and the
 // `]` key. Storage can be blocked (private window), so every read and write is guarded.
 import { useCallback, useEffect, useState } from 'react';
+import { useLayout } from '../../../lib/panel-widths';
+import { useFocusMode } from '../../../lib/focus-mode';
 
 export const RAIL_KEY = 'pm.sessionRail.open';
-/** Below this window width the rail is hidden whatever the person chose. */
-export const RAIL_MIN_WIDTH = 1100;
 
 function readOpen(): boolean {
   try {
@@ -32,7 +32,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 export interface RailLayout {
   /** The person wants the rail. */
   open: boolean;
-  /** The window is wide enough to hold it. */
+  /** The window leaves the chat at least 480 px beside the narrowest panel. */
   fits: boolean;
   /** Show it: open and fits. */
   visible: boolean;
@@ -41,20 +41,14 @@ export interface RailLayout {
 
 export function useRailLayout(): RailLayout {
   const [open, setOpen] = useState(readOpen);
-  const [width, setWidth] = useState(() => (typeof window === 'undefined' ? RAIL_MIN_WIDTH : window.innerWidth));
-  const fits = width >= RAIL_MIN_WIDTH;
+  const fits = useLayout().railFits;
+  const focus = useFocusMode();
 
   const toggle = useCallback(() => {
     setOpen((was) => {
       writeOpen(!was);
       return !was;
     });
-  }, []);
-
-  useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
@@ -68,5 +62,5 @@ export function useRailLayout(): RailLayout {
     return () => window.removeEventListener('keydown', onKey);
   }, [fits, toggle]);
 
-  return { open, fits, visible: open && fits, toggle };
+  return { open, fits, visible: open && fits && !focus, toggle };
 }

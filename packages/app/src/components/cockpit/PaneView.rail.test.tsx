@@ -109,7 +109,8 @@ describe('session rail in the pane view', () => {
   });
 
   it('is not there on a narrow window, and has no button', async () => {
-    setWidth(1000);
+    // 240 sidebar + 240 narrowest panel + 480 chat = 960 px.
+    setWidth(900);
     const c = cockpit([mk('p', 'Refactor auth')], 'p');
     await act(async () => root.render(<PaneView c={c} paneId="p" />));
     expect(rail()).toBeNull();

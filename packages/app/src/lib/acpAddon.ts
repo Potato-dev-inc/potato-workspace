@@ -2,6 +2,7 @@
 // the desktop app, plus the pure rules the screens share: the install prompt's words, the Settings row's words, and how
 // a start error is told apart. Nothing here names an agent: labels, sizes and sign-in hints come from the backend.
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 export type AddonState = 'not_installed' | 'installing' | 'installed' | 'failed';
@@ -112,18 +113,18 @@ export function addonFor(byAgent: Record<string, AddonStatus>, agentId: string |
 
 /** "about 48 MB", or nothing when the size is not known. */
 export function sizeText(mb: number | null): string {
-  return mb && mb > 0 ? ` (about ${mb} MB)` : '';
+  return mb && mb > 0 ? ` ${t('addon.about', { mb })}` : '';
 }
 
 /** The install prompt: "Chat needs a small add-on for Claude (about 48 MB)." */
 export function promptText(s: AddonStatus): string {
-  return `Chat needs a small add-on for ${s.label}${sizeText(s.size_mb)}.`;
+  return t('addon.prompt', { label: s.label, size: sizeText(s.size_mb) });
 }
 
 /** The newest progress line, or a plain "Installing…". */
 export function progressText(s: AddonStatus): string {
   const last = s.lines.length > 0 ? s.lines[s.lines.length - 1] : '';
-  return last || 'Installing…';
+  return last || t('pack.installing');
 }
 
 /** Whether Chat for this agent still needs the add-on installed (so Send waits and the prompt shows). */
@@ -135,13 +136,13 @@ export function needsInstall(s: AddonStatus | undefined | null): boolean {
 export function rowText(s: AddonStatus): string {
   switch (s.state) {
     case 'installed':
-      return `Installed${s.version ? ` ${s.version}` : ''}`;
+      return `${t('addon.installed')}${s.version ? ` ${s.version}` : ''}`;
     case 'installing':
-      return `Installing… ${s.lines.length > 0 ? progressText(s) : ''}`.trim();
+      return `${t('pack.installing')} ${s.lines.length > 0 ? progressText(s) : ''}`.trim();
     case 'failed':
-      return s.detail || 'The install did not finish.';
+      return s.detail || t('addon.notFinished');
     default:
-      return 'Not installed';
+      return t('keepGoing.notInstalled');
   }
 }
 

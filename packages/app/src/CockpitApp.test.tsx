@@ -3,6 +3,9 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CockpitApp from './CockpitApp';
+import { startDrag } from './components/dnd/dragStore';
+import { resetSideWidth, setSideWidth } from './lib/panel-widths';
+import { setFocusMode } from './lib/focus-mode';
 import { requestGoLive, type LiveStatus } from './lib/live-room';
 import { requestBringChats, requestImportedChat } from './lib/chatImport';
 import { runStoreCheck } from './lib/agentStoreCheck';
@@ -852,6 +855,26 @@ describe('CockpitApp split view wiring', () => {
     expect(mainText()).toContain('SPLIT VIEW p1|p2|right');
   });
 
+  it('a chat dragged onto the right half opens beside the selected one; onto the left half it takes the left', () => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const side = this.getAttribute('data-testid');
+      const [l, r] = side === 'dropzone-left' ? [0, 500] : side === 'dropzone-right' ? [500, 1000] : [0, 0];
+      return { left: l, right: r, top: 0, bottom: 600, width: r - l, height: 600, x: l, y: 0, toJSON() {} } as DOMRect;
+    });
+    const move = (type: string, x: number) => act(() => void window.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: 50, button: 0 })));
+    act(() => startDrag({ kind: 'chat', id: 'p2', label: 'p2' }, { clientX: 10, clientY: 10, button: 0 }));
+    move('pointermove', 700);
+    move('pointerup', 700);
+    move('click', 700); // a browser always sends the click that follows a release
+    expect(mainText()).toContain('SPLIT VIEW p1|p2|right');
+    act(() => startDrag({ kind: 'chat', id: 'p2', label: 'p2' }, { clientX: 10, clientY: 10, button: 0 }));
+    move('pointermove', 200);
+    move('pointerup', 200);
+    move('click', 200);
+    expect(mainText()).toContain('SPLIT VIEW p2|p1|left');
+    vi.restoreAllMocks();
+  });
+
   it('picking the right pane in the sidebar swaps the sides; the inbox ends the split', () => {
     clickButton('Open p2 to the side');
     clickButton('pane p2');
@@ -869,6 +892,95 @@ describe('CockpitApp split view wiring', () => {
     act(() => ctrlBackslash());
     expect(mainText()).toContain('SPLIT VIEW');
     resize(800);
+    expect(mainText()).toBe('PANE VIEW p1');
+  });
+});
+
+describe('CockpitApp layout: panel widths, focus mode and swapping the sides', () => {
+  const press = (init: KeyboardEventInit) => act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })));
+  const cockpitEl = () => host.querySelector<HTMLElement>('.cockpit')!;
+  const handle = () => host.querySelector<HTMLElement>('[role="separator"][aria-label="Resize the sidebar"]')!;
+  const focusing = () => cockpitEl().hasAttribute('data-focus-mode');
+  beforeEach(() => {
+    window.innerWidth = 1280;
+    act(() => window.dispatchEvent(new Event('resize')));
+  });
+  afterEach(() => {
+    act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    window.innerWidth = 1024;
+    act(() => window.dispatchEvent(new Event('resize')));
+    localStorage.clear();
+    act(() => resetSideWidth());
+  });
+
+  it('the sidebar has a handle: arrow keys widen it, Home goes to the smallest, double-click resets, and it is remembered', () => {
+    expect(cockpitEl().style.getPropertyValue('--ck-side-w')).toBe('240px');
+    expect(handle().getAttribute('aria-valuenow')).toBe('240');
+    act(() => handle().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    expect(cockpitEl().style.getPropertyValue('--ck-side-w')).toBe('256px');
+    expect(localStorage.getItem('pm.sidebar.width')).toBe('256');
+    act(() => handle().dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
+    expect(cockpitEl().style.getPropertyValue('--ck-side-w')).toBe('180px');
+    act(() => handle().dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(cockpitEl().style.getPropertyValue('--ck-side-w')).toBe('240px');
+  });
+
+  it('dragging the sidebar very narrow makes it the thin icon strip, and dragging out brings it back', () => {
+    act(() => setSideWidth(100));
+    expect(cockpitEl().hasAttribute('data-side-strip')).toBe(true);
+    expect(cockpitEl().style.getPropertyValue('--ck-side-w')).toBe('52px');
+    act(() => setSideWidth(260));
+    expect(cockpitEl().hasAttribute('data-side-strip')).toBe(false);
+    expect(cockpitEl().style.getPropertyValue('--ck-side-w')).toBe('260px');
+  });
+
+  it('Ctrl+Shift+Enter fills the window with the open pane; Esc and the button bring the layout back', () => {
+    press({ key: 'Enter', ctrlKey: true, shiftKey: true });
+    expect(focusing()).toBe(true);
+    expect(cockpitEl().style.getPropertyValue('--ck-side-w')).toBe('0px');
+    expect(host.querySelector('.ck-resize--side')).toBeNull();
+    press({ key: 'Escape' });
+    expect(focusing()).toBe(false);
+    press({ key: 'Enter', ctrlKey: true, shiftKey: true });
+    clickButton('Exit focus mode');
+    expect(focusing()).toBe(false);
+    press({ key: 'Enter', ctrlKey: true, shiftKey: true });
+    press({ key: 'Enter', ctrlKey: true, shiftKey: true });
+    expect(focusing()).toBe(false);
+  });
+
+  it('focus mode ends when the Inbox opens', () => {
+    press({ key: 'Enter', ctrlKey: true, shiftKey: true });
+    expect(focusing()).toBe(true);
+    clickButton('Inbox');
+    expect(focusing()).toBe(false);
+    press({ key: 'Enter', ctrlKey: true, shiftKey: true });
+    expect(focusing()).toBe(false);
+  });
+
+  it('Esc is left alone while a sheet is open', () => {
+    press({ key: 'Enter', ctrlKey: true, shiftKey: true });
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    document.body.appendChild(dialog);
+    press({ key: 'Escape' });
+    expect(focusing()).toBe(true);
+    dialog.remove();
+    press({ key: 'Escape' });
+    expect(focusing()).toBe(false);
+  });
+
+  it('Ctrl+Alt+X swaps the two chats of a split view; the chat that had the focus keeps it', () => {
+    clickButton('Open p2 to the side');
+    expect(mainText()).toContain('SPLIT VIEW p1|p2|left');
+    press({ key: 'x', ctrlKey: true, altKey: true });
+    expect(mainText()).toContain('SPLIT VIEW p2|p1|right');
+    press({ key: 'x', ctrlKey: true, altKey: true });
+    expect(mainText()).toContain('SPLIT VIEW p1|p2|left');
+  });
+
+  it('Ctrl+Alt+X does nothing without a split view', () => {
+    press({ key: 'x', ctrlKey: true, altKey: true });
     expect(mainText()).toBe('PANE VIEW p1');
   });
 });

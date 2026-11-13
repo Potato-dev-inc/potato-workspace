@@ -1,7 +1,11 @@
 // Settings > Orchestrator & Models: the project index builder and the OpenCode defaults. Every control autosaves.
+import { t } from '../../../i18n';
 import { TextControl } from '../controls';
 import type { RowDef } from '../model';
 import { SettingRow } from '../settings-ui';
+
+/** Example values in the empty fields: ids and a word that is code, the same in every language. */
+const EXAMPLE = { indexer: 'opencode', provider: 'anthropic', model: 'claude-sonnet-4' };
 
 const trim = (text: string) => text.trim();
 
@@ -14,14 +18,14 @@ export const modelsRows: RowDef[] = [
     group: 'Project index',
     render: (env) => (
       <SettingRow
-        label="Project index"
-        description="Empty: OpenCode builds it. Or the path to your own script."
+        label={t('settings.row.librarian-indexer.label')}
+        description={t('settings.row.librarian-indexer.hint')}
       >
         <TextControl
-          aria-label="Project index"
+          aria-label={t('settings.row.librarian-indexer.label')}
           mode="blur"
           mono
-          placeholder="opencode"
+          placeholder={EXAMPLE.indexer}
           value={env.settings.librarian_indexer_path ?? ''}
           normalize={trim}
           onCommit={(text) => env.patch({ librarian_indexer_path: text || null })}
@@ -36,12 +40,12 @@ export const modelsRows: RowDef[] = [
     keywords: 'orchestrator opencode provider id anthropic model',
     group: 'OpenCode',
     render: (env) => (
-      <SettingRow label="OpenCode: model service" description="Used when you start OpenCode without naming a model.">
+      <SettingRow label={t('settings.row.opencode-provider.label')} description={t('settings.row.opencode-provider.hint')}>
         <TextControl
-          aria-label="OpenCode provider ID"
+          aria-label={t('models.providerId')}
           mode="blur"
           mono
-          placeholder="anthropic"
+          placeholder={EXAMPLE.provider}
           value={env.settings.opencode_model_provider ?? ''}
           normalize={trim}
           onCommit={(text) => env.patch({ opencode_model_provider: text || null })}
@@ -56,12 +60,12 @@ export const modelsRows: RowDef[] = [
     keywords: 'orchestrator opencode model id',
     group: 'OpenCode',
     render: (env) => (
-      <SettingRow label="OpenCode: model" description="The model used with the service above.">
+      <SettingRow label={t('settings.row.opencode-model.label')} description={t('settings.row.opencode-model.hint')}>
         <TextControl
-          aria-label="OpenCode model ID"
+          aria-label={t('models.modelId')}
           mode="blur"
           mono
-          placeholder="claude-sonnet-4"
+          placeholder={EXAMPLE.model}
           value={env.settings.opencode_model_id ?? ''}
           normalize={trim}
           onCommit={(text) => env.patch({ opencode_model_id: text || null })}

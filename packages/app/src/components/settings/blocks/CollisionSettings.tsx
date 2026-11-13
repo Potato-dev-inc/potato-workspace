@@ -1,15 +1,17 @@
 // Settings > Agents: "Warn me when two agents change the same file" (on by default). Saves itself the moment you
 // flip it, through the collision settings command. It only warns: nothing here pauses or stops an agent.
 import { useEffect, useState } from 'react';
+import { en } from '../../../i18n/en';
+import { useT } from '../../../i18n';
 import { tauriCollisionApi, type CollisionApi, type CollisionSettings } from '../../../lib/collision';
 import { Note, SettingToggle } from '../settings-ui';
 
-export const COLLISION_LABEL = 'Warn me when two agents change the same file';
-export const COLLISION_FOOTER =
-  'Potato Workspace reads the list of changed files, and the changed lines when both agents changed the same file. It never pauses or stops an agent.';
-export const COLLISION_SAVE_FAILED = 'Could not save. Try again.';
+export const COLLISION_LABEL = en['settings.row.collision.label'];
+export const COLLISION_FOOTER = en['collision.footer'];
+export const COLLISION_SAVE_FAILED = en['collision.saveFailed'];
 
 export function CollisionSettings({ api = tauriCollisionApi, onSaved }: { api?: CollisionApi; onSaved?: () => void }) {
+  const t = useT();
   const [current, setCurrent] = useState<CollisionSettings | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -45,15 +47,15 @@ export function CollisionSettings({ api = tauriCollisionApi, onSaved }: { api?: 
       },
       () => {
         setCurrent(previous);
-        setError(COLLISION_SAVE_FAILED);
+        setError(t('collision.saveFailed'));
       },
     );
   };
 
   return (
     <>
-      <SettingToggle label={COLLISION_LABEL} checked={current?.enabled ?? false} disabled={!current} onChange={change} />
-      <Note>{COLLISION_FOOTER}</Note>
+      <SettingToggle label={t('settings.row.collision.label')} checked={current?.enabled ?? false} disabled={!current} onChange={change} />
+      <Note>{t('collision.footer')}</Note>
       {error && <Note role="alert">{error}</Note>}
     </>
   );

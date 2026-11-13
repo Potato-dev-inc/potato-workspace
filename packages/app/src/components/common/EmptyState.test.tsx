@@ -39,9 +39,9 @@ describe('EmptyState', () => {
   });
 
   it('shows the quiet Potato mark, except in a small menu', () => {
-    const big = render(<EmptyState title="T" />).querySelector('svg[data-mark="potato"]');
+    const big = render(<EmptyState title="T" />).querySelector('img[data-mark="potato"]');
     expect(big?.getAttribute('class')).toBe('ck-potato ck-potato--quiet');
     expect(big?.getAttribute('width')).toBe('28');
-    expect(render(<EmptyState plain title="T" />).querySelector('svg')).toBeNull();
+    expect(render(<EmptyState plain title="T" />).querySelector('img')).toBeNull();
   });
 });

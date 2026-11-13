@@ -1,11 +1,13 @@
 // Settings > General > Labs > Ask bar: the global shortcut that opens a small bar to ask an agent a quick question.
 // It saves through its own commands (`askbar_settings_get/set`), then flashes the row's "Saved" tick.
 import { errorSentence } from '../../../lib/sayError';
+import { useT } from '../../../i18n';
 import { useEffect, useState } from 'react';
 import { ASKBAR_SHORTCUTS, tauriAskbarApi, type AskbarAgent, type AskbarApi, type AskbarSettings } from '../../../lib/askbar';
 import { FieldSelect, SettingRow, SettingToggle } from '../settings-ui';
 
 export function AskBarSettingsBlock({ api = tauriAskbarApi, onSaved }: { api?: AskbarApi; onSaved?: () => void }) {
+  const t = useT();
   const [s, setS] = useState<AskbarSettings | null>(null);
   const [agents, setAgents] = useState<AskbarAgent[]>([]);
   useEffect(() => {
@@ -26,7 +28,7 @@ export function AskBarSettingsBlock({ api = tauriAskbarApi, onSaved }: { api?: A
       })
       .catch((e: unknown) => {
         setS(before); // put the old value back: it was not saved
-        setError('Not saved: ' + (errorSentence(e)));
+        setError(t('settings.notSaved', { reason: errorSentence(e) }));
       });
   };
   return (
@@ -37,13 +39,13 @@ export function AskBarSettingsBlock({ api = tauriAskbarApi, onSaved }: { api?: A
         </p>
       )}
       <SettingToggle
-        label="Ask bar"
-        description="Open a small bar from any app to ask an agent a quick question. Off by default."
+        label={t('settings.row.ask-bar.label')}
+        description={t('askBar.help')}
         checked={s.enabled}
         onChange={(enabled) => save({ ...s, enabled })}
       />
-      <SettingRow label="Ask bar shortcut" description="Pick the keys that open the bar. Record your own in Settings > Shortcuts.">
-        <FieldSelect aria-label="Ask bar shortcut" value={s.shortcut} disabled={!s.enabled} onChange={(e) => save({ ...s, shortcut: e.target.value })}>
+      <SettingRow label={t('askBar.shortcut')} description={t('askBar.shortcutHelp')}>
+        <FieldSelect aria-label={t('askBar.shortcut')} value={s.shortcut} disabled={!s.enabled} onChange={(e) => save({ ...s, shortcut: e.target.value })}>
           {ASKBAR_SHORTCUTS.map((key) => (
             <option key={key} value={key}>
               {key}
@@ -51,14 +53,14 @@ export function AskBarSettingsBlock({ api = tauriAskbarApi, onSaved }: { api?: A
           ))}
         </FieldSelect>
       </SettingRow>
-      <SettingRow label="Ask bar agent" description="Which agent answers. Last used keeps the one you picked last.">
+      <SettingRow label={t('askBar.agent')} description={t('askBar.agentHelp')}>
         <FieldSelect
-          aria-label="Ask bar agent"
+          aria-label={t('askBar.agent')}
           value={s.default_agent ?? ''}
           disabled={!s.enabled}
           onChange={(e) => save({ ...s, default_agent: e.target.value || null })}
         >
-          <option value="">Last used</option>
+          <option value="">{t('askBar.lastUsed')}</option>
           {agents.map((a) => (
             <option key={a.id} value={a.id}>
               {a.label}
@@ -67,8 +69,8 @@ export function AskBarSettingsBlock({ api = tauriAskbarApi, onSaved }: { api?: A
         </FieldSelect>
       </SettingRow>
       <SettingToggle
-        label="Attach clipboard by default"
-        description="Off by default. When on, each open reads the clipboard and attaches it to your question. Clipboard text can hold passwords or keys."
+        label={t('askBar.clipboard')}
+        description={t('askBar.clipboardHelp')}
         checked={s.attach_clipboard_default}
         onChange={(attach_clipboard_default) => save({ ...s, attach_clipboard_default })}
       />

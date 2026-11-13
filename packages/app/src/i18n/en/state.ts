@@ -80,6 +80,7 @@ export const state = {
   'state.usage.limitUntil': 'Limit reached until {at}',
   'state.usage.reported': 'Reported {time} ago',
   'state.usage.openPage': 'Click to open its usage page',
+  'state.usage.forecast': 'At this pace you hit the limit at about {hit} · resets {reset}',
   // sidebar
   'state.otherGroup': 'Other',
   'state.helpers_one': '{count} helper',

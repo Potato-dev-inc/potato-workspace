@@ -1,6 +1,8 @@
 // "Create team relay": a Cloudflare token in, the relay deployed into the person's own account (the Rust side does
 // the upload, src-tauri/src/team/relay_deploy.rs), its address out. The token is sent once and not kept here.
 import { errorSentence } from '../../../lib/sayError';
+import { en } from '../../../i18n/en';
+import { useT } from '../../../i18n';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { tauri } from '../../../lib/tauri';
 import type { CloudflareAccount, RelayDeployStep, TeamApi } from '../../../lib/team';
@@ -11,11 +13,11 @@ const errText = (err: unknown): string => (errorSentence(err));
 export const CLOUDFLARE_TOKENS_URL = 'https://dash.cloudflare.com/profile/api-tokens';
 
 const STEPS: { step: RelayDeployStep; label: string }[] = [
-  { step: 'token', label: 'Checking your token' },
-  { step: 'upload', label: 'Putting the relay in your account' },
-  { step: 'subdomain', label: 'Turning on its free address' },
-  { step: 'health', label: 'Waiting for it to start' },
-  { step: 'done', label: 'Done' },
+  { step: 'token', label: en['relay.step.token'] },
+  { step: 'upload', label: en['relay.step.upload'] },
+  { step: 'subdomain', label: en['relay.step.subdomain'] },
+  { step: 'health', label: en['relay.step.health'] },
+  { step: 'done', label: en['relay.step.done'] },
 ];
 
 /** A link that opens in the system browser in the desktop app, and as a normal link elsewhere. */
@@ -39,6 +41,7 @@ export function ExternalLink({ href, children }: { href: string; children: React
 }
 
 export function RelaySheet({ api, onDone, onClose }: { api: TeamApi; onDone: (url: string) => void; onClose: () => void }) {
+  const t = useT();
   const [token, setToken] = useState('');
   const [accounts, setAccounts] = useState<CloudflareAccount[] | null>(null);
   const [accountId, setAccountId] = useState('');
@@ -95,17 +98,17 @@ export function RelaySheet({ api, onDone, onClose }: { api: TeamApi; onDone: (ur
       }}
     >
       <div className="st-sheet st-relay" role="dialog" aria-modal="true" aria-labelledby="st-relay-title">
-        <h2 id="st-relay-title">Create team relay</h2>
-        <p>The relay lives in your own Cloudflare account, on the free plan. It only passes on encrypted messages.</p>
-        <ol className="st-relay-how" aria-label="Three steps">
+        <h2 id="st-relay-title">{t('teamPage.createRelay')}</h2>
+        <p>{t('relay.intro')}</p>
+        <ol className="st-relay-how" aria-label={t('relay.stepsAria')}>
           <li>
-            <strong>Open Cloudflare.</strong> <ExternalLink href={CLOUDFLARE_TOKENS_URL}>Create a Cloudflare token</ExternalLink>. Sign in if it asks.
+            <strong>{t('relay.s1a')}</strong> <ExternalLink href={CLOUDFLARE_TOKENS_URL}>{t('relay.s1b')}</ExternalLink>{t('relay.s1c')}
           </li>
           <li>
-            <strong>Use the “Edit Cloudflare Workers” template.</strong> Press Use template, then Continue to summary, then Create Token.
+            <strong>{t('relay.s2a')}</strong> {t('relay.s2b')}
           </li>
           <li>
-            <strong>Paste the token here.</strong> It is used once and not kept.
+            <strong>{t('relay.s3a')}</strong> {t('relay.s3b')}
           </li>
         </ol>
         <FieldInput
@@ -114,8 +117,8 @@ export function RelaySheet({ api, onDone, onClose }: { api: TeamApi; onDone: (ur
           className="font-mono"
           autoComplete="off"
           spellCheck={false}
-          aria-label="Cloudflare token"
-          placeholder="Paste the token"
+          aria-label={t('relay.tokenAria')}
+          placeholder={t('relay.tokenPlaceholder')}
           value={token}
           disabled={running}
           onChange={(e) => setToken(e.target.value)}
@@ -124,7 +127,7 @@ export function RelaySheet({ api, onDone, onClose }: { api: TeamApi; onDone: (ur
           }}
         />
         {accounts && accounts.length > 1 && (
-          <FieldSelect aria-label="Cloudflare account" value={accountId} disabled={running} onChange={(e) => setAccountId(e.target.value)}>
+          <FieldSelect aria-label={t('relay.accountAria')} value={accountId} disabled={running} onChange={(e) => setAccountId(e.target.value)}>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -135,14 +138,14 @@ export function RelaySheet({ api, onDone, onClose }: { api: TeamApi; onDone: (ur
         {at >= 0 && (
           <>
             <p className="st-relay-now" role="status">
-              {error ? `Stopped at step ${Math.min(at + 1, 4)} of 4` : step === 'done' ? 'Done' : `Step ${Math.min(at + 1, 4)} of 4: ${STEPS[at].label}…`}
+              {error ? t('relay.stoppedAt', { n: Math.min(at + 1, 4) }) : step === 'done' ? t('relay.step.done') : t('relay.stepOf', { n: Math.min(at + 1, 4), label: t(`relay.step.${STEPS[at].step}`) })}
             </p>
-            <ol className="st-relay-steps" aria-label="Progress">
+            <ol className="st-relay-steps" aria-label={t('relay.progress')}>
               {STEPS.map((s, i) => {
                 const state = i < at || step === 'done' ? 'done' : i === at ? (error ? 'failed' : 'now') : 'later';
                 return (
                   <li key={s.step} data-state={state} aria-current={state === 'now' ? 'step' : undefined}>
-                    {s.label}
+                    {t(`relay.step.${s.step}`)}
                   </li>
                 );
               })}
@@ -150,13 +153,13 @@ export function RelaySheet({ api, onDone, onClose }: { api: TeamApi; onDone: (ur
           </>
         )}
         {error && <Note role="alert">{error}</Note>}
-        {error && <p className="st-relay-hint">Nothing was changed on your team. Check the token uses the “Edit Cloudflare Workers” template, then try again.</p>}
+        {error && <p className="st-relay-hint">{t('relay.hint')}</p>}
         <div className="st-sheet-actions">
           <Btn disabled={running} onClick={onClose}>
-            Cancel
+            {t('lend.cancel')}
           </Btn>
           <Btn primary disabled={running || !token.trim()} onClick={() => void deploy()}>
-            {running ? 'Working…' : error ? 'Retry' : 'Create relay'}
+            {running ? t('discord.working') : error ? t('relay.retry') : t('relay.create')}
           </Btn>
         </div>
       </div>

@@ -495,3 +495,17 @@ fn the_pc_answered_this_occurrence_a_moment_ago_so_the_phone_is_told_and_nothing
     assert!(env.audits.lock().is_empty());
     assert!(env.notes.lock().is_empty());
 }
+
+#[test]
+fn a_phone_cannot_answer_for_an_agent_whose_remote_control_is_off() {
+    use crate::mobile_pairing::pane_rules::{self, PaneRule};
+    let env = FakeEnv::showing("pane-remote-off", rec("pid-1", "Run command: npm test (in shop)", "low"), 3);
+    pane_rules::set("pane-remote-off", PaneRule { remote: false, ..PaneRule::default() }).unwrap();
+    let reply = answer(&env, &all(), &env.item_id(), &env.request("allow_once", None));
+    assert_eq!(reply.0, 403);
+    assert_eq!(reply.1["code"], "PANE_REMOTE_OFF");
+    assert_eq!(env.writes(), 0, "nothing is typed for a switched-off agent");
+    // Back on: the same answer goes through.
+    pane_rules::set("pane-remote-off", PaneRule::default()).unwrap();
+    assert_eq!(outcome(&answer(&env, &all(), &env.item_id(), &env.request("allow_once", None))), "answered");
+}

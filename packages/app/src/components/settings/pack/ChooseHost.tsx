@@ -2,6 +2,7 @@
 // The backend reads the file, says where its server list is and what an entry looks like; the user sees the exact
 // entry first, then keeps the choice. Nothing is written to the agent's files until the normal Install.
 import { useState } from 'react';
+import { t, useT } from '../../../i18n';
 import type { AgentPackApi, PackInspection } from '../../../lib/agent-pack';
 import { errText } from '../../../lib/toolbelt';
 import { btn, btnPrimary, field } from '../toolbelt/styles';
@@ -15,6 +16,7 @@ export interface HostTarget {
 }
 
 export function InspectionCard({ found }: { found: PackInspection }) {
+  const t = useT();
   const entry = JSON.stringify({ 'potato-workspace': found.entry }, null, 2);
   return (
     <div data-testid="pack-inspection" className="space-y-1.5 rounded-lg border border-pm-border bg-pm-panel p-3 text-xs leading-5">
@@ -22,19 +24,19 @@ export function InspectionCard({ found }: { found: PackInspection }) {
         {found.path}
       </div>
       <div>
-        Format: <span className="font-medium">{FORMAT_NAME[found.format] ?? found.format}</span>
+        {t('pack.format')} <span className="font-medium">{FORMAT_NAME[found.format] ?? found.format}</span>
       </div>
       <div>
-        Server list: <span className="font-mono">{found.key_path}</span>
-        {found.creates_list && <span className="text-pm-muted"> (this file has none yet, so Potato Workspace adds it)</span>}
+        {t('pack.serverList')} <span className="font-mono">{found.key_path}</span>
+        {found.creates_list && <span className="text-pm-muted"> {t('pack.createsList')}</span>}
       </div>
       <div className="text-pm-muted">{found.shape}</div>
       {found.already_present ? (
-        <div>A potato-workspace entry is already in this list. It is left unchanged.</div>
+        <div>{t('pack.alreadyIn')}</div>
       ) : (
         <>
           <div>
-            This entry will be added under <span className="font-mono">{found.key_path}</span>:
+            {t('pack.willBeAdded')} <span className="font-mono">{found.key_path}</span>:
           </div>
           <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-pm-bg p-2 font-mono text-[11px] leading-5">{entry}</pre>
         </>
@@ -57,6 +59,7 @@ export function ChooseHost({
   onSaved: () => void;
   onCancel?: () => void;
 }) {
+  const t = useT();
   const [name, setName] = useState('');
   const [found, setFound] = useState<PackInspection | null>(null);
   const [skills, setSkills] = useState<string | null>(null);
@@ -102,22 +105,22 @@ export function ChooseHost({
     <div data-testid="pack-choose" className="mt-2 space-y-2">
       {askName && (
         <label className="block text-xs text-pm-muted">
-          Agent name
-          <input aria-label="Agent name" className={field} value={name} maxLength={40} placeholder="For example: My agent" onChange={(e) => setName(e.target.value)} />
+          {t('pack.agentName')}
+          <input aria-label={t('pack.agentName')} className={field} value={name} maxLength={40} placeholder={t('pack.agentNamePlaceholder')} onChange={(e) => setName(e.target.value)} />
         </label>
       )}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className={btn} onClick={() => void chooseFile()}>
-          Choose settings file…
+          {t('pack.chooseFile')}
         </button>
         <button type="button" className={btn} onClick={() => void chooseFolder()}>
-          Choose skills folder…
+          {t('pack.chooseFolder')}
         </button>
-        <span className="text-[11px] text-pm-muted">The skills folder is optional.</span>
+        <span className="text-[11px] text-pm-muted">{t('pack.folderOptional')}</span>
       </div>
       {skills && (
         <div className="truncate font-mono text-[11px] text-pm-muted" title={skills} data-testid="pack-skills-pick">
-          Skills folder: {skills}
+          {t('pack.skillsFolder', { path: skills })}
         </div>
       )}
       {error && (
@@ -130,12 +133,12 @@ export function ChooseHost({
         <div className="flex gap-2">
           {found && (
             <button type="button" className={btnPrimary} disabled={busy || nameMissing} onClick={() => void save()}>
-              {busy ? 'Saving…' : 'Use this file'}
+              {busy ? t('tunnel.saving') : t('pack.useFile')}
             </button>
           )}
           {onCancel && (
             <button type="button" className={btn} onClick={onCancel}>
-              Cancel
+              {t('lend.cancel')}
             </button>
           )}
         </div>

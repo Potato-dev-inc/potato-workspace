@@ -2,6 +2,7 @@
 // small line helpers, and the two request stores (open an old chat, open the Bring panel). The Rust side is
 // src-tauri/src/commands/chat_import.rs. Nothing here reads an agent folder: that starts only after "Find my chats".
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
 import { listen } from '@tauri-apps/api/event';
 import { useSyncExternalStore } from 'react';
 import { formatBytes, type ChatIndexStatus } from './chatIndex';
@@ -303,7 +304,7 @@ function rangeText(oldestMs: number | null, newestMs: number | null, now: number
 
 /** A count with its noun: "1 chat", "412 chats". Every count on the Bring my chats screens uses it. */
 export function chatCount(count: number): string {
-  return `${count.toLocaleString('en-US')} ${count === 1 ? 'chat' : 'chats'}`;
+  return t('bring.chatCount', { count, n: count.toLocaleString('en-US') });
 }
 
 /** One row of the agent list: "Claude · 412 chats · 38 MB · Mar 2026 to now". */

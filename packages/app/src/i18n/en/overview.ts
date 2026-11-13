@@ -54,6 +54,8 @@ export const overview = {
   "overview.update.reopenChats": "Reopen chats",
   "overview.update.tryAgain": "Try again",
   "overview.update.fallback": "The update could not be installed. Your current version keeps working.",
+  "overview.update.checkStableFailed": "Couldn't check for updates. Try again later.",
+  "overview.update.checkBetaFailed": "Couldn't check for early versions. Try again later.",
   "overview.update.oneAgent": "An agent is",
   "overview.update.manyAgents": "{count} agents are",
   "overview.update.stillWorking": "{who} still working or waiting for you{names}. Restarting stops {them}.",

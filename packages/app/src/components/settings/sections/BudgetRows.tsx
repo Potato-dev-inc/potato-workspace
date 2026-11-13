@@ -1,6 +1,7 @@
 // Settings > General > Budgets: the default brake for work agents start. Off by default (0): an
 // agent run has no budget unless one of these is set or the agent that starts it asks for one.
 // A run that reaches a limit pauses before its next turn; it is never stopped mid-turn.
+import { t } from '../../../i18n';
 import { NumberControl } from '../controls';
 import type { RowDef } from '../model';
 import { SettingRow } from '../settings-ui';
@@ -19,14 +20,14 @@ export const budgetRows: RowDef[] = [
     keywords: 'budget limit cost turns pause helpers brake spend',
     group: 'Budgets',
     render: (env) => (
-      <SettingRow label="Turns an agent may use" description={TURNS_HINT}>
+      <SettingRow label={t('settings.row.budget-turns.label')} description={t('settings.row.budget-turns.hint')}>
         <NumberControl
-          aria-label="Turns an agent may use (0 is no limit)"
+          aria-label={t('budget.turnsAria')}
           min={0}
           max={10000}
           value={env.settings.budget_default_turns ?? 0}
           normalize={clampBudgetTurns}
-          suffix="turns"
+          suffix={t('budget.turnsSuffix')}
           onCommit={(turns) => env.patch({ budget_default_turns: turns })}
         />
       </SettingRow>
@@ -39,14 +40,14 @@ export const budgetRows: RowDef[] = [
     keywords: 'budget limit cost time minutes pause brake spend',
     group: 'Budgets',
     render: (env) => (
-      <SettingRow label="Time an agent may use" description={TIME_HINT}>
+      <SettingRow label={t('settings.row.budget-minutes.label')} description={t('settings.row.budget-minutes.hint')}>
         <NumberControl
-          aria-label="Time an agent may use (0 is no limit)"
+          aria-label={t('budget.minutesAria')}
           min={0}
           max={10080}
           value={env.settings.budget_default_minutes ?? 0}
           normalize={clampBudgetMinutes}
-          suffix="min"
+          suffix={t('budget.minSuffix')}
           onCommit={(minutes) => env.patch({ budget_default_minutes: minutes })}
         />
       </SettingRow>

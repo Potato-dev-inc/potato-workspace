@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.23
+
+This is a beta.
+
+- New: the Potato is the app's face. The app icon, tray, taskbar and phone icon use the Potato drawing, and the companion row shows the Potato with a mood (watching, needs you, sleepy, celebrating).
+- New: drag the sidebar edge and the right panel edge to make them wider or narrower. Double-click resets. Double-click a tab for focus mode; Esc brings everything back.
+- New: drag a chat from the sidebar onto the left or right half to open it side by side.
+- New: Remote control for each agent, in the right panel. Turn it off and paired devices cannot read, answer or type to that agent. The PC enforces it, not only the screen.
+- New: continue where you left off. The start page offers to reopen the chats that were open last time, in the same split.
+- New: a bell for each agent (everything, only when it needs me, only when it is finished, silent), quiet hours, and snooze for 30 minutes. Risky approvals always reach you.
+- New: a usage forecast. "At this pace you hit the limit at about 15:40."
+- All Settings pages are now in Traditional Chinese too.
+- Early versions: the app now says when it could not check for updates, instead of saying "Up to date".
+- Fixes: a pane no longer breaks when the PC answers a chat request with nothing, and a drag no longer also selects the chat.
+
 ## 1.0.22
 
 This is a beta.

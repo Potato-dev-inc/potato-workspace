@@ -1,7 +1,7 @@
 // Cockpit window (`index.html?cockpit=1`): one window that orchestrates every agent pane.
 import { useNudgeOnAction } from './lib/desktop-nudge';
 import { useFollowFocusedProject } from './hooks/useFollowFocusedProject';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AgentDoctor } from './components/cockpit/AgentDoctor';
 import { markSpawned } from './lib/agent-health';
 import { useCockpit } from './hooks/useCockpit';
@@ -47,12 +47,20 @@ import { useModeSwitch } from './lib/mode-switch/useModeSwitch';
 import { LoopGuardContext, tauriLoopApi, useLoopSignals, type StopReport } from './lib/loop-guard';
 import { homeView, isSplitShortcut, splitAfterSelect, splitFits, splitFocusKey, splitPartner, splitStillOn, SPLIT_DEFAULT_RATIO, viewAfterSelect, type MainView, type SplitSide } from './components/cockpit/main-view';
 import { digitForAction, isMacPlatform, isShortcutRecording, matchesAction } from './lib/shortcuts';
+import { useT } from './i18n';
+import { setFocusMode, toggleFocusMode, useFocusMode } from './lib/focus-mode';
+import { SIDE_MAX, SIDE_MIN, resetSideWidth, saveWidths, setSideWidth, useLayout } from './lib/panel-widths';
+import { ResizeHandle } from './components/cockpit/ResizeHandle';
 import { nextNeedingPane, paneAtNumber, recordPaneUse, stepPane } from './lib/pane-order';
 import { useKeybindingsSync, useKeybindingsVersion } from './hooks/useKeybindings';
+import { DragLayer } from './components/dnd/DragLayer';
+import { WorkAreaDropZones } from './components/dnd/WorkAreaDropZones';
+import { dropSplit, type DropSide } from './components/dnd/drop-split';
 import { focusSideComposer, SplitView, useWindowWidth } from './components/cockpit/SplitView';
 import { useSessionMemory } from './components/cockpit/useSessionMemory';
 import { EndedAgentsLine } from './components/cockpit/EndedAgentsLine';
-import { clearSplitMemory, readSplitMemory, restorableSplit, writeSplitMemory } from './components/cockpit/split-memory';
+import { clearSplitMemory, readSplitMemory, restorableSplit, writeSplitMemory, type SplitMemory } from './components/cockpit/split-memory';
+import { useYesterdaySnapshot } from './components/cockpit/useYesterdaySnapshot';
 import { useCompanions } from './hooks/useCompanions';
 import { tauriCompanionTransport } from './lib/companion';
 
@@ -132,6 +140,9 @@ export default function CockpitApp() {
   // The left side's share of the room (drag or arrow keys on the divider). Remembered with the split (split-memory.ts).
   const [ratio, setRatio] = useState(SPLIT_DEFAULT_RATIO);
   const width = useWindowWidth();
+  const t = useT();
+  const focusMode = useFocusMode();
+  const layout = useLayout();
   const paneIds = c.registry.paneList.map((p) => p.info.id);
   // The animated Orchestration <-> Individual switch: Rust asks for the proxies, this window fades around the overlay.
   useModeSwitch({
@@ -288,6 +299,19 @@ export default function CockpitApp() {
     setSplit(id);
     setSide('left');
   };
+  // A chat dragged from the sidebar and dropped on the left or right half of the work area (components/dnd).
+  const dropChat = (id: string, to: DropSide) => {
+    if (!splitFits(width)) {
+      c.notify('The window is too narrow for two chats');
+      return;
+    }
+    const pick = dropSplit(c.selectedId, splitOn ? split : null, id, to);
+    if (!pick) return;
+    setView('pane');
+    if (pick.selected !== c.selectedId) c.select(pick.selected);
+    setSplit(pick.split);
+    setSide(to);
+  };
   useEffect(() => {
     if (c.registry.paneList.length > 0) markSpawned();
   }, [c.registry.paneList.length]);
@@ -356,6 +380,47 @@ export default function CockpitApp() {
     return () => window.removeEventListener('keydown', onKey, true);
   });
 
+  // Focus mode: Ctrl+Shift+Enter fills the window with the open pane; the same keys, Esc (outside a terminal, a menu
+  // or a sheet) or the button bring everything back. It also ends by itself when no pane is open.
+  const paneOpen = view === 'pane' && c.selectedId !== null;
+  useEffect(() => {
+    if (!paneOpen) setFocusMode(false);
+  }, [paneOpen]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing) return;
+      if (matchesAction(e, 'focus-mode', isMacPlatform())) {
+        if (!paneOpen && !focusMode) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFocusMode();
+        return;
+      }
+      if (e.key !== 'Escape' || !focusMode || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (inTerminal(e.target) || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]')) return;
+      e.preventDefault();
+      setFocusMode(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [paneOpen, focusMode]);
+
+  // Ctrl+Alt+X swaps the two sides of a split view. The pane that had the focus keeps it on its new side.
+  useEffect(() => {
+    if (split === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || !matchesAction(e, 'split-swap', isMacPlatform())) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const was = side;
+      // Picking the right pane makes it the left one and the old left pane the right one (splitAfterSelect).
+      nav.select(split);
+      setSide(was === 'left' ? 'right' : 'left');
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
+
   // Ctrl+Alt+Left / Right (Cmd+Alt on a Mac) move the focus between the two sides. Only while the split is open:
   // otherwise the keys go on to the terminal as before.
   useEffect(() => {
@@ -407,6 +472,27 @@ export default function CockpitApp() {
       savedSplit.current = false;
     }
   }, [split, ratio, c.selectedId]);
+
+  // "Continue where you left off" (yesterday-memory.ts): this run's open chats are saved for the next start.
+  const openPanes = useMemo(() => c.registry.paneList.map((p) => p.info), [c.registry.paneList]);
+  const liveSplit = useMemo<SplitMemory | null>(() => (split !== null && c.selectedId !== null ? { left: c.selectedId, right: split, ratio } : null), [split, ratio, c.selectedId]);
+  useYesterdaySnapshot({ ready: c.registry.initialReady, panes: openPanes, split: liveSplit });
+  // Chats reopened from that card: the split they had comes back once both of its panes are on the list.
+  const [pendingSplit, setPendingSplit] = useState<SplitMemory | null>(null);
+  useEffect(() => {
+    if (!pendingSplit) return;
+    if (!c.registry.panes.has(pendingSplit.left) || !c.registry.panes.has(pendingSplit.right)) return;
+    setPendingSplit(null);
+    if (!splitFits(width)) return;
+    nav.select(pendingSplit.left);
+    setSplit(pendingSplit.right);
+    setRatio(pendingSplit.ratio);
+    setSide('left');
+  }, [pendingSplit, c.registry.panes]);
+  const onReopenedRun = (paneIds: string[], back: SplitMemory | null) => {
+    if (back) setPendingSplit(back);
+    else if (paneIds[0]) nav.select(paneIds[0]);
+  };
 
   const { onClickCapture } = useNudgeOnAction();
   // Mission cards (Labs) count once in the one list, as they do in the Rust snapshot (tray, phone).
@@ -479,7 +565,28 @@ export default function CockpitApp() {
     <NeedsYouContext.Provider value={needsYou}>
     <LastTurnContext.Provider value={away.lastTurn}>
     <LiveStatusContext.Provider value={live.status}>
-    <div className="cockpit" data-theme={c.theme} onClickCapture={onClickCapture}>
+    <div
+      className="cockpit"
+      data-theme={c.theme}
+      data-side-strip={layout.strip ? '' : undefined}
+      data-focus-mode={focusMode ? '' : undefined}
+      style={{ ['--ck-side-w' as string]: `${layout.sidePx}px` } as CSSProperties}
+      onClickCapture={onClickCapture}
+    >
+      {!focusMode && (
+        <ResizeHandle
+          className="ck-resize--side"
+          grow="right"
+          value={layout.sidePx}
+          min={SIDE_MIN}
+          max={SIDE_MAX}
+          label={t('pane.resizeSidebar')}
+          title={t('pane.resizeSidebarTip')}
+          onChange={setSideWidth}
+          onCommit={saveWidths}
+          onReset={resetSideWidth}
+        />
+      )}
       <Sidebar
         c={nav}
         handoff={handoff}
@@ -516,6 +623,7 @@ export default function CockpitApp() {
         }}
       />
       <main className="ck-main">
+        <WorkAreaDropZones onDropChat={dropChat} />
         <EndedAgentsLine ended={session.ended} onReopen={session.reopen} onDismiss={session.dismiss} />
         {c.mode === 'individual' ? (
           <div className="ck-spawn ck-spawn--plain">
@@ -570,7 +678,7 @@ export default function CockpitApp() {
         ) : view === 'settings' ? (
           <SettingsView key={settings.viewKey} {...settings.viewProps} onOpenStore={openStore} />
         ) : view === 'newagent' ? (
-          <NewAgentHost c={nav} project={newAgentProject} onSetUp={() => setView('doctor')} />
+          <NewAgentHost c={nav} project={newAgentProject} onSetUp={() => setView('doctor')} onReopenedRun={onReopenedRun} />
         ) : view === 'spaces' && spacesOn ? (
           <SpacesPage />
         ) : c.chatStarting ? (
@@ -632,7 +740,13 @@ export default function CockpitApp() {
             }}
           />
         )}
+        {focusMode && (
+          <button type="button" className="ck-focus-exit" title={t('pane.focusExitTip')} onClick={() => setFocusMode(false)}>
+            {t('pane.focusExit')}
+          </button>
+        )}
       </main>
+      <DragLayer />
       {paletteOpen && (
         <Palette
           key={paletteMode}

@@ -153,6 +153,7 @@ mod capacity_proxy;
 mod keep_awake;
 mod wsl;
 mod collision;
+mod notify_levels;
 #[cfg(test)]
 mod conformance_suite;
 
@@ -811,6 +812,13 @@ pub fn run() {
             commands::agents_detect_installed,
             commands::orca_import_scan,
             commands::orca_import_add,
+            commands::get_pane_remote,
+            commands::set_pane_remote,
+            commands::notify_prefs_get,
+            commands::notify_bell_set,
+            commands::notify_quiet_set,
+            commands::notify_snooze,
+            commands::notify_prefs_import,
         ])
         .setup(|app| {
             commands::startup_probe(app.handle().clone());

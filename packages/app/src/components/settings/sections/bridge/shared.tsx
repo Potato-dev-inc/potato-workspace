@@ -1,6 +1,8 @@
 // Pieces shared by the Bridge & MCP rows: the "MCP changed" event, one install/uninstall action at a
 // time, and small status lines. Monochrome: status is words, never colour.
 import { errorSentence } from '../../../../lib/sayError';
+import { en } from '../../../../i18n/en';
+import { t } from '../../../../i18n';
 import { useState, type ReactNode } from 'react';
 import type { EnsureMcpResult } from '../../../../lib/mcp-config';
 import type { SettingsEnv } from '../../model';
@@ -8,8 +10,7 @@ import { Note } from '../../settings-ui';
 
 export const MCP_CHANGED_EVENT = 'pm-mcp-changed';
 
-export const RESTART_NOTE =
-  'Restart any open MCP host sessions so they disconnect the old process and launch the selected MCP runtime.';
+export const RESTART_NOTE = en['bridge.restartNote'];
 
 /** Tell the other Bridge & MCP rows that agent configs were written or removed. */
 export function announceMcpChanged(): void {
@@ -23,7 +24,7 @@ export function installPathOf(env: SettingsEnv): string {
 
 /** The runtime that the app writes into agent configs, in words. */
 export function runtimeName(env: SettingsEnv): string {
-  return env.settings.developer_use_rust_mcp ? 'bundled Rust MCP binary' : 'npm package';
+  return env.settings.developer_use_rust_mcp ? t('bridge.rustBinary') : t('bridge.npmPackage');
 }
 
 /**
@@ -75,7 +76,7 @@ export function ResultLines({ results, note }: { results: EnsureMcpResult[]; not
         <StatusLine
           key={r.backend}
           label={backendName(r.backend)}
-          value={r.installed ? (r.changed ? 'Updated' : 'Already set') : 'Incomplete'}
+          value={r.installed ? (r.changed ? t('bridge.updated') : t('bridge.alreadySet')) : t('bridge.incomplete')}
           detail={r.message}
         />
       ))}
@@ -93,8 +94,8 @@ export function backendName(id: string): string {
   const [first = '', ...rest] = id.split('_').filter(Boolean);
   const agent = agents[first] ?? first.charAt(0).toUpperCase() + first.slice(1);
   const words = rest.filter((word) => word !== 'cli');
-  if (words.join('_') === 'global_home') return `${agent} · home folder`;
-  if (words.includes('global')) return `${agent} · all projects`;
-  if (rest.includes('cli')) return `${agent} · this project`;
+  if (words.join('_') === 'global_home') return `${agent} · ${t('bridge.homeFolder')}`;
+  if (words.includes('global')) return `${agent} · ${t('toolbelt.allProjects').toLowerCase()}`;
+  if (rest.includes('cli')) return `${agent} · ${t('toolbelt.thisProject').toLowerCase()}`;
   return words.length ? `${agent} ${words.join(' ')}` : agent;
 }

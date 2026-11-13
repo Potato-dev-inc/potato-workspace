@@ -114,6 +114,9 @@ async function press(deps: HandoffDeps) {
   for (let i = 0; i < 12; i++) await flush();
 }
 
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+
 describe('pane header: Hand off follows the "Hand off does" setting', () => {
   it('Handoff to new agent: label, temporary file, fixed notes, the same agent with its sign-in, Ready, file moved', async () => {
     settings.value = { handoff_mode: 'new_agent', handoff_fixed_notes: 'Reply short.' };

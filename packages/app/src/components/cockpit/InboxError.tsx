@@ -56,6 +56,7 @@ export function PaneErrorCard({ c, paneId, agentType, name, project, age, onOpen
       meta={project}
       age={age ?? null}
       reason={<span title={code ?? undefined}>{words.sentence}</span>}
+      snoozeKeys={[paneId]}
       data={{ 'data-error-pane': paneId }}
       actions={
         <>

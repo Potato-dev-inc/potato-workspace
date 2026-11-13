@@ -55,6 +55,8 @@ export const overview: Partial<Record<EnglishKey, string>> = {
   'overview.update.agentsStopped': 'AI 助理已停止。',
   'overview.update.reopenChats': '重新開啟對話',
   'overview.update.tryAgain': '再試一次',
+  'overview.update.checkStableFailed': '無法檢查更新，請稍後再試。',
+  'overview.update.checkBetaFailed': '無法檢查搶先版本，請稍後再試。',
   'overview.update.fallback': '無法安裝更新。你目前的版本仍可繼續使用。',
   'overview.update.oneAgent': '有 1 個 AI 助理',
   'overview.update.manyAgents': '有 {count} 個 AI 助理',

@@ -5,6 +5,7 @@
 // one more sign-in for the borrower (`lend:<grant id>`, see lib/accounts.ts). A request that arrives from a teammate is
 // untrusted data (rendered as plain text, the reason always in quotes).
 import { errorSentence } from './sayError';
+import { t } from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { Account } from './accounts';
@@ -177,12 +178,12 @@ export const capFor = (forOtherPerson: boolean): number => (forOtherPerson ? CAP
 /** "1 hour", "8 hours", "1 h 30 min", "45 min", "2 days". */
 export function durationWords(secs: number): string {
   const s = Math.max(0, Math.round(secs));
-  if (s % (24 * HOUR) === 0 && s >= 24 * HOUR * 2) return `${s / (24 * HOUR)} days`;
+  if (s % (24 * HOUR) === 0 && s >= 24 * HOUR * 2) return t('lend.dur.days', { n: s / (24 * HOUR) });
   const h = Math.floor(s / HOUR);
   const m = Math.round((s % HOUR) / 60);
-  if (h === 0) return `${m} min`;
-  if (m === 0) return h === 1 ? '1 hour' : `${h} hours`;
-  return `${h} h ${m} min`;
+  if (h === 0) return t('lend.dur.min', { m });
+  if (m === 0) return h === 1 ? t('lend.dur.hour') : t('lend.dur.hours', { h });
+  return t('lend.dur.hm', { h, m });
 }
 
 /** Hours and minutes typed in the Custom field to seconds. NaN-safe: anything unreadable is 0. */
@@ -195,15 +196,15 @@ export function customSecs(hours: string, minutes: string): number {
 
 /** Why a length cannot be used, in a plain sentence; null when it is fine. */
 export function durationProblem(secs: number, forOtherPerson: boolean): string | null {
-  if (secs < 60) return 'Pick at least one minute.';
+  if (secs < 60) return t('lend.dur.atLeast');
   const cap = capFor(forOtherPerson);
-  if (secs > cap) return forOtherPerson ? 'Another person can borrow it for 24 hours at most.' : 'The most is 7 days.';
+  if (secs > cap) return forOtherPerson ? t('lend.dur.otherMax') : t('lend.dur.max7');
   return null;
 }
 
 /** "2h 14m", "40m", "1m" (the last minute), "3d 2h". The time left on a grant. */
 export function leftText(ms: number): string {
-  if (ms <= 0) return 'ended';
+  if (ms <= 0) return t('lend.ended');
   const total = Math.ceil(ms / 60_000);
   if (total < 1) return '<1m';
   const d = Math.floor(total / 1440);
@@ -228,7 +229,7 @@ export const isActiveOut = (g: Grant, now: number): boolean => g.direction === '
 /** The agent's name from the driver list, else the id with a capital. */
 export function agentLabel(state: Pick<LendState, 'drivers'> | null | undefined, id: string): string {
   const hit = state?.drivers.find((d) => d.agent_id === id)?.label;
-  return hit ?? (id ? id[0].toUpperCase() + id.slice(1) : 'agent');
+  return hit ?? (id ? id[0].toUpperCase() + id.slice(1) : t('lend.agent'));
 }
 
 /** Agents a person may ask for or lend: verified, or lab (tagged). `no` is never offered. */
@@ -239,7 +240,7 @@ export function offerable(drivers: readonly LendDriver[]): LendDriver[] {
 /** Agents shown in the lists as "<Agent>: coming soon" and never offered. None today: Codex and Gemini lend with an API key. */
 export const COMING_SOON: readonly { agent_id: string; label: string }[] = [];
 
-export const comingSoonText = (label: string): string => `${label}: coming soon`;
+export const comingSoonText = (label: string): string => t('lend.comingSoon', { label });
 
 /** The coming-soon agents that have no working driver in this state. */
 export function comingSoonAgents(drivers: readonly LendDriver[]): { agent_id: string; label: string }[] {
@@ -253,78 +254,73 @@ export function comingSoonAgents(drivers: readonly LendDriver[]): { agent_id: st
 export function signInProblem(drivers: readonly LendDriver[], agentIds: readonly string[]): string | null {
   const blocked = drivers.find((d) => agentIds.includes(d.agent_id) && !d.account);
   if (!blocked) return null;
-  return blocked.account_note || `${blocked.label} can only be lent with an API key.`;
+  return blocked.account_note || t('lend.apiKeyOnly', { label: blocked.label });
 }
 
-export const supportTag = (s: Support): string => (s === 'verified' ? 'Works' : s === 'lab' ? 'Lab' : 'Not possible');
+export const supportTag = (s: Support): string => (s === 'verified' ? t('lend.support.works') : s === 'lab' ? t('lend.support.lab') : t('lend.support.no'));
 
 /** "Leo's laptop": a device name that already starts with the owner is kept as it is. */
 export function ownerOf(person: string, device: string): string {
-  return device.toLowerCase().startsWith(person.toLowerCase()) ? device : `${person}'s ${device}`;
+  return device.toLowerCase().startsWith(person.toLowerCase()) ? device : t('lend.ownerOf', { person, device });
 }
 
 /** "Leo's laptop wants Claude for 8 hours". */
 export function requestTitle(r: LendRequest, agent: string): string {
   const who = r.device_name ? ownerOf(r.member_name, r.device_name) : r.member_name;
-  return `${who} wants ${agent} for ${durationWords(r.secs)}`;
+  return t('lend.wants', { who, agent, time: durationWords(r.secs) });
 }
 
 /** "Lending Claude to Maya · 2h 14m left" / "Borrowing Codex from Leo · 40m left". */
 export function grantLine(g: Grant, agent: string, now: number): string {
-  const left = `${leftText(g.ends_ms - now)} left`;
-  return g.direction === 'out' ? `Lending ${agent} to ${g.peer_name} · ${left}` : `Borrowing ${agent} from ${g.peer_name} · ${left}`;
+  const time = leftText(g.ends_ms - now);
+  return g.direction === 'out' ? t('lend.lendingTo', { agent, peer: g.peer_name, time }) : t('lend.borrowingFrom', { agent, peer: g.peer_name, time });
 }
 
 /** The sentence shown on both PCs when `problem` is set. The Rust side sends its own words; this is the same text. */
-export const SIGNIN_PROBLEM_TEXT = "The lender's sign-in expired. Ask them to sign in again.";
+export const signinProblemText = (): string => t('lend.signinExpired');
 
 /** What to show for a grant's `problem`: the plain sentence, whatever the backend's wording, or null when all is fine. */
-export const problemText = (g: Pick<Grant, 'problem'>): string | null => (g.problem ? SIGNIN_PROBLEM_TEXT : null);
+export const problemText = (g: Pick<Grant, 'problem'>): string | null => (g.problem ? signinProblemText() : null);
 
 /** "12 requests · 3.4k tokens", or null while nothing was used (the borrower's PC may not count). */
 export function usageText(g: Pick<Grant, 'requests' | 'input_tokens' | 'output_tokens'>): string | null {
   const requests = g.requests ?? 0;
   const tokens = (g.input_tokens ?? 0) + (g.output_tokens ?? 0);
   if (requests === 0 && tokens === 0) return null;
-  const t = tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1)}M` : tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
-  return `${requests} ${requests === 1 ? 'request' : 'requests'} · ${t} tokens`;
+  const tk = tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1)}M` : tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
+  return t('lend.usage', { requests, count: requests, tokens: tk });
 }
 
 /** The limits of a profile as one line, or null when it has none. */
 export function limitsText(p: Pick<LendProfile, 'max_requests' | 'max_tokens'>): string | null {
   const parts: string[] = [];
-  if (p.max_requests) parts.push(`${p.max_requests} requests`);
-  if (p.max_tokens) parts.push(`${p.max_tokens.toLocaleString('en-US')} tokens`);
-  return parts.length > 0 ? `Up to ${parts.join(' and ')}` : null;
+  if (p.max_requests) parts.push(t('lend.limit.requests', { n: p.max_requests }));
+  if (p.max_tokens) parts.push(t('lend.limit.tokens', { n: p.max_tokens.toLocaleString('en-US') }));
+  return parts.length > 0 ? t('lend.limit.upTo', { parts: parts.join(t('lend.and')) }) : null;
 }
 
 /** The pane chip: "Leo's Claude · 1h 59m". */
 export function chipText(g: Grant, agent: string, now: number): string {
-  return `${g.peer_name}'s ${agent} · ${leftText(g.ends_ms - now)}`;
+  return `${t('lend.ownerOf', { person: g.peer_name, device: agent })} · ${leftText(g.ends_ms - now)}`;
 }
 
 /** Why a grant ended, in a plain sentence. */
 export function endedWords(g: Grant): string {
-  if (g.end_reason === 'revoked') return 'Taken back';
-  if (g.end_reason === 'returned') return 'Given back';
-  return 'Time ran out';
+  if (g.end_reason === 'revoked') return t('lend.end.revoked');
+  if (g.end_reason === 'returned') return t('lend.end.returned');
+  return t('lend.end.timeout');
 }
 
 /** The two messages that come before a grant ends. */
-export const WARN_TEN = { minutes: 10, text: 'Finish or save now' } as const;
-export const WARN_ONE = { minutes: 1, text: 'Finish or save now' } as const;
+export const WARN_TEN = { minutes: 10 } as const;
+export const WARN_ONE = { minutes: 1 } as const;
 
 /** The box shown when lending to another person. The text is the founder's (plan, section 4). */
 export function otherPersonWarning(agent: string): { head: string; lines: string[]; tick: string } {
   return {
-    head: 'You are lending to another person. Use at your own risk.',
-    lines: [
-      `They will use your ${agent} plan as you. Your provider may not allow sharing and may limit or close your account.`,
-      '"Send my login": they get a copy of your sign-in. It keeps working until you sign it out. Potato Workspace cannot take it back.',
-      '"Through my PC": your PC can see what they send.',
-      'Lend only to people you trust.',
-    ],
-    tick: 'I understand',
+    head: t('lend.risk.head'),
+    lines: [t('lend.risk.l1', { agent }), t('lend.risk.l2'), t('lend.risk.l3'), t('lend.risk.l4')],
+    tick: t('lend.risk.tick'),
   };
 }
 
@@ -335,7 +331,7 @@ export const quoted = (text: string): string => `“${text}”`;
 
 /** The first line of the chip's details: "Borrowed Claude from Leo's PC". */
 export function chipLabelOf(g: Grant, agent: string): string {
-  return `Borrowed ${agent} from ${ownerOf(g.peer_name, g.peer_device_name || 'PC')}`;
+  return t('lend.borrowedFrom', { agent, owner: ownerOf(g.peer_name, g.peer_device_name || t('lend.pc')) });
 }
 
 /**
@@ -343,5 +339,5 @@ export function chipLabelOf(g: Grant, agent: string): string {
  * address, so it may say "API billing" or "API key" even when the lender lends a plan: say what is true.
  */
 export function borrowedBillingNote(peerName: string): string {
-  return `This is ${peerName}'s sign-in, lent through their PC. The agent may say "API billing"; that is only how it is connected. Use is charged to ${peerName}'s plan, not yours.`;
+  return t('lend.billingNote', { peer: peerName });
 }

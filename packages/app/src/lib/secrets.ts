@@ -3,6 +3,7 @@
 // "Custom AI service" writer calls its service from this webview and needs that one key. The provider keys
 // are never handed back.
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
 
 /** The three provider keys, which also have a fallback field in the settings file. */
 export type ProviderSecretName = 'anthropic_api_key' | 'openai_api_key' | 'openrouter_api_key';
@@ -53,12 +54,12 @@ export function maskLocal(value: string | undefined): SecretMask {
 /** Plain, true-in-every-state line describing a key. */
 export function describeKeyState(mask: SecretMask, info: SecretStorageInfo): string {
   if (!mask.set) {
-    return info.secure ? `Not set. It will be stored in ${info.label}.` : 'Not set.';
+    return info.secure ? t('keys.state.notSetStored', { label: info.label }) : t('keys.state.notSet');
   }
   const dots = mask.last4 ? `•••• ${mask.last4}` : '••••';
   return info.secure
-    ? `${dots} · Stored in ${info.label}`
-    : `${dots} · Saved in a plain settings file (not secure)`;
+    ? `${dots} · ${t('keys.state.stored', { label: info.label })}`
+    : `${dots} · ${t('keys.state.plain')}`;
 }
 
 export const NO_SECURE_STORAGE_WARNING =

@@ -67,6 +67,7 @@ export function PaneApprovalCard({
       title={asks ? t('inboxCards.labelled', { label: asks, text: plainTitle }) : plainTitle}
       meta={who}
       age={age}
+      snoozeKeys={[paneId]}
       body={onOpen && hasChoices ? <KeyHints hints={approvalHints({ answers: prompt.choices.length, high: false, canOpen: true })} /> : undefined}
       actions={
         hasChoices ? (

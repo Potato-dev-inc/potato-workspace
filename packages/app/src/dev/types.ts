@@ -77,6 +77,8 @@ export interface HarnessScenario {
   headlessOnlyAgent?: boolean;
   /** Cockpit: start with the "While you were away" digest showing (as after a return). */
   awayDigest?: boolean;
+  /** Cockpit: show one companion ("Mochi") in this state in the sidebar. Absent: no companion yet. */
+  companion?: import('../lib/companion').CompanionState;
   /** Run info the mocked `pane_run_info` returns per pane id (default: only the example Claude pane has one). */
   runs?: Record<string, import('../lib/cockpit-api').PaneRunInfo>;
   /** Cockpit History: make `checkpoints_list` answer with this state instead of the example list. */

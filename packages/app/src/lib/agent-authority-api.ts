@@ -1,6 +1,7 @@
 // Typed wrappers for the agent-authority commands (`commands/agent_authority.rs`): the two switches
 // and the read-only audit list. Only the desktop window can call them; the phone has no route.
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
 
 export interface AgentAuthority {
   /** A: ask before an agent controls a pane it did not start. */
@@ -47,14 +48,14 @@ export type AgentAuthorityApi = typeof agentAuthorityApi;
 export function whoText(who: AuditEntry['who']): string {
   switch (who) {
     case 'desktop':
-      return 'You';
+      return t('security.who.desktop');
     case 'device':
-      return 'A paired phone';
+      return t('security.who.device');
     case 'agent':
-      return 'An agent';
+      return t('security.who.agent');
     case 'teammate':
-      return 'A teammate';
+      return t('security.who.teammate');
     default:
-      return 'A program on this computer';
+      return t('security.who.other');
   }
 }

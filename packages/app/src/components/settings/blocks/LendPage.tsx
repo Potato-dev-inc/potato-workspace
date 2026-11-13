@@ -2,6 +2,7 @@
 // Lend through my PC: the sign-in stays on this PC. A profile uses a lend sign-in (signed in once in a pane) or a pasted
 // API key. The main sign-in is shown but turned off. There is no file to hand over in this mode (no .pm parts).
 import { useEffect, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import { tauriAccountsApi, type Account, type AccountsApi } from '../../../lib/accounts';
 import {
   agentLabel,
@@ -65,6 +66,7 @@ export function LendPage({
   accountsApi?: AccountsApi;
   onSaved?: () => void;
 }) {
+  const t = useT();
   const lend = useLend(api);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [members, setMembers] = useState<MemberView[]>([]);
@@ -90,7 +92,7 @@ export function LendPage({
 
   if (!lend.enabled || !lend.state) return null;
   return (
-    <section className="lend-page" aria-label="Lend">
+    <section className="lend-page" aria-label={t('lend.page.aria')}>
       <Profiles api={api} accountsApi={accountsApi} lend={lend} accounts={accounts} members={members} onSaved={onSaved} onAccounts={loadAccounts} />
       <ActiveLends api={api} lend={lend} />
     </section>
@@ -118,6 +120,7 @@ function Profiles({
   onSaved?: () => void;
   onAccounts: () => void;
 }) {
+  const t = useT();
   const state = lend.state!;
   const [editing, setEditing] = useState<LendProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -132,26 +135,26 @@ function Profiles({
     }
   };
   return (
-    <section className="lend-block" aria-label="Lend profiles">
-      <h3>Lend profiles</h3>
-      <p className="lend-muted">A profile says who may ask, for which agents, and for how long. Nothing is lent until you say yes or a profile says it may.</p>
-      {state.profiles.length === 0 && !editing && <p className="lend-muted">No profiles yet.</p>}
+    <section className="lend-block" aria-label={t('lend.profiles')}>
+      <h3>{t('lend.profiles')}</h3>
+      <p className="lend-muted">{t('lend.profilesHelp')}</p>
+      {state.profiles.length === 0 && !editing && <p className="lend-muted">{t('lend.noProfiles')}</p>}
       <ul className="lend-list">
         {state.profiles.map((p) => (
           <li key={p.id}>
             <div className="lend-who">
               <span>{p.name}</span>
               <small>
-                {p.agent_ids.map((a) => agentLabel(state, a)).join(', ') || 'No agents'} · {p.who === 'my_pcs' ? 'My PCs' : 'Teammates'} · up to {durationWords(p.max_secs)} ·{' '}
-                {p.approval === 'each' ? 'asks first' : 'no questions'}
+                {p.agent_ids.map((a) => agentLabel(state, a)).join(', ') || t('lend.noAgents')} · {p.who === 'my_pcs' ? t('lend.who.myPcs') : t('lend.who.teammates')} · {t('lend.upTo', { time: durationWords(p.max_secs) })} ·{' '}
+                {p.approval === 'each' ? t('lend.asksFirst') : t('lend.noQuestions')}
                 {limitsText(p) ? ` · ${limitsText(p)}` : ''}
               </small>
             </div>
             <button type="button" className="lend-btn is-small" onClick={() => setEditing(p)}>
-              Edit
+              {t('lend.edit')}
             </button>
-            <button type="button" className="lend-btn is-small is-plain" aria-label={`Delete ${p.name}`} onClick={() => void remove(p)}>
-              Delete
+            <button type="button" className="lend-btn is-small is-plain" aria-label={t('lend.deleteName', { name: p.name })} onClick={() => void remove(p)}>
+              {t('lend.delete')}
             </button>
           </li>
         ))}
@@ -180,7 +183,7 @@ function Profiles({
       ) : (
         <div>
           <button type="button" className="lend-btn" onClick={() => setEditing(blank())}>
-            New profile
+            {t('lend.newProfile')}
           </button>
         </div>
       )}
@@ -209,6 +212,7 @@ function ProfileEditor({
   onDone: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const state = lend.state!;
   const [p, setP] = useState<LendProfile>(initial);
   const [understood, setUnderstood] = useState(false);
@@ -236,24 +240,24 @@ function ProfileEditor({
   const haveKey = how === 'key' && ((initial.has_key && !removeKey) || key.trim() !== '');
 
   const problems: string[] = [];
-  if (!p.name.trim()) problems.push('Give it a name.');
-  if (p.agent_ids.length === 0) problems.push('Pick at least one agent.');
-  if (how === 'signin' && !accountId) problems.push('Add a lend sign-in, or paste an API key.');
-  if (how === 'key' && !haveKey) problems.push('Paste an API key.');
+  if (!p.name.trim()) problems.push(t('lend.problem.name'));
+  if (p.agent_ids.length === 0) problems.push(t('lend.problem.agent'));
+  if (how === 'signin' && !accountId) problems.push(t('lend.problem.signIn'));
+  if (how === 'key' && !haveKey) problems.push(t('lend.problem.key'));
   const dur = durationProblem(p.default_secs, forOther) ?? durationProblem(p.max_secs, forOther);
   if (dur) problems.push(dur);
-  else if (p.default_secs > p.max_secs) problems.push('The default is longer than the most.');
-  if (forOther && !understood) problems.push('Tick "I understand" first.');
+  else if (p.default_secs > p.max_secs) problems.push(t('lend.problem.default'));
+  if (forOther && !understood) problems.push(t('lend.problem.tick'));
 
   const addSignIn = async () => {
     if (!firstAgent) return;
     setAdding(true);
     setError(null);
     try {
-      const made = await api.accountAdd(firstAgent, `Lend ${agentLabel(state, firstAgent)}`);
+      const made = await api.accountAdd(firstAgent, t('lend.signInLabel', { agent: agentLabel(state, firstAgent) }));
       setAdded(made);
       set({ account: { kind: 'account', id: made.id } });
-      setSignInNote(`Added "${made.label}". Sign in to it once in a pane, then save the profile.`);
+      setSignInNote(t('lend.signInAdded', { label: made.label }));
       onAccounts();
     } catch (err) {
       setError(errText(err));
@@ -311,7 +315,7 @@ function ProfileEditor({
         className="lend-num"
         style={{ width: 140 }}
         value={value ?? ''}
-        placeholder="No limit"
+        placeholder={t('lend.noLimit')}
         onChange={(e) => {
           const n = Number.parseInt(e.target.value, 10);
           onChange(Number.isFinite(n) && n > 0 ? n : null);
@@ -321,13 +325,13 @@ function ProfileEditor({
   );
 
   return (
-    <div className="lend-editor" role="group" aria-label={initial.id ? 'Edit profile' : 'New profile'}>
+    <div className="lend-editor" role="group" aria-label={initial.id ? t('lend.editProfile') : t('lend.newProfile')}>
       <label className="lend-field">
-        <span>Name</span>
-        <input type="text" aria-label="Name" value={p.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />
+        <span>{t('lend.name')}</span>
+        <input type="text" aria-label={t('lend.name')} value={p.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />
       </label>
       <fieldset className="lend-checks">
-        <legend className="lend-legend">Agents</legend>
+        <legend className="lend-legend">{t('lend.agents')}</legend>
         {agents.map((d) => (
           <label key={d.agent_id}>
             <input type="checkbox" checked={p.agent_ids.includes(d.agent_id)} onChange={() => set({ agent_ids: toggle(p.agent_ids, d.agent_id) })} />
@@ -343,11 +347,11 @@ function ProfileEditor({
           </label>
         ))}
       </fieldset>
-      <fieldset className="lend-checks" aria-label="Sign-in">
-        <legend className="lend-legend">Sign-in</legend>
+      <fieldset className="lend-checks" aria-label={t('lend.signIn')}>
+        <legend className="lend-legend">{t('lend.signIn')}</legend>
         <label className="lend-radio" aria-disabled={noSignIn ? 'true' : undefined}>
           <input type="radio" name="lend-how" checked={how === 'signin'} disabled={!!noSignIn} onChange={() => setHow('signin')} />
-          <span className={noSignIn ? 'lend-muted' : undefined}>A lend sign-in</span>
+          <span className={noSignIn ? 'lend-muted' : undefined}>{t('lend.aSignIn')}</span>
         </label>
         {noSignIn && (
           <p className="lend-note" role="status" data-testid="lend-signin-not-yet">
@@ -356,20 +360,20 @@ function ProfileEditor({
         )}
         <label className="lend-radio">
           <input type="radio" name="lend-how" checked={how === 'key'} onChange={() => setHow('key')} />
-          <span>{PASTE_KEY}</span>
+          <span>{t('lend.pasteKey')}</span>
         </label>
         <label className="lend-radio" aria-disabled="true">
           <input type="radio" name="lend-how" disabled checked={false} readOnly />
-          <span className="lend-muted">Main sign-in · {MAIN_SIGN_IN_HINT}</span>
+          <span className="lend-muted">{t('lend.mainSignIn')} · {t('lend.comingLater')}</span>
         </label>
         {how === 'signin' && (
           <>
             {mine.length > 0 && (
               <label className="lend-field">
-                <span>Lend sign-in</span>
-                <select aria-label="Lend sign-in" value={accountId} onChange={(e) => set({ account: { kind: 'account', id: e.target.value } })}>
+                <span>{t('lend.lendSignIn')}</span>
+                <select aria-label={t('lend.lendSignIn')} value={accountId} onChange={(e) => set({ account: { kind: 'account', id: e.target.value } })}>
                   <option value="" disabled>
-                    Pick a sign-in
+                    {t('lend.pickSignIn')}
                   </option>
                   {mine.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -381,15 +385,15 @@ function ProfileEditor({
             )}
             <div className="lend-row">
               <button type="button" className="lend-btn" disabled={!firstAgent || adding} onClick={() => void addSignIn()}>
-                {ADD_SIGN_IN}
+                {t('lend.addSignIn')}
               </button>
               {accountId && (
                 <button type="button" className="lend-btn is-plain" onClick={() => void openToSignIn()}>
-                  Open it to sign in
+                  {t('lend.openToSignIn')}
                 </button>
               )}
             </div>
-            {!firstAgent && <span className="lend-muted">Pick an agent first.</span>}
+            {!firstAgent && <span className="lend-muted">{t('lend.pickAgentFirst')}</span>}
             {signInNote && (
               <p className="lend-note" role="status">
                 {signInNote}
@@ -400,42 +404,42 @@ function ProfileEditor({
         {how === 'key' && (
           <div className="lend-field">
             <label className="lend-field">
-              <span>{PASTE_KEY}</span>
+              <span>{t('lend.pasteKey')}</span>
               <input
                 type="password"
-                aria-label="API key"
+                aria-label={t('lend.apiKey')}
                 autoComplete="off"
                 value={key}
-                placeholder={initial.has_key && !removeKey ? 'A key is saved. Paste a new one to replace it.' : 'Paste the key here'}
+                placeholder={initial.has_key && !removeKey ? t('lend.keySaved') : t('lend.keyHere')}
                 onChange={(e) => setKey(e.target.value)}
               />
             </label>
-            <span className="lend-muted">It is kept in this PC&apos;s credential store and is never shown again.</span>
+            <span className="lend-muted">{t('lend.keyStored')}</span>
             {initial.has_key && (
               <label className="lend-radio">
                 <input type="checkbox" checked={removeKey} onChange={(e) => setRemoveKey(e.target.checked)} />
-                <span>Remove the saved key</span>
+                <span>{t('lend.removeKey')}</span>
               </label>
             )}
           </div>
         )}
       </fieldset>
       <fieldset className="lend-checks">
-        <legend className="lend-legend">Who can ask</legend>
+        <legend className="lend-legend">{t('lend.whoCanAsk')}</legend>
         <label className="lend-radio">
           <input type="radio" name="lend-who" checked={p.who === 'my_pcs'} onChange={() => set({ who: 'my_pcs' })} />
-          <span>My PCs</span>
+          <span>{t('lend.who.myPcs')}</span>
         </label>
         <label className="lend-radio">
           <input type="radio" name="lend-who" checked={p.who === 'teammates'} onChange={() => set({ who: 'teammates' })} />
-          <span>Teammates</span>
+          <span>{t('lend.who.teammates')}</span>
         </label>
       </fieldset>
       {forOther && (
         <>
           {members.length > 0 && (
             <fieldset className="lend-checks">
-              <legend className="lend-legend">Which teammates (none ticked: anyone on the team)</legend>
+              <legend className="lend-legend">{t('lend.whichTeammates')}</legend>
               {members.map((m) => (
                 <label key={m.id}>
                   <input type="checkbox" checked={p.member_ids.includes(m.id)} onChange={() => set({ member_ids: toggle(p.member_ids, m.id) })} />
@@ -444,24 +448,24 @@ function ProfileEditor({
               ))}
             </fieldset>
           )}
-          <LendWarning agent={p.agent_ids.length === 1 ? agentLabel(state, p.agent_ids[0]) : 'agent'} checked={understood} onChange={setUnderstood} />
+          <LendWarning agent={p.agent_ids.length === 1 ? agentLabel(state, p.agent_ids[0]) : t('lend.agent')} checked={understood} onChange={setUnderstood} />
         </>
       )}
-      <DurationField secs={p.default_secs} onChange={(s) => set({ default_secs: s })} forOther={forOther} label="How long (default)" />
-      <DurationField secs={p.max_secs} onChange={(s) => set({ max_secs: s })} forOther={forOther} label={`The most (up to ${durationWords(capFor(forOther))})`} />
-      {numberField('Most requests (optional)', p.max_requests, (n) => set({ max_requests: n }))}
-      {numberField('Most tokens (optional)', p.max_tokens, (n) => set({ max_tokens: n }))}
+      <DurationField secs={p.default_secs} onChange={(s) => set({ default_secs: s })} forOther={forOther} label={t('lend.howLongDefault')} />
+      <DurationField secs={p.max_secs} onChange={(s) => set({ max_secs: s })} forOther={forOther} label={t('lend.theMost', { time: durationWords(capFor(forOther)) })} />
+      {numberField(t('lend.mostRequests'), p.max_requests, (n) => set({ max_requests: n }))}
+      {numberField(t('lend.mostTokens'), p.max_tokens, (n) => set({ max_tokens: n }))}
       <label className="lend-radio">
         <input type="checkbox" checked={p.approval === 'each'} onChange={(e) => set({ approval: e.target.checked ? 'each' : 'none' })} />
-        <span>Ask me before each request</span>
+        <span>{t('lend.askEach')}</span>
       </label>
       <label className="lend-radio">
         <input type="checkbox" checked={p.sign_out_on_end} onChange={(e) => set({ sign_out_on_end: e.target.checked })} />
-        <span>Sign out when it ends</span>
+        <span>{t('lend.signOutEnd')}</span>
       </label>
       <label className="lend-radio">
         <input type="checkbox" checked={p.keep_awake} onChange={(e) => set({ keep_awake: e.target.checked })} />
-        <span>Keep this PC awake while lending</span>
+        <span>{t('lend.keepAwake')}</span>
       </label>
       {problems.length > 0 && <p className="lend-muted">{problems[0]}</p>}
       {error && (
@@ -471,10 +475,10 @@ function ProfileEditor({
       )}
       <div className="lend-actions">
         <button type="button" className="lend-btn is-plain" onClick={onCancel} disabled={busy}>
-          Cancel
+          {t('lend.cancel')}
         </button>
         <button type="button" className="lend-btn is-primary" disabled={busy || problems.length > 0} onClick={() => void save()}>
-          Save profile
+          {t('lend.saveProfile')}
         </button>
       </div>
     </div>
@@ -484,6 +488,7 @@ function ProfileEditor({
 // ---------- active lends ----------
 
 function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
+  const t = useT();
   const state = lend.state!;
   const [error, setError] = useState<string | null>(null);
   const live = state.grants.filter((g) => isActiveOut(g, lend.now) || isActiveIn(g, lend.now));
@@ -498,17 +503,17 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
     }
   };
   return (
-    <section className="lend-block" aria-label="Active lends">
-      <h3>Active lends</h3>
-      {live.length === 0 && <p className="lend-muted">Nothing is lent or borrowed right now.</p>}
-      {state.keeping_awake && <p className="lend-muted">This PC stays awake while you lend.</p>}
+    <section className="lend-block" aria-label={t('lend.active')}>
+      <h3>{t('lend.active')}</h3>
+      {live.length === 0 && <p className="lend-muted">{t('lend.nothing')}</p>}
+      {state.keeping_awake && <p className="lend-muted">{t('lend.staysAwake')}</p>}
       <ul className="lend-list">
         {live.map((g) => (
           <li key={g.id}>
             <div className="lend-who">
               <span>{grantLine(g, agentLabel(state, g.agent_id), lend.now)}</span>
               {g.peer_device_name && <small>{g.peer_device_name}</small>}
-              {usageText(g) && <small className="lend-usage">Used so far: {usageText(g)}</small>}
+              {usageText(g) && <small className="lend-usage">{t('lend.usedSoFar', { used: usageText(g) ?? '' })}</small>}
               {g.direction === 'in' && <small className="lend-note">{borrowedBillingNote(g.peer_name)}</small>}
               {problemText(g) && (
                 <small className="lend-problem" role="status">
@@ -518,7 +523,7 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
             </div>
             <TestLink grantId={g.id} api={api} />
             <button type="button" className="lend-btn is-small" onClick={() => void act(g.id, g.direction === 'out')}>
-              {g.direction === 'out' ? 'Revoke' : 'Give back'}
+              {g.direction === 'out' ? t('phone.device.revoke') : t('lend.giveBack')}
             </button>
           </li>
         ))}
@@ -526,7 +531,7 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
           <li key={g.id}>
             <div className="lend-who">
               <span className="lend-muted">
-                {g.direction === 'out' ? 'Lent' : 'Borrowed'} {agentLabel(state, g.agent_id)} · {g.peer_name}
+                {g.direction === 'out' ? t('lend.lent') : t('lend.borrowed')} {agentLabel(state, g.agent_id)} · {g.peer_name}
               </span>
               <small>{endedWords(g)}</small>
             </div>

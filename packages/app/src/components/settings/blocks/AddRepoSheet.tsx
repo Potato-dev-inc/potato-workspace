@@ -2,12 +2,15 @@
 // first (its GitHub remote must be exactly that repository). The agent list has ready agents only. Saving hands
 // the new repository to the parent, which writes the whole config through `intakeSave` (the backend checks it too).
 import { useEffect, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useAgentRegistry, type AgentDescriptor } from '../../../lib/agentRegistry';
 import { intakeCheckFolder, type FolderCheck, type RepoWatch } from '../../../lib/issue-intake';
 import { Btn, FieldInput, FieldSelect, Note, SettingRow, SettingToggle } from '../settings-ui';
 
 export const DEFAULT_LABEL = 'puppet';
+/** An example path in the empty field: the same in every language. */
+const EXAMPLE_FOLDER = 'C:\\work\\my-project';
 export const TURNS = { min: 1, max: 200, value: 30 };
 export const MINUTES = { min: 5, max: 240, value: 45 };
 export const RUNS_A_DAY = { min: 1, max: 50, value: 5 };
@@ -24,7 +27,7 @@ export function readyAgents(agents: AgentDescriptor[]): AgentDescriptor[] {
 
 /** Plain error for a label, or null when it is fine. Letters, numbers, spaces and _ . : - only. */
 export function labelError(label: string): string | null {
-  return LABEL_RE.test(label.trim()) ? null : 'Use letters, numbers, spaces, and _ . : - (up to 50 characters).';
+  return LABEL_RE.test(label.trim()) ? null : t('repo.labelError');
 }
 
 /** Plain error for a whole-number field, or null when it is in range. */
@@ -32,7 +35,7 @@ export function countError(text: string, what: string, range: { min: number; max
   const trimmed = text.trim();
   const n = Number(trimmed);
   if (trimmed !== '' && Number.isInteger(n) && n >= range.min && n <= range.max) return null;
-  return `${what} must be a whole number from ${range.min} to ${range.max}.`;
+  return t('repo.countError', { what, min: range.min, max: range.max });
 }
 
 /** A new watched-repo id: "rw-" and 8 lowercase hex digits (the backend checks the shape). */
@@ -78,18 +81,18 @@ export function buildRepo(input: {
 }): BuildResult {
   const { folder, form, check, existing, editing } = input;
   const owner = check?.owner_repo;
-  if (!owner || check?.why_not) return { error: check?.why_not ?? 'Pick the folder of a clone of a GitHub repository.' };
-  if (existing.some((r) => r.owner_repo === owner && r.id !== editing?.id)) return { error: `You already watch ${owner}.` };
-  if (!editing && existing.length >= REPOS_CAP) return { error: `You can watch up to ${REPOS_CAP} repositories. Remove one first.` };
+  if (!owner || check?.why_not) return { error: check?.why_not ?? t('repo.pickClone') };
+  if (existing.some((r) => r.owner_repo === owner && r.id !== editing?.id)) return { error: t('repo.already', { owner }) };
+  if (!editing && existing.length >= REPOS_CAP) return { error: t('repo.cap', { n: REPOS_CAP }) };
   const label = labelError(form.label);
   if (label) return { error: label };
-  const turns = countError(form.turns, 'Turns per run', TURNS);
+  const turns = countError(form.turns, t('repo.turns'), TURNS);
   if (turns) return { error: turns };
-  const minutes = countError(form.minutes, 'Minutes per run', MINUTES);
+  const minutes = countError(form.minutes, t('repo.minutes'), MINUTES);
   if (minutes) return { error: minutes };
-  const runs = countError(form.runsPerDay, 'Runs a day', RUNS_A_DAY);
+  const runs = countError(form.runsPerDay, t('repo.runs'), RUNS_A_DAY);
   if (runs) return { error: runs };
-  if (!form.agent) return { error: 'Pick an agent. Only ready agents are listed.' };
+  if (!form.agent) return { error: t('repo.pickAgent') };
   return {
     repo: {
       id: editing?.id ?? newRepoId(),
@@ -123,6 +126,7 @@ export function AddRepoSheet({
   onSave: (repo: RepoWatch) => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useT();
   const agents = readyAgents(useAgentRegistry().agents);
   const [folder, setFolder] = useState(editing?.folder ?? projectPath ?? '');
   const [form, setForm] = useState<RepoForm>(() =>
@@ -203,10 +207,10 @@ export function AddRepoSheet({
     }
   };
 
-  let detected = 'Pick the folder of a clone of the GitHub repository.';
-  if (checking) detected = 'Checking the folder…';
+  let detected = t('repo.pickFolder');
+  if (checking) detected = t('repo.checking');
   else if (shown?.why_not) detected = shown.why_not;
-  else if (shown?.owner_repo) detected = `Found ${shown.owner_repo}${shown.default_branch ? `. Default branch: ${shown.default_branch}.` : '.'}`;
+  else if (shown?.owner_repo) detected = shown.default_branch ? t('repo.foundBranch', { repo: shown.owner_repo, branch: shown.default_branch }) : t('repo.found', { repo: shown.owner_repo });
 
   return (
     <div
@@ -219,41 +223,41 @@ export function AddRepoSheet({
       }}
     >
       <div className="st-sheet" role="dialog" aria-modal="true" aria-labelledby="st-repo-title">
-        <h2 id="st-repo-title">{editing ? 'Edit repository' : 'Add a repository'}</h2>
-        <p>Potato Workspace starts an agent on an issue only when an allowed person adds the label to it on GitHub.</p>
+        <h2 id="st-repo-title">{editing ? t('repo.edit') : t('repo.add')}</h2>
+        <p>{t('repo.intro')}</p>
 
-        <SettingRow label="Folder on this PC" description="A clone of the repository. Its GitHub remote must be exactly this repository.">
+        <SettingRow label={t('repo.folder')} description={t('repo.folderHelp')}>
           <div className="st-number">
             <FieldInput
-              aria-label="Folder on this PC"
+              aria-label={t('repo.folder')}
               className="font-mono"
               value={folder}
-              placeholder="C:\\work\\my-project"
+              placeholder={EXAMPLE_FOLDER}
               onChange={(e) => setFolder(e.target.value)}
               onBlur={() => void runCheck(folder)}
             />
             <Btn small onClick={() => void browse()}>
-              Browse
+              {t('general.browse')}
             </Btn>
           </div>
         </SettingRow>
         {projectPath && folder !== projectPath && (
           <Btn small onClick={() => { setFolder(projectPath); void runCheck(projectPath); }}>
-            Use project folder
+            {t('repo.useProject')}
           </Btn>
         )}
         <Note role={shown?.why_not ? 'alert' : 'status'}>{detected}</Note>
         {shown && !shown.why_not && shown.gh && shown.gh !== 'ready' && (
-          <Note>Install the GitHub CLI and run gh auth login. Nothing runs until GitHub is ready.</Note>
+          <Note>{t('repo.ghInstall')}</Note>
         )}
 
-        <SettingRow label="Label on GitHub" description="Put this label on an issue to start a run.">
-          <FieldInput aria-label="Label on GitHub" value={form.label} onChange={(e) => set('label', e.target.value)} />
+        <SettingRow label={t('repo.label')} description={t('repo.labelHelp')}>
+          <FieldInput aria-label={t('repo.label')} value={form.label} onChange={(e) => set('label', e.target.value)} />
         </SettingRow>
 
-        <SettingRow label="Agent" description="Only agents that are ready are listed.">
-          <FieldSelect aria-label="Agent" value={chosen} disabled={agents.length === 0} onChange={(e) => set('agent', e.target.value)}>
-            {chosen === '' && <option value="">Choose an agent</option>}
+        <SettingRow label={t('lend.request.agent')} description={t('repo.agentHelp')}>
+          <FieldSelect aria-label={t('lend.request.agent')} value={chosen} disabled={agents.length === 0} onChange={(e) => set('agent', e.target.value)}>
+            {chosen === '' && <option value="">{t('keepGoing.choose')}</option>}
             {agents.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.label || a.id}
@@ -261,27 +265,27 @@ export function AddRepoSheet({
             ))}
           </FieldSelect>
         </SettingRow>
-        {agents.length === 0 && <Note>No agent is ready. Set one up under Agents, then come back.</Note>}
+        {agents.length === 0 && <Note>{t('repo.noAgent')}</Note>}
 
-        <SettingRow label="Turns per run" description={`The most turns one run may use (${TURNS.min} to ${TURNS.max}).`}>
-          <FieldInput aria-label="Turns per run" type="number" min={TURNS.min} max={TURNS.max} value={form.turns} onChange={(e) => set('turns', e.target.value)} />
+        <SettingRow label={t('repo.turns')} description={t('repo.turnsHelp', { min: TURNS.min, max: TURNS.max })}>
+          <FieldInput aria-label={t('repo.turns')} type="number" min={TURNS.min} max={TURNS.max} value={form.turns} onChange={(e) => set('turns', e.target.value)} />
         </SettingRow>
-        <SettingRow label="Minutes per run" description={`A run stops after this long (${MINUTES.min} to ${MINUTES.max}).`}>
-          <FieldInput aria-label="Minutes per run" type="number" min={MINUTES.min} max={MINUTES.max} value={form.minutes} onChange={(e) => set('minutes', e.target.value)} />
+        <SettingRow label={t('repo.minutes')} description={t('repo.minutesHelp', { min: MINUTES.min, max: MINUTES.max })}>
+          <FieldInput aria-label={t('repo.minutes')} type="number" min={MINUTES.min} max={MINUTES.max} value={form.minutes} onChange={(e) => set('minutes', e.target.value)} />
         </SettingRow>
-        <SettingRow label="Runs a day" description={`Most runs in this repository in 24 hours (${RUNS_A_DAY.min} to ${RUNS_A_DAY.max}).`}>
-          <FieldInput aria-label="Runs a day" type="number" min={RUNS_A_DAY.min} max={RUNS_A_DAY.max} value={form.runsPerDay} onChange={(e) => set('runsPerDay', e.target.value)} />
+        <SettingRow label={t('repo.runs')} description={t('repo.runsHelp', { min: RUNS_A_DAY.min, max: RUNS_A_DAY.max })}>
+          <FieldInput aria-label={t('repo.runs')} type="number" min={RUNS_A_DAY.min} max={RUNS_A_DAY.max} value={form.runsPerDay} onChange={(e) => set('runsPerDay', e.target.value)} />
         </SettingRow>
 
         <SettingToggle
-          label="Ask me before each run"
-          description="On: you tap Start first. Off: a run starts by itself for an allowed person. It still asks for the first run here, for issues written by someone not on your list, and when the issue text had to be cleaned or cut."
+          label={t('repo.askStart')}
+          description={t('repo.askStartHelp')}
           checked={form.askBeforeStart}
           onChange={(on) => set('askBeforeStart', on)}
         />
         <SettingToggle
-          label="Ask me before pushing"
-          description="On: you tap Open draft PR first. Off: a change still asks you when it edits CI files, adds secret-looking text, or changes git settings."
+          label={t('repo.askPush')}
+          description={t('repo.askPushHelp')}
           checked={form.askBeforePush}
           onChange={(on) => set('askBeforePush', on)}
         />
@@ -289,10 +293,10 @@ export function AddRepoSheet({
         {error && <Note role="alert">{error}</Note>}
         <div className="st-sheet-actions">
           <Btn disabled={busy} onClick={onCancel}>
-            Cancel
+            {t('lend.cancel')}
           </Btn>
           <Btn primary disabled={busy} onClick={() => void save()}>
-            {editing ? 'Save' : 'Add repository'}
+            {editing ? t('discord.save') : t('repo.addBtn')}
           </Btn>
         </div>
       </div>

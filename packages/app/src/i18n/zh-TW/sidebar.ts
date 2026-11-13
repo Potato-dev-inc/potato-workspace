@@ -82,4 +82,7 @@ export const sidebar: Partial<Record<EnglishKey, string>> = {
   'sidebar.handoffFromHere': '從這裡交接',
   'sidebar.details': '詳細資訊',
   'sidebar.close': '關閉',
+  'sidebar.dragLive': '正在拖曳「{name}」。放到左側或右側，按 Esc 取消。',
+  'sidebar.dropLeft': '在左側開啟',
+  'sidebar.dropRight': '在右側開啟',
 };

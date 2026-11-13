@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaneInfo } from '@potato-workspace/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { ShipApi } from '../../lib/ship-api';
-import type { UsageSnapshot } from '../../lib/usage';
+import { notePace, resetPaceHistory, type UsageSnapshot } from '../../lib/usage';
 
 const invoke = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
@@ -400,5 +400,32 @@ describe('the three chip shapes (proposal 8)', () => {
     expect(css).toMatch(/height:\s*18px/);
     expect(css).toMatch(/border-radius:\s*5px/);
     expect(css).not.toMatch(/#[0-9a-f]{3,6}/i);
+  });
+});
+
+describe('the usage forecast in the Usage popover (proposal 27)', () => {
+  const row = (pct: number, now: number) => ({
+    ...SNAP.rows[0],
+    windows: [{ name: '5-hour', used_percent: pct, minutes: 300, resets_at_ms: now + 3 * H, reset_since: false }],
+  });
+
+  it('one line per agent with a limit, saying "about" when the limit comes before the reset', async () => {
+    resetPaceHistory();
+    const now = Date.now();
+    // 30 % twenty minutes ago and 50 % now: a pace of 1 % a minute, so the limit is about 50 minutes away.
+    notePace(row(30, now), now - 20 * 60_000);
+    await render({ refreshed_at_ms: now, rows: [row(50, now)] });
+    await act(async () => chipsIn(host)[0].click());
+    const line = document.querySelector('[data-testid="usage-forecast"]');
+    expect(line?.textContent).toContain('about');
+    expect(line?.textContent).toContain('resets');
+  });
+
+  it('shows no line without data for a pace', async () => {
+    resetPaceHistory();
+    const now = Date.now();
+    await render({ refreshed_at_ms: now, rows: [row(50, now)] });
+    await act(async () => chipsIn(host)[0].click());
+    expect(document.querySelector('[data-testid="usage-forecast"]')).toBeNull();
   });
 });

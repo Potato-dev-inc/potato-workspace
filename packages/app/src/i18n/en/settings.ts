@@ -232,6 +232,8 @@ export const settings = {
   "settings.row.keep-awake.hint": "Your agents keep going when you lock the PC (Win+L). The screen can still turn off.",
   "settings.row.away-minutes.label": "Away digest after",
   "settings.row.away-minutes.hint": "After this many minutes without keyboard or mouse, shows what agents did. 0 is off.",
+  "settings.row.quiet-hours.label": "Quiet hours",
+  "settings.row.quiet-hours.hint": "Pause alerts at night. A high-risk approval still comes through.",
   "settings.row.pairing.label": "Pair a phone",
   "settings.row.paired-devices.label": "Paired phones",
   "settings.row.phone-notifications.label": "Phone alerts",

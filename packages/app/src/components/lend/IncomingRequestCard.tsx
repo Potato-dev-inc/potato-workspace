@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useT } from '../../i18n';
 import { agentLabel, capFor, durationProblem, errText, lendApi, quoted, requestTitle, type LendApi, type LendProfile, type LendRequest, type LendState } from '../../lib/lend';
 import { openSettingsAt } from '../../lib/openSettingsAt';
 import { CardButton, InboxCard } from '../cockpit/InboxCard';
@@ -33,6 +34,7 @@ export function IncomingRequestCard({
   now: number;
   onDone?: () => void;
 }) {
+  const t = useT();
   const profiles = profilesFor(state, request);
   const [profileId, setProfileId] = useState('');
   const [changing, setChanging] = useState(false);
@@ -43,7 +45,7 @@ export function IncomingRequestCard({
   const profile = profiles.find((p) => p.id === profileId) ?? profiles[0];
   const agent = agentLabel(state, request.agent_id);
   const cap = Math.min(capFor(request.for_other_person), profile?.max_secs ?? Infinity);
-  const timeProblem = durationProblem(secs, request.for_other_person) ?? (secs > cap ? 'That is longer than this profile allows.' : null);
+  const timeProblem = durationProblem(secs, request.for_other_person) ?? (secs > cap ? t('lend.incoming.tooLong') : null);
   const canLend = !!profile && !busy && !timeProblem && (!request.for_other_person || understood);
 
   const run = async (what: () => Promise<unknown>) => {
@@ -72,8 +74,8 @@ export function IncomingRequestCard({
           {request.for_other_person && <LendWarning agent={agent} checked={understood} onChange={setUnderstood} />}
           {profiles.length > 1 && (
             <label className="lend-field">
-              <span>Lend with</span>
-              <select aria-label="Lend with" value={profile?.id ?? ''} onChange={(e) => setProfileId(e.target.value)}>
+              <span>{t('lend.incoming.lendWith')}</span>
+              <select aria-label={t('lend.incoming.lendWith')} value={profile?.id ?? ''} onChange={(e) => setProfileId(e.target.value)}>
                 {profiles.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -84,13 +86,13 @@ export function IncomingRequestCard({
           )}
           {profiles.length === 0 && (
             <p className="ib-note">
-              No profile lends {agent} to {request.for_other_person ? 'teammates' : 'your PCs'} yet.{' '}
+              {t('lend.incoming.noProfile', { agent, who: request.for_other_person ? t('lend.incoming.teammates') : t('lend.incoming.yourPcs') })}{' '}
               <button type="button" className="lend-btn is-plain is-small" onClick={() => openSettingsAt('lend')}>
-                Open Lend settings
+                {t('lend.incoming.openSettings')}
               </button>
             </p>
           )}
-          {changing && <DurationField secs={secs} onChange={setSecs} forOther={request.for_other_person} label="Lend it for" maxSecs={profile?.max_secs} />}
+          {changing && <DurationField secs={secs} onChange={setSecs} forOther={request.for_other_person} label={t('lend.incoming.lendFor')} maxSecs={profile?.max_secs} />}
           {error && (
             <p className="ib-error" role="alert">
               {error}
@@ -101,13 +103,13 @@ export function IncomingRequestCard({
       actions={
         <>
           <CardButton tone="secondary" disabled={!canLend} onClick={() => void run(() => api.answer(request.id, true, profile!.id, secs === request.secs ? null : secs))}>
-            {profiles.length > 1 && profile ? `Lend with ${profile.name}` : 'Lend'}
+            {profiles.length > 1 && profile ? t('lend.incoming.lendWithName', { name: profile.name }) : t('lend.incoming.lend')}
           </CardButton>
           <CardButton tone="plain" disabled={busy} aria-expanded={changing} onClick={() => setChanging((v) => !v)}>
-            Change time
+            {t('lend.incoming.changeTime')}
           </CardButton>
           <CardButton tone="plain" disabled={busy} onClick={() => void run(() => api.answer(request.id, false, null, null))}>
-            Say no
+            {t('lend.incoming.sayNo')}
           </CardButton>
         </>
       }

@@ -48,7 +48,7 @@ function render(q: Question, handlers: { onAnswer?: () => void; onDismiss?: () =
   return { onAnswer, onDismiss };
 }
 
-const buttons = () => Array.from(host.querySelectorAll('button'));
+const buttons = () => Array.from(host.querySelectorAll<HTMLButtonElement>('button:not([data-snooze])'));
 const byText = (text: string) => buttons().find((b) => b.textContent === text)!;
 
 function type(input: HTMLInputElement, value: string) {
@@ -122,7 +122,7 @@ describe('QuestionCard', () => {
     expect(buttons().map((b) => b.textContent)).toEqual(['Postgres', 'SQLite', 'Dismiss']);
     // one action row: the answers left, Dismiss in the same row on the right
     expect(host.querySelectorAll('.ib-actions')).toHaveLength(1);
-    expect(host.querySelector('.ib-actions-end')?.textContent).toBe('Dismiss');
+    expect(host.querySelector('.ib-actions-end')?.textContent).toBe('Snooze 30 minDismiss');
     // No text field when free text is off.
     expect(host.querySelector('input')).toBeNull();
   });

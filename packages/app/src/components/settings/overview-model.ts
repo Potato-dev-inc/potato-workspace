@@ -2,7 +2,7 @@
 // one quiet sub-line and the actions. Pure, so the words are easy to test. A card never shows a tick without data:
 // when its source fails (or has not answered) the card shows "…" and "Can't check this yet".
 import { accountsFor, type AccountsOverview } from '../../lib/accounts';
-import type { UpdateOffer } from '../../lib/app-update';
+import { checkFailureLine, type CheckFailure, type UpdateOffer } from '../../lib/app-update';
 import type { HelperVisibility } from '../../lib/agentRunMode';
 import { t } from '../../i18n';
 import { isCantCheck, type CheckRow } from '../../lib/setup-checks';
@@ -177,6 +177,11 @@ export function phoneCard(paired: number): CardView {
 }
 
 // ---------- Updates ----------
+
+/** A check that could not read a channel: one plain line, never "Up to date". */
+export function checkFailedCard(failure: CheckFailure): CardView {
+  return { id: 'updates', name: CARD_NAMES.updates, glyph: '…', line: checkFailureLine(failure), actions: [{ label: t('settings.card.whatsNew'), kind: 'row', row: 'whats-new' }] };
+}
 
 export function updatesCard(version: string | null, offer: UpdateOffer | null): CardView {
   const shown = version ? version.replace(/^v/i, '') : null;

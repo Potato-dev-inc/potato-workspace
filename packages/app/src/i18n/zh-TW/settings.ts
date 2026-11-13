@@ -234,6 +234,8 @@ export const settings: Partial<Record<EnglishKey, string>> = {
   'settings.row.keep-awake.hint': '鎖定電腦（Win+L）後 AI 助理仍會繼續工作。螢幕還是可以關閉。',
   'settings.row.away-minutes.label': '離開多久後顯示摘要',
   'settings.row.away-minutes.hint': '超過這個分鐘數沒有動鍵盤或滑鼠後，顯示 AI 助理做了哪些事。設為 0 即關閉。',
+  'settings.row.quiet-hours.label': '勿擾時段',
+  'settings.row.quiet-hours.hint': '夜間暫停通知。高風險的確認仍會通知你。',
   'settings.row.pairing.label': '配對手機',
   'settings.row.paired-devices.label': '已配對的手機',
   'settings.row.phone-notifications.label': '手機通知',

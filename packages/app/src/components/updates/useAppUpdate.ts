@@ -3,10 +3,12 @@
 // it says so and offers to reopen the chats.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  checkFailureOf,
   plainUpdateError,
   progressPercent,
   tauriUpdateTransport,
   updateErrorCode,
+  type CheckFailure,
   type UpdateBusyInfo,
   type UpdateOffer,
   type UpdateTransport,
@@ -16,6 +18,8 @@ export type UpdatePhase =
   | 'idle'
   | 'checking'
   | 'none'
+  /** A channel could not be read and nothing newer came from the other one: never "up to date". */
+  | 'failed'
   | 'available'
   | 'downloading'
   /** Downloaded and checked. Agents may still be working: Restart now asks nothing more, it is the confirmed press. */
@@ -29,6 +33,8 @@ export type UpdatePhase =
 
 export interface AppUpdateState {
   phase: UpdatePhase;
+  /** Which channel could not be read (set with phase `failed`). */
+  failure: CheckFailure | null;
   offer: UpdateOffer | null;
   busyAgents: string[];
   /** The split of `busyAgents` (empty lists when the backend does not say). */
@@ -60,6 +66,7 @@ const NO_BUSY: UpdateBusyInfo = { agents: [], chats: [], terminals: [] };
 export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, auto = true): AppUpdateState {
   const [phase, setPhase] = useState<UpdatePhase>('idle');
   const [offer, setOffer] = useState<UpdateOffer | null>(null);
+  const [failure, setFailure] = useState<CheckFailure | null>(null);
   const [busy, setBusy] = useState<UpdateBusyInfo>(NO_BUSY);
   const [percent, setPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,11 +94,18 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
         const found = await transport.check();
         if (!live.current) return;
         setOffer(found);
+        setFailure(null);
         setPhase(found ? 'available' : loud ? 'none' : 'idle');
       } catch (e) {
         if (!live.current) return;
         if (!loud) {
           setPhase((p) => (p === 'checking' ? 'idle' : p));
+          return;
+        }
+        const failed = checkFailureOf(e);
+        if (failed) {
+          setFailure(failed);
+          setPhase('failed');
           return;
         }
         setError(plainUpdateError(e));
@@ -185,5 +199,5 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
     };
   }, [auto, check]);
 
-  return { phase, offer, busyAgents: busy.agents, busy, percent, error, reopened, check, update, restartNow, restartWhenIdle, reopenChats };
+  return { phase, failure, offer, busyAgents: busy.agents, busy, percent, error, reopened, check, update, restartNow, restartWhenIdle, reopenChats };
 }

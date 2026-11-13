@@ -1,6 +1,7 @@
 // The question before Chat is removed for an agent: what changes (new sessions start in a terminal, saved chats stay),
 // and when an add-on is on disk, a box to delete it too. Plain words, no jargon. Cancel is the default button.
 import { useState } from 'react';
+import { useT } from '../../../i18n';
 import type { AcpLaneAgent } from '../../../lib/acpChat';
 import { Btn } from '../settings-ui';
 
@@ -17,6 +18,7 @@ export function RemoveChatDialog({
   onRemove: (removeAddon: boolean) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [removeAddon, setRemoveAddon] = useState(false);
   const addon = agent.addon?.installed ? agent.addon : null;
   const dialog = (
@@ -24,19 +26,19 @@ export function RemoveChatDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Remove chat for ${agent.label}`}
+        aria-label={t('lane.removeFor', { label: agent.label })}
         data-testid="remove-chat-dialog"
         className="w-full max-w-md rounded-xl border border-pm-border bg-pm-panel p-5 text-pm-text"
         onKeyDown={(e) => {
           if (e.key === 'Escape' && !busy) onCancel();
         }}
       >
-        <h3 className="text-sm font-semibold">Remove chat for {agent.label}?</h3>
-        <p className="mt-2 text-sm text-pm-muted">New sessions will start in a terminal. Your saved chats stay.</p>
+        <h3 className="text-sm font-semibold">{t('lane.removeTitle', { label: agent.label })}</h3>
+        <p className="mt-2 text-sm text-pm-muted">{t('lane.removeBody')}</p>
         {addon && (
           <label className="mt-3 flex items-center gap-2 text-sm">
             <input type="checkbox" checked={removeAddon} disabled={busy} onChange={(e) => setRemoveAddon(e.target.checked)} />
-            <span>Also delete the chat add-on ({addon.size_mb} MB)</span>
+            <span>{t('lane.alsoDelete', { mb: addon.size_mb })}</span>
           </label>
         )}
         {error && (
@@ -46,10 +48,10 @@ export function RemoveChatDialog({
         )}
         <div className="mt-4 flex justify-end gap-2">
           <Btn small autoFocus disabled={busy} onClick={onCancel}>
-            Cancel
+            {t('lend.cancel')}
           </Btn>
           <Btn small primary disabled={busy} onClick={() => onRemove(!!addon && removeAddon)}>
-            {busy ? 'Removing…' : 'Remove'}
+            {busy ? t('bridge.removing') : t('settings.remove')}
           </Btn>
         </div>
       </div>

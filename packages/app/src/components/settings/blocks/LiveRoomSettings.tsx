@@ -2,6 +2,7 @@
 // The relay is checked by the app when saved (https for a remote host); its refusal is shown as is.
 import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
+import { useT } from '../../../i18n';
 import { durationLabel, liveRoomApi, type LiveRoomApi, type LiveRoomConfig } from '../../../lib/live-room';
 import { FieldInput, FieldSelect, Note, SettingRow } from '../settings-ui';
 
@@ -20,6 +21,7 @@ export function LiveRoomSettings({
   teamRelay?: string;
   onSaved?: () => void;
 }) {
+  const t = useT();
   const [cfg, setCfg] = useState<LiveRoomConfig | null>(null);
   const [relay, setRelay] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -61,11 +63,11 @@ export function LiveRoomSettings({
 
   return (
     <>
-      <SettingRow label="Relay address" description="The server that carries the room. Use your own, or the team relay.">
+      <SettingRow label={t('teamPage.relayAddress')} description={t('liveRoom.relayHelp')}>
         <FieldInput
-          aria-label="Relay address"
+          aria-label={t('teamPage.relayAddress')}
           value={relay}
-          placeholder={teamRelay.trim() ? 'Uses your team relay' : 'https://relay.example.com'}
+          placeholder={teamRelay.trim() ? t('liveRoom.usesTeam') : 'https://relay.example.com'} // i18n-ok: example
           onChange={(e) => setRelay(e.target.value)}
           onBlur={saveRelay}
           onKeyDown={(e) => {
@@ -74,9 +76,9 @@ export function LiveRoomSettings({
           spellCheck={false}
         />
       </SettingRow>
-      <SettingRow label="Default length" description="How long a new room runs.">
+      <SettingRow label={t('liveRoom.length')} description={t('liveRoom.lengthHelp')}>
         <FieldSelect
-          aria-label="Default length"
+          aria-label={t('liveRoom.length')}
           value={String(cfg.minutes)}
           onChange={(e) => save({ ...cfg, relay: relay.trim(), minutes: Number(e.target.value) })}
         >
@@ -87,9 +89,9 @@ export function LiveRoomSettings({
           ))}
         </FieldSelect>
       </SettingRow>
-      <SettingRow label="Default viewers" description="Most people who can watch at once.">
+      <SettingRow label={t('liveRoom.viewers')} description={t('liveRoom.viewersHelp')}>
         <FieldSelect
-          aria-label="Default viewers"
+          aria-label={t('liveRoom.viewers')}
           value={String(cfg.maxViewers)}
           onChange={(e) => save({ ...cfg, relay: relay.trim(), maxViewers: Number(e.target.value) })}
         >
@@ -101,7 +103,7 @@ export function LiveRoomSettings({
         </FieldSelect>
       </SettingRow>
       {error && <Note role="alert">{error}</Note>}
-      <Note>Rooms are end-to-end encrypted. The relay sees only sizes and times.</Note>
+      <Note>{t('liveRoom.note')}</Note>
     </>
   );
 }

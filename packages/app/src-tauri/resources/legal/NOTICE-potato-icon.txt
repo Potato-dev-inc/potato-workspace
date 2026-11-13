@@ -1,0 +1,7 @@
+App icon and logo art
+
+The Potato icon used for the app icons (src-tauri/icons), the tray and taskbar icon,
+the favicon, the PWA and phone icons, and the in-app logo is taken from the Potato
+animation pack (icons/icon.svg and icons/icon.png, 16 to 512 px).
+
+Potato artwork (c) the Puppet Master founder. All rights reserved.

@@ -1,6 +1,7 @@
 // Settings › Phone › Devices: every paired phone, what it may do (one switch per ability), when it
 // signs out if unused, and Revoke. The bridge enforces the abilities on every request.
 import { errorSentence } from '../../../lib/sayError';
+import { t, useT } from '../../../i18n';
 import { DEVICE_CAPS, type DeviceCap, type PairedDeviceInfo } from '@potato-workspace/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../../../lib/tauri';
@@ -29,8 +30,8 @@ function days(secs: number | undefined): number {
 /** "Active · expires if unused for 30 days" or the signed-out line. */
 export function expiryLine(device: PairedDeviceInfo): string {
   const window = days(device.idle_expiry_secs);
-  if (device.expired) return `Signed out after ${window} days without use. Pair it again to use it.`;
-  return `Active · expires if unused for ${window} days`;
+  if (device.expired) return t('phone.device.signedOut', { days: window });
+  return t('phone.device.active', { days: window });
 }
 
 function DeviceRow({
@@ -44,6 +45,7 @@ function DeviceRow({
   onRevoke: () => void;
   busy: boolean;
 }) {
+  const t = useT();
   const caps = deviceCaps(device);
   const toggle = (cap: DeviceCap, on: boolean) =>
     onChange(DEVICE_CAPS.filter((c) => (c === cap ? on : caps.includes(c))));
@@ -55,21 +57,21 @@ function DeviceRow({
           <small>{expiryLine(device)}</small>
         </div>
         <Btn small onClick={onRevoke} disabled={busy}>
-          {device.expired ? 'Remove' : 'Revoke'}
+          {device.expired ? t('settings.remove') : t('phone.device.revoke')}
         </Btn>
       </div>
       {!device.expired && (
-        <ul className="st-abilities" aria-label={`What ${device.name} can do`}>
-          {ABILITIES.map(({ cap, label, hint }) => (
+        <ul className="st-abilities" aria-label={t('phone.device.canDo', { name: device.name })}>
+          {ABILITIES.map(({ cap }) => (
             <li key={cap} className="st-ability">
               <div className="st-label">
-                <span>{label}</span>
-                <small>{hint}</small>
+                <span>{t(`phone.ability.${cap}.label`)}</span>
+                <small>{t(`phone.ability.${cap}.hint`)}</small>
               </div>
               <Switch
                 checked={caps.includes(cap)}
                 onChange={(on) => toggle(cap, on)}
-                label={`${device.name}: ${label}`}
+                label={`${device.name}: ${t(`phone.ability.${cap}.label`)}`}
                 disabled={busy}
               />
             </li>
@@ -81,6 +83,7 @@ function DeviceRow({
 }
 
 export function PairedDevices() {
+  const t = useT();
   const [devices, setDevices] = useState<PairedDeviceInfo[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -104,7 +107,7 @@ export function PairedDevices() {
       await refresh();
       window.dispatchEvent(new Event(DEVICES_CHANGED_EVENT));
     } catch (e) {
-      setErr(`Not saved: ${errorSentence(e)}`);
+      setErr(t('settings.notSaved', { reason: errorSentence(e) }));
     } finally {
       setBusy(null);
     }
@@ -113,12 +116,12 @@ export function PairedDevices() {
   return (
     <div className="st-row is-block" data-testid="paired-devices">
       <div className="st-label">
-        <span>Paired phones</span>
-        <small>Turn off what a phone shouldn't do. Changes apply at once.</small>
+        <span>{t('settings.row.paired-devices.label')}</span>
+        <small>{t('phone.devices.hint')}</small>
       </div>
       <div className="st-body">
         {devices.length === 0 ? (
-          <p className="st-note">No phones paired yet.</p>
+          <p className="st-note">{t('phone.devices.none')}</p>
         ) : (
           <ul className="st-devices">
             {devices.map((device) => (

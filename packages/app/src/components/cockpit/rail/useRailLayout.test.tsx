@@ -3,6 +3,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RAIL_KEY, useRailLayout, type RailLayout } from './useRailLayout';
+import { resetPanelWidthsForTests } from '../../../lib/panel-widths';
+import { setFocusMode } from '../../../lib/focus-mode';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -25,6 +27,8 @@ const press = (key: string, target: EventTarget = window, init: KeyboardEventIni
 
 beforeEach(() => {
   window.localStorage.clear();
+  resetPanelWidthsForTests();
+  setFocusMode(false);
   Object.defineProperty(window, 'innerWidth', { value: 1400, configurable: true });
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -40,12 +44,13 @@ describe('useRailLayout', () => {
   it('is open by default on a wide window', () => {
     expect(latest.visible).toBe(true);
   });
-  it('hides under 1100 px whatever was chosen', () => {
-    setWidth(1000);
+  it('hides when the chat would get under 480 px, whatever was chosen', () => {
+    // 240 sidebar + 240 narrowest panel + 480 chat = 960 px.
+    setWidth(950);
     expect(latest.open).toBe(true);
     expect(latest.fits).toBe(false);
     expect(latest.visible).toBe(false);
-    setWidth(1200);
+    setWidth(960);
     expect(latest.visible).toBe(true);
   });
   it('toggles with the ] key and remembers it', () => {

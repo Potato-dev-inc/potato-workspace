@@ -1,5 +1,6 @@
 // Settings > MCP & bridge > Toolbelt: list MCP servers once, apply them to every agent.
 import { useCallback, useEffect, useState } from 'react';
+import { useT } from '../../../i18n';
 import {
   errText,
   joinArgs,
@@ -14,6 +15,9 @@ import {
 import { ToolbeltImport } from './ToolbeltImport';
 import { ToolbeltPreview } from './ToolbeltPreview';
 import { btn, btnPrimary, field } from './styles';
+
+// Example values in the empty fields: code and addresses, the same in every language.
+const EXAMPLE = { command: 'npx', args: '-y @playwright/mcp', url: 'https://example.com/mcp' };
 
 interface Draft {
   id: string;
@@ -84,6 +88,7 @@ function Switch({ on, label, onChange }: { on: boolean; label: string; onChange:
 }
 
 export function ToolbeltGroup({ api = toolbeltApi, projectPath }: { api?: ToolbeltApi; projectPath?: string | null }) {
+  const t = useT();
   const [listing, setListing] = useState<ToolbeltListing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -143,31 +148,26 @@ export function ToolbeltGroup({ api = toolbeltApi, projectPath }: { api?: Toolbe
   const servers = listing?.servers ?? [];
 
   return (
-    <section aria-label="Tools for every agent" className="rounded-xl border border-pm-border bg-pm-panel p-4">
+    <section aria-label={t('settings.row.toolbelt.label')} className="rounded-xl border border-pm-border bg-pm-panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Tools for every agent</h3>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-pm-muted">
-            Add a tool server once. It is written into each agent&apos;s settings, so each agent can use it.
-          </p>
+          <h3 className="text-sm font-semibold">{t('settings.row.toolbelt.label')}</h3>
+          <p className="mt-1 max-w-xl text-sm leading-6 text-pm-muted">{t('toolbelt.intro')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" className={btn} onClick={() => setImporting(true)}>
-            Import from agents
+            {t('toolbelt.import')}
           </button>
           <button type="button" className={btn} onClick={() => setDraft({ ...EMPTY })}>
-            Add server
+            {t('toolbelt.add')}
           </button>
           <button type="button" className={btnPrimary} onClick={() => setPreviewing(true)} disabled={!listing}>
-            Apply to all agents
+            {t('toolbelt.apply')}
           </button>
         </div>
       </div>
 
-      <p className="mt-3 text-xs leading-5 text-pm-muted">
-        Keys, tokens and passwords are kept in your system's secure storage and hidden here. Each agent&apos;s config file needs the real
-        value, so Potato Workspace writes it there as plain text.
-      </p>
+      <p className="mt-3 text-xs leading-5 text-pm-muted">{t('toolbelt.secrets')}</p>
 
       {error && (
         <p role="alert" className="mt-3 rounded-lg border border-pm-border bg-pm-bg px-3 py-2 text-xs leading-5 text-pm-text">
@@ -176,42 +176,42 @@ export function ToolbeltGroup({ api = toolbeltApi, projectPath }: { api?: Toolbe
       )}
       {notice && <p className="mt-3 text-xs leading-5 text-pm-muted">{notice}</p>}
 
-      <ul className="mt-3 divide-y divide-pm-border overflow-hidden rounded-lg border border-pm-border" aria-label="Servers">
+      <ul className="mt-3 divide-y divide-pm-border overflow-hidden rounded-lg border border-pm-border" aria-label={t('toolbelt.servers')}>
         {servers.map((s) => (
           <li key={s.id} className="flex items-center gap-3 bg-pm-bg px-3 py-2.5">
-            <Switch on={s.enabled} label={`Use ${s.name}`} onChange={(next) => void toggle(s, next)} />
+            <Switch on={s.enabled} label={t('toolbelt.use', { name: s.name })} onChange={(next) => void toggle(s, next)} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium">{s.name}</span>
-                <span className="shrink-0 text-[11px] text-pm-muted">{s.scope === 'project' ? 'This project' : 'All projects'}</span>
+                <span className="shrink-0 text-[11px] text-pm-muted">{s.scope === 'project' ? t('toolbelt.thisProject') : t('toolbelt.allProjects')}</span>
               </div>
               <div className="truncate font-mono text-[11px] text-pm-muted" title={summary(s)}>{summary(s)}</div>
             </div>
-            <button type="button" className={btn} onClick={() => setDraft(toDraft(s))} aria-label={`Edit ${s.name}`}>
-              Edit
+            <button type="button" className={btn} onClick={() => setDraft(toDraft(s))} aria-label={t('toolbelt.editName', { name: s.name })}>
+              {t('lend.edit')}
             </button>
-            <button type="button" className={btn} onClick={() => void remove(s)} aria-label={`Remove ${s.name}`}>
-              Remove
+            <button type="button" className={btn} onClick={() => void remove(s)} aria-label={t('keepGoing.removeLabel', { label: s.name })}>
+              {t('settings.remove')}
             </button>
           </li>
         ))}
         {listing && servers.length === 0 && (
           <li className="bg-pm-bg px-3 py-4 text-sm text-pm-muted">
-            No servers yet. Add one, or import the ones your agents already use.
+            {t('toolbelt.none')}
           </li>
         )}
       </ul>
 
       {listing && (
         <p className="mt-3 text-xs leading-5 text-pm-muted">
-          Works with {listing.agents.map((a) => a.label).join(', ') || 'no agents yet'}.
-          {listing.unsupported.length > 0 && ` Not supported: ${listing.unsupported.map((a) => a.label).join(', ')}.`}
+          {t('toolbelt.worksWith', { names: listing.agents.map((a) => a.label).join(', ') || t('toolbelt.noAgentsYet') })}
+          {listing.unsupported.length > 0 && ` ${t('toolbelt.notSupported', { names: listing.unsupported.map((a) => a.label).join(', ') })}`}
         </p>
       )}
 
       {draft && (
         <form
-          aria-label={draft.id ? 'Edit server' : 'Add server'}
+          aria-label={draft.id ? t('toolbelt.editServer') : t('toolbelt.add')}
           className="mt-3 space-y-3 rounded-lg border border-pm-border bg-pm-bg p-3"
           onSubmit={(e) => {
             e.preventDefault();
@@ -219,62 +219,62 @@ export function ToolbeltGroup({ api = toolbeltApi, projectPath }: { api?: Toolbe
           }}
         >
           <label className="block text-xs text-pm-muted">
-            Name
-            <input className={field} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Browser" />
+            {t('lend.name')}
+            <input className={field} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={t('toolbelt.namePlaceholder')} />
           </label>
-          <div role="group" aria-label="Type" className="inline-flex rounded-lg border border-pm-border p-0.5 text-xs">
-            {(['stdio', 'http'] as const).map((t) => (
+          <div role="group" aria-label={t('toolbelt.type')} className="inline-flex rounded-lg border border-pm-border p-0.5 text-xs">
+            {(['stdio', 'http'] as const).map((kind) => (
               <button
-                key={t}
+                key={kind}
                 type="button"
-                aria-pressed={draft.transport === t}
-                onClick={() => setDraft({ ...draft, transport: t })}
-                className={`rounded-md px-3 py-1 ${draft.transport === t ? 'bg-pm-text text-pm-bg' : 'text-pm-muted'}`}
+                aria-pressed={draft.transport === kind}
+                onClick={() => setDraft({ ...draft, transport: kind })}
+                className={`rounded-md px-3 py-1 ${draft.transport === kind ? 'bg-pm-text text-pm-bg' : 'text-pm-muted'}`}
               >
-                {t === 'stdio' ? 'Command' : 'Web address'}
+                {kind === 'stdio' ? t('toolbelt.command') : t('toolbelt.webAddress')}
               </button>
             ))}
           </div>
           {draft.transport === 'stdio' ? (
             <>
               <label className="block text-xs text-pm-muted">
-                Command
-                <input className={`${field} font-mono`} value={draft.command} onChange={(e) => setDraft({ ...draft, command: e.target.value })} placeholder="npx" />
+                {t('toolbelt.command')}
+                <input className={`${field} font-mono`} value={draft.command} onChange={(e) => setDraft({ ...draft, command: e.target.value })} placeholder={EXAMPLE.command} />
               </label>
               <label className="block text-xs text-pm-muted">
-                Arguments
-                <input className={`${field} font-mono`} value={draft.args} onChange={(e) => setDraft({ ...draft, args: e.target.value })} placeholder="-y @playwright/mcp" />
+                {t('toolbelt.arguments')}
+                <input className={`${field} font-mono`} value={draft.args} onChange={(e) => setDraft({ ...draft, args: e.target.value })} placeholder={EXAMPLE.args} />
               </label>
               <label className="block text-xs text-pm-muted">
-                Environment variables, one per line (NAME=value)
+                {t('toolbelt.env')}
                 <textarea className={`${field} font-mono`} rows={2} value={draft.env} onChange={(e) => setDraft({ ...draft, env: e.target.value })} />
               </label>
             </>
           ) : (
             <>
               <label className="block text-xs text-pm-muted">
-                Address
-                <input className={`${field} font-mono`} value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} placeholder="https://example.com/mcp" />
+                {t('tunnel.address')}
+                <input className={`${field} font-mono`} value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} placeholder={EXAMPLE.url} />
               </label>
               <label className="block text-xs text-pm-muted">
-                Headers, one per line (Name: value)
+                {t('toolbelt.headers')}
                 <textarea className={`${field} font-mono`} rows={2} value={draft.headers} onChange={(e) => setDraft({ ...draft, headers: e.target.value })} />
               </label>
             </>
           )}
           <label className="block text-xs text-pm-muted">
-            Use in
+            {t('toolbelt.useIn')}
             <select className={field} value={draft.scope} onChange={(e) => setDraft({ ...draft, scope: e.target.value as Draft['scope'] })}>
-              <option value="global">All projects</option>
-              <option value="project">This project only</option>
+              <option value="global">{t('toolbelt.allProjects')}</option>
+              <option value="project">{t('toolbelt.thisProjectOnly')}</option>
             </select>
           </label>
           <div className="flex justify-end gap-2">
             <button type="button" className={btn} onClick={() => setDraft(null)}>
-              Cancel
+              {t('lend.cancel')}
             </button>
             <button type="submit" className={btnPrimary} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('tunnel.saving') : t('discord.save')}
             </button>
           </div>
         </form>
@@ -298,7 +298,7 @@ export function ToolbeltGroup({ api = toolbeltApi, projectPath }: { api?: Toolbe
           onClose={() => setImporting(false)}
           onImported={(count) => {
             setImporting(false);
-            setNotice(count === 1 ? 'Added 1 server to your toolbelt.' : `Added ${count} servers to your toolbelt.`);
+            setNotice(t('toolbelt.added', { count }));
             void refresh();
           }}
         />

@@ -1,4 +1,5 @@
 // Pure helpers for the "Public address" section in Settings > Mobile PWA.
+import { t } from '../../i18n';
 import type { TunnelConfigInput, TunnelConfigView, TunnelMode, TunnelStatus } from '../../lib/tauri-types';
 
 export interface TunnelDraft {
@@ -27,11 +28,11 @@ export function draftFromConfig(config: TunnelConfigView | null | undefined): Tu
 /** Whether Save makes sense, with the reason shown under the form when it does not. */
 export function draftProblem(draft: TunnelDraft, config: TunnelConfigView | null | undefined): string | null {
   if (draft.mode === 'named') {
-    if (!draft.hostname.trim()) return 'Enter the hostname, for example pm.example.com.';
+    if (!draft.hostname.trim()) return t('tunnel.problem.hostname');
     const hasStoredToken = config?.mode === 'named' && config.has_token;
-    if (!draft.token.trim() && !hasStoredToken) return 'Paste the tunnel token from Cloudflare.';
+    if (!draft.token.trim() && !hasStoredToken) return t('tunnel.problem.token');
   }
-  if (draft.mode === 'custom' && !draft.url.trim()) return 'Enter the address, for example https://pm.example.com.';
+  if (draft.mode === 'custom' && !draft.url.trim()) return t('tunnel.problem.address');
   return null;
 }
 
@@ -50,17 +51,17 @@ export interface StatusLine {
 }
 
 export function statusLine(status: TunnelStatus | null): StatusLine {
-  if (!status) return { tone: 'idle', text: 'Available in the desktop app.' };
-  const overridden = status.mode === 'env' ? ' (set outside the app)' : '';
+  if (!status) return { tone: 'idle', text: t('tunnel.status.desktopOnly') };
+  const overridden = status.mode === 'env' ? ` ${t('tunnel.status.outside')}` : '';
   switch (status.state) {
     case 'running':
-      return { tone: 'ok', text: `Online${overridden}` };
+      return { tone: 'ok', text: `${t('tunnel.status.online')}${overridden}` };
     case 'starting':
-      return { tone: 'wait', text: 'Starting…' };
+      return { tone: 'wait', text: t('tunnel.status.starting') };
     case 'error':
-      return { tone: 'bad', text: status.error ?? 'The tunnel stopped.' };
+      return { tone: 'bad', text: status.error ?? t('tunnel.status.stopped') };
     default:
-      return { tone: status.error ? 'bad' : 'idle', text: status.error ?? 'Not running.' };
+      return { tone: status.error ? 'bad' : 'idle', text: status.error ?? t('tunnel.status.notRunning') };
   }
 }
 

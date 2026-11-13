@@ -2,6 +2,7 @@
 // settings command (not settings.json). Off = only the offline look-alike check runs on the approval card.
 // Only the package name is ever sent to a public registry; nothing here names an agent.
 import { useEffect, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import { packageCheckSettingsGet, packageCheckSettingsSet, type PackageCheckSettings } from '../../../lib/package-check';
 import { Note, SettingRow, SettingToggle } from '../settings-ui';
 
@@ -13,10 +14,14 @@ export const PACKAGE_CHECK_OFF_NOTE = 'Look-alike names are still checked on thi
 export function packageCheckSaveError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   const text = raw.replace(/^[A-Z][A-Z0-9_]*:\s*/, '').trim();
-  return text || "Couldn't save. Try again.";
+  return text || t('keepGoing.saveFailed');
 }
 
 export function PackageCheckRow({ onSaved }: { onSaved?: () => void }) {
+  const t = useT();
+  const PACKAGE_CHECK_LABEL = t('settings.row.package-check.label');
+  const PACKAGE_CHECK_NOTE = t('settings.row.package-check.hint');
+  const PACKAGE_CHECK_OFF_NOTE = t('packageCheck.offNote');
   // undefined = still loading, null = not available here (a browser preview), otherwise the saved setting.
   const [settings, setSettings] = useState<PackageCheckSettings | null | undefined>(undefined);
   const [saving, setSaving] = useState(false);
@@ -36,7 +41,7 @@ export function PackageCheckRow({ onSaved }: { onSaved?: () => void }) {
   if (settings === null) {
     return (
       <SettingRow label={PACKAGE_CHECK_LABEL} description={PACKAGE_CHECK_NOTE}>
-        <span className="st-value">Available in the desktop app.</span>
+        <span className="st-value">{t('tunnel.status.desktopOnly')}</span>
       </SettingRow>
     );
   }

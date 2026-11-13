@@ -67,6 +67,9 @@ const show = async (handoff?: HandoffControl) => {
   await flush();
 };
 
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+
 describe('pane header: Hand off', () => {
   it('starts the handoff for this pane', async () => {
     const h = control();

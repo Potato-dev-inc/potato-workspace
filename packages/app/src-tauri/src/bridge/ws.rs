@@ -243,7 +243,7 @@ fn handle_client_text(
         "input" => {
             let pane_id = value.get("pane_id").and_then(Value::as_str)?.to_string();
             // Same cap as `POST /panes/{id}/input` (device caps: `type`); re-read per frame.
-            if !crate::mobile_pairing::caller_may(ctx.headers, ctx.peer_loopback, crate::mobile_pairing::Cap::Type) {
+            if !crate::mobile_pairing::caller_may_on(ctx.headers, ctx.peer_loopback, crate::mobile_pairing::Cap::Type, Some(&pane_id)) {
                 super::typing_refusals::note_refused(&pane_id, super::typing_refusals::Channel::Socket, "this device may not type");
                 return Some(json!({"type": "input-error", "pane_id": pane_id, "error": "not_allowed"}).to_string());
             }

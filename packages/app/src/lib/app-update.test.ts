@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isVersionNewer, normalizeVersion, parseVersionParts, plainUpdateError, runningJobWarning } from './app-update';
+import { checkFailureLine, checkFailureOf, isVersionNewer, normalizeVersion, parseVersionParts, plainUpdateError, runningJobWarning } from './app-update';
 
 describe('version compare', () => {
   it('reads v-prefixed and plain versions', () => {
@@ -35,5 +35,21 @@ describe('plain errors', () => {
   it('says one agent or several when work runs', () => {
     expect(runningJobWarning(['claude'])).toContain('An agent is still working');
     expect(runningJobWarning(['claude', 'codex'])).toContain('2 agents are still working');
+  });
+});
+
+describe('a failed channel check', () => {
+  it('reads which channel failed from the code at the start of the message', () => {
+    expect(checkFailureOf("CHECK_FAILED_BETA: Couldn't check for early versions. Try again later.")).toBe('beta');
+    expect(checkFailureOf(new Error('CHECK_FAILED_STABLE: Couldn\'t check for updates.'))).toBe('stable');
+    expect(checkFailureOf('UPDATE_RUNNING: An agent is working.')).toBeNull();
+    expect(checkFailureOf('Could not reach the update server.')).toBeNull();
+    expect(checkFailureOf(undefined)).toBeNull();
+  });
+
+  it('has one plain line per channel, and neither says up to date', () => {
+    expect(checkFailureLine('beta')).toBe("Couldn't check for early versions. Try again later.");
+    expect(checkFailureLine('stable')).toBe("Couldn't check for updates. Try again later.");
+    expect(checkFailureLine('beta')).not.toMatch(/up to date|newest/i);
   });
 });

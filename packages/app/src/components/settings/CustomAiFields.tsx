@@ -2,6 +2,7 @@
 // Presentational and controlled, so the agent wizard uses it today and a general custom provider can use it
 // later. The key is typed here and saved by the caller into the credential store; it is never shown again,
 // only "Saved, ends in 1234".
+import { useT } from '../../i18n';
 import { CUSTOM_AI_PRESETS, normalizeBaseUrl, presetById, type CustomAiPresetId, type CustomAiService } from '../../lib/custom-ai';
 
 const FIELD = 'mt-1 block w-full rounded-lg border border-pm-border bg-transparent px-2 py-1 text-xs';
@@ -25,6 +26,7 @@ export function CustomAiFields({
   last4?: string | null;
   testId?: string;
 }) {
+  const t = useT();
   const preset = presetById(value.preset);
 
   const pickPreset = (id: CustomAiPresetId) => {
@@ -47,9 +49,9 @@ export function CustomAiFields({
   return (
     <div className="space-y-2" data-testid={testId}>
       <label className="block text-xs text-pm-muted">
-        Service
+        {t('keys.service')}
         <select
-          aria-label="AI service"
+          aria-label={t('keys.serviceAria')}
           className={FIELD}
           value={preset ? preset.id : 'other'}
           onChange={(e) => pickPreset(e.target.value as CustomAiPresetId)}
@@ -63,11 +65,11 @@ export function CustomAiFields({
       </label>
       {preset && <p className="text-xs text-pm-muted">{preset.hint}</p>}
       <label className="block text-xs text-pm-muted">
-        Address
+        {t('tunnel.address')}
         <input
-          aria-label="Service address"
+          aria-label={t('keys.serviceAddress')}
           className={`${FIELD} font-mono`}
-          placeholder="https://api.example.com/v1"
+          placeholder="https://api.example.com/v1" // i18n-ok: example
           autoComplete="off"
           spellCheck={false}
           value={value.baseUrl}
@@ -75,12 +77,12 @@ export function CustomAiFields({
         />
       </label>
       <label className="block text-xs text-pm-muted">
-        Key
+        {t('keys.keyWord')}
         <input
-          aria-label="Service key"
+          aria-label={t('keys.serviceKey')}
           type="password"
           className={`${FIELD} font-mono`}
-          placeholder={keySet ? `Saved${last4 ? `, ends in ${last4}` : ''}. Type to replace it.` : 'Paste your key'}
+          placeholder={keySet ? t('keys.savedType', { tail: last4 ? t('keys.endsIn', { tail: last4 }) : '' }) : t('keys.paste')}
           autoComplete="off"
           spellCheck={false}
           value={keyDraft}
@@ -88,11 +90,11 @@ export function CustomAiFields({
         />
       </label>
       <label className="block text-xs text-pm-muted">
-        Model
+        {t('keys.model')}
         <input
-          aria-label="Model name"
+          aria-label={t('keys.modelName')}
           className={`${FIELD} font-mono`}
-          placeholder="model-name or vendor/model"
+          placeholder="model-name or vendor/model" // i18n-ok: example
           autoComplete="off"
           spellCheck={false}
           value={value.model}

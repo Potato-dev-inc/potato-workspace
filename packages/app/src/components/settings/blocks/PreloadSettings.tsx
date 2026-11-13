@@ -1,6 +1,7 @@
 // Settings > Preload: keep a warm agent (CLI at its input box + a hidden pane window) per ticked
 // provider, so opening a pane for it is instant. Backed by the standby pool (`standby-pool.json`).
 import { errorSentence } from '../../../lib/sayError';
+import { useT } from '../../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri, type StandbyConfig, type StandbyStatus } from '../../../lib/tauri';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
@@ -35,6 +36,7 @@ const DEFAULT_API: PreloadApi = {
 };
 
 export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadApi; onSaved?: () => void }) {
+  const t = useT();
   const registry = useAgentRegistry();
   const [status, setStatus] = useState<StandbyStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,14 +70,14 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
   return (
     <>
       <SettingToggle
-        label="Preload agents"
-        description="Off by default. Each ready agent stays open in the background, which uses memory, and some providers count it as an open session. Turning this off closes them all."
+        label={t('preload.label')}
+        description={t('preload.help')}
         checked={config.preload.enabled}
         onChange={(value) => void save(withPreloadEnabled(config, value))}
       />
       <SettingBlock
-        label="Agents to keep warm"
-        description="Warm agents start in the folder you are working in: the project of your last run or of the pane you opened (your project folder setting until then). A pane for another folder starts normally. They never answer a trust or login prompt: an agent that shows one is dropped (open it once yourself first)."
+        label={t('preload.agentsLabel')}
+        description={t('preload.agentsHelp')}
       >
         <div className="space-y-2" data-testid="preload-providers">
           {providers.map((provider) => {
@@ -85,7 +87,7 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
                 <label className="flex w-56 items-center gap-2 font-medium">
                   <input
                     type="checkbox"
-                    aria-label={`Keep ${provider.label} warm`}
+                    aria-label={t('preload.keepWarm', { label: provider.label })}
                     disabled={!provider.supported || !status}
                     checked={count > 0}
                     onChange={(event) => void save(withPreloadCount(config, provider.id, event.target.checked ? 1 : 0))}
@@ -94,17 +96,17 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
                   {provider.experimental && (
                     <span
                       className="text-xs font-normal text-pm-muted"
-                      title="This agent has no ready screen of its own. A warm one is used only after its screen has held still for two seconds with no dialog on it."
+                      title={t('preload.experimentalTip')}
                     >
-                      (experimental)
+                      {t('preload.experimental')}
                     </span>
                   )}
                 </label>
                 {provider.supported ? (
                   <label className="flex items-center gap-2 text-pm-muted">
-                    keep
+                    {t('preload.keep')}
                     <select
-                      aria-label={`Warm ${provider.label} count`}
+                      aria-label={t('preload.warmCount', { label: provider.label })}
                       disabled={count === 0}
                       value={count || 1}
                       onChange={(event) => void save(withPreloadCount(config, provider.id, Number(event.target.value)))}
@@ -115,7 +117,7 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
                         </option>
                       ))}
                     </select>
-                    warm
+                    {t('preload.warm')}
                   </label>
                 ) : (
                   <span className="text-xs text-pm-muted">{provider.unsupportedNote}</span>
@@ -123,28 +125,28 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
               </div>
             );
           })}
-          {!status && <p className="text-sm text-pm-muted">Available in the desktop app.</p>}
+          {!status && <p className="text-sm text-pm-muted">{t('tunnel.status.desktopOnly')}</p>}
         </div>
       </SettingBlock>
       <SettingBlock
-        label="Idle timeout"
-        description={`A warm agent nobody used for ${formatDuration(config.idle_timeout_secs * 1000)} is closed; it warms again the next time you open that agent.`}
+        label={t('preload.idle')}
+        description={t('preload.idleHelp', { time: formatDuration(config.idle_timeout_secs * 1000) })}
       >
         <IdleTimeoutField config={config} onChange={save} />
       </SettingBlock>
-      <SettingBlock label="Status" description={summarizePreload(status)}>
+      <SettingBlock label={t('preload.status')} description={summarizePreload(status)}>
         <div className="space-y-2 text-sm">
           {error && <p className="text-pm-text">{error}</p>}
           {status?.following && (
             <p className="text-sm text-pm-text" data-testid="preload-following">
-              following: <span className="font-mono text-xs">{status.following.project}</span> — {followWhyText(status.following.why)}
+              {t('preload.following')} <span className="font-mono text-xs">{status.following.project}</span> — {followWhyText(status.following.why)}
             </p>
           )}
           {status?.following?.not_warmed.map((item) => (
             <p key={item.agent_type} className="text-sm text-pm-text" data-testid={`preload-not-warmed-${item.agent_type}`}>
-              not warmed: <span className="font-mono text-xs">{status.following?.project}</span> needs trust once for{' '}
-              {registry.agents.find((a) => a.id === item.agent_type)?.label ?? item.agent_type}
-              <span className="text-pm-muted"> (open it there yourself once, then it warms on its own)</span>
+              {t('preload.notWarmed')} <span className="font-mono text-xs">{status.following?.project}</span>{' '}
+              {t('preload.needsTrust', { agent: registry.agents.find((a) => a.id === item.agent_type)?.label ?? item.agent_type })}
+              <span className="text-pm-muted"> {t('preload.openOnce')}</span>
             </p>
           ))}
           {status?.standbys
@@ -155,26 +157,25 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
                 <span className="font-mono text-xs text-pm-muted">{standby.project}</span>
                 <span>{standby.state}</span>
                 {standby.idle_expires_in_ms != null && (
-                  <span className="text-pm-muted">closes in {formatDuration(standby.idle_expires_in_ms)} if unused</span>
+                  <span className="text-pm-muted">{t('preload.closesIn', { time: formatDuration(standby.idle_expires_in_ms) })}</span>
                 )}
               </div>
             ))}
           {status?.agents_blocked?.map((agent) => (
             <p key={agent.agent_type} className="text-sm text-pm-text" data-testid={`preload-blocked-${agent.agent_type}`}>
-              {registry.agents.find((a) => a.id === agent.agent_type)?.label ?? agent.agent_type} couldn't stay warm: {agent.message}.{' '}
+              {t('preload.cantStay', { agent: registry.agents.find((a) => a.id === agent.agent_type)?.label ?? agent.agent_type, message: agent.message })}{' '}
               <span className="text-pm-muted">
                 {agent.reason === 'untested_version'
-                  ? 'Not warming it until it is a tested version.'
+                  ? t('preload.untested')
                   : agent.cold
-                    ? 'Not warming it until you open it.'
-                    : `Trying again in ${formatDuration(agent.retry_in_ms)}.`}
+                    ? t('preload.untilOpen')
+                    : t('preload.tryingAgain', { time: formatDuration(agent.retry_in_ms) })}
               </span>
             </p>
           ))}
           {status?.blocked.map((blocked) => (
             <p key={blocked.key} className="text-xs text-pm-muted">
-              Held back: {holdKeyLabel(blocked.key)} ({holdReasonText(blocked.reason)}
-              {blocked.cold ? ', warms again when you open it' : `, retry in ${formatDuration(blocked.retry_in_ms)}`})
+              {t('preload.heldBack', { key: holdKeyLabel(blocked.key), reason: holdReasonText(blocked.reason), extra: blocked.cold ? t('preload.warmsAgain') : t('preload.retryIn', { time: formatDuration(blocked.retry_in_ms) }) })}
             </p>
           ))}
         </div>
@@ -188,6 +189,7 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
  * not "0 minutes"). Showing it never rewrites it; only typing a number or switching the unit does.
  */
 function IdleTimeoutField({ config, onChange }: { config: StandbyConfig; onChange: (next: StandbyConfig) => Promise<void> | void }) {
+  const t = useT();
   const secs = config.idle_timeout_secs;
   const [unit, setUnit] = useState<IdleUnit>(() => idleUnitFor(secs));
   // A change from outside (another window, a reload) that no longer fits the shown unit moves the unit.
@@ -200,13 +202,13 @@ function IdleTimeoutField({ config, onChange }: { config: StandbyConfig; onChang
         <NumberControl
           min={unit === 'minutes' ? 1 : 5}
           max={unit === 'minutes' ? 1440 : 86400}
-          aria-label={`Preload idle timeout (${unit})`}
+          aria-label={t('preload.idleAria', { unit: t(`preload.unit.${unit}`) })}
           value={idleDisplayValue(secs, unit)}
           onCommit={(value) => onChange(withIdleValue(config, value, unit))}
         />
       </div>
       <Popup
-        aria-label="Idle timeout unit"
+        aria-label={t('preload.unitAria')}
         value={unit}
         onChange={(event) => {
           const next = event.target.value as IdleUnit;
@@ -217,8 +219,8 @@ function IdleTimeoutField({ config, onChange }: { config: StandbyConfig; onChang
           }
         }}
       >
-        <option value="seconds">seconds</option>
-        <option value="minutes">minutes</option>
+        <option value="seconds">{t('preload.unit.seconds')}</option>
+        <option value="minutes">{t('preload.unit.minutes')}</option>
       </Popup>
     </div>
   );

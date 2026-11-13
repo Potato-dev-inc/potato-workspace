@@ -1,5 +1,7 @@
 // One inline icon set: 16px, 1.5px stroke, round caps.
 import type { ReactNode } from 'react';
+import potatoIcon from '../../assets/potato/icons/icon.svg';
+import { PotatoFace, type PotatoState } from './PotatoFace';
 
 function Icon({ children, size = 16 }: { children: ReactNode; size?: number }) {
   return (
@@ -196,15 +198,11 @@ export const IconClosedChats = () => (
   </Icon>
 );
 
-/** The Potato mark: a flat potato with three eyes (spots). It takes its colour from the text colour around it (the
- *  sidebar and empty states set it to the accent, the loading screen to its own), so it works in both themes. */
-export const PotatoMark = ({ size = 16, className }: { size?: number; className?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" className={className} data-mark="potato" aria-hidden="true" focusable="false">
-    <path d="M16.2 4.5c5.9-.4 11.6 3.6 11.8 10.2.2 6.9-4.9 12.8-11.7 12.8C9.5 27.5 4 22.9 4 16.2 4 9.5 9.8 4.9 16.2 4.5z" fill="currentColor" />
-    <g fill="var(--bg-side, black)" opacity="0.4">
-      <circle cx="12" cy="13" r="1.6" />
-      <circle cx="19.5" cy="17.5" r="1.6" />
-      <circle cx="13.5" cy="21" r="1.2" />
-    </g>
-  </svg>
-);
+/** The Potato mark: the real Potato art (assets/potato), still by default. `state` picks a moving pose (the loading
+ *  screen uses `loading`); with prefers-reduced-motion every pose shows its still first frame. */
+export const PotatoMark = ({ size = 16, className, state }: { size?: number; className?: string; state?: PotatoState }) =>
+  state ? (
+    <PotatoFace state={state} size={size} className={className} mark />
+  ) : (
+    <img src={potatoIcon} width={size} height={size} className={className} alt="" aria-hidden="true" data-mark="potato" draggable={false} />
+  );

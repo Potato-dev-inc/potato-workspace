@@ -1,6 +1,7 @@
 // Settings > Helpers > "Let agents ask each other for help": install the skills and the connection into
 // each agent that is on this computer. Review first, then install; Undo puts every file back.
 import { useCallback, useEffect, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import {
   agentPackApi,
   groupAgents,
@@ -16,9 +17,7 @@ import { errText } from '../../../lib/toolbelt';
 import { ChooseHost } from './ChooseHost';
 import { btn, btnPrimary, overlay, sheet } from '../toolbelt/styles';
 
-const UNSUPPORTED_REASON = "Potato Workspace doesn't know where this agent keeps its settings yet";
-
-const FILE_TEXT: Record<FileKind, string> = { add: 'new', update: 'newer version', replace: 'replaces your file (kept for Undo)', unchanged: 'up to date' };
+const fileText = (kind: FileKind): string => t(`pack.file.${kind}`);
 
 function names(row: PackRow): string {
   return row.labels.join(', ');
@@ -27,22 +26,22 @@ function names(row: PackRow): string {
 function skillsLine(row: PackRow): string {
   const s = row.skills;
   if (!s) return '';
-  if (s.status === 'skipped') return s.reason ?? 'Skipped';
-  if (s.status === 'error') return s.reason ?? 'Something went wrong';
-  if (s.status === 'unchanged') return 'Skills are already installed';
+  if (s.status === 'skipped') return s.reason ?? t('pack.skipped');
+  if (s.status === 'error') return s.reason ?? t('pack.wrong');
+  if (s.status === 'unchanged') return t('pack.skillsInstalled');
   const n = s.files.filter((f) => f.kind !== 'unchanged').length;
   const replaced = s.files.some((f) => f.kind === 'replace');
-  return `${n} ${n === 1 ? 'skill' : 'skills'} to add${replaced ? ', one replaces a file of yours' : ''}`;
+  return t('pack.skillsToAdd', { count: n, extra: replaced ? t('pack.oneReplaces') : '' });
 }
 
 function mcpLine(row: PackRow): string {
   const m = row.mcp;
   if (!m) return '';
-  if (m.status === 'skipped') return m.reason ?? 'Skipped';
-  if (m.status === 'error') return m.reason ?? 'Something went wrong';
-  if (m.status === 'unchanged') return 'Already connected to Potato Workspace';
-  if (m.change === 'update') return "Fix the Potato Workspace connection (it pointed at a program that doesn't exist)";
-  return 'Connection to Potato Workspace will be added';
+  if (m.status === 'skipped') return m.reason ?? t('pack.skipped');
+  if (m.status === 'error') return m.reason ?? t('pack.wrong');
+  if (m.status === 'unchanged') return t('pack.connected');
+  if (m.change === 'update') return t('pack.fixConnection');
+  return t('pack.willAdd');
 }
 
 export function PackSheet({
@@ -57,6 +56,7 @@ export function PackSheet({
   /** The user's own settings files changed (saved or forgotten). */
   onChanged?: () => void;
 }) {
+  const t = useT();
   const [report, setReport] = useState<PackReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -116,8 +116,8 @@ export function PackSheet({
       const where = written.map(names).join(', ');
       const text =
         written.length === 0
-          ? 'Every agent already has Potato Workspace.'
-          : `Added to ${where}.${failed.length > 0 ? ` ${failed.length} could not be written.` : ''} Restart open agents to pick it up.`;
+          ? t('pack.everyHas')
+          : t('pack.addedTo', { where, failed: failed.length > 0 ? ` ${t('pack.couldNotWrite', { n: failed.length })}` : '' });
       onDone(text, done);
     } catch (e) {
       setError(errText(e));
@@ -127,13 +127,10 @@ export function PackSheet({
 
   return (
     <div className={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label="Let agents ask each other for help" className={sheet}>
+      <div role="dialog" aria-modal="true" aria-label={t('settings.row.agent-pack.label')} className={sheet}>
         <div className="border-b border-pm-border px-4 py-3">
-          <h4 className="text-sm font-semibold">Let agents ask each other for help</h4>
-          <p className="mt-1 text-xs leading-5 text-pm-muted">
-            Skills are short guides that teach an agent when and how to hand work to other agents. Nothing runs at install time. An
-            existing connection is never changed, except one an earlier version pointed at a program that doesn't exist. Undo puts every file back.
-          </p>
+          <h4 className="text-sm font-semibold">{t('settings.row.agent-pack.label')}</h4>
+          <p className="mt-1 text-xs leading-5 text-pm-muted">{t('pack.sheetHelp')}</p>
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
@@ -142,14 +139,14 @@ export function PackSheet({
               {error}
             </p>
           )}
-          {!report && !error && <p className="text-xs text-pm-muted">Looking for your agents…</p>}
+          {!report && !error && <p className="text-xs text-pm-muted">{t('pack.looking')}</p>}
           {rows.map((row) => (
             <div key={row.key} data-testid="pack-agent" className="rounded-lg border border-pm-border bg-pm-bg">
               <div className="px-3 pt-2.5 text-sm font-medium">{names(row)}</div>
               <dl className="space-y-1 px-3 py-2 text-xs">
                 {row.skills && (
                   <div className="flex gap-2">
-                    <dt className="w-20 shrink-0 text-pm-muted">Skills</dt>
+                    <dt className="w-20 shrink-0 text-pm-muted">{t('pack.skills')}</dt>
                     <dd className="min-w-0">
                       <div>{skillsLine(row)}</div>
                       <div className="truncate font-mono text-[11px] text-pm-muted" title={row.skills.path}>
@@ -158,7 +155,7 @@ export function PackSheet({
                       {open === `${row.key}|skills` &&
                         row.skills.files.map((f) => (
                           <div key={f.name} className="font-mono text-[11px] text-pm-muted">
-                            {f.name} · {FILE_TEXT[f.kind]}
+                            {f.name} · {fileText(f.kind)}
                           </div>
                         ))}
                     </dd>
@@ -166,7 +163,7 @@ export function PackSheet({
                 )}
                 {row.mcp && (
                   <div className="flex gap-2">
-                    <dt className="w-20 shrink-0 text-pm-muted">Connection</dt>
+                    <dt className="w-20 shrink-0 text-pm-muted">{t('pack.connection')}</dt>
                     <dd className="min-w-0">
                       <div>{mcpLine(row)}</div>
                       <div className="truncate font-mono text-[11px] text-pm-muted" title={row.mcp.path}>
@@ -186,10 +183,10 @@ export function PackSheet({
                 .map((c) => (
                   <div key={c.id} data-testid="pack-chosen" className="flex items-center justify-between gap-2 border-t border-pm-border px-3 py-2 text-xs">
                     <span className="min-w-0 truncate text-pm-muted" title={c.config_path}>
-                      Settings file you chose: <span className="font-mono text-[11px]">{c.config_path}</span> ({c.format.toUpperCase()}, {c.key_path})
+                      {t('pack.chosenFile')} <span className="font-mono text-[11px]">{c.config_path}</span> ({c.format.toUpperCase()}, {c.key_path})
                     </span>
                     <button type="button" className="shrink-0 text-xs text-pm-muted underline" onClick={() => void forget(c.id)}>
-                      Forget
+                      {t('pack.forget')}
                     </button>
                   </div>
                 ))}
@@ -200,21 +197,21 @@ export function PackSheet({
                   aria-expanded={open?.startsWith(row.key) ?? false}
                   onClick={() => setOpen(open?.startsWith(row.key) ? null : `${row.key}|${row.mcp?.diff ? 'mcp' : 'skills'}`)}
                 >
-                  {open?.startsWith(row.key) ? 'Hide details' : 'Show details'}
+                  {open?.startsWith(row.key) ? t('pack.hideDetails') : t('pack.showDetails')}
                 </button>
               </div>
             </div>
           ))}
-          {report && rows.length === 0 && <p className="text-xs text-pm-muted">No supported agents found on this computer.</p>}
+          {report && rows.length === 0 && <p className="text-xs text-pm-muted">{t('pack.noneFound')}</p>}
           {absent.length > 0 && (
             <p className="text-xs leading-5 text-pm-muted" data-testid="pack-absent">
-              Not on this computer: {absent.map(names).join(', ')}.
+              {t('pack.notHere', { names: absent.map(names).join(', ') })}
             </p>
           )}
           {unsupported.map((u) => (
             <div key={u.id} data-testid="pack-unsupported-row">
               <p className="text-xs leading-5 text-pm-muted" data-testid="pack-unsupported">
-                Can't set up yet: {u.label} — {u.reason?.trim() ? u.reason.trim().replace(/\.$/, '') : UNSUPPORTED_REASON}.
+                {t('pack.cantYet', { label: u.label, reason: u.reason?.trim() ? u.reason.trim().replace(/\.$/, '') : t('pack.unsupportedReason') })}
               </p>
               <ChooseHost api={api} target={{ agentId: u.id, label: u.label }} onSaved={changed} />
             </div>
@@ -225,7 +222,7 @@ export function PackSheet({
                 <ChooseHost api={api} target={{}} askName onSaved={changed} onCancel={() => setOther(false)} />
               ) : (
                 <button type="button" className="text-xs text-pm-muted underline" onClick={() => setOther(true)}>
-                  Other agent…
+                  {t('pack.otherAgent')}
                 </button>
               )}
             </div>
@@ -234,14 +231,14 @@ export function PackSheet({
 
         <div className="flex items-center justify-between gap-2 border-t border-pm-border px-4 py-3">
           <span className="text-xs text-pm-muted">
-            {report ? (pending === 0 ? 'Nothing to add.' : `${pending} ${pending === 1 ? 'agent' : 'agents'} will change.`) : ''}
+            {report ? (pending === 0 ? t('pack.nothingToAdd') : t('pack.willChange', { count: pending })) : ''}
           </span>
           <div className="flex gap-2">
             <button type="button" className={btn} onClick={onClose}>
-              Cancel
+              {t('lend.cancel')}
             </button>
             <button type="button" className={btnPrimary} onClick={() => void install()} disabled={busy || pending === 0}>
-              {busy ? 'Installing…' : 'Install'}
+              {busy ? t('pack.installing') : t('agentPage.install')}
             </button>
           </div>
         </div>
@@ -251,6 +248,7 @@ export function PackSheet({
 }
 
 export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
+  const t = useT();
   const [reviewing, setReviewing] = useState(false);
   const [recorded, setRecorded] = useState(0);
   const [found, setFound] = useState<string[] | null>(null);
@@ -282,8 +280,8 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
       const n = u.removed.length + u.restored.length;
       setNotice(
         u.skipped.length > 0
-          ? `Undone for ${n} ${n === 1 ? 'item' : 'items'}. ${u.skipped.length} you changed since were left as they are.`
-          : `Undone. ${n} ${n === 1 ? 'item was' : 'items were'} put back as before.`,
+          ? t('pack.undoneSkipped', { count: n, skipped: u.skipped.length })
+          : t('pack.undone', { count: n }),
       );
       await refresh();
     } catch (e) {
@@ -294,27 +292,25 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
   };
 
   return (
-    <section aria-label="Let agents ask each other for help" className="rounded-xl border border-pm-border bg-pm-panel p-4">
+    <section aria-label={t('settings.row.agent-pack.label')} className="rounded-xl border border-pm-border bg-pm-panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Let agents ask each other for help</h3>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-pm-muted">
-            Teach each agent you use when to ask another agent for help, and connect it to Potato Workspace. You review every file first.
-          </p>
+          <h3 className="text-sm font-semibold">{t('settings.row.agent-pack.label')}</h3>
+          <p className="mt-1 max-w-xl text-sm leading-6 text-pm-muted">{t('pack.groupHelp')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {recorded > 0 && (
             <button type="button" className={btn} onClick={() => void undo()} disabled={undoing}>
-              {undoing ? 'Undoing…' : 'Undo'}
+              {undoing ? t('pack.undoing') : t('pack.undo')}
             </button>
           )}
           <button type="button" className={btnPrimary} onClick={() => setReviewing(true)}>
-            Review and install
+            {t('pack.review')}
           </button>
         </div>
       </div>
-      {found && <p className="mt-3 text-xs leading-5 text-pm-muted">{found.length > 0 ? `Found: ${found.join(', ')}.` : 'No supported agents found yet.'}</p>}
-      {cantSetUp.length > 0 && <p className="mt-1 text-xs leading-5 text-pm-muted">Can't set up: {cantSetUp.join(', ')}.</p>}
+      {found && <p className="mt-3 text-xs leading-5 text-pm-muted">{found.length > 0 ? t('pack.found', { names: found.join(', ') }) : t('pack.noneYet')}</p>}
+      {cantSetUp.length > 0 && <p className="mt-1 text-xs leading-5 text-pm-muted">{t('pack.cantSetUp', { names: cantSetUp.join(', ') })}</p>}
       {error && (
         <p role="alert" className="mt-3 rounded-lg border border-pm-border bg-pm-bg px-3 py-2 text-xs leading-5 text-pm-text">
           {error}

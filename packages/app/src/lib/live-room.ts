@@ -2,6 +2,7 @@
 // `live_room_*` commands (`commands/live_room.rs`) and the `live://state` event. Desktop window only.
 // The room's secrets (read token, content key) stay in the link's #fragment. The UI only ever sees the masked link.
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 /** What a viewer may see about a pane. `gone` = the pane closed. */
@@ -134,10 +135,10 @@ export function minutesLeft(endsAtMs: number, now: number): number {
 
 /** The length choice as plain words: 30 → `30 min`, 60 → `1 h`, 90 → `1 h 30 min`. */
 export function durationLabel(min: number): string {
-  if (min < 60) return `${min} min`;
+  if (min < 60) return t('liveRoom.dur.min', { m: min });
   const h = Math.floor(min / 60);
   const rest = min % 60;
-  return rest === 0 ? `${h} h` : `${h} h ${rest} min`;
+  return rest === 0 ? t('liveRoom.dur.h', { h }) : t('liveRoom.dur.hm', { h, m: rest });
 }
 
 /** The window event that opens the Go live sheet. The chat menu and the palette fire it; the cockpit listens. */

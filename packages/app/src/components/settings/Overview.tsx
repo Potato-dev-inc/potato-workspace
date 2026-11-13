@@ -8,7 +8,7 @@ import { useT } from '../../i18n';
 import { tauriAccountsApi, type AccountsOverview } from '../../lib/accounts';
 import { tauriHelperAgentsApi, type HelperVisibility } from '../../lib/agentRunMode';
 import { agentPackApi } from '../../lib/agent-pack';
-import { tauriUpdateTransport, type UpdateOffer } from '../../lib/app-update';
+import { checkFailureOf, tauriUpdateTransport, type CheckFailure, type UpdateOffer } from '../../lib/app-update';
 import { DEV_LABS_KEYS } from '../../lib/dev-labs';
 import { runAllChecks, tauriSetupDeps, type CheckRow, type SetupCheckContext, type SetupCheckDeps } from '../../lib/setup-checks';
 import { SetupChecksProvider, useSharedSetupChecks, type SetupChecksState } from './setup-source';
@@ -23,6 +23,7 @@ import {
   loadingCard,
   phoneCard,
   signedInCard,
+  checkFailedCard,
   updatesCard,
   type CardAction,
   type CardId,
@@ -60,7 +61,7 @@ export const DEFAULT_OVERVIEW_SOURCES: OverviewSources = {
   actions: DEFAULT_SETUP_ACTIONS,
 };
 
-type Loaded<T> = { state: 'loading' } | { state: 'failed'; why: string } | { state: 'ready'; value: T };
+type Loaded<T> = { state: 'loading' } | { state: 'failed'; why: string; failure: CheckFailure | null } | { state: 'ready'; value: T };
 
 /** Runs `load` once on mount. A rejection becomes `failed`; nothing here throws. */
 function useSource<T>(load: () => Promise<T>): Loaded<T> {
@@ -72,7 +73,7 @@ function useSource<T>(load: () => Promise<T>): Loaded<T> {
     loadRef
       .current()
       .then((value) => alive && setResult({ state: 'ready', value }))
-      .catch((error) => alive && setResult({ state: 'failed', why: errorSentence(error) }));
+      .catch((error) => alive && setResult({ state: 'failed', why: errorSentence(error), failure: checkFailureOf(error) }));
     return () => {
       alive = false;
     };
@@ -135,7 +136,10 @@ function OverviewCards({ openRow, openPage, sources = DEFAULT_OVERVIEW_SOURCES }
   const updatesView = (): CardView => {
     // Both sources are needed for a tick: the version we run, and the answer of the update check.
     if (version.state === 'loading' || update.state === 'loading') return loadingCard('updates');
-    if (update.state === 'failed') return cantCheckCard('updates', update.why);
+    if (update.state === 'failed') {
+      // A channel that could not be read gets its own line; anything else is "can't check".
+      return update.failure ? checkFailedCard(update.failure) : cantCheckCard('updates', update.why);
+    }
     return updatesCard(version.state === 'ready' ? version.value : null, update.value);
   };
 

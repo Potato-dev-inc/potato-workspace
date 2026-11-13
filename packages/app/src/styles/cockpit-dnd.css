@@ -1,0 +1,66 @@
+/* Drag layer: the ghost card and the work-area drop zones. Tokens only. */
+.cockpit .ck-drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--sep);
+  background: var(--bg-raised);
+  box-shadow: var(--raise-hi);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  will-change: transform;
+}
+.cockpit .ck-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.cockpit .ck-dropzones {
+  position: absolute;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  pointer-events: none;
+}
+.cockpit .ck-dropzone {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px dashed var(--sep);
+  background: var(--bg-float);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.cockpit .ck-dropzone.is-over {
+  border-style: solid;
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.cockpit .ck-dropzone-label {
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+}
+body.pm-dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-dropzone {
+    transition: none;
+  }
+}

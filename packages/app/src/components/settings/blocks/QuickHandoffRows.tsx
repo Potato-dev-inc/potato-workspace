@@ -1,6 +1,6 @@
 // Settings > Agents > Handoff: "Hand off does" (Quick handoff or Handoff to new agent) and "Fixed notes for every
 // handoff" (used by both). Both save through env.patch; the Hand off button reads them (hooks/useHandoff).
-import { t } from '../../../i18n';
+import { t, useT } from '../../../i18n';
 import { DEFAULT_HANDOFF_MODE, type HandoffMode } from '../../../lib/handoff';
 import { Popup, TextAreaControl } from '../controls';
 import type { SettingsEnv } from '../model';
@@ -16,11 +16,12 @@ export const FIXED_NOTES_LABEL = 'Fixed notes for every handoff';
 export const FIXED_NOTES_HINT = 'Added to the end of every handoff, under Always remember.';
 
 export function QuickHandoffRows({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const mode: HandoffMode = env.settings.handoff_mode ?? DEFAULT_HANDOFF_MODE;
   return (
     <>
-      <SettingRow label={HANDOFF_MODE_LABEL} description={HANDOFF_MODE_HINT}>
-        <Popup aria-label={HANDOFF_MODE_LABEL} value={mode} onChange={(event) => void env.patch({ handoff_mode: event.target.value as HandoffMode })}>
+      <SettingRow label={t('settings.row.handoff-mode.label')} description={t('settings.row.handoff-mode.hint')}>
+        <Popup aria-label={t('settings.row.handoff-mode.label')} value={mode} onChange={(event) => void env.patch({ handoff_mode: event.target.value as HandoffMode })}>
           {HANDOFF_MODES.map((m) => (
             <option key={m.value} value={m.value}>
               {m.label}
@@ -28,10 +29,10 @@ export function QuickHandoffRows({ env }: { env: SettingsEnv }) {
           ))}
         </Popup>
       </SettingRow>
-      <SettingBlock label={FIXED_NOTES_LABEL} description={FIXED_NOTES_HINT}>
+      <SettingBlock label={t('handoff.notes')} description={t('handoff.notesHelp')}>
         <TextAreaControl
-          aria-label={FIXED_NOTES_LABEL}
-          placeholder="For example: Reply in short sentences. Never push without asking."
+          aria-label={t('handoff.notes')}
+          placeholder={t('handoff.notesPlaceholder')}
           value={env.settings.handoff_fixed_notes ?? ''}
           onCommit={(next) => env.patch({ handoff_fixed_notes: next })}
         />

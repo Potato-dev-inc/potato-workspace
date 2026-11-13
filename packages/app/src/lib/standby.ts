@@ -1,4 +1,5 @@
 // Preload (warm standby) settings helpers (pure; the Preload tab and its tests share them).
+import { t } from '../i18n';
 import { peekAgentRegistry, type AgentDescriptor } from './agentRegistry';
 import type { StandbyConfig, StandbyStatus } from './tauri-types';
 
@@ -53,8 +54,8 @@ export function preloadProviders(agents: readonly AgentDescriptor[]): PreloadPro
         unsupportedNote: supported
           ? null
           : agent.kind === 'native_protocol' || agent.dispatchable === false
-            ? NOT_TERMINAL_NOTE
-            : NO_WARM_MODE_NOTE,
+            ? t('preload.notTerminal')
+            : t('preload.noWarmMode'),
       };
     });
 }
@@ -122,31 +123,31 @@ export function formatDuration(ms: number | null | undefined): string {
 
 /** One line for the status strip: "2 warm (1 ready, 1 starting)" or why nothing is warm. */
 export function summarizePreload(status: StandbyStatus | null): string {
-  if (!status) return 'Preload status is unavailable outside the desktop app.';
-  if (!status.config.preload.enabled) return 'Off: no agents are kept warm.';
+  if (!status) return t('preload.sum.unavailable');
+  if (!status.config.preload.enabled) return t('preload.sum.off');
   const { total, ready, starting } = status.counts;
-  if (Object.keys(status.config.preload.providers).length === 0) return 'On, but no provider is ticked.';
-  if (total === 0) return 'On: warm agents start in a few seconds.';
-  return `${total} warm (${ready} ready, ${starting} starting)`;
+  if (Object.keys(status.config.preload.providers).length === 0) return t('preload.sum.noProvider');
+  if (total === 0) return t('preload.sum.starting');
+  return t('preload.sum.counts', { total, ready, starting });
 }
 
 /** Plain words for why a warm agent was held back (`standby/pool.rs` reasons); unknown ones lose their underscores. */
 export function holdReasonText(reason: string): string {
   switch (reason) {
     case 'idle_timeout':
-      return 'closed after sitting unused';
+      return t('preload.hold.idle_timeout');
     case 'dialog':
-      return 'it stops at a trust or approval prompt';
+      return t('preload.hold.dialog');
     case 'needs_attention':
-      return 'it stops at a login or update screen';
+      return t('preload.hold.needs_attention');
     case 'dead':
-      return 'it exited right after starting';
+      return t('preload.hold.dead');
     case 'startup_timeout':
-      return 'it never reached its input box';
+      return t('preload.hold.startup_timeout');
     case 'claim_health_check_failed':
-      return 'it was not ready when a run asked for it';
+      return t('preload.hold.claim_health_check_failed');
     default:
-      return reason.startsWith('spawn_failed') ? 'it would not start' : reason.replace(/_/g, ' ');
+      return reason.startsWith('spawn_failed') ? t('preload.hold.spawn_failed') : reason.replace(/_/g, ' ');
   }
 }
 
@@ -156,22 +157,22 @@ export function holdKeyLabel(key: string): string {
   if (!match) return key;
   const [, agent, account, headless, project] = match;
   const parts = [backendLabel(agent)];
-  if (headless) parts.push('headless');
+  if (headless) parts.push(t('preload.headless'));
   if (account) parts.push(account.trim().slice(1, -1));
-  return `${parts.join(', ')} in ${project}`;
+  return t('preload.inProject', { parts: parts.join(t('preload.comma')), project });
 }
 
 /** Plain words for why Preload follows a folder (`following.why` from `standby/pool.rs`). */
 export function followWhyText(why: string): string {
   switch (why) {
     case 'run':
-      return 'your last run';
+      return t('preload.why.run');
     case 'focus':
-      return 'the pane you opened';
+      return t('preload.why.focus');
     case 'setting':
-      return 'your project folder setting';
+      return t('preload.why.setting');
     case 'registry':
-      return 'the current project';
+      return t('preload.why.registry');
     default:
       return why.replace(/_/g, ' ');
   }

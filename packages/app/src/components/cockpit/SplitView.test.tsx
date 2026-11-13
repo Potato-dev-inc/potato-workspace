@@ -162,3 +162,18 @@ describe('split view focus', () => {
     expect(document.activeElement).toBe(host.querySelector('[aria-label="message p1"]'));
   });
 });
+
+describe('split view: focus this side', () => {
+  it('a double-click on a side header fills the window with that side, but not on a button', async () => {
+    const { setFocusMode, isFocusMode } = await import('../../lib/focus-mode');
+    setFocusMode(false);
+    const { onFocus } = await renderSplit('left');
+    const rightHead = host.querySelector<HTMLElement>('.ck-split-side[data-split-side="right"] .ck-split-head')!;
+    act(() => void rightHead.querySelector('button')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(isFocusMode()).toBe(false);
+    act(() => void rightHead.querySelector('.ck-split-title')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(isFocusMode()).toBe(true);
+    expect(onFocus).toHaveBeenCalledWith('right');
+    setFocusMode(false);
+  });
+});

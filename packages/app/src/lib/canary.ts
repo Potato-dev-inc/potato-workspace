@@ -3,6 +3,7 @@
 // The `canary_*` Tauri commands (src-tauri/src/commands/canary.rs); the status is also pushed as
 // the `canary://changed` event.
 import { useCallback, useEffect, useState } from 'react';
+import { t } from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -138,19 +139,19 @@ export function useCanary(api: CanaryApi = tauriCanaryApi): { status: CanaryStat
 /** "3 minutes ago" for the last check line. */
 export function checkedAgo(atMs: number, now: number): string {
   const secs = Math.max(0, Math.round((now - atMs) / 1000));
-  if (secs < 45) return 'just now';
+  if (secs < 45) return t('versions.ago.now');
   const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins} ${mins === 1 ? 'minute' : 'minutes'} ago`;
+  if (mins < 60) return t('versions.ago.minutes', { count: mins });
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  if (hours < 24) return t('versions.ago.hours', { count: hours });
   const days = Math.round(hours / 24);
-  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  return t('versions.ago.days', { count: days });
 }
 
 /** The sentence under an agent in Settings about its last check, or null when it has none. */
 export function lastCheckLine(agent: CanaryAgent, now: number): string | null {
   if (!agent.last) return null;
-  return `${agent.last.summary} Checked ${checkedAgo(agent.last.at_ms, now)}.`;
+  return `${agent.last.summary} ${t('versions.checkedAgo', { ago: checkedAgo(agent.last.at_ms, now) })}`;
 }
 
 /** The sentence under an agent in Settings about its last update ("Claude 2.3.0 -> 2.4.0: checked, all good. Updated 3 hours ago."), or null before any. */
@@ -158,5 +159,5 @@ export function changeLine(agent: CanaryAgent, now: number): string | null {
   const change = agent.change;
   if (!change) return null;
   if (!change.at_ms) return change.text;
-  return `${change.text} Updated ${checkedAgo(change.at_ms, now)}.`;
+  return `${change.text} ${t('versions.updatedAgo', { ago: checkedAgo(change.at_ms, now) })}`;
 }

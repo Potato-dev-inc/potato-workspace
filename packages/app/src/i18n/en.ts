@@ -15,6 +15,28 @@ import { risk } from './en/risk';
 import { state } from './en/state';
 import { overview } from './en/overview';
 import { team } from './en/team';
+import { companion } from './en/companion';
+import { settingsRows } from './en/settingsRows';
+import { settingsPreviews } from './en/settingsPreviews';
+import { settingsLane } from './en/settingsLane';
+import { settingsIntake } from './en/settingsIntake';
+import { settingsShortcuts } from './en/settingsShortcuts';
+import { settingsGeneral } from './en/settingsGeneral';
+import { settingsModelBridge } from './en/settingsModelBridge';
+import { settingsMisc } from './en/settingsMisc';
+import { settingsBridge } from './en/settingsBridge';
+import { settingsToolbelt } from './en/settingsToolbelt';
+import { settingsKeys } from './en/settingsKeys';
+import { settingsPack } from './en/settingsPack';
+import { settingsAgentPage } from './en/settingsAgentPage';
+import { settingsPreload } from './en/settingsPreload';
+import { settingsAgents } from './en/settingsAgents';
+import { settingsTelegram } from './en/settingsTelegram';
+import { settingsLend } from './en/settingsLend';
+import { settingsTeam } from './en/settingsTeam';
+import { settingsConnect } from './en/settingsConnect';
+import { settingsPhone } from './en/settingsPhone';
+import { notify } from './en/notify';
 
 export const en = {
   ...common,
@@ -32,6 +54,28 @@ export const en = {
   ...state,
   ...overview,
   ...team,
+  ...companion,
+  ...settingsRows,
+  ...settingsPreviews,
+  ...settingsLane,
+  ...settingsIntake,
+  ...settingsShortcuts,
+  ...settingsGeneral,
+  ...settingsModelBridge,
+  ...settingsMisc,
+  ...settingsBridge,
+  ...settingsToolbelt,
+  ...settingsKeys,
+  ...settingsPack,
+  ...settingsAgentPage,
+  ...settingsPreload,
+  ...settingsAgents,
+  ...settingsTelegram,
+  ...settingsLend,
+  ...settingsTeam,
+  ...settingsConnect,
+  ...settingsPhone,
+  ...notify,
 } as const;
 
 export type MessageKey = Exclude<keyof typeof en, `${string}_one` | `${string}_other`> | PluralKey;

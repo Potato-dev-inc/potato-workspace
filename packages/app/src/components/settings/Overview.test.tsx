@@ -108,6 +108,13 @@ describe('Overview cards', () => {
     expect(card('phone').textContent).toContain('2 phones paired');
   });
 
+  it('a failed beta check shows its own line on the Updates card, never Up to date', async () => {
+    await mount(fakeOverviewSources({ update: () => Promise.reject("CHECK_FAILED_BETA: Couldn't check for early versions. Try again later.") }));
+    expect(card('updates').textContent).toContain("Couldn't check for early versions. Try again later.");
+    expect(card('updates').textContent).not.toContain('Up to date');
+    expect(glyph('updates')).toBe('…');
+  });
+
   it('each card action lands on the row the spec names', async () => {
     await mount(fakeOverviewSources({ phones: async () => 0, helpers: async () => ({ mode: 'always_show', keepOpen: true, connected: false }) }));
     await click(button('agents', 'Check my setup'));

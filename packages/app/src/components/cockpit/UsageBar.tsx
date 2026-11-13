@@ -11,7 +11,10 @@ import {
   formatLeftLong,
   groupParts,
   groupSentence,
+  forecastOf,
+  forecastText,
   formatTokens,
+  notePace,
   rowName,
   tightestFirst,
   tooltip,
@@ -114,6 +117,7 @@ function Chip({
 
 function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }) {
   const t = useT();
+  const fc = forecastOf(row, now);
   return (
     <li className={`ck-usage-pop-row is-${row.state}`} data-agent={row.agent_id}>
       <div className="ck-usage-pop-head">
@@ -143,6 +147,11 @@ function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }
           </div>
         );
       })}
+      {fc && (
+        <p className="ck-usage-forecast" data-testid="usage-forecast">
+          {forecastText(fc, now)}
+        </p>
+      )}
       {row.totals && (
         <div className="ck-usage-totals" data-testid="usage-totals">
           <div className="ck-usage-win">
@@ -229,6 +238,14 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: 
     const t = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(t);
   }, []);
+
+  // Each new snapshot is a sample for the usage forecast (pace over the last 30 minutes); show it at once.
+  useEffect(() => {
+    if (!snap) return;
+    const at = Date.now();
+    for (const r of Array.isArray(snap.rows) ? snap.rows : []) notePace(r, at);
+    setNow(at);
+  }, [snap]);
 
   // Fit the chips on one line: measure each chip in a hidden copy, then show as many as fit.
   useLayoutEffect(() => {

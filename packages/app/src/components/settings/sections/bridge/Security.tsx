@@ -6,6 +6,8 @@
 // Models and the list under General until Security has a section of its own; they sit together here
 // so the three belong to one story. Moving a row is a one-line change in the section files.
 import { errorSentence } from '../../../../lib/sayError';
+import { en } from '../../../../i18n/en';
+import { t, useT } from '../../../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import {
   agentAuthorityApi,
@@ -18,10 +20,10 @@ import {
 import type { RowDef } from '../../model';
 import { Btn, Note, SettingBlock, SettingToggle } from '../../settings-ui';
 
-const ASK_LABEL = "Ask me before an agent controls a pane it didn't start";
-const ASK_HINT = 'Another agent asks you first, in the Inbox, before it types into a pane or answers.';
-const MERGE_LABEL = 'Let agents merge separate copies';
-const MERGE_HINT = "Off: only you merge an agent's copy, from Changes. On: agents merge by themselves.";
+const ASK_LABEL = en['settings.row.security-ask-before-control.label'];
+const ASK_HINT = en['settings.row.security-ask-before-control.hint'];
+const MERGE_LABEL = en['settings.row.security-agents-merge.label'];
+const MERGE_HINT = en['settings.row.security-agents-merge.hint'];
 
 /** "14:12" for today, "Oct 13, 14:12" for an earlier day. */
 export function whenText(ts: number, now: number = Date.now()): string {
@@ -46,7 +48,7 @@ function useAuthority(api: AgentAuthorityApi) {
         onSaved();
       } catch (e) {
         setValue(before);
-        onError(`Not saved: ${errorSentence(e)}`);
+        onError(t('settings.notSaved', { reason: errorSentence(e) }));
       }
     },
     [api, value],
@@ -63,11 +65,12 @@ export function AskBeforeControlToggle({
   setError: (message: string | null) => void;
   api?: AgentAuthorityApi;
 }) {
+  const t = useT();
   const { value, change } = useAuthority(api);
   return (
     <SettingToggle
-      label={ASK_LABEL}
-      description={ASK_HINT}
+      label={t('settings.row.security-ask-before-control.label')}
+      description={t('settings.row.security-ask-before-control.hint')}
       checked={Boolean(value?.ask_before_agent_control)}
       disabled={!value}
       onChange={(on) => void change({ ask_before_agent_control: on }, markSaved, setError)}
@@ -84,11 +87,12 @@ export function AgentsMayMergeToggle({
   setError: (message: string | null) => void;
   api?: AgentAuthorityApi;
 }) {
+  const t = useT();
   const { value, change } = useAuthority(api);
   return (
     <SettingToggle
-      label={MERGE_LABEL}
-      description={MERGE_HINT}
+      label={t('settings.row.security-agents-merge.label')}
+      description={t('settings.row.security-agents-merge.hint')}
       checked={Boolean(value?.agents_may_merge)}
       disabled={!value}
       onChange={(on) => void change({ agents_may_merge: on }, markSaved, setError)}
@@ -98,6 +102,7 @@ export function AgentsMayMergeToggle({
 
 /** The newest lines of the audit log, with a check that the log has not been edited. */
 export function RecentApprovals({ api = agentAuthorityApi, now }: { api?: AgentAuthorityApi; now?: number }) {
+  const t = useT();
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [check, setCheck] = useState<AuditVerify | null>(null);
   const [failed, setFailed] = useState(false);
@@ -117,13 +122,13 @@ export function RecentApprovals({ api = agentAuthorityApi, now }: { api?: AgentA
 
   return (
     <SettingBlock
-      label="Recent approvals and control changes"
-      description="Who allowed what, and when. Only you can read it here; nothing in it can be changed from this window."
+      label={t('settings.row.security-recent-approvals.label')}
+      description={t('security.recentHelp')}
     >
-      {failed && <Note role="alert">The list could not be read.</Note>}
-      {entries && entries.length === 0 && <Note>Nothing yet. Approvals, pairing and agent control show up here.</Note>}
+      {failed && <Note role="alert">{t('security.unreadable')}</Note>}
+      {entries && entries.length === 0 && <Note>{t('security.nothing')}</Note>}
       {entries && entries.length > 0 && (
-        <ul className="st-audit" aria-label="Recent approvals and control changes">
+        <ul className="st-audit" aria-label={t('settings.row.security-recent-approvals.label')}>
           {entries.map((e) => (
             <li key={e.seq} className="st-audit-row" data-kind={e.kind}>
               <span className="st-audit-when">{whenText(e.ts_ms, now)}</span>
@@ -136,11 +141,11 @@ export function RecentApprovals({ api = agentAuthorityApi, now }: { api?: AgentA
       {check && (
         <p className="st-audit-check" role={check.ok ? undefined : 'alert'}>
           {check.ok
-            ? `Log checked: ${check.entries} ${check.entries === 1 ? 'entry' : 'entries'}, none changed.`
-            : `This log was changed after it was written (${check.broken?.reason ?? 'a line does not match'}).`}
+            ? t('security.logChecked', { count: check.entries })
+            : t('security.logChanged', { reason: check.broken?.reason ?? t('security.lineMismatch') })}
         </p>
       )}
-      <Btn onClick={() => void load()}>Refresh</Btn>
+      <Btn onClick={() => void load()}>{t('security.refresh')}</Btn>
     </SettingBlock>
   );
 }

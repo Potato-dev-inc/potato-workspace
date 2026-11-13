@@ -1,5 +1,6 @@
 // "Import from agents": offer the servers an agent already has, so they can join the toolbelt.
 import { useEffect, useState } from 'react';
+import { useT } from '../../../i18n';
 import { errText, type ImportCandidate, type ToolbeltApi } from '../../../lib/toolbelt';
 import { btn, btnPrimary, overlay, sheet } from './styles';
 
@@ -14,6 +15,7 @@ export function ToolbeltImport({
   onClose: () => void;
   onImported: (count: number) => void;
 }) {
+  const t = useT();
   const [found, setFound] = useState<ImportCandidate[] | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -50,12 +52,10 @@ export function ToolbeltImport({
 
   return (
     <div className={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label="Import from agents" className={sheet}>
+      <div role="dialog" aria-modal="true" aria-label={t('toolbelt.import')} className={sheet}>
         <div className="border-b border-pm-border px-4 py-3">
-          <h4 className="text-sm font-semibold">Import from agents</h4>
-          <p className="mt-1 text-xs leading-5 text-pm-muted">
-            These servers are already set up in your agents. Pick the ones to add to your toolbelt. Nothing is changed in the agents.
-          </p>
+          <h4 className="text-sm font-semibold">{t('toolbelt.import')}</h4>
+          <p className="mt-1 text-xs leading-5 text-pm-muted">{t('toolbelt.importHelp')}</p>
         </div>
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
           {error && (
@@ -63,8 +63,8 @@ export function ToolbeltImport({
               {error}
             </p>
           )}
-          {!found && !error && <p className="text-xs text-pm-muted">Reading agent configs…</p>}
-          {found?.length === 0 && <p className="text-xs text-pm-muted">No servers found in your agents&apos; configs.</p>}
+          {!found && !error && <p className="text-xs text-pm-muted">{t('toolbelt.reading')}</p>}
+          {found?.length === 0 && <p className="text-xs text-pm-muted">{t('toolbelt.noneFound')}</p>}
           {found?.map((c) => (
             <label key={c.reference} className="flex items-start gap-3 rounded-lg border border-pm-border bg-pm-bg px-3 py-2.5">
               <input type="checkbox" className="mt-1" disabled={c.already} checked={picked.has(c.reference)} onChange={() => toggle(c.reference)} />
@@ -77,7 +77,7 @@ export function ToolbeltImport({
                   {c.server.transport === 'http' ? c.server.url : [c.server.command, ...(c.server.args ?? [])].join(' ')}
                 </span>
                 <span className="block text-[11px] text-pm-muted">
-                  {c.already ? 'Already in your toolbelt · ' : ''}Found in {c.agents.map((a) => a.label).join(', ')}
+                  {c.already ? `${t('toolbelt.already')} · ` : ''}{t('toolbelt.foundIn', { names: c.agents.map((a) => a.label).join(', ') })}
                 </span>
               </span>
             </label>
@@ -85,10 +85,10 @@ export function ToolbeltImport({
         </div>
         <div className="flex justify-end gap-2 border-t border-pm-border px-4 py-3">
           <button type="button" className={btn} onClick={onClose}>
-            Cancel
+            {t('lend.cancel')}
           </button>
           <button type="button" className={btnPrimary} disabled={busy || picked.size === 0} onClick={() => void run()}>
-            {busy ? 'Adding…' : 'Add to toolbelt'}
+            {busy ? t('toolbelt.adding') : t('toolbelt.addTo')}
           </button>
         </div>
       </div>

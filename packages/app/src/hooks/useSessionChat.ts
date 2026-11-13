@@ -99,7 +99,13 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
     openSessionChat(paneId, surface)
       .then((snapshot) => {
         if (!live) return;
-        setItems((prev) => mergeItems(prev, snapshot.items, false));
+        // A backend that answers with nothing must not crash the view: show the chat as unavailable.
+        if (!snapshot) {
+          setStatus({ state: 'unavailable', reason: null, waitingFor: null, source: null });
+          return;
+        }
+        const incoming = snapshot.items ?? [];
+        setItems((prev) => mergeItems(prev, incoming, false));
         setStatus(
           snapshot.available
             ? { state: 'ready', reason: null, waitingFor: snapshot.waitingFor ?? null, source: snapshot.source ?? 'file' }

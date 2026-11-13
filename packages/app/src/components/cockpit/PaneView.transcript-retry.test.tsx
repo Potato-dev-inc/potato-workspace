@@ -88,6 +88,9 @@ const moreTab = (name: string) => {
 const button = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === label);
 const runInfoCalls = () => invoke.mock.calls.filter((c) => c[0] === 'pane_run_info').length;
 
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+
 describe('the Transcript tab when the run cannot be read', () => {
   it('shows one plain line and Try again, then Try again loads the run and replaces the failure', async () => {
     await act(async () => root.render(<PaneView c={cockpit()} paneId="p1" />));

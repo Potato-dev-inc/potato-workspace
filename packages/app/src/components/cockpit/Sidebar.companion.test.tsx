@@ -113,7 +113,8 @@ describe('sidebar: companions', () => {
     expect(rows[0].classList.contains('ck-companion-row')).toBe(true);
     expect(rows[1].textContent).toContain('Inbox');
     expect(rows[0].textContent).toContain('Mochi');
-    expect(rows[0].textContent).toContain('Working');
+    expect(rows[0].textContent).toContain('Watching 1 agent');
+    expect(rows[0].querySelector('img[data-potato-state="working"]')).not.toBeNull();
   });
 
   it("does not list the companion's pane a second time in the groups", async () => {
@@ -136,11 +137,34 @@ describe('sidebar: companions', () => {
     expect(onOpenCompanion).toHaveBeenCalledWith('mochi');
   });
 
-  it('with no companion, shows one quiet "Make a companion" row', async () => {
+  it('shows the waiting agent by name, with the needs-you face', async () => {
+    await render({ companions: [companion({ state: 'idle' })] }, [pane('p1', 'waiting_input'), pane('companion-mochi', 'running')]);
+    const row = host.querySelector('.ck-companion-row')!;
+    expect(row.textContent).toContain('Codex needs you');
+    expect(row.classList.contains('is-needs')).toBe(true);
+    expect(row.querySelector('img[data-potato-state="needs-you"]')).not.toBeNull();
+  });
+
+  it('gets sleepy at night when nothing is happening', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 13, 1, 30));
+    try {
+      await render({ companions: [companion({ state: 'idle', pendingMemory: 2 })] }, [pane('companion-mochi', 'running')]);
+      const row = host.querySelector('.ck-companion-row')!;
+      expect(row.textContent).toContain('Sleepy · 2 notes for you');
+      expect(row.querySelector('img[data-potato-state="sleep"]')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('with no companion, shows one quiet line at the bottom, not a dashed slot', async () => {
     const onNewCompanion = vi.fn();
     await render({ companions: [], onNewCompanion });
-    const row = host.querySelector<HTMLButtonElement>('.ck-companion-row--empty')!;
-    expect(row.textContent).toContain('Make a companion');
+    expect(host.querySelector('.ck-companion-row')).toBeNull();
+    const row = host.querySelector<HTMLButtonElement>('.ck-companion-make')!;
+    expect(row.textContent).toBe('Want a companion? Make one');
+    expect(host.querySelector('.ck-side-scroll')!.lastElementChild).toBe(row);
     act(() => row.click());
     expect(onNewCompanion).toHaveBeenCalledTimes(1);
   });
@@ -148,6 +172,6 @@ describe('sidebar: companions', () => {
   it('with no companion list at all (no backend), shows no companion rows', async () => {
     await render({ companions: null });
     expect(host.querySelector('.ck-companion-row')).toBeNull();
-    expect(host.textContent).not.toContain('Make a companion');
+    expect(host.querySelector('.ck-companion-make')).toBeNull();
   });
 });

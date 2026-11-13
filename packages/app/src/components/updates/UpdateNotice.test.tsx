@@ -203,3 +203,30 @@ describe('the Settings row', () => {
     expect(hasText(h2, 'No update information was found')).toBe(true);
   });
 });
+
+describe('a channel that cannot be read', () => {
+  const BETA_FAILED = 'CHECK_FAILED_BETA: Couldn\'t check for early versions. Try again later.';
+  const STABLE_FAILED = 'CHECK_FAILED_STABLE: Couldn\'t check for updates. Try again later.';
+
+  it('shows the early-versions line for a failed beta check and never says up to date', async () => {
+    const h = await mount(<UpdateRow transport={transport({ check: vi.fn(async () => Promise.reject(BETA_FAILED)) })} />);
+    await click(buttonByText(h, 'Check for updates'));
+    await settle();
+    expect(hasText(h, 'Couldn\'t check for early versions. Try again later.')).toBe(true);
+    expect(hasText(h, 'You have the newest version.')).toBe(false);
+    expect(h.textContent).not.toMatch(/up to date/i);
+  });
+
+  it('shows its own line when the stable address cannot be read', async () => {
+    const h = await mount(<UpdateRow transport={transport({ check: vi.fn(async () => Promise.reject(STABLE_FAILED)) })} />);
+    await click(buttonByText(h, 'Check for updates'));
+    await settle();
+    expect(hasText(h, 'Couldn\'t check for updates. Try again later.')).toBe(true);
+    expect(h.textContent).not.toMatch(/up to date|newest version/i);
+  });
+
+  it('a quiet check that fails shows nothing in the corner', async () => {
+    const h = await mount(<AppUpdateHost transport={transport({ check: vi.fn(async () => Promise.reject(BETA_FAILED)) })} />);
+    expect(h.querySelector('.app-update-notice')).toBeNull();
+  });
+});

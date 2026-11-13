@@ -1,5 +1,6 @@
 // Settings > Mobile PWA > Public address: pick how the phone reaches this computer.
 import { errorSentence } from '../../lib/sayError';
+import { useT } from '../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../../lib/tauri';
 import type { TunnelConfigInput, TunnelConnectionTest, TunnelStatus } from '../../lib/tauri-types';
@@ -39,6 +40,7 @@ const buttonClass =
   'rounded-lg border border-pm-border px-3 py-1.5 text-xs hover:bg-pm-border/40 disabled:opacity-50';
 
 export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
+  const t = useT();
   const [status, setStatus] = useState<TunnelStatus | null>(null);
   const [draft, setDraft] = useState<TunnelDraft>(draftFromConfig(null));
   const [busy, setBusy] = useState<'save' | 'restart' | 'test' | null>(null);
@@ -51,7 +53,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
       setStatus(next);
       setDraft(draftFromConfig(next?.config));
     } catch (e) {
-      setError(`Could not read the address: ${errorSentence(e)}`);
+      setError(t('tunnel.readFailed', { reason: errorSentence(e) }));
     }
   }, [api]);
 
@@ -66,7 +68,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
       api
         .getStatus()
         .then((next) => next && setStatus(next))
-        .catch((e: unknown) => setError(`Could not check the address: ${errorSentence(e)}`));
+        .catch((e: unknown) => setError(t('tunnel.checkFailed', { reason: errorSentence(e) })));
     }, 1500);
     return () => window.clearInterval(id);
   }, [api, status?.state]);
@@ -88,24 +90,24 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
   const dirty = JSON.stringify(draft) !== JSON.stringify(draftFromConfig(status?.config));
 
   return (
-    <section className="rounded-xl border border-pm-border bg-pm-panel p-4" aria-label="Public address">
-      <h3 className="text-sm font-semibold">Public address</h3>
+    <section className="rounded-xl border border-pm-border bg-pm-panel p-4" aria-label={t('settings.row.tunnel.label')}>
+      <h3 className="text-sm font-semibold">{t('settings.row.tunnel.label')}</h3>
       <p className="mt-1 text-sm leading-6 text-pm-muted">
-        A fixed address means you pair your phone once. The automatic address changes every time the app restarts.
+        {t('tunnel.intro')}
       </p>
 
       <div className="mt-3 space-y-3">
         <div>
-          <FieldLabel>How your phone connects</FieldLabel>
+          <FieldLabel>{t('tunnel.how')}</FieldLabel>
           <select
-            aria-label="Tunnel mode"
+            aria-label={t('tunnel.modeAria')}
             value={draft.mode}
             onChange={(e) => setDraft({ ...draft, mode: e.target.value as TunnelDraft['mode'] })}
             className="w-full rounded-lg border border-pm-border bg-pm-bg px-3 py-2 text-sm outline-none"
           >
             {(Object.keys(MODE_LABELS) as (keyof typeof MODE_LABELS)[]).map((mode) => (
               <option key={mode} value={mode}>
-                {MODE_LABELS[mode]}
+                {t(`tunnel.mode.${mode}`)}
               </option>
             ))}
           </select>
@@ -114,29 +116,28 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
         {draft.mode === 'named' && (
           <>
             <div>
-              <FieldLabel>Hostname</FieldLabel>
+              <FieldLabel>{t('tunnel.hostname')}</FieldLabel>
               <FieldInput
-                aria-label="Tunnel hostname"
-                placeholder="pm.example.com"
+                aria-label={t('tunnel.hostnameAria')}
+                placeholder="pm.example.com" // i18n-ok: example
                 value={draft.hostname}
                 onChange={(e) => setDraft({ ...draft, hostname: e.target.value })}
                 className="font-mono"
               />
             </div>
             <div>
-              <FieldLabel>Tunnel token</FieldLabel>
+              <FieldLabel>{t('tunnel.token')}</FieldLabel>
               <FieldInput
-                aria-label="Tunnel token"
+                aria-label={t('tunnel.token')}
                 type="password"
                 autoComplete="off"
-                placeholder={status?.config.has_token ? 'Saved. Paste a new one to replace it.' : 'Paste from Cloudflare Zero Trust'}
+                placeholder={status?.config.has_token ? t('tunnel.tokenSaved') : t('tunnel.tokenPaste')}
                 value={draft.token}
                 onChange={(e) => setDraft({ ...draft, token: e.target.value })}
                 className="font-mono"
               />
               <p className="mt-1 text-xs text-pm-muted">
-                Create a tunnel in Cloudflare Zero Trust, point its public hostname at http://127.0.0.1:1420, and copy the
-                token. The token stays on this computer.
+                {t('tunnel.namedHelp')}
               </p>
             </div>
           </>
@@ -144,16 +145,16 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
 
         {draft.mode === 'custom' && (
           <div>
-            <FieldLabel>Address</FieldLabel>
+            <FieldLabel>{t('tunnel.address')}</FieldLabel>
             <FieldInput
-              aria-label="Custom address"
-              placeholder="https://pm.example.com"
+              aria-label={t('tunnel.customAria')}
+              placeholder="https://pm.example.com" // i18n-ok: example
               value={draft.url}
               onChange={(e) => setDraft({ ...draft, url: e.target.value })}
               className="font-mono"
             />
             <p className="mt-1 text-xs text-pm-muted">
-              Point your own proxy or domain at http://127.0.0.1:1420. Potato Workspace only advertises this address.
+              {t('tunnel.customHelp')}
             </p>
           </div>
         )}
@@ -169,7 +170,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
             </code>
           )}
           {status && !isStableMode(status.mode) && status.state === 'running' && (
-            <span className="text-xs text-pm-muted">This address will change on restart.</span>
+            <span className="text-xs text-pm-muted">{t('tunnel.willChange')}</span>
           )}
         </div>
 
@@ -181,7 +182,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
 
         {test && (
           <p data-testid="tunnel-test" className="text-xs text-pm-muted">
-            {test.ok ? 'Reachable. ' : 'Not reachable. '}
+            {`${test.ok ? t('tunnel.reachable') : t('tunnel.notReachable')} `}
             {test.message}
           </p>
         )}
@@ -200,7 +201,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
               })
             }
           >
-            {busy === 'save' ? 'Saving…' : 'Save and restart'}
+            {busy === 'save' ? t('tunnel.saving') : t('tunnel.saveRestart')}
           </button>
           <button
             type="button"
@@ -213,7 +214,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
               })
             }
           >
-            {busy === 'restart' ? 'Restarting…' : 'Restart tunnel'}
+            {busy === 'restart' ? t('tunnel.restarting') : t('tunnel.restart')}
           </button>
           <button
             type="button"
@@ -221,7 +222,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
             disabled={busy !== null || !status?.public_url}
             onClick={() => void run('test', async () => setTest(await api.test()))}
           >
-            {busy === 'test' ? 'Testing…' : 'Test connection'}
+            {busy === 'test' ? t('tunnel.testing') : t('tunnel.test')}
           </button>
         </div>
       </div>

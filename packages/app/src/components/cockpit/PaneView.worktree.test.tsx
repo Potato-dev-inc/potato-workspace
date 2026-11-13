@@ -103,6 +103,9 @@ const moreTab = (name: string) => {
   act(() => [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((t) => t.textContent === name)!.click());
 };
 
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+
 describe('the pane header says where the agent works', () => {
   const headerLine = () => host.querySelector('.ck-pane-head .ck-sub-inline')!;
   const withCwd = (cwd: string): CockpitApi => {

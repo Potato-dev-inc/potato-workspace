@@ -446,7 +446,39 @@ fn classify_question(question: &crate::questions::Question, label: String) -> (K
     (Kind::Question, label, None)
 }
 
+/// The bell key of the agent a candidate came from and whether it is a helper (it has a parent pane).
+/// A helper keeps its own bell (`helper:<agent>`). A card with no pane belongs to no agent.
+fn bell_subject(ctx: &Ctx, candidate: &Candidate) -> (Option<String>, bool) {
+    let Some(pane_id) = candidate.pane_id.as_deref() else { return (None, false) };
+    let reg = ctx.registry.lock();
+    match reg.panes.get(pane_id) {
+        Some(pane) => {
+            let helper = pane.info.parent_pane_id.is_some();
+            let id = &pane.info.agent_type;
+            (Some(if helper { format!("helper:{id}") } else { id.clone() }), helper)
+        }
+        None => (None, false),
+    }
+}
+
+/// The one notification filter (levels, quiet hours, snooze): `false` = this alert is not sent anywhere.
+/// The attention list is untouched, so the Inbox number still counts it.
+fn passes_levels(ctx: &Ctx, candidate: &Candidate, now: u64) -> bool {
+    let (bell_key, is_helper) = bell_subject(ctx, candidate);
+    let mut keys: Vec<&str> = vec![candidate.key.as_str()];
+    keys.extend(candidate.pane_id.as_deref());
+    keys.extend(candidate.item.as_ref().map(|i| i.id.as_str()));
+    let high_risk = candidate.prompt.as_ref().and_then(|p| p.risk.as_ref()).is_some_and(|r| r.level == crate::prompt_risk::RiskLevel::High);
+    crate::notify_levels::allows(
+        &crate::notify_levels::Alert { kind: candidate.kind, high_risk, bell_key: bell_key.as_deref(), is_helper, snooze_keys: &keys },
+        now,
+    )
+}
+
 fn dispatch(ctx: &Ctx, candidate: Candidate) {
+    if !passes_levels(ctx, &candidate, now_ms()) {
+        return;
+    }
     // The chat gets its own look first: a person with Telegram and no subscribed phone still hears it.
     crate::channels::offer(&candidate);
     // Discord alerts (a webhook the person pasted) get the same card; they ignore phones and Telegram.

@@ -93,3 +93,14 @@ describe('SessionRail', () => {
     expect(open).toHaveBeenCalled();
   });
 });
+
+describe('SessionRail remote control', () => {
+  it('has the Remote control card for the pane, with Pair a phone when none is paired', async () => {
+    await act(async () => root.render(<SessionRail {...props} />));
+    await act(async () => {});
+    const card = host.querySelector('[data-testid="rail-remote"]');
+    expect(card).not.toBeNull();
+    expect(card?.textContent).toContain('Remote control');
+    expect(card?.textContent).toContain('Pair a phone');
+  });
+});

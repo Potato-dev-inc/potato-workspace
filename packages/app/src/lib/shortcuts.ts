@@ -13,6 +13,8 @@
 // always the Control key (shown ⌃ on a Mac), `Meta` the Windows / Cmd key, then `Alt` (⌥) and `Shift` (⇧), then one key.
 // Keys: a letter or digit, a symbol, Left/Right/Up/Down, Esc, Enter, Space, Tab, F1..F12 and so on.
 
+import { t } from '../i18n';
+
 export type ShortcutGroup = 'Navigate' | 'Chat' | 'Panes' | 'Search';
 export type ShortcutScope = 'app' | 'global';
 
@@ -512,6 +514,26 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
   ),
   custom(
     {
+      id: 'split-swap',
+      group: 'Panes',
+      label: 'In a split view: swap the two chats',
+      handlers: [handler(COCKPIT, "matchesAction(e, 'split-swap'")],
+    },
+    'Mod+Alt+X',
+    'Mod+Alt+X',
+  ),
+  custom(
+    {
+      id: 'focus-mode',
+      group: 'Panes',
+      label: 'Focus mode: the open chat fills the window. Press again, or Esc, to come back',
+      handlers: [handler(COCKPIT, "matchesAction(e, 'focus-mode'")],
+    },
+    'Mod+Shift+Enter',
+    'Mod+Shift+Enter',
+  ),
+  custom(
+    {
       id: 'pane-next',
       group: 'Panes',
       label: 'Next agent in the list',
@@ -808,22 +830,22 @@ export function reservedReason(binding: string, mac: boolean): string | null {
 export function checkBinding(id: string, binding: string, overrides: Keybindings = current, mac: boolean = isMacPlatform()): BindingCheck {
   const entry = entryOf(id);
   const b = parseBinding(binding);
-  if (!entry?.bind || !b) return { error: 'That is not a key combination.', warnings: [] };
+  if (!entry?.bind || !b) return { error: t('shortcuts.err.notCombo'), warnings: [] };
   const digits = entry.bind.digits === true;
-  if (digits && !/^[1-9]$/.test(b.key)) return { error: 'Press a number key from 1 to 9, with the keys you want to hold.', warnings: [] };
+  if (digits && !/^[1-9]$/.test(b.key)) return { error: t('shortcuts.err.digits'), warnings: [] };
   const holdsModifier = b.mod || b.ctrl || b.meta || b.alt;
   const functionKey = /^F\d+$/.test(b.key);
   if (!holdsModifier && !functionKey) {
-    return { error: 'Hold Ctrl, Alt or ' + (mac ? '⌘' : 'the Windows key') + ' as well, or the shortcut would fire while you type.', warnings: [] };
+    return { error: t('shortcuts.err.modifier', { key: mac ? '⌘' : t('shortcuts.winKey') }), warnings: [] };
   }
-  if (entry.bind.scope === 'global' && !holdsModifier) return { error: 'A shortcut that works from any app needs Ctrl, Alt or ' + (mac ? '⌘' : 'the Windows key') + ' as well.', warnings: [] };
+  if (entry.bind.scope === 'global' && !holdsModifier) return { error: t('shortcuts.err.global', { key: mac ? '⌘' : t('shortcuts.winKey') }), warnings: [] };
   const warnings: BindingProblem[] = [];
   for (const other of BINDABLE) {
     if (other.id === id) continue;
     const combo = effectiveBinding(other.id, overrides, mac);
     const parsed = combo ? parseBinding(combo) : null;
     if (parsed && sameShape(b, digits, parsed, other.bind?.digits === true, mac)) {
-      warnings.push({ kind: 'conflict', message: `Already used by "${other.label}". Both would fire.` });
+      warnings.push({ kind: 'conflict', message: t('shortcuts.err.usedBoth', { label: other.label }) });
     }
   }
   for (const other of SHORTCUTS) {
@@ -831,7 +853,7 @@ export function checkBinding(id: string, binding: string, overrides: Keybindings
     for (const key of other.keys) {
       const parsed = parseBinding(key);
       if (parsed && (parsed.mod || parsed.ctrl || parsed.meta || parsed.alt) && sameShape(b, digits, parsed, false, mac)) {
-        warnings.push({ kind: 'conflict', message: `Already used by "${other.label}".` });
+        warnings.push({ kind: 'conflict', message: t('shortcuts.err.used', { label: other.label }) });
       }
     }
   }

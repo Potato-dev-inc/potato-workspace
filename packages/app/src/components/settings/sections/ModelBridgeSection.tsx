@@ -2,9 +2,13 @@
 // then add it to Codex with one click (a preview, a backup, Undo). The key is typed once, goes straight to the system
 // key store, and is cleared from this window the moment it is sent. Nothing here can read a key back.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import { keySavedLine, modelBridgeApi, plainError, type ModelBridgeApi, type ModelBridgeList, type ModelBridgePreview, type ModelBridgeService } from '../../../lib/model-bridge';
 import type { RowDef } from '../model';
 import { Btn, FieldInput, FieldLabel, FieldSelect, Note, SettingBlock } from '../settings-ui';
+
+/** An example address in the empty field: the same in every language. */
+const EXAMPLE_URL = 'https://example.com/v1';
 
 interface Props {
   api?: ModelBridgeApi;
@@ -22,6 +26,7 @@ async function copyText(text: string): Promise<void> {
 }
 
 export function ModelBridge({ api = modelBridgeApi }: Props) {
+  const t = useT();
   const [data, setData] = useState<ModelBridgeList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -53,7 +58,7 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
   }, [refresh]);
 
   if (!data) {
-    return error ? <Note role="alert">{error}</Note> : <Note>Loading…</Note>;
+    return error ? <Note role="alert">{error}</Note> : <Note>{t('teamPage.loading')}</Note>;
   }
 
   const connected = data.adapters.filter((a) => a.keySaved);
@@ -103,7 +108,7 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
     run(async () => {
       await api.remove(s.id);
       setStep(null);
-      setStatus(`${s.displayName} removed. Its key is gone from ${data.storageLabel}.`);
+      setStatus(t('modelBridge.removed', { name: s.displayName, store: data.storageLabel }));
       await refresh();
     });
 
@@ -131,33 +136,33 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
 
   return (
     <SettingBlock
-      label="Another model in Codex"
-      description="Connect a model service with a key, then add it to Codex. A backup is kept."
+      label={t('settings.row.model-bridge.label')}
+      description={t('settings.row.model-bridge.hint')}
     >
-      {!data.secure && <Note role="alert">The secure key store on this computer is not available, so a key cannot be saved.</Note>}
+      {!data.secure && <Note role="alert">{t('modelBridge.noStore')}</Note>}
 
       {connected.length > 0 && (
-        <ul className="st-mb-list" aria-label="Connected model services">
+        <ul className="st-mb-list" aria-label={t('modelBridge.connected')}>
           {connected.map((s) => {
             const inCodex = s.applied !== null;
             return (
               <li key={s.id} className="st-mb-item" data-service={s.id}>
                 <div className="st-mb-name">
                   {s.displayName}
-                  <small>{inCodex ? 'Ready · In your Codex settings' : 'Ready'}</small>
+                  <small>{inCodex ? t('modelBridge.readyInCodex') : t('agentList.ready')}</small>
                   {s.needsReview && s.note && <small>{s.note}</small>}
                 </div>
                 {inCodex ? (
-                  <Btn small disabled={busy} onClick={() => void undo(s)} aria-label={`Undo ${s.displayName} in Codex`}>
-                    Undo
+                  <Btn small disabled={busy} onClick={() => void undo(s)} aria-label={t('modelBridge.undoAria', { name: s.displayName })}>
+                    {t('pack.undo')}
                   </Btn>
                 ) : (
-                  <Btn small disabled={busy} onClick={() => void showPreview(s)} aria-label={`Use ${s.displayName} in Codex`}>
-                    Use in Codex
+                  <Btn small disabled={busy} onClick={() => void showPreview(s)} aria-label={t('modelBridge.useAria', { name: s.displayName })}>
+                    {t('modelBridge.use')}
                   </Btn>
                 )}
-                <Btn small disabled={busy} onClick={() => void remove(s)} aria-label={`Remove ${s.displayName}`}>
-                  Remove
+                <Btn small disabled={busy} onClick={() => void remove(s)} aria-label={t('keepGoing.removeLabel', { label: s.displayName })}>
+                  {t('settings.remove')}
                 </Btn>
               </li>
             );
@@ -166,24 +171,24 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
       )}
 
       {step?.kind === 'preview' && (
-        <div className="st-mb-card" role="group" aria-label="Preview">
+        <div className="st-mb-card" role="group" aria-label={t('modelBridge.preview')}>
           <p>{step.preview.title}</p>
-          <pre aria-label="What will be added">{step.preview.lines.join('\n')}</pre>
-          <p>Added to {step.preview.configPath}</p>
+          <pre aria-label={t('modelBridge.willAdd')}>{step.preview.lines.join('\n')}</pre>
+          <p>{t('modelBridge.addedTo', { path: step.preview.configPath })}</p>
           <p>
-            If you start Codex yourself, set this first (paste your key where it says so):
+            {t('modelBridge.setFirst')}
             <br />
             <code>{step.preview.envLine}</code>
           </p>
           <div className="st-mb-actions">
             <Btn primary disabled={busy} onClick={() => void add(step.service)}>
-              Add
+              {t('keepGoing.add')}
             </Btn>
             <Btn disabled={busy} onClick={() => setStep(null)}>
-              Cancel
+              {t('lend.cancel')}
             </Btn>
             <Btn small onClick={() => void copyText(step.preview.envLine)}>
-              Copy variable line
+              {t('modelBridge.copyVar')}
             </Btn>
           </div>
         </div>
@@ -192,7 +197,7 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
       {step?.kind === 'done' && (
         <div className="st-mb-card" role="status">
           <p>{step.message}</p>
-          <p>Panes that Potato Workspace starts get the key by themselves. In a Codex you start yourself, set the variable first.</p>
+          <p>{t('modelBridge.doneNote')}</p>
           <div className="st-mb-actions">
             <Btn
               small
@@ -202,7 +207,7 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
                 if (s) void undo(s);
               }}
             >
-              Undo
+              {t('pack.undo')}
             </Btn>
             <Btn
               small
@@ -211,7 +216,7 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
                 if (s) void copyText(s.envLine);
               }}
             >
-              Copy variable line
+              {t('modelBridge.copyVar')}
             </Btn>
           </div>
         </div>
@@ -220,7 +225,7 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
       {!connecting && (
         <div className="st-mb-actions">
           <Btn primary={connected.length === 0} disabled={busy || !data.secure} onClick={openConnect}>
-            Connect a model service
+            {t('modelBridge.connect')}
           </Btn>
         </div>
       )}
@@ -228,8 +233,8 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
       {connecting && (
         <div className="st-mb-form">
           <div>
-            <FieldLabel>Service</FieldLabel>
-            <FieldSelect aria-label="Service" value={pick} onChange={(e) => setPick(e.target.value)}>
+            <FieldLabel>{t('keys.service')}</FieldLabel>
+            <FieldSelect aria-label={t('keys.service')} value={pick} onChange={(e) => setPick(e.target.value)}>
               {data.adapters.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.displayName}
@@ -242,15 +247,15 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
           {needsName && (
             <>
               <div>
-                <FieldLabel>Name</FieldLabel>
-                <FieldInput aria-label="Service name" placeholder="My service" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
+                <FieldLabel>{t('lend.name')}</FieldLabel>
+                <FieldInput aria-label={t('modelBridge.serviceName')} placeholder={t('modelBridge.myService')} autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div>
-                <FieldLabel>Address</FieldLabel>
+                <FieldLabel>{t('tunnel.address')}</FieldLabel>
                 <FieldInput
-                  aria-label="Service address"
+                  aria-label={t('keys.serviceAddress')}
                   className="font-mono"
-                  placeholder="https://example.com/v1"
+                  placeholder={EXAMPLE_URL}
                   autoComplete="off"
                   spellCheck={false}
                   value={url}
@@ -260,25 +265,25 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
             </>
           )}
           <div>
-            <FieldLabel>Key</FieldLabel>
+            <FieldLabel>{t('keys.keyWord')}</FieldLabel>
             <FieldInput
-              aria-label="Service key"
+              aria-label={t('keys.serviceKey')}
               type="password"
               className="font-mono"
-              placeholder="Paste your key"
+              placeholder={t('keys.paste')}
               autoComplete="off"
               spellCheck={false}
               value={key}
               onChange={(e) => setKey(e.target.value)}
             />
-            <Note>It is kept in {data.storageLabel}. Potato Workspace never shows it again.</Note>
+            <Note>{t('modelBridge.keptIn', { store: data.storageLabel })}</Note>
           </div>
           <div className="st-mb-actions">
             <Btn primary disabled={!canSave} onClick={() => void saveKey()}>
-              Save key
+              {t('modelBridge.saveKey')}
             </Btn>
             <Btn disabled={busy} onClick={closeConnect}>
-              Cancel
+              {t('lend.cancel')}
             </Btn>
           </div>
         </div>

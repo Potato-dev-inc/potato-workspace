@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { t, useT } from '../../i18n';
 import { agentLabel, borrowedBillingNote, chipText, chipLabelOf, errText, grantLine, isActiveIn, isActiveOut, leftText, lendApi, problemText, urgencyOf, usageText, WARN_ONE, WARN_TEN, type Grant, type LendApi } from '../../lib/lend';
 import { useLend, type LendHandle } from './useLend';
 import { TestLink } from './TestLink';
@@ -6,6 +7,7 @@ import '../../styles/lend.css';
 
 /** Active lends with this member, both ways, as short lines with Revoke or Give back. Used in Settings > Team's People list. */
 export function MemberLends({ memberId, lend, api = lendApi }: { memberId: string; lend: LendHandle; api?: LendApi }) {
+  const t = useT();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const state = lend.state;
@@ -26,7 +28,7 @@ export function MemberLends({ memberId, lend, api = lendApi }: { memberId: strin
   };
   return (
     <>
-      <ul className="lend-lends" aria-label="Active lends">
+      <ul className="lend-lends" aria-label={t('lend.active')}>
         {rows.map((g) => (
           <li key={g.id}>
             <span>
@@ -39,7 +41,7 @@ export function MemberLends({ memberId, lend, api = lendApi }: { memberId: strin
             </span>
             <TestLink grantId={g.id} api={api} />
             <button type="button" className="lend-btn is-small" disabled={busy === g.id} onClick={() => void act(g)}>
-              {g.direction === 'out' ? 'Revoke' : 'Give back'}
+              {g.direction === 'out' ? t('phone.device.revoke') : t('lend.giveBack')}
             </button>
           </li>
         ))}
@@ -58,6 +60,7 @@ export function MemberLends({ memberId, lend, api = lendApi }: { memberId: strin
  * Amber at 10 minutes, red at 1. Clicking it opens the details with "Give back now". Nothing for any other pane.
  */
 export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; api?: LendApi; lend?: LendHandle }) {
+  const t = useT();
   const own = useLend(api);
   const handle = lend ?? own;
   const [open, setOpen] = useState(false);
@@ -107,15 +110,15 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
         {chipText(grant, agent, handle.now)}
       </button>
       {open && (
-        <div className="lend-pop" role="dialog" aria-label="Borrowed sign-in">
+        <div className="lend-pop" role="dialog" aria-label={t('lend.borrowedSignIn')}>
           <p className="lend-pop-title">{chipLabelOf(grant, agent)}</p>
-          <p>{leftText(left)} left. When it ends, this agent stops.</p>
+          <p>{t('lend.timeLeftStops', { time: leftText(left) })}</p>
           <p className="lend-note" data-testid="lend-billing-note">
             {borrowedBillingNote(grant.peer_name)}
           </p>
           {used && (
             <p className="lend-usage" data-testid="lend-usage">
-              Used so far: {used}
+              {t('lend.usedSoFar', { used })}
             </p>
           )}
           {problem && (
@@ -123,7 +126,7 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
               {problem}
             </p>
           )}
-          {grant.for_other_person && <p className="lend-note">Replies and sign-in come from {grant.peer_name}&apos;s plan.</p>}
+          {grant.for_other_person && <p className="lend-note">{t('lend.repliesFrom', { peer: grant.peer_name })}</p>}
           {error && (
             <p className="lend-error" role="alert">
               {error}
@@ -131,7 +134,7 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
           )}
           <div className="lend-actions">
             <button type="button" className="lend-btn is-primary" disabled={busy} onClick={() => void giveBack()}>
-              Give back now
+              {t('lend.giveBackNow')}
             </button>
           </div>
         </div>
@@ -152,17 +155,17 @@ export function useLendToasts(lend: LendHandle, notify: (text: string) => void):
     for (const g of state.grants) {
       if (!isActiveIn(g, lend.now)) continue;
       const left = g.ends_ms - lend.now;
-      const who = `${g.peer_name}'s ${agentLabel(state, g.agent_id)}`;
+      const who = t('lend.ownerOf', { person: g.peer_name, device: agentLabel(state, g.agent_id) });
       // The 1-minute one wins when both are due at once (a lend that started late).
       if (left <= WARN_ONE.minutes * 60_000) {
         if (!sent.current.has(`${g.id}:1`)) {
           sent.current.add(`${g.id}:1`);
           sent.current.add(`${g.id}:10`);
-          notify(`${who}: 1 minute left. ${WARN_ONE.text}.`);
+          notify(t('lend.warnOne', { who }));
         }
       } else if (left <= WARN_TEN.minutes * 60_000 && !sent.current.has(`${g.id}:10`)) {
         sent.current.add(`${g.id}:10`);
-        notify(`${who}: ${leftText(left)} left. ${WARN_TEN.text}.`);
+        notify(t('lend.warnTen', { who, time: leftText(left) }));
       }
     }
   }, [state, lend.now, notify]);

@@ -4,6 +4,8 @@
 // Shortcuts that work from any app are also tried with the OS by Rust (`global_shortcut_set`); when the OS says no,
 // the old keys stay and the row says why.
 import { invoke } from '@tauri-apps/api/core';
+import { t, useT } from '../../../i18n';
+import { translateOr } from '../i18n-labels';
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   BINDABLE,
@@ -49,7 +51,7 @@ export const shortcutsApi = {
 
 function errorText(e: unknown): string {
   if (typeof e === 'string') return e;
-  return e instanceof Error ? e.message : 'Could not change that shortcut.';
+  return e instanceof Error ? e.message : t('shortcuts.couldNot');
 }
 
 type Phase = { kind: 'idle' } | { kind: 'recording' } | { kind: 'confirm'; binding: string; warnings: BindingProblem[] };
@@ -73,6 +75,8 @@ function useGlobalNote(entry: ShortcutEntry, version: number): string | null {
 }
 
 function ShortcutRow({ entry, env }: { entry: ShortcutEntry; env: SettingsEnv }) {
+  const t = useT();
+  const label = translateOr(`settings.row.shortcut-${entry.id}.label`, entry.label);
   const mac = isMacPlatform();
   const overrides: Keybindings = sanitizeKeybindings(env.settings.keybindings);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
@@ -140,25 +144,25 @@ function ShortcutRow({ entry, env }: { entry: ShortcutEntry; env: SettingsEnv })
     else if (result.kind === 'combo') consider(result.binding);
   };
 
-  const shown = current ? bindingLabel(entry.id, mac, overrides) : 'Off';
+  const shown = current ? bindingLabel(entry.id, mac, overrides) : t('telegram.off');
   return (
-    <SettingRow label={entry.label} description={entry.bind?.digits ? describe(entry) : undefined}>
+    <SettingRow label={label} description={entry.bind?.digits ? describe(entry) : undefined}>
       <div className="st-shortcut" data-shortcut={entry.id}>
         {phase.kind === 'recording' ? (
-          <button type="button" className="st-btn is-small" autoFocus aria-label={`Press the new keys for ${entry.label}. Esc cancels.`} onKeyDown={onKey} onBlur={() => setPhase({ kind: 'idle' })}>
-            Press the keys… (Esc to cancel)
+          <button type="button" className="st-btn is-small" autoFocus aria-label={t('shortcuts.pressAria', { label })} onKeyDown={onKey} onBlur={() => setPhase({ kind: 'idle' })}>
+            {t('shortcuts.press')}
           </button>
         ) : (
           <>
-            {global && <span className="st-anyapp">Any app</span>}
+            {global && <span className="st-anyapp">{t('shortcuts.anyApp')}</span>}
             {/* The keys are the button: click them to change. */}
             <button
               type="button"
               className="st-keycap"
               data-off={current === null ? 'true' : undefined}
               disabled={busy}
-              title="Click to change"
-              aria-label={`Change keys for ${entry.label}. Now: ${shown}`}
+              title={t('shortcuts.clickChange')}
+              aria-label={t('shortcuts.changeAria', { label, shown })}
               onClick={() => {
                 setError(null);
                 setPhase({ kind: 'recording' });
@@ -167,13 +171,13 @@ function ShortcutRow({ entry, env }: { entry: ShortcutEntry; env: SettingsEnv })
               {shown}
             </button>
             {current !== null && (
-              <Btn small className="st-turnoff" disabled={busy} aria-label={`Turn off ${entry.label}`} onClick={() => void save(DISABLED)}>
-                Turn off
+              <Btn small className="st-turnoff" disabled={busy} aria-label={t('shortcuts.turnOffAria', { label })} onClick={() => void save(DISABLED)}>
+                {t('shortcuts.turnOff')}
               </Btn>
             )}
             {changed && (
-              <Btn small disabled={busy} aria-label={`Reset ${entry.label} to ${fallback ? formatKey(fallback, mac) : 'its default'}`} onClick={() => void save(null)}>
-                Reset
+              <Btn small disabled={busy} aria-label={t('shortcuts.resetAria', { label, to: fallback ? formatKey(fallback, mac) : t('shortcuts.itsDefault') })} onClick={() => void save(null)}>
+                {t('settings.reset')}
               </Btn>
             )}
           </>
@@ -182,13 +186,13 @@ function ShortcutRow({ entry, env }: { entry: ShortcutEntry; env: SettingsEnv })
           <div role="alert" className="st-shortcut-warn">
             <Note role="alert">{phase.warnings.map((w) => w.message).join(' ')}</Note>
             <Btn small primary disabled={busy} onClick={() => void save(phase.binding)}>
-              Use {formatKey(phase.binding, mac)} anyway
+              {t('shortcuts.useAnyway', { keys: formatKey(phase.binding, mac) })}
             </Btn>
             <Btn small disabled={busy} onClick={() => setPhase({ kind: 'recording' })}>
-              Pick another
+              {t('shortcuts.pickAnother')}
             </Btn>
             <Btn small disabled={busy} onClick={() => setPhase({ kind: 'idle' })}>
-              Cancel
+              {t('lend.cancel')}
             </Btn>
           </div>
         )}
@@ -200,17 +204,18 @@ function ShortcutRow({ entry, env }: { entry: ShortcutEntry; env: SettingsEnv })
 }
 
 function describe(entry: ShortcutEntry): string {
-  if (entry.bind?.digits) return 'Hold these keys and press 1 to 9.';
-  if (entry.bind?.scope === 'global') return 'Works from any app, even when this window is hidden.';
-  return 'Works while Potato Workspace is in front.';
+  if (entry.bind?.digits) return t('shortcuts.hintDigits');
+  if (entry.bind?.scope === 'global') return t('shortcuts.hintGlobal');
+  return t('shortcuts.hintFront');
 }
 
 function ResetAll({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const overrides = sanitizeKeybindings(env.settings.keybindings);
   const count = Object.keys(overrides).length;
   const run = async () => {
-    const ok = await env.confirm({ title: 'Reset all shortcuts?', body: 'Every shortcut goes back to the keys it came with, and the ones you turned off come back on.', confirmLabel: 'Reset all' });
+    const ok = await env.confirm({ title: t('shortcuts.resetAllTitle'), body: t('shortcuts.resetAllBody'), confirmLabel: t('settings.resetAll') });
     if (!ok) return;
     setBusy(true);
     env.setError(null);
@@ -225,9 +230,9 @@ function ResetAll({ env }: { env: SettingsEnv }) {
     }
   };
   return (
-    <SettingRow label="Reset all shortcuts" description="Puts every shortcut back to the keys it came with.">
+    <SettingRow label={t('settings.row.shortcuts-reset-all.label')} description={t('settings.row.shortcuts-reset-all.hint')}>
       <Btn small disabled={busy || count === 0} onClick={() => void run()}>
-        Reset all
+        {t('settings.resetAll')}
       </Btn>
     </SettingRow>
   );

@@ -78,7 +78,7 @@
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: var(--ck-side-w, 240px) minmax(0, 1fr);
   background: var(--bg);
   color: var(--label);
   font-family: var(--font-ui);

@@ -34,6 +34,14 @@ describe('ShortcutsSheet', () => {
     expect(host.textContent).toContain('Split the view with the next pane');
   });
 
+  it('lists focus mode and the split swap with their keys', () => {
+    act(() => root.render(<ShortcutsSheet onClose={vi.fn()} mac={false} />));
+    const rows = [...host.querySelectorAll('.ck-shortcuts-row')];
+    const rowOf = (text: string) => rows.find((r) => r.textContent?.includes(text))!;
+    expect(rowOf('Focus mode').textContent).toContain('Ctrl+Shift+Enter');
+    expect(rowOf('swap the two chats').textContent).toContain('Ctrl+Alt+X');
+  });
+
   it('shows ⌘ instead of Ctrl on a Mac', () => {
     act(() => root.render(<ShortcutsSheet onClose={vi.fn()} mac={true} />));
     const keys = [...host.querySelectorAll('.ck-shortcuts-keys')].map((k) => k.textContent);

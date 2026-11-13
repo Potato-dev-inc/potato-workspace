@@ -77,8 +77,12 @@ const tabs = () => [...host.querySelectorAll<HTMLElement>('[aria-label="Pane vie
 const selected = () => tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.textContent;
 const tabNamed = (name: string) => tabs().find((t) => t.textContent === name)!;
 const moreButton = () => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-haspopup="menu"]')!;
-const menuItems = () => [...host.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')];
+// The agent's bell rows (Alerts: ...) share the ⋯ menu; these tests are about the view rows only.
+const menuItems = () => [...host.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].filter((el) => !el.textContent?.startsWith('Alerts:'));
 const menuItemNamed = (name: string) => menuItems().find((m) => m.textContent === name)!;
+
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
 
 describe('the pane remembers its view', () => {
   it('a remount of the same pane id opens the view it was on', async () => {
@@ -150,7 +154,11 @@ describe('the More menu', () => {
   it('Down and Up move between the items, wrapping', async () => {
     await render('p1');
     await act(async () => moreButton().click());
-    const [first, second, third] = menuItems();
+    // Arrow keys walk every row of the menu, the agent's bell rows included.
+    const all = [...host.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')];
+    const first = all[0];
+    const second = all[1];
+    const last = all[all.length - 1];
     expect(document.activeElement).toBe(first);
     const press = (k: string) =>
       act(async () => {
@@ -158,12 +166,10 @@ describe('the More menu', () => {
       });
     await press('ArrowDown');
     expect(document.activeElement).toBe(second);
-    await press('ArrowDown');
-    expect(document.activeElement).toBe(third);
-    await press('ArrowDown');
+    for (let i = 0; i < all.length - 1; i++) await press('ArrowDown');
     expect(document.activeElement).toBe(first);
     await press('ArrowUp');
-    expect(document.activeElement).toBe(third);
+    expect(document.activeElement).toBe(last);
   });
 
   it('a click outside closes it', async () => {

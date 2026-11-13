@@ -19,7 +19,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 use crate::commands::AppState;
-use super::update_channel::{self, Channel};
+use super::update_channel::{self, Channel, Failed};
 
 static FOUND: Mutex<Option<Update>> = Mutex::new(None);
 /// A downloaded and verified update, kept while the person decides about the agents that are still working.
@@ -127,13 +127,23 @@ async fn check_channel(app: &AppHandle, channel: Channel) -> Result<Option<(Stri
     Ok(found.map(|u| (u.version.clone(), u)))
 }
 
+/// The words for a check that could not read a channel. The page reads the code at the start (`CHECK_FAILED_BETA:`) and
+/// shows its own line, so a failed beta address is never shown as "up to date".
+pub fn check_failed_error(failed: Failed) -> String {
+    match failed {
+        Failed::Stable => "CHECK_FAILED_STABLE: Couldn't check for updates. Try again later.".to_string(),
+        Failed::Beta => "CHECK_FAILED_BETA: Couldn't check for early versions. Try again later.".to_string(),
+    }
+}
+
 /// Looks for an update: the stable address, and with "Get early versions (beta)" on, the beta address too, then the
-/// newer of the two. Off reads only the stable address, as before.
+/// newer of the two. Off reads only the stable address, as before. A channel that cannot be read (offline, 404, a bad
+/// file) and leaves nothing newer is an error with its code, never "no update".
 async fn find_update(app: &AppHandle) -> Result<Option<Update>, String> {
     let early = update_channel::early_versions_on(&crate::settings_store::read_public_settings(app));
     let stable = check_channel(app, Channel::Stable).await;
     let beta = if update_channel::channels_to_check(early).contains(&Channel::Beta) { Some(check_channel(app, Channel::Beta).await) } else { None };
-    update_channel::combine(stable, beta)
+    update_channel::combine(stable, beta).map_err(check_failed_error)
 }
 
 #[tauri::command]

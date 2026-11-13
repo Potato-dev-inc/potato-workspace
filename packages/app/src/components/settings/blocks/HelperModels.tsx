@@ -2,6 +2,7 @@
 // the same picker and model list as the New agent page. A helper an agent starts without naming a model runs on
 // this one. The New agent page keeps its own last-picked memory; the two never mix.
 import { useAgentRegistry } from '../../../lib/agentRegistry';
+import { t, useT } from '../../../i18n';
 import { tauriModelOptionsApi, useModelOptions, type ModelOptionsApi } from '../../../lib/modelOptions';
 import { ModelPicker } from '../../common/ModelPicker';
 import { SettingBlock } from '../settings-ui';
@@ -36,25 +37,27 @@ export function hasModelChoice(options: { terminal: boolean; models: readonly st
 }
 
 function AgentModelRow({ agentId, label, value, api, onChange, single }: { agentId: string; label: string; value: string; api: ModelOptionsApi; onChange: (model: string) => void; single: boolean }) {
+  const t = useT();
   const state = useModelOptions(agentId, api);
   if (state.status === 'ready' && !hasModelChoice(state.options)) return null;
   return (
     <div className="st-helper-model">
       {!single && <span className="st-helper-model-name">{label}</span>}
-      <ModelPicker testId={`helper-model-${agentId}`} label={`Default model for ${label} helpers`} state={state} value={value} onChange={onChange} defaultWord="Agent's default" />
+      <ModelPicker testId={`helper-model-${agentId}`} label={t('models.helperFor', { label })} state={state} value={value} onChange={onChange} defaultWord={t('models.agentDefault')} />
     </div>
   );
 }
 
 /** `only`: show just this agent (its page in Settings > Agents). */
 export function HelperDefaultModels({ saved, onChange, api = tauriModelOptionsApi, only }: { saved: unknown; onChange: (next: Record<string, string>) => void; api?: ModelOptionsApi; only?: string }) {
+  const t = useT();
   const listing = useAgentRegistry();
   const map = cleanHelperModels(saved);
   const agents = listing.agents.filter((a) => a.installed && a.kind !== 'shell' && (!only || a.id === only));
   return (
-    <SettingBlock label={HELPER_MODELS_LABEL} description={HELPER_MODELS_HINT}>
+    <SettingBlock label={t('settings.row.helper-default-models.label')} description={t('settings.row.helper-default-models.hint')}>
       {agents.length === 0 ? (
-        <small>No agents are installed yet.</small>
+        <small>{t('models.noneInstalled')}</small>
       ) : (
         agents.map((agent) => (
           <AgentModelRow key={agent.id} agentId={agent.id} label={agent.label} value={map[agent.id] ?? ''} api={api} onChange={(model) => onChange(withHelperModel(map, agent.id, model))} single={Boolean(only)} />

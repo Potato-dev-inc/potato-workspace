@@ -10,6 +10,27 @@ export interface UpdateOffer {
   notes: string | null;
 }
 
+/** A channel that could not be read: the stable address, or the early-versions (beta) one. */
+export type CheckFailure = 'stable' | 'beta';
+
+/** Which channel a failed check named (the backend starts the message with `CHECK_FAILED_BETA:`), or null. */
+export function checkFailureOf(raw: unknown): CheckFailure | null {
+  if (typeof raw === 'string') return failureFromCode(raw);
+  if (raw instanceof Error) return failureFromCode(raw.message);
+  return null;
+}
+
+function failureFromCode(text: string): CheckFailure | null {
+  const match = /^CHECK_FAILED_(STABLE|BETA):/.exec(text.trim());
+  if (!match) return null;
+  return match[1] === 'BETA' ? 'beta' : 'stable';
+}
+
+/** The one plain line for a channel that could not be checked. Never "Up to date". */
+export function checkFailureLine(failure: CheckFailure): string {
+  return t(failure === 'beta' ? 'overview.update.checkBetaFailed' : 'overview.update.checkStableFailed');
+}
+
 /** Who is working (or waiting for you) now. Chats come back after the restart; terminal agents do not. */
 export interface UpdateBusyInfo {
   agents: string[];

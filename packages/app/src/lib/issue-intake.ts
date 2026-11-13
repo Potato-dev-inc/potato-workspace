@@ -3,6 +3,7 @@
 // snake_case, `RunView` is camelCase (see the spec, section 3.7). The page never gets an issue body, a token or
 // pane output: the card carries the issue text, and this file only carries the status around it.
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 /** The event the backend sends when a run or the settings change. The payload is not read: call `intakeView()`. */
@@ -146,41 +147,23 @@ export function onIntakeChanged(cb: () => void): Promise<UnlistenFn> {
 }
 
 /** Plain-English text for each state, used when the backend sent no sentence. Never "auto", "merge" or "fix it". */
-const FALLBACK: Record<RunStateTag, string> = {
-  skipped: 'Skipped',
-  asking: 'Waiting for you',
-  declined: 'Not now',
-  ignored: 'Ignored',
-  expired: 'The card timed out',
-  queued: 'Waiting for a free slot',
-  starting: 'Starting',
-  running: 'Working',
-  checking: 'Checking the change',
-  ask_push: 'Waiting for you to open the draft PR',
-  pushing: 'Opening the draft PR',
-  pr_open: 'Draft PR open',
-  no_changes: 'No changes',
-  held: "Potato Workspace won't push this. Check the copy yourself.",
-  thrown_away: 'Thrown away',
-  failed: 'Failed',
-};
+const fallbackText = (state: RunStateTag): string => t(`intake.state.${state}`);
 
 /** The one-line state of a run: the backend's sentence, else the plain text for its state. */
 export function stateText(run: RunView): string {
   const own = run.stateText.trim();
   if (own) return own;
-  return FALLBACK[run.state] ?? 'Working';
+  return fallbackText(run.state) ?? t('intake.state.running');
 }
 
 /** "acme/billing · label puppet · Codex · 30 turns · 45 min · 5 a day": one repo row in Settings. */
 export function repoLine(repo: RepoWatch, agentLabel: string): string {
-  const turns = repo.turns === 1 ? 'turn' : 'turns';
   return [
     repo.owner_repo,
-    `label ${repo.label}`,
+    t('intake.repoLabel', { label: repo.label }),
     agentLabel,
-    `${repo.turns} ${turns}`,
-    `${repo.minutes} min`,
-    `${repo.runs_per_day} a day`,
+    t('intake.repoTurns', { count: repo.turns }),
+    t('intake.repoMinutes', { count: repo.minutes }),
+    t('intake.repoPerDay', { count: repo.runs_per_day }),
   ].join(' · ');
 }

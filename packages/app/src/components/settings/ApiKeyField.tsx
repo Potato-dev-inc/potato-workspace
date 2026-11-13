@@ -1,6 +1,7 @@
 // One provider API key: masked when stored, with Replace / Remove. The copy matches where the key really is.
 // Typing a key saves it when the field loses focus or on Enter (never per keystroke, no Save button).
 import { errorSentence } from '../../lib/sayError';
+import { useT } from '../../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   NO_SECURE_STORAGE_WARNING,
@@ -30,6 +31,7 @@ interface Props {
 }
 
 export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileValue, onFileChange, onSaved, onConfirmRemove }: Props) {
+  const t = useT();
   const [info, setInfo] = useState<SecretStorageInfo | null>(null);
   const [mask, setMask] = useState<SecretMask | null>(null);
   const [editing, setEditing] = useState(false);
@@ -56,7 +58,7 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
   if (!info) {
     return (
       <p className="text-xs text-pm-muted">
-        {error ? `Could not check secure storage: ${error}` : 'Checking where keys are stored...'}
+        {error ? t('keys.storageFailed', { error }) : t('keys.storageChecking')}
       </p>
     );
   }
@@ -123,7 +125,7 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
     <div className="space-y-2" data-testid={`key-${name}`}>
       {!info.secure && (
         <p role="note" className="text-xs leading-5 text-pm-muted">
-          {NO_SECURE_STORAGE_WARNING}
+          {t('keys.noSecure')}
         </p>
       )}
       {showInput ? (
@@ -149,7 +151,7 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={commitDraft}
               >
-                Save
+                {t('discord.save')}
               </Btn>
             )}
             {editing && (
@@ -161,7 +163,7 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
                   setDraftText('');
                 }}
               >
-                Cancel
+                {t('lend.cancel')}
               </Btn>
             )}
           </div>
@@ -177,10 +179,10 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
             {describeKeyState(current, info)}
           </span>
           <Btn disabled={busy} onClick={() => setEditing(true)}>
-            Replace
+            {t('keys.replace')}
           </Btn>
           <Btn disabled={busy} onClick={() => void remove()}>
-            Remove
+            {t('settings.remove')}
           </Btn>
         </div>
       )}

@@ -1,6 +1,7 @@
 // Model Bridge (Labs `model_bridge_enabled`, off by default): connect a model service once, then add it to Codex.
 // Wire types and calls for the Rust commands in `commands/model_bridge.rs`. A key goes in (`saveKey`) and never comes
 // back: no call here returns one. Errors are plain sentences made by the app.
+import { t } from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
 
 export interface ModelBridgeApplied {
@@ -70,10 +71,10 @@ export const modelBridgeApi: ModelBridgeApi = {
 export function plainError(e: unknown): string {
   const text = typeof e === 'string' ? e : e instanceof Error ? e.message : '';
   const cleaned = text.replace(/^(Error|INVALID_ARGUMENT):\s*/i, '').trim();
-  return cleaned || 'Something went wrong. Nothing was changed.';
+  return cleaned || t('modelBridge.wrong');
 }
 
 /** "Key saved in Windows Credential Manager." */
 export function keySavedLine(storageLabel: string): string {
-  return `Key saved in ${storageLabel}.`;
+  return t('modelBridge.keySaved', { store: storageLabel });
 }

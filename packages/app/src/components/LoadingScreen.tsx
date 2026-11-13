@@ -30,7 +30,7 @@ export function LoadingScreen({ steps, progress, exiting = false }: Props) {
 
       <div className="pm-boot-layout">
         <header className="pm-boot-header">
-          <PotatoMark size={48} className="pm-boot-logo" />
+          <PotatoMark size={48} className="pm-boot-logo" state="loading" />
           <div>
             <p className="pm-boot-kicker">Potato Workspace</p>
             <h1 className="pm-boot-title">Starting control room</h1>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useT } from '../../i18n';
 import { customSecs, durationProblem, durationWords, PRESETS } from '../../lib/lend';
 import '../../styles/lend.css';
 
@@ -10,7 +11,7 @@ export function DurationField({
   secs,
   onChange,
   forOther,
-  label = 'How long',
+  label,
   maxSecs,
 }: {
   secs: number;
@@ -20,12 +21,13 @@ export function DurationField({
   /** A tighter cap than the general one (a profile's own limit). */
   maxSecs?: number;
 }) {
+  const t = useT();
   const isPreset = PRESETS.some((p) => p.secs === secs);
   const [custom, setCustom] = useState(!isPreset);
   const [hours, setHours] = useState(String(Math.floor(secs / 3600)));
   const [minutes, setMinutes] = useState(String(Math.floor((secs % 3600) / 60)));
   const general = durationProblem(secs, forOther);
-  const problem = general ?? (maxSecs !== undefined && secs > maxSecs ? `The most here is ${durationWords(maxSecs)}.` : null);
+  const problem = general ?? (maxSecs !== undefined && secs > maxSecs ? t('lend.dur.mostHere', { time: durationWords(maxSecs) }) : null);
 
   const type = (h: string, m: string) => {
     setHours(h);
@@ -35,7 +37,7 @@ export function DurationField({
 
   return (
     <fieldset className="lend-dur">
-      <legend className="lend-legend">{label}</legend>
+      <legend className="lend-legend">{label ?? t('lend.dur.howLong')}</legend>
       <div className="lend-seg">
         {PRESETS.map((p) => (
           <button
@@ -47,19 +49,19 @@ export function DurationField({
               onChange(p.secs);
             }}
           >
-            {p.label}
+            {durationWords(p.secs)}
           </button>
         ))}
         <button type="button" aria-pressed={custom} onClick={() => setCustom(true)}>
-          Custom
+          {t('lend.dur.custom')}
         </button>
       </div>
       {custom && (
         <div className="lend-row">
-          <input className="lend-num" type="number" min={0} inputMode="numeric" aria-label="Hours" value={hours} onChange={(e) => type(e.target.value, minutes)} />
-          <span>hours</span>
-          <input className="lend-num" type="number" min={0} max={59} inputMode="numeric" aria-label="Minutes" value={minutes} onChange={(e) => type(hours, e.target.value)} />
-          <span>minutes</span>
+          <input className="lend-num" type="number" min={0} inputMode="numeric" aria-label={t('lend.dur.hoursAria')} value={hours} onChange={(e) => type(e.target.value, minutes)} />
+          <span>{t('lend.dur.hoursUnit')}</span>
+          <input className="lend-num" type="number" min={0} max={59} inputMode="numeric" aria-label={t('lend.dur.minutesAria')} value={minutes} onChange={(e) => type(hours, e.target.value)} />
+          <span>{t('lend.dur.minutesUnit')}</span>
         </div>
       )}
       {problem && (

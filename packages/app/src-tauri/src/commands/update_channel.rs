@@ -68,15 +68,27 @@ pub fn pick_newer<T>(stable: Option<(String, T)>, beta: Option<(String, T)>) -> 
     }
 }
 
-/// Combine the two reads. A beta address that fails (no beta release yet, offline) never hides a stable answer, and a
-/// failed stable read does not hide a beta one; only when both fail is the stable error returned.
-pub fn combine<T, E>(stable: Result<Option<(String, T)>, E>, beta: Option<Result<Option<(String, T)>, E>>) -> Result<Option<T>, E> {
-    let Some(beta) = beta else { return stable.map(|s| s.map(|(_, t)| t)) };
+/// Which address could not be read. A channel that failed is never reported as "up to date".
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Failed {
+    Stable,
+    Beta,
+}
+
+/// Combine the two reads. A beta address that fails (no beta release yet, a 404, offline) never hides a stable answer, and
+/// a failed stable read does not hide a beta one. When a channel failed and nothing newer came from the other one, the
+/// failure is returned: "no update" would be a lie, because the failed address might have had one.
+pub fn combine<T, E>(stable: Result<Option<(String, T)>, E>, beta: Option<Result<Option<(String, T)>, E>>) -> Result<Option<T>, Failed> {
+    let Some(beta) = beta else {
+        return stable.map(|s| s.map(|(_, t)| t)).map_err(|_| Failed::Stable);
+    };
     match (stable, beta) {
         (Ok(s), Ok(b)) => Ok(pick_newer(s, b).map(|(_, t)| t)),
-        (Ok(s), Err(_)) => Ok(s.map(|(_, t)| t)),
-        (Err(_), Ok(b)) => Ok(b.map(|(_, t)| t)),
-        (Err(e), Err(_)) => Err(e),
+        (Ok(Some((_, t))), Err(_)) => Ok(Some(t)),
+        (Ok(None), Err(_)) => Err(Failed::Beta),
+        (Err(_), Ok(Some((_, t)))) => Ok(Some(t)),
+        (Err(_), Ok(None)) => Err(Failed::Stable),
+        (Err(_), Err(_)) => Err(Failed::Stable),
     }
 }
 
@@ -132,6 +144,15 @@ mod tests {
     fn with_early_versions_off_the_beta_answer_is_never_looked_at() {
         let stable: Result<Option<(String, &str)>, &str> = Ok(Some(("1.0.19".into(), "stable")));
         assert_eq!(combine(stable, None), Ok(Some("stable")));
+        let down: Result<Option<(String, &str)>, &str> = Err("offline");
+        assert_eq!(combine(down, None), Err(Failed::Stable));
+    }
+
+    #[test]
+    fn a_404_on_the_beta_address_counts_as_a_failure_and_never_as_up_to_date() {
+        let stable: Result<Option<(String, &str)>, &str> = Ok(None);
+        let beta: Result<Option<(String, &str)>, &str> = Err("404 Not Found");
+        assert_eq!(combine(stable, Some(beta)), Err(Failed::Beta));
     }
 
     #[test]
@@ -142,15 +163,28 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_stable_read_still_gives_the_beta_and_two_failures_give_the_stable_error() {
+    fn a_failed_stable_read_still_gives_the_beta_update() {
         let beta_ok: Result<Option<(String, &str)>, &str> = Ok(Some(("1.0.20-beta.1".into(), "beta")));
         assert_eq!(combine(Err("offline"), Some(beta_ok)), Ok(Some("beta")));
-        let none: Result<Option<(String, &str)>, &str> = Err("beta 404");
-        assert_eq!(combine(Err("stable offline"), Some(none)), Err("stable offline"));
     }
 
     #[test]
-    fn when_both_have_nothing_newer_there_is_no_update() {
+    fn a_failed_stable_read_with_nothing_newer_on_beta_is_a_stable_failure_not_up_to_date() {
+        let none: Result<Option<(String, &str)>, &str> = Ok(None);
+        assert_eq!(combine(Err("stable offline"), Some(none)), Err(Failed::Stable));
+        let beta_err: Result<Option<(String, &str)>, &str> = Err("beta 404");
+        assert_eq!(combine(Err("stable offline"), Some(beta_err)), Err(Failed::Stable));
+    }
+
+    #[test]
+    fn a_failed_beta_read_with_nothing_newer_on_stable_is_a_beta_failure() {
+        let stable: Result<Option<(String, &str)>, &str> = Ok(None);
+        let beta: Result<Option<(String, &str)>, &str> = Err("bad json");
+        assert_eq!(combine(stable, Some(beta)), Err(Failed::Beta));
+    }
+
+    #[test]
+    fn when_both_channels_answer_with_nothing_newer_there_is_no_update() {
         let a: Result<Option<(String, &str)>, &str> = Ok(None);
         let b: Result<Option<(String, &str)>, &str> = Ok(None);
         assert_eq!(combine(a, Some(b)), Ok(None));

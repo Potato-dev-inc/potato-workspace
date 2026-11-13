@@ -217,7 +217,10 @@ impl Viewer {
     pub fn view<'a>(&self, payload: &'a str) -> Option<Option<std::borrow::Cow<'a, str>>> {
         match self {
             Viewer::Local => Some(Some(std::borrow::Cow::Borrowed(payload))),
-            Viewer::Device(id) => stream_caps(id).map(|caps| project(caps, payload)),
+            // An agent switched off for remote control sends a phone nothing but its name and status.
+            Viewer::Device(id) => {
+                stream_caps(id).map(|caps| project(caps, payload).filter(|_| !pane_rules::hides_event(payload)))
+            }
         }
     }
 }
@@ -285,6 +288,17 @@ pub fn authorize_caller(
         TokenCheck::Valid { device_id, caps } => {
             let need = route_need(method, segments);
             if caps.satisfies(need) {
+                // The phone's own caps cover the route; the agent it names may still be switched off
+                // or capped lower (`pane_rules`). This is the one place that is enforced for pane routes.
+                if let Some(refusal) = pane_rule_refusal(segments, need) {
+                    events::emit(events::SecurityEvent::CapDenied {
+                        device_id,
+                        method: method.to_string(),
+                        route: format!("/{}", segments.join("/")),
+                        needs: format!("{} (this agent)", need_name(need)),
+                    });
+                    return Err(refusal);
+                }
                 return Ok(Caller::Device { device_id, caps });
             }
             let needs = need_name(need);
@@ -307,6 +321,35 @@ pub fn authorize_caller(
     }
 }
 
+/// A refusal when the route is about one agent pane whose remote rule does not allow what the route needs.
+/// A route that needs only "a paired device" (the lists and streams) names no agent content and passes.
+fn pane_rule_refusal(segments: &[&str], need: Need) -> Option<(u16, serde_json::Value)> {
+    let pane_id = pane_rules::pane_of_route(segments)?;
+    let refused = match need {
+        Need::Device => false,
+        Need::Cap(cap) => pane_rules::refuses(pane_id, cap),
+        Need::AnyOf(a, b) => pane_rules::refuses(pane_id, a) && pane_rules::refuses(pane_id, b),
+    };
+    refused.then(|| pane_rule_error(pane_id))
+}
+
+/// The 403 a phone gets for an agent whose remote rule says no.
+pub fn pane_rule_error(pane_id: &str) -> (u16, serde_json::Value) {
+    let off = !pane_rules::rule(pane_id).remote;
+    (
+        403,
+        serde_json::json!({
+            "error": "not_allowed",
+            "code": if off { "PANE_REMOTE_OFF" } else { "PANE_LEVEL" },
+            "hint": if off {
+                "Remote control is off for this agent. Switch it on in the agent's Remote control card on your PC."
+            } else {
+                "This agent lets phones do less than that. Change it in the agent's Remote control card on your PC."
+            },
+        }),
+    )
+}
+
 fn need_name(need: Need) -> String {
     match need {
         Need::Device => "device".into(),
@@ -318,7 +361,16 @@ fn need_name(need: Need) -> String {
 /// Whether the caller behind these headers may use `cap` right now (re-checks the token, so a
 /// change of caps or a revoke applies at once). For checks inside an open connection, e.g. the
 /// WebSocket `input` frame.
+#[cfg(test)]
 pub fn caller_may(headers: &str, peer_loopback: bool, cap: Cap) -> bool {
+    caller_may_on(headers, peer_loopback, cap, None)
+}
+
+/// [`caller_may`] for one agent pane: the phone's caps and that agent's remote rule must both allow `cap`.
+pub fn caller_may_on(headers: &str, peer_loopback: bool, cap: Cap, pane_id: Option<&str>) -> bool {
+    if requires_pairing_token(headers, peer_loopback) && pane_id.is_some_and(|id| pane_rules::refuses(id, cap)) {
+        return false;
+    }
     if !requires_pairing_token(headers, peer_loopback) {
         return true;
     }

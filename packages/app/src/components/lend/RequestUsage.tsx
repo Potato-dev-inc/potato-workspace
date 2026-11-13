@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { t, useT } from '../../i18n';
 import { teamApi, type MemberView, type TeamApi } from '../../lib/team';
 import { agentLabel, comingSoonAgents, comingSoonText, DEFAULT_SECS, durationProblem, durationWords, errText, lendApi, MAX_REASON, offerable, supportTag, type LendApi, type LendRequest, type LendState } from '../../lib/lend';
 import { DurationField } from './Duration';
@@ -25,7 +26,7 @@ export function sourcesOf(members: readonly MemberView[]): { mine: Source[]; oth
       if (list.length > 0) {
         for (const d of list) mine.push({ value: `${m.id}|${d.id}`, label: d.name, memberId: m.id, deviceId: d.id, mine: true });
       } else if (m.devices > 1) {
-        mine.push({ value: `${m.id}|`, label: 'My other PC', memberId: m.id, deviceId: null, mine: true });
+        mine.push({ value: `${m.id}|`, label: t('lend.request.myOtherPc'), memberId: m.id, deviceId: null, mine: true });
       }
     } else {
       others.push({ value: `${m.id}|`, label: m.name, memberId: m.id, deviceId: null, mine: false });
@@ -35,9 +36,9 @@ export function sourcesOf(members: readonly MemberView[]): { mine: Source[]; oth
 }
 
 /** Waiting / Ready / Said no. */
-export const askStatus = (r: Pick<LendRequest, 'state'>): string => (r.state === 'open' ? 'Waiting' : r.state === 'accepted' ? 'Ready' : 'Said no');
+export const askStatus = (r: Pick<LendRequest, 'state'>): string => (r.state === 'open' ? t('lend.ask.waiting') : r.state === 'accepted' ? t('lend.ask.ready') : t('lend.ask.saidNo'));
 
-const askWords = (r: LendRequest, state: LendState | null): string => `${r.member_name || 'Teammate'} · ${agentLabel(state, r.agent_id)} · ${durationWords(r.secs)}`;
+const askWords = (r: LendRequest, state: LendState | null): string => `${r.member_name || t('lend.teammate')} · ${agentLabel(state, r.agent_id)} · ${durationWords(r.secs)}`;
 
 /** The newest asks of mine that are still worth seeing: waiting, or answered in the last day. */
 export const recentAsks = (state: LendState | null, now: number): LendRequest[] =>
@@ -59,6 +60,7 @@ export function RequestUsage({
   lend?: LendHandle;
   variant?: 'inbox' | 'settings';
 }) {
+  const t = useT();
   const own = useLend(api);
   const handle = lend ?? own;
   const [open, setOpen] = useState(false);
@@ -67,10 +69,10 @@ export function RequestUsage({
   return (
     <div className="lend-entry" data-lend-entry={variant}>
       <button type="button" className="lend-btn" onClick={() => setOpen(true)}>
-        Request usage
+        {t('lend.request.title')}
       </button>
       {asks.length > 0 && (
-        <ul className="lend-asks" aria-label="Your requests">
+        <ul className="lend-asks" aria-label={t('lend.request.yours')}>
           {asks.map((r) => (
             <li key={r.id}>
               <span>{askWords(r, handle.state)}</span>
@@ -87,6 +89,7 @@ export function RequestUsage({
 }
 
 function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamApi; lend: LendHandle; onClose: () => void }) {
+  const t = useT();
   const [members, setMembers] = useState<MemberView[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [from, setFrom] = useState('');
@@ -138,7 +141,7 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
     const live = state.requests_out.find((r) => r.id === sentId);
     const status = live?.state ?? 'open';
     return (
-      <LendSheet title="Request sent" labelledBy="lend-ask-t" onClose={onClose}>
+      <LendSheet title={t('lend.request.sent')} labelledBy="lend-ask-t" onClose={onClose}>
         <p>
           {picked?.label} · {agentLabel(state, agentId)} · {durationWords(secs)}
         </p>
@@ -149,14 +152,14 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
         </p>
         <p className="lend-note">
           {status === 'accepted'
-            ? 'It is ready. Pick it in the New agent menu.'
+            ? t('lend.request.readyNote')
             : status === 'declined'
-              ? 'They said no. You can ask again with another time.'
-              : 'They see it in their Inbox. You can close this and keep working.'}
+              ? t('lend.request.declinedNote')
+              : t('lend.request.openNote')}
         </p>
         <div className="lend-actions">
           <button type="button" className="lend-btn is-primary" onClick={onClose}>
-            Done
+            {t('lend.request.done')}
           </button>
         </div>
       </LendSheet>
@@ -164,15 +167,15 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
   }
 
   return (
-    <LendSheet title="Request usage" labelledBy="lend-ask-t" onClose={busy ? undefined : onClose}>
+    <LendSheet title={t('lend.request.title')} labelledBy="lend-ask-t" onClose={busy ? undefined : onClose}>
       {loadError || (members && all.length === 0) ? (
-        <p className="lend-note">There is nobody to ask yet. Join a team in Settings › Team, or add another of your PCs to it.</p>
+        <p className="lend-note">{t('lend.request.nobody')}</p>
       ) : (
         <label className="lend-field">
-          <span>Ask</span>
-          <select aria-label="Ask" value={picked?.value ?? ''} onChange={(e) => setFrom(e.target.value)} disabled={!members}>
+          <span>{t('lend.request.ask')}</span>
+          <select aria-label={t('lend.request.ask')} value={picked?.value ?? ''} onChange={(e) => setFrom(e.target.value)} disabled={!members}>
             {mine.length > 0 && (
-              <optgroup label="My PCs">
+              <optgroup label={t('lend.who.myPcs')}>
                 {mine.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
@@ -181,7 +184,7 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
               </optgroup>
             )}
             {others.length > 0 && (
-              <optgroup label="Teammates">
+              <optgroup label={t('lend.who.teammates')}>
                 {others.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
@@ -193,8 +196,8 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
         </label>
       )}
       <label className="lend-field">
-        <span>Agent</span>
-        <select aria-label="Agent" value={agentId} onChange={(e) => setAgent(e.target.value)}>
+        <span>{t('lend.request.agent')}</span>
+        <select aria-label={t('lend.request.agent')} value={agentId} onChange={(e) => setAgent(e.target.value)}>
           {agents.map((d) => (
             <option key={d.agent_id} value={d.agent_id}>
               {d.label}
@@ -215,13 +218,13 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
       )}
       <DurationField secs={secs} onChange={setSecs} forOther={forOther} />
       <label className="lend-field">
-        <span>Why (optional)</span>
-        <textarea aria-label="Why" value={reason} maxLength={MAX_REASON} rows={2} onChange={(e) => setReason(e.target.value)} />
+        <span>{t('lend.request.why')}</span>
+        <textarea aria-label={t('lend.request.whyAria')} value={reason} maxLength={MAX_REASON} rows={2} onChange={(e) => setReason(e.target.value)} />
         <span className="lend-count">
           {reason.length} / {MAX_REASON}
         </span>
       </label>
-      {forOther && picked && <p className="lend-note">{picked.label} decides. They may say no.</p>}
+      {forOther && picked && <p className="lend-note">{t('lend.request.decides', { name: picked.label })}</p>}
       {error && (
         <p className="lend-error" role="alert">
           {error}
@@ -229,10 +232,10 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
       )}
       <div className="lend-actions">
         <button type="button" className="lend-btn is-plain" onClick={onClose} disabled={busy}>
-          Cancel
+          {t('lend.cancel')}
         </button>
         <button type="button" className="lend-btn is-primary" disabled={!canAsk} onClick={() => void ask()}>
-          Ask
+          {t('lend.request.ask')}
         </button>
       </div>
     </LendSheet>

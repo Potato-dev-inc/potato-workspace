@@ -2,6 +2,7 @@
 // in order, and whether to ask to move it back after the reset. Saved through the keep-going settings command
 // (not settings.json). Agent names come from the registry and the saved logins; nothing here names an agent.
 import { errorSentence } from '../../../lib/sayError';
+import { t, useT } from '../../../i18n';
 import { useEffect, useState } from 'react';
 import { accountsFor, tauriAccountsApi, type Account } from '../../../lib/accounts';
 import { useAgentRegistry, type AgentDescriptor } from '../../../lib/agentRegistry';
@@ -49,20 +50,17 @@ export function keepGoingLabel(target: KeepGoingTarget, agents: AgentDescriptor[
   const base = agents.find((agent) => agent.id === target.agent_id)?.label ?? target.agent_id;
   if (!target.account) return base;
   const account = accounts.find((item) => item.id === target.account);
-  return account ? `${base} · ${account.label}` : `${base} · login removed`;
+  return account ? `${base} · ${account.label}` : `${base} · ${t('keepGoing.loginRemoved')}`;
 }
 
 /** The text a failed save shows: the server's plain sentence, without its `CODE:` prefix. */
 export function keepGoingSaveError(err: unknown): string {
-  return errorSentence(err, "Couldn't save. Try again.");
+  return errorSentence(err, t('keepGoing.saveFailed'));
 }
 
-const HEADING = {
-  label: 'When an agent runs out of usage',
-  description: 'Potato Workspace offers these agents, in this order, when the agent a task runs on hits its usage limit. You pick one each time.',
-};
-
 export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
+  const t = useT();
+  const HEADING = { label: t('settings.row.keep-going.label'), description: t('keepGoing.help') };
   const registry = useAgentRegistry();
   // undefined = still loading, null = not available here (a browser preview), otherwise the saved settings.
   const [settings, setSettings] = useState<KeepGoingSettings | null | undefined>(undefined);
@@ -88,7 +86,7 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
   if (settings === null) {
     return (
       <SettingBlock {...HEADING}>
-        <p className="text-sm text-pm-muted">Available in the desktop app.</p>
+        <p className="text-sm text-pm-muted">{t('tunnel.status.desktopOnly')}</p>
       </SettingBlock>
     );
   }
@@ -123,11 +121,11 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
     <>
       <SettingBlock {...HEADING}>
         <div className="space-y-3">
-          <p className="text-sm font-medium">Offer to continue on, in order</p>
+          <p className="text-sm font-medium">{t('keepGoing.offer')}</p>
           {settings.order.length === 0 ? (
-            <p className="text-sm text-pm-muted">Nothing listed. Potato Workspace then offers every other installed agent, in its usual order.</p>
+            <p className="text-sm text-pm-muted">{t('keepGoing.nothing')}</p>
           ) : (
-            <ol className="space-y-2 text-sm" aria-label="Offer order">
+            <ol className="space-y-2 text-sm" aria-label={t('keepGoing.orderAria')}>
               {settings.order.map((target, i) => {
                 const key = keepGoingTargetKey(target);
                 const label = keepGoingLabel(target, registry.agents, accounts);
@@ -136,16 +134,16 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
                   <li key={key} data-target-key={key} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-pm-border px-3 py-2">
                     <span className="w-4 font-mono text-xs text-pm-muted">{i + 1}</span>
                     <span className="font-medium">{label}</span>
-                    <span className="text-xs text-pm-muted">{installed ? 'Installed' : 'Not installed'}</span>
+                    <span className="text-xs text-pm-muted">{installed ? t('keepGoing.installed') : t('keepGoing.notInstalled')}</span>
                     <span className="ml-auto flex gap-1">
-                      <Btn small aria-label={`Move ${label} up`} disabled={i === 0} onClick={() => move(i, i - 1)}>
+                      <Btn small aria-label={t('keepGoing.moveUp', { label })} disabled={i === 0} onClick={() => move(i, i - 1)}>
                         ↑
                       </Btn>
-                      <Btn small aria-label={`Move ${label} down`} disabled={i === last} onClick={() => move(i, i + 1)}>
+                      <Btn small aria-label={t('keepGoing.moveDown', { label })} disabled={i === last} onClick={() => move(i, i + 1)}>
                         ↓
                       </Btn>
-                      <Btn small aria-label={`Remove ${label}`} onClick={() => remove(i)}>
-                        Remove
+                      <Btn small aria-label={t('keepGoing.removeLabel', { label })} onClick={() => remove(i)}>
+                        {t('settings.remove')}
                       </Btn>
                     </span>
                   </li>
@@ -155,12 +153,12 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
           )}
           <div className="flex flex-wrap items-center gap-2">
             <Popup
-              aria-label="Agent to add"
+              aria-label={t('keepGoing.addAria')}
               value={chosen ? pick : ''}
               disabled={full || choices.length === 0}
               onChange={(event) => setPick(event.target.value)}
             >
-              <option value="">{choices.length > 0 ? 'Choose an agent' : 'No more agents to add'}</option>
+              <option value="">{choices.length > 0 ? t('keepGoing.choose') : t('keepGoing.noMore')}</option>
               {choices.map((choice) => (
                 <option key={choice.key} value={choice.key}>
                   {choice.label}
@@ -168,17 +166,17 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
               ))}
             </Popup>
             <Btn small disabled={!chosen || full} onClick={add}>
-              Add
+              {t('keepGoing.add')}
             </Btn>
-            {full && <span className="text-xs text-pm-muted">You can list up to {KEEP_GOING_ORDER_CAP} agents.</span>}
+            {full && <span className="text-xs text-pm-muted">{t('keepGoing.full', { n: KEEP_GOING_ORDER_CAP })}</span>}
           </div>
-          <p className="text-xs text-pm-muted">Potato Workspace asks every time. It never moves a task to another login of the same company.</p>
+          <p className="text-xs text-pm-muted">{t('keepGoing.asks')}</p>
           {error && <Note role="alert">{error}</Note>}
         </div>
       </SettingBlock>
       <SettingToggle
-        label="Ask to move it back when the first agent resets"
-        description="Asks once, after the reset time. Never moves a task back on its own."
+        label={t('keepGoing.askBack')}
+        description={t('keepGoing.askBackHelp')}
         checked={settings.ask_back}
         onChange={(on) => void save({ ...settings, ask_back: on })}
       />

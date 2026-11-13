@@ -1,15 +1,18 @@
 // Settings > General: the search index of your chats (Ctrl+Shift+F). A switch to keep it or not, what it holds,
 // and a button that clears it. Clearing asks first and never touches the chats themselves.
 import { errorSentence } from '../../../lib/sayError';
+import { en } from '../../../i18n/en';
+import { useT } from '../../../i18n';
 import { useEffect, useState } from 'react';
 import { chatIndexClear, chatIndexSetEnabled, chatIndexStatus, indexStatusText, type ChatIndexStatus } from '../../../lib/chatIndex';
 import { bindingLabel } from '../../../lib/shortcuts';
 import type { SettingsEnv } from '../model';
 import { Btn, SettingRow, SettingToggle } from '../settings-ui';
 
-export const CHAT_INDEX_CLEAR_BODY = 'This removes the saved search text. Chats themselves are not touched.';
+export const CHAT_INDEX_CLEAR_BODY = en['chatIndex.clearBody'];
 
 export function ChatIndexSettings({ env }: { env: SettingsEnv }) {
+  const t = useT();
   const [status, setStatus] = useState<ChatIndexStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -38,7 +41,7 @@ export function ChatIndexSettings({ env }: { env: SettingsEnv }) {
 
   const clear = async () => {
     env.setError(null);
-    const ok = await env.confirm({ title: 'Clear search index?', body: CHAT_INDEX_CLEAR_BODY, confirmLabel: 'Clear' });
+    const ok = await env.confirm({ title: t('chatIndex.clearTitle'), body: t('chatIndex.clearBody'), confirmLabel: t('chatIndex.clear') });
     if (!ok) return;
     setBusy(true);
     try {
@@ -54,14 +57,14 @@ export function ChatIndexSettings({ env }: { env: SettingsEnv }) {
   return (
     <>
       <SettingToggle
-        label="Keep a search index of my chats"
-        description={`Lets ${bindingLabel('search-chats') || 'chat search'} find what was said in the chats you have opened. The saved text is redacted and stays on this computer. Off: nothing new is saved and nothing is searched.`}
+        label={t('chatIndex.keep')}
+        description={t('chatIndex.keepHelp', { keys: bindingLabel('search-chats') || t('chatIndex.chatSearch') })}
         checked={enabled}
         onChange={(value) => void toggle(value)}
       />
-      <SettingRow label="Clear search index" description={status ? indexStatusText(status) : 'Loading…'}>
+      <SettingRow label={t('chatIndex.clearLabel')} description={status ? indexStatusText(status) : t('teamPage.loading')}>
         <Btn disabled={busy || !status} onClick={() => void clear()}>
-          {busy ? 'Clearing…' : 'Clear search index'}
+          {busy ? t('chatIndex.clearing') : t('chatIndex.clearLabel')}
         </Btn>
       </SettingRow>
     </>

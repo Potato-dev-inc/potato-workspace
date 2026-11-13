@@ -31,6 +31,28 @@ import { risk } from './zh-TW/risk';
 import { state } from './zh-TW/state';
 import { overview } from './zh-TW/overview';
 import { team } from './zh-TW/team';
+import { companion } from './zh-TW/companion';
+import { settingsRows } from './zh-TW/settingsRows';
+import { settingsPreviews } from './zh-TW/settingsPreviews';
+import { settingsLane } from './zh-TW/settingsLane';
+import { settingsIntake } from './zh-TW/settingsIntake';
+import { settingsShortcuts } from './zh-TW/settingsShortcuts';
+import { settingsGeneral } from './zh-TW/settingsGeneral';
+import { settingsModelBridge } from './zh-TW/settingsModelBridge';
+import { settingsMisc } from './zh-TW/settingsMisc';
+import { settingsBridge } from './zh-TW/settingsBridge';
+import { settingsToolbelt } from './zh-TW/settingsToolbelt';
+import { settingsKeys } from './zh-TW/settingsKeys';
+import { settingsPack } from './zh-TW/settingsPack';
+import { settingsAgentPage } from './zh-TW/settingsAgentPage';
+import { settingsPreload } from './zh-TW/settingsPreload';
+import { settingsAgents } from './zh-TW/settingsAgents';
+import { settingsTelegram } from './zh-TW/settingsTelegram';
+import { settingsLend } from './zh-TW/settingsLend';
+import { settingsTeam } from './zh-TW/settingsTeam';
+import { settingsConnect } from './zh-TW/settingsConnect';
+import { settingsPhone } from './zh-TW/settingsPhone';
+import { notify } from './zh-TW/notify';
 
 export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...common,
@@ -48,4 +70,26 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...state,
   ...overview,
   ...team,
+  ...companion,
+  ...settingsRows,
+  ...settingsPreviews,
+  ...settingsLane,
+  ...settingsIntake,
+  ...settingsShortcuts,
+  ...settingsGeneral,
+  ...settingsModelBridge,
+  ...settingsMisc,
+  ...settingsBridge,
+  ...settingsToolbelt,
+  ...settingsKeys,
+  ...settingsPack,
+  ...settingsAgentPage,
+  ...settingsPreload,
+  ...settingsAgents,
+  ...settingsTelegram,
+  ...settingsLend,
+  ...settingsTeam,
+  ...settingsConnect,
+  ...settingsPhone,
+  ...notify,
 };

@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
+import type { PaneRemote, PaneRemoteLevel } from './pane-remote';
 import type {
   AgentContextProfile,
   AgentModelInspection,
@@ -303,6 +304,11 @@ export const tauri = {
     safeInvoke<boolean>('revoke_paired_mobile_device', { deviceId }, false, true),
   setPairedMobileDeviceCaps: (deviceId: string, caps: readonly DeviceCap[]) =>
     safeInvoke<boolean>('set_paired_mobile_device_caps', { deviceId, caps: [...caps] }, false, true),
+  /** An agent's Remote control rule (the bridge enforces it for paired phones). */
+  getPaneRemote: (paneId: string) =>
+    safeInvoke<PaneRemote>('get_pane_remote', { paneId }, { remote: true, level: 'full' }, true),
+  setPaneRemote: (paneId: string, change: { remote?: boolean; level?: PaneRemoteLevel }) =>
+    safeInvoke<PaneRemote>('set_pane_remote', { paneId, ...change }, { remote: change.remote ?? true, level: change.level ?? 'full' }, true),
   /** This launch's bridge key for the app's own HTTP calls (IPC only; null outside the app). */
   bridgeLocalSecret: () =>
     safeInvoke<string | null>('bridge_local_secret', undefined, null, true).catch(() => null),

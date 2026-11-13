@@ -54,6 +54,7 @@ export function QuestionCard({
       meta={askerName(q, paneName)}
       age={now - q.created_at_ms}
       reason={q.context}
+      snoozeKeys={helper ? undefined : [`q-${q.id}`]}
       note={<span data-testid="question-wait">{waitCaption(q, now, paneName)}</span>}
       data={{ 'data-question-id': q.id, 'data-urgent': q.urgency === 'high' ? '' : undefined }}
       body={

@@ -2,6 +2,7 @@
 // The link is kept in the secure store on this PC. After it is saved the field shows only a mask: the link never
 // comes back to this window. No bot. Off until a link is saved.
 import { useEffect, useState } from 'react';
+import { useT } from '../../../i18n';
 import {
   discordErrorMessage,
   tauriDiscordAlertsApi,
@@ -15,6 +16,7 @@ import { Btn, FieldInput, Note, SettingBlock, SettingToggle } from '../settings-
 const MASK = '\u2022'.repeat(24);
 
 export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { api?: DiscordAlertsApi; onSaved?: () => void }) {
+  const t = useT();
   const [status, setStatus] = useState<DiscordAlertsStatus | null>(null);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -68,25 +70,25 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
   return (
     <>
       <SettingBlock
-        label="Webhook link"
-        description="Kept in the secure store on this PC. After you save it, it is never shown again."
+        label={t('discord.link')}
+        description={t('discord.linkHelp')}
       >
         <div className="flex flex-wrap items-center gap-2">
           {status.saved ? (
             <FieldInput
-              aria-label="Discord webhook link"
+              aria-label={t('discord.linkAria')}
               type="password"
               readOnly
               value={MASK}
-              title={status.tail ? `Saved. Ends in ${status.tail}` : 'Saved'}
+              title={status.tail ? t('discord.savedEnds', { tail: status.tail }) : t('settings.saved')}
             />
           ) : (
             <FieldInput
-              aria-label="Discord webhook link"
+              aria-label={t('discord.linkAria')}
               type="password"
               autoComplete="off"
               spellCheck={false}
-              placeholder="https://discord.com/api/webhooks/..."
+              placeholder="https://discord.com/api/webhooks/..." // i18n-ok: example
               value={draft}
               disabled={busy}
               onChange={(e) => setDraft(e.target.value)}
@@ -97,38 +99,38 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
           )}
           {!status.saved && (
             <Btn primary disabled={busy || draft.trim() === ''} onClick={() => void save()}>
-              Save
+              {t('discord.save')}
             </Btn>
           )}
           <SendTest
-            disabledReason={status.saved ? (busy ? 'Working…' : null) : 'Add a webhook link first'}
+            disabledReason={status.saved ? (busy ? t('discord.working') : null) : t('discord.addFirst')}
             send={() => api.test()}
           />
           {status.saved && (
             <Btn disabled={busy} onClick={() => void remove()}>
-              Remove
+              {t('settings.remove')}
             </Btn>
           )}
         </div>
-        {status.saved && <Note role="status">{`Saved in the secure store on this PC. Ends in ${status.tail ?? '...'}.`}</Note>}
-        {!status.saved && <Note>Not on yet. In Discord: channel settings, Integrations, Webhooks, New Webhook, Copy Webhook URL.</Note>}
+        {status.saved && <Note role="status">{t('discord.savedNote', { tail: status.tail ?? '...' })}</Note>}
+        {!status.saved && <Note>{t('discord.notOn')}</Note>}
         {error && <Note role="alert">{error}</Note>}
       </SettingBlock>
       <SettingToggle
-        label="Needs you"
-        description="An agent asks a question or waits for you to allow something."
+        label={t('discord.needsYou')}
+        description={t('discord.needsYouHelp')}
         checked={status.kinds.needs_you}
         onChange={(value) => setKind('needs_you', value)}
       />
       <SettingToggle
-        label="Finished"
-        description="An agent finishes its run."
+        label={t('discord.finished')}
+        description={t('discord.finishedHelp')}
         checked={status.kinds.finished}
         onChange={(value) => setKind('finished', value)}
       />
       <SettingToggle
-        label="Failed"
-        description="An agent run fails."
+        label={t('discord.failed')}
+        description={t('discord.failedHelp')}
         checked={status.kinds.failed}
         onChange={(value) => setKind('failed', value)}
       />

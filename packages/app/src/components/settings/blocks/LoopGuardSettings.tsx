@@ -1,11 +1,13 @@
 // Settings > General: stuck-agent warnings and the "Stop all agents" shortcut.
 import { errorSentence } from '../../../lib/sayError';
+import { t, useT } from '../../../i18n';
 import { useEffect, useState } from 'react';
 import { tauriLoopApi, type LoopGuardApi, type LoopGuardSettings } from '../../../lib/loop-guard';
 import { bindingLabel } from '../../../lib/shortcuts';
 import { FieldSelect, SettingRow, SettingToggle } from '../settings-ui';
 
 export function LoopGuardSettingsBlock({ api = tauriLoopApi, onSaved }: { api?: LoopGuardApi; onSaved?: () => void }) {
+  const t = useT();
   const [s, setS] = useState<LoopGuardSettings | null>(null);
   useEffect(() => {
     api.settingsGet().then(setS).catch(() => {});
@@ -24,7 +26,7 @@ export function LoopGuardSettingsBlock({ api = tauriLoopApi, onSaved }: { api?: 
       })
       .catch((e: unknown) => {
         setS(before); // put the old value back: it was not saved
-        setError('Not saved: ' + (errorSentence(e)));
+        setError(t('settings.notSaved', { reason: errorSentence(e) }));
       });
   };
   return (
@@ -35,20 +37,20 @@ export function LoopGuardSettingsBlock({ api = tauriLoopApi, onSaved }: { api?: 
         </p>
       )}
       <SettingToggle
-        label="Warn when an agent seems stuck"
-        description="Shows a card when an agent repeats the same error or the same steps, or works for a long time with nothing new."
+        label={t('settings.row.loop-guard.label')}
+        description={t('loopGuard.help')}
         checked={s.enabled}
         onChange={(enabled) => save({ ...s, enabled })}
       />
-      <SettingRow label="Stuck warning sensitivity" description="How many repeats before the warning. More repeats means fewer false alarms.">
+      <SettingRow label={t('loopGuard.sens')} description={t('loopGuard.sensHelp')}>
         <FieldSelect value={String(s.turns)} disabled={!s.enabled} onChange={(e) => save({ ...s, turns: Number(e.target.value) })}>
-          <option value="3">Early (3 repeats)</option>
-          <option value="4">Balanced (4 repeats)</option>
-          <option value="6">Careful (6 repeats)</option>
-          <option value="8">Very careful (8 repeats)</option>
+          <option value="3">{t('loopGuard.early')}</option>
+          <option value="4">{t('loopGuard.balanced')}</option>
+          <option value="6">{t('loopGuard.careful')}</option>
+          <option value="8">{t('loopGuard.veryCareful')}</option>
         </FieldSelect>
       </SettingRow>
-      <SettingRow label="Quiet for too long" description="Warn when an agent has been working this long without printing anything new.">
+      <SettingRow label={t('loopGuard.quiet')} description={t('loopGuard.quietHelp')}>
         <FieldSelect
           value={String(s.stalled_minutes)}
           disabled={!s.enabled}
@@ -56,14 +58,14 @@ export function LoopGuardSettingsBlock({ api = tauriLoopApi, onSaved }: { api?: 
         >
           {[10, 20, 30, 60].map((m) => (
             <option key={m} value={m}>
-              {m} minutes
+              {t('loopGuard.minutes', { m })}
             </option>
           ))}
         </FieldSelect>
       </SettingRow>
       <SettingToggle
-        label="Global shortcut: stop all agents"
-        description={`${bindingLabel('stop-all') || 'A shortcut'} interrupts every working agent from anywhere. Off by default.`}
+        label={t('loopGuard.stopAll')}
+        description={t('loopGuard.stopAllHelp', { keys: bindingLabel('stop-all') || t('loopGuard.aShortcut') })}
         checked={s.panic_shortcut}
         onChange={(panic_shortcut) => save({ ...s, panic_shortcut })}
       />

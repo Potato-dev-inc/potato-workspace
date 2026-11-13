@@ -2,6 +2,7 @@
 // `/chat/completions` call. The agent wizard's writer uses it today; a general custom provider can reuse the
 // type, the presets and the client. The address and model are normal settings (`custom_ai`); the key is kept
 // only in the OS credential store (secret `custom_ai_key`) and is read back at call time, never saved elsewhere.
+import { t } from '../i18n';
 import { maskEmails } from './agentWizardPrompt';
 import { CUSTOM_AI_SECRET, readCustomAiKey, secretsApi, type SecretMask } from './secrets';
 import { loadSettings, patchSettings } from './settings';
@@ -33,7 +34,9 @@ export const CUSTOM_AI_PRESETS: readonly CustomAiPreset[] = [
     label: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
     model: 'google/gemini-2.5-flash',
-    hint: 'One key for many models. Some are free to try.',
+    get hint() {
+      return t('keys.preset.openrouter');
+    },
     headers: { 'HTTP-Referer': 'https://github.com/Potato-dev-inc/potato-workspace', 'X-Title': 'Potato Workspace' },
   },
   {
@@ -41,14 +44,20 @@ export const CUSTOM_AI_PRESETS: readonly CustomAiPreset[] = [
     label: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4.1-mini',
-    hint: 'Your OpenAI account key.',
+    get hint() {
+      return t('keys.preset.openai');
+    },
   },
   {
     id: 'other',
-    label: 'Other service',
+    get label() {
+      return t('keys.preset.otherLabel');
+    },
     baseUrl: '',
     model: '',
-    hint: 'Any service that works like OpenAI. Type its address.',
+    get hint() {
+      return t('keys.preset.other');
+    },
   },
 ];
 

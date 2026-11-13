@@ -8,6 +8,7 @@ import { folderKey } from './history-model';
 import { IconClose } from './Icons';
 import { paneHeading } from './titles';
 import { useT } from '../../i18n';
+import { setFocusMode } from '../../lib/focus-mode';
 import '../../styles/pane-tabs.css';
 
 export type TabDot = 'working' | 'needs' | 'error' | null;
@@ -45,8 +46,13 @@ export function PaneTabs({ c, paneId }: { c: CockpitApi; paneId: string }) {
               role="tab"
               aria-selected={active}
               className="ck-ptab-main"
-              title={`${agentName} · ${title}`}
+              title={`${agentName} · ${title} · ${t('pane.tabFocusTip')}`}
               onClick={() => c.select(id)}
+              onDoubleClick={() => {
+                // A double-click opens the tab and fills the window with it (focus mode, Esc brings the layout back).
+                c.select(id);
+                setFocusMode(true);
+              }}
             >
               <AgentLogo id={p.info.agent_type} name={agentName} size={14} decorative />
               <span className="ck-ptab-title">{title}</span>

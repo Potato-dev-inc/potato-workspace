@@ -16,6 +16,7 @@ mod caps;
 pub mod events;
 pub mod mint;
 pub mod local_secret;
+pub mod pane_rules;
 
 pub use auth::*;
 pub use caps::*;
@@ -564,6 +565,7 @@ static PAIRING_STORE: once_cell::sync::OnceCell<SharedPairingStore> =
     once_cell::sync::OnceCell::new();
 
 pub fn init_pairing_store(path: PathBuf) -> Result<SharedPairingStore, String> {
+    pane_rules::init(&path);
     let store = Arc::new(Mutex::new(MobilePairingStore::load_or_create(path)?));
     let _ = PAIRING_STORE.set(store.clone());
     Ok(store)

@@ -1,20 +1,21 @@
 // The "Apply to all agents" sheet: what will change in each agent's config, then Apply.
 import { useCallback, useEffect, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import { changeCounts, errText, type ChangeKind, type SyncHost, type SyncReport, type ToolbeltApi } from '../../../lib/toolbelt';
 import { btn, btnPrimary, overlay, sheet } from './styles';
 
-const KIND_TEXT: Record<ChangeKind, string> = { add: 'Add', update: 'Update', remove: 'Remove', unchanged: 'No change' };
+const kindText = (kind: ChangeKind): string => t(`toolbelt.kind.${kind}`);
 
 function hostTitle(h: SyncHost): string {
   return h.agents.map((a) => a.label).join(', ');
 }
 
 function hostLine(h: SyncHost): string {
-  if (h.status === 'skipped') return h.reason ?? 'Skipped';
-  if (h.status === 'error') return h.reason ?? 'Something went wrong';
-  if (h.status === 'unchanged') return 'Already up to date';
+  if (h.status === 'skipped') return h.reason ?? t('pack.skipped');
+  if (h.status === 'error') return h.reason ?? t('pack.wrong');
+  if (h.status === 'unchanged') return t('toolbelt.upToDate');
   const n = changeCounts(h);
-  return [n.add && `${n.add} to add`, n.update && `${n.update} to update`, n.remove && `${n.remove} to remove`].filter(Boolean).join(', ');
+  return [n.add && t('toolbelt.toAdd', { n: n.add }), n.update && t('toolbelt.toUpdate', { n: n.update }), n.remove && t('toolbelt.toRemove', { n: n.remove })].filter(Boolean).join(t('preload.comma'));
 }
 
 export function ToolbeltPreview({
@@ -28,6 +29,7 @@ export function ToolbeltPreview({
   onClose: () => void;
   onApplied: (summary: string) => void;
 }) {
+  const t = useT();
   const [report, setReport] = useState<SyncReport | null>(null);
   const [includePm, setIncludePm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,13 +65,13 @@ export function ToolbeltPreview({
       const done = await api.syncApply({ project: projectPath, includePm });
       const written = done.hosts.filter((h) => h.written);
       const failed = done.hosts.filter((h) => h.status === 'error');
-      const files = `${written.length} config ${written.length === 1 ? 'file' : 'files'}`;
+      const files = t('toolbelt.configFiles', { count: written.length });
       const text =
         failed.length > 0
-          ? `Updated ${files}; ${failed.length} could not be written. Restart open agents to pick up changes.`
+          ? t('toolbelt.updatedFailed', { files, n: failed.length })
           : written.length === 0
-            ? 'Every agent is already up to date.'
-            : `Updated ${files}. Restart open agents to pick up changes.`;
+            ? t('toolbelt.allUpToDate')
+            : t('toolbelt.updated', { files });
       onApplied(text);
     } catch (e) {
       setError(errText(e));
@@ -79,13 +81,10 @@ export function ToolbeltPreview({
 
   return (
     <div className={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label="Apply to all agents" className={sheet}>
+      <div role="dialog" aria-modal="true" aria-label={t('toolbelt.apply')} className={sheet}>
         <div className="border-b border-pm-border px-4 py-3">
-          <h4 className="text-sm font-semibold">Apply to all agents</h4>
-          <p className="mt-1 text-xs leading-5 text-pm-muted">
-            This only adds, updates or removes entries named <span className="font-mono">pm-toolbelt-…</span>. Your own entries are not
-            touched. The first time a file changes, a <span className="font-mono">.bak</span> copy is saved next to it.
-          </p>
+          <h4 className="text-sm font-semibold">{t('toolbelt.apply')}</h4>
+          <p className="mt-1 text-xs leading-5 text-pm-muted">{t('toolbelt.previewHelp')}</p>
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
@@ -94,7 +93,7 @@ export function ToolbeltPreview({
               {error}
             </p>
           )}
-          {!report && !error && <p className="text-xs text-pm-muted">Checking each agent…</p>}
+          {!report && !error && <p className="text-xs text-pm-muted">{t('toolbelt.checkingEach')}</p>}
           {report?.hosts.map((h) => {
             const id = `${h.path}|${h.scope}`;
             const changed = h.changes.filter((c) => c.kind !== 'unchanged');
@@ -106,13 +105,13 @@ export function ToolbeltPreview({
                 </div>
                 <div className="truncate px-3 pb-2 font-mono text-[11px] text-pm-muted" title={h.path}>
                   {h.path}
-                  {h.scope === 'project' ? ' (this project)' : ''}
+                  {h.scope === 'project' ? ` ${t('toolbelt.thisProjectParen')}` : ''}
                 </div>
                 {changed.length > 0 && (
                   <ul className="border-t border-pm-border px-3 py-2 text-xs">
                     {changed.map((c) => (
                       <li key={c.key} className="flex gap-2 py-0.5">
-                        <span className="w-14 shrink-0 text-pm-muted">{KIND_TEXT[c.kind]}</span>
+                        <span className="w-14 shrink-0 text-pm-muted">{kindText(c.kind)}</span>
                         <span className="truncate">{c.name}</span>
                       </li>
                     ))}
@@ -131,7 +130,7 @@ export function ToolbeltPreview({
                       aria-expanded={open === id}
                       onClick={() => setOpen(open === id ? null : id)}
                     >
-                      {open === id ? 'Hide file changes' : 'Show file changes'}
+                      {open === id ? t('toolbelt.hideChanges') : t('toolbelt.showChanges')}
                     </button>
                     {open === id && (
                       <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md bg-pm-panel p-2 font-mono text-[11px] leading-5">
@@ -145,7 +144,7 @@ export function ToolbeltPreview({
           })}
           {report && report.unsupported.length > 0 && (
             <div className="rounded-lg border border-pm-border bg-pm-bg px-3 py-2.5" data-testid="toolbelt-unsupported">
-              <div className="text-sm font-medium">Not supported</div>
+              <div className="text-sm font-medium">{t('toolbelt.notSupportedTitle')}</div>
               <ul className="mt-1 space-y-1 text-xs text-pm-muted">
                 {report.unsupported.map((u) => (
                   <li key={u.id}>
@@ -157,20 +156,20 @@ export function ToolbeltPreview({
           )}
           <label className="flex items-center gap-2 text-xs text-pm-muted">
             <input type="checkbox" checked={includePm} onChange={(e) => setIncludePm(e.target.checked)} />
-            Also register Potato Workspace itself in these agents
+            {t('toolbelt.alsoRegister')}
           </label>
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-pm-border px-4 py-3">
           <span className="text-xs text-pm-muted">
-            {report ? (pending.length === 0 ? 'Nothing to change.' : `${pending.length} ${pending.length === 1 ? 'file' : 'files'} will change.`) : ''}
+            {report ? (pending.length === 0 ? t('toolbelt.nothingToChange') : t('toolbelt.filesWillChange', { count: pending.length })) : ''}
           </span>
           <div className="flex gap-2">
             <button type="button" className={btn} onClick={onClose}>
-              Cancel
+              {t('lend.cancel')}
             </button>
             <button type="button" className={btnPrimary} onClick={() => void apply()} disabled={busy || pending.length === 0}>
-              {busy ? 'Applying…' : 'Apply'}
+              {busy ? t('toolbelt.applying') : t('toolbelt.applyBtn')}
             </button>
           </div>
         </div>

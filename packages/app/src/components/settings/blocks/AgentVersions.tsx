@@ -4,6 +4,7 @@
 //
 // Copy follows UX-PHASE1 §0: "Untested version" is the only chip, no code names or raw ids.
 import { errorSentence } from '../../../lib/sayError';
+import { useT } from '../../../i18n';
 import { useCallback, useState } from 'react';
 import { changeLine, lastCheckLine, tauriCanaryApi, useCanary, type CanaryApi } from '../../../lib/canary';
 import { Btn, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
@@ -11,6 +12,7 @@ import '../../../styles/canary.css';
 
 /** `only`: show just this agent's line (its page in Settings > Agents), without the rows that are about every agent. */
 export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now(), only }: { api?: CanaryApi; now?: () => number; only?: string }) {
+  const t = useT();
   const { status, refresh } = useCanary(api);
   const [running, setRunning] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -39,10 +41,10 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now(), on
   return (
     <>
       <SettingBlock
-        label={only ? 'Version' : 'Agent versions'}
-        description="Agents update often, and an update can change what Potato Workspace sees on screen. Checking starts the agent in an empty folder, waits for its input box, then closes it. Nothing is sent to it, so it costs no tokens."
+        label={only ? t('settings.row.version.label') : t('settings.row.versions.label')}
+        description={t('versions.help')}
       >
-        <ul className="st-ver-list" aria-label="Agent versions" data-testid="agent-versions">
+        <ul className="st-ver-list" aria-label={t('settings.row.versions.label')} data-testid="agent-versions">
           {installed.map((agent) => {
             const busy = agent.checking || running.has(agent.agent);
             const last = lastCheckLine(agent, now());
@@ -66,41 +68,41 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now(), on
                     </p>
                   )}
                   {busy ? (
-                    <p className="st-ver-last">Checking. This can take up to a minute.</p>
+                    <p className="st-ver-last">{t('versions.checking')}</p>
                   ) : (
                     last && <p className="st-ver-last">{last}</p>
                   )}
                 </div>
                 <div className="st-ver-actions">
                   <Btn small disabled={busy} onClick={() => void check(agent.agent)}>
-                    {busy ? 'Checking' : 'Check this agent'}
+                    {busy ? t('versions.checkingShort') : t('versions.check')}
                   </Btn>
                 </div>
               </li>
             );
           })}
-          {installed.length === 0 && <li className="st-ver-plain">{only ? 'Not installed.' : 'No agents are installed on this computer yet.'}</li>}
+          {installed.length === 0 && <li className="st-ver-plain">{only ? t('versions.notInstalled') : t('versions.none')}</li>}
         </ul>
         {error && <Note role="alert">{error}</Note>}
       </SettingBlock>
       {!only && (
         <>
           <SettingToggle
-            label="Check agents after they update"
-            description="When an agent's version changes, check it the same way. Off: only when you press Check this agent."
+            label={t('versions.auto')}
+            description={t('versions.autoHelp')}
             checked={status.auto_check}
             onChange={(on) => void api.setAuto(on).then(refresh)}
           />
           <SettingRow
-            label="Screens I didn't recognise"
+            label={t('versions.screens')}
             description={
               status.captures === 0
-                ? 'When an agent stays on a screen Potato Workspace cannot read, the screen is saved here with secrets removed. Nothing has been saved yet.'
-                : `${status.captures} ${status.captures === 1 ? 'screen' : 'screens'} saved on this computer, with secrets removed. Nothing is sent anywhere.`
+                ? t('versions.screensNone')
+                : t('versions.screensSaved', { count: status.captures })
             }
           >
             <Btn small onClick={() => void api.openCaptures().catch((e) => setError(errorSentence(e)))}>
-              Open folder
+              {t('versions.openFolder')}
             </Btn>
           </SettingRow>
         </>

@@ -1,4 +1,5 @@
 import { errorSentence } from '../lib/sayError';
+import { useT } from '../i18n';
 import {
   buildPairingInviteUrl,
   DEVICE_CAPS,
@@ -66,6 +67,7 @@ export function MobilePairingPanel({
   onDevServerPortChange,
   compact = false,
 }: Props) {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [devInfo, setDevInfo] = useState<PublicBridgeDevInfo | null>(null);
   const [session, setSession] = useState<PairingSession | null>(null);
@@ -160,12 +162,12 @@ export function MobilePairingPanel({
   return (
     <div className="st-row is-block" data-testid="pairing-panel">
       <div className="st-label">
-        <span>Pair a phone</span>
-        <small>Scan the QR code with your phone camera. It opens a link and signs you in.</small>
+        <span>{t('phone.pair.title')}</span>
+        <small>{t('phone.pair.hint')}</small>
       </div>
       <div className="st-body space-y-3">
         <fieldset className="st-choices" data-testid="pairing-choice">
-          <legend>What can this phone do?</legend>
+          <legend>{t('phone.choice.legend')}</legend>
           {PAIRING_CHOICES.map((option) => (
             <label key={option.id} className="st-choice" data-selected={choice === option.id ? 'true' : undefined}>
               <input
@@ -176,12 +178,12 @@ export function MobilePairingPanel({
                 onChange={() => setChoice(option.id)}
               />
               <span className="st-label">
-                <span>{option.label}</span>
-                <small>{option.hint}</small>
+                <span>{t(`phone.choice.${option.id}.label`)}</span>
+                <small>{t(`phone.choice.${option.id}.hint`)}</small>
               </span>
             </label>
           ))}
-          <p className="st-note">You can change this later under Paired phones. A new choice makes a new code.</p>
+          <p className="st-note">{t('phone.choice.note')}</p>
         </fieldset>
 
         {(() => {
@@ -189,7 +191,7 @@ export function MobilePairingPanel({
           if (!notice) return null;
           return (
             <p className="text-xs" data-testid="pairing-origin">
-              <span className="text-pm-muted">Your phone will connect to </span>
+              <span className="text-pm-muted">{t('phone.connectTo')} </span>
               <strong className="font-mono break-all">{notice.host}</strong>{' '}
               <button
                 type="button"
@@ -203,7 +205,7 @@ export function MobilePairingPanel({
                   }
                 }}
               >
-                Copy
+                {t('settings.copy')}
               </button>
               {notice.warning && <span className="block mt-1 text-pm-muted">{notice.warning}</span>}
             </p>
@@ -211,15 +213,15 @@ export function MobilePairingPanel({
         })()}
         <div className="flex flex-col sm:flex-row gap-4 items-start">
           <div className="rounded-lg border border-pm-border bg-pm-bg p-2 shrink-0" hidden={!session}>
-            <canvas ref={canvasRef} className="block" aria-label="Mobile pairing QR code" />
+            <canvas ref={canvasRef} className="block" aria-label={t('phone.qrLabel')} />
           </div>
           {session ? (
             <div className="flex-1 min-w-0 space-y-2 text-xs" data-testid="pairing-code">
               <div>
-                <div className="text-[10px] text-pm-muted">Pairing code</div>
+                <div className="text-[10px] text-pm-muted">{t('phone.code')}</div>
                 <code className="text-sm font-mono">{session.pairing_code}</code>
               </div>
-              <div className="text-[10px] text-pm-muted">Expires {expiresLabel}</div>
+              <div className="text-[10px] text-pm-muted">{t('phone.expires', { time: expiresLabel })}</div>
               <button
                 type="button"
                 disabled={busy}
@@ -229,7 +231,7 @@ export function MobilePairingPanel({
                 }}
                 className="px-2 py-1 text-xs rounded border border-pm-border hover:bg-pm-border/40 disabled:opacity-50"
               >
-                {busy ? 'Refreshing…' : 'Refresh QR'}
+                {busy ? t('phone.refreshing') : t('phone.refreshQr')}
               </button>
             </div>
           ) : (
@@ -243,33 +245,33 @@ export function MobilePairingPanel({
                   void refreshPairing();
                 }}
               >
-                {busy ? 'Making a code…' : 'Pair a phone'}
+                {busy ? t('phone.making') : t('phone.pair.title')}
               </Btn>
-              <div className="text-[10px] text-pm-muted">Makes a one-time code. It expires after a few minutes.</div>
+              <div className="text-[10px] text-pm-muted">{t('phone.makesCode')}</div>
             </div>
           )}
         </div>
 
         {!compact && (
         <details className="st-fold" data-testid="pairing-address">
-          <summary>Address (advanced)</summary>
+          <summary>{t('phone.address.summary')}</summary>
         <div>
           <label htmlFor="pairing-public-url" className="block text-[11px] text-pm-muted mb-1">
-            Phone page address
+            {t('phone.address.label')}
           </label>
           <TextControl
             id="pairing-public-url"
-            aria-label="Phone page address"
+            aria-label={t('phone.address.label')}
             type="url"
             mono
             value={publicPwaUrl}
-            placeholder="Leave empty to use the automatic address"
+            placeholder={t('phone.address.placeholder')}
             normalize={normalizePwaUrlText}
             onCommit={onPublicPwaUrlChange}
           />
           {tunnelOrigin && publicPwaUrl.trim() && publicPwaUrl.replace(/\/+$/, '') !== tunnelOrigin && (
             <p className="text-[10px] text-pm-muted mb-1">
-              This address must open on your phone. The automatic address is:{' '}
+              {t('phone.address.mustOpen')}{' '}
               <button
                 type="button"
                 className="underline font-mono"
@@ -281,34 +283,34 @@ export function MobilePairingPanel({
           )}
           {tunnelOrigin && !publicPwaUrl.trim() && (
             <p className="text-[10px] text-pm-muted mb-1">
-              The QR code uses the automatic address: <code className="font-mono">{tunnelOrigin}</code>
+              {t('phone.address.auto')} <code className="font-mono">{tunnelOrigin}</code>
             </p>
           )}
           <label htmlFor="pairing-dev-port" className="block text-[10px] text-pm-muted mb-1 mt-2">
-            Port on this PC
+            {t('phone.port')}
           </label>
           <NumberControl
             id="pairing-dev-port"
-            aria-label="Port on this PC"
+            aria-label={t('phone.port')}
             min={1024}
             max={65535}
             value={devServerPort}
             onCommit={onDevServerPortChange}
           />
           <p className="text-[10px] text-pm-muted mt-1">
-            Point your address at <code className="font-mono">{localProxyTarget}</code> (the usual port is{' '}
-            <code className="font-mono">{DEFAULT_DEV_SERVER_PORT}</code>).
+            {t('phone.address.pointBefore')} <code className="font-mono">{localProxyTarget}</code> {t('phone.address.pointMiddle')}{' '}
+            <code className="font-mono">{DEFAULT_DEV_SERVER_PORT}</code>{t('phone.address.pointAfter')}
           </p>
           <p className="text-[10px] text-pm-muted mt-1">
-            The phone opens:{' '}
+            {t('phone.opens')}{' '}
             <code className="font-mono break-all">
-              {session ? buildPairingInviteUrl(pwaOrigin, session.pairing_code) : 'Shown once you make a code'}
+              {session ? buildPairingInviteUrl(pwaOrigin, session.pairing_code) : t('phone.shownOnce')}
             </code>
           </p>
           <p className="text-[10px] text-pm-muted mt-1">
-            The phone connects to: <code className="font-mono">{bridgeUrl}</code>
+            {t('phone.connectsTo')} <code className="font-mono">{bridgeUrl}</code>
             {devInfo?.tunnelUrl && !publicPwaUrl.trim() && (
-              <span> · the automatic address (type your own above to change it)</span>
+              <span> · {t('phone.address.autoNote')}</span>
             )}
           </p>
         </div>

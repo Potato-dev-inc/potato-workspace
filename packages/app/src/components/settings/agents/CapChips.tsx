@@ -4,16 +4,19 @@
 //   unknown  dashed outline, no mark. Listed after the known ones under "Fills in after your first chat:".
 // Nothing here upgrades a chip. No colour carries meaning.
 import { chipViews, sourceText, terminalOnly, type AgentCaps, type ChipView } from '../../../lib/agentCaps';
+import { en } from '../../../i18n/en';
+import { t, useT } from '../../../i18n';
 
-export const UNKNOWN_CAPTION = 'Fills in after your first chat:';
+export const UNKNOWN_CAPTION = en['agentList.fillsIn'];
 /** The list row shows this many known chips; the page shows all of them. */
 export const LIST_CHIPS = 3;
 
 function KnownChip({ chip, name }: { chip: ChipView; name: string }) {
+  const t = useT();
   const tip = sourceText(chip.cap?.source ?? 'unknown', name);
   const yes = chip.value === 'yes';
   return (
-    <li className={`ag-chip is-${chip.value}`} data-chip={chip.key} data-value={chip.value} tabIndex={0} title={tip} aria-label={`${chip.label}: ${yes ? 'yes' : 'no'}. ${tip}`}>
+    <li className={`ag-chip is-${chip.value}`} data-chip={chip.key} data-value={chip.value} tabIndex={0} title={tip} aria-label={`${chip.label}: ${yes ? t('agentList.yes') : t('agentList.no')}. ${tip}`}>
       <span className="ag-chip-mark" data-mark={chip.value} aria-hidden="true">
         {yes ? '✓' : '✕'}
       </span>
@@ -28,6 +31,7 @@ function KnownChip({ chip, name }: { chip: ChipView; name: string }) {
  * a terminal agent, and the page says so.
  */
 export function CapChips({ caps, name, compact = false }: { caps: AgentCaps | null; name: string; compact?: boolean }) {
+  const t = useT();
   if (!caps || terminalOnly(caps)) return null;
   const { known, unknown } = chipViews(caps);
   if (compact) {
@@ -37,7 +41,7 @@ export function CapChips({ caps, name, compact = false }: { caps: AgentCaps | nu
     const shown = yes.slice(0, LIST_CHIPS);
     const more = yes.length - shown.length;
     return (
-      <span className="ag-chips-text" aria-label={`What ${name} can do`}>
+      <span className="ag-chips-text" aria-label={t('phone.device.canDo', { name })}>
         {shown.map((c) => c.label).join(' · ')}
         {more > 0 ? ` · +${more}` : ''}
       </span>
@@ -46,7 +50,7 @@ export function CapChips({ caps, name, compact = false }: { caps: AgentCaps | nu
   return (
     <div className="ag-chipset">
       {known.length > 0 && (
-        <ul className="ag-chips" aria-label={`What ${name} can do`}>
+        <ul className="ag-chips" aria-label={t('phone.device.canDo', { name })}>
           {known.map((chip) => (
             <KnownChip key={chip.key} chip={chip} name={name} />
           ))}
@@ -54,10 +58,10 @@ export function CapChips({ caps, name, compact = false }: { caps: AgentCaps | nu
       )}
       {unknown.length > 0 && (
         <>
-          <p className="ag-caption">{UNKNOWN_CAPTION}</p>
-          <ul className="ag-chips is-unknown" aria-label={`Not seen yet for ${name}`}>
+          <p className="ag-caption">{t('agentList.fillsIn')}</p>
+          <ul className="ag-chips is-unknown" aria-label={t('agentList.notSeenFor', { name })}>
             {unknown.map((chip) => (
-              <li key={chip.key} className="ag-chip is-unknown" data-chip={chip.key} data-value="unknown" tabIndex={0} title={sourceText('unknown', name)} aria-label={`${chip.label}: not seen yet`}>
+              <li key={chip.key} className="ag-chip is-unknown" data-chip={chip.key} data-value="unknown" tabIndex={0} title={sourceText('unknown', name)} aria-label={`${chip.label}: ${t('agentList.notSeen')}`}>
                 <span>{chip.label}</span>
               </li>
             ))}

@@ -1,6 +1,7 @@
 // Settings > General: "Save a diagnostic file". Shows what the zip would hold before anything is written;
 // the person can leave any file out and read one before saving. Nothing is uploaded.
 import { errorSentence } from '../../../lib/sayError';
+import { t, useT } from '../../../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { tauri, type DiagnosticPreview } from '../../../lib/tauri';
@@ -22,6 +23,7 @@ function fileName(now = new Date()): string {
 export const DIAGNOSTIC_REFRESH_MS = 5000;
 
 export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
+  const t = useT();
   const [preview, setPreview] = useState<DiagnosticPreview | null>(null);
   const [left, setLeft] = useState<Set<string>>(new Set());
   const [shown, setShown] = useState<{ path: string; text: string } | null>(null);
@@ -51,7 +53,7 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
       setLeft(new Set());
       setShown(null);
     } catch (e) {
-      setMessage({ text: `Could not look at what to include: ${errorSentence(e)}`, error: true });
+      setMessage({ text: t('diag.lookFailed', { reason: errorSentence(e) }), error: true });
     } finally {
       setBusy(false);
     }
@@ -106,17 +108,17 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
 
   const save = async () => {
     setMessage(null);
-    const target = await saveDialog({ defaultPath: fileName(), filters: [{ name: 'Zip file', extensions: ['zip'] }] });
+    const target = await saveDialog({ defaultPath: fileName(), filters: [{ name: t('diag.zipFile'), extensions: ['zip'] }] });
     if (typeof target !== 'string') return;
     setBusy(true);
     try {
       const saved = await tauri.diagnosticSave(target, [...left]);
-      setMessage({ text: `Saved to ${saved.path} (${size(saved.bytes)}). Nothing was sent anywhere.`, error: false });
+      setMessage({ text: t('diag.saved', { path: saved.path, size: size(saved.bytes) }), error: false });
       setPreview(null);
       setCrashed(false);
       onSaved?.();
     } catch (e) {
-      setMessage({ text: `Not saved: ${errorSentence(e)}`, error: true });
+      setMessage({ text: t('settings.notSaved', { reason: errorSentence(e) }), error: true });
     } finally {
       setBusy(false);
     }
@@ -126,31 +128,31 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
     <>
       {crashed && (
         <SettingRow
-          label="Potato Workspace closed unexpectedly last time"
-          description="A report was kept on this PC. A diagnostic file helps whoever looks into it."
+          label={t('diag.crashed')}
+          description={t('diag.crashedHelp')}
         >
           <Btn disabled={busy} onClick={() => void save()}>
-            Save a diagnostic file
+            {t('settings.row.diagnostic-file.label')}
           </Btn>
           <Btn small onClick={() => setCrashed(false)}>
-            Dismiss
+            {t('diag.dismiss')}
           </Btn>
         </SettingRow>
       )}
       <SettingRow
-        label="Save a diagnostic file"
-        description="One .zip with your settings (keys removed), recent app messages and recordings of runs that failed. Nothing is sent anywhere."
+        label={t('settings.row.diagnostic-file.label')}
+        description={t('diag.help')}
       >
         <Btn disabled={busy} onClick={() => void review()}>
-          {preview ? 'Refresh' : 'Review…'}
+          {preview ? t('security.refresh') : t('diag.review')}
         </Btn>
       </SettingRow>
       {preview && (
         <SettingBlock
-          label="What the file will contain"
-          description="Passwords, keys and your user name are removed first. Untick anything you would rather leave out."
+          label={t('diag.contains')}
+          description={t('diag.containsHelp')}
         >
-          <ul className="st-diag-list" aria-label="Files in the diagnostic file">
+          <ul className="st-diag-list" aria-label={t('diag.filesAria')}>
             {preview.files.map((file) => (
               <li key={file.path} className="st-diag-item">
                 <label className="st-diag-main">
@@ -159,7 +161,7 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
                   <span className="st-diag-size">{size(file.bytes)}</span>
                 </label>
                 <Btn small onClick={() => void show(file.path)}>
-                  {shown?.path === file.path ? 'Hide' : 'Show'}
+                  {shown?.path === file.path ? t('diag.hide') : t('diag.show')}
                 </Btn>
                 {shown?.path === file.path && <pre className="st-diag-text">{shown.text}</pre>}
               </li>
@@ -167,9 +169,9 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
           </ul>
           <div className="st-diag-actions">
             <Btn primary disabled={busy || left.size >= preview.files.length} onClick={() => void save()}>
-              Save…
+              {t('diag.saveDots')}
             </Btn>
-            <Btn onClick={() => setPreview(null)}>Cancel</Btn>
+            <Btn onClick={() => setPreview(null)}>{t('lend.cancel')}</Btn>
           </div>
         </SettingBlock>
       )}

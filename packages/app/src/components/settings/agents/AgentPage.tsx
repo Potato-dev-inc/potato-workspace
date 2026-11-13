@@ -8,6 +8,7 @@ import { terminalOnly } from '../../../lib/agentCaps';
 import { removability, tauriAgentDefinitionsApi, type AgentDefinitionsApi, type DefinitionRow } from '../../../lib/agentDefinitions';
 import { handleDefinitionsChanged } from '../../../lib/agentRegistry';
 import { errorSentence } from '../../../lib/sayError';
+import { useT } from '../../../i18n';
 import { AgentLogo } from '../../common/AgentLogo';
 import { AccountsGroup } from '../accounts/AccountsGroup';
 import { AgentDefaultModels } from '../blocks/AgentDefaultModels';
@@ -16,6 +17,7 @@ import { AgentVersions } from '../blocks/AgentVersions';
 import { HelperDefaultModels } from '../blocks/HelperModels';
 import type { SettingsEnv } from '../model';
 import { Btn, InfoRow, Note, SettingBlock, SettingRow } from '../settings-ui';
+import { AgentNotifyRows } from '../NotifyRows';
 import { openAddAgentWith } from './agentTarget';
 import { CapChips } from './CapChips';
 import { standingWords, type AgentRow } from './useAgentRows';
@@ -27,6 +29,7 @@ function removable(def: DefinitionRow | undefined, loaded: boolean): def is Defi
 }
 
 function RemoveRow({ row, env, api, onRemoved }: { row: AgentRow; env: SettingsEnv; api: DefinitionsPick; onRemoved: () => void }) {
+  const t = useT();
   const [def, setDef] = useState<DefinitionRow | undefined>();
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -51,9 +54,9 @@ function RemoveRow({ row, env, api, onRemoved }: { row: AgentRow; env: SettingsE
     if (!def || !api.remove) return;
     setError(null);
     const ok = await env.confirm({
-      title: `Remove ${row.label}?`,
-      body: `${row.label} leaves the New agent menu. Chats you already have stay. You can bring it back from Your own agents.`,
-      confirmLabel: 'Remove',
+      title: t('agentPage.removeTitle', { label: row.label }),
+      body: t('agentPage.removeBody', { label: row.label }),
+      confirmLabel: t('settings.remove'),
     });
     if (!ok) return;
     setBusy(true);
@@ -71,9 +74,9 @@ function RemoveRow({ row, env, api, onRemoved }: { row: AgentRow; env: SettingsE
   if (!removable(def, loaded)) return null;
   return (
     <>
-      <SettingRow label={`Remove ${row.label}`} description="Takes it out of Potato. Nothing is deleted for good.">
-        <Btn small disabled={busy} aria-label={`Remove ${row.label}`} onClick={() => void remove()}>
-          Remove
+      <SettingRow label={t('agentPage.removeLabel', { label: row.label })} description={t('agentPage.removeHelp')}>
+        <Btn small disabled={busy} aria-label={t('agentPage.removeLabel', { label: row.label })} onClick={() => void remove()}>
+          {t('settings.remove')}
         </Btn>
       </SettingRow>
       {error && <Note role="alert">{error}</Note>}
@@ -101,6 +104,7 @@ function needsRepair(row: AgentRow): boolean {
 
 /** The chat was turned off after an update: say why, in plain words, and offer to look again. */
 function RepairNote({ row, recheck }: { row: AgentRow; recheck?: (agentId: string) => Promise<unknown> }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!needsRepair(row) || !recheck) return null;
@@ -116,9 +120,9 @@ function RepairNote({ row, recheck }: { row: AgentRow; recheck?: (agentId: strin
     }
   };
   return (
-    <SettingRow label="Chat is off" description={row.caps?.chat.proof || `${row.label} changed and its chat stopped answering.`}>
-      <Btn small disabled={busy} aria-label={`Check ${row.label} again`} onClick={() => void again()}>
-        {busy ? 'Checking…' : 'Check it again'}
+    <SettingRow label={t('agentPage.chatOff')} description={row.caps?.chat.proof || t('agentPage.chatOffHelp', { label: row.label })}>
+      <Btn small disabled={busy} aria-label={t('agentPage.checkAgainAria', { label: row.label })} onClick={() => void again()}>
+        {busy ? t('agentPage.checking') : t('agentPage.checkAgain')}
       </Btn>
       {error && <Note role="alert">{error}</Note>}
     </SettingRow>
@@ -127,6 +131,7 @@ function RepairNote({ row, recheck }: { row: AgentRow; recheck?: (agentId: strin
 
 /** "Check now" in the header: the deep check of this one agent. Hidden when the agent cannot be checked. */
 function CheckNow({ row, onCheck }: { row: AgentRow; onCheck?: () => Promise<void> }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   if (!row.canTest || !row.installed || !onCheck) return null;
   return (
@@ -140,12 +145,13 @@ function CheckNow({ row, onCheck }: { row: AgentRow; onCheck?: () => Promise<voi
           .finally(() => setBusy(false));
       }}
     >
-      {busy ? 'Checking…' : 'Check now'}
+      {busy ? t('agentPage.checking') : t('agentPage.checkNow')}
     </Btn>
   );
 }
 
 export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }: { row: AgentRow; env: SettingsEnv; onBack: () => void; onCheck?: () => Promise<void>; apis?: AgentPageApis }) {
+  const t = useT();
   const cli = row.caps !== null && terminalOnly(row.caps);
   return (
     // A <section>: the Settings list hides a row wrapper that has no direct .st-row child, and this page holds several.
@@ -163,8 +169,8 @@ export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }:
 
       <RepairNote row={row} recheck={apis.recheck} />
 
-      <SettingBlock label="What it can do" description={cli ? undefined : 'Only what Potato has seen or checked.'}>
-        {cli ? <p className="ag-terminal-note">{row.label} works in a terminal window only. It cannot chat here.</p> : row.caps ? <CapChips caps={row.caps} name={row.label} /> : <p className="ag-caption">Nothing checked yet.</p>}
+      <SettingBlock label={t('agentPage.canDo')} description={cli ? undefined : t('agentPage.canDoHelp')}>
+        {cli ? <p className="ag-terminal-note">{t('agentPage.terminalOnly', { label: row.label })}</p> : row.caps ? <CapChips caps={row.caps} name={row.label} /> : <p className="ag-caption">{t('agentPage.nothingChecked')}</p>}
       </SettingBlock>
 
       {row.state === 'needs_login' && row.loginHint && <p className="ag-caption ag-hint"><CodeText text={row.loginHint} /></p>}
@@ -172,16 +178,18 @@ export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }:
 
       <AgentDefaultModels only={row.id} saved={env.settings.agent_default_models} onChange={(next) => void env.patch({ agent_default_models: next })} />
 
-      {cli ? <InfoRow label="How it opens" description="In a terminal window." value="Terminal" /> : <AgentLaneRows only={row.id} />}
+      {cli ? <InfoRow label={t('agentPage.howOpens')} description={t('agentPage.inTerminal')} value={t('agentPage.terminal')} /> : <AgentLaneRows only={row.id} />}
+
+      <AgentNotifyRows agentId={row.id} label={row.label} />
 
       <HelperDefaultModels only={row.id} saved={env.settings.helper_default_models} onChange={(next) => void env.patch({ helper_default_models: next })} />
 
       {row.installed ? (
         <AgentVersions only={row.id} />
       ) : (
-        <SettingRow label="Version" description="Not installed">
-          <Btn small aria-label={`Install ${row.label}`} onClick={() => openAddAgentWith(row.label)}>
-            Install
+        <SettingRow label={t('settings.row.version.label')} description={t('keepGoing.notInstalled')}>
+          <Btn small aria-label={t('agentPage.installAria', { label: row.label })} onClick={() => openAddAgentWith(row.label)}>
+            {t('agentPage.install')}
           </Btn>
         </SettingRow>
       )}

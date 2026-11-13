@@ -7,6 +7,7 @@
 // Messages are end-to-end encrypted; the relay (or the shared folder) only moves ciphertext. No ids are shown:
 // people are names, the team is its name.
 import { errorSentence } from '../../../lib/sayError';
+import { t, useT } from '../../../i18n';
 import { lendApi, type LendApi } from "../../../lib/lend";
 import { useLend } from "../../lend/useLend";
 import QRCode from "qrcode";
@@ -43,12 +44,12 @@ export const RELAY_HELP_URL =
   "https://github.com/Potato-dev-inc/potato-workspace/blob/main/relay/README.md";
 
 function roleWords(m: MemberView): string {
-  if (m.admin || m.roles.includes("admin")) return "Owner";
-  return m.roles.includes("approve") ? "Can answer" : "Watching";
+  if (m.admin || m.roles.includes("admin")) return t("teamPage.role.owner");
+  return m.roles.includes("approve") ? t("teamPage.role.answer") : t("teamPage.role.watching");
 }
 
 function githubText(login: string | null, confirmed: boolean): string | null {
-  return login ? `GitHub: ${login}${confirmed ? "" : " (claimed)"}` : null;
+  return login ? `GitHub: ${login}${confirmed ? "" : ` ${t("teamPage.claimed")}`}` : null;
 }
 
 /** The team's name inside an invite link (`n=`), or null. Shown so the person sees what they are about to join. */
@@ -96,68 +97,66 @@ export function connectionOf(view: TeamConfigView): Connection {
   if (!view.enabled)
     return {
       state: "paused",
-      title: "Paused",
-      detail: "Team is off on this computer. Nothing is sent or received.",
+      title: t("teamPage.conn.paused"),
+      detail: t("teamPage.conn.pausedDetail"),
       action: "on",
     };
   if (view.transport === "folder") {
     return view.error
       ? {
           state: "bad",
-          title: "Can't use the shared folder",
+          title: t("teamPage.conn.folderBad"),
           detail: view.error,
           action: "retry",
         }
       : {
           state: "ok",
-          title: "Connected",
-          detail: "Through the shared folder.",
+          title: t("teamPage.conn.connected"),
+          detail: t("teamPage.conn.viaFolder"),
           action: null,
         };
   }
   if (view.link === "denied") {
     return {
       state: "bad",
-      title: "The relay turned this computer away",
-      detail: "Ask the owner to let you in again.",
+      title: t("teamPage.conn.denied"),
+      detail: t("teamPage.conn.deniedDetail"),
       action: null,
     };
   }
   if (view.link === "offline") {
     return {
       state: "bad",
-      title: "Can't reach the relay",
-      detail:
-        view.error ||
-        `Check your internet. If that is fine, the relay at ${hostOf(view.relay)} may be down or its address may have changed.`,
+      title: t("teamPage.conn.offline"),
+      detail: view.error || t("teamPage.conn.offlineDetail", { host: hostOf(view.relay) }),
       action: "retry",
     };
   }
   if (view.error)
     return {
       state: "bad",
-      title: "Something is wrong",
+      title: t("teamPage.conn.wrong"),
       detail: view.error,
       action: "retry",
     };
   if (view.link === "live")
     return {
       state: "ok",
-      title: "Connected",
-      detail: "Through the relay.",
+      title: t("teamPage.conn.connected"),
+      detail: t("teamPage.conn.viaRelay"),
       action: null,
     };
   if (view.link === "polling")
     return {
       state: "ok",
-      title: "Connected",
-      detail: "Through the relay. News can take a few seconds.",
+      title: t("teamPage.conn.connected"),
+      detail: t("teamPage.conn.viaRelaySlow"),
       action: null,
     };
   return {
     state: "wait",
-    title: "Connecting…",
-    detail: "Reaching the relay.",
+    title: t("teamPage.conn.connecting"),
+    detail: t("teamPage.conn.reaching"),
     action: null,
   };
 }
@@ -171,6 +170,7 @@ function StatusLine({
   busy: boolean;
   onAction: (a: "retry" | "on") => void;
 }) {
+  const t = useT();
   const c = connectionOf(view);
   return (
     <div className="tp-status" data-state={c.state} role="status">
@@ -185,7 +185,7 @@ function StatusLine({
           disabled={busy}
           onClick={() => onAction(c.action as "retry" | "on")}
         >
-          {c.action === "on" ? "Turn on" : "Try again"}
+          {c.action === "on" ? t("teamPage.turnOn") : t("teamPage.tryAgain")}
         </Btn>
       )}
     </div>
@@ -213,6 +213,7 @@ export function TeamPage({
   displayName?: string;
   onSaved?: () => void;
 }) {
+  const t = useT();
   const [view, setView] = useState<TeamConfigView | null>(null);
   const [projects, setProjects] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -313,17 +314,14 @@ export function TeamPage({
     run(() => api.configSet({ enabled, projects: splitLines(projects) }), true);
 
   const body = () => {
-    if (!view) return error ? null : <Note>Loading…</Note>;
+    if (!view) return error ? null : <Note>{t("teamPage.loading")}</Note>;
     if (view.joining) {
       return (
         <div className="tp-wait">
           <h3 className="tp-h">
-            Waiting for the owner of “{view.joining}” to let you in
+            {t("teamPage.waiting", { team: view.joining })}
           </h3>
-          <p className="tp-sub">
-            They get a note on their computer. Once they say yes, this page
-            turns into your team. You can close Settings meanwhile.
-          </p>
+          <p className="tp-sub">{t("teamPage.waitingHelp")}</p>
           <div>
             <Btn
               disabled={busy}
@@ -332,7 +330,7 @@ export function TeamPage({
                 void run(() => api.leave());
               }}
             >
-              Cancel request
+              {t("teamPage.cancelRequest")}
             </Btn>
           </div>
         </div>
@@ -371,16 +369,16 @@ export function TeamPage({
             className="tp-choice"
             onClick={() => setMode("start")}
           >
-            <strong>Start a team</strong>
-            <span>Be the owner. Pick a name, connect, and send an invite.</span>
+            <strong>{t("teamPage.start")}</strong>
+            <span>{t("teamPage.startHelp")}</span>
           </button>
           <button
             type="button"
             className="tp-choice"
             onClick={() => setMode("join")}
           >
-            <strong>Join a team</strong>
-            <span>Someone sent you an invite. Paste it here.</span>
+            <strong>{t("teamPage.join")}</strong>
+            <span>{t("teamPage.joinHelp")}</span>
           </button>
         </div>
       );
@@ -391,8 +389,8 @@ export function TeamPage({
           <h3 className="tp-h">{view.teamName}</h3>
           <span className="tp-sub">
             {view.admin
-              ? "You're the owner"
-              : `${view.members.length} ${view.members.length === 1 ? "person" : "people"}`}
+              ? t("teamPage.youOwner")
+              : t("teamPage.people", { count: view.members.length })}
           </span>
         </div>
         <StatusLine
@@ -408,13 +406,13 @@ export function TeamPage({
         )}
 
         {view.admin && view.joins.length > 0 && (
-          <section className="tp-block" aria-label="Waiting to join">
-            <h4 className="tp-h4">Waiting to join</h4>
-            <ul className="st-team-people" aria-label="Waiting to join">
+          <section className="tp-block" aria-label={t("teamPage.waitingJoin")}>
+            <h4 className="tp-h4">{t("teamPage.waitingJoin")}</h4>
+            <ul className="st-team-people" aria-label={t("teamPage.waitingJoin")}>
               {view.joins.map((j) => (
                 <li key={j.id} className="st-team-member">
                   <div className="st-team-who">
-                    <span>{j.name} wants to join</span>
+                    <span>{t("teamPage.wantsJoin", { name: j.name })}</span>
                     <small>
                       {[githubText(j.github, false), j.device]
                         .filter(Boolean)
@@ -430,18 +428,18 @@ export function TeamPage({
                     small
                     primary
                     disabled={busy}
-                    aria-label={`Let ${j.name} in`}
+                    aria-label={t("teamPage.letInName", { name: j.name })}
                     onClick={() => void run(() => api.approveJoin(j.id))}
                   >
-                    Let in
+                    {t("teamPage.letIn")}
                   </Btn>
                   <Btn
                     small
                     disabled={busy}
-                    aria-label={`Decline ${j.name}`}
+                    aria-label={t("teamPage.declineName", { name: j.name })}
                     onClick={() => void run(() => api.declineJoin(j.id))}
                   >
-                    Decline
+                    {t("teamPage.decline")}
                   </Btn>
                 </li>
               ))}
@@ -449,12 +447,12 @@ export function TeamPage({
           </section>
         )}
 
-        <section className="tp-block" aria-label="People">
+        <section className="tp-block" aria-label={t("teamPage.peopleTitle")}>
           <div className="st-team-people-head">
-            <h4 className="tp-h4">People</h4>
+            <h4 className="tp-h4">{t("teamPage.peopleTitle")}</h4>
             {canPing && (
               <Btn small disabled={pings.busy} onClick={pings.ping}>
-                {pings.busy ? "Pinging" : "Ping"}
+                {pings.busy ? t("teamPage.pinging") : t("teamPage.ping")}
               </Btn>
             )}
           </div>
@@ -462,7 +460,7 @@ export function TeamPage({
           <Suspense fallback={null}>
             <RequestUsage api={lendClient} team={api} lend={lend} variant="settings" />
           </Suspense>
-          <ul className="st-team-people" aria-label="People">
+          <ul className="st-team-people" aria-label={t("teamPage.peopleTitle")}>
             {view.members.map((m) => {
               const gh = githubText(m.github, m.githubConfirmed);
               return (
@@ -470,7 +468,7 @@ export function TeamPage({
                   <div className="st-team-who">
                     <span>
                       {m.name}
-                      {m.me && <span className="st-team-you"> (you)</span>}
+                      {m.me && <span className="st-team-you"> {t("teamPage.you")}</span>}
                     </span>
                     {gh && <small>{gh}</small>}
                     {canPing &&
@@ -485,7 +483,7 @@ export function TeamPage({
                               data-ok={p.ok ? "true" : "false"}
                               title={p.ok ? undefined : (p.message ?? undefined)}
                             >
-                              {(m.deviceList ?? []).length > 1 ? `${m.name}'s ${d.name}` : m.name} · {pingText(p)}
+                              {(m.deviceList ?? []).length > 1 ? t("teamPage.deviceOf", { name: m.name, device: d.name }) : m.name} · {pingText(p)}
                             </small>
                           );
                         })}
@@ -499,14 +497,14 @@ export function TeamPage({
                       disabled={busy}
                       onClick={() => void run(() => api.confirmGithub(m.id))}
                     >
-                      Confirm GitHub
+                      {t("teamPage.confirmGithub")}
                     </Btn>
                   )}
                   <span className="st-team-role">{roleWords(m)}</span>
                   <span className="st-team-slot">
                     {view.admin && !m.me && (
                       <Btn small disabled={busy} onClick={() => setRemoving(m)}>
-                        Remove
+                        {t("settings.remove")}
                       </Btn>
                     )}
                   </span>
@@ -523,37 +521,34 @@ export function TeamPage({
             aria-expanded={optionsOpen}
             onClick={() => setOptionsOpen((o) => !o)}
           >
-            <span>Options</span>
+            <span>{t("teamPage.options")}</span>
             <span aria-hidden="true">{optionsOpen ? "−" : "+"}</span>
           </button>
           {optionsOpen && (
             <div className="tp-options">
               <div className="st-team-row">
-                <span>Use Team</span>
+                <span>{t("teamPage.useTeam")}</span>
                 <Switch
                   checked={view.enabled}
-                  label="Use Team"
+                  label={t("teamPage.useTeam")}
                   disabled={busy}
                   onChange={(next) => void save(next)}
                 />
               </div>
               <label className="st-team-row is-top">
-                <span>Projects</span>
+                <span>{t("teamPage.projects")}</span>
                 <textarea
                   className="st-field is-mono"
                   rows={2}
                   value={projects}
-                  placeholder="Optional. One folder per line."
+                  placeholder={t("teamPage.projectsPlaceholder")}
                   onChange={(e) => {
                     projectsEdited.current = true;
                     setProjects(e.target.value);
                   }}
                 />
               </label>
-              <Note>
-                Projects with an open agent are watched anyway. Add a folder
-                here to watch it too.
-              </Note>
+              <Note>{t("teamPage.projectsHelp")}</Note>
               <div className="st-team-row">
                 <span />
                 <Btn
@@ -561,19 +556,12 @@ export function TeamPage({
                   disabled={busy}
                   onClick={() => void save(view.enabled)}
                 >
-                  Save
+                  {t("discord.save")}
                 </Btn>
               </div>
-              <Note>
-                Keys are kept in {view.keyStore}. Messages are end-to-end
-                encrypted. The relay sees who sends when, never names, branches
-                or code.
-              </Note>
+              <Note>{t("teamPage.keysNote", { store: view.keyStore })}</Note>
               {view.profile && (
-                <Note>
-                  This is the “{view.profile}” profile, a separate Potato
-                  Workspace on this computer.
-                </Note>
+                <Note>{t("teamPage.profileNote", { profile: view.profile })}</Note>
               )}
             </div>
           )}
@@ -581,7 +569,7 @@ export function TeamPage({
 
         <div className="tp-leave">
           <Btn disabled={busy} onClick={() => setLeaving(true)}>
-            Leave team
+            {t("teamPage.leave")}
           </Btn>
         </div>
       </>
@@ -589,12 +577,10 @@ export function TeamPage({
   };
 
   return (
-    <section className="st-team tp" aria-label="Team">
+    <section className="st-team tp" aria-label={t("teamPage.aria")}>
       {view?.readError && (
         <Note role="alert">
-          Your team settings file couldn't be read, so Team is off. Setting it
-          up again here replaces it (the old file is kept next to it as
-          team.json.unreadable).
+          {t("teamPage.readError")}
           <span className="st-team-detail"> {view.readError}</span>
         </Note>
       )}
@@ -606,9 +592,9 @@ export function TeamPage({
       {removing && (
         <Sheet>
           <ConfirmSheet
-            title={`Remove ${removing.name}?`}
-            body="They keep what they already received. The team key changes, so they can't read anything new."
-            confirmLabel="Remove"
+            title={t("teamPage.removeTitle", { name: removing.name })}
+            body={t("teamPage.removeBody")}
+            confirmLabel={t("settings.remove")}
             onCancel={() => setRemoving(null)}
             onConfirm={() => {
               const id = removing.id;
@@ -621,9 +607,9 @@ export function TeamPage({
       {leaving && (
         <Sheet>
           <ConfirmSheet
-            title="Leave this team?"
-            body="You stop sending and receiving team updates on this computer. What you already received stays."
-            confirmLabel="Leave"
+            title={t("teamPage.leaveTitle")}
+            body={t("teamPage.leaveBody")}
+            confirmLabel={t("teamPage.leaveConfirm")}
             onCancel={() => setLeaving(false)}
             onConfirm={() => {
               setLeaving(false);
@@ -641,6 +627,7 @@ export function TeamPage({
 // ---------- invite ----------
 
 function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
+  const t = useT();
   const [invite, setInvite] = useState<InviteView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
@@ -689,34 +676,28 @@ function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
       setCopied(what);
       window.setTimeout(() => setCopied(null), 1500);
     } catch {
-      setError("Couldn't copy. Select the text and copy it by hand.");
+      setError(t("teamPage.copyFailed"));
     }
   };
 
   return (
-    <section className="tp-block tp-invite" aria-label="Invite">
-      <h4 className="tp-h4">Invite someone</h4>
+    <section className="tp-block tp-invite" aria-label={t("teamPage.invite")}>
+      <h4 className="tp-h4">{t("teamPage.inviteSomeone")}</h4>
       {!invite ? (
         <div className="tp-invite-empty">
-          <p className="tp-sub">
-            Makes a link and a code. Both work once, for 10 minutes. You are
-            asked before anyone gets in.
-          </p>
+          <p className="tp-sub">{t("teamPage.inviteHelp")}</p>
           <Btn primary disabled={making} onClick={() => void make()}>
-            {making ? "Making an invite…" : "Make an invite"}
+            {making ? t("teamPage.making") : t("teamPage.make")}
           </Btn>
         </div>
       ) : (
         <>
-          <p className="tp-send">
-            Send this to your teammate. Send the link and the code in two
-            separate messages.
-          </p>
+          <p className="tp-send">{t("teamPage.sendThis")}</p>
           <div className="tp-invite-body">
             <canvas
               ref={canvasRef}
               className="st-invite-qr tp-qr"
-              aria-label="Invite QR code"
+              aria-label={t("teamPage.qrAria")}
             />
             <div className="tp-invite-side">
               <div className="st-invite-link">
@@ -724,26 +705,26 @@ function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
                   className="st-field is-mono"
                   readOnly
                   value={invite.link}
-                  aria-label="Invite link"
+                  aria-label={t("teamPage.linkAria")}
                   onFocus={(e) => e.currentTarget.select()}
                 />
                 <Btn onClick={() => void copy("link")}>
-                  {copied === "link" ? "Copied" : "Copy"}
+                  {copied === "link" ? t("teamPage.copied") : t("settings.copy")}
                 </Btn>
               </div>
               <div className="tp-code-line">
-                <small>Code</small>
-                <span className="st-invite-code" aria-label="Invite code">
+                <small>{t("teamPage.code")}</small>
+                <span className="st-invite-code" aria-label={t("teamPage.codeAria")}>
                   {invite.code}
                 </span>
                 <Btn small onClick={() => void copy("code")}>
-                  {copied === "code" ? "Copied" : "Copy code"}
+                  {copied === "code" ? t("teamPage.copied") : t("teamPage.copyCode")}
                 </Btn>
               </div>
               <div className="tp-invite-foot">
-                <small>Expires at {clock(invite.expiresAtMs)}</small>
+                <small>{t("teamPage.expiresAt", { time: clock(invite.expiresAtMs) })}</small>
                 <Btn small disabled={making} onClick={() => void make()}>
-                  New invite
+                  {t("teamPage.newInvite")}
                 </Btn>
               </div>
             </div>
@@ -772,6 +753,7 @@ function StartForm({
   onBack: () => void;
   onCreate: (input: TeamCreateInput) => Promise<boolean>;
 }) {
+  const t = useT();
   const [teamName, setTeamName] = useState("");
   const [name, setName] = useState("");
   const [nameEdited, setNameEdited] = useState(false);
@@ -794,25 +776,25 @@ function StartForm({
     <div className="tp-form">
       <div className="tp-form-top">
         <Btn small onClick={onBack}>
-          Back
+          {t("settings.back")}
         </Btn>
-        <h3 className="tp-h">Start a team</h3>
+        <h3 className="tp-h">{t("teamPage.start")}</h3>
       </div>
       <label className="st-team-row">
-        <span>Team name</span>
+        <span>{t("teamPage.teamName")}</span>
         <FieldInput
           value={teamName}
-          placeholder="Acme"
+          placeholder="Acme" // i18n-ok: example
           maxLength={60}
           autoFocus
           onChange={(e) => setTeamName(e.target.value)}
         />
       </label>
       <label className="st-team-row">
-        <span>Your name</span>
+        <span>{t("teamPage.yourName")}</span>
         <FieldInput
           value={shownName}
-          placeholder="Maya"
+          placeholder="Maya" // i18n-ok: example
           maxLength={40}
           onChange={(e) => {
             setNameEdited(true);
@@ -823,19 +805,16 @@ function StartForm({
 
       <div className="tp-way tp-way-main">
         <div>
-          <strong>Create team relay</strong>{" "}
-          <span className="tp-tag">Recommended</span>
-          <p className="tp-sub">
-            A free relay in your own Cloudflare account. It takes about two
-            minutes, and you only do it once.
-          </p>
+          <strong>{t("teamPage.createRelay")}</strong>{" "}
+          <span className="tp-tag">{t("teamPage.recommended")}</span>
+          <p className="tp-sub">{t("teamPage.relayHelp")}</p>
         </div>
         <Btn
           primary
           disabled={busy || !named}
           onClick={() => setDeploying(true)}
         >
-          Create team relay
+          {t("teamPage.createRelay")}
         </Btn>
       </div>
 
@@ -845,7 +824,7 @@ function StartForm({
         aria-expanded={others}
         onClick={() => setOthers((o) => !o)}
       >
-        <span>Other ways</span>
+        <span>{t("teamPage.otherWays")}</span>
         <span aria-hidden="true">{others ? "−" : "+"}</span>
       </button>
       {others && (
@@ -853,63 +832,60 @@ function StartForm({
           <div
             className="tp-seg"
             role="group"
-            aria-label="Other ways to connect"
+            aria-label={t("teamPage.otherWaysAria")}
           >
             <button
               type="button"
               aria-pressed={way !== "folder"}
               onClick={() => setWay("address")}
             >
-              Use my own address
+              {t("teamPage.ownAddress")}
             </button>
             <button
               type="button"
               aria-pressed={way === "folder"}
               onClick={() => setWay("folder")}
             >
-              Use a shared folder
+              {t("teamPage.sharedFolderBtn")}
             </button>
           </div>
           {way === "folder" ? (
             <>
               <label className="st-team-row">
-                <span>Shared folder</span>
+                <span>{t("teamPage.sharedFolder")}</span>
                 <FieldInput
                   value={folder}
                   className="font-mono"
-                  placeholder="D:\team\wire"
+                  placeholder="D:\team\wire" // i18n-ok: example
                   onChange={(e) => setFolder(e.target.value)}
                 />
               </label>
-              <p className="tp-sub">
-                A folder everyone on the team can open, such as one in Dropbox
-                or on a network drive. Only encrypted files are put there.
-              </p>
+              <p className="tp-sub">{t("teamPage.folderHelp")}</p>
               <div>
                 <Btn
                   primary
                   disabled={busy || !named || !folder.trim()}
                   onClick={() => create({ folder: folder.trim() })}
                 >
-                  Create team
+                  {t("teamPage.createTeam")}
                 </Btn>
               </div>
             </>
           ) : (
             <>
               <label className="st-team-row">
-                <span>Relay address</span>
+                <span>{t("teamPage.relayAddress")}</span>
                 <FieldInput
                   value={relay}
                   className="font-mono"
-                  placeholder="https://relay.example.com"
+                  placeholder="https://relay.example.com" // i18n-ok: example
                   onChange={(e) => setRelay(e.target.value)}
                 />
               </label>
               <p className="tp-sub">
-                Host your own relay on Cloudflare or with Docker.{" "}
+                {t("teamPage.hostOwn")}{" "}
                 <ExternalLink href={RELAY_HELP_URL}>
-                  How to host your own
+                  {t("teamPage.howToHost")}
                 </ExternalLink>
               </p>
               <div>
@@ -918,7 +894,7 @@ function StartForm({
                   disabled={busy || !named || !relay.trim()}
                   onClick={() => create({ relay: relay.trim() })}
                 >
-                  Create team
+                  {t("teamPage.createTeam")}
                 </Btn>
               </div>
             </>
@@ -954,6 +930,7 @@ function JoinForm({
   onBack: () => void;
   onJoin: (input: TeamJoinInput) => Promise<boolean>;
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -969,17 +946,17 @@ function JoinForm({
     <div className="tp-form">
       <div className="tp-form-top">
         <Btn small onClick={onBack}>
-          Back
+          {t("settings.back")}
         </Btn>
-        <h3 className="tp-h">Join a team</h3>
+        <h3 className="tp-h">{t("teamPage.join")}</h3>
       </div>
       <label className="tp-paste">
-        <span>Paste the invite you were sent</span>
+        <span>{t("teamPage.pasteInvite")}</span>
         <textarea
           className="st-field is-mono"
           rows={3}
-          aria-label="Invite link"
-          placeholder="pm://team/join?…"
+          aria-label={t("teamPage.linkAria")}
+          placeholder="pm://team/join?…" // i18n-ok: example
           spellCheck={false}
           autoFocus
           value={text}
@@ -991,36 +968,31 @@ function JoinForm({
         />
       </label>
       {text.trim() && !found.link && (
-        <Note role="alert">
-          That doesn't look like an invite. It is a link that starts with
-          pm://team/join.
-        </Note>
+        <Note role="alert">{t("teamPage.notInvite")}</Note>
       )}
       {found.link && (
         <p className="tp-found" role="status">
-          Invite found{teamName ? ` for “${teamName}”` : ""}.
+          {teamName ? t("teamPage.inviteFoundFor", { team: teamName }) : t("teamPage.inviteFound")}
         </p>
       )}
       <label className="st-team-row">
-        <span>Code</span>
+        <span>{t("teamPage.code")}</span>
         <FieldInput
           value={code}
           className="font-mono"
-          placeholder="ABCD-EFGH"
+          placeholder="ABCD-EFGH" // i18n-ok: example
           maxLength={9}
           onChange={(e) => setCode(formatCode(e.target.value))}
         />
       </label>
       {found.link && !code && (
-        <p className="tp-sub">
-          Type the 8-letter code your teammate sent in a separate message.
-        </p>
+        <p className="tp-sub">{t("teamPage.typeCode")}</p>
       )}
       <label className="st-team-row">
-        <span>Your name</span>
+        <span>{t("teamPage.yourName")}</span>
         <FieldInput
           value={shownName}
-          placeholder="Leo"
+          placeholder="Leo" // i18n-ok: example
           maxLength={40}
           onChange={(e) => {
             setNameEdited(true);
@@ -1029,10 +1001,10 @@ function JoinForm({
         />
       </label>
       <label className="st-team-row">
-        <span>GitHub login</span>
+        <span>{t("teamPage.githubLogin")}</span>
         <FieldInput
           value={github}
-          placeholder="Optional"
+          placeholder={t("teamPage.optional")}
           maxLength={39}
           onChange={(e) => setGithub(e.target.value)}
         />
@@ -1051,7 +1023,7 @@ function JoinForm({
             })
           }
         >
-          Join
+          {t("teamPage.joinBtn")}
         </Btn>
       </div>
     </div>

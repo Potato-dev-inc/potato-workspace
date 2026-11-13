@@ -1,0 +1,33 @@
+// Traditional Chinese (Taiwan) for ../en/settingsModelBridge.ts (same keys). Term choices are listed at the top of ../zh-TW.ts.
+import type { EnglishKey } from '../en';
+
+export const settingsModelBridge: Partial<Record<EnglishKey, string>> = {
+  'modelBridge.removed': '已移除 {name}。它的金鑰已從 {store} 刪除。',
+  'modelBridge.noStore': '這台電腦沒有可用的安全金鑰儲存區，所以無法儲存金鑰。',
+  'modelBridge.connected': '已連結的模型服務',
+  'modelBridge.readyInCodex': '已就緒 · 已在你的 Codex 設定中',
+  'modelBridge.undoAria': '在 Codex 中復原 {name}',
+  'modelBridge.useAria': '在 Codex 中使用 {name}',
+  'modelBridge.use': '在 Codex 中使用',
+  'modelBridge.preview': '預覽',
+  'modelBridge.willAdd': '將會加入的內容',
+  'modelBridge.addedTo': '會加到 {path}',
+  'modelBridge.setFirst': '如果你自己啟動 Codex，請先設定這個（在標示的地方貼上你的金鑰）：',
+  'modelBridge.copyVar': '複製變數那一行',
+  'modelBridge.doneNote': 'Potato Workspace 啟動的窗格會自動取得金鑰。如果是你自己啟動的 Codex，請先設定這個變數。',
+  'modelBridge.connect': '連結模型服務',
+  'modelBridge.serviceName': '服務名稱',
+  'modelBridge.myService': '我的服務',
+  'modelBridge.keptIn': '會存放在 {store}。Potato Workspace 之後不會再顯示它。',
+  'modelBridge.saveKey': '儲存金鑰',
+  'modelBridge.wrong': '發生問題，沒有任何東西被更動。',
+  'modelBridge.keySaved': '金鑰已儲存在 {store}。',
+  'askBar.help': '從任何 App 開啟一個小小的列，快速問 AI 助理一個問題。預設為關閉。',
+  'askBar.shortcut': '提問列快速鍵',
+  'askBar.shortcutHelp': '選擇開啟提問列的按鍵。也可以在「設定 > 快速鍵」錄製你自己的。',
+  'askBar.agent': '提問列的 AI 助理',
+  'askBar.agentHelp': '由哪個 AI 助理回答。「上次使用的」會沿用你最後選的那個。',
+  'askBar.lastUsed': '上次使用的',
+  'askBar.clipboard': '預設附上剪貼簿',
+  'askBar.clipboardHelp': '預設為關閉。開啟後，每次開啟都會讀取剪貼簿並附在你的問題上。剪貼簿的文字可能包含密碼或金鑰。',
+};

@@ -68,6 +68,9 @@ afterEach(() => {
 const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 const chip = () => host.querySelector<HTMLElement>('[data-testid="pane-place"]');
 
+// These tests are about the pane, not the side panel: a window under 960 px (240 sidebar + 240 panel + 480 chat) has none.
+Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
+
 describe('pane place chip', () => {
   it('shows Linux and the distro for a Linux pane', async () => {
     const c = cockpit([mk('p', linux)], 'p');
