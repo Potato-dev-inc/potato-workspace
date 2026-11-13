@@ -15,6 +15,7 @@ import { MemoryCard } from './MemoryCard';
 import { AgentRow } from './AgentRow';
 import { HomeProblemCard } from './HomeProblemCard';
 import { PendingCard } from './PendingCard';
+import { SpeakCard } from './SpeakCard';
 import { ShareTodayToggle } from './ShareTodayToggle';
 import { StartAtSignInHint } from './StartAtSignInHint';
 import { isValidName, movesWhenFree, stateLineOf } from './model';
@@ -244,6 +245,7 @@ export function CompanionPage(props: CompanionPageProps) {
             transport={transport}
             onChanged={() => onChanged()}
           />
+          <SpeakCard />
           <section className="ck-companion-card" aria-labelledby="ck-companion-setup-card">
             <h2 className="ck-companion-card-title" id="ck-companion-setup-card">
               Setup

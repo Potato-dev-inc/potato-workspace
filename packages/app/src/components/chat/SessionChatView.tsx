@@ -6,6 +6,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { clearChatJump, turnWithItem, type ChatJump } from '../../lib/chatJump';
+import { registerPaneTurns } from '../../lib/potatoCheck';
 import type { ChatSource, ChatTurn, SessionChatState, TurnStep } from '../../lib/sessionChatModel';
 import '../../styles/cockpit-chat.css';
 import { ActivityLine } from './ActivityLine';
@@ -204,6 +205,10 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
   // Markdown only for what the agent itself wrote (its session file or its API); an unknown source keeps the text as it is.
   const markdown = source === 'file' || source === 'api' || source === 'acp';
   const [mode, setMode] = useChatViewMode(paneId);
+  // Potato ("check on this") reads this chat's turns while it is open, and only reads them.
+  const turnsNow = useRef(turns);
+  turnsNow.current = turns;
+  useEffect(() => (paneId ? registerPaneTurns(paneId, () => turnsNow.current) : undefined), [paneId]);
   const plan = useMemo(() => currentPlan(turns), [turns]);
   // The same rule for `Branch`.
   const showBranch = !!canBranch && !!onBranch && !readOnly;

@@ -73,6 +73,12 @@ export const SettingsSchema = z.object({
   spaces_enabled: z.boolean().optional(),
   /** Share an agent (Settings > General > Labs): lend an agent sign-in to another PC, or borrow one. Off unless chosen. Rust: lend. */
   lend_enabled: z.boolean().optional(),
+  /** Desktop Potato (Settings > General > Labs): a small pet window on the desktop. Off unless chosen. Rust: pet. */
+  desktop_pet_enabled: z.boolean().optional(),
+  /** Desktop Potato: size 'small' | 'medium' | 'large', hidden-until (epoch ms), quiet. Rust: pet. */
+  desktop_pet_size: z.enum(['small', 'medium', 'large']).optional(),
+  desktop_pet_quiet: z.boolean().optional(),
+  desktop_pet_hidden_until_ms: z.number().optional(),
   /** Get early versions (beta): the updater also reads the beta address and takes the newer version. Off unless chosen. Rust: commands/update_channel. */
   early_versions_enabled: z.boolean().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */

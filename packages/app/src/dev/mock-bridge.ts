@@ -4,6 +4,7 @@ import { PHONE_AGENT_TYPES, PHONE_BUFFER, PHONE_DIGEST, PHONE_PANES, PHONE_PREVI
 import { DEFAULT_PUBLIC_SETTINGS } from '../lib/bridge-settings';
 import { LS_BRIDGE_URL } from '../lib/bridge-url';
 import { PANE_CODEX } from './fixtures';
+import { PHONE_CHAT_REPLY } from './phone-chat-fixtures';
 import { PHONE_TEAM_JOB, PHONE_TEAM_OFF, phoneTeamReply } from './phone-team-fixtures';
 import type { HarnessScenario } from './types';
 
@@ -81,6 +82,12 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
   if (route === '/questions') return json({ questions: phone.questions === false ? [] : (phone.questionList ?? [PHONE_QUESTION]) });
   if (route === '/digest') return json(phone.digest === false ? { ...PHONE_DIGEST, empty: true } : PHONE_DIGEST);
   if (route === '/agents/types') return json(PHONE_AGENT_TYPES);
+  const chatRoute = /^\/panes\/([^/]+)\/chat$/.exec(route);
+  if (chatRoute && method === 'GET') return json(path.includes('since=') ? { ...PHONE_CHAT_REPLY, items: [] } : PHONE_CHAT_REPLY);
+  if (/^\/panes\/[^/]+\/messages$/.test(route) && method === 'GET') return json({ messages: [] });
+  if (route === '/pane-rules' && method === 'GET') return json({ rules: phone.rules ?? {} });
+  if (/^\/panes\/[^/]+\/interrupt$/.test(route) && method === 'POST') return json({ pane_id: route.split('/')[2], stopped: true });
+  if (route === '/control-asks' && method === 'POST') return json({ asked: true, id: 'ask-harness' }, 202);
   if (route === '/panes/stop-all') return json({ stopped: [{ pane_id: PANE_CODEX, agent_type: 'codex', cwd: '' }], failed: [] });
   if (pane) {
     const [, id, kind] = pane;
@@ -131,6 +138,8 @@ export function installMockBridge(scenario: HarnessScenario): void {
     localStorage.setItem(LS_BRIDGE_URL, MOCK_BRIDGE_URL);
     if (scenario.phone?.activeTab) localStorage.setItem('pm.mobile.activeTab', scenario.phone.activeTab);
     else localStorage.removeItem('pm.mobile.activeTab');
+    if (scenario.phone?.setup) localStorage.setItem('pm.phone.setup', 'pending');
+    else localStorage.setItem('pm.phone.setup', 'done');
   } catch {
     /* storage unavailable */
   }

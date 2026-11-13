@@ -9,6 +9,7 @@ export const MOVED_FILES: readonly string[] = [
   `${C}Inbox.tsx`, `${C}InboxCard.tsx`, `${C}InboxError.tsx`, `${C}NoChatPrompt.tsx`, `${C}UndoSheet.tsx`, `${C}EndedAgentsLine.tsx`,
   'components/common/EmptyState.tsx', 'components/common/ErrorBoundary.tsx', 'components/settings/UndoToast.tsx',
   // inbox cards
+  'components/pet/Pet.tsx', 'components/pet/PetMenu.tsx', 'components/pet/PetApp.tsx',
   `${C}QuestionCard.tsx`, `${C}StuckCard.tsx`, `${C}PaneApprovalCard.tsx`, `${C}ApprovalPrompt.tsx`, `${C}ConsentCard.tsx`, `${C}LimitCard.tsx`,
   `${C}BudgetCard.tsx`, `${C}IssueCard.tsx`, `${C}CiFixCard.tsx`, `${C}AskNotices.tsx`, `${C}HiddenRuns.tsx`, `${C}ImportChatsCard.tsx`,
   `${C}CanaryNotices.tsx`,
@@ -100,4 +101,7 @@ export const MOVED_FILES: readonly string[] = [
   'components/settings/blocks/RemoveChatDialog.tsx',
   'components/settings/blocks/ChatIndexSettings.tsx',
   'components/settings/blocks/BringChatsSettings.tsx',
+  // the phone app's shell
+  'components/mobile/PhoneDrawer.tsx', 'components/mobile/PhoneHeader.tsx', 'components/mobile/PhoneConversation.tsx',
+  'components/mobile/FoldedSteps.tsx', 'components/mobile/PhoneComposer.tsx', 'components/mobile/PhoneQuiet.tsx',
 ];

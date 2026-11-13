@@ -27,3 +27,12 @@ export function effectiveLevel(rule: PaneRemote, caps: readonly DeviceCap[] | un
   if (!own) return null;
   return RANK[own] <= RANK[rule.level] ? own : rule.level;
 }
+
+/** A phone that asks the person on the PC for control of one agent ("<phone> asks for control"). */
+export interface ControlAsk {
+  id: string;
+  device_id: string;
+  device_name: string;
+  pane_id: string;
+  at_ms: number;
+}

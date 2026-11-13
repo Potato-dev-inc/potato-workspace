@@ -41,4 +41,13 @@ export const lookFeel: Partial<Record<EnglishKey, string>> = {
   'lookFeel.preview.play': '播放動畫',
   'lookFeel.preview.usage': '使用量列範例',
   'lookFeel.preview.example': '範例',
+  'lookFeel.comfort.textSize.label': '文字大小',
+  'lookFeel.comfort.textSize.hint': '讓所有內容變大或變小。Ctrl + 和 Ctrl - 也能調整。',
+  'lookFeel.comfort.contrast.label': '強烈對比',
+  'lookFeel.comfort.contrast.hint': '文字和線條更亮更清楚，淺色和深色都適用。',
+  'lookFeel.comfort.motion.label': '減少動態效果',
+  'lookFeel.comfort.motion.hint': '停止動畫和轉圈圈。Windows 要求減少動態效果時也會開啟。',
+  'lookFeel.comfort.speak.label': '用語音念出結果',
+  'lookFeel.comfort.speak.hint': 'AI 助理完成時，用 Windows 語音念出來。聲音只在這台電腦播放。',
+  'lookFeel.comfort.speak.finished': '{agent} 已完成。',
 };

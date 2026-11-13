@@ -38,6 +38,8 @@ export const settingsGeneral: Partial<Record<EnglishKey, string>> = {
   'labs.spaces-labs.about': '和朋友在小群組中聊天，電腦對電腦。',
   'labs.lend-labs.name': '出借 AI 助理',
   'labs.lend-labs.about': '把登入借給另一台電腦，或向別人借用。',
+  'labs.desktop-potato-labs.name': '桌面小馬鈴薯',
+  'labs.desktop-potato-labs.about': '桌面上的小馬鈴薯，AI 助理需要你時會揮手。',
   'labs.live-updates.name': '即時更新',
   'labs.live-updates.about': 'Claude 和 Codex 會在開始、提問和完成時告訴 App。',
   'labs.opencode-automation.name': '金鑰切換',

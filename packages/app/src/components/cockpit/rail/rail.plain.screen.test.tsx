@@ -37,14 +37,16 @@ afterEach(() => {
 const props = { paneId: 'p1', status: 'idle', cwd: '/work/billing-service', agentName: 'Codex', readsChat: true, helperOf: null, helpers: [], onOpenPane: () => {} };
 
 describe('plain right panel', () => {
-  it('shows Folder and Background as plain sections: no Agent row, no Context, no empty-state sentence', () => {
+  it('shows Folder, Files and Background as plain sections: no Agent row, no Context, no empty-state sentence', () => {
     act(() => root.render(<SessionRail {...props} />));
     const labels = [...host.querySelectorAll('dt')].map((d) => d.textContent);
     expect(labels).toContain('Folder');
     expect(labels).not.toContain('Agent');
     expect(host.querySelector('[data-testid="rail-context"]')).toBeNull();
     expect(host.textContent).not.toContain('Codex');
-    expect(host.querySelectorAll('section.ck-rail-card').length).toBe(2);
+    // Folder, Files and Background
+    expect(host.querySelectorAll('section.ck-rail-card').length).toBe(3);
+    expect(host.querySelector('[data-testid="rail-files"] h3')!.textContent).toContain('Files');
     // the "Where" section has no heading of its own; Background keeps its small label
     expect(host.querySelector('[data-testid="rail-where"] h3')).toBeNull();
     expect(host.querySelector('[data-testid="rail-background"] h3')!.textContent).toContain('Background');

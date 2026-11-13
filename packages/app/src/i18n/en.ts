@@ -37,6 +37,11 @@ import { settingsTeam } from './en/settingsTeam';
 import { settingsConnect } from './en/settingsConnect';
 import { settingsPhone } from './en/settingsPhone';
 import { notify } from './en/notify';
+import { board } from './en/board';
+import { phone } from './en/phone';
+import { dnd } from './en/dnd';
+import { files } from './en/files';
+import { pet } from './en/pet';
 
 export const en = {
   ...common,
@@ -76,6 +81,11 @@ export const en = {
   ...settingsConnect,
   ...settingsPhone,
   ...notify,
+  ...board,
+  ...phone,
+  ...dnd,
+  ...files,
+  ...pet,
 } as const;
 
 export type MessageKey = Exclude<keyof typeof en, `${string}_one` | `${string}_other`> | PluralKey;

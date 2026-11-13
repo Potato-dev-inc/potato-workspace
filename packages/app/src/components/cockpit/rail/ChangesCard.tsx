@@ -2,6 +2,7 @@
 // it has one; otherwise the list is just a list.
 import type { OutputFile } from '../../../lib/sessionChatModel';
 import { RailCard } from './RailCard';
+import { dragSourceProps } from '../../dnd/dragSourceProps';
 import { baseName, fileFolder, filesCount, writtenFiles } from './railFormat';
 
 const SHOWN = 8;
@@ -21,11 +22,17 @@ export function ChangesCard({ outputs, cwd, onOpenChanges }: { outputs: readonly
     return (
       <li key={file.path}>
         {onOpenChanges ? (
-          <button type="button" className="ck-rail-item" title={`${file.path}. Open Changes`} onClick={onOpenChanges}>
+          <button
+            type="button"
+            className="ck-rail-item"
+            title={`${file.path}. Open Changes`}
+            onClick={onOpenChanges}
+            {...dragSourceProps({ kind: 'file', id: file.path, label: baseName(file.path), meta: { abs: file.path } })}
+          >
             {inner}
           </button>
         ) : (
-          <div className="ck-rail-item is-static" title={file.path}>
+          <div className="ck-rail-item is-static" title={file.path} {...dragSourceProps({ kind: 'file', id: file.path, label: baseName(file.path), meta: { abs: file.path } })}>
             {inner}
           </div>
         )}

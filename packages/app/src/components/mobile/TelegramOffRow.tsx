@@ -2,6 +2,7 @@
 // (bridge POST /channels/telegram/off). Turning it on, pairing and every other setting stay on the PC.
 // The row shows only while the PC says Telegram is on, so a phone with no paired chat never sees it.
 import { useEffect, useMemo, useState } from 'react';
+import { useT } from '../../i18n';
 import { getTelegramPhoneStatus, turnTelegramOff } from '../../lib/telegram-bridge';
 
 export interface TelegramOffDeps {
@@ -31,6 +32,7 @@ export function TelegramOffRow({
   /** Tests inject fakes. */
   deps?: TelegramOffDeps;
 }) {
+  const t = useT();
   const deps = useMemo(() => injected ?? browserTelegramDeps(baseUrl), [injected, baseUrl]);
   // What the PC last said: true only when Telegram is on. A failed read counts as off (row hidden).
   const [on, setOn] = useState(false);
@@ -70,7 +72,7 @@ export function TelegramOffRow({
     <>
       <div className="ph-group">
         <div className="ph-switch-row">
-          <span className="ph-rowtext">Telegram · {done ? 'Off' : 'On'}</span>
+          <span className="ph-rowtext">{done ? t('phone.telegram.off') : t('phone.telegram.on')}</span>
         </div>
         {!done && (
           <button
@@ -80,14 +82,14 @@ export function TelegramOffRow({
             className="ph-rowbtn ph-rowbtn--strong"
             style={{ borderTop: '1px solid var(--sep)' }}
           >
-            Turn Telegram off
+            {t('phone.telegram.turnOff')}
           </button>
         )}
       </div>
-      {done && <p className="ph-foot">Off. Turn it on again on your PC.</p>}
+      {done && <p className="ph-foot">{t('phone.telegram.offNote')}</p>}
       {failed && (
         <p role="alert" className="ph-foot ph-foot--err">
-          Couldn't turn Telegram off. Your PC didn't answer.
+          {t('phone.telegram.failed')}
         </p>
       )}
     </>

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.24
+
+This is a beta.
+
+- New phone app: it works like a chat app for your agents. It opens in the chat that needs you, a drawer from the top-left lists your agents by project, tool steps fold into one line, and one big box at the bottom does the writing.
+- Phone: approvals and questions are cards in the chat (high risk needs a press and hold), a "needs you" pill shows another agent's question, Stop one agent with one tap, plain words when the PC can't be reached, setup steps after pairing, and a lock on agents the PC keeps to itself, with "Ask the PC for control". The phone is now in Traditional Chinese too.
+- New: Files in the right panel. See the project's files, open one in a tab with colour, switch to what the agent changed, and tell the agent about the lines you select.
+- New: the agent board (Ctrl+0): every agent in Needs you, Working and Done.
+- New: drag tabs to reorder them or split, drag chats and projects in the sidebar to reorder them or pin them, drop a folder to add a project, and drop a file on a terminal to type its path.
+- New: Comfort settings: text size, strong contrast, less motion, and reading results out loud.
+- New: the companion can speak up when something waits for you (off until you say yes), and you can drop the Potato on an agent to ask what it is doing.
+- New (Labs): a desktop Potato that sleeps on your screen and waves when an agent needs you.
+- Remote control: "Allow for 15 minutes" now ends on time even if the app was closed.
+
 ## 1.0.23
 
 This is a beta.

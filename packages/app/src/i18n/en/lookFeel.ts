@@ -39,4 +39,13 @@ export const lookFeel = {
   "lookFeel.preview.play": "Play the animation",
   "lookFeel.preview.usage": "Example of the usage bar",
   "lookFeel.preview.example": "Example",
+  "lookFeel.comfort.textSize.label": "Text size",
+  "lookFeel.comfort.textSize.hint": "Makes everything bigger or smaller. Ctrl + and Ctrl - change it too.",
+  "lookFeel.comfort.contrast.label": "Strong contrast",
+  "lookFeel.comfort.contrast.hint": "Brighter text and firmer lines, in light and dark.",
+  "lookFeel.comfort.motion.label": "Less motion",
+  "lookFeel.comfort.motion.hint": "Stops animations and spinners. Also on when Windows asks for less motion.",
+  "lookFeel.comfort.speak.label": "Say results out loud",
+  "lookFeel.comfort.speak.hint": "When an agent finishes, the Windows voice says so. Nothing leaves this computer.",
+  "lookFeel.comfort.speak.finished": "{agent} finished.",
 } as const;

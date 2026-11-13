@@ -1,0 +1,34 @@
+/* Comfort (Settings > Look and feel): text size, strong contrast, less motion. Set by lib/comfort/root.ts
+   as data attributes and one variable on the root. Imported last, so it wins over the theme tokens. */
+
+/* Text size: the whole page is zoomed by --ui-scale (90% to 140%). Fixed px sizes scale with it. */
+html {
+  zoom: var(--ui-scale, 1);
+}
+
+/* Strong contrast: brighter text and firmer lines, in both themes. */
+:root[data-contrast='strong'] {
+  --pm-text: 255 255 255;
+  --pm-muted: 222 218 210;
+  --pm-border: 150 146 140;
+}
+
+:root[data-contrast='strong'][data-theme='light'] {
+  --pm-text: 0 0 0;
+  --pm-muted: 40 38 35;
+  --pm-border: 110 106 100;
+}
+
+/* Less motion: no transitions or looping animations (spinners stop), and the short durations drop to nothing. */
+:root[data-motion='less'] {
+  --dur-fast: 0.01ms;
+  --dur-panel: 0.01ms;
+}
+
+:root[data-motion='less'] *,
+:root[data-motion='less'] *::before,
+:root[data-motion='less'] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

@@ -272,6 +272,12 @@ export interface TeamCardsReply {
   can: { dismiss: boolean; act: boolean };
 }
 
+/** One agent's own remote rule (`mobile_pairing/pane_rules.rs`): whether phones may reach it, and how far. */
+export interface PaneRuleView {
+  remote: boolean;
+  level: 'watch' | 'answer' | 'full';
+}
+
 export interface BridgeClient {
   baseUrl: string;
   listPanes(): Promise<PaneInfo[]>;
@@ -289,6 +295,12 @@ export interface BridgeClient {
   killPane(paneId: string): Promise<void>;
   /** Panic button: interrupt every running agent pane. */
   stopAllPanes(): Promise<{ stopped: { pane_id: string; agent_type: string; cwd: string; checkpoint_id?: string }[]; failed: [string, string][] }>;
+  /** `POST /panes/{id}/interrupt`: stop one agent's turn (needs `type`, and the agent's own remote rule must allow it). Phone only. */
+  interruptPane?(paneId: string): Promise<{ pane_id: string; stopped: boolean }>;
+  /** `GET /pane-rules`: the agents that have their own remote rule (the default is on, full). Phone only; absent on old PCs. */
+  paneRules?(): Promise<Record<string, PaneRuleView>>;
+  /** `POST /control-asks`: ask the person on the PC for control of one agent. One ask per agent per 5 minutes. Phone only. */
+  askControl?(paneId: string): Promise<{ asked: boolean; reason?: string }>;
   /** Pending `ask_user` questions. */
   listQuestions(): Promise<Question[]>;
   /** The one list of things that need the person (`GET /attention`). Absent on old bridges. */

@@ -1,0 +1,5 @@
+import { phoneCoreScenario } from './phone-core-shared';
+
+// Phone core shape: drawer, light.
+export default phoneCoreScenario('drawer', 'light');
+// window: { width: 390, height: 844 } (the registry reads the size from this file)

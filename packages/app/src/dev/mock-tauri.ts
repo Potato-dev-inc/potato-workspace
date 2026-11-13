@@ -48,6 +48,7 @@ import type { ClosedChat } from '../lib/closedChats';
 import { whatBrokeItMock } from './what-broke-it-fixtures';
 import { whatBrokeItResultMock } from './what-broke-it-result-fixtures';
 import { collisionMock } from './collision-fixtures';
+import { filesMock } from './files-fixtures';
 import { addAgentMock } from './add-agent-fixtures';
 import { agentCapsMock } from './agent-caps-fixtures';
 
@@ -100,6 +101,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (addAgent.handled) return addAgent.value;
       const agentCaps = agentCapsMock(cmd, a);
       if (agentCaps.handled) return agentCaps.value;
+      const files = filesMock(cmd, a);
+      if (files.handled) return files.value;
       const collision = collisionMock(scenario.collision, cmd, a);
       if (collision.handled) return collision.value;
       const night = nightMock(scenario.night, cmd, a);
@@ -178,6 +181,10 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return scenario.companion
             ? [{ id: 'mochi', name: 'Mochi', avatar: 'mochi', persona: 'calm', agentType: 'claude', agentLabel: 'Claude', folderName: 'home', state: scenario.companion, stateLine: '', paneId: null, needs: null, pendingMemory: 2, nextCheckin: null, restarts: 0, autoStart: true }]
             : [];
+        case 'side_question_target':
+          return { agent: 'claude', label: 'Claude' };
+        case 'side_question_ask':
+          return { ok: true, answer: 'It is fixing the sign-in page and running the tests.' + String.fromCharCode(10) + 'It needs a yes or no from you before it changes the database.' };
         case 'away_digest_pending':
           return scenario.awayDigest ? EXAMPLE_DIGEST : null;
         case 'away_digest_dismiss':

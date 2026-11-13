@@ -5,6 +5,9 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AgentDoctor } from './components/cockpit/AgentDoctor';
 import { markSpawned } from './lib/agent-health';
 import { useCockpit } from './hooks/useCockpit';
+import { useAttention } from './hooks/useAttention';
+import { useComfortRoot } from './lib/comfort/root';
+import { useSpeakFinished } from './lib/comfort/speak';
 import { useHandoff } from './hooks/useHandoff';
 import { useAway } from './hooks/useAway';
 import { LastTurnContext } from './components/cockpit/away-context';
@@ -22,6 +25,11 @@ import { WhatBrokeItSheet } from './components/cockpit/WhatBrokeItSheet';
 import { panesSharingFolder } from './components/cockpit/history-model';
 import { ProjectMemory } from './components/cockpit/ProjectMemory';
 import { Sidebar } from './components/cockpit/Sidebar';
+import { CompanionAssist } from './components/cockpit/companion/CompanionAssist';
+import { paneHeading } from './components/cockpit/titles';
+import { activityText } from './lib/pane-activity';
+import { tauri } from './lib/tauri';
+import { NUDGE_TEXT } from './lib/potatoCheck';
 import { UsageBar } from './components/cockpit/UsageBar';
 import { SettingsView } from './components/cockpit/SettingsView';
 import { AppUpdateHost } from './components/updates/AppUpdateHost';
@@ -36,6 +44,7 @@ import { useInlineSettings } from './hooks/useInlineSettings';
 import { SpawnView } from './components/cockpit/SpawnView';
 import { ChatStartingView } from './components/cockpit/ChatStartingView';
 import { PanicSheet } from './components/cockpit/PanicSheet';
+import { ControlAskNotice } from './components/cockpit/ControlAskNotice';
 import { IndividualSheet } from './components/cockpit/IndividualSheet';
 import { TellTeamToast } from './components/cockpit/team/TellTeam';
 import { SimpleCockpit } from './components/simple/SimpleCockpit';
@@ -89,11 +98,13 @@ import './styles/chips.css';
 import './styles/night.css';
 import { registerSettingsOpener } from './lib/openSettingsAt';
 import { SpacesPage } from './components/spaces/SpacesPage';
+import { AgentBoard } from './components/cockpit/board/AgentBoard';
 import { useSpacesEnabled } from './lib/spaces';
 import { useLend } from './components/lend/useLend';
 import { useLendToasts } from './components/lend/Borrowed';
 import './styles/night-morning.css';
 import './styles/night-chip.css';
+import './styles/cockpit-board.css';
 
 export type { MainView } from './components/cockpit/main-view';
 
@@ -102,6 +113,9 @@ const inTerminal = (target: EventTarget | null): boolean => target instanceof El
 
 export default function CockpitApp() {
   const c = useCockpit();
+  // Comfort (Settings > Look and feel): text size, contrast, less motion, and spoken results.
+  useComfortRoot();
+  useSpeakFinished(useAttention());
   // The person's own shortcuts (Settings > Shortcuts) for every handler and hint in this window.
   useKeybindingsSync();
   useKeybindingsVersion();
@@ -380,6 +394,19 @@ export default function CockpitApp() {
     return () => window.removeEventListener('keydown', onKey, true);
   });
 
+  // Ctrl+0 (Cmd+0 on a Mac): the agent board. Again closes it. In a terminal the key is left to the program there.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || !matchesAction(e, 'agent-board')) return;
+      if (inTerminal(e.target) || c.mode === 'individual') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setView((v) => (v === 'board' ? homeView(c.spawn !== null, c.selectedId) : 'board'));
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [c.mode, c.spawn, c.selectedId]);
+
   // Focus mode: Ctrl+Shift+Enter fills the window with the open pane; the same keys, Esc (outside a terminal, a menu
   // or a sheet) or the button bring everything back. It also ends by itself when no pane is open.
   const paneOpen = view === 'pane' && c.selectedId !== null;
@@ -504,6 +531,7 @@ export default function CockpitApp() {
   const lend = useLend();
   const lendRequests = useMemo(() => (lend.state?.requests_in ?? []).filter((r) => r.state === 'open'), [lend.state]);
   useLendToasts(lend, c.notify);
+  const assistPanes = useMemo(() => c.registry.paneList.map((p) => ({ id: p.info.id, status: p.status })), [c.registry.paneList]);
   const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined, teamRed, lendRequests);
 
   // Which pane was looked at when: the palette lists the most recent first.
@@ -677,6 +705,8 @@ export default function CockpitApp() {
           />
         ) : view === 'settings' ? (
           <SettingsView key={settings.viewKey} {...settings.viewProps} onOpenStore={openStore} />
+        ) : view === 'board' ? (
+          <AgentBoard c={nav} needsYou={needsYou} onClose={closeOverlay} />
         ) : view === 'newagent' ? (
           <NewAgentHost c={nav} project={newAgentProject} onSetUp={() => setView('doctor')} onReopenedRun={onReopenedRun} />
         ) : view === 'spaces' && spacesOn ? (
@@ -831,7 +861,28 @@ export default function CockpitApp() {
       {c.modeExplainer?.open && <IndividualSheet onSwitch={(d) => void c.modeExplainer.confirm(d)} onCancel={c.modeExplainer.cancel} />}
       {stopReport && <PanicSheet report={stopReport} names={c.names} onClose={() => setStopReport(null)} />}
       <AppUpdateHost />
+      <ControlAskNotice names={c.names} />
       {/* The "Used" bar along the bottom edge; the root leaves room for it only while it shows. */}
+      <CompanionAssist
+        companion={companions.companions?.[0] ?? null}
+        needsYou={needsYou}
+        panes={assistPanes}
+        nameOf={(id) => {
+          const p = c.registry.panes.get(id);
+          return p ? paneHeading(p.info, c.names.get(id) ?? p.info.agent_type).primary : id;
+        }}
+        activityOf={(id) => {
+          const p = c.registry.panes.get(id);
+          return p ? activityText(p.status, c.activities?.[id]) : null;
+        }}
+        onOpenPane={(id) => nav.select(id)}
+        onOpenInbox={() => {
+          nav.select(null);
+          setView('inbox');
+          setInboxVisit((n) => n + 1);
+        }}
+        onNudge={(id) => void tauri.writeInput(id, NUDGE_TEXT, true)}
+      />
       <UsageBar
         working={c.registry.paneList.filter((p) => p.status === 'running' && !needsYou.some((n) => n.paneId === p.info.id)).length}
         needsYou={needsYou.length}

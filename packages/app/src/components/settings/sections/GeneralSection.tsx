@@ -32,6 +32,7 @@ import { NumberControl, TextControl } from '../controls';
 import { LayoutThumbs, ThemeThumbs } from '../previews/Thumbs';
 import type { RowDef, SettingsEnv } from '../model';
 import { PACKAGE_CHECK_LABEL, PACKAGE_CHECK_NOTE, PackageCheckRow } from './PackageCheckRow';
+import { comfortRows } from './ComfortRows';
 import { T as WELCOME } from '../../firstrun/copy';
 import { reopenPatch } from '../../firstrun/model';
 import { Btn, FieldSelect, InfoRow, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
@@ -243,6 +244,7 @@ function WindowLayoutRow({ env }: { env: SettingsEnv }) {
 // ---------- the rows ----------
 
 export const generalRows: RowDef[] = [
+  ...comfortRows,
   { id: 'project-folder', label: 'Default project folder', hint: 'Where new panes and agents start.', keywords: 'workspace directory browse path', group: 'Project', render: (env) => <ProjectFolder env={env} /> },
   {
     id: 'your-name',
@@ -631,6 +633,22 @@ export const generalRows: RowDef[] = [
         description={t('settings.row.lend-labs.hint')}
         checked={env.settings.lend_enabled ?? false}
         onChange={(value) => void env.patch({ lend_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'desktop-potato-labs',
+    label: 'Desktop Potato',
+    hint: 'A small Potato on your desktop. It sleeps, and waves when an agent needs you.',
+    keywords: 'desktop potato pet companion mascot always on top bubble labs early',
+    group: 'Labs',
+    labs: { name: 'Desktop Potato', about: 'A small Potato on your desktop that waves when an agent needs you.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.desktop-potato-labs.label')}
+        description={t('settings.row.desktop-potato-labs.hint')}
+        checked={env.settings.desktop_pet_enabled ?? false}
+        onChange={(value) => void env.patch({ desktop_pet_enabled: value })}
       />
     ),
   },

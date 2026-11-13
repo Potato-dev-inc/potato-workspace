@@ -17,6 +17,13 @@
   pointer-events: none;
   will-change: transform;
 }
+.cockpit .ck-drop-line {
+  position: fixed;
+  z-index: 999;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
 .cockpit .ck-sr-only {
   position: absolute;
   width: 1px;
@@ -33,6 +40,15 @@
   gap: 8px;
   padding: 8px;
   pointer-events: none;
+}
+.cockpit .ck-dropzones--edge {
+  justify-content: flex-end;
+}
+.cockpit .ck-dropzones--edge .ck-dropzone {
+  flex: 0 0 32%;
+}
+.cockpit .ck-dropzone[hidden] {
+  display: none;
 }
 .cockpit .ck-dropzone {
   flex: 1 1 0;
@@ -54,6 +70,56 @@
   padding: 6px 12px;
   border-radius: 8px;
   background: var(--bg-raised);
+}
+/* Files dragged in from Windows: the sidebar says it takes a folder; a terminal pane takes a path. */
+.cockpit .ck-side.is-file-over {
+  position: relative;
+  outline: 2px dashed var(--accent-line);
+  outline-offset: -3px;
+}
+.cockpit .ck-side-dropnote {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-line);
+  background: var(--bg-raised);
+  font-size: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+.cockpit .pm-terminal-stage[data-file-over="true"] {
+  outline: 2px dashed var(--accent-line);
+  outline-offset: -3px;
+}
+.cockpit .ck-side-scroll .ck-pinned--empty {
+  height: 0;
+  margin: 0;
+  position: relative;
+  z-index: 30;
+}
+.cockpit .ck-pinned--empty .ck-pin-drop {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 4px;
+  background: var(--bg-raised);
+}
+.cockpit .ck-pin-drop {
+  margin: 2px 6px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--sep);
+  font-size: 12px;
+  text-align: center;
+  color: var(--label-3);
+}
+.cockpit .ck-pin-drop.is-over {
+  border-style: solid;
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
 }
 body.pm-dragging {
   user-select: none;

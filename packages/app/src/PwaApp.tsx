@@ -2,7 +2,7 @@
 // terminal tabs) plus an "All" overview. The older orchestrator-centric phone app is gone: `?pwa=legacy` opens this one.
 import { errorSentence } from './lib/sayError';
 import { NudgeScheduler } from './lib/nudge-scheduler';
-import { blockingCount, newerSnapshot, type AttentionItem, type AttentionSnapshot } from './lib/attention';
+import { newerSnapshot, type AttentionItem, type AttentionSnapshot } from './lib/attention';
 import { COPY } from './lib/attention-copy';
 import { PROMPT_KINDS } from './lib/needs-you-queue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -33,7 +33,11 @@ import {
   clearPairingInviteFromUrl,
 } from './components/PairInviteScreen';
 import { BridgePaneTerminal, useBridgePaneTransport } from './components/BridgePaneTerminal';
-import { AgentTabBar } from './components/mobile/AgentTabBar';
+import { PhoneHeader } from './components/mobile/PhoneHeader';
+import { PhoneDrawer, useEdgeSwipe } from './components/mobile/PhoneDrawer';
+import { needsPaneIds, pickLanding, rowState, waitingTotal } from './components/mobile/phoneNav';
+import { PhoneQuiet } from './components/mobile/PhoneQuiet';
+import { useT } from './i18n';
 import { PreviewNote } from './components/mobile/PreviewNote';
 import { StuckNote } from './components/mobile/StuckNote';
 import type { LoopSignalInfo } from './lib/bridge-types';
@@ -49,7 +53,6 @@ import { usePhoneAbilities } from './hooks/usePhoneAbilities';
 import { inputRefusalNote } from './lib/input-refusal';
 import { InputRefusedNote } from './components/mobile/InputRefusedNote';
 import { TypingNote } from './components/mobile/TypingNote';
-import { PaneViewSwitch } from './components/mobile/PaneViewSwitch';
 import { PhoneChatView } from './components/mobile/PhoneChatView';
 import { AcpPhoneDock } from './components/mobile/AcpPhoneDock';
 import { ACP_LANE } from './lib/acpChat';
@@ -58,6 +61,13 @@ import { publishBridgeOutbox } from './lib/paneOutbox-bridge';
 import { chatAllowedFor, keepViewsOf, readPaneViews, writePaneViews, type PaneView } from './lib/mobile-pane-view';
 import { MenuSheet, NewAgentSheet, type TypingEchoStats } from './components/mobile/MobileSheet';
 import { SetupScreen } from './components/pwa/SetupScreen';
+import { usePhoneLink } from './hooks/usePhoneLink';
+import { usePaneRules } from './hooks/usePaneRules';
+import { PhoneLinkLine } from './components/mobile/PhoneLinkLine';
+import { PhoneNeedsPill } from './components/mobile/PhoneNeedsPill';
+import { PhoneSetupSteps } from './components/mobile/PhoneSetupSteps';
+import { limitOf } from './lib/pane-rule-view';
+import { markSetupDone, markSetupPending, sendLocalTestNotification, setupPending } from './lib/phone-setup';
 
 const LS_ACTIVE_TAB = 'pm.mobile.activeTab';
 const RESIZES_CONTENT = 'interactive-widget=resizes-content';
@@ -121,6 +131,7 @@ function readActiveTab(): string {
 }
 
 export default function PwaApp() {
+  const t = useT();
   const [inviteCode, setInviteCode] = useState(() => readPairingInviteCode());
   const [bridgeUrl, setBridgeUrl] = useState<string | null>(() =>
     readPairingInviteCode()
@@ -129,6 +140,12 @@ export default function PwaApp() {
   );
   const [bridge, setBridge] = useState<BridgeClient | null>(null);
   const [bridgeReady, setBridgeReady] = useState(false);
+  /** The PC said "I do not know this phone" (401): the link changed or the pairing is gone. */
+  const [authFailed, setAuthFailed] = useState(false);
+  /** The three setup steps (Home Screen, notifications, a test): once after pairing, and again from Help. */
+  const [setupOpen, setSetupOpen] = useState(setupPending);
+  /** After a jump from the "needs you" pill: the chat to go back to. */
+  const [backTo, setBackTo] = useState<string | null>(null);
   const [panes, setPanes] = useState<PaneInfo[]>([]);
   const [panesLoaded, setPanesLoaded] = useState(false);
   const [previews, setPreviews] = useState<Record<string, PreviewUrl[]>>({});
@@ -142,6 +159,11 @@ export default function PwaApp() {
   const [paneViews, setPaneViews] = useState<Record<string, PaneView>>(readPaneViews);
   const [editingUrl, setEditingUrl] = useState(false);
   const [sheet, setSheet] = useState<'menu' | 'new' | 'plans' | null>(null);
+  /** The list of chats (the drawer from the top-left) is open. */
+  const [drawer, setDrawer] = useState(false);
+  /** The app has chosen the chat it opens in (once per start), or the person chose first. */
+  const [landed, setLanded] = useState(false);
+  const [attentionWaited, setAttentionWaited] = useState(false);
   /** "Search all chats" is open (full screen, over the tabs; nothing under it unmounts). */
   const [searchOpen, setSearchOpen] = useState(false);
   const [spawning, setSpawning] = useState(false);
@@ -253,9 +275,13 @@ export default function PwaApp() {
       client
         .listPanes()
         .then((list) => {
-          if (live) applyPanes(list);
+          if (!live) return;
+          setAuthFailed(false);
+          applyPanes(list);
         })
-        .catch(() => {});
+        .catch((error: unknown) => {
+          if (live && / -> 401/.test(errorSentence(error))) setAuthFailed(true);
+        });
       void client.listPreviews?.().then((m) => live && setPreviews(m)).catch(() => {});
       refreshAttention();
     };
@@ -336,14 +362,49 @@ export default function PwaApp() {
   }, [bridgeUrl, applyPanes, publishEcho, noteInputRefused]);
 
   usePushIntents(bridgeUrl, {
-    onOpenItem: (itemId, paneId) => setIntent({ itemId, paneId }),
-    onOpenPane: setActive,
-    onOpenQuestions: () => setActive(ALL_TAB),
+    onOpenItem: (itemId, paneId) => {
+      setLanded(true);
+      setIntent({ itemId, paneId });
+    },
+    onOpenPane: (id) => {
+      setLanded(true);
+      setActive(id);
+    },
+    onOpenQuestions: () => {
+      setLanded(true);
+      setActive(ALL_TAB);
+    },
   });
 
-  // A closed agent's tab falls back to All (only once the real pane list has arrived).
+  const phoneLink = usePhoneLink(bridgeReady, authFailed);
+  const paneRules = usePaneRules(bridge, bridgeReady);
+
+  // The agent chats, in tab order: what the drawer lists and where the app opens.
+  const agentPanes = useMemo(() => panes.filter((p) => !isCompanionPane(p.id)), [panes]);
+
+  // The app opens in a conversation (D10): the chat that needs you, else the one read last, else the first. The PC's list
+  // of what needs you is waited for a moment; an older PC that never sends it does not hold the app back.
   useEffect(() => {
-    if (panesLoaded && active !== ALL_TAB && !isCompanionTab(active) && !panes.some((p) => p.id === active)) setActive(ALL_TAB);
+    if (!panesLoaded) return;
+    const timer = window.setTimeout(() => setAttentionWaited(true), 1500);
+    return () => window.clearTimeout(timer);
+  }, [panesLoaded]);
+  useEffect(() => {
+    if (landed || !panesLoaded || (attention === null && !attentionWaited)) return;
+    setLanded(true);
+    if (intent) return;
+    const lastRead = agentPanes.some((p) => p.id === active) ? active : null;
+    const pick = pickLanding(agentPanes, attention, lastRead);
+    if (pick === null) return;
+    const waiting = needsPaneIds(agentPanes, attention).size > 0;
+    if (waiting || active === ALL_TAB) setActive(pick);
+  }, [landed, panesLoaded, attention, attentionWaited, agentPanes, active, intent]);
+
+  // A closed agent's tab falls back to the chat that needs you, else All (only once the real pane list has arrived).
+  useEffect(() => {
+    if (panesLoaded && active !== ALL_TAB && !isCompanionTab(active) && !panes.some((p) => p.id === active)) setActive(pickLanding(agentPanes, attention, null) ?? ALL_TAB);
+    // The PC's list of what needs you must not move the person out of a chat they are in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, panes, panesLoaded]);
   // A companion that is gone (archived on the PC) falls back to All, once the list has been read.
   useEffect(() => {
@@ -435,7 +496,8 @@ export default function PwaApp() {
   const chatAllowed = !!activePane && chatAllowedFor(agentListing, activePane.info.agent_type);
   // A chat session over ACP has no terminal behind it: its tab is the chat, with no switch, no terminal and no size to claim.
   const isAcpPane = activePane?.info.lane === ACP_LANE;
-  const activeView: PaneView = isAcpPane || (chatAllowed && paneViews[active] === 'chat') ? 'chat' : 'terminal';
+  // The chat is the default; the terminal is a peek from the name in the header.
+  const activeView: PaneView = isAcpPane || (chatAllowed && paneViews[active] !== 'terminal') ? 'chat' : 'terminal';
   // Only the open agent's terminal is streamed; the All overview reads previews by polling.
   const watchedPane = activePane && !isAcpPane ? active : null;
   useEffect(() => {
@@ -496,10 +558,22 @@ export default function PwaApp() {
   );
   const selectTab = useCallback(
     (id: string) => {
+      setLanded(true);
+      setDrawer(false);
+      setBackTo(null);
       setActive(id);
       if (id !== ALL_TAB && !isCompanionTab(id)) requestNudge(false);
     },
     [requestNudge],
+  );
+  /** A tap on the "needs you" pill: open that chat, with a back arrow to this one. */
+  const jumpTo = useCallback(
+    (paneId: string) => {
+      const from = active;
+      selectTab(paneId);
+      if (from !== ALL_TAB && !isCompanionTab(from)) setBackTo(from);
+    },
+    [active, selectTab],
   );
   const selectView = useCallback(
     (view: PaneView) => {
@@ -591,10 +665,10 @@ export default function PwaApp() {
           setAgentListing(listing);
           setLaunchEntries(phoneLaunchEntries(listing));
         }
-        else setSpawnError('Could not read the agent list from your PC.');
+        else setSpawnError(t('phone.new.noList'));
       })
       .catch((e) => setSpawnError(errorSentence(e)));
-  }, [bridge]);
+  }, [bridge, t]);
 
   // The refusal line stays while the person is looking at it, then goes (typing again brings it back).
   useEffect(() => {
@@ -627,7 +701,7 @@ export default function PwaApp() {
     const open = new Set(attention.items.filter((i) => i.state === 'open' && PROMPT_KINDS.includes(i.kind)).map((i) => i.pane?.id));
     return helpersAskingFor(registry.paneList, active, (id) => open.has(id));
   }, [attention, active, registry.paneList]);
-  const dockCard = (helperPaneIds: string[]) =>
+  const dockCard = (helperPaneIds: string[], inChat = false) =>
     bridge && activePane && attention ? (
       <DockedCard
         snapshot={attention}
@@ -636,6 +710,7 @@ export default function PwaApp() {
         bridge={bridge}
         canAnswer={canAnswer}
         autoFocus={deepLinked}
+        inChat={inChat}
         onRefresh={refreshAttentionNow}
         onOpenPane={setActive}
         onOpenItem={(id) => {
@@ -646,6 +721,58 @@ export default function PwaApp() {
     ) : null;
   const dockedCard = dockCard([]);
 
+  // Stop one agent from the drawer (long press on its row), and close one.
+  const stopPane = useCallback(
+    async (id: string): Promise<string | null> => {
+      if (!bridge?.interruptPane) return t('phone.stop.failed');
+      try {
+        await bridge.interruptPane(id);
+        return null;
+      } catch (error) {
+        return / -> 403/.test(errorSentence(error)) ? t('phone.stop.refused') : t('phone.stop.failed');
+      }
+    },
+    [bridge, t],
+  );
+  const closePaneById = useCallback(
+    async (id: string) => {
+      if (!bridge) return;
+      try {
+        await bridge.killPane(id);
+        if (active === id) setActive(ALL_TAB);
+        applyPanes(await bridge.listPanes());
+      } catch (error) {
+        setToast(errorSentence(error));
+      }
+    },
+    [bridge, active, applyPanes],
+  );
+  const locks = useMemo(() => Object.fromEntries(agentPanes.map((p) => [p.id, limitOf(paneRules.rules[p.id])])), [agentPanes, paneRules.rules]);
+  const testNotification = useCallback(async () => {
+    const result = await sendLocalTestNotification(t('phone.setup.testNotifTitle'), t('phone.setup.testNotifBody'));
+    return result === 'sent'
+      ? t('phone.setup.testSent')
+      : result === 'no-permission'
+        ? t('phone.setup.testNoPermission')
+        : result === 'unsupported'
+          ? t('phone.setup.pushUnsupported')
+          : t('phone.setup.testFailed');
+  }, [t]);
+
+  const needsNow = needsPaneIds(agentPanes, attention);
+  const edgeSwipe = useEdgeSwipe(() => setDrawer(true), !drawer && sheet === null && !searchOpen);
+  const activePaneInfo = agentPanes.find((p) => p.id === active);
+  const stateKeys = {
+    needs: 'phone.state.needs',
+    working: 'phone.state.working',
+    risk: 'phone.state.risk',
+    broken: 'phone.state.broken',
+    idle: 'phone.state.idle',
+  } as const;
+  const headerTitle =
+    active === ALL_TAB ? t('phone.overview') : activeCompanion ? activeCompanion.name : (labels.get(active) ?? activePaneInfo?.agent_type ?? '…');
+  const headerState = activePaneInfo ? t(stateKeys[rowState(activePaneInfo, needsNow, attention)]) : null;
+
   if (inviteCode) {
     return (
       <div className="pwa-shell ph bg-pm-bg text-zinc-100">
@@ -653,6 +780,8 @@ export default function PwaApp() {
           pairingCode={inviteCode}
           onConnected={(url) => {
             clearPairingInviteFromUrl();
+            markSetupPending();
+            setSetupOpen(setupPending());
             setInviteCode(null);
             setBridgeUrl(url);
             setEditingUrl(false);
@@ -680,21 +809,23 @@ export default function PwaApp() {
   }
 
   return (
-    <div className="pwa-shell pwa-shell--fit-visual ph">
+    <div className="pwa-shell pwa-shell--fit-visual ph" {...edgeSwipe}>
       <div className="flex h-full min-h-0 min-w-0 flex-col">
-        <AgentTabBar
-          panes={panes}
-          labels={labels}
-          active={active}
+        <PhoneHeader
+          title={headerTitle}
+          stateWords={headerState}
+          waiting={waitingTotal(agentPanes, attention)}
           bridgeReady={bridgeReady}
-          onSelect={selectTab}
+          onMenu={() => setDrawer(true)}
           onNew={openNewAgentSheet}
-          onSearch={() => setSearchOpen(true)}
-          onMenu={() => setSheet('menu')}
-          needsYou={attention ? blockingCount(attention) : undefined}
-          companions={companions}
+          onBack={backTo && backTo !== active && panes.some((p) => p.id === backTo) ? { label: labels.get(backTo) ?? '…', go: () => selectTab(backTo) } : undefined}
+          peek={
+            activePane
+              ? { view: activeView, canSwitch: chatAllowed && !isAcpPane, onView: selectView, onClose: () => void closeActive() }
+              : undefined
+          }
         />
-        {activePane && chatAllowed && !isAcpPane && <PaneViewSwitch view={activeView} onChange={selectView} />}
+        <PhoneLinkLine kind={phoneLink.kind} recovered={phoneLink.recovered} onPairAgain={() => setEditingUrl(true)} />
         {active !== ALL_TAB && stuck.get(active) && <StuckNote signal={stuck.get(active)!} />}
         {active !== ALL_TAB && previews[active]?.[0] && <PreviewNote preview={previews[active][0]} />}
         <main
@@ -703,25 +834,20 @@ export default function PwaApp() {
           onPointerDownCapture={activePane && activeView === 'terminal' ? onAgentPointerDown : undefined}
           onPointerUpCapture={activePane && activeView === 'terminal' ? onAgentPointerUp : undefined}
         >
-          {bridge && active === ALL_TAB && (
+          {active === ALL_TAB && bridgeReady && !landed && <PhoneQuiet kind="loading" />}
+          {bridge && active === ALL_TAB && (landed || !bridgeReady) && (
             <AgentsOverview
               bridge={bridge}
               bridgeReady={bridgeReady}
               panes={overviewPanes}
               labels={labels}
-              onOpen={setActive}
+              onOpen={selectTab}
               onNew={openNewAgentSheet}
               stuck={stuck}
               questionsRevision={questionsRev}
               attention={attention}
               canAnswer={canAnswer}
               onRefreshAttention={refreshAttentionNow}
-              night={
-                <>
-                  {nightApi && <NightSummary api={nightApi} canControl={canControl} refreshKey={resyncKey} />}
-                  {reviewApi && <ReviewSummary api={reviewApi} refreshKey={resyncKey} />}
-                </>
-              }
             />
           )}
           {activeView === 'terminal' && dockedCard}
@@ -764,20 +890,33 @@ export default function PwaApp() {
               canWatch={abilities.canWatch}
               canType={abilities.canType}
               sendBlock={composerBlock(activePane, activePane?.info.agent_type === 'shell', isAcpPane)}
+              link={phoneLink.kind}
+              working={activePane.status === 'running'}
+              ruleLimit={limitOf(paneRules.rules[active])}
+              above={
+                <PhoneNeedsPill
+                  snapshot={attention}
+                  activePaneId={active}
+                  bridge={bridge}
+                  canAnswer={canAnswer}
+                  onJump={jumpTo}
+                  onRefresh={refreshAttentionNow}
+                />
+              }
               dock={
                 isAcpPane ? (
                   <>
                     {bridge && <AcpPhoneDock bridge={bridge} paneId={active} canAnswer={canAnswer} canType={abilities.canType} labels={labels} questionsRevision={questionsRev} />}
-                    {dockCard(helperAskers)}
+                    {dockCard(helperAskers, true)}
                   </>
                 ) : (
-                  dockCard(helperAskers)
+                  dockCard(helperAskers, true)
                 )
               }
             />
           )}
           {active !== ALL_TAB && !isCompanionTab(active) && !activePane && (
-            <div className="ph-loading">Loading agent…</div>
+            <div className="ph-loading">{t('phone.loadingAgent')}</div>
           )}
           {activePane && activeView === 'terminal' && abilities.typingNote && <TypingNote text={abilities.typingNote} />}
           {activePane && activeView === 'terminal' && inputRefused && inputRefused.paneId === active && (
@@ -785,6 +924,33 @@ export default function PwaApp() {
           )}
         </main>
       </div>
+      <PhoneDrawer
+        open={drawer}
+        onClose={() => setDrawer(false)}
+        panes={agentPanes}
+        labels={labels}
+        agentName={(id) => agentLabel(agentListing, id)}
+        attention={attention}
+        active={active}
+        bridgeReady={bridgeReady}
+        companions={companions}
+        onSelect={selectTab}
+        locks={locks}
+        onStopPane={stopPane}
+        onClosePane={(id) => void closePaneById(id)}
+        onSearch={() => {
+          setDrawer(false);
+          setSearchOpen(true);
+        }}
+        onOverview={() => selectTab(ALL_TAB)}
+        onSettings={() => {
+          setDrawer(false);
+          setSheet('menu');
+        }}
+      >
+        {nightApi && <NightSummary api={nightApi} canControl={canControl} refreshKey={resyncKey} />}
+        {reviewApi && <ReviewSummary api={reviewApi} refreshKey={resyncKey} />}
+      </PhoneDrawer>
       {searchOpen && bridge && (
         <PhoneSearch
           bridge={bridge}
@@ -830,6 +996,21 @@ export default function PwaApp() {
             setSheet(null);
           }}
           onOpenPlans={() => setSheet('plans')}
+          linkEvents={phoneLink.events}
+          onOpenSetup={() => {
+            setSheet(null);
+            setSetupOpen(true);
+          }}
+          onTestNotification={testNotification}
+        />
+      )}
+      {setupOpen && bridgeUrl && (
+        <PhoneSetupSteps
+          baseUrl={bridgeUrl}
+          onDone={() => {
+            markSetupDone();
+            setSetupOpen(false);
+          }}
         />
       )}
       {sheet === 'plans' && plansTransport && <PhonePlans api={plansTransport} onClose={() => setSheet(null)} />}

@@ -1,6 +1,7 @@
 // Phone-side push: the "Notifications" toggle as a small state machine, plus the real wiring
 // (service worker, PushManager, bridge routes). The machine is dependency-injected so it is
 // tested without a browser.
+import { t as translate, type MessageKey } from '../i18n';
 import { ngrokRequestHeaders } from './bridge-ngrok';
 import { mergeBridgeHeaders } from './mobile-pairing-auth';
 
@@ -29,26 +30,22 @@ export interface ToggleView {
   hint: string | null;
 }
 
-export function toggleView(state: ToggleState): ToggleView {
+export function toggleView(state: ToggleState, t: (key: MessageKey) => string = translate): ToggleView {
   switch (state.kind) {
     case 'unsupported':
-      return { checked: false, disabled: true, hint: 'This browser cannot show notifications from the web app.' };
+      return { checked: false, disabled: true, hint: t('phone.notif.unsupported') };
     case 'ios-install':
-      return {
-        checked: false,
-        disabled: true,
-        hint: 'On iPhone, add Potato Workspace to your Home Screen first (Share, then Add to Home Screen), then open it from there.',
-      };
+      return { checked: false, disabled: true, hint: t('phone.notif.iosInstall') };
     case 'blocked':
-      return { checked: false, disabled: true, hint: 'Notifications are blocked for this app. Allow them in your phone settings.' };
+      return { checked: false, disabled: true, hint: t('phone.notif.blocked') };
     case 'working':
       return { checked: false, disabled: true, hint: null };
     case 'on':
-      return { checked: true, disabled: false, hint: 'You will get a notification when an agent needs you, errors, or finishes a run. Previews may show the command on your lock screen unless you hide details.' };
+      return { checked: true, disabled: false, hint: t('phone.notif.on') };
     case 'error':
       return { checked: false, disabled: false, hint: state.message };
     default:
-      return { checked: false, disabled: false, hint: 'Get a notification when an agent needs you. Previews may show the command on your lock screen.' };
+      return { checked: false, disabled: false, hint: t('phone.notif.off') };
   }
 }
 

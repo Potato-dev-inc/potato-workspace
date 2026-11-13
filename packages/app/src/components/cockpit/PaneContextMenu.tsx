@@ -20,6 +20,7 @@ export function PaneContextMenu({
   pinned,
   onPin,
   onHandoff,
+  onPotato,
   onAction,
   onInterrupt,
   onClose,
@@ -34,6 +35,8 @@ export function PaneContextMenu({
   onPin?: () => void;
   /** "Handoff from here": the agent writes HANDOFF.md and a new agent continues from it. Absent: no such item. */
   onHandoff?: () => void;
+  /** "Potato, check on this": the companion reads this chat and says what it is doing. Absent: no companion, no item. */
+  onPotato?: () => void;
   onAction: (action: PaneAction) => void;
   onInterrupt: () => void;
   /** The menu wants to go away (Escape, Tab, a click outside). `refocus` when the keyboard closed it. */
@@ -133,6 +136,7 @@ export function PaneContextMenu({
       {item(t('sidebar.reflow'), <IconReflow />, () => onAction('reflow'))}
       {item(t('sidebar.interrupt'), <IconStop />, onInterrupt, '⌃C')}
       {onHandoff && item(t('sidebar.handoffFromHere'), null, onHandoff)}
+      {onPotato && item(t('potato.check.menu'), null, onPotato)}
       {item(t('sidebar.details'), <IconInfo />, () => onAction('details'))}
       <div className="ck-menu-sep" role="separator" />
       {item(t('sidebar.close'), <IconClose />, () => onAction('close'))}

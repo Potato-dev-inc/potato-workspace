@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { PaneInfo } from '@potato-workspace/shared';
 import type { BridgeClient } from '../../lib/bridge';
 import type { LoopSignalInfo } from '../../lib/bridge-types';
-import { ago, glyphStatus, groupPanes, previewLines, projectName, waitingCount } from '../../lib/mobile-agent-tabs';
+import { glyphStatus, groupPanes, previewLines, projectName, waitingCount } from '../../lib/mobile-agent-tabs';
 import { DotSpinner } from '../cockpit/DotSpinner';
 import { DigestCard } from './DigestCard';
 import { isLive } from '../../lib/questions';
@@ -13,8 +13,29 @@ import { blockingCount, type AttentionSnapshot } from '../../lib/attention';
 import { QuestionsView, useQuestionPolling } from './QuestionsList';
 import { NeedsYouList } from './NeedsYouList';
 import { TeamGroup } from './TeamGroup';
+import { PhoneQuiet } from './PhoneQuiet';
+import { useT } from '../../i18n';
+
+/** The headings of the groups (the lib gives their ids; the words are read here so they follow the language). */
+const GROUP_KEYS: Record<string, 'phone.needsYou' | 'phone.state.working' | 'phone.state.idle'> = {
+  needs: 'phone.needsYou',
+  working: 'phone.state.working',
+  idle: 'phone.state.idle',
+};
 
 const PREVIEW_POLL_MS = 4000;
+/** Not connected for this long: Potato says the PC cannot be reached. */
+const AWAY_AFTER_MS = 8000;
+
+/** "5s ago", "3m ago": the lib decides the size of the number, the words come from the language. */
+function agoWords(t: ReturnType<typeof useT>, at: number | null, now: number): string | null {
+  if (at === null) return null;
+  const s = Math.max(0, Math.round((now - at) / 1000));
+  if (s < 5) return t('phone.agoShort.now');
+  if (s < 60) return t('phone.agoShort.sec', { n: s });
+  if (s < 3600) return t('phone.agoShort.min', { n: Math.floor(s / 60) });
+  return t('phone.agoShort.hour', { n: Math.floor(s / 3600) });
+}
 
 function Chevron() {
   return (
@@ -69,11 +90,20 @@ export function AgentsOverview({
   /** Drawn under the Agents title, inside the scrolling list (the Night Shift card). */
   night?: ReactNode;
 }) {
+  const t = useT();
   const { questions, refresh } = useQuestionPolling(bridge, bridgeReady && questionsRevision !== undefined, questionsRevision ?? 0);
   const liveQuestions = questionsRevision === undefined ? [] : questions.filter((q) => isLive(q, Date.now()));
   const [previews, setPreviews] = useState<Record<string, string[]>>({});
   const [now, setNow] = useState(() => Date.now());
   const ids = panes.map((pane) => pane.id).join(',');
+  // Not connected for a while: the quiet place stops saying "connecting" and says the PC cannot be reached.
+  const [gaveUp, setGaveUp] = useState(false);
+  useEffect(() => {
+    setGaveUp(false);
+    if (bridgeReady) return;
+    const timer = window.setTimeout(() => setGaveUp(true), AWAY_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, [bridgeReady]);
 
   useEffect(() => {
     if (!bridgeReady || !ids) return;
@@ -109,7 +139,7 @@ export function AgentsOverview({
     return (
       <>
         {night}
-        <div className="ph-connecting">Connecting to your PC…</div>
+        <PhoneQuiet kind={gaveUp ? 'away' : 'loading'} />
       </>
     );
   }
@@ -136,10 +166,10 @@ export function AgentsOverview({
   );
   const title = (
     <header className="ph-large">
-      <h1>Agents</h1>
-      <div className="ph-counter" aria-label={`${Number(waiting)} waiting`}>
+      <h1>{t('phone.overview.title')}</h1>
+      <div className="ph-counter" aria-label={t('phone.overview.waitingAria', { n: Number(waiting) })}>
         <span className="ph-doto">{waiting}</span>
-        <span className="ph-counter-label">waiting</span>
+        <span className="ph-counter-label">{t('phone.overview.waiting')}</span>
       </div>
     </header>
   );
@@ -153,15 +183,11 @@ export function AgentsOverview({
         {cards}
         <TeamGroup bridge={bridge} bridgeReady={bridgeReady} />
         <DigestCard bridge={bridge} bridgeReady={bridgeReady} onOpen={onOpen} />
-        <div className="ph-empty">
-          <div className="ph-dotgrid" aria-hidden="true" />
-          <DotSpinner status="idle" size={5} />
-          <b>No agents running</b>
-          <p>Agents you open on the PC, or that another agent starts through Potato Workspace, show up here.</p>
+        <PhoneQuiet kind="empty">
           <button type="button" onClick={onNew} className="ph-btn ph-btn--primary">
-            Open an agent
+            {t('phone.empty.start')}
           </button>
-        </div>
+        </PhoneQuiet>
       </div>
     );
   }
@@ -172,17 +198,18 @@ export function AgentsOverview({
       {night}
       {header}
       {cards}
+      {Number(waiting) === 0 && <PhoneQuiet kind="done" compact />}
       <TeamGroup bridge={bridge} bridgeReady={bridgeReady} />
       <DigestCard bridge={bridge} bridgeReady={bridgeReady} onOpen={onOpen} />
       {groupPanes(panes).map((group) => (
         <section key={group.id} aria-label={group.title}>
-          <h2 className="ph-sec">{group.title}</h2>
+          <h2 className="ph-sec">{t(GROUP_KEYS[group.id] ?? 'phone.state.idle')}</h2>
           <ul className="ph-group">
             {group.panes.map((pane) => {
               const lines = previews[pane.id] ?? [];
-              const last = ago(pane.last_output_at, now);
+              const last = agoWords(t, pane.last_output_at, now);
               const signal = stuck?.get(pane.id);
-              const sub = signal ? `Looks stuck: ${signal.summary}` : (lines[lines.length - 1] ?? 'No output yet');
+              const sub = signal ? t('phone.overview.stuck', { summary: signal.summary }) : (lines[lines.length - 1] ?? t('phone.overview.noOutput'));
               return (
                 <li key={pane.id}>
                   <button type="button" onClick={() => onOpen(pane.id)} className={`ph-row${group.id === 'needs' ? ' ph-row--hot' : ''}`}>

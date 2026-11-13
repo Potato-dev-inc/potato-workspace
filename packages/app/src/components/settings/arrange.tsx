@@ -79,6 +79,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
   ],
   look: [
     { group: 'Appearance', rows: ['theme', 'language', 'mode-switch-animation', 'individual-window-layout', 'usage-bar', 'usage-login-reads'] },
+    { group: 'Comfort', rows: ['text-size', 'strong-contrast', 'less-motion', 'speak-results'] },
     { group: 'You', rows: ['your-name'] },
     { group: 'Startup', rows: ['start-at-sign-in'] },
     { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours'] },

@@ -6,7 +6,7 @@ export const ENGLISH_ALLOW = [
   'Potato', 'Workspace', 'Claude', 'Codex', 'Cursor', 'OpenCode', 'Kilo', 'Gemini', 'Copilot', 'Aider', 'Anthropic', 'OpenAI',
   'GitHub', 'Git', 'PR', 'AI', 'API', 'MCP', 'CLI', 'URL', 'HTTP', 'HTTPS', 'ID', 'PC', 'OK', 'Windows', 'Mac', 'Linux',
   'Discord', 'Telegram', 'Chrome', 'npm', 'VS', 'Code', 'Max', 'Pro', 'Plus', 'Free', 'GPT', 'Sonnet', 'Opus', 'Haiku',
-  'App', 'Labs', 'min', 'ms', 'px', 'KB', 'MB', 'GB', 'md', 'json', 'ts', 'tsx', 'rs', 'js', 'css', 'toml', 'exe',
+  'App', 'Alt', 'Labs', 'min', 'ms', 'px', 'KB', 'MB', 'GB', 'md', 'json', 'ts', 'tsx', 'rs', 'js', 'css', 'toml', 'exe',
 ];
 
 export function useChinese(): void {

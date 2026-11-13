@@ -5,6 +5,8 @@ import type { AgentType } from '@potato-workspace/shared';
 import type { LaunchEntry } from '../../lib/agentRegistry';
 import type { PublicSettings } from '../../lib/bridge-settings';
 import type { BridgeLinkStats } from '../../lib/bridge-sse';
+import { t as translate, useT } from '../../i18n';
+import { clockOf, type LinkEvent, type LinkKind } from '../../lib/phone-link';
 import { DotSpinner } from '../cockpit/DotSpinner';
 import { NotificationsToggle } from './NotificationsToggle';
 import { TelegramOffRow } from './TelegramOffRow';
@@ -19,6 +21,7 @@ const SHEET_CLOSE_MS = 240;
  * tap the scrim, press Escape or "Done" for the same. The body scrolls on its own.
  */
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const t = useT();
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ y: number; t: number; dy: number; v: number } | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -88,8 +91,8 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
           <div className="ph-grabber" aria-hidden="true" />
           <div className="ph-sheet-h">
             <b>{title}</b>
-            <button type="button" aria-label="Close" onClick={onClose} className="ph-btn ph-btn--plain">
-              Done
+            <button type="button" aria-label={t('phone.sheet.close')} onClick={onClose} className="ph-btn ph-btn--plain">
+              {t('phone.sheet.done')}
             </button>
           </div>
         </div>
@@ -113,6 +116,7 @@ export function ConfirmSheet({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   return (
     <div className="ph-action" onClick={onCancel}>
       <div role="alertdialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
@@ -127,7 +131,7 @@ export function ConfirmSheet({
         </div>
         <div className="ph-action-card ph-action-cancel">
           <button type="button" className="ph-action-btn" onClick={onCancel}>
-            Cancel
+            {t('phone.sheet.cancel')}
           </button>
         </div>
       </div>
@@ -149,11 +153,12 @@ export function NewAgentSheet({
   spawning: boolean;
   error: string | null;
 }) {
+  const t = useT();
   return (
-    <Sheet title="Open an agent on your PC" onClose={onClose}>
-      {!entries && <div className="ph-loading">Loading agents…</div>}
+    <Sheet title={t('phone.new.title')} onClose={onClose}>
+      {!entries && <div className="ph-loading">{t('phone.new.loading')}</div>}
       {entries && (
-        <ul className="ph-group" aria-label="Agents">
+        <ul className="ph-group" aria-label={t('phone.new.list')}>
           {entries.map((entry) => (
             <li key={entry.type}>
               <button
@@ -166,7 +171,7 @@ export function NewAgentSheet({
               >
                 <span className="ph-txt">
                   <span className="ph-t">{entry.label}</span>
-                  {entry.experimental && <span className="ph-s">Experimental</span>}
+                  {entry.experimental && <span className="ph-s">{t('phone.new.experimental')}</span>}
                   {entry.disabledReason && <span className="ph-s">{entry.disabledReason}</span>}
                 </span>
                 {!entry.disabled && (
@@ -184,13 +189,21 @@ export function NewAgentSheet({
       {spawning && (
         <div className="ph-foot" role="status" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <DotSpinner status="running" />
-          Starting…
+          {t('phone.new.starting')}
         </div>
       )}
       {error && <div className="ph-foot ph-foot--err" role="alert">{error}</div>}
     </Sheet>
   );
 }
+
+const LINK_WORDS: Record<LinkKind, 'phone.link.connected' | 'phone.link.reconnecting' | 'phone.link.asleep' | 'phone.link.offline' | 'phone.link.changed'> = {
+  connected: 'phone.link.connected',
+  reconnecting: 'phone.link.reconnecting',
+  asleep: 'phone.link.asleep',
+  offline: 'phone.link.offline',
+  changed: 'phone.link.changed',
+};
 
 /** Keystroke-to-echo delay measured by the phone: the last one and the median of recent ones. */
 export interface TypingEchoStats {
@@ -200,7 +213,7 @@ export interface TypingEchoStats {
 
 const fmtMs = (ms: number | null | undefined): string => (ms === null || ms === undefined ? '—' : `${Math.round(ms)} ms`);
 
-const reconnectsText = (n: number): string | null => (n <= 0 ? null : n === 1 ? 'reconnected once' : `reconnected ${n} times`);
+const reconnectsText = (n: number): string | null => (n <= 0 ? null : n === 1 ? translate('phone.conn.reconnectedOnce') : translate('phone.conn.reconnected', { n }));
 
 /**
  * One plain-text line describing the link, in words a person reads ("typing delay", "reconnects") rather than
@@ -210,15 +223,15 @@ export function connectionLine(link: BridgeLinkStats | null, echo: TypingEchoSta
   const delay =
     echo?.lastMs === null || echo?.lastMs === undefined
       ? null
-      : `typing delay ${fmtMs(echo.lastMs)}${echo.medianMs === null ? '' : ` (usually ${fmtMs(echo.medianMs)})`}`;
+      : translate('phone.conn.delay', { ms: fmtMs(echo.lastMs) }) + (echo.medianMs === null ? '' : translate('phone.conn.usually', { ms: fmtMs(echo.medianMs) }));
   const parts: (string | null)[] = [];
-  if (!link) parts.push('Connecting…', delay);
-  else if (link.mode === 'polling') parts.push('Slow connection, retrying', delay);
-  else if (link.mode === 'stream') parts.push('Connected on this network', delay);
-  else if (link.mode === 'connecting') parts.push('Connecting…', delay, reconnectsText(link.reconnects));
+  if (!link) parts.push(translate('phone.conn.connecting'), delay);
+  else if (link.mode === 'polling') parts.push(translate('phone.conn.slow'), delay);
+  else if (link.mode === 'stream') parts.push(translate('phone.conn.onNetwork'), delay);
+  else if (link.mode === 'connecting') parts.push(translate('phone.conn.connecting'), delay, reconnectsText(link.reconnects));
   else
     parts.push(
-      `Connected · ${fmtMs(link.rttMs)} round trip`,
+      translate('phone.conn.roundTrip', { ms: fmtMs(link.rttMs) }),
       delay,
       reconnectsText(link.reconnects),
     );
@@ -238,6 +251,9 @@ export function MenuSheet({
   onEditConnection,
   onStopAll,
   onOpenPlans,
+  linkEvents,
+  onOpenSetup,
+  onTestNotification,
 }: {
   onClose: () => void;
   bridgeUrl: string;
@@ -255,7 +271,15 @@ export function MenuSheet({
   onStopAll?: () => void;
   /** Opens "Your plans" (read only) over this menu. */
   onOpenPlans?: () => void;
+  /** The last connection events (newest last), for Help. */
+  linkEvents?: LinkEvent[];
+  /** Opens the three setup steps again. */
+  onOpenSetup?: () => void;
+  /** Shows a test notification on this phone. Resolves to one plain sentence about what happened. */
+  onTestNotification?: () => Promise<string>;
 }) {
+  const t = useT();
+  const [testNote, setTestNote] = useState<string | null>(null);
   const setDelay = (value: number) => {
     const ms = Number.isFinite(value) ? (value <= 0 ? 0 : Math.min(1000, Math.max(50, Math.round(value)))) : 250;
     onPatchSettings({ mobile_input_delay_ms: ms });
@@ -263,32 +287,32 @@ export function MenuSheet({
   const [confirm, setConfirm] = useState<'stop' | 'close' | null>(null);
   return (
     <>
-      <Sheet title="Potato Workspace" onClose={onClose}>
-        <h2 className="ph-sec">Connection</h2>
+      <Sheet title={t('phone.menu.title')} onClose={onClose}>
+        <h2 className="ph-sec">{t('phone.menu.connection')}</h2>
         <div className="ph-group">
           <div className="ph-row">
             <span className={`ph-conn${bridgeReady ? '' : ' ph-conn--off'}`} aria-hidden="true" />
-            <span className="ph-rowtext">{bridgeReady ? 'Connected' : 'Connecting'}</span>
+            <span className="ph-rowtext">{bridgeReady ? t('phone.menu.connected') : t('phone.menu.connecting')}</span>
             <button type="button" onClick={onEditConnection} className="ph-btn ph-btn--plain" style={{ marginRight: -10 }}>
-              Change
+              {t('phone.menu.change')}
             </button>
           </div>
           <div className="ph-row" style={{ minHeight: 0 }}>
             <span className="ph-value" style={{ maxWidth: '100%' }} title={bridgeUrl}>{bridgeUrl}</span>
           </div>
         </div>
-        <p className="ph-foot ph-foot--mono" aria-label="Connection">
+        <p className="ph-foot ph-foot--mono" aria-label={t('phone.menu.connection')}>
           {connectionLine(link, echo)}
         </p>
 
-        <h2 className="ph-sec">Notifications</h2>
+        <h2 className="ph-sec">{t('phone.menu.notifications')}</h2>
         <NotificationsToggle baseUrl={bridgeUrl} bridgeReady={bridgeReady} />
         <TelegramOffRow baseUrl={bridgeUrl} bridgeReady={bridgeReady} />
 
-        <h2 className="ph-sec">Terminal</h2>
+        <h2 className="ph-sec">{t('phone.menu.terminal')}</h2>
         <div className="ph-group">
           <label className="ph-switch-row">
-            <span className="ph-rowtext">Input box under the terminal</span>
+            <span className="ph-rowtext">{t('phone.menu.inputBox')}</span>
             <input
               type="checkbox"
               className="ph-switch"
@@ -298,7 +322,7 @@ export function MenuSheet({
             />
           </label>
           <label className="ph-switch-row" style={{ borderTop: '1px solid var(--sep)' }}>
-            <span className="ph-rowtext">Keyboard resizes the agent</span>
+            <span className="ph-rowtext">{t('phone.menu.keyboardResizes')}</span>
             <input
               type="checkbox"
               className="ph-switch"
@@ -308,7 +332,7 @@ export function MenuSheet({
             />
           </label>
           <label className="ph-switch-row" style={{ borderTop: '1px solid var(--sep)' }}>
-            <span className="ph-rowtext">Typing buffer</span>
+            <span className="ph-rowtext">{t('phone.menu.typingBuffer')}</span>
             <input
               type="number"
               min={0}
@@ -318,22 +342,20 @@ export function MenuSheet({
               disabled={!bridgeReady}
               onChange={(e) => setDelay(Number(e.target.value))}
               className="ph-numfield"
-              aria-label="Typing buffer in milliseconds"
+              aria-label={t('phone.menu.typingBufferMs')}
             />
             <span className="ph-value">ms</span>
           </label>
         </div>
-        <p className="ph-foot">
-          Off: the agent keeps its size and the keyboard covers the top of the screen (swipe to see it). On: the agent redraws above the keyboard (Claude reprints each time).
-        </p>
+        <p className="ph-foot">{t('phone.menu.keyboardNote')}</p>
 
         {(onStopAll || activeLabel) && (
           <>
-            <h2 className="ph-sec">Agents</h2>
+            <h2 className="ph-sec">{t('phone.menu.agents')}</h2>
             <div className="ph-group">
               {onStopAll && (
                 <button type="button" disabled={!bridgeReady} onClick={() => setConfirm('stop')} className="ph-rowbtn ph-rowbtn--strong">
-                  Stop all agents
+                  {t('phone.menu.stopAll')}
                 </button>
               )}
               {activeLabel && (
@@ -343,7 +365,7 @@ export function MenuSheet({
                   className="ph-rowbtn ph-rowbtn--strong"
                   style={onStopAll ? { borderTop: '1px solid var(--sep)' } : undefined}
                 >
-                  Close {activeLabel}
+                  {t('phone.menu.closeOne', { name: activeLabel })}
                 </button>
               )}
             </div>
@@ -352,10 +374,10 @@ export function MenuSheet({
 
         {onOpenPlans && (
           <>
-            <h2 className="ph-sec">Usage</h2>
+            <h2 className="ph-sec">{t('phone.menu.usage')}</h2>
             <div className="ph-group">
               <button type="button" onClick={onOpenPlans} className="ph-row">
-                <span className="ph-rowtext">Your plans</span>
+                <span className="ph-rowtext">{t('phone.menu.plans')}</span>
                 <span className="ph-chev" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="m9 5 7 7-7 7" />
@@ -366,17 +388,63 @@ export function MenuSheet({
           </>
         )}
 
+        {(linkEvents || onOpenSetup || onTestNotification) && (
+          <>
+            <h2 className="ph-sec">{t('phone.help.title')}</h2>
+            <div className="ph-group">
+              {onOpenSetup && (
+                <button type="button" onClick={onOpenSetup} className="ph-row">
+                  <span className="ph-rowtext">{t('phone.help.setup')}</span>
+                </button>
+              )}
+              {onTestNotification && (
+                <button
+                  type="button"
+                  className="ph-row"
+                  data-testid="phone-test-push"
+                  onClick={() => void onTestNotification().then(setTestNote)}
+                >
+                  <span className="ph-rowtext">{t('phone.help.testPush')}</span>
+                </button>
+              )}
+            </div>
+            {testNote && (
+              <p className="ph-foot" role="status">
+                {testNote}
+              </p>
+            )}
+            {linkEvents && (
+              <>
+                <h3 className="ph-foot" style={{ margin: '12px 0 4px' }}>
+                  {t('phone.help.events')}
+                </h3>
+                {linkEvents.length === 0 ? (
+                  <p className="ph-foot">{t('phone.help.noEvents')}</p>
+                ) : (
+                  <ul className="ph-events" data-testid="phone-link-events" aria-label={t('phone.help.events')}>
+                    {[...linkEvents].reverse().map((event) => (
+                      <li key={`${event.at}-${event.kind}`}>
+                        <time>{clockOf(event.at)}</time> <span>{t(LINK_WORDS[event.kind])}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </>
+        )}
+
         <div className="ph-group" style={{ marginTop: 22 }}>
           <a href="?pwa=legacy" className="ph-row">
-            <span className="ph-rowtext">Classic mobile view (orchestrator)</span>
+            <span className="ph-rowtext">{t('phone.menu.classic')}</span>
           </a>
         </div>
       </Sheet>
       {confirm === 'stop' && onStopAll && (
         <ConfirmSheet
-          title="Stop all agents?"
-          message="Every agent that is working gets an interrupt (Ctrl+C)."
-          confirmLabel="Stop all"
+          title={t('phone.menu.stopAllAsk')}
+          message={t('phone.menu.stopAllBody')}
+          confirmLabel={t('phone.menu.stopAllYes')}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
             setConfirm(null);
@@ -386,9 +454,9 @@ export function MenuSheet({
       )}
       {confirm === 'close' && activeLabel && (
         <ConfirmSheet
-          title={`Close ${activeLabel}?`}
-          message="This stops the agent on your PC."
-          confirmLabel={`Close ${activeLabel}`}
+          title={t('phone.menu.closeAsk', { name: activeLabel })}
+          message={t('phone.menu.closeBody')}
+          confirmLabel={t('phone.menu.closeOne', { name: activeLabel })}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
             setConfirm(null);

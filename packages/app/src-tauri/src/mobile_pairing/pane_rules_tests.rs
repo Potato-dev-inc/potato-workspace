@@ -4,9 +4,15 @@ use crate::mobile_pairing::{authorize_caller, init_pairing_store, pairing_store,
 
 /// A paired phone with `caps`; returns its request headers (as if through the tunnel).
 fn phone(caps: Caps) -> String {
-    let dir = std::env::temp_dir().join(format!("pm-pane-rules-{}", std::process::id()));
-    let _ = std::fs::create_dir_all(&dir);
-    let _ = init_pairing_store(dir.join("pairing.json"));
+    // Tests run side by side and the first store set wins: every call tries its own folder until one is set, so two
+    // tests never read one half-written file (same pattern as the phone_control tests).
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    while pairing_store().is_none() {
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("pm-pane-rules-{}-{n}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = init_pairing_store(dir.join("pairing.json"));
+    }
     let store = pairing_store().expect("pairing store");
     let mut guard = store.lock();
     let session = guard.create_pairing_session_with_caps("https://example.invalid".into(), caps);
@@ -161,4 +167,77 @@ fn an_empty_or_huge_pane_id_is_refused() {
     assert!(rules.set("", PaneRule { remote: false, ..PaneRule::default() }).is_err());
     assert!(rules.set(&"x".repeat(300), PaneRule { remote: false, ..PaneRule::default() }).is_err());
     assert!(Level::parse("root").is_err());
+}
+
+fn watch() -> PaneRule {
+    PaneRule { remote: true, level: Level::Watch }
+}
+
+#[test]
+fn a_grant_ends_at_its_time_even_with_no_timer_running() {
+    let mut rules = PaneRules::default();
+    rules.set("p", watch()).unwrap();
+    rules.grant("p", watch(), 1_000).unwrap();
+    // While it runs the agent is open; at the end time a plain read already sees the old rule.
+    assert_eq!(rules.rule_at("p", 999), PaneRule::default());
+    assert!(!rules.refuses_at("p", Cap::Type, 999));
+    assert_eq!(rules.rule_at("p", 1_000), watch());
+    assert!(rules.refuses_at("p", Cap::Type, 1_000));
+    // Settling writes the old rule back and drops the grant.
+    assert!(rules.expire(1_000));
+    assert_eq!(rules.rule("p"), watch());
+    assert!(rules.grant_of("p").is_none());
+    assert!(!rules.expire(5_000));
+}
+
+#[test]
+fn the_global_rule_reads_settle_an_expired_grant() {
+    let pane = "grant-global-1";
+    pane_rules::set(pane, watch()).unwrap();
+    pane_rules::grant(pane, 5_000).unwrap(); // far in the past: already over
+    assert_eq!(pane_rules::rule(pane), watch());
+    assert!(pane_rules::grant_before(pane).is_none());
+    // A running grant (far future) opens the agent, and the person's own change ends it.
+    pane_rules::grant(pane, u64::MAX).unwrap();
+    assert_eq!(pane_rules::rule_at(pane, 10), PaneRule::default());
+    assert_eq!(pane_rules::grant_before(pane), Some(watch()));
+    assert!(!pane_rules::refuses_at(pane, Cap::Type, 10));
+    pane_rules::set(pane, PaneRule { remote: false, level: Level::Full }).unwrap();
+    assert!(pane_rules::grant_before(pane).is_none());
+    assert!(pane_rules::rule(pane).remote == false);
+}
+
+#[test]
+fn a_restart_with_a_past_expiry_returns_the_old_rule() {
+    let dir = std::env::temp_dir().join(format!("pm-pane-rules-restart-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("pane-remote.json");
+    let mut rules = PaneRules::default();
+    rules.set("p", PaneRule { remote: false, level: Level::Answer }).unwrap();
+    rules.grant("p", PaneRule { remote: false, level: Level::Answer }, 2_000).unwrap();
+    rules.save(&path).unwrap();
+    // The app closes and starts again: the file holds the grant, the clock is past it.
+    let mut back = PaneRules::load(&path);
+    assert_eq!(back.rule_at("p", 1_999), PaneRule::default());
+    assert_eq!(back.rule_at("p", 3_000), PaneRule { remote: false, level: Level::Answer });
+    assert!(back.expire(3_000));
+    back.save(&path).unwrap();
+    let again = PaneRules::load(&path);
+    assert!(again.grant_of("p").is_none());
+    assert_eq!(again.rule("p"), PaneRule { remote: false, level: Level::Answer });
+}
+
+#[test]
+fn a_grant_never_raises_above_the_phones_own_level() {
+    let pane = "grant-cap-1";
+    pane_rules::set(pane, watch()).unwrap();
+    pane_rules::grant(pane, u64::MAX).unwrap();
+    let watcher = phone(Caps::none().with(Cap::Watch, true));
+    assert_eq!(status(&watcher, "GET", &["panes", pane, "chat"]), 200);
+    assert_eq!(status(&watcher, "POST", &["panes", pane, "input"]), 403);
+    assert_eq!(status(&watcher, "POST", &answer_route(pane)), 403);
+    // A full phone does get typing while the grant runs.
+    let full = phone(Caps::all());
+    assert_eq!(status(&full, "POST", &["panes", pane, "input"]), 200);
+    pane_rules::set(pane, PaneRule::default()).unwrap();
 }

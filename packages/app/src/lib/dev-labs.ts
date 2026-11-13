@@ -12,6 +12,7 @@ export const DEV_LABS_KEYS = [
   'model_bridge_enabled',
   'spaces_enabled',
   'lend_enabled',
+  'desktop_pet_enabled',
 ] as const;
 
 /** The one line the Labs page shows while the override is on. */

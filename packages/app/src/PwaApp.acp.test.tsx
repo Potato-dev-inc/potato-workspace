@@ -194,15 +194,18 @@ describe('PwaApp with a chat session over ACP', () => {
     expect(host.querySelector('[data-testid="phone-chat"]')).not.toBeNull();
     expect(h.paneChat).toHaveBeenCalledWith('c1', undefined);
     expect(host.querySelector('[data-testid="terminal"]')).toBeNull();
-    expect(host.querySelector('[aria-label="Pane view"]')).toBeNull();
+    // The name's little menu has no terminal to show for a chat session.
+    await act(async () => (host.querySelector('.ph-head-title') as HTMLButtonElement).click());
+    expect(host.querySelector('[data-testid="phone-peek"]')?.textContent).not.toContain('Show terminal');
     expect(h.terminalMounts).toBe(0);
   });
 
-  it('an ordinary pane keeps its terminal and its switch, and the PC is not asked about a chat session for it', async () => {
+  it('an ordinary pane keeps its terminal behind the chat, one tap away, and the PC is not asked about a chat session for it', async () => {
     await open('t1');
     await flush(3000);
     expect(host.querySelector('[data-testid="terminal"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="Pane view"]')).not.toBeNull();
+    await act(async () => (host.querySelector('.ph-head-title') as HTMLButtonElement).click());
+    expect(host.querySelector('[data-testid="phone-peek"]')?.textContent).toContain('Show terminal');
     expect(h.acpSession).not.toHaveBeenCalled();
   });
 

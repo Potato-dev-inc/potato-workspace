@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default permissions for Potato Workspace",
-  "windows": ["main", "settings", "cockpit", "detached-pane-*", "askbar", "pointbox", "mini-bar", "switch-overlay"],
+  "windows": ["main", "settings", "cockpit", "detached-pane-*", "askbar", "pointbox", "mini-bar", "switch-overlay", "pet"],
   "permissions": [
     "core:default",
     "core:window:allow-close",

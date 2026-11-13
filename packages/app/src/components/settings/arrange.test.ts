@@ -61,9 +61,15 @@ describe('groups inside the pages', () => {
     }
   });
 
-  it('Look and feel reads: Appearance, You, Startup, While agents work', () => {
+  it('Look and feel reads: Appearance, Comfort, You, Startup, While agents work', () => {
     const heads = groupRows(section('look').rows).filter((g) => !g.danger).map((g) => g.head);
-    expect(heads).toEqual(['Appearance', 'You', 'Startup', 'While agents work']);
+    expect(heads).toEqual(['Appearance', 'Comfort', 'You', 'Startup', 'While agents work']);
+  });
+
+  it('the Comfort rows sit on Look and feel', () => {
+    for (const id of ['text-size', 'strong-contrast', 'less-motion', 'speak-results']) {
+      expect(rowIn('look', id)?.group, id).toBe('Comfort');
+    }
   });
 
   it('Overview reads: Setup, Updates', () => {
@@ -94,7 +100,7 @@ describe('Advanced > Early features (Labs)', () => {
   it('Labs rows from every file are collected under Advanced > Early features (Labs)', () => {
     expect(labsRows().map((r) => r.id)).toEqual([
       LABS_INDEX_ID, 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift',
-      'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'telegram',
+      'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'desktop-potato-labs', 'telegram',
     ]);
     // They were defined in different files: Agents, Keys, Phone, General, Models.
     const homes = new Set(BASE_SECTIONS.filter((s) => s.rows.some((r) => r.labs)).map((s) => s.id));
@@ -126,7 +132,7 @@ describe('Advanced > Early features (Labs)', () => {
     const base: BaseSectionDef[] = BASE_SECTIONS.map((s) => (s.id === 'phone' ? { ...s, rows: [...s.rows, extra] } : s));
     const arranged = arrangeSections(base);
     const labs = arranged.find((s) => s.id === 'advanced')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id);
-    expect(labs.slice(-9)).toEqual(['assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'telegram', 'later-feature']);
+    expect(labs.slice(-10)).toEqual(['assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'desktop-potato-labs', 'telegram', 'later-feature']);
     expect(arranged.find((s) => s.id === 'connect')!.rows.some((r) => r.id === 'later-feature')).toBe(false);
   });
 

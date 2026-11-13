@@ -1,5 +1,6 @@
 // "Notifications" row of the phone menu sheet. State machine lives in lib/push-client.ts.
 import { useEffect, useMemo, useState } from 'react';
+import { useT } from '../../i18n';
 import {
   browserDeps,
   disable,
@@ -21,6 +22,7 @@ export function NotificationsToggle({
   /** Tests inject fakes. */
   deps?: PushDeps;
 }) {
+  const t = useT();
   const deps = useMemo(() => injected ?? browserDeps(baseUrl), [injected, baseUrl]);
   const [state, setState] = useState<ToggleState>({ kind: 'working' });
 
@@ -71,7 +73,7 @@ export function NotificationsToggle({
     }
   };
 
-  const view = toggleView(state);
+  const view = toggleView(state, t);
   const toggle = async (next: boolean) => {
     // No await before enable(): the permission prompt needs the tap's user activation.
     const pending = next ? enable(deps) : disable(deps);
@@ -83,10 +85,10 @@ export function NotificationsToggle({
     <>
       <div className="ph-group">
         <label className="ph-switch-row">
-          <span className="ph-rowtext">Notifications</span>
+          <span className="ph-rowtext">{t('phone.menu.notifications')}</span>
           <input
             type="checkbox"
-            aria-label="Notifications"
+            aria-label={t('phone.menu.notifications')}
             className="ph-switch"
             checked={view.checked}
             disabled={view.disabled || (!bridgeReady && state.kind !== 'on')}
@@ -98,10 +100,10 @@ export function NotificationsToggle({
         <>
           <div className="ph-group">
             <label className="ph-switch-row">
-              <span className="ph-rowtext">Hide details on lock screen</span>
+              <span className="ph-rowtext">{t('phone.notif.hide')}</span>
               <input
                 type="checkbox"
-                aria-label="Hide details on lock screen"
+                aria-label={t('phone.notif.hide')}
                 className="ph-switch"
                 checked={hideDetails}
                 onChange={(e) => void changeHide(e.target.checked)}
@@ -109,11 +111,7 @@ export function NotificationsToggle({
             </label>
           </div>
           <p role={hideError ? 'alert' : undefined} className={`ph-foot${hideError ? ' ph-foot--err' : ''}`}>
-            {hideError
-              ? "Couldn't change that. Your PC didn't answer."
-              : hideDetails
-                ? 'Notifications only say which agent needs you. The command, the question and your names stay off the lock screen.'
-                : 'Notifications can show what an agent wants to do. Turn this on to keep that off the lock screen.'}
+            {hideError ? t('phone.notif.hideFailed') : hideDetails ? t('phone.notif.hideOn') : t('phone.notif.hideOff')}
           </p>
         </>
       )}

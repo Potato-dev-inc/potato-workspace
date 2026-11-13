@@ -78,11 +78,21 @@ impl PaneRule {
     }
 }
 
+/// A time-limited raise ("Allow 15 min"): the rule that applies again when `until_ms` passes. It is kept in the
+/// rules file, so the raise ends on time even when the app was closed in between.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Grant {
+    pub before: PaneRule,
+    pub until_ms: u64,
+}
+
 /// All rules, by pane id.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct PaneRules {
     #[serde(default)]
     rules: HashMap<String, PaneRule>,
+    #[serde(default)]
+    grants: HashMap<String, Grant>,
 }
 
 impl PaneRules {
@@ -93,6 +103,43 @@ impl PaneRules {
     /// `true` when `cap` is refused for this pane (no rule: never refused).
     pub fn refuses(&self, pane_id: &str, cap: Cap) -> bool {
         self.rules.get(pane_id).is_some_and(|rule| !rule.allows(cap))
+    }
+
+    /// The rule at `now`: a grant that has ended counts as gone, so the rule from before applies.
+    pub fn rule_at(&self, pane_id: &str, now: u64) -> PaneRule {
+        match self.grants.get(pane_id) {
+            Some(grant) if grant.until_ms <= now => grant.before,
+            _ => self.rule(pane_id),
+        }
+    }
+
+    pub fn refuses_at(&self, pane_id: &str, cap: Cap, now: u64) -> bool {
+        !self.rule_at(pane_id, now).allows(cap)
+    }
+
+    /// Raise an agent to on/full until `until_ms`; `before` comes back after. A second grant keeps the first `before`.
+    pub fn grant(&mut self, pane_id: &str, before: PaneRule, until_ms: u64) -> Result<(), String> {
+        let before = self.grants.get(pane_id).map(|g| g.before).unwrap_or(before);
+        self.set(pane_id, PaneRule::default())?;
+        self.grants.insert(pane_id.to_string(), Grant { before, until_ms });
+        Ok(())
+    }
+
+    /// Put back the rule of every grant that ended by `now`. `true` when anything changed.
+    pub fn expire(&mut self, now: u64) -> bool {
+        let due: Vec<String> = self.grants.iter().filter(|(_, g)| g.until_ms <= now).map(|(pane, _)| pane.clone()).collect();
+        for pane in &due {
+            if let Some(grant) = self.grants.remove(pane) {
+                if self.set(pane, grant.before).is_err() {
+                    self.rules.remove(pane);
+                }
+            }
+        }
+        !due.is_empty()
+    }
+
+    pub fn grant_of(&self, pane_id: &str) -> Option<Grant> {
+        self.grants.get(pane_id).copied()
     }
 
     /// Whether any agent is switched off (a cheap test before parsing event payloads).
@@ -139,29 +186,97 @@ pub fn init(pairing_file: &Path) {
     let path = pairing_file.with_file_name("pane-remote.json");
     // The first call wins (the bridge starts once; a test may call this again with another folder).
     if RULES_PATH.set(path.clone()).is_ok() {
-        *RULES.write() = PaneRules::load(&path);
+        // Rules set before the file was known stay (the app sets none before this; a test may): the file adds to them.
+        let mut rules = RULES.write();
+        let mut loaded = PaneRules::load(&path);
+        loaded.rules.extend(rules.rules.drain());
+        loaded.grants.extend(rules.grants.drain());
+        *rules = loaded;
     }
 }
 
+/// End every grant that is over at `now` and write the result back. A failed write still lowers the
+/// rule in memory: the safe side is the lower level.
+pub fn settle_at(now: u64) {
+    if !RULES.read().grants.values().any(|g| g.until_ms <= now) {
+        return;
+    }
+    let mut rules = RULES.write();
+    if rules.expire(now) {
+        if let Some(path) = RULES_PATH.get() {
+            if let Err(error) = rules.save(path) {
+                tracing::warn!(%error, "could not save the remote rules after a grant ended");
+            }
+        }
+    }
+}
+
+/// Clean grants that ended while the app was closed (called when the bridge starts).
+pub fn settle_on_start() {
+    settle_at(super::control_ask::now_ms());
+}
+
 pub fn rule(pane_id: &str) -> PaneRule {
-    RULES.read().rule(pane_id)
+    rule_at(pane_id, super::control_ask::now_ms())
+}
+
+pub fn rule_at(pane_id: &str, now: u64) -> PaneRule {
+    settle_at(now);
+    RULES.read().rule_at(pane_id, now)
 }
 
 /// `true` when a phone may not use `cap` on this agent (switched off, or the level is lower).
 pub fn refuses(pane_id: &str, cap: Cap) -> bool {
-    RULES.read().refuses(pane_id, cap)
+    refuses_at(pane_id, cap, super::control_ask::now_ms())
 }
 
-/// Change one agent's rule and keep it on disk. A failed write leaves the old rule in place.
-pub fn set(pane_id: &str, rule: PaneRule) -> Result<(), String> {
-    let mut rules = RULES.write();
-    let mut next = PaneRules { rules: rules.rules.clone() };
-    next.set(pane_id, rule)?;
+pub fn refuses_at(pane_id: &str, cap: Cap, now: u64) -> bool {
+    settle_at(now);
+    RULES.read().refuses_at(pane_id, cap, now)
+}
+
+/// Every agent that has its own rule (not the default), for the phone's lock icons.
+pub fn all() -> Vec<(String, PaneRule)> {
+    settle_at(super::control_ask::now_ms());
+    RULES.read().rules.iter().map(|(pane, rule)| (pane.clone(), *rule)).collect()
+}
+
+fn store(next: PaneRules, mut rules: parking_lot::RwLockWriteGuard<'_, PaneRules>) -> Result<(), String> {
     if let Some(path) = RULES_PATH.get() {
         next.save(path)?;
     }
     *rules = next;
     Ok(())
+}
+
+fn copy_of(rules: &PaneRules) -> PaneRules {
+    PaneRules { rules: rules.rules.clone(), grants: rules.grants.clone() }
+}
+
+/// The person changes one agent's rule and it is kept on disk. A running grant for the agent ends (their
+/// choice wins). A failed write leaves the old rule in place.
+pub fn set(pane_id: &str, rule: PaneRule) -> Result<(), String> {
+    let rules = RULES.write();
+    let mut next = copy_of(&rules);
+    next.grants.remove(pane_id);
+    next.set(pane_id, rule)?;
+    store(next, rules)
+}
+
+/// Raise an agent to on/full until `until_ms`; the rule from before comes back by itself after.
+pub fn grant(pane_id: &str, until_ms: u64) -> Result<(), String> {
+    let now = super::control_ask::now_ms();
+    settle_at(now);
+    let rules = RULES.write();
+    let mut next = copy_of(&rules);
+    let before = rules.rule(pane_id);
+    next.grant(pane_id, before, until_ms)?;
+    store(next, rules)
+}
+
+/// The rule that comes back when the running grant for this agent ends.
+pub fn grant_before(pane_id: &str) -> Option<PaneRule> {
+    RULES.read().grant_of(pane_id).map(|g| g.before)
 }
 
 /// The pane a bridge route is about: `/panes/{id}/...`. The four wait routes live under `/panes/wait`
@@ -179,6 +294,7 @@ const OFF_KEEPS: &[&str] = &["panes", "pane-status", "pane-resize"];
 
 /// Whether an event-stream payload carries content of an agent that is switched off, so a phone must not get it.
 pub fn hides_event(payload: &str) -> bool {
+    settle_at(super::control_ask::now_ms());
     let rules = RULES.read();
     rules.any_off() && event_hidden(&rules, payload)
 }

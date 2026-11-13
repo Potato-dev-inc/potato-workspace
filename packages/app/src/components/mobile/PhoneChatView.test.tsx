@@ -17,6 +17,7 @@ let root: Root;
 let visibility: DocumentVisibilityState = 'visible';
 
 beforeEach(() => {
+  localStorage.clear();
   vi.useFakeTimers();
   visibility = 'visible';
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
@@ -211,13 +212,13 @@ describe('PhoneChatView states', () => {
   it('a screen-read chat says so', async () => {
     const { bridge } = bridgeWith([reply({ source: 'screen', items: [user('screen:1:user', 'hi')] })]);
     await mount({ bridge });
-    expect(host.querySelector('[data-testid="session-chat-screen-note"]')).not.toBeNull();
+    expect(host.querySelector('.ph-conv-note')).not.toBeNull();
   });
 
   it('puts the docked card under the conversation', async () => {
     const { bridge } = bridgeWith([reply({ items: [user('1:0', 'hi')] })]);
     await mount({ bridge, dock: <div data-testid="dock">Allow?</div> });
-    const dock = host.querySelector('.ck-chat-dock');
+    const dock = host.querySelector('.ph-conv-dock');
     expect(dock?.textContent).toBe('Allow?');
     expect(host.querySelector('[data-testid="phone-chat"]')).not.toBeNull();
   });
@@ -243,7 +244,7 @@ describe('PhoneChatView message box', () => {
     return { bridge, sendPaneMessage, listPaneMessages, cancelPaneMessage };
   }
 
-  const box = () => host.querySelector('[data-testid="chat-composer"]');
+  const box = () => host.querySelector('[data-testid="phone-composer"]');
   const field = () => host.querySelector('textarea') as HTMLTextAreaElement;
 
   function typeAndSend(text: string) {
@@ -253,7 +254,7 @@ describe('PhoneChatView message box', () => {
       field().dispatchEvent(new Event('input', { bubbles: true }));
     });
     act(() => {
-      field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      (host.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     });
   }
 

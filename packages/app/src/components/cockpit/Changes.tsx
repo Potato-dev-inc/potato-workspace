@@ -3,6 +3,7 @@ import { cockpitApi, type ChangeBlame, type WorktreeDiff, type WorktreeItem } fr
 import { lineKind, plural, splitPatch, statusMark } from './diff';
 import { blameLine } from './blame-line';
 import { secondOpinionApi, type SecondOpinionApi } from '../../lib/second-opinion';
+import { dragSourceProps } from '../dnd/dragSourceProps';
 import { AnnotatedDiff } from './AnnotatedDiff';
 import { anchorFindings, reviewHasConcerns } from './review-diff';
 import { sendToAuthor, useReviewRun } from './second-opinion-store';
@@ -366,6 +367,7 @@ export function Changes({
                 className={`ck-changes-file${isOpen ? ' is-open' : ''}`}
                 aria-expanded={isOpen}
                 onClick={() => setOpen(isOpen ? null : f.path)}
+                {...dragSourceProps({ kind: 'file', id: f.path, label: splitPath(f.path).name, meta: { paneId } })}
               >
                 <span className={`ck-changes-mark ck-changes-mark--${f.status}`} aria-label={f.status}>
                   {statusMark(f.status)}

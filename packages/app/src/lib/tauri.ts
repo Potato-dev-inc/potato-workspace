@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
-import type { PaneRemote, PaneRemoteLevel } from './pane-remote';
+import type { ControlAsk, PaneRemote, PaneRemoteLevel } from './pane-remote';
 import type {
   AgentContextProfile,
   AgentModelInspection,
@@ -309,6 +309,12 @@ export const tauri = {
     safeInvoke<PaneRemote>('get_pane_remote', { paneId }, { remote: true, level: 'full' }, true),
   setPaneRemote: (paneId: string, change: { remote?: boolean; level?: PaneRemoteLevel }) =>
     safeInvoke<PaneRemote>('set_pane_remote', { paneId, ...change }, { remote: change.remote ?? true, level: change.level ?? 'full' }, true),
+  /** Asks a phone made for control of one agent that nobody has answered yet. */
+  listControlAsks: () => safeInvoke<ControlAsk[]>('list_control_asks', undefined, [], true),
+  /** The person's answer: Allow lets phones control that agent for 15 minutes, No changes nothing. */
+  answerControlAsk: (id: string, allow: boolean) => safeInvoke<void>('answer_control_ask', { id, allow }, undefined, true),
+  /** A phone asks for control ("<phone> asks for control"). */
+  onControlAsk: (cb: (ask: ControlAsk) => void) => safeListen<ControlAsk>('remote://control-ask', cb),
   /** This launch's bridge key for the app's own HTTP calls (IPC only; null outside the app). */
   bridgeLocalSecret: () =>
     safeInvoke<string | null>('bridge_local_secret', undefined, null, true).catch(() => null),

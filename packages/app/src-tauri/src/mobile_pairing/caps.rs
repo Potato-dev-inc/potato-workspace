@@ -205,6 +205,13 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // `/panes/wait` is a pane route on a pane named `wait` and must not pass as a read.
         ("POST", ["panes", "wait"] | ["panes", "wait", "model" | "task" | "worker"]) => Need::Cap(Watch),
 
+        // Phone 2 (`bridge/routes/phone_control.rs`): stopping one agent is the Stop key of its pane (typing; the agent's own
+        // remote rule applies too, because the path is under `/panes/{id}`). Which agents have their own rule is a list of
+        // names and levels, and asking the PC for control is open to any paired device (the PC decides; one ask per
+        // agent per 5 minutes). Listed exactly: a later route falls through to watch or control.
+        ("POST", ["panes", _, "interrupt"]) => Need::Cap(Type),
+        ("GET", ["pane-rules"]) | ("POST", ["control-asks"]) => Need::Device,
+
         ("GET", _) => Need::Cap(Watch),
         _ => Need::Cap(Control),
     }

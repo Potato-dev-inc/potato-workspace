@@ -1,0 +1,289 @@
+/* The connection line under the phone's header, the offline queue bar, the "Stopped" bar and the "needs you" pill.
+   Tokens only; the dot says the state with its shape too (a ring when not connected). */
+.ph .ph-link {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 16px;
+  background: var(--fill);
+  color: var(--label-2);
+  font: 500 13px/1.3 var(--font-ui);
+}
+.ph .ph-link-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--label-3);
+}
+.ph .ph-link[data-kind='connected'] .ph-link-dot {
+  background: var(--label-2);
+  border-color: var(--label-2);
+}
+.ph .ph-link[data-kind='changed'] {
+  color: var(--label);
+}
+.ph .ph-link-btn {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: var(--fill-active);
+  color: var(--label);
+  font: 600 13px/1 var(--font-ui);
+}
+
+/* Last chats stay readable, greyed, with the time they were read. */
+.ph .ph-conv[data-stale='true'] .ph-conv-body {
+  opacity: 0.6;
+}
+.ph .ph-asof {
+  margin: 0;
+  padding: 4px 16px;
+  text-align: center;
+  color: var(--label-3);
+  font: 500 12px/1.3 var(--font-ui);
+}
+
+/* Bars above the composer: waiting messages, "Stopped · Continue". */
+.ph .ph-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--fill);
+  color: var(--label);
+  font: 500 14px/1.35 var(--font-ui);
+}
+.ph .ph-bar > span {
+  flex: 1;
+  min-width: 0;
+}
+.ph .ph-bar button {
+  flex: none;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  background: var(--fill-active);
+  color: var(--label);
+  font: 600 14px/1 var(--font-ui);
+}
+.ph .ph-bar button[data-primary] {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+
+/* The pill of another agent that needs you. */
+.ph .ph-pill {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 24px;
+  background: var(--fill-active);
+  color: var(--label);
+  font: 500 14px/1.3 var(--font-ui);
+}
+.ph .ph-pill-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.ph .ph-pill-main span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-pill-more {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--fill);
+  font: 700 12px/1.3 var(--font-ui);
+}
+.ph .ph-pill-act {
+  flex: none;
+  min-height: 44px;
+  min-width: 56px;
+  padding: 0 14px;
+  border-radius: 22px;
+  background: var(--fill);
+  color: var(--label);
+  font: 600 14px/1 var(--font-ui);
+}
+.ph .ph-pill-act[data-primary] {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+
+/* Back arrow in the header after a jump from the pill. */
+.ph .ph-back {
+  flex: none;
+}
+
+/* One sentence instead of the composer, and the ask for control. */
+.ph .ph-nocontrol {
+  flex: none;
+  margin: 0 12px 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--fill);
+  color: var(--label-2);
+  font: 400 15px/1.4 var(--font-ui);
+}
+.ph .ph-nocontrol p {
+  margin: 0 0 10px;
+}
+.ph .ph-nocontrol button {
+  min-height: 48px;
+  width: 100%;
+  border-radius: 24px;
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  font: 600 16px/1 var(--font-ui);
+}
+.ph .ph-nocontrol button:disabled {
+  opacity: 0.5;
+}
+.ph .ph-nocontrol .ph-nocontrol-note {
+  margin: 10px 0 0;
+  color: var(--label-2);
+  font: 500 13px/1.35 var(--font-ui);
+}
+
+/* A lock on a drawer row. */
+.ph .ph-lock {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  align-self: center;
+  fill: none;
+  stroke: var(--label-3);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The row menu (long-press on a drawer row). */
+.ph .ph-rowmenu {
+  position: fixed;
+  z-index: 60;
+  min-width: 180px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--bg-float);
+  border: 1px solid var(--sep);
+  box-shadow: var(--float-shadow);
+}
+.ph .ph-rowmenu button {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 10px;
+  text-align: left;
+  color: var(--label);
+  font: 500 16px/1 var(--font-ui);
+}
+.ph .ph-rowmenu button[data-danger] {
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph .ph-link,
+  .ph .ph-bar,
+  .ph .ph-pill {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Setup steps (after pairing, and from Help). */
+.ph .ph-steps {
+  margin: 0;
+  padding: 0 16px;
+  list-style: none;
+}
+.ph .ph-steps li {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--sep);
+}
+.ph .ph-steps h3 {
+  margin: 0 0 4px;
+  font: 600 17px/1.3 var(--font-ui);
+}
+.ph .ph-steps p {
+  margin: 0;
+  color: var(--label-2);
+  font: 400 15px/1.45 var(--font-ui);
+}
+.ph .ph-steps li[data-done] h3::after {
+  content: ' \2713';
+  color: var(--live);
+}
+.ph .ph-step-btn,
+.ph .ph-step-done {
+  min-height: 48px;
+  margin-top: 10px;
+  padding: 0 18px;
+  border-radius: 24px;
+  background: var(--fill-active);
+  color: var(--label);
+  font: 600 16px/1 var(--font-ui);
+}
+.ph .ph-step-btn:disabled {
+  opacity: 0.5;
+}
+.ph .ph-step-done {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 16px;
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+.ph .ph-steps .ph-step-note {
+  margin-top: 8px;
+  font-size: 14px;
+}
+.ph .ph-events {
+  margin: 0;
+  padding: 0 16px;
+  list-style: none;
+  color: var(--label-2);
+  font: 400 14px/1.7 var(--font-ui);
+}
+.ph .ph-events time {
+  color: var(--label-3);
+  font-variant-numeric: tabular-nums;
+}
+.ph .ph-rowmenu-ask {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--label-2);
+  font: 400 14px/1.4 var(--font-ui);
+}
+
+/* Buttons in these places centre their words (the phone reset left-aligns buttons). */
+.ph .ph-nocontrol button,
+.ph .ph-step-btn,
+.ph .ph-step-done,
+.ph .ph-bar button,
+.ph .ph-pill-act,
+.ph .ph-link-btn {
+  text-align: center;
+}

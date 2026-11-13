@@ -154,6 +154,9 @@ mod keep_awake;
 mod wsl;
 mod collision;
 mod notify_levels;
+mod files;
+// Desktop Potato (Labs `desktop_pet_enabled`): a small pet window. Reserved lines at the end.
+mod pet;
 #[cfg(test)]
 mod conformance_suite;
 
@@ -819,6 +822,18 @@ pub fn run() {
             commands::notify_quiet_set,
             commands::notify_snooze,
             commands::notify_prefs_import,
+            commands::path_kind::path_kinds,
+            commands::files_list,
+            commands::files_read,
+            commands::files_marks,
+            commands::files_reveal,
+            commands::files_diff,
+            commands::list_control_asks,
+            commands::answer_control_ask,
+            commands::pet_set_expanded,
+            commands::pet_start_drag,
+            commands::pet_move_by,
+            commands::pet_fullscreen_busy,
         ])
         .setup(|app| {
             commands::startup_probe(app.handle().clone());
@@ -1051,6 +1066,8 @@ pub fn run() {
                 }
             });
 
+            // Desktop Potato: builds its window only if the Labs switch is on (nothing happens otherwise).
+            pet::init(app.handle());
             startup_timing::mark("app", "app_setup_done");
             Ok(())
         })

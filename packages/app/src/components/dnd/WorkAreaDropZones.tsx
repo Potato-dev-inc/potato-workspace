@@ -1,5 +1,6 @@
-// Two drop zones over the work area while a chat is dragged: left half, right half. Mount inside `.ck-main`
-// (it is position: relative). Dropping calls `onDropChat(id, side)`.
+// Drop zones over the work area while something is dragged: a chat gets a left half and a right half; a pane tab
+// gets the right edge only (drop it there to split). Mount inside `.ck-main` (it is position: relative).
+// Dropping calls `onDropChat(id, side)`; a tab's id is its pane's id, so it is the same call.
 import '../../styles/cockpit-dnd.css';
 import { useEffect, useRef } from 'react';
 import { useT } from '../../i18n';
@@ -17,17 +18,19 @@ export function WorkAreaDropZones({ onDropChat }: { onDropChat: (id: string, sid
     const mk = (side: DropSide, ref: { current: HTMLDivElement | null }) =>
       registerDropZone({
         id: `work-${side}`,
-        accepts: (p) => p.kind === 'chat',
+        accepts: (p) => p.kind === 'chat' || (p.kind === 'tab' && side === 'right'),
         getRect: () => ref.current?.getBoundingClientRect() ?? null,
         onDrop: (p) => onDrop.current(p.id, side),
       });
     const offs = [mk('left', left), mk('right', right)];
     return () => offs.forEach((off) => off());
   }, []);
-  if (!drag || drag.payload.kind !== 'chat') return null;
+  if (!drag || (drag.payload.kind !== 'chat' && drag.payload.kind !== 'tab')) return null;
+  const edge = drag.payload.kind === 'tab';
   return (
-    <div className="ck-dropzones" aria-hidden="true">
-      <div ref={left} className={`ck-dropzone${drag.over === 'work-left' ? ' is-over' : ''}`} data-testid="dropzone-left">
+    <div className={`ck-dropzones${edge ? ' ck-dropzones--edge' : ''}`} aria-hidden="true">
+      {/* A tab has no left zone, but the ref stays valid so the zone list is the same for both. */}
+      <div ref={left} className={`ck-dropzone${drag.over === 'work-left' ? ' is-over' : ''}`} data-testid="dropzone-left" hidden={edge}>
         <span className="ck-dropzone-label">{t('sidebar.dropLeft')}</span>
       </div>
       <div ref={right} className={`ck-dropzone${drag.over === 'work-right' ? ' is-over' : ''}`} data-testid="dropzone-right">

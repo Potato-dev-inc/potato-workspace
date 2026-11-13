@@ -4,7 +4,7 @@ import { BRIDGE_HTTP_PORT_RANGE, type AgentContextProfile } from '@potato-worksp
 import { invoke } from '@tauri-apps/api/core';
 import { ngrokRequestHeaders } from './bridge-ngrok';
 import { decodeBase64, streamOffset } from './bridge-sse';
-import type { BridgeClient, PaneViewportResponse } from './bridge-types';
+import type { BridgeClient, PaneRuleView, PaneViewportResponse } from './bridge-types';
 import type { Question } from './questions';
 import { mergeBridgeHeaders } from './mobile-pairing-auth';
 import { localSecretHeaders } from './bridge-local-secret';
@@ -73,6 +73,9 @@ export function makeBridgeClient(baseUrl: string): BridgeClient {
       }
     },
     stopAllPanes: () => call('POST', '/panes/stop-all', {}),
+    interruptPane: (id) => call('POST', `/panes/${encodeURIComponent(id)}/interrupt`, {}),
+    paneRules: async () => (await call<{ rules?: Record<string, PaneRuleView> }>('GET', '/pane-rules')).rules ?? {},
+    askControl: (id) => call('POST', '/control-asks', { pane_id: id }),
     attention: () => call<AttentionSnapshot>('GET', '/attention'),
     answerAttention: async (itemId, body, signal) => {
       const headers = mergeBridgeHeaders({ ...ngrokRequestHeaders(baseUrl), ...localSecretHeaders(baseUrl) });

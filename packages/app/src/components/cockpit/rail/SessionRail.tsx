@@ -10,6 +10,7 @@ import { usePaneJobs } from '../../../lib/pane-jobs';
 import { BackgroundCard } from './BackgroundCard';
 import { ChangesCard } from './ChangesCard';
 import { ContextCard } from './ContextCard';
+import { FilesCard } from '../../files/FilesCard';
 import { HelpersCard, type HelperRow } from './HelpersCard';
 import { RemoteCard } from './RemoteCard';
 import { TasksCard } from './TasksCard';
@@ -67,6 +68,7 @@ export function SessionRail({ paneId, status, cwd, agentName, accountLabel, read
       <ContextCard usage={chat.usage} />
       <TasksCard plan={chat.plan} />
       <ChangesCard outputs={chat.outputs} cwd={cwd} onOpenChanges={onOpenChanges} />
+      <FilesCard paneId={paneId} cwd={cwd} canMention={readsChat} refreshKey={status} />
       <BackgroundCard paneId={paneId} jobs={jobs} />
       <HelpersCard helpers={helpers} usage={usage} onOpen={onOpenPane} onSaveTeam={onSaveTeam} />
       <RemoteCard paneId={paneId} />

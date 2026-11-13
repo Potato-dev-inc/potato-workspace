@@ -19,7 +19,7 @@ export const HOLD_MS = 400;
 export const LISTENING_NOTE = 'Listening. Tap the mic to stop.';
 
 /** Plain sentences for recognizer errors. Quiet ones (no speech, aborted) show nothing. */
-const ERROR_NOTES: Record<string, string> = {
+export const ERROR_NOTES: Record<string, string> = {
   'not-allowed': 'The mic is blocked. Allow the mic for this site in your browser settings.',
   'service-not-allowed': 'Voice typing is not allowed on this phone.',
   'audio-capture': 'No mic was found.',

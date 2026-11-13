@@ -7,9 +7,9 @@ const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row:
 
 /** Every row id that existed before the move (115 of them, plus Add an agent and Your agents). */
 const PINNED_IDS = [
-  'accounts', 'acp-chat-labs', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
+  'accounts', 'acp-chat-labs', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
   'bridge-endpoint', 'bring-chats-agents', 'bring-old-chats', 'budget-minutes', 'budget-turns', 'chat-addons', 'chat-search-index',
-  'checkpoints', 'checkpoints-keep', 'close-helpers-with-agent', 'collision', 'confirm-close', 'definitions', 'diagnostic-file',
+  'checkpoints', 'checkpoints-keep', 'close-helpers-with-agent', 'collision', 'confirm-close', 'definitions', 'desktop-potato-labs', 'diagnostic-file',
   'discord-alerts', 'early-versions', 'handoff-mode', 'helper-agents', 'helper-default-models', 'helper-tools', 'hidden-agents',
   'individual-window-layout', 'keep-awake', 'language', 'keep-going', 'keep-helpers-open', 'key-anthropic', 'key-openai', 'key-openrouter',
   'lend-labs', 'lend-page', 'librarian-indexer', 'linux', 'live-room', 'live-updates', 'loop-guard', 'mcp-install', 'mcp-status',
@@ -18,7 +18,7 @@ const PINNED_IDS = [
   'opencode-provider', 'opencode-restart', 'package-check', 'paired-devices', 'pairing', 'phone-notifications', 'preload',
   'project-folder', 'quiet-hours', 'red-to-green', 'remove-all-keys', 'revoke-all-devices', 'rust-mcp', 'security-agents-merge',
   'security-ask-before-control', 'security-recent-approvals', 'settings-file', 'settings-recovery', 'setup-check', 'shared-memory',
-  'shortcut-ask-aside', 'shortcut-ask-bar', 'shortcut-focus-mode', 'shortcut-mode-toggle', 'shortcut-new-agent', 'shortcut-next-needs-me', 'shortcut-open-inbox',
+  'shortcut-agent-board', 'shortcut-ask-aside', 'shortcut-ask-bar', 'shortcut-focus-mode', 'shortcut-mode-toggle', 'shortcut-new-agent', 'shortcut-next-needs-me', 'shortcut-open-inbox',
   'shortcut-palette', 'shortcut-pane-jump', 'shortcut-pane-next', 'shortcut-pane-prev', 'shortcut-remember', 'shortcut-search-chats',
   'shortcut-show-list', 'shortcut-split', 'shortcut-split-focus-left', 'shortcut-split-focus-right', 'shortcut-split-swap', 'shortcut-stop-all',
   'shortcuts-reset-all', 'show-developer-settings', 'simple-mode', 'snippet-claude-desktop', 'snippet-codex', 'spaces-labs',
@@ -45,6 +45,7 @@ const PLACEMENT: [string, string, string[]][] = [
   ['helpers', 'Limits', ['most-helpers-at-once']],
   ['helpers', 'Connect your agents', ['agent-pack']],
   ['look', 'Appearance', ['theme', 'mode-switch-animation', 'individual-window-layout', 'usage-bar', 'usage-login-reads']],
+  ['look', 'Comfort', ['text-size', 'strong-contrast', 'less-motion', 'speak-results']],
   ['look', 'You', ['your-name']],
   ['look', 'Startup', ['start-at-sign-in']],
   ['look', 'While agents work', ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours']],
@@ -62,7 +63,7 @@ const PLACEMENT: [string, string, string[]][] = [
   [
     'advanced',
     'Early features (Labs)',
-    ['labs-index', 'simple-mode', 'ask-bar', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'telegram'],
+    ['labs-index', 'simple-mode', 'ask-bar', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'desktop-potato-labs', 'telegram'],
   ],
   ['advanced', 'App and files', ['storage', 'settings-file', 'diagnostic-file', 'chat-search-index', 'early-versions', 'settings-recovery', 'bring-old-chats']],
   ['advanced', 'Developer', ['show-developer-settings']],

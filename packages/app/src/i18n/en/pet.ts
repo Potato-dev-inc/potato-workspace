@@ -1,0 +1,21 @@
+// English messages: Desktop Potato, the small pet window (Labs). Keys are dotted (`pet.something`).
+export const pet = {
+  'pet.name': 'Desktop Potato',
+  'pet.needsYou': '{agent} needs you',
+  'pet.finished': '{agent} finished',
+  'pet.open': 'Open',
+  'pet.later': 'Later',
+  'pet.closeBubble': 'Close',
+  'pet.menu.label': 'Desktop Potato menu',
+  'pet.menu.hide': 'Hide for 1 hour',
+  'pet.menu.size': 'Size',
+  'pet.menu.small': 'Small',
+  'pet.menu.medium': 'Medium',
+  'pet.menu.large': 'Large',
+  'pet.menu.quiet': 'Quiet',
+  'pet.menu.off': 'Turn off',
+  'pet.aria.resting': 'Desktop Potato is resting. Press Enter for the menu.',
+  'pet.aria.needs_one': 'Desktop Potato. {count} agent needs you. Press Enter to open it.',
+  'pet.aria.needs_other': 'Desktop Potato. {count} agents need you. Press Enter to open the first.',
+  'pet.aria.quiet': 'Desktop Potato is quiet. Press Enter for the menu.',
+} as const;

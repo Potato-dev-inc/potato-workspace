@@ -4,7 +4,7 @@
 // `voice` adds the mic (phone only): speech turned into text on the device, see hooks/useVoiceInput.ts.
 // `draftKey` (the pane) keeps the unsent text across pane switches and reloads, see lib/composerDraft.ts.
 // `draft` is a message from the Point and Fix box ("Edit in Chat"): it goes into the box once, see useComposerDraft.
-import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
 import { clearDraft, DRAFT_SAVE_MS, readDraftState, writeDraft, type ComposerDraft } from '../../lib/composerDraft';
 import { insertAtCursor } from '../../lib/voice';
@@ -18,6 +18,9 @@ import { ProjectFilePicker, findMentionQuery, removeMention, type ProjectFilePic
 import type { ProjectFileHit } from '../../lib/projectFiles';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { commandHint, commandText, filterCommands, type AcpCommand } from '../../lib/acpChat';
+import { registerFileDrop } from '../../lib/fileDrop';
+import { draggedFilePath } from '../../lib/dropFiles';
+import { registerDropZone, useDragOver } from '../dnd/dragStore';
 import '../../styles/cockpit-acp.css';
 import '../../styles/chat-input-card.css';
 
@@ -98,7 +101,10 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   const pastedCount = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [dropping, setDropping] = useState(false);
+  const [fileOver, setFileOver] = useState(false);
+  const zoneId = useId();
+  const draggedOver = useDragOver(`composer-${zoneId}`);
+  const dropping = fileOver || draggedOver;
   /** Words heard but not final yet, and where in the text they would go. */
   const [interim, setInterim] = useState('');
   const [interimAt, setInterimAt] = useState(0);
@@ -283,6 +289,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   };
 
   /** Copies the picked paths for this pane and adds them as chips. A spinner chip shows while they are copied. */
+  const addPathsRef = useRef<(paths: readonly string[]) => Promise<void>>(async () => undefined);
   const addPaths = async (paths: readonly string[]) => {
     if (paths.length === 0) return;
     if (!draftKey) {
@@ -346,6 +353,8 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     await addPaths(paths);
   };
 
+  addPathsRef.current = addPaths;
+
   // Pasting an image makes a chip (the image is saved for this pane). A file with a path on this PC makes a chip too.
   // A file the webview gives without a path, or a paste with no text and no files, asks the desktop app for the files
   // on the clipboard. Plain text pastes as it always did: the default is left alone.
@@ -367,44 +376,29 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   // Files dropped on the box become paths in the message. The desktop app reports the drop in window coordinates,
   // so each mounted box answers only for its own rectangle (split view has more than one).
   useEffect(() => {
-    if (!attachFiles || typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
-    let live = true;
-    let stop: (() => void) | null = null;
-    const inside = (x: number, y: number): boolean => {
-      const rect = form.current?.getBoundingClientRect();
-      if (!rect) return false;
-      const scale = window.devicePixelRatio || 1;
-      const px = x / scale;
-      const py = y / scale;
-      return px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom;
-    };
-    import('@tauri-apps/api/webview')
-      .then(({ getCurrentWebview }) => {
-        if (!live) return;
-        getCurrentWebview()
-          .onDragDropEvent((event) => {
-            const payload = event.payload;
-            if (payload.type === 'drop') {
-              setDropping(false);
-              if (inside(payload.position.x, payload.position.y)) addPaths(payload.paths);
-              return;
-            }
-            if (payload.type === 'over') setDropping(inside(payload.position.x, payload.position.y));
-            if (payload.type === 'leave') setDropping(false);
-          })
-          .then((unlisten) => {
-            if (live) stop = unlisten;
-            else unlisten();
-          })
-          .catch(() => undefined);
-      })
-      .catch(() => undefined);
-    return () => {
-      live = false;
-      stop?.();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- addPaths only touches setters and refs
-  }, [attachFiles]);
+    if (!attachFiles) return;
+    // One listener for the whole window (lib/fileDrop): each box answers for its own rectangle.
+    return registerFileDrop({
+      id: `composer-${zoneId}`,
+      priority: 1,
+      getRect: () => form.current?.getBoundingClientRect() ?? null,
+      onOver: setFileOver,
+      onDrop: (paths) => void addPathsRef.current(paths),
+    });
+  }, [attachFiles, zoneId]);
+
+  // A file dragged from this app's own Changes list and dropped on the box becomes a chip, like an @ mention.
+  useEffect(() => {
+    if (!mentionsOn) return;
+    return registerDropZone({
+      id: `composer-${zoneId}`,
+      accepts: (p) => p.kind === 'file',
+      getRect: () => form.current?.getBoundingClientRect() ?? null,
+      onDrop: (p) => {
+        void draggedFilePath(p).then((path) => (path ? addPathsRef.current([path]) : undefined));
+      },
+    });
+  }, [mentionsOn, zoneId]);
 
   const pickCommand = (command: AcpCommand) => {
     const next = commandText(command);

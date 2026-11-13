@@ -36,6 +36,8 @@ export const settingsGeneral = {
   "labs.spaces-labs.about": "Chat with friends in small groups, PC to PC.",
   "labs.lend-labs.name": "Lend an agent",
   "labs.lend-labs.about": "Lend a sign-in to another PC, or borrow one.",
+  "labs.desktop-potato-labs.name": "Desktop Potato",
+  "labs.desktop-potato-labs.about": "A small Potato on your desktop that waves when an agent needs you.",
   "labs.live-updates.name": "Live updates",
   "labs.live-updates.about": "Claude and Codex tell the app when they start, ask and finish.",
   "labs.opencode-automation.name": "Key switching",

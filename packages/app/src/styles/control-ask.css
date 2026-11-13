@@ -1,0 +1,46 @@
+/* "<phone> asks for control": a small notice at the bottom right of the PC window. Tokens only. */
+.cockpit .ck-ctlask {
+  position: fixed;
+  right: 16px;
+  bottom: 48px;
+  z-index: 80;
+  width: min(320px, calc(100vw - 32px));
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--bg-float, var(--bg-raised));
+  color: var(--label);
+  box-shadow: var(--float-shadow, none), 0 0 0 1px var(--sep);
+}
+.cockpit .ck-ctlask p {
+  margin: 0;
+}
+.cockpit .ck-ctlask-title {
+  font: 600 14px/1.35 var(--font-ui);
+}
+.cockpit .ck-ctlask-body {
+  margin-top: 4px;
+  color: var(--label-2);
+  font: 400 13px/1.4 var(--font-ui);
+}
+.cockpit .ck-ctlask-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cockpit .ck-ctlask-actions button {
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--fill-active);
+  color: var(--label);
+  font: 500 13px/1 var(--font-ui);
+}
+.cockpit .ck-ctlask-actions .ck-ctlask-yes {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+.cockpit .ck-ctlask-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

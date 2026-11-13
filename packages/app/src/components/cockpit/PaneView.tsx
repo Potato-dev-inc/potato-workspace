@@ -72,10 +72,14 @@ import { SessionChatPanel, type ScreenAsk } from '../chat/SessionChatPanel';
 import { useChatJump } from '../../lib/chatJump';
 import { clearChatTabRequest, useChatTabRequest } from '../../lib/chatTab';
 import { composerBlock } from '../../lib/paneOutbox';
+import { onComposerInsert } from '../../lib/composer-insert';
 import { LiveChip } from './live/LiveChip';
+import { FileTab } from '../files/FileTab';
+import { FileTabsBar } from '../files/FileTabsBar';
+import { clearFileFocus, fileTabId, pathOfTab, usePaneFiles } from '../../lib/file-tabs';
 import { LiveStatusContext } from './live/useLiveRoom';
 
-type Tab = 'mission' | 'terminal' | 'chat' | 'changes' | 'transcript' | 'receipt' | 'history';
+type Tab = 'mission' | 'terminal' | 'chat' | 'changes' | 'transcript' | 'receipt' | 'history' | `file:${string}`;
 
 /** The tab each pane was last on, kept for this app run only (not on disk). A remount opens the same view. */
 const rememberedTabs = new Map<string, Tab>();
@@ -287,6 +291,30 @@ export function PaneView({
     setTab('chat');
     clearChatTabRequest(chatTabAsk);
   }, [chatTabAsk, chatAllowed]);
+
+  // Files open beside the chat (lib/file-tabs.ts): opening one brings its tab to the front; closing the front one goes home.
+  const openFiles = usePaneFiles(paneId);
+  useEffect(() => {
+    const ask = openFiles.focus;
+    if (!ask) return;
+    setTabRaw(fileTabId(ask.path));
+    clearFileFocus(paneId, ask.nonce);
+  }, [openFiles.focus, paneId]);
+  useEffect(() => {
+    const path = pathOfTab(tab);
+    if (path !== null && !openFiles.files.includes(path) && !openFiles.focus) {
+      const before = rememberedTabs.get(paneId);
+      setTabRaw(before && pathOfTab(before) === null ? before : home);
+    }
+  }, [tab, openFiles, paneId, home]);
+  // Text put into this pane's message box (Mention in chat, Tell the agent) opens the Chat tab to show it.
+  useEffect(
+    () =>
+      onComposerInsert((id) => {
+        if (id === paneId && chatAllowed) setTab('chat');
+      }),
+    [paneId, chatAllowed, setTab],
+  );
 
   useEffect(() => {
     // A view that is no longer offered falls back to the Terminal for now; the remembered choice stays.
@@ -592,6 +620,8 @@ export function PaneView({
         )}
       </header>
 
+      <FileTabsBar paneId={paneId} files={openFiles.files} active={tab} onPick={(id) => setTabRaw(id)} />
+
       {dockNow && tab !== 'terminal' && tab !== 'chat' && (
         <button type="button" className="ck-dock-bar" onClick={() => setTab('terminal')} aria-label={t('pane.dockBarAria', { headline: dockHeadline })}>
           <span className="ck-dock-bar-dot" aria-hidden="true" />
@@ -650,6 +680,9 @@ export function PaneView({
                 secondOpinion={<SecondOpinion paneId={paneId} status={pane?.status ?? ''} />}
               />
             </div>
+          )}
+          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && (
+            <FileTab key={tab} paneId={paneId} path={pathOfTab(tab)!} canTell={chatAllowed} refreshKey={pane?.status ?? ''} />
           )}
           {tab === 'transcript' && (
             <div className="ck-scroll ck-fade-in" key="transcript">

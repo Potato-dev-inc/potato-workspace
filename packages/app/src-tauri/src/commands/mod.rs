@@ -90,8 +90,10 @@ mod wsl;
 mod what_broke_it;
 mod ci_fix;
 mod collision;
+mod files_view;
 mod add_agent;
 mod agents_detect;
+pub(crate) mod path_kind;
 
 pub use acp_conversations::*;
 pub use acp_install::*;
@@ -161,6 +163,8 @@ pub use tunnel::*;
 pub use pane_remote::*;
 pub use toolbelt::*;
 pub use agent_pack::*;
+mod pet;
+pub use pet::*;
 pub use point::*;
 pub use channels::*;
 pub use live_room::*;
@@ -173,6 +177,7 @@ pub use package_check::*;
 pub use review_desk::*;
 pub use wsl::*;
 pub use ci_fix::*;
+pub use files_view::*;
 pub use collision::*;
 pub use add_agent::*;
 

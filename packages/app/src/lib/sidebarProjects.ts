@@ -74,6 +74,13 @@ export const withoutProject = (list: readonly SidebarProject[], path: string): S
 export const renamedProject = (list: readonly SidebarProject[], path: string, name: string): SidebarProject[] =>
   list.map((p) => (pathKey(p.path) === pathKey(path) ? (name.trim() ? { path: p.path, name: name.trim() } : { path: p.path }) : p));
 
+/** The added projects in the order of `paths` (folders not named keep their relative order, after those that are). */
+export function withProjectOrder(list: readonly SidebarProject[], paths: readonly string[]): SidebarProject[] {
+  const rank = new Map(paths.map((p, i) => [pathKey(p), i] as const));
+  const named = list.filter((p) => rank.has(pathKey(p.path))).sort((a, b) => (rank.get(pathKey(a.path)) as number) - (rank.get(pathKey(b.path)) as number));
+  return [...named, ...list.filter((p) => !rank.has(pathKey(p.path)))];
+}
+
 export interface ProjectGroup<T> {
   /** Stable key: the folder's path key, or `other`. */
   key: string;
@@ -157,6 +164,8 @@ export function useSidebarProjects(): {
   add: (path: string) => void;
   remove: (path: string) => void;
   rename: (path: string, name: string) => void;
+  /** Put the added projects in this order (a list of folders). */
+  reorder: (paths: string[]) => void;
 } {
   const [projects, setProjects] = useState<SidebarProject[]>(readProjects);
   useEffect(() => {
@@ -174,6 +183,7 @@ export function useSidebarProjects(): {
     add: useCallback((path) => change((l) => withProject(l, path)), [change]),
     remove: useCallback((path) => change((l) => withoutProject(l, path)), [change]),
     rename: useCallback((path, name) => change((l) => renamedProject(l, path, name)), [change]),
+    reorder: useCallback((paths) => change((l) => withProjectOrder(l, paths)), [change]),
   };
 }
 

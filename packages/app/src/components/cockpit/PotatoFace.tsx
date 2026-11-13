@@ -1,5 +1,6 @@
 // The real Potato art (assets/potato). Each state is an animated SVG used as an img (the animation is CSS inside the
-// file, no script). When the person prefers reduced motion, the picture element swaps in the still first frame.
+// file, no script). When the person prefers reduced motion (the system setting, or "Less motion" in Settings), the still first frame shows.
+import { useComfort } from '../../lib/comfort/store';
 import idle from '../../assets/potato/animated/idle.svg';
 import blink from '../../assets/potato/animated/blink.svg';
 import working from '../../assets/potato/animated/working.svg';
@@ -42,11 +43,14 @@ const ART: Record<PotatoState, { moving: string; still: string }> = {
 /** Potato in one state. Decorative by default (the text next to it says what it means); pass `label` to name it. */
 export function PotatoFace({ state = 'idle', size = 24, className, label, mark }: { state?: PotatoState; size?: number; className?: string; label?: string; mark?: boolean }) {
   const art = ART[state];
+  // "Less motion" in Settings (this computer) shows the still frame, just as the system's own setting does.
+  const [comfort] = useComfort();
   return (
     <picture>
       <source media="(prefers-reduced-motion: reduce)" srcSet={art.still} />
       <img
-        src={art.moving}
+        src={comfort.lessMotion ? art.still : art.moving}
+        data-still={comfort.lessMotion ? '' : undefined}
         width={size}
         height={size}
         className={className}

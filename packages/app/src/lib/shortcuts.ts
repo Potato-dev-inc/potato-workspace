@@ -310,6 +310,16 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
   ),
   custom(
     {
+      id: 'agent-board',
+      group: 'Navigate',
+      label: 'Agent board: every agent in three columns (Needs you, Working, Done)',
+      handlers: [handler(COCKPIT, "matchesAction(e, 'agent-board')")],
+    },
+    'Mod+0',
+    'Mod+0',
+  ),
+  custom(
+    {
       id: 'open-inbox',
       group: 'Navigate',
       label: 'Open the Inbox',

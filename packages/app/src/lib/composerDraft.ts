@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { pointApi } from './point-api';
+import { onComposerInsert, takeComposerInserts } from './composer-insert';
 import type { ChatAttachment } from './attachFiles';
 
 export const LS_COMPOSER_DRAFTS = 'pm.composerDrafts';
@@ -159,7 +160,24 @@ export function useComposerDraft(paneId: string | null): ComposerDraft | null {
   useEffect(() => {
     shown.current = paneId;
     setDraft(null);
-    if (!paneId || !isTauri()) return;
+    if (!paneId) return;
+    // Text the Files card and the file tab put here (lib/composer-insert.ts): no backend involved.
+    const takeInserts = () => {
+      const text = takeComposerInserts(paneId);
+      if (text === null) return;
+      if (shown.current === paneId) setDraft({ paneId, text, nonce: ++draftNonce });
+      else keepForLater(paneId, text);
+    };
+    takeInserts();
+    const offInsert = onComposerInsert((named) => {
+      if (named === paneId) takeInserts();
+    });
+    if (!isTauri()) {
+      return () => {
+        offInsert();
+        shown.current = null;
+      };
+    }
     const take = () => {
       void takePointDraft(paneId).then((text) => {
         if (text === null) return;
@@ -173,6 +191,7 @@ export function useComposerDraft(paneId: string | null): ComposerDraft | null {
     });
     return () => {
       unlisten();
+      offInsert();
       shown.current = null;
     };
   }, [paneId]);

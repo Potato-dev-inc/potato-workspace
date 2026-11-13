@@ -67,6 +67,7 @@ export const ROW_META: Record<string, Meta> = {
   'model-bridge-labs': { keys: ['model_bridge_enabled'] },
   'spaces-labs': { keys: ['spaces_enabled'] },
   'lend-labs': { keys: ['lend_enabled'] },
+  'desktop-potato-labs': { keys: ['desktop_pet_enabled'] },
   'early-versions': { keys: ['early_versions_enabled'] },
   'show-developer-settings': { keys: ['show_developer_settings'] },
 };

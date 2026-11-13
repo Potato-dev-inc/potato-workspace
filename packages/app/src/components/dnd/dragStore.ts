@@ -10,6 +10,8 @@ export interface DragPayload {
   id: string;
   /** Shown on the ghost card that follows the pointer. */
   label: string;
+  /** Extra facts the drop needs (for a file: where it is). */
+  meta?: Record<string, string>;
 }
 
 export interface DropZone {
@@ -22,7 +24,20 @@ export interface DropZone {
     top: number;
     bottom: number;
   } | null;
-  onDrop: (payload: DragPayload) => void;
+  /** Where the pointer was when it was released. */
+  onDrop: (payload: DragPayload, point: { x: number; y: number }) => void;
+  /** When two zones overlap, the higher number wins (default 0). */
+  priority?: number;
+  /** A thin insertion line to draw while the pointer is over this zone (see `reorder.ts`). null: none. */
+  line?: (x: number, y: number) => DropLine | null;
+}
+
+/** A line on screen, in window coordinates. */
+export interface DropLine {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
 export interface DragState {
@@ -31,6 +46,8 @@ export interface DragState {
   y: number;
   /** The zone under the pointer, if it accepts this payload. */
   over: string | null;
+  /** The insertion line of the zone under the pointer, if it draws one. */
+  line: DropLine | null;
 }
 
 /** The pointer must move this far before a press becomes a drag, so a plain click still clicks. */
@@ -81,13 +98,19 @@ export function registerDropZone(zone: DropZone): () => void {
 }
 
 function zoneAt(payload: DragPayload, x: number, y: number): string | null {
+  let best: DropZone | null = null;
   for (const z of zones.values()) {
     if (z.accepts && !z.accepts(payload)) continue;
     const r = z.getRect();
-    if (r && x >= r.left && x < r.right && y >= r.top && y < r.bottom)
-      return z.id;
+    if (!r || x < r.left || x >= r.right || y < r.top || y >= r.bottom)
+      continue;
+    if (!best || (z.priority ?? 0) > (best.priority ?? 0)) best = z;
   }
-  return null;
+  return best?.id ?? null;
+}
+
+function lineAt(over: string | null, x: number, y: number): DropLine | null {
+  return (over && zones.get(over)?.line?.(x, y)) || null;
 }
 
 /**
@@ -115,7 +138,7 @@ export function startDrag(
     // The release of a real drag is followed by a click on the row; it must not select the chat a second time.
     if (live) swallowNextClick = true;
     set(null);
-    if (drop && over) zones.get(over)?.onDrop(payload);
+    if (drop && over) zones.get(over)?.onDrop(payload, { x: lx, y: ly });
   };
   const onMove = (ev: PointerEvent) => {
     if (!live) {
@@ -126,16 +149,20 @@ export function startDrag(
     }
     lx = ev.clientX;
     ly = ev.clientY;
+    const over = zoneAt(payload, ev.clientX, ev.clientY);
     set({
       payload,
       x: ev.clientX,
       y: ev.clientY,
-      over: zoneAt(payload, ev.clientX, ev.clientY),
+      over,
+      line: lineAt(over, ev.clientX, ev.clientY),
     });
     // The zones are drawn by this very state change: look again once they exist.
     if (state?.over === null)
       setTimeout(() => {
-        if (state && stop) set({ ...state, over: zoneAt(payload, lx, ly) });
+        if (!state || !stop) return;
+        const again = zoneAt(payload, lx, ly);
+        set({ ...state, over: again, line: lineAt(again, lx, ly) });
       }, 0);
   };
   const onUp = () => finish(true);
@@ -176,6 +203,11 @@ function subscribe(l: () => void) {
   return () => {
     listeners.delete(l);
   };
+}
+
+/** Whether the pointer is over zone `id` right now. Re-renders only when that changes, not on every move. */
+export function useDragOver(id: string): boolean {
+  return useSyncExternalStore(subscribe, () => state?.over === id);
 }
 
 /** The drag in progress, or null. Re-renders on every pointer move while dragging. */

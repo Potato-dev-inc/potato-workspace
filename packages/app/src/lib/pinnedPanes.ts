@@ -31,6 +31,18 @@ export function withPin(ids: readonly string[], id: string, pinned: boolean): st
   return pinned ? [id, ...rest] : rest;
 }
 
+/**
+ * `ids` with `id` placed at `slot` among the `visible` pins (the ones on screen, in order; slot counted before the move).
+ * Pins that are not on screen (their chat is closed) keep their place at the end.
+ */
+export function withPinAt(ids: readonly string[], id: string, visible: readonly string[], slot: number): string[] {
+  const shown = visible.filter((x) => x !== id);
+  const at = Math.max(0, Math.min(shown.length, visible.includes(id) && slot > visible.indexOf(id) ? slot - 1 : slot));
+  const placed = [...shown.slice(0, at), id, ...shown.slice(at)];
+  const gone = ids.filter((x) => x !== id && !visible.includes(x));
+  return [...placed, ...gone];
+}
+
 /** Splits `items` into the pinned ones (in pin order, newest first) and the rest (order kept). */
 export function splitPinned<T>(items: readonly T[], idOf: (item: T) => string, pins: readonly string[]): { pinned: T[]; rest: T[] } {
   const byId = new Map(items.map((item) => [idOf(item), item] as const));
@@ -40,7 +52,12 @@ export function splitPinned<T>(items: readonly T[], idOf: (item: T) => string, p
 }
 
 /** The pinned ids and the way to change them; saved on every change. */
-export function usePinnedPanes(): { pins: string[]; setPinned: (id: string, pinned: boolean) => void } {
+export function usePinnedPanes(): {
+  pins: string[];
+  setPinned: (id: string, pinned: boolean) => void;
+  /** Pin `id` (or move it) to `slot` among the pins on screen. */
+  place: (id: string, slot: number, visible: readonly string[]) => void;
+} {
   const [pins, setPins] = useState<string[]>(readPinnedPanes);
   useEffect(() => {
     const onStorage = (e: StorageEvent) => e.key === LS_PINNED_PANES && setPins(readPinnedPanes());
@@ -52,5 +69,10 @@ export function usePinnedPanes(): { pins: string[]; setPinned: (id: string, pinn
     writePinnedPanes(next);
     setPins(next);
   }, []);
-  return { pins, setPinned };
+  const place = useCallback((id: string, slot: number, visible: readonly string[]) => {
+    const next = withPinAt(readPinnedPanes(), id, visible, slot);
+    writePinnedPanes(next);
+    setPins(next);
+  }, []);
+  return { pins, setPinned, place };
 }

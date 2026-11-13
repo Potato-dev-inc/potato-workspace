@@ -17,6 +17,7 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "model_bridge_enabled",
     "spaces_enabled",
     "lend_enabled",
+    "desktop_pet_enabled",
 ];
 
 /// Tests turn the override on through this; it is off in every test unless a test sets it.
@@ -83,6 +84,10 @@ const PATCHABLE_KEYS: &[&str] = &[
     "handoff_mode",
     "handoff_fixed_notes",
     "lend_enabled",
+    "desktop_pet_enabled",
+    "desktop_pet_size",
+    "desktop_pet_quiet",
+    "desktop_pet_hidden_until_ms",
     "keep_awake_while_working",
     "helper_default_models",
     "agent_default_models",
@@ -128,6 +133,11 @@ pub fn default_public_settings() -> Value {
         "handoff_fixed_notes": "",
         // Share an agent (Labs): lend an agent sign-in to another PC through this one. Off until chosen. Rust: capacity_proxy.
         "lend_enabled": false,
+        // Desktop Potato (Labs): a small pet window on the desktop. Off until chosen. Rust: pet.
+        "desktop_pet_enabled": false,
+        "desktop_pet_size": "medium",
+        "desktop_pet_quiet": false,
+        "desktop_pet_hidden_until_ms": 0,
         // Keep the PC awake (the screen may still turn off) while an agent works, so locking with Win+L does not stop it.
         "keep_awake_while_working": true,
         // Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none.
@@ -190,6 +200,7 @@ fn apply_public_settings(effective: &Value) {
     crate::spaces::runtime::apply_settings(effective);
     crate::capacity_proxy::apply_settings(effective);
     crate::keep_awake::apply_settings(effective);
+    crate::pet::apply_settings(effective);
 }
 
 /// Merge `patch` into the public mirror (bridge state + mobile SSE) without any window event.
@@ -400,6 +411,13 @@ mod spaces_labs_tests {
     fn dev_labs_keys_include_spaces_enabled() {
         assert!(DEV_LABS_KEYS.contains(&"spaces_enabled"));
         assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "spaces_enabled").count(), 1);
+    }
+
+    #[test]
+    fn desktop_pet_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "desktop_pet_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"desktop_pet_enabled"));
+        assert_eq!(default_public_settings()["desktop_pet_enabled"], serde_json::json!(false));
     }
 
     #[test]

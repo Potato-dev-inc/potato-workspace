@@ -43,6 +43,8 @@ pub fn set_pane_remote(pane_id: String, remote: Option<bool>, level: Option<Stri
         rule.level = Level::parse(&level)?;
     }
     pane_rules::set(&pane_id, rule)?;
+    // What the person sets by hand wins over a 15-minute "Ask the PC for control" grant.
+    crate::mobile_pairing::control_ask::rule_changed_by_person(&pane_id);
     crate::audit::record(
         crate::audit::Kind::Pairing,
         crate::audit::Who::Desktop,
@@ -50,4 +52,23 @@ pub fn set_pane_remote(pane_id: String, remote: Option<bool>, level: Option<Stri
         serde_json::json!({ "pane_id": pane_id, "remote": rule.remote, "level": level_name(rule.level) }),
     );
     Ok(rule.into())
+}
+
+/// The asks a phone made that nobody has answered yet ("<phone> asks for control"): what the desktop notice shows when it opens.
+#[tauri::command]
+pub fn list_control_asks() -> Vec<crate::mobile_pairing::control_ask::Ask> {
+    crate::mobile_pairing::control_ask::pending()
+}
+
+/// The person's answer to one ask. Allow lets phones do everything in that agent for 15 minutes, then the old rule comes back.
+#[tauri::command]
+pub fn answer_control_ask(id: String, allow: bool) -> Result<(), String> {
+    let ask = crate::mobile_pairing::control_ask::answer(&id, allow)?;
+    crate::audit::record(
+        crate::audit::Kind::Pairing,
+        crate::audit::Who::Desktop,
+        if allow { "You let a phone control one agent for 15 minutes" } else { "You said no to a phone asking for control" },
+        serde_json::json!({ "pane_id": ask.pane_id, "device_id": ask.device_id }),
+    );
+    Ok(())
 }

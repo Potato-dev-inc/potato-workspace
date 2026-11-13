@@ -2,11 +2,13 @@
 // chat that said it (who said it, the words found marked, agent · folder · time). A hit whose agent is still open
 // opens that chat on the phone. A hit whose agent is closed shows only what was kept, read-only.
 import { useState, type ReactNode } from 'react';
+import { t as translate, useT } from '../../i18n';
 import type { PaneInfo } from '@potato-workspace/shared';
 import type { BridgeClient } from '../../lib/bridge';
 import { kindText, snippetParts, whenText, type ChatHit } from '../../lib/chatSearch';
 import { usePhoneChatSearch } from '../../hooks/usePhoneChatSearch';
 
+/** The English words; the screen reads them through t() so they follow the phone language. */
 export const SEARCH_OFF_TEXT = 'Search is off — turn it on in Settings on your computer';
 /** The longest search the PC takes (`bridge/routes/chats.rs`). */
 export const SEARCH_MAX_CHARS = 200;
@@ -47,6 +49,7 @@ export function PhoneSearch({
   onOpenChat: (paneId: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const search = usePhoneChatSearch(bridge, query);
   /** A hit whose pane is closed: its snippet, read-only. */
@@ -67,25 +70,25 @@ export function PhoneSearch({
         <p className="ph-search-detail-text">
           <Snippet hit={closedHit} />
         </p>
-        <p className="ph-search-note">This chat is closed, so this is all that was kept.</p>
+        <p className="ph-search-note">{t('phone.search.closedNote')}</p>
         <button type="button" className="ph-btn" onClick={() => setClosedHit(null)}>
-          Back to results
+          {t('phone.search.back')}
         </button>
       </div>
     );
   } else if (search.state === 'off') {
-    body = <p className="ph-search-note">{SEARCH_OFF_TEXT}</p>;
+    body = <p className="ph-search-note">{t('phone.search.off')}</p>;
   } else if (search.state === 'failed') {
-    body = <p className="ph-search-note">Could not search. Check the connection to your PC and try again.</p>;
+    body = <p className="ph-search-note">{t('phone.search.failed')}</p>;
   } else if (!query.trim()) {
-    body = <p className="ph-search-note">Type a word to find it in every chat on this PC.</p>;
+    body = <p className="ph-search-note">{t('phone.search.hint')}</p>;
   } else if (search.state === 'done' && search.hits.length === 0) {
-    body = <p className="ph-search-note">No chat says &ldquo;{query.trim()}&rdquo;.</p>;
+    body = <p className="ph-search-note">{t('phone.search.none', { query: query.trim() })}</p>;
   } else if (search.hits.length === 0) {
-    body = <p className="ph-search-note">Searching…</p>;
+    body = <p className="ph-search-note">{t('phone.search.searching')}</p>;
   } else {
     body = (
-      <ul className="ph-search-list" aria-label="Results">
+      <ul className="ph-search-list" aria-label={t('phone.search.results')}>
         {search.hits.map((hit) => {
           const live = panes.some((pane) => pane.id === hit.paneId);
           return (
@@ -93,7 +96,7 @@ export function PhoneSearch({
               <button type="button" className="ph-search-hit" onClick={() => open(hit)}>
                 <span className="ph-search-who">
                   {kindText(hit.kind)}
-                  {!live && <span className="ph-search-closed">Closed</span>}
+                  {!live && <span className="ph-search-closed">{t('phone.search.closed')}</span>}
                 </span>
                 <span className="ph-search-text">
                   <Snippet hit={hit} />
@@ -108,13 +111,13 @@ export function PhoneSearch({
   }
 
   return (
-    <section className="ph-search" role="dialog" aria-modal="true" aria-label="Search all chats">
+    <section className="ph-search" role="dialog" aria-modal="true" aria-label={t('phone.search.placeholder')}>
       <div className="ph-search-top">
         <input
           type="search"
           className="ph-search-input"
-          aria-label="Search all chats"
-          placeholder="Search all chats"
+          aria-label={t('phone.search.placeholder')}
+          placeholder={t('phone.search.placeholder')}
           value={query}
           maxLength={SEARCH_MAX_CHARS}
           autoFocus
@@ -124,7 +127,7 @@ export function PhoneSearch({
           }}
         />
         <button type="button" className="ph-search-close" onClick={onClose}>
-          Cancel
+          {t('phone.search.cancel')}
         </button>
       </div>
       <div className="ph-search-body" aria-live="polite">

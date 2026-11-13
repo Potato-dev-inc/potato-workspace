@@ -13,6 +13,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod auth;
 mod caps;
+pub mod control_ask;
 pub mod events;
 pub mod mint;
 pub mod local_secret;
@@ -566,6 +567,7 @@ static PAIRING_STORE: once_cell::sync::OnceCell<SharedPairingStore> =
 
 pub fn init_pairing_store(path: PathBuf) -> Result<SharedPairingStore, String> {
     pane_rules::init(&path);
+    pane_rules::settle_on_start();
     let store = Arc::new(Mutex::new(MobilePairingStore::load_or_create(path)?));
     let _ = PAIRING_STORE.set(store.clone());
     Ok(store)

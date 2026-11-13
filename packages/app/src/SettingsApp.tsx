@@ -9,8 +9,10 @@ import type { SettingsPageId } from './components/settings/model';
 import { useProjectPath } from './hooks/useProjectPath';
 import { cockpitApi } from './lib/cockpit-api';
 import { settingsEntryTarget } from './lib/settings-target';
+import { useComfortRoot } from './lib/comfort/root';
 
 export default function SettingsApp() {
+  useComfortRoot();
   const target = useMemo(() => settingsEntryTarget(window.location.search), []);
   const initialTab = target.page;
   const { projectPath, setProjectPath } = useProjectPath();

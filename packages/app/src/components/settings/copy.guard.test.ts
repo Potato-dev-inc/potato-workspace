@@ -35,6 +35,7 @@ const COPY: Record<string, [string, string]> = {
   'model-bridge-labs': ['Another model in Codex', 'Adds a way to use another model service inside Codex.'],
   'spaces-labs': ['Spaces', 'Chat with friends in small groups, PC to PC. No server keeps messages.'],
   'lend-labs': ['Lend an agent', 'Lend a sign-in to another PC, or borrow one. Adds a card to Connect.'],
+  'desktop-potato-labs': ['Desktop Potato', 'A small Potato on your desktop. It sleeps, and waves when an agent needs you.'],
   telegram: ['Telegram', 'Answer your agents by Telegram text. Read the warning first.'],
   'opencode-automation': ['Switch OpenCode keys at the limit', "Uses your other key when one is limited. Check your provider's terms."],
 };

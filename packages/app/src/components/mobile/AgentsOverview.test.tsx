@@ -157,7 +157,7 @@ describe('phone AgentsOverview', () => {
     const attention = { v: 1, rev: 4, counts: { blocking: 1, ready: 0 }, items: [ITEM_LOW] } as AttentionSnapshot;
     await mount({ attention, panes: [] });
     expect(host.querySelectorAll('[data-testid="needs-you-queue"]')).toHaveLength(1);
-    expect(host.textContent).toContain('No agents running');
+    expect(host.textContent).toContain('No chats yet');
   });
 
   it('counts its own panes when the PC is too old to send attention', async () => {
@@ -200,10 +200,10 @@ describe('phone AgentsOverview', () => {
     expect(row('Billing tests').textContent).toContain('second meaningful line here');
   });
 
-  it('renders the empty state with an Open an agent button when there are no panes', async () => {
+  it('renders the empty state with a Start a chat button when there are no panes', async () => {
     const { onNew } = await mount({ panes: [] });
-    expect(host.textContent).toContain('No agents running');
-    const open = Array.from(host.querySelectorAll('button')).find((b) => b.textContent === 'Open an agent')!;
+    expect(host.textContent).toContain('No chats yet');
+    const open = Array.from(host.querySelectorAll('button')).find((b) => b.textContent === 'Start a chat')!;
     expect(open).toBeTruthy();
     act(() => open.click());
     expect(onNew).toHaveBeenCalledTimes(1);
@@ -236,7 +236,7 @@ describe('phone AgentsOverview', () => {
     await mount({ panes: [], night: <div data-testid="night-slot">Night card</div> });
     const slot = host.querySelector('[data-testid="night-slot"]')!;
     expect(host.querySelector('.ph-scroll')!.contains(slot)).toBe(true);
-    expect(host.textContent).toContain('No agents running');
+    expect(host.textContent).toContain('No chats yet');
   });
 
   it('keeps the night slot up while the bridge reconnects', async () => {

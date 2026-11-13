@@ -3,6 +3,7 @@
 import type { CompanionView } from '../../../lib/companion';
 import type { Mood } from '../../../lib/companionMood';
 import { useT } from '../../../i18n';
+import { dragSourceProps } from '../../dnd/dragSourceProps';
 import { PotatoFace } from '../PotatoFace';
 import '../../../styles/cockpit-companion.css';
 
@@ -16,7 +17,7 @@ export function CompanionRow({ companion, mood, active, onOpen }: { companion: C
       aria-current={active ? 'true' : undefined}
       data-mood={mood.face}
     >
-      <span className="ck-row-glyph ck-companion-face">
+      <span className="ck-row-glyph ck-companion-face" data-potato-drag="" {...dragSourceProps({ kind: 'potato', id: companion.id, label: companion.name })}>
         <PotatoFace state={mood.face} size={28} />
       </span>
       <span className="ck-row-main">

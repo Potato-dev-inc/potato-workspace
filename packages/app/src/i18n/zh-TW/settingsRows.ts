@@ -119,6 +119,7 @@ export const settingsRows: Partial<Record<EnglishKey, string>> = {
   'settings.row.model-bridge-labs.hint': '新增一種在 Codex 中使用其他模型服務的方式。',
   'settings.row.spaces-labs.hint': '和朋友在小群組中聊天，電腦對電腦，沒有伺服器保存訊息。',
   'settings.row.lend-labs.hint': '把登入借給另一台電腦，或向別人借用。會在「連結」新增一張卡片。',
+  'settings.row.desktop-potato-labs.hint': '桌面上的小馬鈴薯。平常在睡覺，AI 助理需要你時會揮手。',
   'settings.row.telegram.hint': '用 Telegram 文字訊息回覆你的 AI 助理。請先閱讀警告。',
   'settings.row.storage.hint': '任務、檔案鎖，以及每個窗格發生過的事，都是依專案保存。',
   'settings.row.settings-file.hint': '你的設定存放的位置。可以匯出一份不含金鑰的副本。',

@@ -32,6 +32,13 @@ import { ProjectHeader, ProjectMeta, type ProjectSignal } from './ProjectHeader'
 import { groupByBranch, primaryBranch, projectChanges, usePaneCards } from './useProjectCard';
 import { SidebarFooter } from './SidebarFooter';
 import { dragSourceProps } from '../dnd/dragSourceProps';
+import { ReorderList } from '../dnd/ReorderList';
+import { applyOrder, moveToSlot } from '../dnd/reorder';
+import { PinnedGroup } from './PinnedGroup';
+import { DropFolderSheet, useFolderDrop } from './DropFolderSheet';
+import { chatItems, rowIdOf } from './sidebar-reorder';
+import { useChatOrder } from '../../lib/sidebarOrder';
+import { requestPotatoCheck } from '../../lib/potatoCheck';
 import { bindingLabel, isMacPlatform } from '../../lib/shortcuts';
 import { groupByProject, useFoldedProjects, useGroupBy, useSidebarProjects } from '../../lib/sidebarProjects';
 import { formatElapsed, spinnerStatus } from './model';
@@ -150,7 +157,7 @@ export function Sidebar({
   const questionPanes = needsYouPaneIds(needs);
   const grouped = groupHelperTree(panes, questionPanes);
   // Pinned chats sit in their own group at the top, newest pin first, whatever they are doing.
-  const { pins, setPinned } = usePinnedPanes();
+  const { pins, setPinned, place: placePin } = usePinnedPanes();
   const pinSet = new Set(pins);
   const roots = [...grouped.needs, ...grouped.working, ...grouped.idle].filter((n) => !n.awayFrom);
   const { pinned: pinnedNodes } = splitPinned(roots, (n) => n.pane.info.id, pins);
@@ -158,7 +165,12 @@ export function Sidebar({
   const unpinned = (items: typeof grouped.needs) => items.filter((n) => n.awayFrom || !pinnedIds.has(n.pane.info.id));
   const groups = { needs: unpinned(grouped.needs), working: unpinned(grouped.working), idle: unpinned(grouped.idle) };
   // Projects view: the folders the person added, which groups are folded, and how the list is grouped.
-  const { projects, add: addProject, remove: removeProject, rename: renameProject } = useSidebarProjects();
+  const { projects, add: addProject, remove: removeProject, rename: renameProject, reorder: reorderProjects } = useSidebarProjects();
+  // The order the person gave their chats by dragging (Projects view).
+  const { order: chatOrder, setGroupOrder } = useChatOrder();
+  // A folder dragged in from Windows: "Add as a project?"
+  const sideRef = useRef<HTMLElement>(null);
+  const folderDrop = useFolderDrop(sideRef);
   const { folded: foldedProjects, toggle: toggleProject } = useFoldedProjects();
   const [groupBy, setGroupBy] = useGroupBy();
   // Parents whose helpers the person folded away (the helpers that need you stay listed in Needs you).
@@ -439,7 +451,11 @@ export function Sidebar({
     );
 
   // The Projects view: every top-level agent under the folder it works in (see groupByProject).
-  const projectRoots = roots.filter((n) => !pinnedIds.has(n.pane.info.id));
+  const projectRoots = applyOrder(
+    roots.filter((n) => !pinnedIds.has(n.pane.info.id)),
+    (n) => n.pane.info.id,
+    chatOrder,
+  );
   const projectGroups = groupByProject(projectRoots, (n) => n.pane.info.cwd, projects);
   // Branch, copy and change counts of each top-level agent: asked again only when its status changes.
   const cards = usePaneCards(groupBy === 'projects' ? projectRoots.map((n) => ({ id: n.pane.info.id, status: n.pane.status })) : []);
@@ -480,6 +496,25 @@ export function Sidebar({
     <div className="ck-group" key="projects">
       {sectionBar}
       {asks > 0 && questionsRow(asks)}
+      <ReorderList
+        zoneId="sidebar-projects"
+        kind="project"
+        axis="y"
+        className="ck-projlist"
+        items={(box) =>
+          Array.from(box.children).flatMap((proj) => {
+            const handle = proj.querySelector(':scope > .ck-proj-drag');
+            const id = handle?.getAttribute('data-reorder-id');
+            return id ? [{ id, el: proj }] : [];
+          })
+        }
+        keyboardId={(el) => el.closest('.ck-proj-drag')?.getAttribute('data-reorder-id') ?? null}
+        label={(key) => projectGroups.find((g) => g.key === key)?.name ?? key}
+        onMove={(key, slot, keys) => {
+          const next = moveToSlot(keys, key, slot);
+          reorderProjects(next.flatMap((k) => projectGroups.find((g) => g.key === k)?.path ?? []));
+        }}
+      >
       {projectGroups.map((g) => {
         const count = g.items.reduce((n, item) => n + 1 + descendants(item).length, 0);
         const isFolded = foldedProjects.has(g.key);
@@ -497,6 +532,7 @@ export function Sidebar({
         const mainBranch = primaryBranch(ids, cards);
         return (
           <div className="ck-proj" key={g.key} role="group" aria-label={g.name} data-pane-ids={g.items.flatMap((item) => [item.pane.info.id, ...descendants(item).map((d) => d.pane.info.id)]).join(' ')}>
+            <div className="ck-proj-drag" data-reorder-id={g.added ? g.key : undefined} {...(g.added ? dragSourceProps({ kind: 'project', id: g.key, label: g.name }) : {})}>
             <ProjectHeader
               name={g.name}
               count={count}
@@ -513,10 +549,24 @@ export function Sidebar({
               onRemove={() => g.path && removeProject(g.path)}
               onRename={(name) => g.path && renameProject(g.path, name)}
             />
+            </div>
             {!isFolded && !branchGroups && mainBranch && <ProjectMeta branch={mainBranch} />}
             {!isFolded &&
               (g.items.length > 0 ? (
-                <div className="ck-proj-kids">
+                <ReorderList
+                  zoneId={`sidebar-chats-${g.key}`}
+                  kind="chat"
+                  axis="y"
+                  className="ck-proj-kids"
+                  accepts={(p) => ids.includes(p.id)}
+                  items={(box) => chatItems(box, ids)}
+                  keyboardId={(el) => {
+                    const id = rowIdOf(el);
+                    return id !== null && ids.includes(id) ? id : null;
+                  }}
+                  label={(id) => paneTitle(g.items.find((n) => n.pane.info.id === id)?.pane ?? list[0])}
+                  onMove={(id, slot, visible) => setGroupOrder(moveToSlot(visible, id, slot))}
+                >
                   {branchGroups
                     ? branchGroups.map((bg) => (
                         <div className="ck-branch-group" key={bg.key} role="group" aria-label={bg.label || t('sidebar.projectFolder')}>
@@ -531,7 +581,7 @@ export function Sidebar({
                         </div>
                       ))
                     : g.items.map(node)}
-                </div>
+                </ReorderList>
               ) : g.path ? (
                 <button type="button" className="ck-proj-newrow" data-testid="proj-new-agent" onClick={() => g.path && newAgentIn(g.path, g.name)}>
                   {t('sidebar.newAgent')}
@@ -542,6 +592,7 @@ export function Sidebar({
           </div>
         );
       })}
+      </ReorderList>
       <button type="button" data-testid="side-add-project" className="ck-side-new ck-side-add" onClick={() => void addFolder()}>
         <span className="ck-row-glyph ck-row-glyph--icon">
           <IconFolderPlus />
@@ -556,7 +607,7 @@ export function Sidebar({
   // The key of a shortcut as the person set it (CockpitApp draws again when they change it).
   const hint = (id: string) => (isMacPlatform() ? bindingLabel(id) : bindingLabel(id).replace('+', ' '));
   return (
-    <aside className="ck-side" aria-label={t('sidebar.agentsLabel')}>
+    <aside ref={sideRef} className={`ck-side${folderDrop.over ? ' is-file-over' : ''}`} aria-label={t('sidebar.agentsLabel')}>
       {setUpFor && (
         <AddChatDialog
           agent={setUpFor.agent}
@@ -724,7 +775,14 @@ export function Sidebar({
           </span>
           {waiting > 0 && <span className="ck-count">{waiting}</span>}
         </button>
-        {section(t('sidebar.pinned'), pinnedNodes)}
+        <PinnedGroup
+          ids={pinnedNodes.map((n) => n.pane.info.id)}
+          canPin={(id) => roots.some((n) => n.pane.info.id === id)}
+          onPlace={(id, slot, visible) => placePin(id, slot, visible)}
+          labelOf={(id) => paneTitle(list.find((p) => p.info.id === id) ?? list[0])}
+        >
+          {pinnedNodes.map(node)}
+        </PinnedGroup>
         {groupBy === 'projects' ? (
           projectsSection
         ) : (
@@ -787,6 +845,7 @@ export function Sidebar({
           pinned={pinSet.has(rowMenu.id)}
           onPin={() => setPinned(rowMenu.id, !pinSet.has(rowMenu.id))}
           onHandoff={hand.allowed(rowMenu.id) && !handoffBusy ? () => hand.start(rowMenu.id) : undefined}
+          onPotato={companions && companions.length > 0 ? () => requestPotatoCheck(rowMenu.id) : undefined}
           onAction={(action) => runPaneAction(rowMenu.id, action)}
           onInterrupt={() => void c.interrupt(rowMenu.id)}
           onClose={closeRowMenu}
@@ -846,6 +905,12 @@ export function Sidebar({
           }}
         />
       )}
+      {folderDrop.over && (
+        <div className="ck-side-dropnote" aria-hidden="true">
+          {t('dnd.dropFolder')}
+        </div>
+      )}
+      {folderDrop.pending && <DropFolderSheet path={folderDrop.pending} onAdd={addProject} onClose={folderDrop.clear} />}
     </aside>
   );
 }

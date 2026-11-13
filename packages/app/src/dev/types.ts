@@ -51,6 +51,10 @@ export interface HarnessScenario {
     };
     /** Extra launch query, as a notification tap would open it (`item=<id>`, `pane=<id>`). */
     search?: string;
+    /** Phone part 2: the agents that have their own remote rule on the PC (`GET /pane-rules`). */
+    rules?: Record<string, { remote: boolean; level: 'watch' | 'answer' | 'full' }>;
+    /** Phone part 2: open as a phone that was just paired (the three setup steps show). */
+    setup?: boolean;
   };
   /** Phone route: the abilities this phone was paired with (`GET /pair/me`); default: all four. */
   phoneCaps?: string[];

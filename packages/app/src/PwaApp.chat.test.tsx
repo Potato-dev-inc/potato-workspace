@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The phone's Terminal | Chat switch in the PWA root: the terminal stays mounted (hidden) in the chat, nothing in the
-// chat claims the pane's size, the choice is kept per pane, and a shell has no Chat.
+// The phone's conversation and its terminal peek in the PWA root: the app shows the chat by default, the terminal stays
+// mounted (hidden) behind it, nothing in the chat claims the pane's size, and the name in the header brings the terminal up.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -141,34 +141,34 @@ async function open(tab: string) {
 const buttonNamed = (name: string) => Array.from(host.querySelectorAll('button')).find((b) => b.textContent === name);
 const flush = (ms = 50) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
-describe('PwaApp Terminal | Chat', () => {
-  it('shows the switch on an agent tab, with the terminal first and no chat asked for', async () => {
-    await open('a1');
-    expect(host.querySelector('[aria-label="Pane view"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="terminal"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="phone-chat"]')).toBeNull();
-    expect(h.paneChat).not.toHaveBeenCalled();
-  });
+const peekButton = (name: string) => Array.from(host.querySelectorAll('[data-testid="phone-peek"] button')).find((b) => b.textContent === name) as HTMLButtonElement | undefined;
+const openPeek = () => act(async () => (host.querySelector('.ph-head-title') as HTMLButtonElement).click());
 
-  it('has no switch on a shell tab', async () => {
-    await open('s1');
-    expect(host.querySelector('[data-testid="terminal"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="Pane view"]')).toBeNull();
-  });
-
-  it('opens the chat over the terminal, which stays mounted and hidden, and claims no size', async () => {
+describe('PwaApp conversation and terminal peek', () => {
+  it('opens an agent in its chat, with the terminal mounted and hidden behind it', async () => {
     await open('a1');
-    const claimsBefore = h.claim.mock.calls.length;
-    await act(async () => buttonNamed('Chat')!.click());
     await flush();
     expect(host.querySelector('[data-testid="phone-chat"]')).not.toBeNull();
     expect(h.paneChat).toHaveBeenCalledWith('a1', undefined);
     const terminal = host.querySelector('[data-testid="terminal"]')!;
-    expect(terminal).not.toBeNull();
     expect(terminal.parentElement!.className).toContain('invisible');
-    expect(h.terminalUnmounts).toBe(0);
+    expect(host.querySelector('[aria-label="Pane view"]')).toBeNull();
+  });
 
-    // Taps and scrolls in the chat, and coming back to the app, take nothing from the PC window.
+  it('a shell has no chat: its terminal shows and the name offers no switch', async () => {
+    await open('s1');
+    await flush();
+    expect(host.querySelector('[data-testid="terminal"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="phone-chat"]')).toBeNull();
+    await openPeek();
+    expect(peekButton('Show chat')).toBeUndefined();
+    expect(peekButton('Close chat')).toBeDefined();
+  });
+
+  it('claims no size in the chat: taps, scrolls and coming back to the app take nothing from the PC window', async () => {
+    await open('a1');
+    await flush();
+    const claimsBefore = h.claim.mock.calls.length;
     const main = host.querySelector('main')!;
     await act(async () => {
       main.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 5, clientY: 5 }));
@@ -177,18 +177,18 @@ describe('PwaApp Terminal | Chat', () => {
     });
     await flush(2000);
     expect(h.claim.mock.calls.length).toBe(claimsBefore);
+    expect(h.terminalUnmounts).toBe(0);
   });
 
-  it('claims the size again only when the terminal is picked', async () => {
+  it('Show terminal brings up the same terminal and a tap on it claims the size; Show chat goes back', async () => {
     await open('a1');
-    await act(async () => buttonNamed('Chat')!.click());
     await flush();
     const before = h.claim.mock.calls.length;
-    await act(async () => buttonNamed('Terminal')!.click());
+    await openPeek();
+    await act(async () => peekButton('Show terminal')!.click());
     await flush();
     expect(host.querySelector('[data-testid="phone-chat"]')).toBeNull();
     expect(host.querySelector('[data-testid="terminal"]')!.parentElement!.className).not.toContain('invisible');
-    // The terminal is the same one (never remounted); a tap on it claims as before.
     expect(h.terminalMounts).toBe(1);
     expect(h.terminalUnmounts).toBe(0);
     const main = host.querySelector('main')!;
@@ -196,23 +196,16 @@ describe('PwaApp Terminal | Chat', () => {
       main.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 5, clientY: 5 }));
     });
     expect(h.claim.mock.calls.length).toBeGreaterThan(before);
-  });
-
-  it('remembers the choice per pane across a reload', async () => {
-    await open('a1');
-    await act(async () => buttonNamed('Chat')!.click());
+    await openPeek();
+    await act(async () => peekButton('Show chat')!.click());
     await flush();
-    expect(JSON.parse(localStorage.getItem(LS_PANE_VIEWS)!)).toEqual({ a1: 'chat' });
-    act(() => root.unmount());
-    root = createRoot(host);
-    await open('a1');
     expect(host.querySelector('[data-testid="phone-chat"]')).not.toBeNull();
+    expect(h.terminalUnmounts).toBe(0);
   });
 
   it('a phone without watch gets the plain line and asks for nothing', async () => {
     h.caps = ['answer'];
     await open('a1');
-    await act(async () => buttonNamed('Chat')!.click());
     await flush(3000);
     expect(host.textContent).toContain('This phone cannot read chats.');
     expect(h.paneChat).not.toHaveBeenCalled();

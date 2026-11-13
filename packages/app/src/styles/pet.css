@@ -1,0 +1,169 @@
+/* Desktop Potato: a transparent window. Only colour tokens (see theme.css); the page itself draws nothing. */
+html.pet-page,
+html.pet-page body,
+html.pet-page #root {
+  margin: 0;
+  height: 100%;
+  background: transparent !important;
+  overflow: hidden;
+}
+
+.pet-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 6px 16px;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Inter', system-ui, sans-serif;
+  font-size: var(--fs-meta);
+  line-height: 1.35;
+  color: rgb(var(--pm-text));
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.pet-body {
+  display: block;
+  flex: none;
+  border-radius: 12px;
+  cursor: grab;
+  outline: none;
+  touch-action: none;
+}
+.pet-body:active {
+  cursor: grabbing;
+}
+.pet-body:focus-visible {
+  outline: 2px solid rgb(var(--pm-accent));
+  outline-offset: 2px;
+}
+
+.pet-sprite {
+  background-repeat: no-repeat;
+  background-position: 0% 50%;
+  pointer-events: none;
+}
+
+.pet-bubble,
+.pet-menu {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 252px;
+  padding: 8px 10px;
+  border: 1px solid rgb(var(--pm-border));
+  border-radius: 10px;
+  background: rgb(var(--pm-raised));
+  color: rgb(var(--pm-text));
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.28);
+}
+.pet-bubble {
+  position: relative;
+  animation: pet-pop var(--dur-panel) var(--ease) both;
+}
+.pet-bubble[data-kind='needs'] {
+  border-color: rgb(var(--pm-accent) / 0.55);
+}
+.pet-bubble-text {
+  margin: 0 0 8px;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+.pet-bubble-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.pet-btn,
+.pet-menu-item,
+.pet-menu-size {
+  font: inherit;
+  color: inherit;
+  border: 1px solid rgb(var(--pm-border));
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease;
+}
+.pet-btn {
+  min-height: 26px;
+  padding: 3px 12px;
+}
+.pet-btn.is-primary {
+  border-color: rgb(var(--pm-accent) / 0.6);
+  color: rgb(var(--pm-accent));
+}
+.pet-btn:hover,
+.pet-menu-item:hover,
+.pet-menu-size:hover {
+  background: rgb(var(--pm-text) / 0.08);
+}
+.pet-btn:focus-visible,
+.pet-menu-item:focus-visible,
+.pet-menu-size:focus-visible {
+  outline: 2px solid rgb(var(--pm-accent));
+  outline-offset: 1px;
+}
+
+.pet-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 200px;
+}
+.pet-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 26px;
+  padding: 3px 8px;
+  border-color: transparent;
+  text-align: left;
+}
+.pet-menu-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+}
+.pet-menu-label {
+  flex: 1;
+  padding-left: 6px;
+  color: rgb(var(--pm-muted));
+}
+.pet-menu-size {
+  min-width: 34px;
+  min-height: 24px;
+  padding: 2px 6px;
+}
+.pet-menu-size[aria-checked='true'] {
+  border-color: rgb(var(--pm-accent) / 0.6);
+  color: rgb(var(--pm-accent));
+}
+.pet-menu-check {
+  display: inline-block;
+  width: 12px;
+  color: rgb(var(--pm-accent));
+}
+
+@keyframes pet-pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pet-bubble {
+    animation: none;
+  }
+}
