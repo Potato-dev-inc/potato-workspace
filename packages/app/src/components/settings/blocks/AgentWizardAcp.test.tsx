@@ -182,7 +182,7 @@ describe('AgentWizard: chat (ACP)', () => {
     expect(kindRadio('Terminal').checked).toBe(true);
     expect(kindRadio('Chat').checked).toBe(false);
     await findIt();
-    expect(api.start).toHaveBeenCalledWith('fake-agent', true);
+    expect(api.start).toHaveBeenCalledWith('fake-agent', false);
     expect(api.acpDetect).not.toHaveBeenCalled();
     expect(host.querySelector('[data-testid="acp-step"]')).toBeNull();
     await click(button('Skip the visible part'));
@@ -318,7 +318,7 @@ describe('AgentWizard: chat (ACP)', () => {
     const api = mockApi();
     await render(api);
     await findIt('Both');
-    expect(api.start).toHaveBeenCalledWith('fake-agent', true);
+    expect(api.start).toHaveBeenCalledWith('fake-agent', false);
     expect(api.acpDetect).toHaveBeenCalledWith('wz_1');
     await setValue(field('acp-env'), 'FAKE_KEY');
     await click(button('Next'));

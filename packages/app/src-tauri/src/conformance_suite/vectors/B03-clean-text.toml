@@ -1,0 +1,24 @@
+# Lab vector B03. See ../vector.rs for the format.
+id = "B03"
+title = "The text is the model's words only: no banner, no escape codes"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["clean_text"]
+
+[[step]]
+do = "prompt"
+text = "stream 3"
+
+[[expect]]
+turn = 1
+stop = "end_turn"
+text_has = "w0 w1 w2"
+text_lacks = "\u001b"
+
+[[expect]]
+turn = 1
+text_lacks = "Welcome"
+
+[[expect]]
+stdout_clean = true

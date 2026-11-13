@@ -573,25 +573,16 @@ describe('the visible flow', () => {
     expect(review?.textContent).toContain("Answered Nimbus's trust question: Yes, I trust this folder");
   });
 
-  it('"Answer setup questions for me" is on by default, is remembered, and goes to the backend with the start', async () => {
+  it('has no "Answer setup questions for me" switch, and the start never lets the wizard answer for the person', async () => {
     const key = 'pm.agentWizard.answerSetupQuestions';
     try {
-      globalThis.localStorage.removeItem(key);
+      globalThis.localStorage.setItem(key, 'on');
       const api = mockApi(PLAIN_HELP);
       await render(api);
-      const box = host.querySelector('#wizard-auto-answer') as HTMLInputElement;
-      expect(box.checked).toBe(true);
-      expect(text()).toContain("Answer setup questions for me (only in the wizard's temp folder)");
-      expect(text()).toContain('never picks "always"');
-      await click(box);
-      expect(globalThis.localStorage.getItem(key)).toBe('off');
+      expect(host.querySelector('#wizard-auto-answer')).toBeNull();
+      expect(text()).not.toContain('Answer setup questions for me');
       await findIt();
       expect(api.start).toHaveBeenCalledWith('nimbus', false);
-      // a fresh dialog remembers it
-      await act(async () => root.unmount());
-      root = createRoot(host);
-      await render(mockApi(PLAIN_HELP));
-      expect((host.querySelector('#wizard-auto-answer') as HTMLInputElement).checked).toBe(false);
     } finally {
       globalThis.localStorage.removeItem(key);
     }

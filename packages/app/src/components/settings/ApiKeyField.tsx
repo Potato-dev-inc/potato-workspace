@@ -142,6 +142,16 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
               placeholder={placeholder}
               autoComplete="off"
             />
+            {draft.trim() !== '' && (
+              <Btn
+                primary
+                // Keep focus in the field; the click saves what was typed.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={commitDraft}
+              >
+                Save
+              </Btn>
+            )}
             {editing && (
               <Btn
                 // Keep focus in the field, so clicking Cancel does not first blur-save what was typed.
@@ -163,7 +173,7 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
         </>
       ) : (
         <div className="flex items-center gap-2">
-          <span className="font-mono text-sm" data-testid="key-state">
+          <span className="flex-1 text-sm" data-testid="key-state">
             {describeKeyState(current, info)}
           </span>
           <Btn disabled={busy} onClick={() => setEditing(true)}>

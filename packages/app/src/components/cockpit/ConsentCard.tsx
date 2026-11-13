@@ -5,6 +5,7 @@
 // and there is no lock-screen version.
 import { useEffect, useRef } from 'react';
 import type { Question, QuestionAnswer } from '../../lib/questions';
+import { LEVEL_WORD } from '../../lib/approval-risk';
 import { waitCaption } from '../../lib/questions';
 import '../../styles/cockpit-questions.css';
 import { CardButton, InboxCard, focusWithRing } from './InboxCard';
@@ -14,12 +15,31 @@ const UNKNOWN = 'Another agent';
 /** "another agent" inside a sentence, a name as it is. */
 const inSentence = (name: string): string => (name === UNKNOWN ? 'another agent' : name);
 
+const NOT_STARTED = 'It did not start this pane.';
+
+/** Who is asking, for the line next to the title: the name, or one plain phrase when Potato cannot name it. */
+export function askerName(q: Question): string {
+  const name = q.consent?.requester?.trim();
+  return !name || name === UNKNOWN ? 'Unknown agent' : name;
+}
+
+/**
+ * The reason line. Answering a prompt quotes what is being answered, so it cannot read like an order:
+ * "It wants to answer: "Delete a folder outside this project"." then "It did not start this pane."
+ */
+export function consentReason(q: Question): string | undefined {
+  if (q.consent?.action !== 'answer_prompt') return q.context;
+  const asked = (q.context ?? '').replace(NOT_STARTED, '').trim().replace(/[.:]+$/, '');
+  return asked ? `It wants to answer: "${asked}".
+${NOT_STARTED}` : q.context;
+}
+
 /** The card's question in the pane's own name: "Allow Claude to control Codex 1?" */
 export function consentTitle(q: Question, paneName?: string): string {
   const info = q.consent;
   if (!info) return q.question;
   const who = inSentence(info.requester || UNKNOWN);
-  const target = paneName?.trim() || info.target || 'that pane';
+  const target = paneName?.trim() || info.target || 'that window';
   return info.action === 'answer_prompt'
     ? `Allow ${who} to answer a question in ${target}?`
     : `Allow ${who} to control ${target}?`;
@@ -59,7 +79,10 @@ export function ConsentCard({
         guard
         title={consentTitle(q, paneName)}
         age={now - q.created_at_ms}
-        reason={q.context}
+        meta={askerName(q)}
+        status={q.consent?.risk ? LEVEL_WORD[q.consent.risk] : null}
+        risk={q.consent?.risk === 'high' ? 'high' : undefined}
+        reason={consentReason(q)}
         note={<span data-testid="consent-wait">{waitCaption(q, now)}</span>}
         data={{ 'data-consent-id': q.id }}
         actions={
@@ -76,7 +99,7 @@ export function ConsentCard({
             )}
             {has('always') && (
               <CardButton tone="plain" role="answer" data-choice="always" onClick={() => onAnswer({ choice_id: 'always' })}>
-                Always for this agent
+                Always allow here
               </CardButton>
             )}
           </>

@@ -71,18 +71,21 @@ describe('Ctrl+K: New agent', () => {
   });
 });
 
-describe('Ctrl+K: plain shells say they are terminals', () => {
-  it('labels a shell entry as a terminal, by its kind, and leaves an agent name alone', () => {
+describe('Ctrl+K: plain shells are listed under Terminals, below the agents', () => {
+  it('puts a shell entry in its own Terminals group after the agents, and keeps the agent names', () => {
     const c = cockpit({
       launchEntries: [
-        { type: 'claude', label: 'Claude', icon: null },
         { type: 'powershell', label: 'PowerShell', icon: null, shell: true },
+        { type: 'claude', label: 'Claude', icon: null },
       ],
     } as unknown as Partial<CockpitApi>);
     act(() => root.render(<Palette c={c} onClose={vi.fn()} />));
-    expect(rowFor('New PowerShell terminal')).toBeTruthy();
+    expect(rowFor('New PowerShell')).toBeTruthy();
     expect(rowFor('New Claude')).toBeTruthy();
-    expect(rowFor('New PowerShell')).toBeUndefined();
+    const headers = [...host.querySelectorAll('.ck-caption')].map((h) => h.textContent);
+    expect(headers.indexOf('Terminals')).toBeGreaterThan(headers.indexOf('New agent'));
+    const titles = rows().map(titleOf);
+    expect(titles.indexOf('New PowerShell')).toBeGreaterThan(titles.indexOf('New Claude'));
   });
 });
 
@@ -110,11 +113,11 @@ describe('palette commands for features that hide', () => {
   });
 
   it.each([
-    ['live-updates', 'general'],
-    ['budget-turns', 'general'],
-    ['team-page', 'team'],
-    ['pairing', 'phone'],
-    ['diagnostic-file', 'general'],
+    ['live-updates', 'advanced'],
+    ['budget-turns', 'agents'],
+    ['team-page', 'connect'],
+    ['pairing', 'connect'],
+    ['diagnostic-file', 'advanced'],
   ])('the row %s is a real Settings row (in %s)', (row, page) => {
     expect(resolveSettingsTarget(row)).toEqual({ page, row });
   });
@@ -130,7 +133,7 @@ describe('palette commands for features that hide', () => {
     act(() => root.render(<Palette c={c} onClose={vi.fn()} />));
     act(() => rowFor('Missions…')!.click());
     expect(c.openSettings).toHaveBeenCalledWith('missions');
-    expect(resolveSettingsTarget('missions')).toEqual({ page: 'general', row: 'missions' });
+    expect(resolveSettingsTarget('missions')).toEqual({ page: 'advanced', row: 'missions' });
     const heard: (string | null)[] = [];
     const off = onOpenStartMission((p) => heard.push(p));
     const on = settingsShortcuts(c, { missionsOn: true, projectPath: 'C:\work\shop' });

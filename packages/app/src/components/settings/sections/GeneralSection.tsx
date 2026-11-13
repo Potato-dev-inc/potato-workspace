@@ -10,7 +10,7 @@ import { clampAwayMinutes, clampCheckpointsKeep } from '../../../lib/bridge-sett
 import { redactSettings } from '../../../lib/secrets';
 import { resolveSettingsFilePath } from '../../../lib/settings';
 import { cockpitApi } from '../../../lib/cockpit-api';
-import { parseSwitchStyle, parseWindowLayout, STYLE_LABELS, WINDOW_LAYOUT_LABELS, WINDOW_LAYOUTS, type SwitchStyle } from '../../../lib/mode-switch/model';
+import { parseSwitchStyle, parseWindowLayout, STYLE_LABELS, type SwitchStyle } from '../../../lib/mode-switch/model';
 import { tauri, type AppInstallInfo, type CoordinationStorageInfo } from '../../../lib/tauri';
 import { budgetRows } from './BudgetRows';
 import { AskBarSettingsBlock } from '../blocks/AskBarSettings';
@@ -26,9 +26,9 @@ import { SharedMemoryToggle } from '../blocks/SharedMemoryToggle';
 import { START_AT_SIGN_IN_HINT, START_AT_SIGN_IN_LABEL, StartAtSignInSettings } from '../blocks/StartAtSignInSettings';
 import { WhatsNew, WHATS_NEW_LABEL } from '../blocks/WhatsNew';
 import { NumberControl, TextControl } from '../controls';
+import { LayoutThumbs, ThemeThumbs } from '../previews/Thumbs';
 import type { RowDef, SettingsEnv } from '../model';
 import { PACKAGE_CHECK_LABEL, PACKAGE_CHECK_NOTE, PackageCheckRow } from './PackageCheckRow';
-import { T as SIMPLE } from '../../simple/copy';
 import { T as WELCOME } from '../../firstrun/copy';
 import { reopenPatch } from '../../firstrun/model';
 import { Btn, FieldSelect, InfoRow, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
@@ -65,7 +65,7 @@ function ProjectFolder({ env }: { env: SettingsEnv }) {
   };
   return (
     // A block, not a row: a folder path is long, and a 220px field on the right showed "C:\Users\dev\work".
-    <SettingBlock label="Default project folder" description="Where new panes and orchestrator tools start.">
+    <SettingBlock label="Default project folder" description="Where new panes and agents start.">
       <div className="st-path">
         <TextControl
           aria-label="Default project folder"
@@ -124,7 +124,7 @@ function StorageInfo({ env }: { env: SettingsEnv }) {
 
 function VersionRow() {
   const info = useInstallInfo();
-  return <UpdateRow versionLine={info ? `v${info.version}${info.isPackaged ? '' : ' (dev build)'}` : '…'} />;
+  return <UpdateRow versionLine={info ? `${info.version.replace(/^v/i, '')}${info.isPackaged ? '' : ' (dev build)'}` : '…'} />;
 }
 
 // ---------- export and uninstall ----------
@@ -184,6 +184,15 @@ function UninstallRow({ env }: { env: SettingsEnv }) {
   );
 }
 
+/** The Welcome row's own name: it runs the first-run setup again. */
+const SIMPLE_LABEL = 'Simple look';
+const SIMPLE_HINT = 'A calmer screen with fewer buttons and plain words.';
+const WELCOME_LABEL = 'Run setup again';
+const WELCOME_BUTTON = 'Run setup';
+
+/** The away setting in words, beside its field. */
+export const awayWords = (minutes: number): string => (minutes <= 0 ? 'Off' : `After ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+
 const SWITCH_STYLES: SwitchStyle[] = ['domino', 'ink', 'off'];
 const SWITCH_HINT = 'How windows move when you switch modes. Off is a quick fade.';
 
@@ -202,7 +211,6 @@ function ModeSwitchRow({ env }: { env: SettingsEnv }) {
           </option>
         ))}
       </FieldSelect>
-      <Btn onClick={() => void cockpitApi.modeSwitchPreview(style).catch(() => undefined)}>Preview</Btn>
     </SettingRow>
   );
 }
@@ -212,17 +220,10 @@ const LAYOUT_HINT = 'Where windows go in Individual: side by side in rows, or Ca
 function WindowLayoutRow({ env }: { env: SettingsEnv }) {
   return (
     <SettingRow label="Window layout in Individual" description={LAYOUT_HINT}>
-      <FieldSelect
-        aria-label="Window layout in Individual"
+      <LayoutThumbs
         value={parseWindowLayout(env.settings.individual_window_layout)}
-        onChange={(e) => void env.patch({ individual_window_layout: parseWindowLayout(e.target.value) })}
-      >
-        {WINDOW_LAYOUTS.map((value) => (
-          <option key={value} value={value}>
-            {WINDOW_LAYOUT_LABELS[value]}
-          </option>
-        ))}
-      </FieldSelect>
+        onPick={(layout) => void env.patch({ individual_window_layout: layout })}
+      />
     </SettingRow>
   );
 }
@@ -230,7 +231,7 @@ function WindowLayoutRow({ env }: { env: SettingsEnv }) {
 // ---------- the rows ----------
 
 export const generalRows: RowDef[] = [
-  { id: 'project-folder', label: 'Default project folder', hint: 'Where new panes and orchestrator tools start.', keywords: 'workspace directory browse path', group: 'Project', render: (env) => <ProjectFolder env={env} /> },
+  { id: 'project-folder', label: 'Default project folder', hint: 'Where new panes and agents start.', keywords: 'workspace directory browse path', group: 'Project', render: (env) => <ProjectFolder env={env} /> },
   {
     id: 'your-name',
     label: 'Your name',
@@ -242,6 +243,7 @@ export const generalRows: RowDef[] = [
         <TextControl
           aria-label="Your name"
           value={env.settings.display_name ?? ''}
+          mode="blur"
           maxLength={60}
           placeholder="Optional"
           normalize={(text) => text.replace(/\s+/g, ' ').trim()}
@@ -266,14 +268,7 @@ export const generalRows: RowDef[] = [
     group: 'Appearance',
     render: (env) => (
       <SettingRow label="Theme" description="Dark or light.">
-        <FieldSelect
-          aria-label="Theme"
-          value={env.settings.theme ?? 'dark'}
-          onChange={(e) => void env.patch({ theme: e.target.value as Settings['theme'] })}
-        >
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-        </FieldSelect>
+        <ThemeThumbs value={env.settings.theme === 'light' ? 'light' : 'dark'} onPick={(theme) => void env.patch({ theme })} />
       </SettingRow>
     ),
   },
@@ -325,15 +320,15 @@ export const generalRows: RowDef[] = [
   },
   {
     id: 'simple-mode',
-    label: SIMPLE.settingLabel,
-    hint: SIMPLE.settingHint,
+    label: SIMPLE_LABEL,
+    hint: SIMPLE_HINT,
     keywords: 'simple plain easy beginner fewer buttons words look non-technical',
     group: 'Appearance',
     labs: { name: 'Simple mode', about: 'Fewer buttons and plain words, for people who do not write code.' },
     render: (env) => (
       <SettingToggle
-        label={SIMPLE.settingLabel}
-        description={SIMPLE.settingHint}
+        label={SIMPLE_LABEL}
+        description={SIMPLE_HINT}
         checked={env.settings.simple_mode ?? false}
         onChange={(value) => void env.patch({ simple_mode: value })}
       />
@@ -341,13 +336,13 @@ export const generalRows: RowDef[] = [
   },
   {
     id: 'welcome',
-    label: WELCOME.settingLabel,
+    label: WELCOME_LABEL,
     hint: WELCOME.settingHint,
     keywords: 'welcome first run tour setup onboarding start again',
     group: 'Appearance',
     render: (env) => (
-      <SettingRow label={WELCOME.settingLabel} description={WELCOME.settingHint}>
-        <Btn onClick={() => void env.patch(reopenPatch())}>{WELCOME.settingButton}</Btn>
+      <SettingRow label={WELCOME_LABEL} description={WELCOME.settingHint}>
+        <Btn onClick={() => void env.patch(reopenPatch())}>{WELCOME_BUTTON}</Btn>
       </SettingRow>
     ),
   },
@@ -417,6 +412,7 @@ export const generalRows: RowDef[] = [
           suffix="min"
           onCommit={(minutes) => env.patch({ away_minutes: minutes })}
         />
+        <span className="st-aside">{awayWords(env.settings.away_minutes ?? 5)}</span>
       </SettingRow>
     ),
   },
@@ -432,7 +428,7 @@ export const generalRows: RowDef[] = [
   {
     id: 'ask-bar',
     label: 'Ask bar',
-    hint: 'Ask an agent a quick question from a small bar anywhere in Windows. Off by default.',
+    hint: 'Ask a quick question from a small bar anywhere in Windows.',
     keywords: 'ask bar shortcut quick question default agent clipboard attach global',
     group: 'Ask bar',
     labs: { name: 'Ask bar', about: 'A small bar you open from anywhere in Windows to ask an agent a quick question.' },
@@ -508,15 +504,15 @@ export const generalRows: RowDef[] = [
   },
   {
     id: 'missions',
-    label: 'Missions (Preview)',
-    hint: 'Give agents a goal and checks. They work in turns, in a copy, until the checks pass.',
+    label: 'Missions',
+    hint: 'Give agents a goal and checks. They work until the checks pass.',
     keywords: 'mission missions labs preview goal checks loop until tests pass backup agents',
     group: 'Labs',
-    labs: { name: 'Missions', about: 'Agents work in a separate copy, turn by turn, until your checks pass.' },
+    labs: { name: 'Missions', about: 'Give agents a goal and checks to work toward.' },
     render: (env) => (
       <LabsSwitch
-        label="Missions (Preview)"
-        description="Give agents a goal and checks. They work in turns, in a copy, until the checks pass."
+        label="Missions"
+        description="Give agents a goal and checks. They work until the checks pass."
         checked={env.settings.missions_enabled ?? false}
         onChange={(value) => void env.patch({ missions_enabled: value })}
       />
@@ -534,14 +530,14 @@ export const generalRows: RowDef[] = [
   {
     id: 'night-shift',
     label: 'Night Shift',
-    hint: "Agents work on tonight's tasks in copies. You keep or drop each one in the morning.",
+    hint: 'Agents work overnight in copies. You keep or drop each one.',
     keywords: 'night shift tonight overnight morning sleep labs tasks backup agents',
     group: 'Labs',
-    labs: { name: 'Night Shift', about: 'Agents work through your tasks overnight, in separate copies.' },
+    labs: { name: 'Night Shift', about: 'Agents work overnight in copies you keep or drop.' },
     render: (env) => (
       <LabsSwitch
         label="Night Shift"
-        description="Agents work on tonight's tasks in copies. You keep or drop each one in the morning."
+        description="Agents work overnight in copies. You keep or drop each one."
         checked={env.settings.night_shift_enabled ?? false}
         onChange={(value) => void env.patch({ night_shift_enabled: value })}
       />
@@ -550,23 +546,23 @@ export const generalRows: RowDef[] = [
   {
     id: 'red-to-green',
     label: 'Red to Green',
-    hint: 'When CI fails on a pull request Potato Workspace opened, the same agent can fix it.',
+    hint: 'When a check fails on a pull request, the same agent can fix it.',
     keywords: 'ci github checks failed fix pull request',
     group: 'Labs',
-    labs: { name: 'Red to Green', about: 'The same agent fixes failed CI on its pull request, after you say yes.' },
+    labs: { name: 'Red to Green', about: 'When a check fails on a pull request, the same agent can fix it.' },
     render: (env) => <CiFixSettings onSaved={env.markSaved} />,
   },
   {
     id: 'acp-chat-labs',
-    label: 'Chat sessions',
-    hint: 'Run an agent as a chat instead of a terminal. Pick Chat per agent under Agents.',
+    label: 'Chat view',
+    hint: 'Use an agent as a chat instead of a terminal.',
     keywords: 'chat acp agent client protocol conversation terminal lane labs early',
     group: 'Labs',
-    labs: { name: 'Chat sessions', about: 'Run an agent as a chat instead of in a terminal.' },
+    labs: { name: 'Chat view', about: 'Use an agent as a chat instead of a terminal.' },
     render: (env) => (
       <SettingToggle
-        label="Chat sessions"
-        description="Run an agent as a chat instead of a terminal. Pick Chat per agent under Agents."
+        label="Chat view"
+        description="Use an agent as a chat instead of a terminal."
         checked={env.settings.acp_chat_enabled ?? true}
         onChange={(value) => void env.patch({ acp_chat_enabled: value })}
       />
@@ -574,15 +570,15 @@ export const generalRows: RowDef[] = [
   },
   {
     id: 'model-bridge-labs',
-    label: 'Model Bridge',
-    hint: 'Connect a model service with a key and add it to Codex.',
+    label: 'Another model in Codex',
+    hint: 'Adds a way to use another model service inside Codex.',
     keywords: 'model bridge service key codex provider responses connect labs early',
     group: 'Labs',
-    labs: { name: 'Model Bridge', about: 'Connect a model service with a key and add it to Codex.' },
+    labs: { name: 'Another model in Codex', about: 'Adds a way to use another model service inside Codex.' },
     render: (env) => (
       <SettingToggle
-        label="Model Bridge"
-        description="Connect a model service with a key and add it to Codex."
+        label="Another model in Codex"
+        description="Adds a way to use another model service inside Codex."
         checked={env.settings.model_bridge_enabled ?? false}
         onChange={(value) => void env.patch({ model_bridge_enabled: value })}
       />
@@ -591,14 +587,14 @@ export const generalRows: RowDef[] = [
   {
     id: 'spaces-labs',
     label: 'Spaces',
-    hint: 'Chat with friends in small groups, computer to computer. No server keeps your messages.',
+    hint: 'Chat with friends in small groups, PC to PC. No server keeps messages.',
     keywords: 'spaces chat friends groups small group computer to computer labs early',
     group: 'Labs',
-    labs: { name: 'Spaces', about: 'Chat with friends in small groups, computer to computer.' },
+    labs: { name: 'Spaces', about: 'Chat with friends in small groups, PC to PC.' },
     render: (env) => (
       <SettingToggle
         label="Spaces"
-        description="Chat with friends in small groups, computer to computer. No server keeps your messages."
+        description="Chat with friends in small groups, PC to PC. No server keeps messages."
         checked={env.settings.spaces_enabled ?? false}
         onChange={(value) => void env.patch({ spaces_enabled: value })}
       />
@@ -606,15 +602,15 @@ export const generalRows: RowDef[] = [
   },
   {
     id: 'lend-labs',
-    label: 'Share an agent',
-    hint: 'Lend an agent sign-in to another PC, or borrow one. Adds a Lend page to Settings.',
+    label: 'Lend an agent',
+    hint: 'Lend a sign-in to another PC, or borrow one. Adds a card to Connect.',
     keywords: 'lend borrow share agent usage sign-in login labs early request',
     group: 'Labs',
-    labs: { name: 'Share an agent', about: 'Lend an agent sign-in to another PC, or borrow one.' },
+    labs: { name: 'Lend an agent', about: 'Lend a sign-in to another PC, or borrow one.' },
     render: (env) => (
       <SettingToggle
-        label="Share an agent"
-        description="Lend an agent sign-in to another PC, or borrow one. Adds a Lend page to Settings."
+        label="Lend an agent"
+        description="Lend a sign-in to another PC, or borrow one. Adds a card to Connect."
         checked={env.settings.lend_enabled ?? false}
         onChange={(value) => void env.patch({ lend_enabled: value })}
       />

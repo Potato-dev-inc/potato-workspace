@@ -40,6 +40,15 @@ export const runTime = (startedAtMs: number, now: number): string => formatElaps
 
 export const jobCount = (map: JobsMap): number => Object.values(map).reduce((sum, list) => sum + list.length, 0);
 
+/**
+ * The jobs of panes that are in the sidebar's list. The footer chip and the sidebar's "No agents running" both read
+ * this one list of panes, so a job left behind by a closed pane is not counted as running.
+ */
+export function jobsOfPanes(map: JobsMap, paneIds: Iterable<string>): JobsMap {
+  const live = new Set(paneIds);
+  return Object.fromEntries(Object.entries(map).filter(([id, list]) => live.has(id) && list.length > 0));
+}
+
 /** "1 background task", "3 background tasks": the processes agents left running, not agents. */
 export const jobsRunning = (n: number): string => `${n} background ${n === 1 ? 'task' : 'tasks'}`;
 

@@ -1,0 +1,32 @@
+# Lab vector S04. See ../vector.rs for the format.
+id = "S04"
+title = "Stop while a question is open ends the turn cancelled"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt"
+text = "perm"
+
+[[step]]
+do = "wait"
+ms = 500
+
+[[step]]
+do = "cancel"
+after_ms = 0
+
+[[expect]]
+turn = 1
+asked = "edit"
+times = 1
+
+[[expect]]
+turn = 1
+stop = "cancelled"
+within_ms = 5000
+
+[[expect]]
+no_orphans = true

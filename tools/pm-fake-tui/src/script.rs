@@ -286,6 +286,15 @@ pub enum ApprovalKind {
     Create,
 }
 
+/// What a `spew` step puts on the screen.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpewKind {
+    #[default]
+    Line,
+    Binary,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "do", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Step {
@@ -379,6 +388,16 @@ pub enum Step {
     Exit {
         #[serde(default)]
         code: i32,
+        /// A line written to the process's stderr as it leaves (an error a real program prints on its way out).
+        #[serde(default)]
+        stderr: Option<String>,
+    },
+    /// Put `bytes` bytes on the screen at once: `kind = "line"` is ONE unbroken row of `x`; `kind = "binary"` is junk
+    /// (control characters, replacement characters, lone CRs; a line break every 4096 bytes) as rows.
+    Spew {
+        bytes: usize,
+        #[serde(default)]
+        kind: SpewKind,
     },
     /// Die: print a panic line and exit with a failure code.
     Crash {
@@ -519,8 +538,16 @@ mod tests {
     #[test]
     fn json_scripts_work_too() {
         let script = Script::parse(r#"{"agent":"claude","turn":[{"steps":[{"do":"exit","code":3}]}]}"#, true).unwrap();
-        assert!(matches!(script.turn[0].steps[0], Step::Exit { code: 3 }));
+        assert!(matches!(script.turn[0].steps[0], Step::Exit { code: 3, .. }));
         assert_eq!(script.burst_ms(), 0);
+    }
+
+    #[test]
+    fn exit_can_say_something_on_stderr_and_spew_has_two_kinds() {
+        let script = Script::parse(r#"{"agent":"claude","turn":[{"steps":[{"do":"spew","bytes":10,"kind":"binary"},{"do":"spew","bytes":5},{"do":"exit","code":3,"stderr":"boom"}]}]}"#, true).unwrap();
+        assert!(matches!(script.turn[0].steps[0], Step::Spew { bytes: 10, kind: SpewKind::Binary }));
+        assert!(matches!(script.turn[0].steps[1], Step::Spew { bytes: 5, kind: SpewKind::Line }));
+        assert!(matches!(&script.turn[0].steps[2], Step::Exit { code: 3, stderr: Some(t) } if t == "boom"));
     }
 
     #[test]

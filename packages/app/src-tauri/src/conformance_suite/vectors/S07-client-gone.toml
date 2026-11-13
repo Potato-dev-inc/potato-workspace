@@ -1,0 +1,17 @@
+# Lab vector S07. See ../vector.rs for the format.
+id = "S07"
+title = "The client closes its input: the agent exits by itself"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt"
+text = "stream 1"
+
+[[step]]
+do = "close_stdin"
+
+[[expect]]
+agent_exits_ms = 5000

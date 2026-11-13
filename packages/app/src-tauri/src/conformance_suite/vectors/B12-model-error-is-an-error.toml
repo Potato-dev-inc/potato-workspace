@@ -1,0 +1,16 @@
+# Lab vector B12. See ../vector.rs for the format.
+id = "B12"
+title = "A model error ends the turn as an error, not as a normal end"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["errors"]
+
+[[step]]
+do = "prompt"
+text = "rpcerr 401 unauthorized"
+
+[[expect]]
+turn = 1
+stop = "error"
+code_is_set = true

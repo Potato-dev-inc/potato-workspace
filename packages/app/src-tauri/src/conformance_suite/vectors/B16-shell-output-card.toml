@@ -1,0 +1,16 @@
+# Lab vector B16. See ../vector.rs for the format.
+id = "B16"
+title = "A command is a card with its output, completed"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["shell_cards"]
+
+[[step]]
+do = "prompt"
+text = "rich"
+
+[[expect]]
+turn = 1
+tool = "execute"
+status = "completed"

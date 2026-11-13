@@ -1,0 +1,23 @@
+# Lab vector S03. See ../vector.rs for the format.
+id = "S03"
+title = "A stalled model: stop still ends the turn"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt"
+text = "quiet"
+
+[[step]]
+do = "cancel"
+after_ms = 300
+
+[[expect]]
+turn = 1
+stop = "cancelled"
+within_ms = 5000
+
+[[expect]]
+no_orphans = true

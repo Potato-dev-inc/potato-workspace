@@ -99,6 +99,8 @@ export interface HarnessScenario {
   simple?: import('./simple-fixtures').SimpleScenario;
   /** First-run welcome: where it starts and what the mocked first task does. Absent = the welcome never shows. */
   firstRun?: import('./first-run-fixtures').FirstRunScenario;
+  /** Settings > Agents > Add an agent: which mock run the box gets and what "Found on this computer" lists. */
+  addAgent?: import('./add-agent-fixtures').AddAgentHarness;
   /** Worktrees that ship: what the mocked folder step, presets and GitHub commands answer. */
   ship?: import('./ship-fixtures').ShipScenario;
   /** Missions (Preview): the Labs switch and what the mocked `mission_*` commands answer. */

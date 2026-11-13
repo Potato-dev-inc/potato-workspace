@@ -1,0 +1,202 @@
+/* Settings > Agents: the list and one agent's page (components/settings/agents/). Grayscale only, on the settings
+   tokens. Three chip shapes carry the meaning, never colour: yes = filled + tick, no = solid outline + cross,
+   not seen yet = dashed outline. */
+
+.settings .ag-row {
+  cursor: pointer;
+  gap: 12px;
+  transition: background-color 160ms var(--ease, ease-out);
+}
+.settings .ag-row:hover {
+  background: var(--fill);
+}
+.settings .ag-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.settings .ag-open:focus-visible {
+  outline: none;
+  box-shadow: var(--focus, 0 0 0 3px rgba(128, 128, 128, 0.4));
+  border-radius: 6px;
+}
+.settings .ag-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--label-2);
+}
+.settings .ag-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.settings .ag-name {
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings .ag-standing {
+  font-size: 11.5px;
+  color: var(--label-3);
+}
+.settings .ag-row-chips {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%;
+}
+.settings .ag-go {
+  flex: none;
+  color: var(--label-3);
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* the page */
+.settings .ag-head {
+  gap: 10px;
+  border-bottom: 1px solid var(--sep);
+}
+.settings .ag-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+.settings .ag-head .ag-standing {
+  margin-left: auto;
+}
+.settings .ag-page > .st-row + .st-row,
+.settings .ag-page > .st-row + .st-rowwrap {
+  border-top: 1px solid var(--sep);
+}
+.settings .ag-terminal-note {
+  margin: 0;
+  color: var(--label-2);
+}
+
+/* chips */
+.settings .ag-chipset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings .ag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings .ag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.settings .ag-chip.is-yes {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+.settings .ag-chip.is-no {
+  border-color: var(--sep);
+  background: none;
+  color: var(--label-3);
+}
+.settings .ag-chip.is-unknown {
+  height: 22px;
+  border: 1px dashed var(--sep);
+  background: none;
+  color: var(--label-3);
+  font-size: 11.5px;
+}
+.settings .ag-chip-mark {
+  font-weight: 600;
+}
+.settings .ag-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus, 0 0 0 3px rgba(128, 128, 128, 0.4));
+}
+.settings .ag-caption {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--label-3);
+}
+.settings .ag-chipset[data-compact='true'] .ag-chips {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+.settings .ag-more {
+  align-self: center;
+  font-size: 11.5px;
+  color: var(--label-3);
+}
+.settings .ag-chipset[data-compact='true'] .ag-chip {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+@media (max-width: 640px) {
+  .settings .ag-row-chips {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings .ag-row {
+    transition: none;
+  }
+}
+
+/* the list: plain grey words instead of pills, and the one next step as a small button */
+.settings .ag-chips-text {
+  font-size: 12px;
+  color: var(--label-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings .ag-step {
+  flex: none;
+}
+.settings .ag-row[data-installed='false'] .ag-name {
+  color: var(--label-2);
+}
+/* the page: the name is the window title, so the heading is only for screen readers */
+.settings .ag-head .ag-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.settings .ag-hint {
+  margin: 0;
+  padding: 6px 14px;
+}

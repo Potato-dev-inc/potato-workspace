@@ -63,38 +63,38 @@ afterEach(async () => {
 });
 
 describe('Settings levels on the real page', () => {
-  it('first view of General shows only basic rows, and the Advanced group is closed', async () => {
-    await mount();
+  it('first view of Look and feel shows only basic rows, and the Advanced group is closed', async () => {
+    await mount({ initialTab: 'look' });
     expect(row('your-name')).not.toBeNull();
     expect(row('theme')).not.toBeNull();
-    expect(row('checkpoints')).toBeNull();
+    expect(row('usage-login-reads')).toBeNull();
     expect(row('show-developer-settings')).toBeNull();
     expect(advancedToggle()?.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('Advanced opens on click, shows the advanced rows, and stays open after a remount', async () => {
-    await mount();
+    await mount({ initialTab: 'look' });
     await click(advancedToggle());
-    expect(row('checkpoints')).not.toBeNull();
+    expect(row('usage-login-reads')).not.toBeNull();
     expect(advancedToggle()?.getAttribute('aria-expanded')).toBe('true');
-    await remount();
-    expect(row('checkpoints')).not.toBeNull();
+    await remount({ initialTab: 'look' });
+    expect(row('usage-login-reads')).not.toBeNull();
   });
 
-  it('a section with no basic rows opens its Advanced group by itself', async () => {
-    await mount({ initialTab: 'bridge' });
-    expect(row('toolbelt')).not.toBeNull();
-    expect(advancedToggle()?.getAttribute('aria-expanded')).toBe('true');
+  it('the Shortcuts page is one flat list with no Advanced fold', async () => {
+    await mount({ initialTab: 'shortcuts' });
+    expect(row('shortcuts-reset-all')).not.toBeNull();
+    expect(advancedToggle()).toBeNull();
   });
 
   it('developer rows stay hidden until "Show developer settings" is on', async () => {
-    await mount({ initialTab: 'bridge' });
+    await mount({ initialTab: 'advanced' });
+    await click(host.querySelector<HTMLButtonElement>('[data-group="Connections to other tools"] .st-adv-toggle'));
+    expect(row('toolbelt')).not.toBeNull();
     expect(row('bridge-endpoint')).toBeNull();
-    await remount({ initialTab: 'general' });
-    await click(advancedToggle());
     await click(sw('Show developer settings'));
     await settle(3);
-    await remount({ initialTab: 'bridge' });
+    await remount({ initialTab: 'advanced' });
     expect(current.show_developer_settings).toBe(true);
     expect(row('bridge-endpoint')).not.toBeNull();
   });
@@ -120,7 +120,7 @@ describe('Settings levels on the real page', () => {
 
   it('nav still reaches every section', async () => {
     await mount();
-    for (const title of ['Agents', 'Keys', 'Phone']) expect(nav(title)).toBeDefined();
+    for (const title of ['Overview', 'Agents', 'Helpers', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Advanced']) expect(nav(title), title).toBeDefined();
   });
 });
 
@@ -129,10 +129,10 @@ describe('basic rows across the real catalog', () => {
     for (const section of SECTIONS) for (const r of section.rows) expect(['basic', 'advanced', 'developer']).toContain(rowLevel(r));
   });
 
-  // 28 with "Default model for helpers" (founder asked for it, 2026-11-12). 26 in all since "Show usage bar" (founder asked for it at the basic level, 2026-11-11); 27 with "Keep this PC awake".
-  it('shows at most 28 basic rows in all, and at most 25 in any one section', () => {
+  // Spec 2026-11-13: at most 10 basic rows on a page. Today: Overview 4, Agents 3, Helpers 4, Look and feel 9, Connect 6, Keys 6.
+  it('shows at most 34 basic rows in all, and at most 10 on any one page', () => {
     const counts = SECTIONS.map((s) => s.rows.filter((r) => rowLevel(r) === 'basic').length);
-    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(28);
-    for (const c of counts) expect(c).toBeLessThanOrEqual(25);
+    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(34);
+    for (const c of counts) expect(c).toBeLessThanOrEqual(10);
   });
 });

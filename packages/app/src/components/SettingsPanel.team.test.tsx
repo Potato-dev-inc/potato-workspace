@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Team is its own Settings page: reachable from the sidebar and from search, and General no longer shows it.
+// Team is a card on the Connect page: reachable from the nav, a deep link and search, and no other page shows it.
 // This uses the real catalog (the shell test next to it uses a tiny one).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -16,6 +16,9 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async (command: string) => {
     if (command === 'team_config_get') return teamConfig({ enabled: false, team: '', teamName: '', relay: '', name: '', members: [], joins: [], admin: false, transport: null, link: null });
     if (command === 'team_default_name') return 'Pat';
+    // The Connect page shows the paired phones and the public address next to Team.
+    if (command === 'list_paired_mobile_devices') return [];
+    if (command === 'get_mobile_tunnel_info') return null;
     throw new Error(`not answered in this test: ${command}`);
   }),
 }));
@@ -51,49 +54,48 @@ const navButton = (title: string) => [...host.querySelectorAll('.st-nav .st-nav-
 const search = () => host.querySelector('input[aria-label="Search settings"]') as HTMLInputElement;
 const main = () => host.querySelector('.st-main') as HTMLElement;
 
-describe('Settings > Team is its own page', () => {
-  it('has its own entry in the sidebar, with an icon', async () => {
+describe('Settings > Connect > Team', () => {
+  it('has its own group on the Connect page, and every page has a nav entry with an icon', async () => {
     await mount();
-    expect(nav()).toEqual(['General', 'Agents', 'Orchestrator & Models', 'Keys', 'Bridge & MCP', 'Phone', 'Team', 'Shortcuts']);
-    expect(navButton('Team').querySelector('svg')).not.toBeNull();
+    expect(nav()).toEqual(['Overview', 'Agents', 'Helpers', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Advanced']);
+    expect(navButton('Connect').querySelector('svg')).not.toBeNull();
   });
 
-  it('opens from the sidebar on the two choices, "Start a team" and "Join a team"', async () => {
+  it('opens from the nav on the two choices, "Start a team" and "Join a team"', async () => {
     await mount();
-    await click(navButton('Team'));
+    await click(navButton('Connect'));
     await settle(6);
-    expect(main().querySelector('h1')!.textContent).toBe('Team');
-    expect(navButton('Team').getAttribute('aria-current')).toBe('page');
+    expect(main().querySelector('h1')!.textContent).toBe('Connect');
+    expect(navButton('Connect').getAttribute('aria-current')).toBe('page');
     expect(main().textContent).toContain('Start a team');
     expect(main().textContent).toContain('Join a team');
     // settings.css hides a group whose row has no .st-row or <section> child; the page must be one of them.
     expect(main().querySelector('[data-row="team-page"] > section')).not.toBeNull();
   });
 
-  it.each(['team', 'relay', 'invite', 'join'])('searching "%s" lands on the Team page', async (word) => {
-    await mount({ initialTab: 'general' });
+  it.each(['team', 'relay', 'invite', 'join'])('searching "%s" lands on the Team row under Connect', async (word) => {
+    await mount({ initialTab: 'look' });
     await typeInto(search(), word);
     await settle(6);
     const sections = [...main().querySelectorAll('.st-results > section')];
-    expect(sections.map((s) => s.getAttribute('data-section'))).toContain('team');
+    expect(sections.map((s) => s.getAttribute('data-section'))).toContain('connect');
     expect(main().querySelector('[data-row="team-page"]')).not.toBeNull();
-    // ...and it does not come from General.
-    expect(main().querySelector('[data-section="general"] [data-row="team-page"]')).toBeNull();
+    expect(main().querySelector('[data-section="look"] [data-row="team-page"]')).toBeNull();
   });
 
   it('opens straight on the page from a deep link (?tab=team and the old Team command)', async () => {
-    await mount({ initialTab: 'team' });
-    expect(main().querySelector('h1')!.textContent).toBe('Team');
+    await mount({ initialTab: 'connect' });
+    expect(main().querySelector('h1')!.textContent).toBe('Connect');
     expect(main().textContent).toContain('Start a team');
   });
 
-  it('General no longer shows team rows: not in its rows, not in Labs, not on the page', async () => {
-    const general = SECTIONS.find((s) => s.id === 'general')!;
-    expect(general.rows.some((r) => r.id === 'team')).toBe(false);
-    expect(general.rows.some((r) => /\bteam\b/i.test(`${r.label} ${r.hint ?? ''}`) && !r.pointer)).toBe(false);
-    expect(general.rows.some((r) => r.labs?.name === 'Team')).toBe(false);
-    await mount({ initialTab: 'general' });
-    expect(main().querySelector('h1')!.textContent).toBe('General');
+  it('Look and feel shows no team rows: not in its rows, not in Labs, not on the page', async () => {
+    const look = SECTIONS.find((s) => s.id === 'look')!;
+    expect(look.rows.some((r) => r.id === 'team')).toBe(false);
+    expect(look.rows.some((r) => /team/i.test(`${r.label} ${r.hint ?? ''}`) && !r.pointer)).toBe(false);
+    expect(look.rows.some((r) => r.labs?.name === 'Team')).toBe(false);
+    await mount({ initialTab: 'look' });
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
     expect(main().querySelector('[data-row="team-page"]')).toBeNull();
     expect(main().querySelector('.st-team')).toBeNull();
     expect(main().textContent).not.toContain('Start a team');

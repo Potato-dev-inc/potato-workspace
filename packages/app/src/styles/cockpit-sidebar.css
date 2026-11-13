@@ -382,6 +382,59 @@
   border-radius: 50%;
   border: 1.5px solid var(--label-4);
 }
+/* With the agent's icon: the icon leads and the state is a small badge on its corner. */
+.cockpit .ck-mark--icon {
+  position: relative;
+  overflow: visible;
+  color: var(--label-2);
+}
+.cockpit .ck-mark--icon .ck-mark-agent {
+  display: grid;
+  place-items: center;
+  transition: opacity 0.15s;
+}
+.cockpit .ck-mark--idle.ck-mark--icon .ck-mark-agent {
+  opacity: 0.7;
+}
+.cockpit .ck-mark--ended.ck-mark--icon .ck-mark-agent {
+  opacity: 0.4;
+}
+.cockpit .ck-mark--needs.ck-mark--icon,
+.cockpit .ck-mark--working.ck-mark--icon,
+.cockpit .ck-mark--error.ck-mark--icon {
+  color: var(--label);
+}
+.cockpit .ck-mark--icon .ck-mark-shape {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--bg-side, var(--bg));
+}
+.cockpit .ck-mark--working.ck-mark--icon .ck-mark-shape {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--label-4);
+  border-top-color: var(--label);
+  box-shadow: 0 0 0 1px var(--bg-side, var(--bg));
+}
+.cockpit .ck-mark--needs.ck-mark--icon .ck-mark-shape {
+  width: 7px;
+  height: 7px;
+  border: 0;
+  background: var(--label);
+  box-shadow: 0 0 0 2px var(--fill-active);
+}
+.cockpit .ck-mark--error.ck-mark--icon .ck-mark-shape {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--label);
+}
+.cockpit .ck-mark--error.ck-mark--icon .ck-mark-shape::after {
+  top: 1px;
+  height: 3px;
+}
 @keyframes ck-mark-spin {
   to {
     transform: rotate(360deg);

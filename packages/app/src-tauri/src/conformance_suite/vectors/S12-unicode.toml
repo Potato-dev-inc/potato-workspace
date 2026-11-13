@@ -1,0 +1,28 @@
+# Lab vector S12. See ../vector.rs for the format.
+id = "S12"
+title = "CJK, emoji and Arabic come back whole; a unicode file name is written"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt"
+text = "echo 你好 🥔 مرحبا"
+
+[[step]]
+do = "prompt"
+text = "autowrite 檔案🥔.txt"
+
+[[expect]]
+turn = 1
+stop = "end_turn"
+text_has = "echo 你好 🥔 مرحبا"
+
+[[expect]]
+turn = 2
+stop = "end_turn"
+
+[[expect]]
+file = "檔案🥔.txt"
+exists = true

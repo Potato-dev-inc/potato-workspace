@@ -113,7 +113,7 @@ const click = async (el: Element | null | undefined) => {
   await act(async () => (el as HTMLElement).click());
 };
 const menuItem = (text: string, role = 'menuitemradio') => [...host.querySelectorAll<HTMLElement>(`[role=${role}]`)].find((b) => b.textContent?.includes(text));
-const option = (text: string) => [...host.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent?.includes(text));
+const option = (text: string) => [...document.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent?.includes(text));
 async function send(text = 'fix it') {
   const area = host.querySelector<HTMLTextAreaElement>('textarea')!;
   await act(async () => {

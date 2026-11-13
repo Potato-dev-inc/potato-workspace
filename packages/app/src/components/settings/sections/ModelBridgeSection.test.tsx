@@ -234,18 +234,18 @@ describe('Model Bridge section', () => {
 });
 
 describe('Model Bridge is reachable in the real Settings', () => {
-  const models = (flags: { model_bridge_enabled?: boolean } | null) => visibleSections(SECTIONS, flags).find((s) => s.id === 'models')!;
+  const models = (flags: { model_bridge_enabled?: boolean } | null) => visibleSections(SECTIONS, flags).find((s) => s.id === 'advanced')!;
 
-  it('is a row of Orchestrator & Models while the Labs switch is on, and gone while it is off', () => {
+  it('is a row of Advanced > Models while the Labs switch is on, and gone while it is off', () => {
     expect(models({ model_bridge_enabled: true }).rows.map((r) => r.id)).toContain('model-bridge');
     expect(models({ model_bridge_enabled: false }).rows.map((r) => r.id)).not.toContain('model-bridge');
     expect(models(null).rows.map((r) => r.id)).not.toContain('model-bridge');
   });
 
-  it('is found by search, and the Labs switch is in General > Labs', () => {
+  it('is found by search, and the Labs switch is in Advanced > Early features (Labs)', () => {
     const hits = searchSections(visibleSections(SECTIONS, { model_bridge_enabled: true }), 'model bridge');
     expect(JSON.stringify(hits)).toContain('model-bridge');
-    const labs = SECTIONS.find((s) => s.id === 'general')!.rows.filter((r) => r.labs?.name === 'Model Bridge');
+    const labs = SECTIONS.find((s) => s.id === 'advanced')!.rows.filter((r) => r.labs?.name === 'Another model in Codex');
     expect(labs.length).toBe(1);
   });
 
@@ -259,7 +259,7 @@ describe('Model Bridge is reachable in the real Settings', () => {
   });
 
   it('the Labs toggle patches model_bridge_enabled', async () => {
-    const row = SECTIONS.find((s) => s.id === 'general')!.rows.find((r) => r.labs?.name === 'Model Bridge')!;
+    const row = SECTIONS.find((s) => s.id === 'advanced')!.rows.find((r) => r.labs?.name === 'Another model in Codex')!;
     const m = await mountRows([row]);
     const toggle = m.host.querySelector('[role="switch"], input[type="checkbox"]') as HTMLElement;
     await click(toggle);

@@ -1,0 +1,30 @@
+# Lab vector S09. See ../vector.rs for the format.
+id = "S09"
+title = "The model goes quiet mid-reply: the turn ends, the pieces stay, the agent survives"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+inactivity_secs = 2
+hung_grace_secs = 2
+
+[[step]]
+do = "prompt"
+text = "stall 3 60000"
+
+[[step]]
+do = "prompt"
+text = "stream 2"
+
+[[expect]]
+turn = 1
+stop = "any"
+
+[[expect]]
+turn = 1
+text_has = "p0 p1 p2"
+
+[[expect]]
+turn = 2
+stop = "end_turn"
+chunks_at_least = 2

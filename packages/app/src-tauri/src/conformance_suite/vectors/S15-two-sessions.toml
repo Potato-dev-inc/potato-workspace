@@ -1,0 +1,34 @@
+# Lab vector S15. See ../vector.rs for the format.
+id = "S15"
+title = "Two sessions at once: no mixed text, and one stop does not touch the other"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+sessions = 2
+
+[[step]]
+do = "prompt"
+text = "slow"
+
+[[step]]
+do = "prompt"
+text = "stream 3"
+session = 1
+
+[[step]]
+do = "cancel"
+after_ms = 200
+
+[[expect]]
+turn = 1
+stop = "cancelled"
+
+[[expect]]
+turn = 2
+stop = "end_turn"
+text_has = "w0 w1 w2"
+
+[[expect]]
+turn = 2
+text_lacks = "s0 "

@@ -102,9 +102,9 @@ describe('packageCheckSaveError', () => {
 });
 
 describe('Check packages before installs: where it lives and how it is found', () => {
-  it('is a General row laid out in Safety, right after Warn when an agent seems stuck', () => {
-    const safety = LAYOUT.general!.find((g) => g.group === 'Safety')!.rows;
-    expect(safety.indexOf('package-check')).toBe(safety.indexOf('loop-guard') + 1);
+  it('is a General row laid out in Agents > Rules for all agents, right after Warn when an agent seems stuck', () => {
+    const rules = LAYOUT.agents.find((g) => g.group === 'Rules for all agents')!.rows;
+    expect(rules.indexOf('package-check')).toBe(rules.indexOf('loop-guard') + 1);
     expect(generalRows.find((r) => r.id === 'package-check')?.label).toBe(PACKAGE_CHECK_LABEL);
   });
 

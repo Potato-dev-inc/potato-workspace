@@ -13,6 +13,7 @@ import '../../styles/live-preview.css';
 import '../../styles/pane-chrome.css';
 import '../../styles/cockpit-helpers.css';
 import { TerminalViewport } from '../TerminalViewport';
+import { AgentLogo } from '../common/AgentLogo';
 import { DotSpinner } from './DotSpinner';
 import { mainPreview, openPreview, previewLabel } from '../../lib/pane-preview';
 import { pointApi } from '../../lib/point-api';

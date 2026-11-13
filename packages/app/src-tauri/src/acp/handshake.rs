@@ -129,11 +129,75 @@ pub struct SessionInfo {
 }
 
 pub fn parse_session_info(result: &Value) -> SessionInfo {
-    SessionInfo {
-        session_id: result.get("sessionId").and_then(Value::as_str).map(str::to_string),
-        config_options: result.get("configOptions").and_then(Value::as_array).cloned().unwrap_or_default(),
-        modes: result.get("modes").cloned().filter(|v| v.is_object()),
+    let mut config_options: Vec<Value> = result.get("configOptions").and_then(Value::as_array).cloned().unwrap_or_default();
+    let modes = result.get("modes").cloned().filter(|v| v.is_object());
+    if config_options.is_empty() {
+        // An agent that only sends `models` and/or `modes` (the older shape) still gets model and mode pickers.
+        config_options.extend(option_from_models(result.get("models")));
+        config_options.extend(option_from_modes(modes.as_ref()));
     }
+    SessionInfo { session_id: result.get("sessionId").and_then(Value::as_str).map(str::to_string), config_options, modes }
+}
+
+/// The marker `_meta.potato.source` on an option this app built from `models` / `modes`. Setting such an option goes
+/// through `session/set_model` / `session/set_mode`, because the agent has no `session/set_config_option` for it.
+pub const SYNTH_MODELS: &str = "models";
+pub const SYNTH_MODES: &str = "modes";
+
+/// Which kind of republished option this is (`SYNTH_MODELS` / `SYNTH_MODES`), or `None` for the agent's own option.
+pub fn synthesized_source(option: &Value) -> Option<&str> {
+    option.pointer("/_meta/potato/source").and_then(Value::as_str)
+}
+
+fn republished(id: &str, name: &str, source: &str, current: &str, choices: Vec<Value>) -> Value {
+    json!({
+        "id": id,
+        "name": name,
+        "category": id,
+        "type": "select",
+        "currentValue": current,
+        "options": choices,
+        "_meta": { "potato": { "source": source } }
+    })
+}
+
+fn choices(list: &Value, id_key: &str) -> Vec<Value> {
+    list.as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let value = item.get(id_key)?.as_str()?;
+                    let name = item.get("name").and_then(Value::as_str).filter(|n| !n.trim().is_empty()).unwrap_or(value);
+                    let mut out = json!({ "value": value, "name": name });
+                    if let Some(description) = item.get("description").and_then(Value::as_str) {
+                        out["description"] = json!(description);
+                    }
+                    Some(out)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn option_from_models(models: Option<&Value>) -> Option<Value> {
+    let models = models?;
+    let list = choices(models.get("availableModels")?, "modelId");
+    if list.is_empty() {
+        return None;
+    }
+    let current = models.get("currentModelId").and_then(Value::as_str).unwrap_or_default();
+    Some(republished("model", "Model", SYNTH_MODELS, current, list))
+}
+
+fn option_from_modes(modes: Option<&Value>) -> Option<Value> {
+    let modes = modes?;
+    let list = choices(modes.get("availableModes")?, "id");
+    if list.is_empty() {
+        return None;
+    }
+    let current = modes.get("currentModeId").and_then(Value::as_str).unwrap_or_default();
+    Some(republished("mode", "Mode", SYNTH_MODES, current, list))
 }
 
 #[cfg(test)]

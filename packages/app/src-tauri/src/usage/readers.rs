@@ -34,6 +34,30 @@ pub struct Window {
     pub reset_since: bool,
 }
 
+/// Money and tokens over a span (pay-per-use agents).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize)]
+pub struct Spend {
+    pub cost: f64,
+    pub tokens: u64,
+}
+
+/// One model's spend over the week.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ModelSpend {
+    pub model: String,
+    pub cost: f64,
+    pub tokens: u64,
+}
+
+/// What a pay-per-use agent spent: no limit, so no percent.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct Totals {
+    pub today: Spend,
+    pub week: Spend,
+    /// Last 7 days, biggest cost first.
+    pub models: Vec<ModelSpend>,
+}
+
 /// What a reader found.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Reading {
@@ -42,6 +66,7 @@ pub struct Reading {
     pub observed_at_ms: Option<u64>,
     /// The agent said it is stopped at a limit.
     pub reached: bool,
+    pub totals: Option<Totals>,
 }
 
 /// A window's name from its length in minutes.

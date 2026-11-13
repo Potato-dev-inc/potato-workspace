@@ -1,0 +1,50 @@
+# Lab vector B11. See ../vector.rs for the format.
+id = "B11"
+title = "Model and effort reach the agent; a change during a turn is refused"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["model_choice", "effort"]
+
+[[step]]
+do = "prompt"
+text = "slow"
+
+[[step]]
+do = "wait"
+ms = 150
+
+[[step]]
+do = "set_option"
+id = "model"
+value = "a"
+
+[[step]]
+do = "cancel"
+after_ms = 0
+
+[[step]]
+do = "wait"
+ms = 400
+
+[[step]]
+do = "set_option"
+id = "model"
+value = "b"
+
+[[step]]
+do = "set_option"
+id = "effort"
+value = "high"
+
+[[step]]
+do = "prompt"
+text = "settings"
+
+[[expect]]
+refused = ""
+
+[[expect]]
+turn = 2
+stop = "end_turn"
+text_has = "model=b effort=high"

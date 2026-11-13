@@ -207,6 +207,9 @@ pub fn run(script: Script, base_dir: PathBuf) -> i32 {
             painter.draw(&engine.frame(t), size);
         }
         if let Some(code) = engine.exit_code() {
+            if let Some(line) = engine.exit_stderr() {
+                eprintln!("{line}");
+            }
             break code;
         }
     };

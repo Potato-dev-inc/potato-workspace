@@ -38,11 +38,9 @@ import {
   type WizardApi,
 } from '../../../lib/agentWizard';
 import {
-  loadFinishWithoutMe,
   NO_AUTO_DRAFTER_MESSAGE,
   pickAutoDrafter,
   runAutonomous,
-  saveFinishWithoutMe,
   type AutonomousOutcome,
   type AutoTimings,
 } from '../../../lib/agentWizardAuto';
@@ -58,27 +56,12 @@ import { buildPrompt, REMOTE_PROMPT_BUDGET, type CaptureFacts } from '../../../l
 import { AcpStep, type AcpDraft } from './AcpStep';
 import { AgentWizardCapture, AnsweredList, agentName, BTN, INPUT } from './AgentWizardCapture';
 
-const AUTO_ANSWER_KEY = 'pm.agentWizard.answerSetupQuestions';
-
-/** The person's choice, kept between runs. On unless they turned it off. */
-function loadAutoAnswer(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(AUTO_ANSWER_KEY) !== 'off';
-  } catch {
-    return true;
-  }
-}
-
-function saveAutoAnswer(on: boolean) {
-  try {
-    globalThis.localStorage?.setItem(AUTO_ANSWER_KEY, on ? 'on' : 'off');
-  } catch {
-    // a browser without storage keeps the choice for this window only
-  }
-}
+/** The person answers every setup question and approves the result. The wizard never answers or approves for them. */
+const autoAnswer = false;
+const finishWithoutMe = false;
 
 /** What the person wants to make: a terminal agent (today's flow), a chat agent over ACP, or both. */
-type Kind = 'terminal' | 'chat' | 'both';
+export type Kind = 'terminal' | 'chat' | 'both';
 
 type Phase = 'command' | 'finding' | 'acp' | 'acpReview' | 'capture' | 'drafter' | 'running' | 'auto' | 'review' | 'stopped';
 
@@ -130,8 +113,11 @@ export function AgentWizard({
   onClose,
   onApprove,
   autoTimings,
+  initialKind = 'terminal',
 }: {
   api?: WizardApi;
+  /** What the wizard starts on: the manual chat command opens it on Chat. */
+  initialKind?: Kind;
   customAi?: CustomAiSupport;
   /** Shorter waits for "Finish without me" (tests). */
   autoTimings?: Partial<AutoTimings>;
@@ -141,11 +127,6 @@ export function AgentWizard({
 }) {
   const [phase, setPhase] = useState<Phase>('command');
   const [command, setCommand] = useState('');
-  // "Answer setup questions for me": the wizard may answer a trust or one-time approval question in the panes it
-  // starts itself, in its own isolated folder. On by default; the choice is kept.
-  const [autoAnswer, setAutoAnswer] = useState<boolean>(() => loadAutoAnswer());
-  // "Finish without me" (SPEC 11.19): the wizard does everything itself, approval included. On by default; the choice is kept.
-  const [finishWithoutMe, setFinishWithoutMe] = useState<boolean>(() => loadFinishWithoutMe());
   // Each automatic decision, in plain short English, and the capture pane as the run goes (for the preview).
   const [decisions, setDecisions] = useState<string[]>([]);
   const [autoCapture, setAutoCapture] = useState<CaptureStatus | null>(null);
@@ -181,7 +162,7 @@ export function AgentWizard({
   const [showToml, setShowToml] = useState(false);
   const [busy, setBusy] = useState(false);
   // Chat (ACP): what to make (default: terminal only, today's flow), what the chat step keeps, and the checked table.
-  const [kind, setKind] = useState<Kind>('terminal');
+  const [kind, setKind] = useState<Kind>(initialKind);
   const [acpDraft, setAcpDraft] = useState<AcpDraft | null>(null);
   const [acp, setAcp] = useState<AcpValue | null>(null);
 
@@ -365,7 +346,7 @@ export function AgentWizard({
       setError(splitError(e).message);
       setPhase('command');
     }
-  }, [api, autoAnswer, command, discardSession, finishWithoutMe, kind, customAi, loadCustom, startAutonomous]);
+  }, [api, command, discardSession, kind, customAi, loadCustom, startAutonomous]);
 
   /** Draft, check, fix and test. With \`oneTask\`, the visible file in \`result\` is kept and only the one-task mode is added. */
   const startDrafting = useCallback(
@@ -607,59 +588,6 @@ export function AgentWizard({
                 ))}
               </div>
             </fieldset>
-            {kind !== 'terminal' && (
-              <p data-testid="chat-no-auto-note" className="mt-2 text-xs text-pm-muted">
-                {kind === 'both' ? 'Finish without me is only for terminal agents. ' : ''}You approve the result yourself.
-              </p>
-            )}
-            {kind === 'terminal' && (
-            <label className="mt-3 flex items-start gap-2 text-xs" htmlFor="wizard-finish-without-me">
-              <input
-                id="wizard-finish-without-me"
-                type="checkbox"
-                className="mt-0.5"
-                checked={finishWithoutMe}
-                disabled={phase === 'finding'}
-                onChange={(e) => {
-                  setFinishWithoutMe(e.target.checked);
-                  saveFinishWithoutMe(e.target.checked);
-                }}
-              />
-              <span>
-                Finish without me
-                <span className="block text-pm-muted">
-                  The wizard does everything itself: it watches the agent, writes the profile, tests it and approves it, and asks you
-                  nothing on the way. It answers only the plain "trust this folder" or "allow once" questions, never "always" or "don't ask
-                  again". It never signs in for you and never runs the agent with a permission bypass: if the agent needs a sign-in, it stops
-                  and tells you. Everything runs in the wizard's own temporary folder, never in your project. You can still revoke or remove
-                  the agent in Settings afterwards.
-                </span>
-              </span>
-            </label>
-            )}
-            {kind !== 'chat' && !(finishWithoutMe && kind === 'terminal') && (
-              <label className="mt-3 flex items-start gap-2 text-xs" htmlFor="wizard-auto-answer">
-                <input
-                  id="wizard-auto-answer"
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={autoAnswer}
-                  disabled={phase === 'finding'}
-                  onChange={(e) => {
-                    setAutoAnswer(e.target.checked);
-                    saveAutoAnswer(e.target.checked);
-                  }}
-                />
-                <span>
-                  Answer setup questions for me (only in the wizard's temp folder)
-                  <span className="block text-pm-muted">
-                    The agent may ask "do you trust this folder?" or "allow this once?" in the panes the wizard opens. With this on, the
-                    wizard presses the plain yes. It never picks "always", "don't ask again" or "all", and never answers a sign-in, payment
-                    or model question. Your own projects are never touched.
-                  </span>
-                </span>
-              </label>
-            )}
             {phase === 'finding' && (
               <p role="status" className="mt-2 text-xs text-pm-muted">
                 Finding the program and reading its help...

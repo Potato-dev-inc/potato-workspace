@@ -9,7 +9,7 @@ export interface BridgeApi {
   externalLogs: McpLogEntry[];
   isReady: boolean;
   error: string | null;
-  /** True when a bridge that was reachable stops answering. Clears on the next event. */
+  /** True when a bridge that was reachable stops answering. Never true before the first event. Clears on the next event. */
   connectionLost: boolean;
 }
 
@@ -21,6 +21,8 @@ export function useBridge(bridgeUrl?: string): BridgeApi {
   const [error, setError] = useState<string | null>(null);
   const [connectionLost, setConnectionLost] = useState(false);
   const clientRef = useRef<BridgeClient | null>(null);
+  // "Connection lost" needs a connection that was once there: an error before the first event is still connecting.
+  const heardRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +48,7 @@ export function useBridge(bridgeUrl?: string): BridgeApi {
       unsub = subscribeBridgeEvents(
         url,
         (ev) => {
+          heardRef.current = true;
           setConnectionLost(false);
           if (ev.type === 'panes') setPanesFromBridge(ev.panes);
           if (ev.type === 'log') {
@@ -54,7 +57,7 @@ export function useBridge(bridgeUrl?: string): BridgeApi {
         },
         () => {
           // SSE retries internally; this only records that the live connection dropped.
-          setConnectionLost(true);
+          if (heardRef.current) setConnectionLost(true);
         },
       );
     }

@@ -6,7 +6,7 @@ const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8'
 describe('settings saves are honest', () => {
   it('the panel rethrows a failed save so callers do not run their saved path', () => {
     const src = read('../SettingsPanel.tsx');
-    const from = src.indexOf('} catch (error) {', src.indexOf('const patchFor'));
+    const from = src.indexOf('} catch (error) {', src.indexOf('const save'));
     expect(src.slice(from, from + 500)).toMatch(/throw error/);
   });
 

@@ -1,0 +1,18 @@
+# Lab vector B04. See ../vector.rs for the format.
+id = "B04"
+title = "A file edit is a card with a diff, completed"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["edit_cards"]
+
+[[step]]
+do = "prompt"
+text = "rich"
+
+[[expect]]
+turn = 1
+stop = "end_turn"
+tool = "edit"
+status = "completed"
+has_diff = true

@@ -253,3 +253,15 @@ describe('shown once', () => {
     expect(reopenPatch()).toEqual({ onboarding_done: false, onboarding_step: 'agents' });
   });
 });
+
+describe('continueReason', () => {
+  const why = { agents: 'a', connect: 'c', project: 'p', task: 't' };
+  it('names the reason on each step while Continue is off, and nothing while it is on', async () => {
+    const { continueReason, initialFlow } = await import('./model');
+    const base = initialFlow({ start: 'agents', look: 'code', project: null, agentId: null } as never);
+    expect(continueReason({ ...base, step: 'agents', ready: [] }, why)).toBe('a');
+    expect(continueReason({ ...base, step: 'connect', connected: 'no' }, why)).toBe('c');
+    expect(continueReason({ ...base, step: 'project', project: null }, why)).toBe('p');
+    expect(continueReason({ ...base, step: 'connect', connected: 'yes' }, why)).toBeNull();
+  });
+});

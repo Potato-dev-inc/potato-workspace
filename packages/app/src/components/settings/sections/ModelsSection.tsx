@@ -8,17 +8,18 @@ const trim = (text: string) => text.trim();
 export const modelsRows: RowDef[] = [
   {
     id: 'librarian-indexer',
-    label: 'Project index builder',
-    hint: 'Blank: OpenCode builds the index. Or the path to a script that builds one without AI.',
-    keywords: 'librarian indexer path script static project-indexer.py opencode',
+    label: 'Project index',
+    hint: 'Empty: OpenCode builds it. Or the path to your own script.',
+    keywords: 'orchestrator project index builder librarian indexer path script static project-indexer.py opencode',
     group: 'Project index',
     render: (env) => (
       <SettingRow
-        label="Project index builder"
-        description="Leave blank to let OpenCode build the project index. Or give the path to a script that builds a simple index without AI."
+        label="Project index"
+        description="Empty: OpenCode builds it. Or the path to your own script."
       >
         <TextControl
-          aria-label="Project index builder"
+          aria-label="Project index"
+          mode="blur"
           mono
           placeholder="opencode"
           value={env.settings.librarian_indexer_path ?? ''}
@@ -30,14 +31,15 @@ export const modelsRows: RowDef[] = [
   },
   {
     id: 'opencode-provider',
-    label: 'OpenCode provider',
-    hint: 'Used when a prompt to an OpenCode agent does not name a model.',
-    keywords: 'opencode provider id anthropic model',
+    label: 'OpenCode: model service',
+    hint: 'Used when you start OpenCode without naming a model.',
+    keywords: 'orchestrator opencode provider id anthropic model',
     group: 'OpenCode',
     render: (env) => (
-      <SettingRow label="OpenCode provider" description="Used when a prompt to an OpenCode agent does not name a model.">
+      <SettingRow label="OpenCode: model service" description="Used when you start OpenCode without naming a model.">
         <TextControl
           aria-label="OpenCode provider ID"
+          mode="blur"
           mono
           placeholder="anthropic"
           value={env.settings.opencode_model_provider ?? ''}
@@ -49,14 +51,15 @@ export const modelsRows: RowDef[] = [
   },
   {
     id: 'opencode-model',
-    label: 'OpenCode model',
-    hint: 'The model used with the provider above.',
-    keywords: 'opencode model id',
+    label: 'OpenCode: model',
+    hint: 'The model used with the service above.',
+    keywords: 'orchestrator opencode model id',
     group: 'OpenCode',
     render: (env) => (
-      <SettingRow label="OpenCode model" description="The model used with the provider above. Also applies to OpenCode chats.">
+      <SettingRow label="OpenCode: model" description="The model used with the service above.">
         <TextControl
           aria-label="OpenCode model ID"
+          mode="blur"
           mono
           placeholder="claude-sonnet-4"
           value={env.settings.opencode_model_id ?? ''}

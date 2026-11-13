@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.20
+
+This is a beta.
+
+- New: Add an agent in one box. Type a name; Potato finds the program, checks its version and says hello to it, with no model calls. Agents that only work in a terminal are added as terminal agents. Installs ask once first.
+- New: Found on this computer. The Add an agent box lists agents already installed, with Add and Add all.
+- New: every agent shows what it can do (chat, remember, pick a model, ask before changes). A tick only appears when it was proven; the rest say "Not seen yet" until a chat shows it.
+- New: Settings opens on an Overview (agents, sign-ins, phone, updates, helpers) and has eight plain pages, search with everyday words, a page per agent, a dot on what you changed, Reset per row and Undo.
+- New: agent icons. Each agent shows its own icon instead of a dot, in the sidebar, usage bar, New agent page and Settings; the working and needs-you marks sit on the icon.
+- New: OpenCode spend (today and the last 7 days, per model) in the usage bar, read from OpenCode's own files on this PC.
+- The New agent page lists the same models as the chat, with descriptions, once the agent has reported them.
+- Chats: an agent that stops on its own is shown as an error, not a success; agents that only send models or modes get a working picker; Python agents get UTF-8 output.
+- Safer setup checks: a help text can no longer turn on a skip-permissions flag through a short alias, a model list command is checked before it runs, and a resumed chat stays in its own project.
+- Smaller fixes: one count for running jobs, no "Connection lost" before the first connect, readable usage wording, plain Inbox words, delete asks first in Closed chats, and the Shortcuts sheet has a title.
+
 ## 1.0.19
 
 This is a beta.

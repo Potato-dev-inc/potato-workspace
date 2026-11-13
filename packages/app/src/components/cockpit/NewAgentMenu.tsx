@@ -9,6 +9,7 @@
 // The first row of step 1 is "Pick for me" (only with a `pick` API and a project). It asks which agent to start
 // here, from the person's own history. It starts nothing: only a press on its Start button does.
 import { SIGN_IN } from '../../lib/glossary';
+import { AgentLogo } from '../common/AgentLogo';
 import { Fragment, useEffect, useState } from 'react';
 import { accountsFor, needsAccountStep, pickableAccounts, rememberSignIn, rememberedSignIn, signInLabel, tauriAccountsApi, type Account, type AccountsApi } from '../../lib/accounts';
 import { startFailure, type AcpAddable, type AcpChatApi, type AcpLaneAgent, type TerminalChatAgent } from '../../lib/acpChat';
@@ -595,6 +596,7 @@ export function NewAgentMenu({
               }
             }}
           >
+            <AgentLogo id={e.type} name={e.label} size={14} decorative className="ck-menu-logo" />
             <span>{e.label}</span>
             {!e.disabled && hasAccounts && <span className="ck-menu-hint">{last ? `${last.label} ›` : `${accountsFor(live, e.type).length + 1} sign-ins ›`}</span>}
             {!e.disabled && !hasAccounts && route === 'terminal' && readyAgents.has(e.type) && <span className="ck-menu-hint">ready</span>}

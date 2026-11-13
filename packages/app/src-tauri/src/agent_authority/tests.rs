@@ -56,7 +56,7 @@ fn adopting_a_user_pane_with_a_on_raises_a_card_and_the_call_says_consent_pendin
         assert_eq!(q.urgency, "high");
         assert!(!q.allow_free_text);
         let labels: Vec<&str> = q.choices.iter().map(|c| c.label.as_str()).collect();
-        assert_eq!(labels, ["Allow once", "Always for this pane", "Deny"]);
+        assert_eq!(labels, ["Allow once", "Always allow here", "Deny"]);
         let info = q.consent.expect("marked as a consent card");
         assert_eq!((info.action.as_str(), info.pane_id.as_deref()), ("take_over", Some(pane.as_str())));
         assert!(q.pane_id.is_none(), "the target pane is not the one waiting");

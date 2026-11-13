@@ -6,7 +6,7 @@ const s: HarnessScenario = {
   route: 'settings',
   settingsTab: 'bridge',
   after: async (dom) => {
-    await dom.waitFor('[aria-label="Toolbelt"] li');
+    await dom.waitFor('[aria-label="Tools for every agent"] li');
     await dom.sleep(300);
   },
 };

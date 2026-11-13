@@ -250,15 +250,15 @@ export function Sidebar({
   // skeleton goes and the rejection goes on to the menu, which shows why (and the terminal fallback).
   const startAcpChat = async (agentId: string, accountId?: string) => {
     if (!project) throw new Error('Pick a project folder first.');
-    c.beginChatStart(agentId, project.path);
+    const startId = c.beginChatStart(agentId, project.path);
     let started: Awaited<ReturnType<AcpChatApi['start']>>;
     try {
       started = await (accountId === undefined ? acp.start(agentId, project.path, true) : acp.start(agentId, project.path, true, accountId));
     } catch (err) {
-      c.endChatStart();
+      c.endChatStart(startId);
       throw err;
     }
-    c.endChatStart();
+    c.endChatStart(startId);
     c.select(started.pane_id);
   };
   // Missions (Preview, Labs): "+" → Start a mission… opens the start sheet for the menu's project.
@@ -334,7 +334,7 @@ export function Sidebar({
           aria-label={pill ? `${heading.primary}, needs you` : undefined}
         >
           <span className="ck-row-glyph">
-            <RowMark status={p.status} asking={asking && p.status !== 'error'} />
+            <RowMark status={p.status} asking={asking && p.status !== 'error'} agentId={p.info.agent_type} agentName={entry?.label} />
           </span>
           <span className="ck-row-main" title={[...new Set([heading.primary, entry?.label, subline, projectWithCopy(p.info.cwd)])].filter(Boolean).join(' · ')}>
             <span className="ck-row-title">{heading.primary}</span>

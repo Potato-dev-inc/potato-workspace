@@ -1,7 +1,7 @@
 // "3 background tasks" in the sidebar footer: it counts the background jobs of every pane and opens a
 // sheet that lists them grouped by pane. Hidden when nothing runs in the background.
 import { useEffect, useState } from 'react';
-import { jobCount, jobsRunning, tauriJobsApi, usePaneJobs, type JobsApi, type JobsMap } from '../../../lib/pane-jobs';
+import { jobCount, jobsOfPanes, jobsRunning, tauriJobsApi, usePaneJobs, type JobsApi, type JobsMap } from '../../../lib/pane-jobs';
 import { IconTerminal } from '../Icons';
 import { Sheet } from '../Sheet';
 import { previewJobPort, stopJob } from './BackgroundCard';
@@ -62,7 +62,9 @@ export function JobsSheet({ jobs, names, onOpenPane, onClose, api = tauriJobsApi
 }
 
 export function JobsChip({ names, onOpenPane, api = tauriJobsApi }: JobsChipProps) {
-  const jobs = usePaneJobs(api);
+  const all = usePaneJobs(api);
+  // Only the panes the sidebar lists: with no agents there is nothing running to count.
+  const jobs = jobsOfPanes(all, names.keys());
   const [open, setOpen] = useState(false);
   const count = jobCount(jobs);
   if (count === 0) return null;

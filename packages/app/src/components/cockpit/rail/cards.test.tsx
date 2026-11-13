@@ -60,10 +60,10 @@ describe('ContextCard', () => {
   });
   it('says so when the agent does not report it', () => {
     show(<ContextCard usage={usage(5000, 10, null)} />);
-    expect(host.textContent).toContain('Not reported by this agent');
+    expect(host.textContent).toContain("This agent doesn't share this");
     expect(host.querySelector('[role="meter"]')).toBeNull();
     show(<ContextCard usage={null} />);
-    expect(host.textContent).toContain('Not reported by this agent');
+    expect(host.textContent).toContain("This agent doesn't share this");
   });
 });
 

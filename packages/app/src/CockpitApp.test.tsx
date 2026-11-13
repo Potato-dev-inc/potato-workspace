@@ -653,7 +653,7 @@ describe('Settings in the cockpit', () => {
   it('a deep link opens the inline view on that section', () => {
     clickButton('pane p1');
     fromRust({ tab: 'bridge' });
-    expect(settingsTab()).toBe('bridge');
+    expect(settingsTab()).toBe('advanced');
   });
 
   it('a deep link from an Inbox card opens Settings on Agents (the old "preload" id means Agents)', () => {
@@ -738,7 +738,7 @@ describe('Settings in the cockpit', () => {
     await act(async () => root.render(createElement(CockpitApp)));
     // Effects flush when act ends; the link opens on the next tick.
     await act(async () => new Promise((r) => setTimeout(r, 20)));
-    expect(settingsTab()).toBe('bridge');
+    expect(settingsTab()).toBe('advanced');
   });
 });
 

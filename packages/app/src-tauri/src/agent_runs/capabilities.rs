@@ -51,6 +51,14 @@ pub fn read_only_supported(agent_type: &str, has_pane: bool) -> bool {
     !has_pane && (features.read_only_headless || features.read_only_spawned_pane)
 }
 
+/// The one read-only table for run-spawned work: a headless run or a run-spawned pane that enforces it, or a chat
+/// whose definition says how (`[acp.read_only]`). `agent_caps` reads this same answer for its `read_only` line, so the
+/// run resolver and the add-agent chips cannot disagree.
+pub fn read_only_run_table(agent_type: &str) -> bool {
+    read_only_supported(agent_type, false)
+        || crate::acp::config::find_builtin(agent_type).is_some_and(|cfg| cfg.read_only.is_some())
+}
+
 /// Like [`read_only_supported`], but a named pane counts when it was spawned with enforced
 /// read-only permissions. Adopted shared panes never do.
 pub fn read_only_supported_for(agent_type: &str, pane_id: Option<&str>) -> bool {

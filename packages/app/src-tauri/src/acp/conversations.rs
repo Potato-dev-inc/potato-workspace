@@ -125,6 +125,13 @@ impl Conversations {
         Some(self.view_of(&record))
     }
 
+    /// The saved records of one agent (any case), newest first.
+    pub fn records_of_agent(&self, agent: &str) -> Vec<ConversationRecord> {
+        let mut out: Vec<ConversationRecord> = self.0.records.lock().iter().filter(|r| r.agent.eq_ignore_ascii_case(agent)).cloned().collect();
+        out.sort_by(|a, b| b.updated_ms.cmp(&a.updated_ms));
+        out
+    }
+
     pub fn record(&self, id: &str) -> Option<ConversationRecord> {
         self.0.records.lock().iter().find(|r| r.id == id).cloned()
     }

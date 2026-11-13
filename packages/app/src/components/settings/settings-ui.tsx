@@ -1,16 +1,36 @@
 // Row building blocks for the Settings window (macOS System Settings style). Everything here is a row
 // inside a grouped inset list (`.st-list`); the panel supplies the list, the groups and the "Saved" tick.
 // Monochrome: no colour, no badges. Styles live in styles/settings.css.
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import { createContext, useContext, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Popup, Switch } from './controls';
+
+/**
+ * New words for a row whose own file is not ours to edit: while it renders, a label that reads `from` shows `label`
+ * (and `hint`, when given) instead. Set by `withRowMeta` (row-meta.tsx), from the copy table.
+ */
+export const RowCopyContext = createContext<{ from: string; label: string; hint?: string } | null>(null);
 
 /** A label with its one-line hint. */
 function Label({ label, description }: { label: ReactNode; description?: ReactNode }) {
+  const copy = useContext(RowCopyContext);
+  if (copy && label === copy.from) {
+    label = copy.label;
+    if (copy.hint) description = copy.hint;
+  }
   return (
     <div className="st-label">
       <span>{label}</span>
       {description && <small>{description}</small>}
     </div>
+  );
+}
+
+/** A small "?" that explains something on hover or focus, so the row itself stays one short line. */
+export function Tip({ text, label = 'More about this' }: { text: string; label?: string }) {
+  return (
+    <span className="st-tip" role="img" tabIndex={0} title={text} aria-label={`${label}: ${text}`}>
+      ?
+    </span>
   );
 }
 

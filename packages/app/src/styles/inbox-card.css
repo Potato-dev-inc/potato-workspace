@@ -317,3 +317,54 @@
 .cockpit .ib-next:empty {
   margin: 0;
 }
+
+/* Narrow cards (under about 420px): the title is one line that ends in an ellipsis and never wraps one word per line.
+   The risk word and the age move down to the meta line, next to the agent and project. The answers take two rows
+   (the plain "Always allow..." answer gets its own), and Details / Open sit right-aligned on a row of their own. */
+.cockpit .ib-list > li {
+  container-type: inline-size;
+}
+@container (max-width: 420px) {
+  .ib-card .ib-main {
+    display: contents;
+  }
+  .ib-card .ib-title {
+    grid-column: 2 / -1;
+    grid-row: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* A question and a consent are sentences the person must read to the end (who, what): they keep their lines. */
+  .ib-card[data-kind='question'] .ib-title,
+  .ib-card[data-kind='consent'] .ib-title {
+    white-space: pre-wrap;
+  }
+  .ib-card .ib-meta {
+    grid-column: 2;
+    grid-row: 2;
+    margin-left: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ib-card .ib-aside {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  .ib-card .ib-glyph {
+    grid-row: 1;
+  }
+  .ib-card .ib-actions > .ck-btn--plain[data-ib='answer'] {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    order: 1;
+  }
+  .ib-card .ib-actions-end {
+    order: 2;
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+}

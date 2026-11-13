@@ -59,7 +59,7 @@ const click = async (el: Element | null | undefined) => {
   if (!el) throw new Error('element not found');
   await act(async () => (el as HTMLElement).click());
 };
-const option = (text: string) => [...host.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent?.includes(text));
+const option = (text: string) => [...document.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent?.includes(text));
 async function send(text = 'fix it') {
   const area = host.querySelector<HTMLTextAreaElement>('textarea')!;
   await act(async () => {
@@ -74,7 +74,7 @@ describe('New agent page: model picker', () => {
     await mount('terminal');
     expect(chip()?.textContent).toContain('Default (Gpt-5.1)');
     await click(chip());
-    expect([...host.querySelectorAll('[role=option]')].map((o) => o.textContent)).toEqual(['DefaultGpt-5.1', 'Gpt-5.1', 'Gpt-5-mini']);
+    expect([...document.querySelectorAll('[role=option]')].map((o) => o.textContent)).toEqual(['DefaultGpt-5.1', 'Gpt-5.1', 'Gpt-5-mini']);
   });
 
   it('shows model names with a capital first letter, while the start request keeps the id', async () => {
@@ -96,7 +96,7 @@ describe('New agent page: model picker', () => {
     await mount('chat', undefined, [agent('beta', 'Beta')]);
     expect(chip()).not.toBeNull();
     await click(chip());
-    expect(host.querySelector('input[aria-label="Type a model id"]')).not.toBeNull();
+    expect(document.querySelector('input[aria-label="Type a model id"]')).not.toBeNull();
   });
 
   it('with Default picked, the start request carries no model', async () => {

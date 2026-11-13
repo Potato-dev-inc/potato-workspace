@@ -17,7 +17,7 @@ function sources(dir: string): string[] {
 }
 
 describe('settings stays monochrome', () => {
-  const files = [...sources(here), path.join(here, '../MobilePairingPanel.tsx'), path.join(here, '../SettingsPanel.tsx'), path.join(here, '../../styles/settings.css')];
+  const files = [...sources(here), path.join(here, '../MobilePairingPanel.tsx'), path.join(here, '../SettingsPanel.tsx'), path.join(here, '../../styles/settings.css'), path.join(here, '../../styles/settings-shell.css')];
 
   it.each(files.map((f) => [path.relative(path.join(here, '../..'), f), f]))('%s has no hue classes', (_name, file) => {
     const text = readFileSync(file, 'utf8');

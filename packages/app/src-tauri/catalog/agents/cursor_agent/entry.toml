@@ -21,6 +21,9 @@ license_kind = "proprietary"
 kind = "account"
 summary = "Run agent login. This step is not checked yet."
 
+# Lab survey 2026-11-10 (acp-lab LAB-REPORT 4.4d): a headless `--print` flag is in the help text, but the
+# probe was never run and no chat was proven. Needs a real run before any [headless] table is added.
+# Card date and how are unchanged: nothing new was checked here.
 [checked]
 date = "2026-10-14"
 version = "not recorded"

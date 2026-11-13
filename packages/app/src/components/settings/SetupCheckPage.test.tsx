@@ -47,7 +47,7 @@ describe('SetupCheckPage', () => {
     const a = actions();
     const m = await mountRows([pageRow(deps(), a)]);
     await settle(6);
-    expect(hasText(m.host, 'Bridge is running')).toBe(true);
+    expect(hasText(m.host, 'Potato Workspace is running')).toBe(true);
     expect(hasText(m.host, 'Claude needs sign-in')).toBe(true);
     await click(buttonByText(m.host, 'Sign in'));
     expect(a.signIn).toHaveBeenCalledWith('claude');

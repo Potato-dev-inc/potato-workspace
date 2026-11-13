@@ -1,0 +1,20 @@
+# Lab vector B08. See ../vector.rs for the format.
+id = "B08"
+title = "The agent cannot write outside the session folder through the client"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["sandbox"]
+
+[[step]]
+do = "prompt"
+text = "fswrite"
+
+[[expect]]
+turn = 1
+stop = "end_turn"
+text_has = "fs-error:"
+
+[[expect]]
+file = "work/notes.txt"
+exists = false

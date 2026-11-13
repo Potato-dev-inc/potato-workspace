@@ -1,0 +1,25 @@
+# Lab vector S02. See ../vector.rs for the format.
+id = "S02"
+title = "50 stops in a row, every one answered cancelled"
+levels = ["native"]
+opts = ""
+cost = "slow"
+claims = []
+
+[[step]]
+do = "repeat"
+times = 50
+steps = [{do = "prompt", text = "slow"}, {do = "cancel", after_ms = 100}]
+
+[[expect]]
+turn = 1
+stop = "cancelled"
+within_ms = 5000
+
+[[expect]]
+turn = 50
+stop = "cancelled"
+within_ms = 5000
+
+[[expect]]
+no_orphans = true

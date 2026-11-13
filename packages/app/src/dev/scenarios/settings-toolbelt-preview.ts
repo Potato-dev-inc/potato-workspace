@@ -5,7 +5,7 @@ const s: HarnessScenario = {
   route: 'settings',
   settingsTab: 'bridge',
   after: async (dom) => {
-    await dom.waitFor('[aria-label="Toolbelt"] li');
+    await dom.waitFor('[aria-label="Tools for every agent"] li');
     await dom.clickText('button', 'Apply to all agents');
     await dom.waitFor('[role="dialog"] [data-testid="toolbelt-host"]');
     await dom.clickText('button', 'Show file changes');

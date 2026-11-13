@@ -167,8 +167,31 @@ pub fn hits_in_definition(def: &Definition) -> Vec<Hit> {
             add(hits_in_argv(read_only));
         }
     }
+    if let Some(argv) = &def.model.probe_argv {
+        add(hits_in_argv(argv));
+    }
     let env: Vec<(String, String)> = def.env.set.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     add(hits_in_env(&env));
+    out
+}
+
+/// The most tokens a model-list command may have (`models list`, `--list-models`, `model ls --all`).
+pub const MAX_LIST_ARGV: usize = 3;
+
+/// Why `argv` may not run as the agent's own model-list command (it runs when a chat opens, before the person
+/// typed anything): a bypass hit, too many tokens, whitespace in a token, or a placeholder. Empty means fine.
+pub fn list_argv_problems(argv: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = hits_in_argv(argv).into_iter().map(|h| format!("`{}` ({})", h.token, h.why)).collect();
+    if argv.len() > MAX_LIST_ARGV {
+        out.push(format!("more than {MAX_LIST_ARGV} tokens"));
+    }
+    for t in argv {
+        if t.chars().any(char::is_whitespace) {
+            out.push(format!("`{t}` holds a space (it could be a prompt)"));
+        } else if t.contains('{') || t.contains('<') {
+            out.push(format!("`{t}` is a placeholder"));
+        }
+    }
     out
 }
 

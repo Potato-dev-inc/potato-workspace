@@ -21,10 +21,13 @@ license_kind = "proprietary"
 kind = "either"
 summary = "Open it and type /login, then follow the on-screen instructions."
 
+# Lab survey 2026-11-10 (D:\pm-research\acp-lab\LAB-REPORT.md, section 4.4d): run on this PC. No
+# headless flag was found and no own ACP, so chat is read from the pane (level 5, terminal only).
+# handshake only; windows_tested stays false until a chat turn runs
 [checked]
-date = "2026-10-28"
+date = "2026-11-10"
 version = "not recorded"
-how = "vendor_docs"
+how = "ran_on_windows"
 windows_tested = false
 
 [publisher]

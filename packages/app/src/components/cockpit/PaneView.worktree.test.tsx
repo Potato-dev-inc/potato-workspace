@@ -134,8 +134,8 @@ describe('Changes tab for isolated panes', () => {
     worktreeFor = { iso: ITEM };
     await act(async () => root.render(<PaneView c={cockpit()} paneId="iso" />));
     await flush();
-    expect(tabs()).toEqual(['Terminal', 'Chat', 'Changes · 1']);
-    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent?.startsWith('Changes'))!;
+    expect(tabs()).toEqual(['Terminal', 'Chat', '1 file changed']);
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent?.endsWith('file changed'))!;
     await act(async () => tab.click());
     await flush();
     expect(host.querySelector('.ck-changes')).not.toBeNull();
@@ -174,6 +174,7 @@ describe('Changes tab for isolated panes', () => {
   it('labels the tab without a number until files changed', () => {
     expect(changesTabLabel({ ...ITEM, summary: null })).toBe('Changes');
     expect(changesTabLabel({ ...ITEM, summary: { files_changed: 0, additions: 0, deletions: 0 } })).toBe('Changes');
-    expect(changesTabLabel(ITEM)).toBe('Changes · 1');
+    expect(changesTabLabel(ITEM)).toBe('1 file changed');
+    expect(changesTabLabel({ ...ITEM, summary: { files_changed: 3, additions: 1, deletions: 0 } })).toBe('3 files changed');
   });
 });

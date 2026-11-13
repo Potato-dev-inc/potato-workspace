@@ -78,10 +78,10 @@ describe('Phone: every control renders', () => {
       expect(m.host.querySelector(`[data-row="${id}"]`), `missing row: ${id}`).not.toBeNull();
     }
     expect(hasText(m.host, 'Tunnel stub')).toBe(true);
-    expect(hasText(m.host, 'Telegram (early)')).toBe(true);
+    expect(hasText(m.host, 'Telegram')).toBe(true);
     expect(hasText(m.host, 'Telegram stub')).toBe(true);
     expect(hasText(m.host, 'Tag Your Agent')).toBe(false);
-    expect(hasText(m.host, 'Notifications')).toBe(true);
+    expect(hasText(m.host, 'Phone alerts')).toBe(true);
     expect(hasText(m.host, 'On the phone')).toBe(true);
     expect(byLabel(m.host, 'Typing delay (ms)')).toBeTruthy();
     expect(switchFor('Keyboard resizes the agent')).toBeTruthy();
@@ -94,12 +94,12 @@ describe('Phone: every control renders', () => {
     expect(m.host.querySelectorAll('[data-row]')).toHaveLength(9);
   });
 
-  it('Telegram (early) is its own list with the setup block in it', async () => {
+  it('Telegram is its own list with the setup block in it', async () => {
     await mount();
     const row = m.host.querySelector('[data-row="telegram"]');
     expect(row?.textContent).toContain('Telegram stub');
     const list = row?.closest('section.st-group');
-    expect(list?.textContent).toContain('Telegram (early)');
+    expect(list?.textContent).toContain('Telegram');
     expect(list?.getAttribute('data-danger')).not.toBe('true');
   });
 

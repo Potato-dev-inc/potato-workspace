@@ -237,6 +237,12 @@ struct Core {
     auto_approved: Vec<AutoApproved>,
     idle_since: Option<Instant>,
     stats: SessionStats,
+    /// The app itself answered a question "cancelled" in this turn (`cancel_permission`, a question that could not be
+    /// shown, a read-only reject with no reject option). A turn that then ends "cancelled" is a Cancelled turn, not
+    /// one the agent stopped on its own. Reset when a prompt is sent.
+    app_cancelled: bool,
+    /// What this turn showed, for the capability table (`agent_caps::record_seen`).
+    seen: crate::agent_caps::live::TurnSeen,
 }
 
 impl Core {
@@ -325,6 +331,8 @@ impl AcpSession {
                 auto_approved: Vec::new(),
                 idle_since: None,
                 stats: SessionStats::default(),
+                app_cancelled: false,
+                seen: Default::default(),
             }),
             changed: Condvar::new(),
             outbox: Mutex::new(Outbox::default()),
@@ -876,6 +884,8 @@ impl AcpSession {
             let conn = core.conn.clone().filter(AcpConnection::is_alive).ok_or(AcpError::Closed)?;
             let session_id = core.state.session_id().map(str::to_string).ok_or_else(|| AcpError::Protocol("no session id".into()))?;
             let turn_id = core.state.on_prompt_sent();
+            core.app_cancelled = false;
+            core.seen.reset();
             core.turn = Some(Turn { id: turn_id, clock: TurnClock::new(Instant::now()) });
             core.idle_since = None;
             ev.push(SessionEvent::TurnStarted { turn: turn_id });
@@ -937,6 +947,15 @@ impl AcpSession {
                 Err(AcpError::Rpc { code, message, .. }) => TurnOutcome::Failed { message, code: Some(code) },
                 Err(AcpError::Closed) => TurnOutcome::Failed { message: "the adapter exited before the turn finished".into(), code: None },
                 Err(other) => TurnOutcome::Failed { message: other.to_string(), code: None },
+            };
+            // `cancelled` is what an agent answers to our stop request. If we never sent one, the agent stopped on its own
+            // (a crashed tool, a closed window of its own): the person must not read that as a finished answer.
+            let outcome = match outcome {
+                TurnOutcome::Stop(StopReason::Cancelled) if !core.state.cancel_was_requested() && !core.app_cancelled => TurnOutcome::Failed {
+                    message: "The agent stopped before it finished, and nobody asked it to. Send your message again.".into(),
+                    code: None,
+                },
+                other => other,
             };
             let summary = core.state.on_turn_end(outcome);
             // Questions still open belong to a turn that is over: nobody is waiting for the answer.
@@ -1050,6 +1069,7 @@ impl AcpSession {
             let conn = core.conn.clone().filter(AcpConnection::is_alive).ok_or(AcpError::Closed)?;
             let parked = core.parked.remove(&ask_id).ok_or(AcpError::NoSuchAsk)?;
             core.state.on_permission_resolved(ask_id);
+            core.app_cancelled = true;
             if core.parked.is_empty() {
                 if let Some(turn) = core.turn.as_mut() {
                     turn.clock.resume(Instant::now());
@@ -1114,20 +1134,48 @@ impl AcpSession {
     /// typed into the chat as a command. Refused while a turn runs.
     pub fn set_config_option(&self, config_id: &str, value: Value) -> Result<(), AcpError> {
         self.ensure_running()?;
-        let (conn, session_id) = self.with_core(|core, _| {
+        let (conn, session_id, source) = self.with_core(|core, _| {
             if core.turn.is_some() {
                 return Err(AcpError::Busy);
             }
             let conn = core.conn.clone().filter(AcpConnection::is_alive).ok_or(AcpError::Closed)?;
             let session_id = core.state.session_id().ok_or_else(|| AcpError::Protocol("no session id".into()))?.to_string();
-            Ok((conn, session_id))
+            let source = core
+                .state
+                .config_options()
+                .iter()
+                .find(|o| o.get("id").and_then(Value::as_str) == Some(config_id))
+                .and_then(|o| handshake::synthesized_source(o).map(str::to_string));
+            Ok((conn, session_id, source))
         })?;
+        if let Some(source) = source {
+            return self.set_republished(&conn, &session_id, config_id, &source, value);
+        }
         let answer = conn.request("session/set_config_option", json!({ "sessionId": session_id, "configId": config_id, "value": value }), self.cfg.timeouts.request())?;
         let options = handshake::parse_session_info(&answer).config_options;
         self.with_core(|core, _| {
             core.desired_config.insert(config_id.to_string(), value);
             if !options.is_empty() {
                 core.state.set_config_options(options);
+            }
+        });
+        Ok(())
+    }
+
+    /// An option this app built from the agent's `models` / `modes` (`handshake::synthesized_source`): the agent knows it
+    /// as `session/set_model` / `session/set_mode`, not as a config option. The shown option follows the pick.
+    fn set_republished(&self, conn: &AcpConnection, session_id: &str, config_id: &str, source: &str, value: Value) -> Result<(), AcpError> {
+        let picked = value.as_str().ok_or_else(|| AcpError::Unsupported("the value of this setting must be text".into()))?.to_string();
+        let (method, key) = if source == handshake::SYNTH_MODES { ("session/set_mode", "modeId") } else { ("session/set_model", "modelId") };
+        conn.request(method, json!({ "sessionId": session_id, key: picked }), self.cfg.timeouts.request())?;
+        self.with_core(|core, _| {
+            let mut options = core.state.config_options().to_vec();
+            if let Some(option) = options.iter_mut().find(|o| o.get("id").and_then(Value::as_str) == Some(config_id)) {
+                option["currentValue"] = json!(picked);
+            }
+            core.state.set_config_options(options);
+            if source == handshake::SYNTH_MODES {
+                core.desired_mode = Some(picked);
             }
         });
         Ok(())
@@ -1382,10 +1430,11 @@ impl AcpSession {
 
     fn on_session_update(&self, epoch: u64, params: Value) {
         let parsed = serde_json::from_value::<SessionNotification>(params.clone());
-        self.with_core(|core, ev| {
+        let seen = self.with_core(|core, ev| {
+            let mut seen = Vec::new();
             if core.state.epoch() != epoch {
                 core.stats.stale_events += 1;
-                return;
+                return seen;
             }
             let now = Instant::now();
             let replay = core.loading;
@@ -1394,9 +1443,12 @@ impl AcpSession {
                     // One session per adapter process. Until `session/new` has answered there is no id to compare.
                     if core.state.session_id().is_some_and(|mine| mine != note.session_id) {
                         core.stats.foreign_updates += 1;
-                        return;
+                        return seen;
                     }
                     let effect = core.state.on_update(&note.update, replay);
+                    if !replay && core.turn.is_some() {
+                        seen = core.seen.on_update(&note.update);
+                    }
                     if !replay {
                         if let Some(turn) = core.turn.as_mut() {
                             turn.clock.frame(now, effect.progress);
@@ -1416,7 +1468,12 @@ impl AcpSession {
                     ev.push(SessionEvent::UpdateUnparsed { kind, raw: params, replay });
                 }
             }
+            seen
         });
+        // After the session lock is released: a store write must not hold up the chat.
+        for fact in seen {
+            let _ = crate::agent_caps::record_seen(&self.cfg.id, fact);
+        }
     }
 
     fn on_permission_request(&self, epoch: u64, rpc_id: Value, params: Value) {
@@ -1438,12 +1495,14 @@ impl AcpSession {
             let conn = core.conn.clone();
             let Ok(request) = parsed else {
                 core.stats.refused_questions += 1;
+                core.app_cancelled = true;
                 ev.push(SessionEvent::PermissionRefused { reason: "the request could not be read".into() });
                 return Decision::Refuse(conn);
             };
             let foreign = core.state.session_id().is_some_and(|mine| mine != request.session_id);
             if foreign || core.parked.len() >= MAX_PARKED {
                 core.stats.refused_questions += 1;
+                core.app_cancelled = true;
                 let reason = if foreign {
                     "it named another session"
                 } else {
@@ -1460,6 +1519,8 @@ impl AcpSession {
                 let kind = request.tool_call.kind.as_deref().unwrap_or("other");
                 ev.push(SessionEvent::PermissionRefused { reason: format!("this chat is read-only, so a request to use a tool of kind \"{kind}\" was rejected") });
                 let option = request.options.iter().find(|o| o.kind == "reject_once").or_else(|| request.options.iter().find(|o| o.kind == "reject_always")).map(|o| o.option_id.clone());
+                // No reject option: the agent is answered "cancelled", and that is the app's doing.
+                core.app_cancelled |= option.is_none();
                 return Decision::Reject(conn, option);
             }
             if core.auto_approve_reads && read_only_allows(request.tool_call.kind.as_deref()) {
@@ -1475,6 +1536,7 @@ impl AcpSession {
                     return Decision::Allow(conn, option);
                 }
             }
+            core.seen.asked(&request.tool_call.tool_call_id);
             let ask_id = core.state.on_permission_request(&request, now_ms());
             core.parked.insert(ask_id, Parked { rpc_id: rpc_id.clone(), options: request.options.iter().map(|o| o.option_id.clone()).collect() });
             if let Some(turn) = core.turn.as_mut() {
@@ -1611,9 +1673,14 @@ mod close_race_tests {
     }
 
     fn session_for(opts: &str, key: &str) -> (Arc<AcpSession>, PathBuf) {
+        session_with_id(opts, key, "fake")
+    }
+
+    fn session_with_id(opts: &str, key: &str, id: &str) -> (Arc<AcpSession>, PathBuf) {
         let dir = std::env::temp_dir().join(format!("pm-acp-close-race-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
-        let cfg = crate::acp::fake_agent::agent_config(opts, &dir.join("store"));
+        let mut cfg = crate::acp::fake_agent::agent_config(opts, &dir.join("store"));
+        cfg.id = id.into();
         let host: Arc<dyn HostEnv> = Arc::new(Host { root: dir.clone() });
         let session = AcpSession::new(Arc::new(cfg), host, SessionParams { key: key.into(), cwd: dir.clone(), resume_session_id: None });
         (session, dir)
@@ -1658,6 +1725,86 @@ mod close_race_tests {
         session.close();
         assert!(matches!(session.ensure_running(), Err(AcpError::SessionClosed)));
         assert!(session.connection().is_none());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    /// Runs the fake agent's "perm" turn up to its question and returns the events log and the question.
+    fn ask_one_question(session: &Arc<AcpSession>) -> (Arc<parking_lot::Mutex<Vec<SessionEvent>>>, u64, String) {
+        let log = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let sink = log.clone();
+        session.add_sink(Arc::new(move |event| sink.lock().push(event.clone())));
+        session.prompt_text("perm").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            let asked = log.lock().iter().find_map(|e| match e {
+                SessionEvent::PermissionRequested(wait) => Some((wait.ask_id, wait.options.first().map(|o| o.id.clone()).unwrap_or_default())),
+                _ => None,
+            });
+            if let Some((ask_id, first)) = asked {
+                return (log, ask_id, first);
+            }
+            assert!(Instant::now() < deadline, "the agent never asked");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn turn_end(log: &Arc<parking_lot::Mutex<Vec<SessionEvent>>>) -> crate::acp::state::TurnSummary {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            let ended = log.lock().iter().find_map(|e| match e {
+                SessionEvent::TurnEnded(summary) => Some(summary.clone()),
+                _ => None,
+            });
+            if let Some(summary) = ended {
+                return summary;
+            }
+            assert!(Instant::now() < deadline, "the turn never ended");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// The app answers one question "cancelled" (`cancel_permission`); the agent then ends the turn "cancelled".
+    /// That is the app's own doing, so the turn reads Cancelled, not "stopped and nobody asked it to".
+    #[test]
+    fn app_cancelled_permission_is_cancelled_not_error() {
+        use crate::acp::state::StopKind;
+        let (session, dir) = session_with_id("", "t-app-cancel", "appcancel");
+        let (log, ask_id, _) = ask_one_question(&session);
+        session.cancel_permission(ask_id).unwrap();
+        let summary = turn_end(&log);
+        assert_eq!(summary.stop, StopKind::Cancelled, "{summary:?}");
+        assert!(summary.error.is_none(), "{summary:?}");
+        session.close();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A turn the agent ends "cancelled" on its own is still an error (the hardening rule stays).
+    #[test]
+    fn the_flag_is_per_turn() {
+        use crate::acp::state::StopKind;
+        let (session, dir) = session_with_id("", "t-flag-per-turn", "flagturn");
+        let (log, ask_id, _) = ask_one_question(&session);
+        session.cancel_permission(ask_id).unwrap();
+        assert_eq!(turn_end(&log).stop, StopKind::Cancelled);
+        assert!(session.core.lock().app_cancelled, "the app cancelled that question");
+        session.prompt_text("hi").unwrap();
+        assert!(!session.core.lock().app_cancelled, "a new prompt starts clean");
+        session.close();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A turn that asks, edits and ends leaves its facts in the capability store: the edit finished, and it asked.
+    #[test]
+    fn a_turn_records_what_it_showed() {
+        let (session, dir) = session_with_id("", "t-record-seen", "seenfake");
+        let (log, ask_id, first) = ask_one_question(&session);
+        session.answer_permission(ask_id, &first, AnswerSource::Person).unwrap();
+        turn_end(&log);
+        let caps = crate::agent_caps::for_agent("seenfake");
+        assert_eq!(caps.shows_steps.value, crate::agent_caps::Tri::Yes, "{caps:?}");
+        assert_eq!(caps.edits_files.value, crate::agent_caps::Tri::Yes, "{caps:?}");
+        assert_eq!((caps.asks_before_edit.value, caps.asks_before_edit.source), (crate::agent_caps::Tri::Yes, crate::agent_caps::Source::Seen));
+        session.close();
+        crate::agent_caps::forget("seenfake");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

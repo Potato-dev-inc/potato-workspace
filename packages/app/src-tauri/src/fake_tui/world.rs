@@ -984,3 +984,52 @@ impl Session {
         (counts.blocking, counts.ready)
     }
 }
+
+// ---- chaos switches (SPEC-CHAOS-1113 section 1.3) --------------------------------------------------------------------
+impl Session {
+    /// Kills the agent process of `pane_id` (its pid, never by name) and its tree, and returns when it is gone
+    /// (at most 10 s). `Err` when the pane has no known agent process or it would not die.
+    pub fn kill_agent(&self, pane_id: &str) -> Result<u32, String> {
+        let pid = self.agent_pid(pane_id).ok_or_else(|| "this pane has no agent process (yet)".to_string())?;
+        crate::pty::proc_tree::kill_process_tree(pid);
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while crate::proc_util::pid_alive(pid) {
+            if std::time::Instant::now() > deadline {
+                return Err(format!("process {pid} is still alive 10 s after it was killed"));
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        Ok(pid)
+    }
+
+    /// A second reader of the same pane, like a detached window next to the main one. It reads the one screen the
+    /// pane's emulator holds; its `resize` changes the pane's one PTY grid, as a window does (the last viewer to
+    /// resize wins, which is exactly the situation the grid invariant is about).
+    pub fn second_viewer(&self, pane_id: &str) -> Viewer {
+        Viewer { world: self.world, pane_id: pane_id.to_string() }
+    }
+}
+
+/// A second window on a pane (see [`Session::second_viewer`]).
+pub struct Viewer {
+    world: &'static World,
+    pane_id: String,
+}
+
+impl Viewer {
+    /// What this window shows: the pane's screen, every cell's text.
+    pub fn screen(&self) -> String {
+        let parser = self.world.registry.lock().panes.get(&self.pane_id).map(|pane| pane.screen.clone());
+        parser.map(|parser| parser.lock().screen().contents()).unwrap_or_default()
+    }
+
+    /// The grid (columns, rows) of the pane as the registry lists it.
+    pub fn size(&self) -> Option<(u16, u16)> {
+        self.world.registry.lock().list().into_iter().find(|p| p.id == self.pane_id).map(|p| (p.cols, p.rows))
+    }
+
+    /// This window changed size: the pane's grid follows it.
+    pub fn resize(&self, cols: u16, rows: u16) -> Result<bool, String> {
+        crate::pty::registry_resize(&self.world.registry, &self.pane_id, cols, rows)
+    }
+}

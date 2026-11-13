@@ -11,31 +11,35 @@ import { cleanHelperModels, hasModelChoice, withHelperModel } from './HelperMode
 export const AGENT_MODELS_LABEL = 'Default model';
 export const AGENT_MODELS_HINT = 'The model each agent starts on, unless you pick another when you start it.';
 
-function Row({ agentId, label, value, api, onChange }: { agentId: string; label: string; value: string; api: ModelOptionsApi; onChange: (model: string) => void }) {
+function Row({ agentId, label, value, api, onChange, single }: { agentId: string; label: string; value: string; api: ModelOptionsApi; onChange: (model: string) => void; single: boolean }) {
   const state = useModelOptions(agentId, api);
   if (state.status === 'ready' && !hasModelChoice(state.options)) return null;
   const chatsOnly = state.status === 'ready' && !state.options.terminal;
   return (
     <div className="st-helper-model">
-      <span className="st-helper-model-name">
-        {label}
-        {chatsOnly && <small className="st-helper-model-note"> · Only for chats</small>}
-      </span>
+      {/* On an agent's own page the name is already the title. */}
+      {(!single || chatsOnly) && (
+        <span className="st-helper-model-name">
+          {single ? '' : label}
+          {chatsOnly && <small className="st-helper-model-note">{single ? 'Only for chats' : ' · Only for chats'}</small>}
+        </span>
+      )}
       <ModelPicker testId={`agent-model-${agentId}`} label={`Default model for ${label}`} state={state} value={value} onChange={onChange} defaultWord="Agent's own default" />
     </div>
   );
 }
 
-export function AgentDefaultModels({ saved, onChange, api = tauriModelOptionsApi }: { saved: unknown; onChange: (next: Record<string, string>) => void; api?: ModelOptionsApi }) {
+/** `only`: show just this agent (its page in Settings > Agents). */
+export function AgentDefaultModels({ saved, onChange, api = tauriModelOptionsApi, only }: { saved: unknown; onChange: (next: Record<string, string>) => void; api?: ModelOptionsApi; only?: string }) {
   const listing = useAgentRegistry();
   const map = cleanHelperModels(saved);
-  const agents = listing.agents.filter((a) => a.installed && a.kind !== 'shell');
+  const agents = listing.agents.filter((a) => a.installed && a.kind !== 'shell' && (!only || a.id === only));
   return (
     <SettingBlock label={AGENT_MODELS_LABEL} description={AGENT_MODELS_HINT}>
       {agents.length === 0 ? (
         <small>No agents are installed yet.</small>
       ) : (
-        agents.map((agent) => <Row key={agent.id} agentId={agent.id} label={agent.label} value={map[agent.id] ?? ''} api={api} onChange={(model) => onChange(withHelperModel(map, agent.id, model))} />)
+        agents.map((agent) => <Row key={agent.id} agentId={agent.id} label={agent.label} value={map[agent.id] ?? ''} api={api} onChange={(model) => onChange(withHelperModel(map, agent.id, model))} single={Boolean(only)} />)
       )}
     </SettingBlock>
   );

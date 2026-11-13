@@ -103,9 +103,11 @@ mod adapter_key_tests;
 #[cfg(test)]
 mod conversation_tests;
 #[cfg(test)]
-mod fake_agent;
+pub(crate) mod fake_agent;
 #[cfg(test)]
 mod guard_tests;
+#[cfg(test)]
+mod hardening_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

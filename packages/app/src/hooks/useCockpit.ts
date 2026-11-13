@@ -17,6 +17,7 @@ import { visibleSelection } from '../components/cockpit/selection';
 import { forgetTerminal } from '../components/cockpit/session-memory';
 import { usePaneActivity, type ActivityMap } from '../lib/pane-activity';
 import type { UserGesture } from '../lib/user-gesture';
+import { useChatStarts, type ChatStartState } from './useChatStarts';
 
 /** How long after an answer landed further clicks on the same card are ignored (the TUI redraws
  *  the dialog away within this; the backend's own window is 5 s). */
@@ -37,12 +38,7 @@ export interface SpawnState {
   failed: string | null;
 }
 
-/** A chat (ACP) that is starting: shown as a skeleton in the main area until it is selected or fails. */
-export interface ChatStartState {
-  agentId: string;
-  /** The folder the chat starts in (the menu's project). */
-  folder: string;
-}
+export type { ChatStartState } from './useChatStarts';
 
 export interface Toast {
   id: number;
@@ -74,8 +70,9 @@ export interface CockpitApi {
   dismissSpawn: () => void;
   /** A chat that is starting now (null when none). Cleared by `endChatStart` on success or failure. */
   chatStarting: ChatStartState | null;
-  beginChatStart: (agentId: string, folder: string) => void;
-  endChatStart: () => void;
+  /** Returns this start's id; pass it to `endChatStart` so two starts at once do not end each other. */
+  beginChatStart: (agentId: string, folder: string) => string;
+  endChatStart: (startId?: string) => void;
   toasts: Toast[];
   notify: (text: string, action?: Toast['action']) => void;
   /** Switch the UI mode. The first switch to Individual from here opens `modeExplainer` instead of switching. */
@@ -118,7 +115,8 @@ export function useCockpit(): CockpitApi {
   const [now, setNow] = useState(() => Date.now());
   const [readyAgents, setReadyAgents] = useState<Set<string>>(new Set());
   const [spawn, setSpawn] = useState<SpawnState | null>(null);
-  const [chatStarting, setChatStarting] = useState<ChatStartState | null>(null);
+  const chatStarts = useChatStarts();
+  const chatStarting = chatStarts.chatStarting;
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [explainerOpen, setExplainerOpen] = useState(false);
   // `individual_explained` from settings: the sheet was dismissed for good.
@@ -568,8 +566,8 @@ export function useCockpit(): CockpitApi {
     spawn,
     dismissSpawn: () => setSpawn(null),
     chatStarting,
-    beginChatStart: (agentId: string, folder: string) => setChatStarting({ agentId, folder }),
-    endChatStart: () => setChatStarting(null),
+    beginChatStart: chatStarts.begin,
+    endChatStart: chatStarts.end,
     toasts,
     notify,
     setMode,

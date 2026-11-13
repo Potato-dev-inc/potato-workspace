@@ -46,7 +46,7 @@ describe('Settings > Shortcuts', () => {
 
   it('Change listens for the next keys and saves them', async () => {
     m = await mountRows(shortcutsRows);
-    await click(byLabel(row('palette'), 'Change keys for ' + BINDABLE.find((b) => b.id === 'palette')!.label));
+    await click(row('palette').querySelector('.st-keycap'));
     expect(row('palette').textContent).toContain('Press the keys');
     await press({ key: 'p', ctrlKey: true });
     expect(m.env.patches).toEqual([{ keybindings: { palette: 'Mod+P' } }]);
@@ -55,7 +55,7 @@ describe('Settings > Shortcuts', () => {
 
   it('Esc cancels and saves nothing', async () => {
     m = await mountRows(shortcutsRows);
-    await click(buttonText(row('palette'), 'Change'));
+    await click(row('palette').querySelector('.st-keycap'));
     await press({ key: 'Escape' });
     expect(m.env.patches).toEqual([]);
     expect(row('palette').textContent).not.toContain('Press the keys');
@@ -64,7 +64,7 @@ describe('Settings > Shortcuts', () => {
 
   it('waits while only a modifier is down', async () => {
     m = await mountRows(shortcutsRows);
-    await click(buttonText(row('palette'), 'Change'));
+    await click(row('palette').querySelector('.st-keycap'));
     await press({ key: 'Control', ctrlKey: true });
     expect(row('palette').textContent).toContain('Press the keys');
     expect(m.env.patches).toEqual([]);
@@ -72,7 +72,7 @@ describe('Settings > Shortcuts', () => {
 
   it('says why keys without Ctrl or Alt cannot be used', async () => {
     m = await mountRows(shortcutsRows);
-    await click(buttonText(row('palette'), 'Change'));
+    await click(row('palette').querySelector('.st-keycap'));
     await press({ key: 'j' });
     expect(row('palette').querySelector('[role="alert"]')?.textContent).toMatch(/Ctrl, Alt/);
     expect(m.env.patches).toEqual([]);
@@ -80,7 +80,7 @@ describe('Settings > Shortcuts', () => {
 
   it('warns when another shortcut has the keys, names it, and saves only after "Use it anyway"', async () => {
     m = await mountRows(shortcutsRows);
-    await click(buttonText(row('palette'), 'Change'));
+    await click(row('palette').querySelector('.st-keycap'));
     await press({ key: 'n', ctrlKey: true });
     const alert = row('palette').querySelector('[role="alert"]');
     expect(alert?.textContent).toContain('New agent');
@@ -91,7 +91,7 @@ describe('Settings > Shortcuts', () => {
 
   it('warns about a terminal key, and "Pick another" listens again', async () => {
     m = await mountRows(shortcutsRows);
-    await click(buttonText(row('palette'), 'Change'));
+    await click(row('palette').querySelector('.st-keycap'));
     await press({ key: 'd', ctrlKey: true });
     expect(row('palette').querySelector('[role="alert"]')?.textContent).toMatch(/Terminals use Ctrl\+D/);
     await click(buttonText(row('palette'), 'Pick another'));
@@ -118,7 +118,7 @@ describe('Settings > Shortcuts', () => {
 
   it('keys equal to the default are stored as no choice at all', async () => {
     m = await mountRows(shortcutsRows, { settings: { ...(await import('../test-utils')).BASE_SETTINGS, keybindings: { palette: 'Mod+P' } } });
-    await click(buttonText(row('palette'), 'Change'));
+    await click(row('palette').querySelector('.st-keycap'));
     await press({ key: 'k', ctrlKey: true });
     expect((m.env.patches[0].keybindings as unknown as Record<string, unknown>).palette).toBeNull();
   });
@@ -135,7 +135,7 @@ describe('Settings > Shortcuts', () => {
   it('a global shortcut goes to the OS first and is not saved when the OS refuses', async () => {
     vi.mocked(shortcutsApi.globalSet).mockRejectedValueOnce('Ctrl+Alt+K is already used by another app or by Windows. Pick another combination.');
     m = await mountRows(shortcutsRows);
-    await click(buttonText(row('ask-bar'), 'Change'));
+    await click(row('ask-bar').querySelector('.st-keycap'));
     await press({ key: 'k', ctrlKey: true, altKey: true });
     expect(shortcutsApi.globalSet).toHaveBeenCalledWith('ask-bar', 'Mod+Alt+K');
     expect(row('ask-bar').querySelector('[role="alert"]')?.textContent).toContain('already used by another app');
@@ -144,7 +144,7 @@ describe('Settings > Shortcuts', () => {
 
   it('a global shortcut the OS accepts is saved', async () => {
     m = await mountRows(shortcutsRows);
-    await click(buttonText(row('stop-all'), 'Change'));
+    await click(row('stop-all').querySelector('.st-keycap'));
     await press({ key: 'k', ctrlKey: true, altKey: true });
     expect(shortcutsApi.globalSet).toHaveBeenCalledWith('stop-all', 'Mod+Alt+K');
     expect(m.env.patches).toEqual([{ keybindings: { 'stop-all': 'Mod+Alt+K' } }]);

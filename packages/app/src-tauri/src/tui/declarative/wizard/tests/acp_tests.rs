@@ -97,7 +97,8 @@ fn detect_needs_a_probe_and_reads_only_the_stored_text() {
     let out = ok(&wizard, "acp_detect", json!({"session": id}));
     assert_eq!(out["candidates"][0]["command"], "fake-agent");
     assert_eq!(out["candidates"][0]["args"], json!(["acp"]));
-    assert_eq!(out["candidates"][0]["confidence"], "high");
+    // The fake program never answers the handshake, so help text alone no longer earns "high".
+    assert_eq!(out["candidates"][0]["confidence"], "medium");
     assert!(out["candidates"][0]["evidence"].as_str().unwrap().contains("acp"));
     assert!(call(&wizard, "acp_detect", json!({})).is_err());
 }

@@ -1,0 +1,49 @@
+# Lab vector S10. See ../vector.rs for the format.
+id = "S10"
+title = "500, 429, garbage and an empty reply each end cleanly, and the next message works"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt"
+text = "rpcerr 500 fetch failed"
+
+[[step]]
+do = "prompt"
+text = "rpcerr 429 slow down"
+
+[[step]]
+do = "prompt"
+text = "garbage"
+
+[[step]]
+do = "prompt"
+text = "empty"
+
+[[step]]
+do = "prompt"
+text = "stream 2"
+
+[[expect]]
+turn = 1
+stop = "error"
+
+[[expect]]
+turn = 2
+stop = "error"
+
+[[expect]]
+turn = 3
+stop = "end_turn"
+text_has = "after"
+
+[[expect]]
+turn = 4
+stop = "end_turn"
+
+[[expect]]
+turn = 5
+stop = "end_turn"
+chunks_at_least = 2

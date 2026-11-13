@@ -356,3 +356,25 @@ fn json_formats_still_need_a_path() {
     def.headless.as_mut().unwrap().output.as_mut().unwrap().session.as_mut().unwrap().path = None;
     has_at(&def, "AGENT_DEF_INCONSISTENT", "headless.output.session.path");
 }
+
+#[test]
+fn validate_rejects_bypass_in_model_probe_argv() {
+    use crate::tui::declarative::schema::{ModelSource, ModelTable};
+    let with = |argv: &[&str]| {
+        let mut def = kilo();
+        def.model = ModelTable {
+            source: ModelSource::ProbeCommand,
+            probe_argv: Some(argv.iter().map(|a| a.to_string()).collect()),
+            probe_regex: Some("(.+)".into()),
+            default: None,
+        };
+        def
+    };
+    assert!(!codes(&with(&["models", "list"])).iter().any(|(_, p)| p == "model.probe_argv"));
+    for bad in [&["-p", "delete the tests", "--dangerously-skip-permissions"][..], &["--yolo"], &["a", "b", "c", "d"], &["ask", "{task}"]] {
+        has_at(&with(bad), "AGENT_DEF_INCONSISTENT", "model.probe_argv");
+    }
+    // The wizard's own bypass check sees the field too.
+    let hits = crate::tui::declarative::wizard::bypass::hits_in_definition(&with(&["--dangerously-skip-permissions"]));
+    assert!(!hits.is_empty());
+}

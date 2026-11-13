@@ -1,5 +1,6 @@
 // The keyboard shortcuts sheet: `?`, Ctrl+/ or "Keyboard shortcuts" in the palette. The list is lib/shortcuts.ts.
 // Esc closes it (Sheet), and so does the Close button.
+import { useEffect, useRef } from 'react';
 import { SHORTCUT_GROUPS, SHORTCUTS, isMacPlatform, shortcutKeys } from '../../lib/shortcuts';
 import { useKeybindingsVersion } from '../../hooks/useKeybindings';
 import { openSettingsAt } from '../../lib/openSettingsAt';
@@ -9,6 +10,9 @@ import { Sheet } from './Sheet';
 export function ShortcutsSheet({ onClose, mac = isMacPlatform() }: { onClose: () => void; mac?: boolean }) {
   // Draws again when you change a key in Settings > Shortcuts.
   useKeybindingsVersion();
+  // Focus Close without scrolling: a plain autoFocus scrolled the sheet and hid the title and the first row.
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => closeRef.current?.focus({ preventScroll: true }), []);
   return (
     <Sheet labelledBy="ck-shortcuts-t" role="dialog" onClose={onClose} className="ck-sheet--shortcuts">
       <h2 className="ck-section" id="ck-shortcuts-t">
@@ -45,7 +49,7 @@ export function ShortcutsSheet({ onClose, mac = isMacPlatform() }: { onClose: ()
         >
           Change shortcuts
         </button>
-        <button type="button" className="ck-btn ck-btn--secondary" autoFocus onClick={onClose}>
+        <button ref={closeRef} type="button" className="ck-btn ck-btn--secondary" onClick={onClose}>
           Close
         </button>
       </div>

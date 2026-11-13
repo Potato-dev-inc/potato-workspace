@@ -22,7 +22,11 @@ pub mod exec;
 pub mod features;
 pub mod finish;
 pub mod fixtures;
+pub mod headless_probe;
 pub mod hints;
+pub mod ladder;
+pub mod ladder_handshake;
+pub mod ladder_save;
 pub mod livetest;
 pub mod locate;
 pub mod probe;
@@ -34,6 +38,8 @@ pub mod visible;
 
 #[cfg(test)]
 pub(crate) mod tests;
+#[cfg(test)]
+mod ladder_tests;
 
 #[cfg(test)]
 pub use report::WizardError;

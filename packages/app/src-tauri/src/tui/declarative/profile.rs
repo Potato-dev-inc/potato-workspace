@@ -743,6 +743,13 @@ impl TuiProfile for DeclarativeProfile {
         Some(table)
     }
 
+    fn bridge_tables(&self) -> Option<crate::acp::bridge::DefinitionTables> {
+        Some(crate::acp::bridge::DefinitionTables {
+            model: self.def.model.clone(),
+            tool: self.def.headless.as_ref().and_then(|h| h.output.as_ref()).and_then(|o| o.tool.clone()),
+        })
+    }
+
     fn session_chat(&self) -> Option<&'static dyn crate::session_chat::SessionSource> {
         self.chat_source.map(|source| source as &'static dyn crate::session_chat::SessionSource)
     }

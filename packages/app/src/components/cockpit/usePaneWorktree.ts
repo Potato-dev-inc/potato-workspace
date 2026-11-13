@@ -37,8 +37,8 @@ export function usePaneWorktree(
   return item;
 }
 
-/** The tab label: `Changes`, plus the number of changed files once there are some. */
+/** The tab label: `Changes`, or "3 files changed" once there are some. */
 export function changesTabLabel(item: WorktreeItem): string {
   const n = item.summary?.files_changed ?? 0;
-  return n > 0 ? `Changes · ${n}` : 'Changes';
+  return n > 0 ? `${n} ${n === 1 ? 'file' : 'files'} changed` : 'Changes';
 }

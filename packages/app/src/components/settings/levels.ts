@@ -1,5 +1,6 @@
-// Which rows a person sees first. Everything not named here is `advanced`: it sits under its section's closed
-// "Advanced" group. `developer` rows show only while "Show developer settings" is on (General > Advanced).
+// Which rows a person sees first. Everything not named here is `advanced`: it sits under its page's closed
+// "Advanced" group (on the Advanced page: in that page's own closed groups). `developer` rows show only while
+// "Show developer settings" is on (Advanced > Developer).
 // Search finds every level. Keep the basic list short: the test in catalog.test.ts caps it per section.
 import type { RowLevel } from './model';
 
@@ -17,6 +18,8 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'away-minutes',
   'version',
   'whats-new',
+  'welcome',
+  'discord-alerts',
   // Agents: sign in first, and check that the setup works. Writing your own agent file is advanced.
   'accounts',
   'setup-check',
@@ -39,6 +42,9 @@ export const BASIC_ROW_IDS: readonly string[] = [
   // Phone: pair a phone, and the phones that are paired
   'pairing',
   'paired-devices',
+  'phone-notifications',
+  // Lend: the whole page is one row (shown only while its Labs flag is on)
+  'lend-page',
 ];
 
 export const DEVELOPER_ROW_IDS: readonly string[] = [

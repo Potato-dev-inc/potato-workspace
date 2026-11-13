@@ -263,8 +263,21 @@ describe('1. Your agents', () => {
 describe('2. Connect your agents', () => {
   const at: Seed = { ...SEED, start: 'connect' };
 
-  it('lists the files that change, one button adds Potato Workspace, Undo puts it back', async () => {
-    const d = deps();
+  it('by default hides file paths and the dev build note, says what happens in one line, and says why Continue is off', async () => {
+    await mount(deps(), at);
+    expect(host.querySelector('[data-testid="connect-files"]')).toBeNull();
+    expect(host.querySelector('[data-testid="connect-dev"]')).toBeNull();
+    expect(text()).not.toContain('C:/Users/a/.claude/config.json');
+    expect(text()).not.toContain('dev build');
+    expect(host.querySelector('[data-testid="connect-summary"]')!.textContent).toContain(T.connectSummary(['Claude Code', 'Codex']));
+    expect(button('Continue')!.disabled).toBe(true);
+    expect(host.querySelector('[data-testid="continue-why"]')!.textContent).toBe(T.whyConnect);
+    await tap(T.connectButton(['Claude Code', 'Codex']));
+    expect(host.querySelector('[data-testid="continue-why"]')).toBeNull();
+  });
+
+  it('with the developer switch on: lists the files that change, one button adds Potato Workspace, Undo puts it back', async () => {
+    const d = deps({ load: vi.fn(async () => ({ show_developer_settings: true }) as never) });
     await mount(d, at);
     const files = host.querySelector('[data-testid="connect-files"]')!.textContent!;
     expect(files).toContain('C:/Users/a/.claude/config.json');
@@ -636,7 +649,7 @@ describe('connect: what changes, and the dev build warning', () => {
     const base = await pack.preview();
     const agents = base.agents.map((a) => (a.id === 'codex' ? { ...a, mcp: { ...a.mcp!, change: 'update' as const, diff: '- command = "C:/old/mcp.exe"\n+ command = "C:/new/mcp.exe"' } } : a));
     pack.preview = vi.fn(async () => ({ ...base, agents })) as never;
-    await mount(deps({ pack }), { ...SEED, start: 'connect' });
+    await mount(deps({ pack, load: vi.fn(async () => ({ show_developer_settings: true }) as never) }), { ...SEED, start: 'connect' });
     const files = host.querySelector('[data-testid="connect-files"]')!.textContent!;
     expect(files).toContain(T.connectPointsTo('C:/old/mcp.exe'));
     expect(files).not.toContain(T.connectFileFix);

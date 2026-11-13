@@ -9,6 +9,7 @@ import {
   type DiscordAlertsStatus,
   type DiscordKinds,
 } from '../../../lib/discordAlerts';
+import { SendTest } from '../previews/Previews';
 import { Btn, FieldInput, Note, SettingBlock, SettingToggle } from '../settings-ui';
 
 const MASK = '\u2022'.repeat(24);
@@ -18,7 +19,6 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -53,30 +53,16 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
   const save = async () => {
     const link = draft.trim();
     if (!link) return;
-    setResult(null);
     if (await run(() => api.setUrl(link))) setDraft('');
   };
 
   const remove = async () => {
-    setResult(null);
     await run(() => api.clear());
     setDraft('');
   };
 
   const setKind = (key: keyof DiscordKinds, value: boolean) => {
     void run(() => api.setKinds({ ...status.kinds, [key]: value }));
-  };
-
-  const test = async () => {
-    setBusy(true);
-    setResult(null);
-    try {
-      setResult(await api.test());
-    } catch (e) {
-      setResult({ ok: false, message: discordErrorMessage(e) });
-    } finally {
-      setBusy(false);
-    }
   };
 
   return (
@@ -114,9 +100,10 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
               Save
             </Btn>
           )}
-          <Btn disabled={busy || !status.saved} onClick={() => void test()}>
-            Test
-          </Btn>
+          <SendTest
+            disabledReason={status.saved ? (busy ? 'Working…' : null) : 'Add a webhook link first'}
+            send={() => api.test()}
+          />
           {status.saved && (
             <Btn disabled={busy} onClick={() => void remove()}>
               Remove
@@ -125,7 +112,6 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
         </div>
         {status.saved && <Note role="status">{`Saved in the secure store on this PC. Ends in ${status.tail ?? '...'}.`}</Note>}
         {!status.saved && <Note>Not on yet. In Discord: channel settings, Integrations, Webhooks, New Webhook, Copy Webhook URL.</Note>}
-        {result && <Note role={result.ok ? 'status' : 'alert'}>{result.message}</Note>}
         {error && <Note role="alert">{error}</Note>}
       </SettingBlock>
       <SettingToggle

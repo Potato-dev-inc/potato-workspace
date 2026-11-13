@@ -19,11 +19,11 @@ import { NeedsYouContext } from '../../hooks/useNeedsYou';
 import { useKeybindingsVersion } from '../../hooks/useKeybindings';
 import { ChatFilterChips, type ChipKey } from './ChatFilterChips';
 import { T as WELCOME } from '../firstrun/copy';
-import { DotSpinner } from './DotSpinner';
+import { AgentLogo } from '../common/AgentLogo';
 import { IconChart, IconInbox, IconClose, IconCopy, IconGlobe, IconInfo, IconLayers, IconMoon, IconNote, IconPlus, IconReflow, IconRename, IconSearch, IconSettings, IconStop, IconSun, IconTerminal } from './Icons';
 import { isCompanionPaneId } from './companion/model';
 import { requestPaneAction } from '../../lib/pane-actions';
-import { matchesQuery, spinnerStatus, stateText } from './model';
+import { matchesQuery, stateText } from './model';
 import { settingsShortcuts } from './palette-shortcuts';
 import { useMissionsEnabled } from '../../lib/missions';
 import { useNightEnabled } from '../../lib/night';
@@ -35,7 +35,7 @@ import { Avatar } from '../companion/Avatar';
 
 interface Item {
   id: string;
-  group: 'Panes' | 'New agent' | 'Actions';
+  group: 'Panes' | 'New agent' | 'Terminals' | 'Actions';
   title: string;
   desc?: string;
   icon: ReactNode;
@@ -164,22 +164,25 @@ export function Palette({
         group: 'Panes',
         title: heading.primary,
         desc: `${paneSubline(p.info, agentName, projectWithCopy(p.info.cwd), multiLogin)} · ${waiting.has(id) ? 'Needs you' : stateText(p.status)}`,
-        icon: <DotSpinner status={spinnerStatus(p.status)} />,
+        icon: <AgentLogo id={p.info.agent_type} name={agentName} size={14} decorative />,
         run: () => c.select(id),
       });
     }
+    // Plain shells (PowerShell, bash) go in their own group under the agents, not next to them.
+    const terminals: Item[] = [];
     for (const e of c.launchEntries) {
       if (e.disabled) continue;
-      out.push({
+      const row: Item = {
         id: `new:${e.type}`,
-        group: 'New agent',
-        // A plain shell is a terminal (its kind says so), so the row says that next to its name.
-        title: e.shell ? `New ${e.label} terminal` : `New ${e.label}`,
+        group: e.shell ? 'Terminals' : 'New agent',
+        title: `New ${e.label}`,
         desc: c.readyAgents.has(e.type) ? 'Opens instantly' : undefined,
         icon: <IconPlus />,
         hint: c.readyAgents.has(e.type) ? 'ready' : undefined,
         run: () => void c.newAgent(e.type),
-      });
+      };
+      if (e.shell) terminals.push(row);
+      else out.push(row);
     }
     if (onNewCompanion) {
       out.push({
@@ -192,6 +195,7 @@ export function Palette({
         run: onNewCompanion,
       });
     }
+    out.push(...terminals);
     // Moving around: the same actions as the keys, with the keys you chose shown on the right.
     const listed = c.registry.paneList.map((p) => p.info.id).filter((id) => !isCompanionPaneId(id));
     if (onOpenInbox) {

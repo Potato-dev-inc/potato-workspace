@@ -9,11 +9,12 @@ import { changeLine, lastCheckLine, tauriCanaryApi, useCanary, type CanaryApi } 
 import { Btn, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
 import '../../../styles/canary.css';
 
-export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now() }: { api?: CanaryApi; now?: () => number }) {
+/** `only`: show just this agent's line (its page in Settings > Agents), without the rows that are about every agent. */
+export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now(), only }: { api?: CanaryApi; now?: () => number; only?: string }) {
   const { status, refresh } = useCanary(api);
   const [running, setRunning] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const installed = status.agents.filter((a) => a.installed);
+  const installed = status.agents.filter((a) => a.installed && (!only || a.agent === only));
 
   const check = useCallback(
     async (agent: string) => {
@@ -38,7 +39,7 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now() }: 
   return (
     <>
       <SettingBlock
-        label="Agent versions"
+        label={only ? 'Version' : 'Agent versions'}
         description="Agents update often, and an update can change what Potato Workspace sees on screen. Checking starts the agent in an empty folder, waits for its input box, then closes it. Nothing is sent to it, so it costs no tokens."
       >
         <ul className="st-ver-list" aria-label="Agent versions" data-testid="agent-versions">
@@ -50,7 +51,7 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now() }: 
               <li key={agent.agent} className="st-ver-row" data-testid={`agent-version-${agent.agent}`}>
                 <div className="st-ver-main">
                   <div className="st-ver-line">
-                    <span className="st-ver-name">{agent.label}</span>
+                    {!only && <span className="st-ver-name">{agent.label}</span>}
                     {agent.version && <span className="st-ver-num">{agent.version}</span>}
                     {agent.chip && (
                       <span className="st-ver-chip" data-testid={`agent-version-chip-${agent.agent}`}>
@@ -78,28 +79,32 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now() }: 
               </li>
             );
           })}
-          {installed.length === 0 && <li className="st-ver-plain">No agents are installed on this computer yet.</li>}
+          {installed.length === 0 && <li className="st-ver-plain">{only ? 'Not installed.' : 'No agents are installed on this computer yet.'}</li>}
         </ul>
         {error && <Note role="alert">{error}</Note>}
       </SettingBlock>
-      <SettingToggle
-        label="Check agents after they update"
-        description="When an agent's version changes, check it the same way. Off: only when you press Check this agent."
-        checked={status.auto_check}
-        onChange={(on) => void api.setAuto(on).then(refresh)}
-      />
-      <SettingRow
-        label="Screens I didn't recognise"
-        description={
-          status.captures === 0
-            ? 'When an agent stays on a screen Potato Workspace cannot read, the screen is saved here with secrets removed. Nothing has been saved yet.'
-            : `${status.captures} ${status.captures === 1 ? 'screen' : 'screens'} saved on this computer, with secrets removed. Nothing is sent anywhere.`
-        }
-      >
-        <Btn small onClick={() => void api.openCaptures().catch((e) => setError(errorSentence(e)))}>
-          Open folder
-        </Btn>
-      </SettingRow>
+      {!only && (
+        <>
+          <SettingToggle
+            label="Check agents after they update"
+            description="When an agent's version changes, check it the same way. Off: only when you press Check this agent."
+            checked={status.auto_check}
+            onChange={(on) => void api.setAuto(on).then(refresh)}
+          />
+          <SettingRow
+            label="Screens I didn't recognise"
+            description={
+              status.captures === 0
+                ? 'When an agent stays on a screen Potato Workspace cannot read, the screen is saved here with secrets removed. Nothing has been saved yet.'
+                : `${status.captures} ${status.captures === 1 ? 'screen' : 'screens'} saved on this computer, with secrets removed. Nothing is sent anywhere.`
+            }
+          >
+            <Btn small onClick={() => void api.openCaptures().catch((e) => setError(errorSentence(e)))}>
+              Open folder
+            </Btn>
+          </SettingRow>
+        </>
+      )}
     </>
   );
 }

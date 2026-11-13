@@ -1,0 +1,25 @@
+# Lab vector S11. See ../vector.rs for the format.
+id = "S11"
+title = "One megabyte in a single message line, and the next message still works"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt"
+text = "bigline 1048576"
+
+[[step]]
+do = "prompt"
+text = "stream 2"
+
+[[expect]]
+turn = 1
+stop = "end_turn"
+chunks_at_least = 1
+
+[[expect]]
+turn = 2
+stop = "end_turn"
+chunks_at_least = 2

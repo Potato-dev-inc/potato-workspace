@@ -127,6 +127,11 @@ impl TuiProfile for OpenCode {
         Some("Open OpenCode and type /connect".into())
     }
 
+    /// What it spent, for the "Used" strip: `usage.toml` (data).
+    fn usage_source(&self) -> Option<crate::usage::source::UsageSource> {
+        crate::usage::source::from_toml(include_str!("usage.toml"))
+    }
+
     /// `XDG_DATA_HOME` moves OpenCode's data dir: its login is `<data>/opencode/auth.json`
     /// (OpenCode 1.19.0 binary: `globalDataPath` = `XDG_DATA_HOME || ~/.local/share`, then `Path.data/auth.json`).
     fn account_scheme(&self) -> Option<AccountScheme> {

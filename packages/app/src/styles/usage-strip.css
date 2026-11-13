@@ -254,3 +254,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.cockpit .ck-usage-totals .ck-usage-win {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name pct';
+}
+.cockpit .ck-usage-totals .ck-usage-win-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-usage-totals .ck-usage-model {
+  color: var(--label-3);
+}

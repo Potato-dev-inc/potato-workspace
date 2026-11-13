@@ -12,12 +12,16 @@ import {
   type AccountsOverview,
 } from '../../../lib/accounts';
 import { agentLabel, useAgentRegistry } from '../../../lib/agentRegistry';
-import { SettingBlock } from '../settings-ui';
+import { SettingBlock, Tip } from '../settings-ui';
 import { CodeText } from '../../common/CodeText';
 
+const TERMS = "Each sign-in is a folder you control. Potato Workspace only points the agent at it and never reads or shares what is inside. Check your provider's terms before using several sign-ins.";
+/** Beside each sign-in: opens the agent's own window to sign in again. */
+const SIGN_IN_AGAIN = 'Sign in again';
 const BTN = 'rounded-lg border border-pm-border px-3 py-1.5 text-xs font-medium hover:bg-pm-border/40 disabled:opacity-50';
 
-export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi }) {
+/** `only`: show just this agent (its page in Settings > Agents). */
+export function AccountsGroup({ api = tauriAccountsApi, only }: { api?: AccountsApi; only?: string }) {
   const [data, setData] = useState<AccountsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -59,12 +63,17 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
     }
   };
 
-  if (!data || data.agents.length === 0) return null;
+  const shownAgents = data ? data.agents.filter((a) => !only || a.agent_id === only) : [];
+  if (!data || shownAgents.length === 0) return null;
 
   return (
     <SettingBlock
       label={SIGN_IN.rowLabel}
-      description="Use the same agent with more than one sign-in, and pick one per pane. Each sign-in is a folder you control; Potato Workspace only points the agent at it and never reads or shares what is inside. Check your provider's terms before using several sign-ins."
+      description={
+        <>
+          Use more than one sign-in per agent. Each lives in its own folder. <Tip text={TERMS} label="About sign-ins" />
+        </>
+      }
     >
       {error && (
         <p role="alert" className="mb-3 text-sm text-pm-muted">
@@ -77,15 +86,17 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
         </p>
       )}
       <div className="space-y-4">
-        {data.agents.map((agent) => {
+        {shownAgents.map((agent) => {
           const mine = accountsFor(data.accounts, agent.agent_id);
           const draft = drafts[agent.agent_id] ?? '';
           return (
             <section key={agent.agent_id} aria-label={`${agent.agent_id} sign-ins`} data-testid={`accounts-${agent.agent_id}`}>
-              <h4 className="text-sm font-medium">{agentLabel(registry, agent.agent_id)}</h4>
-              <p className="mt-0.5 text-xs text-pm-muted">
-                <CodeText text={agent.login_hint} />
-              </p>
+              {!only && <h4 className="text-sm font-medium">{agentLabel(registry, agent.agent_id)}</h4>}
+              {mine.length === 0 && (
+                <p className="mt-0.5 text-xs text-pm-muted">
+                  <CodeText text={agent.login_hint} />
+                </p>
+              )}
               {mine.length === 0 && <p className="mt-2 text-xs text-pm-muted">No extra sign-ins yet. It uses its own.</p>}
               <ul className="mt-2 divide-y divide-pm-border rounded-lg border border-pm-border">
                 {mine.map((a) => (
@@ -111,7 +122,7 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
                       disabled={busy}
                       onClick={() => void run(() => api.openLoginPane(agent.agent_id, a.id), 'Opened a sign-in window. Sign in there once.')}
                     >
-                      {SIGN_IN.openWindow}
+                      {SIGN_IN_AGAIN}
                     </button>
                     <button
                       type="button"
@@ -129,6 +140,7 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
                 <label htmlFor={`helper-login-${agent.agent_id}`} className="text-xs text-pm-muted">
                   Run helpers on
                 </label>
+                <Tip text="The sign-in for a helper an agent starts without picking one. Ask me shows a card each time." label="About helper sign-ins" />
                 <select
                   id={`helper-login-${agent.agent_id}`}
                   value={helperValue(data.helper_logins?.[agent.agent_id], mine)}
@@ -145,9 +157,6 @@ export function AccountsGroup({ api = tauriAccountsApi }: { api?: AccountsApi })
                   ))}
                 </select>
               </div>
-              <p className="mt-1 text-xs text-pm-muted">
-                The sign-in for a helper an agent starts without picking one. Ask me shows a card each time.
-              </p>
               <form
                 className="mt-2 flex items-center gap-2"
                 onSubmit={(e) => {

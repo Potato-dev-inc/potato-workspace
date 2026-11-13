@@ -178,15 +178,15 @@ fn card_words(ask: &Ask) -> (String, String, Vec<Choice>) {
     match ask.action {
         Action::TakeOver => (
             format!("Allow {who} to control {}?", ask.target),
-            "It would type into the pane and answer its questions. It did not start this pane.".to_string(),
-            vec![choice(CHOICE_ONCE, "Allow once"), choice(CHOICE_ALWAYS, "Always for this pane"), choice(CHOICE_DENY, "Deny")],
+            "It would type into the window and answer its questions. It did not start this window.".to_string(),
+            vec![choice(CHOICE_ONCE, "Allow once"), choice(CHOICE_ALWAYS, "Always allow here"), choice(CHOICE_DENY, "Deny")],
         ),
         Action::AnswerPrompt => (
             format!("Allow {who} to answer a question in {}?", ask.target),
             ask.risk_headline
                 .clone()
-                .map(|headline| format!("{headline}. It did not start this pane."))
-                .unwrap_or_else(|| "It did not start this pane.".to_string()),
+                .map(|headline| format!("{headline}. It did not start this window."))
+                .unwrap_or_else(|| "It did not start this window.".to_string()),
             vec![choice(CHOICE_ONCE, "Allow once"), choice(CHOICE_DENY, "Deny")],
         ),
     }
@@ -272,7 +272,7 @@ pub fn on_resolved(question: &Question) {
     };
     let summary = match decision {
         "allow_once" => format!("You allowed {who_asked} {allowed}, once"),
-        "always" => format!("You allowed {who_asked} {allowed}, always for this pane"),
+        "always" => format!("You allowed {who_asked} {allowed}, always here"),
         _ => format!("You said no to {refused}"),
     };
     audit::record(

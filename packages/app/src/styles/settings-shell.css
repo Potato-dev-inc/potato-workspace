@@ -1,0 +1,200 @@
+/* Settings shell: the Overview cards, search results, the Advanced page's closed groups and the nav separator.
+   Grayscale only. Uses the tokens of settings.css (everything is scoped under .settings). */
+
+/* ---------- nav ---------- */
+.settings .st-navsep {
+  height: 1px;
+  margin: 8px 10px;
+  background: var(--sep);
+}
+.settings .st-search .st-kbd {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--sep);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--label-3);
+}
+.settings .st-search:focus-within .st-kbd {
+  display: none;
+}
+
+/* ---------- Overview cards ---------- */
+.settings .st-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+/* Five in one row when the window is wide; 3 + 2 below that. */
+@media (max-width: 1100px) {
+  .settings .st-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .settings .st-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.settings .st-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 96px;
+  padding: 10px 10px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--list);
+  box-shadow: var(--raise-hi);
+}
+.settings .st-card-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.settings .st-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--sep);
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--label);
+}
+.settings .st-card-line {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.settings .st-card-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.settings .st-card-act {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+/* ---------- search ---------- */
+.settings .st-results {
+  gap: 0;
+}
+.settings .st-results > section + section {
+  margin-top: 0;
+}
+.settings .st-results h2.st-path {
+  margin: 18px 0 5px 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-3);
+}
+.settings .st-results > section:first-child h2.st-path,
+.settings .st-results > .st-names + section h2.st-path {
+  margin-top: 0;
+}
+.settings .st-rowwrap:has(> .st-level-tag) {
+  padding-top: 14px;
+}
+.settings .st-level-tag {
+  position: absolute;
+  top: 3px;
+  left: 14px;
+  z-index: 1;
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--label-3);
+  pointer-events: none;
+}
+.settings .st-rowwrap[data-active='true'] {
+  box-shadow: inset 0 0 0 1.5px var(--label-2);
+  border-radius: 9px;
+}
+.settings .st-names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.settings .st-name-hit {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: var(--list);
+  text-align: left;
+  color: var(--label);
+}
+.settings .st-name-hit:hover,
+.settings .st-name-hit[data-active='true'] {
+  background: var(--fill-hover);
+}
+.settings .st-name-hit small {
+  color: var(--label-3);
+  font-size: 12px;
+}
+.settings .st-showall {
+  margin-top: 14px;
+}
+.settings .st-emptycard {
+  margin-top: 26px;
+  padding: 22px;
+  border: 1px dashed var(--sep);
+  border-radius: 10px;
+  text-align: center;
+}
+.settings .st-emptycard p {
+  margin: 0 0 4px;
+}
+.settings .st-emptycard .st-empty-help {
+  margin-bottom: 12px;
+  color: var(--label-3);
+}
+.settings .st-quiet-links {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.settings .st-linkbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label-3);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.settings .st-linkbtn:hover {
+  color: var(--label);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings .st-card,
+  .settings .st-name-hit {
+    transition: background-color 140ms ease-out;
+  }
+}
+
+/* "Check my setup" is a list, not a one-line row: settings.css hides a row that has no .st-row child, so show it. */
+.settings .st-rowwrap.st-rowwrap:has(> .st-setupcheck) {
+  display: block;
+}
+.settings .st-group.st-group:has(.st-rowwrap > .st-setupcheck) {
+  display: block;
+}

@@ -35,28 +35,29 @@ export function hasModelChoice(options: { terminal: boolean; models: readonly st
   return options.terminal || options.models.length > 0;
 }
 
-function AgentModelRow({ agentId, label, value, api, onChange }: { agentId: string; label: string; value: string; api: ModelOptionsApi; onChange: (model: string) => void }) {
+function AgentModelRow({ agentId, label, value, api, onChange, single }: { agentId: string; label: string; value: string; api: ModelOptionsApi; onChange: (model: string) => void; single: boolean }) {
   const state = useModelOptions(agentId, api);
   if (state.status === 'ready' && !hasModelChoice(state.options)) return null;
   return (
     <div className="st-helper-model">
-      <span className="st-helper-model-name">{label}</span>
+      {!single && <span className="st-helper-model-name">{label}</span>}
       <ModelPicker testId={`helper-model-${agentId}`} label={`Default model for ${label} helpers`} state={state} value={value} onChange={onChange} defaultWord="Agent's default" />
     </div>
   );
 }
 
-export function HelperDefaultModels({ saved, onChange, api = tauriModelOptionsApi }: { saved: unknown; onChange: (next: Record<string, string>) => void; api?: ModelOptionsApi }) {
+/** `only`: show just this agent (its page in Settings > Agents). */
+export function HelperDefaultModels({ saved, onChange, api = tauriModelOptionsApi, only }: { saved: unknown; onChange: (next: Record<string, string>) => void; api?: ModelOptionsApi; only?: string }) {
   const listing = useAgentRegistry();
   const map = cleanHelperModels(saved);
-  const agents = listing.agents.filter((a) => a.installed && a.kind !== 'shell');
+  const agents = listing.agents.filter((a) => a.installed && a.kind !== 'shell' && (!only || a.id === only));
   return (
     <SettingBlock label={HELPER_MODELS_LABEL} description={HELPER_MODELS_HINT}>
       {agents.length === 0 ? (
         <small>No agents are installed yet.</small>
       ) : (
         agents.map((agent) => (
-          <AgentModelRow key={agent.id} agentId={agent.id} label={agent.label} value={map[agent.id] ?? ''} api={api} onChange={(model) => onChange(withHelperModel(map, agent.id, model))} />
+          <AgentModelRow key={agent.id} agentId={agent.id} label={agent.label} value={map[agent.id] ?? ''} api={api} onChange={(model) => onChange(withHelperModel(map, agent.id, model))} single={Boolean(only)} />
         ))
       )}
     </SettingBlock>

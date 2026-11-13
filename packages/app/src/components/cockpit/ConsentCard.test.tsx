@@ -27,7 +27,7 @@ const takeOver: Question = {
   context: 'It would type into the pane and answer its questions. It did not start this pane.',
   choices: [
     { id: 'allow_once', label: 'Allow once' },
-    { id: 'always', label: 'Always for this agent' },
+    { id: 'always', label: 'Always allow here' },
     { id: 'deny', label: 'Deny' },
   ],
   allow_free_text: false,
@@ -58,10 +58,10 @@ describe('ConsentCard', () => {
     expect(host.querySelector('.ib-title')?.textContent).toBe('Allow Claude to control Codex 1?');
     expect(button('Deny')?.className).toContain('ck-btn--primary');
     expect(button('Allow once')?.className).toContain('ck-btn--secondary');
-    expect(button('Always for this agent')?.className).toContain('ck-btn--plain');
+    expect(button('Always allow here')?.className).toContain('ck-btn--plain');
     expect(host.textContent).toContain('It did not start this pane.');
     // Deny first, and no number key may answer a consent
-    expect(Array.from(host.querySelectorAll('[data-ib="answer"]')).map((b) => b.textContent)).toEqual(['Deny', 'Allow once', 'Always for this agent']);
+    expect(Array.from(host.querySelectorAll('[data-ib="answer"]')).map((b) => b.textContent)).toEqual(['Deny', 'Allow once', 'Always allow here']);
     expect(host.querySelector('[data-ib-card]')?.hasAttribute('data-guard')).toBe(true);
     expect(host.textContent).not.toMatch(/asked \d/);
   });
@@ -69,7 +69,7 @@ describe('ConsentCard', () => {
   it('sends the choice id for each button', () => {
     const onAnswer = render(takeOver);
     act(() => button('Allow once')!.click());
-    act(() => button('Always for this agent')!.click());
+    act(() => button('Always allow here')!.click());
     act(() => button('Deny')!.click());
     expect(onAnswer.mock.calls.map((c) => c[0])).toEqual([{ choice_id: 'allow_once' }, { choice_id: 'always' }, { choice_id: 'deny' }]);
   });
@@ -83,7 +83,7 @@ describe('ConsentCard', () => {
     };
     render(answer);
     expect(host.querySelector('.ib-title')?.textContent).toBe('Allow another agent to answer a question in Claude?');
-    expect(button('Always for this agent')).toBeUndefined();
+    expect(button('Always allow here')).toBeUndefined();
     expect(host.querySelector('input')).toBeNull();
   });
 
@@ -91,6 +91,22 @@ describe('ConsentCard', () => {
     expect(consentTitle(takeOver)).toBe('Allow Claude to control Codex?');
     render(takeOver);
     expect(host.textContent).not.toContain('p-codex');
+  });
+});
+
+describe('consent card words for a person', () => {
+  it('a window with no name is "that window", never "that pane"', () => {
+    const noTarget: Question = { ...takeOver, consent: { action: 'take_over', requester: 'Claude', target: '', pane_id: 'p-x' } };
+    expect(consentTitle(noTarget)).toBe('Allow Claude to control that window?');
+    render(noTarget);
+    expect(host.textContent).toContain('Allow Claude to control that window?');
+    expect(host.textContent).not.toContain('that pane');
+  });
+
+  it('the always button says "Always allow here"', () => {
+    render(takeOver);
+    expect(button('Always allow here')).toBeDefined();
+    expect(host.textContent).not.toContain('Always for this');
   });
 });
 
@@ -103,5 +119,40 @@ describe('a consent card in the Needs-you list', () => {
     ]);
     expect(items[0].risk).toBe('high');
     expect(items[0].paneId).toBeUndefined();
+  });
+});
+
+describe('ConsentCard: answering a risky prompt', () => {
+  const answerRisky = (requester: string): Question => ({
+    ...takeOver,
+    id: 'c2',
+    agent: requester,
+    question: 'x',
+    context: 'Delete a folder outside this project. It did not start this pane.',
+    choices: [
+      { id: 'allow_once', label: 'Allow once' },
+      { id: 'deny', label: 'Deny' },
+    ],
+    consent: { action: 'answer_prompt', requester, target: 'Claude', pane_id: 'p-claude', risk: 'high' },
+  });
+
+  it('quotes what it wants to answer, names the asker and marks the risk', () => {
+    render(answerRisky('Codex'));
+    expect(host.querySelector('.ib-reason')?.textContent).toBe('It wants to answer: "Delete a folder outside this project".\nIt did not start this pane.');
+    expect(host.querySelector('.ib-meta')?.textContent).toBe('Codex');
+    expect(host.querySelector('.ib-status')?.textContent).toBe('High risk');
+    expect(host.querySelector('[data-ib-card]')?.getAttribute('data-risk')).toBe('high');
+  });
+
+  it('says so in plain words when it cannot name the asker', () => {
+    render(answerRisky('Another agent'));
+    expect(host.querySelector('.ib-meta')?.textContent).toBe('Unknown agent');
+  });
+
+  it('a take-over card keeps its own reason and shows no risk word', () => {
+    render(takeOver);
+    expect(host.querySelector('.ib-reason')?.textContent).toBe(takeOver.context);
+    expect(host.querySelector('.ib-status')).toBeNull();
+    expect(host.querySelector('.ib-meta')?.textContent).toBe('Claude');
   });
 });

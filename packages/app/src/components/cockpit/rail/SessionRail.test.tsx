@@ -67,7 +67,7 @@ describe('SessionRail', () => {
     chat.current = { model: null, cliVersion: null, usage: null, plan: [], outputs: [] };
     act(() => root.render(<SessionRail {...props} />));
     const text = host.textContent ?? '';
-    expect(text).toContain('Not reported by this agent');
+    expect(text).toContain("This agent doesn't share this");
     expect(text).not.toContain('Tasks');
     expect(text).not.toContain('Changes');
     expect(text).not.toContain('Helpers');

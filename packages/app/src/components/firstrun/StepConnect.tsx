@@ -3,6 +3,7 @@
 // plan, its Undo). The files that change are listed before the button is pressed.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentPackApi, groupAgents, visibleRows, type AgentPackApi, type PackReport, type PackRow } from '../../lib/agent-pack';
+import { loadSettings } from '../../lib/settings';
 import { errText } from '../../lib/toolbelt';
 import { DotSpinner } from '../cockpit/DotSpinner';
 import { T } from './copy';
@@ -63,13 +64,17 @@ export function StepConnect({
   connected,
   onConnected,
   dev = import.meta.env.DEV,
+  load = loadSettings,
 }: {
   api?: AgentPackApi;
   connected: Connected;
   onConnected: (connected: Connected) => void;
   /** A dev build (not installed): the entry would point at this copy. */
   dev?: boolean;
+  /** Reads "Show developer settings": the file paths and the dev build note show only while it is on. */
+  load?: typeof loadSettings;
 }) {
+  const [developer, setDeveloper] = useState(false);
   const [report, setReport] = useState<PackReport | null>(null);
   const [busy, setBusy] = useState<'add' | 'undo' | null>(null);
   const [message, setMessage] = useState<{ tone: 'ok' | 'problem'; text: string } | null>(null);
@@ -77,6 +82,16 @@ export function StepConnect({
   const alive = useRef(true);
   const onConnectedRef = useRef(onConnected);
   onConnectedRef.current = onConnected;
+
+  useEffect(() => {
+    let live = true;
+    void load()
+      .then((s) => live && setDeveloper(s?.show_developer_settings === true))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [load]);
 
   const look = useCallback(async () => {
     try {
@@ -155,7 +170,13 @@ export function StepConnect({
         </div>
       )}
 
-      {files.length > 0 && (
+      {files.length > 0 && !developer && (
+        <div className="fr-card" data-testid="connect-summary">
+          <p className="fr-hint">{T.connectSummary(names)}</p>
+          <p className="fr-hint">{T.connectBackups}</p>
+        </div>
+      )}
+      {files.length > 0 && developer && (
         <div className="fr-card" data-testid="connect-files">
           <h2 className="fr-cap">{T.connectFilesTitle}</h2>
           <ul className="fr-files">

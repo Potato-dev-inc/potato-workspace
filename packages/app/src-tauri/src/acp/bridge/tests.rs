@@ -10,6 +10,7 @@ use parking_lot::Mutex;
 use serde_json::{json, Value};
 
 use super::*;
+use crate::acp::bridge::extras::ModelListCommand;
 use crate::proc_util::pid_alive;
 use crate::tui::{Features, HeadlessLaunch, LaunchSpec, TuiProfile};
 
@@ -18,6 +19,7 @@ const TASK: &str = "PM_BRIDGE_TASK";
 const RESUME: &str = "PM_BRIDGE_RESUME";
 const DIR: &str = "PM_BRIDGE_DIR";
 const MEMORY: &str = "PM_BRIDGE_MEMORY";
+const MODEL: &str = "PM_BRIDGE_MODEL";
 const HARNESS: [&str; 4] = ["--exact", "acp::bridge::tests::child_entry", "--nocapture", "--test-threads=1"];
 const SECRET: &str = "sk-abcdefghijk123";
 
@@ -26,7 +28,30 @@ struct FakeProfile {
     memory: bool,
     headless: bool,
     dir: PathBuf,
+    /// The definition names a model-list command (and a model flag).
+    list: bool,
+    /// The definition has `[headless.output.tool]` rules.
+    tools: bool,
 }
+
+impl FakeProfile {
+    fn new(memory: bool, dir: PathBuf) -> FakeProfile {
+        FakeProfile { memory, headless: true, dir, list: false, tools: false }
+    }
+}
+
+const TOOL_RULES: &str = r#"
+id = "id"
+title = "name"
+input = "input"
+output = "out"
+[start]
+where = { type = "tool", phase = "start" }
+[finish]
+where = { type = "tool", phase = "end" }
+[failed]
+where = { ok = false }
+"#;
 
 impl TuiProfile for FakeProfile {
     fn id(&self) -> &'static str {
@@ -45,9 +70,14 @@ impl TuiProfile for FakeProfile {
             (ROLE.to_string(), "headless".to_string()),
             (TASK.to_string(), launch.task.to_string()),
             (DIR.to_string(), self.dir.to_string_lossy().into_owned()),
+            ("RUST_TEST_NOCAPTURE".to_string(), "1".to_string()),
+            ("RUST_TEST_THREADS".to_string(), "1".to_string()),
         ];
         if let Some(resume) = launch.resume_session {
             env.push((RESUME.to_string(), resume.to_string()));
+        }
+        if let Some(model) = launch.model {
+            env.push((MODEL.to_string(), model.to_string()));
         }
         Ok(LaunchSpec {
             program: std::env::current_exe().unwrap().to_string_lossy().into_owned(),
@@ -59,9 +89,35 @@ impl TuiProfile for FakeProfile {
         })
     }
 
+    fn accepts_headless_model(&self) -> bool {
+        self.list
+    }
+
+    fn bridge_tables(&self) -> Option<DefinitionTables> {
+        use crate::tui::declarative::schema::{ModelSource, ModelTable};
+        let model = if self.list {
+            // Three tokens at most (the bridge refuses longer list commands); capture and threads come from the env.
+            let argv: Vec<String> = ["--exact", "acp::bridge::tests::child_entry", "list-models"].iter().map(|a| a.to_string()).collect();
+            ModelTable { source: ModelSource::ProbeCommand, probe_argv: Some(argv), probe_regex: Some(r"^model:(\S+)$".into()), default: None }
+        } else {
+            ModelTable::default()
+        };
+        let tool = self.tools.then(|| toml::from_str(TOOL_RULES).expect("tool rules"));
+        Some(DefinitionTables { model, tool })
+    }
+
     fn extract_result(&self, output: &str, exit_code: i32) -> Option<String> {
         if exit_code != 0 {
             return None;
+        }
+        if self.tools && output.lines().any(|l| l.starts_with('{')) {
+            let text: Vec<String> = output
+                .lines()
+                .filter_map(|l| serde_json::from_str::<Value>(l.trim()).ok())
+                .filter(|v| v["type"] == "text")
+                .filter_map(|v| v["text"].as_str().map(str::to_string))
+                .collect();
+            return (!text.is_empty()).then(|| text.join("\n"));
         }
         let text: Vec<&str> = output.lines().filter(|l| !l.starts_with("SESSION:") && !l.contains("child_entry") && !l.starts_with("running ")).collect();
         let text = text.join("\n").trim().to_string();
@@ -83,11 +139,7 @@ fn child_entry() {
         "bridge" => {
             // The harness leaves "test ... " unterminated on stdout; the first JSON line must start fresh.
             println!();
-            let profile = FakeProfile {
-                memory: std::env::var(MEMORY).as_deref() == Ok("1"),
-                headless: true,
-                dir: PathBuf::from(std::env::var(DIR).unwrap_or_default()),
-            };
+            let profile = FakeProfile::new(std::env::var(MEMORY).as_deref() == Ok("1"), PathBuf::from(std::env::var(DIR).unwrap_or_default()));
             serve(Arc::new(profile), "Fake Chat".into(), std::io::stdin().lock(), std::io::stdout(), ServeOptions::default());
             std::process::exit(0);
         }
@@ -99,7 +151,24 @@ fn child_entry() {
     }
 }
 
+/// The fake CLI's model-list command: counts how often it ran, prints three kinds of lines.
+fn list_models_child() {
+    println!();
+    let dir = PathBuf::from(std::env::var(DIR).unwrap_or_default());
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let _ = std::fs::write(dir.join(format!("listed-{nanos}")), "x");
+    println!("Available models:");
+    println!("model:alpha");
+    println!("model:beta");
+    println!("model:alpha");
+    println!("not a model line");
+    std::process::exit(0);
+}
+
 fn headless_child() {
+    if std::env::args().any(|a| a == "list-models") {
+        list_models_child();
+    }
     println!();
     let task = std::env::var(TASK).unwrap_or_default();
     let dir = PathBuf::from(std::env::var(DIR).unwrap_or_default());
@@ -133,6 +202,51 @@ fn headless_child() {
             std::process::exit(3);
         }
         "empty" => {}
+        "whichmodel" => {
+            println!("using:{}", std::env::var(MODEL).unwrap_or_else(|_| "none".into()));
+            println!("SESSION:s-1");
+        }
+        "remember" | "recall" => {
+            // A CLI that keeps one code word per conversation id, on disk, like a real one keeps its history.
+            let resume = std::env::var(RESUME).ok();
+            let id = resume.clone().unwrap_or_else(|| {
+                let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+                format!("cw-{nanos}")
+            });
+            let file = dir.join(format!("mem-{id}"));
+            if verb == "remember" {
+                let _ = std::fs::write(&file, task.split_whitespace().nth(1).unwrap_or(""));
+                println!("ok");
+            } else {
+                println!("word:{}", std::fs::read_to_string(&file).unwrap_or_else(|_| "none".into()));
+            }
+            println!("SESSION:{id}");
+        }
+        "opentool" | "opentoolhang" => {
+            // A card starts and never finishes; a finish for a card nobody started comes too.
+            println!("{}", json!({"type": "tool", "phase": "start", "id": "o1", "name": "run", "input": "make"}));
+            println!("{}", json!({"type": "tool", "phase": "end", "id": "ghost", "ok": true, "out": "x"}));
+            let _ = std::io::stdout().flush();
+            if verb == "opentoolhang" {
+                let (_keep, rx) = mpsc::channel::<()>();
+                let _ = rx.recv_timeout(Duration::from_secs(120));
+            }
+            std::process::exit(3);
+        }
+        "tools" => {
+            let lines = [
+                json!({"type": "tool", "phase": "start", "id": "t1", "name": "read_file", "input": "a.txt"}),
+                json!({"type": "tool", "phase": "end", "id": "t1", "ok": true, "out": format!("body {SECRET}")}),
+                json!({"type": "tool", "phase": "start", "id": "t2", "name": "run", "input": "make"}),
+                json!({"type": "tool", "phase": "end", "id": "t2", "ok": false, "out": "boom"}),
+                json!({"type": "text", "text": "all done"}),
+            ];
+            for line in lines {
+                println!("{line}");
+                let _ = std::io::stdout().flush();
+            }
+            println!("SESSION:s-1");
+        }
         _ => {
             let resume = std::env::var(RESUME).unwrap_or_else(|_| "none".into());
             println!("got:{task} resume:{resume}");
@@ -183,6 +297,8 @@ struct Rig {
     server: Option<std::thread::JoinHandle<()>>,
     dir: PathBuf,
     next_id: u64,
+    /// Keep `dir` when the rig is dropped (a test that restarts the bridge on the same folder).
+    keep: bool,
 }
 
 fn temp_dir() -> PathBuf {
@@ -197,18 +313,22 @@ fn fast_limits() -> TurnLimits {
 
 impl Rig {
     fn new(memory: bool) -> Rig {
-        Rig::with(FakeProfile { memory, headless: true, dir: temp_dir() }, fast_limits())
+        Rig::with(FakeProfile::new(memory, temp_dir()), fast_limits())
     }
 
     fn with(profile: FakeProfile, limits: TurnLimits) -> Rig {
+        Rig::with_store(profile, limits, None)
+    }
+
+    fn with_store(profile: FakeProfile, limits: TurnLimits, store_dir: Option<PathBuf>) -> Rig {
         let dir = profile.dir.clone();
         let (tx, rx) = mpsc::channel();
         let out = Sink::default();
         let sink = out.clone();
         let server = std::thread::spawn(move || {
-            serve(Arc::new(profile), "Fake Chat".into(), BufReader::new(ChanRead { rx, rest: Vec::new() }), sink, ServeOptions { read_only: false, limits });
+            serve(Arc::new(profile), "Fake Chat".into(), BufReader::new(ChanRead { rx, rest: Vec::new() }), sink, ServeOptions { read_only: false, limits, store_dir, list_timeout: None });
         });
-        Rig { tx: Some(tx), out, server: Some(server), dir, next_id: 0 }
+        Rig { tx: Some(tx), out, server: Some(server), dir, next_id: 0, keep: false }
     }
 
     fn send_raw(&self, value: Value) {
@@ -248,6 +368,15 @@ impl Rig {
     }
 
     /// The chunks sent so far for `session`, in order, with the time they were first seen.
+    /// Waits (with a deadline) until `n` tool-card updates were sent.
+    fn wait_cards(&self, n: usize) {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while tool_updates(self).len() < n {
+            assert!(Instant::now() < deadline, "no tool card; got {:#?}", self.lines());
+            std::thread::park_timeout(Duration::from_millis(5));
+        }
+    }
+
     fn chunks(&self) -> Vec<String> {
         self.lines()
             .iter()
@@ -271,7 +400,9 @@ impl Drop for Rig {
         if let Some(server) = self.server.take() {
             let _ = server.join();
         }
-        let _ = std::fs::remove_dir_all(&self.dir);
+        if !self.keep {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
     }
 }
 
@@ -303,23 +434,27 @@ fn pids(dir: &std::path::Path) -> Vec<u32> {
 // ---- protocol ----------------------------------------------------------------------------------------------
 
 #[test]
-fn initialize_says_text_only_no_load_and_the_agents_label() {
+fn initialize_says_text_only_load_only_with_memory_and_the_agents_label() {
     let mut rig = Rig::new(true);
     let id = rig.request("initialize", json!({"protocolVersion": 1, "clientCapabilities": {}}));
     let reply = rig.response(id);
     let result = &reply["result"];
     assert_eq!(result["protocolVersion"], 1);
     assert_eq!(result["agentInfo"]["name"], "Fake Chat");
-    assert_eq!(result["agentCapabilities"]["loadSession"], false);
+    assert_eq!(result["agentCapabilities"]["loadSession"], true, "an agent that can resume offers session/load");
     assert_eq!(result["agentCapabilities"]["promptCapabilities"]["image"], false);
     assert_eq!(result["authMethods"], json!([]));
+    // An agent with no resume mechanism has nothing to load.
+    let mut rig = Rig::new(false);
+    let id = rig.request("initialize", json!({"protocolVersion": 1}));
+    assert_eq!(rig.response(id)["result"]["agentCapabilities"]["loadSession"], false);
     let id = rig.request("session/load", json!({"sessionId": "x", "cwd": ".", "mcpServers": []}));
     assert_eq!(rig.response(id)["error"]["code"], -32601);
 }
 
 #[test]
 fn an_agent_with_no_headless_mode_is_refused_on_initialize() {
-    let profile = FakeProfile { memory: false, headless: false, dir: temp_dir() };
+    let profile = FakeProfile { headless: false, ..FakeProfile::new(false, temp_dir()) };
     let dir = profile.dir.clone();
     let mut rig = Rig::with(profile, fast_limits());
     let id = rig.request("initialize", json!({"protocolVersion": 1}));
@@ -444,7 +579,7 @@ fn an_agent_that_prints_nothing_is_an_error_not_an_empty_answer() {
 #[test]
 fn a_turn_past_the_time_limit_is_stopped_with_a_sentence() {
     let limits = TurnLimits { timeout: Duration::from_millis(600), ..fast_limits() };
-    let mut rig = Rig::with(FakeProfile { memory: true, headless: true, dir: temp_dir() }, limits);
+    let mut rig = Rig::with(FakeProfile::new(true, temp_dir()), limits);
     let session = rig.init();
     let id = rig.prompt(&session, "slow");
     let reply = rig.response(id);
@@ -494,11 +629,11 @@ fn closing_the_host_pipe_stops_a_running_agent() {
 
 #[test]
 fn info_says_whether_there_is_memory_and_refuses_no_headless() {
-    let with = info_for_profile(&FakeProfile { memory: true, headless: true, dir: PathBuf::new() }, "Fake Chat").unwrap();
+    let with = info_for_profile(&FakeProfile::new(true, PathBuf::new()), "Fake Chat").unwrap();
     assert!(with.has_memory && with.note.contains("continue the same conversation"));
-    let without = info_for_profile(&FakeProfile { memory: false, headless: true, dir: PathBuf::new() }, "Fake Chat").unwrap();
+    let without = info_for_profile(&FakeProfile::new(false, PathBuf::new()), "Fake Chat").unwrap();
     assert!(!without.has_memory && without.note.contains("each message starts fresh"));
-    let refused = info_for_profile(&FakeProfile { memory: false, headless: false, dir: PathBuf::new() }, "Fake Chat").unwrap_err();
+    let refused = info_for_profile(&FakeProfile { headless: false, ..FakeProfile::new(false, PathBuf::new()) }, "Fake Chat").unwrap_err();
     assert_eq!(refused, "Fake Chat has no non-interactive mode, so a chat adapter cannot be made");
 }
 
@@ -523,6 +658,276 @@ fn the_command_line_is_ours_only_for_the_subcommand() {
     assert_eq!(run_cli(&["--new-pane".into(), "x".into()]), None);
     assert_eq!(run_cli(&["acp-bridge".into()]), Some(2));
     assert_eq!(run_cli(&["acp-bridge".into(), "--bogus".into()]), Some(2));
+}
+
+// ---- bridge v2: model chip, tool cards, resume ------------------------------------------------------------------
+
+fn option_values(options: &Value) -> Vec<String> {
+    options[0]["options"].as_array().unwrap().iter().map(|o| o["value"].as_str().unwrap().to_string()).collect()
+}
+
+fn listed(dir: &std::path::Path) -> usize {
+    std::fs::read_dir(dir).unwrap().filter_map(Result::ok).filter(|e| e.file_name().to_string_lossy().starts_with("listed-")).count()
+}
+
+#[test]
+fn bridge_model_chip_from_cli_list() {
+    let mut rig = Rig::with(FakeProfile { list: true, ..FakeProfile::new(true, temp_dir()) }, fast_limits());
+    let id = rig.request("initialize", json!({"protocolVersion": 1}));
+    rig.response(id);
+    let id = rig.request("session/new", json!({"cwd": rig.dir.to_string_lossy(), "mcpServers": []}));
+    let reply = rig.response(id);
+    let options = &reply["result"]["configOptions"];
+    assert_eq!(options[0]["id"], "model");
+    assert_eq!(options[0]["category"], "model");
+    assert_eq!(options[0]["type"], "select");
+    assert_eq!(options[0]["currentValue"], "", "nothing is chosen until the person picks: no guess");
+    // The agent's default first, then the CLI's own list, once each, in its order.
+    assert_eq!(option_values(options), ["", "alpha", "beta"]);
+    let session = reply["result"]["sessionId"].as_str().unwrap().to_string();
+
+    // Before a pick, no model flag goes out.
+    let id = rig.prompt(&session, "whichmodel");
+    rig.response(id);
+    assert!(rig.chunks().concat().contains("using:none"), "{:?}", rig.chunks());
+
+    // A pick is checked against the list and then rides on the next turn.
+    let id = rig.request("session/set_config_option", json!({"sessionId": session, "configId": "model", "value": "beta"}));
+    assert_eq!(rig.response(id)["result"]["configOptions"][0]["currentValue"], "beta");
+    let id = rig.request("session/set_config_option", json!({"sessionId": session, "configId": "model", "value": "not-in-the-list"}));
+    assert_eq!(rig.response(id)["error"]["code"], -32602);
+    let id = rig.request("session/set_config_option", json!({"sessionId": session, "configId": "effort", "value": "high"}));
+    assert_eq!(rig.response(id)["error"]["code"], -32602);
+    let before = rig.chunks().len();
+    let id = rig.prompt(&session, "whichmodel");
+    rig.response(id);
+    assert!(rig.chunks()[before..].concat().contains("using:beta"), "{:?}", rig.chunks());
+
+    // Back to the default: no flag again.
+    let id = rig.request("session/set_config_option", json!({"sessionId": session, "configId": "model", "value": ""}));
+    rig.response(id);
+    let before = rig.chunks().len();
+    let id = rig.prompt(&session, "whichmodel");
+    rig.response(id);
+    assert!(rig.chunks()[before..].concat().contains("using:none"));
+
+    // Another chat shows the same list, and the CLI was asked for it exactly once.
+    let id = rig.request("session/new", json!({"cwd": rig.dir.to_string_lossy()}));
+    assert_eq!(option_values(&rig.response(id)["result"]["configOptions"]), ["", "alpha", "beta"]);
+    assert_eq!(listed(&rig.dir), 1, "the list command ran more than once");
+}
+
+#[test]
+fn bridge_no_model_option_without_list_command() {
+    let mut rig = Rig::new(true);
+    let id = rig.request("initialize", json!({"protocolVersion": 1}));
+    rig.response(id);
+    let id = rig.request("session/new", json!({"cwd": rig.dir.to_string_lossy(), "mcpServers": []}));
+    let reply = rig.response(id);
+    assert!(reply["result"].get("configOptions").is_none(), "{reply}");
+    let session = reply["result"]["sessionId"].as_str().unwrap().to_string();
+    let id = rig.request("session/set_config_option", json!({"sessionId": session, "configId": "model", "value": "alpha"}));
+    assert_eq!(rig.response(id)["error"]["code"], -32602);
+    assert_eq!(listed(&rig.dir), 0, "nothing was run to look for models");
+}
+
+#[test]
+fn bridge_tool_lines_become_tool_cards() {
+    let mut rig = Rig::with(FakeProfile { tools: true, ..FakeProfile::new(true, temp_dir()) }, fast_limits());
+    let session = rig.init();
+    let id = rig.prompt(&session, "tools");
+    assert_eq!(rig.response(id)["result"]["stopReason"], "end_turn");
+    let updates: Vec<Value> = rig
+        .lines()
+        .into_iter()
+        .filter(|v| v["method"] == "session/update")
+        .map(|v| v["params"]["update"].clone())
+        .filter(|u| u["sessionUpdate"] != "agent_message_chunk")
+        .collect();
+    let kinds: Vec<(&str, &str)> = updates.iter().map(|u| (u["sessionUpdate"].as_str().unwrap(), u["toolCallId"].as_str().unwrap())).collect();
+    assert_eq!(kinds, [("tool_call", "t1"), ("tool_call_update", "t1"), ("tool_call", "t2"), ("tool_call_update", "t2")], "{updates:#?}");
+    assert_eq!(updates[0]["title"], "read_file");
+    assert_eq!(updates[0]["status"], "in_progress");
+    assert_eq!(updates[0]["rawInput"], "a.txt");
+    assert_eq!(updates[1]["status"], "completed");
+    assert_eq!(updates[3]["status"], "failed");
+    let shown = updates[1]["content"][0]["content"]["text"].as_str().unwrap();
+    assert!(shown.starts_with("body ") && !shown.contains(SECRET), "a secret in tool output must be redacted: {shown:?}");
+    // The answer is still the agent's text, and the cards came before the end of the turn.
+    assert_eq!(rig.chunks().concat(), "all done");
+    let lines = rig.lines();
+    let answer_at = lines.iter().position(|v| v["id"] == id).unwrap();
+    assert!(lines.iter().rposition(|v| v["params"]["update"]["sessionUpdate"] == "tool_call_update").unwrap() < answer_at);
+
+    // Plain text stays text.
+    let before = rig.lines().len();
+    let id = rig.prompt(&session, "echo hello");
+    rig.response(id);
+    let after = rig.lines()[before..].to_vec();
+    assert!(after.iter().all(|v| !v["params"]["update"]["sessionUpdate"].as_str().is_some_and(|k| k.starts_with("tool_call"))), "{after:#?}");
+    assert!(rig.chunks().concat().contains("got:echo hello"));
+
+    // An agent whose definition has no tool rules gets no cards from the same lines.
+    let mut rig = Rig::with(FakeProfile { tools: false, ..FakeProfile::new(true, temp_dir()) }, fast_limits());
+    let session = rig.init();
+    let id = rig.prompt(&session, "tools");
+    rig.response(id);
+    assert!(rig.lines().iter().all(|v| !v["params"]["update"]["sessionUpdate"].as_str().is_some_and(|k| k.starts_with("tool_call"))));
+}
+
+fn tool_updates(rig: &Rig) -> Vec<(String, String, String)> {
+    rig.lines()
+        .into_iter()
+        .map(|v| v["params"]["update"].clone())
+        .filter(|u| u["sessionUpdate"].as_str().is_some_and(|k| k.starts_with("tool_call")))
+        .map(|u| (u["sessionUpdate"].to_string(), u["toolCallId"].to_string(), u["status"].to_string()))
+        .collect()
+}
+
+#[test]
+fn open_tool_cards_are_closed_when_a_turn_fails_or_is_cancelled() {
+    let mut rig = Rig::with(FakeProfile { tools: true, ..FakeProfile::new(true, temp_dir()) }, fast_limits());
+    let session = rig.init();
+    let id = rig.prompt(&session, "opentool");
+    assert!(rig.response(id).get("error").is_some(), "the agent exits with an error");
+    let cards = tool_updates(&rig);
+    let q = |s: &str| format!("\"{s}\"");
+    assert_eq!(cards, [(q("tool_call"), q("o1"), q("in_progress")), (q("tool_call_update"), q("o1"), q("failed"))], "a finish for an unknown card is dropped: {cards:?}");
+
+    let id = rig.prompt(&session, "opentoolhang");
+    rig.wait_cards(3);
+    rig.send_raw(json!({"jsonrpc": "2.0", "method": "session/cancel", "params": {"sessionId": session}}));
+    assert_eq!(rig.response(id)["result"]["stopReason"], "cancelled");
+    let cards = tool_updates(&rig);
+    assert_eq!(cards.len(), 4, "{cards:?}");
+    assert_eq!(cards[3], (q("tool_call_update"), q("o1"), q("failed")));
+}
+
+#[test]
+fn leading_dash_ids_are_never_selectable_or_resumed() {
+    let cmd = ModelListCommand::from_table(&crate::tui::declarative::schema::ModelTable {
+        source: crate::tui::declarative::schema::ModelSource::ProbeCommand,
+        probe_argv: Some(vec!["--list-models".into()]),
+        probe_regex: Some(r"^(\S+)$".into()),
+        default: None,
+    })
+    .expect("a plain list command");
+    assert_eq!(cmd.parse("--evil
+-x
+alpha
+"), ["alpha"]);
+}
+
+#[test]
+fn bridge_refuses_probe_argv_with_bypass_flag() {
+    use crate::tui::declarative::schema::{ModelSource, ModelTable};
+    let table = |argv: &[&str]| ModelTable {
+        source: ModelSource::ProbeCommand,
+        probe_argv: Some(argv.iter().map(|a| a.to_string()).collect()),
+        probe_regex: Some("(.+)".into()),
+        default: None,
+    };
+    assert!(ModelListCommand::from_table(&table(&["models", "list"])).is_some());
+    assert!(ModelListCommand::from_table(&table(&["--list-models"])).is_some());
+    for bad in [
+        vec!["-p", "delete the tests", "--dangerously-skip-permissions"],
+        vec!["models", "--yolo"],
+        vec!["--dangerously-skip-permissions"],
+        vec!["a", "b", "c", "d"],
+        vec!["ask", "delete the tests"],
+        vec!["run", "{task}"],
+    ] {
+        assert!(ModelListCommand::from_table(&table(&bad)).is_none(), "{bad:?}");
+    }
+}
+
+#[test]
+fn session_load_in_other_folder_is_invalid_params() {
+    let dir = temp_dir();
+    let store = temp_dir();
+    let other = temp_dir();
+    let mut first = Rig::with_store(FakeProfile::new(true, dir.clone()), fast_limits(), Some(store.clone()));
+    first.keep = true;
+    let chat = first.init();
+    let id = first.prompt(&chat, "remember pineapple");
+    first.response(id);
+    drop(first);
+
+    let mut second = Rig::with_store(FakeProfile::new(true, dir.clone()), fast_limits(), Some(store.clone()));
+    second.keep = true;
+    let id = second.request("initialize", json!({"protocolVersion": 1}));
+    second.response(id);
+    let id = second.request("session/load", json!({"sessionId": chat, "cwd": other.to_string_lossy(), "mcpServers": []}));
+    let reply = second.response(id);
+    assert_eq!(reply["error"]["code"], -32602, "{reply}");
+    // The chat was not created in the other folder: the right folder still brings it back.
+    let id = second.request("session/load", json!({"sessionId": chat, "cwd": dir.to_string_lossy(), "mcpServers": []}));
+    assert!(second.response(id).get("error").is_none());
+    // Once held in memory, the other folder is refused the same way.
+    let id = second.request("session/load", json!({"sessionId": chat, "cwd": other.to_string_lossy(), "mcpServers": []}));
+    assert_eq!(second.response(id)["error"]["code"], -32602);
+    second.keep = false;
+    drop(second);
+    let _ = std::fs::remove_dir_all(store);
+    let _ = std::fs::remove_dir_all(other);
+}
+
+#[test]
+fn resume_recalls_code_word_after_restart() {
+    let dir = temp_dir();
+    let store = temp_dir();
+    let fresh = || FakeProfile::new(true, dir.clone());
+
+    let mut first = Rig::with_store(fresh(), fast_limits(), Some(store.clone()));
+    first.keep = true;
+    let chat = first.init();
+    let id = first.prompt(&chat, "remember pineapple");
+    assert_eq!(first.response(id)["result"]["stopReason"], "end_turn");
+    drop(first);
+
+    // A new bridge process-equivalent: nothing in memory, only the store and the CLI's own files.
+    let mut second = Rig::with_store(fresh(), fast_limits(), Some(store.clone()));
+    second.keep = true;
+    let id = second.request("initialize", json!({"protocolVersion": 1}));
+    assert_eq!(second.response(id)["result"]["agentCapabilities"]["loadSession"], true);
+    let id = second.request("session/load", json!({"sessionId": chat, "cwd": dir.to_string_lossy(), "mcpServers": []}));
+    assert!(second.response(id).get("error").is_none(), "{:?}", second.lines());
+    let id = second.prompt(&chat, "recall");
+    assert_eq!(second.response(id)["result"]["stopReason"], "end_turn");
+    assert!(second.chunks().concat().contains("word:pineapple"), "{:?}", second.chunks());
+
+    // A new chat in the same bridge does not know the word.
+    let other = {
+        let id = second.request("session/new", json!({"cwd": dir.to_string_lossy()}));
+        second.response(id)["result"]["sessionId"].as_str().unwrap().to_string()
+    };
+    let before = second.chunks().len();
+    let id = second.prompt(&other, "recall");
+    second.response(id);
+    assert!(second.chunks()[before..].concat().contains("word:none"));
+    second.keep = false;
+    drop(second);
+    let _ = std::fs::remove_dir_all(store);
+}
+
+#[test]
+fn unknown_session_id_is_invalid_params() {
+    let store = temp_dir();
+    let mut rig = Rig::with_store(FakeProfile::new(true, temp_dir()), fast_limits(), Some(store.clone()));
+    let id = rig.request("initialize", json!({"protocolVersion": 1}));
+    rig.response(id);
+    let id = rig.request("session/load", json!({"sessionId": "bridge-never-existed", "cwd": rig.dir.to_string_lossy(), "mcpServers": []}));
+    let reply = rig.response(id);
+    assert_eq!(reply["error"]["code"], -32602);
+    assert!(reply["error"]["message"].as_str().unwrap().contains("not remembered"));
+    // A chat made but never answered has no conversation to bring back either.
+    let chat = rig.init();
+    let id = rig.request("session/load", json!({"sessionId": "bridge-other", "cwd": ".", "mcpServers": []}));
+    assert_eq!(rig.response(id)["error"]["code"], -32602);
+    // Loading a chat this very bridge holds is fine.
+    let id = rig.request("session/load", json!({"sessionId": chat, "cwd": rig.dir.to_string_lossy(), "mcpServers": []}));
+    assert!(rig.response(id).get("error").is_none());
+    let _ = std::fs::remove_dir_all(store);
 }
 
 // ---- end to end: the real host code (conn.rs + session.rs) talks to the bridge subprocess -------------------
@@ -636,7 +1041,7 @@ mod host {
         assert_eq!(chat.session.ensure_running().unwrap(), Readiness::Started(StartKind::New));
         let caps = chat.session.caps().unwrap();
         assert_eq!(caps.agent_name.as_deref(), Some("Fake Chat"));
-        assert!(!caps.load_session && !caps.resume && !caps.image_prompts);
+        assert!(caps.load_session && !caps.resume && !caps.image_prompts, "a memory agent offers session/load only");
         let summary = chat.turn("echo hello");
         assert_eq!(summary.stop, StopKind::EndTurn, "{summary:?}");
         assert!(chat.text_since(0).contains("got:echo hello resume:none"), "{}", chat.text_since(0));

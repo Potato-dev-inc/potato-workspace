@@ -3,12 +3,12 @@
 import type { SettingsEnv } from '../model';
 import { SettingBlock } from '../settings-ui';
 
-export const WHATS_NEW_LABEL = "What's new in 0.2.0";
+export const WHATS_NEW_LABEL = "What's new";
 
 const ITEMS: { text: string; to: string }[] = [
   { text: 'Budgets: limit the turns or minutes an agent may use.', to: 'budget-turns' },
   { text: 'Safety: choose whether an agent may control another agent, and see who allowed what.', to: 'security-ask-before-control' },
-  { text: 'Add Potato Workspace to your agents in one reviewed step.', to: 'agent-pack' },
+  { text: 'Let your agents ask each other for help, in one reviewed step.', to: 'agent-pack' },
   { text: 'Labs: the Ask bar, Simple mode and live updates, all off until you turn them on.', to: 'labs-index' },
   { text: 'Team has its own page: start a team or join one with an invite.', to: 'team' },
   { text: 'A diagnostic file you can save to ask for help. Nothing is sent anywhere.', to: 'diagnostic-file' },

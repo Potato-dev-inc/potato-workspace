@@ -110,6 +110,7 @@ pub fn config_with(entry: &AdapterEntry, id: &str, label: &str, item: &AdapterOv
         .collect();
     let cfg = AgentConfig {
         command: python.to_string_lossy().into_owned(),
+        runtime: entry.meta.runtime.clone(),
         args: vec![template.clone()],
         pins: vec![AdapterPin { package: format!("file:{}", entry.install_folder()), version: entry.meta.tested_version.clone(), entry: template, sha256: Some(entry.meta.sha256.to_ascii_lowercase()) }],
         pin_policy: PinPolicy::Enforce,

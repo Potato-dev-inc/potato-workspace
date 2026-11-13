@@ -296,6 +296,35 @@ pub struct OutputTable {
     pub error: Option<Selector>,
     /// Selector plus `warning_code`; feeds `rejected_call_warning`.
     pub rejected: Option<Selector>,
+    /// Tool events in `json_lines` output, for the chat bridge's tool cards (`[headless.output.tool]`).
+    /// Absent = the bridge shows text only.
+    pub tool: Option<ToolTable>,
+}
+
+/// `[headless.output.tool]`: which JSON lines are tool calls, so the chat bridge can show a card per call.
+/// Every selector is run on one "element": each item of the array at `items` in a line, or the line itself
+/// when `items` is absent. Paths (`id`, `title`, ...) are read from the element.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolTable {
+    /// Dotted path of an array inside each line whose items are the elements (for example `message.content`).
+    pub items: Option<String>,
+    /// Elements that start a tool call.
+    pub start: Selector,
+    /// Path of the call's id in a start element.
+    pub id: String,
+    /// Path of the text on the card (usually the tool's name).
+    pub title: String,
+    /// Path of the call's input, shown as the card's detail.
+    pub input: Option<String>,
+    /// Elements that finish a call.
+    pub finish: Option<Selector>,
+    /// Path of the call's id in a finish element (default: `id`).
+    pub finish_id: Option<String>,
+    /// Path of the text a finished call returned.
+    pub output: Option<String>,
+    /// Finish elements that also match this selector mark the call as failed.
+    pub failed: Option<Selector>,
 }
 
 /// A `where` value: string, integer or bool (SPEC 7.1 selector table).

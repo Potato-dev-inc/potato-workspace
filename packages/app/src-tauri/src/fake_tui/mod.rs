@@ -37,7 +37,7 @@ pub use store_rig::StoreRig;
 pub(crate) use store_rig::catalog_files as store_catalog_files;
 pub use wizard_rig::{Answers, WizardRig};
 pub use team::{leak_check, Person, Remote};
-pub use world::{Session, World};
+pub use world::{Session, Viewer, World};
 
 use parking_lot::Mutex;
 use std::time::Duration;

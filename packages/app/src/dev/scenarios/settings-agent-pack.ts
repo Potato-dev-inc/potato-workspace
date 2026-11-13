@@ -7,7 +7,7 @@ const s: HarnessScenario = {
   settingsTab: 'bridge',
   window: { width: 1440, height: 1700 },
   after: async (dom) => {
-    await dom.waitFor('[aria-label="Add Potato Workspace to your agents"]');
+    await dom.waitFor('[aria-label="Let agents ask each other for help"]');
     await dom.sleep(400);
   },
 };

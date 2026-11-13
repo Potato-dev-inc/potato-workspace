@@ -1266,3 +1266,10 @@ mod collision;
 
 #[path = "fake_tui_terminal_chat_prompt.rs"]
 mod terminal_chat_prompt;
+
+// ---- Chaos cases for terminal agents (SPEC-CHAOS-1113): filled by test/chaos-a and test/chaos-b ----------------------------
+
+#[path = "fake_tui_chaos_a.rs"]
+mod chaos_a;
+#[path = "fake_tui_chaos_b.rs"]
+mod chaos_b;

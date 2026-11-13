@@ -1,0 +1,23 @@
+# Lab vector B10. See ../vector.rs for the format.
+id = "B10"
+title = "The second message sees the first, in the same process"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["memory"]
+
+[[step]]
+do = "prompt"
+text = "stream 1"
+
+[[step]]
+do = "prompt"
+text = "recall"
+
+[[expect]]
+turn = 2
+stop = "end_turn"
+text_has = "recall:stream 1"
+
+[[expect]]
+same_pid = true

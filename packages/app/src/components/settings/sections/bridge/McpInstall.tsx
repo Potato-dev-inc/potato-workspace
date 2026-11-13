@@ -10,15 +10,15 @@ export function McpInstallBlock({ env }: { env: SettingsEnv }) {
 
   return (
     <SettingBlock
-      label="Install MCP runtime"
-      description={`Register Claude, Codex, and OpenCode to use the selected runtime: ${runtimeName(env)}.`}
+      label="Connect Claude, Codex and OpenCode"
+      description="Writes the helper program into their settings."
     >
       <div className="flex flex-wrap items-center gap-2">
         <Btn primary disabled={!installPath || busy !== null} onClick={() => void run('project', () => installNpmMcpConfigs(installPath))}>
-          {busy === 'project' ? 'Installing…' : 'Install in project'}
+          {busy === 'project' ? 'Installing…' : 'Connect for this project'}
         </Btn>
         <Btn disabled={busy !== null} onClick={() => void run('global', () => installGlobalNpmMcpConfigs())}>
-          {busy === 'global' ? 'Installing…' : 'Install globally'}
+          {busy === 'global' ? 'Installing…' : 'Connect everywhere'}
         </Btn>
       </div>
       <Note>Project: {installPath || 'Choose a project folder in General first'}</Note>

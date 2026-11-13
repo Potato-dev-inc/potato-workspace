@@ -181,150 +181,34 @@ async function until(check: () => boolean, what: string, ms = 4000) {
   throw new Error(`never reached: ${what}\n${text()}`);
 }
 
-describe('the "Finish without me" switch', () => {
-  it('is on by default, hides the older setup-question switch, and is remembered', async () => {
-    await render(mockApi());
-    expect(box('wizard-finish-without-me')?.checked).toBe(true);
+describe('the wizard has no auto-answer switches', () => {
+  it('shows neither switch and starts with the person answering', async () => {
+    const api = mockApi();
+    await render(api);
+    expect(box('wizard-finish-without-me')).toBeNull();
     expect(box('wizard-auto-answer')).toBeNull();
-    expect(text()).toContain('Finish without me');
-    await click(box('wizard-finish-without-me'));
-    expect(box('wizard-finish-without-me')?.checked).toBe(false);
-    expect(globalThis.localStorage.getItem(KEY)).toBe('off');
-    expect(box('wizard-auto-answer')?.checked).toBe(true);
-    // a new dialog remembers it
-    await act(async () => root.unmount());
-    root = createRoot(host);
-    await render(mockApi());
-    expect(box('wizard-finish-without-me')?.checked).toBe(false);
-    await click(box('wizard-finish-without-me'));
-    expect(globalThis.localStorage.getItem(KEY)).toBe('on');
+    expect(text()).not.toContain('Finish without me');
+    expect(text()).not.toContain('Answer setup questions for me');
+    await typeCommand('nimbus');
+    await click(button('Find it'));
+    await until(() => text().includes('It will start exactly this'), 'the capture plan');
+    expect(api.start).toHaveBeenCalledWith('nimbus', false);
+    expect(api.captureStart).not.toHaveBeenCalled();
+    expect(api.verdict).not.toHaveBeenCalled();
+    expect(button('Start')).toBeTruthy();
   });
 
-  it('off keeps today\'s flow: start with two arguments, then the capture plan the person confirms', async () => {
-    globalThis.localStorage.setItem(KEY, 'off');
+  it('ignores an old saved "on" for either switch', async () => {
+    globalThis.localStorage.setItem(KEY, 'on');
+    globalThis.localStorage.setItem('pm.agentWizard.answerSetupQuestions', 'on');
     const api = mockApi();
     await render(api);
     await typeCommand('nimbus');
     await click(button('Find it'));
     await until(() => text().includes('It will start exactly this'), 'the capture plan');
-    expect(api.start).toHaveBeenCalledWith('nimbus', true);
+    expect(api.start).toHaveBeenCalledWith('nimbus', false);
+    expect(api.start).not.toHaveBeenCalledWith('nimbus', true, true);
     expect(api.captureStart).not.toHaveBeenCalled();
-    expect(api.verdict).not.toHaveBeenCalled();
-    expect(button('Start')).toBeTruthy();
-  });
-});
-
-describe('a run with the switch on', () => {
-  it('stops with a plain message when neither Claude nor Codex is installed', async () => {
-    const api = mockApi({ drafters: [{ id: 'opencode', label: 'OpenCode' }] });
-    await render(api);
-    await typeCommand('nimbus');
-    await click(button('Find it'));
-    await until(() => text().includes('needs Claude or Codex'), 'the message');
-    expect(api.captureStart).not.toHaveBeenCalled();
-    expect(api.cancel).toHaveBeenCalledWith('wz_1');
-    expect(host.querySelector('#wizard-command')).toBeTruthy();
-  });
-
-  it('after the typed command it finishes with no further click: the AI look, the draft, the tests and the approval', async () => {
-    const api = mockApi();
-    const onApprove = vi.fn();
-    await render(api, onApprove);
-    await typeCommand('nimbus');
-    await click(button('Find it'));
-    await until(() => onApprove.mock.calls.length === 1, 'the approval');
-    expect(api.start).toHaveBeenCalledWith('nimbus', true, true);
-    // Claude was picked without a question, the capture was started with the plan it read
-    expect(api.ask.mock.calls.every((c) => c[1] === 'claude')).toBe(true);
-    expect(api.captureStart).toHaveBeenCalledWith('wz_1', [], 'cap-A');
-    expect(api.verdict).toHaveBeenCalledWith('wz_1', 'ready_for_input');
-    expect(api.captureAct).not.toHaveBeenCalled();
-    expect(api.visibletest).toHaveBeenCalledWith('wz_1', 'vis-A');
-    // finish got the decisions and the request for the approval; the parent got the result
-    const [, , auto] = api.finish.mock.calls[0];
-    expect(auto.approve).toBe(true);
-    expect(auto.decisions).toContain('Decided the agent is ready (AI look)');
-    expect(onApprove.mock.calls[0][0].approval).toMatchObject({ approved: true, approved_by: 'wizard', count: 9 });
-    // the decisions are on screen in plain short English, the exact command too
-    const list = host.querySelector('[data-testid="auto-decisions"]')?.textContent ?? '';
-    expect(list).toContain('Picked Claude to write the profile');
-    expect(list).toContain('Will run (visible test): nimbus');
-    expect(list).toContain('Decided the agent is ready (AI look)');
-    expect(list).toContain('Approved after 9 checks passed');
-    // not one button was pressed after the command (no confirm panel ever showed)
-    expect(host.querySelector('[data-testid="visible-confirm"]')).toBeNull();
-    expect(host.querySelector('[data-testid="live-confirm"]')).toBeNull();
-  });
-
-  it('has a Show the pane button in the list while it runs (the panes are hidden), and Cancel closes everything', async () => {
-    const api = mockApi();
-    api.captureStatus = vi.fn(async () => status({ step: 'message' }));
-    api.captureStart = vi.fn(async () => status({ step: 'message' }));
-    await render(api);
-    await typeCommand('nimbus');
-    await click(button('Find it'));
-    await until(() => !!button('Show the pane'), 'the button');
-    await click(button('Show the pane'));
-    expect(api.captureShow).toHaveBeenCalledWith('wz_1');
-    await click(button('Cancel'));
-    expect(api.cancel).toHaveBeenCalledWith('wz_1');
-  });
-
-  const PERMISSION = { step: 'permission' as const, kind: 'permission', message: 'The agent is asking for permission. Press your answer in the pane. The wizard answers nothing.' };
-
-  it('a question only the person answers keeps the pane open: Show the pane opens it and Retry goes on from it', async () => {
-    const api = mockApi();
-    let answered = false;
-    const asking = status({ step: 'permission', needs_you: PERMISSION });
-    api.captureStart = vi.fn(async () => asking);
-    api.captureStatus = vi.fn(async () => (answered ? status({ step: 'exit', settled: true, can: ['retry'] }) : asking));
-    const onApprove = vi.fn();
-    await render(api, onApprove);
-    await typeCommand('nimbus');
-    await click(button('Find it'));
-    await until(() => text().includes('asks a question that only you may answer'), 'the stop');
-    expect(api.captureDiscard).not.toHaveBeenCalled();
-    await click(button('Show the pane'));
-    expect(api.captureShow).toHaveBeenCalledWith('wz_1');
-    // the person answers in the pane, then presses Retry: the same capture goes on, nothing is started again
-    answered = true;
-    await click(button('Retry'));
-    await until(() => onApprove.mock.calls.length === 1, 'the approval');
-    expect(api.captureStart).toHaveBeenCalledTimes(1);
-    expect(api.captureDiscard).not.toHaveBeenCalled();
-  });
-
-  it('when the agent quit on its own the stop says so, has no Show the pane, and Retry starts a fresh pane', async () => {
-    const api = mockApi();
-    let quit = true;
-    const gone = status({ step: 'permission', alive: false, needs_you: PERMISSION });
-    api.captureStart = vi.fn(async () => (quit ? gone : status({ step: 'exit', settled: true, can: ['retry'] })));
-    api.captureStatus = vi.fn(async () => (quit ? gone : status({ step: 'exit', settled: true, can: ['retry'] })));
-    const onApprove = vi.fn();
-    await render(api, onApprove);
-    await typeCommand('nimbus');
-    await click(button('Find it'));
-    await until(() => text().includes('quit before the question was answered'), 'the stop');
-    expect(text()).not.toContain('Press your answer in the pane');
-    expect(button('Show the pane')).toBeUndefined();
-    quit = false;
-    await click(button('Retry'));
-    await until(() => onApprove.mock.calls.length === 1, 'the approval');
-    expect(api.captureDiscard).toHaveBeenCalledWith('wz_1');
-    expect(api.captureStart).toHaveBeenCalledTimes(2);
-  });
-
-  it('a sign-in screen stops the run with the plain message; Retry starts it again', async () => {
-    const api = mockApi({ signInStop: true });
-    await render(api);
-    await typeCommand('nimbus');
-    await click(button('Find it'));
-    await until(() => text().includes('Sign in to nimbus (or finish its setup), then press Retry.'), 'the stop');
-    expect(api.verify).not.toHaveBeenCalled();
-    expect(api.finish).not.toHaveBeenCalled();
-    expect(button('Show the pane')).toBeTruthy();
-    await click(button('Retry'));
-    await until(() => api.captureStart.mock.calls.length === 2, 'the second run');
-    expect(api.captureDiscard).toHaveBeenCalledWith('wz_1');
+    globalThis.localStorage.removeItem('pm.agentWizard.answerSetupQuestions');
   });
 });

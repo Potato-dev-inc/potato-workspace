@@ -1,0 +1,324 @@
+/* Checkpoint-2 review fixes for Settings. The one Potato orange (--accent) is used in a few small places only:
+   things that need you (an Overview card that needs a fix) and things you chose (the Changed dot, the chosen
+   picture). Everything else stays grey. Loaded after settings-rows.css, so it wins ties. */
+
+/* ---------- Overview cards ---------- */
+.settings .st-card[data-tone='fix'] {
+  border-left: 2px solid var(--accent);
+}
+.settings .st-card[data-tone='fix'] .st-glyph {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.settings .st-card-sub {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- title divider and fade once the page has scrolled ---------- */
+.settings .st-title {
+  position: relative;
+  border-bottom: 1px solid transparent;
+}
+.settings .st-title[data-scrolled='true'] {
+  border-bottom-color: var(--sep);
+}
+.settings .st-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 8px;
+  background: linear-gradient(var(--window), transparent);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.settings .st-title[data-scrolled='true']::after {
+  opacity: 1;
+}
+.settings .st-title-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--label-3);
+  cursor: pointer;
+}
+.settings .st-title-link:hover {
+  color: var(--label);
+}
+.settings .st-reset-all {
+  position: absolute;
+  right: max(32px, calc((100% - 680px) / 2));
+  top: 26px;
+  font-size: 12px;
+}
+.settings .st-chip-slot {
+  min-height: 32px;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* ---------- Changed dot and Reset ---------- */
+.settings .st-dot {
+  left: 3px;
+  top: 17px;
+  background: var(--accent);
+}
+.settings .st-rowwrap:has(.st-label small) > .st-dot {
+  top: 14px;
+}
+.settings .st-rowwrap:has(.st-thumbs) > .st-dot {
+  top: 17px;
+}
+.settings .st-nav-dot {
+  background: var(--accent);
+}
+.settings .st-rowwrap[data-changed='true'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.settings .st-rowwrap[data-changed='true'] > * {
+  grid-column: 1;
+}
+.settings .st-rowwrap[data-changed='true'] > .st-reset {
+  grid-column: 2;
+  grid-row: 1;
+  position: static;
+  margin: 0 12px 0 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--label-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  opacity: 1;
+  pointer-events: auto;
+}
+.settings .st-rowwrap[data-changed='true'] > .st-reset:hover {
+  color: var(--label);
+  background: var(--fill-hover);
+}
+
+/* ---------- picture choices: chosen = a 2 px ring and a small tick ---------- */
+.settings .st-thumb {
+  position: relative;
+}
+.settings .st-thumb[aria-checked='true'] .st-thumb-pic,
+.settings .st-thumb[aria-checked='true']:hover .st-thumb-pic {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.settings .st-thumb[aria-checked='true']::after {
+  content: '✓';
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 9px;
+  line-height: 1;
+}
+
+/* ---------- the animation picture is the play button ---------- */
+.settings button.st-mode-frame {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+.settings .st-mode-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  color: var(--label-2);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.settings .st-mode-frame:hover .st-mode-play,
+.settings .st-mode-frame:focus-visible .st-mode-play {
+  opacity: 1;
+}
+
+/* ---------- Undo toast: inverted (dark in the light theme, light in the dark one), with a 5 s hairline ---------- */
+.settings .st-toast {
+  position: relative;
+  overflow: hidden;
+  background: var(--label);
+  color: var(--window);
+  border-color: transparent;
+  backdrop-filter: none;
+  font-size: 13px;
+}
+.settings .st-toast-undo {
+  background: none;
+  color: inherit;
+  padding: 2px 6px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: 13px;
+}
+.settings .st-toast-undo:hover {
+  background: none;
+  opacity: 0.75;
+}
+.settings .st-toast::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 1px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.5;
+  transform-origin: left;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .settings .st-toast::after {
+    animation: st-toast-run 5s linear forwards;
+  }
+  .settings .st-toast:hover::after {
+    animation-play-state: paused;
+  }
+}
+@keyframes st-toast-run {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* ---------- Advanced page: one card per group, the header is its first row ---------- */
+.settings .st-closed-group .st-list > .st-adv-toggle {
+  margin: 0;
+  padding: 0 14px;
+  min-height: 36px;
+  gap: 8px;
+}
+.settings .st-closed-group .st-list > .st-adv-toggle:hover {
+  background: var(--fill-hover);
+}
+.settings .st-closed-group .st-list > .st-adv-toggle .st-adv-count {
+  margin-left: auto;
+}
+.settings .st-closed-group[data-open='true'] .st-list > .st-adv-toggle {
+  border-bottom: 1px solid var(--sep);
+}
+
+/* ---------- groups: 24 px above, 8 px below the name ---------- */
+.settings .st-page {
+  gap: 24px;
+}
+.settings .st-group h2,
+.settings .st-results h2 {
+  margin: 0 0 8px 4px;
+}
+
+/* ---------- empty search: no dashed drop-zone box ---------- */
+.settings .st-emptycard {
+  border: 0;
+  background: var(--fill);
+}
+.settings .st-linehit {
+  min-height: 36px;
+}
+
+/* ---------- small helpers ---------- */
+.settings .st-fold {
+  font-size: 12px;
+  color: var(--label-2);
+}
+.settings .st-fold > summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 2px 0;
+  color: var(--label-3);
+}
+.settings .st-fold[open] > summary {
+  margin-bottom: 8px;
+}
+.settings .st-tip {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  border: 1px solid var(--sep);
+  border-radius: 50%;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--label-3);
+  cursor: help;
+  vertical-align: middle;
+}
+.settings .st-tip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+/* ---------- Shortcuts: keycaps ---------- */
+.settings .st-shortcut {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.settings .st-keycap {
+  min-width: 140px;
+  padding: 2px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 4px;
+  background: var(--fill);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: right;
+  color: var(--label);
+  cursor: pointer;
+}
+.settings .st-keycap:hover {
+  background: var(--fill-hover);
+}
+.settings .st-keycap[data-off='true'] {
+  color: var(--label-3);
+}
+.settings .st-anyapp {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+.settings .st-turnoff {
+  opacity: 0;
+}
+.settings .st-rowwrap:hover .st-turnoff,
+.settings .st-rowwrap:focus-within .st-turnoff,
+.settings .st-turnoff:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .settings .st-turnoff {
+    opacity: 1;
+  }
+}
+
+/* A closed Advanced group is drawn even while closed (it has no rows on screen then): its header is the card. */
+.settings section.st-group.st-closed-group[data-group] {
+  display: block;
+}

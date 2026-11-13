@@ -66,19 +66,40 @@ describe('ClosedChatsSheet', () => {
     expect(onReopened).not.toHaveBeenCalled();
   });
 
-  it('Delete asks first and deletes only after the person confirms', async () => {
+  it('Delete asks first, inline in that row, and deletes only after the person confirms', async () => {
     const { api, onChanged } = setup();
     act(() => button('Delete').click());
     expect(api.remove).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Delete this chat? This can't be undone.");
+    // The question is in the row itself: no second sheet opens.
+    const row = document.querySelector('[data-testid="closed-chat-row"]')!;
+    expect(row.querySelector('[data-testid="closed-chat-confirm"]')?.textContent).toContain("Delete for good? This can't be undone.");
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     await act(async () => button('Cancel').click());
     expect(api.remove).not.toHaveBeenCalled();
     expect(document.querySelectorAll('[data-testid="closed-chat-row"]')).toHaveLength(2);
+    expect(document.querySelector('[data-testid="closed-chat-confirm"]')).toBeNull();
 
     act(() => button('Delete').click());
     await act(async () => button('Delete').click());
     expect(api.remove).toHaveBeenCalledWith('a');
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('Delete sits apart from Reopen, and Reopen is never the button that deletes', () => {
+    setup();
+    const row = document.querySelector('[data-testid="closed-chat-row"]')!;
+    const reopen = [...row.querySelectorAll('button')].find((b) => b.textContent === 'Reopen')!;
+    const remove = [...row.querySelectorAll('button')].find((b) => b.textContent === 'Delete')!;
+    expect(remove.className).toContain('ck-closed-delete');
+    expect(reopen.className).not.toContain('ck-closed-delete');
+    expect(reopen.nextElementSibling).toBe(remove);
+  });
+
+  it('a chat with a blank title says "Untitled chat", never "No messages"', () => {
+    act(() => root.render(<ClosedChatsSheet chats={[{ ...chats[1], title: '   ' }]} api={{ reopen: vi.fn(), remove: vi.fn(), removeAll: vi.fn() }} now={NOW} onReopened={vi.fn()} onChanged={vi.fn()} onClose={vi.fn()} notify={vi.fn()} />));
+    const row = document.querySelector('[data-testid="closed-chat-row"]')!;
+    expect(row.querySelector('.ck-closed-title')?.textContent).toBe('Untitled chat');
+    expect(row.textContent).not.toContain('No messages');
   });
 
   it('Delete all closed chats asks with the same words and then deletes them all', async () => {

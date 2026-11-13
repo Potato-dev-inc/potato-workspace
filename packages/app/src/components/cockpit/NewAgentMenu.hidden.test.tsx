@@ -105,7 +105,7 @@ async function openMenu() {
   return host.querySelector<HTMLElement>('[role="menu"]')!;
 }
 const menu = () => host.querySelector<HTMLElement>('[role="menu"]')!;
-const menuRowLabels = () => [...menu().querySelectorAll<HTMLButtonElement>('button.ck-menu-item')].map((b) => b.querySelector('span')?.textContent);
+const menuRowLabels = () => [...menu().querySelectorAll<HTMLButtonElement>('button.ck-menu-item')].map((b) => b.querySelector('span:not([data-mark])')?.textContent);
 const editBox = (label: string) => host.querySelector<HTMLInputElement>(`input[aria-label="Show ${label} in the New agent menu"]`);
 const buttonNamed = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === label);
 const click = async (el: HTMLElement | null | undefined) => {

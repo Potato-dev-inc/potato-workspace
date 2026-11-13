@@ -1,0 +1,22 @@
+# OpenCode: what it spent, for the "Used" strip. Read by `crate::usage`; the table is DATA.
+#
+# OpenCode is pay-per-use through many providers, so there is no plan limit. It keeps every message in
+# `<data>/opencode/opencode.db` (SQLite; on this PC 2026-11-13: table `message`, `time_created` in Unix ms,
+# JSON `data` with `role`, `modelID`, `cost` (dollars) and `tokens` {input, output, reasoning, cache{read,write}}).
+# The reader opens it read-only and sums cost and tokens for today and the last 7 days, per model. Cache
+# reads are not counted as tokens (they would swamp the real work). The login file is never opened.
+[usage]
+schema = 1
+main_home = "~/.local/share"
+
+[usage.reader]
+kind = "sqlite_totals"
+file = "opencode/opencode.db"
+table = "message"
+time_column = "time_created"
+data_column = "data"
+only = ["/role", "assistant"]
+model = "/modelID"
+cost = "/cost"
+tokens = ["/tokens/input", "/tokens/output", "/tokens/reasoning"]
+reason = "No OpenCode usage found yet."

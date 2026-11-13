@@ -70,7 +70,7 @@ afterEach(async () => {
 describe('Settings > Agents > Helpers on the real page', () => {
   it('shows "Close helpers when their agent closes" next to the other helper settings, on by default', async () => {
     await act(async () => {
-      root.render(<SettingsPanel open api={makeApi()} initialTab="agents" />);
+      root.render(<SettingsPanel open api={makeApi()} initialTab="helpers" />);
     });
     await settle(10);
     expect(row('helper-agents')).not.toBeNull();
@@ -85,7 +85,7 @@ describe('Settings > Agents > Helpers on the real page', () => {
 
   it('turning it off saves through its own command', async () => {
     await act(async () => {
-      root.render(<SettingsPanel open api={makeApi()} initialTab="agents" />);
+      root.render(<SettingsPanel open api={makeApi()} initialTab="helpers" />);
     });
     await settle(10);
     await click(closeSwitch());
@@ -98,7 +98,7 @@ describe('Settings > Agents > Helpers on the real page', () => {
 describe('Settings > Agents > Helpers: Most helpers at once on the real page', () => {
   it('shows the row after the other helper settings, set to 8, and a change saves through its own command', async () => {
     await act(async () => {
-      root.render(<SettingsPanel open api={makeApi()} initialTab="agents" />);
+      root.render(<SettingsPanel open api={makeApi()} initialTab="helpers" />);
     });
     await settle(10);
     // A rarely changed setting: it sits under Advanced until that is opened.

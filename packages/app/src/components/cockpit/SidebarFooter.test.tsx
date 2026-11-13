@@ -49,6 +49,18 @@ describe('SidebarFooter', () => {
     expect(labels).toEqual(['Set up agents', 'Project', 'Review', 'More', 'Theme', 'Settings']);
   });
 
+  it('in a narrow window (icons only) every footer button still has a name and a tooltip', () => {
+    mount();
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ck-foot-icons button')];
+    expect(buttons.length).toBeGreaterThanOrEqual(6);
+    for (const b of buttons) {
+      expect(b.getAttribute('aria-label') ?? '').not.toBe('');
+      expect(b.getAttribute('title') ?? '').not.toBe('');
+    }
+    // The visible text is decoration for wide windows; the name comes from the button, never from it.
+    for (const l of host.querySelectorAll('.ck-foot-label')) expect(l.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it('Settings is a gear with its own shape, not the theme icon', () => {
     mount();
     const settings = host.querySelector('button[aria-label="Settings"] svg')!;

@@ -6,12 +6,12 @@ import type { AgentHealth } from '../agent-health';
 export type CheckStatus = 'ok' | 'warn' | 'fail';
 
 /** What the one fix button does. The page maps each kind to an action (see `runFix`). */
-export type FixKind = 'signin' | 'installAddon';
+export type FixKind = 'signin' | 'installAddon' | 'test';
 
 export interface FixAction {
   kind: FixKind;
   label: string;
-  /** Agent id for `signin` and `installAddon`. */
+  /** Agent id for `signin`, `installAddon` and `test`. */
   agentId?: string;
 }
 

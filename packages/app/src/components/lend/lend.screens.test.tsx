@@ -46,6 +46,11 @@ vi.mock('@tauri-apps/api/core', async () => {
           return { agents: [], helper_logins: {}, ...shell.accounts };
         case 'checkpoints_list':
           return { state: 'ok', message: '', items: [] };
+        // The Connect page shows the paired phones and the public address next to Lend.
+        case 'list_paired_mobile_devices':
+          return [];
+        case 'get_mobile_tunnel_info':
+          return null;
         default:
           throw new Error(`not answered in this test: ${cmd}`);
       }
@@ -214,17 +219,14 @@ describe('Settings > Lend', () => {
   const search = () => host.querySelector('input[aria-label="Search settings"]') as HTMLInputElement;
   const main = () => host.querySelector('.st-main') as HTMLElement;
 
-  it('is in the sidebar and opens the page, with its sections', async () => {
-    await mount(true);
-    expect(navTitles()).toContain('Lend');
-    const nav = [...host.querySelectorAll('.st-nav .st-nav-row')].find((b) => b.textContent === 'Lend') as HTMLButtonElement;
-    expect(nav.querySelector('svg')).not.toBeNull();
-    await click(nav);
+  it('is a card on the Connect page, with its sections', async () => {
+    await mount(true, { initialTab: 'connect' });
+    expect(navTitles()).not.toContain('Lend');
     // The page loads its state when it opens: poll for what the test needs, no fixed wait.
-    for (let i = 0; i < 200 && !(main()?.querySelector('h1')?.textContent === 'Lend' && main().querySelector('section[aria-label="Active lends"]') && main().querySelector('[data-row="lend-page"]')); i++) {
+    for (let i = 0; i < 200 && !(main().querySelector('section[aria-label="Active lends"]') && main().querySelector('[data-row="lend-page"]')); i++) {
       await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
     }
-    expect(main().querySelector('h1')!.textContent).toBe('Lend');
+    expect(main().querySelector('h1')!.textContent).toBe('Connect');
     for (const label of ['Lend profiles', 'Active lends']) {
       expect(main().querySelector(`section[aria-label="${label}"]`), label).not.toBeNull();
     }
@@ -238,23 +240,22 @@ describe('Settings > Lend', () => {
   });
 
   it.each(['lend', 'borrow', 'usage'])('searching "%s" finds it', async (word) => {
-    await mount(true, { initialTab: 'general' });
+    await mount(true, { initialTab: 'look' });
     await typeInto(search(), word);
     await settle(6);
-    expect([...main().querySelectorAll('.st-results > section')].map((s) => s.getAttribute('data-section'))).toContain('lend');
+    expect([...main().querySelectorAll('.st-results > section')].map((s) => s.getAttribute('data-section'))).toContain('connect');
     expect(main().querySelector('[data-row="lend-page"]')).not.toBeNull();
   });
 
-  it.each(['lend', 'borrow', 'usage'])('with the switch off, no nav entry and "%s" finds no Lend page', async (word) => {
-    await mount(false, { initialTab: 'general' });
-    expect(navTitles()).not.toContain('Lend');
+  it.each(['lend', 'borrow', 'usage'])('with the switch off, "%s" finds no Lend page', async (word) => {
+    await mount(false, { initialTab: 'look' });
     await typeInto(search(), word);
     await settle(6);
     expect(main().querySelector('[data-row="lend-page"]')).toBeNull();
   });
 
-  it('has the Labs switch in General', async () => {
-    await mount(false, { initialTab: 'general' });
+  it('has the Labs switch in Advanced', async () => {
+    await mount(false, { initialTab: 'look' });
     await typeInto(search(), 'share an agent');
     await settle(6);
     expect(main().querySelector('[data-row="lend-labs"]')).not.toBeNull();

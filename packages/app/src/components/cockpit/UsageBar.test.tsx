@@ -161,12 +161,12 @@ describe('the Used bar at the bottom of the cockpit', () => {
     expect(strip!.closest('.ck-side')).toBeNull();
     expect(host.querySelector('.ck-side-foot .ck-usage, .ck-side-foot .ck-statusbar, .ck-side-foot .ck-usage-chip')).toBeNull();
     // The root leaves room for it through CSS (`.cockpit:has(> .ck-statusbar)`, cockpit-statusbar.css).
-    expect(strip!.querySelector('.ck-usage-cap')?.textContent).toBe('Used');
+    expect(strip!.querySelector('.ck-usage-cap')?.textContent).toBe('Usage');
     const chips = chipsIn(strip!);
     expect(chips.map((c) => c.querySelector('.ck-usage-text')?.textContent)).toEqual([
-      '⚠ 87% 10h',
-      '⚠ Limited · 3h',
-      'Not shared',
+      '⚠ 87% used · resets in 10 hours',
+      '⚠ Limit reached · resets in 3 hours',
+      'Usage not shared',
       '⚠ Sign-in expired',
     ]);
     // Codex, Claude and Cursor have a logo, so none of them gets a letter badge.
@@ -177,7 +177,7 @@ describe('the Used bar at the bottom of the cockpit', () => {
     expect(chips.map((c) => c.querySelector('.ck-usage-suffix')?.textContent ?? null)).toEqual([null, 'Work', null, null]);
     expect(strip!.textContent).not.toContain('Codex CLI');
     expect(strip!.textContent).not.toContain('Cursor Agent CLI');
-    expect(chips.some((c) => c.querySelector('[data-mark="letters"]'))).toBe(false);
+    expect(chips.some((c) => c.querySelector('[data-mark="monogram"]'))).toBe(false);
     // The tooltip carries the windows, the plan, the sign-in and the reason.
     expect(chips[0].title).toContain('Weekly: 31% used');
     expect(chips[0].title).toContain('Plan: plus');
@@ -207,10 +207,10 @@ describe('the Used bar at the bottom of the cockpit', () => {
     expect(document.querySelectorAll('.ck-usage-pop-head [data-mark]').length).toBe(2);
   });
 
-  it('an unknown agent gets a letter mark from its id', async () => {
+  it('an agent without a published logo gets a monogram of its name', async () => {
     const odd = { ...SNAP.rows[2], agent_id: 'kilo', label: 'Kilo' };
     await render({ ...SNAP, rows: [odd] });
-    expect(chipsIn(host)[0].querySelector('[data-mark="letters"]')?.textContent).toBe('KI');
+    expect(chipsIn(host)[0].querySelector('[data-mark="monogram"]')?.getAttribute('data-letter')).toBe('K');
   });
 
   it('warns at 80 % and not below', async () => {
@@ -218,7 +218,7 @@ describe('the Used bar at the bottom of the cockpit', () => {
     await render({ ...SNAP, rows: [low] });
     const chip = chipsIn(host)[0];
     expect(chip.classList.contains('is-warn')).toBe(false);
-    expect(chip.querySelector('.ck-usage-text')?.textContent).toBe('79% 10h');
+    expect(chip.querySelector('.ck-usage-text')?.textContent).toBe('79% used · resets in 10 hours');
   });
 
   it('a chip opens the Usage popover above the bar: tightest first, bars, the usage page, refresh', async () => {
@@ -246,7 +246,7 @@ describe('the Used bar at the bottom of the cockpit', () => {
     const meters = [...pop!.querySelectorAll('[role="meter"]')].map((m) => `${m.getAttribute('aria-label')} ${m.getAttribute('aria-valuenow')}`);
     expect(meters).toEqual(['Monthly used 100', '5-hour used 87', 'Weekly used 31']);
     expect(pop!.textContent).toContain('87% used');
-    expect(pop!.textContent).toContain('Resets in 10h');
+    expect(pop!.textContent).toContain('Resets in 10 hours');
     const page = [...pop!.querySelectorAll<HTMLButtonElement>('.ck-usage-link')][0];
     await act(async () => page.click());
     expect(invoke).toHaveBeenCalledWith('open_external_url', { url: 'https://example.test/codex-usage' });
@@ -297,5 +297,59 @@ describe('the Used bar at the bottom of the cockpit', () => {
     await render({ rows: [], refreshed_at_ms: NOW });
     expect(host.querySelector('.ck-statusbar')).toBeNull();
     expect(host.querySelector('.ck-side-foot')).not.toBeNull();
+  });
+});
+
+describe('a pay-per-use agent (OpenCode) in the Used bar', () => {
+  const OPENCODE: UsageSnapshot = {
+    refreshed_at_ms: NOW,
+    rows: [
+      {
+        agent_id: 'opencode',
+        label: 'OpenCode',
+        account_id: null,
+        account_label: null,
+        state: 'ok',
+        reason: null,
+        windows: [],
+        totals: {
+          today: { cost: 1.236, tokens: 310_400 },
+          week: { cost: 9.5, tokens: 2_400_000 },
+          models: [
+            { model: 'model-a', cost: 7, tokens: 1_900_000 },
+            { model: 'model-b', cost: 2.5, tokens: 500_000 },
+          ],
+        },
+        plan: null,
+        observed_at_ms: NOW - 60_000,
+        limited_until_ms: null,
+        page: null,
+      },
+    ],
+  };
+
+  it('shows what it spent today, with no limit, and lists each model in the popover', async () => {
+    await render(OPENCODE);
+    const chip = chipsIn(host)[0];
+    expect(chip.querySelector('.ck-usage-text')?.textContent).toBe('$1.24 today · 310k tokens');
+    expect(chip.classList.contains('is-warn')).toBe(false);
+    expect(chip.title).toContain('Last 7 days: $9.50, 2.4M tokens');
+    expect(chip.title).not.toContain('% used');
+    await act(async () => chip.click());
+    const totals = document.querySelector('[data-testid="usage-totals"]')!;
+    expect(totals.textContent).toContain('Today$1.24 · 310k tokens');
+    expect(totals.textContent).toContain('model-a$7.00 · 1.9M tokens');
+    expect(totals.textContent).toContain('model-b$2.50 · 500k tokens');
+    expect(document.querySelectorAll('[role="meter"]').length).toBe(0);
+  });
+
+  it('shows the week when nothing was spent today, and "Usage not shared" without numbers', async () => {
+    const quiet = { ...OPENCODE.rows[0], totals: { ...OPENCODE.rows[0].totals!, today: { cost: 0, tokens: 0 } } };
+    await render({ ...OPENCODE, rows: [quiet] });
+    expect(chipsIn(host)[0].querySelector('.ck-usage-text')?.textContent).toBe('$9.50 this week · 2.4M tokens');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render({ ...OPENCODE, rows: [{ ...OPENCODE.rows[0], state: 'unknown', totals: undefined, reason: 'No OpenCode usage found yet.' }] });
+    expect(chipsIn(host)[0].querySelector('.ck-usage-text')?.textContent).toBe('Usage not shared');
   });
 });

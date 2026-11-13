@@ -1,14 +1,15 @@
 // The "Used" bar along the bottom edge of the cockpit window: one chip per signed-in agent (and per account) with the
-// fullest limit window's percent used and the time until it resets, or Limited / Sign-in expired / Unknown.
+// fullest limit window's percent used and the time until it resets, or Limit reached / Sign-in expired / Usage not shared.
 // A chip warns at 80 % used. Clicking the strip opens the Usage popover: every sign-in, tightest limit first,
 // a bar per window with its reset time, the agent's own usage page, and Refresh.
 // Off with Settings > General > "Show usage bar". Nothing shows until there is a signed-in agent.
-import { presetFor, type AgentType } from '@potato-workspace/shared';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   chipText,
-  formatLeft,
+  formatCost,
+  formatLeftLong,
+  formatTokens,
   rowName,
   tightestFirst,
   tooltip,
@@ -19,7 +20,6 @@ import {
   type UsageApi,
   type UsageRow,
 } from '../../lib/usage';
-import { agentLogoFor } from '../../lib/agentLogos';
 import { AgentLogo } from '../common/AgentLogo';
 import '../../styles/usage-strip.css';
 import '../../styles/cockpit-statusbar.css';
@@ -33,26 +33,11 @@ function RefreshIcon() {
   );
 }
 
-function iconFor(row: UsageRow): string {
-  try {
-    return presetFor(row.agent_id as AgentType).icon;
-  } catch {
-    return row.agent_id.slice(0, 2).toUpperCase();
-  }
-}
-
-/** The agent's mark: its logo when we have one, else the letter badge (the preset's 1-4 letters, or the id's first two). */
+/** The agent's mark: its logo in brand colour, or the monogram (first letter of its name) when it has none. */
 export function AgentMark({ row }: { row: UsageRow }) {
-  if (agentLogoFor(row.agent_id)) {
-    return (
-      <span className="ck-usage-ic is-logo" aria-hidden="true">
-        <AgentLogo id={row.agent_id} size={12} decorative />
-      </span>
-    );
-  }
   return (
-    <span className="ck-usage-ic" aria-hidden="true" data-mark="letters">
-      {iconFor(row)}
+    <span className="ck-usage-ic is-logo" aria-hidden="true">
+      <AgentLogo id={row.agent_id} name={row.label} size={12} decorative />
     </span>
   );
 }
@@ -113,7 +98,7 @@ function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }
       </div>
       {row.windows.map((w) => {
         const pct = Math.max(0, Math.min(100, Math.round(w.used_percent)));
-        const reset = w.reset_since ? 'Started again' : w.resets_at_ms ? `Resets in ${formatLeft(w.resets_at_ms - now)}` : '';
+        const reset = w.reset_since ? 'Started again' : w.resets_at_ms ? `Resets in ${formatLeftLong(w.resets_at_ms - now)}` : '';
         return (
           <div key={w.name} className="ck-usage-win">
             <span className="ck-usage-win-name">{w.name}</span>
@@ -132,9 +117,33 @@ function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }
           </div>
         );
       })}
+      {row.totals && (
+        <div className="ck-usage-totals" data-testid="usage-totals">
+          <div className="ck-usage-win">
+            <span className="ck-usage-win-name">Today</span>
+            <span className="ck-usage-win-pct">
+              {formatCost(row.totals.today.cost)} · {formatTokens(row.totals.today.tokens)} tokens
+            </span>
+          </div>
+          <div className="ck-usage-win">
+            <span className="ck-usage-win-name">Last 7 days</span>
+            <span className="ck-usage-win-pct">
+              {formatCost(row.totals.week.cost)} · {formatTokens(row.totals.week.tokens)} tokens
+            </span>
+          </div>
+          {row.totals.models.slice(0, 5).map((m) => (
+            <div key={m.model} className="ck-usage-win ck-usage-model">
+              <span className="ck-usage-win-name">{m.model}</span>
+              <span className="ck-usage-win-pct">
+                {formatCost(m.cost)} · {formatTokens(m.tokens)} tokens
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {row.reason && <p className="ck-usage-pop-reason">{row.reason}</p>}
       <div className="ck-usage-pop-foot">
-        <span>{row.observed_at_ms ? `Read ${formatLeft(now - row.observed_at_ms)} ago` : ''}</span>
+        <span>{row.observed_at_ms ? `Read ${formatLeftLong(now - row.observed_at_ms)} ago` : ''}</span>
         {row.page && (
           <button type="button" className="ck-usage-link" onClick={() => void api.openPage(row.page as string).catch(() => {})}>
             Usage page
@@ -260,7 +269,7 @@ export function UsageBar({ api = usageApi }: { api?: UsageApi }) {
   const suffixOf = (r: UsageRow) => signInSuffix(r, (perAgent.get(r.agent_id) ?? 0) > 1);
   return (
     <div className="ck-statusbar" ref={bar} role="group" aria-label="Plan usage">
-      <span className="ck-usage-cap">Used</span>
+      <span className="ck-usage-cap">Usage</span>
       <div className="ck-sb-chips" ref={row}>
         {rows.slice(0, count).map((r) => (
           <Chip key={key(r)} row={r} now={now} onOpen={toggle} suffix={suffixOf(r)} />

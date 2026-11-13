@@ -202,6 +202,24 @@ describe('one list, one card', () => {
   });
 });
 
+describe('the heading count is the cards on screen', () => {
+  it('counts what the list renders, for a mixed inbox, and says it in the title and the big number', () => {
+    const { api } = fixture({ questions: [question(), consent, budget] });
+    mount(api);
+    expect(cards()).toHaveLength(6);
+    expect(host.querySelector('h1')?.textContent).toBe('6 things need you');
+    expect(host.querySelector('.ck-doto')?.textContent).toBe('06');
+  });
+
+  it('does not count a waiting pane that has no card, and shows no number the cards do not back', () => {
+    // The pane list is empty, so the approval and the error have no card to draw.
+    const { api } = fixture({ panes: [], questions: [question()] });
+    mount(api);
+    expect(cards()).toHaveLength(1);
+    expect(host.querySelector('h1')?.textContent).toBe('One thing needs you');
+  });
+});
+
 describe('keyboard', () => {
   it('focuses the first card when it opens: a high-risk first card puts focus on Deny', () => {
     const { api } = fixture();

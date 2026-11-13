@@ -1,0 +1,37 @@
+# Lab vector S14. See ../vector.rs for the format.
+id = "S14"
+title = "Broken JSON, an unknown method and wrong types sent to the agent do not kill it; binary junk back does not either"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "send_raw"
+line = "{this is not json"
+
+[[step]]
+do = "send_raw"
+line = "{\"jsonrpc\":\"2.0\",\"id\":777,\"method\":\"nope\"}"
+
+[[step]]
+do = "send_raw"
+line = "{\"jsonrpc\":\"2.0\",\"id\":778,\"method\":\"session/prompt\",\"params\":{\"sessionId\":5,\"prompt\":\"x\"}}"
+
+[[step]]
+do = "prompt"
+text = "stream 2"
+
+[[step]]
+do = "prompt"
+text = "binary 4096"
+
+[[expect]]
+turn = 1
+stop = "end_turn"
+chunks_at_least = 2
+
+[[expect]]
+turn = 2
+stop = "end_turn"
+text_has = "after junk"

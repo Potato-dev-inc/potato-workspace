@@ -1,0 +1,15 @@
+# Lab vector B18. See ../vector.rs for the format.
+id = "B18"
+title = "Context use is reported with used no larger than size"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["usage"]
+
+[[step]]
+do = "prompt"
+text = "rich"
+
+[[expect]]
+turn = 1
+usage = true

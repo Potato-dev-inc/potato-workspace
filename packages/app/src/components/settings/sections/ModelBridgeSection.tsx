@@ -131,8 +131,8 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
 
   return (
     <SettingBlock
-      label="Model Bridge"
-      description="Connect a model service once, then add it to Codex. The key is kept on this computer only."
+      label="Another model in Codex"
+      description="Connect a model service with a key, then add it to Codex. A backup is kept."
     >
       {!data.secure && <Note role="alert">The secure key store on this computer is not available, so a key cannot be saved.</Note>}
 
@@ -296,9 +296,9 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
 export const modelBridgeRows: RowDef[] = [
   {
     id: 'model-bridge',
-    label: 'Model Bridge',
+    label: 'Another model in Codex',
     hint: 'Connect a model service with a key, then add it to Codex. A backup is kept.',
-    keywords: 'model bridge service key codex provider connect responses api credential backup undo',
+    keywords: 'orchestrator model bridge service key codex provider connect responses api credential backup undo',
     group: 'Model Bridge',
     labsFlag: 'model_bridge_enabled',
     render: () => <ModelBridge />,

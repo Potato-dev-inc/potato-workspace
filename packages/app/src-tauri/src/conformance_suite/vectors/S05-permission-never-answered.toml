@@ -1,0 +1,33 @@
+# Lab vector S05. See ../vector.rs for the format.
+id = "S05"
+title = "An unanswered question stays parked: nothing answers it for the person"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt"
+text = "perm"
+
+[[step]]
+do = "wait"
+ms = 3000
+
+[[step]]
+do = "cancel"
+after_ms = 0
+
+[[expect]]
+turn = 1
+asked = "edit"
+times = 1
+
+[[expect]]
+turn = 1
+text_lacks = "chose:"
+
+[[expect]]
+turn = 1
+stop = "cancelled"
+within_ms = 5000

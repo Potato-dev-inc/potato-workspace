@@ -1,0 +1,22 @@
+# Lab vector B13. See ../vector.rs for the format.
+id = "B13"
+title = "Everything the agent writes to stdout is JSON-RPC (the lab's stdout_clean; the wizard check tolerates noise lines, this one does not)"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["stdout_clean"]
+
+[[step]]
+do = "prompt"
+text = "rich"
+
+[[step]]
+do = "prompt"
+text = "stream 2"
+
+[[expect]]
+stdout_clean = true
+
+[[expect]]
+turn = 2
+stop = "end_turn"

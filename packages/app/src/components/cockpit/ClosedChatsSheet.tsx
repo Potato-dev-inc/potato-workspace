@@ -1,5 +1,6 @@
 // "Closed chats": the chats the person closed, newest first. Reopen brings one back into the sidebar with its history;
-// Delete removes it for good (after asking). Shown from the sidebar's "Closed chats" row.
+// Delete removes it for good. Delete on one row asks inline, in that row; "Delete all" asks in a sheet.
+// Shown from the sidebar's "Closed chats" row.
 import { errorSentence } from '../../lib/sayError';
 import { useState } from 'react';
 import { folderName, type ClosedChat, type ClosedChatsApi } from '../../lib/closedChats';
@@ -8,6 +9,9 @@ import { formatAgo } from './history-model';
 import { Sheet } from './Sheet';
 
 type Ask = { kind: 'one'; chat: ClosedChat } | { kind: 'all' };
+
+/** A chat with no title (or only spaces) is "Untitled chat", never blank and never "No messages". */
+export const closedChatName = (chat: ClosedChat): string => chat.title?.trim() || 'Untitled chat';
 
 export function ClosedChatsSheet({
   chats,
@@ -60,13 +64,13 @@ export function ClosedChatsSheet({
     }
   };
 
-  if (ask) {
+  if (ask?.kind === 'all') {
     return (
       <Sheet labelledBy="ck-closed-t" onClose={busy ? undefined : () => setAsk(null)}>
         <h2 className="ck-section" id="ck-closed-t">
-          {ask.kind === 'one' ? 'Delete this chat?' : 'Delete all closed chats?'}
+          Delete all closed chats?
         </h2>
-        <p className="ck-sub">{ask.kind === 'one' ? "Delete this chat? This can't be undone." : `Delete all ${chats.length} closed chats? This can't be undone.`}</p>
+        <p className="ck-sub">{`Delete all ${chats.length} closed chats? This can't be undone.`}</p>
         <div className="ck-sheet-actions">
           <button type="button" className="ck-btn ck-btn--secondary" autoFocus disabled={busy} onClick={() => setAsk(null)}>
             Cancel
@@ -89,22 +93,40 @@ export function ClosedChatsSheet({
         <p className="ck-closed-empty">No closed chats.</p>
       ) : (
         <ul className="ck-closed-list">
-          {chats.map((chat) => (
-            <li key={chat.id} className="ck-closed-row" data-testid="closed-chat-row">
-              <div className="ck-closed-main">
-                <span className="ck-closed-title">{chat.title ?? 'Untitled chat'}</span>
-                <span className="ck-closed-meta">
-                  {chat.label} · {folderName(chat.cwd)} · {formatAgo(Math.max(0, now - chat.updated_ms))}
-                </span>
-              </div>
-              <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} aria-label={`Reopen ${chat.title ?? 'Untitled chat'}`} onClick={() => void reopen(chat)}>
-                Reopen
-              </button>
-              <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" disabled={busy} aria-label={`Delete ${chat.title ?? 'Untitled chat'}`} onClick={() => setAsk({ kind: 'one', chat })}>
-                Delete
-              </button>
-            </li>
-          ))}
+          {chats.map((chat) => {
+            const name = closedChatName(chat);
+            const asking = ask?.kind === 'one' && ask.chat.id === chat.id;
+            return (
+              <li key={chat.id} className="ck-closed-row" data-testid="closed-chat-row">
+                <div className="ck-closed-main">
+                  <span className="ck-closed-title">{name}</span>
+                  <span className="ck-closed-meta">
+                    {chat.label} · {folderName(chat.cwd)} · {formatAgo(Math.max(0, now - chat.updated_ms))}
+                  </span>
+                </div>
+                {asking ? (
+                  <div className="ck-closed-confirm" data-testid="closed-chat-confirm">
+                    <span className="ck-closed-ask">Delete for good? This can&apos;t be undone.</span>
+                    <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} onClick={() => setAsk(null)}>
+                      Cancel
+                    </button>
+                    <button type="button" className="ck-btn ck-btn--primary ck-btn--sm" disabled={busy} aria-label={`Delete ${name} for good`} onClick={() => void confirmDelete()}>
+                      Delete
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} aria-label={`Reopen ${name}`} onClick={() => void reopen(chat)}>
+                      Reopen
+                    </button>
+                    <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ck-closed-delete" disabled={busy} aria-label={`Delete ${name}`} onClick={() => setAsk({ kind: 'one', chat })}>
+                      Delete
+                    </button>
+                  </>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       <div className="ck-sheet-actions">

@@ -5,7 +5,6 @@ import type { AgentHealth } from '../agent-health';
 import { checkAddons } from './addons';
 import { checkAgents } from './agents';
 import { checkBridge } from './bridge';
-import { checkLabs } from './labs';
 import { buildReport, redactReport, runAllChecks, CANT_CHECK_YET, type SetupCheckDeps } from './index';
 
 const agent = (over: Partial<AgentHealth>): AgentHealth => ({
@@ -43,7 +42,7 @@ const ctx = (over: Partial<{ bridgeUrl: string | null; labs: Record<string, bool
 
 describe('setup checks: mapping', () => {
   it('bridge is ok when its address is known, a fail when not', () => {
-    expect(checkBridge(ctx())[0]).toMatchObject({ status: 'ok', sentence: 'Bridge is running', fix: null });
+    expect(checkBridge(ctx())[0]).toMatchObject({ status: 'ok', sentence: 'Potato Workspace is running', fix: null });
     expect(checkBridge(ctx({ bridgeUrl: null }))[0].status).toBe('fail');
   });
 
@@ -80,9 +79,24 @@ describe('setup checks: mapping', () => {
     expect(rows[2].fix).toEqual({ kind: 'installAddon', label: 'Install', agentId: 'x' });
   });
 
-  it('labs: summary lists only the features that are on', () => {
-    expect(checkLabs(ctx({ labs: { night_shift_enabled: true, acp_chat_enabled: false } }))[0].sentence).toBe('Labs on: Night shift');
-    expect(checkLabs(ctx())[0].sentence).toBe('No Labs features are on');
+  it('never uses the word Bridge, and the failing row says what to do', () => {
+    const text = [...checkBridge(ctx()), ...checkBridge(ctx({ bridgeUrl: null }))].map((r) => r.sentence).join(' ');
+    expect(text).not.toMatch(/bridge/i);
+    expect(checkBridge(ctx({ bridgeUrl: null }))[0].sentence).toContain('needs a restart');
+  });
+
+  it('an agent that did not start names the agent and offers Try again; an untested one offers Test', () => {
+    const rows = checkAgents([
+      agent({ state: 'error', reason: 'Found it, but it did not start properly: exit code 1' }),
+      agent({ id: 'claude', label: 'Claude', state: 'unchecked', reason: '' }),
+    ]);
+    expect(rows[0]).toMatchObject({ status: 'fail', sentence: 'Codex was found but did not start (exit code 1)', fix: { kind: 'test', label: 'Try again', agentId: 'codex' } });
+    expect(rows[1]).toMatchObject({ status: 'warn', sentence: 'Claude is not tested yet', fix: { kind: 'test', label: 'Test', agentId: 'claude' } });
+  });
+
+  it('there is no Labs row in the list', async () => {
+    const rows = await runAllChecks({ agentHealth: async () => [], addons: async () => ({ labsEnabled: true, addons: [] }) }, ctx({ labs: { night_shift_enabled: true } }));
+    expect(rows.map((r) => r.id)).not.toContain('labs');
   });
 });
 

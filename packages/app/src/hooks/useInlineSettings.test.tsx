@@ -45,7 +45,7 @@ describe('useInlineSettings with row names', () => {
     await act(async () => hook.open('live-updates'));
     await render();
     expect(view).toBe('settings');
-    expect(hook.viewProps.initialTab).toBe('general');
+    expect(hook.viewProps.initialTab).toBe('advanced');
     expect(hook.viewProps.initialRow).toBe('live-updates');
   });
 
@@ -66,7 +66,7 @@ describe('useInlineSettings with row names', () => {
     await act(async () => hook.open('budget-turns'));
     await render();
     expect(hook.viewKey).toBeGreaterThan(before);
-    expect(hook.viewProps.initialTab).toBe('general');
+    expect(hook.viewProps.initialTab).toBe('agents');
     expect(hook.viewProps.initialRow).toBe('budget-turns');
   });
 

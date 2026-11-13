@@ -1,0 +1,389 @@
+/* "Add an agent" box (components/settings/blocks/AddAgent.tsx). Grayscale only, built on the settings tokens.
+   Cursor/Codex density: one quiet card, 13px text, hairline borders, no colour carries meaning. */
+
+/* One surface: the Settings list already is the card, so the box adds no border, no fill and no width limit. */
+.aa {
+  width: 100%;
+  color: var(--label, inherit);
+}
+.aa-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  animation: aa-in 180ms var(--ease, ease-out);
+}
+@keyframes aa-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aa-body {
+    animation: none;
+  }
+}
+.aa-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.aa-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.aa-sub {
+  margin: 0;
+  color: var(--label-2, inherit);
+  font-size: 13px;
+}
+.aa-quiet {
+  margin: 0;
+  color: var(--label-3, inherit);
+  font-size: 12px;
+}
+.aa-note {
+  margin: 0;
+  color: var(--label-2, inherit);
+  font-size: 12px;
+}
+.aa-link {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--label-3, inherit);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 140ms var(--ease, ease-out);
+}
+.aa-link:hover,
+.aa-link[aria-expanded='true'] {
+  color: var(--label, inherit);
+}
+.aa-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.aa .aa-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.aa-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* steps */
+.aa-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.aa-step {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.aa-step.is-pending,
+.aa-step.is-skipped {
+  color: var(--label-3, inherit);
+}
+.aa-step.is-pending .aa-mark {
+  opacity: 0.8;
+}
+.aa-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--label-2, inherit);
+}
+.aa-pending-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--label-3, currentColor);
+}
+.aa-step.is-running .aa-step-text {
+  color: var(--label, inherit);
+}
+.aa-step-time {
+  margin-left: 12px;
+  color: var(--label-3, inherit);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* chips */
+.aa-chipwrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 6px;
+}
+.aa-caption {
+  margin-top: 4px;
+}
+.aa-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aa-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--sep, rgba(128, 128, 128, 0.25));
+  border-radius: 999px;
+  background: var(--fill, transparent);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+}
+/* Three shapes, no colour: yes = filled pill, no = solid outline with no fill and a dim label, unknown = dashed outline. */
+.aa-chip.is-yes {
+  background: var(--fill-hover, var(--fill, rgba(128, 128, 128, 0.14)));
+  border-color: transparent;
+}
+.aa-chip.is-unknown {
+  border-style: dashed;
+  background: none;
+  color: var(--label-3, inherit);
+}
+.aa-chip.is-no {
+  border-style: solid;
+  background: none;
+  color: var(--label-3, inherit);
+}
+.aa-chips.is-small .aa-chip {
+  height: 24px;
+  font-size: 12px;
+}
+.aa-chip-mark {
+  font-weight: 500;
+  font-style: normal;
+  font-family: var(--font-sans, inherit);
+}
+.aa-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus, 0 0 0 3px rgba(128, 128, 128, 0.4));
+}
+.aa-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 3;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--float-bg, #333);
+  box-shadow: var(--float-shadow, 0 6px 18px rgba(0, 0, 0, 0.3));
+  color: var(--label, #fff);
+  font-size: 11.5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 120ms var(--ease, ease-out), transform 120ms var(--ease, ease-out);
+}
+.aa-chip:hover .aa-tip,
+.aa-chip:focus-visible .aa-tip {
+  opacity: 1;
+  transform: none;
+}
+
+/* install, details */
+.aa-details {
+  font-size: 12px;
+  color: var(--label-2, inherit);
+}
+.aa-details summary {
+  cursor: pointer;
+  width: fit-content;
+  user-select: none;
+}
+.aa-cmd {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: var(--fill, rgba(128, 128, 128, 0.08));
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.aa-cmdbox {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.aa-cmdbox .aa-cmd {
+  flex: 1 1 auto;
+  margin: 0;
+  min-height: 32px;
+  padding-right: 64px;
+  display: flex;
+  align-items: center;
+}
+.aa-cmdbox .aa-copy {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+}
+.aa-cmdbox .aa-copy:active {
+  transform: translateY(-50%) scale(0.97);
+}
+
+/* the sign-in line: the one thing the person must do, in the main text colour */
+.aa-signin {
+  margin: -2px 0 2px;
+  font-size: 13px;
+  color: var(--label, inherit);
+}
+
+/* found on this computer */
+.aa-found {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aa-found-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.aa-or {
+  color: var(--label-3, inherit);
+  font-size: 12px;
+}
+.aa-reason {
+  margin: -4px 0 0;
+  color: var(--label-2, inherit);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.aa-head {
+  margin-top: 4px;
+}
+.aa-found-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.aa-found-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aa-found-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  font-size: 13px;
+}
+.aa-found-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* one weight for every button label (500): primary is filled, secondary is a subtle fill */
+.aa .st-btn {
+  font-weight: 500;
+  font-synthesis: none;
+}
+.aa .st-btn:not(.is-primary) {
+  color: var(--label-2, inherit);
+}
+.aa .st-btn.is-primary {
+  color: var(--primary-fg, inherit);
+}
+/* the placeholder reads as a hint, not as typed text; a disabled Add looks off */
+.aa .aa-input::placeholder {
+  opacity: 0.35;
+}
+.aa .st-btn.is-primary:disabled {
+  opacity: 0.4;
+}
+/* An empty box: the field is on the normal input surface and Add is quiet, so the card does not look switched off. */
+.aa .aa-input {
+  background: var(--list, transparent);
+}
+.aa-link {
+  color: var(--label-2, inherit);
+}
+.aa-adv .aa-actions.is-row {
+  flex-wrap: nowrap;
+}
+
+/* advanced */
+.aa-adv {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--sep, rgba(128, 128, 128, 0.25));
+}
+.aa-adv-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label-2, inherit);
+}
+.aa-detail-body {
+  margin-top: 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.aa-detail-body ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
+/* The running dots are grey here too: no colour carries meaning on this screen. */
+.aa .pm-dots {
+  color: var(--label-2, currentColor);
+}

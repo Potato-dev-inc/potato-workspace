@@ -1,10 +1,10 @@
 // Where a Settings deep link lands: a page and, when it names one, a row to scroll to and mark.
 //
 // Anything that opens Settings may send any of these (the palette, the tray, an error card, `?tab=`):
-//   - a section id (`agents`) or `later`
+//   - a page id (`agents`), or an older section or tab id (`general`, `phone`, `later`)
 //   - a row id (`live-updates`, `budget-turns`, `security-ask-before-control`): the section that holds the row
 //     opens, scrolled to it. Every row has one (ids are unique across sections).
-//   - `labs`: General > Labs
+//   - `labs`: Advanced > Early features (Labs)
 //   - one of the old 22 tab ids (`preload`, `mobile`, `team`)
 // This file imports the catalog, so the entry route in `settings-entry.ts` (read by main.tsx) does not.
 import { LABS_INDEX_ID } from '../components/settings/arrange';

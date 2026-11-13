@@ -118,11 +118,16 @@ pub fn detect_in_texts(command: &str, texts: &[&str]) -> Detection {
 }
 
 /// `initialize_check` is the real ACP check's answer (`acp_check`), or `null` when none ran: help text alone.
+///
+/// Help text alone never earns "high": when a handshake ran and failed, the candidates drop to "medium" (the screen
+/// shows the check's reason beside them); when it did not run, the help-only confidence is kept and `initialize_check`
+/// stays `null`.
 fn detection_json(command: &str, d: &Detection, check: Option<&InitCheck>) -> Value {
+    let failed = check.is_some_and(|c| !c.ok);
     let candidates: Vec<Value> = d
         .candidates
         .iter()
-        .map(|c| json!({"command": command, "args": c.args, "evidence": c.evidence, "confidence": if c.high { "high" } else { "medium" }}))
+        .map(|c| json!({"command": command, "args": c.args, "evidence": c.evidence, "confidence": if c.high && !failed { "high" } else { "medium" }}))
         .collect();
     json!({
         "ok": true,
@@ -185,7 +190,7 @@ fn check_found(name: &str, program: Option<&Path>, dirs: &[PathBuf], mut found: 
 }
 
 /// "Add chat" for an agent that is already installed: locate the program, read ONLY its help (`--help`, then
-/// `-h`, then `help`, stopping at the first that prints something) and analyse it. No wizard session, no
+/// `-h`, stopping at the first that prints something) and analyse it. No wizard session, no
 /// subcommand probing (that took a dozen runs and ~12 s for a slow-starting CLI). Same answer shape as `acp_detect`.
 ///
 /// Then the ACP check (`acp_check`): when help shows an ACP command, that command gets one `initialize` handshake.
@@ -204,7 +209,8 @@ pub fn detect_program(wizard: &Wizard, command: &str) -> Result<Value, WizardErr
     let work_dir = make_work_dir(&env.temp_root, &id)?;
     let vars = probe_env();
     let mut texts: Vec<String> = Vec::new();
-    for args in [["--help"], ["-h"], ["help"]] {
+    // Never the bare word `help`: for some programs that is a prompt, i.e. a model call.
+    for args in [["--help"], ["-h"]] {
         let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
         let mut spec = RunSpec::new(&located.path, &args, &work_dir);
         spec.env = &vars;

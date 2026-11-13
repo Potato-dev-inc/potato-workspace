@@ -427,6 +427,20 @@ fn check_headless(def: &Definition, e: &mut Errors, regexes: &mut Regexes) {
             }
         }
     }
+    if let Some(tool) = &output.tool {
+        if plain || output.format != super::schema::OutputFormat::JsonLines {
+            e.add("AGENT_DEF_INCONSISTENT", "headless.output.tool", "tool events need format = \"json_lines\"");
+        }
+        check_selector("headless.output.tool.start", &tool.start, false, e, regexes);
+        for (name, sel) in [("finish", &tool.finish), ("failed", &tool.failed)] {
+            if let Some(sel) = sel {
+                check_selector(&format!("headless.output.tool.{name}"), sel, false, e, regexes);
+            }
+        }
+        if tool.failed.is_some() && tool.finish.is_none() {
+            e.add("AGENT_DEF_INCONSISTENT", "headless.output.tool.failed", "failed needs finish");
+        }
+    }
 }
 
 fn check_selector(path: &str, sel: &Selector, needs_path: bool, e: &mut Errors, regexes: &mut Regexes) {
@@ -570,6 +584,10 @@ fn check_model_and_context(def: &Definition, e: &mut Errors, regexes: &mut Regex
     }
     if let Some(argv) = &model.probe_argv {
         check_argv("model.probe_argv", argv, &[], e);
+        let problems = super::wizard::bypass::list_argv_problems(argv);
+        if !problems.is_empty() {
+            e.add("AGENT_DEF_INCONSISTENT", "model.probe_argv", format!("not a plain list command: {}", problems.join("; ")));
+        }
     }
     match model.source {
         ModelSource::None => {}

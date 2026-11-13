@@ -57,3 +57,21 @@ describe('ShortcutsSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ShortcutsSheet title and focus', () => {
+  it('has the title "Keyboard shortcuts" as its heading', () => {
+    act(() => root.render(<ShortcutsSheet onClose={vi.fn()} mac={false} />));
+    const heading = host.querySelector('h2');
+    expect(heading?.textContent).toBe('Keyboard shortcuts');
+    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-labelledby')).toBe(heading?.id);
+  });
+
+  it('focuses Close without scrolling the sheet, so the title and first row stay in view', () => {
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    act(() => root.render(<ShortcutsSheet onClose={vi.fn()} mac={false} />));
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    const close = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Close')!;
+    expect(document.activeElement).toBe(close);
+    focus.mockRestore();
+  });
+});

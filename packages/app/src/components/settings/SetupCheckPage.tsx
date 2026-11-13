@@ -1,7 +1,8 @@
 // Settings > Agents > "Check my setup": one list of plain sentences. Each row has a tick, a "!" or a cross, and at most
 // one fix button. "Copy report" copies every row as plain text, after the path and key scrubber (lib/setup-checks/report).
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { tauriAcpAddonApi } from '../../lib/acpAddon';
+import { agentHealthApi } from '../../lib/agent-health';
 import { openSettingsAt } from '../../lib/openSettingsAt';
 import {
   buildReport,
@@ -13,16 +14,21 @@ import {
   type SetupCheckDeps,
 } from '../../lib/setup-checks';
 import { Btn, Note } from './settings-ui';
+import { problemWords } from './problem-words';
+import { useRunSetupChecks, useSharedSetupChecks } from './setup-source';
 
 export interface SetupCheckActions {
   signIn: (agentId: string) => void;
   installAddon: (agentId: string) => Promise<void> | void;
+  /** Runs the deep check of one agent ("Test", "Try again"). */
+  test?: (agentId: string) => Promise<void> | void;
 }
 
 /** Where each fix button goes. Settings-page defaults; tests pass fakes. */
 export const DEFAULT_SETUP_ACTIONS: SetupCheckActions = {
   signIn: () => openSettingsAt('agents', 'agent-lane'),
   installAddon: (agentId) => tauriAcpAddonApi.install(agentId).then(() => undefined),
+  test: (agentId) => agentHealthApi.test(agentId).then(() => undefined),
 };
 
 /** Runs the button's action. */
@@ -32,10 +38,18 @@ export function runFix(fix: FixAction, actions: SetupCheckActions): Promise<void
       return actions.signIn(fix.agentId ?? '');
     case 'installAddon':
       return actions.installAddon(fix.agentId ?? '');
+    case 'test':
+      return actions.test?.(fix.agentId ?? '');
   }
 }
 
 const GLYPH: Record<CheckRow['status'], string> = { ok: '✓', warn: '!', fail: '×' };
+
+/** The header line's left side: how the checks came out, in the same words as the Overview card. */
+function summary(rows: CheckRow[] | null): string {
+  if (rows === null) return 'Checks';
+  return problemWords(rows) ?? 'Everything works';
+}
 
 export interface SetupCheckPageProps {
   ctx: SetupCheckContext;
@@ -50,29 +64,21 @@ export interface SetupCheckPageProps {
 export function SetupCheckPage({
   ctx,
   deps = tauriSetupDeps,
-  actions = DEFAULT_SETUP_ACTIONS,
+  actions: actionsProp,
   appVersion = 'dev',
   now = () => new Date(),
   copy,
 }: SetupCheckPageProps) {
-  const [rows, setRows] = useState<CheckRow[] | null>(null);
+  // The rows come from the one shared source when the page sits under the Settings window (so the Overview cards
+  // agree with this list); a page shown alone (a test) runs the checks itself.
+  const shared = useSharedSetupChecks();
+  const own = useRunSetupChecks(() => runAllChecks(deps, ctx), shared === null);
+  const source = shared ?? own;
+  const actions = actionsProp ?? shared?.actions ?? DEFAULT_SETUP_ACTIONS;
+  const rows = source.result.state === 'ready' ? source.result.rows : source.result.state === 'failed' ? [] : null;
   const [message, setMessage] = useState<{ tone: 'status' | 'alert'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tick, setTick] = useState(0);
-
-  // The checks run on mount and on "Check again" (tick).
-  useEffect(() => {
-    let alive = true;
-    setRows(null);
-    void runAllChecks(deps, ctx).then((next) => {
-      if (alive) setRows(next);
-    });
-    return () => {
-      alive = false;
-    };
-    // ctx is read once per run; a new run needs "Check again".
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, deps]);
+  const refresh = source.refresh;
 
   const fix = useCallback(
     async (f: FixAction) => {
@@ -80,13 +86,14 @@ export function SetupCheckPage({
       setMessage(null);
       try {
         await runFix(f, actions);
+        refresh();
       } catch (error) {
         setMessage({ tone: 'alert', text: error instanceof Error ? error.message : 'That did not work. Try again.' });
       } finally {
         setBusy(false);
       }
     },
-    [actions],
+    [actions, refresh],
   );
 
   const copyReport = async () => {
@@ -103,12 +110,15 @@ export function SetupCheckPage({
   return (
     <div className="st-setupcheck" data-testid="setup-check">
       <div className="st-setupcheck-head">
-        <Btn small disabled={rows === null} onClick={() => void copyReport()}>
-          Copy report
-        </Btn>
-        <Btn small disabled={rows === null} onClick={() => setTick((t) => t + 1)}>
-          Check again
-        </Btn>
+        <span className="st-setupcheck-summary">{summary(rows)}</span>
+        <div>
+          <Btn small disabled={rows === null} onClick={() => void copyReport()}>
+            Copy report
+          </Btn>
+          <Btn small disabled={rows === null} onClick={refresh}>
+            Check again
+          </Btn>
+        </div>
       </div>
       <div className="st-setupcheck-list" role="list">
         {rows === null && <p className="st-note">Checking…</p>}

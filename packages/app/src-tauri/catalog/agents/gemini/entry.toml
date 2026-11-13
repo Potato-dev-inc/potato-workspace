@@ -21,10 +21,14 @@ license_kind = "open_source"
 kind = "either"
 summary = "Sign in with your Google account, or use a Gemini API key from AI Studio."
 
+# Evidence, checked 2026-11-13: the facts above are from the vendor docs (2026-10-28). Lab survey 2026-11-10
+# (LAB-REPORT section 4.4d) ran `gemini --acp` on this PC: the ACP handshake passed. The account in use was
+# refused by Google, so no prompt got an answer. The installed version was not recorded (0.66.0 is the docs version).
+# handshake only; windows_tested stays false until a chat turn runs
 [checked]
-date = "2026-10-28"
+date = "2026-11-10"
 version = "0.66.0"
-how = "vendor_docs"
+how = "ran_on_windows"
 windows_tested = false
 
 [publisher]

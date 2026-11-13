@@ -1599,8 +1599,4 @@
   min-width: 0;
   font-size: 13px;
 }
-.st-helper-model .mp-menu {
-  left: auto;
-  right: 0;
-}
 .st-helper-model-note { color: var(--label-3); font-size: 11px; }

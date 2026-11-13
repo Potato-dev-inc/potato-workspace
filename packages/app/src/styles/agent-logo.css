@@ -1,0 +1,32 @@
+/* An agent's mark. Logos wear their brand colour (--al-dark / --al-light, set per logo); a logo without one follows
+ * the text colour. The monogram is the plain grey fallback. This file is the one place brand colours may appear. */
+.pm-agent-logo {
+  flex: none;
+  fill: var(--al-dark, currentColor);
+}
+[data-theme='light'] .pm-agent-logo {
+  fill: var(--al-light, currentColor);
+}
+.pm-agent-mono {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  border-radius: 28%;
+  border: 1px solid currentColor;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  opacity: 0.8;
+}
+.cockpit .ck-pane-logo {
+  align-self: center;
+  color: var(--label-2);
+}
+.cockpit .ck-menu-item .ck-menu-logo {
+  color: var(--label-2);
+}
+.aa-title .aa-logo { vertical-align: -2px; margin-right: 2px; }
+.pm-agent-mono::before {
+  content: attr(data-letter);
+}

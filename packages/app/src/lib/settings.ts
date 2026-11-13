@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from './settings-defaults';
 import { invoke } from '@tauri-apps/api/core';
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { LazyStore } from '@tauri-apps/plugin-store';
@@ -61,29 +62,6 @@ export function invalidateSettingsCache(): void {
   cached = null;
   migrationDone = false;
 }
-
-const DEFAULT_SETTINGS: Settings = {
-  mobile_input_delay_ms: 60,
-  mobile_input_visible: true,
-  mobile_keyboard_resizes_agent: false,
-  dev_server_port: 1420,
-  sidebar_width: 360,
-  theme: 'dark',
-  ui_mode: 'orchestration',
-  developer_use_rust_mcp: false,
-  confirm_close_running_pane: true,
-  keep_awake_while_working: true,
-  show_usage_bar: true,
-  usage_login_reads: true,
-  checkpoints_enabled: true,
-  checkpoints_keep: 50,
-  away_minutes: 5,
-  budget_default_turns: 0,
-  budget_default_minutes: 0,
-  agent_hooks_mode: 'shadow',
-  // Chat is on until the person turns it off (the "+" menu starts chats by default). Rust: settings_store.
-  acp_chat_enabled: true,
-};
 
 function readLegacySidebarWidth(): number | undefined {
   if (typeof localStorage === 'undefined') return undefined;

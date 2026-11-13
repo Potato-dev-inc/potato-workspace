@@ -1,0 +1,20 @@
+# Lab vector S01. See ../vector.rs for the format.
+id = "S01"
+title = "200 turns, no error (memory is not measured by this runner)"
+levels = ["native"]
+opts = ""
+cost = "soak"
+claims = []
+
+[[step]]
+do = "repeat"
+times = 200
+steps = [{do = "prompt", text = "stream 3"}]
+
+[[expect]]
+turn = 200
+stop = "end_turn"
+chunks_at_least = 3
+
+[[expect]]
+no_orphans = true

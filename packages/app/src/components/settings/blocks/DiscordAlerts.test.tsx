@@ -67,12 +67,12 @@ afterEach(() => {
 });
 
 describe('Discord alerts block', () => {
-  it('starts empty and off: a paste field, Save and Test disabled, the default kinds', async () => {
+  it('starts empty and off: a paste field, Save and Send a test disabled, the default kinds', async () => {
     await mount(fakeApi());
     expect(field()?.value).toBe('');
     expect(field()?.type).toBe('password');
     expect(button('Save')?.disabled).toBe(true);
-    expect(button('Test')?.disabled).toBe(true);
+    expect(button('Send a test')?.disabled).toBe(true);
     expect(button('Remove')).toBeNull();
     expect(sw('Needs you')?.getAttribute('aria-checked')).toBe('true');
     expect(sw('Finished')?.getAttribute('aria-checked')).toBe('false');
@@ -95,7 +95,7 @@ describe('Discord alerts block', () => {
     expect(host.textContent).toContain('Ends in EFGH');
     expect(button('Save')).toBeNull();
     expect(button('Remove')).not.toBeNull();
-    expect(button('Test')?.disabled).toBe(false);
+    expect(button('Send a test')?.disabled).toBe(false);
   });
 
   it('a refused link shows the plain reason and keeps the paste field for another try', async () => {
@@ -111,11 +111,11 @@ describe('Discord alerts block', () => {
   it('Test calls the command and shows what came back', async () => {
     const api = fakeApi({ ...OFF, saved: true, tail: 'EFGH', active: true });
     await mount(api);
-    await click(button('Test')!);
+    await click(button('Send a test')!);
     expect(api.test).toHaveBeenCalledTimes(1);
     expect([...host.querySelectorAll('[role="status"]')].map((n) => n.textContent).join(' ')).toContain('Sent. Look for the message');
     api.test.mockResolvedValueOnce({ ok: false, message: 'Discord does not accept that webhook any more. Make a new one.' });
-    await click(button('Test')!);
+    await click(button('Send a test')!);
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('Make a new one');
   });
 
@@ -139,7 +139,7 @@ describe('Discord alerts block', () => {
     expect(api.clear).toHaveBeenCalledTimes(1);
     expect(field()?.readOnly).toBe(false);
     expect(field()?.value).toBe('');
-    expect(button('Test')?.disabled).toBe(true);
+    expect(button('Send a test')?.disabled).toBe(true);
   });
 
   it('shows nothing outside the desktop app (the status call fails)', async () => {

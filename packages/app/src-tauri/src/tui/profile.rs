@@ -579,6 +579,12 @@ pub trait TuiProfile: Send + Sync {
         None
     }
 
+    /// The parts of the definition the chat bridge (`crate::acp::bridge`) reads beyond the headless command:
+    /// the model-list command and the tool-event rules. `None` (the default): the bridge offers neither.
+    fn bridge_tables(&self) -> Option<crate::acp::bridge::DefinitionTables> {
+        None
+    }
+
     /// Where this agent writes the session file the chat view reads (`crate::session_chat`). `None` (the
     /// default): the agent has no file Potato Workspace can read, and the chat view falls back to reading the
     /// screen (`screen_chat`).

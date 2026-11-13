@@ -1,0 +1,13 @@
+# Lab vector S08. See ../vector.rs for the format.
+id = "S08"
+title = "The app is killed: the agent and what it started are gone"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "crash_host"
+
+[[expect]]
+no_orphans = true

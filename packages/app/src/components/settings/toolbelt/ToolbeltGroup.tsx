@@ -143,12 +143,12 @@ export function ToolbeltGroup({ api = toolbeltApi, projectPath }: { api?: Toolbe
   const servers = listing?.servers ?? [];
 
   return (
-    <section aria-label="Toolbelt" className="rounded-xl border border-pm-border bg-pm-panel p-4">
+    <section aria-label="Tools for every agent" className="rounded-xl border border-pm-border bg-pm-panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Toolbelt</h3>
+          <h3 className="text-sm font-semibold">Tools for every agent</h3>
           <p className="mt-1 max-w-xl text-sm leading-6 text-pm-muted">
-            Add an MCP server once. Potato Workspace writes it into every agent&apos;s own config, so each agent can use it.
+            Add a tool server once. It is written into each agent&apos;s settings, so each agent can use it.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

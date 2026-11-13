@@ -49,3 +49,22 @@
 .cockpit .ck-closed-all {
   margin-right: auto;
 }
+/* Delete sits apart from Reopen: a divider and a gap, so it is not the next button to press. */
+.cockpit .ck-closed-delete {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--sep);
+}
+/* The inline confirm replaces the two buttons in that row only. */
+.cockpit .ck-closed-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.cockpit .ck-closed-ask {
+  font-size: 12px;
+  color: var(--label-2);
+  margin-right: 4px;
+}

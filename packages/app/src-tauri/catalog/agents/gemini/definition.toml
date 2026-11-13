@@ -1,6 +1,7 @@
 # Gemini CLI (google-gemini/gemini-cli), starter. The npm install command and the sign-in
 # options come from the project README (https://github.com/google-gemini/gemini-cli), read
-# 2026-10-28. Not run on Windows yet, so the card says so.
+# 2026-10-28. Started on Windows in the lab survey (2026-11-10): `gemini --acp` answered the handshake.
+# No chat or headless table: a prompt was not run to an answer, so chat is read from the pane.
 schema_version = 1
 
 [agent]

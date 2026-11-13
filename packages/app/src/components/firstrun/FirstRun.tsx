@@ -18,6 +18,7 @@ import { demoApi, type DemoApi } from './demo-api';
 import {
   agentPatch,
   canContinue,
+  continueReason,
   demoFinished,
   demoHelpers,
   initialFlow,
@@ -200,6 +201,7 @@ export function FirstRun({ c, seed, onFinish, deps }: { c: CockpitApi; seed: See
 
   const step = flow.step;
   const last = step === 'done';
+  const blocked = continueReason(flow, { agents: T.whyAgents, connect: T.whyConnect, project: T.whyProject, task: T.whyTask });
   const primaryLabel = last ? T.doneButton : T.next;
 
   return (
@@ -235,7 +237,7 @@ export function FirstRun({ c, seed, onFinish, deps }: { c: CockpitApi; seed: See
             />
           )}
           {more === null && step === 'connect' && (
-            <StepConnect api={d.pack} connected={flow.connected} onConnected={(connected) => dispatch({ type: 'connected', connected })} />
+            <StepConnect api={d.pack} load={d.load} connected={flow.connected} onConnected={(connected) => dispatch({ type: 'connected', connected })} />
           )}
           {more === null && step === 'project' && (
             <StepProject project={flow.project} ship={d.ship} simple={d.simple} onProject={(project) => dispatch({ type: 'project', project })} />
@@ -276,6 +278,11 @@ export function FirstRun({ c, seed, onFinish, deps }: { c: CockpitApi; seed: See
             {more !== null ? T.doneButton : primaryLabel}
           </button>
         </footer>
+        {more === null && blocked && (
+          <p className="fr-why" role="status" data-testid="continue-why">
+            {blocked}
+          </p>
+        )}
         <p className="fr-reopen">{T.reopenNote}</p>
       </div>
     </div>

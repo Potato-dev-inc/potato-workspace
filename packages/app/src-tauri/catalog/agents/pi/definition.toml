@@ -4,6 +4,8 @@
 # which differs from the planning note's @mariozechner/pi-coding-agent, so no install command is
 # shipped until one name is confirmed. Add works only when `pi` is already on PATH.
 # The command is `pi`, a short name that another program can use, so the entry is marked ambiguous_name.
+# Lab survey 2026-11-10 (acp-lab LAB-REPORT 4.4d): a headless `--print` flag is in the help text, but the
+# probe was never run. Needs a real run before any [headless] table is added. Chat stays "read from screen".
 schema_version = 1
 
 [agent]

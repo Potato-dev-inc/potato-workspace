@@ -19,6 +19,19 @@ export interface UsageWindow {
   reset_since: boolean;
 }
 
+/** What a pay-per-use agent spent (no plan, so no limit window). */
+export interface UsageSpend {
+  cost: number;
+  tokens: number;
+}
+
+export interface UsageTotals {
+  today: UsageSpend;
+  week: UsageSpend;
+  /** Last 7 days, biggest cost first. */
+  models: { model: string; cost: number; tokens: number }[];
+}
+
 export type UsageState = 'ok' | 'limited' | 'expired' | 'unknown';
 
 export interface UsageRow {
@@ -29,6 +42,8 @@ export interface UsageRow {
   state: UsageState;
   reason: string | null;
   windows: UsageWindow[];
+  /** Pay-per-use agents only. */
+  totals?: UsageTotals;
   plan: string | null;
   observed_at_ms: number | null;
   limited_until_ms: number | null;
@@ -65,6 +80,17 @@ export function formatLeft(ms: number): string {
   return `${m}m`;
 }
 
+/** The same wait in words, one unit: "12 days", "9 hours", "40 min". Under a minute: "a moment". */
+export function formatLeftLong(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return 'a moment';
+  const mins = Math.max(1, Math.round(ms / 60_000));
+  const days = Math.floor(mins / 1440);
+  if (days >= 1) return `${days} ${days === 1 ? 'day' : 'days'}`;
+  const hours = Math.floor(mins / 60);
+  if (hours >= 1) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  return `${mins} min`;
+}
+
 /** The window the chip shows: the fullest one. */
 export function headline(row: UsageRow): UsageWindow | null {
   if (row.windows.length === 0) return null;
@@ -86,6 +112,7 @@ function tightness(row: UsageRow): number {
   if (row.state === 'limited') return 1000;
   if (row.state === 'expired') return 900;
   if (row.state === 'unknown') return -1;
+  if (row.totals && !row.windows.length) return 0;
   return headline(row)?.used_percent ?? -1;
 }
 
@@ -94,16 +121,38 @@ export function tightestFirst(rows: UsageRow[]): UsageRow[] {
   return [...rows].sort((a, b) => tightness(b) - tightness(a));
 }
 
+/** "$1.24", "<$0.01", "$0.00". */
+export function formatCost(cost: number): string {
+  if (!Number.isFinite(cost) || cost <= 0) return '$0.00';
+  return cost < 0.01 ? '<$0.01' : `$${cost.toFixed(2)}`;
+}
+
+/** "950", "310k", "1.2M". */
+export function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0';
+  if (n < 1000) return String(Math.round(n));
+  if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}
+
+/** "$1.24 today · 310k tokens", or this week's when nothing was spent today. Never a limit. */
+export function totalsText(totals: UsageTotals): string {
+  const quiet = totals.today.cost <= 0 && totals.today.tokens <= 0;
+  const span = quiet ? totals.week : totals.today;
+  return `${formatCost(span.cost)} ${quiet ? 'this week' : 'today'} · ${formatTokens(span.tokens)} tokens`;
+}
+
 /** The words after the icon. */
 export function chipText(row: UsageRow, now: number): string {
   if (row.state === 'expired') return 'Sign-in expired';
   if (row.state === 'limited') {
-    return row.limited_until_ms && row.limited_until_ms > now ? `Limited · ${formatLeft(row.limited_until_ms - now)}` : 'Limited';
+    return row.limited_until_ms && row.limited_until_ms > now ? `Limit reached · resets in ${formatLeftLong(row.limited_until_ms - now)}` : 'Limit reached';
   }
   const top = headline(row);
-  if (row.state === 'unknown' || !top) return 'Not shared';
-  const pct = `${Math.round(top.used_percent)}%`;
-  return top.resets_at_ms && top.resets_at_ms > now ? `${pct} ${formatLeft(top.resets_at_ms - now)}` : pct;
+  if (row.state === 'ok' && row.totals && !top) return totalsText(row.totals);
+  if (row.state === 'unknown' || !top) return 'Usage not shared';
+  const pct = `${Math.round(top.used_percent)}% used`;
+  return top.resets_at_ms && top.resets_at_ms > now ? `${pct} · resets in ${formatLeftLong(top.resets_at_ms - now)}` : pct;
 }
 
 /** Who the row is: "Codex CLI" or "Codex CLI (Work)". */
@@ -120,14 +169,18 @@ export function tooltip(row: UsageRow, now: number): string {
   const lines = [rowName(row), `Sign-in: ${row.account_label ?? 'main login'}`];
   if (row.plan) lines.push(`Plan: ${row.plan}`);
   for (const w of row.windows) {
-    const reset = w.reset_since ? 'started again' : w.resets_at_ms ? `resets in ${formatLeft(w.resets_at_ms - now)} (${clock(w.resets_at_ms)})` : 'reset time unknown';
+    const reset = w.reset_since ? 'started again' : w.resets_at_ms ? `resets in ${formatLeftLong(w.resets_at_ms - now)} (${clock(w.resets_at_ms)})` : 'reset time unknown';
     lines.push(`${w.name}: ${Math.round(w.used_percent)}% used, ${reset}`);
   }
+  if (row.totals) {
+    lines.push(`Today: ${formatCost(row.totals.today.cost)}, ${formatTokens(row.totals.today.tokens)} tokens`);
+    lines.push(`Last 7 days: ${formatCost(row.totals.week.cost)}, ${formatTokens(row.totals.week.tokens)} tokens`);
+  }
   if (row.state === 'limited') {
-    lines.push(row.limited_until_ms && row.limited_until_ms > now ? `Limited until ${clock(row.limited_until_ms)}` : 'Limited');
+    lines.push(row.limited_until_ms && row.limited_until_ms > now ? `Limit reached until ${clock(row.limited_until_ms)}` : 'Limit reached');
   }
   if (row.reason) lines.push(row.reason);
-  if (row.observed_at_ms) lines.push(`Reported ${formatLeft(now - row.observed_at_ms)} ago`);
+  if (row.observed_at_ms) lines.push(`Reported ${formatLeftLong(now - row.observed_at_ms)} ago`);
   if (row.page) lines.push('Click to open its usage page');
   return lines.join('\n');
 }

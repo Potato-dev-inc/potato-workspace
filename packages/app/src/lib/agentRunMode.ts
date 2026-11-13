@@ -99,12 +99,11 @@ export const tauriHelperAgentsApi = {
 export type HelperAgentsApi = typeof tauriHelperAgentsApi;
 
 export const HELPER_AGENTS_LABEL = 'Helper agents';
-export const HELPER_AGENTS_HINT =
-  'Always show them: helpers open in their own pane even if the agent asks for background mode. Let the agent choose: the agent decides. Always run in the background: helpers run with no pane and appear in your Inbox.';
+export const HELPER_AGENTS_HINT = 'Where helpers show up.';
 export const HELPER_CHOICES: { value: HelperVisibility; label: string }[] = [
-  { value: 'always_show', label: 'Always show them' },
-  { value: 'agent_chooses', label: 'Let the agent choose' },
-  { value: 'always_background', label: 'Always run in the background' },
+  { value: 'always_show', label: 'Always show them: each helper gets a pane' },
+  { value: 'agent_chooses', label: 'Let the agent choose: it decides each time' },
+  { value: 'always_background', label: 'Always run in the background: they show in your Inbox' },
 ];
 
 export const KEEP_OPEN_LABEL = 'Keep helpers open when they finish';

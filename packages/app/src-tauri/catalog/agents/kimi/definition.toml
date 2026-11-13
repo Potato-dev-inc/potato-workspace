@@ -1,7 +1,8 @@
 # Kimi Code (MoonshotAI/kimi-code), starter. The PowerShell install script, the Git for Windows
 # note and the /login sign-in step come from the project README
 # (https://github.com/MoonshotAI/kimi-code), read 2026-10-28. The npm package is left out: the
-# README does not name it. Not run on Windows yet, so the card says so.
+# README does not name it. Started on Windows in the lab survey (2026-11-10): `kimi acp` answered the handshake.
+# The install script was not run. No chat or headless table: a prompt was not run to an answer.
 schema_version = 1
 
 [agent]

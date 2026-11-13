@@ -7,6 +7,7 @@
 //! ```toml
 //! [acp]
 //! command = "node"
+//! runtime = "python"                  # optional; python adds PYTHONUTF8=1 and PYTHONUNBUFFERED=1 to the env
 //! args = ["{adapters}/codex/node_modules/@agentclientprotocol/codex-acp/dist/index.js"]
 //! env_allow = ["CODEX_HOME"]          # names passed on from the app's environment
 //! resume = "prefer_resume"
@@ -95,6 +96,11 @@ pub struct AgentConfig {
     pub command: String,
     /// Arguments. `{adapters}` is the folder the adapters are installed in.
     pub args: Vec<String>,
+    /// What the program runs on, when that changes how it must be started. `"python"`: the child gets `PYTHONUTF8=1`
+    /// and `PYTHONUNBUFFERED=1` (a Python adapter on a Windows pipe otherwise writes in the console code page and
+    /// buffers its output, which garbles or stalls the protocol). Empty (the default): nothing is added. A variable the
+    /// definition sets itself in `env` wins.
+    pub runtime: String,
     /// Extra names to pass through from the app's environment.
     pub env_allow: Vec<String>,
     /// Fixed variables.
@@ -554,6 +560,10 @@ pub fn build_env(cfg: &AgentConfig, host: &dyn HostEnv, private_home: Option<&Pa
             put(&mut out, name, path.into_os_string());
         }
     }
+    if cfg.runtime.trim().eq_ignore_ascii_case("python") {
+        put(&mut out, "PYTHONUTF8", OsString::from("1"));
+        put(&mut out, "PYTHONUNBUFFERED", OsString::from("1"));
+    }
     for (name, value) in &cfg.env {
         put(&mut out, name, OsString::from(expand(value, host)));
     }
@@ -954,6 +964,9 @@ pub fn problems(cfg: &AgentConfig) -> Vec<(String, String)> {
     let mut add = |path: &str, message: String| out.push((format!("acp.{path}"), message));
     if cfg.command.trim().is_empty() || !plain_text(&cfg.command) {
         add("command", "needed, at most 512 characters, no control characters".into());
+    }
+    if !matches!(cfg.runtime.trim().to_ascii_lowercase().as_str(), "" | "python") {
+        add("runtime", "must be empty or \"python\"".into());
     }
     if cfg.args.len() > 64 || !cfg.args.iter().all(|a| plain_text(a)) {
         add("args", "at most 64 arguments of at most 512 characters, no control characters".into());

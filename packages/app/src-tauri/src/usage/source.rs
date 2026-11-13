@@ -89,6 +89,27 @@ pub enum Reader {
         #[serde(default)]
         provider: Option<String>,
     },
+    /// Pay-per-use agents have no plan limit. Each message the agent keeps in its own SQLite file carries a JSON
+    /// blob with cost and token counts; they are summed for today and the last 7 days, per model (`sqlite.rs`).
+    /// The file is opened read-only and only those numbers and the model name are read.
+    SqliteTotals {
+        /// The database, relative to the sign-in's home (`opencode/opencode.db`).
+        file: String,
+        table: String,
+        /// Column with the Unix time in milliseconds.
+        time_column: String,
+        /// Column with the JSON text.
+        data_column: String,
+        /// Only rows where this pointer holds this text (`/role` = `assistant`).
+        #[serde(default)]
+        only: Option<(String, String)>,
+        model: String,
+        cost: String,
+        /// Pointers summed into the token count (input, output, reasoning; cache reads are left out).
+        tokens: Vec<String>,
+        /// Shown when there are no numbers yet.
+        reason: String,
+    },
     /// No local or CLI source of numbers. The row still shows sign-in and limits the app saw on screen.
     None { reason: String },
 }

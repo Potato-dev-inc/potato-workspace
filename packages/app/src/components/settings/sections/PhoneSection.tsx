@@ -8,7 +8,8 @@ import { tauri } from '../../../lib/tauri';
 import { DEVICES_CHANGED_EVENT, MobilePairingPanel } from '../../MobilePairingPanel';
 import { NumberControl } from '../controls';
 import type { RowDef, SettingsEnv } from '../model';
-import { Btn, InfoRow, SettingRow, SettingToggle } from '../settings-ui';
+import { SendTest, type TestResult } from '../previews/Previews';
+import { Btn, SettingRow, SettingToggle } from '../settings-ui';
 import { TunnelSection } from '../TunnelSection';
 import { PairedDevices } from '../blocks/PairedDevices';
 import { TelegramSetup } from '../blocks/TelegramSetup';
@@ -56,6 +57,27 @@ function RevokeAllRow({ env }: { env: SettingsEnv }) {
   );
 }
 
+// ---------- phone alerts ----------
+
+/**
+ * Where the phone's alerts are turned on (in the phone app), and "Send a test". The test needs a paired phone and a
+ * sender: this build has no command that pushes a test alert, so with phones paired the button is not drawn (a button
+ * that could only fail would be worse than none). With no phone it says why a test cannot be sent.
+ */
+function PhoneAlerts({ sendTest }: { sendTest?: () => Promise<TestResult> }) {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    void tauri.listPairedMobileDevices().then((list) => setCount(list.length)).catch(() => setCount(null));
+  }, []);
+  return (
+    <SettingRow label="Phone alerts" description={NOTIFICATIONS}>
+      <span className="st-value">On the phone</span>
+      {count === 0 && <SendTest disabledReason="Pair a phone first" />}
+      {count !== null && count > 0 && sendTest && <SendTest send={sendTest} />}
+    </SettingRow>
+  );
+}
+
 // ---------- the rows ----------
 
 const NOTIFICATIONS =
@@ -71,11 +93,11 @@ export const phoneRows: RowDef[] = [
   },
   {
     id: 'phone-notifications',
-    label: 'Notifications',
+    label: 'Phone alerts',
     hint: NOTIFICATIONS,
     keywords: 'alerts push lock screen previews needs you',
     group: 'Phone app',
-    render: () => <InfoRow label="Notifications" description={NOTIFICATIONS} value="On the phone" />,
+    render: () => <PhoneAlerts />,
   },
   {
     id: 'mobile-input-delay',
@@ -162,10 +184,10 @@ export const phoneRows: RowDef[] = [
   },
   {
     id: 'telegram',
-    label: 'Telegram (early)',
-    hint: 'Answer agents by Telegram text. Telegram is a third party; read the warning first.',
+    label: 'Telegram',
+    hint: 'Answer your agents by Telegram text. Read the warning first.',
     keywords: 'telegram bot text message chat token pairing remote early answer',
-    group: 'Telegram (early)',
+    group: 'Telegram',
     labs: { name: 'Telegram', about: 'Ask your agents and answer them by Telegram text, through a third party.' },
     render: (env) => <TelegramSetup env={env} />,
   },

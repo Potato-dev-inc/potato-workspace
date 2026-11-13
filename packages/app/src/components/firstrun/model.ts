@@ -94,6 +94,23 @@ export function canContinue(flow: Flow): boolean {
   }
 }
 
+/** One line that says why Continue is off on this step, or null while it is on. */
+export function continueReason(flow: Flow, why: { agents: string; connect: string; project: string; task: string }): string | null {
+  if (canContinue(flow)) return null;
+  switch (flow.step) {
+    case 'agents':
+      return why.agents;
+    case 'connect':
+      return why.connect;
+    case 'project':
+      return why.project;
+    case 'task':
+      return why.task;
+    default:
+      return null;
+  }
+}
+
 function advance(flow: Flow): Flow {
   const i = stepIndex(flow.step);
   // The last step's button closes the welcome.

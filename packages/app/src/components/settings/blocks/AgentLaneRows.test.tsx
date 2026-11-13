@@ -228,9 +228,9 @@ describe('the settings rows', () => {
 
   it('the Labs switch row is named in plain words', () => {
     const row = SECTIONS.flatMap((s) => s.rows).find((r) => r.id === 'acp-chat-labs')!;
-    expect(row.labs?.name).toBe('Chat sessions');
-    expect(row.labs?.about).toBe('Run an agent as a chat instead of in a terminal.');
-    expect(row.group).toBe('Labs');
+    expect(row.labs?.name).toBe('Chat view');
+    expect(row.labs?.about).toBe('Use an agent as a chat instead of a terminal.');
+    expect(row.group).toBe('Early features (Labs)');
   });
 });
 

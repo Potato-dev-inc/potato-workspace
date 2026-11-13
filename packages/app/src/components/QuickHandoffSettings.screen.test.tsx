@@ -41,7 +41,7 @@ const row = (id: string) => host.querySelector(`[data-row="${id}"]`);
 const modeSelect = () => host.querySelector<HTMLSelectElement>('select[aria-label="Hand off does"]');
 const notesBox = () => host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Fixed notes for every handoff"]');
 const search = () => host.querySelector<HTMLInputElement>('input[type="search"][aria-label="Search settings"]')!;
-const show = async (initialTab: 'agents' | 'general' = 'agents') => {
+const show = async (initialTab: 'agents' | 'look' = 'agents') => {
   api = makeApi();
   await act(async () => {
     root.render(<SettingsPanel open api={api} initialTab={initialTab} />);
@@ -105,7 +105,7 @@ describe('Settings > Agents > Hand off does', () => {
   });
 
   it.each(['quick handoff', 'handoff', 'hand off', 'fresh', 'ready', 'fixed notes', 'always remember'])('search "%s" finds it, from another tab', async (word) => {
-    await show('general');
+    await show('look');
     await type(search(), word);
     await settle(5);
     expect(row('handoff-mode'), word).not.toBeNull();

@@ -38,7 +38,7 @@ import {
 } from './model';
 import { AgentLogo } from '../../common/AgentLogo';
 import { ModelPicker } from '../../common/ModelPicker';
-import { readPickedModel, tauriAgentDefaultsApi, tauriModelOptionsApi, useAgentDefaults, useModelOptions, writePickedModel, type AgentDefaultsApi, type ModelOptionsApi } from '../../../lib/modelOptions';
+import { readPickedModel, tauriAgentDefaultsApi, presetOnly, tauriModelOptionsApi, useAgentDefaults, useModelOptions, writePickedModel, type AgentDefaultsApi, type ModelOptionsApi } from '../../../lib/modelOptions';
 import { isStartBlock } from './start';
 import '../../../styles/cockpit-newagent.css';
 import { BringChatsLink } from '../../history/BringChatsLink';
@@ -276,7 +276,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const isolated = copyDefault(storedCopy) && copiesOk && runAs === 'terminal';
 
   // ----- the model: the last pick per agent and sign-in (this page only), else the agent's Default model from Settings -----
-  const modelList = useModelOptions(choice?.agentId ?? null, modelApi);
+  const liveList = useModelOptions(choice?.agentId ?? null, modelApi);
+  // A terminal pane takes the launch flag's own names; only a chat is told the agent's live ids.
+  const modelList: typeof liveList = runAs === 'terminal' && liveList.status === 'ready' ? { status: 'ready', options: presetOnly(liveList.options) } : liveList;
   const modelSlot = choice ? `${choice.agentId}|${choice.accountId ?? ''}` : '';
   const [modelPick, setModelPick] = useState<{ slot: string; value: string } | null>(null);
   const storedModel = choice ? readPickedModel(choice.agentId, choice.accountId) : '';
@@ -520,7 +522,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 trigger={
                   <>
                     <span className={`ck-na-dot is-${choice?.state ?? 'missing'}`} aria-hidden="true" />
-                    {choice && <AgentLogo id={choice.agentId} size={13} decorative fallback={null} className="ck-na-logo" />}
+                    {choice && <AgentLogo id={choice.agentId} name={choice.label} size={13} decorative className="ck-na-logo" />}
                     <span className="ck-na-chip-text">{choice?.label ?? 'No agent ready'}</span>
                     <IconChevronDown />
                   </>
@@ -545,7 +547,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                     <span className="ck-na-item-main">
                       <span className="ck-na-item-row">
                         <span className={`ck-na-dot is-${c.state}`} aria-hidden="true" />
-                        <AgentLogo id={c.agentId} size={13} decorative fallback={null} className="ck-na-logo" />
+                        <AgentLogo id={c.agentId} name={c.label} size={13} decorative className="ck-na-logo" />
                         <span>{c.label}</span>
                       </span>
                     </span>

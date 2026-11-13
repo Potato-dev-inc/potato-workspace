@@ -5,7 +5,6 @@ import { agentHealthApi } from '../agent-health';
 import { checkAddons } from './addons';
 import { checkAgents } from './agents';
 import { checkBridge } from './bridge';
-import { checkLabs } from './labs';
 import type { CheckRow, SetupCheckContext, SetupCheckDeps } from './types';
 
 export type { CheckRow, CheckStatus, FixAction, FixKind, SetupCheckContext, SetupCheckDeps } from './types';
@@ -38,6 +37,5 @@ export async function runAllChecks(deps: SetupCheckDeps, ctx: SetupCheckContext)
   if (ctx.labs.acp_chat_enabled === true) {
     rows.push(...(await step('addons', async () => checkAddons(await deps.addons()))));
   }
-  rows.push(...(await step('labs', () => checkLabs(ctx))));
   return rows;
 }

@@ -3,6 +3,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LABS_GROUP, LAYOUT } from '../components/settings/arrange';
+import { generalRows } from '../components/settings/sections/GeneralSection';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -58,9 +60,11 @@ describe('useSimpleMode', () => {
     expect((await mountHook())()).toBe(false);
   });
 
-  it('is a switch in Settings > General, off by default', async () => {
-    const { generalRows } = await import('../components/settings/sections/GeneralSection');
+  it('is a switch under Settings > Advanced > Early features, off by default', () => {
     const row = generalRows.find((r) => r.id === 'simple-mode');
-    expect(row?.label).toBe('Simple mode: fewer buttons and plain words');
+    expect(row?.label).toBe('Simple look');
+    // An early feature (it has a Labs entry), and the Advanced page collects every one of those.
+    expect(row?.labs).toBeTruthy();
+    expect(LAYOUT.advanced.some((g) => g.group === LABS_GROUP && g.rows.includes('@labs'))).toBe(true);
   });
 });

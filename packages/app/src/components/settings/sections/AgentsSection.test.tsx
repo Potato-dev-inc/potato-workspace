@@ -169,7 +169,7 @@ describe('Agents: every row renders', () => {
     expect(hasText(m.host, 'Sign in')).toBe(true);
     expect(byLabel(m.host, 'New claude sign-in name')).toBeTruthy();
     expect(buttonByText(m.host, 'Add another sign-in')).toBeTruthy();
-    expect(buttonByText(m.host, 'Open sign-in window')).toBeTruthy();
+    expect(buttonByText(m.host, 'Sign in again')).toBeTruthy();
     expect(buttonByText(m.host, 'Remove')).toBeTruthy();
 
     // Preload
@@ -202,7 +202,7 @@ describe('Agents: every row renders', () => {
   it('groups the rows: Sign in, Your chats, Speed, Models, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
     await mount();
     const heads = [...m.host.querySelectorAll('section.st-group')].map((g) => g.querySelector(':scope > h2')?.textContent?.trim() ?? '');
-    expect(heads).toEqual(['Check my setup', 'Sign in', 'Your chats', 'Speed', 'Models', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Linux', 'Same file', '']);
+    expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Your chats', 'Speed', 'Models', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Linux', 'Same file', '']);
   });
 
   it('mounts the same-file switch under Same file and it is found by search', async () => {
@@ -234,7 +234,7 @@ describe('Agents: each control saves through its own command', () => {
 
   it('Accounts: Open login pane starts that agent under that account', async () => {
     await mount();
-    await click(buttonByText(m.host, 'Open sign-in window'));
+    await click(buttonByText(m.host, 'Sign in again'));
     await settle();
     expect(tauriAccountsApi.openLoginPane).toHaveBeenCalledExactlyOnceWith('claude', 'acc_9');
   });

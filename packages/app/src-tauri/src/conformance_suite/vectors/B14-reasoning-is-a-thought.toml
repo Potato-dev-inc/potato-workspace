@@ -1,0 +1,19 @@
+# Lab vector B14. See ../vector.rs for the format.
+id = "B14"
+title = "Reasoning arrives as a thought, not as message text"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["thoughts"]
+
+[[step]]
+do = "prompt"
+text = "rich"
+
+[[expect]]
+turn = 1
+thought = true
+
+[[expect]]
+turn = 1
+text_lacks = "thinking about it"

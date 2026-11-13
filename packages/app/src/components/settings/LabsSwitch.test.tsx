@@ -2,7 +2,7 @@
 // Development build: every Labs switch reads as on and is disabled, and the Labs page says why.
 // Outside a development build the switches are the plain ones.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { RowDef, SectionDef } from './model';
+import type { BaseSectionDef, RowDef } from './model';
 import { arrangeSections, LABS_INDEX_ID } from './arrange';
 import { LabsSwitch } from './LabsSwitch';
 import { click, hasText, mountRows, settle, type Mounted } from './test-utils';
@@ -50,7 +50,7 @@ describe('a Labs switch', () => {
 });
 
 describe('the Labs page note', () => {
-  const base: SectionDef[] = [
+  const base: BaseSectionDef[] = [
     {
       id: 'general',
       title: 'General',
@@ -58,7 +58,7 @@ describe('the Labs page note', () => {
       rows: [{ id: 'night-shift', label: 'Night Shift', labs: { name: 'Night Shift', about: 'Agents work overnight.' }, render: () => <span>switch</span> }],
     },
   ];
-  const labsIndexRow = (): RowDef => arrangeSections(base).find((s) => s.id === 'general')!.rows.find((r) => r.id === LABS_INDEX_ID)!;
+  const labsIndexRow = (): RowDef => arrangeSections(base).find((s) => s.id === 'advanced')!.rows.find((r) => r.id === LABS_INDEX_ID)!;
 
   it('is the first line of the Labs page while the development override is on', async () => {
     setDevLabsOverrideForTests(true);

@@ -1,6 +1,9 @@
 # Aider, generic. Install facts from https://aider.chat/docs/install.html: the Windows PowerShell
 # script https://aider.chat/install.ps1 and the uv package aider-chat. The page lists Python 3.8 to
 # 3.13 for uv; this uses 3.12. The script is the second, high-risk choice (after uv).
+# Lab note (LAB-REPORT.md, section 4.4, 2026-11-10): aider driven through a text shim passed the
+# creator rounds 10/0/0. That is a lab adapter, not a Potato Workspace run, so this definition
+# claims no one-task (headless) or chat table. Needs a real run before either is added.
 schema_version = 1
 
 [agent]

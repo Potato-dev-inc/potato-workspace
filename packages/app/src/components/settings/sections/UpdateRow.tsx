@@ -10,7 +10,7 @@ export function UpdateRow({ transport = tauriUpdateTransport, versionLine = '' }
   return (
     <SettingRow
       label="Version"
-      description={`${versionLine ? `${versionLine}. ` : ''}Potato Workspace looks for a new version now and then. Nothing installs until you press Update. Your agents, settings and projects stay as they are.`}
+      description={`${versionLine ? `Version ${versionLine}. ` : ''}Nothing installs until you press Update.`}
     >
       <div className="app-update-row">
         <Btn disabled={checking || state.phase === 'installing'} onClick={() => void state.check(true)}>

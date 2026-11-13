@@ -1,0 +1,29 @@
+# Lab vector B17. See ../vector.rs for the format.
+id = "B17"
+title = "One command asks exactly once, and an allow runs it"
+levels = ["native", "native_bad", "json", "text"]
+opts = "writes=1"
+cost = "fast"
+claims = ["permissions"]
+
+[[step]]
+do = "prompt"
+text = "permkind execute"
+
+[[step]]
+do = "answer"
+option = "allow_once"
+
+[[expect]]
+turn = 1
+asked = "execute"
+times = 1
+
+[[expect]]
+file = "permkind-execute.txt"
+exists = true
+content = "fake"
+
+[[expect]]
+turn = 1
+stop = "end_turn"

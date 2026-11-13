@@ -126,10 +126,13 @@ describe('General: every control renders', () => {
   });
 });
 
+/** One picture choice (a radio) of a group such as Theme. */
+const radio = (group: string, choice: string): HTMLElement => m.host.querySelector<HTMLElement>(`[role="radiogroup"][aria-label="${group}"] [role="radio"][aria-label="${choice}"]`)!;
+
 describe('General: each control saves a partial patch', () => {
   it('Theme saves only {theme}', async () => {
     await mount();
-    await pickOption(byLabel<HTMLSelectElement>(m.host, 'Theme')!, 'light');
+    await click(radio('Theme', 'Light'));
     expect(m.env.patches).toEqual([{ theme: 'light' }]);
   });
 
@@ -146,27 +149,25 @@ describe('General: each control saves a partial patch', () => {
 
   it('Window layout in Individual defaults to Side by side and saves only {individual_window_layout}', async () => {
     await mount();
-    const select = byLabel<HTMLSelectElement>(m.host, 'Window layout in Individual')!;
-    expect(select.value).toBe('side_by_side');
-    expect([...select.options].map((o) => o.textContent)).toEqual(['Side by side', 'Cascade']);
-    await pickOption(select, 'cascade');
-    await pickOption(select, 'side_by_side');
+    expect(radio('Window layout in Individual', 'Side by side').getAttribute('aria-checked')).toBe('true');
+    expect([...m.host.querySelectorAll('[aria-label="Window layout in Individual"] [role="radio"]')].map((o) => o.textContent)).toEqual(['Side by side', 'Cascade']);
+    await click(radio('Window layout in Individual', 'Cascade'));
+    await m.rerender();
+    await click(radio('Window layout in Individual', 'Side by side'));
     expect(m.env.patches).toEqual([{ individual_window_layout: 'cascade' }, { individual_window_layout: 'side_by_side' }]);
   });
 
   it('Window layout in Individual shows the saved choice and sits right after Mode switch animation', async () => {
     await mount({ settings: { ...makeEnv().settings, individual_window_layout: 'cascade' } });
-    expect(byLabel<HTMLSelectElement>(m.host, 'Window layout in Individual')!.value).toBe('cascade');
+    expect(radio('Window layout in Individual', 'Cascade').getAttribute('aria-checked')).toBe('true');
     const text = m.host.textContent ?? '';
     expect(text.indexOf('Mode switch animation')).toBeLessThan(text.indexOf('Window layout in Individual'));
   });
 
-  it('Mode switch animation shows the saved choice and Preview plays it', async () => {
+  it('Mode switch animation shows the saved choice and has one Play: the picture', async () => {
     await mount({ settings: { ...makeEnv().settings, mode_switch_animation: 'ink' } });
     expect(byLabel<HTMLSelectElement>(m.host, 'Mode switch animation')!.value).toBe('ink');
-    await click(buttonByText(m.host, 'Preview'));
-    const { cockpitApi } = await import('../../../lib/cockpit-api');
-    expect(cockpitApi.modeSwitchPreview).toHaveBeenCalledWith('ink');
+    expect(buttonByText(m.host, 'Preview')).toBeUndefined();
   });
 
   it('Ask before closing saves only {confirm_close_running_pane}', async () => {

@@ -32,20 +32,20 @@ describe('Orchestrator & Models: every control renders', () => {
     for (const id of ids) expect(m.host.querySelector(`[data-row="${id}"]`), `no row ${id}`).not.toBeNull();
   });
 
-  it('says the OpenCode model also applies to OpenCode chats, in 90 characters or fewer', async () => {
+  it('says the OpenCode model is used with the service above, in 90 characters or fewer', async () => {
     await mount({});
-    const hint = 'The model used with the provider above. Also applies to OpenCode chats.';
+    const hint = 'The model used with the service above.';
     expect(hasText(m.host, hint)).toBe(true);
     expect(hint.length).toBeLessThanOrEqual(90);
   });
 
   it('shows every control by its label and aria-label', async () => {
     await mount();
-    for (const label of ['Project index builder', 'OpenCode provider', 'OpenCode model']) {
+    for (const label of ['Project index', 'OpenCode: model service', 'OpenCode: model']) {
       expect(hasText(m.host, label), `missing label: ${label}`).toBe(true);
     }
     for (const aria of [
-      'Project index builder',
+      'Project index',
       'OpenCode provider ID',
       'OpenCode model ID',
     ]) {
@@ -77,22 +77,22 @@ describe('Orchestrator & Models: each control saves a partial patch', () => {
     }
   });
 
-  it('Librarian indexer clears to null after a pause in typing', async () => {
-    vi.useFakeTimers();
+  it('Project index clears to null when you leave the field, not while you type', async () => {
     await mount({ librarian_indexer_path: 'opencode' });
-    const field = byLabel<HTMLInputElement>(m.host, 'Project index builder')!;
+    const field = byLabel<HTMLInputElement>(m.host, 'Project index')!;
     expect(field.value).toBe('opencode');
     await typeInto(field, '');
     expect(m.env.patches).toHaveLength(0);
-    await act(async () => void (await vi.advanceTimersByTimeAsync(700)));
+    await blur(field);
     expect(m.env.patches).toEqual([{ librarian_indexer_path: null }]);
   });
 
-  it('Librarian indexer saves a typed path after a pause', async () => {
-    vi.useFakeTimers();
+  it('Project index saves a typed path when you leave the field', async () => {
     await mount({ librarian_indexer_path: 'opencode' });
-    await typeInto(byLabel<HTMLInputElement>(m.host, 'Project index builder')!, 'scripts/project-indexer.py');
-    await act(async () => void (await vi.advanceTimersByTimeAsync(700)));
+    const field = byLabel<HTMLInputElement>(m.host, 'Project index')!;
+    await typeInto(field, 'scripts/project-indexer.py');
+    expect(m.env.patches).toHaveLength(0);
+    await blur(field);
     expect(m.env.patches).toEqual([{ librarian_indexer_path: 'scripts/project-indexer.py' }]);
   });
 

@@ -280,3 +280,30 @@ fn a_sibling_that_does_not_answer_is_not_reported_and_nothing_is_checked() {
     assert!(out["candidates"].as_array().unwrap().is_empty(), "{out}");
     assert!(out["initialize_check"].is_null(), "{out}");
 }
+
+/// Help text that lists an `acp` row is not proof: the program gets a real `initialize` round trip. One that answers
+/// stays "high"; one that only prints help (or noise) is reported with the failed check and is no longer "high".
+#[cfg(windows)]
+#[test]
+fn acp_detect_requires_real_initialize() {
+    use crate::tui::declarative::wizard::acp::detect_program;
+    let tree = Tree::new("acp-detect-real-init");
+    let good = tree.root.join("goodbin");
+    write_cmd(&good, "shimagent.cmd", ACP_SHIM);
+    let liar = tree.root.join("liarbin");
+    // The help lists `acp`, but running it prints help again and never answers the handshake.
+    write_cmd(&liar, "shimagent.cmd", "echo Usage: shimagent [command]\necho   run   run a task\necho   acp   start the protocol server\nexit /b 0");
+    let detect = |dir: &Path| {
+        let dir = dir.to_path_buf();
+        let wizard = tree.wizard_with(move |e| e.path_dirs = Some(vec![dir.clone()]));
+        detect_program(&wizard, "shimagent").expect("detect")
+    };
+    let answered = detect(&good);
+    assert_eq!(answered["initialize_check"]["ok"], json!(true), "{answered}");
+    assert_eq!(answered["candidates"][0]["confidence"], json!("high"), "{answered}");
+    let silent = detect(&liar);
+    assert_eq!(silent["candidates"][0]["args"], json!(["acp"]), "{silent}");
+    assert_eq!(silent["initialize_check"]["ok"], json!(false), "{silent}");
+    assert!(silent["initialize_check"]["reason"].is_string(), "{silent}");
+    assert_eq!(silent["candidates"][0]["confidence"], json!("medium"), "help text alone is not proof: {silent}");
+}

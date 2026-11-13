@@ -1,0 +1,28 @@
+# Lab vector B07. See ../vector.rs for the format.
+id = "B07"
+title = "A shell command asks first, and a rejection stops it"
+levels = ["native", "native_bad", "json", "text"]
+opts = "writes=1"
+cost = "fast"
+claims = ["permissions"]
+
+[[step]]
+do = "prompt"
+text = "permkind execute"
+
+[[step]]
+do = "answer"
+option = "reject_once"
+
+[[expect]]
+turn = 1
+asked = "execute"
+times = 1
+
+[[expect]]
+file = "permkind-execute.txt"
+exists = false
+
+[[expect]]
+turn = 1
+stop = "end_turn"

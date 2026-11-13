@@ -32,8 +32,8 @@ export function McpUninstallBlock({ env }: { env: SettingsEnv }) {
 
   return (
     <SettingBlock
-      label="Uninstall MCP"
-      description="Remove potato-workspace from agent config files. Does not remove the app or the npm package. Restart MCP hosts afterwards."
+      label="Disconnect agents from Potato Workspace"
+      description="Removes the app from agent settings. The app stays. Restart the agents."
     >
       <div className="flex flex-wrap items-center gap-2">
         <Btn disabled={!installPath || busy !== null} onClick={() => void uninstallProject()}>

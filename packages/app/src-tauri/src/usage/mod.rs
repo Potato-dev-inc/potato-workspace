@@ -13,8 +13,11 @@
 pub mod oauth;
 pub mod readers;
 pub mod source;
+pub mod sqlite;
 #[cfg(test)]
 mod oauth_tests;
+#[cfg(test)]
+mod sqlite_tests;
 #[cfg(test)]
 mod tests;
 
@@ -22,7 +25,7 @@ use crate::accounts::{Account, Store};
 use crate::plans_report::limit_log::{self, Entry};
 use crate::tui::AccountScheme;
 use parking_lot::Mutex;
-use readers::{LineSpec, Reading, SignIn, Window};
+use readers::{LineSpec, Reading, SignIn, Totals, Window};
 use serde::Serialize;
 use source::{Reader, UsageSource};
 use std::path::{Path, PathBuf};
@@ -51,6 +54,9 @@ pub struct UsageRow {
     pub state: &'static str,
     pub reason: Option<String>,
     pub windows: Vec<Window>,
+    /// Pay-per-use agents: what was spent today and this week (no limit, so no windows).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub totals: Option<Totals>,
     pub plan: Option<String>,
     /// When the agent itself reported these numbers.
     pub observed_at_ms: Option<u64>,
@@ -297,6 +303,10 @@ fn sign_in(agent: &AgentUsage, login: &Login, probe: &dyn Probe) -> Signed {
 }
 
 fn read(source: &UsageSource, home: Option<&Path>, now: SystemTime) -> Option<Reading> {
+    if let Reader::SqliteTotals { file, table, time_column, data_column, only, model, cost, tokens, .. } = &source.reader {
+        let spec = sqlite::Spec { table, time_column, data_column, only: only.as_ref(), model, cost, tokens };
+        return sqlite::read_totals(&home?.join(file), &spec, now);
+    }
     let Reader::JsonlRateLimits { dir, file_prefix, max_age_days, object, observed_at, plan, reached, windows } = &source.reader else {
         return None;
     };
@@ -358,6 +368,7 @@ fn row_for(agent: &AgentUsage, login: &Login, inputs: &Inputs<'_>) -> Option<Usa
         state: "unknown",
         reason: None,
         windows: Vec::new(),
+        totals: None,
         plan: None,
         observed_at_ms: None,
         limited_until_ms: None,
@@ -380,9 +391,10 @@ fn row_for(agent: &AgentUsage, login: &Login, inputs: &Inputs<'_>) -> Option<Usa
                 .max();
         }
         row.windows = reading.windows;
+        row.totals = reading.totals;
         row.plan = reading.plan.filter(|p| !p.is_empty());
         row.observed_at_ms = reading.observed_at_ms;
-        if row.windows.is_empty() {
+        if row.windows.is_empty() && row.totals.is_none() {
             row.state = "unknown";
             row.reason = Some("The agent reported no limit windows.".into());
         }
@@ -393,7 +405,7 @@ fn row_for(agent: &AgentUsage, login: &Login, inputs: &Inputs<'_>) -> Option<Usa
         }
     } else {
         row.reason = Some(match (&agent.source.reader, &note) {
-            (Reader::None { reason } | Reader::StatusJson { reason, .. }, _) => reason.clone(),
+            (Reader::None { reason } | Reader::StatusJson { reason, .. } | Reader::SqliteTotals { reason, .. }, _) => reason.clone(),
             (Reader::OauthUsage { .. }, LoginNote::Off) => "Reading usage with your login is off in Settings.".into(),
             (Reader::OauthUsage { .. }, LoginNote::Failing(why)) => why.clone(),
             (Reader::OauthUsage { reason, .. }, _) => reason.clone(),

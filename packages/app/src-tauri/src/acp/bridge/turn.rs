@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 
 use crate::acp::job::{self, Containment};
+use super::extras::{ToolEvent, ToolRules, ToolScanner};
 use crate::tui::{HeadlessLaunch, LaunchEnv, TuiProfile};
 
 /// What one turn needs.
@@ -21,6 +22,8 @@ pub struct TurnRequest {
     /// The agent's own conversation id from an earlier turn (only passed when the profile can resume).
     pub resume: Option<String>,
     pub read_only: bool,
+    /// The model the person picked in the chat (passed only when the profile takes one); `None` = the agent's own.
+    pub model: Option<String>,
 }
 
 /// Every wait has a limit written down here.
@@ -245,7 +248,9 @@ pub fn run_turn(
     request: &TurnRequest,
     limits: &TurnLimits,
     ctl: &TurnControl,
+    tools: Option<&Arc<ToolRules>>,
     emit: &mut dyn FnMut(&str),
+    on_tool: &mut dyn FnMut(ToolEvent),
 ) -> TurnEnd {
     if ctl.is_cancelled() {
         return TurnEnd::Cancelled;
@@ -258,7 +263,8 @@ pub fn run_turn(
     if let Err(gate) = profile.spawn_gate(&project) {
         return TurnEnd::Failed(gate.message);
     }
-    // Only what the definition declares for headless: no shell opt-in, no trust opt-in, no model override.
+    // Only what the definition declares for headless: no shell opt-in, no trust opt-in. A model is passed only
+    // when the person picked one from the agent's own list and the definition has a model segment.
     let launch = HeadlessLaunch {
         project: &project,
         task: &request.prompt,
@@ -266,7 +272,7 @@ pub fn run_turn(
         resume_session: request.resume.as_deref(),
         trust_workspace: false,
         allow_shell: false,
-        model: None,
+        model: request.model.as_deref().filter(|_| profile.accepts_headless_model()),
         reasoning: None,
     };
     let spec = match crate::tui::headless_launch_with(profile, profile.id(), &launch) {
@@ -296,6 +302,7 @@ pub fn run_turn(
     let mut output = String::new();
     let mut pending: Vec<u8> = Vec::new();
     let mut emitter = Emitter::default();
+    let mut scanner = tools.map(|rules| ToolScanner::new(rules.clone()));
     let mut last_extract = Instant::now();
     let mut new_lines = false;
     let mut stdout_done = false;
@@ -335,6 +342,9 @@ pub fn run_turn(
         if new_lines && last_extract.elapsed() >= limits.extract_every {
             last_extract = Instant::now();
             new_lines = false;
+            if let Some(scanner) = scanner.as_mut() {
+                scanner.scan(&output, false).into_iter().for_each(&mut *on_tool);
+            }
             if let Some(text) = profile.extract_result(&output, 0) {
                 emitter.offer(&text, false, emit);
             }
@@ -359,10 +369,15 @@ pub fn run_turn(
         }
     };
     ctl.detach();
+    // Whatever the end, the lines read so far are scanned, and a card still open ends as failed (none spins forever).
+    take_text(&mut pending, &mut output, limits.max_output_bytes, true);
+    if let Some(scanner) = scanner.as_mut() {
+        scanner.scan(&output, true).into_iter().for_each(&mut *on_tool);
+        scanner.close_open().into_iter().for_each(&mut *on_tool);
+    }
     if !matches!(end, TurnEnd::Done { .. }) {
         return end;
     }
-    take_text(&mut pending, &mut output, limits.max_output_bytes, true);
     let code = exit.unwrap_or(-1);
     if code != 0 {
         return TurnEnd::Failed(failure_sentence(profile, label, &output, code, &stderr));

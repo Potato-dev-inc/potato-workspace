@@ -1,0 +1,31 @@
+# Lab vector S17. See ../vector.rs for the format.
+id = "S17"
+title = "A stop ends the agent's command and everything it started; the next message works"
+levels = ["native"]
+opts = "grandchild=1"
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt"
+text = "toolhang"
+
+[[step]]
+do = "cancel"
+after_ms = 300
+
+[[step]]
+do = "prompt"
+text = "stream 2"
+
+[[expect]]
+turn = 1
+stop = "cancelled"
+within_ms = 5000
+
+[[expect]]
+turn = 2
+stop = "end_turn"
+
+[[expect]]
+no_orphans = true

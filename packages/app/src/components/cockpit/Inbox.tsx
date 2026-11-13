@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { projectWithCopy } from './shell-labels';
 import { hasEverSpawned } from '../../lib/agent-health';
-import { sortInbox, type InboxEntry } from '../../lib/inbox-order';
+import { inboxCardCount, sortInbox, type InboxEntry } from '../../lib/inbox-order';
 import { isBudget, isCiCard, isConsent, isIssueCard, isLimit, type QuestionAnswer } from '../../lib/questions';
 import { patchSettings } from '../../lib/settings';
 import { PaneApprovalCard } from './PaneApprovalCard';
@@ -84,13 +84,14 @@ export function Inbox({
   const missions = useMissions();
   // One Team read for the red-branch banner on top and the Team section below.
   const team = useTeam();
-  const count = blockingItems(needs).length;
-  const waiting = c.registry.paneList.filter((p) => !isCompanionPaneId(p.info.id) && itemsOfKind(needs, 'approval').some((i) => i.paneId === p.info.id));
-  const errored = c.registry.paneList.filter((p) => !isCompanionPaneId(p.info.id) && itemsOfKind(needs, 'error').some((i) => i.paneId === p.info.id));
+  // The pane cards use the same de-duplicated list the badge counts (a pane has one problem card, not two).
+  const blocking = blockingItems(needs);
+  const waiting = c.registry.paneList.filter((p) => !isCompanionPaneId(p.info.id) && itemsOfKind(blocking, 'approval').some((i) => i.paneId === p.info.id));
+  const errored = c.registry.paneList.filter((p) => !isCompanionPaneId(p.info.id) && itemsOfKind(blocking, 'error').some((i) => i.paneId === p.info.id));
   const noPanes = c.registry.paneList.length === 0 && c.registry.initialReady;
   const firstRun = noPanes && !hasEverSpawned();
   const setUp = onSetUp === undefined ? onOpenDoctor : onSetUp;
-  const stuckIds = itemsOfKind(needs, 'stuck').flatMap((i) => (i.paneId ? [i.paneId] : []));
+  const stuckIds = itemsOfKind(blocking, 'stuck').flatMap((i) => (i.paneId ? [i.paneId] : []));
 
   // The sign-ins, for a usage-limit card's "Use another sign-in". No store (browser, old backend): the button stays away.
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -276,6 +277,9 @@ export function Inbox({
   };
   const nextCard = useNextCard(root, entries.map((e) => e.key), nameOfKey);
 
+  // The heading counts the cards the person can see: the list above (a stopped companion's card is a helper, not a
+  // waiting item, so the sidebar badge leaves it out) and the mission cards drawn by MissionsSection.
+  const count = inboxCardCount(entries.map((e) => e.kind), blocking);
   const quick = entries.some((e) => e.quick);
   const title = firstRun ? 'Welcome to Potato Workspace' : count === 0 ? 'Nothing needs you' : count === 1 ? 'One thing needs you' : `${count} things need you`;
 

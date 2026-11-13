@@ -250,7 +250,7 @@ describe('AgentWizard', () => {
     const api = mockApi();
     await render(api, mockCustomAi());
     await findIt();
-    expect(api.start).toHaveBeenCalledWith('fake-agent', true);
+    expect(api.start).toHaveBeenCalledWith('fake-agent', false);
     expect(api.probe).toHaveBeenCalledWith('wz_1');
     const found = host.querySelector('[data-testid="wizard-found"]');
     expect(found?.textContent).toContain('Found fake-agent');

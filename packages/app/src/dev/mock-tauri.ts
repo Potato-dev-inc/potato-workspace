@@ -47,6 +47,8 @@ import type { ClosedChat } from '../lib/closedChats';
 import { whatBrokeItMock } from './what-broke-it-fixtures';
 import { whatBrokeItResultMock } from './what-broke-it-result-fixtures';
 import { collisionMock } from './collision-fixtures';
+import { addAgentMock } from './add-agent-fixtures';
+import { agentCapsMock } from './agent-caps-fixtures';
 
 const DOCTOR_ROWS = [
   { id: 'claude', label: 'Claude', state: 'unchecked', installed: true, version: '2.1.4 (Claude Code)', reason: 'Installed. Press Test to check it can answer.', install_hint: 'winget install Anthropic.ClaudeCode', install_fallback: 'npm i -g @anthropic-ai/claude-code', login_hint: 'Open Claude and type /login', can_test: true, hooks: { state: 'connected', mode: 'shadow', sentence: 'Connected. Claude tells Potato Workspace when it starts, asks and finishes. Watch only: Potato Workspace still decides from the screen.' } },
@@ -89,6 +91,10 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (keepGoing.handled) return keepGoing.value;
       const branch = branchMock(scenario.branch, cmd, a);
       if (branch.handled) return branch.value;
+      const addAgent = addAgentMock(scenario.addAgent, cmd, a);
+      if (addAgent.handled) return addAgent.value;
+      const agentCaps = agentCapsMock(cmd, a);
+      if (agentCaps.handled) return agentCaps.value;
       const collision = collisionMock(scenario.collision, cmd, a);
       if (collision.handled) return collision.value;
       const night = nightMock(scenario.night, cmd, a);
@@ -313,6 +319,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { active_profile: 'a', profiles: [{ id: 'a', label: 'Primary', configured: true }, { id: 'b', label: 'Secondary', configured: false }], key_automation_mode: 'notify_only', restart_pane_on_rotate: true };
         // Chat sessions (ACP) are off in the preview: no agent offers Chat, and no terminal holds a conversation.
         case 'agent_lane_get':
+          // A scenario can turn Chat on for Claude (`window.__chatLane`), e.g. to show the live model list.
+          if ((window as unknown as { __chatLane?: boolean }).__chatLane) return { labs_enabled: true, agents: [{ id: 'claude', lane: 'acp', disabled: false }] };
           return { labs_enabled: false, agents: [] };
         // The Chat tab opens the pane's session file; the preview has none, so it says "not available" (a null answer blanked the page).
         case 'session_chat_open':
@@ -323,9 +331,18 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return null;
         // The model pickers: Claude starts a pane on a model; every other agent lists none in the preview.
         case 'agent_model_options':
-          return a.agentId === 'claude'
-            ? { terminal: true, default_model: 'sonnet', models: ['opus', 'sonnet', 'haiku'] }
-            : { terminal: false, default_model: null, models: [] };
+          // `live` is what the agent's chats last reported (the chat picker's list).
+          if (a.agentId === 'claude') return { terminal: true, default_model: 'sonnet', models: ['opus', 'sonnet', 'haiku'], live: { options: [
+            { value: 'default', name: 'Default (recommended) · Opus 5.5', description: 'Opus 5.5 with 1M context · Most capable for complex work' },
+            { value: 'opus', name: 'Opus 5.5', description: 'Most capable for complex work' },
+            { value: 'fable', name: 'Fable 5.2', description: 'Fast and good at everyday work' },
+            { value: 'sonnet', name: 'Sonnet 5.5', description: 'Best for everyday tasks' },
+            { value: 'haiku', name: 'Haiku 5.5', description: 'Fastest for quick answers' },
+          ] } };
+          if (a.agentId === 'opencode') {
+            return { terminal: false, default_model: null, models: ['opencode-go/deepseek-v4.1-flash', 'opencode-go/glm-5', 'opencode-go/kimi-k2.5', 'opencode/big-pickle', 'opencode/gpt-5-nano', 'anthropic/claude-sonnet-4-5', 'anthropic/claude-haiku-4-5', 'openai/gpt-5.1', 'openai/gpt-5-mini', 'google/gemini-2.5-pro'] };
+          }
+          return { terminal: false, default_model: null, models: [] };
         case 'agent_run_mode_get':
         case 'agent_run_mode_set':
           // The dev harness has no custom agents to choose for.

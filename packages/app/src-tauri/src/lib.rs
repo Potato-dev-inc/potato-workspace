@@ -13,6 +13,7 @@ pub mod agent_runs;
 mod agent_health;
 mod agent_install;
 mod agent_store;
+mod agent_caps;
 pub mod agent_hooks;
 pub mod app_lifecycle;
 mod autostart;
@@ -151,6 +152,8 @@ mod capacity_proxy;
 mod keep_awake;
 mod wsl;
 mod collision;
+#[cfg(test)]
+mod conformance_suite;
 
 use commands::AppState;
 use std::path::{Path, PathBuf};
@@ -795,9 +798,24 @@ pub fn run() {
             commands::companion_checkins_set,
             commands::companion_feed,
             commands::companion_open_folder,
+            commands::agent_caps_get,
+            commands::agent_caps_list,
+            commands::add_agent_start,
+            commands::add_agent_status,
+            commands::add_agent_cancel,
+            commands::add_agent_approve_install,
+            commands::agents_detect_installed,
         ])
         .setup(|app| {
             commands::startup_probe(app.handle().clone());
+            // The window hears when an agent's capability table changes (agent-caps://changed).
+            {
+                use tauri::Emitter;
+                let handle = app.handle().clone();
+                agent_caps::set_notifier(move |agent_id| {
+                    let _ = handle.emit("agent-caps://changed", serde_json::json!({ "agent_id": agent_id }));
+                });
+            }
             // Agents keep working when the PC is locked: hold it awake while any pane is busy.
             keep_awake::spawn(app.state::<AppState>().registry.clone());
             // Copy (never move) the data release 1.0.3 left under the old names once: the home and

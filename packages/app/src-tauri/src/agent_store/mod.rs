@@ -12,6 +12,9 @@ pub mod add;
 // `problems`, `embedded_definition` and `detect` are used by the tests and by later tasks.
 #[allow(dead_code)]
 pub mod catalog;
+// Finds the agents already on this PC. The Tauri command that calls it is wired by a later task.
+#[allow(dead_code)]
+pub mod detect;
 // The catalog check runs as a test and in CI only; the app never calls it.
 #[allow(dead_code)]
 pub mod check;
@@ -22,6 +25,10 @@ pub mod record;
 pub mod state;
 pub mod uninstall;
 
+#[cfg(test)]
+mod catalog_claims_tests;
+#[cfg(test)]
+mod detect_tests;
 #[cfg(test)]
 mod tests;
 

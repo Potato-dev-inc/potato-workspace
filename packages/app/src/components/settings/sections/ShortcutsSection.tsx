@@ -142,7 +142,7 @@ function ShortcutRow({ entry, env }: { entry: ShortcutEntry; env: SettingsEnv })
 
   const shown = current ? bindingLabel(entry.id, mac, overrides) : 'Off';
   return (
-    <SettingRow label={entry.label} description={describe(entry)}>
+    <SettingRow label={entry.label} description={entry.bind?.digits ? describe(entry) : undefined}>
       <div className="st-shortcut" data-shortcut={entry.id}>
         {phase.kind === 'recording' ? (
           <button type="button" className="st-btn is-small" autoFocus aria-label={`Press the new keys for ${entry.label}. Esc cancels.`} onKeyDown={onKey} onBlur={() => setPhase({ kind: 'idle' })}>
@@ -150,14 +150,24 @@ function ShortcutRow({ entry, env }: { entry: ShortcutEntry; env: SettingsEnv })
           </button>
         ) : (
           <>
-            <span className="st-value" aria-label={`Current keys: ${shown}`}>
+            {global && <span className="st-anyapp">Any app</span>}
+            {/* The keys are the button: click them to change. */}
+            <button
+              type="button"
+              className="st-keycap"
+              data-off={current === null ? 'true' : undefined}
+              disabled={busy}
+              title="Click to change"
+              aria-label={`Change keys for ${entry.label}. Now: ${shown}`}
+              onClick={() => {
+                setError(null);
+                setPhase({ kind: 'recording' });
+              }}
+            >
               {shown}
-            </span>
-            <Btn small disabled={busy} aria-label={`Change keys for ${entry.label}`} onClick={() => { setError(null); setPhase({ kind: 'recording' }); }}>
-              Change
-            </Btn>
+            </button>
             {current !== null && (
-              <Btn small disabled={busy} aria-label={`Turn off ${entry.label}`} onClick={() => void save(DISABLED)}>
+              <Btn small className="st-turnoff" disabled={busy} aria-label={`Turn off ${entry.label}`} onClick={() => void save(DISABLED)}>
                 Turn off
               </Btn>
             )}

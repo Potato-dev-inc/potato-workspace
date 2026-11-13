@@ -96,6 +96,7 @@ pub struct Engine {
     notice: Option<(String, Option<u64>)>,
     ctrl_c_armed: bool,
     exit: Option<i32>,
+    exit_stderr: Option<String>,
     log: Option<std::fs::File>,
     transcript: Option<crate::transcript::Transcript>,
 }
@@ -166,6 +167,7 @@ impl Engine {
             notice: None,
             ctrl_c_armed: false,
             exit: None,
+            exit_stderr: None,
             log,
             transcript,
         };
@@ -186,6 +188,11 @@ impl Engine {
 
     pub fn exit_code(&self) -> Option<i32> {
         self.exit
+    }
+
+    /// The line an exit step wants on stderr as the process leaves.
+    pub fn exit_stderr(&self) -> Option<&str> {
+        self.exit_stderr.as_deref()
     }
 
     pub fn resize(&mut self, cols: usize, rows: usize, now: u64) {
@@ -745,7 +752,8 @@ impl Engine {
                     }
                     return;
                 }
-                Step::Exit { code } => {
+                Step::Exit { code, stderr } => {
+                    self.exit_stderr = stderr;
                     self.exit_with(code, now);
                     return;
                 }
@@ -754,6 +762,13 @@ impl Engine {
                     self.blocks.push(Block::Raw(message.lines().map(str::to_string).collect()));
                     self.exit_with(code, now);
                     return;
+                }
+                Step::Spew { bytes, kind } => {
+                    let rows = match kind {
+                        crate::script::SpewKind::Line => vec!["x".repeat(bytes)],
+                        crate::script::SpewKind::Binary => junk_rows(bytes),
+                    };
+                    self.blocks.push(Block::Raw(rows));
                 }
                 Step::Screen { text } => self.blocks.push(Block::Raw(text.lines().map(str::to_string).collect())),
                 Step::Hold { text } => {
@@ -1790,4 +1805,27 @@ steps = [{ do = \"say\", text = \"ok\" }]");
         assert!(frame.rows.len() <= 40);
         assert!(frame.rows.iter().all(|row| render::visible_len(row) <= 120));
     }
+}
+
+/// `bytes` bytes of junk as screen rows: control characters (never ESC), replacement characters, lone carriage
+/// returns; a new row every 4096 bytes.
+fn junk_rows(bytes: usize) -> Vec<String> {
+    const JUNK: [char; 8] = ['\u{1}', '\u{fffd}', '\u{2}', '\r', '\u{7f}', '\u{fffd}', '\u{3}', '\u{8}'];
+    let mut rows = Vec::new();
+    let mut row = String::new();
+    let mut used = 0;
+    let mut n = 0;
+    while used < bytes {
+        let c = JUNK[n % JUNK.len()];
+        n += 1;
+        used += c.len_utf8();
+        row.push(c);
+        if used / 4096 != (used - c.len_utf8()) / 4096 {
+            rows.push(std::mem::take(&mut row));
+        }
+    }
+    if !row.is_empty() {
+        rows.push(row);
+    }
+    rows
 }

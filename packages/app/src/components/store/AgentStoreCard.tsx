@@ -51,7 +51,7 @@ export function AgentStoreCard({ card, onOpen }: AgentStoreCardProps) {
     <article className="ck-store-card" data-state={card.state} data-tier={card.tier}>
       <div className="ck-store-card-head">
         <span className="ck-store-icon" aria-hidden="true">
-          <AgentLogo id={card.id} size={16} decorative fallback={card.icon} />
+          <AgentLogo id={card.id} size={16} decorative />
         </span>
         <div className="ck-store-card-title">
           <span className="ck-row-title">{card.label}</span>

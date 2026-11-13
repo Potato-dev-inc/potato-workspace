@@ -18,50 +18,50 @@ const CODEX_MCP = '[mcp_servers.potato-workspace]\ncommand = "npx"\nargs = ["-y"
 export const bridgeRows: RowDef[] = [
   {
     id: 'toolbelt',
-    label: 'Toolbelt',
-    hint: "Add an MCP server once; Potato Workspace writes it into every agent's own config.",
-    keywords: 'mcp servers apply to all agents import secrets scope',
+    label: 'Tools for every agent',
+    hint: "Add a tool server once. It is written into each agent's settings.",
+    keywords: 'toolbelt mcp servers apply to all agents import secrets scope',
     render: (env) => <ToolbeltGroup projectPath={installPathOf(env) || null} />,
   },
   {
     id: 'agent-pack',
-    label: 'Add Potato Workspace to your agents',
-    hint: 'Teach each agent when to ask another for help. Review first; Undo puts it back.',
-    keywords: 'skills skill plugin install teach delegate second opinion claude code codex cursor opencode add agents undo',
+    label: 'Let agents ask each other for help',
+    hint: 'Teaches each agent when to ask another. Review first; Undo puts it back.',
+    keywords: 'add potato workspace to your agents mcp skills skill plugin install teach delegate second opinion claude code codex cursor opencode add agents undo',
     render: () => <AgentPackGroup />,
   },
   {
     id: 'bridge-endpoint',
-    label: 'Bridge address',
-    hint: 'Where other tools reach Potato Workspace on this computer. Found automatically.',
-    keywords: 'bridge endpoint port ports url local http address 17421 17499',
+    label: 'Local address',
+    hint: 'Where other tools reach this app on this computer. Found by itself.',
+    keywords: 'bridge address endpoint port ports url local http address 17421 17499',
     group: 'Bridge',
     render: (env) => (
       <InfoRow
-        label="Bridge address"
-        description="Where other tools reach Potato Workspace on this computer. Found automatically."
+        label="Local address"
+        description="Where other tools reach this app on this computer. Found by itself."
         value={env.bridgeUrl ?? 'Not found yet'}
       />
     ),
   },
   {
     id: 'mcp-status',
-    label: 'Runtime status',
-    hint: 'Checks the bridge, MCP runtime, Node.js and agent configs. Repair fixes project files.',
-    keywords: 'status repair recheck node nodejs npx npm cursor claude desktop codex opencode bridge port mcp.json runtime health',
+    label: 'Connection check',
+    hint: "Checks the local address, the helper program and each agent's settings.",
+    keywords: 'runtime status mcp bridge repair recheck node nodejs npx npm cursor claude desktop codex opencode bridge port mcp.json runtime health',
     group: 'Bridge',
     render: (env) => <McpStatusBlock env={env} />,
   },
   {
     id: 'rust-mcp',
-    label: 'Use bundled Rust MCP',
-    hint: 'When on, MCP configs start the bundled Rust MCP instead of npx.',
-    keywords: 'rust binary bundled npx npm node runtime developer',
+    label: 'Use the built-in helper program',
+    hint: 'On: agents start the helper that ships with the app. Off: they use npx.',
+    keywords: 'bundled rust mcp binary bundled npx npm node runtime developer',
     group: 'Bridge',
     render: (env) => (
       <SettingToggle
-        label="Use bundled Rust MCP"
-        description="When on, MCP configs start the bundled Rust MCP instead of npx."
+        label="Use the built-in helper program"
+        description="On: agents start the helper that ships with the app. Off: they use npx."
         checked={Boolean(env.settings.developer_use_rust_mcp)}
         onChange={(value) => void env.patch({ developer_use_rust_mcp: value })}
       />
@@ -69,34 +69,34 @@ export const bridgeRows: RowDef[] = [
   },
   {
     id: 'mcp-install',
-    label: 'Install MCP runtime',
-    hint: 'Register Claude, Codex and OpenCode to use the selected runtime.',
-    keywords: 'install register claude code codex opencode cursor claude desktop npx node repair mcp.json project global runtime',
+    label: 'Connect Claude, Codex and OpenCode',
+    hint: 'Writes the helper program into their settings.',
+    keywords: 'install mcp runtime register claude code codex opencode cursor claude desktop npx node repair mcp.json project global runtime',
     group: 'Install',
     render: (env) => <McpInstallBlock env={env} />,
   },
   {
     id: 'snippet-claude-desktop',
-    label: 'Claude Desktop config',
-    hint: "Add this to Claude Desktop's MCP settings by hand. Potato Workspace won't write it.",
+    label: 'Set up Claude Desktop by hand',
+    hint: "Copy this into Claude Desktop's settings. The app won't write it.",
     keywords: 'claude desktop config json mcp.json cursor npx manual copy',
     group: 'Install',
-    render: () => <CodeBlock title="Claude Desktop config" code={CLAUDE_DESKTOP_MCP} />,
+    render: () => <CodeBlock title="Set up Claude Desktop by hand" code={CLAUDE_DESKTOP_MCP} />,
   },
   {
     id: 'snippet-codex',
-    label: 'Codex config',
-    hint: 'Copy this if you set up Codex by hand instead of using Install.',
+    label: 'Set up Codex by hand',
+    hint: 'Copy this if you would rather not use Connect.',
     keywords: 'codex config toml mcp_servers npx node manual copy',
     group: 'Install',
-    render: () => <CodeBlock title="Codex config" code={CODEX_MCP} />,
+    render: () => <CodeBlock title="Set up Codex by hand" code={CODEX_MCP} />,
   },
   ...securityRows,
   {
     id: 'mcp-uninstall',
-    label: 'Uninstall MCP',
-    hint: 'Removes the app from agent configs. The app and package stay. Restart MCP hosts.',
-    keywords: 'remove delete uninstall mcp.json codex opencode claude code cursor claude desktop global project config npx node',
+    label: 'Disconnect agents from Potato Workspace',
+    hint: 'Removes the app from agent settings. The app stays. Restart the agents.',
+    keywords: 'uninstall mcp remove delete mcp.json codex opencode claude code cursor claude desktop global project config npx node',
     group: 'Uninstall',
     danger: true,
     render: (env) => <McpUninstallBlock env={env} />,

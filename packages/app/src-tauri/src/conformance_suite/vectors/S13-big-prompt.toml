@@ -1,0 +1,18 @@
+# Lab vector S13. See ../vector.rs for the format.
+id = "S13"
+title = "A prompt of a million characters is accepted and counted whole"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt_big"
+prefix = "len "
+fill = "x"
+count = 1000007
+
+[[expect]]
+turn = 1
+stop = "end_turn"
+text_has = "len:1000011"

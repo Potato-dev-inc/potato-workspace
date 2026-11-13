@@ -13,7 +13,6 @@ vi.mock('../settings/catalog', async () => {
   const { TextControl } = await import('../settings/controls');
   type Env = import('../settings/model').SettingsEnv;
   return {
-    LATER_ITEMS: [],
     SECTIONS: [
       {
         id: 'general',

@@ -1,0 +1,16 @@
+# Lab vector B02. See ../vector.rs for the format.
+id = "B02"
+title = "Text arrives in several chunks, then end_turn"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["streaming"]
+
+[[step]]
+do = "prompt"
+text = "stream 15"
+
+[[expect]]
+turn = 1
+stop = "end_turn"
+chunks_at_least = 3

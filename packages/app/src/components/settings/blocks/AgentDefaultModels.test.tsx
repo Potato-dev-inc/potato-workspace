@@ -8,11 +8,12 @@ import type { ModelOptions } from '../../../lib/modelOptions';
 import { rowMatches, searchSections } from '../model';
 import { SECTIONS } from '../catalog';
 import { agentsRows } from '../sections/AgentsSection';
-import { BASE_SETTINGS, click, mountRows, settle, type Mounted } from '../test-utils';
+import { BASE_SETTINGS, click, mountRows, settle, type, type Mounted } from '../test-utils';
 import { AGENT_MODELS_HINT } from './AgentDefaultModels';
 
 const options = vi.hoisted(() => ({
   alpha: { terminal: true, defaultModel: 'gpt-5.1', models: ['gpt-5.1', 'gpt-5-mini'] },
+  claude: { terminal: true, defaultModel: 'sonnet', models: ['opus', 'sonnet', 'haiku'] },
   chatty: { terminal: false, defaultModel: null, models: ['m1', 'm2'] },
   shell: { terminal: false, defaultModel: null, models: [] },
 }) as Record<string, ModelOptions>);
@@ -25,7 +26,7 @@ vi.mock('../../../lib/modelOptions', async (importOriginal) => {
 vi.mock('../../../lib/agentRegistry', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/agentRegistry')>();
   const agent = (id: string, label: string, installed = true, kind = 'cli') => ({ id, label, installed, kind }) as unknown as AgentRegistryListing['agents'][number];
-  const agents = [agent('alpha', 'Alpha'), agent('chatty', 'Chatty'), agent('shell', 'PowerShell', true, 'shell'), agent('gone', 'Gone', false)];
+  const agents = [agent('alpha', 'Alpha'), agent('claude', 'Claude'), agent('chatty', 'Chatty'), agent('shell', 'PowerShell', true, 'shell'), agent('gone', 'Gone', false)];
   return { ...real, useAgentRegistry: () => ({ ...real.fallbackListing(), agents }) };
 });
 
@@ -68,14 +69,14 @@ describe('Default model per agent', () => {
     m = await mountRows(row);
     await settle(10);
     await click(chipFor('alpha'));
-    await click([...m.host.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent === 'Gpt-5-mini'));
+    await click([...document.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent === 'Gpt-5-mini'));
     await settle(5);
     expect(m.env.patches).toEqual([{ agent_default_models: { alpha: 'gpt-5-mini' } }]);
     await m.rerender();
     await settle(5);
     expect(chipFor('alpha')?.textContent).toContain('Gpt-5-mini');
     await click(chipFor('alpha'));
-    await click([...m.host.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent?.startsWith("Agent's own default")));
+    await click([...document.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent?.startsWith("Agent's own default")));
     await settle(5);
     expect(m.env.patches.at(-1)).toEqual({ agent_default_models: {} });
   });
@@ -86,5 +87,29 @@ describe('Default model per agent', () => {
     m = await mountRows(row);
     await settle(10);
     expect(chipFor('alpha')).not.toBeNull();
+  });
+
+  it('lists the models of an agent that has them (Claude) in a menu outside the card, so nothing clips it', async () => {
+    m = await mountRows(row);
+    await settle(10);
+    await click(chipFor('claude'));
+    const menu = document.querySelector<HTMLElement>('.mp-menu');
+    expect(menu).not.toBeNull();
+    expect(m.host.contains(menu)).toBe(false);
+    expect(menu?.style.position).toBe('fixed');
+    const names = [...menu!.querySelectorAll('[role=option]')].map((o) => o.textContent);
+    expect(names).toEqual(expect.arrayContaining(['Opus', 'Sonnet', 'Haiku']));
+    expect(menu?.querySelector('input')).not.toBeNull();
+  });
+
+  it('every agent takes a typed model id, and it is saved as typed', async () => {
+    m = await mountRows(row);
+    await settle(10);
+    await click(chipFor('claude'));
+    const box = document.querySelector<HTMLInputElement>('.mp-menu input')!;
+    await type(box, 'claude-opus-4-1');
+    await click([...document.querySelectorAll<HTMLElement>('.mp-menu [role=option]')].find((o) => o.textContent?.includes('claude-opus-4-1')));
+    await settle(5);
+    expect(m.env.patches.at(-1)).toEqual({ agent_default_models: { claude: 'claude-opus-4-1' } });
   });
 });

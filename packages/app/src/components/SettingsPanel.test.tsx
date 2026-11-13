@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-// The Settings shell: sections, row search, Coming later, autosave plumbing, fresh state, confirm sheet.
+// The Settings shell: eight pages (Overview first), row search, autosave plumbing, fresh state, confirm sheet.
 // The catalog is replaced by a tiny one so these tests cover the panel, not the sections (each section has its own test).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Settings } from '@potato-workspace/shared';
 import { BASE_SETTINGS, blur, click, settle, type as typeInto } from './settings/test-utils';
+import { fakeOverviewSources } from './settings/overview-test-utils';
 import type { SettingsRefreshInfo } from '../lib/settings-sync';
 
 const recovery = vi.hoisted(() => ({ status: { damaged: false, hasBackup: true }, restore: vi.fn(async () => undefined), dismiss: vi.fn(async () => undefined) }));
@@ -18,15 +19,14 @@ vi.mock('./settings/catalog', async () => {
   const { SettingRow, SettingToggle, Btn } = await import('./settings/settings-ui');
   const { NumberControl, TextControl } = await import('./settings/controls');
   return {
-    LATER_ITEMS: [
-      { title: 'Cost controls', note: 'Daily limits.' },
-      { title: 'Plugins', note: 'Add-ons.' },
-    ],
     SECTIONS: [
+      { id: 'overview', title: 'Overview', blurb: 'Is everything OK?', rows: [{ id: 'setup-check', label: 'Check my setup', hint: 'What works.', level: 'basic', group: 'Setup', render: () => <SettingRow label="Check my setup" /> }] },
+      { id: 'agents', title: 'Agents', blurb: 'Agents.', rows: [{ id: 'accounts', label: 'Sign in', hint: 'Sign in to each agent.', level: 'basic', group: 'Sign in', render: () => <SettingRow label="Sign in" /> }] },
+      { id: 'helpers', title: 'Helpers', blurb: 'Helpers.', rows: [{ id: 'helper-agents', label: 'Helper agents', hint: 'Shown or hidden.', level: 'basic', group: 'How helpers run', render: () => <SettingRow label="Helper agents" /> }] },
       {
-        id: 'general',
-        title: 'General',
-        blurb: 'General things.',
+        id: 'look',
+        title: 'Look and feel',
+        blurb: 'Look things.',
         rows: [
           {
             id: 'theme',
@@ -79,6 +79,7 @@ vi.mock('./settings/catalog', async () => {
           },
         ],
       },
+      { id: 'connect', title: 'Connect', blurb: 'Connect.', rows: [{ id: 'pairing', label: 'Pair a phone', hint: 'Scan a code.', level: 'basic', group: 'Phone', render: () => <SettingRow label="Pair a phone" /> }] },
       {
         id: 'keys',
         title: 'Keys',
@@ -97,6 +98,17 @@ vi.mock('./settings/catalog', async () => {
             pointer: true,
             render: (env: import('./settings/model').SettingsEnv) => <Btn onClick={() => env.openRow?.('folder')}>Go to folder</Btn>,
           },
+        ],
+      },
+      { id: 'shortcuts', title: 'Shortcuts', blurb: 'Keys.', rows: [{ id: 'shortcut-palette', label: 'Open the palette', hint: 'A shortcut.', group: 'Search', render: () => <SettingRow label="Open the palette" /> }] },
+      {
+        id: 'advanced',
+        title: 'Advanced',
+        blurb: 'For developers.',
+        closedGroups: ['Tools'],
+        rows: [
+          { id: 'toolbelt', label: 'Tools for every agent', hint: 'Add a tool server once.', group: 'Tools', render: () => <SettingRow label="Tools for every agent" /> },
+          { id: 'bridge-endpoint', label: 'Local address', hint: 'Where other tools reach this app.', level: 'developer', group: 'Tools', render: () => <SettingRow label="Local address" /> },
         ],
       },
     ],
@@ -133,7 +145,7 @@ function makeApi(): typeof api {
 
 async function mount(props: Partial<React.ComponentProps<typeof SettingsPanel>> = {}) {
   await act(async () => {
-    root.render(<SettingsPanel open api={api} {...props} />);
+    root.render(<SettingsPanel open api={api} initialTab="look" overviewSources={fakeOverviewSources()} {...props} />);
   });
   await settle(5);
 }
@@ -177,12 +189,20 @@ describe('a damaged settings file', () => {
 });
 
 describe('shell', () => {
-  it('lists the sections in the sidebar, opens on the first, and has one quiet Coming later row', async () => {
-    await mount();
-    expect([...host.querySelectorAll('.st-nav .st-nav-row')].map((b) => b.textContent)).toEqual(['General', 'Keys']);
-    expect(nav('General').getAttribute('aria-current')).toBe('page');
-    expect(main().querySelector('h1')!.textContent).toBe('General');
-    expect(host.querySelector('.st-side-foot')!.textContent).toBe('Coming later');
+  it('Settings opens on Overview, and every page is reachable from the nav', async () => {
+    await mount({ initialTab: undefined });
+    const titles = ['Overview', 'Agents', 'Helpers', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Advanced'];
+    expect([...host.querySelectorAll('.st-nav .st-nav-row')].map((b) => b.textContent)).toEqual(titles);
+    expect(nav('Overview').getAttribute('aria-current')).toBe('page');
+    expect(main().querySelector('h1')!.textContent).toBe('Overview');
+    expect(host.querySelector('.st-side-foot')).toBeNull(); // the "Coming later" entry is gone
+    expect(host.querySelectorAll('.st-card')).toHaveLength(5); // the cards come before the Setup rows
+    expect(main().textContent).toContain('Check my setup');
+    for (const title of titles) {
+      await click(nav(title));
+      expect(main().querySelector('h1')!.textContent, title).toBe(title);
+      expect(nav(title).getAttribute('aria-current')).toBe('page');
+    }
   });
 
   it('has no Save, Done or Saved footer and no Planned badge anywhere', async () => {
@@ -197,8 +217,8 @@ describe('shell', () => {
   it('opens on the requested page and switches pages from the sidebar', async () => {
     await mount({ initialTab: 'keys' });
     expect(main().querySelector('h1')!.textContent).toBe('Keys');
-    await click(nav('General'));
-    expect(main().querySelector('h1')!.textContent).toBe('General');
+    await click(nav('Look and feel'));
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
     expect(main().textContent).toContain('Dark theme');
   });
 
@@ -238,7 +258,7 @@ describe('search', () => {
     expect(main().textContent).not.toContain('Dark theme');
 
     await typeInto(search(), 'workspace'); // a keyword, not in the label or hint
-    expect([...main().querySelectorAll('.st-results > section h2')].map((h) => h.textContent)).toEqual(['General']);
+    expect([...main().querySelectorAll('.st-results > section h2')].map((h) => h.textContent)).toEqual(['Look and feel']);
     expect(main().textContent).toContain('Default project folder');
 
     await typeInto(search(), 'minutes'); // a hint
@@ -251,7 +271,11 @@ describe('search', () => {
     await typeInto(search(), 'DARK light');
     expect(main().textContent).toContain('Dark theme');
     await typeInto(search(), 'dark keychain');
-    expect(main().textContent).toContain('No settings match');
+    expect(main().textContent).toContain('Nothing found for "dark keychain"');
+    expect(main().textContent).toContain('Try a simpler word');
+    await click([...main().querySelectorAll('button')].find((b) => b.textContent === 'Clear search'));
+    expect(search().value).toBe('');
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
   });
 
   it('search rows are live controls, and Escape or picking a section leaves search', async () => {
@@ -263,11 +287,11 @@ describe('search', () => {
       search().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     expect(search().value).toBe('');
-    expect(main().querySelector('h1')!.textContent).toBe('General');
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
     await typeInto(search(), 'keychain');
-    await click(nav('General'));
+    await click(nav('Look and feel'));
     expect(search().value).toBe('');
-    expect(main().querySelector('h1')!.textContent).toBe('General');
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
   });
 
   it('a destructive row found by search still sits in its own list', async () => {
@@ -278,18 +302,88 @@ describe('search', () => {
   });
 });
 
-describe('Coming later', () => {
-  it('is a plain read-only list: no inputs, switches or buttons, honest copy, no Planned badge', async () => {
+describe('keys', () => {
+  const key = (init: KeyboardEventInit, target: EventTarget = document.body) => act(async () => void target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })));
+
+  it('slash focuses search and Escape clears it', async () => {
     await mount();
-    await click(nav('Coming later'));
-    expect(main().querySelector('h1')!.textContent).toBe('Coming later');
-    expect(main().textContent).toContain('Not built yet');
-    expect(main().textContent).toContain('Cost controls');
-    expect(main().textContent).toContain('Plugins');
-    expect(main().querySelectorAll('input, select, button, [role="switch"]')).toHaveLength(0);
-    expect([...main().querySelectorAll('.st-value')].every((v) => v.textContent === 'Not available yet')).toBe(true);
-    expect(main().textContent).not.toContain('Planned');
-    expect(nav('Coming later').getAttribute('aria-current')).toBe('page');
+    expect(document.activeElement).not.toBe(search());
+    await key({ key: '/' });
+    expect(document.activeElement).toBe(search());
+    await typeInto(search(), 'theme');
+    expect(main().querySelector('h1')!.textContent).toBe('Search results');
+    await key({ key: 'Escape' }, search());
+    expect(search().value).toBe('');
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
+  });
+
+  it('Ctrl+F focuses search, and Escape clears it even when a result has focus', async () => {
+    await mount();
+    await key({ key: 'f', ctrlKey: true });
+    expect(document.activeElement).toBe(search());
+    await typeInto(search(), 'theme');
+    (host.querySelector('[data-row="theme"] [role="switch"]') as HTMLElement).focus();
+    await key({ key: 'Escape' }, document.activeElement!);
+    expect(search().value).toBe('');
+  });
+
+  it('a letter typed while no field has focus starts a search', async () => {
+    await mount();
+    await key({ key: 't' });
+    expect(document.activeElement).toBe(search());
+  });
+
+  it('a letter typed inside a field stays in that field', async () => {
+    await mount();
+    const folder = host.querySelector('input[aria-label="Folder"]') as HTMLInputElement;
+    folder.focus();
+    await key({ key: 'x' }, folder);
+    expect(document.activeElement).toBe(folder);
+  });
+
+  it('Up and Down move between hits and Enter opens the row on its page', async () => {
+    Element.prototype.scrollIntoView = () => undefined;
+    await mount();
+    await typeInto(search(), 'minutes'); // the hint of one row
+    const keyOnSearch = (k: string) => act(async () => void search().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })));
+    await keyOnSearch('ArrowDown');
+    await keyOnSearch('ArrowUp');
+    await keyOnSearch('Enter');
+    await settle(3);
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
+    expect(search().value).toBe('');
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+});
+
+describe('old ids and deep links into the Advanced page', () => {
+  const scrolled: HTMLElement[] = [];
+  beforeEach(() => {
+    scrolled.length = 0;
+    Element.prototype.scrollIntoView = function (this: HTMLElement) {
+      scrolled.push(this);
+    };
+  });
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it('a deep link to a row inside a closed Advanced group opens the group and marks the row', async () => {
+    await mount({ initialTab: 'advanced' });
+    const toggle = () => host.querySelector('[data-group="Tools"] .st-adv-toggle') as HTMLButtonElement;
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(host.querySelector('[data-row="toolbelt"]')).toBeNull();
+    await act(async () => refresh!({ reason: 'show', tab: 'toolbelt' }));
+    await settle(4);
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('[data-row="toolbelt"][data-target="true"]')).not.toBeNull();
+    expect(scrolled.map((el) => el.getAttribute('data-row'))).toContain('toolbelt');
+  });
+
+  it('the Advanced page has closed groups and no Advanced fold', async () => {
+    await mount({ initialTab: 'advanced' });
+    expect(host.querySelectorAll('.st-closed-group')).toHaveLength(1);
+    expect(host.querySelectorAll('.st-advanced')).toHaveLength(0);
   });
 });
 
@@ -389,13 +483,16 @@ describe('fresh state', () => {
     await settle();
     expect(api.load).toHaveBeenCalledTimes(2);
     // An unknown tab: stay put, but still refresh.
-    expect(main().querySelector('h1')!.textContent).toBe('General');
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
     await act(async () => refresh!({ reason: 'show', tab: 'keys' }));
     await settle();
     expect(main().querySelector('h1')!.textContent).toBe('Keys');
     await act(async () => refresh!({ reason: 'show', tab: 'later' }));
     await settle();
-    expect(main().querySelector('h1')!.textContent).toBe('Coming later');
+    expect(main().querySelector('h1')!.textContent).toBe('Overview'); // the old "Coming later" id opens Overview
+    await act(async () => refresh!({ reason: 'show', tab: 'general' }));
+    await settle();
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel'); // an old section id still opens a page
   });
 
   it('reloads when the window regains focus', async () => {
@@ -453,7 +550,7 @@ describe('deep links', () => {
 
   it('opens on the row it was asked for: scrolled to, and marked for a moment', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    await mount({ initialTab: 'general', initialRow: 'folder' });
+    await mount({ initialTab: 'look', initialRow: 'folder' });
     expect(scrolled.map((el) => el.getAttribute('data-row'))).toEqual(['folder']);
     expect(marked()).toEqual(['folder']);
     await act(async () => {
@@ -471,8 +568,8 @@ describe('deep links', () => {
   it('a "Show" link in one section jumps to a row in another, clears the search, and marks it', async () => {
     await mount({ initialTab: 'keys' });
     await click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Go to folder') as HTMLElement);
-    expect(main().querySelector('h1')!.textContent).toBe('General');
-    expect(nav('General').getAttribute('aria-current')).toBe('page');
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
+    expect(nav('Look and feel').getAttribute('aria-current')).toBe('page');
     expect(scrolled.map((el) => el.getAttribute('data-row'))).toEqual(['folder']);
     expect(marked()).toEqual(['folder']);
   });
@@ -481,13 +578,13 @@ describe('deep links', () => {
     await mount({ initialTab: 'keys' });
     await act(async () => refresh!({ reason: 'show', tab: 'folder' }));
     await settle(3);
-    expect(main().querySelector('h1')!.textContent).toBe('General');
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
     expect(scrolled.map((el) => el.getAttribute('data-row'))).toEqual(['folder']);
   });
 
   it('a row that is not there is ignored: the page opens at the top, nothing is marked', async () => {
-    await mount({ initialTab: 'general', initialRow: 'no-such-row' });
-    expect(main().querySelector('h1')!.textContent).toBe('General');
+    await mount({ initialTab: 'look', initialRow: 'no-such-row' });
+    expect(main().querySelector('h1')!.textContent).toBe('Look and feel');
     expect(scrolled).toEqual([]);
     expect(marked()).toEqual([]);
   });
@@ -495,6 +592,6 @@ describe('deep links', () => {
   it('search results never show a link row, only the real ones', async () => {
     await mount();
     await typeInto(search(), 'jump');
-    expect(main().textContent).toContain('No settings match');
+    expect(main().textContent).toContain('Nothing found for "jump"');
   });
 });

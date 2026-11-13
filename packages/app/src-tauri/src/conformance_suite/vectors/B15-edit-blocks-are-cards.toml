@@ -1,0 +1,28 @@
+# Lab vector B15. See ../vector.rs for the format.
+id = "B15"
+title = "An edit is a tool card; the prose before and after is plain text"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["edit_cards"]
+
+[[step]]
+do = "prompt"
+text = "rich"
+
+[[expect]]
+turn = 1
+text_has = "Looking at it."
+
+[[expect]]
+turn = 1
+text_has = "All done."
+
+[[expect]]
+turn = 1
+text_lacks = "SEARCH"
+
+[[expect]]
+turn = 1
+tool = "edit"
+has_diff = true

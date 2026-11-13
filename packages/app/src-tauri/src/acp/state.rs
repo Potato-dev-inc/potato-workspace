@@ -418,6 +418,11 @@ impl SessionState {
         }
     }
 
+    /// Whether we asked the agent to stop the turn that is running (`on_cancel_requested`).
+    pub fn cancel_was_requested(&self) -> bool {
+        self.cancel_requested
+    }
+
     pub fn on_turn_end(&mut self, outcome: TurnOutcome) -> TurnSummary {
         let (stop, stop_reason, error, error_code) = match &outcome {
             TurnOutcome::Stop(reason) => {
@@ -499,6 +504,12 @@ impl SessionState {
             SessionUpdate::CurrentModeUpdate(change) => {
                 if let Some(map) = self.working.modes.as_mut().and_then(Value::as_object_mut) {
                     map.insert("currentModeId".into(), Value::String(change.current_mode_id.clone()));
+                }
+                // The mode option this app republished from `modes` follows the agent's own change.
+                for option in self.working.config_options.iter_mut() {
+                    if super::handshake::synthesized_source(option) == Some(super::handshake::SYNTH_MODES) {
+                        option["currentValue"] = Value::String(change.current_mode_id.clone());
+                    }
                 }
             }
             SessionUpdate::SessionInfoUpdate(info) => {

@@ -1,0 +1,19 @@
+# Lab vector S16. See ../vector.rs for the format.
+id = "S16"
+title = "20 quick restarts: each start works, nothing is left running"
+levels = ["native"]
+opts = ""
+cost = "slow"
+claims = []
+
+[[step]]
+do = "repeat"
+times = 20
+steps = [{do = "prompt", text = "stream 1"}, {do = "restart"}]
+
+[[expect]]
+turn = 20
+stop = "end_turn"
+
+[[expect]]
+no_orphans = true

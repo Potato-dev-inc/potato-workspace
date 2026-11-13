@@ -65,7 +65,7 @@ fn every_shipped_usage_table_parses() {
 
 #[test]
 fn the_registered_profiles_declare_their_tables() {
-    for id in ["claude", "codex", "cursor_agent"] {
+    for id in ["claude", "codex", "cursor_agent", "opencode"] {
         assert!(crate::tui::profile_for(id).usage_source().is_some(), "{id} declares usage");
     }
     assert!(crate::tui::profile_for("cmd").usage_source().is_none());

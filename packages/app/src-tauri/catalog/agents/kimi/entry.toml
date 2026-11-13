@@ -22,10 +22,15 @@ license_url = "https://github.com/MoonshotAI/kimi-code/blob/main/LICENSE"
 kind = "either"
 summary = "On first launch, run /login inside Kimi Code CLI and choose Kimi Code OAuth or a Moonshot AI Open Platform API key."
 
+# Evidence, checked 2026-11-13: the facts above are from the vendor docs (2026-10-28). Lab survey 2026-11-10
+# (LAB-REPORT section 4.4d) ran `kimi acp` on this PC: the ACP handshake passed, and the sign-in step showed
+# a `kimi login` prompt there. The vendor text above says /login, so the two are not reconciled. The install
+# script was not run. The installed version was not recorded (2.4.0 is the docs version).
+# handshake only; windows_tested stays false until a chat turn runs
 [checked]
-date = "2026-10-28"
+date = "2026-11-10"
 version = "2.4.0"
-how = "vendor_docs"
+how = "ran_on_windows"
 windows_tested = false
 
 [publisher]

@@ -41,3 +41,11 @@ export function sortInbox<T extends InboxEntry>(entries: ReadonlyArray<T>): T[] 
       a.key.localeCompare(b.key),
   );
 }
+
+/**
+ * The number in the Inbox heading: the cards on screen. The list's own cards (a stopped companion's card is not a
+ * waiting item and the sidebar badge leaves it out) plus the mission cards, which MissionsSection draws below.
+ */
+export function inboxCardCount(kinds: ReadonlyArray<InboxKind>, blocking: ReadonlyArray<{ kind: string }>): number {
+  return kinds.filter((k) => k !== 'companion').length + blocking.filter((i) => i.kind === 'mission').length;
+}

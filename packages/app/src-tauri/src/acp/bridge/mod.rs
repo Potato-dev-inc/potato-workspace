@@ -10,7 +10,7 @@
 //!
 //! # What v1 does
 //!
-//! * `initialize` (protocol 1; no `loadSession`; text prompts only; `agentInfo.name` = the agent's label).
+//! * `initialize` (protocol 1; `loadSession` only when the agent can resume; text prompts only; `agentInfo.name` = the agent's label).
 //!   An agent without a headless mode is refused with a JSON-RPC error and the bridge exits.
 //! * `session/new` (the folder comes from the request), `session/prompt` (text blocks only), `session/cancel`.
 //! * A turn runs the headless command once, streams what the agent prints as `agent_message_chunk` as it
@@ -23,12 +23,26 @@
 //!   output carries that id, turn 2 resumes turn 1. Otherwise every turn starts fresh and the first turn says
 //!   so once, in a message chunk.
 //!
-//! # What v1 does not do (said honestly in the docs and in the chat)
+//! # Bridge v2 (all optional, all from the agent's definition; the bridge never guesses)
 //!
-//! No tool-call cards, no permission requests (the agent runs with whatever its headless mode allows; the
-//! bridge only ever passes the flags the definition itself declares: no `allow_shell`, no `trust_workspace`,
-//! read-only only when the caller asks for it with `--read-only`), no images, no `session/load`, one turn at a
-//! time per bridge, and the answer can only be as live as the agent's output is.
+//! * **Model chip.** When `[model] source = "probe_command"` names the CLI's own list command (`probe_argv`,
+//!   one model per line read with `probe_regex`) and the headless table has a `when = "model"` segment, the
+//!   command runs once (same exec rules as a turn: gated program, hidden window, closed stdin, time limit, output
+//!   cap, no prompt) and becomes a `model` config option. `session/set_config_option` checks the pick against the
+//!   list; the next turn passes it through the definition's model flag. No list command: no option.
+//! * **Tool cards.** With `[headless.output.tool]` (needs `json_lines`), lines that start or finish a tool call
+//!   become ACP `tool_call` / `tool_call_update`; text is redacted and clipped. Everything else stays text.
+//! * **Resume.** The bridge remembers each chat's agent conversation id, folder and model in a small file per
+//!   agent (`store.rs`). `session/load` points a chat at that id, so the next message resumes it through the
+//!   definition's resume flag, also after the bridge was restarted. There is no history to replay. An id nobody
+//!   remembers is `-32602`, and the app starts a fresh chat.
+//!
+//! # What the bridge still does not do (said honestly in the docs and in the chat)
+//!
+//! No permission requests (the agent runs with whatever its headless mode allows; the bridge only ever passes the
+//! flags the definition itself declares: no `allow_shell`, no `trust_workspace`, read-only only when the caller
+//! asks for it with `--read-only`), no images, no history replay, one turn at a time per bridge, and the answer
+//! can only be as live as the agent's output is.
 //!
 //! # Plugging it in (agent A's wiring)
 //!
@@ -44,7 +58,10 @@
 //! names `spawn_spec_with_env` is given. The agent's own env rules (`LaunchSpec::env` / `env_remove`) are
 //! applied inside the bridge.
 
+mod extras;
+mod models;
 mod server;
+mod store;
 mod turn;
 
 #[cfg(test)]
@@ -57,6 +74,7 @@ use super::config::BASE_ENV_ALLOW;
 use super::conn::SpawnSpec;
 use crate::tui::TuiProfile;
 
+pub use extras::DefinitionTables;
 pub use server::{serve, ServeOptions};
 #[cfg(test)]
 pub use turn::{TurnLimits};
@@ -150,7 +168,7 @@ pub fn run_cli(args: &[String]) -> Option<i32> {
         return None;
     }
     let mut agent: Option<String> = None;
-    let mut options = ServeOptions::default();
+    let mut options = ServeOptions { store_dir: Some(crate::app_paths::app_data_dir().join("acp-bridge")), ..ServeOptions::default() };
     let mut rest = args[1..].iter();
     while let Some(arg) = rest.next() {
         match arg.as_str() {

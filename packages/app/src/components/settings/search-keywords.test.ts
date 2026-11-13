@@ -25,15 +25,15 @@ describe('settings search keywords', () => {
     expect(keys?.rows.map((r) => r.id)).toEqual(expect.arrayContaining(['key-anthropic', 'key-openai', 'key-openrouter']));
   });
 
-  it('"team", "relay", "invite" and "join" find the Team page, and only the Team page', () => {
+  it('"team", "relay", "invite" and "join" find the Team row, under Connect', () => {
     for (const word of ['team', 'relay', 'invite', 'join']) {
       const hits = searchSections(SECTIONS, word);
-      expect(hits.map((h) => h.section.id), word).toContain('team');
-      expect(hits.find((h) => h.section.id === 'general')?.rows.map((r) => r.id) ?? [], word).not.toContain('team-page');
+      expect(hits.find((h) => h.section.id === 'connect')?.rows.map((r) => r.id) ?? [], word).toContain('team-page');
+      expect(hits.find((h) => h.section.id === 'look')?.rows.map((r) => r.id) ?? [], word).not.toContain('team-page');
     }
   });
 
-  it('"awake", "sleep" and "lock" find the keep-awake row, a basic General row with a short hint', () => {
+  it('"awake", "sleep" and "lock" find the keep-awake row, a basic Look and feel row with a short hint', () => {
     for (const word of ['awake', 'sleep', 'lock']) {
       const rows = searchSections(SECTIONS, word).flatMap((h) => h.rows);
       expect(rows.map((r) => r.id), word).toContain('keep-awake');

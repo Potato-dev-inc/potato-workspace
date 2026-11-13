@@ -109,6 +109,16 @@ pub struct AgentModelOptions {
     pub default_model: Option<String>,
     /// Models worth listing, best known first. Empty: the page offers a typed id.
     pub models: Vec<String>,
+    /// The agent's own model setting as it last sent it (ACP `configOptions` entry, category `model`), from the newest
+    /// saved chat that has one. The same list the chat's model picker shows. `None`: this agent never reported one.
+    pub live: Option<serde_json::Value>,
+}
+
+/// The newest model setting (a `select` with at least two plain choices) among `records` (given newest first).
+pub(crate) fn live_model_option(records: &[crate::acp::record::ConversationRecord]) -> Option<serde_json::Value> {
+    records.iter().flat_map(|r| r.config_options.iter()).find(|o| {
+        o["category"] == "model" && o["type"] == "select" && o["options"].as_array().is_some_and(|l| l.len() >= 2 && l.iter().all(|c| c["value"].is_string() && c["name"].is_string()))
+    }).cloned()
 }
 
 pub(crate) fn model_options_for(agent_type: &str) -> AgentModelOptions {
@@ -117,6 +127,7 @@ pub(crate) fn model_options_for(agent_type: &str) -> AgentModelOptions {
         terminal: crate::tui::pane_model_args(agent_type, "probe").is_some(),
         default_model: if profile.probes_default_model() { profile.default_model() } else { None },
         models: profile.model_choices(),
+        live: live_model_option(&crate::acp::conversations::global().records_of_agent(agent_type)),
     }
 }
 
@@ -160,6 +171,23 @@ mod model_options_tests {
         assert_eq!(crate::tui::pane_model_args("claude", " opus "), Some(vec!["--model".into(), "opus".into()]));
         assert!(crate::tui::pane_model_args("claude", "--dangerously-skip-permissions").is_none());
         assert!(crate::tui::pane_model_args("claude", "  ").is_none());
+    }
+
+    fn record_with(options: Vec<serde_json::Value>) -> crate::acp::record::ConversationRecord {
+        serde_json::from_value(serde_json::json!({
+            "id": "c", "agent": "claude", "session_id": null, "cwd": "/x", "lane": "acp", "last_known_state": "live",
+            "config_options": options, "created_ms": 1, "updated_ms": 1
+        })).unwrap()
+    }
+
+    #[test]
+    fn the_live_list_is_the_newest_saved_model_setting() {
+        let mode = serde_json::json!({"id": "mode", "category": "mode", "type": "select", "options": [{"value": "a", "name": "A"}, {"value": "b", "name": "B"}]});
+        let model = serde_json::json!({"id": "model", "category": "model", "type": "select", "currentValue": "x", "options": [{"value": "x", "name": "X"}, {"value": "y", "name": "Y", "description": "d"}]});
+        let thin = serde_json::json!({"id": "model", "category": "model", "type": "select", "options": [{"value": "x", "name": "X"}]});
+        assert_eq!(live_model_option(&[record_with(vec![mode.clone(), model.clone()])]), Some(model.clone()));
+        assert_eq!(live_model_option(&[record_with(vec![mode]), record_with(vec![thin])]), None);
+        assert_eq!(live_model_option(&[]), None);
     }
 
     #[test]

@@ -21,6 +21,8 @@ license_kind = "proprietary"
 kind = "account"
 summary = "Open it and type /login. Signing in needs a paid Claude plan."
 
+# Lab survey 2026-11-10 (acp-lab LAB-REPORT 4.4d): no own ACP. Chat runs through the app's shipped adapter,
+# which is not changed here. Card facts are unchanged.
 [checked]
 date = "2026-10-14"
 version = "not recorded"

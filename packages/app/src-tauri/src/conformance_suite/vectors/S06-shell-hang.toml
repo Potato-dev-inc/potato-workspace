@@ -1,0 +1,31 @@
+# Lab vector S06. See ../vector.rs for the format.
+id = "S06"
+title = "A command that never finishes is stopped by a stop, nothing is left running"
+levels = ["native"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[step]]
+do = "prompt"
+text = "toolhang"
+
+[[step]]
+do = "cancel"
+after_ms = 300
+
+[[step]]
+do = "prompt"
+text = "stream 2"
+
+[[expect]]
+turn = 1
+stop = "cancelled"
+within_ms = 5000
+
+[[expect]]
+turn = 2
+stop = "end_turn"
+
+[[expect]]
+no_orphans = true

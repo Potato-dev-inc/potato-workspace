@@ -15,11 +15,11 @@ type AutomationMode = 'auto_if_backup' | 'notify_only';
 
 const KEYWORDS = 'api key anthropic openai openrouter opencode rotate rate limit keychain credential';
 
-const OPENCODE_HINT = 'For OpenCode only. Kept in the keychain when there is one. Never sent to the phone.';
+const OPENCODE_HINT = 'For OpenCode only. Never sent to the phone.';
 /** The opt-in's name (founder decision 2026-10-15). Off by default; a person's earlier explicit choice is kept by the backend. */
-const AUTOMATION_LABEL = "Switch to another of your keys when one hits its rate limit (check your provider's terms)";
-const AUTOMATION_HINT = 'Off: Potato Workspace only says a key needs swapping. Needs a second OpenCode key (B).';
-const RESTART_HINT = 'Restart the OpenCode pane after a key switch so it picks up the new key.';
+const AUTOMATION_LABEL = 'Switch OpenCode keys at the limit';
+const AUTOMATION_HINT = "Uses your other key when one is limited. Check your provider's terms.";
+const RESTART_HINT = 'So it picks up the new key.';
 const REMOVE_ALL_HINT = 'Deletes Anthropic, OpenAI and OpenRouter keys here. Agents lose access. OpenCode stays.';
 
 // ---------- OpenCode key status (each row keeps its own copy) ----------
@@ -56,22 +56,22 @@ const PROVIDER_KEYS: ProviderKeyDef[] = [
     id: 'key-anthropic',
     label: 'Anthropic API key',
     name: 'anthropic_api_key',
-    placeholder: 'sk-ant-…',
-    hint: 'Used by agents on Anthropic models. Kept in your system keychain when one is available.',
+    placeholder: 'Paste your key',
+    hint: 'Used by agents on Anthropic models.',
   },
   {
     id: 'key-openai',
     label: 'OpenAI API key',
     name: 'openai_api_key',
-    placeholder: 'sk-…',
-    hint: 'Used by agents on OpenAI models. Kept in your system keychain when one is available.',
+    placeholder: 'Paste your key',
+    hint: 'Used by agents on OpenAI models.',
   },
   {
     id: 'key-openrouter',
     label: 'OpenRouter API key',
     name: 'openrouter_api_key',
-    placeholder: 'sk-or-…',
-    hint: 'Used by agents that route through OpenRouter. Kept in the keychain when there is one.',
+    placeholder: 'Paste your key',
+    hint: 'Used by agents that route through OpenRouter.',
   },
 ];
 
@@ -110,8 +110,8 @@ function OpenCodeKeys({ env }: { env: SettingsEnv }) {
     if (!status) return 'Checking…';
     const profile = status.profiles.find((entry) => entry.id === id);
     if (!profile) return 'Unknown';
-    if (!profile.configured) return 'Not set';
-    return status.active_profile === id ? 'Configured - active' : 'Configured';
+    if (!profile.configured) return 'not set';
+    return status.active_profile === id ? 'saved, in use' : 'saved';
   };
 
   const save = async (id: 'a' | 'b', secret: string) => {
@@ -126,20 +126,20 @@ function OpenCodeKeys({ env }: { env: SettingsEnv }) {
   };
 
   return (
-    <SettingBlock label="OpenCode API keys (A / B)" description={OPENCODE_HINT}>
+    <SettingBlock label="OpenCode keys (main and spare)" description={OPENCODE_HINT}>
       <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
-            <FieldLabel>Key A - {profileLine('a')}</FieldLabel>
-            <SecretControl aria-label="OpenCode key A" placeholder="Leave blank to keep existing" onCommit={(secret) => save('a', secret)} />
+            <FieldLabel>Main key: {profileLine('a')}</FieldLabel>
+            <SecretControl aria-label="OpenCode key A" placeholder="Paste your key" onCommit={(secret) => save('a', secret)} />
           </div>
           <div className="space-y-1">
-            <FieldLabel>Key B - {profileLine('b')}</FieldLabel>
-            <SecretControl aria-label="OpenCode key B" placeholder="Leave blank to keep existing" onCommit={(secret) => save('b', secret)} />
+            <FieldLabel>Spare key: {profileLine('b')}</FieldLabel>
+            <SecretControl aria-label="OpenCode key B" placeholder="Paste your key" onCommit={(secret) => save('b', secret)} />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Btn onClick={() => void refresh()}>Refresh status</Btn>
+          <Btn onClick={() => void refresh()}>Check keys</Btn>
         </div>
         {error && <Note role="alert">{`Could not read OpenCode key status: ${error}`}</Note>}
       </div>
@@ -200,7 +200,7 @@ function RestartPane({ env }: { env: SettingsEnv }) {
 
   return (
     <SettingToggle
-      label="Restart pane after key rotate"
+      label="Restart OpenCode after a key switch"
       description={RESTART_HINT}
       checked={status?.restart_pane_on_rotate ?? true}
       disabled={!status || busy}
@@ -260,9 +260,9 @@ export const keysRows: RowDef[] = [
   ),
   {
     id: 'opencode-keys',
-    label: 'OpenCode API keys (A / B)',
+    label: 'OpenCode keys (main and spare)',
     hint: OPENCODE_HINT,
-    keywords: `${KEYWORDS} OpenCode key A OpenCode key B refresh status`,
+    keywords: `${KEYWORDS} OpenCode key A OpenCode key B main spare refresh status check keys`,
     group: 'OpenCode keys',
     render: (env) => <OpenCodeKeys env={env} />,
   },
@@ -277,7 +277,7 @@ export const keysRows: RowDef[] = [
   },
   {
     id: 'opencode-restart',
-    label: 'Restart pane after key rotate',
+    label: 'Restart OpenCode after a key switch',
     hint: RESTART_HINT,
     keywords: `${KEYWORDS} restart pane rotate switch`,
     group: 'OpenCode keys',

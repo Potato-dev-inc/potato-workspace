@@ -1,0 +1,399 @@
+/* Settings rows: the Changed dot, Reset, previews, the Undo toast and the Changed filter chip.
+   Grey only. Motion is 120-160 ms ease-out and is off under reduced motion. Tokens come from settings.css. */
+
+/* ---------- Changed dot and Reset ---------- */
+.settings .st-rowwrap:focus {
+  outline: none;
+}
+.settings .st-rowwrap:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--label-3);
+  border-radius: 9px;
+}
+.settings .st-dot,
+.settings .st-nav-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--label-2);
+  flex: none;
+}
+.settings .st-dot {
+  position: absolute;
+  top: 19px;
+  left: 4px;
+  z-index: 1;
+}
+.settings .st-rowwrap:has(.st-thumbs) > .st-dot {
+  top: 38px;
+}
+.settings .st-nav-dot {
+  margin-left: auto;
+}
+.settings .st-reset:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--label-3);
+}
+.settings .st-reset {
+  position: absolute;
+  top: 0;
+  right: 56px;
+  z-index: 2;
+  padding: 0 6px;
+  border: 1px solid var(--sep);
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  background: var(--list);
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--label-2);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+.settings .st-rowwrap:hover > .st-reset,
+.settings .st-rowwrap:focus-within > .st-reset,
+.settings .st-reset:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.settings .st-reset:hover {
+  color: var(--label);
+  background: var(--fill-hover);
+}
+/* Touch: there is no hover, so Reset is always drawn on a changed row. */
+@media (hover: none), (max-width: 700px) {
+  .settings .st-reset {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .settings .st-reset {
+    transition: opacity 140ms ease-out;
+  }
+}
+
+/* ---------- filter chip and quiet lines ---------- */
+.settings .st-chip {
+  margin: 0 12px 8px;
+  align-self: flex-start;
+  padding: 2px 10px;
+  border: 1px solid var(--sep);
+  border-radius: 999px;
+  background: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--label-2);
+  cursor: pointer;
+}
+.settings .st-chip:hover {
+  background: var(--fill-hover);
+}
+.settings .st-chip[aria-pressed='true'] {
+  background: var(--fill-active);
+  color: var(--label);
+  border-color: var(--label-4);
+}
+.settings .st-quiet-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.settings .st-aside {
+  font-size: 12px;
+  color: var(--label-3);
+  white-space: nowrap;
+}
+
+/* ---------- picture choices (theme, window layout) ---------- */
+.settings .st-thumbs {
+  display: flex;
+  gap: 8px;
+}
+.settings .st-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-size: 11px;
+  color: var(--label-3);
+  cursor: pointer;
+}
+.settings .st-thumb-pic {
+  display: block;
+  width: 64px;
+  height: 40px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px var(--sep);
+}
+.settings .st-thumb[aria-checked='true'] .st-thumb-pic {
+  box-shadow: 0 0 0 1px var(--label);
+}
+.settings .st-thumb[aria-checked='true'] {
+  color: var(--label);
+}
+.settings .st-thumb:hover .st-thumb-pic {
+  box-shadow: 0 0 0 1px var(--label-3);
+}
+.settings .st-thumb[aria-checked='true']:hover .st-thumb-pic {
+  box-shadow: 0 0 0 1px var(--label);
+}
+.settings .st-thumb:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.settings .st-thumb-pic .win {
+  fill: #2a2927;
+}
+.settings .st-thumb-pic .side {
+  fill: #1c1b1a;
+}
+.settings .st-thumb-pic .line {
+  fill: #cfcdc9;
+}
+.settings .st-thumb-pic .faint {
+  fill: #5b5955;
+}
+.settings .st-thumb-pic .box {
+  fill: #4a4845;
+  stroke: #777470;
+  stroke-width: 0.8;
+}
+.settings .st-thumb-pic .box.front {
+  fill: #5d5a56;
+}
+.settings .st-thumb-pic[data-tone='light'] .win {
+  fill: #ffffff;
+}
+.settings .st-thumb-pic[data-tone='light'] .side {
+  fill: #ececef;
+}
+.settings .st-thumb-pic[data-tone='light'] .line {
+  fill: #3a3a3c;
+}
+.settings .st-thumb-pic[data-tone='light'] .faint {
+  fill: #c9c9cd;
+}
+
+/* ---------- previews under a row ---------- */
+.settings .st-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px 10px;
+}
+.settings .st-mode-frame {
+  position: relative;
+  width: 120px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.settings .st-mode-frame i {
+  position: absolute;
+  top: 14px;
+  width: 30px;
+  height: 44px;
+  border-radius: 4px;
+  background: var(--label-4);
+  box-shadow: inset 0 0 0 1px var(--label-3);
+}
+.settings .st-mode-frame i:nth-child(1) {
+  left: 10px;
+}
+.settings .st-mode-frame i:nth-child(2) {
+  left: 45px;
+}
+.settings .st-mode-frame i:nth-child(3) {
+  left: 80px;
+}
+.settings .st-mode-frame[data-motion='ink'] i {
+  border-radius: 50%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .settings .st-mode-frame[data-playing='domino'] i {
+    animation: st-domino 520ms ease-out both;
+  }
+  .settings .st-mode-frame[data-playing='domino'] i:nth-child(2) {
+    animation-delay: 80ms;
+  }
+  .settings .st-mode-frame[data-playing='domino'] i:nth-child(3) {
+    animation-delay: 160ms;
+  }
+  .settings .st-mode-frame[data-playing='ink'] i {
+    animation: st-ink 720ms ease-out both;
+  }
+  .settings .st-mode-frame[data-playing='fade'] i {
+    animation: st-fade 160ms ease-out both;
+  }
+}
+@keyframes st-domino {
+  from {
+    transform: translateY(20px) scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes st-ink {
+  from {
+    transform: scale(0.15);
+    opacity: 0.2;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes st-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.settings .st-usage-sample {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  max-width: 260px;
+}
+.settings .st-usage-tag {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+.settings .st-usage-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--label-2);
+}
+.settings .st-usage-line > :first-child {
+  width: 44px;
+}
+.settings .st-usage-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--fill-active);
+  overflow: hidden;
+}
+.settings .st-usage-track i {
+  display: block;
+  height: 100%;
+  background: var(--label-2);
+}
+.settings .st-usage-num {
+  width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.settings .st-sendtest {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.settings .st-sendtest small {
+  font-size: 11px;
+  color: var(--label-3);
+}
+
+/* ---------- Undo toast ---------- */
+.settings .st-main {
+  position: relative;
+}
+.settings .st-toast-host {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+.settings .st-toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(520px, calc(100% - 32px));
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--float-bg);
+  box-shadow: var(--float-shadow);
+  backdrop-filter: blur(14px);
+  font-size: 13px;
+  color: var(--label);
+  pointer-events: auto;
+}
+.settings .st-toast-undo {
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--fill-active);
+  font-size: 12px;
+  color: var(--label);
+  cursor: pointer;
+}
+.settings .st-toast-undo:hover {
+  background: var(--label-4);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .settings .st-toast {
+    animation: st-toast-in 150ms ease-out both;
+  }
+}
+@keyframes st-toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ---------- Check my setup: a header line, not floating buttons ---------- */
+.settings .st-setupcheck-head {
+  justify-content: space-between;
+  align-items: center;
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--sep);
+}
+.settings .st-setupcheck-summary {
+  font-size: 12px;
+  color: var(--label-3);
+}
+.settings .st-setupcheck-head > div {
+  display: flex;
+  gap: 8px;
+}
+
+/* The layout diagrams follow the theme (the theme thumbnails stay in fixed greys, they show the theme itself). */
+.settings .st-thumb-pic[data-tone='plain'] .win {
+  fill: var(--fill-active);
+}
+.settings .st-thumb-pic[data-tone='plain'] .box {
+  fill: var(--label-4);
+  stroke: var(--label-3);
+}
+.settings .st-thumb-pic[data-tone='plain'] .box.front {
+  fill: var(--label-3);
+}

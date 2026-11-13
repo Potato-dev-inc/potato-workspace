@@ -29,7 +29,7 @@ describe('AgentLogo', () => {
       expect(svg).not.toBeNull();
       expect(svg?.querySelector('path')?.getAttribute('d')?.length).toBeGreaterThan(20);
       expect(svg?.getAttribute('fill')).toBe('currentColor');
-      expect(host.querySelector('[data-mark="letters"]')).toBeNull();
+      expect(host.querySelector('[data-mark="monogram"]')).toBeNull();
     },
   );
 
@@ -46,9 +46,9 @@ describe('AgentLogo', () => {
   it('falls back to letters for an agent without a logo, or nothing when fallback is null', () => {
     show(<AgentLogo id="kilo" />);
     expect(host.querySelector('svg')).toBeNull();
-    expect(host.querySelector('[data-mark="letters"]')?.textContent).toBe('KI');
+    expect(host.querySelector('[data-mark="monogram"]')?.getAttribute('data-letter')).toBe('K');
     show(<AgentLogo id="goose" fallback="GS" />);
-    expect(host.querySelector('[data-mark="letters"]')?.textContent).toBe('GS');
+    expect(host.querySelector('[data-mark="monogram"]')?.getAttribute('data-letter')).toBe('G');
     show(<AgentLogo id="aider" fallback={null} />);
     expect(host.innerHTML).toBe('');
   });

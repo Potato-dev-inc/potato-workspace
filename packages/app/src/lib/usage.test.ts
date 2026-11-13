@@ -36,14 +36,15 @@ describe('usage strip words', () => {
 
   it('shows the fullest window with its reset', () => {
     expect(headline(row())?.name).toBe('5-hour');
-    expect(chipText(row(), NOW)).toBe('87% 9h 55m');
+    expect(chipText(row(), NOW)).toBe('87% used · resets in 9 hours');
   });
 
-  it('says Limited, Sign-in expired or Unknown instead of numbers', () => {
-    expect(chipText(row({ state: 'limited', limited_until_ms: NOW + 2 * H }), NOW)).toBe('Limited · 2h');
-    expect(chipText(row({ state: 'limited' }), NOW)).toBe('Limited');
+  it('says Limit reached, Sign-in expired or Usage not shared instead of numbers', () => {
+    expect(chipText(row({ state: 'limited', limited_until_ms: NOW + 2 * H }), NOW)).toBe('Limit reached · resets in 2 hours');
+    expect(chipText(row({ state: 'limited' }), NOW)).toBe('Limit reached');
     expect(chipText(row({ state: 'expired', windows: [] }), NOW)).toBe('Sign-in expired');
-    expect(chipText(row({ state: 'unknown', windows: [], reason: 'no numbers' }), NOW)).toBe('Not shared');
+    expect(chipText(row({ state: 'unknown', windows: [], reason: 'no numbers' }), NOW)).toBe('Usage not shared');
+    expect(chipText(row({ state: 'limited', limited_until_ms: NOW + (12 * 24 + 1) * H }), NOW)).toBe('Limit reached · resets in 12 days');
   });
 
   it('names the sign-in and lists every window, the plan and the reason in the tooltip', () => {
@@ -51,8 +52,8 @@ describe('usage strip words', () => {
     expect(rowName(row({ account_label: 'Work' }))).toBe('Codex CLI (Work)');
     expect(tip).toContain('Sign-in: Work');
     expect(tip).toContain('Plan: plus');
-    expect(tip).toContain('5-hour: 87% used, resets in 9h 55m');
-    expect(tip).toContain('Weekly: 31% used, resets in 4d');
+    expect(tip).toContain('5-hour: 87% used, resets in 9 hours');
+    expect(tip).toContain('Weekly: 31% used, resets in 4 days');
     expect(tip).toContain('why');
     expect(tooltip(row(), NOW)).toContain('Sign-in: main login');
     const started = tooltip(row({ windows: [{ name: '5-hour', used_percent: 0, reset_since: true }] }), NOW);

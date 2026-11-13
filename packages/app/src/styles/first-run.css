@@ -704,3 +704,12 @@
   grid-column: 2;
   overflow-wrap: anywhere;
 }
+
+/* Why Continue is off: one quiet line under the buttons. */
+.cockpit .fr-why {
+  margin: 0;
+  padding: 0 0 6px;
+  color: var(--label-3);
+  font-size: 12px;
+  text-align: right;
+}

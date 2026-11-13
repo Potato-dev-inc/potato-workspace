@@ -45,7 +45,7 @@ export function laneNote(agent: AcpLaneAgent): string {
   return 'Helpers this agent starts run in a terminal.';
 }
 
-export function AgentLaneRows({ api = tauriAcpChatApi }: { api?: Pick<AcpChatApi, 'laneGet' | 'laneSet'> & Pick<AcpChatApi, 'overlayDetect' | 'overlaySet' | 'overlayRemove' | 'chatRemove'> }) {
+export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; api?: Pick<AcpChatApi, 'laneGet' | 'laneSet'> & Pick<AcpChatApi, 'overlayDetect' | 'overlaySet' | 'overlayRemove' | 'chatRemove'> }) {
   const [view, setView] = useState<AcpLaneView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<AcpAddable | null>(null);
@@ -112,9 +112,10 @@ export function AgentLaneRows({ api = tauriAcpChatApi }: { api?: Pick<AcpChatApi
     [api],
   );
 
-  const addable = addableChat(view);
-  const terminalChat = terminalChatCapable(view);
-  if (!view || !view.labs_enabled || (view.agents.length === 0 && addable.length === 0 && terminalChat.length === 0)) return null;
+  const addable = addableChat(view).filter((a) => !only || a.id === only);
+  const terminalChat = terminalChatCapable(view).filter((t) => !only || t.id === only);
+  const laneAgents = view ? view.agents.filter((a) => !only || a.id === only) : [];
+  if (!view || !view.labs_enabled || (laneAgents.length === 0 && addable.length === 0 && terminalChat.length === 0)) return null;
   const terminalChatNote = (id: string) => {
     const note = terminalChat.find((t) => t.id === id)?.note;
     return note ? <span data-testid="agent-terminal-chat-note"> {note}</span> : null;
@@ -124,10 +125,10 @@ export function AgentLaneRows({ api = tauriAcpChatApi }: { api?: Pick<AcpChatApi
   return (
     <>
       <span hidden data-testid="agent-lane" />
-      {view.agents.map((agent) => (
+      {laneAgents.map((agent) => (
         <SettingRow
           key={agent.id}
-          label={agent.label}
+          label={only ? 'How it opens' : agent.label}
           description={
             <>
               {agent.disabled ? <span data-testid="agent-lane-note">{agent.disabled_note ?? 'Chat is not available for this agent.'}</span> : laneNote(agent)}
@@ -156,11 +157,11 @@ export function AgentLaneRows({ api = tauriAcpChatApi }: { api?: Pick<AcpChatApi
         </SettingRow>
       ))}
       {terminalChat
-        .filter((t) => !view.agents.some((a) => a.id === t.id))
+        .filter((t) => !laneAgents.some((a) => a.id === t.id))
         .map((t) => (
           <SettingRow
             key={`tc-${t.id}`}
-            label={t.label}
+            label={only ? 'How it opens' : t.label}
             description={<>New sessions start in a terminal unless you pick {TERMINAL_CHAT_WORD}.{terminalChatNote(t.id)}</>}
           >
             {t.chosen && (

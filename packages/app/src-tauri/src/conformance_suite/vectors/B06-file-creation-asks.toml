@@ -1,0 +1,46 @@
+# Lab vector B06. See ../vector.rs for the format.
+id = "B06"
+title = "Creating a file asks, and only an allow creates it"
+levels = ["native", "native_bad", "json", "text"]
+opts = "writes=1"
+cost = "fast"
+claims = ["permissions"]
+
+[[step]]
+do = "prompt"
+text = "permkind move"
+
+[[step]]
+do = "answer"
+option = "reject_once"
+
+[[step]]
+do = "prompt"
+text = "permkind edit"
+
+[[step]]
+do = "answer"
+option = "allow_once"
+
+[[expect]]
+turn = 1
+asked = "move"
+times = 1
+
+[[expect]]
+turn = 2
+asked = "edit"
+times = 1
+
+[[expect]]
+file = "permkind-move.txt"
+exists = false
+
+[[expect]]
+file = "permkind-edit.txt"
+exists = true
+content = "fake"
+
+[[expect]]
+turn = 2
+stop = "end_turn"

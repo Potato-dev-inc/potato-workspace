@@ -1,7 +1,11 @@
 // Settings > Agents: signing in, keeping agents warm (preload) and agent definitions (TOML files,
 // consent, review and approval). Most blocks save through their own command; the Live updates row calls env.patch.
 import { SIGN_IN } from '../../../lib/glossary';
+import { requestAddAgentAction } from '../../../lib/addAgentActions';
+import { openSettingsAt } from '../../../lib/openSettingsAt';
 import { AccountsGroup } from '../accounts/AccountsGroup';
+import { AgentsView } from '../agents/AgentsView';
+import { AddAgent } from '../blocks/AddAgent';
 import { AgentDefinitions } from '../blocks/AgentDefinitions';
 import { AGENT_MODELS_HINT, AGENT_MODELS_LABEL, AgentDefaultModels } from '../blocks/AgentDefaultModels';
 import { AgentLaneRows } from '../blocks/AgentLaneRows';
@@ -97,6 +101,34 @@ export const setupCheckRow: RowDef = {
 };
 
 export const agentsRows: RowDef[] = [
+  {
+    id: 'add-agent',
+    level: 'basic',
+    label: 'Add an agent',
+    hint: "Type an agent's name. Potato finds it, checks it and adds it.",
+    keywords: 'add new agent install name kimi paste command find advanced wizard import terminal chat',
+    group: 'Add an agent',
+    render: (env) => (
+      <AddAgent
+        projectDir={env.projectPath}
+        onStartChat={(id) => requestAddAgentAction('chat', id)}
+        onOpenTerminal={(id) => requestAddAgentAction('terminal', id)}
+        onOpenAgent={(id) => requestAddAgentAction('terminal', id)}
+        onShowInstall={() => openSettingsAt('agents', 'chat-addons')}
+        onOpenLabs={() => openSettingsAt('general', 'labs-index')}
+      />
+    ),
+  },
+  {
+    id: 'agent-list',
+    level: 'basic',
+    label: 'Your agents',
+    hint: 'One page per agent: sign-ins, model, how it opens, version and what it can do.',
+    keywords: 'agents list page claude codex each agent sign in model chat terminal version remove chips capabilities what it can do',
+    group: 'Your agents',
+    // Found on this computer: the Add an agent box above holds it (built there, not here).
+    render: (env) => <AgentsView env={env} />,
+  },
   setupCheckRow,
   {
     id: 'accounts',

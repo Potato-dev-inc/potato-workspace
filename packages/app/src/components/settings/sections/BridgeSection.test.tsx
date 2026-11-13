@@ -38,7 +38,7 @@ vi.mock('../toolbelt/ToolbeltGroup', async () => {
   const { createElement } = await import('react');
   return {
     ToolbeltGroup: ({ projectPath }: { projectPath?: string | null }) =>
-      createElement('section', { 'aria-label': 'Toolbelt', 'data-project': projectPath ?? '' }, 'Toolbelt stub'),
+      createElement('section', { 'aria-label': 'Tools for every agent', 'data-project': projectPath ?? '' }, 'Toolbelt stub'),
   };
 });
 
@@ -72,14 +72,14 @@ describe('Bridge & MCP: every row renders', () => {
     for (const row of bridgeRows) {
       expect(m.host.querySelector(`[data-row="${row.id}"]`), `missing row: ${row.id}`).not.toBeNull();
     }
-    expect(m.host.querySelector('[aria-label="Toolbelt"]')).not.toBeNull();
-    for (const label of ['Bridge address', 'Runtime status', 'Use bundled Rust MCP', 'Install MCP runtime', 'Claude Desktop config', 'Codex config', 'Uninstall MCP']) {
+    expect(m.host.querySelector('[aria-label="Tools for every agent"]')).not.toBeNull();
+    for (const label of ['Local address', 'Connection check', 'Use the built-in helper program', 'Connect Claude, Codex and OpenCode', 'Set up Claude Desktop by hand', 'Set up Codex by hand', 'Disconnect agents from Potato Workspace']) {
       expect(hasText(m.host, label), `missing: ${label}`).toBe(true);
     }
-    for (const text of ['Recheck & repair', 'Install in project', 'Install globally', 'Uninstall from project…', 'Uninstall globally…', 'Copy']) {
+    for (const text of ['Check and repair', 'Connect for this project', 'Connect everywhere', 'Uninstall from project…', 'Uninstall globally…', 'Copy']) {
       expect(buttonByText(m.host, text), `missing button: ${text}`).toBeTruthy();
     }
-    expect(switchFor('Use bundled Rust MCP')).not.toBeNull();
+    expect(switchFor('Use the built-in helper program')).not.toBeNull();
   });
 
   it('shows the bridge endpoint from the environment', async () => {
@@ -100,32 +100,31 @@ describe('Bridge & MCP: every row renders', () => {
     const lists = [...m.host.querySelectorAll('section.st-group')];
     const last = lists[lists.length - 1];
     expect(last.getAttribute('data-danger')).toBe('true');
-    expect(last.textContent).toContain('Uninstall MCP');
-    expect(lists.slice(0, -1).some((s) => s.textContent?.includes('Uninstall MCP'))).toBe(false);
+    expect(last.textContent).toContain('Disconnect agents from Potato Workspace');
+    expect(lists.slice(0, -1).some((s) => s.textContent?.includes('Disconnect agents from Potato Workspace'))).toBe(false);
   });
 
   it('shows the runtime status from the report', async () => {
     await mount();
-    expect(hasText(m.host, 'Ready for orchestrators')).toBe(true);
+    expect(hasText(m.host, 'Ready')).toBe(true);
     expect(hasText(m.host, 'Installed (npm)')).toBe(true);
     expect(getMcpStatus).toHaveBeenCalledWith('C:\\work\\demo', false);
   });
 });
 
 describe('Bridge & MCP: controls save and run the right calls', () => {
-  it('Use bundled Rust MCP saves only {developer_use_rust_mcp} and the install hint follows the new runtime', async () => {
+  it('Use the built-in helper program saves only {developer_use_rust_mcp}', async () => {
     await mount();
-    await click(switchFor('Use bundled Rust MCP'));
+    await click(switchFor('Use the built-in helper program'));
     expect(m.env.patches).toEqual([{ developer_use_rust_mcp: true }]);
     await m.rerender();
-    expect(rowText('mcp-install')).toContain('bundled Rust MCP binary');
-    expect(switchFor('Use bundled Rust MCP')!.getAttribute('aria-checked')).toBe('true');
+    expect(switchFor('Use the built-in helper program')!.getAttribute('aria-checked')).toBe('true');
   });
 
-  it('Install in project runs the project install, shows the per-agent result, and asks the status to re-check', async () => {
+  it('Connect for this project runs the project install, shows the per-agent result, and asks the status to re-check', async () => {
     await mount();
     vi.mocked(getMcpStatus).mockClear();
-    await click(buttonByText(m.host, 'Install in project'));
+    await click(buttonByText(m.host, 'Connect for this project'));
     await settle(5);
     expect(installNpmMcpConfigs).toHaveBeenCalledWith('C:\\work\\demo');
     expect(rowText('mcp-install')).toContain('Wrote .mcp.json.');
@@ -137,30 +136,30 @@ describe('Bridge & MCP: controls save and run the right calls', () => {
   it('a failed install shows its error on the row', async () => {
     await mount();
     vi.mocked(installNpmMcpConfigs).mockRejectedValueOnce(new Error('npm not found'));
-    await click(buttonByText(m.host, 'Install in project'));
+    await click(buttonByText(m.host, 'Connect for this project'));
     await settle(5);
     expect(rowText('mcp-install')).toContain('npm not found');
   });
 
-  it('Install globally runs the global install with no project path', async () => {
+  it('Connect everywhere runs the global install with no project path', async () => {
     await mount();
-    await click(buttonByText(m.host, 'Install globally'));
+    await click(buttonByText(m.host, 'Connect everywhere'));
     await settle(5);
     expect(installGlobalNpmMcpConfigs).toHaveBeenCalledTimes(1);
     expect(installNpmMcpConfigs).not.toHaveBeenCalled();
   });
 
-  it('Install in project is disabled and says why when no project folder is chosen', async () => {
+  it('Connect for this project is disabled and says why when no project folder is chosen', async () => {
     await mount({ projectPath: null });
-    expect(buttonByText(m.host, 'Install in project')!.disabled).toBe(true);
+    expect(buttonByText(m.host, 'Connect for this project')!.disabled).toBe(true);
     expect(hasText(m.host, 'Choose a project folder in General first')).toBe(true);
     expect(buttonByText(m.host, 'Uninstall from project…')!.disabled).toBe(true);
-    expect(buttonByText(m.host, 'Install globally')!.disabled).toBe(false);
+    expect(buttonByText(m.host, 'Connect everywhere')!.disabled).toBe(false);
   });
 
-  it('Recheck & repair calls getMcpStatus with autoRepair on', async () => {
+  it('Check and repair calls getMcpStatus with autoRepair on', async () => {
     await mount();
-    await click(buttonByText(m.host, 'Recheck & repair'));
+    await click(buttonByText(m.host, 'Check and repair'));
     await settle(5);
     expect(getMcpStatus).toHaveBeenLastCalledWith('C:\\work\\demo', true);
   });

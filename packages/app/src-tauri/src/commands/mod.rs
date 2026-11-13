@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, State};
 
 mod acp_conversations;
 mod acp_install;
+mod agent_caps;
 mod agent_install;
 mod agent_store;
 mod agent_wizard;
@@ -86,12 +87,16 @@ mod wsl;
 mod what_broke_it;
 mod ci_fix;
 mod collision;
+mod add_agent;
+mod agents_detect;
 
 pub use acp_conversations::*;
 pub use acp_install::*;
 pub use app_update::*;
 pub use agent_install::*;
 pub use agent_store::*;
+pub use agent_caps::*;
+pub use agents_detect::*;
 pub use agent_wizard::*;
 pub use agent_models::*;
 pub use attention::*;
@@ -163,6 +168,7 @@ pub use review_desk::*;
 pub use wsl::*;
 pub use ci_fix::*;
 pub use collision::*;
+pub use add_agent::*;
 
 use crate::pty::agents::AgentType;
 use crate::pty::{

@@ -65,6 +65,7 @@ import { NewAgentHost } from './components/cockpit/newagent/NewAgentHost';
 import { StartCrewSheet } from './components/cockpit/crews/StartCrewSheet';
 import { ShortcutsSheet } from './components/cockpit/ShortcutsSheet';
 import { ImportHost } from './components/history/ImportHost';
+import { AddAgentActionHost } from './components/cockpit/AddAgentActionHost';
 import { isTypingTarget } from './components/cockpit/rail/useRailLayout';
 import { agentLabel, useAgentRegistry } from './lib/agentRegistry';
 import { LiveBar } from './components/cockpit/live/LiveBar';
@@ -711,6 +712,7 @@ export default function CockpitApp() {
       {welcome.open && c.mode !== 'individual' && <FirstRun key={welcome.openKey} c={nav} seed={welcome.seed} onFinish={welcome.finish} />}
       {c.mode !== 'individual' && <TellTeamToast />}
       <ImportHost c={nav} />
+      <AddAgentActionHost c={nav} />
       {c.modeExplainer?.open && <IndividualSheet onSwitch={(d) => void c.modeExplainer.confirm(d)} onCancel={c.modeExplainer.cancel} />}
       {stopReport && <PanicSheet report={stopReport} names={c.names} onClose={() => setStopReport(null)} />}
       <AppUpdateHost />

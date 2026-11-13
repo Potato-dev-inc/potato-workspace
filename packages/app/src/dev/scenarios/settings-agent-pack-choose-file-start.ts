@@ -7,7 +7,7 @@ const s: HarnessScenario = {
   settingsTab: 'bridge',
   window: { width: 1100, height: 900 },
   after: async (dom) => {
-    await dom.waitFor('[aria-label="Add Potato Workspace to your agents"]');
+    await dom.waitFor('[aria-label="Let agents ask each other for help"]');
     await dom.clickText('button', 'Review and install');
     await dom.waitFor('[role="dialog"] [data-testid="pack-unsupported-row"]');
     document.querySelector('[data-testid="pack-other"]')?.scrollIntoView({ block: 'end' });

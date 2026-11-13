@@ -1,18 +1,23 @@
-// Settings window model: the seven sections, the row contract every section implements, and search.
+// Settings window model: the eight pages, the row contract every section implements, and search.
 //
-// A section is a list of rows (`RowDef`). The panel renders them grouped, filters them when you search
-// (label + hint + keywords), and hands every row a `SettingsEnv`: the fresh settings, a partial-patch
+// A page is a list of rows (`RowDef`). The panel renders them grouped, filters them when you search
+// (label + hint + keywords + synonyms), and hands every row a `SettingsEnv`: the fresh settings, a partial-patch
 // `patch()` that saves one control, and a few helpers. Nothing in a row ever writes the whole settings
 // object back.
 import type { ReactNode } from 'react';
 import type { Settings } from '@potato-workspace/shared';
 import type { SettingsPatch } from '../../lib/settings';
+import { queryUnits, wordsOf } from './synonyms';
 
-export const SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'lend', 'shortcuts'] as const;
+/** The pages a person sees, in nav order. Rows are defined in the older section files (`BASE_SECTION_IDS`) and placed by `arrange.tsx`. */
+export const SECTION_IDS = ['overview', 'agents', 'helpers', 'look', 'connect', 'keys', 'shortcuts', 'advanced'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
-/** `later` is the read-only "Coming later" page; it is not a section of settings. */
-export type SettingsPageId = SectionId | 'later';
+/** The section files that define the rows. Old links may still name them (see `LEGACY_TABS`). */
+export const BASE_SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'lend', 'shortcuts'] as const;
+export type BaseSectionId = (typeof BASE_SECTION_IDS)[number];
+
+export type SettingsPageId = SectionId;
 
 export interface ConfirmOptions {
   title: string;
@@ -76,7 +81,21 @@ export interface RowDef {
   pointer?: boolean;
   /** An early feature's own row: shown (and searched) only while this Labs flag is on. Hidden otherwise, as if it did not exist. */
   labsFlag?: 'acp_chat_enabled' | 'model_bridge_enabled' | 'lend_enabled';
+  /** The saved keys this row owns. Rows without it are actions or panels. (Used by the Changed dot, Reset and Undo.) */
+  keys?: (keyof Settings)[];
+  /** A small frame drawn at the right of, or under, the control. */
+  preview?: (env: SettingsEnv) => ReactNode;
+  /** The value in words, for the Undo toast ("Theme: Light"). */
+  valueText?: (settings: Settings) => string;
   render: (env: SettingsEnv) => ReactNode;
+}
+
+/** A section as its file defines it (the older nine). */
+export interface BaseSectionDef {
+  id: BaseSectionId;
+  title: string;
+  blurb: string;
+  rows: RowDef[];
 }
 
 export interface SectionDef {
@@ -85,6 +104,8 @@ export interface SectionDef {
   /** One quiet line under the page title. */
   blurb: string;
   rows: RowDef[];
+  /** The Advanced page: these groups are closed disclosure headers (no "Advanced" fold on that page). */
+  closedGroups?: string[];
 }
 
 /** The level of a row; a row without one is advanced. */
@@ -133,10 +154,10 @@ export function groupRows(rows: RowDef[]): RowGroup[] {
   return groups;
 }
 
-/** Lower-case words of a text: letters and digits only, so "claude.md" is "claude" and "md". */
-function words(text: string): string[] {
-  return text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-}
+const words = wordsOf;
+
+/** What a synonym hit scores: the same as a keyword hit. */
+export const SYNONYM_SCORE = 2;
 
 /**
  * How well `row` answers one typed word, or 0 for no match. The label and the curated keywords match from the
@@ -160,20 +181,48 @@ function wordScoreExact(row: RowDef, word: string): number {
 }
 
 /** Every word in the query must match the row's label, keywords or hint. Pointers never match. */
-export function rowMatches(row: RowDef, query: string): boolean {
-  return rowScore(row, query) > 0;
+export function rowMatches(row: RowDef, query: string, extra = ''): boolean {
+  return rowScore(row, query, extra) > 0;
 }
 
-/** The sum of the word scores (0 when any word finds nothing). Label matches outrank hint matches. */
-export function rowScore(row: RowDef, query: string): number {
-  const typed = words(query);
-  if (typed.length === 0) return 1;
+/** Whether one synonym (a list of words) is in the row's label, or its keywords, or `extra` (group and page names). */
+function altMatches(row: RowDef, alt: string[], extra: string): boolean {
+  const label = words(row.label);
+  const keys = words(`${row.keywords ?? ''} ${extra}`);
+  return alt.every((word) => {
+    const stem = word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word;
+    return label.some((w) => w.startsWith(stem)) || keys.some((w) => w.startsWith(stem));
+  });
+}
+
+function altInLabel(row: RowDef, alt: string[]): boolean {
+  const label = words(row.label);
+  return alt.every((word) => {
+    const stem = word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word;
+    return label.some((w) => w.startsWith(stem));
+  });
+}
+
+/**
+ * The sum of the word scores (0 when any typed word or phrase finds nothing). Label matches outrank hint
+ * matches. A typed word is widened to its synonyms (synonyms.ts); a synonym finds the label, keywords and
+ * `extra` (the group and page names) only, and scores as a keyword. Rows marked `danger` answer the delete words.
+ */
+export function rowScore(row: RowDef, query: string, extra = ''): number {
+  const units = queryUnits(query);
+  if (units.length === 0) return 1;
   if (row.pointer) return 0;
   let total = 0;
-  for (const word of typed) {
-    const score = wordScore(row, word);
-    if (score === 0) return 0;
-    total += score;
+  for (const unit of units) {
+    const scores = unit.words.map((word) => wordScore(row, word));
+    let best = scores.every((s) => s > 0) ? scores.reduce((a, b) => a + b, 0) : 0;
+    if (best < SYNONYM_SCORE) {
+      // A synonym that finds the row's own label ranks above one that only finds its keywords or its group's name.
+      if (unit.alts.some((alt) => altMatches(row, alt, ''))) best = Math.max(best, SYNONYM_SCORE + (unit.alts.some((alt) => altInLabel(row, alt)) ? 0.5 : 0));
+      else if (unit.alts.some((alt) => altMatches(row, alt, extra)) || (unit.danger && row.danger)) best = Math.max(best, SYNONYM_SCORE);
+    }
+    if (best === 0) return 0;
+    total += best;
   }
   return total;
 }
@@ -193,7 +242,7 @@ export function searchSections(sections: SectionDef[], query: string): SearchHit
   return sections
     .map((section) => {
       const scored = section.rows
-        .map((row, index) => ({ row, index, score: rowScore(row, query) }))
+        .map((row, index) => ({ row, index, score: rowScore(row, query, `${section.title} ${row.group ?? ''}`) }))
         .filter((r) => r.score > 0);
       const best = new Map<string | undefined, number>();
       const first = new Map<string | undefined, number>();
@@ -208,18 +257,15 @@ export function searchSections(sections: SectionDef[], query: string): SearchHit
           b.score - a.score ||
           a.index - b.index,
       );
-      return { section, rows: scored.map((r) => r.row) };
+      return { section, rows: scored.map((r) => r.row), top: Math.max(0, ...scored.map((r) => r.score)) };
     })
-    .filter((hit) => hit.rows.length > 0);
+    .filter((hit) => hit.rows.length > 0)
+    // The page with the best hit first; pages with equal scores keep the nav order (the sort is stable).
+    .sort((a, b) => b.top - a.top)
+    .map(({ section, rows }) => ({ section, rows }));
 }
 
 /** The section a row lives in, by its id (ids are unique across all sections). */
 export function findRowSection(sections: SectionDef[], rowId: string): SectionDef | undefined {
   return sections.find((s) => s.rows.some((r) => r.id === rowId));
-}
-
-/** One entry of the read-only "Coming later" list. */
-export interface LaterItem {
-  title: string;
-  note: string;
 }

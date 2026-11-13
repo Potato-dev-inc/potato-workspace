@@ -1,0 +1,10 @@
+# Lab vector T01. See ../vector.rs for the format.
+id = "T01"
+title = "An agent with no chat is refused with a plain sentence that names the terminal"
+levels = ["terminal_only"]
+opts = ""
+cost = "fast"
+claims = []
+
+[[expect]]
+refused = ""

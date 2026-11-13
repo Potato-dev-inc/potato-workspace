@@ -5,6 +5,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmSheet, NumberControl, Popup, SecretControl, Switch, TextControl } from './controls';
 import { blur, click, pickOption, type as typeInto } from './test-utils';
+import { SectionRows, onRowKeyDown } from './SectionView';
+import type { RowDef, SettingsEnv } from './model';
+import { SettingRow, SettingToggle } from './settings-ui';
 
 let host: HTMLDivElement;
 let root: Root;
@@ -196,5 +199,52 @@ describe('ConfirmSheet', () => {
     const confirmBtn = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!;
     await click(confirmBtn);
     expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Keyboard on a page of rows', () => {
+  it('arrow keys move between rows and Enter flips a switch', async () => {
+    const flips: string[] = [];
+    const rows: RowDef[] = ['One', 'Two', 'Three'].map((label) => ({
+      id: label.toLowerCase(),
+      label,
+      group: 'Group',
+      render: (env: SettingsEnv) =>
+        label === 'Two' ? (
+          <SettingRow label="Two">
+            <input aria-label="Two field" />
+          </SettingRow>
+        ) : (
+          <SettingToggle label={label} checked={false} onChange={() => flips.push(label)} />
+        ),
+    }));
+    const env = { settings: {} } as SettingsEnv;
+    await render(
+      <div onKeyDown={onRowKeyDown}>
+        <SectionRows rows={rows} envFor={() => env} />
+      </div>,
+    );
+    const press = async (target: Element, key: string) =>
+      act(async () => {
+        target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      });
+    const first = host.querySelector('[role="switch"][aria-label="One"]') as HTMLElement;
+    first.focus();
+    await press(first, 'ArrowDown');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Two field');
+    // A text field keeps its own arrow keys.
+    await press(document.activeElement!, 'ArrowDown');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Two field');
+    // Up from the third row goes back; Down from the field is not ours, so reach row three from row one's wrapper.
+    const third = host.querySelector('[role="switch"][aria-label="Three"]') as HTMLElement;
+    third.focus();
+    await press(third, 'ArrowUp');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Two field');
+    await press(third, 'Enter');
+    expect(flips).toEqual(['Three']); // Enter flips the switch of the focused row
+    const wrap = host.querySelector('[data-row="one"]') as HTMLElement;
+    wrap.focus();
+    await press(wrap, 'Enter');
+    expect(flips).toEqual(['Three', 'One']); // ... also when the row itself has focus
   });
 });

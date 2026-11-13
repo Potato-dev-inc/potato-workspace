@@ -23,7 +23,7 @@ import {
 import { watchTunnelDevInfo } from '../lib/load-tunnel-dev-info';
 import { originNotice } from '../lib/origin-notice';
 import { NumberControl, TextControl } from './settings/controls';
-import { Note } from './settings/settings-ui';
+import { Btn, Note } from './settings/settings-ui';
 
 /** Fired on window when paired devices change (a phone paired, Revoke, Revoke all, abilities). */
 export const DEVICES_CHANGED_EVENT = 'pm-devices-changed';
@@ -164,7 +164,81 @@ export function MobilePairingPanel({
         <small>Scan the QR code with your phone camera. It opens a link and signs you in.</small>
       </div>
       <div className="st-body space-y-3">
+        <fieldset className="st-choices" data-testid="pairing-choice">
+          <legend>What can this phone do?</legend>
+          {PAIRING_CHOICES.map((option) => (
+            <label key={option.id} className="st-choice" data-selected={choice === option.id ? 'true' : undefined}>
+              <input
+                type="radio"
+                name={choiceGroup}
+                value={option.id}
+                checked={choice === option.id}
+                onChange={() => setChoice(option.id)}
+              />
+              <span className="st-label">
+                <span>{option.label}</span>
+                <small>{option.hint}</small>
+              </span>
+            </label>
+          ))}
+          <p className="st-note">You can change this later under Paired phones. A new choice makes a new code.</p>
+        </fieldset>
+
+        {(() => {
+          const notice = originNotice(pwaOrigin);
+          if (!notice) return null;
+          return (
+            <p className="text-xs" data-testid="pairing-origin">
+              <span className="text-pm-muted">Your phone will connect to </span>
+              <strong className="font-mono break-all">{notice.host}</strong>
+              {notice.warning && <span className="block mt-1 text-pm-muted">{notice.warning}</span>}
+            </p>
+          );
+        })()}
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+          <div className="rounded-lg border border-pm-border bg-pm-bg p-2 shrink-0" hidden={!session}>
+            <canvas ref={canvasRef} className="block" aria-label="Mobile pairing QR code" />
+          </div>
+          {session ? (
+            <div className="flex-1 min-w-0 space-y-2 text-xs" data-testid="pairing-code">
+              <div>
+                <div className="text-[10px] text-pm-muted">Pairing code</div>
+                <code className="text-sm font-mono">{session.pairing_code}</code>
+              </div>
+              <div className="text-[10px] text-pm-muted">Expires {expiresLabel}</div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  qrReadyRef.current = true;
+                  void refreshPairing();
+                }}
+                className="px-2 py-1 text-xs rounded border border-pm-border hover:bg-pm-border/40 disabled:opacity-50"
+              >
+                {busy ? 'Refreshing…' : 'Refresh QR'}
+              </button>
+            </div>
+          ) : (
+            <div className="flex-1 min-w-0 space-y-2 text-xs">
+              <Btn
+                primary
+                data-testid="pair-a-phone"
+                disabled={busy}
+                onClick={() => {
+                  qrReadyRef.current = true;
+                  void refreshPairing();
+                }}
+              >
+                {busy ? 'Making a code…' : 'Pair a phone'}
+              </Btn>
+              <div className="text-[10px] text-pm-muted">Makes a one-time code. It expires after a few minutes.</div>
+            </div>
+          )}
+        </div>
+
         {!compact && (
+        <details className="st-fold" data-testid="pairing-address">
+          <summary>Address (advanced)</summary>
         <div>
           <label htmlFor="pairing-public-url" className="block text-[11px] text-pm-muted mb-1">
             Phone page address
@@ -224,80 +298,8 @@ export function MobilePairingPanel({
             )}
           </p>
         </div>
+        </details>
         )}
-
-        <fieldset className="st-choices" data-testid="pairing-choice">
-          <legend>What can this phone do?</legend>
-          {PAIRING_CHOICES.map((option) => (
-            <label key={option.id} className="st-choice" data-selected={choice === option.id ? 'true' : undefined}>
-              <input
-                type="radio"
-                name={choiceGroup}
-                value={option.id}
-                checked={choice === option.id}
-                onChange={() => setChoice(option.id)}
-              />
-              <span className="st-label">
-                <span>{option.label}</span>
-                <small>{option.hint}</small>
-              </span>
-            </label>
-          ))}
-          <p className="st-note">You can change this later under Devices. A new choice makes a new code.</p>
-        </fieldset>
-
-        {(() => {
-          const notice = originNotice(pwaOrigin);
-          if (!notice) return null;
-          return (
-            <div className="rounded border border-pm-border p-2 text-xs" data-testid="pairing-origin">
-              <span className="text-pm-muted">Your phone will connect to </span>
-              <strong className="font-mono break-all">{notice.host}</strong>
-              {notice.warning && <p className="mt-1 text-pm-muted">{notice.warning}</p>}
-            </div>
-          );
-        })()}
-        <div className="flex flex-col sm:flex-row gap-4 items-start">
-          <div className="rounded-lg border border-pm-border bg-pm-bg p-2 shrink-0" hidden={!session}>
-            <canvas ref={canvasRef} className="block" aria-label="Mobile pairing QR code" />
-          </div>
-          {session ? (
-            <div className="flex-1 min-w-0 space-y-2 text-xs" data-testid="pairing-code">
-              <div>
-                <div className="text-[10px] text-pm-muted">Pairing code</div>
-                <code className="text-sm font-mono">{session.pairing_code}</code>
-              </div>
-              <div className="text-[10px] text-pm-muted">Expires {expiresLabel}</div>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  qrReadyRef.current = true;
-                  void refreshPairing();
-                }}
-                className="px-2 py-1 text-xs rounded border border-pm-border hover:bg-pm-border/40 disabled:opacity-50"
-              >
-                {busy ? 'Refreshing…' : 'Refresh QR'}
-              </button>
-            </div>
-          ) : (
-            <div className="flex-1 min-w-0 space-y-2 text-xs">
-              <button
-                type="button"
-                data-testid="pair-a-phone"
-                disabled={busy}
-                onClick={() => {
-                  qrReadyRef.current = true;
-                  void refreshPairing();
-                }}
-                className="px-2 py-1 text-xs rounded border border-pm-border hover:bg-pm-border/40 disabled:opacity-50"
-              >
-                {busy ? 'Making a code…' : 'Pair a phone'}
-              </button>
-              <div className="text-[10px] text-pm-muted">Makes a one-time code. It expires after a few minutes.</div>
-            </div>
-          )}
-        </div>
 
         {err && <Note role="alert">{err}</Note>}
 

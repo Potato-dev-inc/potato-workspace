@@ -9,7 +9,7 @@ export function ContextCard({ usage }: { usage: UsageItem | null }) {
   if (!ctx) {
     return (
       <RailCard title="Context" testId="rail-context">
-        <p className="ck-rail-empty">Not reported by this agent</p>
+        <p className="ck-rail-empty">{"This agent doesn't share this"}</p>
       </RailCard>
     );
   }

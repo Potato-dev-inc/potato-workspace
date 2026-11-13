@@ -283,3 +283,172 @@ pub fn mask_private_json(value: &mut serde_json::Value) {
         _ => {}
     }
 }
+
+// ---- Guarded headless runs (headless probe). Added next to `run`; nothing above changes. ----
+
+/// Terminal-UI escape codes: alternate screen, hide cursor, absolute cursor addressing. A headless run that
+/// prints one of these is a full-screen program, not a headless one.
+static TUI_ESCAPES: Lazy<regex::bytes::Regex> =
+    Lazy::new(|| regex::bytes::Regex::new(r"\x1b\[\?1049h|\x1b\[\?25l|\x1b\[\d+;\d+H").expect("tui escapes"));
+
+/// Does this raw output contain terminal-UI escape codes?
+pub fn has_tui_escapes(bytes: &[u8]) -> bool {
+    TUI_ESCAPES.is_match(bytes)
+}
+
+/// The time limits of one guarded run.
+#[derive(Debug, Clone, Copy)]
+pub struct GuardLimits {
+    /// No byte at all by then: stop.
+    pub first_byte: Duration,
+    /// Output started, then nothing new for this long: stop.
+    pub idle: Duration,
+    /// The whole run.
+    pub total: Duration,
+}
+
+impl Default for GuardLimits {
+    fn default() -> Self {
+        Self { first_byte: Duration::from_secs(30), idle: Duration::from_secs(20), total: Duration::from_secs(120) }
+    }
+}
+
+/// Why a guarded run was stopped (or ended badly).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuardStop {
+    /// Terminal-UI escape codes appeared.
+    Tui,
+    /// No output within `first_byte`.
+    NoOutput,
+    /// Output went quiet for `idle`.
+    Idle,
+    /// `total` ran out.
+    Total,
+    /// The program ended with a non-zero exit code (not killed by us).
+    ExitNonzero,
+}
+
+impl GuardStop {
+    pub fn word(self) -> &'static str {
+        match self {
+            GuardStop::Tui => "tui",
+            GuardStop::NoOutput => "no-output",
+            GuardStop::Idle => "idle",
+            GuardStop::Total => "total",
+            GuardStop::ExitNonzero => "exit-nonzero",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct GuardedOutput {
+    /// stdout and stderr in the order they arrived, capped.
+    pub text: String,
+    pub stop: Option<GuardStop>,
+    pub exit: Option<i32>,
+    pub spawn_error: Option<String>,
+    pub duration: Duration,
+}
+
+struct Shared {
+    bytes: Vec<u8>,
+    last: Instant,
+}
+
+fn merged_reader<R: Read + Send + 'static>(mut source: R, cap: usize, into: Arc<Mutex<Shared>>) -> JoinHandle<()> {
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 4096];
+        while let Ok(n) = source.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            let mut s = into.lock().unwrap_or_else(|e| e.into_inner());
+            let room = cap.saturating_sub(s.bytes.len());
+            s.bytes.extend_from_slice(&buf[..n.min(room)]);
+            s.last = Instant::now();
+        }
+    })
+}
+
+/// Run `program args` with stdin closed, a plain terminal environment, stdout and stderr merged, and these guards:
+/// terminal-UI escape codes, no first byte, idle, total time. The whole process tree is killed when a guard fires.
+/// Never goes through a shell.
+pub fn run_guarded(program: &Path, args: &[String], cwd: &Path, limits: &GuardLimits, max_bytes: usize) -> GuardedOutput {
+    let env: Vec<(String, String)> = [("TERM", "dumb"), ("NO_COLOR", "1"), ("CI", "1"), ("PYTHONUTF8", "1"), ("PAGER", "cat")]
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    let mut spec = RunSpec::new(program, args, cwd);
+    spec.env = &env;
+    let started = Instant::now();
+    let mut out = GuardedOutput::default();
+    let mut child = match command(&spec).spawn() {
+        Ok(child) => child,
+        Err(e) => {
+            out.spawn_error = Some(e.to_string());
+            out.duration = started.elapsed();
+            return out;
+        }
+    };
+    let shared = Arc::new(Mutex::new(Shared { bytes: Vec::new(), last: started }));
+    let mut readers = Vec::new();
+    if let Some(s) = child.stdout.take() {
+        readers.push(merged_reader(s, max_bytes, shared.clone()));
+    }
+    if let Some(s) = child.stderr.take() {
+        readers.push(merged_reader(s, max_bytes, shared.clone()));
+    }
+    let mut killed = false;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !killed {
+                    out.exit = status.code();
+                }
+                break;
+            }
+            Ok(None) => {}
+            Err(_) => break,
+        }
+        if killed {
+            std::thread::sleep(POLL);
+            continue;
+        }
+        let (empty, quiet, tui) = {
+            let s = shared.lock().unwrap_or_else(|e| e.into_inner());
+            (s.bytes.is_empty(), s.last.elapsed(), has_tui_escapes(&s.bytes))
+        };
+        let elapsed = started.elapsed();
+        let stop = if tui {
+            Some(GuardStop::Tui)
+        } else if empty && elapsed > limits.first_byte {
+            Some(GuardStop::NoOutput)
+        } else if !empty && quiet > limits.idle {
+            Some(GuardStop::Idle)
+        } else if elapsed > limits.total {
+            Some(GuardStop::Total)
+        } else {
+            None
+        };
+        if let Some(stop) = stop {
+            out.stop = Some(stop);
+            kill_tree(&mut child);
+            killed = true;
+            continue;
+        }
+        std::thread::sleep(POLL);
+    }
+    let deadline = Instant::now() + READER_GRACE;
+    while Instant::now() < deadline && readers.iter().any(|r| !r.is_finished()) {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    out.text = String::from_utf8_lossy(&shared.lock().unwrap_or_else(|e| e.into_inner()).bytes).into_owned();
+    if out.stop.is_none() && has_tui_escapes(out.text.as_bytes()) {
+        out.stop = Some(GuardStop::Tui);
+    }
+    if out.stop.is_none() && !matches!(out.exit, Some(0) | None) {
+        out.stop = Some(GuardStop::ExitNonzero);
+    }
+    out.duration = started.elapsed();
+    out
+}

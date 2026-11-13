@@ -69,7 +69,7 @@ export function McpStatusBlock({ env }: { env: SettingsEnv }) {
     ? 'No project selected'
     : status
       ? status.overallReady
-        ? 'Ready for orchestrators'
+        ? 'Ready'
         : 'Not ready'
       : checking
         ? 'Checking…'
@@ -77,12 +77,12 @@ export function McpStatusBlock({ env }: { env: SettingsEnv }) {
 
   return (
     <SettingBlock
-      label="Runtime status"
-      description={`Checks the local bridge, ${runtimeName(env)}, and orchestrator MCP configs. Use Recheck & repair to fix project configs.`}
+      label="Connection check"
+      description="Checks the local address, the helper program and each agent's settings."
     >
       <div className="flex flex-wrap items-center gap-3">
         <Btn disabled={!installPath || checking} onClick={() => void check(true)}>
-          {checking ? 'Checking…' : 'Recheck & repair'}
+          {checking ? 'Checking…' : 'Check and repair'}
         </Btn>
         <Note role="status">{headline}</Note>
       </div>

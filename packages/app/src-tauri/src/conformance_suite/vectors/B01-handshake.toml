@@ -1,0 +1,15 @@
+# Lab vector B01. See ../vector.rs for the format.
+id = "B01"
+title = "Handshake: the agent starts, opens a session and answers a first message"
+levels = ["native", "native_bad", "json", "text"]
+opts = ""
+cost = "fast"
+claims = ["handshake"]
+
+[[step]]
+do = "prompt"
+text = "stream 1"
+
+[[expect]]
+turn = 1
+stop = "end_turn"

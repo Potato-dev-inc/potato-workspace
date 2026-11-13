@@ -1,96 +1,133 @@
 // Where every row lives, and in which group. The rows themselves stay in their section files (sections/*.tsx);
-// this file is the one place that says how the six sections are laid out for a person:
-//   - the group titles and their order inside each section
-//   - which rows moved to another section (the agent safety switches live in General > Safety, not under
-//     the MCP snippets) and which early features are collected in General > Labs
-//   - the links left behind where a row used to be
-// A row that is not named here (for example one a new feature adds) keeps its own `group` and is placed after the
-// named groups of its section, so adding a row never needs a change here to show up.
+// this file is the one place that says how the eight pages are laid out for a person:
+//   - the pages (title, blurb, order) and the group titles and their order inside each page
+//   - which row sits on which page (the safety switches are under Agents > Rules for all agents, every early
+//     feature is under Advanced > Early features (Labs), ...)
+// A row that is not named here (for example one a new feature adds) lands in Advanced > Other, and the test in
+// arrange.test.ts fails naming it, so nothing hides by accident.
 import { SIGN_IN } from '../../lib/glossary';
-import type { ReactNode } from 'react';
-import type { RowDef, SectionDef, SectionId, SettingsEnv } from './model';
+import type { BaseSectionDef, RowDef, SectionDef, SectionId, SettingsEnv } from './model';
 import { useDevLabsOverride, DEV_LABS_NOTE } from '../../lib/dev-labs';
-import { Btn, Note, SettingBlock, SettingRow } from './settings-ui';
+import { Note, SettingBlock } from './settings-ui';
 
-/** One entry of a group: a row id, a link to a row that now lives elsewhere, or `@labs` (every early feature). */
-export type LayoutEntry = string | { pointerTo: string; label?: string; note?: string };
+/**
+ * One entry of a group: a row id, a row with its label changed here (`row`), `@labs` (every early feature), or
+ * `@base:<section>` (every row of that section file that is not named elsewhere, each keeping its own group).
+ */
+export type LayoutEntry = string | { row: string; label?: string };
 
 export interface LayoutGroup {
   group: string;
   rows: LayoutEntry[];
 }
 
-export const LABS_GROUP = 'Labs';
-/** Row id of the Labs overview (a deep link to General > Labs). */
+export const LABS_GROUP = 'Early features (Labs)';
+/** Row id of the Labs overview (a deep link to Advanced > Early features (Labs)). */
 export const LABS_INDEX_ID = 'labs-index';
+/** The group that catches a row nobody placed. */
+export const OTHER_GROUP = 'Other';
 
 /** Early features list in this order; one added later (a new row with `labs`) is listed after them. */
 const LABS_ORDER = ['ask-bar', 'simple-mode', 'live-updates', 'opencode-automation'];
 
-export const LAYOUT: Partial<Record<SectionId, LayoutGroup[]>> = {
-  general: [
-    { group: 'Project', rows: ['project-folder'] },
-    { group: 'Startup', rows: ['start-at-sign-in'] },
-    { group: 'Appearance', rows: ['theme', 'mode-switch-animation', 'individual-window-layout', 'your-name', 'usage-bar', 'usage-login-reads', 'welcome'] },
-    {
-      group: 'Safety',
-      rows: ['security-ask-before-control', 'security-agents-merge', 'confirm-close', 'keep-awake', 'loop-guard', 'package-check', 'security-recent-approvals'],
-    },
-    { group: 'Budgets', rows: ['budget-turns', 'budget-minutes'] },
-    { group: 'Undo and memory', rows: ['checkpoints', 'checkpoints-keep', 'shared-memory'] },
-    { group: 'When you are away', rows: ['away-minutes'] },
-    { group: 'Discord alerts', rows: ['discord-alerts'] },
-    { group: LABS_GROUP, rows: [LABS_INDEX_ID, '@labs'] },
-    { group: 'Live Room', rows: ['live-room'] },
-    { group: 'Storage', rows: ['storage', 'chat-search-index', 'bring-old-chats'] },
-    { group: 'About', rows: ['version', 'early-versions', 'whats-new', 'settings-recovery', 'settings-file', 'diagnostic-file'] },
-    { group: 'Developer', rows: ['show-developer-settings'] },
-    { group: 'Uninstall', rows: ['uninstall'] },
+/** The closed groups of the Advanced page, in order (Developer and the danger list follow them, open). */
+export const ADVANCED_CLOSED_GROUPS = ['Connections to other tools', 'Models', LABS_GROUP, 'App and files', OTHER_GROUP];
+
+export interface PageMeta {
+  id: SectionId;
+  title: string;
+  blurb: string;
+}
+
+export const PAGES: PageMeta[] = [
+  { id: 'overview', title: 'Overview', blurb: 'Is everything OK?' },
+  { id: 'agents', title: 'Agents', blurb: 'Your agents, how they sign in and what they may do.' },
+  { id: 'helpers', title: 'Helpers', blurb: 'When an agent asks another agent for help.' },
+  { id: 'look', title: 'Look and feel', blurb: 'How the app looks and behaves.' },
+  { id: 'connect', title: 'Connect', blurb: 'Your phone, your team and alerts.' },
+  { id: 'keys', title: 'Keys', blurb: 'API keys. Kept in your system keychain when there is one.' },
+  { id: 'shortcuts', title: 'Shortcuts', blurb: 'Click the keys to change them. Shortcuts work while Potato Workspace is in front, except those tagged Any app.' },
+  { id: 'advanced', title: 'Advanced', blurb: 'For developers and the curious. Most people never need this page.' },
+];
+
+export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
+  overview: [
+    { group: 'Setup', rows: ['setup-check', { row: 'welcome', label: 'Run setup again' }] },
+    { group: 'Updates', rows: ['version', 'whats-new'] },
   ],
   agents: [
+    { group: 'Add an agent', rows: ['add-agent'] },
+    { group: 'Your agents', rows: ['agent-list'] },
     { group: SIGN_IN.group, rows: ['accounts'] },
+    { group: 'Where agents start', rows: ['project-folder', 'linux'] },
+    { group: 'Moving work', rows: ['handoff-mode', 'keep-going'] },
+    { group: 'All agents', rows: ['preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions'] },
     { group: 'Your chats', rows: ['bring-chats-agents'] },
-    { group: 'Helpers', rows: ['helper-agents', 'helper-default-models', 'keep-helpers-open', 'close-helpers-with-agent', 'most-helpers-at-once'] },
-    { group: 'Handoff', rows: ['handoff-mode'] },
-    { group: 'Ready to use', rows: ['preload', 'helper-tools'] },
-    { group: 'Chat', rows: ['agent-lane', 'chat-addons'] },
-    { group: 'Versions', rows: ['versions'] },
+    {
+      group: 'Rules for all agents',
+      rows: ['security-ask-before-control', 'security-agents-merge', 'loop-guard', 'package-check', 'collision', 'security-recent-approvals'],
+    },
+    { group: 'Limits', rows: ['budget-turns', 'budget-minutes'] },
+    { group: 'Undo and memory', rows: ['checkpoints', 'checkpoints-keep', 'shared-memory'] },
     { group: 'Your own agents', rows: ['definitions'] },
   ],
-  models: [
-    { group: 'Project index', rows: ['librarian-indexer'] },
-    { group: 'OpenCode', rows: ['opencode-provider', 'opencode-model'] },
-    { group: 'Model Bridge', rows: ['model-bridge'] },
+  helpers: [
+    { group: 'How helpers run', rows: ['helper-agents', 'helper-default-models', 'keep-helpers-open', 'close-helpers-with-agent'] },
+    { group: 'Limits', rows: ['most-helpers-at-once'] },
+    { group: 'Connect your agents', rows: ['agent-pack'] },
+  ],
+  look: [
+    { group: 'Appearance', rows: ['theme', 'mode-switch-animation', 'individual-window-layout', 'usage-bar', 'usage-login-reads'] },
+    { group: 'You', rows: ['your-name'] },
+    { group: 'Startup', rows: ['start-at-sign-in'] },
+    { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes'] },
+  ],
+  connect: [
+    { group: 'Phone', rows: ['pairing', 'paired-devices', { row: 'phone-notifications', label: 'Phone alerts' }] },
+    { group: 'Team', rows: ['team-page'] },
+    { group: 'Lend', rows: ['lend-page'] },
+    { group: 'Discord', rows: ['discord-alerts'] },
+    { group: 'Share a chat', rows: ['live-room'] },
+    { group: 'On the phone', rows: ['mobile-input-delay', 'mobile-keyboard-resizes', 'mobile-input-visible'] },
+    { group: 'Public address', rows: ['tunnel'] },
+    { group: 'Revoke', rows: ['revoke-all-devices'] },
   ],
   keys: [
     { group: 'Provider keys', rows: ['key-anthropic', 'key-openai', 'key-openrouter'] },
     { group: 'OpenCode keys', rows: ['opencode-keys', 'opencode-restart'] },
     { group: 'Remove keys', rows: ['remove-all-keys'] },
   ],
-  bridge: [
-    { group: 'Connect your agents', rows: ['agent-pack', 'toolbelt'] },
-    { group: 'Status', rows: ['bridge-endpoint', 'mcp-status'] },
-    { group: 'Install', rows: ['mcp-install', 'rust-mcp'] },
-    { group: 'Set up by hand', rows: ['snippet-claude-desktop', 'snippet-codex'] },
-    { group: 'Uninstall', rows: ['mcp-uninstall'] },
-  ],
   // Shortcuts: one group per kind of shortcut, in the order lib/shortcuts.ts lists them (the section file names the groups).
-  shortcuts: [],
-  phone: [
-    { group: 'Pair a phone', rows: ['pairing'] },
-    { group: 'Your phones', rows: ['paired-devices', 'revoke-all-devices'] },
-    { group: 'On the phone', rows: ['phone-notifications', 'mobile-input-delay', 'mobile-keyboard-resizes', 'mobile-input-visible'] },
-    { group: 'Public address', rows: ['tunnel'] },
+  shortcuts: [{ group: 'Shortcuts', rows: ['@base:shortcuts'] }],
+  advanced: [
+    {
+      group: 'Connections to other tools',
+      rows: ['toolbelt', 'helper-tools', 'bridge-endpoint', 'mcp-status', 'rust-mcp', 'mcp-install', 'snippet-claude-desktop', 'snippet-codex'],
+    },
+    { group: 'Models', rows: ['librarian-indexer', 'opencode-provider', 'opencode-model', 'model-bridge'] },
+    { group: LABS_GROUP, rows: [LABS_INDEX_ID, '@labs'] },
+    { group: 'App and files', rows: ['storage', 'settings-file', 'diagnostic-file', 'chat-search-index', 'early-versions', 'settings-recovery', 'bring-old-chats'] },
+    { group: 'Developer', rows: ['show-developer-settings'] },
+    { group: 'Uninstall', rows: ['uninstall', 'mcp-uninstall'] },
   ],
-  team: [{ group: 'Your team', rows: ['team-page'] }],
-  lend: [{ group: 'Share an agent', rows: ['lend-page'] }],
 };
 
-/** Every row id the layout names (not the `@labs` placeholder or the links). Used to catch stale ids. */
-export function layoutRowIds(layout = LAYOUT): string[] {
+/** The row id an entry names (null for the `@labs` placeholder). */
+function entryId(entry: LayoutEntry): string | null {
+  if (typeof entry !== 'string') return entry.row;
+  return entry.startsWith('@') ? null : entry;
+}
+
+/** Every row id the layout names (not the `@labs` placeholder). Used to catch stale ids. */
+export function layoutRowIds(layout: Partial<Record<SectionId, LayoutGroup[]>> = LAYOUT): string[] {
   const ids: string[] = [];
   for (const groups of Object.values(layout)) {
-    for (const g of groups ?? []) for (const entry of g.rows) if (typeof entry === 'string' && entry !== '@labs') ids.push(entry);
+    for (const g of groups ?? []) {
+      for (const entry of g.rows) {
+        const id = entryId(entry);
+        if (id) ids.push(id);
+      }
+    }
   }
   return ids;
 }
@@ -100,14 +137,7 @@ export function layoutRowIds(layout = LAYOUT): string[] {
 function LabsIndex({ env, labs }: { env: SettingsEnv; labs: RowDef[] }) {
   const devLabs = useDevLabsOverride();
   return (
-    <SettingBlock
-      label="Early features"
-      description={
-        devLabs
-          ? 'Tap one to jump to its switch.'
-          : 'Each one is off until you turn it on, and may change. Tap one to jump to its switch.'
-      }
-    >
+    <SettingBlock label="Early features" description="Tap one to jump to its switch.">
       {devLabs && <Note>{DEV_LABS_NOTE}</Note>}
       <ul className="st-labs-list">
         {labs.map((row) => (
@@ -123,19 +153,10 @@ function LabsIndex({ env, labs }: { env: SettingsEnv; labs: RowDef[] }) {
   );
 }
 
-/** Where a row went: the target's own name, one line on where it is now, and a button that jumps to it. */
-function PointerRow({ target, label, text, env }: { target: RowDef; label: string; text: string; env: SettingsEnv }): ReactNode {
-  return (
-    <SettingRow label={label} description={text}>
-      <Btn onClick={() => env.openRow?.(target.id)}>Show</Btn>
-    </SettingRow>
-  );
-}
-
 // ---------- arrange ----------
 
 /** The early features of every section, in the order they are listed in Labs. */
-export function collectLabs(sections: SectionDef[]): RowDef[] {
+export function collectLabs(sections: Pick<BaseSectionDef, 'rows'>[]): RowDef[] {
   const all = sections.flatMap((s) => s.rows).filter((r) => r.labs);
   const rank = (id: string) => {
     const i = LABS_ORDER.indexOf(id);
@@ -144,67 +165,76 @@ export function collectLabs(sections: SectionDef[]): RowDef[] {
   return all.map((row, index) => ({ row, index })).sort((a, b) => rank(a.row.id) - rank(b.row.id) || a.index - b.index).map((x) => x.row);
 }
 
+function labsIndexRow(labs: RowDef[]): RowDef | null {
+  if (labs.length === 0) return null;
+  return {
+    id: LABS_INDEX_ID,
+    level: 'advanced',
+    label: 'Early features',
+    hint: 'Tap one to jump to its switch.',
+    keywords: 'labs early experimental preview beta features',
+    render: (env) => <LabsIndex env={env} labs={labs} />,
+  };
+}
+
+/** Ids of rows the layout does not place (and that are not early features, which `@labs` collects). Should be empty. */
+export function unplacedRowIds(base: BaseSectionDef[], layout: Partial<Record<SectionId, LayoutGroup[]>> = LAYOUT): string[] {
+  const claimed = new Set<string>(layoutRowIds(layout));
+  const collected = layoutHasLabs(layout);
+  const wholeSections = new Set(baseSectionsTaken(layout));
+  return base
+    .filter((s) => !wholeSections.has(s.id))
+    .flatMap((s) => s.rows)
+    .filter((r) => !claimed.has(r.id) && !(collected && r.labs))
+    .map((r) => r.id);
+}
+
+/** The section files a layout takes whole (`@base:<section>`). */
+function baseSectionsTaken(layout: Partial<Record<SectionId, LayoutGroup[]>>): string[] {
+  return Object.values(layout).flatMap((groups) => (groups ?? []).flatMap((g) => g.rows.filter((e): e is string => typeof e === 'string' && e.startsWith('@base:')).map((e) => e.slice(6))));
+}
+
+function layoutHasLabs(layout: Partial<Record<SectionId, LayoutGroup[]>>): boolean {
+  return Object.values(layout).some((groups) => groups?.some((g) => g.rows.includes('@labs')));
+}
+
 /**
- * The sections as a person sees them. Pure: it returns new section objects and never changes the rows'
- * own definitions (their ids, labels, hints and render functions), only where they sit and under which group.
+ * The pages as a person sees them. Pure: it returns new section objects and never changes the rows' own
+ * definitions (their ids, hints and render functions), only where they sit, under which group, and (for the
+ * few entries that say so) the label. A row nobody placed lands in Advanced > Other.
  */
-export function arrangeSections(base: SectionDef[], layout: Partial<Record<SectionId, LayoutGroup[]>> = LAYOUT): SectionDef[] {
-  const byId = new Map<string, { row: RowDef; section: SectionDef }>();
-  for (const section of base) for (const row of section.rows) byId.set(row.id, { row, section });
+export function arrangeSections(base: BaseSectionDef[], layout: Partial<Record<SectionId, LayoutGroup[]>> = LAYOUT): SectionDef[] {
+  const byId = new Map<string, RowDef>();
+  for (const section of base) for (const row of section.rows) byId.set(row.id, row);
 
   const labs = collectLabs(base);
-  const labsIndex: RowDef | null =
-    labs.length === 0
-      ? null
-      : {
-          id: LABS_INDEX_ID,
-          level: 'advanced',
-          label: 'Labs',
-          hint: 'Early features that are off until you turn them on.',
-          keywords: 'labs early experimental preview beta features',
-          render: (env) => <LabsIndex env={env} labs={labs} />,
-        };
-  if (labsIndex) byId.set(labsIndex.id, { row: labsIndex, section: base[0] });
+  const labsIndex = labsIndexRow(labs);
+  if (labsIndex) byId.set(labsIndex.id, labsIndex);
 
-  const claimed = new Set<string>(layoutRowIds(layout));
-  for (const row of labs) claimed.add(row.id);
+  const unplaced = unplacedRowIds(base, layout).map((id) => byId.get(id)).filter((r): r is RowDef => Boolean(r));
 
-  return base.map((section) => {
-    const groups = layout[section.id];
-    if (!groups) return section;
+  return PAGES.map((page) => {
     const rows: RowDef[] = [];
-    for (const g of groups) {
+    for (const g of layout[page.id] ?? []) {
       for (const entry of g.rows) {
         if (entry === '@labs') {
           for (const row of labs) rows.push({ ...row, group: g.group, keywords: `${row.keywords ?? ''} labs early` });
           continue;
         }
-        if (typeof entry === 'string') {
-          const found = byId.get(entry);
-          if (found) rows.push({ ...found.row, group: g.group });
+        if (typeof entry === 'string' && entry.startsWith('@base:')) {
+          const claimed = new Set(layoutRowIds(layout));
+          for (const row of base.find((s) => s.id === entry.slice(6))?.rows ?? []) if (!claimed.has(row.id)) rows.push(row);
           continue;
         }
-        const target = byId.get(entry.pointerTo);
-        if (!target) continue;
-        const destSection = target.row.labs ? 'general' : (base.find((s) => s.rows.some((r) => r.id === target.row.id))?.id ?? section.id);
-        const destTitle = base.find((s) => s.id === destSection)?.title ?? 'Settings';
-        const destGroup = target.row.labs ? LABS_GROUP : (target.row.group ?? '');
-        const where = destSection === section.id ? `Now under ${destGroup}, further down.` : `Now in ${destTitle} › ${destGroup}.`;
-        const text = entry.note ?? `${where} ${target.row.labs?.about ?? ''}`.trim();
-        const label = entry.label ?? target.row.labs?.name ?? target.row.label;
-        rows.push({
-          id: `${section.id}-${entry.pointerTo}-link`,
-          label,
-          hint: text,
-          pointer: true,
-          level: 'advanced',
-          group: g.group,
-          render: (env) => <PointerRow target={target.row} label={label} text={text} env={env} />,
-        });
+        const id = entryId(entry);
+        const found = id ? byId.get(id) : undefined;
+        if (!found) continue;
+        const label = typeof entry === 'string' ? undefined : entry.label;
+        rows.push({ ...found, group: g.group, ...(label ? { label } : {}) });
       }
     }
-    // Rows the layout does not name (a new feature's own rows) keep their group, after the named ones.
-    for (const row of section.rows) if (!claimed.has(row.id)) rows.push(row);
-    return { ...section, rows };
+    if (page.id === 'advanced') for (const row of unplaced) rows.push({ ...row, group: OTHER_GROUP });
+    const closedGroups = page.id === 'advanced' ? ADVANCED_CLOSED_GROUPS : undefined;
+    return { id: page.id, title: page.title, blurb: page.blurb, rows, ...(closedGroups ? { closedGroups } : {}) };
   });
 }

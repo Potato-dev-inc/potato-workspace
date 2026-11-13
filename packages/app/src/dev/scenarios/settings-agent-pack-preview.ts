@@ -6,7 +6,7 @@ const s: HarnessScenario = {
   route: 'settings',
   settingsTab: 'bridge',
   after: async (dom) => {
-    await dom.waitFor('[aria-label="Add Potato Workspace to your agents"]');
+    await dom.waitFor('[aria-label="Let agents ask each other for help"]');
     await dom.clickText('button', 'Review and install');
     await dom.waitFor('[role="dialog"] [data-testid="pack-agent"]');
     await dom.clickText('button', 'Show details');

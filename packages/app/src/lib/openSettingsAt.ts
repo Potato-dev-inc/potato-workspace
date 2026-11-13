@@ -3,7 +3,7 @@
 //
 // The page change itself goes through `open` (the cockpit's settings opener takes a tab, and a row id is a
 // valid tab: see `lib/settings-target.ts`). Without one, a window event `pm:open-settings` carries the tab.
-import type { SectionId } from '../components/settings/model';
+import type { BaseSectionId, SectionId } from '../components/settings/model';
 
 export const SETTINGS_GLOW_MS = 2000;
 const GLOW_ATTR = 'data-glow';
@@ -23,8 +23,8 @@ export interface OpenSettingsOptions {
   focusField?: boolean;
 }
 
-/** Open Settings on `section`, or on `rowId` inside it when given. */
-export function openSettingsAt(section: SectionId, rowId?: string, options: OpenSettingsOptions = {}): void {
+/** Open Settings on `section` (an older section id such as `lend` still works), or on `rowId` inside it when given. */
+export function openSettingsAt(section: SectionId | BaseSectionId, rowId?: string, options: OpenSettingsOptions = {}): void {
   const tab = rowId ?? section;
   const open = options.open ?? registered;
   if (open) open(tab);

@@ -76,7 +76,7 @@ describe('AccountsGroup', () => {
     expect(claude.querySelector('code')?.textContent).toBe('claude');
     expect(host.querySelector('[data-testid="accounts-codex"]')).toBeTruthy();
     expect(host.querySelector('[data-testid="accounts-opencode"]')).toBeNull();
-    expect(host.textContent).toContain('never reads or shares');
+    expect(host.querySelector('.st-tip')?.getAttribute('title')).toContain('never reads or shares');
   });
 
   it('headings show the agent display name, not the raw id', async () => {
@@ -108,7 +108,7 @@ describe('AccountsGroup', () => {
     await render(api);
     const codex = host.querySelector('[data-testid="accounts-codex"]') as HTMLElement;
     await act(async () => {
-      button(codex, 'Open sign-in window')!.click();
+      button(codex, 'Sign in again')!.click();
     });
     expect(api.openLoginPane).toHaveBeenCalledWith('codex', 'acc_9');
     expect(host.textContent).toContain('Sign in there once');

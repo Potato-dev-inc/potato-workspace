@@ -67,11 +67,11 @@ describe('Helper agents', () => {
     await settle(10);
     expect(choice()?.value).toBe('always_show');
     expect([...choice()!.options].map((o) => o.textContent)).toEqual([
-      'Always show them',
-      'Let the agent choose',
-      'Always run in the background',
+      'Always show them: each helper gets a pane',
+      'Let the agent choose: it decides each time',
+      'Always run in the background: they show in your Inbox',
     ]);
-    expect(hasText(m.host, 'open in their own pane even if the agent asks for background mode')).toBe(true);
+    expect(hasText(m.host, 'Where helpers show up.')).toBe(true);
     expect(hasText(m.host, 'Claude Code')).toBe(false);
   });
 
