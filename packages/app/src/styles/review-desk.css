@@ -54,7 +54,7 @@
   background: transparent;
   color: var(--label);
   font: inherit;
-  text-decoration: underline;
+  text-decoration: none;
   cursor: pointer;
 }
 .cockpit .ck-rd-btn:focus-visible,

@@ -1,0 +1,51 @@
+/* The three chip shapes, and only these. Everything else that used to look like a chip is plain text.
+   Count = a number or "6 of 20" (fill). Label = a word that names a state or kind (outline). Key = a keyboard key
+   (mono, outline). All 18px tall, radius 5, 11px / 500. Colour only through tokens; a tone class tints text. */
+.cockpit .ck-chip-count,
+.cockpit .ck-chip-label,
+.cockpit .ck-chip-key {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 18px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ck-chip-count {
+  background: var(--fill);
+  color: var(--label-2);
+}
+.cockpit .ck-chip-label {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--label-2);
+}
+.cockpit .ck-chip-key {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--label-3);
+  font-family: var(--font-mono);
+}
+.cockpit button.ck-chip-count,
+.cockpit button.ck-chip-label {
+  cursor: pointer;
+}
+.cockpit .ck-chip-count.is-risk,
+.cockpit .ck-chip-label.is-risk {
+  color: var(--risk);
+}
+.cockpit .ck-chip-count.is-danger,
+.cockpit .ck-chip-label.is-danger {
+  color: var(--danger);
+}
+.cockpit .ck-chip-count.is-you,
+.cockpit .ck-chip-label.is-you {
+  color: var(--accent);
+}

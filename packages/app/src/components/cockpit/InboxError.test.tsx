@@ -45,7 +45,10 @@ describe('Inbox error card', () => {
     api.info = { handle: 'h', status: 'failed', receipt: null, error: { code: 'AGENT_EXITED' } };
     await mount();
     expect(host.querySelector('.ib-title')!.textContent).toBe('Claude stopped');
-    expect(host.querySelector('.ib-glyph [role="img"]')!.getAttribute('aria-label')).toBe('Error');
+    // the agent's brand icon leads the row; the state is the one chip
+    expect(host.querySelector('.ib-glyph[data-brand] svg[data-mark="logo"]')).not.toBeNull();
+    expect(host.querySelector('.ib-chip')!.getAttribute('data-chip')).toBe('stopped');
+    expect(host.querySelector('.ib-chip')!.textContent).toBe('Stopped');
     expect(host.querySelector('.ib-meta')!.textContent).toBe('shop');
     expect(host.querySelector('.ib-age')!.textContent).toBe('2m');
     expect(host.querySelector('.ib-reason')!.textContent).toBe('It closed unexpectedly. Your files are as it left them.');
@@ -63,7 +66,7 @@ describe('Inbox error card', () => {
     expect(text.querySelector('span')!.getAttribute('title')).toBe('WORKSPACE_TRUST_DECLINED');
     expect(host.textContent).not.toContain('WORKSPACE_TRUST_DECLINED');
     // the calm glyph (idle corners), not the X of an error
-    expect(host.querySelector('.ib-glyph [role="img"]')!.getAttribute('aria-label')).toBe('Idle');
+    expect(host.querySelector('.ib-chip')).toBeNull();
     await act(async () => button('Start again')!.click());
     expect(newAgent).toHaveBeenCalledWith('claude');
   });

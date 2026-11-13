@@ -1,0 +1,16 @@
+import type { HarnessScenario } from '../types';
+import { SIDEBAR_PANES } from '../fixtures-sidebar';
+
+/** Evidence for the sidebar round (1113): project cards, row marks, footer. */
+const s: HarnessScenario = {
+  name: 'ui-sidebar-dark-1280',
+  route: 'cockpit',
+  theme: 'dark',
+  window: { width: 1280, height: 800 },
+  panes: SIDEBAR_PANES,
+  storage: {
+    'pm.sidebar.pinned': JSON.stringify(['sb-plan']),
+    'pm.sidebar.projects': JSON.stringify([{ path: 'C:/Users/dev/work/potato-workspace' }, { path: 'C:/Users/dev/work/potato-site' }, { path: 'C:/Users/dev/work/empty-project' }]),
+  },
+};
+export default s;

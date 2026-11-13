@@ -286,7 +286,7 @@ describe('sidebar: footer', () => {
     const onOpenScores = vi.fn();
     await render(c, { onOpenDoctor: () => {}, onOpenMemory: () => {}, onOpenPlans, onOpenScores });
     const foot = q('.ck-side-foot')!;
-    for (const label of ['Set up agents', 'Project', 'More', 'Toggle theme', 'Settings']) {
+    for (const label of ['More', 'Settings']) {
       expect(foot.querySelector(`button[aria-label="${label}"]`)?.getAttribute('title')).toBeTruthy();
     }
     expect(foot.textContent).not.toContain('Your plans');
@@ -305,6 +305,9 @@ describe('sidebar: footer', () => {
     await click(byLabel('More'));
     await click(item('Your plans'));
     expect(onOpenPlans).toHaveBeenCalledTimes(1);
+    // Theme, Project and Set up agents moved into the menu too.
+    await click(byLabel('More'));
+    expect(['Switch to light', 'Project', 'Set up agents'].every((l) => item(l))).toBe(true);
   });
 
   it('closes More with Escape', async () => {

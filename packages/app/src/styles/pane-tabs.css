@@ -1,0 +1,135 @@
+/* Pane tabs: the project's open agents. Icon + title; a dot on tabs behind; the front tab is lifted with a 2px accent line. */
+.cockpit .ck-ptabs {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-height: 32px;
+  padding: 0 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--bg-side);
+  border-bottom: 1px solid var(--sep);
+}
+.cockpit .ck-ptabs::-webkit-scrollbar {
+  display: none;
+}
+.cockpit .ck-ptab {
+  position: relative;
+  flex: 0 1 180px;
+  min-width: 96px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px 6px 0 0;
+  color: var(--label-2);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.cockpit .ck-ptab:hover {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .ck-ptab.is-active {
+  background: var(--bg);
+  color: var(--label);
+  margin-bottom: -1px;
+  height: 31px;
+}
+.cockpit .ck-ptab.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  border-radius: 6px 6px 0 0;
+  background: var(--accent-line);
+}
+.cockpit .ck-ptab-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 26px 0 10px;
+  text-align: left;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  color: inherit;
+}
+.cockpit .ck-ptab-main:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-ptab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The dot and the close button share the right edge: the dot shows at rest, the close on hover or focus. */
+.cockpit .ck-ptab-dot,
+.cockpit .ck-ptab-x {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.cockpit .ck-ptab-dot {
+  width: 7px;
+  height: 7px;
+  right: 9px;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.cockpit .ck-ptab-dot--working {
+  background: var(--live);
+}
+.cockpit .ck-ptab-dot--needs {
+  background: var(--accent);
+}
+.cockpit .ck-ptab-dot--error {
+  background: var(--danger);
+}
+.cockpit .ck-ptab-x {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--label-2);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+.cockpit .ck-ptab:hover .ck-ptab-x,
+.cockpit .ck-ptab-x:focus-visible {
+  opacity: 1;
+}
+.cockpit .ck-ptab:hover .ck-ptab-dot {
+  opacity: 0;
+}
+.cockpit .ck-ptab-x:hover {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-ptab-x:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+@media (hover: none) {
+  .cockpit .ck-ptab-x {
+    opacity: 1;
+  }
+  .cockpit .ck-ptab-dot {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-ptab,
+  .cockpit .ck-ptab-dot,
+  .cockpit .ck-ptab-x {
+    transition: none;
+  }
+}

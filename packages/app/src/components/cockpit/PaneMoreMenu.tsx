@@ -11,7 +11,7 @@ export function menuShiftX(left: number, right: number, viewport: number, gap = 
   return 0;
 }
 
-/** A "More" menu for the pane's less used views. Its button shows the open view's name. */
+/** A "More" menu for the pane's less used views: a ⋯ button; it is lit while one of its views is open. */
 export function PaneMoreMenu<T extends string>({
   items,
   value,
@@ -80,12 +80,14 @@ export function PaneMoreMenu<T extends string>({
       <button
         ref={buttonRef}
         type="button"
-        className="ck-seg-btn"
+        className={`ck-icon-btn ck-more-btn${current ? ' is-on' : ''}`}
+        aria-label={label}
+        title={current ? `${label} · ${current.label}` : label}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        {current ? current.label : label}
+        <span aria-hidden="true">{'⋯'}</span>
       </button>
       {open && (
         <div ref={menuRef} className="ck-menu ck-menu--start" role="menu" aria-label={label} onKeyDown={onMenuKey}>

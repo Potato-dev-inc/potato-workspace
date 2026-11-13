@@ -21,7 +21,7 @@
   color: var(--label-2);
   font: 12px var(--font-ui);
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 .cockpit .ck-pill:hover:not(:disabled),
 .cockpit .ck-pill[aria-expanded='true'] {
@@ -36,6 +36,22 @@
   opacity: 0.5;
   cursor: default;
 }
+/* The permission chip: neutral for the safe modes; warning-yellow with a shield only for Full access. */
+.cockpit .ck-pill[data-tone='risk'],
+.cockpit [data-tone='risk'] > .ck-pill {
+  color: var(--risk);
+  background: color-mix(in srgb, var(--risk) 14%, transparent);
+}
+.cockpit [data-tone='risk'] > .ck-pill:hover:not(:disabled) {
+  color: var(--risk);
+  background: color-mix(in srgb, var(--risk) 22%, transparent);
+}
+.cockpit .ck-pill-shield {
+  flex: none;
+}
+.cockpit .ck-pill--readonly {
+  cursor: default;
+}
 .cockpit .ck-pill-label {
   max-width: 160px;
   overflow: hidden;
@@ -45,7 +61,7 @@
 .cockpit .ck-pill-chev {
   flex: none;
   color: var(--label-3);
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-fast) ease;
 }
 .cockpit .ck-pill[aria-expanded='true'] .ck-pill-chev {
   transform: rotate(180deg);
@@ -140,7 +156,7 @@
   background: var(--fill-active);
   box-shadow: inset 0 0 0 1px var(--sep);
   transform: translateX(calc(var(--i, 0) * 100%));
-  transition: transform 0.25s var(--ease);
+  transition: transform var(--dur-panel) var(--ease);
 }
 .cockpit .ck-seg-btn {
   position: relative;
@@ -152,7 +168,7 @@
   font: 11.5px var(--font-ui);
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition: color var(--dur-fast) ease;
 }
 .cockpit .ck-seg-btn[aria-checked='true'] {
   color: var(--label);
@@ -186,7 +202,7 @@
   background: transparent;
   color: var(--label-2);
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: background var(--dur-fast) ease;
 }
 .cockpit .ck-ctx-ring:hover,
 .cockpit .ck-ctx-ring[aria-expanded='true'] {
@@ -243,7 +259,7 @@
   height: 100%;
   border-radius: 999px;
   background: var(--label);
-  transition: width 0.4s var(--ease);
+  transition: width var(--dur-panel) var(--ease);
 }
 .cockpit .ck-ctx-line {
   margin: 8px 0 0;
@@ -324,7 +340,7 @@
   border-radius: 7px;
   color: var(--label-2);
   text-decoration: none;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 .cockpit .ck-chat-pending .ck-chat-link:hover {
   background: var(--fill-active);

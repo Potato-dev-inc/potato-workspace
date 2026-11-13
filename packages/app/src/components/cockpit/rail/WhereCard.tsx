@@ -1,13 +1,14 @@
-// Where this pane runs: the agent, its model and version, the folder, the git branch and the account.
+// Where this pane runs: the model, the folder, the git branch and the account.
 import { SIGN_IN } from '../../../lib/glossary';
 import type { ReactNode } from 'react';
 import { RailCard } from './RailCard';
 import { shortFolder } from './railFormat';
 
 export interface WhereCardProps {
-  agentName: string;
+  /** Not shown any more: the agent is the pane's title. Kept so callers need no change. */
+  agentName?: string;
   model: string | null;
-  cliVersion: string | null;
+  cliVersion?: string | null;
   folder: string;
   /** The git branch of the folder; null when it is not a git folder (or not known yet). */
   branch: string | null;
@@ -23,12 +24,10 @@ function Row({ label, children, title }: { label: string; children: ReactNode; t
   );
 }
 
-export function WhereCard({ agentName, model, cliVersion, folder, branch, accountLabel }: WhereCardProps) {
-  const agent = [agentName, cliVersion ? `v${cliVersion.replace(/^v/i, '')}` : null].filter(Boolean).join(' ');
+export function WhereCard({ model, folder, branch, accountLabel }: WhereCardProps) {
   return (
-    <RailCard title="Where" testId="rail-where">
+    <RailCard title="Where" testId="rail-where" bare>
       <dl className="ck-rail-facts">
-        <Row label="Agent">{agent}</Row>
         {model && (
           <Row label="Model" title={model}>
             <span className="ck-mono">{model}</span>

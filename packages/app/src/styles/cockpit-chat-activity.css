@@ -4,3 +4,92 @@
   color: var(--label);
   font-weight: 600;
 }
+
+/* ---- Chat that reads like a document ---- */
+/* A centred column about 72 characters wide. The scrolling box stays full width (so the scrollbar sits at the pane
+   edge); the side padding grows to centre the text. Wide tables and code blocks scroll inside their own box. */
+.cockpit .ck-chat-body {
+  padding-inline: max(20px, calc((100% - 72ch) / 2));
+}
+
+/* File names and commands in soft chips (the agent's `code`, and the code words in other chat lines). */
+.cockpit .ck-chat-md-code,
+.cockpit .ck-chat .ck-code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--fill);
+  font: 0.9em/1.4 var(--font-mono);
+  color: var(--label);
+}
+
+/* Tables with hairlines only: a line under each row, no box and no column lines. */
+.cockpit .ck-chat-md-table-wrap {
+  border: 0;
+  border-radius: 0;
+}
+.cockpit .ck-chat-md-table th,
+.cockpit .ck-chat-md-table td {
+  padding: 6px 12px 6px 0;
+  border: 0;
+  border-bottom: 1px solid var(--sep);
+}
+.cockpit .ck-chat-md-table th {
+  background: transparent;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  color: var(--label-3);
+}
+
+/* A tool step is one dim line: icon, what it did, a tick (green) or a cross (red). No card, no box. */
+.cockpit .ck-chat .ck-agc-card {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.cockpit .ck-chat .ck-agc-card + .ck-agc-card {
+  margin-top: 0;
+}
+.cockpit .ck-chat .ck-agc-card .ck-agc-head {
+  min-height: 24px;
+  padding: 2px 6px;
+  gap: 8px;
+  font-size: var(--fs-meta);
+  color: var(--label-3);
+}
+.cockpit .ck-chat .ck-agc-card .ck-agc-name {
+  font-weight: var(--fw-regular);
+  color: var(--label-2);
+}
+.cockpit .ck-chat .ck-agc-card .ck-agc-sub {
+  color: var(--label-3);
+}
+.cockpit .ck-chat .ck-agc-badge .ck-agc-check {
+  color: var(--live);
+}
+.cockpit .ck-chat .ck-agc-badge .ck-agc-cross {
+  color: var(--danger);
+}
+/* The state is the icon; its word stays for screen readers. */
+.cockpit .ck-chat .ck-agc-badge--done > span:not([class*='ck-agc-']),
+.cockpit .ck-chat .ck-agc-badge--failed > span:not([class*='ck-agc-']) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.cockpit .ck-chat .ck-agc-card .ck-agc-badge {
+  position: relative;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-weight: var(--fw-regular);
+  color: var(--label-3);
+}
+.cockpit .ck-chat .ck-agc-card .ck-agc-badge--failed {
+  color: var(--danger);
+}

@@ -23,7 +23,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  transition: opacity 160ms var(--ease);
+  transition: opacity var(--dur-fast) var(--ease);
 }
 .cockpit .ck-split-side.is-dim {
   opacity: var(--ck-split-dim);
@@ -51,7 +51,7 @@
   left: 4px;
   width: 1px;
   background: var(--sep);
-  transition: background-color 160ms var(--ease);
+  transition: background-color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-split-divider:hover::before,
 .cockpit .ck-split-divider:focus-visible::before {

@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import type { ToolStep } from '../../lib/sessionChatModel';
 import '../../styles/chat-agent-cards.css';
+import '../../styles/cockpit-chat-activity.css';
 import { Chevron, CheckIcon, CrossIcon, KindIcon, PendingMark, SpinMark } from './chatCardIcons';
 import { kindOfCall } from './chatActivity';
 import { ToolDetail } from './ToolDetail';

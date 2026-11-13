@@ -182,7 +182,7 @@
   padding: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease;
+  transition: opacity var(--dur-fast) ease;
 }
 
 .terminal-scroll-bottom--visible {
@@ -257,7 +257,7 @@
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   user-select: none;
-  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform var(--dur-fast) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .terminal-mobile-special-toggle:active {
@@ -274,8 +274,8 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   transition:
-    opacity 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity var(--dur-panel) cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform var(--dur-panel) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .terminal-mobile-special-icon--close {
@@ -394,8 +394,8 @@
   touch-action: manipulation;
   user-select: none;
   transition:
-    transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    background-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform var(--dur-fast) cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color var(--dur-fast) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .terminal-mobile-special-key--wide {
@@ -455,7 +455,7 @@
   .terminal-mobile-special-controls--open .terminal-mobile-special-icon--keyboard,
   .terminal-mobile-special-controls--open .terminal-mobile-special-icon--close {
     transform: none;
-    transition-duration: 120ms;
+    transition-duration: var(--dur-fast);
   }
 }
 

@@ -36,7 +36,7 @@ describe('AcpConfigChips', () => {
   it('uses a segmented switch for an effort-like setting with few choices, menus for the rest', () => {
     const options = [select('model', 'model', ['a', 'b', 'c']), select('mode', 'mode', ['x', 'y']), select('effort', 'thought_level', ['low', 'medium', 'high'])];
     act(() => root.render(<AcpConfigChips paneId="p1" state={state(options)} api={{ setConfig: vi.fn() }} />));
-    expect(kinds()).toEqual(['model:menu', 'mode:menu', 'effort:segmented']);
+    expect(kinds()).toEqual(['mode:menu', 'model:menu', 'effort:segmented']);
   });
 
   it('keeps a menu for an effort-like setting with more than four choices, and for a few-choice setting of another kind', () => {

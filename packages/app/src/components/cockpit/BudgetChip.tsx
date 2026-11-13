@@ -12,6 +12,7 @@ import {
   type BudgetAction,
   type BudgetApi,
 } from '../../lib/budgets';
+import '../../styles/chips.css';
 import '../../styles/budgets.css';
 
 export function BudgetChip({
@@ -62,7 +63,7 @@ export function BudgetChip({
     <span className="ck-budget-wrap" ref={wrap}>
       <button
         type="button"
-        className={`ck-budget-chip is-${view.state}`}
+        className={`ck-chip-count ck-budget-chip is-${view.state}`}
         data-testid="budget-chip"
         aria-haspopup="dialog"
         aria-expanded={open}

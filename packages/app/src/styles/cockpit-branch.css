@@ -29,7 +29,7 @@
   border-radius: 5px;
   color: var(--label-2);
   font-size: 12.5px;
-  transition: background 160ms var(--ease), color 160ms var(--ease);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-branch-seg-btn[aria-pressed='true'] {
   background: var(--fill-active);
@@ -126,7 +126,7 @@
 }
 .cockpit .ck-branch-disclosure:hover {
   color: var(--label);
-  text-decoration: underline;
+  text-decoration: none;
 }
 .cockpit .ck-branch-brief-box {
   display: flex;
@@ -164,8 +164,8 @@
   font-size: 11px;
   opacity: 0;
   transition:
-    opacity 160ms var(--ease),
-    color 160ms var(--ease);
+    opacity var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-chat-turn:hover .ck-chat-branch-btn,
 .cockpit .ck-chat-branch-btn:focus-visible,

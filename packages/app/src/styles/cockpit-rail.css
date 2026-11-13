@@ -17,11 +17,11 @@
   width: 280px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 10px 16px;
+  gap: 0;
+  padding: 6px 14px 16px;
   overflow-y: auto;
   border-left: 1px solid var(--sep);
-  background: var(--bg-side);
+  background: var(--bg);
   animation: ck-rail-in 220ms var(--ease-sheet);
 }
 @keyframes ck-rail-in {
@@ -48,20 +48,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   transition:
-    background-color 160ms var(--ease),
-    color 160ms var(--ease);
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-rail-parent:hover {
   background: var(--fill-hover);
   color: var(--label);
 }
 
+/* Plain sections: a small label, rows, a hairline between sections. No boxes. */
 .cockpit .ck-rail-card {
-  padding: 9px 10px 10px;
-  border-radius: 8px;
-  background: var(--bg-raised);
-  border: 1px solid var(--sep);
-  box-shadow: var(--raise-hi);
+  padding: 12px 0;
+}
+.cockpit .ck-rail-card + .ck-rail-card {
+  border-top: 1px solid var(--sep);
 }
 .cockpit .ck-rail-h {
   display: flex;
@@ -69,10 +69,11 @@
   justify-content: space-between;
   gap: 8px;
   margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--label-2);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--label-3);
 }
 .cockpit .ck-rail-note {
   font-weight: 400;
@@ -112,7 +113,11 @@
 }
 .cockpit .ck-rail-row dt {
   flex: none;
-  width: 52px;
+  width: 60px;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--label-3);
 }
 .cockpit .ck-rail-row dd {
@@ -139,7 +144,7 @@
   height: 100%;
   border-radius: inherit;
   background: var(--label-2);
-  transition: width 320ms var(--ease-sheet);
+  transition: width var(--dur-panel) var(--ease-sheet);
 }
 
 /* Lists: tasks, files, helpers. */
@@ -203,7 +208,7 @@
   text-align: left;
   font-size: 12px;
   color: var(--label);
-  transition: background-color 160ms var(--ease);
+  transition: background-color var(--dur-fast) var(--ease);
 }
 .cockpit button.ck-rail-item:hover {
   background: var(--fill-hover);

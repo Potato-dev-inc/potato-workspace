@@ -43,29 +43,46 @@ const mount = () =>
   );
 
 describe('SidebarFooter', () => {
-  it('every button carries a text label for wide windows', () => {
+  it('is one row: Settings, Review, and a More menu', () => {
     mount();
-    const labels = [...host.querySelectorAll('.ck-foot-icons .ck-icon-btn')].map((b) => b.querySelector('.ck-foot-label')?.textContent);
-    expect(labels).toEqual(['Set up agents', 'Project', 'Review', 'More', 'Theme', 'Settings']);
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ck-foot-icons > button, .ck-foot-icons .ck-menu-wrap > button')];
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Settings', 'Review', 'More']);
+    expect(host.querySelectorAll('.ck-foot-icons').length).toBe(1);
+  });
+
+  it('Theme, Project and Set up agents live in the More menu', () => {
+    mount();
+    expect(host.querySelector('button[aria-label="Toggle theme"]')).toBeNull();
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
+    const items = [...host.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim());
+    expect(items).toEqual(expect.arrayContaining(['Project', 'Set up agents', 'Switch to light']));
+  });
+
+  it('shows no status line when there is nothing to say, and the lost connection when it is real', () => {
+    mount();
+    expect(host.querySelector('.ck-foot-status')!.children.length).toBe(0);
+    act(() =>
+      root.render(
+        <SidebarFooter names={new Map()} onOpenPane={() => {}} mode="orchestration" onMode={() => {}} theme="dark" onToggleTheme={() => {}} onOpenSettings={() => {}} reviewCount={0} bridgeLine="x" />,
+      ),
+    );
+    expect(host.querySelector('.ck-foot-status .ck-bridge')?.textContent).toContain('Connection lost');
   });
 
   it('in a narrow window (icons only) every footer button still has a name and a tooltip', () => {
     mount();
     const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ck-foot-icons button')];
-    expect(buttons.length).toBeGreaterThanOrEqual(6);
+    expect(buttons.length).toBe(3);
     for (const b of buttons) {
       expect(b.getAttribute('aria-label') ?? '').not.toBe('');
       expect(b.getAttribute('title') ?? '').not.toBe('');
     }
-    // The visible text is decoration for wide windows; the name comes from the button, never from it.
     for (const l of host.querySelectorAll('.ck-foot-label')) expect(l.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('Settings is a gear with its own shape, not the theme icon', () => {
+  it('Settings is a gear with its own shape', () => {
     mount();
     const settings = host.querySelector('button[aria-label="Settings"] svg')!;
-    const theme = host.querySelector('button[aria-label="Toggle theme"] svg')!;
-    expect(settings.innerHTML).not.toBe(theme.innerHTML);
     expect(settings.querySelector('path')).not.toBeNull();
   });
 });

@@ -32,10 +32,11 @@ const usage = (inputTokens: number, outputTokens: number, contextWindow: number 
 });
 
 describe('WhereCard', () => {
-  it('shows agent, model, version, folder, branch and account', () => {
+  it('shows model, folder, branch and account, and no Agent row (the agent is the pane title)', () => {
     show(<WhereCard agentName="Claude" model="opus-x" cliVersion="2.1.0" folder="/work/shop/app" branch="main" accountLabel="Work" />);
     const text = host.textContent ?? '';
-    expect(text).toContain('Claude v2.1.0');
+    expect(text).not.toContain('Claude');
+    expect(host.querySelector('dt')?.textContent).toBe('Model');
     expect(text).toContain('opus-x');
     expect(text).toContain('shop/app');
     expect(text).toContain('main');
@@ -58,12 +59,12 @@ describe('ContextCard', () => {
     expect(host.querySelector('[role="meter"]')?.getAttribute('aria-valuenow')).toBe('24');
     expect(host.querySelector('[role="meter"]')?.getAttribute('title')).toBe('Input 47,000 tokens, output 1,000 tokens');
   });
-  it('says so when the agent does not report it', () => {
+  it('is hidden when the agent does not report it', () => {
     show(<ContextCard usage={usage(5000, 10, null)} />);
-    expect(host.textContent).toContain("This agent doesn't share this");
+    expect(host.textContent).toBe('');
     expect(host.querySelector('[role="meter"]')).toBeNull();
     show(<ContextCard usage={null} />);
-    expect(host.textContent).toContain("This agent doesn't share this");
+    expect(host.querySelector('[data-testid="rail-context"]')).toBeNull();
   });
 });
 

@@ -241,7 +241,7 @@
   padding: 0;
   color: var(--label-2);
   font: inherit;
-  text-decoration: underline;
+  text-decoration: none;
   cursor: pointer;
 }
 .cockpit .ck-usage-link:focus-visible {

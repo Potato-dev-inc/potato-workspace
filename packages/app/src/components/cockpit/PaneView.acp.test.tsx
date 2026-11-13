@@ -90,7 +90,7 @@ describe('pane view of a chat session over ACP', () => {
   it('has no Terminal view at all: Chat is the pane, with no "no terminal" placeholder', async () => {
     await act(async () => root.render(<PaneView c={cockpit('acp')} paneId="p1" />));
     await flush();
-    expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).not.toContain('Terminal');
+    expect([...host.querySelectorAll('[aria-label="Pane view"] [role="tab"]')].map((t) => t.textContent)).not.toContain('Terminal');
     expect(tab('Chat').getAttribute('aria-selected')).toBe('true');
     expect(host.textContent).not.toMatch(/no terminal|This is a chat session/i);
     expect(host.querySelector('textarea')).not.toBeNull();

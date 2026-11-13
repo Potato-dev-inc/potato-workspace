@@ -79,7 +79,7 @@ async function send(text = 'fix it') {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, text);
     area.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await click(host.querySelector('button[aria-label="Send"]'));
+  await click(host.querySelector('button[aria-label="Start"]'));
 }
 
 describe("New agent page: the agent's live models", () => {

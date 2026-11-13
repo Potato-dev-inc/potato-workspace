@@ -25,9 +25,10 @@ import '../../styles/live-preview.css';
 import '../../styles/cockpit-helpers.css';
 import '../../styles/cockpit-sidebar.css';
 import { DotSpinner } from './DotSpinner';
-import { IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
+import { PotatoMark, IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
 import { RowMark } from './RowMark';
-import { ProjectHeader } from './ProjectHeader';
+import { ProjectHeader, ProjectMeta, type ProjectSignal } from './ProjectHeader';
+import { groupByBranch, primaryBranch, projectChanges, usePaneCards } from './useProjectCard';
 import { SidebarFooter } from './SidebarFooter';
 import { bindingLabel, isMacPlatform } from '../../lib/shortcuts';
 import { groupByProject, useFoldedProjects, useGroupBy, useSidebarProjects } from '../../lib/sidebarProjects';
@@ -313,13 +314,16 @@ export function Sidebar({
     const entry = c.launchEntries.find((e) => e.type === p.info.agent_type);
     const asking = p.status === 'waiting_input' || questionPanes.has(id);
     const pill = asking && p.status !== 'error';
+    const broken = p.status === 'error';
+    const working = p.status === 'running' && !asking;
+    const calm = !asking && !broken && !working;
     const preview = mainPreview(c.previews, id);
     return (
       <div key={id} className="ck-rowwrap">
         <button
           type="button"
           data-pane-row={id}
-          className={`ck-row ck-row--slim${active ? ' is-active' : ''}${asking ? ' is-needs' : ''}${p.status === 'error' ? ' is-error' : ''}`}
+          className={`ck-row ck-row--slim${active ? ' is-active' : ''}${asking ? ' is-needs' : ''}${broken ? ' is-error' : ''}${calm ? (p.status === 'idle' ? ' is-idle' : ' is-ended') : ''}`}
           onClick={() => c.select(id)}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -350,11 +354,14 @@ export function Sidebar({
               <IconPin />
             </span>
           )}
+          {/* The right side says one thing: the chip when it needs you or is broken, the time while it works, else nothing. */}
           {pill ? (
             <span className="ck-row-pill">Needs you</span>
-          ) : (
+          ) : broken ? (
+            <span className="ck-row-pill ck-row-pill--error">Error</span>
+          ) : working ? (
             <span className="ck-row-time">{since ? formatElapsed(c.now - since) : ''}</span>
-          )}
+          ) : null}
         </button>
         <button
           type="button"
@@ -424,6 +431,8 @@ export function Sidebar({
   // The Projects view: every top-level agent under the folder it works in (see groupByProject).
   const projectRoots = roots.filter((n) => !pinnedIds.has(n.pane.info.id));
   const projectGroups = groupByProject(projectRoots, (n) => n.pane.info.cwd, projects);
+  // Branch, copy and change counts of each top-level agent: asked again only when its status changes.
+  const cards = usePaneCards(groupBy === 'projects' ? projectRoots.map((n) => ({ id: n.pane.info.id, status: n.pane.status })) : []);
   const newAgentIn = (path: string, name: string) => {
     if (onOpenNewAgent) {
       onOpenNewAgent({ path, name });
@@ -464,13 +473,28 @@ export function Sidebar({
       {projectGroups.map((g) => {
         const count = g.items.reduce((n, item) => n + 1 + descendants(item).length, 0);
         const isFolded = foldedProjects.has(g.key);
+        const ids = g.items.map((item) => item.pane.info.id);
+        const everyPane = g.items.flatMap((item) => [item.pane, ...descendants(item).map((d) => d.pane)]);
+        const asksHere = (p: Pane) => p.status === 'waiting_input' || questionPanes.has(p.info.id);
+        const signal: ProjectSignal = everyPane.some(asksHere)
+          ? 'needs'
+          : everyPane.some((p) => p.status === 'error')
+            ? 'error'
+            : everyPane.some((p) => p.status === 'running')
+              ? 'working'
+              : null;
+        const branchGroups = groupByBranch(g.items, (n) => n.pane.info.id, cards);
+        const mainBranch = primaryBranch(ids, cards);
         return (
           <div className="ck-proj" key={g.key} role="group" aria-label={g.name} data-pane-ids={g.items.flatMap((item) => [item.pane.info.id, ...descendants(item).map((d) => d.pane.info.id)]).join(' ')}>
             <ProjectHeader
               name={g.name}
               count={count}
               folded={isFolded}
-              needs={g.items.some((n) => n.pane.status === 'waiting_input' || n.pane.status === 'error' || questionPanes.has(n.pane.info.id))}
+              needs={everyPane.some((p) => asksHere(p) || p.status === 'error')}
+              changes={projectChanges(ids, cards)}
+              agents={g.items.map((item) => ({ id: item.pane.info.id, agentType: item.pane.info.agent_type, label: c.launchEntries.find((e) => e.type === item.pane.info.agent_type)?.label }))}
+              signal={signal}
               added={g.added}
               hasFolder={g.path !== null}
               onToggle={() => toggleProject(g.key)}
@@ -479,9 +503,25 @@ export function Sidebar({
               onRemove={() => g.path && removeProject(g.path)}
               onRename={(name) => g.path && renameProject(g.path, name)}
             />
+            {!isFolded && !branchGroups && mainBranch && <ProjectMeta branch={mainBranch} />}
             {!isFolded &&
               (g.items.length > 0 ? (
-                <div className="ck-proj-kids">{g.items.map(node)}</div>
+                <div className="ck-proj-kids">
+                  {branchGroups
+                    ? branchGroups.map((bg) => (
+                        <div className="ck-branch-group" key={bg.key} role="group" aria-label={bg.label || 'Project folder'}>
+                          <div className="ck-branch-head">
+                            <span className="ck-proj-branch" title={bg.label}>
+                              {bg.label || 'No branch'}
+                            </span>
+                            <span className="ck-pill-quiet">{bg.copy ? 'copy' : 'primary'}</span>
+                            {bg.pr && <span className="ck-branch-pr">{bg.pr}</span>}
+                          </div>
+                          {bg.items.map(node)}
+                        </div>
+                      ))
+                    : g.items.map(node)}
+                </div>
               ) : g.path ? (
                 <button type="button" className="ck-proj-newrow" data-testid="proj-new-agent" onClick={() => g.path && newAgentIn(g.path, g.name)}>
                   New agent
@@ -522,6 +562,7 @@ export function Sidebar({
         />
       )}
       <div className="ck-side-head">
+        <PotatoMark size={18} className="ck-potato" />
         <span className="ck-wordmark">Potato Workspace</span>
       </div>
 
@@ -678,7 +719,10 @@ export function Sidebar({
         )}
         {list.length === 0 && c.registry.initialReady && (
           <>
-            <p className="ck-side-empty">No agents running.</p>
+            <div className="ck-side-empty" data-testid="side-empty">
+              <PotatoMark size={28} className="ck-potato ck-potato--quiet" />
+              <p>No agents running.</p>
+            </div>
             <BringChatsLink className="bc-link ck-side-bring" label="Bring my chats from another agent" />
           </>
         )}

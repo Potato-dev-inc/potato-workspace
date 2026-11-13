@@ -401,6 +401,9 @@ describe('the New agent menu: an agent with no working chat yet', () => {
     await click(row('No chat agent'));
     expect(calls('acp_overlay_resolve')).toEqual([{ agent: 'nochat' }]);
     expect(promptButtons('nochat')).toEqual(['Use adapter', 'Add chat…', 'Use terminal']);
+    // drawn with the shared empty state: one button, the other ways as quiet rows
+    expect(prompt('nochat')!.querySelector('[data-empty-state] .ck-btn--primary')!.textContent).toBe('Use adapter');
+    expect(prompt('nochat')!.querySelectorAll('.ck-empty-or li')).toHaveLength(2);
     expect(calls('acp_chat_start')).toHaveLength(0);
     expect(c.newAgent).not.toHaveBeenCalled();
   });

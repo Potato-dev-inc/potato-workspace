@@ -94,12 +94,12 @@ afterEach(() => {
   delete (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__;
 });
 
-const tabs = () => [...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
+const tabs = () => [...host.querySelectorAll('[aria-label="Pane view"] [role="tab"]')].map((t) => t.textContent);
 const flush = () => act(async () => { await new Promise((r) => setImmediate(r)); });
 
 /** Opens a view from the More menu (Transcript, Receipt, History). */
 const moreTab = (name: string) => {
-  act(() => host.querySelector<HTMLButtonElement>('.ck-tabs-bar button[aria-haspopup="menu"]')!.click());
+  act(() => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-haspopup="menu"]')!.click());
   act(() => [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((t) => t.textContent === name)!.click());
 };
 
@@ -134,8 +134,8 @@ describe('Changes tab for isolated panes', () => {
     worktreeFor = { iso: ITEM };
     await act(async () => root.render(<PaneView c={cockpit()} paneId="iso" />));
     await flush();
-    expect(tabs()).toEqual(['Terminal', 'Chat', '1 file changed']);
-    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent?.endsWith('file changed'))!;
+    expect(tabs()).toEqual(['Terminal', 'Chat', 'Changes1']);
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent?.startsWith('Changes'))!;
     await act(async () => tab.click());
     await flush();
     expect(host.querySelector('.ck-changes')).not.toBeNull();

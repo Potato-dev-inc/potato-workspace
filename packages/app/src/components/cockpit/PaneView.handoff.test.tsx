@@ -71,7 +71,7 @@ describe('pane header: Hand off', () => {
   it('starts the handoff for this pane', async () => {
     const h = control();
     await show(h);
-    expect(btn()!.textContent).toBe('Hand off to new agent');
+    expect(btn()!.textContent).toBe('Hand off');
     act(() => btn()!.click());
     expect(h.start).toHaveBeenCalledWith('p1');
   });
@@ -80,7 +80,7 @@ describe('pane header: Hand off', () => {
     await show(control({ mode: 'file' }));
     expect(btn()!.textContent).toBe('Quick handoff');
     await show(control({ mode: 'new_agent' }));
-    expect(btn()!.textContent).toBe('Hand off to new agent');
+    expect(btn()!.textContent).toBe('Hand off');
   });
 
   it('is disabled and says so while one runs', async () => {

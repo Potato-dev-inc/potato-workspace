@@ -262,11 +262,11 @@ describe('settings chips and slash commands in a chat session', () => {
     const setConfig = vi.fn(async () => state());
     await mount(c, fakeAcpApi({ state: async () => state({ configOptions: options }), setConfig }));
     const chips = chipControls();
-    expect(chips.map((s) => s.querySelector('button')!.getAttribute('aria-label'))).toEqual(['Model', 'Mode']);
+    expect(chips.map((s) => s.querySelector('button')!.getAttribute('aria-label'))).toEqual(['Mode', 'Model']);
     expect(chips.every((s) => !s.hasAttribute('data-disabled'))).toBe(true);
-    await choose(chips[0], 'Deep');
+    await choose(chips[1], 'Deep');
     expect(setConfig).toHaveBeenCalledWith('p1', 'model', 'b');
-    expect(chips[0].dataset.value).toBe('b');
+    expect(chips[1].dataset.value).toBe('b');
   });
 
   it('switches the chips off while a turn runs, and draws none when the agent offers none', async () => {
@@ -286,10 +286,10 @@ describe('settings chips and slash commands in a chat session', () => {
       throw 'BUSY: The agent is working. Try again when it is done.';
     });
     await mount(c, fakeAcpApi({ state: async () => state({ configOptions: options }), setConfig }));
-    await choose(chipControls()[0], 'Deep');
+    await choose(chipControls()[1], 'Deep');
     await flush();
     expect(host.querySelector('[data-testid="acp-chips"] [role="alert"]')?.textContent).toBe('The agent is working. Try again when it is done.');
-    expect(chipControls()[0].dataset.value).toBe('a');
+    expect(chipControls()[1].dataset.value).toBe('a');
   });
 
   it("gives the message box the agent's slash commands", async () => {

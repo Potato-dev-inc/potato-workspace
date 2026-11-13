@@ -55,7 +55,6 @@ describe('SessionRail', () => {
     act(() => root.render(<SessionRail {...props} helpers={[{ id: 'h', title: 'Check tests', agent: 'Codex', status: 'running' }]} />));
     const text = host.textContent ?? '';
     expect(text).toContain('model-x');
-    expect(text).toContain('v1.2.3');
     expect(text).toContain('feat/rail');
     expect(text).toContain('96k of 200k tokens (48%)');
     expect(text).toContain('1 of 2 done');
@@ -63,11 +62,12 @@ describe('SessionRail', () => {
     expect(text).toContain('Check tests');
     expect(chat.calls[0]).toEqual(['p1', true]);
   });
-  it('hides the cards that have nothing and says context is not reported', () => {
+  it('hides the cards that have nothing, Context included', () => {
     chat.current = { model: null, cliVersion: null, usage: null, plan: [], outputs: [] };
     act(() => root.render(<SessionRail {...props} />));
     const text = host.textContent ?? '';
-    expect(text).toContain("This agent doesn't share this");
+    expect(text).not.toContain("This agent doesn't share this");
+    expect(host.querySelector('[data-testid="rail-context"]')).toBeNull();
     expect(text).not.toContain('Tasks');
     expect(text).not.toContain('Changes');
     expect(text).not.toContain('Helpers');

@@ -1,6 +1,6 @@
-// The one-line mark of a slim sidebar row: the agent's own icon (brand logo or monogram) with a small status badge
-// on its corner. Working = a thin spinner badge, needs you = a filled dot with a halo, error = a ring with a bar,
-// idle = the icon alone, a little dimmer, ended = the icon faded. The state is also spoken (role img).
+// The one-line mark of a slim sidebar row: one mark, two readings. The brand icon says who (the agent); a small dot on
+// its corner says what: green and breathing while it works, orange when it needs you, red when it is broken, and
+// nothing when idle (the icon dims instead). The state is also spoken (role img) and the row's right side repeats it in words.
 import { AgentLogo } from '../common/AgentLogo';
 
 const LABEL: Record<string, string> = { running: 'Working', waiting_input: 'Needs you', idle: 'Idle', error: 'Error' };

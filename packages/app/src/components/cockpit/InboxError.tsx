@@ -48,6 +48,7 @@ export function PaneErrorCard({ c, paneId, agentType, name, project, age, onOpen
   return (
     <InboxCard
       kind="error"
+      agent={agentType}
       glyph={known?.glyph ?? 'error'}
       title={words.title}
       meta={project}

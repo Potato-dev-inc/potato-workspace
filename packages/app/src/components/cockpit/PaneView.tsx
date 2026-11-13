@@ -31,13 +31,14 @@ import { acpResult, acpStatusWords } from './acp-pane';
 import { AcpResultStrip } from './AcpResultStrip';
 import { ReceiptTab } from './ReceiptTab';
 import { Changes } from './Changes';
-import { changesTabLabel, usePaneWorktree } from './usePaneWorktree';
+import { usePaneWorktree } from './usePaneWorktree';
 import { SecondOpinion } from './SecondOpinion';
 import { History } from './History';
 import { panesSharingFolder } from './history-model';
 import { RenameTitle } from './RenameTitle';
 import { useLastTurn } from './away-context';
 import { SegTabs } from './SegTabs';
+import { PaneTabs } from './PaneTabs';
 import { Sheet } from './Sheet';
 import { paneHeading } from './titles';
 import { helperOfLabel, startedByLabel } from '../../lib/pane-helpers';
@@ -406,6 +407,7 @@ export function PaneView({
 
   return (
     <div className="ck-pane" data-pane-tile={paneId}>
+      <PaneTabs c={c} paneId={paneId} />
       <header className="ck-pane-head">
         <div className="ck-pane-id">
           <RenameTitle
@@ -435,6 +437,18 @@ export function PaneView({
             </button>
           )}
         </div>
+        <SegTabs
+          label="Pane view"
+          value={tab}
+          onChange={setTab}
+          options={[
+            ...(mission ? [{ id: 'mission' as const, label: 'Mission' }] : []),
+            ...(isAcp ? [] : [{ id: 'terminal' as const, label: 'Terminal' }]),
+            ...(chatAllowed ? [{ id: 'chat' as const, label: 'Chat' }] : []),
+            ...(worktree ? [{ id: 'changes' as const, label: 'Changes', badge: worktree.summary?.files_changed || undefined }] : []),
+          ]}
+        />
+        <span className="ck-head-gap" aria-hidden="true" />
         <UntestedChip agent={info.agent_type} />
         {isAcp && (
           <span className="ck-lane-chip" data-testid="pane-lane" title="This agent runs as a chat as a chat, not in a terminal.">
@@ -512,9 +526,19 @@ export function PaneView({
             title={handoff.mode === 'file' ? 'Save a handoff note (HANDOFF.md) for the next agent.' : 'Write a handoff and continue this work in a new agent of the same kind.'}
             onClick={() => handoff.start(paneId)}
           >
-            {handoff.busy ? 'Handing off…' : handoffLabel(handoff.mode)}
+            {handoff.busy ? 'Handing off…' : handoff.mode === 'file' ? handoffLabel(handoff.mode) : 'Hand off'}
           </button>
         )}
+        <PaneMoreMenu<'transcript' | 'receipt' | 'history'>
+          label="More"
+          value={tab}
+          onPick={setTab}
+          items={[
+            { id: 'transcript', label: 'Transcript' },
+            { id: 'receipt', label: 'Receipt' },
+            { id: 'history', label: 'History' },
+          ]}
+        />
         {rail.fits && (
           <button
             type="button"
@@ -528,32 +552,6 @@ export function PaneView({
           </button>
         )}
       </header>
-
-      <div className="ck-tabs-bar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <SegTabs
-            label="Pane view"
-            value={tab}
-            onChange={setTab}
-            options={[
-              ...(mission ? [{ id: 'mission' as const, label: 'Mission' }] : []),
-              ...(isAcp ? [] : [{ id: 'terminal' as const, label: 'Terminal' }]),
-              ...(chatAllowed ? [{ id: 'chat' as const, label: 'Chat' }] : []),
-              ...(worktree ? [{ id: 'changes' as const, label: changesTabLabel(worktree) }] : []),
-            ]}
-          />
-          <PaneMoreMenu<'transcript' | 'receipt' | 'history'>
-            label="More"
-            value={tab}
-            onPick={setTab}
-            items={[
-              { id: 'transcript', label: 'Transcript' },
-              { id: 'receipt', label: 'Receipt' },
-              { id: 'history', label: 'History' },
-            ]}
-          />
-        </div>
-      </div>
 
       {dockNow && tab !== 'terminal' && tab !== 'chat' && (
         <button type="button" className="ck-dock-bar" onClick={() => setTab('terminal')} aria-label={`Needs you: ${dockHeadline}. Open the terminal to answer.`}>

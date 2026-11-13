@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.21
+
+This is a beta.
+
+- New look: warm charcoal with a little colour that means one thing each. Orange is your move (Needs you, Send, where you are), green is working, yellow is risk, red is broken.
+- Sidebar: each project is a card with its branch and how much changed; an agent's icon carries a small dot for working, needs you or error; the footer is one row (Settings, Review, more).
+- Inbox: one flat list. Each item shows the agent's icon and what kind of ask it is (Question, Permission, Stopped, Done), with a one-line heading.
+- Agent panes: a one-row header, tabs for the agents in the same project (with a dot when one is working or needs you), a plain side panel, and Changes with added and removed line counts.
+- Status bar: each agent's usage under its own icon with a small meter; it turns yellow from 80% and red when a sign-in expired, and shows how many agents are working or need you.
+- Chat reads like a document, and the message box shows a yellow shield only when the agent has full access.
+- New agent page: one question, three starters to try, and Start once you type.
+- One empty-state style, one type scale, and the same hover, selected and focus look everywhere.
+
 ## 1.0.20
 
 This is a beta.

@@ -36,6 +36,7 @@ const PANES: [string, string, string][] = [
   ['a', 'claude', 'running'],
   ['b', 'codex', 'waiting_input'],
   ['c', 'kilo', 'idle'],
+  ['d', 'claude', 'error'],
 ];
 
 function fakeApi(): CockpitApi {
@@ -45,7 +46,7 @@ function fakeApi(): CockpitApi {
   }));
   return {
     registry: { paneList: panes, panes: new Map(panes.map((p) => [p.info.id, p])), initialReady: true },
-    names: new Map([['a', 'Alpha'], ['b', 'Beta'], ['c', 'Gamma']]),
+    names: new Map([['a', 'Alpha'], ['b', 'Beta'], ['c', 'Gamma'], ['d', 'Delta']]),
     asked: { questions: [] },
     launchEntries: [],
     readyAgents: new Set<string>(),
@@ -55,7 +56,7 @@ function fakeApi(): CockpitApi {
     select: vi.fn(),
     interrupt: vi.fn(async () => {}),
     prompts: {},
-    statusSince: new Map(),
+    statusSince: new Map([['a', 1], ['c', 1]]),
     now: 60_000,
     spawn: null,
     toasts: [],
@@ -104,5 +105,28 @@ describe('agent icons in the sidebar', () => {
     const idle = rowOf('Gamma').querySelector('.ck-mark')!;
     expect(idle.getAttribute('aria-label')).toBe('Idle');
     expect(idle.querySelector('.ck-mark-shape')).toBeNull();
+  });
+});
+
+describe('sidebar rows: bright only when it matters (icon says who, corner dot says what)', () => {
+  it('each state has its own dot kind, and idle has no dot and a dimmed name', async () => {
+    await render();
+    const kind = (n: string) => ['working', 'needs', 'error', 'idle'].find((k) => rowOf(n).querySelector(`.ck-mark--${k}`));
+    expect(kind('Alpha')).toBe('working');
+    expect(kind('Beta')).toBe('needs');
+    expect(kind('Delta')).toBe('error');
+    expect(kind('Gamma')).toBe('idle');
+    expect(rowOf('Gamma').querySelector('.ck-mark-shape')).toBeNull();
+    expect(rowOf('Gamma').classList.contains('is-idle')).toBe(true);
+    expect(rowOf('Alpha').classList.contains('is-idle')).toBe(false);
+  });
+
+  it('the right side shows one thing: time while working, a chip when it needs you or is broken, nothing when idle', async () => {
+    await render();
+    const right = (n: string) => [...rowOf(n).querySelectorAll('.ck-row-time, .ck-row-pill')].map((e) => e.className + ':' + e.textContent);
+    expect(right('Alpha')).toEqual(['ck-row-time:59s']);
+    expect(right('Beta')).toEqual(['ck-row-pill:Needs you']);
+    expect(right('Delta')).toEqual(['ck-row-pill ck-row-pill--error:Error']);
+    expect(right('Gamma')).toEqual([]);
   });
 });

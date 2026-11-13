@@ -119,7 +119,7 @@ describe('pane header: Hand off follows the "Hand off does" setting', () => {
     settings.value = { handoff_mode: 'new_agent', handoff_fixed_notes: 'Reply short.' };
     const { deps, sent } = fakes();
     await press(deps);
-    expect(btn()!.textContent).toBe('Hand off to new agent');
+    expect(btn()!.textContent).toBe('Hand off');
     expect(sent[0]).toEqual(['p1', quickWritePrompt(PATH)]);
     expect(sent[0][1]).toContain('.potato/handoffs/handoff-');
     expect(deps.quick.appendNotes).toHaveBeenCalledWith('p1', '20261111-0930', 'Reply short.');
@@ -145,7 +145,7 @@ describe('pane header: Hand off follows the "Hand off does" setting', () => {
     settings.value = {};
     const { deps, sent } = fakes();
     await press(deps);
-    expect(btn()!.textContent).toBe('Hand off to new agent');
+    expect(btn()!.textContent).toBe('Hand off');
     expect(sent[0]).toEqual(['p1', quickWritePrompt(PATH)]);
     expect(deps.quick.appendNotes).not.toHaveBeenCalled();
   });

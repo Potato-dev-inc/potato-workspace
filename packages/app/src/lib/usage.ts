@@ -155,6 +155,32 @@ export function chipText(row: UsageRow, now: number): string {
   return top.resets_at_ms && top.resets_at_ms > now ? `${pct} · resets in ${formatLeftLong(top.resets_at_ms - now)}` : pct;
 }
 
+/** What a status-bar group shows: icon, percent, a tiny bar, the time to reset. Null `pct` = a word instead (see `chipText`). */
+export interface GroupParts {
+  pct: number | null;
+  /** "5d 18h" (short), empty when the agent gave no reset time. */
+  reset: string;
+  tone: 'calm' | 'risk' | 'danger';
+}
+
+export function groupParts(row: UsageRow, now: number): GroupParts {
+  if (row.state === 'expired') return { pct: null, reset: '', tone: 'danger' };
+  const top = headline(row);
+  const tone = warns(row) ? 'risk' : 'calm';
+  if (row.state !== 'ok' || !top) return { pct: null, reset: '', tone };
+  const reset = !top.reset_since && top.resets_at_ms && top.resets_at_ms > now ? formatLeft(top.resets_at_ms - now) : '';
+  return { pct: Math.max(0, Math.min(100, Math.round(top.used_percent))), reset, tone };
+}
+
+/** The hover sentence: "Codex: 86% used, resets in 2 hours". Null when there is no single sentence to say. */
+export function groupSentence(row: UsageRow, now: number): string | null {
+  const g = groupParts(row, now);
+  if (g.pct === null) return null;
+  const top = headline(row) as UsageWindow;
+  const when = top.resets_at_ms && top.resets_at_ms > now ? `, resets in ${formatLeftLong(top.resets_at_ms - now)}` : '';
+  return `${rowName(row)}: ${g.pct}% used${when}`;
+}
+
 /** Who the row is: "Codex CLI" or "Codex CLI (Work)". */
 export function rowName(row: UsageRow): string {
   return row.account_label ? `${row.label} (${row.account_label})` : row.label;

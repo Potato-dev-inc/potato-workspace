@@ -8,6 +8,7 @@
 import { errorSentence } from '../../lib/sayError';
 import { useEffect, useRef, useState } from 'react';
 import { addonFor, plainMessage, type AcpAddonApi, type AddonStatus } from '../../lib/acpAddon';
+import { EmptyState, type EmptyAction } from '../common/EmptyState';
 import { normalizeOptions, type AcpChatApi, type OverlayOption } from '../../lib/acpChat';
 
 /** The agent the prompt is for; `reason` is the app's own words for why a chat cannot be added now. */
@@ -158,29 +159,16 @@ export function NoChatPrompt({ agent, addons, resolve, canAdd, onStartChat, onAd
     }
   };
 
+  // The first way on offer is the one button; the others are the quiet "or" rows (at most three).
+  const ways: EmptyAction[] = [];
+  if (needsAddon && addons) ways.push({ label: `Install chat add-on${sizeLabel(addon?.size_mb)}`, disabled: busy, onClick: () => void install() });
+  if (adapter) ways.push({ label: 'Use adapter', disabled: busy, onClick: () => onAddChat(agent, 'adapter') });
+  if (others) ways.push({ label: 'Add chat…', disabled: busy, onClick: () => onAddChat(agent) });
+  ways.push({ label: 'Use terminal', disabled: phase === 'starting', onClick: onUseTerminal });
+
   return (
     <div className="ck-nochat" data-testid={`nochat-${agent.id}`} role="group" aria-label={`Chat for ${agent.label}`}>
-      <div className="ck-nochat-title">No chat for {agent.label} yet</div>
-      <div className="ck-nochat-actions">
-        {needsAddon && addons && (
-          <button type="button" className="ck-btn ck-btn--primary ck-btn--sm" disabled={busy} onClick={() => void install()}>
-            Install chat add-on{sizeLabel(addon?.size_mb)}
-          </button>
-        )}
-        {adapter && (
-          <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} onClick={() => onAddChat(agent, 'adapter')}>
-            Use adapter
-          </button>
-        )}
-        {others && (
-          <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} onClick={() => onAddChat(agent)}>
-            Add chat…
-          </button>
-        )}
-        <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={phase === 'starting'} onClick={onUseTerminal}>
-          Use terminal
-        </button>
-      </div>
+      <EmptyState plain className="ck-empty--compact" title={`No chat for ${agent.label} yet`} action={ways[0]} alternatives={ways.slice(1)}>
       {phase === 'loading' && <div className="ck-nochat-note">Checking…</div>}
       {phase === 'installing' && (
         <div className="ck-nochat-note" role="status">
@@ -198,6 +186,7 @@ export function NoChatPrompt({ agent, addons, resolve, canAdd, onStartChat, onAd
         </div>
       )}
       {phase === 'ready' && !failure && agent.reason && !needsAddon && !adapter && !others && <div className="ck-nochat-note">{agent.reason}</div>}
+      </EmptyState>
     </div>
   );
 }

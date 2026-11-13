@@ -2,27 +2,49 @@
 
 :root {
   color-scheme: dark;
-  --pm-bg: 27 26 25;
-  --pm-panel: 33 31 30;
-  --pm-raised: 41 39 37;
+  --pm-bg: 30 28 26;
+  --pm-panel: 22 21 20;
+  --pm-raised: 40 38 35;
   --pm-border: 62 59 56;
   --pm-accent: 242 154 60;
-  --pm-text: 244 242 239;
-  --pm-muted: 154 150 145;
+  --pm-text: 240 238 234;
+  --pm-muted: 169 164 156;
   --pm-ok: 214 214 214;
   --pm-warn: 180 180 180;
   --pm-err: 255 255 255;
+
+  /* Type scale: five sizes, three weights. 600 is for titles and headings only, rows and buttons are 500, reading text 400. */
+  --fs-label: 11px;
+  --fs-meta: 12px;
+  --fs-body: 13px;
+  --fs-heading: 15px;
+  --fs-title: 20px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* Motion: two speeds and one easing, no bounce. Both speeds drop to nothing under "reduce motion". */
+  --dur-fast: 120ms; /* colour, fill, small state changes */
+  --dur-panel: 200ms; /* panels, sheets, menus */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0.01ms;
+    --dur-panel: 0.01ms;
+  }
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --pm-bg: 250 250 250;
-  --pm-panel: 242 242 242;
-  --pm-raised: 255 255 255;
-  --pm-border: 212 212 212;
-  --pm-accent: 168 79 5;
-  --pm-text: 18 18 18;
-  --pm-muted: 96 96 96;
+  --pm-bg: 253 252 250;
+  --pm-panel: 244 242 239;
+  --pm-raised: 248 246 243;
+  --pm-border: 224 220 214;
+  --pm-accent: 156 72 4;
+  --pm-text: 28 27 25;
+  --pm-muted: 102 98 92;
   --pm-ok: 56 56 56;
   --pm-warn: 86 86 86;
   --pm-err: 0 0 0;

@@ -17,7 +17,7 @@
   background: none;
   color: var(--label);
   font: inherit;
-  text-decoration: underline;
+  text-decoration: none;
   text-underline-offset: 2px;
   cursor: pointer;
 }

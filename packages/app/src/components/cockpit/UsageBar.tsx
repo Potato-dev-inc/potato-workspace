@@ -9,6 +9,8 @@ import {
   chipText,
   formatCost,
   formatLeftLong,
+  groupParts,
+  groupSentence,
   formatTokens,
   rowName,
   tightestFirst,
@@ -21,6 +23,7 @@ import {
   type UsageRow,
 } from '../../lib/usage';
 import { AgentLogo } from '../common/AgentLogo';
+import '../../styles/chips.css';
 import '../../styles/usage-strip.css';
 import '../../styles/cockpit-statusbar.css';
 
@@ -37,7 +40,7 @@ function RefreshIcon() {
 export function AgentMark({ row }: { row: UsageRow }) {
   return (
     <span className="ck-usage-ic is-logo" aria-hidden="true">
-      <AgentLogo id={row.agent_id} name={row.label} size={12} decorative />
+      <AgentLogo id={row.agent_id} name={row.label} size={14} decorative />
     </span>
   );
 }
@@ -62,11 +65,14 @@ function Chip({
   suffix: string | null;
 }) {
   const warn = warns(row);
-  const tip = tooltip(row, now).replace('Click to open its usage page', 'Click for details');
+  const g = groupParts(row, now);
+  const full = tooltip(row, now);
+  const sentence = groupSentence(row, now);
+  const tip = (sentence ? `${sentence}\n${full.split('\n').slice(1).join('\n')}` : full).replace('Click to open its usage page', 'Click for details');
   return (
     <button
       type="button"
-      className={`ck-usage-chip is-${row.state}${warn ? ' is-warn' : ''}`}
+      className={`ck-usage-chip is-${row.state}${warn ? ' is-warn' : ''} tone-${g.tone}`}
       title={tip}
       aria-label={tip.replace(/\n/g, '. ')}
       aria-haspopup="dialog"
@@ -79,10 +85,27 @@ function Chip({
           {suffix}
         </span>
       )}
-      <span className="ck-usage-text" aria-hidden="true">
-        {warn && <span className="ck-usage-warn">⚠ </span>}
-        {chipText(row, now)}
-      </span>
+      {g.pct === null ? (
+        <span className="ck-usage-text" aria-hidden="true">
+          {warn && row.state !== 'expired' && <span className="ck-usage-warn">⚠ </span>}
+          {chipText(row, now)}
+        </span>
+      ) : (
+        <>
+          <span className="ck-usage-text ck-usage-pct" aria-hidden="true">
+            {warn && <span className="ck-usage-warn">⚠ </span>}
+            {g.pct}%
+          </span>
+          <span className="ck-usage-meter" aria-hidden="true">
+            <span style={{ width: `${g.pct}%` }} />
+          </span>
+          {g.reset && (
+            <span className="ck-usage-reset" aria-hidden="true">
+              {g.reset}
+            </span>
+          )}
+        </>
+      )}
     </button>
   );
 }
@@ -184,7 +207,7 @@ const PLUS_WIDTH = 34;
  * that do not fit become "+N". Clicking a chip or "+N" opens the Usage popover above the bar. The cockpit root
  * leaves room for it only while it is shown (cockpit-statusbar.css, `:has`).
  */
-export function UsageBar({ api = usageApi }: { api?: UsageApi }) {
+export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: UsageApi; working?: number; needsYou?: number }) {
   const { on, loginReads } = useUsageBarOn();
   const { snap, busy, refresh } = useUsage(api, on === true, loginReads);
   const [now, setNow] = useState(() => Date.now());
@@ -286,6 +309,15 @@ export function UsageBar({ api = usageApi }: { api?: UsageApi }) {
             +{hidden}
           </button>
         )}
+      </div>
+      <div className="ck-sb-counts">
+        {working > 0 && (
+          <span className="ck-sb-count is-working">
+            <span className="ck-sb-live" aria-hidden="true" />
+            {working} working
+          </span>
+        )}
+        {needsYou > 0 && <span className="ck-sb-count is-needs">{needsYou} {needsYou === 1 ? 'needs' : 'need'} you</span>}
       </div>
       {/* The same chips, unseen, so their natural widths can be measured. */}
       <div className="ck-sb-measure" ref={measureRow} aria-hidden="true">

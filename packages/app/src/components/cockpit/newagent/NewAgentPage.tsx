@@ -12,19 +12,19 @@ import { AddonPrompt } from '../../acp/AddonPrompt';
 import { SignInCard } from '../../acp/SignInCard';
 import { lastRealFolder, projectOfCwd, readStoredCopyPreference, supportsCopies, writeCopyPreference, copyDefault } from '../../../lib/ship-model';
 import { folderName, pathKey, useSidebarProjects } from '../../../lib/sidebarProjects';
-import { IconArrowUp, IconChevronDown, IconFolder, IconPlus, IconSpark } from '../Icons';
+import { IconChevronDown, IconFolder, IconPlus, IconSpark } from '../Icons';
 import type { ProjectChoice } from '../NewAgentMenu';
 import { tauriNewAgentApi, type HomeSettings, type NewAgentApi } from './api';
 import { HomeCards, type CardData } from './HomeCards';
 import {
   EXAMPLE_MS,
+  addCard,
   agentChoices,
+  canAdd,
   chatAvailable,
-  cleanName,
   defaultChoice,
   defaultRunAs,
   exampleAt,
-  greeting,
   nextExample,
   parseRunAs,
   sendBlock,
@@ -41,7 +41,7 @@ import { ModelPicker } from '../../common/ModelPicker';
 import { readPickedModel, tauriAgentDefaultsApi, presetOnly, tauriModelOptionsApi, useAgentDefaults, useModelOptions, writePickedModel, type AgentDefaultsApi, type ModelOptionsApi } from '../../../lib/modelOptions';
 import { isStartBlock } from './start';
 import '../../../styles/cockpit-newagent.css';
-import { BringChatsLink } from '../../history/BringChatsLink';
+import { Starters } from './Starters';
 
 const REMEMBER_KEY = 'pm.newagent.agent';
 const REMEMBER_RUN_KEY = 'pm.newagent.runAs';
@@ -403,7 +403,6 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
     needs,
   };
 
-  const name = cleanName(home.name);
   return (
     <section className="ck-na" aria-label="New agent">
       <header className="ck-na-top">
@@ -414,12 +413,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
           <div className="ck-na-mark" aria-hidden="true">
             <IconSpark />
           </div>
-          <h1 className="ck-na-greet" data-testid="na-greeting">
-            {greeting(name)}
-          </h1>
-          <h2 className="ck-na-ask" data-testid="na-ask">
+          <h1 className="ck-na-ask" data-testid="na-ask">
             What should the agent do?
-          </h2>
+          </h1>
 
           <div className="ck-na-composer" ref={menuRoot}>
             <div className="ck-na-field">
@@ -605,8 +601,8 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               )}
 
               <span className="ck-na-spacer" />
-              <button type="button" className="ck-na-send" aria-label="Send" title={block ?? 'Send (Enter)'} disabled={block !== null} onClick={() => void send()}>
-                <IconArrowUp />
+              <button type="button" className="ck-na-send" aria-label="Start" title={block ?? 'Start (Enter)'} disabled={block !== null} onClick={() => void send()}>
+                Start
               </button>
             </div>
           </div>
@@ -640,6 +636,15 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
             {error ?? (prompt.trim() && block ? block : '')}
           </p>
 
+          {!prompt && (
+            <Starters
+              onUse={(text) => {
+                setPrompt(text);
+                area.current?.focus();
+              }}
+              onPin={canAdd(home.cards, 'prompt') ? (text) => setCards(addCard(home.cards, 'prompt', text)) : undefined}
+            />
+          )}
           <HomeCards
             cards={home.cards}
             data={cardData}
@@ -651,7 +656,6 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               area.current?.focus();
             }}
           />
-          <BringChatsLink className="bc-link" label="Bring my chats from another agent" />
         </div>
       </div>
     </section>

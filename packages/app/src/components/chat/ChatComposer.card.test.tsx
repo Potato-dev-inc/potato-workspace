@@ -41,6 +41,15 @@ describe('ChatComposer card', () => {
     expect(order).toEqual(['chat-composer-attach', 'tb', 'context-meter', 'send']);
   });
 
+  it('draws the dim "where the work lands" line under the card, and nothing without it', () => {
+    act(() => root.render(<ChatComposer onSend={onSend} blockedReason={null} footnote="Work lands on main" />));
+    const line = host.querySelector('[data-testid="chat-composer-where"]')!;
+    expect(line.textContent).toBe('Work lands on main');
+    expect(line.previousElementSibling).toBe(host.querySelector('.ck-chat-composer-row'));
+    act(() => root.render(<ChatComposer onSend={onSend} blockedReason={null} />));
+    expect(host.querySelector('[data-testid="chat-composer-where"]')).toBeNull();
+  });
+
   it('shows the ring only when there is a reading', () => {
     act(() => root.render(<ChatComposer onSend={onSend} blockedReason={null} />));
     expect(host.querySelector('[data-testid="context-meter"]')).toBeNull();

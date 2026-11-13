@@ -236,13 +236,8 @@
   white-space: nowrap;
 }
 .cockpit .ck-mission-budget-chip {
-  font-size: 12px;
-  color: var(--label-2);
-  font-variant-numeric: tabular-nums;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--fill);
-  white-space: nowrap;
+  /* shape: the shared Count chip (chips.css) */
+  margin: 0;
 }
 .cockpit .ck-mission-sub {
   margin: 0;
@@ -277,7 +272,7 @@
   display: block;
   height: 100%;
   background: var(--label);
-  transition: width 280ms var(--ease);
+  transition: width var(--dur-panel) var(--ease);
 }
 .cockpit .ck-mission-bar-text {
   font-size: 12px;

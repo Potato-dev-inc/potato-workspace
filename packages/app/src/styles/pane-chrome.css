@@ -41,7 +41,7 @@
   height: 24px;
   padding: 0 8px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--label-2);
 }
 .cockpit .ck-dock-more:hover {
@@ -64,8 +64,8 @@
   border-radius: 6px;
   background: var(--fill);
   color: var(--label);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
   text-align: left;
 }
 .cockpit .ck-dock-bar:hover {
@@ -89,7 +89,7 @@
   white-space: nowrap;
 }
 .cockpit .ck-dock-bar-go {
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--label-2);
 }
 
@@ -104,9 +104,9 @@
 }
 .cockpit .ck-rc-line {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-heading);
   line-height: 1.45;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--label);
 }
 .cockpit .ck-receipt .ck-lastturn {
@@ -130,7 +130,7 @@
 .cockpit .ck-facts dt,
 .cockpit .ck-facts dd {
   margin: 0;
-  font: 13px/1.45 var(--font-ui);
+  font: var(--fs-body)/1.45 var(--font-ui);
 }
 .cockpit .ck-facts dt {
   color: var(--label-2);
@@ -141,13 +141,13 @@
 }
 .cockpit .ck-facts dd.ck-mono,
 .cockpit .ck-facts .ck-mono {
-  font: 12px var(--font-mono);
+  font: var(--fs-meta) var(--font-mono);
 }
 .cockpit .ck-facts--details .ck-facts-row:first-child {
   border-top: 1px solid var(--sep);
 }
 .cockpit .ck-code {
-  font: 12px var(--font-mono);
+  font: var(--fs-meta) var(--font-mono);
   padding: 1px 5px;
   border-radius: 4px;
   background: var(--fill);
@@ -161,7 +161,7 @@
 
 /* ---------- Transcript: a clean chat; monospace only for output ---------- */
 .cockpit .ck-chunk--prose pre {
-  font: 13px/1.55 var(--font-ui);
+  font: var(--fs-body)/1.55 var(--font-ui);
   color: var(--label);
 }
 
@@ -178,12 +178,12 @@
 }
 .cockpit .ck-hist-row .ck-hist-time,
 .cockpit .ck-hist-row .ck-hist-delta {
-  font: 12px var(--font-ui);
+  font: var(--fs-meta) var(--font-ui);
   font-variant-numeric: tabular-nums;
 }
 .cockpit .ck-hist-row .ck-hist-restore {
   opacity: 0;
-  transition: opacity 160ms var(--ease);
+  transition: opacity var(--dur-fast) var(--ease);
 }
 .cockpit .ck-hist-row:hover .ck-hist-restore,
 .cockpit .ck-hist-row:focus-within .ck-hist-restore {
@@ -206,6 +206,71 @@
 }
 .cockpit .ck-changes-hint {
   align-self: center;
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--label-2);
+}
+
+/* ---------- Header in one 40px row: name + project, view tabs, then state and actions on the right ---------- */
+.cockpit .ck-pane .ck-pane-head {
+  flex: none;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 0 10px 0 20px;
+  gap: 10px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.cockpit .ck-pane .ck-pane-id {
+  flex: 0 1 auto;
+  align-items: baseline;
+  overflow: hidden;
+}
+.cockpit .ck-pane .ck-pane-id .ck-sub-inline {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.cockpit .ck-head-gap {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.cockpit .ck-pane .ck-pane-head > * {
+  flex-shrink: 0;
+}
+.cockpit .ck-pane .ck-pane-head > .ck-pane-id,
+.cockpit .ck-pane .ck-pane-head > .ck-pane-state {
+  flex-shrink: 1;
+  min-width: 0;
+}
+.cockpit .ck-pane .ck-pane-state .ck-pane-doing {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 28ch;
+}
+.cockpit .ck-seg-badge {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-3);
+}
+.cockpit .ck-seg-btn[aria-selected='true'] .ck-seg-badge {
+  color: var(--label-2);
+}
+.cockpit .ck-more-btn {
+  font-size: 16px;
+  line-height: 1;
+}
+.cockpit .ck-more-btn.is-on {
+  background: var(--fill-active);
+  color: var(--label);
+}
+/* Narrow: the project name goes first, then the long state words. */
+@media (max-width: 1000px) {
+  .cockpit .ck-pane .ck-pane-id .ck-sub-inline {
+    display: none;
+  }
+  .cockpit .ck-pane .ck-pane-state .ck-pane-doing {
+    max-width: 14ch;
+  }
 }

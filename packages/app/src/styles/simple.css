@@ -219,7 +219,7 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 160ms var(--ease), transform 160ms var(--ease);
+  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
 
 .sx .sx-choice:hover {

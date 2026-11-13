@@ -4,7 +4,7 @@
 
 html.sw-out .cockpit {
   opacity: 0;
-  transition: opacity 190ms ease-in-out 60ms;
+  transition: opacity var(--dur-panel) ease-in-out 60ms;
 }
 
 html.sw-hold .cockpit {
@@ -14,7 +14,7 @@ html.sw-hold .cockpit {
 
 html.sw-hold.sw-in .cockpit {
   opacity: 1;
-  transition: opacity 140ms ease-in-out;
+  transition: opacity var(--dur-fast) ease-in-out;
 }
 
 html.sw-hold .cockpit [data-sw-hide],
@@ -24,10 +24,10 @@ html.sw-out .cockpit [data-sw-hide] {
 
 @media (prefers-reduced-motion: reduce) {
   html.sw-out .cockpit {
-    transition-duration: 120ms;
+    transition-duration: var(--dur-fast);
     transition-delay: 0ms;
   }
   html.sw-hold.sw-in .cockpit {
-    transition-duration: 120ms;
+    transition-duration: var(--dur-fast);
   }
 }

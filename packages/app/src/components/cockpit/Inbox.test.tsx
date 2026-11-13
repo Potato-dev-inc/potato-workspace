@@ -207,8 +207,10 @@ describe('the heading count is the cards on screen', () => {
     const { api } = fixture({ questions: [question(), consent, budget] });
     mount(api);
     expect(cards()).toHaveLength(6);
-    expect(host.querySelector('h1')?.textContent).toBe('6 things need you');
-    expect(host.querySelector('.ck-doto')?.textContent).toBe('06');
+    expect(host.querySelector('h1')?.textContent).toBe('Inbox6');
+    expect(host.querySelector('.ck-inbox-count')?.textContent).toBe('6');
+    expect(host.querySelector('.ck-inbox-count')?.getAttribute('aria-label')).toBe('6 things need you');
+    expect(host.querySelector('.ck-doto')).toBeNull();
   });
 
   it('does not count a waiting pane that has no card, and shows no number the cards do not back', () => {
@@ -216,7 +218,7 @@ describe('the heading count is the cards on screen', () => {
     const { api } = fixture({ panes: [], questions: [question()] });
     mount(api);
     expect(cards()).toHaveLength(1);
-    expect(host.querySelector('h1')?.textContent).toBe('One thing needs you');
+    expect(host.querySelector('.ck-inbox-count')?.getAttribute('aria-label')).toBe('1 thing needs you');
   });
 });
 
@@ -297,13 +299,17 @@ describe('keyboard', () => {
   it('shows a quiet hint under the title, and only offers number keys when one can answer', () => {
     const { api } = fixture();
     mount(api);
-    expect(host.querySelector('.ib-hint')?.textContent).toContain('move');
-    expect(host.querySelector('.ib-hint')?.textContent).toContain('answer');
-    expect(host.querySelectorAll('.ib-hint .ib-kbd').length).toBeGreaterThanOrEqual(4);
+    // the keys sit behind a quiet button
+    expect(host.querySelector('.ib-hint:not(.ib-hint--card)')).toBeNull();
+    const keysBtn = () => Array.from(host.querySelectorAll('button')).find((b) => b.textContent === 'Keys')!;
+    act(() => keysBtn().click());
+    expect(host.querySelector('.ib-hint:not(.ib-hint--card)')?.textContent).toContain('move');
+    expect(host.querySelector('.ib-hint:not(.ib-hint--card)')?.textContent).toContain('answer');
+    expect(host.querySelectorAll('.ib-hint:not(.ib-hint--card) .ib-kbd').length).toBeGreaterThanOrEqual(4);
     // a lone high-risk card: nothing a number key may answer
     const only = fixture({ panes: [{ id: 'hi', agent: 'codex', status: 'waiting_input', cwd: 'C:\\work\\billing' }], since: { hi: NOW - 1000 } });
     mount(only.api);
-    expect(host.querySelector('.ib-hint')?.textContent).not.toContain('answer');
+    expect(host.querySelector('.ib-hint:not(.ib-hint--card)')?.textContent).not.toContain('answer');
   });
 });
 
@@ -313,8 +319,9 @@ describe('empty and first-run states', () => {
   it('is calm when nothing needs you, with no hint and no list', () => {
     const { api } = calm();
     mount(api);
-    expect(host.querySelector('h1')?.textContent).toBe('Nothing needs you');
-    expect(host.querySelector('.ck-doto')?.textContent).toBe('00');
+    expect(host.querySelector('h1')?.textContent).toBe('Inbox');
+    expect(host.querySelector('.ck-empty-title')?.textContent).toBe('Nothing needs you');
+    expect(host.querySelector('.ck-doto')).toBeNull();
     expect(host.querySelector('.ib-hint')).toBeNull();
     expect(host.querySelector('ul[aria-label="Needs you"]')).toBeNull();
   });
@@ -325,7 +332,7 @@ describe('empty and first-run states', () => {
     const open = vi.fn();
     mount(api, open);
     expect(host.querySelector('h1')?.textContent).toBe('Welcome to Potato Workspace');
-    expect(host.querySelector('.ck-sub')?.textContent).toBe('Your agents work here. First, check which ones this PC has.');
+    expect(host.querySelector('.ck-empty-line')?.textContent).toBe('Your agents work here. First, see which ones are on this PC.');
     // no "00" counter on a welcome
     expect(host.querySelector('.ck-doto')).toBeNull();
     const buttons = Array.from(host.querySelectorAll('button'));
@@ -333,9 +340,8 @@ describe('empty and first-run states', () => {
     expect(setUp.className).toContain('ck-btn--primary');
     act(() => setUp.click());
     expect(open).toHaveBeenCalled();
-    const simple = buttons.find((b) => b.textContent === 'Use Simple mode')!;
-    expect(host.textContent).toContain("I don't write code.");
-    expect(simple.className).toContain('ck-btn--plain');
+    const simple = buttons.find((b) => b.textContent === "I don't write code: use Simple mode")!;
+    expect(simple.className).toContain('ck-empty-alt');
     act(() => simple.click());
     expect(settings.patchSettings).toHaveBeenCalledWith({ simple_mode: true });
   });
@@ -359,7 +365,7 @@ describe('empty and first-run states', () => {
     expect(host.querySelector('h1')?.textContent).toBe('Welcome to Potato Workspace');
     const labels = Array.from(host.querySelectorAll('button')).map((b) => b.textContent);
     expect(labels).not.toContain('Set up your agents');
-    expect(labels).not.toContain('Use Simple mode');
+    expect(labels.some((l) => l?.includes('Simple mode'))).toBe(false);
   });
 
   it('the empty Inbox after setup starts with Start an agent, and Set up agents is second', () => {
@@ -373,7 +379,7 @@ describe('empty and first-run states', () => {
     const startButton = Array.from(host.querySelectorAll('button')).find((b) => b.textContent === 'Start an agent')!;
     const setUpButton = Array.from(host.querySelectorAll('button')).find((b) => b.textContent === 'Set up agents')!;
     expect(startButton.className).toContain('ck-btn--primary');
-    expect(setUpButton.className).toContain('ck-btn--secondary');
+    expect(setUpButton.className).toContain('ck-empty-alt');
     act(() => startButton.click());
     expect(start).toHaveBeenCalledTimes(1);
     act(() => setUpButton.click());
@@ -391,8 +397,8 @@ describe('empty and first-run states', () => {
   it('is not a welcome once something was ever opened', () => {
     const { api } = fixture({ panes: [] });
     mount(api, () => {});
-    expect(host.querySelector('h1')?.textContent).toBe('Nothing needs you');
-    expect(Array.from(host.querySelectorAll('button')).some((b) => b.textContent === 'Use Simple mode')).toBe(false);
+    expect(host.querySelector('.ck-empty-title')?.textContent).toBe('Nothing needs you');
+    expect(Array.from(host.querySelectorAll('button')).some((b) => b.textContent?.includes('Simple mode'))).toBe(false);
   });
 });
 
@@ -459,8 +465,7 @@ describe('Collision alert cards in the Inbox', () => {
     await act(async () => {
       root.render(<Inbox c={api} />);
     });
-    expect(host.querySelector('h1')?.textContent).toBe('Nothing needs you');
-    expect(host.querySelector('.ck-doto')?.textContent).toBe('00');
+    expect(host.querySelector('.ck-empty-title')?.textContent).toBe('Nothing needs you');
 
     act(() => root.unmount());
     root = createRoot(host);
@@ -488,8 +493,7 @@ describe('Collision alert cards in the Inbox', () => {
       root.render(<Inbox c={api} />);
     });
     expect(host.querySelector('.ck-collision-card')).not.toBeNull();
-    expect(host.querySelector('h1')?.textContent).toBe('Nothing needs you');
-    expect(host.querySelector('.ck-doto')?.textContent).toBe('00');
+    expect(host.querySelector('.ck-empty-title')?.textContent).toBe('Nothing needs you');
     expect(host.querySelectorAll('[data-ib-card]')).toHaveLength(0);
   });
 });
@@ -525,5 +529,61 @@ describe('Which login should a helper use, in the Inbox', () => {
     } finally {
       registerSettingsOpener(null);
     }
+  });
+});
+
+describe('the Inbox look: one title line, flat rows, a brand icon and one kind chip per row', () => {
+  it('has one title line "Inbox" with a dim count, a quiet Keys button and no pixel digits', () => {
+    const { api } = fixture();
+    mount(api);
+    const bar = host.querySelector('header.ck-inbox-bar')!;
+    expect(bar.querySelector('h1')!.firstChild!.textContent).toBe('Inbox');
+    expect(bar.querySelector('.ck-inbox-count')!.textContent).toBe(String(cards().length));
+    expect(Array.from(bar.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Keys']);
+    expect(host.querySelector('.ck-doto')).toBeNull();
+    expect(host.querySelector('.ck-sub')).toBeNull();
+  });
+
+  it('is a flat list of rows: one item per card inside one list, no box wrapper per kind', () => {
+    const { api } = fixture();
+    mount(api);
+    const list = host.querySelector('ul.ib-list')!;
+    expect(list.querySelectorAll(':scope > li')).toHaveLength(cards().length);
+    expect(list.querySelectorAll(':scope > li [data-ib-card]')).toHaveLength(cards().length);
+  });
+
+  it('gives each row its kind chip, and the agent brand icon on the pane cards', () => {
+    const { api } = fixture({ questions: [question(), consent] });
+    mount(api);
+    const chipOf = (kind: string) => cards().find((c) => c.dataset.kind === kind)?.querySelector('.ib-chip');
+    expect(chipOf('question')?.getAttribute('data-chip')).toBe('question');
+    expect(chipOf('question')?.textContent).toBe('Question');
+    expect(chipOf('approval')?.getAttribute('data-chip')).toBe('permission');
+    expect(chipOf('approval')?.querySelector('svg')).not.toBeNull();
+    expect(chipOf('consent')?.textContent).toBe('Permission');
+    expect(chipOf('error')?.getAttribute('data-chip')).toBe('stopped');
+    expect(cards().every((c) => c.querySelectorAll('.ib-chip').length <= 1)).toBe(true);
+    const approval = cards().find((c) => c.dataset.kind === 'approval')!;
+    expect(approval.querySelector('.ib-glyph[data-brand] svg[data-mark="logo"]')).not.toBeNull();
+  });
+
+  it('sorts by urgency: permissions and consents before questions, stopped last', () => {
+    const { api } = fixture({ questions: [question(), consent] });
+    mount(api);
+    const order = cards().map((c) => c.dataset.kind);
+    expect(order.indexOf('question')).toBeGreaterThan(order.indexOf('consent'));
+    expect(order.indexOf('error')).toBeGreaterThan(order.indexOf('question'));
+  });
+
+  it('draws the empty Inbox and the welcome with the one shared empty state', () => {
+    window.localStorage.clear();
+    const first = fixture({ panes: [] });
+    mount(first.api, () => {});
+    const welcome = host.querySelector('[data-empty-state]')!;
+    expect(welcome.querySelector('h1')!.textContent).toBe('Welcome to Potato Workspace');
+    expect(welcome.querySelectorAll('.ck-empty-or li').length).toBeLessThanOrEqual(3);
+    const calm = fixture({ panes: [{ id: 'idle', agent: 'codex', status: 'idle', cwd: 'C:\work\shop' }] });
+    mount(calm.api);
+    expect(host.querySelector('[data-empty-state] .ck-empty-title')!.textContent).toBe('Nothing needs you');
   });
 });

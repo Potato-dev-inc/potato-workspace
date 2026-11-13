@@ -1,3 +1,26 @@
+/* Sidebar footer: one row (Settings, Review, the ... menu) and one status line above it, only when there is something. */
+.cockpit .ck-side-foot {
+  gap: 4px;
+}
+/* Whatever is first (lost connection, then background jobs, then a Night Shift run) is the one line; the rest wait. */
+.cockpit .ck-foot-status:empty {
+  display: none;
+}
+.cockpit .ck-foot-status > :not(:first-child) {
+  display: none;
+}
+.cockpit .ck-foot-status .ck-bridge {
+  padding: 2px 4px;
+  color: var(--danger);
+}
+.cockpit .ck-foot-status .ck-bridge-fix {
+  color: var(--label);
+  font-weight: var(--fw-medium);
+  text-decoration: underline;
+}
+.cockpit .ck-menu--up .ck-menu-item.is-active {
+  background: var(--fill-active);
+}
 /* Sidebar footer: text beside each icon once the window is wide enough (900px). Below that, icons only. */
 .cockpit .ck-foot-label {
   display: none;

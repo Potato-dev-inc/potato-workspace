@@ -14,6 +14,9 @@ import { shipApi, type PrRef, type ShipApi } from '../../lib/ship-api';
 import { setupLine } from '../../lib/ship-model';
 import { branchKeepWarning, branchLineage, type BranchView } from '../../lib/branch-from';
 import { ChangedFiles } from '../simple/ChangedFiles';
+import { SegTabs } from './SegTabs';
+import { searchProjectFiles, type ProjectFileHit } from '../../lib/projectFiles';
+import { splitPath } from './changes-rows';
 import '../../styles/cockpit-changes.css';
 
 /** The slice of the cockpit API this section needs (a test double can stand in for it). */
@@ -23,6 +26,8 @@ export type ChangesApi = Pick<
 > &
   // Optional: a test double without it simply shows no blame.
   Partial<Pick<typeof cockpitApi, 'changesBlame'>>;
+
+const ALL_FILES_LIMIT = 300;
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -66,6 +71,7 @@ export function Changes({
   ship = shipApi,
   copyLabel,
   plain = false,
+  listFiles = searchProjectFiles,
 }: {
   paneId: string;
   /** Simple mode: plain words, no branch, no diffs, no Merge / Discard (Simple owns those). */
@@ -85,10 +91,30 @@ export function Changes({
   reviewApi?: SecondOpinionApi;
   /** Create PR and the GitHub checks (a test double can stand in). */
   ship?: ShipApi;
+  /** "All files": the project's files (a test double can stand in). */
+  listFiles?: (paneId: string, query: string, limit?: number) => Promise<ProjectFileHit[]>;
 }) {
   const [item, setItem] = useState<WorktreeItem | null>(null);
   const [diff, setDiff] = useState<WorktreeDiff | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  // Changes (what the agent touched) or All files (the project's files, plain).
+  const [view, setView] = useState<'changes' | 'all'>('changes');
+  const [allFiles, setAllFiles] = useState<ProjectFileHit[] | null>(null);
+  useEffect(() => {
+    if (view !== 'all') return;
+    let cancelled = false;
+    listFiles(paneId, '', ALL_FILES_LIMIT).then(
+      (hits) => {
+        if (!cancelled) setAllFiles(hits);
+      },
+      () => {
+        if (!cancelled) setAllFiles([]);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [view, paneId, listFiles]);
   const [sheet, setSheet] = useState<'merge' | 'discard' | null>(null);
   const [prSheet, setPrSheet] = useState(false);
   const [prRound, setPrRound] = useState(0);
@@ -244,7 +270,7 @@ export function Changes({
             {' · '}
             {plural(total.files_changed, 'file')}
             {' · '}
-            <span className="ck-num">+{total.additions}</span> <span className="ck-num">−{total.deletions}</span>
+            <span className="ck-num ck-add">+{total.additions}</span> <span className="ck-num ck-del">−{total.deletions}</span>
           </>
         )}
       </p>
@@ -294,8 +320,41 @@ export function Changes({
         />
       )}
 
-      {diff && files.length === 0 && <p className="ck-sub">No file changes yet.</p>}
-      <ul className="ck-changes-files">
+      <div className="ck-changes-switch">
+        <SegTabs
+          label="Show"
+          small
+          value={view}
+          onChange={setView}
+          options={[
+            { id: 'changes' as const, label: 'Changes', badge: total?.files_changed },
+            { id: 'all' as const, label: 'All files' },
+          ]}
+        />
+        {total && view === 'changes' && (
+          <span className="ck-changes-total">
+            <span className="ck-add">+{total.additions}</span> <span className="ck-del">−{total.deletions}</span>
+          </span>
+        )}
+      </div>
+      {view === 'all' && (
+        <ul className="ck-changes-files ck-changes-all" data-testid="all-files">
+          {(allFiles ?? []).map((h) => {
+            const { dir, name } = splitPath(h.path);
+            return (
+              <li key={h.path} className="ck-changes-file ck-changes-file--plain" title={h.path}>
+                <span className="ck-changes-path">
+                  {dir && <span className="ck-changes-dir">{dir}</span>}
+                  <span className="ck-changes-name">{name}</span>
+                </span>
+              </li>
+            );
+          })}
+          {allFiles !== null && allFiles.length === 0 && <li className="ck-sub ck-pad">No files to show.</li>}
+        </ul>
+      )}
+      {view === 'changes' && diff && files.length === 0 && <p className="ck-sub">No file changes yet.</p>}
+      <ul className="ck-changes-files" hidden={view !== 'changes'}>
         {files.map((f) => {
           const lines = bodies.get(f.path);
           const who = blame[f.path] ? blameLine(blame[f.path]) : null;
@@ -308,16 +367,29 @@ export function Changes({
                 aria-expanded={isOpen}
                 onClick={() => setOpen(isOpen ? null : f.path)}
               >
-                <span className="ck-changes-mark" aria-label={f.status}>
+                <span className={`ck-changes-mark ck-changes-mark--${f.status}`} aria-label={f.status}>
                   {statusMark(f.status)}
                 </span>
-                <span className="ck-changes-path">{f.path}</span>
+                <span className="ck-changes-path" title={f.path}>
+                  {splitPath(f.path).dir && <span className="ck-changes-dir">{splitPath(f.path).dir}</span>}
+                  <span className="ck-changes-name">{splitPath(f.path).name}</span>
+                </span>
                 {who && (
                   <span className="ck-changes-blame" title={who.title}>
                     {who.text}
                   </span>
                 )}
-                <span className="ck-changes-counts">{f.binary ? 'binary' : `+${f.additions} −${f.deletions}`}</span>
+                <span className="ck-changes-counts">
+                  {f.binary ? (
+                    'binary'
+                  ) : (
+                    <>
+                      {(f.additions > 0 || f.deletions === 0) && <span className="ck-add">+{f.additions}</span>}
+                      {f.additions > 0 && f.deletions > 0 && ' '}
+                      {f.deletions > 0 && <span className="ck-del">−{f.deletions}</span>}
+                    </>
+                  )}
+                </span>
                 {(notes?.get(f.path)?.length ?? 0) > 0 && (
                   <span className="ck-changes-notes">{plural(notes?.get(f.path)?.length ?? 0, 'note')}</span>
                 )}

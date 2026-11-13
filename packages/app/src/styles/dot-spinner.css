@@ -4,8 +4,10 @@
   flex: none;
   vertical-align: middle;
 }
-/* Accent: the working sweep and the needs-you plus. Every other state stays in the text colour. */
-.pm-dots-s-running,
+/* Green: the working sweep (working = live). Accent: the needs-you plus (your move). Every other state stays in the text colour. */
+.pm-dots-s-running {
+  color: var(--live);
+}
 .pm-dots-s-waiting_input {
   color: var(--accent);
 }

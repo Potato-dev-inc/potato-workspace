@@ -102,7 +102,7 @@
   background: var(--bg-raised);
   opacity: 0;
   cursor: pointer;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--dur-fast) ease;
 }
 .cockpit .ck-att-chip:hover .ck-att-remove,
 .cockpit .ck-att-remove:focus-visible {

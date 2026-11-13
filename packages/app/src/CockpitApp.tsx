@@ -717,7 +717,10 @@ export default function CockpitApp() {
       {stopReport && <PanicSheet report={stopReport} names={c.names} onClose={() => setStopReport(null)} />}
       <AppUpdateHost />
       {/* The "Used" bar along the bottom edge; the root leaves room for it only while it shows. */}
-      <UsageBar />
+      <UsageBar
+        working={c.registry.paneList.filter((p) => p.status === 'running' && !needsYou.some((n) => n.paneId === p.info.id)).length}
+        needsYou={needsYou.length}
+      />
       <div className="ck-toasts" aria-live="polite">
         {c.toasts.map((t) => (
           <div className="ck-toast" key={t.id}>

@@ -50,7 +50,7 @@
   padding: 0;
   font-size: 11px;
   color: var(--label-3);
-  text-decoration: underline;
+  text-decoration: none;
   text-underline-offset: 2px;
 }
 .cockpit .ck-appr-toggle:hover {

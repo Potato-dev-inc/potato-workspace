@@ -17,12 +17,24 @@ interface ControlProps {
   choices: readonly ChipChoice[];
   disabled?: boolean;
   onChange: (value: string) => void;
+  /** `risk`: the pill is drawn in the warning colour with a shield (the permission chip in Full access). */
+  tone?: 'risk';
+  /** Shown as plain text: no list, no chevron (the permission chip of an agent that runs in a terminal). */
+  readOnly?: boolean;
 }
 
 function Chevron() {
   return (
     <svg className="ck-pill-chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M4 6l4 4 4-4" />
+    </svg>
+  );
+}
+
+function Shield() {
+  return (
+    <svg className="ck-pill-shield" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 1.8l5 1.8v4c0 3-2.1 5-5 6.6C5.1 12.6 3 10.6 3 7.6v-4z" />
     </svg>
   );
 }
@@ -36,7 +48,7 @@ function Check() {
 }
 
 /** A pill that opens a list above it. The pill shows the name of the current choice. */
-export function ChipMenu({ chipId, label, value, choices, disabled = false, onChange }: ControlProps & { chipId: string }) {
+export function ChipMenu({ chipId, label, value, choices, disabled = false, onChange, tone, readOnly = false }: ControlProps & { chipId: string }) {
   const uid = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -115,8 +127,18 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
   };
 
   const listId = `${uid}-list`;
+  if (readOnly) {
+    return (
+      <div className="ck-menu-rel" data-chip-id={chipId} data-chip-kind="readonly" data-value={value} data-tone={tone}>
+        <span className="ck-pill ck-pill--readonly" role="status" aria-label={`${label}: ${current}`} title={label}>
+          {tone === 'risk' && <Shield />}
+          <span className="ck-pill-label">{current}</span>
+        </span>
+      </div>
+    );
+  }
   return (
-    <div ref={root} className="ck-menu-rel" data-chip-id={chipId} data-chip-kind="menu" data-value={value} data-disabled={disabled || undefined}>
+    <div ref={root} className="ck-menu-rel" data-chip-id={chipId} data-chip-kind="menu" data-value={value} data-tone={tone} data-disabled={disabled || undefined}>
       <button
         ref={button}
         type="button"
@@ -135,6 +157,7 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
           }
         }}
       >
+        {tone === 'risk' && <Shield />}
         <span className="ck-pill-label">{current}</span>
         <Chevron />
       </button>

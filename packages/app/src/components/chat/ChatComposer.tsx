@@ -59,6 +59,8 @@ export interface ChatComposerProps {
   attachFiles?: () => Promise<string[]>;
   /** How full the conversation window is (the ring in the footer). Without a reading the ring is not drawn. */
   contextUsage?: ContextReading | null;
+  /** A dim line under the box: where the work lands (the branch). Not drawn when empty. */
+  footnote?: ReactNode;
 }
 
 function StopIcon() {
@@ -84,7 +86,7 @@ export function ChatComposer(props: ChatComposerProps) {
   return <ChatComposerBox key={props.draftKey ?? ''} {...props} />;
 }
 
-function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, status, attachFiles, contextUsage }: ChatComposerProps) {
+function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, status, attachFiles, contextUsage, footnote }: ChatComposerProps) {
   const stoppable = running && !!onStop;
   const [restored] = useState(() => (draftKey ? readDraftState(draftKey) : { text: '', attachments: [] as ChatAttachment[] }));
   const [text, setText] = useState(restored.text);
@@ -625,6 +627,11 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
           )}
         </div>
       </div>
+      {footnote && (
+        <p className="ck-chat-composer-where" data-testid="chat-composer-where">
+          {footnote}
+        </p>
+      )}
       {voice && mic.note && (
         <p className="ck-chat-composer-note ck-chat-composer-voice" role="status" data-testid="chat-composer-voice">
           {mic.note}

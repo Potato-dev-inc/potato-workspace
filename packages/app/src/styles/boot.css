@@ -47,10 +47,10 @@
 }
 
 .pm-boot-logo {
-  width: 56px;
-  height: auto;
-  border-radius: 8px;
-  border: 1px solid rgb(var(--pm-border));
+  flex: none;
+  width: 48px;
+  height: 48px;
+  color: rgb(var(--pm-accent));
   animation: pm-boot-logo-pulse 2.4s ease-in-out infinite;
 }
 
@@ -196,7 +196,7 @@
   color: rgb(var(--pm-muted));
   opacity: 0.55;
   transform: translateY(4px);
-  transition: opacity 0.35s ease, transform 0.35s ease, color 0.35s ease;
+  transition: opacity var(--dur-panel) ease, transform var(--dur-panel) ease, color var(--dur-panel) ease;
 }
 
 .pm-boot-step--active,

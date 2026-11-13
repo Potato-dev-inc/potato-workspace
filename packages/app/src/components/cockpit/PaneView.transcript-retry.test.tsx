@@ -82,7 +82,7 @@ const tab = (label: string) => [...host.querySelectorAll<HTMLElement>('[role="ta
 
 /** Opens a view from the More menu (Transcript, Receipt, History). */
 const moreTab = (name: string) => {
-  act(() => host.querySelector<HTMLButtonElement>('.ck-tabs-bar button[aria-haspopup="menu"]')!.click());
+  act(() => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-haspopup="menu"]')!.click());
   act(() => [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((t) => t.textContent === name)!.click());
 };
 const button = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === label);

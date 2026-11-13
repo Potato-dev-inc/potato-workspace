@@ -109,7 +109,7 @@ async function key(el: HTMLElement, k: string, init: KeyboardEventInit = {}) {
   });
   return event;
 }
-const send = () => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!;
+const send = () => host.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!;
 
 describe('the greeting', () => {
   it('offers "Bring my chats from another agent" and pressing it asks for the Bring panel', async () => {
@@ -122,17 +122,10 @@ describe('the greeting', () => {
     ask.mockRestore();
   });
 
-  it('has no name until the person saved one', async () => {
-    await mount(rig());
-    expect(host.querySelector('[data-testid="na-greeting"]')!.textContent).toBe('What\u2019s up next?');
-  });
-
-  it('uses the saved name, and follows a change made in Settings', async () => {
-    const r = rig({ name: 'Sam' });
-    await mount(r);
-    expect(host.querySelector('[data-testid="na-greeting"]')!.textContent).toBe('What\u2019s up next, Sam?');
-    await act(async () => r.emit({ name: '' }));
-    expect(host.querySelector('[data-testid="na-greeting"]')!.textContent).toBe('What\u2019s up next?');
+  it('has one heading only: no greeting over the question', async () => {
+    await mount(rig({ name: 'Sam' }));
+    expect(host.querySelector('[data-testid="na-greeting"]')).toBeNull();
+    expect([...host.querySelectorAll('h1, h2')].filter((h) => !h.closest('.ck-na-hc')).map((h) => h.textContent)).toEqual(['What should the agent do?']);
   });
 });
 
@@ -381,27 +374,26 @@ describe('add files', () => {
 });
 
 describe('home cards', () => {
-  it('shows no card until one is added, then Add shortcut pins it and saves the list', async () => {
-    const r = rig();
+  it('shows no card until one is added, then Add card pins it and saves the list', async () => {
+    const r = rig({ cards: [{ id: 'p', kind: 'running' }] });
     await mount(r);
-    expect(host.querySelector('.ck-na-hc')).toBeNull();
-    expect(byLabel('Customize')).toBeUndefined();
-    await click(byLabel('Add shortcut'));
+    expect(host.querySelectorAll('.ck-na-hc')).toHaveLength(1);
+    await click(byLabel('Add card'));
     await click(byLabel('Recent projects'));
-    expect(host.querySelector('.ck-na-hc')!.textContent).toContain('alpha-app');
+    expect(host.textContent).toContain('alpha-app');
     expect(r.saveCards).toHaveBeenCalledTimes(1);
     const saved = r.saveCards.mock.calls[0][0] as HomeCard[];
-    expect(saved.map((c) => c.kind)).toEqual(['recent']);
+    expect(saved.map((c) => c.kind)).toEqual(['running', 'recent']);
   });
 
   it('pins a saved prompt, and a click on it fills the box', async () => {
-    const r = rig();
+    const r = rig({ cards: [{ id: 'p', kind: 'running' }] });
     await mount(r);
-    await click(byLabel('Add shortcut'));
+    await click(byLabel('Add card'));
     await click(byLabel('A saved prompt'));
     await type(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Saved prompt text"]')!, 'Write short commit messages.');
     await click(byLabel(/^Pin$/));
-    expect((r.saveCards.mock.calls[0][0] as HomeCard[])[0]).toMatchObject({ kind: 'prompt', text: 'Write short commit messages.' });
+    expect((r.saveCards.mock.calls[0][0] as HomeCard[])[1]).toMatchObject({ kind: 'prompt', text: 'Write short commit messages.' });
     await click(host.querySelector<HTMLElement>('.ck-na-prompt')!);
     expect(input().value).toBe('Write short commit messages.');
   });
@@ -463,15 +455,33 @@ describe('page words', () => {
     await mount(rig());
     expect(host.querySelector('.ck-na-top-title')?.textContent).toBe('New agent');
     expect(host.querySelector('[data-testid="na-ask"]')?.textContent).toBe('What should the agent do?');
-    expect(host.querySelector('h2[data-testid="na-ask"]')).not.toBeNull();
+    expect(host.querySelector('h1[data-testid="na-ask"]')).not.toBeNull();
   });
 
-  it('explains Add shortcut in one line on first use, and the line goes once a card is pinned', async () => {
+  it('shows three starters under the box; one click fills the box, and Add card shows only after the first pin', async () => {
+    const r = rig();
+    await mount(r);
+    const starters = host.querySelector('[data-testid="na-starters"]')!;
+    expect([...starters.querySelectorAll('.ck-na-starter')].map((b) => b.textContent?.replace('›', ''))).toEqual([
+      'Explain how this project is organised',
+      'Find and fix one small bug',
+      'Bring my chats from another agent',
+    ]);
+    expect(byLabel('Add card')).toBeUndefined();
+    expect(byLabel('Add shortcut')).toBeUndefined();
+    await click(starters.querySelector<HTMLElement>('.ck-na-starter')!);
+    expect(input().value).toBe('Explain how this project is organised');
+    await type(input(), '');
+    await click(byLabel(/^Pin "Find and fix/));
+    expect((r.saveCards.mock.calls[0][0] as HomeCard[])[0]).toMatchObject({ kind: 'prompt', text: 'Find and fix one small bug' });
+    expect(byLabel('Add card')).toBeDefined();
+  });
+
+  it('the footer strip has the pickers and a Start button that is solid once there is text', async () => {
     await mount(rig());
-    expect(host.querySelector('[data-testid="na-cards-hint"]')?.textContent).toContain('Add a shortcut for a project');
-    await click(byLabel('Add shortcut'));
-    expect(host.querySelector('[data-testid="na-cards-hint"]')).toBeNull();
-    await click(byLabel('Recent projects'));
-    expect(host.querySelector('[data-testid="na-cards-hint"]')).toBeNull();
+    expect(host.querySelector('.ck-na-composer > .ck-na-row .ck-na-send')?.textContent).toBe('Start');
+    expect(send().disabled).toBe(true);
+    await type(input(), 'Do a thing');
+    expect(send().disabled).toBe(false);
   });
 });

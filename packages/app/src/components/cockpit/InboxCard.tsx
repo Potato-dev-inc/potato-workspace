@@ -14,6 +14,8 @@ import '../../styles/inbox-card.css';
 import { DotSpinner } from './DotSpinner';
 import { agePhrase, formatAge } from './inbox-age';
 import { formatKey, isMacPlatform } from '../../lib/shortcuts';
+import { AgentLogo } from '../common/AgentLogo';
+import { agentLogoFor } from '../../lib/agentLogos';
 
 /** `needs` waits for a person, `error` stopped, `notice` is calm information, `done` finished, the risk levels are approvals. */
 export type CardGlyphKind = 'needs' | 'error' | 'notice' | 'working' | 'done' | RiskLevel;
@@ -40,10 +42,32 @@ function CardGlyph({ kind }: { kind: CardGlyphKind }) {
   return <DotSpinner status={status} />;
 }
 
+/** The one kind chip on a row: what is being asked, in two words. Kinds that are not a decision (notes, team) have none. */
+export type ChipKind = 'question' | 'permission' | 'stopped' | 'done';
+
+export function chipFor(kind: string, glyph: CardGlyphKind): { kind: ChipKind; label: string } | null {
+  if (glyph === 'done') return { kind: 'done', label: 'Done' };
+  if (kind === 'question') return { kind: 'question', label: 'Question' };
+  if (kind === 'approval' || kind === 'consent') return { kind: 'permission', label: 'Permission' };
+  if ((kind === 'error' && glyph !== 'notice') || kind === 'stuck') return { kind: 'stopped', label: 'Stopped' };
+  return null;
+}
+
+function ChipIcon({ kind }: { kind: ChipKind }) {
+  if (kind !== 'permission' && kind !== 'done') return null;
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {kind === 'permission' ? <path d="M8 1.8 13.2 3.7v4c0 3-2.1 5.3-5.2 6.5C4.9 13 2.8 10.7 2.8 7.7v-4L8 1.8Z" /> : <path d="m3.5 8.5 3 3 6-6.5" />}
+    </svg>
+  );
+}
+
 export interface InboxCardProps {
   /** `data-kind`: approval, question, consent, budget, limit, error, stuck, note, team. */
   kind: string;
   glyph: CardGlyphKind;
+  /** The agent's id (claude, codex...): its brand icon replaces the glyph when the agent has one. */
+  agent?: string | null;
   /** What it wants, verb first. The only bold line. */
   title: ReactNode;
   /** The project (or the agent and project), quiet, next to the title. */
@@ -76,9 +100,11 @@ export interface InboxCardProps {
   children?: ReactNode;
 }
 
-export function InboxCard({ kind, glyph, title, meta, status, age, risk, info, guard, reason, caution, body, note, actions, more, data, children }: InboxCardProps) {
+export function InboxCard({ kind, glyph, agent, title, meta, status, age, risk, info, guard, reason, caution, body, note, actions, more, data, children }: InboxCardProps) {
   const extra = Object.fromEntries(Object.entries(data ?? {}).filter(([, v]) => v !== undefined));
   const hasAge = age !== undefined && age !== null;
+  const chip = chipFor(kind, glyph);
+  const brand = !!agent && !!agentLogoFor(agent);
   return (
     <section
       className="ib-card"
@@ -91,15 +117,21 @@ export function InboxCard({ kind, glyph, title, meta, status, age, risk, info, g
       tabIndex={-1}
       {...extra}
     >
-      <span className="ib-glyph" aria-hidden={glyph === 'notice' ? true : undefined}>
-        <CardGlyph kind={glyph} />
+      <span className="ib-glyph" data-brand={brand ? '' : undefined} aria-hidden={glyph === 'notice' || brand ? true : undefined}>
+        {brand ? <AgentLogo id={agent!} size={16} decorative /> : <CardGlyph kind={glyph} />}
       </span>
       <div className="ib-main">
         <span className="ib-title">{title}</span>
         {meta ? <span className="ib-meta">{meta}</span> : null}
       </div>
-      {(status || hasAge) && (
+      {(status || hasAge || chip) && (
         <div className="ib-aside">
+          {chip ? (
+            <span className="ib-chip" data-chip={chip.kind}>
+              <ChipIcon kind={chip.kind} />
+              {chip.label}
+            </span>
+          ) : null}
           {status ? <span className="ib-status">{status}</span> : null}
           {hasAge ? (
             <span className="ib-age" title={agePhrase(age)} aria-label={agePhrase(age)}>

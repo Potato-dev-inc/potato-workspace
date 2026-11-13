@@ -19,8 +19,8 @@
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 160ms var(--ease),
-    transform 160ms var(--ease);
+    background-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 .cockpit .ck-side-new:hover {
   background: var(--fill);
@@ -53,8 +53,8 @@
   border-bottom: 1px solid var(--sep);
 }
 .cockpit .ck-na-top-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
   color: var(--label-2);
 }
 .cockpit .ck-na-scroll {
@@ -88,7 +88,7 @@
   margin: 0 0 22px;
   text-align: center;
   font-size: 26px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: -0.01em;
   line-height: 1.2;
   color: var(--label);
@@ -118,7 +118,7 @@
   background: transparent;
   color: var(--label);
   font: inherit;
-  font-size: 15px;
+  font-size: var(--fs-heading);
   line-height: 1.5;
   padding: 4px 6px 4px 6px;
 }
@@ -130,13 +130,13 @@
   border-radius: 10px;
   background: var(--fill);
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 .cockpit .ck-na-tabhint {
   position: absolute;
   right: 6px;
   top: 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   color: var(--label-3);
   pointer-events: none;
 }
@@ -148,12 +148,15 @@
   box-shadow: inset 0 0 0 1px var(--sep);
   color: var(--label-2);
 }
+/* The footer strip: the pickers and Start, under a hairline. */
 .cockpit .ck-na-row {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-top: 8px;
+  padding-top: 8px;
   min-width: 0;
+  box-shadow: inset 0 1px 0 var(--sep);
 }
 .cockpit .ck-na-spacer {
   flex: 1;
@@ -174,7 +177,7 @@
   background: transparent;
   color: var(--label-2);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-meta);
   cursor: pointer;
 }
 .cockpit .ck-na-chip:hover,
@@ -230,7 +233,7 @@
   background: transparent;
   color: var(--label-3);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   cursor: pointer;
 }
 .cockpit .ck-na-seg-btn[aria-checked='true'] {
@@ -242,15 +245,17 @@
   box-shadow: var(--focus);
 }
 .cockpit .ck-na-send {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 16px;
   flex: 0 0 auto;
   border: 0;
-  border-radius: 50%;
+  border-radius: 999px;
   background: var(--accent, var(--primary-bg));
   color: var(--primary-fg);
+  font: var(--fw-medium) var(--fs-body) var(--font-ui);
   cursor: pointer;
 }
 .cockpit .ck-na-send:focus-visible {
@@ -266,7 +271,7 @@
   min-height: 18px;
   margin: 8px 0 0;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--label-3);
 }
 
@@ -289,8 +294,8 @@
 }
 .cockpit .ck-na-cap {
   padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.02em;
   color: var(--label-3);
 }
@@ -306,7 +311,7 @@
   background: transparent;
   color: var(--label);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-body);
   text-align: left;
   cursor: pointer;
 }
@@ -336,12 +341,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--label-3);
 }
 .cockpit .ck-na-item-hint {
   flex: 0 0 auto;
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   color: var(--label-3);
 }
 .cockpit .ck-na-toggle {
@@ -352,12 +357,12 @@
   margin-top: 4px;
   padding: 8px 8px 4px;
   border-top: 1px solid var(--sep);
-  font-size: 12.5px;
+  font-size: var(--fs-meta);
   color: var(--label-2);
 }
 .cockpit .ck-na-note {
   margin: 4px 8px;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--label-3);
 }
 
@@ -391,8 +396,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-semibold);
   color: var(--label-2);
 }
 .cockpit .ck-na-hc-tools {
@@ -407,7 +412,7 @@
   background: transparent;
   color: var(--label-2);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1;
   cursor: pointer;
 }
@@ -444,7 +449,7 @@
   background: transparent;
   color: var(--label);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-body);
   text-align: left;
   cursor: pointer;
 }
@@ -463,7 +468,7 @@
 }
 .cockpit .ck-na-line-side {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--label-3);
 }
 .cockpit .ck-na-prompt {
@@ -476,7 +481,7 @@
   background: transparent;
   color: var(--label);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.45;
   text-align: left;
   white-space: pre-wrap;
@@ -518,7 +523,7 @@
   background: transparent;
   color: var(--label-3);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-body);
   cursor: pointer;
 }
 .cockpit .ck-na-addrow:hover {
@@ -535,7 +540,7 @@
   background: transparent;
   color: var(--label-3);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   cursor: pointer;
 }
 .cockpit .ck-na-link:hover {
@@ -570,11 +575,83 @@
   box-shadow: inset 0 1px 0 var(--sep);
 }
 
-/* the question over the message box: the greeting says hello, this says what the box is for */
+/* the one heading over the message box */
 .cockpit .ck-na-ask {
-  margin: -4px 0 12px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--label-2);
+  margin: 0 0 16px;
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--label);
   text-align: center;
+}
+
+/* three one-click starters under the box */
+.cockpit .ck-na-starters {
+  margin-top: 16px;
+}
+.cockpit .ck-na-starters-cap {
+  margin: 0 0 4px;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+.cockpit .ck-na-starters-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cockpit .ck-na-starter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: inset 0 -1px 0 var(--sep);
+}
+.cockpit .ck-na-starter {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 4px;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  font: var(--fw-regular) var(--fs-body) var(--font-ui);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.cockpit .ck-na-starter:hover {
+  color: var(--label);
+}
+.cockpit .ck-na-starter:focus-visible,
+.cockpit .ck-na-starter-pin:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-na-starter-go {
+  color: var(--label-3);
+}
+.cockpit .ck-na-starter-pin {
+  flex: none;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--label-3);
+  font: var(--fw-regular) var(--fs-label) var(--font-ui);
+  cursor: pointer;
+}
+.cockpit .ck-na-starter-pin:hover {
+  background: var(--fill);
+  color: var(--label);
+}
+
+/* no pinned card yet: no empty divider under the starters */
+.cockpit .ck-na-cards .ck-na-foot:empty {
+  display: none;
 }

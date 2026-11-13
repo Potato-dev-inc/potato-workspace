@@ -188,7 +188,7 @@
   border-radius: 10px;
   background: var(--bg-raised);
   box-shadow: var(--raise-hi);
-  transition: background 160ms var(--ease), transform 160ms var(--ease);
+  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
 .cockpit .fr-choice:hover {
   background: var(--fill-hover);

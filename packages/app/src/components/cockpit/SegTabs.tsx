@@ -3,6 +3,8 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 export interface SegOption<T extends string> {
   id: T;
   label: string;
+  /** A small dim number after the label (files changed). */
+  badge?: number;
 }
 
 /** Segmented control with a sliding active pill (CSS transition only). */
@@ -31,6 +33,7 @@ export function SegTabs<T extends string>({
       setPill(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
     };
     measure();
+    if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(measure);
     ro.observe(root);
     return () => ro.disconnect();
@@ -70,6 +73,7 @@ export function SegTabs<T extends string>({
           onKeyDown={(e) => onKeyDown(e, ix)}
         >
           {o.label}
+          {o.badge !== undefined && <span className="ck-seg-badge">{o.badge}</span>}
         </button>
       ))}
     </div>

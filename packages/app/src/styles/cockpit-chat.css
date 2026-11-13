@@ -66,7 +66,7 @@
   border-radius: 6px;
   font: 12px/1.4 var(--font-mono);
   color: var(--label-2);
-  transition: background 160ms var(--ease);
+  transition: background var(--dur-fast) var(--ease);
 }
 .cockpit .ck-chat-tool:hover {
   background: var(--fill);
@@ -172,7 +172,7 @@
   padding: 0;
   font: inherit;
   color: var(--label-2);
-  text-decoration: underline;
+  text-decoration: none;
   text-underline-offset: 2px;
 }
 .cockpit .ck-chat-link:hover {
@@ -197,7 +197,7 @@
   border: 1px solid var(--sep);
   border-radius: 14px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 .cockpit .ck-chat-composer-row:focus-within {
   border-color: var(--label-3);
@@ -224,7 +224,7 @@
   border-radius: 8px;
   color: var(--label-2);
   background: transparent;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 .cockpit .ck-chat-attach:hover:not([aria-disabled='true']) {
   color: var(--label);
@@ -280,10 +280,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--label);
+  background: var(--accent);
   color: var(--bg);
   flex: none;
-  transition: transform 0.2s var(--ease), background 0.15s ease, opacity 0.15s ease;
+  transition: transform var(--dur-panel) var(--ease), background var(--dur-fast) ease, opacity var(--dur-fast) ease;
 }
 .cockpit .ck-chat-send .ck-chat-send-icon {
   display: block;
@@ -297,7 +297,7 @@
   white-space: nowrap;
 }
 .cockpit .ck-btn.ck-chat-send:hover:not(:disabled) {
-  background: var(--label-2);
+  filter: brightness(1.08);
 }
 .cockpit .ck-btn.ck-chat-send:active:not(:disabled) {
   transform: scale(0.92);
@@ -337,7 +337,7 @@
   background: var(--fill-active);
   color: var(--label-2);
   flex: none;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 .cockpit .ck-btn.ck-chat-stop-mini + .ck-chat-send {
   margin-left: 0;
@@ -387,6 +387,19 @@
     background: none;
     color: var(--label-2);
   }
+}
+/* Where the work lands: one dim line under the box. */
+.cockpit .ck-chat-composer-where {
+  margin: 6px 6px 0;
+  font-size: var(--fs-label);
+  color: var(--label-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit .ck-chat-where-branch {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--label-2);
 }
 .cockpit .ck-chat-composer-note {
   margin: 6px 4px 0;
@@ -576,7 +589,7 @@
   min-height: 20px;
   font-weight: 500;
   color: var(--label-3);
-  transition: background 160ms var(--ease), color 160ms var(--ease);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-chat-mode:hover {
   color: var(--label);
@@ -608,7 +621,7 @@
   color: var(--label-2);
   font-size: 12px;
   font-weight: 500;
-  transition: background 160ms var(--ease), color 160ms var(--ease);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-chat-mode-pill:hover,
 .cockpit .ck-chat-mode-pill[aria-expanded='true'] {
@@ -680,7 +693,7 @@
   min-height: 28px;
   font: 500 12px/1.4 var(--font-ui);
   color: var(--label-2);
-  transition: background 160ms var(--ease);
+  transition: background var(--dur-fast) var(--ease);
 }
 .cockpit .ck-chat-activity:focus-visible {
   box-shadow: var(--focus);
@@ -699,7 +712,7 @@
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   transform: rotate(-45deg);
-  transition: transform 160ms var(--ease);
+  transition: transform var(--dur-fast) var(--ease);
 }
 .cockpit .ck-chat-chevron--open {
   transform: rotate(45deg);
@@ -859,7 +872,7 @@
   min-height: 20px;
   font-weight: 500;
   color: var(--label-3);
-  transition: color 160ms var(--ease);
+  transition: color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-chat-aside:hover,
 .cockpit .ck-chat-aside[aria-expanded='true'] {

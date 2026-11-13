@@ -7,6 +7,7 @@ import type { AcpPermission } from '../../lib/acpChat';
 import { canRemember, decisionOptions, isLong, isRisky, kindWords, whatIsAsked } from '../../lib/decisionCard';
 import type { Question } from '../../lib/questions';
 import { HoldButton } from './HoldButton';
+import '../../styles/chips.css';
 import '../../styles/chat-decision-card.css';
 
 export interface DecisionAnswer {
@@ -57,7 +58,7 @@ export function DecisionCard({
             {chip}
           </span>
         )}
-        {risky && <span className="ck-dc-chip ck-dc-chip--risk">Risky</span>}
+        {risky && <span className="ck-chip-label is-risk ck-dc-chip ck-dc-chip--risk">Risky</span>}
       </div>
       {what && (
         <>

@@ -91,7 +91,7 @@ async function mount(addonApi: AcpAddonApi, props: Partial<NewAgentPageProps> = 
 }
 
 const input = () => host.querySelector<HTMLTextAreaElement>('textarea[aria-label="What should the agent do?"]')!;
-const sendButton = () => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!;
+const sendButton = () => host.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!;
 const runAsButton = (word: 'Chat' | 'Terminal') => [...host.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent === word)!;
 const chooseChat = () => act(async () => runAsButton('Chat').click());
 const chooseTerminal = () => act(async () => runAsButton('Terminal').click());

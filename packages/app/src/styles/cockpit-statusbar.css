@@ -25,6 +25,7 @@
   line-height: 20px;
   overflow: hidden;
   z-index: 40;
+  container-type: inline-size;
 }
 .cockpit .ck-statusbar .ck-usage-cap {
   flex: 0 0 auto;
@@ -76,7 +77,78 @@
   box-shadow: var(--focus);
 }
 .cockpit .ck-statusbar .ck-usage-warn {
+  color: var(--risk);
+}
+/* One group per agent: icon, percent, a 26px bar, time to reset. Grey while calm; yellow with a warning mark from
+   80 %; Sign-in expired in red. The bar is never coloured below 80 %. */
+.cockpit .ck-statusbar .ck-usage-chip {
+  gap: 5px;
+  color: var(--label-3);
+  font-size: var(--fs-xs, 11px);
+}
+.cockpit .ck-usage-meter {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--fill-active);
+  overflow: hidden;
+}
+.cockpit .ck-usage-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--label-3);
+}
+.cockpit .ck-usage-reset {
+  color: var(--label-3);
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ck-usage-chip.tone-risk .ck-usage-pct,
+.cockpit .ck-usage-chip.tone-risk .ck-usage-text {
+  color: var(--risk);
+  font-weight: 600;
+}
+.cockpit .ck-usage-chip.tone-risk .ck-usage-meter > span {
+  background: var(--risk);
+}
+.cockpit .ck-usage-chip.tone-danger .ck-usage-text {
+  color: var(--danger);
+  font-weight: 600;
+}
+/* Right side: how many agents are working (live dot) and how many need you (orange). */
+.cockpit .ck-sb-counts {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ck-sb-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.cockpit .ck-sb-count.is-needs {
   color: var(--accent);
+  font-weight: 600;
+}
+.cockpit .ck-sb-live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--live);
+}
+/* Narrow: the reset time goes first, then the bar; the icon and the percent stay. */
+@container (max-width: 720px) {
+  .ck-usage-reset {
+    display: none;
+  }
+}
+@container (max-width: 520px) {
+  .ck-usage-meter {
+    display: none;
+  }
 }
 /* Several sign-ins of one agent: a tiny tag after the mark (the full label is in the tooltip). */
 .cockpit .ck-usage-suffix {

@@ -9,7 +9,7 @@
   background: var(--fill);
   color: var(--label-2);
   font-size: 12px;
-  transition: background-color 160ms var(--ease), color 160ms var(--ease);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-preview-chip:hover {
   background: var(--fill-hover);

@@ -60,7 +60,9 @@ describe('BackgroundCard', () => {
     expect(text).toContain('python');
     expect(text).toContain(':8765');
     expect(text).toContain('2m');
-    expect(host.querySelector('code')?.textContent).toBe('python -m http.server 8765');
+    // One line per task: the full command is the row's hover text, not a second line.
+    expect(host.querySelector('code')).toBeNull();
+    expect(host.querySelector('.ck-job-top')?.getAttribute('title')).toBe('python -m http.server 8765');
   });
 
   it('opens the port in your browser on Shift+click (a plain click opens the app preview)', () => {

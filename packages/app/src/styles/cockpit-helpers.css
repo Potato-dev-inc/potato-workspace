@@ -23,8 +23,8 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   transition:
-    background-color 160ms var(--ease),
-    color 160ms var(--ease);
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-helper-chip:hover {
   background: var(--fill);
@@ -36,7 +36,7 @@
   border-right: 1.25px solid currentColor;
   border-bottom: 1.25px solid currentColor;
   transform: translateY(-1px) rotate(-45deg);
-  transition: transform 160ms var(--ease);
+  transition: transform var(--dur-fast) var(--ease);
 }
 .cockpit .ck-helper-caret.is-open {
   transform: translateY(-2px) rotate(45deg);
@@ -59,7 +59,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 160ms var(--ease);
+  transition: color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-started-by {
   min-width: 0;

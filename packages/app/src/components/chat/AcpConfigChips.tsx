@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { chipsDisabled, configChips, errorSentence, tauriAcpChatApi, type AcpChatApi, type AcpChatState } from '../../lib/acpChat';
 import { ChipMenu, ChipSegmented } from './ChipMenu';
+import { isFullAccessMode, isPermissionChip, permissionFirst } from './permissionChip';
 import '../../styles/cockpit-acp.css';
 
 /** An effort-like setting with this many choices or fewer is drawn as a segmented switch. */
@@ -36,7 +37,7 @@ export function AcpConfigChips({ paneId, state, api = tauriAcpChatApi }: { paneI
   return (
     <div className="ck-acp-chips" data-testid="acp-chips">
       <div className="ck-acp-chips-row" role="group" aria-label="Chat settings">
-        {chips.map((chip) => {
+        {permissionFirst(chips).map((chip) => {
           const props = {
             chipId: chip.id,
             label: chip.label,
@@ -45,6 +46,13 @@ export function AcpConfigChips({ paneId, state, api = tauriAcpChatApi }: { paneI
             disabled: off,
             onChange: (value: string) => change(chip.id, value),
           };
+          // The permission chip: neutral for the safe modes, warning-yellow with a shield only for Full access. It changes
+          // through the same setConfig as before; for a conversation open in a terminal it is plain text.
+          if (isPermissionChip(chip)) {
+            const shown = picked[chip.id] ?? chip.value;
+            const full = isFullAccessMode(chip.choices.find((c) => c.value === shown) ?? { value: shown, name: shown });
+            return <ChipMenu key={chip.id} {...props} tone={full ? 'risk' : undefined} readOnly={!!state?.inTerminal} />;
+          }
           // The effort-like setting (ACP category `thought_level`) with a few choices reads best side by side.
           return chip.category === 'thought_level' && chip.choices.length <= SEGMENTED_MAX ? <ChipSegmented key={chip.id} {...props} /> : <ChipMenu key={chip.id} {...props} />;
         })}

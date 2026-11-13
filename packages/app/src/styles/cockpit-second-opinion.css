@@ -96,8 +96,8 @@
   cursor: pointer;
   opacity: 0;
   transition:
-    opacity 160ms var(--ease),
-    background-color 160ms var(--ease);
+    opacity var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-diff-annot .ck-diff-line:hover > .ck-comment-btn,
 .cockpit .ck-diff-annot .ck-diff-line:focus-within > .ck-comment-btn,

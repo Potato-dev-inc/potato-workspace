@@ -127,15 +127,11 @@ export function HomeCards({
         </div>
       )}
 
-      {cards.length === 0 && adding === null && kinds.length > 0 && (
-        <p className="ck-na-note" data-testid="na-cards-hint">
-          Add a shortcut for a project, a running agent, or a prompt you use often.
-        </p>
-      )}
       <div className="ck-na-foot">
-        {adding === null && kinds.length > 0 && (
+        {/* Nothing to add to until the first pin (the starters under the box pin one). */}
+        {adding === null && cards.length > 0 && kinds.length > 0 && (
           <button type="button" className="ck-na-addrow" onClick={() => setAdding('list')}>
-            <span aria-hidden="true">+</span> Add shortcut
+            <span aria-hidden="true">+</span> Add card
           </button>
         )}
         {adding !== null && (

@@ -8,6 +8,7 @@ import { SegTabs } from '../SegTabs';
 import { Sheet } from '../Sheet';
 import { MissionCard } from './MissionCards';
 import { MissionGlyph, PreviewTag } from './MissionGlyph';
+import '../../../styles/chips.css';
 import '../../../styles/missions.css';
 
 const SHOWN = 8;
@@ -173,7 +174,7 @@ export function MissionProgress({
             <MissionGlyph glyph={m.glyph} />
             <span>{m.state_text}</span>
           </span>
-          {m.budget.text && <span className="ck-mission-budget-chip">{m.budget.text}</span>}
+          {m.budget.text && <span className="ck-chip-count ck-mission-budget-chip">{m.budget.text}</span>}
         </div>
         <p className="ck-mission-sub">
           {m.project_name}

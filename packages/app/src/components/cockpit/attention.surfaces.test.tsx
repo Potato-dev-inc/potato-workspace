@@ -103,10 +103,10 @@ describe('one Needs-you count', () => {
         <Inbox c={api} />
       </>,
     );
-    const doto = host.querySelector('.ck-doto')!;
+    const doto = host.querySelector('.ck-inbox-count')!;
     const badge = host.querySelector('.ck-row--flat .ck-count')!;
     const group = host.querySelector('.ck-group .ck-caption-count')!;
-    expect(doto.textContent).toBe('05');
+    expect(doto.textContent).toBe('5');
     expect(badge.textContent).toBe('5');
     expect(group.textContent).toBe('5');
     expect(doto.getAttribute('aria-label')).toBe('5 things need you');
@@ -132,7 +132,7 @@ describe('one Needs-you count', () => {
         </LoopGuardContext.Provider>,
       );
     });
-    expect(host.querySelector('.ck-doto')!.textContent).toBe('05');
+    expect(host.querySelector('.ck-inbox-count')!.textContent).toBe('5');
     expect(host.querySelector('.ck-row--flat .ck-count')!.textContent).toBe('5');
     expect(host.querySelector('.ck-group .ck-caption-count')!.textContent).toBe('5');
   });
@@ -193,7 +193,8 @@ describe('Inbox error card', () => {
     const only = api.registry.paneList.filter((p) => p.status === 'idle');
     const calm = { ...api, asked: { ...api.asked, questions: [] }, registry: { ...api.registry, paneList: only, panes: new Map(only.map((p) => [p.info.id, p])) } } as unknown as CockpitApi;
     act(() => root.render(<Inbox c={calm} />));
-    expect(host.querySelector('.ck-doto')?.textContent).toBe('00');
-    expect(host.querySelector('h1')?.textContent).toBe('Nothing needs you');
+    expect(host.querySelector('.ck-inbox-count')).toBeNull();
+    expect(host.querySelector('h1')?.textContent).toBe('Inbox');
+    expect(host.querySelector('.ck-empty-title')?.textContent).toBe('Nothing needs you');
   });
 });

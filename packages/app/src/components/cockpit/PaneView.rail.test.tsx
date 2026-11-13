@@ -92,7 +92,7 @@ describe('session rail in the pane view', () => {
     const c = cockpit([mk('p', 'Refactor auth')], 'p');
     await act(async () => root.render(<PaneView c={c} paneId="p" />));
     // Receipt sits in the More menu.
-    act(() => host.querySelector<HTMLButtonElement>('.ck-tabs-bar button[aria-haspopup="menu"]')!.click());
+    act(() => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-haspopup="menu"]')!.click());
     await act(async () => [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((b) => b.textContent === 'Receipt')!.click());
     await flush();
     expect(rail()).not.toBeNull();

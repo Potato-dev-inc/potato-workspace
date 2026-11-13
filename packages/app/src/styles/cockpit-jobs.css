@@ -6,17 +6,27 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
+/* One line per job; the full command is the row's hover text. */
 .cockpit .ck-job {
   display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
 }
-.cockpit .ck-job + .ck-job {
-  padding-top: 8px;
-  border-top: 1px solid var(--sep);
+/* Point is always in the tab order; it only fades in on hover or focus. */
+.cockpit .ck-job-hover {
+  opacity: 0;
+}
+.cockpit .ck-job:hover .ck-job-hover,
+.cockpit .ck-job:focus-within .ck-job-hover {
+  opacity: 1;
+}
+@media (hover: none) {
+  .cockpit .ck-job-hover {
+    opacity: 1;
+  }
 }
 .cockpit .ck-job-top {
   display: flex;
@@ -49,14 +59,15 @@
   color: var(--label-2);
   font: 11px var(--font-mono);
   transition:
-    background-color 160ms var(--ease),
-    color 160ms var(--ease);
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-job-port:hover {
   background: var(--fill-hover);
   color: var(--label);
 }
-.cockpit .ck-job-stop {
+.cockpit .ck-job-stop,
+.cockpit .ck-job-point {
   flex: none;
   height: 20px;
   padding: 0 8px;
@@ -65,15 +76,17 @@
   color: var(--label-2);
   font-size: 11px;
   transition:
-    background-color 160ms var(--ease),
-    color 160ms var(--ease),
-    transform 160ms var(--ease);
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
-.cockpit .ck-job-stop:hover {
+.cockpit .ck-job-stop:hover,
+.cockpit .ck-job-point:hover {
   background: var(--fill-hover);
   color: var(--label);
 }
-.cockpit .ck-job-stop:active {
+.cockpit .ck-job-stop:active,
+.cockpit .ck-job-point:active {
   transform: scale(0.97);
 }
 .cockpit .ck-job-stop.is-danger {

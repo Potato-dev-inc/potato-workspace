@@ -39,8 +39,8 @@ export interface LocalInputOverlay {
 }
 
 export const DEFAULT_THEME: TerminalTheme = {
-  background: '#1b1a19',
-  foreground: '#f4f2ef',
+  background: '#1e1c1a',
+  foreground: '#f0eeea',
   cursor: '#f29a3c',
   black: '#000000',
   red: '#cd3131',

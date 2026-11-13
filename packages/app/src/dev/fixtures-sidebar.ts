@@ -30,3 +30,22 @@ export const SIDEBAR_PANES: PaneInfo[] = [
   mk('sb-plan', 'claude', 'idle', `${WORK}/acp-lab`, 'Night plan', 180),
   mk('sb-scratch', 'powershell', 'idle', `${WORK}/scratch`, 'Scratch shell', 300),
 ];
+
+// What the project cards read: the branch of the folder an agent works in, and for one agent a separate copy with
+// its change counts and pull request (the same shapes the Changes panel reads).
+const BRANCHES: Record<string, string> = { 'sb-login': 'main', 'sb-notes': 'main', 'sb-review': 'main', 'sb-docs': 'main' };
+export const sidebarBranch = (paneId: string): string | null => BRANCHES[paneId] ?? null;
+export const sidebarWorktree = (paneId: string) =>
+  paneId === 'sb-rework'
+    ? {
+        handle: 'w-rework',
+        branch: 'feat/sidebar-rework',
+        base: 'main',
+        repo: `${WORK}/potato-workspace`,
+        path: `${WORK}/potato-workspace-w-rework`,
+        exists: true,
+        state: 'active',
+        summary: { files_changed: 9, additions: 124, deletions: 18 },
+        pr: { number: 212, url: 'https://example.invalid/pr/212', draft: false, base: 'main', created_at_ms: now, checks: { state: 'passing', items: [], checked_at_ms: now } },
+      }
+    : null;

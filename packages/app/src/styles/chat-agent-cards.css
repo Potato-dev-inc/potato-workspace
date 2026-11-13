@@ -114,7 +114,7 @@
   font: 500 12px/1.35 var(--font-ui);
   text-align: left;
   cursor: pointer;
-  transition: background-color 160ms var(--ease, ease);
+  transition: background-color var(--dur-fast) var(--ease, ease);
 }
 :is(.cockpit, .ph) .ck-agc-card .ck-agc-head:hover {
   background: var(--fill);
@@ -157,7 +157,7 @@
 :is(.cockpit, .ph) .ck-agc-chev {
   flex: none;
   color: var(--label-3);
-  transition: transform 250ms var(--ease, ease);
+  transition: transform var(--dur-panel) var(--ease, ease);
 }
 :is(.cockpit, .ph) .ck-agc-head[aria-expanded='false'] .ck-agc-chev {
   transform: rotate(-90deg);
@@ -274,7 +274,7 @@
   color: var(--label-2);
   font: 500 11px/1 var(--font-ui);
   cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease;
 }
 :is(.cockpit, .ph) button.ck-agc-copy:hover,
 :is(.cockpit, .ph) button.ck-agc-copy[data-copied] {
@@ -423,7 +423,7 @@
   color: var(--label-2);
   font: 12px/1.4 var(--font-ui);
   animation: ck-agc-open 200ms var(--ease, ease) both;
-  transition: color 300ms;
+  transition: color var(--dur-panel);
 }
 :is(.cockpit, .ph) .ck-agc-step--running {
   color: var(--label);
@@ -495,7 +495,7 @@
   padding: 4px 2px;
   color: var(--label-3);
   font: 12px/1.45 var(--font-ui);
-  transition: color 300ms;
+  transition: color var(--dur-panel);
 }
 :is(.cockpit, .ph) .ck-agc-task.ck-chat-plan-item--in_progress {
   color: var(--label);

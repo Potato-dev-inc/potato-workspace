@@ -1,7 +1,7 @@
-// The bottom of the sidebar: one row of icon buttons with tooltips (Set up agents, Project, Review, Spaces), a More menu
-// that holds the rest (Plans, Scores, the Orchestration | Individual mode), and Theme and Settings on the right.
-// Background jobs and the Night Shift chip sit above the row (plan usage is the bottom bar, UsageBar.tsx) (they show only while there is something to say), and the
-// "Connection lost" line sits under it.
+// The bottom of the sidebar: one row (Settings, Review with its count, and a ... menu). The menu holds everything else:
+// Spaces, Project, Set up agents, Plans, Scores, Theme and the Orchestration | Individual mode.
+// One status line sits above the row and only exists when there is something to say: the lost connection, else the
+// background jobs, else a Night Shift run (plan usage is the bottom bar, UsageBar.tsx).
 import { useEffect, useRef, useState } from 'react';
 import { IconChart, IconCheck, IconGlobe, IconMoon, IconMore, IconNote, IconSun, IconTerminal } from './Icons';
 import { JobsChip } from './rail/JobsChip';
@@ -89,21 +89,24 @@ export function SidebarFooter(p: SidebarFooterProps) {
 
   return (
     <div className="ck-side-foot">
-      <JobsChip names={p.names} onOpenPane={p.onOpenPane} />
-      {p.onOpenMorning && <NightChip onOpenMorning={p.onOpenMorning} />}
+      <div className="ck-foot-status">
+        {p.bridgeLine && (
+          <div className="ck-bridge" role="status">
+            <span>Connection lost</span>
+            <span aria-hidden="true"> · </span>
+            <button type="button" className="ck-bridge-fix" onClick={() => p.onOpenSettings('bridge')}>
+              Fix
+            </button>
+          </div>
+        )}
+        <JobsChip names={p.names} onOpenPane={p.onOpenPane} />
+        {p.onOpenMorning && <NightChip onOpenMorning={p.onOpenMorning} />}
+      </div>
       <div className="ck-foot-icons">
-        {p.onOpenDoctor && (
-          <button type="button" className="ck-icon-btn" aria-label="Set up agents" title="Set up agents" onClick={p.onOpenDoctor}>
-            <IconTerminal />
-            <Label>Set up agents</Label>
-          </button>
-        )}
-        {p.onOpenMemory && (
-          <button type="button" className="ck-icon-btn" aria-label="Project" title="Project" onClick={p.onOpenMemory}>
-            <IconNote />
-            <Label>Project</Label>
-          </button>
-        )}
+        <button type="button" className="ck-icon-btn" aria-label="Settings" title="Settings" onClick={() => p.onOpenSettings()}>
+          <GearIcon />
+          <Label>Settings</Label>
+        </button>
         {p.onOpenReview && (
           <button type="button" className="ck-icon-btn ck-foot-review" aria-label={reviewLabel} title={reviewLabel} onClick={p.onOpenReview}>
             <IconCheck />
@@ -111,19 +114,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
             {p.reviewCount > 0 && <span className="ck-side-count ck-foot-badge">{p.reviewCount}</span>}
           </button>
         )}
-        {p.spacesEnabled && p.onOpenSpaces && (
-          <button
-            type="button"
-            className={`ck-icon-btn${p.spacesOpen ? ' is-active' : ''}`}
-            aria-label="Spaces"
-            title="Spaces"
-            aria-current={p.spacesOpen ? 'page' : undefined}
-            onClick={p.onOpenSpaces}
-          >
-            <IconGlobe />
-            <Label>Spaces</Label>
-          </button>
-        )}
+        <span className="ck-foot-spacer" />
         <div className="ck-menu-wrap" ref={wrapRef}>
           <button
             type="button"
@@ -136,10 +127,33 @@ export function SidebarFooter(p: SidebarFooterProps) {
             onClick={() => setMoreOpen((v) => !v)}
           >
             <IconMore />
-            <Label>More</Label>
           </button>
           {moreOpen && (
             <div className="ck-menu ck-menu--up" role="menu" aria-label="More">
+              {p.spacesEnabled && p.onOpenSpaces && (
+                <button type="button" role="menuitem" className={`ck-menu-item${p.spacesOpen ? ' is-active' : ''}`} aria-current={p.spacesOpen ? 'page' : undefined} onClick={pick(p.onOpenSpaces)}>
+                  <span className="ck-menu-ic">
+                    <IconGlobe />
+                  </span>
+                  Spaces
+                </button>
+              )}
+              {p.onOpenMemory && (
+                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenMemory)}>
+                  <span className="ck-menu-ic">
+                    <IconNote />
+                  </span>
+                  Project
+                </button>
+              )}
+              {p.onOpenDoctor && (
+                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenDoctor)}>
+                  <span className="ck-menu-ic">
+                    <IconTerminal />
+                  </span>
+                  Set up agents
+                </button>
+              )}
               {p.onOpenPlans && (
                 <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenPlans)}>
                   <span className="ck-menu-ic">
@@ -156,7 +170,11 @@ export function SidebarFooter(p: SidebarFooterProps) {
                   Scores
                 </button>
               )}
-              {(p.onOpenPlans || p.onOpenScores) && <div className="ck-menu-sep" role="separator" />}
+              <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onToggleTheme)}>
+                <span className="ck-menu-ic">{p.theme === 'dark' ? <IconSun /> : <IconMoon />}</span>
+                {p.theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+              </button>
+              <div className="ck-menu-sep" role="separator" />
               <div className="ck-menu-cap">Mode</div>
               <div className="ck-seg" role="radiogroup" aria-label="Mode" title="Each agent gets its own window; the main window hides.">
                 {(['orchestration', 'individual'] as const).map((m) => (
@@ -176,31 +194,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
             </div>
           )}
         </div>
-        <span className="ck-foot-spacer" />
-        <button
-          type="button"
-          className="ck-icon-btn"
-          onClick={p.onToggleTheme}
-          title={p.theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
-          aria-label="Toggle theme"
-        >
-          <span className={`ck-theme-ic${p.theme === 'light' ? ' is-light' : ''}`}>{p.theme === 'dark' ? <IconMoon /> : <IconSun />}</span>
-          <Label>Theme</Label>
-        </button>
-        <button type="button" className="ck-icon-btn" aria-label="Settings" title="Settings" onClick={() => p.onOpenSettings()}>
-          <GearIcon />
-          <Label>Settings</Label>
-        </button>
       </div>
-      {p.bridgeLine && (
-        <div className="ck-bridge" role="status">
-          <span>Connection lost</span>
-          <span aria-hidden="true"> · </span>
-          <button type="button" className="ck-bridge-fix" onClick={() => p.onOpenSettings('bridge')}>
-            Fix
-          </button>
-        </div>
-      )}
     </div>
   );
 }

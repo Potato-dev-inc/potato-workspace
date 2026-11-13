@@ -7,11 +7,8 @@ import { formatTokens, readContext } from './railFormat';
 export function ContextCard({ usage }: { usage: UsageItem | null }) {
   const ctx = readContext(usage);
   if (!ctx) {
-    return (
-      <RailCard title="Context" testId="rail-context">
-        <p className="ck-rail-empty">{"This agent doesn't share this"}</p>
-      </RailCard>
-    );
+    // An agent that does not report its window has nothing to show: no section, not a section that says so.
+    return null;
   }
   const tip = `Input ${ctx.input.toLocaleString('en-US')} tokens, output ${ctx.output.toLocaleString('en-US')} tokens`;
   return (

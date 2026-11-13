@@ -1,7 +1,7 @@
-// The list of background jobs of one pane: name, the ports it listens on, how long it has run, a
-// short command line and a Stop button that asks once ("Stop this job?"). Shared by the Session
+// The list of background jobs of one pane: name, the ports it listens on, how long it has run and a Stop button
+// on ONE line (the full command is the row's hover text; Point shows on hover or focus) that asks once ("Stop this job?"). Shared by the Session
 // rail's card and the sheet that lists the jobs of every pane.
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { openPreview } from '../../../lib/pane-preview';
 import { runTime, type PaneJob } from '../../../lib/pane-jobs';
 import '../../../styles/cockpit-jobs.css';
@@ -50,36 +50,38 @@ function JobRow({ job, now, onStop, onPreview, onPointFix }: { job: PaneJob; now
   };
   return (
     <li className="ck-job" data-testid="background-job">
-      <div className="ck-job-top">
-        <span className="ck-job-name" title={`Process ${job.pid}`}>
+      <div className="ck-job-top" title={job.command}>
+        <span className="ck-job-name" title={`${job.command} (process ${job.pid})`}>
           {job.name}
         </span>
         {job.ports.map((port) => (
-          <Fragment key={port}>
-            <button
-              type="button"
-              className="ck-job-port"
-              title={onPreview ? `Preview :${port} (Shift+click: your browser)` : `Open localhost:${port} in your browser`}
-              onClick={(e) => void open(() => (onPreview ? onPreview(port, e.shiftKey) : openPreview(portUrl(port))))}
-            >
-              :{port}
-            </button>
-            {onPointFix && (
-              <button
-                type="button"
-                className="ck-job-port"
-                title={`Point and fix on localhost:${port}`}
-                aria-label={`Point and fix on localhost:${port}`}
-                onClick={() => void open(() => onPointFix(port))}
-              >
-                Point
-              </button>
-            )}
-          </Fragment>
+          <button
+            key={port}
+            type="button"
+            className="ck-job-port"
+            title={onPreview ? `Preview :${port} (Shift+click: your browser)` : `Open localhost:${port} in your browser`}
+            onClick={(e) => void open(() => (onPreview ? onPreview(port, e.shiftKey) : openPreview(portUrl(port))))}
+          >
+            :{port}
+          </button>
         ))}
         <span className="ck-job-time" title="How long it has run">
           {runTime(job.startedAtMs, now)}
         </span>
+        {/* Hover or keyboard focus on the row shows these; the buttons are always in the tab order. */}
+        {onPointFix &&
+          job.ports.map((port) => (
+            <button
+              key={`point-${port}`}
+              type="button"
+              className="ck-job-point ck-job-hover"
+              title={`Point and fix on localhost:${port}`}
+              aria-label={`Point and fix on localhost:${port}`}
+              onClick={() => void open(() => onPointFix(port))}
+            >
+              Point
+            </button>
+          ))}
         {phase === 'idle' && (
           <button type="button" className="ck-job-stop" onClick={() => setPhase('asking')} aria-label={`Stop ${job.name}`}>
             Stop
@@ -87,9 +89,6 @@ function JobRow({ job, now, onStop, onPreview, onPointFix }: { job: PaneJob; now
         )}
         {phase === 'stopping' && <span className="ck-job-time">Stopping…</span>}
       </div>
-      <code className="ck-job-cmd" title={job.command}>
-        {job.command}
-      </code>
       {phase === 'asking' && (
         <div className="ck-job-ask" role="group" aria-label="Stop this job?">
           <span>Stop this job?</span>

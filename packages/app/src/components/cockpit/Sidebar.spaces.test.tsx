@@ -94,25 +94,34 @@ async function render(enabled: boolean) {
   await act(async () => root.render(<Screen enabled={enabled} />));
   await act(async () => {});
 }
-const spacesRow = () => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.getAttribute('aria-label') === 'Spaces') ?? null;
+// Spaces lives in the footer's More menu: open it, then find the item.
+const openMore = async () => {
+  const more = host.querySelector<HTMLButtonElement>('button[aria-label="More"][aria-haspopup="menu"]');
+  if (more && more.getAttribute('aria-expanded') !== 'true') await act(async () => more.click());
+};
+const spacesRow = () => [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent?.trim() === 'Spaces') ?? null;
 
 describe('sidebar: Spaces row and page', () => {
   it('the row appears when Labs spaces is on', async () => {
     await render(true);
+    await openMore();
     expect(spacesRow()).not.toBeNull();
   });
 
   it('the row is absent when Labs spaces is off', async () => {
     await render(false);
+    await openMore();
     expect(spacesRow()).toBeNull();
   });
 
   it('clicking the row opens the Spaces page and marks the row active', async () => {
     await render(true);
     expect(host.textContent).not.toContain('Chat with friends in small groups');
+    await openMore();
     await act(async () => spacesRow()!.click());
     await act(async () => {});
     expect(host.textContent).toContain('Chat with friends in small groups, computer to computer. No server keeps your messages.');
+    await openMore();
     expect(spacesRow()!.getAttribute('aria-current')).toBe('page');
   });
 });

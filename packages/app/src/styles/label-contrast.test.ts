@@ -24,10 +24,11 @@ export function contrast(a: RGB, b: RGB): number {
 
 /** Token files and the names they use for the grounds (the Settings window calls them --window and --list). */
 const FILES: Record<string, { ground: string[]; float: string }> = {
-  'cockpit.css': { ground: ['--bg', '--bg-side', '--bg-raised'], float: '--bg-float' },
-  'phone.css': { ground: ['--bg', '--bg-side', '--bg-raised'], float: '--bg-float' },
-  'askbar.css': { ground: ['--bg', '--bg-side', '--bg-raised'], float: '--bg-float' },
-  'settings.css': { ground: ['--window', '--bg-side', '--list'], float: '--float-bg' },
+  // Listed from the back layer to the front one: the sidebar sits back, the work area is the middle, cards come forward.
+  'cockpit.css': { ground: ['--bg-side', '--bg', '--bg-raised'], float: '--bg-float' },
+  'phone.css': { ground: ['--bg-side', '--bg', '--bg-raised'], float: '--bg-float' },
+  'askbar.css': { ground: ['--bg-side', '--bg', '--bg-raised'], float: '--bg-float' },
+  'settings.css': { ground: ['--bg-side', '--window', '--list'], float: '--float-bg' },
   'point-box.css': { ground: ['--bg', '--bg-raised'], float: '--bg-float' },
 };
 
@@ -80,9 +81,9 @@ describe.each(Object.keys(FILES))('%s colour tokens', (file) => {
 
   it('the dark theme has no pure-black surface and the grounds get lighter with elevation', () => {
     const solid = FILES[file].ground.map((name) => luminance(hex(values(file, name)[0])));
-    // #1b1a19 is about 0.010; the old #0a0a0b was 0.003. Every ground sits above #181716 (0.0087).
-    for (const l of solid) expect(l).toBeGreaterThan(0.008);
-    for (let i = 1; i < solid.length; i++) expect(solid[i]).toBeGreaterThanOrEqual(solid[i - 1]);
+    // The darkest layer (#161514) is about 0.007; the old #0a0a0b was 0.003. Every ground sits above #121110 (0.006).
+    for (const l of solid) expect(l).toBeGreaterThan(0.006);
+    for (let i = 1; i < solid.length; i++) expect(solid[i]).toBeGreaterThan(solid[i - 1]);
   });
 
   it('the accent: text 4.5:1 on every ground, --accent-fg 4.5:1 on the fill, the marker 3:1', () => {
@@ -97,6 +98,33 @@ describe.each(Object.keys(FILES))('%s colour tokens', (file) => {
       expect(contrast(fg, accent), `accent-fg on accent, theme ${theme}`).toBeGreaterThanOrEqual(4.5);
       for (const name of ['--accent-hover', '--accent-press']) {
         expect(contrast(fg, hex(values(file, name)[theme])), `${name}, theme ${theme}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+});
+
+/** The signal colours: one meaning each. Text 4.5:1 on every ground, and on its own soft tint over each solid layer, both themes. */
+describe.each(Object.keys(FILES))('%s signal tokens', (file) => {
+  for (const name of ['--accent', '--live', '--risk', '--danger']) {
+    it(`${name}: readable on every ground and on its own soft tint, dark and light`, () => {
+      for (const theme of [0, 1] as const) {
+        const c = hex(values(file, name)[theme]);
+        const soft = rgba(values(file, `${name}-soft`)[theme]);
+        const all = grounds(file, theme);
+        for (const bg of all) expect(contrast(c, bg), `${name} on ground, theme ${theme}`).toBeGreaterThanOrEqual(4.5);
+        // Tinted chips sit on the three solid layers, not on the floating sheet (the last ground).
+        for (const bg of all.slice(0, -1)) {
+          expect(contrast(c, blend(soft.rgb, soft.a, bg)), `${name} on tint, theme ${theme}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    });
+  }
+
+  it('brand icons reach 3:1 on every ground', () => {
+    for (const theme of [0, 1] as const) {
+      for (const name of ['--icon-claude', '--icon-blue']) {
+        const c = hex(values(file, name)[theme]);
+        for (const bg of grounds(file, theme)) expect(contrast(c, bg), `${name}, theme ${theme}`).toBeGreaterThanOrEqual(3);
       }
     }
   });

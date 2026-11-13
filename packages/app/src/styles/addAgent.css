@@ -65,7 +65,7 @@
   color: var(--label-3, inherit);
   font-size: 12px;
   cursor: pointer;
-  transition: color 140ms var(--ease, ease-out);
+  transition: color var(--dur-fast) var(--ease, ease-out);
 }
 .aa-link:hover,
 .aa-link[aria-expanded='true'] {
@@ -216,7 +216,7 @@
   pointer-events: none;
   opacity: 0;
   transform: translateY(2px);
-  transition: opacity 120ms var(--ease, ease-out), transform 120ms var(--ease, ease-out);
+  transition: opacity var(--dur-fast) var(--ease, ease-out), transform var(--dur-fast) var(--ease, ease-out);
 }
 .aa-chip:hover .aa-tip,
 .aa-chip:focus-visible .aa-tip {

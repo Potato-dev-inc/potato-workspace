@@ -70,7 +70,7 @@
 }
 @media (prefers-reduced-motion: no-preference) {
   .settings .st-reset {
-    transition: opacity 140ms ease-out;
+    transition: opacity var(--dur-fast) ease-out;
   }
 }
 

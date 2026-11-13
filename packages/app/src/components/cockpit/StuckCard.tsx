@@ -19,6 +19,7 @@ export function focusTerminal(): void {
 export function StuckCard({
   name,
   project,
+  agent,
   signal,
   onHint,
   onInterrupt,
@@ -27,6 +28,7 @@ export function StuckCard({
 }: {
   name: string;
   project?: string;
+  agent?: string | null;
   signal: LoopSignal;
   onHint: () => void;
   onInterrupt: () => void;
@@ -36,6 +38,7 @@ export function StuckCard({
   return (
     <InboxCard
       kind="stuck"
+      agent={agent}
       glyph="needs"
       title={stuckTitle(name, signal)}
       meta={project}
@@ -80,11 +83,13 @@ export function PaneStuckCard({ c, paneId, dock = true }: { c: CockpitApi; paneI
   const signal = signals[paneId];
   if (!signal) return null;
   const name = c.names.get(paneId) ?? paneId;
-  const cwd = c.registry.paneList.find((p) => p.info.id === paneId)?.info.cwd;
+  const info = c.registry.paneList.find((p) => p.info.id === paneId)?.info;
+  const cwd = info?.cwd;
   const card = (
     <StuckCard
       name={name}
       project={cwd ? projectWithCopy(cwd) : undefined}
+      agent={info?.agent_type}
       signal={signal}
       onHint={() => {
         if (c.selectedId !== paneId) c.select(paneId);

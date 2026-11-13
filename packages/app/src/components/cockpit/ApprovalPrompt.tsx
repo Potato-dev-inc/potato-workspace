@@ -27,6 +27,7 @@ export function ApprovalPrompt({
   asks,
   openLabel = 'Open',
   hints = false,
+  agentId,
 }: {
   prompt: PanePrompt;
   /** `gesture` is the click that chose it (`lib/user-gesture.ts`); the backend needs it. */
@@ -48,6 +49,8 @@ export function ApprovalPrompt({
   openLabel?: string;
   /** Card: show the keys that work on it. The Inbox turns this on; a card docked in a pane has no such keys. */
   hints?: boolean;
+  /** Card: the asking agent's id, for its brand icon. */
+  agentId?: string | null;
 }) {
   const risk = prompt.risk;
   const [details, setDetails] = useState(false);
@@ -135,6 +138,7 @@ export function ApprovalPrompt({
       <div ref={root} className="ib-approval">
         <InboxCard
           kind="approval"
+          agent={agentId}
           glyph={risk.level}
           risk={risk.level}
           guard={high}

@@ -52,6 +52,7 @@ export function PaneApprovalCard({
         asks={asks}
         openLabel={openLabel}
         hints={!!onOpen}
+        agentId={pane?.info.agent_type}
         onAnswer={(ch, gesture) => void c.answer(paneId, prompt.promptId, ch.id, ch.label, gesture)}
       />
     );
@@ -59,6 +60,7 @@ export function PaneApprovalCard({
   return (
     <InboxCard
       kind="approval"
+      agent={pane?.info.agent_type}
       glyph="needs"
       title={asks ? `${asks}: ${plainTitle}` : plainTitle}
       meta={who}

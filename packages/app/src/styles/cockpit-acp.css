@@ -112,7 +112,7 @@
 .cockpit .ck-acp-link {
   font-size: 12px;
   color: var(--label-2);
-  text-decoration: underline;
+  text-decoration: none;
   text-underline-offset: 2px;
   cursor: pointer;
 }

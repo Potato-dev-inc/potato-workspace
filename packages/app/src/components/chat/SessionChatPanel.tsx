@@ -25,6 +25,7 @@ import { useChatJump } from '../../lib/chatJump';
 import type { ChatHelper } from '../../lib/chat-helpers';
 import type { AcpCommand } from '../../lib/acpChat';
 import { readContext } from '../cockpit/rail/railFormat';
+import { usePaneBranch } from '../cockpit/rail/usePaneBranch';
 
 export interface ChatReply {
   /** Why the message box is switched off, or null. */
@@ -108,6 +109,8 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
   const userTexts = useMemo(() => chat.turns.flatMap((turn) => (turn.user ? [turn.user.text] : [])), [chat.turns]);
   const { bubbles, hide } = usePendingBubbles(outbox.messages, userTexts);
   const side = useSideQuestion(paneId, chat.turns);
+  // Where the work lands: the branch of the folder the pane works in (a dim line under the box).
+  const branch = usePaneBranch(paneId, reply?.running ? 'running' : 'idle', !!reply);
   const jump = useChatJump(paneId);
   // "Branch": the id of the message that started the turn the branch sheet is open for, or null.
   const [branchFor, setBranchFor] = useState<string | null>(null);
@@ -176,7 +179,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
         }
         pending={reply ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHide={hide} onSendNow={reply.onInterrupt} /> : undefined}
         composer={reply ? (
-          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} status={reply.status} attachFiles={pickFiles} contextUsage={contextReading} />
+          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} status={reply.status} attachFiles={pickFiles} contextUsage={contextReading} footnote={branch ? <>Work lands on <span className="ck-chat-where-branch">{branch}</span></> : undefined} />
         ) : undefined}
       />
       {branchFor !== null && (

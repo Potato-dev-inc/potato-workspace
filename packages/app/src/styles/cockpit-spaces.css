@@ -149,7 +149,7 @@
 }
 .cockpit .ck-spaces-reaction.is-mine { border-color: var(--label); }
 .cockpit .ck-spaces-link {
-  background: none; border: 0; padding: 0; color: var(--label-2); cursor: pointer; font-size: 12px; text-decoration: underline;
+  background: none; border: 0; padding: 0; color: var(--label-2); cursor: pointer; font-size: 12px; text-decoration: none;
 }
 .cockpit .ck-spaces-members { border-left: 1px solid var(--sep); padding: 8px; overflow: auto; }
 .cockpit .ck-spaces-member { display: flex; align-items: center; gap: 6px; padding: 3px 4px; }

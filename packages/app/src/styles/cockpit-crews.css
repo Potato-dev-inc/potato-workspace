@@ -73,7 +73,7 @@
   color: var(--label);
   text-align: left;
   cursor: pointer;
-  transition: background-color 160ms var(--ease);
+  transition: background-color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-crew-pick:hover:not(:disabled) {
   background: var(--fill-hover);

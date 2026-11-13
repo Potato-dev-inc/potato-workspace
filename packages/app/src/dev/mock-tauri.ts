@@ -31,6 +31,7 @@ import {
 import { TEAM_DIFF, teamConfig } from './team-fixtures';
 import { borrowedOf, createLendMock } from './lend-fixtures';
 import { shipMock } from './ship-fixtures';
+import { sidebarBranch, sidebarWorktree } from './fixtures-sidebar';
 import { simpleMock } from './simple-fixtures';
 import { firstRunMock, firstRunStore } from './first-run-fixtures';
 import { missionMock } from './mission-fixtures';
@@ -140,7 +141,9 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'budget_adjust':
           return a.action === 'stop' ? 'Stopped at its budget.' : a.action === 'add_minutes' ? 'Added 30 min.' : 'Added 10 turns.';
         case 'pane_worktree':
-          return a.paneId === PANE_CLAUDE ? EXAMPLE_WORKTREE : null;
+          return a.paneId === PANE_CLAUDE ? EXAMPLE_WORKTREE : sidebarWorktree(String(a.paneId));
+        case 'pane_git_branch':
+          return sidebarBranch(String(a.paneId));
         case 'second_opinion_agents':
           return EXAMPLE_REVIEWERS;
         case 'second_opinion_start':

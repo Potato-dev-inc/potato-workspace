@@ -71,7 +71,7 @@
   display: block;
   height: 100%;
   background: var(--label);
-  transition: width 280ms var(--ease);
+  transition: width var(--dur-panel) var(--ease);
 }
 .cockpit .bc-counts {
   font-size: 12px;

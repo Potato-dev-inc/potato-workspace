@@ -73,10 +73,10 @@ const remount = async (paneId: string) => {
   root = createRoot(host);
   await render(paneId);
 };
-const tabs = () => [...host.querySelectorAll<HTMLElement>('[role="tablist"] [role="tab"]')];
+const tabs = () => [...host.querySelectorAll<HTMLElement>('[aria-label="Pane view"] [role="tab"]')];
 const selected = () => tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.textContent;
 const tabNamed = (name: string) => tabs().find((t) => t.textContent === name)!;
-const moreButton = () => host.querySelector<HTMLButtonElement>('.ck-tabs-bar button[aria-haspopup="menu"]')!;
+const moreButton = () => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-haspopup="menu"]')!;
 const menuItems = () => [...host.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')];
 const menuItemNamed = (name: string) => menuItems().find((m) => m.textContent === name)!;
 
@@ -87,10 +87,10 @@ describe('the pane remembers its view', () => {
     await act(async () => tabNamed('Terminal').click());
     await act(async () => moreButton().click());
     await act(async () => menuItemNamed('Receipt').click());
-    expect(moreButton().textContent).toBe('Receipt');
+    expect(moreButton().getAttribute('title')).toBe('More · Receipt');
     await remount('p1');
     expect(selected()).toBeUndefined();
-    expect(moreButton().textContent).toBe('Receipt');
+    expect(moreButton().getAttribute('title')).toBe('More · Receipt');
   });
 
   it('different pane ids do not share a view', async () => {
@@ -98,19 +98,19 @@ describe('the pane remembers its view', () => {
     await act(async () => moreButton().click());
     await act(async () => menuItemNamed('Receipt').click());
     await render('p2');
-    expect(moreButton().textContent).toBe('More');
+    expect(moreButton().getAttribute('title')).toBe('More');
     expect(selected()).toBe('Terminal');
     await render('p1');
-    expect(moreButton().textContent).toBe('Receipt');
+    expect(moreButton().getAttribute('title')).toBe('More · Receipt');
   });
 
   it('a view from the More menu is remembered too', async () => {
     await render('p1');
     await act(async () => moreButton().click());
     await act(async () => menuItemNamed('History').click());
-    expect(moreButton().textContent).toBe('History');
+    expect(moreButton().getAttribute('title')).toBe('More · History');
     await remount('p1');
-    expect(moreButton().textContent).toBe('History');
+    expect(moreButton().getAttribute('title')).toBe('More · History');
   });
 });
 
@@ -118,7 +118,7 @@ describe('the More menu', () => {
   it('holds Transcript, Receipt and History, and Terminal and Chat stay on the row', async () => {
     await render('p1');
     expect(tabs().map((t) => t.textContent)).toEqual(['Terminal', 'Chat']);
-    expect(moreButton().textContent).toBe('More');
+    expect(moreButton().getAttribute('title')).toBe('More');
     expect(moreButton().getAttribute('aria-expanded')).toBe('false');
     await act(async () => moreButton().click());
     expect(moreButton().getAttribute('aria-expanded')).toBe('true');
@@ -130,7 +130,7 @@ describe('the More menu', () => {
     await act(async () => moreButton().click());
     await act(async () => menuItemNamed('Receipt').click());
     expect(host.querySelector('[role="menu"]')).toBeNull();
-    expect(moreButton().textContent).toBe('Receipt');
+    expect(moreButton().getAttribute('title')).toBe('More · Receipt');
     expect(moreButton().getAttribute('aria-expanded')).toBe('false');
     expect(selected()).toBeUndefined();
     expect(host.querySelector('.ck-pane-body .ck-scroll')).not.toBeNull();

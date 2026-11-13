@@ -146,7 +146,9 @@ describe('Changes section', () => {
     const rows = host.querySelectorAll('.ck-changes-file');
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('a.txt');
-    expect(rows[0].textContent).toContain('+1 −0');
+    expect(rows[0].textContent).toContain('+1');
+    expect(rows[0].textContent).not.toContain('−0');
+    expect(rows[0].querySelector('.ck-add')?.textContent).toBe('+1');
     expect(rows[1].querySelector('.ck-changes-mark')?.textContent).toBe('D');
   });
 

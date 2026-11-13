@@ -164,10 +164,10 @@ describe('the Used bar at the bottom of the cockpit', () => {
     expect(strip!.querySelector('.ck-usage-cap')?.textContent).toBe('Usage');
     const chips = chipsIn(strip!);
     expect(chips.map((c) => c.querySelector('.ck-usage-text')?.textContent)).toEqual([
-      '⚠ 87% used · resets in 10 hours',
+      '⚠ 87%',
       '⚠ Limit reached · resets in 3 hours',
       'Usage not shared',
-      '⚠ Sign-in expired',
+      'Sign-in expired',
     ]);
     // Codex, Claude and Cursor have a logo, so none of them gets a letter badge.
     expect(chips.map((c) => c.querySelector('.ck-usage-ic')?.textContent)).toEqual(['', '', '', '']);
@@ -218,7 +218,10 @@ describe('the Used bar at the bottom of the cockpit', () => {
     await render({ ...SNAP, rows: [low] });
     const chip = chipsIn(host)[0];
     expect(chip.classList.contains('is-warn')).toBe(false);
-    expect(chip.querySelector('.ck-usage-text')?.textContent).toBe('79% used · resets in 10 hours');
+    expect(chip.querySelector('.ck-usage-text')?.textContent).toBe('79%');
+    expect(chip.querySelector('.ck-usage-reset')?.textContent).toBe('10h');
+    expect(chip.classList.contains('tone-calm')).toBe(true);
+    expect(chip.title.split('\n')[0]).toBe('Codex CLI: 79% used, resets in 10 hours');
   });
 
   it('a chip opens the Usage popover above the bar: tightest first, bars, the usage page, refresh', async () => {
@@ -351,5 +354,51 @@ describe('a pay-per-use agent (OpenCode) in the Used bar', () => {
     root = createRoot(host);
     await render({ ...OPENCODE, rows: [{ ...OPENCODE.rows[0], state: 'unknown', totals: undefined, reason: 'No OpenCode usage found yet.' }] });
     expect(chipsIn(host)[0].querySelector('.ck-usage-text')?.textContent).toBe('Usage not shared');
+  });
+});
+
+describe('status bar groups and the right-hand counts (proposal 20)', () => {
+  it('each group is icon, percent, a tiny bar and the reset time; risk from 80 %, danger when expired', async () => {
+    await render(SNAP);
+    const [codex, , , expired] = chipsIn(host);
+    expect(codex.classList.contains('tone-risk')).toBe(true);
+    expect(codex.querySelector('.ck-usage-pct')?.textContent).toBe('⚠ 87%');
+    expect((codex.querySelector('.ck-usage-meter > span') as HTMLElement).style.width).toBe('87%');
+    expect(codex.querySelector('.ck-usage-reset')?.textContent).toBe('10h');
+    expect(expired.classList.contains('tone-danger')).toBe(true);
+    expect(expired.tagName).toBe('BUTTON');
+  });
+
+  it('shows "N working" and "N need you" on the right, and nothing when both are zero', async () => {
+    invoke.mockImplementation(async (cmd: string) => (cmd === 'usage_snapshot' ? SNAP : null));
+    await act(async () => root.render(<div className="cockpit"><UsageBar working={2} needsYou={1} /></div>));
+    await act(async () => {});
+    await act(async () => {});
+    const counts = host.querySelector('.ck-sb-counts')!;
+    expect(counts.querySelector('.is-working')?.textContent).toBe('2 working');
+    expect(counts.querySelector('.is-working .ck-sb-live')).not.toBeNull();
+    expect(counts.querySelector('.is-needs')?.textContent).toBe('1 needs you');
+    await act(async () => root.render(<div className="cockpit"><UsageBar /></div>));
+    await act(async () => {});
+    expect(host.querySelector('.ck-sb-count')).toBeNull();
+  });
+
+  it('OpenCode keeps showing spend, not a percent or a bar', async () => {
+    const oc = { ...SNAP.rows[0], agent_id: 'opencode', label: 'OpenCode', windows: [], totals: { today: { cost: 1.24, tokens: 310000 }, week: { cost: 9, tokens: 2400000 }, models: [] } };
+    await render({ ...SNAP, rows: [oc] });
+    const chip = chipsIn(host)[0];
+    expect(chip.querySelector('.ck-usage-meter')).toBeNull();
+    expect(chip.querySelector('.ck-usage-text')?.textContent).toBe('$1.24 today · 310k tokens');
+  });
+});
+
+describe('the three chip shapes (proposal 8)', () => {
+  it('the shared chip stylesheet defines Count, Label and Key at 18px, radius 5', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync('src/styles/chips.css', 'utf8');
+    for (const k of ['ck-chip-count', 'ck-chip-label', 'ck-chip-key']) expect(css).toContain(`.cockpit .${k}`);
+    expect(css).toMatch(/height:\s*18px/);
+    expect(css).toMatch(/border-radius:\s*5px/);
+    expect(css).not.toMatch(/#[0-9a-f]{3,6}/i);
   });
 });

@@ -46,6 +46,7 @@ export function QuestionCard({
   return (
     <InboxCard
       kind="question"
+      agent={q.agent}
       glyph="needs"
       title={q.question}
       meta={askerName(q, paneName)}

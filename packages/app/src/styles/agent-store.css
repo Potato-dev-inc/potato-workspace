@@ -55,7 +55,7 @@
   color: var(--label-2);
   font-size: 11px;
   cursor: pointer;
-  transition: background 160ms var(--ease);
+  transition: background var(--dur-fast) var(--ease);
 }
 .cockpit .ck-store-chips button:hover {
   background: var(--fill-active);

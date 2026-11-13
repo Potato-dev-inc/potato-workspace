@@ -83,7 +83,7 @@
   cursor: text;
 }
 .cockpit .ck-companion-name:hover {
-  text-decoration: underline;
+  text-decoration: none;
   text-decoration-color: var(--label-4);
 }
 .cockpit .ck-companion-name-input {

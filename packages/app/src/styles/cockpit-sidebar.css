@@ -53,8 +53,8 @@
   color: var(--label-3);
   cursor: pointer;
   transition:
-    background-color 160ms var(--ease),
-    color 160ms var(--ease);
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-side-new-chev:hover,
 .cockpit .ck-side-new-chev[aria-expanded='true'] {
@@ -66,7 +66,7 @@
   box-shadow: var(--focus);
 }
 .cockpit .ck-side-new--primary .ck-row-title {
-  font-weight: 600;
+  font-weight: var(--fw-medium);
 }
 .cockpit .ck-side-new--primary .ck-row-glyph--icon {
   color: var(--label);
@@ -74,7 +74,7 @@
 .cockpit .ck-row-hint {
   flex: none;
   margin-left: auto;
-  font: 400 11px/1 var(--font-mono);
+  font: var(--fw-regular) var(--fs-label)/1 var(--font-mono);
   color: var(--label-3);
   white-space: nowrap;
 }
@@ -92,8 +92,8 @@
   margin-top: 12px;
   padding: 0 4px 0 8px;
   color: var(--label-3);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-medium);
 }
 .cockpit .ck-group > .ck-sechead {
   margin-top: 0;
@@ -112,9 +112,9 @@
   color: var(--label-3);
   opacity: 0;
   transition:
-    opacity 120ms var(--ease),
-    background-color 160ms var(--ease),
-    color 160ms var(--ease);
+    opacity var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .cockpit .ck-sechead-btn svg,
 .cockpit .ck-proj-act svg,
@@ -171,7 +171,7 @@
   padding: 0 4px 0 8px;
   border-radius: 6px;
   color: var(--label);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   text-align: left;
 }
 .cockpit .ck-proj-caret {
@@ -182,7 +182,7 @@
   border-right: 1.25px solid var(--label-3);
   border-bottom: 1.25px solid var(--label-3);
   transform: rotate(-45deg);
-  transition: transform 160ms var(--ease);
+  transition: transform var(--dur-fast) var(--ease);
 }
 .cockpit .ck-proj-caret.is-open {
   transform: translateY(-1px) rotate(45deg);
@@ -196,7 +196,7 @@
 }
 .cockpit .ck-proj-count {
   margin-left: auto;
-  font: 500 11px var(--font-mono);
+  font: var(--fw-medium) var(--fs-label) var(--font-mono);
   color: var(--label-3);
   font-variant-numeric: tabular-nums;
 }
@@ -227,7 +227,7 @@
   padding: 0 8px 0 28px;
   height: 24px;
   line-height: 24px;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--label-3);
 }
 
@@ -242,7 +242,7 @@
   background: transparent;
   text-align: left;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   line-height: 24px;
   color: var(--label-3);
   cursor: pointer;
@@ -267,10 +267,6 @@
   padding: 0 8px;
   gap: 8px;
 }
-.cockpit .ck-row--slim.is-active::before {
-  top: 7px;
-  bottom: 7px;
-}
 .cockpit .ck-row--slim .ck-row-glyph {
   width: 14px;
 }
@@ -280,10 +276,10 @@
 }
 .cockpit .ck-row--slim .ck-row-title {
   min-width: 0;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 .cockpit .ck-row--slim.is-needs .ck-row-title {
-  font-weight: 600;
+  font-weight: var(--fw-medium);
 }
 /* The second line (status, folder) lives in the tooltip; the row is one line. */
 .cockpit .ck-row--slim .ck-row-sub {
@@ -292,13 +288,26 @@
 .cockpit .ck-row-pill {
   flex: none;
   padding: 0 6px;
-  border-radius: 999px;
-  background: var(--fill-active);
-  color: var(--label);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 16px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  line-height: 18px;
   white-space: nowrap;
+}
+/* Broken: a quiet red label, not a solid shape (solid is for "your move"). */
+.cockpit .ck-row-pill--error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+/* Bright only when it matters: an idle or ended agent's name steps back. */
+.cockpit .ck-row--slim.is-idle .ck-row-title,
+.cockpit .ck-row--slim.is-ended .ck-row-title {
+  color: var(--label-2);
+}
+.cockpit .ck-row--slim.is-ended .ck-row-title {
+  color: var(--label-3);
 }
 .cockpit .ck-row--slim .ck-row-time {
   min-width: 24px;
@@ -341,15 +350,15 @@
   height: 11px;
   border-radius: 50%;
   border: 1.5px solid var(--label-4);
-  border-top-color: var(--label);
+  border-top-color: var(--live);
   animation: ck-mark-spin 0.9s linear infinite;
 }
 .cockpit .ck-mark--needs .ck-mark-shape {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--label);
-  box-shadow: 0 0 0 3px var(--fill-active);
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .cockpit .ck-mark--idle .ck-mark-shape {
   width: 6px;
@@ -363,7 +372,7 @@
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  border: 1.5px solid var(--label);
+  border: 1.5px solid var(--danger);
 }
 .cockpit .ck-mark--error .ck-mark-shape::after {
   content: '';
@@ -374,7 +383,7 @@
   height: 4px;
   margin-left: -0.75px;
   border-radius: 1px;
-  background: var(--label);
+  background: var(--danger);
 }
 .cockpit .ck-mark--ended .ck-mark-shape {
   width: 6px;
@@ -382,58 +391,53 @@
   border-radius: 50%;
   border: 1.5px solid var(--label-4);
 }
-/* With the agent's icon: the icon leads and the state is a small badge on its corner. */
+/* With the agent's icon: the icon says who, a dot on its corner says what. Green breathing = working, orange = needs
+   you, red = broken, no dot = idle (the icon dims). */
 .cockpit .ck-mark--icon {
   position: relative;
   overflow: visible;
-  color: var(--label-2);
+  color: var(--label);
 }
 .cockpit .ck-mark--icon .ck-mark-agent {
   display: grid;
   place-items: center;
-  transition: opacity 0.15s;
+  transition: opacity var(--dur-fast) var(--ease);
 }
 .cockpit .ck-mark--idle.ck-mark--icon .ck-mark-agent {
-  opacity: 0.7;
+  opacity: 0.55;
 }
 .cockpit .ck-mark--ended.ck-mark--icon .ck-mark-agent {
-  opacity: 0.4;
-}
-.cockpit .ck-mark--needs.ck-mark--icon,
-.cockpit .ck-mark--working.ck-mark--icon,
-.cockpit .ck-mark--error.ck-mark--icon {
-  color: var(--label);
+  opacity: 0.35;
 }
 .cockpit .ck-mark--icon .ck-mark-shape {
   position: absolute;
   right: -3px;
   bottom: -3px;
   box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 0;
   border-radius: 50%;
-  background: var(--bg-side, var(--bg));
+  animation: none;
+  box-shadow: 0 0 0 2px var(--bg-side, var(--bg));
 }
 .cockpit .ck-mark--working.ck-mark--icon .ck-mark-shape {
-  width: 9px;
-  height: 9px;
-  border: 1.5px solid var(--label-4);
-  border-top-color: var(--label);
-  box-shadow: 0 0 0 1px var(--bg-side, var(--bg));
+  background: var(--live);
+  animation: ck-mark-breathe 2.4s ease-in-out infinite;
 }
 .cockpit .ck-mark--needs.ck-mark--icon .ck-mark-shape {
-  width: 7px;
-  height: 7px;
-  border: 0;
-  background: var(--label);
-  box-shadow: 0 0 0 2px var(--fill-active);
+  background: var(--accent);
 }
 .cockpit .ck-mark--error.ck-mark--icon .ck-mark-shape {
-  width: 9px;
-  height: 9px;
-  border: 1.5px solid var(--label);
+  background: var(--danger);
 }
 .cockpit .ck-mark--error.ck-mark--icon .ck-mark-shape::after {
-  top: 1px;
-  height: 3px;
+  content: none;
+}
+@keyframes ck-mark-breathe {
+  50% {
+    opacity: 0.45;
+  }
 }
 @keyframes ck-mark-spin {
   to {
@@ -441,7 +445,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cockpit .ck-mark--working .ck-mark-shape {
+  .cockpit .ck-mark--working .ck-mark-shape,
+  .cockpit .ck-mark--working.ck-mark--icon .ck-mark-shape {
     animation: none;
   }
   .cockpit .ck-sechead-btn,
@@ -495,4 +500,139 @@
 .cockpit .ck-menu--up .ck-menu-ic {
   width: 16px;
   min-height: 16px;
+}
+
+/* ---------- project card (#17): name + what changed, branch, agents inside; folded: icons + loudest signal ---------- */
+.cockpit .ck-proj {
+  margin-top: 4px;
+  padding: 0 0 2px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: var(--fill);
+}
+.cockpit .ck-proj-head:hover {
+  background: var(--fill-hover);
+}
+.cockpit .ck-proj-changes {
+  display: inline-flex;
+  flex: none;
+  gap: 5px;
+  margin-left: 6px;
+  font: var(--fw-medium) var(--fs-label) var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ck-proj-changes .ck-add {
+  color: var(--live);
+}
+.cockpit .ck-proj-changes .ck-del {
+  color: var(--danger);
+}
+.cockpit .ck-proj-foldrow {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  gap: 8px;
+  order: 5;
+  padding: 0 0 5px 17px;
+}
+.cockpit .ck-proj-head:has(.ck-proj-foldrow),
+.cockpit .ck-proj-head:has(.ck-proj-foldrow) .ck-proj-toggle {
+  height: auto;
+  min-height: 28px;
+}
+.cockpit .ck-proj-toggle:has(.ck-proj-foldrow) {
+  flex-wrap: wrap;
+  align-content: flex-start;
+  padding-top: 5px;
+}
+.cockpit .ck-proj-icons {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+}
+.cockpit .ck-proj-more {
+  font: var(--fw-medium) var(--fs-label) var(--font-mono);
+  color: var(--label-3);
+}
+.cockpit .ck-proj-signal {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  line-height: 18px;
+  white-space: nowrap;
+}
+.cockpit .ck-proj-signal.is-needs {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.cockpit .ck-proj-signal.is-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.cockpit .ck-proj-signal.is-working {
+  background: var(--live-soft);
+  color: var(--live);
+}
+.cockpit .ck-proj-meta,
+.cockpit .ck-branch-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 20px;
+  padding: 0 8px 0 24px;
+  color: var(--label-3);
+  font-size: var(--fs-meta);
+}
+.cockpit .ck-branch-head {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 20px;
+  padding-left: 6px;
+  margin-top: 2px;
+}
+.cockpit .ck-proj-branch {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-pill-quiet {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--sep);
+  border-radius: 5px;
+  font-size: var(--fs-label);
+  line-height: 16px;
+}
+.cockpit .ck-branch-pr {
+  flex: 1 0 100%;
+  white-space: nowrap;
+}
+
+/* ---------- the Potato mark (#24): beside the app name, and above the empty-list line ---------- */
+.cockpit .ck-potato {
+  flex: none;
+  color: var(--accent);
+}
+.cockpit .ck-side-head {
+  align-items: center;
+  gap: 8px;
+}
+.cockpit .ck-side-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.cockpit .ck-side-empty p {
+  margin: 0;
+}
+.cockpit .ck-potato--quiet {
+  opacity: 0.7;
 }

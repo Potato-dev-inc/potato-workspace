@@ -78,7 +78,7 @@ const tab = (name: string) => [...host.querySelectorAll<HTMLElement>('[role="tab
 
 /** Opens a view from the More menu (Transcript, Receipt, History). */
 const moreTab = (name: string) => {
-  act(() => host.querySelector<HTMLButtonElement>('.ck-tabs-bar button[aria-haspopup="menu"]')!.click());
+  act(() => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-haspopup="menu"]')!.click());
   act(() => [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((t) => t.textContent === name)!.click());
 };
 const header = () => host.querySelector('.ck-pane-head')!.textContent ?? '';
@@ -204,7 +204,7 @@ describe('the dock', () => {
   it('puts the question inside the Terminal tab, below the tab strip', async () => {
     await act(async () => root.render(<PaneView c={cockpit('C:\\work\\shop', true)} paneId="p1" />));
     await flush();
-    const tabs = host.querySelector('.ck-tabs-bar')!;
+    const tabs = host.querySelector('.ck-pane-head')!;
     const body = host.querySelector('.ck-pane-body')!;
     const ask = host.querySelector('.ck-dock [data-ib-card]')!;
     expect(body.contains(ask)).toBe(true);

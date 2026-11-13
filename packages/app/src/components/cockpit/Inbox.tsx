@@ -5,6 +5,7 @@ import { hasEverSpawned } from '../../lib/agent-health';
 import { inboxCardCount, sortInbox, type InboxEntry } from '../../lib/inbox-order';
 import { isBudget, isCiCard, isConsent, isIssueCard, isLimit, type QuestionAnswer } from '../../lib/questions';
 import { patchSettings } from '../../lib/settings';
+import { EmptyState } from '../common/EmptyState';
 import { PaneApprovalCard } from './PaneApprovalCard';
 import { PaneStuckCard } from './StuckCard';
 import { blockingItems, itemsOfKind } from '../../lib/attention';
@@ -281,7 +282,7 @@ export function Inbox({
   // waiting item, so the sidebar badge leaves it out) and the mission cards drawn by MissionsSection.
   const count = inboxCardCount(entries.map((e) => e.kind), blocking);
   const quick = entries.some((e) => e.quick);
-  const title = firstRun ? 'Welcome to Potato Workspace' : count === 0 ? 'Nothing needs you' : count === 1 ? 'One thing needs you' : `${count} things need you`;
+  const [keys, setKeys] = useState(false);
 
   return (
     <div
@@ -294,59 +295,61 @@ export function Inbox({
       }}
     >
       <RedBanners state={team.state} api={teamApi} now={c.now} onDone={team.refresh} />
-      <header className="ck-inbox-hero">
-        {!firstRun && (
-          <div className="ck-doto" aria-label={`${count} ${count === 1 ? 'thing needs' : 'things need'} you`}>
-            {String(count).padStart(2, '0')}
-          </div>
-        )}
-        <h1 className="ck-title">{title}</h1>
-        <p className="ck-sub">
-          {firstRun
-            ? 'Your agents work here. First, check which ones this PC has.'
-            : count === 0
-            ? 'Agents that stop to ask a question will show up here.'
-            : 'Answer here, or open the agent.'}
-        </p>
-        {entries.length > 0 && (
-          <p className="ib-hint" aria-label="Keyboard shortcuts">
-            <span>
-              <kbd className="ib-kbd">J</kbd>
-              <kbd className="ib-kbd">K</kbd> move
-            </span>
-            {quick && (
-              <span>
-                <kbd className="ib-kbd">1</kbd>
-                <kbd className="ib-kbd">2</kbd> answer
+      {firstRun ? (
+        <EmptyState
+          page
+          title="Welcome to Potato Workspace"
+          line="Your agents work here. First, see which ones are on this PC."
+          action={noPanes && setUp ? { label: 'Set up your agents', onClick: setUp } : null}
+          alternatives={
+            onSetUp !== null ? [{ label: "I don't write code: use Simple mode", onClick: () => void patchSettings({ simple_mode: true }).catch(() => undefined) }] : []
+          }
+        />
+      ) : (
+        <header className="ck-inbox-hero ck-inbox-bar">
+          <h1 className="ck-title">
+            Inbox
+            {count > 0 && (
+              <span className="ck-inbox-count" aria-label={`${count} ${count === 1 ? 'thing needs' : 'things need'} you`}>
+                {count}
               </span>
             )}
-            <span>
-              <kbd className="ib-kbd">O</kbd> open
-            </span>
-          </p>
-        )}
-        <p className="ib-next" role="status" aria-live="polite">
-          {nextCard.next !== null && <>Next: {nextCard.next}</>}
-        </p>
-        {noPanes && !firstRun && onStartAgent && (
-          <button type="button" className="ck-btn ck-btn--primary" onClick={onStartAgent}>
-            Start an agent
-          </button>
-        )}
-        {noPanes && setUp && (
-          <button type="button" className={`ck-btn ${firstRun || !onStartAgent ? 'ck-btn--primary' : 'ck-btn--secondary'}`} onClick={setUp}>
-            {firstRun ? 'Set up your agents' : 'Set up agents'}
-          </button>
-        )}
-        {firstRun && onSetUp !== null && (
-          <p className="ib-welcome-alt">
-            <span>I don't write code.</span>
-            <button type="button" className="ck-btn ck-btn--plain" onClick={() => void patchSettings({ simple_mode: true }).catch(() => undefined)}>
-              Use Simple mode
+          </h1>
+          {entries.length > 0 && (
+            <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ib-keys-btn" aria-expanded={keys} onClick={() => setKeys((k) => !k)}>
+              Keys
             </button>
-          </p>
-        )}
-      </header>
+          )}
+        </header>
+      )}
+      {!firstRun && keys && entries.length > 0 && (
+        <p className="ib-hint" aria-label="Keyboard shortcuts">
+          <span>
+            <kbd className="ib-kbd">J</kbd>
+            <kbd className="ib-kbd">K</kbd> move
+          </span>
+          {quick && (
+            <span>
+              <kbd className="ib-kbd">1</kbd>
+              <kbd className="ib-kbd">2</kbd> answer
+            </span>
+          )}
+          <span>
+            <kbd className="ib-kbd">O</kbd> open
+          </span>
+        </p>
+      )}
+      <p className="ib-next" role="status" aria-live="polite">
+        {nextCard.next !== null && <>Next: {nextCard.next}</>}
+      </p>
+      {!firstRun && count === 0 && (
+        <EmptyState
+          title="Nothing needs you"
+          line="Agents that stop to ask will show up here."
+          action={noPanes && onStartAgent ? { label: 'Start an agent', onClick: onStartAgent } : noPanes && setUp ? { label: 'Set up agents', onClick: setUp } : null}
+          alternatives={noPanes && onStartAgent && setUp ? [{ label: 'Set up agents', onClick: setUp }] : []}
+        />
+      )}
 
       {entries.length > 0 && (
         <ul className="ib-list" aria-label="Needs you">

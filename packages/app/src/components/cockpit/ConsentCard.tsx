@@ -75,6 +75,7 @@ export function ConsentCard({
     <div ref={root} className="ib-approval">
       <InboxCard
         kind="consent"
+        agent={q.agent}
         glyph="needs"
         guard
         title={consentTitle(q, paneName)}

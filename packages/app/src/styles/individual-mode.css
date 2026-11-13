@@ -96,7 +96,7 @@ html.mb-root #root {
   z-index: 1;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 120ms ease;
+  transition: opacity var(--dur-fast) ease;
 }
 .mb-chips-wrap::before {
   left: 0;
