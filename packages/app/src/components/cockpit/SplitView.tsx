@@ -1,8 +1,10 @@
-// Split view: two agent chats side by side (like split editors). The left side is the selected pane, the
-// right side is the pane opened "to the side". The side with focus is full strength; the other is dimmed.
+// Split view: agent chats side by side (like split editors), up to four as a 2x2 grid. The left side is the selected
+// pane, the right side is the pane opened "to the side"; each column can also hold a chat below (split-grid.ts).
+// The side with focus is full strength; the others are dimmed.
 // The session rail on the right follows the focused side. Each side has its own message box (SessionChatPanel).
 import { ErrorBoundary } from '../common/ErrorBoundary';
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useT } from '../../i18n';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { SessionChatPanel, type ScreenAsk } from '../chat/SessionChatPanel';
 import { composerBlock } from '../../lib/paneOutbox';
@@ -16,17 +18,18 @@ import { DockedCards } from './DockedCards';
 import { DotSpinner } from './DotSpinner';
 import { SplitDivider } from './SplitDivider';
 import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
-import { IconClose, IconRail } from './Icons';
+import { IconClose, IconRail, IconSplitDown } from './Icons';
+import { SplitRowDivider } from './SplitRowDivider';
+import { NO_BELOW, canSplitDown, hasBelow, shownIds, slotIds, type SplitBelow, type SplitColumn, type SplitSlot } from './split-grid';
 import { dockItems } from './pane-chrome';
 import { spinnerStatus, stateText } from './model';
 import { SessionRail } from './rail/SessionRail';
 import { helperRows } from './rail/helperRows';
 import { useRailLayout } from './rail/useRailLayout';
-import type { SplitSide } from './main-view';
 import { paneHeading } from './titles';
 
 /** Moves the keyboard focus into a side's message box (Ctrl+Alt+Left / Right, see CockpitApp). */
-export function focusSideComposer(side: SplitSide) {
+export function focusSideComposer(side: SplitSlot) {
   document.querySelector<HTMLTextAreaElement>(`.ck-split-side[data-split-side="${side}"] textarea`)?.focus();
 }
 
@@ -41,65 +44,92 @@ export function useWindowWidth(): number {
   return width;
 }
 
+
 export function SplitView({
   c,
   leftId,
   rightId,
   focus,
   ratio,
+  below = NO_BELOW,
   onFocus,
   onRatio,
+  onRows,
   onClose,
+  onCloseChat,
+  onSplitDown,
 }: {
   c: CockpitApi;
   leftId: string;
   rightId: string;
-  focus: SplitSide;
+  focus: SplitSlot;
   /** The left side's share of the room (see main-view.ts). The CSS keeps each side at its minimum width. */
   ratio: number;
-  onFocus: (side: SplitSide) => void;
+  /** The chats below the two top ones (split-grid.ts). None: the two-chat split. */
+  below?: SplitBelow;
+  onFocus: (side: SplitSlot) => void;
   onRatio: (ratio: number) => void;
+  /** A column's top chat share of its height was dragged. */
+  onRows?: (column: SplitColumn, rows: number) => void;
+  /** Ends the whole split view. */
   onClose: () => void;
+  /** Takes one chat out of the view (the agent keeps running). Without it a chat has no close button of its own. */
+  onCloseChat?: (slot: SplitSlot) => void;
+  /** Opens another chat below a column. Without it the Split down button is not shown. */
+  onSplitDown?: (column: SplitColumn) => void;
 }) {
   const rail = useRailLayout();
   const colsRef = useRef<HTMLDivElement>(null);
-  const focusedId = focus === 'right' ? rightId : leftId;
+  const ids = slotIds(leftId, rightId, below);
+  const focusedId = ids[focus] ?? leftId;
   const fp = c.registry.panes.get(focusedId);
   const agentName = c.names.get(focusedId) ?? fp?.info.agent_type ?? '';
   const listing = useAgentRegistry();
   const agentType = fp?.info.agent_type ?? '';
   const chatAllowed = listing.agents.find((a) => a.id === agentType)?.kind !== 'shell';
+  const shown = shownIds(leftId, rightId, below).length;
+  const grid = hasBelow(below);
+  const column = (col: SplitColumn) => {
+    const top = col === 'left' ? leftId : rightId;
+    const down = col === 'left' ? below.leftDown : below.rightDown;
+    return (
+      <SplitColumnView
+        c={c}
+        column={col}
+        topId={top}
+        downId={down}
+        rows={col === 'left' ? below.leftRows : below.rightRows}
+        focus={focus}
+        grid={grid}
+        canSplitDown={!!onSplitDown && canSplitDown(below, col, shown)}
+        onFocus={onFocus}
+        onRows={(rows) => onRows?.(col, rows)}
+        onClose={onClose}
+        onCloseChat={onCloseChat}
+        onSplitDown={onSplitDown}
+        topActions={
+          col === 'right' && rail.fits ? (
+            <button
+              type="button"
+              className="ck-icon-btn"
+              aria-label={rail.open ? 'Hide session details' : 'Show session details'}
+              aria-pressed={rail.open}
+              title={`${rail.open ? 'Hide' : 'Show'} session details ( ] )`}
+              onClick={rail.toggle}
+            >
+              <IconRail />
+            </button>
+          ) : null
+        }
+      />
+    );
+  };
   return (
     <div className="ck-split">
       <div ref={colsRef} className="ck-split-cols" style={{ ['--ck-split-ratio' as string]: String(ratio) } as CSSProperties}>
-        <ErrorBoundary where="Pane" resetKeys={[leftId]}>
-          <SplitSideView c={c} paneId={leftId} side="left" focused={focus === 'left'} onFocus={onFocus} onClose={onClose} />
-        </ErrorBoundary>
+        {column('left')}
         <SplitDivider colsRef={colsRef} ratio={ratio} onRatio={onRatio} />
-        <ErrorBoundary where="Pane" resetKeys={[rightId]}>
-        <SplitSideView
-          c={c}
-          paneId={rightId}
-          side="right"
-          focused={focus === 'right'}
-          onFocus={onFocus}
-          onClose={onClose}
-          actions={
-            rail.fits ? (
-              <button
-                type="button"
-                className="ck-icon-btn"
-                aria-label={rail.open ? 'Hide session details' : 'Show session details'}
-                aria-pressed={rail.open}
-                title={`${rail.open ? 'Hide' : 'Show'} session details ( ] )`}
-                onClick={rail.toggle}
-              >
-                <IconRail />
-              </button>
-            ) : null
-          }
-        />
-        </ErrorBoundary>
+        {column('right')}
       </div>
       {rail.visible && fp && (
         <SessionRail
@@ -118,6 +148,76 @@ export function SplitView({
   );
 }
 
+/** One column of the split: its top chat, and (when there is one) a divider and the chat below. */
+function SplitColumnView({
+  c,
+  column,
+  topId,
+  downId,
+  rows,
+  focus,
+  grid,
+  canSplitDown: canDown,
+  onFocus,
+  onRows,
+  onClose,
+  onCloseChat,
+  onSplitDown,
+  topActions,
+}: {
+  c: CockpitApi;
+  column: SplitColumn;
+  topId: string;
+  downId: string | null;
+  rows: number;
+  focus: SplitSlot;
+  grid: boolean;
+  canSplitDown: boolean;
+  onFocus: (side: SplitSlot) => void;
+  onRows: (rows: number) => void;
+  onClose: () => void;
+  onCloseChat?: (slot: SplitSlot) => void;
+  onSplitDown?: (column: SplitColumn) => void;
+  topActions: ReactNode;
+}) {
+  const t = useT();
+  const colRef = useRef<HTMLDivElement>(null);
+  const downSlot: SplitSlot = column === 'left' ? 'leftDown' : 'rightDown';
+  const side = (slot: SplitSlot, paneId: string, actions?: ReactNode, splitDown?: boolean, top?: boolean) => (
+    <ErrorBoundary where="Pane" resetKeys={[paneId]}>
+      <SplitSideView
+        c={c}
+        paneId={paneId}
+        side={slot}
+        focused={focus === slot}
+        onFocus={onFocus}
+        onClose={onClose}
+        // The two-chat split keeps its one close button (on the right side, closing the whole split). Once there are
+        // more chats, every chat has its own close button.
+        closeChat={grid && onCloseChat ? () => onCloseChat(slot) : undefined}
+        onSplitDown={splitDown && onSplitDown ? () => onSplitDown(column) : undefined}
+        stacked={top && downId !== null}
+        actions={actions}
+      />
+    </ErrorBoundary>
+  );
+  return (
+    <div
+      ref={colRef}
+      className={`ck-split-col ck-split-col-${column}${downId !== null ? ' has-down' : ''}`}
+      style={{ ['--ck-split-rows' as string]: String(rows) } as CSSProperties}
+    >
+      {side(column, topId, topActions, canDown, true)}
+      {downId !== null && (
+        <>
+          <SplitRowDivider colRef={colRef} rows={rows} onRows={onRows} label={t('split.rowResize')} />
+          {side(downSlot, downId)}
+        </>
+      )}
+    </div>
+  );
+}
+
 function SplitSideView({
   c,
   paneId,
@@ -125,17 +225,26 @@ function SplitSideView({
   focused,
   onFocus,
   onClose,
+  closeChat,
+  onSplitDown,
+  stacked,
   actions,
 }: {
   c: CockpitApi;
   paneId: string;
-  side: SplitSide;
+  side: SplitSlot;
   focused: boolean;
-  onFocus: (side: SplitSide) => void;
+  onFocus: (side: SplitSlot) => void;
   onClose: () => void;
+  /** Takes this chat out of the view (shown on every chat once the split has more than two). */
+  closeChat?: () => void;
+  onSplitDown?: () => void;
+  /** Another chat sits below this one: this chat takes its share of the column height. */
+  stacked?: boolean;
   /** Extra header buttons (the right side holds the rail toggle and the close button). */
   actions?: ReactNode;
 }) {
+  const t = useT();
   const pane = c.registry.panes.get(paneId);
   const listing = useAgentRegistry();
   const { signals } = useLoopGuard();
@@ -177,9 +286,9 @@ function SplitSideView({
 
   return (
     <section
-      className={`ck-split-side${side === 'left' ? ' ck-split-side-left' : ''}${focused ? ' is-focused' : ' is-dim'}`}
+      className={`ck-split-side${side === 'left' ? ' ck-split-side-left' : ''}${stacked ? ' ck-split-side-top' : ''}${focused ? ' is-focused' : ' is-dim'}`}
       data-split-side={side}
-      aria-label={`${side === 'left' ? 'Left' : 'Right'} chat: ${heading.primary}`}
+      aria-label={t('split.chatAt', { place: t(`split.place.${side}`), name: heading.primary })}
       aria-current={focused ? 'true' : undefined}
       onMouseDownCapture={() => onFocus(side)}
       onFocusCapture={() => onFocus(side)}
@@ -197,7 +306,16 @@ function SplitSideView({
         <span className="ck-split-title">{heading.primary}</span>
         <span className="ck-split-state">{waiting ? 'Needs you' : stateText(pane.status)}</span>
         {actions}
-        {side === 'right' && (
+        {onSplitDown && (
+          <button type="button" className="ck-icon-btn" aria-label={t('split.down')} title={`${t('split.down')}${bindingHint('split-down')}`} onClick={onSplitDown}>
+            <IconSplitDown />
+          </button>
+        )}
+        {closeChat ? (
+          <button type="button" className="ck-icon-btn" aria-label={t('split.closeChat')} title={`${t('split.closeChat')}${bindingHint('split-close-side')}`} onClick={closeChat}>
+            <IconClose />
+          </button>
+        ) : side === 'right' && (
           <button type="button" className="ck-icon-btn" aria-label="Close split view" title={`Close split view${bindingHint('split')}`} onClick={onClose}>
             <IconClose />
           </button>

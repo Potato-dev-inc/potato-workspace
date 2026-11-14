@@ -54,6 +54,17 @@ pub struct AuthSpec {
     /// Account sign-ins only: how the agent's own CLI is asked to renew its token while a lend is active.
     #[serde(default)]
     pub refresh: Option<RefreshSpec>,
+    /// Account sign-ins only: where in the sign-in folder the agent keeps who is signed in (shown on the lender's own
+    /// PC as "Signed in as ...", never sent anywhere). None: the sheet says only "Signed in".
+    #[serde(default)]
+    pub identity: Option<IdentitySpec>,
+}
+
+/// Where a lend sign-in's folder says who is signed in: a file in the folder and a JSON pointer to a text value.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct IdentitySpec {
+    pub file: String,
+    pub json_pointer: String,
 }
 
 /// Renewing a lend sign-in's token with the agent's own CLI (the app never talks to the provider's sign-in itself).
@@ -275,6 +286,11 @@ fn check_expiry(auth: &mut AuthSpec) -> Result<(), String> {
         }
         refresh.timeout_secs = refresh.timeout_secs.clamp(1, MAX_REFRESH_TIMEOUT_SECS);
     }
+    if let Some(id) = &auth.identity {
+        if id.file.is_empty() || id.file.contains(['/', '\\']) || id.file.contains("..") || !id.json_pointer.starts_with('/') {
+            return Err("lend proxy spec: identity needs a file name in the folder and a JSON pointer".into());
+        }
+    }
     Ok(())
 }
 
@@ -345,6 +361,16 @@ mod tests {
         assert_eq!(refresh.before_secs, 240);
         assert_eq!(refresh.timeout_secs, 120);
         assert!(!refresh.args.is_empty());
+    }
+
+    #[test]
+    fn the_claude_spec_says_where_the_signed_in_email_is_and_a_bad_identity_is_refused() {
+        let id = ProxySpec::parse(CLAUDE).unwrap().auth.account.unwrap().identity.unwrap();
+        assert_eq!((id.file.as_str(), id.json_pointer.as_str()), (".claude.json", "/oauthAccount/emailAddress"));
+        let outside = CLAUDE.replace("file = \".claude.json\"", "file = \"../.claude.json\"");
+        assert!(ProxySpec::parse(&outside).unwrap_err().contains("identity"));
+        let no_pointer = CLAUDE.replace("json_pointer = \"/oauthAccount/emailAddress\"", "json_pointer = \"oauthAccount\"");
+        assert!(ProxySpec::parse(&no_pointer).is_err());
     }
 
     #[test]

@@ -18,7 +18,7 @@ const ALLOWED: Record<string, number> = {
   'cockpit-live.css': 2,
   'history.css': 1,
   'individual-mode.css': 4,
-  'lend.css': 40,
+  'lend.css': 34,
   'model-picker.css': 3,
   'project-file-picker.css': 2,
   'settings-rows.css': 11,

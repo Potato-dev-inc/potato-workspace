@@ -1,0 +1,30 @@
+// zh-TW wording for ../en/artifacts.ts (same keys). Term choices are listed at the top of ../zh-TW.ts.
+import type { EnglishKey } from '../en';
+
+export const artifacts: Partial<Record<EnglishKey, string>> = {
+  'artifacts.cardLabel': '代理做的頁面：{title}',
+  'artifacts.cardOpen': '開啟',
+  'artifacts.cardMeta': '{kind} · 第 {n} 版',
+  'artifacts.kindHtml': '網頁',
+  'artifacts.kindMarkdown': '文件',
+  'artifacts.kindSvg': '圖片',
+  'artifacts.kindMermaid': '圖表',
+  'artifacts.tabLabel': '頁面：{title}',
+  'artifacts.frameLabel': '頁面：{title}',
+  'artifacts.versionLabel': '版本',
+  'artifacts.versionOption': '第 {n} 版',
+  'artifacts.versionLatest': '第 {n} 版（最新）',
+  'artifacts.openBrowser': '在瀏覽器開啟',
+  'artifacts.copyPath': '複製檔案路徑',
+  'artifacts.pathCopied': '已複製檔案路徑。',
+  'artifacts.copyFailed': '無法複製檔案路徑。',
+  'artifacts.reload': '重新載入',
+  'artifacts.newer': '代理做了較新的版本。',
+  'artifacts.showNewest': '顯示最新版',
+  'artifacts.loading': '載入中…',
+  'artifacts.failed': '無法開啟這個頁面。',
+  'artifacts.sandboxNote': '這個頁面在上鎖的框架中執行，無法存取你的檔案、這個應用程式或網際網路（少數腳本函式庫除外）。',
+  'artifacts.phoneClose': '關閉',
+  'artifacts.phoneTooLarge': '這個頁面太大，手機打不開。請在電腦上開啟。',
+  'artifacts.phoneVersions': '版本',
+};

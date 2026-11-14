@@ -46,6 +46,9 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
   const [busy, setBusy] = useState<'save' | 'restart' | 'test' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [test, setTest] = useState<TunnelConnectionTest | null>(null);
+  // The shared secret, shown only after it was made or after "Show secret"; never kept in the draft.
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -85,8 +88,29 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
     }
   };
 
+  const storedWorker = status?.config.mode === 'stable' ? status.config.url : null;
+  const hasStoredSecret = Boolean(storedWorker) && status?.config.has_secret === true;
   const problem = draftProblem(draft, status?.config);
   const line = statusLine(status);
+
+  // "Show secret" and "Make a new secret" save the stored Worker address with a secret action.
+  const secretAction = (kind: 'show' | 'regenerate') =>
+    void run('save', async () => {
+      if (!storedWorker) return;
+      const next = await api.save({ mode: 'stable', worker_url: storedWorker, secret_action: kind });
+      setStatus(next);
+      setRevealed(next.secret_once ?? null);
+      setCopied(false);
+    });
+  const copySecret = async () => {
+    if (!revealed) return;
+    try {
+      await navigator.clipboard.writeText(revealed);
+      setCopied(true);
+    } catch (e) {
+      setError(errorSentence(e));
+    }
+  };
   const dirty = JSON.stringify(draft) !== JSON.stringify(draftFromConfig(status?.config));
 
   return (
@@ -159,6 +183,60 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
           </div>
         )}
 
+        {draft.mode === 'stable' && (
+          <>
+            <div>
+              <FieldLabel>{t('tunnel.workerAddress')}</FieldLabel>
+              <FieldInput
+                aria-label={t('tunnel.workerAria')}
+                placeholder="https://potato-stable-link.you.workers.dev" // i18n-ok: example
+                value={draft.workerUrl ?? ''}
+                onChange={(e) => setDraft({ ...draft, workerUrl: e.target.value })}
+                className="font-mono"
+              />
+              <p className="mt-1 text-xs text-pm-muted">{t('tunnel.stableHelp')}</p>
+            </div>
+            <div>
+              <FieldLabel>{t('tunnel.secret')}</FieldLabel>
+              <FieldInput
+                aria-label={t('tunnel.secretAria')}
+                type="password"
+                autoComplete="off"
+                placeholder={hasStoredSecret ? t('tunnel.secretSaved') : t('tunnel.secretOwn')}
+                value={draft.secret ?? ''}
+                onChange={(e) => setDraft({ ...draft, secret: e.target.value })}
+                className="font-mono"
+              />
+              {revealed && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <code data-testid="stable-secret" className="break-all text-xs">
+                    {revealed}
+                  </code>
+                  <button type="button" className={buttonClass} onClick={() => void copySecret()}>
+                    {copied ? t('tunnel.secretCopied') : t('tunnel.secretCopy')}
+                  </button>
+                  <button type="button" className={buttonClass} onClick={() => setRevealed(null)}>
+                    {t('tunnel.secretHide')}
+                  </button>
+                </div>
+              )}
+              <p className="mt-1 text-xs text-pm-muted">{t('tunnel.secretHelp')}</p>
+              {hasStoredSecret && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {!revealed && (
+                    <button type="button" className={buttonClass} disabled={busy !== null} onClick={() => secretAction('show')}>
+                      {t('tunnel.secretShow')}
+                    </button>
+                  )}
+                  <button type="button" className={buttonClass} disabled={busy !== null} onClick={() => secretAction('regenerate')}>
+                    {t('tunnel.secretNew')}
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         <div className="flex flex-wrap items-center gap-2" aria-live="polite">
           <span className={'inline-block h-2 w-2 shrink-0 rounded-full ' + DOT[line.tone]} aria-hidden />
           <span data-testid="tunnel-status" className="text-xs text-pm-muted">
@@ -168,6 +246,11 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
             <code data-testid="tunnel-url" className="break-all text-xs">
               {status.public_url}
             </code>
+          )}
+          {status?.stable?.quick_url && (
+            <span data-testid="tunnel-quick-url" className="break-all text-xs text-pm-muted">
+              {t('tunnel.stable.behind', { url: status.stable.quick_url })}
+            </span>
           )}
           {status && !isStableMode(status.mode) && status.state === 'running' && (
             <span className="text-xs text-pm-muted">{t('tunnel.willChange')}</span>
@@ -196,6 +279,8 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
               void run('save', async () => {
                 const next = await api.save(toInput(draft));
                 setStatus(next);
+                setRevealed(next.secret_once ?? null);
+                setCopied(false);
                 setDraft(draftFromConfig(next.config));
                 setTest(null);
               })

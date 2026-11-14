@@ -13,6 +13,7 @@ import {
   type ChatItem,
   type ChatSource,
   type ChatTurn,
+  type GroupedChat,
   type OutputFile,
   type PlanItem,
   type SessionChatState,
@@ -131,7 +132,9 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
     };
   }, [paneId, enabled, surface]);
 
-  const grouped = useMemo(() => groupTurns(items), [items]);
+  // The last result goes back in, so a turn that did not change stays the same object (the view skips it).
+  const lastGrouped = useRef<GroupedChat | null>(null);
+  const grouped = useMemo(() => (lastGrouped.current = groupTurns(items, lastGrouped.current)), [items]);
   return {
     state: status.state,
     reason: status.reason,

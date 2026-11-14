@@ -18,6 +18,15 @@ export function stalledNote(): string {
   return t('inboxCards.stalled');
 }
 
+/** Shown when the answer was refused or never reached the pane: say so, and offer the terminal. */
+export function failedNote(): string {
+  return t('inboxCards.failed');
+}
+
+function noteOf(prompt: PanePrompt): string | null {
+  return prompt.failed ? failedNote() : prompt.stalled ? stalledNote() : null;
+}
+
 export function ApprovalPrompt({
   prompt,
   onAnswer,
@@ -150,7 +159,7 @@ export function ApprovalPrompt({
           meta={who}
           status={asksQuestion ? null : LEVEL_WORD[risk.level]}
           age={age ?? null}
-          reason={prompt.stalled ? stalledNote() : firstReason(risk) || null}
+          reason={noteOf(prompt) ?? (firstReason(risk) || null)}
           caution={high ? cautionText() : null}
           body={
             packageFacts || detailsPanel || runs.length > 0 || hints ? (
@@ -182,7 +191,7 @@ export function ApprovalPrompt({
               )}
               {onOpen && (
                 <CardButton tone="plain" role="open" onClick={onOpen}>
-                  {openLabel ?? t('inboxCards.open')}
+                  {prompt.failed ? t('inboxCards.openTerminal') : (openLabel ?? t('inboxCards.open'))}
                 </CardButton>
               )}
             </>
@@ -202,7 +211,7 @@ export function ApprovalPrompt({
         <span className="ck-appr-headline">{risk.headline}</span>
         <span className="ck-appr-level">{LEVEL_WORD[risk.level]}</span>
       </div>
-      {(prompt.stalled || firstReason(risk)) && <p className="ck-appr-reason">{prompt.stalled ? stalledNote() : firstReason(risk)}</p>}
+      {(noteOf(prompt) || firstReason(risk)) && <p className="ck-appr-reason" role={prompt.failed ? 'alert' : undefined}>{noteOf(prompt) ?? firstReason(risk)}</p>}
       {runs.map((r) => (
         <p key={r} className="ck-appr-reason">
           {t('inboxCards.runs')} <InlineCode>{r}</InlineCode>

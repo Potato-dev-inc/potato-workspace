@@ -547,7 +547,14 @@ fn a_session_that_replaces_a_lost_one_shows_its_own_settings() {
     let session = app.session(&id).unwrap();
     assert_eq!(model_of(&session), Some(serde_json::json!("b")));
     assert_eq!(app.open_chat(&id).unwrap(), Readiness::Started(StartKind::HistoryLost));
+    // The replacement's own settings arrive (and are saved) a moment after `open_chat` returns; wait, don't race.
+    let shown = session.wait_for(|s| s.config_options.iter().any(|o| o["id"] == "model" && o["currentValue"] == "a"), Duration::from_secs(10));
+    assert!(shown.is_some(), "the session shows its own settings: {:?}", model_of(&session));
     assert_eq!(model_of(&session), Some(serde_json::json!("a")));
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while app.record(&id).unwrap().config_options[0]["currentValue"] != "a" && std::time::Instant::now() < deadline {
+        session.wait_for(|_| false, Duration::from_millis(20));
+    }
     assert_eq!(app.record(&id).unwrap().config_options[0]["currentValue"], serde_json::json!("a"), "and the record follows");
     session.close();
 }

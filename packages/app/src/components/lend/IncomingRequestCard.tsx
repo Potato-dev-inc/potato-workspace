@@ -10,6 +10,8 @@ import '../../styles/lend.css';
 /** The profiles that could answer this request: they lend that agent, to that kind of borrower. */
 export function profilesFor(state: Pick<LendState, 'profiles'>, r: LendRequest): LendProfile[] {
   return state.profiles.filter((p) => {
+    // The borrower named one of my profiles (it picked it from what I offered): only that one can answer.
+    if (r.profile_id && p.id !== r.profile_id) return false;
     if (!p.agent_ids.includes(r.agent_id)) return false;
     if (p.who === 'my_pcs') return !r.for_other_person;
     return r.for_other_person && (p.member_ids.length === 0 || p.member_ids.includes(r.member_id));

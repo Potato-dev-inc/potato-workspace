@@ -17,6 +17,7 @@ fn pane(id: &str, cwd: &str, last: Option<i64>) -> TargetFacts {
         cwd: cwd.into(),
         kind: PaneKind::Agent,
         run_controls: false,
+        chat: false,
         not_ready: None,
         last_output_at: last,
     }

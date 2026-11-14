@@ -67,6 +67,7 @@ export function PaneApprovalCard({
       title={asks ? t('inboxCards.labelled', { label: asks, text: plainTitle }) : plainTitle}
       meta={who}
       age={age}
+      reason={prompt?.failed ? t('inboxCards.failed') : prompt?.stalled ? t('inboxCards.stalled') : null}
       snoozeKeys={[paneId]}
       body={onOpen && hasChoices ? <KeyHints hints={approvalHints({ answers: prompt.choices.length, high: false, canOpen: true })} /> : undefined}
       actions={
@@ -83,7 +84,7 @@ export function PaneApprovalCard({
       more={
         onOpen ? (
           <CardButton tone="plain" role="open" onClick={onOpen}>
-            {openLabel ?? t('inboxCards.open')}
+            {prompt?.failed ? t('inboxCards.openTerminal') : (openLabel ?? t('inboxCards.open'))}
           </CardButton>
         ) : null
       }

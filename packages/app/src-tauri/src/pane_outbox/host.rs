@@ -56,6 +56,14 @@ impl Look {
     }
 }
 
+/// What a chat shows, for "did the agent answer": how many items came from the agent side (not the person's own
+/// message), and whether the chat is still starting or waking up (the wait does not count then).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pulse {
+    pub replies: usize,
+    pub waking: bool,
+}
+
 /// How one attempt to type a message ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Attempt {
@@ -86,6 +94,10 @@ pub trait Host: Send + Sync + 'static {
     /// sends them as content blocks.
     fn type_message_with(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Attempt {
         self.type_message(pane_id, &text_with_paths(text, attachments))
+    }
+    /// The chat's pulse, for a pane that is a chat session. `None`: not applicable (a terminal), nothing is watched.
+    fn pulse(&self, _pane_id: &str) -> Option<Pulse> {
+        None
     }
     /// Tells the windows and phones the pane's messages changed (the whole list, newest last).
     fn publish(&self, pane_id: &str, messages: &[OutboxMessage]);

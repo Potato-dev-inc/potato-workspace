@@ -20,6 +20,7 @@ import { Btn, InfoRow, Note, SettingBlock, SettingRow } from '../settings-ui';
 import { AgentNotifyRows } from '../NotifyRows';
 import { openAddAgentWith } from './agentTarget';
 import { CapChips } from './CapChips';
+import { ChatAdapterRow, type ChatAdapterApi } from './ChatAdapterRow';
 import { standingWords, type AgentRow } from './useAgentRows';
 import { CodeText } from '../../common/CodeText';
 
@@ -90,6 +91,8 @@ export interface AgentPageApis {
   definitions: DefinitionsPick;
   /** Runs the free checks of one agent again (version, hello, models). The window hears the new table by the caps event. */
   recheck?: (agentId: string) => Promise<unknown>;
+  /** The chat adapter row's backend; the real one when absent. */
+  chat?: ChatAdapterApi;
 }
 
 export const defaultPageApis: AgentPageApis = {
@@ -178,7 +181,9 @@ export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }:
 
       <AgentDefaultModels only={row.id} saved={env.settings.agent_default_models} onChange={(next) => void env.patch({ agent_default_models: next })} />
 
-      {cli ? <InfoRow label={t('agentPage.howOpens')} description={t('agentPage.inTerminal')} value={t('agentPage.terminal')} /> : <AgentLaneRows only={row.id} />}
+      {cli ? <InfoRow label={t('agentPage.howOpens')} description={t('agentPage.inTerminal')} value={t('agentPage.terminal')} /> : <AgentLaneRows only={row.id} noAdapter />}
+
+      <ChatAdapterRow agent={row} api={apis.chat} />
 
       <AgentNotifyRows agentId={row.id} label={row.label} />
 

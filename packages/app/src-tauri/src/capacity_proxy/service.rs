@@ -27,10 +27,10 @@ use super::frame::{SigninNote, UsageNote};
 use super::gate::{EndReason, Gate, Limits};
 use super::link::{node_from_hex, BorrowerGrant, ConnectError, LendNet, LenderBook, LenderGrant, LinkOpener, Probe, CLOSE_LEND_ENDED};
 use super::ping::Pinger;
-use super::shim::Shim;
+use super::shim::{NotingOpener, Shim};
 use super::signin::SigninFile;
 use super::spec::{ProxySpec, RefreshSpec};
-use super::wire::{self, Body, Guard, Item, NodeHint, WireReject};
+use super::wire::{self, Body, Guard, Item, NodeHint, Offer, WireReject};
 use crate::p2p::endpoint::{Link, NodeId};
 use crate::secrets::SecretBackend;
 use crate::secure_core::crypto::{b64, random_bytes, unb64};
@@ -52,10 +52,74 @@ pub const ENDED: &str = "This lend ended";
 pub const NO_CHAT: &str = "Chat can't be borrowed through a PC for this agent yet. Open it in a terminal.";
 /// What both PCs show on a grant whose lend sign-in can't be used.
 pub const SIGNIN_PROBLEM: &str = "The lender's sign-in expired. Ask them to sign in again.";
+/// What the borrower shows on a grant whose lending PC does not answer (asleep or offline).
+pub const UNREACHABLE_PROBLEM: &str = "The lending PC is not answering. It may be asleep or offline.";
+
+/// Why a grant has a problem right now (`Grant.problem_kind`): so each screen picks words that fit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProblemKind {
+    /// The lender's sign-in is out or can't be renewed.
+    Signin,
+    /// The borrower can't reach the lender's PC.
+    Unreachable,
+}
+
+impl ProblemKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Signin => "signin",
+            Self::Unreachable => "unreachable",
+        }
+    }
+
+    fn words(self) -> &'static str {
+        match self {
+            Self::Signin => SIGNIN_PROBLEM,
+            Self::Unreachable => UNREACHABLE_PROBLEM,
+        }
+    }
+}
+
+/// The longest profile name kept from another PC.
+pub const MAX_PROFILE_NAME: usize = 60;
+
+/// A profile name that came from another PC (or goes to one): plain text only. Control characters become spaces, runs of
+/// space collapse, the ends are trimmed and it is cut to 60 characters. Never used as HTML or as a file name.
+pub fn clean_profile_name(raw: &str) -> String {
+    let plain: String = raw.chars().map(|c| if c.is_control() || c == '\u{2028}' || c == '\u{2029}' { ' ' } else { c }).collect();
+    plain.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(MAX_PROFILE_NAME).collect()
+}
+
+/// The borrowed sign-in's name in pickers: "Ren's Work account (borrowed)". A profile name that already starts with the
+/// owner ("Ren's work account") is not prefixed again; from my own other PC it is "Work account on Desk-PC (borrowed)";
+/// with no name (an older lender) it is "Ren's PC (borrowed)".
+pub fn borrowed_name(owner: &str, device: &str, profile: &str, mine: bool) -> String {
+    let profile = clean_profile_name(profile);
+    if profile.is_empty() {
+        return format!("{owner}'s PC (borrowed)");
+    }
+    if mine && !device.is_empty() {
+        return format!("{profile} on {device} (borrowed)");
+    }
+    if !owner.is_empty() && profile.to_lowercase().starts_with(&owner.to_lowercase()) {
+        return format!("{profile} (borrowed)");
+    }
+    format!("{owner}'s {profile} (borrowed)")
+}
 
 /// How often an active lend sign-in's expiry is looked at, and the least time between two refreshes of it.
 const REFRESH_TICK: Duration = if cfg!(test) { Duration::from_millis(100) } else { Duration::from_secs(60) };
 const REFRESH_GAP_MS: u64 = if cfg!(test) { 800 } else { 5 * 60 * 1000 };
+
+/// Whether `profile` may be lent to `member`: my own PCs for my own PCs; a teammates profile for the people it names
+/// (none named: anyone on the team). The one rule behind the offers, the Lend card and the answer.
+pub fn profile_allows(profile: &LendProfile, member_id: &str, other_person: bool) -> bool {
+    if other_person {
+        profile.who == LendWho::Teammates && (profile.member_ids.is_empty() || profile.member_ids.iter().any(|m| m == member_id))
+    } else {
+        profile.who == LendWho::MyPcs
+    }
+}
 
 fn cap_for(other_person: bool) -> u64 {
     if other_person {
@@ -168,6 +232,16 @@ pub struct Grant {
     /// Something is wrong with the lender's sign-in right now (shown on both PCs). None: all fine.
     #[serde(default)]
     pub problem: Option<String>,
+    /// What kind of problem (`signin`, `unreachable`), so the words fit. None while there is none.
+    #[serde(default)]
+    pub problem_kind: Option<String>,
+    /// The lender's name for the profile this lend comes from. Borrower: as the lender sent it, cleaned (empty from an
+    /// older lender). Lender: the profile's own name.
+    #[serde(default)]
+    pub profile_name: String,
+    /// Lender only: which of my profiles this lend comes from (so the screen can say a profile is lent right now).
+    #[serde(default)]
+    pub profile_id: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,6 +265,35 @@ pub struct LendRequest {
     pub at_ms: u64,
     pub for_other_person: bool,
     pub state: RequestState,
+    /// The lender's profile the borrower asked for (picked from the offers). None: the lender chooses.
+    #[serde(default)]
+    pub profile_id: Option<String>,
+    /// Incoming only: that profile's name on this PC (filled when the state is read).
+    #[serde(default)]
+    pub profile_name: String,
+}
+
+/// One offer as the borrower's screen sees it: the lender's words plus which of their PCs said it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct OfferView {
+    #[serde(flatten)]
+    pub offer: Offer,
+    pub device_id: String,
+    pub device_name: String,
+}
+
+/// What `offers` found: `answered` false means no PC of theirs answered in time (an older build, or asleep).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct OffersResult {
+    pub answered: bool,
+    pub offers: Vec<OfferView>,
+}
+
+/// An `OffersAsk` of mine that is waiting for answers.
+struct PendingOffers {
+    member: String,
+    asked: Vec<String>,
+    got: HashMap<String, Vec<Offer>>,
 }
 
 /// What a chat on a borrowed sign-in is started with.
@@ -221,6 +324,14 @@ pub struct Driver {
     pub chat: bool,
     /// A sign-in this agent has that cannot be lent yet, in plain words (shown, never offered).
     pub account_note: Option<String>,
+}
+
+/// What the sign-in step reads about one lend sign-in. The identity is shown on this PC only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SigninStatus {
+    /// `signed_in`, `signed_out` or `expired`.
+    pub state: &'static str,
+    pub identity: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -433,6 +544,8 @@ pub struct Lend {
     inner: Mutex<Inner>,
     /// Whether the awake hold is on (taken once for all outgoing lends, not per grant).
     awake_on: Mutex<bool>,
+    /// Offers I asked for and have not finished collecting (nonce -> who and what came back).
+    offers_wait: Mutex<HashMap<String, PendingOffers>>,
     me: Weak<Lend>,
 }
 
@@ -462,6 +575,7 @@ impl Lend {
             deps,
             inner: Mutex::new(Inner { saved, out: HashMap::new(), inn: HashMap::new(), in_grants: HashMap::new() }),
             awake_on: Mutex::new(false),
+            offers_wait: Mutex::new(HashMap::new()),
             me: me.clone(),
         });
         let book: Weak<dyn LenderBook> = svc.me.clone();
@@ -540,7 +654,21 @@ impl Lend {
                 v
             })
             .collect();
-        let pick = |d: Direction| inner.saved.requests.iter().filter(|r| r.view.direction == d).map(|r| r.view.clone()).collect();
+        let pick = |d: Direction| {
+            inner
+                .saved
+                .requests
+                .iter()
+                .filter(|r| r.view.direction == d)
+                .map(|r| {
+                    let mut v = r.view.clone();
+                    if d == Direction::In {
+                        v.profile_name = v.profile_id.as_ref().and_then(|id| inner.saved.profiles.iter().find(|p| &p.id == id)).map(|p| p.name.clone()).unwrap_or_default();
+                    }
+                    v
+                })
+                .collect()
+        };
         LendState {
             enabled,
             profiles: inner
@@ -585,6 +713,41 @@ impl Lend {
             return Ok(());
         }
         Err(spec.auth.account_not_yet.clone().unwrap_or_else(|| "A sign-in of this agent can't be lent yet. Use an API key.".to_string()))
+    }
+
+    // ------------------------------------------------------------------------------------------------- sign-in step
+
+    /// The lend sign-in `account_id` (a lend-only account of this PC) and the spec of its agent.
+    fn signin_target(&self, account_id: &str) -> Result<(crate::accounts::Account, ProxySpec), String> {
+        let acc = super::signin_pane::check_account(&self.deps.accounts, account_id)?;
+        self.account_lendable(&acc.agent_id)?;
+        let spec = self.spec(&acc.agent_id).cloned().ok_or_else(|| format!("{} can't be lent through this PC.", acc.agent_id))?;
+        Ok((acc, spec))
+    }
+
+    /// The lend sign-in to start the sign-in step on: a new one, or the draft's own when it is still signed out.
+    pub fn signin_account(&self, agent_id: &str, label: &str, reuse: Option<&str>) -> Result<crate::accounts::Account, String> {
+        self.account_lendable(agent_id)?;
+        let spec = self.spec(agent_id).cloned().ok_or_else(|| format!("{agent_id} can't be lent through this PC."))?;
+        super::signin_pane::add_or_reuse(&self.deps.accounts, &spec, agent_id, label, reuse, self.now())
+    }
+
+    /// The account to open a hidden sign-in pane for (checked: lend-only, not borrowed, lendable).
+    pub fn signin_pane_account(&self, account_id: &str) -> Result<crate::accounts::Account, String> {
+        Ok(self.signin_target(account_id)?.0)
+    }
+
+    /// Where the lend sign-in stands, and who is signed in (read on this PC only; never sent).
+    pub fn signin_status(&self, account_id: &str) -> Result<SigninStatus, String> {
+        let (acc, spec) = self.signin_target(account_id)?;
+        let (state, identity) = super::signin_pane::status_of(&spec, &acc, self.now())?;
+        Ok(SigninStatus { state: state.as_str(), identity })
+    }
+
+    /// Forgets the lend sign-in when it holds no sign-in (the person backed out before signing in).
+    pub fn signin_remove_if_empty(&self, account_id: &str) -> Result<bool, String> {
+        let (acc, spec) = self.signin_target(account_id)?;
+        super::signin_pane::remove_if_empty(&self.deps.accounts, &spec, &acc)
     }
 
     // ------------------------------------------------------------------------------------------------- profiles
@@ -635,6 +798,17 @@ impl Lend {
     }
 
     pub fn profile_delete(&self, id: &str) -> Result<(), String> {
+        // Deleting a profile takes back what is lent from it right now (the screen asks first and says so).
+        let lent: Vec<String> = lock(&self.inner)
+            .saved
+            .grants
+            .iter()
+            .filter(|g| g.view.direction == Direction::Out && g.view.state == GrantState::Active && g.profile_id.as_deref() == Some(id))
+            .map(|g| g.view.id.clone())
+            .collect();
+        for grant_id in lent {
+            let _ = self.revoke(&grant_id);
+        }
         let mut inner = lock(&self.inner);
         inner.saved.profiles.retain(|p| p.id != id);
         self.save(&inner);
@@ -686,15 +860,28 @@ impl Lend {
     }
 
     /// Shows (or clears) the sign-in problem on a grant, on this PC. Told by the forwarder, the shim and the refresher.
-    fn set_problem(&self, grant_id: &str, bad: bool) {
-        let want = bad.then(|| SIGNIN_PROBLEM.to_string());
+    ///
+    /// Each kind clears only itself: a link that works again does not hide a sign-in that is out.
+    fn set_problem(&self, grant_id: &str, kind: ProblemKind, bad: bool) {
         {
             let mut inner = lock(&self.inner);
             let Some(g) = inner.saved.grants.iter_mut().find(|g| g.view.id == grant_id && g.view.state == GrantState::Active) else { return };
-            if g.view.problem == want {
-                return;
+            if bad {
+                if g.view.problem_kind.as_deref() == Some(kind.as_str()) {
+                    return;
+                }
+                g.view.problem = Some(kind.words().to_string());
+                g.view.problem_kind = Some(kind.as_str().to_string());
+            } else {
+                if g.view.problem_kind.as_deref() != Some(kind.as_str()) && g.view.problem.is_some() {
+                    return;
+                }
+                if g.view.problem.is_none() {
+                    return;
+                }
+                g.view.problem = None;
+                g.view.problem_kind = None;
             }
-            g.view.problem = want;
         }
         self.changed();
     }
@@ -727,7 +914,17 @@ impl Lend {
         let (me, id) = (self.me.clone(), grant_id.to_string());
         Arc::new(move |bad| {
             if let Some(svc) = me.upgrade() {
-                svc.set_problem(&id, bad);
+                svc.set_problem(&id, ProblemKind::Signin, bad);
+            }
+        })
+    }
+
+    /// Told by the borrower's opener: the lending PC does not answer (true) or answers again (false).
+    fn reach_note(&self, grant_id: &str) -> SigninNote {
+        let (me, id) = (self.me.clone(), grant_id.to_string());
+        Arc::new(move |bad| {
+            if let Some(svc) = me.upgrade() {
+                svc.set_problem(&id, ProblemKind::Unreachable, bad);
             }
         })
     }
@@ -735,6 +932,11 @@ impl Lend {
     // ------------------------------------------------------------------------------------------------- asking
 
     pub fn request(&self, member_id: &str, device_id: Option<&str>, agent_id: &str, secs: u64, reason: &str) -> Result<LendRequest, String> {
+        self.request_with_profile(member_id, device_id, agent_id, secs, reason, None, None)
+    }
+
+    /// `request`, naming the lender's profile picked from its offers (None: the lender chooses).
+    pub fn request_with_profile(&self, member_id: &str, device_id: Option<&str>, agent_id: &str, secs: u64, reason: &str, profile_id: Option<&str>, profile_name: Option<&str>) -> Result<LendRequest, String> {
         if self.spec(agent_id).is_none() {
             return Err(format!("{agent_id} can't be borrowed through a PC."));
         }
@@ -775,6 +977,7 @@ impl Lend {
                 reason: reason.to_string(),
                 device_name: my_name.clone(),
                 node_hint: node.clone(),
+                profile_id: profile_id.map(str::to_string),
             };
             let (payload, _) = wire::seal(&session, d, body, now)?;
             self.deps.team.send(&payload)?;
@@ -795,6 +998,9 @@ impl Lend {
             at_ms: now,
             for_other_person: other,
             state: RequestState::Open,
+            profile_id: profile_id.map(str::to_string),
+            // The name the lender's offer gave it (words only; cleaned), so my own list can say what I asked for.
+            profile_name: profile_name.map(clean_profile_name).unwrap_or_default(),
         };
         let mut inner = lock(&self.inner);
         inner.saved.requests.push(RequestRec { view: view.clone(), devices, node_hint: node });
@@ -825,9 +1031,11 @@ impl Lend {
             return Ok(None);
         }
         let spec = self.spec(&req.view.agent_id).cloned().ok_or("This agent can't be lent through this PC.")?;
+        // The profile the lender picked on the card, else the one the borrower asked for, else the first that fits.
+        let wanted = profile_id.map(str::to_string).or_else(|| req.view.profile_id.clone());
         let profile = {
             let inner = lock(&self.inner);
-            match profile_id {
+            match wanted.as_deref() {
                 Some(id) => inner.saved.profiles.iter().find(|p| p.id == id).cloned(),
                 None => inner.saved.profiles.iter().find(|p| p.agent_ids.iter().any(|a| a.eq_ignore_ascii_case(&req.view.agent_id))).cloned(),
             }
@@ -835,6 +1043,10 @@ impl Lend {
         .ok_or("Pick a lend profile first.")?;
         if !profile.agent_ids.iter().any(|a| a.eq_ignore_ascii_case(&req.view.agent_id)) {
             return Err("That profile doesn't lend this agent.".into());
+        }
+        // A profile is only for the people it names, whoever picked it (a borrower may name any id it was never offered).
+        if !profile_allows(&profile, &req.view.member_id, req.view.for_other_person) {
+            return Err("That profile is not for this person.".into());
         }
         let secs = secs.unwrap_or(req.view.secs);
         let cap = cap_for(req.view.for_other_person).min(profile.max_secs);
@@ -874,6 +1086,9 @@ impl Lend {
             input_tokens: 0,
             output_tokens: 0,
             problem: None,
+            problem_kind: None,
+            profile_name: profile.name.clone(),
+            profile_id: profile.id.clone(),
         };
         let body = Body::Grant {
             request_id: request_id.into(),
@@ -886,6 +1101,7 @@ impl Lend {
             node: hint,
             link_secret: b64(&secret),
             device_name: session.roster.device(&session.my_device()?).map(|(_, d)| d.name.clone()).unwrap_or_default(),
+            profile_name: clean_profile_name(&profile.name),
         };
         let (payload, _) = wire::seal(&session, &to, body, now)?;
         // The grant is live before it is sent, so the borrower's first dial finds it.
@@ -958,15 +1174,15 @@ impl Lend {
     async fn refresh_tick(&self, grant_id: &str, plan: &RefreshPlan, last: &mut Option<u64>) {
         let now = self.now();
         let at = match Self::read_expiry(plan).await {
-            None => return self.set_problem(grant_id, true),
+            None => return self.set_problem(grant_id, ProblemKind::Signin, true),
             Some(None) => return,
             Some(Some(at)) => at,
         };
         if at > now.saturating_add(plan.refresh.before_secs.saturating_mul(1000)) {
-            return self.set_problem(grant_id, false);
+            return self.set_problem(grant_id, ProblemKind::Signin, false);
         }
         if at <= now {
-            self.set_problem(grant_id, true);
+            self.set_problem(grant_id, ProblemKind::Signin, true);
         }
         if last.is_some_and(|t| now.saturating_sub(t) < REFRESH_GAP_MS) {
             return;
@@ -983,7 +1199,7 @@ impl Lend {
         let ran = tokio::time::timeout(wait, (self.deps.refresh)(job)).await;
         tracing::info!(grant = grant_id, ran_ok = matches!(ran, Ok(Ok(()))), "lend: sign-in refresh");
         let fine = matches!(Self::read_expiry(plan).await, Some(Some(at)) if at > self.now());
-        self.set_problem(grant_id, !fine);
+        self.set_problem(grant_id, ProblemKind::Signin, !fine);
     }
 
     /// A grant I lend ended (any reason): the record says so, links close, the secret goes.
@@ -1086,12 +1302,14 @@ impl Lend {
         lock(&self.inner).in_grants.insert(grant_id.to_string(), g.clone());
         let (me, net, id) = (self.me.clone(), self.deps.net.clone(), grant_id.to_string());
         let note = self.signin_note(grant_id);
+        let reach = self.reach_note(grant_id);
         let usage = self.usage_note(grant_id);
         let left = ends_ms.saturating_sub(self.now());
         let max_body = self.grant_rec(grant_id).and_then(|r| self.spec(&r.view.agent_id).map(|s| s.max_body_bytes)).unwrap_or(super::spec::MAX_BODY_CAP);
         (self.deps.spawn)(Box::pin(async move {
             let opener = LinkOpener::new(net, g.clone());
-            let shim = match Shim::start_with(opener.clone(), max_body, Some(note), usage).await {
+            let noting = NotingOpener::new(opener.clone(), reach);
+            let shim = match Shim::start_with(noting, max_body, Some(note), usage).await {
                 Ok(s) => s,
                 Err(error) => {
                     tracing::warn!(%error, "lend: the local shim could not start");
@@ -1168,7 +1386,9 @@ impl Lend {
                 serde_json::json!({
                     "id": format!("{ACCOUNT_PREFIX}{}", g.view.id),
                     "agent_id": g.view.agent_id,
-                    "label": format!("{}'s PC (lent)", g.view.peer_name),
+                    "label": borrowed_name(&g.view.peer_name, &g.view.peer_device_name, &g.view.profile_name, !g.view.for_other_person),
+                    "profile_name": g.view.profile_name,
+                    "owner": g.view.peer_name,
                     "ends_ms": g.view.ends_ms,
                     "grant_id": g.view.id,
                     "chat": self.spec(&g.view.agent_id).is_some_and(|s| s.chat.is_some()),
@@ -1178,7 +1398,9 @@ impl Lend {
     }
 
     pub fn borrowed_label(&self, grant_id: &str) -> Option<String> {
-        self.grant_rec(grant_id).filter(|g| g.view.direction == Direction::In).map(|g| format!("{}'s PC (lent)", g.view.peer_name))
+        self.grant_rec(grant_id)
+            .filter(|g| g.view.direction == Direction::In)
+            .map(|g| borrowed_name(&g.view.peer_name, &g.view.peer_device_name, &g.view.profile_name, !g.view.for_other_person))
     }
 
     pub fn grant_agent(&self, grant_id: &str) -> Option<(String, GrantState, Direction)> {
@@ -1189,6 +1411,87 @@ impl Lend {
     #[cfg(test)]
     pub fn usage(&self, grant_id: &str) -> Option<super::gate::Usage> {
         lock(&self.inner).out.get(grant_id).map(|l| l.gate.usage())
+    }
+
+    // ------------------------------------------------------------------------------------------------- offers
+
+    /// What this PC offers `asker`: only profiles that person could really borrow (the same rule as who may ask). Never a
+    /// profile that is for my own PCs to a teammate. Names and numbers only.
+    fn offers_for(&self, asker_member: &str, me_member: &str) -> Vec<Offer> {
+        let other = asker_member != me_member;
+        let inner = lock(&self.inner);
+        let mut out = Vec::new();
+        for p in inner.saved.profiles.iter().filter(|p| profile_allows(p, asker_member, other)) {
+            for agent in &p.agent_ids {
+                if self.spec(agent).is_none() {
+                    continue;
+                }
+                let max_secs = p.max_secs.min(cap_for(other));
+                out.push(Offer {
+                    profile_id: p.id.clone(),
+                    name: clean_profile_name(&p.name),
+                    agent_id: agent.clone(),
+                    max_secs,
+                    default_secs: p.default_secs.min(max_secs),
+                    asks_first: p.approval == Approval::Each,
+                });
+            }
+        }
+        out.truncate(wire::MAX_OFFERS);
+        out
+    }
+
+    /// Asks a member's PC(s) what they can lend me, and waits up to `within` for the answers. `answered` is false when no
+    /// PC answered (an older build, asleep, offline): the screen then falls back to asking for an agent.
+    pub async fn offers(&self, member_id: &str, device_id: Option<&str>, within: Duration) -> Result<OffersResult, String> {
+        let session = self.deps.team.session()?;
+        let me_member = session.my_member()?;
+        let me_device = session.my_device()?;
+        let member = session.roster.member(member_id).ok_or("That person is not on the team.")?.clone();
+        let devices: Vec<String> = match device_id {
+            Some(d) => {
+                if !member.devices.iter().any(|x| x.id == d) || d == me_device {
+                    return Err("That PC is not one of theirs.".into());
+                }
+                vec![d.to_string()]
+            }
+            None => member.devices.iter().map(|d| d.id.clone()).filter(|d| *d != me_device).collect(),
+        };
+        if devices.is_empty() || (member.id == me_member && devices.is_empty()) {
+            return Err("They have no other PC on the team.".into());
+        }
+        let nonce = short_id("lo");
+        lock(&self.offers_wait).insert(nonce.clone(), PendingOffers { member: member.id.clone(), asked: devices.clone(), got: HashMap::new() });
+        for d in &devices {
+            let sent = wire::seal(&session, d, Body::OffersAsk { nonce: nonce.clone() }, self.now()).and_then(|(payload, _)| self.deps.team.send(&payload));
+            if let Err(e) = sent {
+                lock(&self.offers_wait).remove(&nonce);
+                return Err(e);
+            }
+        }
+        let deadline = tokio::time::Instant::now() + within;
+        loop {
+            let done = lock(&self.offers_wait).get(&nonce).is_none_or(|p| p.got.len() >= p.asked.len());
+            if done || tokio::time::Instant::now() >= deadline {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(40)).await;
+        }
+        let pending = lock(&self.offers_wait).remove(&nonce);
+        let got = pending.map(|p| p.got).unwrap_or_default();
+        let mut offers = Vec::new();
+        for (device, list) in &got {
+            let device_name = session.roster.device(device).map(|(_, d)| d.name.clone()).unwrap_or_default();
+            offers.extend(list.iter().cloned().map(|offer| OfferView { offer, device_id: device.clone(), device_name: device_name.clone() }));
+        }
+        offers.sort_by(|a, b| (a.offer.name.to_lowercase(), &a.device_id).cmp(&(b.offer.name.to_lowercase(), &b.device_id)));
+        Ok(OffersResult { answered: !got.is_empty(), offers })
+    }
+
+    /// Tests: the nonce of an offers question that is still waiting for answers.
+    #[cfg(test)]
+    pub fn pending_offers_nonce(&self) -> Option<String> {
+        lock(&self.offers_wait).keys().next().cloned()
     }
 
     // ------------------------------------------------------------------------------------------------- inbound
@@ -1215,7 +1518,7 @@ impl Lend {
             (m, d)
         };
         match item.body {
-            Body::Request { request_id, agent_id, mode, duration_ms, reason, device_name, node_hint } => {
+            Body::Request { request_id, agent_id, mode, duration_ms, reason, device_name, node_hint, profile_id } => {
                 if mode != MODE || self.spec(&agent_id).is_none() || node_from_hex(&node_hint).is_none() {
                     return Err(WireReject::BadItem);
                 }
@@ -1237,11 +1540,14 @@ impl Lend {
                     at_ms: now,
                     for_other_person: other,
                     state: RequestState::Open,
+                    // An id is opaque: only a short plain one is kept.
+                    profile_id: profile_id.filter(|p| !p.is_empty() && p.len() <= 64 && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')),
+                    profile_name: String::new(),
                 };
                 inner.saved.requests.push(RequestRec { view, devices: vec![item.from_device.clone()], node_hint });
                 self.save(&inner);
             }
-            Body::Grant { request_id, grant_id, agent_id, mode, duration_ms, not_after_ms, limits, node, link_secret, device_name } => {
+            Body::Grant { request_id, grant_id, agent_id, mode, duration_ms, not_after_ms, limits, node, link_secret, device_name, profile_name } => {
                 let secret = unb64(&link_secret).filter(|s| s.len() == 32).ok_or(WireReject::BadItem)?;
                 if mode != MODE || node_from_hex(&node.id).is_none() {
                     return Err(WireReject::BadItem);
@@ -1291,6 +1597,9 @@ impl Lend {
                             input_tokens: 0,
                             output_tokens: 0,
                             problem: None,
+                            problem_kind: None,
+                            profile_name: clean_profile_name(&profile_name),
+                            profile_id: String::new(),
                         },
                         lender_device: item.from_device.clone(),
                         borrower_device: my_device,
@@ -1334,6 +1643,37 @@ impl Lend {
                     return Err(WireReject::Impersonation);
                 }
                 self.finish_out(&grant_id, EndReason::Returned);
+            }
+            Body::OffersAsk { nonce } => {
+                // Only what THIS asker may use. Nothing changes here, so the screens need no refresh.
+                let offers = self.offers_for(&item.from_member, &me_member);
+                let (payload, _) = wire::seal(session, &item.from_device, Body::Offers { nonce, offers }, now).map_err(|_| WireReject::BadItem)?;
+                let _ = self.deps.team.send(&payload);
+                return Ok(());
+            }
+            Body::Offers { nonce, offers } => {
+                let mut wait = lock(&self.offers_wait);
+                let pending = wait.get_mut(&nonce).ok_or(WireReject::BadItem)?;
+                // Only a device I asked, once, and for the member I asked.
+                if pending.member != item.from_member || !pending.asked.contains(&item.from_device) {
+                    return Err(WireReject::BadItem);
+                }
+                if pending.got.contains_key(&item.from_device) {
+                    return Err(WireReject::Replay);
+                }
+                // Words from another PC: cut and cleaned, at most 20, and only agents this PC can ask for.
+                let clean: Vec<Offer> = offers
+                    .into_iter()
+                    .filter(|o| self.spec(&o.agent_id).is_some() && !o.profile_id.is_empty() && o.profile_id.len() <= 64)
+                    .take(wire::MAX_OFFERS)
+                    .map(|mut o| {
+                        o.name = clean_profile_name(&o.name);
+                        o
+                    })
+                    .filter(|o| !o.name.is_empty())
+                    .collect();
+                pending.got.insert(item.from_device.clone(), clean);
+                return Ok(());
             }
             // Pings are answered before the lend service (`ping`); one that gets here is not for it.
             Body::Ack { .. } | Body::Ping { .. } | Body::Pong { .. } => return Ok(()),

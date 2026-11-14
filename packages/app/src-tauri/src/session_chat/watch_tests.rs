@@ -145,11 +145,7 @@ fn append(path: &Path, text: &str) {
 }
 
 fn wait_until(what: &str, cond: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !cond() {
-        assert!(Instant::now() < deadline, "timed out waiting for: {what}");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    crate::test_support::wait::wait_for(what, 5, cond);
 }
 
 #[test]

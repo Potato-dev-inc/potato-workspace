@@ -25,6 +25,10 @@ export interface BorrowedSignIn {
   ends_ms: number;
   grant_id: string;
   chat?: boolean;
+  /** The lender's name for the profile, cleaned (an older lender sends none). `label` already carries it. */
+  profile_name?: string;
+  /** Who lent it. */
+  owner?: string;
 }
 
 /** An agent whose profile declares how it is pointed at another account. */

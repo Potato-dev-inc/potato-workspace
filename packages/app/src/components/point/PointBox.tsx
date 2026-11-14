@@ -2,6 +2,8 @@
 // does. PointBoxApp owns the state and the calls (see lib/point-api.ts). Every page-derived string is plain text.
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { PickView, PointState } from '../../lib/point-api';
+import { useT } from '../../i18n';
+import { RecheckStrip } from './RecheckStrip';
 import { MAX_REQUEST, boxKey, groupTargets, sourceLine, targetLabel } from './point-model';
 
 /** Most elements one message carries (the Rust session keeps the same cap). */
@@ -22,6 +24,10 @@ export interface PointBoxProps {
   onDiscard: () => void;
   onHide: () => void;
   onOpenBlocked: () => void;
+  /** "Check again" in the before and after strip. */
+  onRecheckAgain?: () => void;
+  /** Closes the before and after strip. */
+  onRecheckClose?: () => void;
   /** One plain sentence about the last action that did not happen. The text stays in the box. */
   error?: string | null;
   /** One plain line about the last action that did happen, e.g. "Copied.". */
@@ -31,14 +37,15 @@ export interface PointBoxProps {
 }
 
 function PickRow({ pick, onRemove }: { pick: PickView; onRemove: (id: string) => void }): JSX.Element {
+  const t = useT();
   const line = sourceLine(pick);
   return (
     <li className="point-box-pick">
       {pick.thumb ? (
-        <img className="point-box-thumb" src={pick.thumb} alt={`Screenshot of ${pick.label}`} />
+        <img className="point-box-thumb" src={pick.thumb} alt={t('point.shotOf', { label: pick.label })} />
       ) : (
-        <div className="point-box-thumb point-box-thumb--none" title={pick.noShotReason || 'No screenshot'}>
-          No screenshot
+        <div className="point-box-thumb point-box-thumb--none" title={pick.noShotReason || t('point.noShot')}>
+          {t('point.noShot')}
         </div>
       )}
       <div className="point-box-pick-body">
@@ -55,7 +62,7 @@ function PickRow({ pick, onRemove }: { pick: PickView; onRemove: (id: string) =>
           {pick.page}
         </div>
       </div>
-      <button type="button" className="point-box-x" aria-label={`Remove ${pick.label}`} onClick={() => onRemove(pick.id)}>
+      <button type="button" className="point-box-x" aria-label={t('point.remove', { label: pick.label })} onClick={() => onRemove(pick.id)}>
         ×
       </button>
     </li>
@@ -77,13 +84,16 @@ export function PointBox(props: PointBoxProps): JSX.Element {
     onDiscard,
     onHide,
     onOpenBlocked,
+    onRecheckAgain,
+    onRecheckClose,
     error,
     info,
     busy = false,
   } = props;
+  const t = useT();
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const picks = state.picks;
-  const chosen = state.targets.find((t) => t.paneId === target);
+  const chosen = state.targets.find((x) => x.paneId === target);
   const ready = picks.length > 0;
   const canSend = ready && !!chosen?.canSend && !busy;
   const canCopy = ready && !!chosen && !busy;
@@ -114,13 +124,17 @@ export function PointBox(props: PointBoxProps): JSX.Element {
   };
 
   return (
-    <div className="point-box" role="dialog" aria-label="Point and Fix" onKeyDown={onRootKeyDown}>
+    <div className="point-box" role="dialog" aria-label={t('point.title')} onKeyDown={onRootKeyDown}>
+      {state.recheck && picks.length === 0 ? (
+        <RecheckStrip view={state.recheck} onAgain={() => onRecheckAgain?.()} onClose={() => onRecheckClose?.()} />
+      ) : (
+        <>
       <div className="point-box-head">
-        <span className="point-box-title">Point and Fix</span>
-        <span className="point-box-count">{`${picks.length} of ${MAX_PICKS}`}</span>
+        <span className="point-box-title">{t('point.title')}</span>
+        <span className="point-box-count">{t('point.count', { n: picks.length, max: MAX_PICKS })}</span>
         <span className="point-box-spacer" />
         <button type="button" className="point-box-btn point-box-btn--plain" onClick={onDiscard}>
-          Discard
+          {t('point.discard')}
         </button>
       </div>
 
@@ -128,7 +142,7 @@ export function PointBox(props: PointBoxProps): JSX.Element {
         <div className="point-box-notice" role="status">
           <span>{state.notice}</span>
           <button type="button" className="point-box-btn point-box-btn--plain" onClick={onOpenBlocked}>
-            Open in browser
+            {t('point.openInBrowser')}
           </button>
         </div>
       )}
@@ -140,29 +154,30 @@ export function PointBox(props: PointBoxProps): JSX.Element {
           ))}
         </ul>
       ) : (
-        <p className="point-box-empty">Click Point in the preview, then click the thing that is wrong.</p>
+        <p className="point-box-empty">{t('point.empty')}</p>
       )}
 
       <label className="point-box-to">
-        <span>To</span>
+        <span>{t('point.to')}</span>
         <select className="point-box-select" value={target ?? ''} onChange={(e) => onTarget(e.target.value)} disabled={state.targets.length === 0}>
-          {!chosen && <option value="">Choose a pane</option>}
+          {!chosen && <option value="">{t('point.choose')}</option>}
           {groupTargets(state.targets).map((g) => (
-            <optgroup key={g.label} label={g.label}>
-              {g.items.map((t) => (
-                <option key={t.paneId} value={t.paneId} disabled={!t.canSend}>
-                  {targetLabel(t)}
+            <optgroup key={g.key} label={t(g.key === 'same' ? 'point.group.same' : 'point.group.other')}>
+              {g.items.map((item) => (
+                <option key={item.paneId} value={item.paneId} disabled={!item.canSend}>
+                  {targetLabel(item)}
                 </option>
               ))}
             </optgroup>
           ))}
         </select>
       </label>
-      {state.targets.length === 0 && <div className="point-box-reason">No agent pane is open to take the message.</div>}
+      {state.targets.length === 0 && <div className="point-box-reason">{t('point.noTargets')}</div>}
       {chosen && !chosen.canSend && chosen.reason && <div className="point-box-reason">{chosen.reason}</div>}
+      {chosen?.canSend && chosen.chat && <div className="point-box-reason">{t('point.chatNote')}</div>}
 
       <label className="point-box-q" htmlFor="point-box-request">
-        What should change?
+        {t('point.question')}
       </label>
       <textarea
         id="point-box-request"
@@ -174,7 +189,7 @@ export function PointBox(props: PointBoxProps): JSX.Element {
         onChange={(e) => onRequest(e.target.value)}
         onKeyDown={onAreaKeyDown}
       />
-      <div className="point-box-hint">Enter sends. Shift+Enter starts a new line. Esc hides.</div>
+      <div className="point-box-hint">{t('point.hint')}</div>
 
       {(error || info) && (
         <div className={error ? 'point-box-error' : 'point-box-info'} role={error ? 'alert' : 'status'}>
@@ -184,19 +199,21 @@ export function PointBox(props: PointBoxProps): JSX.Element {
 
       <div className="point-box-foot">
         <button type="button" className="point-box-btn point-box-btn--plain" onClick={onPointAnother} disabled={picks.length >= MAX_PICKS || busy}>
-          Point another
+          {t('point.another')}
         </button>
         <span className="point-box-spacer" />
         <button type="button" className="point-box-btn" onClick={onCopy} disabled={!canCopy}>
-          Copy
+          {t('point.copy')}
         </button>
         <button type="button" className="point-box-btn" onClick={onEditInChat} disabled={!canSend}>
-          Edit in Chat
+          {t('point.editInChat')}
         </button>
         <button type="button" className="point-box-btn point-box-btn--primary" onClick={onSend} disabled={!canSend}>
-          {busy ? 'Sending…' : 'Send'}
+          {busy ? t('point.sending') : t('point.send')}
         </button>
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -457,7 +457,7 @@ impl Env for RealEnv {
     }
 
     fn live_prompt(&self, pane_id: &str) -> Option<Live> {
-        let (detected, observed_pos) = crate::pane_prompt::detect_at(&self.registry, pane_id, false)?;
+        let (detected, observed_pos) = crate::pane_prompt::detect_at_for_answer(&self.registry, pane_id, false)?;
         let prompt = crate::pane_prompt::PanePrompt::from_detected(&detected)?;
         let pid = self.registry.lock().panes.get(pane_id).map(|p| p.info.pid)?;
         Some(Live {

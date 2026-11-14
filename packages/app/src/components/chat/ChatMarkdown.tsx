@@ -1,8 +1,9 @@
 // The agent's own text (a session file) as formatted text: headings, bold, code, lists, quotes, rules and tables.
 // The tree comes from lib/chatMarkdown; every piece is a React element with text children, so no HTML from the
 // message is ever created. Links show their text and keep the address in `title`; they are not clickable.
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { parseChatMarkdown, type Align, type Block, type Inline, type ListBlock, type ListItem } from '../../lib/chatMarkdown';
+import { FoldButton, useFold } from './chatFold';
 import '../../styles/chat-copy.css';
 import '../../styles/chat-agent-cards.css';
 
@@ -21,9 +22,10 @@ const WEB_URL = /^https?:\/\/[^\s<>"']+$/i;
 const COPIED_MS = 1500;
 
 export function ChatMarkdown({ text, onOpenLink }: ChatMarkdownProps) {
+  const blocks = useMemo(() => safeParse(text), [text]);
   return (
     <OpenLink.Provider value={onOpenLink}>
-      <div className="ck-chat-md min-w-0 break-words ck-chat-text">{renderBlocks(safeParse(text))}</div>
+      <div className="ck-chat-md min-w-0 break-words ck-chat-text">{renderBlocks(blocks)}</div>
     </OpenLink.Provider>
   );
 }
@@ -93,9 +95,10 @@ function renderBlock(block: Block, key: number): ReactNode {
   }
 }
 
-/** A fenced block with a Copy button. The button copies the code as written: no language tag, no added newline. */
+/** A fenced block with a Copy button. Over 30 lines it folds (Show all N lines). The button copies all the code as written: no language tag, no added newline. */
 function CodeBlock({ lang, text }: { lang: string; text: string }) {
   const [copied, setCopied] = useState(false);
+  const fold = useFold(text);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -126,8 +129,9 @@ function CodeBlock({ lang, text }: { lang: string; text: string }) {
         </button>
       </div>
       <pre data-lang={lang || undefined} className="ck-chat-md-pre ck-agc-codepre">
-        <code>{text}</code>
+        <code>{fold.shown}</code>
       </pre>
+      <FoldButton fold={fold} className="ck-agc-fold" />
     </div>
   );
 }

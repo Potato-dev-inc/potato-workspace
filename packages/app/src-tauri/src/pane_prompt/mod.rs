@@ -65,13 +65,37 @@ pub fn detect_at(
     pane_id: &str,
     allow_broad: bool,
 ) -> Option<(Value, Option<u64>)> {
+    detect_as(registry, pane_id, allow_broad, false)
+}
+
+/// The prompt an ANSWER is checked against. A card is drawn while the pane is `waiting_input`, and a menu no profile
+/// describes gets its card only then (`generic_menu::unknown_question`: an `idle` pane needs a plainly-approval menu,
+/// a `running` pane gets none). The pane's status can move between the card being drawn and the click (a spinner tick,
+/// a redraw, the idle timer) while the same menu is still on screen: reading it with the status of that moment made the
+/// click fail as STALE ("not showing a supported prompt") although the person was looking at the question. The id the
+/// caller sends must still equal the id of what is on screen, so only a prompt that was offered can be answered.
+pub fn detect_for_answer(registry: &Arc<Mutex<PaneRegistry>>, pane_id: &str, allow_broad: bool) -> Option<Value> {
+    detect_as(registry, pane_id, allow_broad, true).map(|(prompt, _)| prompt)
+}
+
+/// [`detect_for_answer`] with the stream position (the phone card's re-read under an answer permit).
+pub fn detect_at_for_answer(registry: &Arc<Mutex<PaneRegistry>>, pane_id: &str, allow_broad: bool) -> Option<(Value, Option<u64>)> {
+    detect_as(registry, pane_id, allow_broad, true)
+}
+
+fn detect_as(
+    registry: &Arc<Mutex<PaneRegistry>>,
+    pane_id: &str,
+    allow_broad: bool,
+    as_waiting: bool,
+) -> Option<(Value, Option<u64>)> {
     let (agent_type, screen, pos, workspace, status) = {
         let reg = registry.lock();
         let pane = reg.panes.get(pane_id)?;
         let parser = pane.screen.lock();
         let pos = crate::pty::stream_pos::get(pane_id).map(|p| p.processed.load(std::sync::atomic::Ordering::SeqCst));
         let contents = parser.screen().contents();
-        let status = pane.status.lock().as_str();
+        let status = if as_waiting { "waiting_input" } else { pane.status.lock().as_str() };
         (pane.info.agent_type.clone(), contents, pos, pane.info.cwd.clone(), status)
     };
     let mut prompt = detect_in_screen_with_status(&agent_type, &screen, allow_broad, Some(status))?;
@@ -522,7 +546,7 @@ pub fn answer_with(
                 false,
             )
         })?;
-    let prompt = detect(registry, pane_id, true).ok_or_else(|| {
+    let prompt = detect_for_answer(registry, pane_id, true).ok_or_else(|| {
         OperationError::new(
             "STALE_PROMPT",
             "this pane is not showing a supported prompt; it may already be answered (re-check with wait_for_panes)",

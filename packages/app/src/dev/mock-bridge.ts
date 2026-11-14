@@ -56,6 +56,9 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
   if (route === '/pair/me') {
     return json({ local: false, device_id: 'harness-phone', caps: scenario.phoneCaps ?? ['watch', 'answer', 'type', 'control'] });
   }
+  if (route === '/plans' && method === 'GET') {
+    return json({ month: { id: '2026-11', label: 'November 2026', startMs: 0, endMs: 1 }, months: [], rows: [], totals: { turns: 41, busyMs: 0, filesChanged: 0, added: 0, deleted: 0, merged: 0, limitHits: 0, limitedMs: 0 }, notes: [] });
+  }
   if (route === '/previews') return json({ previews: PHONE_PREVIEWS });
   if (route === '/settings') return json({ ...DEFAULT_PUBLIC_SETTINGS });
   if (route === '/attention' && method === 'GET' && phone.attention) {

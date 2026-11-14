@@ -46,7 +46,7 @@ export function laneNote(agent: AcpLaneAgent): string {
   return t('lane.helperTerminal');
 }
 
-export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; api?: Pick<AcpChatApi, 'laneGet' | 'laneSet'> & Pick<AcpChatApi, 'overlayDetect' | 'overlaySet' | 'overlayRemove' | 'chatRemove'> }) {
+export function AgentLaneRows({ api = tauriAcpChatApi, only, noAdapter = false }: { only?: string; /** The agent page has its own Chat adapter row: leave Add chat and Remove chat to it. */ noAdapter?: boolean; api?: Pick<AcpChatApi, 'laneGet' | 'laneSet'> & Pick<AcpChatApi, 'overlayDetect' | 'overlaySet' | 'overlayRemove' | 'chatRemove'> }) {
   const t = useT();
   const [view, setView] = useState<AcpLaneView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +114,7 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
     [api, t],
   );
 
-  const addable = addableChat(view).filter((a) => !only || a.id === only);
+  const addable = noAdapter ? [] : addableChat(view).filter((a) => !only || a.id === only);
   const terminalChat = terminalChatCapable(view).filter((t) => !only || t.id === only);
   const laneAgents = view ? view.agents.filter((a) => !only || a.id === only) : [];
   if (!view || !view.labs_enabled || (laneAgents.length === 0 && addable.length === 0 && terminalChat.length === 0)) return null;
@@ -139,16 +139,18 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
             </>
           }
         >
-          <Btn
-            small
-            aria-label={t('lane.removeFor', { label: agent.label })}
-            onClick={() => {
-              setRemoveError(null);
-              setRemoving(agent);
-            }}
-          >
-            {t('lane.removeChat')}
-          </Btn>
+          {!noAdapter && (
+            <Btn
+              small
+              aria-label={t('lane.removeFor', { label: agent.label })}
+              onClick={() => {
+                setRemoveError(null);
+                setRemoving(agent);
+              }}
+            >
+              {t('lane.removeChat')}
+            </Btn>
+          )}
           {!agent.disabled && (
             <Popup aria-label={t('lane.howRuns', { label: agent.label })} value={shownLane(agent)} onChange={(event) => void save(agent.id, event.target.value as RunLaneWord)}>
               <option value="terminal">{t('agentPage.terminal')}</option>
@@ -166,7 +168,7 @@ export function AgentLaneRows({ api = tauriAcpChatApi, only }: { only?: string; 
             label={only ? t('agentPage.howOpens') : tc.label}
             description={<>{t('lane.newSessions', { word: TERMINAL_CHAT_WORD })}{terminalChatNote(tc.id)}</>}
           >
-            {tc.chosen && (
+            {tc.chosen && !noAdapter && (
               <Btn
                 small
                 aria-label={t('lane.removeFor', { label: tc.label })}

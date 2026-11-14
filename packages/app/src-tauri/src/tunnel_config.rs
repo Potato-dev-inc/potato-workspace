@@ -9,6 +9,9 @@
 //! - `quick`  (default): bundled cloudflared quick tunnel; the trycloudflare URL changes per launch.
 //! - `named`: `cloudflared tunnel run` with a Cloudflare tunnel token; `hostname` is the stable origin.
 //! - `custom`: the user runs their own proxy or domain; Potato Workspace just advertises the URL.
+//! - `stable`: the quick tunnel plus the user's own Cloudflare Worker (`relay/stable-link`): the phone is
+//!   told the Worker's fixed address, and the app registers every new quick-tunnel URL with the Worker
+//!   (see `mobile_tunnel/stable_link.rs`). The shared secret is stored like the named-tunnel token.
 //!
 //! `POTATO_WORKSPACE_PUBLIC_URL` (env) still wins over everything and skips cloudflared.
 
@@ -37,6 +40,10 @@ pub enum TunnelConfig {
     Custom {
         url: String,
     },
+    Stable {
+        worker_url: String,
+        secret: String,
+    },
 }
 
 // Manual Debug so a stray `{:?}` can never print the token.
@@ -46,6 +53,7 @@ impl std::fmt::Debug for TunnelConfig {
             Self::Quick => write!(f, "Quick"),
             Self::Named { hostname, .. } => write!(f, "Named {{ hostname: {hostname:?}, token: <redacted> }}"),
             Self::Custom { url } => write!(f, "Custom {{ url: {url:?} }}"),
+            Self::Stable { worker_url, .. } => write!(f, "Stable {{ worker_url: {worker_url:?}, secret: <redacted> }}"),
         }
     }
 }
@@ -57,6 +65,8 @@ pub struct TunnelConfigView {
     pub hostname: Option<String>,
     pub url: Option<String>,
     pub has_token: bool,
+    /// `stable` mode: whether a shared secret is stored (never the secret itself).
+    pub has_secret: bool,
 }
 
 /// What the UI sends. `token: None` on a `named` save means "keep the stored token".
@@ -72,21 +82,74 @@ pub enum TunnelConfigInput {
     Custom {
         url: String,
     },
+    Stable {
+        worker_url: String,
+        /// A secret the person chose (for the Worker's `SETUP_SECRET_SHA256`). Empty or absent: keep or make one.
+        #[serde(default)]
+        secret: Option<String>,
+        #[serde(default)]
+        secret_action: SecretAction,
+    },
+}
+
+/// What a `stable` save does with the shared secret.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SecretAction {
+    /// Keep the stored secret (make one the first time).
+    #[default]
+    Keep,
+    /// Throw the stored secret away and make a new one.
+    Regenerate,
+    /// Keep it, and send it back once so the person can copy it.
+    Show,
 }
 
 impl TunnelConfig {
     pub fn view(&self) -> TunnelConfigView {
+        let base = |mode: &'static str| TunnelConfigView { mode, hostname: None, url: None, has_token: false, has_secret: false };
         match self {
-            Self::Quick => TunnelConfigView { mode: "quick", hostname: None, url: None, has_token: false },
+            Self::Quick => base("quick"),
             Self::Named { token, hostname } => TunnelConfigView {
-                mode: "named",
                 hostname: Some(hostname.clone()),
-                url: None,
                 has_token: !token.is_empty(),
+                ..base("named")
             },
-            Self::Custom { url } => TunnelConfigView { mode: "custom", hostname: None, url: Some(url.clone()), has_token: false },
+            Self::Custom { url } => TunnelConfigView { url: Some(url.clone()), ..base("custom") },
+            Self::Stable { worker_url, secret } => {
+                TunnelConfigView { url: Some(worker_url.clone()), has_secret: !secret.is_empty(), ..base("stable") }
+            }
         }
     }
+
+    /// The stored shared secret of a `stable` setting.
+    pub fn stable_secret(&self) -> Option<&str> {
+        match self {
+            Self::Stable { secret, .. } if !secret.is_empty() => Some(secret),
+            _ => None,
+        }
+    }
+}
+
+/// 32 random bytes as 43 URL-safe characters: the shared secret between the app and the Worker.
+pub fn generate_secret() -> String {
+    use base64::Engine;
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
+/// A secret the person typed: long enough to guess nothing, and safe inside an HTTP header.
+fn check_chosen_secret(raw: &str) -> Result<String, String> {
+    let secret = raw.trim();
+    if secret.len() < 16 {
+        return Err("The secret needs at least 16 characters.".into());
+    }
+    if secret.len() > 200 || !secret.chars().all(|c| c.is_ascii_graphic()) {
+        return Err("The secret may only use letters, numbers and symbols (no spaces).".into());
+    }
+    Ok(secret.to_string())
 }
 
 /// Validate UI input into a stored config. `current` supplies the stored token when the UI omits it.
@@ -94,6 +157,16 @@ pub fn config_from_input(input: TunnelConfigInput, current: &TunnelConfig) -> Re
     match input {
         TunnelConfigInput::Quick => Ok(TunnelConfig::Quick),
         TunnelConfigInput::Custom { url } => Ok(TunnelConfig::Custom { url: normalize_custom_url(&url)? }),
+        TunnelConfigInput::Stable { worker_url, secret, secret_action } => {
+            let worker_url = normalize_custom_url(&worker_url)?;
+            let chosen = secret.as_deref().map(str::trim).filter(|s| !s.is_empty());
+            let secret = match (chosen, secret_action, current.stable_secret()) {
+                (Some(own), _, _) => check_chosen_secret(own)?,
+                (None, SecretAction::Regenerate, _) | (None, _, None) => generate_secret(),
+                (None, _, Some(stored)) => stored.to_string(),
+            };
+            Ok(TunnelConfig::Stable { worker_url, secret })
+        }
         TunnelConfigInput::Named { token, hostname } => {
             let origin = normalize_origin(&hostname, true)?;
             let stored = match current {
@@ -179,6 +252,8 @@ pub enum TunnelPlan {
     Quick,
     Named { origin: String },
     Custom { url: String },
+    /// A quick tunnel registered with the person's own Worker; phones are told `worker_url`.
+    Stable { worker_url: String },
 }
 
 impl TunnelPlan {
@@ -188,6 +263,7 @@ impl TunnelPlan {
             Self::Quick => "quick",
             Self::Named { .. } => "named",
             Self::Custom { .. } => "custom",
+            Self::Stable { .. } => "stable",
         }
     }
 
@@ -196,12 +272,13 @@ impl TunnelPlan {
         match self {
             Self::Env { url } | Self::Custom { url } => Some(url.clone()),
             Self::Named { origin } => Some(origin.clone()),
+            Self::Stable { worker_url } => Some(worker_url.clone()),
             Self::Quick => None,
         }
     }
 
     pub fn runs_cloudflared(&self) -> bool {
-        matches!(self, Self::Quick | Self::Named { .. })
+        matches!(self, Self::Quick | Self::Named { .. } | Self::Stable { .. })
     }
 }
 
@@ -213,6 +290,7 @@ pub fn resolve_plan(env_public_url: Option<String>, config: &TunnelConfig) -> Tu
         TunnelConfig::Quick => TunnelPlan::Quick,
         TunnelConfig::Named { hostname, .. } => TunnelPlan::Named { origin: format!("https://{hostname}") },
         TunnelConfig::Custom { url } => TunnelPlan::Custom { url: url.clone() },
+        TunnelConfig::Stable { worker_url, .. } => TunnelPlan::Stable { worker_url: worker_url.clone() },
     }
 }
 
@@ -359,5 +437,79 @@ mod tests {
         assert!(matches!(classify_named_line("ERR Unauthorized: invalid tunnel secret"), NamedLine::Failed(_)));
         assert!(matches!(classify_named_line("Provided tunnel token is not valid"), NamedLine::Failed(_)));
         assert_eq!(classify_named_line("INF Starting tunnel"), NamedLine::Other);
+    }
+
+    fn stable_input(url: &str, secret: Option<&str>, action: SecretAction) -> TunnelConfigInput {
+        TunnelConfigInput::Stable { worker_url: url.into(), secret: secret.map(Into::into), secret_action: action }
+    }
+
+    #[test]
+    fn stable_round_trips_in_its_own_file_and_the_view_never_contains_the_secret() {
+        let dir = std::env::temp_dir().join(format!("pm-tunnel-stable-{}", std::process::id()));
+        let path = dir.join(TUNNEL_FILE_NAME);
+        let cfg = TunnelConfig::Stable { worker_url: "https://pm.me.workers.dev".into(), secret: "S3CRET-VALUE-0123456789".into() };
+        save(&path, &cfg).unwrap();
+        assert_eq!(load(&path), cfg);
+        let view = serde_json::to_string(&cfg.view()).unwrap();
+        assert!(!view.contains("S3CRET-VALUE"), "view leaked the secret: {view}");
+        assert!(view.contains("\"has_secret\":true") && view.contains("\"mode\":\"stable\"") && view.contains("https://pm.me.workers.dev"));
+        assert!(!format!("{cfg:?}").contains("S3CRET-VALUE"), "Debug leaked the secret");
+        // not in the public settings mirror either
+        let patch = serde_json::json!({"mode": "stable", "worker_url": "https://x.dev", "secret": "S3CRET-VALUE"});
+        let merged = crate::settings_store::merge_public_settings(&serde_json::json!({}), &patch);
+        assert!(!merged.to_string().contains("S3CRET-VALUE"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn stable_makes_a_32_byte_secret_once_and_keeps_it_until_asked() {
+        let first = config_from_input(stable_input("https://pm.me.workers.dev/", None, SecretAction::Keep), &TunnelConfig::Quick).unwrap();
+        let TunnelConfig::Stable { worker_url, secret } = &first else { panic!("{first:?}") };
+        assert_eq!(worker_url, "https://pm.me.workers.dev");
+        assert_eq!(secret.len(), 43, "32 random bytes as URL-safe base64");
+        assert!(secret.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        let kept = config_from_input(stable_input("pm.me.workers.dev", None, SecretAction::Keep), &first).unwrap();
+        assert_eq!(kept.stable_secret(), first.stable_secret());
+        let shown = config_from_input(stable_input("pm.me.workers.dev", None, SecretAction::Show), &first).unwrap();
+        assert_eq!(shown.stable_secret(), first.stable_secret());
+        let fresh = config_from_input(stable_input("pm.me.workers.dev", None, SecretAction::Regenerate), &first).unwrap();
+        assert_ne!(fresh.stable_secret(), first.stable_secret());
+        assert_ne!(generate_secret(), generate_secret());
+    }
+
+    #[test]
+    fn stable_accepts_a_chosen_secret_and_refuses_weak_or_unsafe_ones() {
+        let cfg = config_from_input(stable_input("https://w.dev", Some("  my-own-secret-123456  "), SecretAction::Keep), &TunnelConfig::Quick).unwrap();
+        assert_eq!(cfg.stable_secret(), Some("my-own-secret-123456"));
+        for bad in ["short", "has a space in it 1234", "line\nbreak-1234567890"] {
+            assert!(config_from_input(stable_input("https://w.dev", Some(bad), SecretAction::Keep), &TunnelConfig::Quick).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn stable_worker_address_must_be_https_unless_it_is_this_machine() {
+        assert!(config_from_input(stable_input("http://pm.me.workers.dev", None, SecretAction::Keep), &TunnelConfig::Quick).is_err());
+        assert!(config_from_input(stable_input("", None, SecretAction::Keep), &TunnelConfig::Quick).is_err());
+        assert!(config_from_input(stable_input("http://127.0.0.1:8787", None, SecretAction::Keep), &TunnelConfig::Quick).is_ok());
+    }
+
+    #[test]
+    fn stable_input_parses_from_what_the_ui_sends() {
+        let input: TunnelConfigInput = serde_json::from_str(r#"{"mode":"stable","worker_url":"https://w.dev"}"#).unwrap();
+        assert!(matches!(input, TunnelConfigInput::Stable { secret: None, secret_action: SecretAction::Keep, .. }));
+        let input: TunnelConfigInput = serde_json::from_str(r#"{"mode":"stable","worker_url":"https://w.dev","secret_action":"regenerate"}"#).unwrap();
+        assert!(matches!(input, TunnelConfigInput::Stable { secret_action: SecretAction::Regenerate, .. }));
+    }
+
+    #[test]
+    fn stable_plan_advertises_the_worker_runs_cloudflared_like_quick_and_env_still_wins() {
+        let cfg = TunnelConfig::Stable { worker_url: "https://pm.me.workers.dev".into(), secret: "x".repeat(20) };
+        let plan = resolve_plan(None, &cfg);
+        assert_eq!(plan, TunnelPlan::Stable { worker_url: "https://pm.me.workers.dev".into() });
+        assert_eq!(plan.mode(), "stable");
+        assert_eq!(plan.known_public_url().as_deref(), Some("https://pm.me.workers.dev"));
+        assert!(plan.runs_cloudflared());
+        assert_eq!(cloudflared_args(&plan, "http://127.0.0.1:1420"), ["tunnel", "--url", "http://127.0.0.1:1420"]);
+        assert!(matches!(resolve_plan(Some("https://env.dev".into()), &cfg), TunnelPlan::Env { .. }));
     }
 }

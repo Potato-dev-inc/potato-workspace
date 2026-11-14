@@ -327,6 +327,49 @@ fn a_menu_with_allow_once_in_it_is_read_as_a_menu_where_the_shared_guess_would_t
     crate::tui::registry::registry().remove_transient("menuprobe");
 }
 
+/// The live bug (founder, 2026-11-13): a card for a menu no profile describes was clicked and the answer failed as "not
+/// showing a supported prompt" because the pane's status had moved off `waiting_input` (idle / running) since the card
+/// was drawn, while the same menu was still on screen. The answer reads the screen as the card was read.
+#[test]
+fn an_answer_still_finds_the_menu_after_the_pane_status_moved_off_waiting() {
+    use crate::pty::status::PaneStatus;
+    let profile = std::sync::Arc::new(
+        crate::tui::declarative::DeclarativeProfile::new(
+            crate::tui::declarative::parse_definition(&ID_PROBE.replace("idprobe", "answerprobe")).expect("parses"),
+        )
+        .expect("builds"),
+    );
+    crate::tui::registry::registry().add_transient(profile).expect("registered");
+    // A menu with a cursor and options but no row that asks and no plain yes / no: only a waiting pane gets a card.
+    let menu = "ANSWERPROBE\r\n\r\nUpdate available\r\n\r\n> 1. Update now\r\n  2. Remind me later\r\n";
+    let registry = Arc::new(Mutex::new(PaneRegistry::default()));
+    let mut pane = PaneRegistry::test_pane_stub("answer-probe-pane");
+    pane.info.agent_type = "answerprobe".into();
+    pane.screen.lock().screen_mut().set_size(24, 80); // the stub is 3 x 10
+    pane.screen.lock().process(menu.as_bytes());
+    *pane.status.lock() = PaneStatus::WaitingInput;
+    registry.lock().panes.insert("answer-probe-pane".into(), pane);
+
+    let card = detect(&registry, "answer-probe-pane", true).expect("the card the person saw");
+    assert_eq!(card["kind"], "unknown_question");
+    let id = card["prompt_id"].as_str().unwrap().to_string();
+
+    for moved in [PaneStatus::Idle, PaneStatus::Running] {
+        *registry.lock().panes.get("answer-probe-pane").unwrap().status.lock() = moved;
+        // a plain read offers nothing to a pane that is not waiting (by design) ...
+        assert!(detect(&registry, "answer-probe-pane", true).is_none(), "{moved:?}");
+        // ... but the answer to the card that was shown still finds the same question
+        let for_answer = detect_for_answer(&registry, "answer-probe-pane", true).unwrap_or_else(|| panic!("{moved:?}: STALE"));
+        assert_eq!(for_answer["prompt_id"].as_str(), Some(id.as_str()), "{moved:?}");
+    }
+    // it is not a way to answer a question nobody asked: another screen is another id
+    let other = "\x1b[2J\x1b[HANSWERPROBE\r\n\r\nDelete the project?\r\n\r\n> 1. Delete\r\n  2. Keep\r\n";
+    registry.lock().panes.get("answer-probe-pane").unwrap().screen.lock().process(other.as_bytes());
+    let changed = detect_for_answer(&registry, "answer-probe-pane", true).expect("another question");
+    assert_ne!(changed["prompt_id"].as_str(), Some(id.as_str()));
+    crate::tui::registry::registry().remove_transient("answerprobe");
+}
+
 // ---- Package check: `packages` on the prompt (facts only; the id, the choices and the buttons do not depend on it) ----
 
 const LODAHS_SCREEN: &str = " $ npm install lodahs\n\n Run this command?\n Run once (y)\n Skip (esc or n)\n\n → Add follow-up\n";

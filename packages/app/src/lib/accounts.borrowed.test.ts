@@ -57,3 +57,15 @@ describe('a borrowed lend is one more sign-in', () => {
     expect(sendBlock({ prompt: 'hi', choice: borrowed, runAs: 'chat', folder: 'C:\\p', busy: false })).toBeNull();
   });
 });
+
+describe('a borrowed sign-in carries the lender\'s name for the profile', () => {
+  it("the label passes through whole: \"Ren's Work account (borrowed) · 2h 14m left\"", () => {
+    const named: Pick<AccountsOverview, 'accounts' | 'borrowed'> = {
+      accounts: [],
+      borrowed: [{ id: 'lend:g9', agent_id: 'claude', label: "Ren's Work account (borrowed)", profile_name: 'Work account', owner: 'Ren', ends_ms: NOW + 134 * MIN, grant_id: 'g9' }],
+    };
+    const [one] = pickableAccounts(named, NOW);
+    expect(signInLabel(one, NOW)).toBe("Ren's Work account (borrowed) · 2h 14m left");
+    expect(one.label).toBe("Ren's Work account (borrowed)");
+  });
+});

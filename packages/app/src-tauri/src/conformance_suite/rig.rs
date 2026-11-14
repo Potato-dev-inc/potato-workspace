@@ -40,16 +40,7 @@ pub(crate) fn temp_dir(tag: &str) -> PathBuf {
     dir
 }
 
-pub(crate) fn wait_until(secs: u64, mut condition: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(secs);
-    while Instant::now() < deadline {
-        if condition() {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    condition()
-}
+pub(crate) use crate::test_support::wait::wait_until;
 
 struct RigEnv {
     root: PathBuf,
@@ -77,6 +68,8 @@ pub(crate) struct AcpRig {
     pub(crate) session: Arc<AcpSession>,
     log: Arc<Mutex<Vec<SessionEvent>>>,
     pub(crate) dir: PathBuf,
+    /// Held while the rig's agent process runs: at most 2 rigs start real processes at once (`PM_TEST_SLOW` stretches the waits).
+    _gate: crate::test_support::wait::Permit<'static>,
 }
 
 impl AcpRig {
@@ -109,6 +102,7 @@ impl AcpRig {
     }
 
     fn in_dir(dir: PathBuf, opts: &str, tweak: impl FnOnce(&mut AgentConfig)) -> AcpRig {
+        let gate = crate::test_support::wait::process_permit();
         let mut cfg = fake_agent::agent_config(opts, &dir.join("store"));
         tweak(&mut cfg);
         let host: Arc<dyn HostEnv> = Arc::new(RigEnv { root: dir.clone() });
@@ -116,7 +110,7 @@ impl AcpRig {
         let log = Arc::new(Mutex::new(Vec::new()));
         let sink_log = log.clone();
         session.add_sink(Arc::new(move |event| sink_log.lock().push(event.clone())));
-        AcpRig { session, log, dir }
+        AcpRig { session, log, dir, _gate: gate }
     }
 
     /// The `.cmd` file a [`AcpRig::via_launcher`] rig starts the agent through.
@@ -134,7 +128,7 @@ impl AcpRig {
 
     /// First event at or after `from` that satisfies `pred`.
     pub(crate) fn wait_event(&self, from: usize, pred: impl Fn(&SessionEvent) -> bool, secs: u64) -> Option<(usize, SessionEvent)> {
-        let deadline = Instant::now() + Duration::from_secs(secs);
+        let deadline = Instant::now() + Duration::from_secs(crate::test_support::wait::slow_secs(secs));
         loop {
             {
                 let log = self.log.lock();
@@ -293,6 +287,8 @@ pub(crate) struct ChatRig {
     /// Every agent pid this rig has seen, so `alive_pids()` can tell what is left.
     seen_pids: Mutex<Vec<u32>>,
     tweak_secs: Mutex<Option<Arc<dyn Fn(&mut AgentConfig) + Send + Sync>>>,
+    /// Held while the rig's agent process runs: at most 2 rigs start real processes at once (`PM_TEST_SLOW` stretches the waits).
+    _gate: crate::test_support::wait::Permit<'static>,
 }
 
 impl ChatRig {
@@ -301,6 +297,7 @@ impl ChatRig {
     }
 
     pub(crate) fn with(opts: &str, tweak: impl Fn(&mut AgentConfig) + Send + Sync + 'static) -> ChatRig {
+        let gate = crate::test_support::wait::process_permit();
         let dir = temp_dir("chat");
         let tweak: Arc<dyn Fn(&mut AgentConfig) + Send + Sync> = Arc::new(tweak);
         let mut cfg = fake_agent::agent_config(opts, &dir.join("store"));
@@ -309,7 +306,7 @@ impl ChatRig {
         let host = Arc::new(Recorder::default());
         let deps = StartDeps { registry: registry.clone(), host: host.clone(), env: Arc::new(RigEnv { root: dir.clone() }), conversations: None };
         let chat = chat::start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None, ..Default::default() }).expect("the fake agent starts");
-        let rig = ChatRig { chat, registry, host, dir, opts: opts.to_string(), conversations: None, seen_pids: Mutex::new(Vec::new()), tweak_secs: Mutex::new(Some(tweak)) };
+        let rig = ChatRig { chat, registry, host, dir, opts: opts.to_string(), conversations: None, seen_pids: Mutex::new(Vec::new()), tweak_secs: Mutex::new(Some(tweak)), _gate: gate };
         rig.note_pid();
         rig
     }
@@ -317,6 +314,7 @@ impl ChatRig {
     /// A rig whose chats are saved conversations in a store under its folder, so [`ChatRig::quit`] and [`ChatRig::reopen`] mean
     /// something. `chats` conversations are started, each with its own folder.
     pub(crate) fn with_store(opts: &str, chats: usize) -> ChatRig {
+        let gate = crate::test_support::wait::process_permit();
         let dir = temp_dir("chatstore");
         let conversations = conversations_in(&dir, opts);
         let registry = Arc::new(Mutex::new(PaneRegistry::new()));
@@ -330,7 +328,7 @@ impl ChatRig {
             let chat = chat::start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder, explicit: true, account: None, ..Default::default() }).expect("the fake agent starts");
             first.get_or_insert(chat);
         }
-        let rig = ChatRig { chat: first.expect("one chat"), registry, host, dir, opts: opts.to_string(), conversations: Some(conversations), seen_pids: Mutex::new(Vec::new()), tweak_secs: Mutex::new(None) };
+        let rig = ChatRig { chat: first.expect("one chat"), registry, host, dir, opts: opts.to_string(), conversations: Some(conversations), seen_pids: Mutex::new(Vec::new()), tweak_secs: Mutex::new(None), _gate: gate };
         rig.note_pid();
         rig
     }

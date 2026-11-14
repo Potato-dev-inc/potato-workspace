@@ -71,3 +71,28 @@ describe('split memory: restore on start', () => {
     expect(restorableSplit(saved, { width: 800, hasPane: both })).toBeNull();
   });
 });
+
+describe('split memory: the grid below the top two chats', () => {
+  const grid = { ...saved, below: { leftDown: 'p3', rightDown: null, leftRows: 0.4, rightRows: 0.5 } };
+  const all = (id: string) => ['p1', 'p2', 'p3', 'p4'].includes(id);
+
+  it('keeps the chats below and the row ratio through storage', () => {
+    writeSplitMemory(grid);
+    expect(readSplitMemory()).toEqual(grid);
+  });
+
+  it('an older save with no grid reads as a plain split', () => {
+    expect(parseSplitMemory(JSON.stringify(saved))).toEqual(saved);
+    expect(parseSplitMemory(JSON.stringify({ ...saved, below: { leftDown: 3 } }))).toEqual(saved);
+  });
+
+  it('comes back with its grid when every chat still exists', () => {
+    expect(restorableSplit(grid, { width: 1200, hasPane: all })).toEqual(grid);
+  });
+
+  it('a chat below that is gone drops out; the rest of the split comes back', () => {
+    const two = { ...saved, below: { leftDown: 'p3', rightDown: 'p4', leftRows: 0.4, rightRows: 0.5 } };
+    expect(restorableSplit(two, { width: 1200, hasPane: (id) => all(id) && id !== 'p4' })?.below).toMatchObject({ leftDown: 'p3', rightDown: null });
+    expect(restorableSplit(grid, { width: 1200, hasPane: both })).toEqual(saved);
+  });
+});

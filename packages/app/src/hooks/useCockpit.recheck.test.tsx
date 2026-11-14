@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCockpit, type CockpitApi } from './useCockpit';
 
 const registry = vi.hoisted(() => ({ status: 'waiting_input' }));
-const api_ = vi.hoisted(() => ({ reads: [] as unknown[], answered: 0 }));
+const api_ = vi.hoisted(() => ({ reads: [] as unknown[], answered: 0, fail: null as string | null }));
 
 vi.mock('./usePaneRegistry', () => ({
   usePaneRegistry: () => {
@@ -37,7 +37,7 @@ vi.mock('../lib/cockpit-api', () => ({
     {
       get: (_t, name: string) => {
         if (name === 'panePrompt') return () => Promise.resolve(api_.reads.length > 1 ? api_.reads.shift() : (api_.reads[0] ?? null));
-        if (name === 'answerPanePrompt') return () => (api_.answered++, Promise.resolve());
+        if (name === 'answerPanePrompt') return () => (api_.answered++, api_.fail ? Promise.reject(new Error(api_.fail)) : Promise.resolve());
         return name.startsWith('on') ? () => Promise.resolve(() => {}) : () => Promise.resolve(null);
       },
     },
@@ -135,5 +135,21 @@ describe('an answer that did not take', () => {
     api_.reads = [null];
     await later(6_000);
     expect(api.prompts.p1?.stalled).toBeFalsy();
+  });
+});
+
+describe('an answer the backend refused', () => {
+  it('puts a failed note on the card at once, and the next click goes out again', async () => {
+    api_.fail = 'STALE_PROMPT: the prompt on screen changed';
+    api_.reads = [PROMPT];
+    await rerender();
+    await later(50);
+    await act(async () => api.answer('p1', 'prompt-1', 'option_1', 'Update now', {} as never));
+    expect(api.prompts.p1?.failed).toBe(true);
+    expect(api.prompts.p1?.promptId).toBe('prompt-1');
+    api_.fail = null;
+    await act(async () => api.answer('p1', 'prompt-1', 'option_1', 'Update now', {} as never));
+    expect(api_.answered).toBe(2);
+    expect(api.prompts.p1?.failed).toBeFalsy();
   });
 });

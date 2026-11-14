@@ -321,7 +321,9 @@ async fn request_accept_shim_upstream_usage_then_revoke() {
     let rows = w.leo.lend.borrowed_rows();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["id"], json!(format!("lend:{grant_id}")));
-    assert_eq!(rows[0]["label"], json!("Maya's PC (lent)"));
+    assert_eq!(rows[0]["label"], json!("Maya's Work Claude (borrowed)"));
+    assert_eq!(rows[0]["profile_name"], json!("Work Claude"));
+    assert_eq!(rows[0]["owner"], json!("Maya"));
 
     // Revoke: the next request is refused at once, before the revoke item even arrives.
     w.maya.lend.revoke(&grant_id).unwrap();
@@ -428,6 +430,7 @@ async fn a_revoke_from_the_wrong_device_and_a_replayed_grant_are_refused() {
         node: NodeHint { id: "11".repeat(32), relay: String::new(), lan: vec![] },
         link_secret: crate::secure_core::crypto::b64(&[5u8; 32]),
         device_name: String::new(),
+        profile_name: String::new(),
     };
     let (payload, _) = wire::seal(&w.maya.team.session, &w.leo.device(), body, now()).unwrap();
     let cin = match w.leo.team.session.open(&w.maya.team.session.seal(&payload, 999, now()).unwrap(), &mut SeqTracker::default(), now()) {
@@ -909,4 +912,245 @@ fn an_old_saved_profile_without_the_setting_keeps_the_pc_awake() {
     }))
     .unwrap();
     assert!(p.keep_awake);
+}
+
+// ----------------------------------------------------------------------------------------- the profile name travels
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_grant_carries_the_profile_name_to_the_borrower_and_every_label_uses_it() {
+    let w = world2(sse_script()).await;
+    let (grant_id, _base) = lend_one(&w, 3600).await;
+    // The profile is called "Work Claude" (see `profile_with`): both PCs know the grant by that name.
+    let lent = w.maya.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(lent.profile_name, "Work Claude");
+    let borrowed = w.leo.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(borrowed.profile_name, "Work Claude", "the grant item named the profile");
+    assert_eq!(w.leo.lend.borrowed_label(&grant_id).as_deref(), Some("Maya's Work Claude (borrowed)"));
+    assert_eq!(w.leo.lend.borrowed_rows()[0]["label"], json!("Maya's Work Claude (borrowed)"));
+    // The name is words only: nothing else of the profile (account, key) came with it.
+    let on_wire = serde_json::to_string(&borrowed).unwrap();
+    assert!(!on_wire.contains(LENDER_KEY));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_long_profile_name_with_a_newline_arrives_as_sixty_clean_characters() {
+    let w = world2(sse_script()).await;
+    let req = w.leo.lend.request(&w.maya.member(), None, "claude", 3600, "").unwrap();
+    w.maya.pump();
+    // A lender that does not clean its own words: 200 characters with a line break and a control character.
+    let dirty = format!("Work
+account {}", "x".repeat(200));
+    let body = Body::Grant {
+        request_id: req.id.clone(),
+        grant_id: "lg_dirty".into(),
+        agent_id: "claude".into(),
+        mode: "proxy".into(),
+        duration_ms: 3_600_000,
+        not_after_ms: now() + 3_600_000,
+        limits: Default::default(),
+        node: NodeHint { id: "11".repeat(32), relay: String::new(), lan: vec![] },
+        link_secret: crate::secure_core::crypto::b64(&[5u8; 32]),
+        device_name: String::new(),
+        profile_name: dirty,
+    };
+    let (payload, _) = wire::seal(&w.maya.team.session, &w.leo.device(), body, now()).unwrap();
+    w.maya.team.send(&payload).unwrap();
+    w.leo.pump();
+    let g = w.leo.lend.state(true).grants.into_iter().find(|g| g.id == "lg_dirty").expect("the grant arrived");
+    assert_eq!(g.profile_name.chars().count(), 60);
+    assert!(g.profile_name.starts_with("Work account xxx"), "{}", g.profile_name);
+    assert!(!g.profile_name.chars().any(char::is_control));
+    assert!(w.leo.lend.borrowed_label("lg_dirty").unwrap().starts_with("Maya's Work account xxx"));
+}
+
+#[test]
+fn borrowed_names_follow_the_rules() {
+    use super::service::{borrowed_name, clean_profile_name};
+    assert_eq!(borrowed_name("Ren", "Ren's laptop", "Work account", false), "Ren's Work account (borrowed)");
+    assert_eq!(borrowed_name("Ren", "", "Ren's work account", false), "Ren's work account (borrowed)", "no Ren's Ren's");
+    assert_eq!(borrowed_name("Ren", "Desk-PC", "Work account", true), "Work account on Desk-PC (borrowed)");
+    assert_eq!(borrowed_name("Ren", "Desk-PC", "", false), "Ren's PC (borrowed)", "an older lender sent no name");
+    assert_eq!(clean_profile_name("  a	b
+c  "), "a b c");
+    assert_eq!(clean_profile_name(&"é".repeat(90)).chars().count(), 60);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_failed_tries_to_the_lender_set_the_unreachable_kind() {
+    let w = world2(sse_script()).await;
+    let (grant_id, base) = lend_one(&w, 3600).await;
+    let problem = |side: &Side| side.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).map(|g| (g.problem, g.problem_kind));
+    assert_eq!(problem(&w.leo), Some((None, None)));
+    // The lender's PC goes away (its link stops answering): two failed tries in a row mark the grant.
+    w.maya.lend.net().stop().await;
+    for _ in 0..2 {
+        let r = post(&base, "/v1/messages").await;
+        assert_eq!(r.status, 502, "{}", r.text());
+    }
+    let (text, kind) = problem(&w.leo).unwrap();
+    assert_eq!(kind.as_deref(), Some("unreachable"));
+    assert!(text.unwrap().contains("not answering"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn deleting_a_profile_takes_back_what_is_lent_from_it() {
+    let w = world2(sse_script()).await;
+    let profile_id = profile(&w);
+    let (grant_id, base) = lend_one_with(&w, 3600, &profile_id).await;
+    // The link is up (one request went through) before the profile goes.
+    assert_eq!(post(&base, "/v1/messages").await.status, 200);
+    let lent = w.maya.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(lent.profile_id, profile_id, "the lender's row knows which profile it comes from");
+    w.maya.lend.profile_delete(&profile_id).unwrap();
+    assert_eq!(post(&base, "/v1/messages").await.text(), ENDED_BODY, "the borrower's agent stops at once");
+    let lent = w.maya.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(lent.end_reason, Some(GrantEnd::Revoked));
+    w.leo.pump();
+    let borrowed = w.leo.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(borrowed.end_reason, Some(GrantEnd::Revoked));
+    assert!(w.maya.lend.state(true).profiles.is_empty());
+}
+
+// ------------------------------------------------------------------------------------- the borrower picks a profile (offers)
+
+/// A profile of Maya's called `name`, lent to `who` (teammates named in `members`; none named: anyone), with a pasted key.
+fn named_profile(w: &World2, name: &str, who: LendWho, members: Vec<String>) -> String {
+    let p = w
+        .maya
+        .lend
+        .profile_save(LendProfile {
+            id: String::new(),
+            name: name.into(),
+            agent_ids: vec!["claude".into()],
+            account: LendAccount::Main,
+            who,
+            member_ids: members,
+            default_secs: 1800,
+            max_secs: 8 * 3600,
+            approval: Approval::Each,
+            sign_out_on_end: false,
+            max_requests: None,
+            max_tokens: None,
+            keep_awake: true,
+            has_key: false,
+        })
+        .unwrap();
+    w.maya.lend.key_set(&p.id, LENDER_KEY).unwrap();
+    p.id
+}
+
+/// `asker` asks Maya what it may borrow; Maya answers; returns what came back.
+async fn ask_offers(w: &World2, asker: &Side) -> super::service::OffersResult {
+    let lend = asker.lend.clone();
+    let maya = w.maya.member();
+    let task = tokio::spawn(async move { lend.offers(&maya, None, Duration::from_secs(10)).await });
+    w.maya.pump();
+    asker.pump();
+    task.await.unwrap().unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_lender_offers_each_asker_only_what_that_asker_may_borrow() {
+    let w = world2(sse_script()).await;
+    named_profile(&w, "Work account", LendWho::Teammates, vec![]);
+    named_profile(&w, "Sam only", LendWho::Teammates, vec![w.sam.member()]);
+    named_profile(&w, "My own PCs", LendWho::MyPcs, vec![]);
+    let leo = ask_offers(&w, &w.leo).await;
+    assert!(leo.answered);
+    let names: Vec<&str> = leo.offers.iter().map(|o| o.offer.name.as_str()).collect();
+    assert_eq!(names, ["Work account"], "a teammate never sees a my-PCs profile, nor one that names someone else");
+    let first = &leo.offers[0];
+    assert_eq!((first.offer.agent_id.as_str(), first.offer.max_secs, first.offer.default_secs, first.offer.asks_first), ("claude", 8 * 3600, 1800, true));
+    assert_eq!(first.device_id, w.maya.device());
+    let sam = ask_offers(&w, &w.sam).await;
+    assert_eq!(sam.offers.iter().map(|o| o.offer.name.as_str()).collect::<Vec<_>>(), ["Sam only", "Work account"]);
+    // Nothing secret is in what came back.
+    let wire = serde_json::to_string(&sam).unwrap();
+    assert!(!wire.contains(LENDER_KEY) && !wire.contains("home") && !wire.contains("token"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn offers_for_another_nonce_or_from_a_pc_that_was_not_asked_are_dropped() {
+    let w = world2(sse_script()).await;
+    named_profile(&w, "Work account", LendWho::Teammates, vec![]);
+    let lend = w.leo.lend.clone();
+    let maya = w.maya.member();
+    let task = tokio::spawn(async move { lend.offers(&maya, None, Duration::from_secs(10)).await });
+    let mut nonce = None;
+    for _ in 0..100 {
+        nonce = w.leo.lend.pending_offers_nonce();
+        if nonce.is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(30)).await;
+    }
+    let nonce = nonce.expect("the question is waiting");
+    let bogus = wire::Offer { profile_id: "lp_bogus".into(), name: "Bogus".into(), agent_id: "claude".into(), max_secs: 60, default_secs: 60, asks_first: false };
+    let open = |from: &Side, body: Body| {
+        let (payload, _) = wire::seal(&from.team.session, &w.leo.device(), body, now()).unwrap();
+        match w.leo.team.session.open(&from.team.session.seal(&payload, 5, now()).unwrap(), &mut SeqTracker::default(), now()) {
+            Ok(Opened::Capacity(c)) => c,
+            other => panic!("{other:?}"),
+        }
+    };
+    // Sam was not asked, and a nonce nobody asked is nothing: both are dropped.
+    let from_sam = open(&w.sam, Body::Offers { nonce: nonce.clone(), offers: vec![bogus.clone()] });
+    assert_eq!(w.leo.lend.on_item(&from_sam), Err(wire::WireReject::BadItem));
+    let wrong = open(&w.maya, Body::Offers { nonce: "lo_nobody_asked".into(), offers: vec![bogus] });
+    assert_eq!(w.leo.lend.on_item(&wrong), Err(wire::WireReject::BadItem));
+    // The real answer still works.
+    w.maya.pump();
+    w.leo.pump();
+    let got = task.await.unwrap().unwrap();
+    assert_eq!(got.offers.iter().map(|o| o.offer.name.as_str()).collect::<Vec<_>>(), ["Work account"]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn nobody_answering_is_not_an_empty_list() {
+    let w = world2(sse_script()).await;
+    // Maya never pumps: an older build or a sleeping PC. The short wait ends with "no answer".
+    let r = w.leo.lend.offers(&w.maya.member(), None, Duration::from_millis(400)).await.unwrap();
+    assert!(!r.answered && r.offers.is_empty());
+    // A PC that did answer with nothing to lend is different.
+    let task = {
+        let lend = w.leo.lend.clone();
+        let maya = w.maya.member();
+        tokio::spawn(async move { lend.offers(&maya, None, Duration::from_secs(10)).await })
+    };
+    w.maya.pump();
+    w.leo.pump();
+    let r = task.await.unwrap().unwrap();
+    assert!(r.answered && r.offers.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_request_that_names_profile_b_is_answered_with_b_and_a_profile_that_is_not_for_the_asker_is_refused() {
+    let w = world2(sse_script()).await;
+    let a = named_profile(&w, "Work account", LendWho::Teammates, vec![]);
+    let b = named_profile(&w, "Personal", LendWho::Teammates, vec![]);
+    let sam_only = named_profile(&w, "Sam only", LendWho::Teammates, vec![w.sam.member()]);
+    assert_ne!(a, b);
+    // Leo picks B from the offers.
+    let req = w.leo.lend.request_with_profile(&w.maya.member(), None, "claude", 1800, "", Some(&b), Some("Personal")).unwrap();
+    assert_eq!(req.profile_name, "Personal", "my own list says what I asked for");
+    w.maya.pump();
+    let incoming = w.maya.lend.state(true).requests_in;
+    assert_eq!(incoming[0].profile_id.as_deref(), Some(b.as_str()));
+    assert_eq!(incoming[0].profile_name, "Personal", "the card can name it");
+    // Maya says yes without picking: B is the one that is used (and A, which comes first, is not).
+    let grant = w.maya.lend.answer(&req.id, true, None, None).await.unwrap().unwrap();
+    assert_eq!(grant.profile_name, "Personal");
+    w.leo.pump();
+    let borrowed = w.leo.lend.state(true).grants.into_iter().find(|g| g.id == grant.id).unwrap();
+    assert_eq!(borrowed.profile_name, "Personal");
+    assert_eq!(w.leo.lend.borrowed_label(&grant.id).as_deref(), Some("Maya's Personal (borrowed)"));
+    // A borrower may name any id: one that does not include it is refused, even when the lender's card picks nothing else.
+    let sneaky = w.leo.lend.request_with_profile(&w.maya.member(), None, "claude", 1800, "", Some(&sam_only), None).unwrap();
+    w.maya.pump();
+    let err = w.maya.lend.answer(&sneaky.id, true, None, None).await.unwrap_err();
+    assert_eq!(err, "That profile is not for this person.");
+    // An id that does not exist: the lender must pick.
+    let ghost = w.leo.lend.request_with_profile(&w.maya.member(), None, "claude", 1800, "", Some("lp_nothing"), None).unwrap();
+    w.maya.pump();
+    assert!(w.maya.lend.answer(&ghost.id, true, None, None).await.is_err());
 }

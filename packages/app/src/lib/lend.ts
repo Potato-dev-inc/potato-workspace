@@ -39,6 +39,9 @@ export interface LendProfile {
 
 export type GrantEnd = 'expired' | 'revoked' | 'returned';
 
+/** Why a grant has a problem, so the words fit: the lender's sign-in, the lender's PC not answering, or a limit. */
+export type ProblemKind = 'signin' | 'unreachable' | 'limit';
+
 export interface Grant {
   id: string;
   /** `out`: I lend it. `in`: I borrow it. */
@@ -59,6 +62,31 @@ export interface Grant {
   output_tokens?: number;
   /** Something is wrong with the lender's sign-in right now (shown on both PCs). Absent or null: all fine. */
   problem?: string | null;
+  /** What kind of problem it is. Absent: an older build, which only ever meant the lender's sign-in. */
+  problem_kind?: ProblemKind | null;
+  /** The lender's name for the profile this lend comes from, as the lender sent it. Absent: an older lender build. */
+  profile_name?: string;
+  /** Lender only: which of my profiles this lend comes from (so deleting the profile can say it is lent). */
+  profile_id?: string;
+}
+
+/** What a lender offers me (the lender's words and numbers only): one profile of theirs and the agent it lends. */
+export interface Offer {
+  profile_id: string;
+  name: string;
+  agent_id: string;
+  max_secs: number;
+  default_secs: number;
+  asks_first: boolean;
+  /** Which of their PCs said it (the ask goes to that one). */
+  device_id: string;
+  device_name: string;
+}
+
+/** `answered` false: no PC of theirs answered in time (an older build, asleep or offline). */
+export interface OffersResult {
+  answered: boolean;
+  offers: Offer[];
 }
 
 export interface LendRequest {
@@ -73,6 +101,10 @@ export interface LendRequest {
   at_ms: number;
   for_other_person: boolean;
   state: 'open' | 'accepted' | 'declined';
+  /** The profile of the lender that was asked for (picked from the offers). Absent: the lender chooses. */
+  profile_id?: string | null;
+  /** Incoming only: that profile's name on this PC. */
+  profile_name?: string;
 }
 
 export interface LendDriver {
@@ -109,19 +141,40 @@ export interface LinkTest {
   message: string;
 }
 
+/** Where a lend sign-in stands. `expired`: a token is there but its own time has passed. */
+export type SignInState = 'signed_in' | 'signed_out' | 'expired';
+
+/** What the sign-in step reads. `identity` (who is signed in) is shown on this PC only and is never sent anywhere. */
+export interface SignInStatus {
+  state: SignInState;
+  identity: string | null;
+  /** The hidden sign-in pane still runs. */
+  pane_alive: boolean;
+}
+
 export interface LendApi {
   state: () => Promise<LendState>;
   profileSave: (profile: LendProfile) => Promise<LendProfile>;
   profileDelete: (id: string) => Promise<void>;
-  request: (memberId: string, deviceId: string | null, agentId: string, secs: number, reason: string) => Promise<LendRequest>;
+  request: (memberId: string, deviceId: string | null, agentId: string, secs: number, reason: string, profileId?: string | null, profileName?: string | null) => Promise<LendRequest>;
+  /** What can I borrow from this person (or this PC of mine)? Waits a few seconds for the answer. */
+  offers: (memberId: string, deviceId: string | null) => Promise<OffersResult>;
   answer: (requestId: string, accept: boolean, profileId: string | null, secs: number | null) => Promise<Grant | null>;
   revoke: (grantId: string) => Promise<void>;
   giveBack: (grantId: string) => Promise<void>;
   /** Test link: opens the real link handshake to the other PC and reports. Absent from an older backend. */
   testLink?: (grantId: string) => Promise<LinkTest>;
   startAgent: (grantId: string, projectPath: string) => Promise<{ pane_id: string }>;
-  /** A new lend sign-in: an app-managed account folder for `agentId`, marked lend-only. Sign in to it once in a pane. */
-  accountAdd: (agentId: string, label: string) => Promise<Account>;
+  /**
+   * A new lend sign-in: an app-managed account folder for `agentId`, marked lend-only. `reuse` (the draft's own account)
+   * gives that one back while it is still signed out, so a retry never makes a second one.
+   */
+  accountAdd: (agentId: string, label: string, reuse?: string | null) => Promise<Account>;
+  /** Starts the sign-in in a hidden pane that belongs to the sheet (not in the sidebar, never selected). */
+  signInStart: (accountId: string) => Promise<{ pane_id: string }>;
+  signInStatus: (accountId: string) => Promise<SignInStatus>;
+  /** Stops the hidden pane. `removeIfEmpty`: forget the account when it holds no sign-in. True when it was removed. */
+  signInStop: (accountId: string, removeIfEmpty: boolean) => Promise<boolean>;
   /** The API key pasted into a profile, into the OS credential store. An empty key removes it. Never returned. */
   keySet: (profileId: string, key: string) => Promise<void>;
   onChanged: (cb: () => void) => Promise<UnlistenFn>;
@@ -139,14 +192,18 @@ export const lendApi: LendApi = {
   state: () => call('lend_state'),
   profileSave: (profile) => call('lend_profile_save', { profile }),
   profileDelete: (id) => call('lend_profile_delete', { id }),
-  request: (memberId, deviceId, agentId, secs, reason) =>
-    call('lend_request', { member_id: memberId, device_id: deviceId, agent_id: agentId, secs, reason }),
+  request: (memberId, deviceId, agentId, secs, reason, profileId, profileName) =>
+    call('lend_request', { member_id: memberId, device_id: deviceId, agent_id: agentId, secs, reason, profile_id: profileId ?? null, profile_name: profileName ?? null }),
+  offers: (memberId, deviceId) => call('lend_offers', { member_id: memberId, device_id: deviceId }),
   answer: (requestId, accept, profileId, secs) => call('lend_answer', { request_id: requestId, accept, profile_id: profileId, secs }),
   revoke: (grantId) => call('lend_revoke', { grant_id: grantId }),
   giveBack: (grantId) => call('lend_return', { grant_id: grantId }),
   testLink: (grantId) => call('lend_test_link', { grant_id: grantId }),
   startAgent: (grantId, projectPath) => call('lend_start_agent', { grant_id: grantId, project_path: projectPath }),
-  accountAdd: (agentId, label) => call('lend_account_add', { agent_id: agentId, label }),
+  accountAdd: (agentId, label, reuse) => call('lend_account_add', { agent_id: agentId, label, reuse: reuse ?? null }),
+  signInStart: (accountId) => call('lend_signin_start', { account_id: accountId }),
+  signInStatus: (accountId) => call('lend_signin_status', { account_id: accountId }),
+  signInStop: (accountId, removeIfEmpty) => call('lend_signin_stop', { account_id: accountId, remove_if_empty: removeIfEmpty }),
   keySet: (profileId, key) => call('lend_key_set', { profile_id: profileId, key }),
   onChanged: (cb) => (isTauri() ? listen('lend://changed', () => cb()) : Promise.resolve(noop)),
 };
@@ -216,7 +273,7 @@ export function leftText(ms: number): string {
 }
 
 export type Urgency = 'calm' | 'soon' | 'now';
-/** The chip turns amber at 10 minutes and red at 1. */
+/** The chip is grey, then orange at 10 minutes, then orange and filled at 1 (red is kept for errors). */
 export function urgencyOf(msLeft: number): Urgency {
   if (msLeft <= 60_000) return 'now';
   if (msLeft <= 10 * 60_000) return 'soon';
@@ -267,20 +324,79 @@ export function ownerOf(person: string, device: string): string {
 /** "Leo's laptop wants Claude for 8 hours". */
 export function requestTitle(r: LendRequest, agent: string): string {
   const who = r.device_name ? ownerOf(r.member_name, r.device_name) : r.member_name;
+  const profile = cleanName(r.profile_name);
+  if (profile) return t('lend.wantsProfile', { who, profile, agent, time: durationWords(r.secs) });
   return t('lend.wants', { who, agent, time: durationWords(r.secs) });
 }
 
-/** "Lending Claude to Maya · 2h 14m left" / "Borrowing Codex from Leo · 40m left". */
+/** The longest profile name that is shown (the other PC's words are cut to this, like the request reason). */
+export const MAX_PROFILE_NAME = 60;
+
+/** A name that came from another PC: plain text only, control characters dropped, cut to 60 characters. */
+export function cleanName(raw: string | null | undefined): string {
+  // eslint-disable-next-line no-control-regex
+  const plain = (raw ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return [...plain].slice(0, MAX_PROFILE_NAME).join('');
+}
+
+type NameParts = Pick<Grant, 'peer_name' | 'peer_device_name' | 'for_other_person' | 'profile_name'>;
+
+const startsWithOwner = (profile: string, owner: string): boolean => owner !== '' && profile.toLowerCase().startsWith(owner.toLowerCase());
+
+/**
+ * The name a borrower sees everywhere: "Claude · Ren's Work account (borrowed)". When the profile name already starts with
+ * the owner ("Ren's work account") it is not prefixed again; from my own other PC it is "Claude · Work account on Desk-PC
+ * (borrowed)"; from an older lender (no name sent) it is "Claude · Ren's PC (borrowed)".
+ */
+export function borrowedName(agent: string, g: NameParts): string {
+  const profile = cleanName(g.profile_name);
+  const owner = g.peer_name;
+  if (!profile) return t('lend.borrowedNamePc', { agent, owner });
+  if (!g.for_other_person && g.peer_device_name) return t('lend.borrowedNameMine', { agent, profile, device: g.peer_device_name });
+  if (startsWithOwner(profile, owner)) return t('lend.borrowedNameBare', { agent, profile });
+  return t('lend.borrowedName', { agent, owner, profile });
+}
+
+/** The short form for tight places (the pane chip, the 10-minute toast): "Ren's Work account", or "Leo's Claude" with no name. */
+export function borrowedShort(agent: string, g: NameParts): string {
+  const profile = cleanName(g.profile_name);
+  if (!profile) return t('lend.ownerOf', { person: g.peer_name, device: agent });
+  // My own other PC: the owner is me, so the name alone says it.
+  return !g.for_other_person || startsWithOwner(profile, g.peer_name) ? profile : t('lend.borrowedShort', { owner: g.peer_name, profile });
+}
+
+/** "Lending Claude to Maya · 2h 14m left" / "Borrowing Codex from Leo · 40m left"; with a profile name it leads with the name. */
 export function grantLine(g: Grant, agent: string, now: number): string {
   const time = leftText(g.ends_ms - now);
-  return g.direction === 'out' ? t('lend.lendingTo', { agent, peer: g.peer_name, time }) : t('lend.borrowingFrom', { agent, peer: g.peer_name, time });
+  const profile = cleanName(g.profile_name);
+  if (g.direction === 'out') {
+    return profile ? t('lend.lendingNamed', { profile, peer: g.peer_name, time }) : t('lend.lendingTo', { agent, peer: g.peer_name, time });
+  }
+  return profile ? t('lend.borrowingNamed', { name: borrowedName(agent, g), time }) : t('lend.borrowingFrom', { agent, peer: g.peer_name, time });
 }
 
 /** The sentence shown on both PCs when `problem` is set. The Rust side sends its own words; this is the same text. */
 export const signinProblemText = (): string => t('lend.signinExpired');
 
-/** What to show for a grant's `problem`: the plain sentence, whatever the backend's wording, or null when all is fine. */
-export const problemText = (g: Pick<Grant, 'problem'>): string | null => (g.problem ? signinProblemText() : null);
+/**
+ * What to show for a grant's `problem`, picked by its kind: the lender's sign-in (worded for the lender or the borrower),
+ * the lender's PC not answering, or a limit. No kind (an older build) is the old sentence. Null when all is fine.
+ */
+export function problemText(g: Pick<Grant, 'problem'> & Partial<Pick<Grant, 'problem_kind' | 'direction' | 'peer_name' | 'profile_name'>>): string | null {
+  if (!g.problem) return null;
+  const peer = g.peer_name ?? '';
+  const profile = cleanName(g.profile_name) || t('lend.thisProfile');
+  switch (g.problem_kind) {
+    case 'unreachable':
+      return t('lend.problem.unreachable', { owner: peer });
+    case 'limit':
+      return t('lend.limitHit', { owner: peer });
+    case 'signin':
+      return g.direction === 'out' ? t('lend.problem.signinLender', { profile, peer }) : t('lend.problem.signinBorrower', { owner: peer, profile });
+    default:
+      return signinProblemText();
+  }
+}
 
 /** "12 requests · 3.4k tokens", or null while nothing was used (the borrower's PC may not count). */
 export function usageText(g: Pick<Grant, 'requests' | 'input_tokens' | 'output_tokens'>): string | null {
@@ -299,9 +415,10 @@ export function limitsText(p: Pick<LendProfile, 'max_requests' | 'max_tokens'>):
   return parts.length > 0 ? t('lend.limit.upTo', { parts: parts.join(t('lend.and')) }) : null;
 }
 
-/** The pane chip: "Leo's Claude · 1h 59m". */
+/** The pane chip: "Ren's Work account · 1h 59m" ("Leo's Claude · 1h 59m" when the lender sent no name). */
 export function chipText(g: Grant, agent: string, now: number): string {
-  return `${t('lend.ownerOf', { person: g.peer_name, device: agent })} · ${leftText(g.ends_ms - now)}`;
+  if (g.problem_kind === 'unreachable' && g.problem) return `${borrowedShort(agent, g)} · ${t('lend.chip.notAnswering')}`;
+  return `${borrowedShort(agent, g)} · ${leftText(g.ends_ms - now)}`;
 }
 
 /** Why a grant ended, in a plain sentence. */
@@ -329,9 +446,9 @@ export const errText = (err: unknown): string => (errorSentence(err));
 /** A reason from another PC, always shown in quotes. */
 export const quoted = (text: string): string => `“${text}”`;
 
-/** The first line of the chip's details: "Borrowed Claude from Leo's PC". */
+/** The first line of the chip's details: "Claude · Ren's Work account (borrowed)". */
 export function chipLabelOf(g: Grant, agent: string): string {
-  return t('lend.borrowedFrom', { agent, owner: ownerOf(g.peer_name, g.peer_device_name || t('lend.pc')) });
+  return borrowedName(agent, g);
 }
 
 /**

@@ -464,7 +464,12 @@ impl TuiProfile for DeclarativeProfile {
 
     fn is_installed(&self) -> bool {
         let here = std::env::current_dir().unwrap_or_default();
-        resolve_binary(&self.def.binary, &here).is_ok()
+        if resolve_binary(&self.def.binary, &here).is_ok() {
+            return true;
+        }
+        // Not on this process's PATH: the person may have installed it since the app started (its own installer, the
+        // Add-agent wizard). Read the registry PATH again (rate-limited) and look once more.
+        crate::agent_install::path_refresh::refresh_if_stale() && resolve_binary(&self.def.binary, &here).is_ok()
     }
 
     fn headless_command(&self, launch: &HeadlessLaunch) -> Result<LaunchSpec, String> {

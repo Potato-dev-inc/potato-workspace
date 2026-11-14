@@ -68,7 +68,7 @@ function openNewAgentMenu(): HTMLElement {
   return menu;
 }
 
-describe('"Separate copy" switch in the New agent menu', () => {
+describe('"Work on a copy" switch in the New agent menu', () => {
   it('renders a switch, off by default, with no native checkbox', () => {
     act(() => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} />));
     const menu = openNewAgentMenu();
@@ -76,7 +76,7 @@ describe('"Separate copy" switch in the New agent menu', () => {
     const sw = menu.querySelector('[role="switch"]');
     expect(sw).toBeTruthy();
     expect(sw?.getAttribute('aria-checked')).toBe('false');
-    expect(menu.textContent).toContain('Separate copy');
+    expect(menu.textContent).toContain('Work on a copy');
     expect(menu.querySelector('input[type="checkbox"]')).toBeNull();
   });
 

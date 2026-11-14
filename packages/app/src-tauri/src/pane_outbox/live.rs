@@ -4,7 +4,7 @@
 use super::confirm;
 use crate::attach::{blocks::text_with_paths, ChatAttachment};
 use super::draft_guard::{DraftGuard, DRAFT_PREFIX};
-use super::host::{Attempt, Host, Look, PaneKind};
+use super::host::{Attempt, Host, Look, PaneKind, Pulse};
 use super::model::{OutboxMessage, FAIL_IN_BOX, FAIL_NOT_TAKEN, FAIL_STUCK, FAIL_WRITE};
 use super::Outbox;
 use crate::agent_runs::delivery::{self, Delivery, PaneIo};
@@ -90,6 +90,10 @@ impl Host for LiveHost {
 
     fn look(&self, pane_id: &str) -> Option<Look> {
         look_pane(&self.registry, pane_id)
+    }
+
+    fn pulse(&self, pane_id: &str) -> Option<Pulse> {
+        crate::acp::chat::get(pane_id).map(|chat| super::chat::pulse(&chat))
     }
 
     fn type_message(&self, pane_id: &str, text: &str) -> Attempt {

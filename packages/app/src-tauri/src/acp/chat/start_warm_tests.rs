@@ -45,16 +45,7 @@ impl AgentSource for Agents {
     }
 }
 
-fn wait_until(secs: u64, mut condition: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(secs);
-    while Instant::now() < deadline {
-        if condition() {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    condition()
-}
+use crate::test_support::wait::wait_until;
 
 struct Rig {
     dir: PathBuf,

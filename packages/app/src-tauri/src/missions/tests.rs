@@ -340,8 +340,13 @@ fn start(project: &str, agents: &[&str], io: &Arc<FakeIo>) -> Mission {
 }
 
 /// Waits until the mission stops moving on its own (done, ended, or waiting for the person).
+/// `missions::wait_until` with its timeout stretched by `PM_TEST_SLOW`.
+fn wait_mission(m: &Mission, done: impl Fn(&Mission) -> bool, timeout_ms: u64) -> Mission {
+    super::wait_until(m, done, crate::test_support::wait::slow_ms(timeout_ms))
+}
+
 fn settle(m: &Mission) -> Mission {
-    let done = super::wait_until(m, |m| m.state.terminal() || matches!(m.state, MissionState::NeedsYou | MissionState::Paused), 180_000);
+    let done = wait_mission(m, |m| m.state.terminal() || matches!(m.state, MissionState::NeedsYou | MissionState::Paused), 180_000);
     assert!(
         done.state.terminal() || matches!(done.state, MissionState::NeedsYou | MissionState::Paused),
         "the mission did not settle: {:?} {:?}",
@@ -517,7 +522,7 @@ fn the_budget_pauses_before_the_next_turn_and_more_turns_resume_it() {
     assert!(m.rounds[2].operation_id.is_none());
     // The person adds turns on the budget card: the mission goes on by itself.
     *io.turn_limit.lock() = Some(5);
-    let m = settle(&super::wait_until(&m, |m| m.state != MissionState::NeedsYou, 10_000));
+    let m = settle(&wait_mission(&m, |m| m.state != MissionState::NeedsYou, 10_000));
     assert_eq!(m.state, MissionState::Green, "{:?}", lines(&m));
 }
 
@@ -546,7 +551,7 @@ fn stop_mid_turn_cancels_the_turn_once_and_keeps_the_copy() {
     let project = project(&[]);
     let io = FakeIo::new(&[("claude", vec![ending(End::Block)])]);
     let m = start(&project, &["claude"], &io);
-    let m = super::wait_until(&m, |m| m.rounds.first().is_some_and(|r| r.operation_id.is_some()), 30_000);
+    let m = wait_mission(&m, |m| m.rounds.first().is_some_and(|r| r.operation_id.is_some()), 30_000);
     let m = super::stop(&m.id, "you").unwrap();
     assert_eq!(m.state, MissionState::Stopped);
     assert_eq!(io.cancels.lock().len(), 1, "the turn is stopped once");
@@ -639,7 +644,7 @@ fn green_by_skipping_a_test_blocks_done_and_undo_puts_the_test_back() {
     assert_eq!(card.actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), vec!["undo_tests", "accept_tests"]);
     // Undo the test changes and keep going: the test file is back, the implementation stays.
     let m = super::decide_card(&m.id, "undo_tests", "you").unwrap();
-    let m = settle(&super::wait_until(&m, |m| m.state != MissionState::NeedsYou, 10_000));
+    let m = settle(&wait_mission(&m, |m| m.state != MissionState::NeedsYou, 10_000));
     assert_eq!(m.state, MissionState::Green, "{:?}", lines(&m));
     let restored = std::fs::read_to_string(copy(&m).join("cart.test.js")).unwrap();
     assert_eq!(restored.replace('\r', ""), TESTS, "the test file is back as it was at the start");
@@ -696,7 +701,7 @@ fn agents_may_change_tests_turns_findings_into_notes() {
 
 /// Waits until no engine runs the mission (the record can then be rewritten like a restart finds it).
 fn engine_gone(id: &str) {
-    for _ in 0..500 {
+    for _ in 0..crate::test_support::wait::slow_ms(500) {
         if engine::control_of(id).is_none() {
             return;
         }
@@ -712,7 +717,7 @@ fn saved(project: &str, agents: &[&str]) -> Mission {
     let io = FakeIo::new(&[]);
     // A mission whose checks pass at once ends in planning; use a red project and freeze it there.
     let m = super::start_with(request(project, agents, 30), io.clone() as Arc<dyn RoundIo>).unwrap();
-    super::wait_until(&m, |m| m.state == MissionState::Working && m.rounds.first().is_some_and(|r| r.operation_id.is_some()), 30_000)
+    wait_mission(&m, |m| m.state == MissionState::Working && m.rounds.first().is_some_and(|r| r.operation_id.is_some()), 30_000)
 }
 
 #[test]
@@ -722,7 +727,7 @@ fn a_restart_after_the_key_was_saved_finds_the_turn_instead_of_starting_a_second
     // doesn't know its operation yet.
     let first = FakeIo::new(&[("claude", vec![ending(End::Block)])]);
     let m = start(&project, &["claude"], &first);
-    let m = super::wait_until(&m, |m| m.rounds.first().is_some_and(|r| r.operation_id.is_some()), 30_000);
+    let m = wait_mission(&m, |m| m.rounds.first().is_some_and(|r| r.operation_id.is_some()), 30_000);
     super::stop(&m.id, "you").unwrap();
     engine_gone(&m.id);
     // Rewrite the record as it was just before the turn was recorded.

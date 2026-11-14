@@ -314,6 +314,10 @@ fn mcp_tools_for_pane(pane: Option<String>) -> Vec<Value> {
     if let Some(recall) = tool_registry::companion_recall_for_pane(pane.as_deref(), mode, &tools) {
         tools.push(recall);
     }
+    // And `show_artifact`: an agent in one of our panes has a chat to show a page in.
+    if let Some(show) = tool_registry::show_artifact_for_pane(pane.as_deref(), mode, &tools) {
+        tools.push(show);
+    }
     tools
         .into_iter()
         .filter(|tool| tool.visibility.external_mcp)

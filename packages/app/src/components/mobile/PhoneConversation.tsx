@@ -8,6 +8,8 @@ import { ChatMarkdown } from '../chat/ChatMarkdown';
 import { AttachmentChips } from '../chat/AttachmentChips';
 import { HelperRow } from '../chat/HelperRow';
 import { NoticeLine } from '../chat/NoticeLine';
+import { ArtifactCard } from '../artifacts/ArtifactCard';
+import { ARTIFACT_NOTICE, type ArtifactRef } from '../../lib/artifacts';
 import { PermissionTrace } from '../chat/PermissionTrace';
 import { ThinkingBlock } from '../chat/ThinkingBlock';
 import { currentPlan } from '../chat/PlanCard';
@@ -19,8 +21,11 @@ import { useSinceLine } from '../chat/useSinceLine';
 import { hasPrice, turnPrices, type TurnPrice } from '../../lib/turnPrice';
 import { FoldedSteps } from './FoldedSteps';
 import { PhonePlanLine } from './PhonePlanLine';
+import { PhoneQuiet } from './PhoneQuiet';
 import { usePhoneTextSize } from '../../lib/phone-text-size';
 import { Pressable, type PressedMessage } from './MessageActions';
+import { MessageRail } from '../chat/MessageRail';
+import { buildRailEntries } from '../chat/messageRailModel';
 import { foldTurnSteps } from './foldSteps';
 import { hideResultBlock } from '../../lib/phone-result';
 import '../../styles/phone-shell.css';
@@ -37,7 +42,7 @@ function TextPiece({ step, markdown }: { step: Extract<TurnStep, { kind: 'text' 
   );
 }
 
-function TurnBlock({ turn, fromScreen, markdown, onPress, price }: { price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; onPress?: (message: PressedMessage) => void }) {
+function TurnBlock({ turn, fromScreen, markdown, onPress, price, onOpenArtifact }: { onOpenArtifact?: (ref: ArtifactRef, title: string) => void; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; onPress?: (message: PressedMessage) => void }) {
   const t = useT();
   const live = turn.end === null;
   const lastStepId = turn.steps[turn.steps.length - 1]?.id;
@@ -46,7 +51,7 @@ function TurnBlock({ turn, fromScreen, markdown, onPress, price }: { price?: Tur
   return (
     <section className="ph-turn" data-turn-id={turn.id}>
       {turn.user && (
-        <div className="ph-you">
+        <div className="ph-you" data-rail-id={turn.user.id}>
           {turn.user.attachments && turn.user.attachments.length > 0 && <AttachmentChips attachments={turn.user.attachments} className="ck-chat-user-files" />}
           {turn.user.text.trim() !== '' && (
             <Pressable className="ph-you-bubble" message={{ text: turn.user.text, mine: true }} onPress={onPress}>
@@ -67,6 +72,7 @@ function TurnBlock({ turn, fromScreen, markdown, onPress, price }: { price?: Tur
         const step = piece.step;
         if (step.kind === 'tool') return <HelperRow key={step.id} step={step} fromScreen={fromScreen} />;
         if (step.kind === 'notice') {
+          if (step.item.noticeKind === ARTIFACT_NOTICE && onOpenArtifact) return <ArtifactCard key={step.id} title={step.item.text} url={step.item.url} onOpen={onOpenArtifact} />;
           return step.item.noticeKind === 'permission' ? (
             <PermissionTrace key={step.id} text={step.item.text} />
           ) : (
@@ -75,7 +81,7 @@ function TurnBlock({ turn, fromScreen, markdown, onPress, price }: { price?: Tur
         }
         if (step.kind === 'thinking') return <ThinkingBlock key={step.id} text={step.item.text} durationMs={step.item.durationMs} streaming={live && step.id === lastStepId} folded />;
         return (
-          <Pressable key={step.id} className="ph-agent-text" message={{ text: step.item.text, mine: false }} onPress={onPress}>
+          <Pressable key={step.id} railId={step.id} className="ph-agent-text" message={{ text: step.item.text, mine: false }} onPress={onPress}>
             <TextPiece step={step} markdown={markdown} />
           </Pressable>
         );
@@ -101,6 +107,7 @@ export function PhoneConversation({
   staleAt = null,
   onPressMessage,
   chatId,
+  onOpenArtifact,
 }: {
   /** The chat's id (its pane): the moment it was last read is kept under it, for the "New since you looked" line. */
   chatId?: string | null;
@@ -125,6 +132,8 @@ export function PhoneConversation({
   staleAt?: number | null;
   /** A long press on a message (yours or the agent's). Absent: messages are plain. */
   onPressMessage?: (message: PressedMessage) => void;
+  /** A tap on a page card (a page the agent made). Absent: the card is a plain line. */
+  onOpenArtifact?: (ref: ArtifactRef, title: string) => void;
 }) {
   const t = useT();
   const fromScreen = source === 'screen';
@@ -136,6 +145,7 @@ export function PhoneConversation({
   usePhoneTextSize(rootRef);
   const atBottom = useRef(true);
   const prices = useMemo(() => turnPrices(turns), [turns]);
+  const railEntries = useMemo(() => buildRailEntries(turns, 'normal'), [turns]);
   const sinceLine = useSinceLine({ chatId, turns, ready: state === 'ready', scrollRef, atBottom });
 
   // Follow new items only while the reader is at the bottom.
@@ -163,6 +173,7 @@ export function PhoneConversation({
       )}
       {progress}
       <PhonePlanLine items={plan} />
+      <div className="ck-mrail-host">
       <div
         ref={scrollRef}
         className="ph-conv-body"
@@ -181,19 +192,21 @@ export function PhoneConversation({
         )}
         {state !== 'unavailable' && turns.length === 0 && (
           <div className="ph-conv-empty">
-            <p>{fromScreen ? t('phone.conv.waitingScreen') : t('phone.conv.waiting')}</p>
+            <PhoneQuiet kind="loading" compact text={fromScreen ? t('phone.conv.waitingScreen') : t('phone.conv.waiting')} />
             {waitingFor && <p className="ph-conv-sub">{waitingFor}</p>}
           </div>
         )}
         {state !== 'unavailable' && turns.map((turn) => (
             <Fragment key={turn.id}>
               {sinceLine.show && sinceLine.report?.firstTurnId === turn.id && <SinceLine report={sinceLine.report} />}
-              <TurnBlock turn={turn} fromScreen={fromScreen} markdown={markdown} onPress={onPressMessage} price={prices.get(turn.id)} />
+              <TurnBlock turn={turn} fromScreen={fromScreen} markdown={markdown} onPress={onPressMessage} price={prices.get(turn.id)} onOpenArtifact={onOpenArtifact} />
             </Fragment>
           ))}
         {state !== 'unavailable' && after}
         {state !== 'unavailable' && pending}
         {sinceLine.show && <JumpToLatest onJump={sinceLine.jumpToLatest} />}
+      </div>
+      {state !== 'unavailable' && <MessageRail entries={railEntries} scrollRef={scrollRef} rootRef={rootRef} findQuery="" />}
       </div>
       {dock && <div className="ph-conv-dock">{dock}</div>}
       {above}

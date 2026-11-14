@@ -40,12 +40,16 @@ import { notify } from './en/notify';
 import { board } from './en/board';
 import { phone } from './en/phone';
 import { phoneChat } from './en/phoneChat';
+import { noReply } from './en/noReply';
 import { dnd } from './en/dnd';
 import { files } from './en/files';
+import { artifacts } from './en/artifacts';
 import { pet } from './en/pet';
 import { phoneCompose } from './en/phoneCompose';
 import { phoneShell } from './en/phoneShell';
+import { phoneHalf } from './en/phoneHalf';
 import { chatUx } from './en/chatUx';
+import { point } from './en/point';
 import { flow } from './en/flow';
 import { appUx } from './en/appUx';
 import { deskReview } from './en/deskReview';
@@ -91,13 +95,17 @@ export const en = {
   ...board,
   ...phone,
   ...phoneChat,
+  ...noReply,
   ...dnd,
   ...files,
+  ...artifacts,
   ...pet,
   ...phoneCompose,
   ...phoneShell,
+  ...phoneHalf,
   ...chatUx,
   ...flow,
+  ...point,
   ...appUx,
   ...deskReview,
 } as const;

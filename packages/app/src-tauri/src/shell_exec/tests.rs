@@ -93,7 +93,7 @@ fn powershell_pty_executes_commands_reports_failures_and_times_out() {
     let pane_id = "shell-exec-integration";
     wait_for_powershell_prompt(&registry, pane_id);
 
-    let success = super::execute(&registry, pane_id, "Write-Output 'shell-exec-ok'", 60_000)
+    let success = super::execute(&registry, pane_id, "Write-Output 'shell-exec-ok'", crate::test_support::wait::slow_ms(60_000))
         .expect("command should complete");
     assert_eq!(success["exit_code"], 0);
     assert!(
@@ -105,7 +105,7 @@ fn powershell_pty_executes_commands_reports_failures_and_times_out() {
         crate::pty::registry_read_buffer(&registry, pane_id, 80).unwrap_or_default()
     );
 
-    let failure = super::execute(&registry, pane_id, "cmd.exe /c exit 7", 10_000)
+    let failure = super::execute(&registry, pane_id, "cmd.exe /c exit 7", crate::test_support::wait::slow_ms(10_000))
         .expect("non-zero child exit should still complete");
     assert_eq!(failure["exit_code"], 7);
 
@@ -115,7 +115,7 @@ fn powershell_pty_executes_commands_reports_failures_and_times_out() {
         &registry,
         pane_id,
         "Write-Output 'must-not-run'",
-        10_000,
+        crate::test_support::wait::slow_ms(10_000),
         Some(&missing),
     )
     .expect("failed Set-Location should return a command result");
@@ -139,7 +139,7 @@ fn powershell_pty_executes_commands_reports_failures_and_times_out() {
 /// deadline, so the first command never races PowerShell's startup.
 #[cfg(windows)]
 fn wait_for_powershell_prompt(registry: &Arc<Mutex<PaneRegistry>>, pane_id: &str) {
-    let deadline = Instant::now() + Duration::from_secs(60);
+    let deadline = Instant::now() + Duration::from_secs(crate::test_support::wait::slow_secs(60));
     loop {
         let buffer = crate::pty::registry_read_buffer(registry, pane_id, 80).unwrap_or_default();
         if buffer.contains("PS ") {

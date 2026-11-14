@@ -93,6 +93,7 @@ mod ci_fix;
 mod collision;
 mod editor;
 mod files_view;
+mod artifacts_view;
 mod add_agent;
 mod agents_detect;
 pub(crate) mod path_kind;
@@ -182,6 +183,7 @@ pub use wsl::*;
 pub use ci_fix::*;
 pub use editor::*;
 pub use files_view::*;
+pub use artifacts_view::*;
 pub use collision::*;
 pub use add_agent::*;
 

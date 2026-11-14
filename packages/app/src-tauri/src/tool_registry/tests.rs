@@ -404,7 +404,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "75-2d4c3cc55c21df4a");
+    assert_eq!(catalog_version(), "76-236911635f9e88ea");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one
@@ -657,4 +657,51 @@ fn review_by_is_on_run_agent_and_the_multi_agent_tools_are_listed_only_in_mode_a
     let batch = registry.iter().find(|tool| tool.name == "run_agents").unwrap();
     assert_eq!(batch.input_schema["properties"]["until"]["enum"], serde_json::json!(["all", "any", "first_success"]));
     assert_eq!(batch.input_schema["required"], serde_json::json!(["tasks"]));
+}
+
+// ---- show_artifact ----
+
+#[test]
+fn show_artifact_is_one_tool_that_names_the_ways_to_give_a_page_and_the_kinds() {
+    let t = tool("show_artifact");
+    assert_eq!((t.method, t.path), ("POST", "/artifacts/show"));
+    assert!(t.visibility.external_mcp);
+    // Nothing is required: content or a path is checked by the route, which says which is missing.
+    assert_eq!(t.input_schema["required"], json!([]));
+    assert_eq!(t.input_schema["properties"]["kind"]["enum"], json!(["html", "markdown", "svg", "mermaid"]));
+    for key in ["title", "content", "path", "id"] {
+        assert!(t.input_schema["properties"].get(key).is_some(), "{key}");
+    }
+    // The description says when to use it, the folder convention and the versioning rule.
+    for needle in [".potato/artifacts/", "Same id again", "card in your chat"] {
+        assert!(t.description.contains(needle), "{needle}: {}", t.description);
+    }
+}
+
+#[test]
+fn show_artifact_is_callable_in_agent_mode_and_listed_only_for_an_agent_in_one_of_our_panes() {
+    use super::show_artifact_for_pane;
+    for mode in [McpMode::Agent, McpMode::Both, McpMode::All] {
+        assert!(tool_visible_in_mode("show_artifact", mode), "{mode:?}");
+    }
+    assert!(!tool_visible_in_mode("show_artifact", McpMode::Shell));
+    for mode in [McpMode::Agent, McpMode::Shell, McpMode::Both] {
+        assert!(!tools_for_mode(mode).iter().any(|t| t.name == "show_artifact"), "{mode:?}");
+    }
+    assert!(tools_for_mode(McpMode::All).iter().any(|t| t.name == "show_artifact"));
+    let agent_list = tools_for_mode(McpMode::Agent);
+    assert!(show_artifact_for_pane(Some("5f3c-ordinary-pane"), McpMode::Agent, &agent_list).is_some());
+    assert!(show_artifact_for_pane(None, McpMode::Agent, &agent_list).is_none(), "no pane, no chat to show it in");
+    assert!(show_artifact_for_pane(Some("  "), McpMode::Agent, &agent_list).is_none());
+    // Not twice, and not in a mode that cannot call it.
+    assert!(show_artifact_for_pane(Some("p"), McpMode::All, &tools_for_mode(McpMode::All)).is_none());
+    assert!(show_artifact_for_pane(Some("p"), McpMode::Shell, &tools_for_mode(McpMode::Shell)).is_none());
+}
+
+#[test]
+fn the_skill_and_the_hosts_page_tell_agents_when_to_show_a_page() {
+    let skill = include_str!("../../../../../integrations/skills/potato-workspace/SKILL.md");
+    assert!(skill.contains("show_artifact") && skill.contains(".potato/artifacts/"));
+    let hosts = include_str!("../../../../../MCP_HOSTS.md");
+    assert!(hosts.contains("show_artifact") && hosts.contains("ARTIFACT_OUTSIDE_PROJECT"));
 }

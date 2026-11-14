@@ -29,6 +29,8 @@ export const inboxCards = {
   // PaneApprovalCard and ApprovalPrompt
   'inboxCards.approval.waiting': 'Waiting for your answer',
   'inboxCards.approval.ariaLabel': 'Approval request',
+  'inboxCards.failed': "That didn't reach the agent. Try again, or open the terminal.",
+  'inboxCards.openTerminal': 'Open terminal',
   'inboxCards.stalled': 'That answer did not go through. Claude is still asking. Press your answer again.',
 
   // ConsentCard

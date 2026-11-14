@@ -288,3 +288,136 @@
     transition: none;
   }
 }
+
+/* Word, spreadsheet, PDF and web page viewers */
+.cockpit .ck-file-plain {
+  margin: 0;
+  padding: 16px 20px;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--label);
+}
+.cockpit .ck-docx h1,
+.cockpit .ck-docx h2,
+.cockpit .ck-docx h3,
+.cockpit .ck-docx h4 {
+  margin: 1.1em 0 0.4em;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--label);
+}
+.cockpit .ck-docx h1 {
+  font-size: 22px;
+}
+.cockpit .ck-docx h2 {
+  font-size: 17px;
+}
+.cockpit .ck-docx h3,
+.cockpit .ck-docx h4 {
+  font-size: 14.5px;
+}
+.cockpit .ck-docx ul,
+.cockpit .ck-docx ol {
+  margin: 0 0 0.8em;
+  padding-left: 22px;
+}
+.cockpit .ck-docx ul {
+  list-style: disc;
+}
+.cockpit .ck-docx ol {
+  list-style: decimal;
+}
+.cockpit .ck-docx li {
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.cockpit .ck-docx a {
+  color: var(--label);
+  text-decoration: underline;
+}
+.cockpit .ck-docx a:not([href]) {
+  text-decoration: none;
+}
+.cockpit .ck-docx p {
+  margin: 0 0 0.7em;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.cockpit .ck-docx table {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+}
+.cockpit .ck-docx td,
+.cockpit .ck-docx th {
+  border: 1px solid var(--sep);
+  padding: 4px 10px;
+  font-size: 13px;
+}
+.cockpit .ck-docx img {
+  max-width: 100%;
+  height: auto;
+}
+.cockpit .ck-xl {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.cockpit .ck-xl-picker {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--sep);
+}
+.cockpit .ck-xl-tab {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--label-2);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.cockpit .ck-xl-tab.is-active {
+  color: var(--label);
+  border-bottom-color: var(--label);
+}
+.cockpit .ck-xl-scroll {
+  flex: 1;
+  overflow: auto;
+}
+.cockpit .ck-xl-table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.cockpit .ck-xl-table th,
+.cockpit .ck-xl-table td {
+  border: 1px solid var(--sep);
+  padding: 3px 10px;
+  text-align: left;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit .ck-xl-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-2, var(--bg));
+  font-weight: 600;
+}
+.cockpit .ck-pdf,
+.cockpit .ck-html {
+  height: 100%;
+}
+.cockpit .ck-sandbox {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: white;
+}
+.cockpit .ck-sandbox--fill {
+  height: 100%;
+  min-height: 420px;
+}

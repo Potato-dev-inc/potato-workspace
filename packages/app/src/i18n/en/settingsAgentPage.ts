@@ -73,4 +73,13 @@ export const settingsAgentPage = {
   "accounts.askMe": "Ask me",
   "accounts.newName": "New {agent} sign-in name",
   "accounts.namePlaceholder": "Name, for example Work",
+  "chatAdapter.label": "Chat adapter",
+  "chatAdapter.noneShort": "None",
+  "chatAdapter.none": "None. This agent cannot be used as a chat until you add one.",
+  "chatAdapter.added": "Added by you. It starts this agent as a chat.",
+  "chatAdapter.builtin": "Built in. It starts this agent as a chat.",
+  "chatAdapter.notFound": "This agent was not found on this PC yet. You can still add its chat adapter.",
+  "chatAdapter.change": "Change",
+  "chatAdapter.changeAria": "Change the chat adapter of {label}",
+  "chatAdapter.added.status": "Chat adapter saved for {label}.",
 } as const;

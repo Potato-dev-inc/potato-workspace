@@ -33,6 +33,10 @@ pub mod ending;
 pub mod lanes;
 pub mod mapper;
 mod start;
+pub mod copy;
+pub mod trial;
+#[cfg(test)]
+mod copy_tests;
 pub(crate) use start::start_failure_sentence;
 pub mod read_only;
 pub mod receipt;
@@ -303,6 +307,14 @@ fn on_pane_gone(pane_id: &str, app_ending: bool) {
         if app_ending {
             return;
         }
+        // A copy the chat never changed goes with it; one with changes stays for the person to keep or throw away.
+        if let Some(link) = conversations.as_ref().and_then(|c| c.copy_of(pane_id)) {
+            if copy::release_if_pristine(&link) {
+                if let Some(c) = &conversations {
+                    c.set_copy(pane_id, None);
+                }
+            }
+        }
         if let Some(conversations) = conversations {
             let _ = conversations.close(pane_id);
         }
@@ -516,6 +528,11 @@ impl AcpChat {
             return;
         }
         self.push(vec![crate::session_chat::ChatItem::Notice { id: id.into(), at: Some(now_iso()), notice_kind: "tools_missing".into(), text, url: None }]);
+    }
+
+    /// A page the agent made (an artifact) as a card in the chat: one quiet notice, written to the journal like any item.
+    pub(crate) fn note_artifact(&self, item: crate::session_chat::ChatItem) {
+        self.push(vec![item]);
     }
 
     fn push(&self, items: Vec<crate::session_chat::ChatItem>) {
@@ -1211,7 +1228,8 @@ impl AcpChat {
             Some(Writer::Terminal { pane_id }) => Some(json!({ "paneId": pane_id })),
             _ => None,
         });
-        json!({
+        let copy = self.conversations.as_ref().and_then(|c| c.copy_of(&self.pane_id));
+        let mut state = json!({
             "lane": LANE,
             "agent": self.agent_id,
             "label": self.label,
@@ -1239,7 +1257,12 @@ impl AcpChat {
             "autoAllow": self.auto_allowed_kinds(),
             "interruptedTurn": self.interrupted.load(Ordering::SeqCst),
             "signIn": { "needed": self.sign_in_needed(), "hint": self.session.config().addon.signin_hint, "text": self.sign_in_text() },
-        })
+        });
+        // Only a chat that works on a copy says so (the keep / throw-away buttons are drawn from it).
+        if let Some(copy) = copy {
+            state["copy"] = json!({ "kind": copy.kind });
+        }
+        state
     }
 }
 

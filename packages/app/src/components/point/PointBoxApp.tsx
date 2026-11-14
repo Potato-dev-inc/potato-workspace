@@ -3,26 +3,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import '../../styles/point-box.css';
 import { pointApi, type PointState } from '../../lib/point-api';
+import { useT } from '../../i18n';
 import { PointBox } from './PointBox';
 
 type PointApi = typeof pointApi;
 
 const NO_STATE: PointState = { picks: [], targets: [], defaultTarget: null, notice: null };
-const NO_TEXT = 'Write what should change first.';
-const NO_TARGET = 'Pick an agent pane to send to.';
-const COPY_FAILED = 'Could not copy the text.';
-const COPIED = 'Copied.';
 
-function messageOf(e: unknown): string {
+function messageOf(e: unknown, fallback = 'Something went wrong.'): string {
   if (typeof e === 'string' && e.trim()) return e;
   if (e && typeof e === 'object' && 'message' in e) {
     const message = (e as { message: unknown }).message;
     if (typeof message === 'string' && message.trim()) return message;
   }
-  return 'Something went wrong.';
+  return fallback;
 }
 
 export function PointBoxApp({ api = pointApi }: { api?: PointApi }): JSX.Element {
+  const t = useT();
+  const NO_TEXT = t('point.err.noText');
+  const NO_TARGET = t('point.err.noTarget');
+  const COPY_FAILED = t('point.err.copyFailed');
+  const COPIED = t('point.copied');
   const [state, setState] = useState<PointState>(NO_STATE);
   const [target, setTarget] = useState<string | null>(null);
   const [request, setRequest] = useState('');
@@ -181,6 +183,14 @@ export function PointBoxApp({ api = pointApi }: { api?: PointApi }): JSX.Element
     void Promise.resolve(api.hide()).catch(() => {});
   };
 
+  const recheckAgain = () => {
+    void Promise.resolve(api.recheckRun()).catch((e: unknown) => setError(messageOf(e, t('point.err.generic'))));
+  };
+
+  const recheckClose = () => {
+    void Promise.resolve(api.recheckDismiss()).catch(() => {});
+  };
+
   const openBlocked = async () => {
     try {
       await api.openBlockedLink();
@@ -207,6 +217,8 @@ export function PointBoxApp({ api = pointApi }: { api?: PointApi }): JSX.Element
       onDiscard={() => void discard()}
       onHide={hide}
       onOpenBlocked={() => void openBlocked()}
+      onRecheckAgain={recheckAgain}
+      onRecheckClose={recheckClose}
       error={error}
       info={info}
       busy={busy}

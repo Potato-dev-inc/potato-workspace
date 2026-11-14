@@ -2,6 +2,8 @@
 import type { EnglishKey } from '../en';
 
 export const chatUx: Partial<Record<EnglishKey, string>> = {
+  'chatUx.fold.show': '顯示全部 {n} 行',
+  'chatUx.fold.hide': '收合',
   'chatUx.find.label': '在這個對話中尋找',
   'chatUx.find.placeholder': '尋找',
   'chatUx.find.count': '第 {n} 筆，共 {total} 筆',
@@ -33,4 +35,10 @@ export const chatUx: Partial<Record<EnglishKey, string>> = {
   'chatUx.price.tipLong': '這次比這個對話平常花更久。把要求拆小一點，通常會更快完成。',
   'chatUx.price.details': '這則回答的詳細內容',
   'chatUx.price.filesTitle': '有變動的檔案',
+  'chatUx.rail.label': '訊息導覽列。按上下方向鍵可在你的訊息之間跳轉。',
+  'chatUx.rail.you': '你',
+  'chatUx.rail.agent': 'AI 助理',
+  'chatUx.rail.noText': '沒有文字',
+  'settings.row.message-rail.label': '訊息導覽列',
+  'settings.row.message-rail.hint': '對話捲動軸旁的細線，每則訊息一條。點一下或拖曳即可跳轉。',
 };

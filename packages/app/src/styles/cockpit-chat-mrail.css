@@ -1,0 +1,115 @@
+/* The message rail: a thin strip of grey dashes beside the chat's scroll bar. Greys only (the chat's own label and
+   fill tokens), so it follows the theme. Works in the desktop chat and the phone chat. */
+.ck-mrail {
+  position: relative;
+  flex: none;
+  width: 18px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+}
+@media (pointer: coarse) {
+  .ck-mrail {
+    width: 26px;
+  }
+}
+.ck-mrail:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--label-3);
+  border-radius: 6px;
+}
+.ck-mrail-dash {
+  position: absolute;
+  left: 50%;
+  width: 10px;
+  height: 2px;
+  margin-left: -5px;
+  border-radius: 1px;
+  background: var(--label-4);
+  pointer-events: none;
+  transition: width 120ms var(--ease), margin 120ms var(--ease), background 120ms var(--ease);
+}
+.ck-mrail-dash.is-hit {
+  width: 14px;
+  margin-left: -7px;
+  background: var(--label-3);
+}
+.ck-mrail-dash.is-hover {
+  background: var(--label-2);
+}
+.ck-mrail-dash.is-current {
+  width: 16px;
+  height: 3px;
+  margin-left: -8px;
+  margin-top: -0.5px;
+  background: var(--label);
+}
+.ck-mrail-card {
+  position: absolute;
+  right: calc(100% + 6px);
+  width: 220px;
+  max-width: calc(100vw - 64px);
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--sep);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 20;
+}
+/* Under a thumb the card sits above the finger, not beside it. */
+.ck-mrail-card.is-touch {
+  transform: translateY(calc(-100% - 20px));
+}
+.ck-mrail-card-who {
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--label-3);
+}
+.ck-mrail-card-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--label);
+  overflow-wrap: anywhere;
+}
+/* The message a jump landed on: a soft gray wash that fades out. */
+.ck-mrail-flash {
+  border-radius: 8px;
+  animation: ck-mrail-flash 1200ms var(--ease) both;
+}
+@keyframes ck-mrail-flash {
+  0%, 55% {
+    background: var(--fill-active);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ck-mrail-dash {
+    transition: none;
+  }
+  .ck-mrail-flash {
+    animation: none;
+    background: var(--fill);
+  }
+}
+
+/* The phone's conversation: its scrolling box and the rail side by side. */
+.ck-mrail-host {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+.ck-mrail-host > .ph-conv-body {
+  min-width: 0;
+}

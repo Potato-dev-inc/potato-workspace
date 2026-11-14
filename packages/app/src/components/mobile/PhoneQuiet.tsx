@@ -27,6 +27,7 @@ export function PhoneQuiet({
   compact = false,
   children,
   onStarter,
+  text,
 }: {
   kind: QuietKind;
   /** A smaller one that sits above a list. */
@@ -34,6 +35,8 @@ export function PhoneQuiet({
   children?: ReactNode;
   /** The empty state offers three starters; one puts its sentence in the new chat's box and calls this to open that screen. */
   onStarter?: () => void;
+  /** Other words in place of the kind's own line ("Opening the chat…"). */
+  text?: string;
 }) {
   const t = useT();
   const art = ART[kind];
@@ -41,7 +44,7 @@ export function PhoneQuiet({
     <div className="ph-quiet" data-testid="phone-quiet" data-kind={kind} data-compact={compact || undefined} role="status">
       <PotatoFace state={art.state} size={compact ? 64 : 96} />
       {art.title && <b>{t(art.title)}</b>}
-      <p>{t(art.body)}</p>
+      <p>{text ?? t(art.body)}</p>
       {children}
       {kind === 'empty' && onStarter && (
         <div className="ph-starters" data-testid="phone-starters">

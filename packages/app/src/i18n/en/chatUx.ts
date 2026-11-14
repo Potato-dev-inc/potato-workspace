@@ -1,5 +1,7 @@
 // English messages: chat extras (find in this chat, my messages, new since you looked, turn price tag).
 export const chatUx = {
+  'chatUx.fold.show': 'Show all {n} lines',
+  'chatUx.fold.hide': 'Show less',
   'chatUx.find.label': 'Find in this chat',
   'chatUx.find.placeholder': 'Find',
   'chatUx.find.count': '{n} of {total}',
@@ -31,4 +33,10 @@ export const chatUx = {
   'chatUx.price.tipLong': 'This took much more than usual for this chat. A smaller request can finish faster.',
   'chatUx.price.details': 'Details of this answer',
   'chatUx.price.filesTitle': 'Files changed',
+  'chatUx.rail.label': 'Message rail. Up and down arrows jump between your messages.',
+  'chatUx.rail.you': 'You',
+  'chatUx.rail.agent': 'Agent',
+  'chatUx.rail.noText': 'No text',
+  'settings.row.message-rail.label': 'Message rail',
+  'settings.row.message-rail.hint': 'Thin dashes by the chat scroll bar, one per message. Click or drag to jump.',
 } as const;

@@ -9,6 +9,7 @@ import { companionTab } from '../../lib/mobile-agent-tabs';
 import type { CompanionView } from '../../lib/companion';
 import { stateWord } from '../../lib/companion';
 import { PhoneAgentTile } from './PhoneAgentTile';
+import { PhoneQuiet } from './PhoneQuiet';
 import { Avatar } from '../companion/Avatar';
 import { groupByProject, needsPaneIds, rowState, type RowState } from './phoneNav';
 import type { RuleLimit } from '../../lib/pane-rule-view';
@@ -171,6 +172,7 @@ export function PhoneDrawer({
   closed,
   canReopen = false,
   onReopen,
+  usage,
 }: {
   open: boolean;
   onClose: () => void;
@@ -204,6 +206,8 @@ export function PhoneDrawer({
   canReopen?: boolean;
   /** Brings a closed chat back and opens it. Resolves to null, or one plain sentence saying why not. */
   onReopen?: (id: string) => Promise<string | null>;
+  /** The foot's usage line: this month's turns (null until known) and a tap that opens the usage sheet. Absent: no such line. */
+  usage?: { turns: number | null; onOpen: () => void };
 }) {
   const t = useT();
   const [menu, setMenu] = useState<{ paneId: string; title: string } | null>(null);
@@ -304,6 +308,7 @@ export function PhoneDrawer({
         </button>
         <div className="ph-dscroll">
           {children}
+          {panes.length === 0 && companions.length === 0 && (!closed || closed.length === 0) && <PhoneQuiet kind="empty" compact />}
           {waiting.length > 0 && (
             <section aria-label={t('phone.needsYou')}>
               <h2 className="ph-dsec ph-dsec--needs">{t('phone.needsYou')}</h2>
@@ -454,9 +459,17 @@ export function PhoneDrawer({
           </div>
         )}
         <footer className="ph-dfoot">
-          <div className="ph-dpc" role="status" data-online={bridgeReady || undefined}>
-            <span className={`ph-conn${bridgeReady ? '' : ' ph-conn--off'}`} aria-hidden="true" />
-            <span>{bridgeReady ? t('phone.sh.pcOn') : t('phone.sh.pcOff')}</span>
+          <div className="ph-dleft">
+            <div className="ph-dpc" role="status" data-online={bridgeReady || undefined}>
+              <span className={`ph-conn${bridgeReady ? '' : ' ph-conn--off'}`} aria-hidden="true" />
+              <span>{bridgeReady ? t('phone.sh.pcOn') : t('phone.sh.pcOff')}</span>
+            </div>
+            {usage && (
+              <button type="button" className="ph-dusage" data-testid="drawer-usage" aria-label={t('phone.drawer.usageOpen')} onClick={usage.onOpen}>
+                <span>{t('phone.drawer.usage')}</span>
+                {usage.turns !== null && <span className="ph-dusage-n">{t('phone.drawer.usageTurns', { count: usage.turns })}</span>}
+              </button>
+            )}
           </div>
           <button type="button" className="ph-iconbtn ph-dsettings" aria-label={t('phone.settings')} onClick={onSettings}>
             <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -28,6 +28,8 @@ pub const MAX_FUTURE_MS: u64 = 10 * 60_000;
 /// How long a msg id is remembered (the relay keeps envelopes for 7 days).
 pub const REMEMBER_MS: u64 = 8 * 24 * 3_600_000;
 pub const MAX_REASON: usize = 280;
+/// The most offers one answer carries (the rest are dropped), and the longest offer name.
+pub const MAX_OFFERS: usize = 20;
 /// Largest sealed item accepted (a relay envelope is at most 24 KiB).
 const MAX_ITEM_BYTES: usize = 16 * 1024;
 
@@ -40,6 +42,18 @@ pub struct NodeHint {
     pub relay: String,
     #[serde(default)]
     pub lan: Vec<String>,
+}
+
+/// What a lender offers ONE asker: words and numbers only (no token, no path, no email). The asker picks one and names its
+/// `profile_id` in its request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Offer {
+    pub profile_id: String,
+    pub name: String,
+    pub agent_id: String,
+    pub max_secs: u64,
+    pub default_secs: u64,
+    pub asks_first: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,6 +69,9 @@ pub enum Body {
         device_name: String,
         /// The borrower's lend node id (hex): the only node the lender's link will let in for this grant.
         node_hint: String,
+        /// The lender's profile the borrower picked from an `Offers` answer. None: the lender chooses (an older borrower).
+        #[serde(default)]
+        profile_id: Option<String>,
     },
     /// "Yes": sent by the lender to the device that asked.
     Grant {
@@ -71,6 +88,10 @@ pub enum Body {
         link_secret: String,
         #[serde(default)]
         device_name: String,
+        /// The lender's name for the profile this lend comes from (words only, cut and cleaned by the borrower). An older
+        /// lender sends none; an older borrower ignores it.
+        #[serde(default)]
+        profile_name: String,
     },
     Decline { request_id: String },
     /// The lender took it back (only from the device that issued the grant).
@@ -82,6 +103,10 @@ pub enum Body {
     /// trip through the relay. Answered whether or not Lend is on (`ping`); an older build drops it as a bad item.
     Ping { nonce: String },
     Pong { nonce: String },
+    /// "What can I borrow from you?": answered with `Offers` carrying the same nonce, listing only what THIS asker may use.
+    /// An older build drops it as a bad item (the asker times out and falls back to asking for an agent).
+    OffersAsk { nonce: String },
+    Offers { nonce: String, offers: Vec<Offer> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,6 +202,11 @@ pub fn open(session: &Session, kem: &KemSecret, cin: &CapacityIn, now_ms: u64) -
     }
     if let Body::Request { reason, .. } = &item.body {
         if reason.chars().count() > MAX_REASON {
+            return Err(WireReject::BadItem);
+        }
+    }
+    if let Body::Offers { offers, .. } = &item.body {
+        if offers.len() > MAX_OFFERS * 4 {
             return Err(WireReject::BadItem);
         }
     }

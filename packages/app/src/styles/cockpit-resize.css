@@ -107,15 +107,24 @@
 .cockpit[data-focus-mode] .ck-ptabs {
   display: none;
 }
-.cockpit[data-focus-mode] .ck-split-cols > :not(.is-focused):not(.ck-split-divider) {
+.cockpit[data-focus-mode] .ck-split-cols > .ck-split-col:not(:has(.is-focused)) {
   display: none;
 }
-.cockpit[data-focus-mode] .ck-split-divider {
+.cockpit[data-focus-mode] .ck-split-col .ck-split-side:not(.is-focused) {
   display: none;
+}
+.cockpit[data-focus-mode] .ck-split-divider,
+.cockpit[data-focus-mode] .ck-split-rowdivider {
+  display: none;
+}
+.cockpit[data-focus-mode] .ck-split-col {
+  flex: 1 1 0;
+  width: auto;
 }
 .cockpit[data-focus-mode] .ck-split-side.is-focused {
   flex: 1 1 0;
   width: auto;
+  height: auto;
 }
 .cockpit[data-focus-mode] .ck-pane-head,
 .cockpit[data-focus-mode] .ck-split-head {

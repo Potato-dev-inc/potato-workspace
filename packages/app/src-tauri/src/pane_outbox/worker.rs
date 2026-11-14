@@ -3,6 +3,7 @@
 use crate::attach::ChatAttachment;
 use super::host::{Attempt, Look};
 use super::model::*;
+use super::now_ms;
 use super::{Inner, PaneQueue, Timing};
 use crate::agent_runs::readiness::Readiness;
 use crate::tui::ComposerState;
@@ -67,23 +68,72 @@ pub(super) fn snapshot(queue: &PaneQueue) -> Vec<OutboxMessage> {
 pub(super) fn prune(queue: &mut PaneQueue, timing: &Timing) -> bool {
     let before = queue.entries.len();
     queue.entries.retain(|e| {
-        let keep = if e.message.state == State::Failed { timing.keep_failed.max(timing.keep) } else { timing.keep };
+        let keep = if e.message.state == State::Failed || e.message.no_answer { timing.keep_failed.max(timing.keep) } else { timing.keep };
         e.finished.map_or(true, |at| at.elapsed() < keep)
     });
     queue.entries.len() != before
 }
 
+/// Runs when the worker thread ends, however it ends. A thread that died of a panic must not leave `worker` set (later
+/// messages would wait for a worker that is gone): the flag is cleared, a message that was being sent is marked failed
+/// (it may or may not have gone in), the list is published, and when messages still wait one new worker is started.
+struct EndGuard {
+    inner: Arc<Inner>,
+    pane: String,
+}
+
+impl Drop for EndGuard {
+    fn drop(&mut self) {
+        let panicked = std::thread::panicking();
+        let (list, restart) = {
+            let mut panes = self.inner.panes.lock();
+            let Some(queue) = panes.get_mut(&self.pane) else { return };
+            queue.worker = false;
+            if !panicked {
+                return;
+            }
+            record(queue, "worker stopped after an unexpected error");
+            for entry in queue.entries.iter_mut().filter(|e| e.message.state == State::Sending) {
+                entry.finish(State::Failed, Some(FAIL_STOPPED));
+            }
+            let waiting = queue.entries.iter().any(|e| e.message.state == State::Queued);
+            let restart = waiting && queue.restarts < 1 && !self.inner.closed.load(Ordering::SeqCst);
+            if restart {
+                queue.restarts += 1;
+                queue.worker = true;
+            }
+            (snapshot(queue), restart)
+        };
+        self.inner.host.publish(&self.pane, &list);
+        if restart {
+            spawn(self.inner.clone(), &self.pane);
+        }
+    }
+}
+
 pub(super) fn spawn(inner: Arc<Inner>, pane_id: &str) {
     let pane = pane_id.to_string();
     let worker_inner = inner.clone();
-    let started = std::thread::Builder::new()
-        .name(format!("pane-outbox-{pane}"))
-        .spawn(move || run(worker_inner, pane));
+    let started = std::thread::Builder::new().name(format!("pane-outbox-{pane}")).spawn(move || {
+        let _end = EndGuard { inner: worker_inner.clone(), pane: pane.clone() };
+        run(worker_inner, pane);
+    });
     if started.is_err() {
         if let Some(queue) = inner.panes.lock().get_mut(pane_id) {
             queue.worker = false;
         }
     }
+}
+
+/// Keeps one line per change of reason in the pane's list of decisions.
+pub(super) fn record(queue: &mut PaneQueue, reason: &str) {
+    if queue.decisions.back().is_some_and(|(_, last)| last == reason) {
+        return;
+    }
+    if queue.decisions.len() >= super::DECISIONS_KEPT {
+        queue.decisions.pop_front();
+    }
+    queue.decisions.push_back((now_ms(), reason.to_string()));
 }
 
 fn run(inner: Arc<Inner>, pane_id: String) {
@@ -143,8 +193,42 @@ fn housekeeping(inner: &Inner, pane_id: &str) -> Housekeeping {
     }
 }
 
+/// For messages that went in: did the chat show anything new? One that did not for `no_answer_after` is marked (the
+/// hint only informs); the mark goes when a reply shows. A chat that is starting or waking up does not count the wait.
+fn watch_answers(inner: &Inner, pane_id: &str) {
+    let watching = inner.panes.lock().get(pane_id).is_some_and(|queue| queue.entries.iter().any(|e| e.watch.is_some()));
+    if !watching {
+        return;
+    }
+    let Some(pulse) = inner.host.pulse(pane_id) else { return };
+    let mut panes = inner.panes.lock();
+    let Some(queue) = panes.get_mut(pane_id) else { return };
+    let mut changed = false;
+    for entry in queue.entries.iter_mut() {
+        let Some(watch) = entry.watch.as_mut() else { continue };
+        if pulse.replies > watch.replies {
+            entry.watch = None;
+            changed |= std::mem::take(&mut entry.message.no_answer);
+        } else if pulse.waking {
+            watch.since = Instant::now();
+        } else if !entry.message.no_answer && watch.since.elapsed() >= inner.timing.no_answer_after {
+            entry.message.no_answer = true;
+            changed = true;
+        }
+    }
+    let list = changed.then(|| snapshot(queue));
+    if changed {
+        record(queue, "sent, no answer yet");
+    }
+    drop(panes);
+    if let Some(list) = list {
+        inner.host.publish(pane_id, &list);
+    }
+}
+
 /// One pass. `false` when the queue is empty and the worker is done.
 fn tick(inner: &Arc<Inner>, pane_id: &str) -> bool {
+    watch_answers(inner, pane_id);
     let (head_id, head_text, head_attachments) = match housekeeping(inner, pane_id) {
         Housekeeping::Empty => return false,
         Housekeeping::Idle => return true,
@@ -182,6 +266,14 @@ fn tick(inner: &Arc<Inner>, pane_id: &str) -> bool {
             other => other,
         },
     };
+    let reason = match &step {
+        Step::Deliver => "deliver".to_string(),
+        Step::Wait(why) => format!("wait: {why}"),
+        Step::Fail(why) => format!("fail: {why}"),
+    };
+    if let Some(queue) = inner.panes.lock().get_mut(pane_id) {
+        record(queue, &reason);
+    }
     match step {
         Step::Fail(why) => settle_waiting(inner, pane_id, |entry, _| entry.finish(State::Failed, Some(why))),
         Step::Wait(why) => settle_waiting(inner, pane_id, |entry, is_head| entry.wait(if is_head { why } else { WAIT_TURN })),
@@ -225,16 +317,21 @@ fn deliver(inner: &Inner, pane_id: &str, id: &str, text: &str, attachments: &[Ch
         drop(panes);
         inner.host.publish(pane_id, &list);
     }
+    let baseline = inner.host.pulse(pane_id).map(|pulse| pulse.replies);
     let attempt = inner.host.type_message_with(pane_id, text, attachments);
     let mut panes = inner.panes.lock();
     let Some(queue) = panes.get_mut(pane_id) else { return };
     if matches!(attempt, Attempt::Sent) {
         queue.last_sent = Some(Instant::now());
+        queue.restarts = 0;
     }
     queue.gate_tried = matches!(attempt, Attempt::Gate).then(Instant::now);
     if let Some(entry) = queue.entries.iter_mut().find(|e| e.message.id == id) {
         match attempt {
-            Attempt::Sent => entry.finish(State::Sent, None),
+            Attempt::Sent => {
+                entry.finish(State::Sent, None);
+                entry.watch = baseline.map(|replies| Watch { since: Instant::now(), replies });
+            }
             Attempt::Draft => entry.wait(WAIT_DRAFT),
             Attempt::Gate => entry.wait(WAIT_GATE),
             Attempt::NotTyped => entry.wait(WAIT_BUSY),

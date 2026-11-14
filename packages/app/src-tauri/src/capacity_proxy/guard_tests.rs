@@ -163,3 +163,24 @@ fn no_token_value_shows_in_the_auth_source_debug_output() {
     assert!(!format!("{signin:?}").contains("tok-GUARD-FAKE"));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn the_sign_in_step_commands_are_window_guarded_and_refuse_anything_but_a_lend_only_account() {
+    // Only the app's own windows pass; a pane window, a bridge page or a stray webview does not.
+    for ok in ["cockpit", "main", "settings"] {
+        assert!(crate::commands::window_allowed(ok), "{ok}");
+    }
+    for bad in ["detached-pane-1", "pane-abc", "", "browser", "settings2"] {
+        assert!(!crate::commands::window_allowed(bad), "{bad:?} must be refused");
+    }
+    // Every sign-in command starts with the window and switch check (`on(&webview)`), before it reads an argument.
+    let text = std::fs::read_to_string(src_dir().join("commands").join("lend.rs")).unwrap();
+    for name in ["lend_signin_start", "lend_signin_status", "lend_signin_stop", "lend_account_add"] {
+        let body = text.split(&format!("pub async fn {name}(")).nth(1).unwrap_or_else(|| panic!("{name} is gone"));
+        let body = body.split("#[tauri::command").next().unwrap();
+        assert!(body.contains("on(&webview)?"), "{name} must check the window first");
+    }
+    // The account check itself is `signin_pane::check_account` (lend-only, not borrowed): see signin_pane_tests.
+    let text = std::fs::read_to_string(src_dir().join("capacity_proxy").join("service.rs")).unwrap();
+    assert!(text.contains("signin_pane::check_account(&self.deps.accounts, account_id)"), "every sign-in call goes through the account check");
+}

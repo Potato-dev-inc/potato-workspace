@@ -931,3 +931,71 @@
     transition: none;
   }
 }
+
+/* ---- drawer foot: PC state, then usage under it (the half-built pass) ---- */
+.ph .ph-dleft {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.ph .ph-dleft .ph-dpc {
+  min-height: 28px;
+}
+.ph .ph-dusage {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 400 calc(var(--sh-fs) - 2px)/1.2 var(--font-ui);
+  color: var(--sh-muted);
+  text-align: left;
+}
+.ph .ph-dusage-n {
+  color: var(--label-3);
+  font-variant-numeric: tabular-nums;
+}
+.ph .ph-dusage-n::before {
+  content: '·';
+  margin-right: 8px;
+}
+/* A state word takes its colour as well as its dot: orange needs you, green working, red trouble. */
+.ph .ph-drow-state[data-kind='needs'],
+.ph .ph-drow-state[data-kind='asking'] {
+  color: var(--sh-accent-text);
+}
+.ph .ph-drow-state[data-kind='working'],
+.ph .ph-drow-state[data-kind='sending'],
+.ph .ph-drow-state[data-kind='waking'] {
+  color: var(--sh-ok);
+}
+.ph .ph-drow-state[data-kind='stopped'],
+.ph .ph-drow-state[data-kind='offline'] {
+  color: var(--danger);
+}
+.ph .ph-group + .ph-group {
+  margin-top: 8px;
+}
+/* The rule line above the message box: one small line with a lock. */
+.ph .ph-ruleline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 16px;
+  font: 400 calc(var(--sh-fs) - 3px)/1.3 var(--font-ui);
+  color: var(--sh-muted);
+}
+.ph .ph-ruleline svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

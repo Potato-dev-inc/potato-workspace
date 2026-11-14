@@ -22,6 +22,8 @@ pub struct Target {
     pub title: String,
     pub same_folder: bool,
     pub can_send: bool,
+    /// A chat session (not a terminal): the Point message goes in as a chat message with its pictures attached.
+    pub chat: bool,
     /// One plain sentence when `can_send` is false.
     pub reason: Option<String>,
 }
@@ -35,6 +37,8 @@ pub struct TargetFacts {
     pub cwd: String,
     pub kind: PaneKind,
     pub run_controls: bool,
+    /// The pane is a chat session (ACP). Chat panes are named by their task title.
+    pub chat: bool,
     /// One plain sentence when the pane shows a dialog, a question or no input box right now (`pane_outbox::target_block`).
     /// Nothing is typed into such a pane, so it is greyed out and never the default.
     pub not_ready: Option<String>,
@@ -67,6 +71,7 @@ pub fn targets(panes: &[TargetFacts], opener: Option<&str>, preview_cwd: Option<
                 title: p.title.clone(),
                 same_folder,
                 can_send,
+                chat: p.chat,
                 reason,
             };
             (rank, p.last_output_at, target)

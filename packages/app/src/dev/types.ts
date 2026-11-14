@@ -160,6 +160,8 @@ export interface HarnessScenario {
     /** What the install window reports once Run was pressed. */
     after?: 'running' | 'done_ok' | 'cancelled' | 'restart';
   };
+  /** Settings > Phone > Public address: `stable` answers with a linked Stable link, `stable-failed` with a refused secret. */
+  tunnel?: 'stable' | 'stable-failed';
   /** Runs once after the first paint (and after the panes loaded); click things, press keys. */
   after?: (api: HarnessDom) => void | Promise<void>;
 }

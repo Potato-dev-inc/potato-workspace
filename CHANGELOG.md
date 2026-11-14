@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.29
+
+This is a beta.
+
+- New: artifacts. An agent can make a page (a web page, Markdown, a picture or a diagram) that shows as a card in the chat and opens beside it, with versions, Reload and Open in browser. Also on the phone. The page runs walled off from the app and your files.
+- New: a message rail next to the chat's scroll bar. One dash per message, the one you are reading is brighter; rest the mouse to see the message, click to jump, drag to move through the chat. Alt+Up and Alt+Down jump between your own messages. Also on the phone. Turn it off in Settings > Agents.
+- New: open Word, Excel, CSV, PDF and web pages beside the chat. Word shows as a page, sheets as a table with a sheet picker.
+- New: "Work on a copy". Start a chat on a separate copy of the project, then Keep the changes or Throw away the copy. Folders without git get a trial copy.
+- New: split into up to four chats (2 by 2). Drop files or folders from Explorer anywhere on a chat to attach them.
+- New: Point and Fix sends your note and the screenshot straight into a chat, shows the picture in the message, and "Check it again" shows before and after once the agent is done.
+- New: a stable phone link. Put your own small Cloudflare Worker in front of the automatic tunnel and the phone's address never changes (Settings > Phone link > Stable link).
+- New lending flow: sign in inside the profile window (nothing opens in your sidebar), a half-made profile is kept if you leave, and the borrowing PC shows the profile's real name.
+- Faster: long chats stay smooth while an answer streams, the window opens before the start-up chores, and long code or output folds after 30 lines with "Show all".
+- A message never waits forever: after 20 seconds with no answer you see "No answer yet" with Try again; a chat that is starting shows "Waking up…".
+- Phone: Light / Dark / Auto theme, a number on the app icon for chats that need you, usage at the bottom of the drawer, and a short line when this phone may not stop or close agents.
+- Fixed: yes/no buttons on terminal agents (like "trust this folder") sometimes did nothing; a failed answer now says so with Try again.
+- Fixed: agents added with the wizard (like Agy) had no way to set up their chat. Every agent page now has a Chat adapter row.
+
 ## 1.0.28
 
 This is a beta.

@@ -141,3 +141,38 @@ fn the_marks_and_the_diff_follow_git() {
     assert!(fresh.contains("+fresh") && fresh.contains("@@ -0,0 +1,1 @@"), "{fresh}");
     assert!(diff(s(&dir), "../x").unwrap_err().starts_with("FILES_OUTSIDE"));
 }
+
+#[test]
+fn raw_bytes_come_back_as_base64_and_a_big_file_is_not_read() {
+    let dir = scratch("bytes");
+    fs::write(dir.join("a.docx"), [b'P', b'K', 0, 1, 2]).unwrap();
+    fs::write(dir.join("big.pdf"), vec![0u8; (MAX_BYTES_READ + 1) as usize]).unwrap();
+    let ok = read_bytes(s(&dir), "a.docx").unwrap();
+    assert_eq!(ok.kind, "bytes");
+    assert_eq!(ok.size, 5);
+    assert_eq!(base64::engine::general_purpose::STANDARD.decode(ok.base64.unwrap()).unwrap(), vec![b'P', b'K', 0, 1, 2]);
+    let big = read_bytes(s(&dir), "big.pdf").unwrap();
+    assert_eq!(big.kind, "too_large");
+    assert!(big.base64.is_none());
+}
+
+#[test]
+fn the_byte_reader_stays_inside_the_project_folder() {
+    let dir = scratch("bytes-out");
+    let other = scratch("bytes-out-other");
+    fs::write(other.join("secret.docx"), "s").unwrap();
+    assert!(read_bytes(s(&dir), "../x.docx").unwrap_err().starts_with("FILES_OUTSIDE"));
+    let err = read_bytes(s(&dir), s(&other.join("secret.docx"))).unwrap_err();
+    assert!(err.starts_with("FILES_OUTSIDE"), "{err}");
+    assert!(read_bytes(s(&dir), "missing.docx").unwrap_err().starts_with("FILES_NOT_FOUND"));
+}
+
+#[test]
+fn only_document_kinds_are_opened_in_the_default_program() {
+    let dir = scratch("open-default");
+    fs::write(dir.join("run.exe"), "x").unwrap();
+    fs::write(dir.join("run.bat"), "x").unwrap();
+    assert!(open_default(s(&dir), "run.exe").unwrap_err().starts_with("FILES_NOT_OPENABLE"));
+    assert!(open_default(s(&dir), "run.bat").unwrap_err().starts_with("FILES_NOT_OPENABLE"));
+    assert!(open_default(s(&dir), "../run.docx").unwrap_err().starts_with("FILES_OUTSIDE"));
+}

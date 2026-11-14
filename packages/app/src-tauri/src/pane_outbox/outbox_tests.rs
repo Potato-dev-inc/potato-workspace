@@ -1,6 +1,6 @@
 //! The outbox state machine against a fake host (no terminal), and the delivery guard against a scripted pane.
 
-use super::host::{Attempt, Host, Look, PaneKind};
+use super::host::{Attempt, Host, Look, PaneKind, Pulse};
 use super::live::attempt_of;
 use super::model::*;
 use super::worker::{decide, target_block, Step};
@@ -29,6 +29,13 @@ struct Fake {
     /// While true `type_message` waits (a message stays `sending`).
     hold: Mutex<bool>,
     released: Condvar,
+    /// How many of the next `look` calls panic (a worker that dies).
+    panics: Mutex<usize>,
+    /// What the chat shows (`None`: a terminal, nothing is watched).
+    pulse: Mutex<Option<Pulse>>,
+    /// How often the worker asked for the pulse / looked at the pane.
+    pulses: Mutex<usize>,
+    looks: Mutex<usize>,
 }
 
 fn look(readiness: Readiness, composer: ComposerState, idle: bool) -> Look {
@@ -56,6 +63,10 @@ impl Fake {
             published: Mutex::new(Vec::new()),
             hold: Mutex::new(false),
             released: Condvar::new(),
+            panics: Mutex::new(0),
+            pulse: Mutex::new(None),
+            pulses: Mutex::new(0),
+            looks: Mutex::new(0),
         })
     }
 
@@ -97,7 +108,21 @@ impl Host for Fake {
     }
 
     fn look(&self, _pane_id: &str) -> Option<Look> {
+        *self.looks.lock() += 1;
+        {
+            let mut panics = self.panics.lock();
+            if *panics > 0 {
+                *panics -= 1;
+                drop(panics);
+                panic!("the fake host fails on purpose");
+            }
+        }
         self.look.lock().clone()
+    }
+
+    fn pulse(&self, _pane_id: &str) -> Option<Pulse> {
+        *self.pulses.lock() += 1;
+        *self.pulse.lock()
     }
 
     fn type_message(&self, _pane_id: &str, text: &str) -> Attempt {
@@ -129,6 +154,7 @@ fn fast() -> Timing {
         keep_failed: Duration::from_secs(60),
         after_send: Duration::ZERO,
         gate_retry: Duration::from_millis(100),
+        no_answer_after: Duration::from_millis(150),
     }
 }
 
@@ -899,4 +925,92 @@ fn letting_a_hold_go_sends_the_old_text_and_an_empty_or_late_edit_is_refused() {
     assert_eq!(host.typed(), ["keep me"]);
     assert_eq!(outbox.edit("p", &message.id, "too late").unwrap_err(), NO_SUCH_MESSAGE);
     assert_eq!(outbox.hold("p", "nope", true).unwrap_err(), NO_SUCH_MESSAGE);
+}
+
+// ---- a message never waits for ever ---------------------------------------------------------------------------
+
+#[test]
+fn a_worker_that_panics_does_not_block_the_next_message() {
+    // Two panics: the first worker dies and is started once more, that one dies too and is not started again.
+    let host = Fake::new(ready());
+    *host.panics.lock() = 2;
+    let outbox = outbox(&host);
+    let first = outbox.send("p", "one").unwrap();
+    // The line "worker stopped after an unexpected error" is written by the FIRST panic, while the restarted worker
+    // still runs; only the header "worker stopped." (flag cleared) says the second one is over. Waiting on the line
+    // let `send` see a running flag, start no worker, and strand the message when the second panic came.
+    until("the worker flag to be cleared after the second panic", || outbox.support_text("p").contains("worker stopped."));
+    assert_eq!(state(&outbox, &first.id).unwrap().state, State::Queued, "still waiting, nobody drains it");
+    // The next message starts a new worker, which delivers both in order.
+    let second = outbox.send("p", "two").unwrap();
+    until_state(&outbox, &second.id, State::Sent);
+    until_state(&outbox, &first.id, State::Sent);
+    assert_eq!(host.typed(), ["one", "two"]);
+}
+
+#[test]
+fn a_worker_that_panics_once_is_started_again_for_the_waiting_message() {
+    let host = Fake::new(ready());
+    *host.panics.lock() = 1;
+    let outbox = outbox(&host);
+    let message = outbox.send("p", "hello").unwrap();
+    until_state(&outbox, &message.id, State::Sent);
+    assert_eq!(host.typed(), ["hello"]);
+    assert!(outbox.support_text("p").contains("worker stopped after an unexpected error"));
+}
+
+#[test]
+fn a_message_that_gets_no_item_is_marked_no_answer_and_the_mark_goes_when_a_reply_shows() {
+    let host = Fake::new(ready());
+    *host.pulse.lock() = Some(Pulse { replies: 3, waking: false });
+    let outbox = outbox(&host);
+    let message = outbox.send("p", "hello").unwrap();
+    until_state(&outbox, &message.id, State::Sent);
+    until("no answer", || state(&outbox, &message.id).is_some_and(|m| m.no_answer));
+    assert_eq!(state(&outbox, &message.id).unwrap().state, State::Sent, "it only informs");
+    // A reply shows: the mark goes.
+    *host.pulse.lock() = Some(Pulse { replies: 4, waking: false });
+    until("the mark to go", || state(&outbox, &message.id).is_some_and(|m| !m.no_answer));
+    assert!(outbox.support_text("p").contains("sent, no answer yet"));
+}
+
+#[test]
+fn a_chat_that_is_waking_up_does_not_count_the_wait() {
+    let host = Fake::new(ready());
+    *host.pulse.lock() = Some(Pulse { replies: 0, waking: true });
+    let outbox = outbox(&host);
+    let message = outbox.send("p", "hello").unwrap();
+    until_state(&outbox, &message.id, State::Sent);
+    // Every look is at least one poll (5 ms) apart: 60 of them are more than the 150 ms of `no_answer_after`.
+    let before = *host.pulses.lock();
+    until("60 more looks while waking up", || *host.pulses.lock() >= before + 60);
+    assert!(!state(&outbox, &message.id).unwrap().no_answer, "still waking up: no hint");
+    *host.pulse.lock() = Some(Pulse { replies: 0, waking: false });
+    until("no answer after the wake-up", || state(&outbox, &message.id).is_some_and(|m| m.no_answer));
+}
+
+#[test]
+fn a_terminal_pane_is_not_watched_for_an_answer() {
+    let host = Fake::new(ready());
+    let outbox = outbox(&host);
+    let message = outbox.send("p", "hello").unwrap();
+    until_state(&outbox, &message.id, State::Sent);
+    // Nothing is watched for a terminal: the pulse is never asked for.
+    assert_eq!(*host.pulses.lock(), 1, "only the one before the send");
+    assert!(!state(&outbox, &message.id).unwrap().no_answer);
+}
+
+#[test]
+fn the_support_text_lists_the_last_decisions_without_repeats() {
+    let host = Fake::new(busy());
+    let outbox = outbox(&host);
+    let message = outbox.send("p", "hello").unwrap();
+    waiting_for(&outbox, &message.id, WAIT_BUSY);
+    let before = *host.looks.lock();
+    until("five more looks while busy", || *host.looks.lock() >= before + 5);
+    host.set(ready());
+    until_state(&outbox, &message.id, State::Sent);
+    let text = outbox.support_text("p");
+    assert_eq!(text.matches("wait: The agent is working").count(), 1, "{text}");
+    assert!(text.contains("deliver"), "{text}");
 }

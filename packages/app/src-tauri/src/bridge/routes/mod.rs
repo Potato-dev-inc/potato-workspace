@@ -4,6 +4,7 @@
 
 mod accounts;
 mod acp_chat;
+mod artifacts;
 mod attention;
 pub(super) mod definitions;
 pub(super) mod health;
@@ -111,6 +112,7 @@ pub(super) fn dispatch(cx: &Ctx) -> Option<RouteResult> {
         .or_else(|| phone_chat::handle(cx))
         .or_else(|| phone_upload::handle(cx))
         .or_else(|| phone_result::handle(cx))
+        .or_else(|| artifacts::handle(cx))
         .or_else(|| panes::handle(cx))
         .or_else(|| plans::handle(cx))
 }

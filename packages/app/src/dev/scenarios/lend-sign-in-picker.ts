@@ -2,7 +2,7 @@ import { GRANT_IN, GRANT_IN_PANE, lendState } from '../lend-fixtures';
 import type { HarnessScenario } from '../types';
 
 // The New agent menu, sign-in step for Claude: my own login next to the lent ones, each with its time left
-// ("Leo's PC (lent) · 1h 59m left"). There is no separate Borrowed group.
+// ("Work account on Leo's PC (borrowed) · 1h 59m left"). There is no separate Borrowed group.
 const s: HarnessScenario = {
   name: 'lend-sign-in-picker',
   route: 'cockpit',

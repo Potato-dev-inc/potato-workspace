@@ -103,7 +103,7 @@ describe('Settings blocks in Traditional Chinese have no visible English', () =>
     expect(english(host)).toEqual([]);
   });
 
-  it('Lend: profiles, the profile editor and the active lends', async () => {
+  it('Lend: profiles, the profile sheet and the active lends', async () => {
     const api: LendApi = {
       state: async () => lendState({ grants: [GRANT_OUT, GRANT_IN] }),
       onChanged: async () => () => {},
@@ -115,9 +115,9 @@ describe('Settings blocks in Traditional Chinese have no visible English', () =>
     expect(host.textContent).toContain('出借設定檔');
     expect(host.textContent).toContain('進行中的出借');
     expect(english(host)).toEqual([]);
-    await click([...host.querySelectorAll('button')].find((b) => b.textContent === '新增設定檔')!);
+    await click([...host.querySelectorAll('button')].find((b) => b.textContent === '新增出借設定檔')!);
     await settle(3);
-    expect(host.querySelector('.lend-editor')).not.toBeNull();
+    expect(host.querySelector('.lend-sheet')).not.toBeNull();
     expect(english(host)).toEqual([]);
   });
 });

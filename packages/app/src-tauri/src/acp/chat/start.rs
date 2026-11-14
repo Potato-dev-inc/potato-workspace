@@ -40,6 +40,11 @@ pub struct StartRequest {
     pub model: Option<String>,
     /// An agent started this chat as its helper: the "Default model for helpers" setting counts.
     pub is_helper: bool,
+    /// "Work on a copy": the chat works in a separate copy of `folder` (a worktree, or a plain copy without git) and the
+    /// project stays untouched until the person keeps the changes (`copy`).
+    pub separate_copy: bool,
+    /// Where plain copies are kept; `None`: the app's data folder. Tests set it.
+    pub copy_store: Option<PathBuf>,
 }
 
 /// Why a chat session did not start. `fallback`: the terminal is the way to run this agent instead.
@@ -116,7 +121,34 @@ static SWEEPER: OnceLock<SweeperHandle> = OnceLock::new();
 
 /// Starts a chat session with `cfg` (no gate). The adapter is started and the session opened before the pane exists,
 /// so a failure leaves nothing behind and the caller can run the agent in a terminal instead (`fallback`).
-pub fn start(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
+pub fn start(deps: &StartDeps, cfg: AgentConfig, mut request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
+    if !request.separate_copy {
+        return start_in(deps, cfg, request);
+    }
+    // The copy first: the chat starts in it. A start that fails leaves no copy behind.
+    let store = request.copy_store.clone().unwrap_or_else(crate::app_paths::app_data_dir);
+    let project = request.folder.clone();
+    if !project.is_absolute() || !project.is_dir() {
+        return Err(StartError::new("INVALID_ARGUMENT", "The folder must be an existing folder (a full path).", false));
+    }
+    let made = super::copy::make(&project, &store)?;
+    request.folder = made.folder.clone();
+    request.separate_copy = false;
+    match start_in(deps, cfg, request) {
+        Ok(chat) => {
+            if let Some(conversations) = &deps.conversations {
+                conversations.set_copy(chat.pane_id(), Some(made.link));
+            }
+            Ok(chat)
+        }
+        Err(error) => {
+            super::copy::release_if_pristine(&made.link);
+            Err(error)
+        }
+    }
+}
+
+fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
     // Timing only: the stages are logged (`startup_stage`). Until the pane exists they sit under a temporary key, then move
     // to the pane's id (`startup_timing::carry`). The key holds no folder: logs stay free of paths.
     let timing_key = format!("chat-start-{}-{}", cfg.id, uuid::Uuid::new_v4());
@@ -256,6 +288,13 @@ pub fn start_failure_sentence(label: &str, error: &crate::acp::error::AcpError) 
 /// conversation that is open in a terminal pane (the terminal survived) shows that. Returns the pane ids.
 pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
     let Some(conversations) = &deps.conversations else { return Vec::new() };
+    // Copies of closed chats that changed nothing are removed (the person may have closed the app mid-clean-up).
+    if !cfg!(test) {
+        let conversations = conversations.clone();
+        std::thread::spawn(move || {
+            super::copy::sweep_closed(&conversations);
+        });
+    }
     let mut restored = Vec::new();
     let mut links: Vec<(String, String)> = Vec::new();
     for id in conversations.open_ids() {

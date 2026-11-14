@@ -9,19 +9,21 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaneInfo } from '@potato-workspace/shared';
-import { borrowedOf, createLendMock, GRANT_IN, GRANT_IN_PANE, GRANT_IN_PROBLEM, GRANT_OUT, lendState, REQUEST_MAYA, type LendScenario } from '../../dev/lend-fixtures';
+import { borrowedOf, createLendMock, GRANT_IN, GRANT_IN_PANE, GRANT_IN_PROBLEM, GRANT_IN_REN, GRANT_IN_REN_OLD, GRANT_OUT, lendState, REQUEST_MAYA, type LendScenario } from '../../dev/lend-fixtures';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { deriveNeedsYou } from '../../lib/attention';
 import type { ShipApi } from '../../lib/ship-api';
 import { SettingsPanel, type SettingsApi } from '../SettingsPanel';
 import { BASE_SETTINGS, buttonByText, click, pickOption, settle, type as typeInto } from '../settings/test-utils';
 import { TeamPage } from '../settings/blocks/TeamPage';
+import { resetDraftForTests } from '../../lib/lendDraft';
 import { Inbox } from '../cockpit/Inbox';
 import { PaneView } from '../cockpit/PaneView';
 import { Sidebar } from '../cockpit/Sidebar';
 
 vi.mock('qrcode', () => ({ default: { toCanvas: vi.fn(async () => undefined) } }));
 vi.mock('../TerminalViewport', () => ({ TerminalViewport: () => <div data-testid="term" /> }));
+vi.mock('./SignInTerminal', () => ({ SignInTerminal: ({ paneId }: { paneId: string }) => <div data-testid="signin-term">{paneId}</div> }));
 
 const shell = vi.hoisted(() => ({
   lend: null as null | ((cmd: string, a: Record<string, unknown>) => { handled: boolean; value?: unknown }),
@@ -102,28 +104,25 @@ describe('Request usage is reachable from Teams', () => {
     expect(buttonByText(people.closest('section')!, 'Request usage')).toBeTruthy();
     expect(host.textContent).toMatch(/Lending Claude to Maya · 2h 1\dm left/);
     expect(host.textContent).toMatch(/Borrowing Claude from Sam · 4\dm left/);
-    expect(buttonByText(host, 'Revoke')).toBeTruthy();
+    expect(buttonByText(host, 'Take back')).toBeTruthy();
     expect(buttonByText(host, 'Give back')).toBeTruthy();
     // It opens the sheet, and my other PC comes first.
     await click(buttonByText(host, 'Request usage'));
     await settle(4);
     const sheet = document.querySelector<HTMLElement>('.lend-sheet')!;
     expect([...sheet.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['My PCs', 'Teammates']);
-    // Claude, Codex and Gemini can all be asked for; only Codex and Gemini say what is not lendable yet.
-    const agents = [...sheet.querySelectorAll<HTMLOptionElement>('select[aria-label="Agent"] option')];
-    expect(agents.map((o) => o.textContent)).toEqual(['Claude · Lab', 'Codex · Lab', 'Gemini CLI · Lab']);
-    expect(agents.some((o) => o.disabled)).toBe(false);
-    expect(sheet.querySelector('[role="note"]')).toBeNull();
-    await pickOption(sheet.querySelector('select[aria-label="Agent"]')!, 'codex');
-    expect(sheet.querySelector('[role="note"]')!.textContent).toBe('Codex signed in with ChatGPT is not supported yet. Only an OpenAI API key can be lent.');
-    await pickOption(sheet.querySelector('select[aria-label="Agent"]')!, 'claude');
-    expect(sheet.querySelector('[role="note"]')).toBeNull();
+    // The lender's PC says what it can lend: profiles by name, never an agent list with a tag in its name.
+    const rows = [...sheet.querySelectorAll('[data-testid="lend-offers"] .lend-card')].map((l) => l.textContent);
+    expect(rows).toEqual(['Work accountClaude · up to 8 hours · asks first', 'PersonalClaude · up to 1 hour · lent at once']);
+    expect(sheet.textContent).not.toContain('Lab');
+    expect(sheet.querySelector('select[aria-label="Agent"]')).toBeNull();
     // Ask works: the command goes out with the member, device, agent and length.
     await click(buttonByText(sheet, 'Ask'));
     await settle(4);
     const ask = shell.invoked.find((i) => i.cmd === 'lend_request')!;
-    expect(ask.args).toMatchObject({ member_id: 'm-leo', device_id: 'd-lap', agent_id: 'claude', secs: 28800 });
+    expect(ask.args).toMatchObject({ member_id: 'm-leo', device_id: 'd-lap', agent_id: 'claude', secs: 28800, profile_id: 'lp-work' });
     expect(document.querySelector('.lend-sheet')!.textContent).toContain('Waiting');
+    expect(document.querySelector('.lend-sheet')!.textContent).toContain('Asked Leo laptop for Work account · Claude · 8 hours');
   });
 
   it('Settings > Team: nothing of it while Share an agent is off', async () => {
@@ -187,6 +186,19 @@ describe('Request usage is reachable from Teams', () => {
     expect(team.querySelector('[data-lend-request]')).toBeNull();
   });
 
+  it('Inbox > Team: the incoming card names the profile the borrower picked, with no picker, and lends with it', async () => {
+    lendIs(lendState({ requests_in: [{ ...REQUEST_MAYA, profile_id: 'prof-team', profile_name: 'Teammates, ask first' }] }));
+    await inbox();
+    const card = host.querySelector<HTMLElement>('[data-lend-request="req-in-maya"]')!;
+    expect(card.textContent).toContain("Maya's laptop wants Teammates, ask first (Claude) for 8 hours");
+    expect(card.querySelector('select')).toBeNull();
+    const tick = [...card.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((i) => i.parentElement?.textContent?.includes('I understand'))!;
+    await click(tick);
+    await click(buttonByText(card, 'Lend'));
+    await settle(4);
+    expect(shell.invoked.find((i) => i.cmd === 'lend_answer')!.args).toMatchObject({ request_id: 'req-in-maya', accept: true, profile_id: 'prof-team' });
+  });
+
   it('Inbox > Team: nothing of it while Share an agent is off', async () => {
     lendIs(null);
     await inbox();
@@ -237,6 +249,69 @@ describe('Settings > Lend', () => {
     expect(main().textContent).not.toContain('.pm');
     // A basic row: it is not hidden behind "Advanced".
     expect(main().querySelector('[data-row="lend-page"]')).not.toBeNull();
+  });
+
+  /** Opens Settings on the Lend page and waits for it. */
+  const openLendPage = async () => {
+    await mount(true, { initialTab: 'connect', initialRow: 'lend-page' });
+    for (let i = 0; i < 200 && !main().querySelector('section[aria-label="Lend profiles"]'); i++) {
+      await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
+    }
+  };
+  const sheetEl = () => main().querySelector<HTMLElement>('.lend-sheet') ?? document.querySelector<HTMLElement>('.lend-sheet')!;
+  const sheetInput = (label: string) => sheetEl().querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+  const pickClaude = async () => {
+    await typeInto(sheetInput('Name'), 'Work account');
+    await click([...sheetEl().querySelectorAll<HTMLInputElement>('fieldset.lend-cards input')].find((i) => i.parentElement?.textContent?.includes('Claude'))!);
+  };
+
+  it('signing in while creating a profile starts the hidden sign-in, opens no pane and stays on Settings', async () => {
+    lendIs(lendState({ profiles: [] }));
+    await openLendPage();
+    await click(buttonByText(main(), 'New lend profile'));
+    await pickClaude();
+    await click(buttonByText(sheetEl(), 'Next'));
+    shell.invoked = [];
+    await click(buttonByText(sheetEl(), 'Sign in'));
+    await settle(6);
+    const cmds = shell.invoked.map((c) => c.cmd);
+    expect(cmds).toContain('lend_account_add');
+    expect(cmds).toContain('lend_signin_start');
+    // A normal pane is what cut the flow off: no pane command of any kind, so nothing is selected and the view stays.
+    expect(cmds.filter((c) => /pane|cockpit|select/.test(c))).toEqual([]);
+    expect(main().querySelector('h1')!.textContent).toBe('Connect');
+    expect(sheetEl()).not.toBeNull();
+    expect(sheetEl().textContent).toContain('Step 2 of 4');
+    expect(sheetEl().querySelector('[data-testid="signin-term"]')!.textContent).toMatch(/^signin-pane-acct-/);
+  });
+
+  it('leaving Settings with the sheet open on step 2 and coming back: the "Finish setting up" row is there and Continue restores the draft', async () => {
+    // Whatever takes the main area away from Settings (a new selection, a chat opening) unmounts the page. The draft must
+    // not live in it: it lives in its own store, so the row is waiting when Settings > Lend comes back.
+    window.sessionStorage.clear();
+    resetDraftForTests();
+    lendIs(lendState({ profiles: [] }));
+    await openLendPage();
+    await click(buttonByText(main(), 'New lend profile'));
+    await pickClaude();
+    await click(buttonByText(sheetEl(), 'Next'));
+    await click(buttonByText(sheetEl(), 'Sign in'));
+    await settle(6);
+    expect(shell.invoked.filter((c) => c.cmd === 'lend_account_add')).toHaveLength(1);
+    // The view leaves Settings: everything of it unmounts.
+    await act(async () => root.unmount());
+    expect(document.querySelector('.lend-sheet')).toBeNull();
+    root = createRoot(host);
+    resetDraftForTests(); // a new module state, as after a window reload: it comes back from sessionStorage
+    await openLendPage();
+    const row = main().querySelector<HTMLElement>('[data-testid="lend-draft-row"]')!;
+    expect(row.textContent).toContain('Finish setting up "Work account" · Step 2 of 4');
+    await click(buttonByText(row, 'Continue'));
+    await settle(4);
+    expect(sheetEl().textContent).toContain('Step 2 of 4');
+    expect(shell.invoked.filter((c) => c.cmd === 'lend_account_add')).toHaveLength(1);
+    await click(buttonByText(sheetEl(), 'Back'));
+    expect(sheetInput('Name').value).toBe('Work account');
   });
 
   it.each(['lend', 'borrow', 'usage'])('searching "%s" finds it', async (word) => {
@@ -302,7 +377,17 @@ describe('New agent menu: a borrowed grant is a sign-in', () => {
   const items = (menu: HTMLElement) => [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')];
   const claudeRow = (menu: HTMLElement) => items(menu).find((i) => i.textContent?.startsWith('Claude'));
 
-  it('shows "Leo\'s PC (lent) · 1h 5Xm left" in the sign-in step next to my own logins, and starts the pane on it', async () => {
+  it("falls back to Leo's PC (borrowed) when the lender sent no profile name", async () => {
+    lendIs(lendState({ grants: [{ ...GRANT_IN_PANE, pane_ids: [], profile_name: undefined }] }), []);
+    const c = cockpit();
+    const menu = await openMenu(c);
+    await click(claudeRow(menu));
+    await settle(4);
+    const labels = items(host.querySelector<HTMLElement>('[role="menu"]')!).map((i) => i.textContent);
+    expect(labels.some((l) => /^Leo's PC \(borrowed\) · 1h 5\dm left$/.test(l ?? ''))).toBe(true);
+  });
+
+  it('shows "Work account on Leo\'s PC (borrowed) · 1h 5Xm left" in the sign-in step next to my own logins, and starts the pane on it', async () => {
     const own = { id: 'acct-work', agent_id: 'claude', label: 'Work', home: 'C:\\work' };
     // GRANT_IN_PANE has about 2 hours left; the lend I made out is never a sign-in for me.
     lendIs(lendState({ grants: [{ ...GRANT_IN_PANE, pane_ids: [] }, GRANT_OUT] }), [own]);
@@ -317,7 +402,7 @@ describe('New agent menu: a borrowed grant is a sign-in', () => {
     const labels = items(step).map((i) => i.textContent);
     expect(labels[0]).toBe('Default sign-in');
     expect(labels[1]).toBe('Work');
-    expect(labels[2]).toMatch(/^Leo's PC \(lent\) · 1h 5\dm left$/);
+    expect(labels[2]).toMatch(/^Work account on Leo's PC \(borrowed\) · 1h 5\dm left$/);
     expect(labels).toHaveLength(4); // Default, Work, the borrowed one, Back
     await click(items(step)[2]);
     await settle(4);
@@ -372,12 +457,12 @@ describe('Pane header: time-left chip', () => {
     } as unknown as CockpitApi;
   };
 
-  it('shows "Leo\'s Claude" with the time left on a borrowed pane, and Give back now', async () => {
+  it('shows the profile name with the time left on a borrowed pane, and Give back now', async () => {
     lendIs(lendState({ grants: [GRANT_IN_PANE] }));
     await act(async () => root.render(<PaneView c={paneCockpit()} paneId="pane-claude-1" />));
     await settle(8);
     const chip = host.querySelector<HTMLButtonElement>('[data-testid="lend-chip"]')!;
-    expect(chip.textContent).toMatch(/^Leo's Claude · 1h 5\dm$/);
+    expect(chip.textContent).toMatch(/^Work account · 1h 5\dm$/);
     await click(chip);
     await click(buttonByText(host, 'Give back now'));
     await settle(4);
@@ -395,10 +480,89 @@ describe('Pane header: time-left chip', () => {
     expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("The lender's sign-in expired. Ask them to sign in again.");
   });
 
+  const chipOf = async (grant: object) => {
+    lendIs(lendState({ grants: [grant as never] }));
+    await act(async () => root.render(<PaneView c={paneCockpit()} paneId="pane-claude-1" />));
+    await settle(8);
+    return host.querySelector<HTMLButtonElement>('[data-testid="lend-chip"]')!;
+  };
+
+  it("shows the lender's name for it: Ren's Work account with the time, the full name in the tooltip and the details", async () => {
+    const chip = await chipOf(GRANT_IN_REN);
+    expect(chip.textContent).toMatch(/^Ren's Work account · 1h 5\dm$/);
+    expect(chip.title).toBe("Claude · Ren's Work account (borrowed)");
+    await click(chip);
+    expect(host.querySelector('.lend-pop-title')!.textContent).toBe("Claude · Ren's Work account (borrowed)");
+  });
+
+  it("an older lender sent no name: it falls back to Ren's Claude and Claude · Ren's PC (borrowed)", async () => {
+    const chip = await chipOf(GRANT_IN_REN_OLD);
+    expect(chip.textContent).toMatch(/^Ren's Claude · 1h 5\dm$/);
+    await click(chip);
+    expect(host.querySelector('.lend-pop-title')!.textContent).toBe("Claude · Ren's PC (borrowed)");
+  });
+
+  it('words a problem by its kind: not answering on the chip, signed out in the details', async () => {
+    const lost = await chipOf({ ...GRANT_IN_REN, problem: 'x', problem_kind: 'unreachable' });
+    expect(lost.textContent).toBe("Ren's Work account · not answering");
+    expect(lost.dataset.problem).toBe('true');
+    await click(lost);
+    expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("Ren's PC is not answering. It may be asleep or offline. The time keeps running.");
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    const out = await chipOf({ ...GRANT_IN_REN, problem: 'x', problem_kind: 'signin' });
+    await click(out);
+    expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("Ren's Work account is signed out on Ren's PC. Ren has been told. It will carry on when Ren signs in again.");
+  });
+
   it('shows no chip while Share an agent is off', async () => {
     lendIs(null);
     await act(async () => root.render(<PaneView c={paneCockpit()} paneId="pane-claude-1" />));
     await settle(8);
     expect(host.querySelector('[data-testid="lend-chip"]')).toBeNull();
+  });
+});
+
+// ---- the borrower picks a profile ---------------------------------------------------------------------------------------------
+
+describe('Request usage: the borrower picks one of the lender\'s profiles', () => {
+  const openSheet = async (offers?: LendScenario['offers']) => {
+    lendIs(lendState({ offers }));
+    await act(async () => root.render(<TeamPage />));
+    await settle(8);
+    await click(buttonByText(host, 'Request usage'));
+    await settle(6);
+    return document.querySelector<HTMLElement>('.lend-sheet')!;
+  };
+
+  it('lists profiles by name, picks the first, and the time follows the profile', async () => {
+    const sheet = await openSheet();
+    const radios = [...sheet.querySelectorAll<HTMLInputElement>('input[name="lend-offer"]')];
+    expect(radios.map((r) => r.checked)).toEqual([true, false]);
+    expect(sheet.textContent).toContain('What to borrow');
+    await click(radios[1]);
+    // "Personal" is up to 1 hour: that is the time now.
+    expect(sheet.textContent).toContain('1 hour');
+    await click(buttonByText(sheet, 'Ask'));
+    await settle(4);
+    expect(shell.invoked.find((i) => i.cmd === 'lend_request')!.args).toMatchObject({ profile_id: 'lp-personal', secs: 3600, profile_name: 'Personal' });
+  });
+
+  it('no answer in time: the agent list and a note show, with the tag beside the name and never in it', async () => {
+    const sheet = await openSheet({ 'm-leo': null });
+    expect(sheet.querySelector('[data-testid="lend-no-answer"]')!.textContent).toBe('Leo laptop did not answer. Pick an agent; Leo laptop chooses the account.');
+    const agents = [...sheet.querySelectorAll<HTMLOptionElement>('select[aria-label="Agent"] option')].map((o) => o.textContent);
+    expect(agents).toEqual(['Claude', 'Codex', 'Gemini CLI']);
+    expect(sheet.querySelector('.lend-tag')!.textContent).toBe('Early test');
+    await click(buttonByText(sheet, 'Ask'));
+    await settle(4);
+    const ask = shell.invoked.find((i) => i.cmd === 'lend_request')!;
+    expect(ask.args).toMatchObject({ agent_id: 'claude', profile_id: null });
+  });
+
+  it('nothing for me: it says so and Ask stays off', async () => {
+    const sheet = await openSheet({ 'm-leo': [] });
+    expect(sheet.textContent).toContain('Leo laptop has nothing to lend you yet. Ask them to make a lend profile.');
+    expect(buttonByText(sheet, 'Ask')!.disabled).toBe(true);
   });
 });

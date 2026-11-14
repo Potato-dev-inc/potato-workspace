@@ -22,6 +22,9 @@ import { ALL_TAB, companionTab, isCompanionPane, isCompanionTab, orderPanes, pho
 import { bridgeCompanionTransport, type CompanionView } from './lib/companion';
 import { bridgePlansApi } from './lib/plans-report';
 import { PhonePlans } from './components/mobile/PhonePlans';
+import { usePhoneTheme } from './lib/phone-theme';
+import { useAppBadge } from './lib/phone-badge';
+import { usePlansTurns } from './lib/phone-usage-line';
 import { NightSummary, bridgeNightApi } from './components/mobile/NightSummary';
 import { ReviewSummary } from './components/mobile/ReviewSummary';
 import { bridgeReviewApi } from './lib/mobile-review';
@@ -58,6 +61,7 @@ import { AcpPhoneDock } from './components/mobile/AcpPhoneDock';
 import { PhoneNewChat } from './components/mobile/PhoneNewChat';
 import type { PhoneClosedChat } from './lib/bridge-types';
 import { ACP_LANE } from './lib/acpChat';
+import { useAcpPhoneState } from './hooks/useAcpPhoneState';
 import { composerBlock } from './lib/paneOutbox';
 import { publishBridgeOutbox } from './lib/paneOutbox-bridge';
 import { chatAllowedFor, keepViewsOf, readPaneViews, writePaneViews, type PaneView } from './lib/mobile-pane-view';
@@ -812,10 +816,15 @@ export default function PwaApp() {
   }, [t]);
 
   const needsNow = needsPaneIds(agentPanes, attention);
+  usePhoneTheme();
+  // The number on the app icon: chats that need you.
+  useAppBadge(needsNow.size);
+  const usageTurns = usePlansTurns(plansTransport, drawer);
   const edgeSwipe = useEdgeSwipe(() => setDrawer(true), !drawer && sheet === null && !searchOpen);
   const activePaneInfo = agentPanes.find((p) => p.id === active);
   const headerNote = useProgressNote(active);
   const headerMeta = useChatMeta(active);
+  const headerChat = useAcpPhoneState(bridge, active, activePaneInfo?.lane === ACP_LANE);
   const shellRef = useRef<HTMLDivElement>(null);
   usePhoneTextSize(shellRef);
   const behindRef = useRef<HTMLDivElement>(null);
@@ -831,6 +840,7 @@ export default function PwaApp() {
         offline: phoneLink.kind === 'offline' || phoneLink.kind === 'asleep',
         asking: isAsking(attention, activePaneInfo.id),
         sending: headerMeta.sending,
+        waking: !!headerChat && !headerChat.closed && (headerChat.phase === 'starting' || headerChat.phase === 'resuming'),
         doneMs: headerMeta.doneMs,
         total: headerMeta.total,
       })
@@ -959,6 +969,7 @@ export default function PwaApp() {
               ruleLimit={limitOf(paneRules.rules[active])}
               acp={isAcpPane}
               canControl={canControl}
+              canAnswer={canAnswer}
               above={
                 <PhoneNeedsPill
                   snapshot={attention}
@@ -982,7 +993,7 @@ export default function PwaApp() {
             />
           )}
           {active !== ALL_TAB && !isCompanionTab(active) && !activePane && (
-            <div className="ph-loading">{t('phone.loadingAgent')}</div>
+            <PhoneQuiet kind="loading" compact text={t('phone.loadingAgent')} />
           )}
           {activePane && activeView === 'terminal' && abilities.typingNote && <TypingNote text={abilities.typingNote} />}
           {activePane && activeView === 'terminal' && inputRefused && inputRefused.paneId === active && (
@@ -1007,6 +1018,7 @@ export default function PwaApp() {
         closed={closedChats}
         canReopen={canControl}
         onReopen={reopenClosed}
+        usage={plansTransport ? { turns: usageTurns, onOpen: () => { setDrawer(false); setSheet('plans'); } } : undefined}
         onSearch={() => {
           setDrawer(false);
           setSearchOpen(true);

@@ -26,7 +26,7 @@ mod worker;
 #[path = "outbox_tests.rs"]
 mod tests;
 
-pub use host::{Attempt, Host, Look, PaneKind};
+pub use host::{Attempt, Host, Look, PaneKind, Pulse};
 pub use worker::target_block;
 pub use live::{global, look_pane, redacted, LiveHost};
 pub use model::{OutboxMessage, State, MAX_CHARS, MAX_WAITING};
@@ -46,6 +46,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// (the pane outbox and the companion keeper both use it).
 pub const GATE_RETRY: Duration = Duration::from_secs(20);
 
+/// How long a chat may stay silent after a message went in before the person is told "No answer yet".
+pub const NO_ANSWER_AFTER: Duration = Duration::from_secs(20);
+
+/// How many of the worker's last decisions are kept per pane, for the support text.
+const DECISIONS_KEPT: usize = 20;
+
 /// How often a worker looks, how long a message may wait, how long a finished one stays listed.
 #[derive(Debug, Clone, Copy)]
 pub struct Timing {
@@ -61,6 +67,8 @@ pub struct Timing {
     /// After a startup notice ignored its own dismiss keys, the next try to close it waits this long (the keys are
     /// not pressed again every poll).
     pub gate_retry: Duration,
+    /// A sent message with no new item in the chat after this long is marked "no answer yet" (it only informs).
+    pub no_answer_after: Duration,
 }
 
 impl Default for Timing {
@@ -72,6 +80,7 @@ impl Default for Timing {
             keep_failed: Duration::from_secs(10 * 60),
             after_send: Duration::from_millis(1500),
             gate_retry: GATE_RETRY,
+            no_answer_after: NO_ANSWER_AFTER,
         }
     }
 }
@@ -83,6 +92,10 @@ struct PaneQueue {
     last_sent: Option<Instant>,
     /// When delivery last came back blocked by a startup screen (`Attempt::Gate`).
     gate_tried: Option<Instant>,
+    /// The last decisions of the worker (time, reason), oldest first; a repeat of the same reason is not listed twice.
+    decisions: std::collections::VecDeque<(u64, String)>,
+    /// How often a worker that died of a panic was started again (cleared when a message goes in).
+    restarts: u8,
 }
 
 struct Inner {
@@ -103,7 +116,7 @@ impl Drop for Outbox {
     }
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
@@ -174,9 +187,10 @@ impl Outbox {
                 state: State::Queued,
                 waiting_for: None,
                 error: None,
+                no_answer: false,
                 attachments: attachments.to_vec(),
             };
-            queue.entries.push(Entry { message: message.clone(), created: Instant::now(), finished: None, held: None });
+            queue.entries.push(Entry { message: message.clone(), created: Instant::now(), finished: None, held: None, watch: None });
             let start_worker = !queue.worker;
             queue.worker = true;
             (message, worker::snapshot(queue), start_worker)
@@ -195,8 +209,8 @@ impl Outbox {
             let queue = panes.entry(pane_id.to_string()).or_default();
             worker::prune(queue, &self.inner.timing);
             let id = format!("m{}-{:x}", self.inner.next_id.fetch_add(1, Ordering::SeqCst), now_ms());
-            let message = OutboxMessage { id, text: text.to_string(), created_at: now_ms(), state: State::Sent, waiting_for: None, error: None, attachments: attachments.to_vec() };
-            let mut entry = Entry { message: message.clone(), created: Instant::now(), finished: None, held: None };
+            let message = OutboxMessage { id, text: text.to_string(), created_at: now_ms(), state: State::Sent, waiting_for: None, error: None, no_answer: false, attachments: attachments.to_vec() };
+            let mut entry = Entry { message: message.clone(), created: Instant::now(), finished: None, held: None, watch: None };
             entry.finish(State::Sent, None);
             queue.entries.push(entry);
             (message, worker::snapshot(queue))
@@ -268,6 +282,17 @@ impl Outbox {
         };
         self.inner.host.publish(pane_id, &list);
         Ok(message)
+    }
+
+    /// The worker's last decisions for the pane, one line each (time, reason), for "Copy for support".
+    pub fn support_text(&self, pane_id: &str) -> String {
+        let panes = self.inner.panes.lock();
+        let Some(queue) = panes.get(pane_id) else { return "Message outbox: nothing is waiting.".to_string() };
+        let mut text = format!("Message outbox: {} message(s), worker {}.", queue.entries.len(), if queue.worker { "running" } else { "stopped" });
+        for (at, reason) in &queue.decisions {
+            text.push_str(&format!("\n  {at} {reason}"));
+        }
+        text
     }
 
     /// The pane's messages, oldest first: the waiting ones and those that finished in the last two minutes.

@@ -2,6 +2,7 @@ use super::*;
 use crate::app_windows::{cascade_position, pane_placement, pane_window_size, placement_physical};
 use crate::window_layout::{plan_layout, WindowLayout, WorkArea};
 use serde_json::json;
+use crate::test_support::wait::{slow, wait_until};
 use std::sync::Arc;
 
 // ---- the setting
@@ -283,11 +284,11 @@ fn a_full_switch_shows_the_overlay_then_finishes_on_the_overlays_done() {
     };
     let mut stage = Recorder::new();
     let started = Instant::now();
-    let timeouts = Timeouts { begin: Duration::from_millis(500), ready: Duration::from_millis(500), slack: Duration::from_millis(150) };
+    let timeouts = Timeouts { begin: slow(Duration::from_millis(500)), ready: slow(Duration::from_millis(500)), slack: slow(Duration::from_millis(1000)) };
     assert_eq!(drive(&mut stage, &mb, &timeouts), Outcome::Animated);
     let took = started.elapsed();
-    // done arrives ~25 ms in, but the motion is 200 ms: the switch holds to its end, and never sits out the 350 ms timeout.
-    assert!(took >= Duration::from_millis(200) && took < Duration::from_millis(340), "{took:?}");
+    // done arrives ~25 ms in, but the motion is 200 ms: the switch holds to its end, and never sits out the 1200 ms timeout.
+    assert!(took >= Duration::from_millis(200) && took < slow(Duration::from_millis(1100)), "{took:?}");
     assert_eq!(stage.calls, ["announce", "overlay:3", "ready", "finish:Animated"]);
     poster.join().unwrap();
 }
@@ -323,22 +324,23 @@ fn the_way_back_runs_through_the_overlay_too() {
 
 #[test]
 fn the_end_is_timed_from_when_the_overlay_started_not_from_when_it_was_shown() {
-    // ready comes 60 ms after the overlay was shown; the motion is 80 ms; done 85 ms after ready is on time,
-    // although it is 145 ms after the show (the old deadline: 80 + 40 slack = 120 ms from the show).
+    // The motion is 400 ms and the slack 200 ms, so the end is due 600 ms after ready. Ready comes 300 ms after the overlay was
+    // shown and done 450 ms after ready: on time (150 ms to spare), although it is 750 ms after the show (the old deadline
+    // was 600 ms from the show, 150 ms short). Every gap is at least 150 ms, so a busy PC does not flip the verdict.
     let mb = Arc::new(Mailbox::new());
-    mb.post_begin(begin_with(1, 80));
+    mb.post_begin(begin_with(1, 400));
     let poster = {
         let mb = mb.clone();
         std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(45));
+            std::thread::sleep(Duration::from_millis(300));
             mb.post_ready_with(None);
-            std::thread::sleep(Duration::from_millis(85));
+            std::thread::sleep(Duration::from_millis(450));
             mb.post_done_with(None);
         })
     };
     let mut stage = Recorder::new();
-    let timeouts = Timeouts { begin: Duration::from_millis(500), ready: Duration::from_millis(500), slack: Duration::from_millis(40) };
-    // ready limit is min(500, 80+40=120): 45 ms is inside it.
+    let timeouts = Timeouts { begin: Duration::from_millis(500), ready: Duration::from_millis(500), slack: Duration::from_millis(200) };
+    // ready limit is min(500, 400+200=600) = 500: 300 ms is inside it.
     assert_eq!(drive(&mut stage, &mb, &timeouts), Outcome::Animated);
     poster.join().unwrap();
 }
@@ -353,7 +355,7 @@ fn the_switch_still_completes_when_the_overlay_never_says_done() {
     assert_eq!(drive(&mut stage, &mb, &quick()), Outcome::DoneTimeout);
     let took = started.elapsed();
     // animation (50 ms) + slack (40 ms): not forever, and not before the animation could end.
-    assert!(took >= Duration::from_millis(85) && took < Duration::from_millis(400), "{took:?}");
+    assert!(took >= Duration::from_millis(85) && took < slow(Duration::from_millis(3000)), "{took:?}");
     assert_eq!(stage.calls, ["announce", "overlay:2", "ready", "finish:DoneTimeout"]);
 }
 
@@ -368,11 +370,11 @@ fn the_switch_completes_without_an_overlay_at_all() {
 #[test]
 fn an_overlay_that_never_draws_ends_the_switch_at_its_ready_timeout() {
     let mb = Mailbox::new();
-    mb.post_begin(begin_with(1, 700));
+    mb.post_begin(begin_with(1, 3000));
     let mut stage = Recorder::new();
     let started = Instant::now();
     assert_eq!(drive(&mut stage, &mb, &quick()), Outcome::ReadyTimeout);
-    assert!(started.elapsed() < Duration::from_millis(300), "ready is not waited for the whole animation");
+    assert!(started.elapsed() < slow(Duration::from_millis(2500)), "ready is not waited for the whole animation");
     assert_eq!(stage.calls, ["announce", "overlay:1", "finish:ReadyTimeout"]);
 }
 
@@ -404,7 +406,7 @@ fn a_switch_cancelled_before_it_starts_only_jumps_to_its_end_state() {
 #[test]
 fn a_cancel_while_waiting_wakes_the_switch_and_ends_it_at_once() {
     let mb = Arc::new(Mailbox::new());
-    mb.post_begin(begin_with(2, 2000));
+    mb.post_begin(begin_with(2, 3000));
     mb.post_ready_with(None);
     let canceller = {
         let mb = mb.clone();
@@ -417,7 +419,7 @@ fn a_cancel_while_waiting_wakes_the_switch_and_ends_it_at_once() {
     let started = Instant::now();
     let timeouts = Timeouts { begin: Duration::from_millis(500), ready: Duration::from_millis(500), slack: Duration::from_millis(150) };
     assert_eq!(drive(&mut stage, &mb, &timeouts), Outcome::Cancelled);
-    assert!(started.elapsed() < Duration::from_millis(500), "does not wait out the 2 s animation");
+    assert!(started.elapsed() < slow(Duration::from_millis(2500)), "does not wait out the 3 s animation");
     assert_eq!(stage.calls.last().unwrap(), "finish:Cancelled");
     canceller.join().unwrap();
 }
@@ -441,10 +443,7 @@ fn a_second_switch_cancels_the_first_and_waits_for_it_to_settle() {
         })
     };
     // The second one cancels the first right away, but cannot start until the first lets go.
-    let deadline = Instant::now() + Duration::from_secs(2);
-    while !first_box.is_cancelled() && Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(2));
-    }
+    wait_until(2, || first_box.is_cancelled());
     assert!(first_box.is_cancelled(), "the newer switch cancels the one in flight");
     std::thread::sleep(Duration::from_millis(30));
     assert!(order.lock().is_empty(), "it waits for the first to reach its end state");

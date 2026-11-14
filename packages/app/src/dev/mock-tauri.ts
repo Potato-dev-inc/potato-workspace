@@ -50,6 +50,7 @@ import { whatBrokeItMock } from './what-broke-it-fixtures';
 import { whatBrokeItResultMock } from './what-broke-it-result-fixtures';
 import { collisionMock } from './collision-fixtures';
 import { filesMock } from './files-fixtures';
+import { artifactsMock } from './artifacts-fixtures';
 import { addAgentMock } from './add-agent-fixtures';
 import { agentCapsMock } from './agent-caps-fixtures';
 
@@ -104,6 +105,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (agentCaps.handled) return agentCaps.value;
       const files = filesMock(cmd, a);
       if (files.handled) return files.value;
+      const artifacts = artifactsMock(cmd, a);
+      if (artifacts.handled) return artifacts.value;
       const collision = collisionMock(scenario.collision, cmd, a);
       if (collision.handled) return collision.value;
       const night = nightMock(scenario.night, cmd, a);
@@ -425,6 +428,26 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'question_dismiss':
           return { accepted: true, question: (scenario.questions ?? []).find((q) => q.id === a.id) };
         case 'get_tunnel_status':
+        case 'set_tunnel_config': {
+          if (scenario.tunnel) {
+            const failed = scenario.tunnel === 'stable-failed';
+            const worker = 'https://potato-stable-link.example.workers.dev';
+            const shown = a.input && (a.input as { secret_action?: string }).secret_action === 'show';
+            return {
+              mode: 'stable',
+              public_url: worker,
+              state: 'running',
+              error: null,
+              config: { mode: 'stable', hostname: null, url: worker, has_token: false, has_secret: true },
+              stable: {
+                worker_url: worker,
+                quick_url: 'https://quiet-lake-1234.trycloudflare.com',
+                link: failed ? 'failed' : 'linked',
+                error: failed ? 'The secret does not match the one the Worker has. Make a new secret, or reset the Worker.' : null,
+              },
+              ...(shown ? { secret_once: 'k3Qm9x-EXAMPLE-ONLY-vT7pL2dRw8YzN1uHa5bC0eJ' } : {}),
+            };
+          }
           return {
             mode: 'named',
             public_url: 'https://pm.example.com',
@@ -432,6 +455,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
             error: null,
             config: { mode: 'named', hostname: 'pm.example.com', url: null, has_token: true },
           };
+        }
         case 'test_tunnel_connection':
           return { ok: true, url: 'https://pm.example.com/bridge/health', http_status: 200, latency_ms: 84, message: 'Connected in 84 ms.' };
         case 'create_mobile_pairing_session': {

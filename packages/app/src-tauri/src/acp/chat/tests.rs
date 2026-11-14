@@ -69,6 +69,8 @@ struct Rig {
     registry: Arc<Mutex<PaneRegistry>>,
     host: Arc<Recorder>,
     dir: PathBuf,
+    /// Held while the rig's agent process runs: at most 2 rigs start real processes at once (`PM_TEST_SLOW` stretches the waits).
+    _gate: crate::test_support::wait::Permit<'static>,
 }
 
 impl Rig {
@@ -77,6 +79,7 @@ impl Rig {
     }
 
     fn with(opts: &str, tweak: impl FnOnce(&mut AgentConfig)) -> Rig {
+        let gate = crate::test_support::wait::process_permit();
         let dir = std::env::temp_dir().join(format!("pm-acp-chat-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut cfg = fake_agent::agent_config(opts, &dir.join("store"));
@@ -85,7 +88,7 @@ impl Rig {
         let host = Arc::new(Recorder::default());
         let deps = StartDeps { registry: registry.clone(), host: host.clone(), env: Arc::new(TestEnv { root: dir.clone() }), conversations: None };
         let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None, ..Default::default() }).expect("the fake agent starts");
-        Rig { chat, registry, host, dir }
+        Rig { chat, registry, host, dir, _gate: gate }
     }
 
     fn id(&self) -> String {
@@ -136,16 +139,7 @@ impl Drop for Rig {
     }
 }
 
-fn wait_until(secs: u64, mut condition: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(secs);
-    while Instant::now() < deadline {
-        if condition() {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    condition()
-}
+use crate::test_support::wait::wait_until;
 
 struct Recorded(Mutex<Vec<(String, usize, bool)>>);
 impl Sink for Recorded {
@@ -1380,4 +1374,50 @@ fn another_agents_default_is_not_used() {
     let rig = Rig::new("");
     crate::acp::chat::default_model::apply_with(&rig.chat, &json!({"agent_default_models": {"someone-else": "b"}}), &picked_store(&rig), None, false);
     assert_eq!(crate::acp::chat::surface::view(&rig.chat)["model"], json!("a"));
+}
+
+// ---- a message that gets no answer -----------------------------------------------------------------------------------
+
+/// The outbox over a real chat session (the fake agent): the same look, send and pulse the live host uses.
+struct NoReplyHost {
+    chat: Arc<AcpChat>,
+}
+
+impl crate::pane_outbox::Host for NoReplyHost {
+    fn pane_kind(&self, _: &str) -> Option<crate::pane_outbox::PaneKind> {
+        Some(crate::pane_outbox::PaneKind::Agent)
+    }
+    fn run_controls(&self, _: &str) -> bool {
+        false
+    }
+    fn look(&self, _: &str) -> Option<crate::pane_outbox::Look> {
+        crate::pane_outbox::chat::look(&self.chat)
+    }
+    fn type_message(&self, _: &str, text: &str) -> crate::pane_outbox::Attempt {
+        crate::pane_outbox::chat::type_message(&self.chat, text)
+    }
+    fn pulse(&self, _: &str) -> Option<crate::pane_outbox::Pulse> {
+        Some(crate::pane_outbox::chat::pulse(&self.chat))
+    }
+    fn publish(&self, _: &str, _: &[crate::pane_outbox::OutboxMessage]) {}
+}
+
+#[test]
+fn an_agent_that_never_answers_leaves_the_message_marked_no_answer_yet() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    let timing = crate::pane_outbox::Timing { poll: Duration::from_millis(20), no_answer_after: Duration::from_millis(300), ..Default::default() };
+    let outbox = crate::pane_outbox::Outbox::with_timing(Arc::new(NoReplyHost { chat: rig.chat.clone() }), timing);
+    let message = outbox.send(&id, "quiet").unwrap();
+    // It goes in (the agent took it) and then nothing comes back.
+    assert!(wait_until(30, || outbox.list(&id).iter().any(|m| m.id == message.id && m.no_answer)), "never marked: {:?}", outbox.list(&id));
+    let marked = outbox.list(&id).into_iter().find(|m| m.id == message.id).unwrap();
+    assert_eq!(marked.state, crate::pane_outbox::State::Sent, "it only informs");
+    // The person's own message is in the chat, but it is not an answer.
+    assert!(rig.kinds().contains(&"user".to_string()));
+    assert_eq!(rig.chat.state()["phase"], "working");
+    // "Try again" is the same text sent again: it is accepted as a new message.
+    assert!(outbox.send(&id, "quiet").is_ok());
+    // The marked message belongs to the outbox, not to the agent: Stop ends the stuck turn when it can.
+    let _ = rig.chat.cancel();
 }

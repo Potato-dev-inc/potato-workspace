@@ -78,6 +78,12 @@ export async function bootHarness(name: string): Promise<() => JSX.Element> {
   settle.textContent = '*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important}';
   document.head.appendChild(settle);
   if (scenario.route === 'phone') {
+    // The phone keeps its own Light / Dark / Auto choice; a scenario's theme is that choice.
+    try {
+      window.localStorage.setItem('potato.phone.theme.v1', scenario.theme ?? 'dark');
+    } catch {
+      /* storage blocked: the phone follows its own setting */
+    }
     installMockBridge(scenario);
   } else {
     installTauriMock(scenario);

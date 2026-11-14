@@ -3,6 +3,7 @@
 // session (or the screen) shows it. On the desktop they read as a short stacked queue (one slim row each, in order);
 // the phone keeps its bubbles (phone-chat.css).
 import { useState } from 'react';
+import { useT } from '../../i18n';
 import type { OutboxMessage } from '../../lib/paneOutbox';
 import '../../styles/chat-input-card.css';
 
@@ -21,6 +22,10 @@ export interface PendingMessagesProps {
    * stopped from here (a chat session, a Chat (terminal) pane); without it a waiting message has Cancel only.
    */
   onSendNow?: () => void;
+  /** "Try again" under "No answer yet": sends the same text again. Resolves to null, or to the reason it was refused. */
+  onRetry?: (text: string) => Promise<string | null>;
+  /** "Start fresh" under "No answer yet": stops the stuck turn so the person can begin again. Without it the button is not shown. */
+  onStartFresh?: () => void;
 }
 
 /** The backend's sentence for a message that waits for the turn to end (pane_outbox `WAIT_BUSY`). */
@@ -46,7 +51,7 @@ async function copy(text: string): Promise<boolean> {
   }
 }
 
-type BubbleProps = Pick<PendingMessagesProps, 'onCancel' | 'onHold' | 'onEdit' | 'onSendNow'> & { message: OutboxMessage; index: number; onHide: (id: string) => void };
+type BubbleProps = Pick<PendingMessagesProps, 'onCancel' | 'onHold' | 'onEdit' | 'onSendNow' | 'onRetry' | 'onStartFresh'> & { message: OutboxMessage; index: number; onHide: (id: string) => void };
 
 /** The small editor of a waiting message: the message is held back while it is open and nothing is sent early. */
 function Editor({ message, onHold, onEdit, onDone }: { message: OutboxMessage; onHold: NonNullable<PendingMessagesProps['onHold']>; onEdit: NonNullable<PendingMessagesProps['onEdit']>; onDone: (note: string | null) => void }) {
@@ -98,11 +103,64 @@ function Editor({ message, onHold, onEdit, onDone }: { message: OutboxMessage; o
   );
 }
 
-function Bubble({ message, index, onCancel, onHold, onEdit, onHide, onSendNow }: BubbleProps) {
+/** A message that went in but got no answer for a while: one line with two ways out. It only informs; nothing is stopped. */
+function NoAnswer({ message, onRetry, onStartFresh, onHide }: Pick<BubbleProps, 'message' | 'onRetry' | 'onStartFresh' | 'onHide'>) {
+  const t = useT();
+  const [note, setNote] = useState<string | null>(null);
+  return (
+    <div className="flex justify-end ck-chat-pending" data-testid="chat-pending" data-state="no-answer">
+      <div className="max-w-[85%] ck-chat-pending-body">
+        <div className="ck-chat-pending-meta">
+          <span role="status" data-testid="chat-pending-no-answer">
+            {t('chat.noAnswer')}
+          </span>
+          {onRetry && (
+            <>
+              <span aria-hidden="true">·</span>
+              <button
+                type="button"
+                className="ck-chat-link"
+                data-testid="chat-pending-retry"
+                onClick={() => {
+                  void onRetry(message.text).then((refused) => {
+                    if (refused) setNote(refused);
+                    else onHide(message.id);
+                  });
+                }}
+              >
+                {t('chat.noAnswer.retry')}
+              </button>
+            </>
+          )}
+          {onStartFresh && (
+            <>
+              <span aria-hidden="true">·</span>
+              <button
+                type="button"
+                className="ck-chat-link"
+                data-testid="chat-pending-fresh"
+                onClick={() => {
+                  onStartFresh();
+                  onHide(message.id);
+                }}
+              >
+                {t('chat.noAnswer.fresh')}
+              </button>
+            </>
+          )}
+          {note && <span data-testid="chat-pending-note">{note}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Bubble({ message, index, onCancel, onHold, onEdit, onHide, onSendNow, onRetry, onStartFresh }: BubbleProps) {
   const [note, setNote] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const { state } = message;
   const canEdit = state === 'queued' && !!onHold && !!onEdit;
+  if (state === 'sent' && message.noAnswer) return <NoAnswer message={message} onRetry={onRetry} onStartFresh={onStartFresh} onHide={onHide} />;
   return (
     <div className="flex justify-end ck-chat-pending" data-testid="chat-pending" data-state={state}>
       <div className={`max-w-[85%] ck-chat-pending-body${state === 'failed' ? ' ck-chat-pending-body--failed' : ''}`}>
@@ -195,12 +253,12 @@ function Bubble({ message, index, onCancel, onHold, onEdit, onHide, onSendNow }:
   );
 }
 
-export function PendingMessages({ messages, onCancel, onHold, onEdit, onHide, onSendNow }: PendingMessagesProps) {
+export function PendingMessages({ messages, onCancel, onHold, onEdit, onHide, onSendNow, onRetry, onStartFresh }: PendingMessagesProps) {
   if (messages.length === 0) return null;
   return (
     <div className="space-y-2 ck-chat-pending-list" aria-live="polite">
       {messages.map((message, index) => (
-        <Bubble key={message.id} message={message} index={index} onCancel={onCancel} onHold={onHold} onEdit={onEdit} onHide={onHide} onSendNow={onSendNow} />
+        <Bubble key={message.id} message={message} index={index} onCancel={onCancel} onHold={onHold} onEdit={onEdit} onHide={onHide} onSendNow={onSendNow} onRetry={onRetry} onStartFresh={onStartFresh} />
       ))}
     </div>
   );

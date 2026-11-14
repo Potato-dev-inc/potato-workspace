@@ -95,7 +95,8 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
   const signIn = state && !state.closed && state.signIn?.needed ? state : null;
   // The first other agent that can open a visible chat or terminal; none: the card offers only "Sign in again".
   const otherAgent = signIn ? (c.launchEntries ?? []).find((e) => e.type !== signIn.agent && !e.disabled && !e.shell) : undefined;
-  if (cards.length === 0 && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0 && !orphan) return null;
+  const waking = !quiet && strip?.waking ? strip : null;
+  if (cards.length === 0 && !waking && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0 && !orphan) return null;
   const keepWaiting = () => {
     api.keepWaiting?.(paneId).catch(() => undefined);
   };
@@ -132,6 +133,13 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
             if (opened && kept) pushComposerInsert(opened, kept);
           }}
         />
+      )}
+      {waking && (
+        <div className="ck-acp-strip" data-testid="acp-waking">
+          <span className="ck-acp-strip-text" role="status">
+            {t('chat.waking')}
+          </span>
+        </div>
       )}
       {interrupted && !strip && (
         <div className="ck-acp-strip" data-testid="acp-interrupted">

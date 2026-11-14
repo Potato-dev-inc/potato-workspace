@@ -51,6 +51,14 @@ const english = () => {
 const texts = () => Array.from(host.querySelectorAll('button')).map((b) => b.textContent);
 
 describe('ApprovalPrompt (zh-TW)', () => {
+  it.each(['card', 'bar'] as const)('a failed answer says so in Chinese on the %s', (variant) => {
+    render({ ...prompt('medium'), failed: true }, variant);
+    expect(host.textContent).toContain(t('inboxCards.failed'));
+    expect(host.textContent).not.toContain('did not reach');
+    expect(english()).toEqual([]);
+  });
+
+
   it.each(['card', 'bar'] as const)('high risk %s: caution, risk word and answers are Chinese', (variant) => {
     render(prompt('high'), variant);
     expect(host.textContent).toContain(t('risk.level.high'));

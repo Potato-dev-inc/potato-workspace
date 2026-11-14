@@ -80,6 +80,8 @@ struct Rig {
     deps: StartDeps,
     chat: Arc<AcpChat>,
     panes: Panes,
+    /// Held while the rig's agent process runs: at most 2 rigs start real processes at once.
+    _gate: crate::test_support::wait::Permit<'static>,
 }
 
 pub(super) fn agents(opts: &str, dir: &Path) -> Arc<Agents> {
@@ -104,13 +106,14 @@ pub(super) fn deps_for(dir: &Path, conversations: &Conversations) -> StartDeps {
 
 impl Rig {
     fn new(opts: &str) -> Rig {
+        let gate = crate::test_support::wait::process_permit();
         let dir = std::env::temp_dir().join(format!("pm-acp-ws-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let conversations = conversations_in(&dir, opts);
         let deps = deps_for(&dir, &conversations);
         let cfg = agents(opts, &dir).0["fake"].as_ref().clone();
         let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None, ..Default::default() }).expect("the fake agent starts");
-        Rig { dir, opts: opts.to_string(), conversations, deps, chat, panes: Panes::default() }
+        Rig { dir, opts: opts.to_string(), conversations, deps, chat, panes: Panes::default(), _gate: gate }
     }
 
     fn id(&self) -> String {
@@ -141,19 +144,10 @@ impl Drop for Rig {
     }
 }
 
-fn wait_until(secs: u64, mut condition: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(secs);
-    while Instant::now() < deadline {
-        if condition() {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    condition()
-}
+use crate::test_support::wait::wait_until;
 
 fn wait_for_ask(chat: &AcpChat) -> (String, Vec<String>) {
-    assert!(wait_until(30, || !chat.state()["permissions"].as_array().unwrap().is_empty()), "no permission question appeared");
+    assert!(wait_until(30, || chat.state()["permissions"][0]["questionId"].is_string() && chat.state()["permissions"][0]["options"].is_array()), "no permission question appeared (with its card)");
     let state = chat.state();
     let first = &state["permissions"][0];
     let options = first["options"].as_array().unwrap().iter().map(|o| o["id"].as_str().unwrap().to_string()).collect();
@@ -475,7 +469,7 @@ fn the_agent_tools_see_a_chat_by_its_handle_and_read_the_chat_not_a_screen() {
     assert!(call(&rig, "GET", "agents/run-123", Value::Null, None).is_none());
     assert!(call(&rig, "POST", "agents/wait", json!({ "handles": ["run-123"] }), None).is_none());
 
-    let waited = call(&rig, "POST", "agents/wait", json!({ "handles": [id], "wait_ms": 2000 }), None).unwrap().unwrap();
+    let waited = call(&rig, "POST", "agents/wait", json!({ "handles": [id], "wait_ms": crate::test_support::wait::slow_ms(2000) }), None).unwrap().unwrap();
     assert_eq!(waited["reason"], "matched_state");
     assert_eq!(waited["agents"][0]["status"], "completed");
     let mixed = call(&rig, "POST", "agents/wait", json!({ "handles": [id, "run-123"] }), None).unwrap();
@@ -490,12 +484,12 @@ fn followup_runs_the_next_turn_and_answer_prompt_needs_the_switch() {
     let rig = Rig::new("");
     let id = rig.id();
     rig.chat.set_started_by(Some("session-A"));
-    let done = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 2", "wait_ms": 20000 }), Some("session-A")).unwrap().unwrap();
+    let done = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 2", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
     assert_eq!(done["status"], "completed");
     assert_eq!(done["result"], "w0 w1 ");
 
     // A permission question: visible to the caller as a prompt with option ids, but not answerable.
-    let asked = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "perm", "wait_ms": 20000 }), Some("session-A")).unwrap().unwrap();
+    let asked = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "perm", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
     assert_eq!(asked["status"], "waiting_input");
     assert_eq!(asked["prompt"]["answerable_by_agent"], json!(false));
     let prompt = asked["prompt"]["prompt_id"].as_str().unwrap().to_string();
@@ -506,7 +500,7 @@ fn followup_runs_the_next_turn_and_answer_prompt_needs_the_switch() {
     rig.chat.set_agent_answering(true);
     let answered = call(&rig, "POST", "agents/answer", json!({ "handle": id, "prompt_id": prompt, "choice": "reject_once" }), Some("session-A")).unwrap().unwrap();
     assert_eq!(answered["answered"]["name"], "Reject");
-    let finished = call(&rig, "POST", "agents/wait", json!({ "handles": [id], "wait_ms": 20000 }), Some("session-A")).unwrap().unwrap();
+    let finished = call(&rig, "POST", "agents/wait", json!({ "handles": [id], "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
     assert_eq!(finished["agents"][0]["status"], "completed");
 }
 
@@ -628,7 +622,7 @@ fn next_run(rig: &Rig, opts: &str) -> (Conversations, Arc<AcpChat>) {
 fn wait_journal_quiet(rig: &Rig) {
     let quiet_for = crate::acp::journal::COALESCE * 3;
     let mut last = (std::fs::metadata(journal_of(rig)).map(|m| m.len()).unwrap_or(0), Instant::now());
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + Duration::from_secs(crate::test_support::wait::slow_secs(10));
     while last.1.elapsed() < quiet_for && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(20));
         let now = std::fs::metadata(journal_of(rig)).map(|m| m.len()).unwrap_or(0);
@@ -820,7 +814,7 @@ fn followup_on_a_closed_chat_reopens_it_and_loads_the_agents_session() {
     let refused = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 1" }), Some("session-B")).unwrap();
     assert_eq!(refused.unwrap_err().code, "NOT_YOUR_CHAT");
 
-    let done = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 3", "wait_ms": 20000 }), Some("session-A")).unwrap().unwrap();
+    let done = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 3", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
     assert_eq!(done["reopened"]["how"], "chat_reopened");
     assert_eq!(done["reopened"]["previous_handle"], json!(id));
     assert_eq!(done["status"], "completed");

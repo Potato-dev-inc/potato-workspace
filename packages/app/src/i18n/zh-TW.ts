@@ -56,12 +56,16 @@ import { notify } from './zh-TW/notify';
 import { board } from './zh-TW/board';
 import { phone } from './zh-TW/phone';
 import { phoneChat } from './zh-TW/phoneChat';
+import { noReply } from './zh-TW/noReply';
 import { dnd } from './zh-TW/dnd';
 import { files } from './zh-TW/files';
+import { artifacts } from './zh-TW/artifacts';
 import { pet } from './zh-TW/pet';
 import { phoneCompose } from './zh-TW/phoneCompose';
 import { phoneShell } from './zh-TW/phoneShell';
+import { phoneHalf } from './zh-TW/phoneHalf';
 import { chatUx } from './zh-TW/chatUx';
+import { point } from './zh-TW/point';
 import { flow } from './zh-TW/flow';
 import { appUx } from './zh-TW/appUx';
 import { deskReview } from './zh-TW/deskReview';
@@ -107,13 +111,17 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...board,
   ...phone,
   ...phoneChat,
+  ...noReply,
   ...dnd,
   ...files,
+  ...artifacts,
   ...pet,
   ...phoneCompose,
   ...phoneShell,
+  ...phoneHalf,
   ...chatUx,
   ...flow,
+  ...point,
   ...appUx,
   ...deskReview,
 };

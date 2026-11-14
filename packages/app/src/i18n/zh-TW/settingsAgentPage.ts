@@ -75,4 +75,13 @@ export const settingsAgentPage: Partial<Record<EnglishKey, string>> = {
   'accounts.askMe': '每次都問我',
   'accounts.newName': '新的 {agent} 登入名稱',
   'accounts.namePlaceholder': '名稱，例如「工作」',
+  'chatAdapter.label': '對話轉接器',
+  'chatAdapter.noneShort': '無',
+  'chatAdapter.none': '沒有。加入之後，這個 AI 助理才能用對話方式使用。',
+  'chatAdapter.added': '由你加入，用來以對話方式啟動這個 AI 助理。',
+  'chatAdapter.builtin': '內建，用來以對話方式啟動這個 AI 助理。',
+  'chatAdapter.notFound': '這台電腦上還找不到這個 AI 助理，但你仍可先加入它的對話轉接器。',
+  'chatAdapter.change': '更換',
+  'chatAdapter.changeAria': '更換 {label} 的對話轉接器',
+  'chatAdapter.added.status': '已儲存 {label} 的對話轉接器。',
 };

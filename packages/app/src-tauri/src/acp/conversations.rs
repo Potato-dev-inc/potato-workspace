@@ -132,6 +132,21 @@ impl Conversations {
         out
     }
 
+    /// The separate copy the conversation works in, if any.
+    pub fn copy_of(&self, id: &str) -> Option<super::record::CopyLink> {
+        self.0.records.lock().iter().find(|r| r.id == id).and_then(|r| r.copy.clone())
+    }
+
+    /// Notes (or, with `None`, forgets) the separate copy of a conversation.
+    pub fn set_copy(&self, id: &str, copy: Option<super::record::CopyLink>) {
+        self.update(id, |r| r.copy = copy);
+    }
+
+    /// Closed conversations that still point at a copy: the copy's clean-up reads them.
+    pub fn closed_with_copy(&self) -> Vec<(String, super::record::CopyLink)> {
+        self.0.records.lock().iter().filter(|r| r.last_known_state == LastState::Closed).filter_map(|r| r.copy.clone().map(|c| (r.id.clone(), c))).collect()
+    }
+
     pub fn record(&self, id: &str) -> Option<ConversationRecord> {
         self.0.records.lock().iter().find(|r| r.id == id).cloned()
     }
@@ -222,7 +237,7 @@ impl Conversations {
             started_by: None,
             parent_pane_id: None,
             account: account.map(str::to_string),
-            lane_note: None,
+            lane_note: None, copy: None,
             created_ms: now,
             updated_ms: now,
         };
@@ -269,7 +284,7 @@ impl Conversations {
             started_by: None,
             parent_pane_id: None,
             account: account.map(str::to_string),
-            lane_note: None,
+            lane_note: None, copy: None,
             created_ms: now,
             updated_ms: now,
         };
@@ -300,7 +315,7 @@ impl Conversations {
             started_by: None,
             parent_pane_id: None,
             account: None,
-            lane_note: None,
+            lane_note: None, copy: None,
             created_ms: now,
             updated_ms: now,
         };

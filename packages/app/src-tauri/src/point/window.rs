@@ -444,13 +444,24 @@ fn sweep(app: &AppHandle) {
 
 /// Asks the page for one queued pick. None when there is none or the page does not answer.
 fn take(window: &WebviewWindow, key: &str) -> Option<String> {
+    ask_text(window, take_script(key))
+}
+
+/// Runs a script that answers a JSON string and returns that text. None when it answers null, anything else, or
+/// nothing in time (`parse_take` rules).
+pub(super) fn ask_text(window: &WebviewWindow, script: String) -> Option<String> {
     let (tx, rx) = mpsc::channel();
     window
-        .eval_with_callback(take_script(key), move |answer| {
+        .eval_with_callback(script, move |answer| {
             let _ = tx.send(answer);
         })
         .ok()?;
     parse_take(&rx.recv_timeout(TAKE_TIMEOUT).ok()?)
+}
+
+/// The window of an open preview.
+pub(super) fn preview_window(app: &AppHandle, preview_id: &str) -> Option<WebviewWindow> {
+    PREVIEWS.lock().iter().any(|p| p.id == preview_id).then(|| app.get_webview_window(preview_id)).flatten()
 }
 
 // ---------------------------------------------------------------- after a pick
@@ -521,7 +532,7 @@ fn save_crop(png: &[u8], facts: &super::PickFacts, project: &Path, now: u64, seq
 }
 
 /// The native screenshot of the preview's viewport (PF-9). On other systems it is a plain sentence.
-fn capture_png(window: &WebviewWindow) -> Result<Vec<u8>, &'static str> {
+pub(super) fn capture_png(window: &WebviewWindow) -> Result<Vec<u8>, &'static str> {
     super::capture::viewport_png(window, CAPTURE_TIMEOUT)
 }
 
@@ -592,6 +603,7 @@ pub fn target_facts(registry: &Arc<Mutex<PaneRegistry>>, infos: &[PaneInfo]) -> 
                 cwd: p.cwd.clone(),
                 kind,
                 run_controls: crate::bridge::pane_has_open_run(&p.id, &p.cwd),
+                chat: crate::acp::chat::get(&p.id).is_some(),
                 not_ready,
                 last_output_at: p.last_output_at,
             }
@@ -607,7 +619,9 @@ pub fn current_state(app: &AppHandle) -> PointState {
 }
 
 fn current_state_with(targets: Vec<target::Target>, default: Option<String>) -> PointState {
-    SESSION.lock().state(now_ms(), targets, default)
+    let mut state = SESSION.lock().state(now_ms(), targets, default);
+    state.recheck = super::recheck::view();
+    state
 }
 
 /// The dev server pane of the newest pick's preview, else of the newest preview.

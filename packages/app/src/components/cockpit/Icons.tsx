@@ -105,6 +105,12 @@ export const IconPane = () => (
     <path d="M2.5 6.5h11" />
   </Icon>
 );
+export const IconSplitDown = () => (
+  <Icon>
+    <rect x="2.5" y="3" width="11" height="10" rx="2" />
+    <path d="M2.5 8h11" />
+  </Icon>
+);
 export const IconRail = () => (
   <Icon>
     <rect x="2.5" y="3" width="11" height="10" rx="2" />

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { t, useT } from '../../i18n';
-import { agentLabel, borrowedBillingNote, chipText, chipLabelOf, errText, grantLine, isActiveIn, isActiveOut, leftText, lendApi, problemText, urgencyOf, usageText, WARN_ONE, WARN_TEN, type Grant, type LendApi } from '../../lib/lend';
+import { agentLabel, borrowedBillingNote, borrowedShort, chipText, chipLabelOf, errText, grantLine, isActiveIn, isActiveOut, leftText, lendApi, problemText, urgencyOf, usageText, WARN_ONE, WARN_TEN, type Grant, type LendApi } from '../../lib/lend';
 import { useLend, type LendHandle } from './useLend';
+import { TakeBack } from './TakeBack';
 import { TestLink } from './TestLink';
 import '../../styles/lend.css';
 
@@ -40,9 +41,13 @@ export function MemberLends({ memberId, lend, api = lendApi }: { memberId: strin
               )}
             </span>
             <TestLink grantId={g.id} api={api} />
-            <button type="button" className="lend-btn is-small" disabled={busy === g.id} onClick={() => void act(g)}>
-              {g.direction === 'out' ? t('phone.device.revoke') : t('lend.giveBack')}
-            </button>
+            {g.direction === 'out' ? (
+              <TakeBack profile={g.profile_name || agentLabel(state, g.agent_id)} peer={g.peer_name} busy={busy === g.id} onConfirm={() => void act(g)} />
+            ) : (
+              <button type="button" className="lend-btn is-small" disabled={busy === g.id} onClick={() => void act(g)}>
+                {t('lend.giveBack')}
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -56,8 +61,8 @@ export function MemberLends({ memberId, lend, api = lendApi }: { memberId: strin
 }
 
 /**
- * The time-left chip in the header of a pane that runs on a borrowed sign-in: "Leo's Claude · 1h 59m".
- * Amber at 10 minutes, red at 1. Clicking it opens the details with "Give back now". Nothing for any other pane.
+ * The time-left chip in the header of a pane that runs on a borrowed sign-in: "Ren's Work account · 1h 59m".
+ * Grey, orange at 10 minutes, filled orange at 1. Clicking it opens the details with "Give back now". Nothing for any other pane.
  */
 export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; api?: LendApi; lend?: LendHandle }) {
   const t = useT();
@@ -106,7 +111,7 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
 
   return (
     <span className="lend-chip-wrap" ref={wrap}>
-      <button type="button" className="lend-chip" data-urgency={urgencyOf(left)} data-problem={problem ? 'true' : undefined} title={problem ?? undefined} data-testid="lend-chip" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="lend-chip" data-urgency={urgencyOf(left)} data-problem={problem ? 'true' : undefined} title={problem ?? chipLabelOf(grant, agent)} data-testid="lend-chip" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {chipText(grant, agent, handle.now)}
       </button>
       {open && (
@@ -155,7 +160,7 @@ export function useLendToasts(lend: LendHandle, notify: (text: string) => void):
     for (const g of state.grants) {
       if (!isActiveIn(g, lend.now)) continue;
       const left = g.ends_ms - lend.now;
-      const who = t('lend.ownerOf', { person: g.peer_name, device: agentLabel(state, g.agent_id) });
+      const who = borrowedShort(agentLabel(state, g.agent_id), g);
       // The 1-minute one wins when both are due at once (a lend that started late).
       if (left <= WARN_ONE.minutes * 60_000) {
         if (!sent.current.has(`${g.id}:1`)) {

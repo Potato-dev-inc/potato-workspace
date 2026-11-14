@@ -79,6 +79,8 @@ const ADVANCED: &[&str] = &[
     "team_notify",
     // Companions only: listed by the shim for an agent started in a companion pane, callable by name elsewhere (and refused there).
     "companion_recall",
+    // A page the agent made, as a card in its chat: callable by name, listed for an agent started in a Potato pane.
+    "show_artifact",
     // More than one agent, and a second opinion by another agent: callable by name, listed in mode all.
     "run_agents",
     "review_agent",

@@ -714,7 +714,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     let started = match super::start::check_gate(labs_on, config.is_some(), crate::acp::lane::RunLane::Acp, true) {
         Err(gate) => Err(gate.into()),
         Ok(()) => match config {
-            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: requested_model.clone(), is_helper: session.is_some() || model_from_helper }),
+            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: requested_model.clone(), is_helper: session.is_some() || model_from_helper , ..Default::default() }),
             None => Err(super::start::GateError::NoDefinition.into()),
         },
     };

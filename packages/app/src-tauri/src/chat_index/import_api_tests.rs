@@ -3,7 +3,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+
 
 use super::entry::{Entry, MAX_IMPORTED_TEXT_CHARS};
 use super::imported::{import_pane_id, ImportedChatRow};
@@ -63,12 +63,8 @@ fn live_user(id: &str, text: &str) -> ChatItem {
     ChatItem::User { id: id.into(), at: None, text: text.into(), attachments: Vec::new() }
 }
 
-fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !done() {
-        assert!(Instant::now() < deadline, "timed out waiting for {what}");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+fn wait_until(what: &str, done: impl FnMut() -> bool) {
+    crate::test_support::wait::wait_for(what, 10, done);
 }
 
 #[test]

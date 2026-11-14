@@ -559,6 +559,46 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
   ),
   custom(
     {
+      id: 'split-focus-up',
+      group: 'Panes',
+      label: 'In a split view: move to the chat above',
+      handlers: [handler(MAIN_VIEW, "matchesAction(e, 'split-focus-up', mac)")],
+    },
+    'Mod+Alt+Shift+Up',
+    'Mod+Alt+Shift+Up',
+  ),
+  custom(
+    {
+      id: 'split-focus-down',
+      group: 'Panes',
+      label: 'In a split view: move to the chat below',
+      handlers: [handler(MAIN_VIEW, "matchesAction(e, 'split-focus-down', mac)")],
+    },
+    'Mod+Alt+Shift+Down',
+    'Mod+Alt+Shift+Down',
+  ),
+  custom(
+    {
+      id: 'split-down',
+      group: 'Panes',
+      label: 'In a split view: open another chat below this one (up to four)',
+      handlers: [handler(COCKPIT, "matchesAction(e, 'split-down'")],
+    },
+    'Mod+Alt+D',
+    'Mod+Alt+D',
+  ),
+  custom(
+    {
+      id: 'split-close-side',
+      group: 'Panes',
+      label: 'In a split view: take this chat out of the view',
+      handlers: [handler(COCKPIT, "matchesAction(e, 'split-close-side'")],
+    },
+    'Mod+Alt+W',
+    'Mod+Alt+W',
+  ),
+  custom(
+    {
       id: 'split-swap',
       group: 'Panes',
       label: 'In a split view: swap the two chats',

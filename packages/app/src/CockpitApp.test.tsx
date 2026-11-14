@@ -26,6 +26,8 @@ const cockpit = vi.hoisted(() => ({
   openSettings: (async () => {}) as (tab?: string) => Promise<void>,
   // The pane list is known (the split restores on start only then). Off by default, as before.
   ready: false,
+  // More panes than p1 and p2 (the split grid needs up to four). None by default, so other tests see two.
+  extraIds: [] as string[],
   // The first-switch sheet the (mocked) hook reports, and what Switch / Cancel did.
   explainer: { open: false, confirm: (async () => {}) as (d: boolean) => Promise<void>, cancel: () => {} },
 }));
@@ -51,7 +53,7 @@ vi.mock('./hooks/useCockpit', async () => {
   return {
     useCockpit: () => {
       const [selectedId, setSelectedId] = useState<string | null>('p1');
-      const ids = ['p1', 'p2'];
+      const ids = ['p1', 'p2', ...cockpit.extraIds];
       const infoOf = (id: string) => ({ id, cwd: `/proj/${id}`, agent_type: `agent-${id}` });
       return {
         selectedId,
@@ -277,7 +279,8 @@ vi.mock('./components/store/StoreHost', async () => {
 // The split view's own rendering is tested in SplitView.test.tsx; here only its wiring from CockpitApp.
 vi.mock('./components/cockpit/SplitView', async () => {
   const { createElement: h, useEffect, useState } = await import('react');
-  type Props = { leftId: string; rightId: string; focus: string; ratio: number; onClose: () => void; onFocus: (side: string) => void; onRatio: (r: number) => void };
+  type Below = { leftDown: string | null; rightDown: string | null; leftRows: number; rightRows: number };
+  type Props = { leftId: string; rightId: string; focus: string; ratio: number; below?: Below; onClose: () => void; onFocus: (side: string) => void; onRatio: (r: number) => void; onCloseChat?: (slot: string) => void; onSplitDown?: (column: string) => void };
   return {
     useWindowWidth: () => {
       const [w, setW] = useState(() => window.innerWidth);
@@ -288,12 +291,14 @@ vi.mock('./components/cockpit/SplitView', async () => {
       }, []);
       return w;
     },
-    SplitView: ({ leftId, rightId, focus, ratio, onClose, onFocus }: Props) =>
+    SplitView: ({ leftId, rightId, focus, ratio, below, onClose, onFocus, onCloseChat, onSplitDown }: Props) =>
       h(
         'div',
         null,
-        `SPLIT VIEW ${leftId}|${rightId}|${focus}|${ratio}`,
+        `SPLIT VIEW ${leftId}|${rightId}|${focus}|${ratio}${below && (below.leftDown || below.rightDown) ? `|down:${below.leftDown ?? '-'},${below.rightDown ?? '-'}` : ''}`,
         h('button', { type: 'button', onClick: onClose }, 'Close split'),
+        h('button', { type: 'button', onClick: () => onSplitDown?.('left') }, 'Split down left'),
+        h('button', { type: 'button', onClick: () => onCloseChat?.(focus) }, 'Close focused chat'),
         h('button', { type: 'button', onClick: () => onFocus('right') }, 'Focus right'),
       ),
     focusSideComposer: () => {},
@@ -1284,5 +1289,69 @@ describe('Individual mode first-switch sheet', () => {
     clickButton('Cancel');
     expect(cancel).toHaveBeenCalledTimes(1);
     cockpit.explainer = { open: false, confirm, cancel };
+  });
+});
+
+// The split grid (up to four chats): split down, close one, the keys, and the layout kept for the next start.
+describe('CockpitApp split grid wiring', () => {
+  const press = (init: KeyboardEventInit) => act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })));
+  const ctrlAltD = () => press({ key: 'd', ctrlKey: true, altKey: true });
+  const ctrlAltW = () => press({ key: 'w', ctrlKey: true, altKey: true });
+  beforeEach(async () => {
+    // The mocked hook reads extraIds on render: set them, then draw once more.
+    cockpit.extraIds = ['p3', 'p4'];
+    await act(async () => root.render(createElement(CockpitApp, { key: 'grid' })));
+  });
+  afterEach(() => {
+    cockpit.extraIds = [];
+  });
+
+  it('Ctrl+Alt+D opens the next chat below, then below the other column; a fifth is refused', () => {
+    clickButton('Open p2 to the side');
+    expect(mainText()).toContain('SPLIT VIEW p1|p2|left|0.5');
+    expect(mainText()).not.toContain('down:');
+    ctrlAltD();
+    expect(mainText()).toContain('SPLIT VIEW p1|p2|leftDown|0.5|down:p3,-');
+    ctrlAltD();
+    expect(mainText()).toContain('|down:p3,p4');
+    ctrlAltD();
+    expect(live.notes).toContain('Four chats are already open');
+    expect(mainText()).toContain('|down:p3,p4');
+  });
+
+  it('the Split down button of a column opens a chat below it', () => {
+    clickButton('Open p2 to the side');
+    clickButton('Split down left');
+    expect(mainText()).toContain('|down:p3,-');
+  });
+
+  it('Ctrl+Alt+D does nothing without a split view', () => {
+    ctrlAltD();
+    expect(mainText()).toBe('PANE VIEW p1');
+  });
+
+  it('Ctrl+Alt+W takes the focused chat out; the grid closes up and the last two stay split', () => {
+    clickButton('Open p2 to the side');
+    ctrlAltD();
+    ctrlAltD();
+    expect(mainText()).toContain('|down:p3,p4');
+    ctrlAltW(); // focus is on the chat below the right column (p4)
+    expect(mainText()).toContain('SPLIT VIEW p1|p2|left|0.5|down:p3,-');
+    clickButton('Close focused chat'); // focus went back to the left top (p1): p3 moves up
+    expect(mainText()).toContain('SPLIT VIEW p3|p2|left|0.5');
+    expect(mainText()).not.toContain('down:');
+    ctrlAltW(); // two chats: closing one ends the split and the other stays open
+    expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('remembers the grid for the next start, and a plain split forgets it', () => {
+    clickButton('Open p2 to the side');
+    ctrlAltD();
+    const saved = JSON.parse(localStorage.getItem('pm.cockpit.split') ?? 'null');
+    expect(saved).toMatchObject({ left: 'p1', right: 'p2', below: { leftDown: 'p3', rightDown: null } });
+    ctrlAltW();
+    const plain = JSON.parse(localStorage.getItem('pm.cockpit.split') ?? 'null');
+    expect(plain).toMatchObject({ left: 'p1', right: 'p2' });
+    expect(plain.below).toBeUndefined();
   });
 });

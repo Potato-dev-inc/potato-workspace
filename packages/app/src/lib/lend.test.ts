@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { GRANT_IN, GRANT_IN_PANE, GRANT_OUT, LEND_DRIVERS, REQUEST_MAYA } from '../dev/lend-fixtures';
 import {
   agentLabel,
+  borrowedName,
+  borrowedShort,
   capFor,
+  cleanName,
   chipText,
   comingSoonAgents,
   customSecs,
@@ -86,7 +89,11 @@ describe('lend rules', () => {
     const now = GRANT_OUT.started_ms + 5 * MIN;
     expect(grantLine(GRANT_OUT, 'Claude', GRANT_OUT.ends_ms - (2 * 3600_000 + 14 * MIN))).toBe('Lending Claude to Maya · 2h 14m left');
     expect(grantLine(GRANT_IN, 'Claude', GRANT_IN.ends_ms - 40 * MIN)).toBe('Borrowing Claude from Sam · 40m left');
-    expect(chipText(GRANT_IN_PANE, 'Claude', GRANT_IN_PANE.ends_ms - 119 * MIN)).toBe("Leo's Claude · 1h 59m");
+    expect(chipText(GRANT_IN_PANE, 'Claude', GRANT_IN_PANE.ends_ms - 119 * MIN)).toBe('Work account · 1h 59m');
+    // The lender sent no name (an older build): the old short form.
+    expect(chipText({ ...GRANT_IN_PANE, profile_name: undefined }, 'Claude', GRANT_IN_PANE.ends_ms - 119 * MIN)).toBe("Leo's Claude · 1h 59m");
+    // The lender's PC is not answering: the chip says so instead of the time.
+    expect(chipText({ ...GRANT_IN_PANE, problem: 'x', problem_kind: 'unreachable' }, 'Claude', GRANT_IN_PANE.ends_ms - 119 * MIN)).toBe('Work account · not answering');
     expect(isActiveIn(GRANT_IN, now)).toBe(true);
     expect(isActiveIn({ ...GRANT_IN, state: 'ended' }, now)).toBe(false);
   });
@@ -114,5 +121,58 @@ describe('lend rules', () => {
     expect(lendEnabled(null)).toBe(false);
     expect(lendEnabled({})).toBe(false);
     expect(lendEnabled({ lend_enabled: true })).toBe(true);
+  });
+});
+
+describe('the borrowed name (one helper, used everywhere)', () => {
+  const ren = { peer_name: 'Ren', peer_device_name: "Ren's laptop", for_other_person: true, profile_name: 'Work account' };
+
+  it('normal: "Claude · Ren\'s Work account (borrowed)"', () => {
+    expect(borrowedName('Claude', ren)).toBe("Claude · Ren's Work account (borrowed)");
+    expect(borrowedShort('Claude', ren)).toBe("Ren's Work account");
+  });
+
+  it('a profile name that already starts with the owner is not prefixed again', () => {
+    const named = { ...ren, profile_name: "Ren's work account" };
+    expect(borrowedName('Claude', named)).toBe("Claude · Ren's work account (borrowed)");
+    expect(borrowedShort('Claude', named)).toBe("Ren's work account");
+  });
+
+  it('from my own other PC: "Claude · Work account on Desk-PC (borrowed)"', () => {
+    const mine = { ...ren, peer_name: 'Leo', peer_device_name: 'Desk-PC', for_other_person: false };
+    expect(borrowedName('Claude', mine)).toBe('Claude · Work account on Desk-PC (borrowed)');
+    expect(borrowedShort('Claude', mine)).toBe('Work account');
+  });
+
+  it('an older lender sent no name: "Claude · Ren\'s PC (borrowed)"', () => {
+    expect(borrowedName('Claude', { ...ren, profile_name: undefined })).toBe("Claude · Ren's PC (borrowed)");
+    expect(borrowedName('Claude', { ...ren, profile_name: '   ' })).toBe("Claude · Ren's PC (borrowed)");
+    expect(borrowedShort('Claude', { ...ren, profile_name: undefined })).toBe("Ren's Claude");
+  });
+
+  it('a long or dirty name from another PC is cut to 60 plain characters', () => {
+    const dirty = `Work\naccount\u0007 ${'x'.repeat(200)}`;
+    const cut = cleanName(dirty);
+    expect([...cut]).toHaveLength(60);
+    expect(cut.startsWith('Work account xxx')).toBe(true);
+    // eslint-disable-next-line no-control-regex
+    expect(/[\u0000-\u001f]/.test(cut)).toBe(false);
+    expect(borrowedName('Claude', { ...ren, profile_name: dirty })).toContain("Ren's Work account xxx");
+    expect(cleanName(null)).toBe('');
+  });
+
+  it('words the problem by its kind, and an older build (no kind) keeps the old sentence', () => {
+    const base = { problem: 'x', peer_name: 'Ren', profile_name: 'Work account' };
+    expect(problemText({ ...base, problem_kind: 'unreachable' })).toBe("Ren's PC is not answering. It may be asleep or offline. The time keeps running.");
+    expect(problemText({ ...base, problem_kind: 'signin', direction: 'in' })).toBe("Ren's Work account is signed out on Ren's PC. Ren has been told. It will carry on when Ren signs in again.");
+    expect(problemText({ ...base, problem_kind: 'signin', direction: 'out', peer_name: 'Maya' })).toBe('Work account is signed out. Maya cannot use it until you sign in again.');
+    expect(problemText({ ...base, problem_kind: 'limit' })).toBe('The limit for this lend was reached. Ask Ren for more.');
+    expect(problemText({ problem: 'sign-in expired' })).toBe("The lender's sign-in expired. Ask them to sign in again.");
+    expect(problemText({ problem: null, problem_kind: 'unreachable' })).toBeNull();
+  });
+
+  it('the lines name the profile when there is one', () => {
+    expect(grantLine({ ...GRANT_OUT, profile_name: 'Work account' }, 'Claude', GRANT_OUT.ends_ms - 8 * 3600_000)).toBe('Lending Work account to Maya · 8h 0m left');
+    expect(grantLine({ ...GRANT_IN, profile_name: 'Work account' }, 'Claude', GRANT_IN.ends_ms - 40 * MIN)).toBe("Claude · Sam's Work account (borrowed) · 40m left");
   });
 });

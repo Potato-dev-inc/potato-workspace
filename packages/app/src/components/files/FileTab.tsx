@@ -1,15 +1,16 @@
 // A file open beside the chat: read-only, with colour for code, Markdown as a page, pictures as pictures, and a clear
 // message for files that are too big or not text. The File / Changes switch shows what the agent changed in the same
 // place. Lines picked in either view can be sent to the chat box with "Tell the agent".
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { filesApi, fileSize, type FileContent, type FilesApi } from '../../lib/files-api';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { bytesOf, filesApi, fileSize, type FileBytes, type FileContent, type FilesApi } from '../../lib/files-api';
 import { pushComposerInsert } from '../../lib/composer-insert';
 import { requestChatTab } from '../../lib/chatTab';
 import { errorSentence } from '../../lib/sayError';
 import { useT } from '../../i18n';
 import { ChatMarkdown } from '../chat/ChatMarkdown';
 import { SegTabs } from '../cockpit/SegTabs';
-import { isMarkdown } from './languages';
+import { extensionOf, isMarkdown } from './languages';
+import { richKindOf, type RichKind } from './rich-kind';
 import type { CodeSelection } from './CodeEditor';
 import { FileDiff } from './FileDiff';
 import { useOpenInEditor } from './OpenInEditor';
@@ -21,7 +22,17 @@ import '../../styles/files.css';
 // The editor is its own chunk: it loads when the first code file opens.
 const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })));
 
+// Each viewer is its own chunk: it loads when the first file of its kind opens, never with the app.
+const DocxView = lazy(() => import('./DocxView').then((m) => ({ default: m.DocxView })));
+const SheetView = lazy(() => import('./SheetView').then((m) => ({ default: m.SheetView })));
+const PdfView = lazy(() => import('./PdfView').then((m) => ({ default: m.PdfView })));
+const HtmlView = lazy(() => import('./HtmlView').then((m) => ({ default: m.HtmlView })));
+
 type View = 'file' | 'changes';
+
+/** The viewers that need the file's raw bytes (the rest read text or a picture). */
+const needsBytes = (kind: RichKind | null) => kind === 'docx' || kind === 'pdf' || kind === 'sheet';
+const BYTES_LIMIT = '15 MB';
 
 export function FileTab({
   paneId,
@@ -44,7 +55,9 @@ export function FileTab({
   const t = useT();
   const opener = useOpenInEditor(paneId, editor);
   const [view, setView] = useState<View>('file');
+  const rich = richKindOf(path);
   const [content, setContent] = useState<FileContent | null>(null);
+  const [file, setFile] = useState<FileBytes | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [patch, setPatch] = useState<string | null>(null);
   const [asText, setAsText] = useState(false);
@@ -53,18 +66,32 @@ export function FileTab({
 
   useEffect(() => {
     let cancelled = false;
-    api.read(paneId, path).then(
-      (c) => {
-        if (cancelled) return;
-        setContent(c);
-        setError(null);
-      },
-      (err: unknown) => !cancelled && setError(errorSentence(err)),
-    );
+    setFile(null);
+    if (needsBytes(richKindOf(path))) {
+      api.readBytes(paneId, path).then(
+        (b) => {
+          if (cancelled) return;
+          setFile(b);
+          setError(null);
+        },
+        (err: unknown) => !cancelled && setError(errorSentence(err)),
+      );
+    } else {
+      api.read(paneId, path).then(
+        (c) => {
+          if (cancelled) return;
+          setContent(c);
+          setError(null);
+        },
+        (err: unknown) => !cancelled && setError(errorSentence(err)),
+      );
+    }
     return () => {
       cancelled = true;
     };
   }, [api, paneId, path, refreshKey]);
+
+  const bytes = useMemo(() => (file?.kind === 'bytes' && file.base64 != null ? bytesOf(file.base64) : null), [file]);
 
   useEffect(() => {
     if (view !== 'changes') return;
@@ -111,6 +138,24 @@ export function FileTab({
         </p>
       );
     }
+    if (needsBytes(rich)) {
+      if (!file) return <p className="ck-file-note">{t('files.loading')}</p>;
+      if (file.kind === 'too_large' || !bytes) {
+        return (
+          <p className="ck-file-note" data-testid="file-too-large">
+            {t('files.tooLarge', { size: fileSize(file.size), limit: BYTES_LIMIT })}
+          </p>
+        );
+      }
+      const name = file.name;
+      return (
+        <Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
+          {rich === 'docx' && <DocxView bytes={bytes} asText={asText} />}
+          {rich === 'pdf' && <PdfView bytes={bytes} name={name} />}
+          {rich === 'sheet' && <SheetView bytes={bytes} csv={extensionOf(path) === 'csv'} />}
+        </Suspense>
+      );
+    }
     if (!content) return <p className="ck-file-note">{t('files.loading')}</p>;
     if (content.kind === 'too_large') {
       return (
@@ -128,6 +173,13 @@ export function FileTab({
       );
     }
     const text = content.text ?? '';
+    if (rich === 'html' && !asText) {
+      return (
+        <Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
+          <HtmlView html={text} name={content.name} />
+        </Suspense>
+      );
+    }
     if (isMarkdown(path) && !asText) {
       return (
         <div className="ck-file-page" data-testid="file-markdown">
@@ -162,6 +214,16 @@ export function FileTab({
         </span>
         {folder && <span className="ck-file-folder">{folder}</span>}
         <span className="ck-head-gap" aria-hidden="true" />
+        {rich && (
+          <button
+            type="button"
+            className="ck-btn ck-btn--plain ck-btn--sm"
+            onClick={() => void api.openDefault(paneId, path).then(() => setNotice(null), (err: unknown) => setNotice(errorSentence(err)))}
+          >
+            {rich === 'docx' ? t('files.openWord') : rich === 'sheet' ? t('files.openExcel') : t('files.openDefault')}
+          </button>
+        )}
+        {(!rich || rich === 'html' || extensionOf(path) === 'csv') && (
         <button
           type="button"
           className="ck-btn ck-btn--plain ck-btn--sm"
@@ -171,7 +233,8 @@ export function FileTab({
         >
           {opener.name ? t('editor.open', { name: opener.name }) : t('editor.openGeneric')}
         </button>
-        {isMarkdown(path) && view === 'file' && content?.kind === 'text' && (
+        )}
+        {view === 'file' && ((isMarkdown(path) || rich === 'html') && content?.kind === 'text' ? true : rich === 'docx' && !!bytes) && (
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-pressed={asText} onClick={() => setAsText((v) => !v)}>
             {asText ? t('files.showPage') : t('files.showText')}
           </button>

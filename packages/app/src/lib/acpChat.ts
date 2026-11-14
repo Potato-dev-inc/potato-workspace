@@ -59,6 +59,8 @@ export interface AcpChatState {
   conversation?: string | null;
   /** The conversation was handed to a terminal pane: this chat is paused. `paneId` is that terminal, when known. */
   inTerminal?: { paneId: string | null } | null;
+  /** The chat works on a separate copy of its project ("Work on a copy"): `git` (a worktree) or `plain` (a trial copy). */
+  copy?: { kind: 'git' | 'plain' } | null;
   /** An agent (one that started this chat through Potato Workspace, or any agent tool) may answer the permission cards. Off by default. */
   agentAnswering?: boolean;
   /** Tool kinds the person said "don't ask again" for in this chat (memory only; ends with the chat). */
@@ -394,7 +396,7 @@ export interface AcpChatApi {
   laneSet: (agentId: string, lane: RunLaneWord) => Promise<AcpLaneView>;
   /** Start a chat session. `explicit`: the person picked Chat for this session, so the saved choice is not needed. */
   /** `accountId`: run the chat under that sign-in (an account, or a borrowed `lend:<grant>`); absent: the agent's own login. */
-  start: (agentId: string, folder: string, explicit?: boolean, accountId?: string) => Promise<AcpStarted>;
+  start: (agentId: string, folder: string, explicit?: boolean, accountId?: string, separateCopy?: boolean) => Promise<AcpStarted>;
   /** Read the agent's help text for how it starts as a chat. Runs nothing but help. */
   overlayDetect?: (agent: string) => Promise<OverlayDetect>;
   /** Every way to give the agent a chat (its own program, the official ACP registry, the built-in bridge), best first. */
@@ -457,8 +459,8 @@ export const tauriAcpChatApi: AcpChatApi = {
   },
   laneGet: async () => normalizeLaneView(await call<AcpLaneView>('agent_lane_get')),
   laneSet: async (agentId, lane) => normalizeLaneView(await call<AcpLaneView>('agent_lane_set', { id: agentId, lane })),
-  start: (agentId, folder, explicit, accountId) =>
-    call<AcpStarted>('acp_chat_start', accountId ? { agentId, folder, explicit: explicit ?? false, accountId } : { agentId, folder, explicit: explicit ?? false }),
+  start: (agentId, folder, explicit, accountId, separateCopy) =>
+    call<AcpStarted>('acp_chat_start', { agentId, folder, explicit: explicit ?? false, ...(accountId ? { accountId } : {}), ...(separateCopy ? { separateCopy: true } : {}) }),
   overlayDetect: (agent) => call<OverlayDetect>('acp_overlay_detect', { agent }),
   overlayResolve: async (agent) => ({ ok: true, options: normalizeOptions(await call<OverlayResolve>('acp_overlay_resolve', { agent })) }),
   overlayInstall: (agent, option, confirmed) => call<unknown>('acp_overlay_install', { agent, option, confirmed }),
@@ -494,7 +496,9 @@ export function permissionCards(questions: readonly Question[], paneId: string):
  * What the strip above the message box says and does. `null`: nothing runs, no strip. `asked`: the person pressed
  * Stop and the backend's state has not come back yet, so the strip already reads "Stopping…".
  */
-export function runStrip(state: AcpChatState | null, asked = false): { text: string; stopping: boolean } | null {
+export function runStrip(state: AcpChatState | null, asked = false): { text: string; stopping: boolean; waking?: boolean } | null {
+  // The adapter is starting or coming back from its nap: say so (the view puts it in the person's language).
+  if (state && !state.closed && !asked && (state.phase === 'starting' || state.phase === 'resuming')) return { text: 'Waking up…', stopping: false, waking: true };
   if (!state || state.closed || !state.turnInFlight) return null;
   if (state.stopping || asked) return { text: 'Stopping…', stopping: true };
   if (state.phase === 'needs_input') return { text: 'Waiting for your answer', stopping: false };

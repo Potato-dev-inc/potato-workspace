@@ -2,7 +2,8 @@ import { LEND_MEMBERS, lendState } from '../lend-fixtures';
 import { teamState } from '../team-fixtures';
 import type { HarnessScenario } from '../types';
 
-// Inbox > Team: "Request usage" opened. My other PC first ("My PCs"), then teammates; agent, how long, reason, Ask.
+// Inbox > Team: "Request usage" opened. My other PC first ("My PCs"), then teammates; "What to borrow" lists the lender's
+// profiles by name ("Work account · Claude · up to 8 hours · asks first"), then how long, reason, Ask.
 const s: HarnessScenario = {
   name: 'lend-request-sheet',
   route: 'cockpit',

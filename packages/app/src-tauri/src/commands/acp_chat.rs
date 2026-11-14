@@ -66,15 +66,46 @@ pub(crate) fn resolve_folder(named: &str, default_project: impl FnOnce() -> Stri
 /// Starts a chat session: `{pane_id, agent, lane: "acp"}`. Needs the Labs switch, and the agent's choice to be Chat
 /// unless `explicit` is true. The adapter is started before the pane exists, so a failure leaves nothing behind.
 #[tauri::command]
-pub async fn acp_chat_start(app: AppHandle, state: State<'_, AppState>, agent_id: String, folder: String, explicit: Option<bool>, account_id: Option<String>) -> Result<Value, String> {
+pub async fn acp_chat_start(app: AppHandle, state: State<'_, AppState>, agent_id: String, folder: String, explicit: Option<bool>, account_id: Option<String>, separate_copy: Option<bool>) -> Result<Value, String> {
     let deps = live_deps(&app, &state.registry);
     let folder = resolve_folder(&folder, || crate::standby::default_project(&state.registry));
-    let request = StartRequest { agent_id, folder: PathBuf::from(folder), explicit: explicit.unwrap_or(false), account: account_id.filter(|a| !a.trim().is_empty()), ..Default::default() };
+    let request = StartRequest { agent_id, folder: PathBuf::from(folder), explicit: explicit.unwrap_or(false), account: account_id.filter(|a| !a.trim().is_empty()), separate_copy: separate_copy.unwrap_or(false), ..Default::default() };
     let started = tauri::async_runtime::spawn_blocking(move || chat::start_gated(&deps, request)).await.map_err(|e| format!("ACP_START_FAILED: {e}"))?;
     match started {
         Ok(session) => Ok(json!({ "pane_id": session.pane_id(), "agent": session.agent_id(), "lane": chat::LANE })),
         Err(error) => Err(start_error_text(&error)),
     }
+}
+
+/// What the copy of a "Work on a copy" chat changed: `{kind, files, additions, deletions}`, or `null` when the chat
+/// works in its project (or the copy is gone).
+#[tauri::command]
+pub async fn acp_chat_copy(pane_id: String) -> Result<Value, String> {
+    let Some(link) = chat::copy::link_of(&pane_id) else { return Ok(Value::Null) };
+    let found = tauri::async_runtime::spawn_blocking(move || chat::copy::summary(&link)).await.map_err(|e| format!("INTERNAL: {e}"))?;
+    Ok(found.unwrap_or(Value::Null))
+}
+
+/// "Keep the changes": brings the copy's work into the project; the copy and its chat close. `{kept, files}`.
+#[tauri::command]
+pub async fn acp_chat_copy_keep(app: AppHandle, state: State<'_, AppState>, pane_id: String) -> Result<Value, String> {
+    let link = chat::copy::link_of(&pane_id).ok_or_else(|| "COPY_NOT_FOUND: This chat does not work on a copy.".to_string())?;
+    let registry = state.registry.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || chat::copy::keep(&link, &pane_id, &registry)).await.map_err(|e| format!("INTERNAL: {e}"))?;
+    let _ = app.emit("worktree://changed", ());
+    let _ = app.emit("pty://panes-changed", ());
+    result
+}
+
+/// "Throw away the copy": the copy and its chat close; the project is not touched.
+#[tauri::command]
+pub async fn acp_chat_copy_discard(app: AppHandle, state: State<'_, AppState>, pane_id: String) -> Result<(), String> {
+    let link = chat::copy::link_of(&pane_id).ok_or_else(|| "COPY_NOT_FOUND: This chat does not work on a copy.".to_string())?;
+    let registry = state.registry.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || chat::copy::throw_away(&link, &pane_id, &registry)).await.map_err(|e| format!("INTERNAL: {e}"))?;
+    let _ = app.emit("worktree://changed", ());
+    let _ = app.emit("pty://panes-changed", ());
+    result
 }
 
 /// Stops the turn of a chat session (`session/cancel`). True when a turn was running. The state says "stopping"

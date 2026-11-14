@@ -21,20 +21,21 @@ export function sourceLine(p: PickView): string | null {
  * says the same thing as the label (e.g. "Claude · Claude" shows as "Claude").
  * The comparison ignores case and the spaces at the ends.
  */
-export function targetLabel(t: Pick<Target, 'agentLabel' | 'title'>): string {
+export function targetLabel(t: Pick<Target, 'agentLabel' | 'title'> & { chat?: boolean }): string {
   const label = t.agentLabel.trim();
   const title = (t.title ?? '').trim();
   if (!title || title.toLowerCase() === label.toLowerCase()) return label;
-  return `${label} · ${title}`;
+  // A chat is named by its task first (that is what the person remembers); a terminal keeps the agent first.
+  return t.chat ? `${title} · ${label}` : `${label} · ${title}`;
 }
 
 /** Same-folder panes first, then the rest. Empty groups are left out. Keeps the order the backend sent. */
-export function groupTargets(ts: Target[]): { label: string; items: Target[] }[] {
+export function groupTargets(ts: Target[]): { key: 'same' | 'other'; label: string; items: Target[] }[] {
   const same = ts.filter((t) => t.sameFolder);
   const other = ts.filter((t) => !t.sameFolder);
-  const groups: { label: string; items: Target[] }[] = [];
-  if (same.length > 0) groups.push({ label: 'Same folder', items: same });
-  if (other.length > 0) groups.push({ label: 'Other panes', items: other });
+  const groups: { key: 'same' | 'other'; label: string; items: Target[] }[] = [];
+  if (same.length > 0) groups.push({ key: 'same', label: 'Same folder', items: same });
+  if (other.length > 0) groups.push({ key: 'other', label: 'Other panes', items: other });
   return groups;
 }
 

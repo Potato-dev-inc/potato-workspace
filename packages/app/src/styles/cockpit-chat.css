@@ -1095,3 +1095,30 @@
   opacity: 0.6;
   text-decoration: none;
 }
+
+/* A finished turn off screen is not laid out or painted until it comes near (long chats stay fast). The turn still running is left out. */
+.cockpit .ck-chat-turn.is-done {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
+}
+
+/* Files from Explorer are over the chat: a quiet veil with "Drop to attach" (set by ChatComposer, grayscale only). */
+.cockpit .ck-chat[data-file-over] {
+  position: relative;
+}
+.cockpit .ck-chat[data-file-over]::after {
+  content: attr(data-drop-label);
+  position: absolute;
+  inset: 6px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--label-3);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-raised) 82%, transparent);
+  color: var(--label);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}

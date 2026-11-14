@@ -11,7 +11,7 @@ export interface StartDeps {
   /** The cockpit's `newAgent`: opens the pane and the starting view; resolves to the pane id, or null if it failed. */
   newAgent: (agentId: string, accountId?: string, isolated?: boolean, projectPath?: string, model?: string) => Promise<string | null>;
   /** Starts a chat session in `folder`; resolves to its pane id. Rejects with one plain sentence. */
-  startChat: (agentId: string, folder: string, accountId?: string) => Promise<string>;
+  startChat: (agentId: string, folder: string, accountId?: string, separateCopy?: boolean) => Promise<string>;
   /**
    * Puts a chat on `model` once it lists its settings, before the first message. Resolves to null when it is set, or to
    * one plain sentence when it could not be (the chat then keeps its default). Absent: the model is not applied.
@@ -37,8 +37,8 @@ export const isStartBlock = (value: unknown): value is StartBlock =>
 const errText = (error: unknown): string => (error instanceof Error ? error.message : typeof error === 'string' ? error : 'Something went wrong.');
 
 /** The real chat start. */
-export async function startChatSession(agentId: string, folder: string, accountId?: string): Promise<string> {
-  const started = await invoke<{ pane_id: string }>('acp_chat_start', accountId ? { agentId, folder, explicit: true, accountId } : { agentId, folder, explicit: true });
+export async function startChatSession(agentId: string, folder: string, accountId?: string, separateCopy?: boolean): Promise<string> {
+  const started = await invoke<{ pane_id: string }>('acp_chat_start', { agentId, folder, explicit: true, ...(accountId ? { accountId } : {}), ...(separateCopy ? { separateCopy: true } : {}) });
   return started.pane_id;
 }
 
@@ -91,7 +91,8 @@ export async function runStart(req: StartRequest, deps: StartDeps): Promise<stri
         deps.notify('Pick a folder for a chat session.');
         return null;
       }
-      paneId = await (req.accountId === undefined ? deps.startChat(req.agentId, req.folder) : deps.startChat(req.agentId, req.folder, req.accountId));
+      // "Work on a copy" reaches the backend only when it is on, so a start without it is called as before.
+      paneId = await (req.isolated ? deps.startChat(req.agentId, req.folder, req.accountId, true) : req.accountId === undefined ? deps.startChat(req.agentId, req.folder) : deps.startChat(req.agentId, req.folder, req.accountId));
       deps.select(paneId);
       // The model goes in before the first message: ACP changes settings between turns.
       if (model && deps.setChatModel) {

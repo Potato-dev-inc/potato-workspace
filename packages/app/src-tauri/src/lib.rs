@@ -124,7 +124,9 @@ mod settings_patch;
 mod settings_safety;
 mod global_shortcuts;
 mod shell_env;
+mod startup_chores;
 mod startup_timing;
+mod startup_trace;
 mod review_desk;
 mod spaces;
 mod secure_core;
@@ -155,6 +157,7 @@ mod keep_awake;
 mod wsl;
 mod collision;
 mod notify_levels;
+mod artifacts;
 mod files;
 // Open in my editor (desk review).
 mod editor;
@@ -162,6 +165,8 @@ mod editor;
 mod pet;
 #[cfg(test)]
 mod conformance_suite;
+#[cfg(test)]
+mod test_support;
 
 use commands::AppState;
 use std::path::{Path, PathBuf};
@@ -309,7 +314,11 @@ pub fn run() {
             commands::lend_profile_delete,
             commands::lend_key_set,
             commands::lend_account_add,
+            commands::lend_signin_start,
+            commands::lend_signin_status,
+            commands::lend_signin_stop,
             commands::lend_request,
+            commands::lend_offers,
             commands::lend_answer,
             commands::lend_revoke,
             commands::lend_return,
@@ -354,6 +363,8 @@ pub fn run() {
             commands::point_edit_in_chat,
             commands::point_take_draft,
             commands::point_discard,
+            commands::point_recheck_run,
+            commands::point_recheck_dismiss,
             commands::point_box_hide,
             commands::point_open_blocked_link,
             team::commands::team_state,
@@ -761,6 +772,9 @@ pub fn run() {
             commands::acp_adapter_key_clear,
             commands::acp_chat_remove,
             commands::acp_chat_restart,
+            commands::acp_chat_copy,
+            commands::acp_chat_copy_keep,
+            commands::acp_chat_copy_discard,
             commands::acp_conversations_list,
             commands::acp_closed_list,
             commands::acp_reopen_closed,
@@ -829,10 +843,15 @@ pub fn run() {
             commands::notify_prefs_import,
             commands::path_kind::path_kinds,
             commands::files_list,
+            commands::artifacts_sync,
+            commands::artifacts_read,
+            commands::artifacts_open_in_browser,
             commands::files_read,
             commands::files_marks,
             commands::files_reveal,
             commands::files_diff,
+            commands::files_read_bytes,
+            commands::files_open_default,
             commands::list_control_asks,
             commands::answer_control_ask,
             commands::pet_set_expanded,
@@ -848,6 +867,7 @@ pub fn run() {
             commands::open_in_editor,
         ])
         .setup(|app| {
+            startup_trace::mark("setup_begin");
             commands::startup_probe(app.handle().clone());
             // The window hears when an agent's capability table changes (agent-caps://changed).
             {
@@ -857,8 +877,6 @@ pub fn run() {
                     let _ = handle.emit("agent-caps://changed", serde_json::json!({ "agent_id": agent_id }));
                 });
             }
-            // An agent that updated itself since the last check gets its free checks again (drift).
-            agent_caps::drift::spawn_startup_check();
             // Agents keep working when the PC is locked: hold it awake while any pane is busy.
             keep_awake::spawn(app.state::<AppState>().registry.clone());
             // Copy (never move) the data release 1.0.3 left under the old names once: the home and
@@ -866,18 +884,22 @@ pub fn run() {
             // The old files stay untouched and nothing already saved under the new names is overwritten.
             app_paths::migrate_legacy_home_data();
             app_paths::migrate_legacy_app_data();
+            startup_trace::mark("legacy_migrations");
             // First, so a panic anywhere below leaves a file behind (the console and the in-memory
             // log tail die with the process).
             flight::lastrun::check_at_start(&app_paths::app_data_dir());
             crash::install(app_paths::app_data_dir());
+            startup_trace::mark("crash_handler");
             // Terminal agents die with the app (job object); anything a crashed run left behind is ended now.
             pty::term_job::init();
             pty::orphans::init(&app_paths::app_data_dir());
+            startup_trace::mark("pty_cleanup");
             // Before the first window: an older version's desktop service worker would serve its UI.
             webview_service_worker::remove_at_startup(app.path().app_local_data_dir().ok());
             // Register approved declarative agent definitions before anything resolves a profile.
             tui::declarative::loader::reload();
             bridge::start_definitions_watcher(app.handle().clone());
+            startup_trace::mark("agent_definitions");
             // An installed copy keeps these under `<install>/resources/` (Tauri copies the `resources/...`
             // entries of tauri.conf.json with that folder name); a dev run has them elsewhere.
             let resource_dir = app.path().resource_dir().ok();
@@ -926,6 +948,7 @@ pub fn run() {
                 tracing::info!(path = %binary.display(), "bundled Rust MCP server");
             }
 
+            startup_trace::mark("mcp_resources");
             app_paths::write_app_exe_file();
             let port_file = app_paths::bridge_port_file();
             let pairing_file = app_paths::pairing_file();
@@ -955,6 +978,7 @@ pub fn run() {
                 }
             };
 
+            startup_trace::mark("bridge");
             push::init(app.state::<AppState>().registry.clone());
 
             // Chat conversations that were live come back, lazily: no adapter starts until one is used.
@@ -964,21 +988,15 @@ pub fn run() {
                 tracing::info!(restored = report.restored.len(), in_terminal = report.in_terminal.len(), failed = report.failed.len(), "acp: conversations restored");
             }
 
-            // Text your agents: starts only if the person turned Telegram on before.
-            channels::start(app.handle().clone(), app.state::<AppState>().registry.clone());
-            discord_alerts::init();
+            startup_trace::mark("acp_restore");
 
-            #[cfg(debug_assertions)]
-            let _ = &bridge_url;
-
-            #[cfg(not(debug_assertions))]
-            {
-                if let Some(url) = bridge_url {
-                    if let Err(err) = mobile_tunnel::start_mobile_tunnel(app.handle(), url) {
-                        tracing::warn!(%err, "mobile tunnel not started");
-                    }
-                }
-            }
+            // Telegram, Discord alerts, the phone tunnel, the stale-copy sweep and the agent version check are
+            // not needed for the first screen: they run on one background thread once the window is open.
+            let chores = startup_chores::chores_for_setup(
+                app.handle().clone(),
+                app.state::<AppState>().registry.clone(),
+                bridge_url,
+            );
 
             app.handle().listen("terminal-data", move |event| {
                 let payload = event.payload();
@@ -1001,9 +1019,7 @@ pub fn run() {
             let registry_for_panes = app.state::<AppState>().registry.clone();
             pane_windows::init(app.handle(), registry_for_panes.clone());
             secrets::migrate_on_startup();
-            // What broke it: remove test copies an earlier run left behind (SPEC n33 section 3.4).
-            #[cfg(not(test))]
-            checkpoints::bisect::live::live().sweep_stale();
+            startup_trace::mark("pane_windows_secrets");
             settings_store::load_saved_public_settings(app.handle());
             agent_run_mode::migrate_legacy_defaults_once(app.handle());
             // With the Labs switch on (known now), each conversation that came back is a chat pane in the pane list.
@@ -1015,6 +1031,7 @@ pub fn run() {
                 tracing::info!(panes = panes.len(), "acp: chat panes restored");
             }
             ui_mode::load_saved();
+            startup_trace::mark("settings_ui_mode");
             // A standalone worker host (`--worker`) is a user-launched single-terminal window with
             // its own webview, and opens nothing else.
             let worker = worker_launch::worker_launch().is_some();
@@ -1024,17 +1041,32 @@ pub fn run() {
             if let Err(e) = tray::init(app.handle()) {
                 tracing::warn!(error = %e, "tray icon failed to start");
             }
+            startup_trace::mark("tray");
             // A normal start opens the primary window (same as a tray click: always the cockpit, in
             // either UI mode; Individual mode still puts Settings in its own window). A sign-in start,
             // a worker host and a headless start (`--no-window` / `POTATO_WORKSPACE_NO_WINDOW`) leave only
             // the tray.
             let args = std::env::args().collect::<Vec<_>>();
             let no_window_env = std::env::var(cockpit::NO_WINDOW_ENV).ok();
-            if cockpit::startup_window(&args, worker, no_window_env.as_deref()) {
-                cockpit::open_startup_windows(app.handle());
-            } else {
-                tracing::info!(worker, "started without a window: tray only");
-            }
+            let open_window = || {
+                if cockpit::startup_window(&args, worker, no_window_env.as_deref()) {
+                    cockpit::open_startup_windows(app.handle());
+                } else {
+                    tracing::info!(worker, "started without a window: tray only");
+                }
+                startup_trace::mark("window_open");
+            };
+            // The window first, then the chores (one background thread, in order).
+            let chore_log_dir = app_paths::app_data_dir();
+            startup_chores::open_then_run(
+                open_window,
+                chores,
+                |name, ms| tracing::info!("startup_chore name={name} ms={ms}"),
+                move || {
+                    startup_trace::mark("chores_done");
+                    startup_trace::finish(&chore_log_dir);
+                },
+            );
             ambient::init(app.handle());
             standby::init(registry_for_panes.clone(), app.handle().clone());
             acp::warm::init(registry_for_panes.clone());
@@ -1080,6 +1112,8 @@ pub fn run() {
 
             // Desktop Potato: builds its window only if the Labs switch is on (nothing happens otherwise).
             pet::init(app.handle());
+            startup_trace::mark("setup_done");
+            startup_trace::finish(&app_paths::app_data_dir());
             startup_timing::mark("app", "app_setup_done");
             Ok(())
         })
@@ -1110,6 +1144,8 @@ pub fn run() {
                     room.stop_all(live_room::publisher::StopReason::AppQuit);
                 }
                 standby::shutdown();
+                // A lend sign-in's hidden pane (the sign-in step of a lend profile) ends with the app.
+                capacity_proxy::signin_pane::app_panes().stop_all();
                 acp::warm::shutdown();
                 // The computer may sleep again: a Night Shift hold must not outlive the app.
                 night_shift::power::release_all();

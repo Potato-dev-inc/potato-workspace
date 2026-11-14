@@ -71,6 +71,7 @@ pub fn tool_visible_in_mode(name: &str, mode: McpMode) -> bool {
         "team_wait",
         "team_notify",
         "companion_recall",
+        "show_artifact",
     ];
     const SHELL_TOOLS: &[&str] = &[
         "list_panes",

@@ -2,6 +2,7 @@
 // (every option with the agent's own name, no default) and, while a turn runs, a line that says so with a Stop button.
 // No settings chips, no slash menu and no hand-over here: those are for the PC.
 import { useState } from 'react';
+import { useT } from '../../i18n';
 import { useAcpPhoneState } from '../../hooks/useAcpPhoneState';
 import { permissionCards, runStrip } from '../../lib/acpChat';
 import type { BridgeClient } from '../../lib/bridge';
@@ -27,6 +28,7 @@ export function AcpPhoneDock({
   /** Bumped by the bridge `questions` event; a change reads the questions again. */
   questionsRevision?: number;
 }) {
+  const t = useT();
   const state = useAcpPhoneState(bridge, paneId, true);
   const { questions, refresh } = useQuestionPolling(bridge, true, questionsRevision);
   // Stop was pressed: the line reads "Stopping…" at once, before the PC's state says so.
@@ -57,7 +59,7 @@ export function AcpPhoneDock({
       {cards.length > 0 && <QuestionsView bridge={bridge} questions={cards} refresh={refresh} labels={labels} bare readOnly={canAnswer ? undefined : COPY.watchOnly} />}
       {strip && (
         <div className="ph-acp-strip" data-testid="acp-phone-strip">
-          <span role="status">{strip.text}</span>
+          <span role="status">{strip.waking ? t('chat.waking') : strip.text}</span>
           {canType && bridge.acpCancel && (
             <button type="button" className="ph-btn" onClick={stop} disabled={strip.stopping}>
               {strip.stopping ? 'Stopping…' : 'Stop'}

@@ -9,8 +9,13 @@ use crate::capacity_proxy::{self as lend, ACCOUNT_PREFIX, NOT_IN_THIS_MODE};
 
 const WINDOWS: [&str; 3] = ["cockpit", "main", "settings"];
 
+/// Whether a webview of this label is one of the app's own windows.
+pub(crate) fn window_allowed(label: &str) -> bool {
+    WINDOWS.contains(&label)
+}
+
 fn guard(webview: &tauri::Webview) -> Result<(), String> {
-    if WINDOWS.contains(&webview.label()) {
+    if window_allowed(webview.label()) {
         Ok(())
     } else {
         Err("Share an agent works only in the app window.".to_string())
@@ -54,11 +59,47 @@ pub async fn lend_key_set(webview: tauri::Webview, profile_id: String, key: Stri
     on(&webview)?.key_set(&profile_id, &key)
 }
 
-/// A new lend sign-in for `agent_id`: an app-managed account folder marked lend-only, to sign into once.
+/// A new lend sign-in for `agent_id`: an app-managed account folder marked lend-only, to sign into once. With `reuse` (the
+/// draft's own account) a sign-in that is still signed out comes back as it is, so retries never pile up "Lend Claude".
 #[tauri::command(rename_all = "snake_case")]
-pub async fn lend_account_add(webview: tauri::Webview, agent_id: String, label: String) -> Result<crate::accounts::Account, String> {
-    on(&webview)?.account_lendable(&agent_id)?;
-    crate::accounts::Store::default_location().add_lend(&agent_id, &label)
+pub async fn lend_account_add(webview: tauri::Webview, agent_id: String, label: String, reuse: Option<String>) -> Result<crate::accounts::Account, String> {
+    on(&webview)?.signin_account(&agent_id, &label, reuse.as_deref())
+}
+
+/// Starts the sign-in of a lend sign-in in a HIDDEN pane that belongs to the sheet: not in the sidebar, never selected, so
+/// the person stays where they are. Returns the pane id (the sheet shows its terminal). The pane is stopped by
+/// `lend_signin_stop`, or after ten minutes.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_signin_start(webview: tauri::Webview, app: AppHandle, state: State<'_, AppState>, account_id: String) -> Result<serde_json::Value, String> {
+    let acc = on(&webview)?.signin_pane_account(&account_id)?;
+    let ports = std::sync::Arc::new(lend::signin_pane::AppPorts { registry: state.registry.clone(), app });
+    let cwd = crate::app_paths::app_data_dir().join("lend").join("signin");
+    let pane_id = lend::signin_pane::app_panes().start(ports, &acc, cwd)?;
+    Ok(serde_json::json!({ "pane_id": pane_id }))
+}
+
+/// Where the lend sign-in stands: `signed_in` / `signed_out` / `expired`, who is signed in when the agent says so (this PC's
+/// screen only), and whether the hidden sign-in pane still runs.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_signin_status(webview: tauri::Webview, account_id: String) -> Result<serde_json::Value, String> {
+    let svc = on(&webview)?;
+    let status = svc.signin_status(&account_id)?;
+    Ok(serde_json::json!({
+        "state": status.state,
+        "identity": status.identity,
+        "pane_alive": lend::signin_pane::app_panes().alive(&account_id),
+    }))
+}
+
+/// Stops the sign-in pane. With `remove_if_empty`, a lend sign-in that holds no sign-in is forgotten (the person cancelled).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_signin_stop(webview: tauri::Webview, account_id: String, remove_if_empty: bool) -> Result<bool, String> {
+    let svc = on(&webview)?;
+    lend::signin_pane::app_panes().stop(&account_id);
+    if remove_if_empty {
+        return svc.signin_remove_if_empty(&account_id);
+    }
+    Ok(false)
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -69,11 +110,20 @@ pub async fn lend_request(
     agent_id: String,
     secs: u64,
     reason: String,
+    profile_id: Option<String>,
+    profile_name: Option<String>,
 ) -> Result<LendRequest, String> {
     let svc = on(&webview)?;
-    tauri::async_runtime::spawn_blocking(move || svc.request(&member_id, device_id.as_deref(), &agent_id, secs, &reason))
+    tauri::async_runtime::spawn_blocking(move || svc.request_with_profile(&member_id, device_id.as_deref(), &agent_id, secs, &reason, profile_id.as_deref(), profile_name.as_deref()))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// What can I borrow from this person (or this PC of mine)? Asks their PC(s) over the team relay and waits up to four
+/// seconds. Only what THEY say this asker may use comes back: names and numbers, never a token, a path or an email.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_offers(webview: tauri::Webview, member_id: String, device_id: Option<String>) -> Result<lend::service::OffersResult, String> {
+    on(&webview)?.offers(&member_id, device_id.as_deref(), std::time::Duration::from_secs(4)).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

@@ -18,6 +18,8 @@ export interface OutboxMessage {
   waitingFor: string | null;
   /** When failed: one plain sentence. */
   error: string | null;
+  /** Sent, but the chat showed nothing new for a while (a hint only; it goes away when a reply shows). */
+  noAnswer?: boolean;
 }
 
 /** Payload of the `pane-outbox` event: the pane's whole list. */
@@ -109,6 +111,8 @@ export function bubblesFor(
       case 'failed':
         return true;
       case 'sent': {
+        // "No answer yet" stays until a reply shows, even when the chat already shows the message.
+        if (m.noAnswer) return true;
         if (said.has(norm(m.text))) return false;
         const seen = sentSeen.get(m.id);
         return seen === undefined || now - seen < SENT_BUBBLE_MS;

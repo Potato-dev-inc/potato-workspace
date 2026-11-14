@@ -36,6 +36,8 @@ export interface PanePrompt {
   packages?: PackageList;
   /** Set by the app, never the backend: the answer was sent but this question is still on the screen. */
   stalled?: boolean;
+  /** Set by the app, never the backend: the answer was refused or never reached the pane, and the question is still up. */
+  failed?: boolean;
 }
 
 export interface PaneRunInfo {

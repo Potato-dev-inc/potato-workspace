@@ -79,3 +79,11 @@ describe('stoppedStrip', () => {
     expect(stoppedStrip({ ...base, closed: true, exit: { kind: 'crashed', code: 1, reason: null } })).toBeNull();
   });
 });
+
+describe('runStrip: waking up', () => {
+  it('says Waking up… while the adapter starts or comes back, even before a turn runs', () => {
+    expect(runStrip(state({ turnInFlight: false, phase: 'starting' }))).toEqual({ text: 'Waking up…', stopping: false, waking: true });
+    expect(runStrip(state({ turnInFlight: false, phase: 'resuming' }))?.waking).toBe(true);
+    expect(runStrip(state({ phase: 'working' }))).toEqual({ text: 'Working…', stopping: false });
+  });
+});

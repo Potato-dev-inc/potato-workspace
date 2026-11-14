@@ -57,7 +57,8 @@ import { useSimpleMode } from './lib/simple-mode';
 import { projectOfCwd } from './lib/ship-model';
 import { useModeSwitch } from './lib/mode-switch/useModeSwitch';
 import { LoopGuardContext, tauriLoopApi, useLoopSignals, type StopReport } from './lib/loop-guard';
-import { homeView, isSplitShortcut, splitAfterSelect, splitFits, splitFocusKey, splitPartner, splitStillOn, SPLIT_DEFAULT_RATIO, viewAfterSelect, type MainView, type SplitSide } from './components/cockpit/main-view';
+import { homeView, isSplitShortcut, splitAfterSelect, splitFits, splitMoveKey, splitPartner, splitStillOn, SPLIT_DEFAULT_RATIO, viewAfterSelect, type MainView } from './components/cockpit/main-view';
+import { NO_BELOW, belowAfterSelect, canSplitDown, closeSlot, columnOf, downPartner, hasBelow, isDownSlot, moveSlot, sanitizeBelow, shownIds, splitColumnDown, type SplitBelow, type SplitColumn, type SplitSlot } from './components/cockpit/split-grid';
 import { digitForAction, isMacPlatform, isShortcutRecording, matchesAction } from './lib/shortcuts';
 import { useT } from './i18n';
 import { setFocusMode, toggleFocusMode, useFocusMode } from './lib/focus-mode';
@@ -104,6 +105,7 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import './styles/cockpit.css';
 import './styles/chips.css';
 import './styles/night.css';
+import { registerNewAgentOpener } from './lib/newAgentRequest';
 import { registerSettingsOpener } from './lib/openSettingsAt';
 import { SpacesPage } from './components/spaces/SpacesPage';
 import { AgentBoard } from './components/cockpit/board/AgentBoard';
@@ -158,7 +160,9 @@ export default function CockpitApp() {
   }
   // The split view (main-view.ts): the pane on the right, and which side has focus. The left side is the selected pane.
   const [split, setSplit] = useState<string | null>(null);
-  const [side, setSide] = useState<SplitSide>('left');
+  const [side, setSide] = useState<SplitSlot>('left');
+  // Up to two more chats below the top two (split-grid.ts): a 2x2 grid. Remembered with the split.
+  const [below, setBelow] = useState<SplitBelow>(NO_BELOW);
   // The left side's share of the room (drag or arrow keys on the divider). Remembered with the split (split-memory.ts).
   const [ratio, setRatio] = useState(SPLIT_DEFAULT_RATIO);
   const width = useWindowWidth();
@@ -177,6 +181,9 @@ export default function CockpitApp() {
   const splitOn = splitStillOn(split, { selectedId: c.selectedId, width, hasPane: (id) => c.registry.panes.has(id) });
   // The split turns off by itself when its pane closes, the selection goes away, or the window gets narrow.
   if (split !== null && !splitOn) setSplit(null);
+  // The chats below only show while the split is on, and a chat that is gone (or shown twice) drops out of the grid.
+  const belowNow = splitOn && split !== null && c.selectedId !== null ? sanitizeBelow(below, c.selectedId, split, (id) => c.registry.panes.has(id)) : NO_BELOW;
+  if (split === null && hasBelow(below)) setBelow(NO_BELOW);
   // The Review Desk: `reviewFirst` opens it on its first row ("Review the riskiest item" in the palette).
   const [reviewFirst, setReviewFirst] = useState(false);
   const openReview = (first = false) => {
@@ -278,6 +285,14 @@ export default function CockpitApp() {
     registerSettingsOpener((tab) => void settings.open(tab));
     return () => registerSettingsOpener(null);
   }, [settings.open]);
+  // A ready lend says "Start a chat": the New agent page (no project picked).
+  useEffect(() => {
+    registerNewAgentOpener(() => {
+      setNewAgentProject(null);
+      setView('newagent');
+    });
+    return () => registerNewAgentOpener(null);
+  }, [settings.open]);
   // Any selection (a pane, the inbox), even of the already-selected pane, leaves the
   // "Set up agents" and "Project memory" views.
   const nav: typeof c = {
@@ -286,6 +301,7 @@ export default function CockpitApp() {
     select: (id) => {
       setView(viewAfterSelect(c.spawn, id));
       setSplit((s) => splitAfterSelect(s, c.selectedId, id));
+      setBelow((b) => belowAfterSelect(b, c.selectedId, id));
       setSide('left');
       c.select(id);
     },
@@ -312,6 +328,37 @@ export default function CockpitApp() {
     setView('pane');
     setSplit(partner);
     setSide('left');
+  };
+  // Split down: another chat opens below a column (the next one in the list that is not on screen). Up to four chats.
+  const splitDownFrom = (column: SplitColumn) => {
+    if (c.selectedId === null || split === null) return;
+    const shown = shownIds(c.selectedId, split, belowNow);
+    if (shown.length >= 4) {
+      c.notify(t('split.full'));
+      return;
+    }
+    const col = canSplitDown(belowNow, column, shown.length) ? column : column === 'left' ? 'right' : 'left';
+    const partner = downPartner(paneIds.filter((id) => !isCompanionPaneId(id)), shown, col === 'left' ? c.selectedId : split);
+    if (partner === null || !canSplitDown(belowNow, col, shown.length)) {
+      c.notify(t('split.needAnother'));
+      return;
+    }
+    setBelow(splitColumnDown(belowNow, col, partner));
+    setSide(col === 'left' ? 'leftDown' : 'rightDown');
+  };
+  // Takes one chat out of the split view (its agent keeps running). The grid closes up; one chat left ends the split.
+  const closeChatSlot = (slot: SplitSlot) => {
+    if (c.selectedId === null || split === null) return;
+    const next = closeSlot({ left: c.selectedId, right: split, below: belowNow }, slot);
+    if (next.left !== c.selectedId) c.select(next.left);
+    setSide('left');
+    if (next.right === null) {
+      setSplit(null);
+      setBelow(NO_BELOW);
+      return;
+    }
+    setSplit(next.right);
+    setBelow(next.below);
   };
   // "Open to the side" in a pane row's menu: the row's pane goes on the right, the selected one stays left.
   const openToSide = (id: string) => {
@@ -493,7 +540,7 @@ export default function CockpitApp() {
       const was = side;
       // Picking the right pane makes it the left one and the old left pane the right one (splitAfterSelect).
       nav.select(split);
-      setSide(was === 'left' ? 'right' : 'left');
+      setSide(isDownSlot(was) ? was : was === 'left' ? 'right' : 'left');
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -501,11 +548,14 @@ export default function CockpitApp() {
 
   // Ctrl+Alt+Left / Right (Cmd+Alt on a Mac) move the focus between the two sides. Only while the split is open:
   // otherwise the keys go on to the terminal as before.
+  // Shift with the same keys moves between the chats above and below each other.
   useEffect(() => {
     if (split === null) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing) return;
-      const to = splitFocusKey(e, isMacPlatform());
+      const dir = splitMoveKey(e, isMacPlatform());
+      if (!dir) return;
+      const to = moveSlot(side, dir, belowNow) ?? (dir === 'left' || dir === 'right' ? dir : null);
       if (!to) return;
       e.preventDefault();
       e.stopPropagation();
@@ -514,7 +564,23 @@ export default function CockpitApp() {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [split]);
+  });
+
+  // Ctrl+Alt+D opens another chat below the focused one (up to four); Ctrl+Alt+W takes the focused chat out of the view.
+  useEffect(() => {
+    if (split === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing) return;
+      const down = matchesAction(e, 'split-down', isMacPlatform());
+      if (!down && !matchesAction(e, 'split-close-side', isMacPlatform())) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (down) splitDownFrom(columnOf(side));
+      else closeChatSlot(side);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
 
   // The split comes back on start when both of its panes still exist (split-memory.ts). The left pane is selected
   // again too: the app starts with no pane selected. Runs once, when the pane list is first known.
@@ -536,6 +602,7 @@ export default function CockpitApp() {
     nav.select(memory.left);
     setSplit(memory.right);
     setRatio(memory.ratio);
+    setBelow(memory.below ?? NO_BELOW);
     setSide('left');
   }, [c.registry.initialReady]);
   // Saves the split while it is on. A split that ends (closed, the inbox picked, its pane gone, a narrow window)
@@ -543,17 +610,17 @@ export default function CockpitApp() {
   const savedSplit = useRef(false);
   useEffect(() => {
     if (split !== null && c.selectedId !== null) {
-      writeSplitMemory({ left: c.selectedId, right: split, ratio });
+      writeSplitMemory(hasBelow(belowNow) ? { left: c.selectedId, right: split, ratio, below: belowNow } : { left: c.selectedId, right: split, ratio });
       savedSplit.current = true;
     } else if (savedSplit.current) {
       clearSplitMemory();
       savedSplit.current = false;
     }
-  }, [split, ratio, c.selectedId]);
+  }, [split, ratio, c.selectedId, belowNow]);
 
   // "Continue where you left off" (yesterday-memory.ts): this run's open chats are saved for the next start.
   const openPanes = useMemo(() => c.registry.paneList.map((p) => p.info), [c.registry.paneList]);
-  const liveSplit = useMemo<SplitMemory | null>(() => (split !== null && c.selectedId !== null ? { left: c.selectedId, right: split, ratio } : null), [split, ratio, c.selectedId]);
+  const liveSplit = useMemo<SplitMemory | null>(() => (split !== null && c.selectedId !== null ? (hasBelow(belowNow) ? { left: c.selectedId, right: split, ratio, below: belowNow } : { left: c.selectedId, right: split, ratio }) : null), [split, ratio, c.selectedId, belowNow]);
   useYesterdaySnapshot({ ready: c.registry.initialReady, panes: openPanes, split: liveSplit });
   // Chats reopened from that card: the split they had comes back once both of its panes are on the list.
   const [pendingSplit, setPendingSplit] = useState<SplitMemory | null>(null);
@@ -565,6 +632,7 @@ export default function CockpitApp() {
     nav.select(pendingSplit.left);
     setSplit(pendingSplit.right);
     setRatio(pendingSplit.ratio);
+    setBelow(pendingSplit.below ?? NO_BELOW);
     setSide('left');
   }, [pendingSplit, c.registry.panes]);
   const onReopenedRun = (paneIds: string[], back: SplitMemory | null) => {
@@ -786,7 +854,20 @@ export default function CockpitApp() {
             }}
           />
         ) : view === 'pane' && c.selectedId && splitOn && split ? (
-          <SplitView c={nav} leftId={c.selectedId} rightId={split} focus={side} ratio={ratio} onFocus={setSide} onRatio={setRatio} onClose={toggleSplit} />
+          <SplitView
+            c={nav}
+            leftId={c.selectedId}
+            rightId={split}
+            focus={side}
+            ratio={ratio}
+            below={belowNow}
+            onFocus={setSide}
+            onRatio={setRatio}
+            onRows={(col, rows) => setBelow((b) => (col === 'left' ? { ...b, leftRows: rows } : { ...b, rightRows: rows }))}
+            onClose={toggleSplit}
+            onCloseChat={closeChatSlot}
+            onSplitDown={splitDownFrom}
+          />
         ) : view === 'pane' && c.selectedId ? (
           <ErrorBoundary where="Pane" resetKeys={[c.selectedId]}>
             <PaneView c={c} paneId={c.selectedId} key={c.selectedId} onWhatBroke={setWhatBrokePane} handoff={handoff} />

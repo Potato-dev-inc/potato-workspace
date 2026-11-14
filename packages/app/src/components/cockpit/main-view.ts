@@ -108,6 +108,15 @@ export function ratioFromLeftPx(leftPx: number, span: number): number {
   return clampSplitRatio(leftPx / span, span);
 }
 
+/** A direction key in a split view (left, right, up, down): the focus moves to the next chat that way. Anything else: null. */
+export function splitMoveKey(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>, mac: boolean): 'left' | 'right' | 'up' | 'down' | null {
+  if (matchesAction(e, 'split-focus-left', mac)) return 'left';
+  if (matchesAction(e, 'split-focus-right', mac)) return 'right';
+  if (matchesAction(e, 'split-focus-up', mac)) return 'up';
+  if (matchesAction(e, 'split-focus-down', mac)) return 'down';
+  return null;
+}
+
 /**
  * Ctrl+Alt+Left / Ctrl+Alt+Right (Cmd+Option on a Mac, or the person's own keys) move the focus to the left or
  * right side. Any other modifier, or any other key, is not ours: null. The caller only asks while the split is open.

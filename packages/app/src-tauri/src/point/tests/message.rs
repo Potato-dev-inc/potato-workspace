@@ -322,3 +322,20 @@ fn a_message_over_the_outbox_limit_is_refused() {
     let err = compose(&[&p], "make it green", &folder.root).unwrap_err();
     assert!(err.contains("too long"));
 }
+
+#[test]
+fn a_chat_message_says_the_screenshot_is_attached_and_names_no_path() {
+    use crate::point::message::{compose_with, Shots};
+    let folder = Folder::new("attached", &[]);
+    let shot = Shot {
+        abs_path: PathBuf::from("C:/agent/.potato-workspace/attachments/1-pick-20261028-223104-1.png"),
+        rel_path: ".potato-workspace/shots/pick-20261028-223104-1.png".into(),
+        width: 10,
+        height: 10,
+    };
+    let p = pick(1, facts("T", None), None, Some(shot), None);
+    let text = compose_with(&[&p], "make it green", &folder.root, Shots::Attached).unwrap();
+    assert!(text.contains("- Screenshot: attached to this message (1-pick-20261028-223104-1.png)\n"), "{text}");
+    assert!(!text.contains("open this image file"), "{text}");
+    assert!(!text.contains(".potato-workspace/shots"), "{text}");
+}

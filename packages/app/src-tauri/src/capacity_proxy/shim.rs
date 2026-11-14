@@ -43,6 +43,41 @@ pub trait Opener: Send + Sync {
     async fn open(&self) -> Result<BiStream, OpenError>;
 }
 
+/// An opener that tells `note` when the lending PC can't be reached (true, after two failures in a row) and when it can
+/// again (false). The borrower's screen shows "not answering" from it, not a sign-in problem.
+pub struct NotingOpener {
+    inner: Arc<dyn Opener>,
+    note: SigninNote,
+    fails: std::sync::atomic::AtomicU32,
+}
+
+impl NotingOpener {
+    pub fn new(inner: Arc<dyn Opener>, note: SigninNote) -> Arc<Self> {
+        Arc::new(Self { inner, note, fails: std::sync::atomic::AtomicU32::new(0) })
+    }
+}
+
+#[async_trait]
+impl Opener for NotingOpener {
+    async fn open(&self) -> Result<BiStream, OpenError> {
+        use std::sync::atomic::Ordering;
+        let opened = self.inner.open().await;
+        match &opened {
+            Err(OpenError::Unavailable(_)) => {
+                if self.fails.fetch_add(1, Ordering::SeqCst) + 1 >= 2 {
+                    (self.note)(true);
+                }
+            }
+            Ok(_) => {
+                self.fails.store(0, Ordering::SeqCst);
+                (self.note)(false);
+            }
+            Err(OpenError::Ended) => {}
+        }
+        opened
+    }
+}
+
 struct Inner {
     secret: String,
     opener: Arc<dyn Opener>,

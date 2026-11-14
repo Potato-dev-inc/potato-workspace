@@ -12,6 +12,15 @@ use crate::acp::lane::RunLane;
 struct Facts {
     labs: bool,
     major: Option<u32>,
+    /// Each agent's chat config, read once: `find_builtin` also reads the person's overlay file in the app-data
+    /// folder, which other tests (running in parallel) write, so two reads could disagree mid-test.
+    configs: std::sync::Mutex<std::collections::HashMap<String, Option<AgentConfig>>>,
+}
+
+impl Facts {
+    fn new(labs: bool, major: Option<u32>) -> Facts {
+        Facts { labs, major, configs: Default::default() }
+    }
 }
 
 impl LaneLookup for Facts {
@@ -19,7 +28,7 @@ impl LaneLookup for Facts {
         self.labs
     }
     fn config_for(&self, agent: &str) -> Option<AgentConfig> {
-        crate::acp::config::find_builtin(agent)
+        self.configs.lock().unwrap().entry(agent.to_string()).or_insert_with(|| crate::acp::config::find_builtin(agent)).clone()
     }
     fn saved(&self, _: &str) -> Option<RunLane> {
         None
@@ -63,7 +72,7 @@ fn every_agent_every_lane_every_flag_starts_or_says_the_call_that_does() {
     let mut refusals = 0;
     for labs in [true, false] {
         for major in [None, Some(1), Some(2)] {
-            let facts = Facts { labs, major };
+            let facts = Facts::new(labs, major);
             for agent in every_agent() {
                 for lane in [None, Some("auto"), Some("acp"), Some("terminal")] {
                     for headless in [false, true] {
@@ -110,7 +119,7 @@ fn every_agent_every_lane_every_flag_starts_or_says_the_call_that_does() {
 #[test]
 fn the_field_report_read_only_opencode_starts_on_the_first_call_whatever_the_lane() {
     for major in [Some(1), Some(2)] {
-        let facts = Facts { labs: true, major };
+        let facts = Facts::new(true, major);
         for lane in [None, Some("acp"), Some("terminal")] {
             let mut body = json!({ "task": "t", "agent_type": "opencode", "project_path": "p", "read_only": true });
             if let Some(lane) = lane {
@@ -129,7 +138,7 @@ fn the_field_report_read_only_opencode_starts_on_the_first_call_whatever_the_lan
 
 #[test]
 fn strict_keeps_the_lane_and_refuses_with_the_call_that_works() {
-    let facts = Facts { labs: true, major: Some(2) };
+    let facts = Facts::new(true, Some(2));
     let body = json!({ "task": "t", "agent_type": "opencode", "project_path": "p", "read_only": true, "lane": "terminal", "strict": true });
     let Route::Refused(error) = run_decide(&facts, &body).route else { panic!("strict must refuse") };
     assert_eq!(error.code, "READ_ONLY_UNSUPPORTED");
@@ -140,7 +149,7 @@ fn strict_keeps_the_lane_and_refuses_with_the_call_that_works() {
 
 #[test]
 fn an_unknown_agent_with_a_near_match_names_the_call_with_the_right_id() {
-    let facts = Facts { labs: true, major: None };
+    let facts = Facts::new(true, None);
     let body = json!({ "task": "t", "agent_type": "opencod", "project_path": "p", "lane": "acp" });
     let Route::Refused(error) = run_decide(&facts, &body).route else { panic!("unknown id") };
     assert_eq!(error.code, "UNKNOWN_AGENT");
@@ -151,7 +160,7 @@ fn an_unknown_agent_with_a_near_match_names_the_call_with_the_right_id() {
 
 #[test]
 fn the_try_leaves_out_the_first_attempts_idempotency_key() {
-    let facts = Facts { labs: false, major: None };
+    let facts = Facts::new(false, None);
     let body = json!({ "task": "t", "agent_type": "opencode", "project_path": "p", "lane": "acp", "idempotency_key": "k1" });
     let Route::Refused(error) = run_decide(&facts, &body).route else { panic!("labs off") };
     assert_eq!(error.code, "ACP_OFF");

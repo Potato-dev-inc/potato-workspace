@@ -51,6 +51,7 @@ fn target(id: &str) -> Target {
         title: "Fix pricing".into(),
         same_folder: true,
         can_send: true,
+        chat: false,
         reason: None,
     }
 }

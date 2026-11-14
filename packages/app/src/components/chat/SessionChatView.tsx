@@ -3,7 +3,7 @@
 // when the agent has a plan, a thin line marks a notice, and a turn ends with how long it worked. The view mode
 // (Summary, Normal, Verbose) is in the header. The agent's text is Markdown when it comes from the session file;
 // text read off the terminal is shown as it is.
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { clearChatJump, turnWithItem, type ChatJump } from '../../lib/chatJump';
 import { registerPaneTurns } from '../../lib/potatoCheck';
@@ -19,6 +19,9 @@ import { HelperRow } from './HelperRow';
 import { PaneHelperRows } from './PaneHelperRows';
 import { placeHelpers, type ChatHelper } from '../../lib/chat-helpers';
 import { NoticeLine } from './NoticeLine';
+import { ArtifactCard } from '../artifacts/ArtifactCard';
+import { ARTIFACT_NOTICE } from '../../lib/artifacts';
+import { openArtifactTab } from '../../lib/artifact-tabs';
 import { PermissionTrace } from './PermissionTrace';
 import { ResponseActions } from './ResponseActions';
 import { ThinkingBlock } from './ThinkingBlock';
@@ -36,6 +39,8 @@ import { useSinceLine } from './useSinceLine';
 import { hasPrice, turnPrices, type TurnPrice } from '../../lib/turnPrice';
 import { TurnEndingButtons, type EndingActions } from './TurnEndingButtons';
 import { ViewModeToggle } from './ViewModeToggle';
+import { MessageRail } from './MessageRail';
+import { buildRailEntries } from './messageRailModel';
 
 export { formatDuration };
 
@@ -117,20 +122,21 @@ const JUMP_WAIT_MS = 10_000;
 
 const SUMMARY_NOTE = 'Summary: your messages, final answers and activity lines.';
 
-function TextStep({ step, markdown, mode, actions }: { step: Extract<TurnStep, { kind: 'text' }>; markdown: boolean; mode: ChatViewMode; actions?: { onRetry?: () => Promise<string | null> } }) {
+const TextStep = memo(function TextStep({ step, markdown, mode, actions }: { step: Extract<TurnStep, { kind: 'text' }>; markdown: boolean; mode: ChatViewMode; actions?: { onRetry?: () => Promise<string | null> } }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   // Summary keeps only the agent's final answers; the rest of its talk is folded away with the rows.
   if (mode === 'summary' && !step.item.finalAnswer) return null;
   const body = markdown ? <ChatMarkdown text={step.item.text} /> : <div className="whitespace-pre-wrap break-words ck-chat-text">{step.item.text}</div>;
-  if (!actions) return body;
+  // `data-rail-id`: the message rail jumps to this reply by it.
+  if (!actions) return <div data-rail-id={step.id}>{body}</div>;
   // A finished reply: its text, and under it the quiet row (Copy, and Retry on the newest turn).
   return (
-    <div className="ck-msg">
+    <div className="ck-msg" data-rail-id={step.id}>
       <div ref={bodyRef}>{body}</div>
       <ResponseActions text={step.item.text} targetRef={bodyRef} onRetry={actions.onRetry} />
     </div>
   );
-}
+});
 
 function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: TurnBranch; endings?: EndingActions }) {
   const parts: string[] = [];
@@ -159,7 +165,16 @@ function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: Tu
   );
 }
 
-function TurnView({ turn, fromScreen, markdown, mode, branch, helpers, onOpenPane, endings, price }: { price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; branch?: TurnBranch; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
+/** Test hook: how many times a turn was drawn (a long chat must not redraw every turn for one streamed chunk). */
+export const turnRenders = { count: 0 };
+
+/** Everything here is stable for a turn that did not change (see `groupTurns` and `useStable`), so `memo` can skip it. */
+const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canBranch, branchAlways, onBranch, helpers, onOpenPane, endings, price, paneId }: { paneId?: string; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; canBranch: boolean; branchAlways: boolean; onBranch?: (userItemId: string) => void; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
+  turnRenders.count += 1;
+  const branch = useMemo<TurnBranch | undefined>(
+    () => (canBranch && onBranch && isBranchable(turn) ? { onBranch: () => onBranch(turn.user.id), always: branchAlways } : undefined),
+    [canBranch, onBranch, turn, branchAlways],
+  );
   const verbose = mode === 'verbose';
   // A turn with no end yet is still running: its rows without a result are live.
   const live = turn.end === null;
@@ -168,9 +183,9 @@ function TurnView({ turn, fromScreen, markdown, mode, branch, helpers, onOpenPan
   let lastTextId: string | null = null;
   for (const s of turn.steps) if (s.kind === 'text') lastTextId = s.id;
   return (
-    <section className="space-y-1.5 ck-chat-turn" data-turn-id={turn.id}>
+    <section className={`space-y-1.5 ck-chat-turn${live ? '' : ' is-done'}`} data-turn-id={turn.id}>
       {turn.user && (
-        <div className="flex flex-col items-end gap-1.5">
+        <div className="flex flex-col items-end gap-1.5" data-rail-id={turn.user.id}>
           {turn.user.attachments && turn.user.attachments.length > 0 && <AttachmentChips attachments={turn.user.attachments} className="ck-chat-user-files" />}
           {turn.user.text.trim() !== '' && (
             <div className="max-w-[85%] whitespace-pre-wrap break-words rounded bg-pm-raised px-2 py-1 text-pm-text ck-chat-bubble">
@@ -192,6 +207,8 @@ function TurnView({ turn, fromScreen, markdown, mode, branch, helpers, onOpenPan
           );
         }
         if (step.kind === 'notice') {
+          // A page the agent made is a card whatever the view mode: it is the answer, not chatter.
+          if (step.item.noticeKind === ARTIFACT_NOTICE && paneId) return <ArtifactCard key={step.id} title={step.item.text} url={step.item.url} onOpen={(ref, title) => openArtifactTab(paneId, ref.id, title)} />;
           if (mode === 'summary') return null;
           if (step.item.noticeKind === 'permission') return <PermissionTrace key={step.id} text={step.item.text} />;
           return <NoticeLine key={step.id} text={step.item.text} kind={step.item.noticeKind} url={step.item.url} />;
@@ -208,6 +225,18 @@ function TurnView({ turn, fromScreen, markdown, mode, branch, helpers, onOpenPan
       {turn.end && hasPrice(price) && <TurnPriceTag price={price} />}
     </section>
   );
+});
+
+/** The value of `next` for each key, but the earlier object where it holds the same data: keeps a memoised row from redrawing. */
+function useStable<T>(next: Map<string, T>): Map<string, T> {
+  const last = useRef(new Map<string, T>());
+  const out = new Map<string, T>();
+  for (const [key, value] of next) {
+    const was = last.current.get(key);
+    out.set(key, was !== undefined && (was === value || JSON.stringify(was) === JSON.stringify(value)) ? was : value);
+  }
+  last.current = out;
+  return out;
 }
 
 export function SessionChatView({ state, reason, waitingFor, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings }: SessionChatViewProps) {
@@ -227,11 +256,18 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
   // The same rule for `Branch`.
   const showBranch = !!canBranch && !!onBranch && !readOnly;
   const newestBranchable = useMemo(() => (showBranch ? lastBranchableId(turns) : null), [showBranch, turns]);
-  const placedHelpers = useMemo(() => placeHelpers(turns, helpers ?? []), [turns, helpers]);
+  const placedHelpers = useStable(useMemo(() => placeHelpers(turns, helpers ?? []), [turns, helpers]));
+  // The newest callbacks, behind functions that stay the same, so a turn that did not change is not redrawn for them.
+  const callbacks = useRef({ onBranch, onOpenPane });
+  callbacks.current = { onBranch, onOpenPane };
+  const stableBranch = useCallback((id: string) => callbacks.current.onBranch?.(id), []);
+  const stableOpenPane = useCallback((id: string) => callbacks.current.onOpenPane?.(id), []);
   const scrollRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
-  const prices = useMemo(() => turnPrices(turns), [turns]);
+  const prices = useStable(useMemo(() => turnPrices(turns), [turns]));
+  // The message rail beside the scroll bar: one dash per message. Its own list; nothing here reaches a TurnView.
+  const railEntries = useMemo(() => buildRailEntries(turns, mode), [turns, mode]);
 
   // Find in this chat (Ctrl+F): the box, the marks and the count. Esc goes back to the message box.
   const find = useChatFind(scrollRef, () => rootRef.current?.querySelector<HTMLTextAreaElement>('textarea.ck-chat-composer-field')?.focus());
@@ -327,7 +363,8 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
       )}
       {banner}
       <PlanBar items={plan} />
-      <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 py-2 ck-chat-body">
+      <div className="relative flex min-h-0 flex-1 ck-chat-main">
+      <div ref={scrollRef} onScroll={onScroll} className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto px-2 py-2 ck-chat-body">
         {state === 'unavailable' && (
           <div className="ck-empty ck-chat-empty">
             <h2 className="ck-section text-xs font-semibold text-pm-text">Chat unavailable</h2>
@@ -350,20 +387,25 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
             <Fragment key={`${mode}:${turn.id}`}>
               {sinceLine.show && sinceLine.report?.firstTurnId === turn.id && <SinceLine report={sinceLine.report} />}
             <TurnView
+              paneId={paneId ?? undefined}
               price={prices.get(turn.id)}
               turn={turn}
               fromScreen={fromScreen}
               markdown={markdown}
               mode={mode}
-              branch={canBranch && !readOnly && onBranch && isBranchable(turn) ? { onBranch: () => onBranch(turn.user.id), always: turn.id === newestBranchable } : undefined}
+              canBranch={!!canBranch && !readOnly && !!onBranch}
+              branchAlways={turn.id === newestBranchable}
+              onBranch={stableBranch}
               helpers={placedHelpers.get(turn.id)}
-              onOpenPane={onOpenPane}
+              onOpenPane={onOpenPane ? stableOpenPane : undefined}
               endings={endings && turn.id === turns[turns.length - 1]?.id ? endings : undefined}
             />
             </Fragment>
           ))}
         {state !== 'unavailable' && pending}
         {sinceLine.show && <JumpToLatest onJump={sinceLine.jumpToLatest} />}
+      </div>
+      {state !== 'unavailable' && <MessageRail entries={railEntries} scrollRef={scrollRef} rootRef={rootRef} findQuery={find.open ? find.query : ''} />}
       </div>
       {remember && paneId && <RememberSelection paneId={paneId} root={scrollRef} />}
       {dock && <div className="ck-chat-dock">{dock}</div>}

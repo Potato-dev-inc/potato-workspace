@@ -59,6 +59,18 @@ pub struct Notice {
     pub seen: bool,
 }
 
+/// The link from a chat to its separate copy: a git worktree (`kind` `git`) or a plain copy of a folder without git
+/// (`kind` `plain`, a trial run). `origin` is the project the copy came from; `handle` names the copy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CopyLink {
+    pub kind: String,
+    pub origin: String,
+    pub handle: String,
+    /// Where a plain copy is kept (the app's data folder when absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConversationRecord {
     /// Ours: the key of the conversation in the app (also the key of its `AcpSession`).
@@ -90,6 +102,9 @@ pub struct ConversationRecord {
     /// Which way `run_agent` chose this chat and why (`{lane_used, lane_reason}`), so a restored chat still says it.
     #[serde(default)]
     pub lane_note: Option<serde_json::Value>,
+    /// The separate copy this chat works in ("Work on a copy"); `None`: it works in the project itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy: Option<CopyLink>,
     pub created_ms: u64,
     pub updated_ms: u64,
 }
@@ -196,7 +211,7 @@ mod tests {
             started_by: None,
             parent_pane_id: None,
             account: None,
-            lane_note: None,
+            lane_note: None, copy: None,
             created_ms: 1,
             updated_ms: 1,
         }
@@ -291,7 +306,7 @@ mod journal_sweep_tests {
     fn rec(id: &str, state: LastState) -> ConversationRecord {
         ConversationRecord {
             id: id.into(), agent: "codex".into(), session_id: None, cwd: "D:/w".into(), lane: RunLane::Acp,
-            last_known_state: state, terminal_pane: None, notices: Vec::new(), config_options: Vec::new(), started_by: None, parent_pane_id: None, account: None, lane_note: None, created_ms: 1, updated_ms: 1,
+            last_known_state: state, terminal_pane: None, notices: Vec::new(), config_options: Vec::new(), started_by: None, parent_pane_id: None, account: None, lane_note: None, copy: None, created_ms: 1, updated_ms: 1,
         }
     }
 

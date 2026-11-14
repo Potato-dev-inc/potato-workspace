@@ -5,7 +5,7 @@ import type { MessageKey } from '../i18n';
 import type { AttentionSnapshot } from './attention';
 import type { ProgressNote } from './phone-progress';
 
-export type StatusKind = 'sending' | 'working' | 'needs' | 'asking' | 'done' | 'stopped' | 'ready' | 'offline';
+export type StatusKind = 'sending' | 'waking' | 'working' | 'needs' | 'asking' | 'done' | 'stopped' | 'ready' | 'offline';
 /** The dot: orange = needs you, green (pulsing) = working, red = trouble, none = nothing to say. */
 export type StatusDot = 'needs' | 'working' | 'danger' | 'none';
 
@@ -19,6 +19,8 @@ export interface StatusInput {
   offline?: boolean;
   /** A message was sent and the PC has not confirmed it yet. */
   sending?: boolean;
+  /** The chat is starting or coming back from its nap (not an answer, not idle). */
+  waking?: boolean;
   /** The agent asked a question (a card or a choice) rather than wants an approval. */
   asking?: boolean;
   /** How long the last turn took, when it ended well (ms). Shows "Done · 48s" for a chat that is not working. */
@@ -49,6 +51,7 @@ export function phoneStatus(t: T, input: StatusInput): PhoneStatus {
   const { state, note, now } = input;
   if (input.offline) return { kind: 'offline', dot: 'danger', text: t('phone.st.offline') };
   if (input.sending) return { kind: 'sending', dot: 'working', text: t('phone.st.sending') };
+  if (input.waking) return { kind: 'waking', dot: 'working', text: t('phone.st.waking') };
   if (state === 'broken') return { kind: 'stopped', dot: 'danger', text: t('phone.st.stopped') };
   if (state === 'needs' || state === 'risk') {
     return input.asking

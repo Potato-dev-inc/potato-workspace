@@ -496,3 +496,43 @@ fn websocket_and_sse_with_another_local_origin_are_refused() {
         }
     }
 }
+
+/// Stable link: the phone reaches the bridge as `https://<worker>` -> Worker -> trycloudflare -> `pwa_server`.
+/// The Worker's host is just another foreign `Host` / `Origin`: never the local app, a paired token is
+/// always needed, and no CORS header is granted (the PWA calls its own origin).
+#[test]
+fn requests_that_came_through_the_stable_link_worker_need_the_paired_token() {
+    let r = rig();
+    let worker = "pm.me.workers.dev";
+    let via_worker = |path: &str, extra: &[&str]| {
+        let mut request = format!(
+            "GET {path} HTTP/1.1\r\nHost: {worker}\r\nOrigin: https://{worker}\r\nX-Forwarded-Host: {worker}\r\nX-Forwarded-Proto: https\r\n"
+        );
+        for header in extra {
+            request.push_str(header);
+            request.push_str("\r\n");
+        }
+        request.push_str("\r\n");
+        request
+    };
+    let auth = format!("Authorization: Bearer {}", r.token);
+    // through pwa_server (the real path) and straight at the bridge port (a Worker pointed at it by mistake)
+    for (name, addr, path) in [("pwa_server", r.pwa, "/bridge/panes"), ("bridge", r.bridge, "/panes")] {
+        let response = send_full(addr, &via_worker(path, &[]));
+        assert_eq!(status_of(&response), 401, "{name}, no token, Host/Origin = worker host: {response}");
+        assert!(!has_allow_origin(&response), "{name}: the worker origin gets no CORS header: {response}");
+        let response = send_full(addr, &via_worker(path, &["Authorization: Bearer AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="]));
+        assert_eq!(status_of(&response), 401, "{name}, wrong token: {response}");
+        let response = send_full(addr, &via_worker(path, &[&auth]));
+        assert_eq!(status_of(&response), 200, "{name}, paired token: {response}");
+        let body = response.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
+        assert_eq!(json(body)["local_app"], false, "{name}: a phone behind the Worker is never the desktop app");
+    }
+    // the event stream and the WebSocket upgrade are gated the same way
+    for path in ["/bridge/events", "/bridge/events/poll"] {
+        assert_eq!(status_of(&send_full(r.pwa, &via_worker(path, &[]))), 401, "{path}");
+        assert_eq!(status_of(&send_full(r.pwa, &via_worker(path, &[&auth]))), 200, "{path} with a token");
+    }
+    // the public health route stays reachable (the Test connection button needs it)
+    assert_eq!(status_of(&send_full(r.pwa, &via_worker("/bridge/health", &[]))), 200);
+}

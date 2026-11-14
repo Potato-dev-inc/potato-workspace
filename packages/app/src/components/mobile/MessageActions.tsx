@@ -26,18 +26,21 @@ export function Pressable({
   message,
   onPress,
   className,
+  railId,
   children,
 }: {
   message: PressedMessage;
   onPress?: (message: PressedMessage) => void;
   className: string;
+  /** The message rail jumps to this message by it. */
+  railId?: string;
   children: ReactNode;
 }) {
   const t = useT();
   const handlers = useLongPress(() => onPress?.(message));
-  if (!onPress) return <div className={className}>{children}</div>;
+  if (!onPress) return <div className={className} data-rail-id={railId}>{children}</div>;
   return (
-    <div className={className} tabIndex={0} aria-description={t('phone.msg.open')} {...handlers}>
+    <div className={className} data-rail-id={railId} tabIndex={0} aria-description={t('phone.msg.open')} {...handlers}>
       {children}
     </div>
   );

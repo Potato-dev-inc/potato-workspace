@@ -212,14 +212,17 @@ export interface StandbyStatus {
   supported: { agent_type: string; visible: boolean; headless: boolean; experimental: boolean }[];
 }
 
-export type TunnelMode = 'quick' | 'named' | 'custom';
+export type TunnelMode = 'quick' | 'named' | 'custom' | 'stable';
 
 /** Saved tunnel setting as the UI may see it: never the token, only whether one is stored. */
 export interface TunnelConfigView {
   mode: TunnelMode;
   hostname: string | null;
+  /** `stable` mode: the Worker address. */
   url: string | null;
   has_token: boolean;
+  /** `stable` mode: whether a shared secret is stored (never the secret itself). */
+  has_secret?: boolean;
 }
 
 export interface TunnelStatus {
@@ -229,12 +232,30 @@ export interface TunnelStatus {
   state: 'stopped' | 'starting' | 'running' | 'error';
   error: string | null;
   config: TunnelConfigView;
+  /** `stable` mode: the Worker, the quick-tunnel address behind it and whether they are linked. */
+  stable?: TunnelStableStatus | null;
+  /** Only on the answer to a save that made the secret or asked to show it. */
+  secret_once?: string | null;
+}
+
+export interface TunnelStableStatus {
+  worker_url: string;
+  quick_url: string | null;
+  link: 'waiting' | 'linking' | 'linked' | 'failed';
+  error: string | null;
 }
 
 export type TunnelConfigInput =
   | { mode: 'quick' }
   | { mode: 'named'; hostname: string; token?: string | null }
-  | { mode: 'custom'; url: string };
+  | { mode: 'custom'; url: string }
+  | {
+      mode: 'stable';
+      worker_url: string;
+      /** A secret the person chose; empty or null keeps the stored one (or makes one). */
+      secret?: string | null;
+      secret_action?: 'keep' | 'regenerate' | 'show';
+    };
 
 export interface TunnelConnectionTest {
   ok: boolean;

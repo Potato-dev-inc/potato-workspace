@@ -117,8 +117,8 @@
 }
 
 :is(.cockpit, .settings, body) .lend-btn.is-primary {
-  color: var(--primary-fg, #1b1a19);
-  background: var(--primary-bg, #f4f2ef);
+  color: var(--accent-fg);
+  background: var(--accent);
   border-color: transparent;
   font-weight: 500;
 }
@@ -392,14 +392,34 @@
 }
 
 :is(.cockpit, .settings, body) .lend-chip[data-urgency='soon'] {
-  color: #e0a43a;
-  box-shadow: inset 0 0 0 1px #e0a43a;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 :is(.cockpit, .settings, body) .lend-chip[data-urgency='now'] {
-  color: #ef6a5e;
-  box-shadow: inset 0 0 0 1px #ef6a5e;
+  color: var(--accent-fg);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
   font-weight: 600;
+}
+
+/* A lender who is signed out or not answering: a hollow warning mark before the words (red stays for errors). */
+:is(.cockpit, .settings, body) .lend-chip[data-problem='true']::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.lend-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--label);
 }
 .lend-pop {
   position: absolute;
@@ -434,4 +454,227 @@
   padding: 6px 10px 2px;
   color: var(--label-3, #999);
   font-size: 11px;
+}
+
+/* Sign-in step: three choices as cards, the small terminal inside the step, one calm "signed in" row. Tokens only; the
+   one orange is the accent variable (the active card edge and the primary button). */
+.lend-signin {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lend-step-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--label);
+}
+.lend-muted {
+  color: var(--label-3);
+}
+.lend-small {
+  font-size: 11px;
+}
+.lend-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lend-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--label);
+}
+.lend-card[data-on='true'] {
+  box-shadow: inset 0 0 0 1px var(--label-3);
+}
+.lend-card:focus-within {
+  box-shadow: var(--focus);
+}
+.lend-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lend-card-text small {
+  color: var(--label-3);
+  font-size: 12px;
+}
+.lend-signin-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.lend-term {
+  box-sizing: border-box;
+  width: 100%;
+  height: 264px;
+  padding: 6px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.lend-term-host {
+  width: 100%;
+  height: 100%;
+}
+.lend-signed {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--label);
+  font-weight: 500;
+}
+.lend-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--label-2);
+}
+.lend-dots {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--label-3);
+  animation: lend-pulse 1.1s ease-in-out infinite;
+}
+@keyframes lend-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lend-dots {
+    animation: none;
+  }
+}
+
+/* The four-step profile sheet: 560 px wide (the whole width on a phone), step dots, summary card. */
+.lend-sheet[data-size='wide'] {
+  width: 560px;
+}
+@media (max-width: 600px) {
+  .lend-sheet[data-size='wide'] {
+    width: 100%;
+    max-height: 100%;
+    border-radius: 10px;
+  }
+  .lend-scrim {
+    padding: 0;
+  }
+}
+.lend-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lend-steps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.lend-dots-row {
+  display: flex;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lend-dots-row li {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--label-4);
+}
+.lend-dots-row li[data-state='done'] {
+  background: var(--label-3);
+}
+.lend-dots-row li[data-state='active'] {
+  background: var(--accent);
+}
+.lend-step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lend-preview {
+  margin: 0;
+  color: var(--label-2);
+  overflow-wrap: anywhere;
+}
+.lend-summary {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 10px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.lend-summary li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  color: var(--label);
+}
+.lend-summary li + li {
+  border-top: 1px solid var(--sep);
+}
+.lend-summary li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lend-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--label);
+}
+.lend-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.lend-more {
+  align-self: flex-start;
+}
+.lend-draft {
+  background: var(--fill);
+}
+.lend-list li[data-flash='true'] {
+  background: var(--accent-soft);
+}
+.lend-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }

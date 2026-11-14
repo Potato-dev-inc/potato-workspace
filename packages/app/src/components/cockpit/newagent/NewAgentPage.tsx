@@ -10,7 +10,7 @@ import { addonFor, needsInstall, tauriAcpAddonApi, type AcpAddonApi } from '../.
 import { useAcpAddons } from '../../../hooks/useAcpAddons';
 import { AddonPrompt } from '../../acp/AddonPrompt';
 import { SignInCard } from '../../acp/SignInCard';
-import { lastRealFolder, projectOfCwd, readStoredCopyPreference, supportsCopies, writeCopyPreference, copyDefault } from '../../../lib/ship-model';
+import { lastRealFolder, projectOfCwd, readStoredCopyPreference, supportsCopies, supportsChatCopy, isPlainCopyFolder, writeCopyPreference, copyDefault } from '../../../lib/ship-model';
 import { folderName, pathKey, useSidebarProjects } from '../../../lib/sidebarProjects';
 import { IconChevronDown, IconFolder, IconPlus, IconSpark } from '../Icons';
 import { useT } from '../../../i18n';
@@ -297,7 +297,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   // Chat is the default whenever the agent has one (a missing add-on shows its install card; Terminal stays one click away). With
   // terminals hidden it is the only way.
   const runAs: RunAs = canChat ? (chatFirst ? 'chat' : (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null))) : 'terminal';
-  const isolated = copyDefault(storedCopy) && copiesOk && runAs === 'terminal';
+  // "Work on a copy": a terminal needs Git; a chat also works on a plain trial copy of a folder without Git.
+  const canCopy = runAs === 'chat' ? supportsChatCopy(folder?.state) : copiesOk;
+  const isolated = copyDefault(storedCopy) && canCopy;
 
   // ----- the model: the last pick per agent and sign-in (this page only), else the agent's Default model from Settings -----
   const liveList = useModelOptions(choice?.agentId ?? null, modelApi);
@@ -483,7 +485,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                     aria-checked={isolated}
                     aria-labelledby="na-copy-label"
                     className="ck-switch"
-                    disabled={!copiesOk || runAs === 'chat'}
+                    disabled={!canCopy}
                     onClick={() => {
                       setStoredCopy(!isolated);
                       writeCopyPreference(folderKey, !isolated);
@@ -492,10 +494,10 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                     <span className="ck-switch-knob" />
                   </button>
                 </div>
-                {runAs === 'chat' ? (
-                  <p className="ck-na-note">{t('newAgent.chatInFolder')}</p>
-                ) : !copiesOk ? (
-                  <p className="ck-na-note">{t('newAgent.needsGit')}</p>
+                {!canCopy ? (
+                  <p className="ck-na-note">{runAs === 'chat' ? t('newAgent.copyMissing') : t('newAgent.needsGit')}</p>
+                ) : runAs === 'chat' && isPlainCopyFolder(folder?.state) ? (
+                  <p className="ck-na-note">{t('newAgent.copyPlain')}</p>
                 ) : null}
               </Pop>
 

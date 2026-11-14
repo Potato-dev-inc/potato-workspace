@@ -165,3 +165,12 @@ export function writeCopyPreference(project: string | null, on: boolean): void {
     /* storage can be blocked: the switch just is not remembered */
   }
 }
+
+/**
+ * Whether a chat can work on a copy of this folder: any folder that exists. With Git the copy is a worktree; without
+ * it the copy is a plain trial copy (small folders only), so "Work on a copy" is offered either way.
+ */
+export const supportsChatCopy = (state: GitState | undefined): boolean => state !== 'missing';
+
+/** The copy of a chat is a plain trial copy (the folder has no Git) rather than a Git copy. */
+export const isPlainCopyFolder = (state: GitState | undefined): boolean => state === 'folder' || state === 'no_commits';

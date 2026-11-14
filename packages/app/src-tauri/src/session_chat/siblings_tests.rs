@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use parking_lot::Mutex;
 
@@ -135,11 +135,7 @@ fn fast() -> Tuning {
 }
 
 fn wait_until(what: &str, cond: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !cond() {
-        assert!(Instant::now() < deadline, "timed out waiting for: {what}");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    crate::test_support::wait::wait_for(what, 5, cond);
 }
 
 /// The words of a pane's chat, in order.

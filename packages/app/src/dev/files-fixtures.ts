@@ -1,11 +1,13 @@
 // The project folder for the harness: what the mocked `files_*` commands answer. Example data only.
 // The shapes are `lib/files-api.ts` (the Rust views in src-tauri/src/files).
 
+import { CSV_SAMPLE, DOCX_SAMPLE, PDF_SAMPLE, XLSX_TWO_SHEETS } from '../components/files/office-fixtures';
+
 const dir = (path: string) => ({ name: path.slice(path.lastIndexOf('/') + 1), path, isDir: true, size: 0 });
 const file = (path: string, size = 900) => ({ name: path.slice(path.lastIndexOf('/') + 1), path, isDir: false, size });
 
 const TREE: Record<string, { entries: ReturnType<typeof file>[]; truncated: boolean }> = {
-  '': { truncated: false, entries: [dir('docs'), dir('src'), dir('tests'), file('README.md'), file('package.json', 420), file('logo.png', 5200)] },
+  '': { truncated: false, entries: [dir('docs'), dir('src'), dir('tests'), file('README.md'), file('package.json', 420), file('logo.png', 5200), file('plan.docx', 2900), file('shop.xlsx', 7000), file('people.csv', 70), file('paper.pdf', 600)] },
   src: { truncated: false, entries: [dir('src/billing'), file('src/auth.ts', 1400), file('src/index.ts', 300), file('src/session.ts', 2100), file('src/tokens.ts', 800)] },
   'src/billing': { truncated: false, entries: [file('src/billing/invoice.ts', 1800), file('src/billing/plans.ts', 700)] },
   docs: { truncated: false, entries: [file('docs/setup.md', 1200)] },
@@ -80,6 +82,12 @@ export function filesMock(cmd: string, args: Record<string, unknown>): { handled
       return { handled: true, value: [{ path: 'src/auth.ts', mark: 'M' }, { path: 'src/tokens.ts', mark: 'M' }, { path: 'src/billing/plans.ts', mark: 'N' }, { path: 'docs/setup.md', mark: 'M' }] };
     case 'files_diff':
       return { handled: true, value: path === 'src/auth.ts' ? PATCH : '' };
+    case 'files_read_bytes': {
+      const name = path.slice(path.lastIndexOf('/') + 1);
+      const base64 = path.endsWith('.docx') ? DOCX_SAMPLE : path.endsWith('.xlsx') ? XLSX_TWO_SHEETS : path.endsWith('.csv') ? CSV_SAMPLE : PDF_SAMPLE;
+      return { handled: true, value: { path, name, size: base64.length, kind: 'bytes', base64 } };
+    }
+    case 'files_open_default':
     case 'files_reveal':
       return { handled: true, value: null };
     case 'files_read': {

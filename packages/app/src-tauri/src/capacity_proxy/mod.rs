@@ -30,6 +30,7 @@ pub mod refresh;
 pub mod service;
 pub mod shim;
 pub mod signin;
+pub mod signin_pane;
 pub mod spec;
 pub mod wire;
 

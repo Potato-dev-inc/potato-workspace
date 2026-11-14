@@ -31,7 +31,25 @@ export interface Target {
   sameFolder: boolean;
   /** False for panes the outbox refuses; `reason` says why. */
   canSend: boolean;
+  /** A chat session: the message goes in as a chat message with the picture attached. */
+  chat?: boolean;
   reason?: string | null;
+}
+
+/** The before and after strip offered when a chat agent's turn ended (N5-21). */
+export interface RecheckView {
+  /** The agent and its task, e.g. "Claude · Fix pricing". */
+  agent: string;
+  /** "button.card-cta" */
+  label: string;
+  /** A data: PNG of the element before the change. */
+  before?: string | null;
+  /** A data: PNG of the element after the reload. */
+  after?: string | null;
+  /** One plain sentence when something did not work. */
+  note?: string | null;
+  /** The recheck is running now. */
+  busy: boolean;
 }
 
 export interface PointState {
@@ -42,6 +60,8 @@ export interface PointState {
   notice?: string | null;
   /** The live session's id. It changes when a new session starts; null when no session is live. */
   session?: number | null;
+  /** Set when the agent's turn ended and the preview was reloaded. */
+  recheck?: RecheckView | null;
 }
 
 /** What `point_open_preview` returns. */
@@ -79,6 +99,10 @@ export const pointApi = {
   discard: () => call<void>('point_discard'),
   hide: () => call<void>('point_box_hide'),
   openBlockedLink: () => call<void>('point_open_blocked_link'),
+  /** Reloads the preview and shoots the element again. */
+  recheckRun: () => call<void>('point_recheck_run'),
+  /** Closes the before and after strip. */
+  recheckDismiss: () => call<void>('point_recheck_dismiss'),
   onState(cb: (s: PointState) => void): () => void {
     if (!isTauri()) return () => {};
     let off: UnlistenFn | undefined;

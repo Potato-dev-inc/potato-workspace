@@ -41,6 +41,7 @@ fn request() -> Body {
         reason: "fix the build".into(),
         device_name: "Maya's laptop".into(),
         node_hint: "ab".repeat(32),
+        profile_id: None,
     }
 }
 
@@ -172,4 +173,72 @@ fn the_link_mac_binds_the_grant_and_both_nodes() {
     assert_ne!(good, handshake_mac(&secret, "lg_1", &c, &b), "another lender node");
     assert_ne!(good, handshake_mac(&[8u8; 32], "lg_1", &a, &b), "another secret");
     assert_eq!(good, handshake_mac(&secret, "lg_1", &a, &b));
+}
+
+fn grant(profile_name: &str) -> Body {
+    Body::Grant {
+        request_id: "lr_1".into(),
+        grant_id: "lg_1".into(),
+        agent_id: "claude".into(),
+        mode: "proxy".into(),
+        duration_ms: 3_600_000,
+        not_after_ms: now() + 3_600_000,
+        limits: Default::default(),
+        node: super::wire::NodeHint { id: "11".repeat(32), relay: String::new(), lan: vec![] },
+        link_secret: crate::secure_core::crypto::b64(&[5u8; 32]),
+        device_name: "Maya's laptop".into(),
+        profile_name: profile_name.into(),
+    }
+}
+
+#[test]
+fn a_grant_without_a_profile_name_still_opens_and_a_name_round_trips() {
+    // An older lender sends no `profile_name`: the item still reads, with an empty name.
+    let mut json = serde_json::to_value(grant("Work account")).unwrap();
+    assert_eq!(json["profile_name"], "Work account");
+    json.as_object_mut().unwrap().remove("profile_name");
+    match serde_json::from_value::<Body>(json).unwrap() {
+        Body::Grant { profile_name, grant_id, .. } => assert_eq!((profile_name.as_str(), grant_id.as_str()), ("", "lg_1")),
+        other => panic!("{other:?}"),
+    }
+    // Sealed to Leo and opened by him: the name travels as words only.
+    let t = three();
+    let sent = grant("Work account");
+    let cin = send(&t.maya, &t.leo, &t.leo, sent.clone(), now(), &mut SeqTracker::default());
+    let item = wire::open(&t.leo, &t.leo.keys.device_kem().unwrap(), &cin, now()).unwrap();
+    assert_eq!(item.body, sent);
+}
+
+#[test]
+fn offers_ask_and_offers_seal_and_open_and_a_request_reads_with_or_without_a_profile() {
+    use super::wire::Offer;
+    let t = three();
+    let ask = Body::OffersAsk { nonce: "n1".into() };
+    let cin = send(&t.leo, &t.maya, &t.maya, ask.clone(), now(), &mut SeqTracker::default());
+    let item = wire::open(&t.maya, &t.maya.keys.device_kem().unwrap(), &cin, now()).unwrap();
+    assert_eq!(item.body, ask);
+    // The answer carries words and numbers only.
+    let offers = Body::Offers {
+        nonce: "n1".into(),
+        offers: vec![Offer { profile_id: "lp_1".into(), name: "Work account".into(), agent_id: "claude".into(), max_secs: 28_800, default_secs: 28_800, asks_first: true }],
+    };
+    let cin = send(&t.maya, &t.leo, &t.leo, offers.clone(), now(), &mut SeqTracker::default());
+    assert_eq!(wire::open(&t.leo, &t.leo.keys.device_kem().unwrap(), &cin, now()).unwrap().body, offers);
+    let json = serde_json::to_string(&offers).unwrap();
+    for word in ["token", "secret", "email", "path", "home"] {
+        assert!(!json.contains(word), "{word} must not be in an offer: {json}");
+    }
+    // A request with and without `profile_id`: an older borrower sends none and still reads.
+    let mut named = serde_json::to_value(request()).unwrap();
+    assert!(named["profile_id"].is_null());
+    named.as_object_mut().unwrap().remove("profile_id");
+    match serde_json::from_value::<Body>(named.clone()).unwrap() {
+        Body::Request { profile_id, .. } => assert_eq!(profile_id, None),
+        other => panic!("{other:?}"),
+    }
+    named["profile_id"] = serde_json::json!("lp_9");
+    match serde_json::from_value::<Body>(named).unwrap() {
+        Body::Request { profile_id, .. } => assert_eq!(profile_id.as_deref(), Some("lp_9")),
+        other => panic!("{other:?}"),
+    }
 }

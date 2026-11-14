@@ -5,7 +5,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 
 use parking_lot::Mutex;
 use pm_relay_protocol::b64;
@@ -103,12 +103,8 @@ fn user(text: &str) -> ChatItem {
 
 /// A hang detector, not a time limit: the room ticks and talks to a relay on its own threads, and a machine running
 /// the whole suite stretches every one of those steps.
-fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(90);
-    while !done() {
-        assert!(Instant::now() < deadline, "timed out waiting for {what}");
-        std::thread::sleep(Duration::from_millis(10));
-    }
+fn wait_until(what: &str, done: impl FnMut() -> bool) {
+    crate::test_support::wait::wait_for(what, 90, done);
 }
 
 /// The three secret parts of a link.

@@ -6,9 +6,12 @@
 
 use super::AppState;
 use crate::app_windows;
+use crate::attach::{self, ChatAttachment};
 use crate::pane_outbox::{self, OutboxMessage};
 use crate::point::box_window;
 use crate::point::message;
+use crate::point::recheck::Pending;
+use crate::point::recheck_live;
 use crate::point::session::{PointState, SESSION};
 use crate::point::shot;
 use crate::point::target::TargetFacts;
@@ -24,6 +27,8 @@ use tauri::{AppHandle, Emitter, State};
 /// The pane is gone from the registry (closed between the list and the send).
 const NO_PANE: &str = "This pane is not open any more.";
 /// A screenshot that cannot be copied into the agent's folder. The message still goes, without it.
+/// A screenshot that cannot be attached to a chat message. The message still goes, without it.
+const ATTACH_FAILED: &str = "The screenshot could not be attached.";
 const COPY_FAILED: &str = "The screenshot could not be copied into the agent's folder.";
 /// A pane the "To:" list greys out, without a sentence of its own.
 const NOT_A_TARGET: &str = "This pane cannot take a message now.";
@@ -82,18 +87,35 @@ pub async fn point_send(
     }
     let picks = live_picks();
     let preview_id = picks.last().map(|p| p.preview_id.clone()).unwrap_or_default();
-    let text = compose_text(picks, &request, Path::new(&target.cwd))?;
+    let recheck_pending = target.chat.then(|| recheck_of(&picks, &target)).flatten();
+    let out = outgoing(picks, &request, &target)?;
     let note = sent_note(&target);
     let host = LiveOutbox { app: app.clone(), registry: state.registry.clone() };
     let watched = target_pane_id.clone();
-    let sent = tauri::async_runtime::spawn_blocking(move || send_with(&host, &target_pane_id, &text))
+    let sent = tauri::async_runtime::spawn_blocking(move || send_with(&host, &target_pane_id, &out.text, &out.attachments))
         .await
         .map_err(|e| format!("INTERNAL: {e}"))??;
-    watch_for_failure(&app, state.registry.clone(), watched, sent.id.clone(), preview_id.clone(), &target);
+    watch_for_failure(&app, state.registry.clone(), watched.clone(), sent.id.clone(), preview_id.clone(), &target);
+    // A chat agent's turn ends by itself: when it does, the preview is reloaded and the strip is offered.
+    if let Some(pending) = recheck_pending {
+        recheck_live::start(&app, state.registry.clone(), pending, watched, sent.id.clone());
+    }
     SESSION.lock().discard_keep_files();
     box_window::hide(&app);
     window::toast(&app, &preview_id, &note);
     Ok(sent)
+}
+
+/// Runs the "Check it again" strip once more: reload the preview and shoot the element again.
+#[tauri::command(async)]
+pub fn point_recheck_run(app: AppHandle) {
+    recheck_live::run(&app);
+}
+
+/// Closes the before and after strip.
+#[tauri::command]
+pub fn point_recheck_dismiss(app: AppHandle) {
+    recheck_live::dismiss(&app);
 }
 
 /// "Edit in Chat": keeps the composed text as that pane's draft, ends the session, and opens the pane's
@@ -151,7 +173,7 @@ pub fn point_open_blocked_link(_app: AppHandle) -> Result<(), String> {
 
 /// The one way a message reaches a pane: the pane outbox.
 trait SendHost: Send + Sync {
-    fn send(&self, pane_id: &str, text: &str) -> Result<OutboxMessage, String>;
+    fn send(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String>;
     /// The pane's messages as the outbox lists them now (a failure shows there after the send was queued).
     fn list(&self, pane_id: &str) -> Vec<OutboxMessage>;
 }
@@ -163,8 +185,8 @@ struct LiveOutbox {
 }
 
 impl SendHost for LiveOutbox {
-    fn send(&self, pane_id: &str, text: &str) -> Result<OutboxMessage, String> {
-        pane_outbox::global(&self.registry, &self.app).send(pane_id, text)
+    fn send(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
+        pane_outbox::global(&self.registry, &self.app).send_with(pane_id, text, attachments)
     }
 
     fn list(&self, pane_id: &str) -> Vec<OutboxMessage> {
@@ -173,8 +195,45 @@ impl SendHost for LiveOutbox {
 }
 
 /// Hands the text to the pane outbox, once. Its error is returned unchanged (the person reads it under the box).
-fn send_with(host: &dyn SendHost, pane_id: &str, text: &str) -> Result<OutboxMessage, String> {
-    host.send(pane_id, text)
+fn send_with(host: &dyn SendHost, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
+    host.send(pane_id, text, attachments)
+}
+
+/// What one send carries: the text and, for a chat pane, the screenshots as attachments.
+struct Outgoing {
+    text: String,
+    attachments: Vec<ChatAttachment>,
+}
+
+/// The message for this target. A terminal agent gets one text with the screenshot path in it. A chat agent gets
+/// the text and each screenshot as an image attachment (the chat attachment path, so the picture shows in the
+/// message and reaches an agent that takes images). A screenshot that cannot be attached is left out with a reason.
+fn outgoing(picks: Vec<Pick>, request: &str, target: &TargetFacts) -> Result<Outgoing, String> {
+    let cwd = Path::new(&target.cwd);
+    if !target.chat {
+        return Ok(Outgoing { text: compose_text(picks, request, cwd)?, attachments: Vec::new() });
+    }
+    let mut attachments = Vec::new();
+    let picks: Vec<Pick> = picks
+        .into_iter()
+        .map(|mut pick| {
+            if let Some(shot) = pick.shot.clone() {
+                match attach::prepare_one(&shot.abs_path, &target.cwd) {
+                    Ok(one) => attachments.push(one),
+                    Err(_) => {
+                        pick.shot = None;
+                        pick.no_shot_reason = Some(ATTACH_FAILED);
+                    }
+                }
+            }
+            pick
+        })
+        .collect();
+    let refs: Vec<&Pick> = picks.iter().collect();
+    // The chat shows the attachment under the sentence, so the text names it ("attached") instead of a path.
+    let text = message::compose_with(&refs, request, cwd, message::Shots::Attached)?;
+    // The names in the text are the attachments' own names, in the same order.
+    Ok(Outgoing { text, attachments })
 }
 
 /// Why a message to this pane is refused before anything is queued (the "To:" list greys it out for the same reason).
@@ -223,6 +282,23 @@ fn watch_for_failure(app: &AppHandle, registry: Arc<Mutex<PaneRegistry>>, pane_i
 fn target_of(state: &AppState, pane_id: &str) -> Result<TargetFacts, String> {
     let infos = state.registry.lock().list();
     window::target_facts(&state.registry, &infos).into_iter().find(|t| t.pane_id == pane_id).ok_or_else(|| NO_PANE.to_string())
+}
+
+/// What "Check it again" needs for the newest pick: its preview, selector and the picture from before.
+/// None when there is no pick.
+fn recheck_of(picks: &[Pick], target: &TargetFacts) -> Option<Pending> {
+    let pick = picks.last()?;
+    let before = pick.shot.as_ref().map(|s| s.abs_path.clone());
+    // The shots folder is `<project>/.potato-workspace/shots/<file>`: the project is three levels up.
+    let project = before.as_ref().and_then(|p| p.ancestors().nth(3)).map(Path::to_path_buf).unwrap_or_else(|| Path::new(&target.cwd).to_path_buf());
+    Some(Pending {
+        preview_id: pick.preview_id.clone(),
+        agent: format!("{} \u{b7} {}", target.agent_label, target.title),
+        label: pick.facts.label.clone(),
+        selector: pick.facts.selector.clone(),
+        project,
+        before,
+    })
 }
 
 /// The picks that wait for a request. An expired session has none (the box shows none either).
@@ -281,14 +357,16 @@ mod tests {
     #[derive(Default)]
     struct FakeOutbox {
         calls: std::sync::Mutex<Vec<(String, String)>>,
+        attached: std::sync::Mutex<Vec<Vec<ChatAttachment>>>,
         answer: Option<String>,
     /// What the outbox lists for the pane, one entry per later look (the last repeats).
     listed: std::sync::Mutex<Vec<Vec<OutboxMessage>>>,
     }
 
     impl SendHost for FakeOutbox {
-        fn send(&self, pane_id: &str, text: &str) -> Result<OutboxMessage, String> {
+        fn send(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
             self.calls.lock().unwrap().push((pane_id.to_string(), text.to_string()));
+            self.attached.lock().unwrap().push(attachments.to_vec());
             match &self.answer {
                 Some(refusal) => Err(refusal.clone()),
                 None => Ok(OutboxMessage {
@@ -298,6 +376,7 @@ mod tests {
                     state: crate::pane_outbox::State::Queued,
                     waiting_for: None,
                     error: None,
+                    no_answer: false,
                     attachments: Vec::new(),
                 }),
             }
@@ -339,7 +418,7 @@ mod tests {
     #[test]
     fn send_makes_one_outbox_call_with_the_target_and_text() {
         let host = FakeOutbox::default();
-        let sent = send_with(&host, "pane-7", "make it green").expect("the outbox accepts");
+        let sent = send_with(&host, "pane-7", "make it green", &[]).expect("the outbox accepts");
         assert_eq!(sent.text, "make it green");
         let calls = host.calls.lock().unwrap().clone();
         assert_eq!(calls, vec![("pane-7".to_string(), "make it green".to_string())]);
@@ -348,7 +427,7 @@ mod tests {
     #[test]
     fn a_refused_send_gives_the_outbox_sentence_back_unchanged() {
         let host = FakeOutbox { answer: Some("The agent is working. Sends when the turn ends.".into()), ..Default::default() };
-        let err = send_with(&host, "pane-7", "make it green").unwrap_err();
+        let err = send_with(&host, "pane-7", "make it green", &[]).unwrap_err();
         assert_eq!(err, "The agent is working. Sends when the turn ends.");
         assert_eq!(host.calls.lock().unwrap().len(), 1);
     }
@@ -375,6 +454,68 @@ mod tests {
         assert_eq!(out[0].no_shot_reason, Some(COPY_FAILED));
     }
 
+    /// A real PNG-named file in a temp project, standing in for the picker's saved crop.
+    fn shot_file(root: &Path) -> Shot {
+        let dir = root.join(".potato-workspace").join("shots");
+        std::fs::create_dir_all(&dir).unwrap();
+        let abs = dir.join("pick-20261115-000000-1.png");
+        std::fs::write(&abs, [0x89, b'P', b'N', b'G']).unwrap();
+        Shot { abs_path: abs, rel_path: ".potato-workspace/shots/pick-20261115-000000-1.png".into(), width: 10, height: 10 }
+    }
+
+    fn temp_project(tag: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("pm-n521-{tag}-{}", uuid::Uuid::new_v4().simple()));
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn a_message_to_a_chat_pane_carries_the_screenshot_as_an_image_attachment() {
+        let project = temp_project("chat");
+        let mut chat = target(None);
+        chat.chat = true;
+        chat.cwd = project.display().to_string();
+        let out = outgoing(vec![pick(Some(shot_file(&project)))], "make it green", &chat).expect("composes");
+        assert_eq!(out.attachments.len(), 1);
+        let one = &out.attachments[0];
+        assert_eq!(one.kind, attach::AttachKind::Image);
+        assert_eq!(one.mime.as_deref(), Some("image/png"));
+        assert!(Path::new(&one.path).is_file(), "the attachment file exists");
+        assert!(one.path.replace("\\", "/").contains("/.potato-workspace/attachments/"), "{}", one.path);
+        // The text says the picture is attached and carries no path to open.
+        assert!(out.text.contains("- Screenshot: attached to this message (pick-20261115-000000-1.png)"), "{}", out.text);
+        assert!(!out.text.contains("open this image file"), "{}", out.text);
+        // And it goes through the outbox in one call, with the attachment.
+        let host = FakeOutbox::default();
+        send_with(&host, "pane-7", &out.text, &out.attachments).unwrap();
+        assert_eq!(host.attached.lock().unwrap()[0].len(), 1);
+        let _ = std::fs::remove_dir_all(&project);
+    }
+
+    #[test]
+    fn a_message_to_a_terminal_pane_keeps_the_path_and_has_no_attachment() {
+        let project = temp_project("term");
+        let mut term = target(None);
+        term.cwd = project.display().to_string();
+        let out = outgoing(vec![pick(Some(shot_file(&project)))], "make it green", &term).expect("composes");
+        assert!(out.attachments.is_empty());
+        assert!(out.text.contains("open this image file"), "{}", out.text);
+        let _ = std::fs::remove_dir_all(&project);
+    }
+
+    #[test]
+    fn a_screenshot_that_cannot_be_attached_leaves_the_message_going_without_it() {
+        let project = temp_project("gone");
+        let mut chat = target(None);
+        chat.chat = true;
+        chat.cwd = project.display().to_string();
+        let missing = Shot { abs_path: project.join("nope.png"), rel_path: ".potato-workspace/shots/nope.png".into(), width: 1, height: 1 };
+        let out = outgoing(vec![pick(Some(missing))], "make it green", &chat).expect("still composes");
+        assert!(out.attachments.is_empty());
+        assert!(out.text.contains("Screenshot: none (the screenshot could not be attached)"), "{}", out.text);
+        let _ = std::fs::remove_dir_all(&project);
+    }
+
     #[test]
     fn the_sent_note_names_the_agent_and_the_pane() {
         let target = TargetFacts {
@@ -384,13 +525,14 @@ mod tests {
             cwd: "C:/project".into(),
             kind: crate::pane_outbox::PaneKind::Agent,
             run_controls: false,
+            chat: false,
             not_ready: None,
             last_output_at: None,
         };
         assert_eq!(sent_note(&target), "Sent to Codex \u{b7} fix-pricing. It waits until the agent is free.");
     }
     fn message(state: crate::pane_outbox::State, error: Option<&str>) -> OutboxMessage {
-        OutboxMessage { id: "m1".into(), text: "x".into(), created_at: 0, state, waiting_for: None, error: error.map(str::to_string), attachments: Vec::new() }
+        OutboxMessage { id: "m1".into(), text: "x".into(), created_at: 0, state, waiting_for: None, error: error.map(str::to_string), no_answer: false, attachments: Vec::new() }
     }
 
     fn target(not_ready: Option<&str>) -> TargetFacts {
@@ -401,6 +543,7 @@ mod tests {
             cwd: "C:/project".into(),
             kind: crate::pane_outbox::PaneKind::Agent,
             run_controls: false,
+            chat: false,
             not_ready: not_ready.map(str::to_string),
             last_output_at: None,
         }

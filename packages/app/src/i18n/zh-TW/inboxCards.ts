@@ -31,6 +31,8 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
   // PaneApprovalCard and ApprovalPrompt
   'inboxCards.approval.waiting': '正在等你回答',
   'inboxCards.approval.ariaLabel': '核准要求',
+  'inboxCards.failed': '這個回答沒有送到代理。請再試一次，或開啟終端機。',
+  'inboxCards.openTerminal': '開啟終端機',
   'inboxCards.stalled': '剛才的回答沒有送出去，Claude 還在等。請再按一次你的回答。',
 
   // ConsentCard

@@ -1,6 +1,7 @@
 //! The tool catalog, assembled from per-family modules, plus its version hash.
 
 mod agents;
+mod artifacts;
 mod companion;
 mod context;
 mod opencode_reply;
@@ -71,6 +72,7 @@ pub fn tools() -> Vec<ToolDefinition> {
     all.extend(questions::tools());
     all.extend(team::tools());
     all.extend(companion::tools());
+    all.extend(artifacts::tools());
     all.extend(multi::tools());
     multi::add_review_by(&mut all);
     all
@@ -89,4 +91,18 @@ pub fn companion_recall_for_pane(pane_hint: Option<&str>, mode: super::types::Mc
         return None;
     }
     companion::tools().into_iter().next()
+}
+
+/// `show_artifact` for the tool list of an agent that Potato Workspace started in one of its own panes (`pane_hint` is
+/// set), when it is not listed already and the connection's mode can call it. An agent outside every pane has no chat
+/// to show a page in, so it never sees the tool listed (it still works by name with `project_path`).
+pub fn show_artifact_for_pane(pane_hint: Option<&str>, mode: super::types::McpMode, already: &[ToolDefinition]) -> Option<ToolDefinition> {
+    let in_a_pane = pane_hint.is_some_and(|hint| !hint.trim().is_empty());
+    if !in_a_pane || already.iter().any(|tool| tool.name == artifacts::SHOW) {
+        return None;
+    }
+    if !super::mode::tool_visible_in_mode(artifacts::SHOW, mode) {
+        return None;
+    }
+    artifacts::tools().into_iter().next()
 }

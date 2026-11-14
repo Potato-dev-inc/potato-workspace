@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { t, useT } from '../../i18n';
 import { teamApi, type MemberView, type TeamApi } from '../../lib/team';
-import { agentLabel, comingSoonAgents, comingSoonText, DEFAULT_SECS, durationProblem, durationWords, errText, lendApi, MAX_REASON, offerable, supportTag, type LendApi, type LendRequest, type LendState } from '../../lib/lend';
+import { agentLabel, cleanName, comingSoonAgents, comingSoonText, DEFAULT_SECS, durationProblem, durationWords, errText, lendApi, MAX_REASON, offerable, supportTag, type LendApi, type LendRequest, type LendState, type Offer, type OffersResult } from '../../lib/lend';
+import { requestNewAgent } from '../../lib/newAgentRequest';
 import { DurationField } from './Duration';
 import { LendSheet } from './LendSheet';
 import { useLend, type LendHandle } from './useLend';
@@ -38,7 +39,11 @@ export function sourcesOf(members: readonly MemberView[]): { mine: Source[]; oth
 /** Waiting / Ready / Said no. */
 export const askStatus = (r: Pick<LendRequest, 'state'>): string => (r.state === 'open' ? t('lend.ask.waiting') : r.state === 'accepted' ? t('lend.ask.ready') : t('lend.ask.saidNo'));
 
-const askWords = (r: LendRequest, state: LendState | null): string => `${r.member_name || t('lend.teammate')} · ${agentLabel(state, r.agent_id)} · ${durationWords(r.secs)}`;
+const askWords = (r: LendRequest, state: LendState | null): string => {
+  const profile = cleanName(r.profile_name);
+  const parts = [r.member_name || t('lend.teammate'), ...(profile ? [profile] : []), agentLabel(state, r.agent_id), durationWords(r.secs)];
+  return parts.join(' · ');
+};
 
 /** The newest asks of mine that are still worth seeing: waiting, or answered in the last day. */
 export const recentAsks = (state: LendState | null, now: number): LendRequest[] =>
@@ -98,7 +103,10 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sentId, setSentId] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ id: string; offer: Offer | null } | null>(null);
+  // What the picked person's PC offers: null while asking, then what came back.
+  const [offered, setOffered] = useState<OffersResult | null>(null);
+  const [offerKey, setOfferKey] = useState('');
   const state = lend.state!;
 
   useEffect(() => {
@@ -116,18 +124,50 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
   const all = [...mine, ...others];
   const agents = offerable(state.drivers);
   const picked = all.find((s) => s.value === (from || all[0]?.value));
-  const agentId = agent || agents[0]?.agent_id || '';
+  const pickedValue = picked?.value ?? '';
+
+  // When the person to ask is picked, ask their PC what it can lend (the answer comes in a few seconds, or not at all).
+  useEffect(() => {
+    if (!picked) return;
+    let alive = true;
+    setOffered(null);
+    setOfferKey('');
+    api
+      .offers(picked.memberId, picked.deviceId)
+      .then((r) => {
+        if (!alive) return;
+        setOffered(r);
+        const first = r.offers[0];
+        if (first) {
+          setOfferKey(`${first.device_id}|${first.profile_id}`);
+          setSecs(first.default_secs);
+        }
+      })
+      .catch(() => alive && setOffered({ answered: false, offers: [] }));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, pickedValue]);
+
+  const offer = offered?.offers.find((o) => `${o.device_id}|${o.profile_id}` === offerKey) ?? null;
+  const fallback = offered !== null && !offered.answered;
+  const nothing = offered !== null && offered.answered && offered.offers.length === 0;
+  const agentId = offer?.agent_id ?? (agent || agents[0]?.agent_id || '');
   const forOther = picked ? !picked.mine : true;
-  const problem = durationProblem(secs, forOther);
-  const canAsk = !!picked && !!agentId && !problem && !busy;
+  const problem = durationProblem(secs, forOther) ?? (offer && secs > offer.max_secs ? t('lend.dur.mostHere', { time: durationWords(offer.max_secs) }) : null);
+  const canAsk = !!picked && !problem && !busy && (offer !== null || (fallback && !!agentId));
+  const askedName = picked?.label ?? '';
 
   const ask = async () => {
     if (!picked) return;
     setBusy(true);
     setError(null);
     try {
-      const r = await api.request(picked.memberId, picked.deviceId, agentId, secs, reason.trim());
-      setSentId(r.id);
+      const r = offer
+        ? await api.request(picked.memberId, offer.device_id, offer.agent_id, secs, reason.trim(), offer.profile_id, offer.name)
+        : await api.request(picked.memberId, picked.deviceId, agentId, secs, reason.trim());
+      setSent({ id: r.id, offer });
       lend.refresh();
     } catch (err) {
       setError(errText(err));
@@ -136,29 +176,37 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
     }
   };
 
-  if (sentId) {
+  if (sent) {
     // The status page: it follows the request as the other side answers.
-    const live = state.requests_out.find((r) => r.id === sentId);
+    const live = state.requests_out.find((r) => r.id === sent.id);
     const status = live?.state ?? 'open';
     return (
       <LendSheet title={t('lend.request.sent')} labelledBy="lend-ask-t" onClose={onClose}>
         <p>
-          {picked?.label} · {agentLabel(state, agentId)} · {durationWords(secs)}
+          {sent.offer
+            ? t('lend.request.asked', { name: askedName, profile: cleanName(sent.offer.name), agent: agentLabel(state, sent.offer.agent_id), time: durationWords(secs) })
+            : `${picked?.label} · ${agentLabel(state, agentId)} · ${durationWords(secs)}`}
         </p>
         <p role="status" aria-live="polite">
           <span className="lend-status" data-state={status}>
             {askStatus({ state: status })}
           </span>
         </p>
-        <p className="lend-note">
-          {status === 'accepted'
-            ? t('lend.request.readyNote')
-            : status === 'declined'
-              ? t('lend.request.declinedNote')
-              : t('lend.request.openNote')}
-        </p>
+        <p className="lend-note">{status === 'accepted' ? t('lend.request.readyNote') : status === 'declined' ? t('lend.request.declinedNote') : t('lend.request.openNote')}</p>
         <div className="lend-actions">
-          <button type="button" className="lend-btn is-primary" onClick={onClose}>
+          {status === 'accepted' && (
+            <button
+              type="button"
+              className="lend-btn is-primary"
+              onClick={() => {
+                onClose();
+                requestNewAgent();
+              }}
+            >
+              {t('lend.startChat')}
+            </button>
+          )}
+          <button type="button" className={status === 'accepted' ? 'lend-btn' : 'lend-btn is-primary'} onClick={onClose}>
             {t('lend.request.done')}
           </button>
         </div>
@@ -195,28 +243,68 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
           </select>
         </label>
       )}
-      <label className="lend-field">
-        <span>{t('lend.request.agent')}</span>
-        <select aria-label={t('lend.request.agent')} value={agentId} onChange={(e) => setAgent(e.target.value)}>
-          {agents.map((d) => (
-            <option key={d.agent_id} value={d.agent_id}>
-              {d.label}
-              {d.support === 'lab' ? ` · ${supportTag('lab')}` : ''}
-            </option>
-          ))}
-          {comingSoonAgents(state.drivers).map((c) => (
-            <option key={c.agent_id} value={`soon:${c.agent_id}`} disabled>
-              {comingSoonText(c.label)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {state.drivers.find((d) => d.agent_id === agentId)?.account_note && (
-        <p className="lend-note" role="note">
-          {state.drivers.find((d) => d.agent_id === agentId)?.account_note}
-        </p>
+      {picked && (
+        <fieldset className="lend-cards" aria-label={t('lend.request.what')} data-testid="lend-offers">
+          <legend className="lend-legend">{t('lend.request.what')}</legend>
+          {offered === null && (
+            <p className="lend-muted" role="status">
+              {t('lend.request.asking', { name: askedName })}
+            </p>
+          )}
+          {offered?.offers.map((o) => {
+            const key = `${o.device_id}|${o.profile_id}`;
+            return (
+              <label key={key} className="lend-card" data-on={offerKey === key ? 'true' : undefined}>
+                <input
+                  type="radio"
+                  name="lend-offer"
+                  checked={offerKey === key}
+                  onChange={() => {
+                    setOfferKey(key);
+                    setSecs(o.default_secs);
+                  }}
+                />
+                <span className="lend-card-text">
+                  <strong>{cleanName(o.name)}</strong>
+                  <small>
+                    {t('lend.offer.sub', { agent: agentLabel(state, o.agent_id), time: durationWords(o.max_secs), how: o.asks_first ? t('lend.asksFirst') : t('lend.offer.atOnce') })}
+                  </small>
+                </span>
+              </label>
+            );
+          })}
+          {nothing && <p className="lend-note">{t('lend.request.nothing', { name: askedName })}</p>}
+          {fallback && (
+            <>
+              <p className="lend-note" role="note" data-testid="lend-no-answer">
+                {t('lend.request.noAnswer', { name: askedName })}
+              </p>
+              <label className="lend-field">
+                <span>{t('lend.request.agent')}</span>
+                <select aria-label={t('lend.request.agent')} value={agentId} onChange={(e) => setAgent(e.target.value)}>
+                  {agents.map((d) => (
+                    <option key={d.agent_id} value={d.agent_id}>
+                      {d.label}
+                    </option>
+                  ))}
+                  {comingSoonAgents(state.drivers).map((c) => (
+                    <option key={c.agent_id} value={`soon:${c.agent_id}`} disabled>
+                      {comingSoonText(c.label)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {state.drivers.find((d) => d.agent_id === agentId)?.support === 'lab' && <span className="lend-tag">{supportTag('lab')}</span>}
+              {state.drivers.find((d) => d.agent_id === agentId)?.account_note && (
+                <p className="lend-note" role="note">
+                  {state.drivers.find((d) => d.agent_id === agentId)?.account_note}
+                </p>
+              )}
+            </>
+          )}
+        </fieldset>
       )}
-      <DurationField secs={secs} onChange={setSecs} forOther={forOther} />
+      <DurationField secs={secs} onChange={setSecs} forOther={forOther} maxSecs={offer?.max_secs} />
       <label className="lend-field">
         <span>{t('lend.request.why')}</span>
         <textarea aria-label={t('lend.request.whyAria')} value={reason} maxLength={MAX_REASON} rows={2} onChange={(e) => setReason(e.target.value)} />

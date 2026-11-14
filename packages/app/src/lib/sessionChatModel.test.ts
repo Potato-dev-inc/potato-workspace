@@ -214,3 +214,33 @@ describe('unknown kinds', () => {
     expect(mergeItems([], [odd], false)).toEqual([odd]);
   });
 });
+
+describe('groupTurns with the last result', () => {
+  const base: ChatItem[] = [
+    { kind: 'user', id: 'u1', at: null, text: 'one' },
+    { kind: 'toolCall', id: 'c1', at: null, callId: 'k1', name: 'Read', summary: 'a.ts' },
+    { kind: 'toolResult', id: 'r1', at: null, callId: 'k1', ok: true, output: 'x' },
+    { kind: 'assistant', id: 'a1', at: null, text: 'done', model: null, finalAnswer: true },
+    { kind: 'turnEnd', id: 'e1', at: null, outcome: 'completed', durationMs: 1 },
+    { kind: 'user', id: 'u2', at: null, text: 'two' },
+    { kind: 'assistant', id: 'a2', at: null, text: 'wor', model: null, finalAnswer: false },
+  ];
+
+  it('returns the same turn object when nothing in it changed, and a new one when it did', () => {
+    const first = groupTurns(base);
+    const grown: ChatItem[] = [{ kind: 'assistant', id: 'a2', at: null, text: 'working', model: null, finalAnswer: false }];
+    const second = groupTurns(mergeItems(base, grown, false), first);
+    expect(second.turns[0]).toBe(first.turns[0]);
+    expect(second.turns[0]!.steps[0]).toBe(first.turns[0]!.steps[0]);
+    expect(second.turns[1]).not.toBe(first.turns[1]);
+    expect((second.turns[1]!.steps[0] as { item: { text: string } }).item.text).toBe('working');
+  });
+
+  it('gives a new turn when a tool result arrives late, and gives the same answer as without the last result', () => {
+    const early = base.filter((item) => item.id !== 'r1');
+    const first = groupTurns(early);
+    const second = groupTurns(mergeItems(early, [base[2]!], false), first);
+    expect(second.turns[0]).not.toBe(first.turns[0]);
+    expect(second.turns).toEqual(groupTurns(base).turns);
+  });
+});

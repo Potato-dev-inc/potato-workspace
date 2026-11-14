@@ -33,6 +33,19 @@ describe('runStart', () => {
     expect(d.newAgent).not.toHaveBeenCalled();
   });
 
+  it('a chat with "Work on a copy" on asks for a separate copy; without it the call is as before', async () => {
+    const d = deps();
+    await runStart(req({ runAs: 'chat', isolated: true }), d);
+    expect(d.startChat).toHaveBeenCalledWith('alpha', '/work/p', undefined, true);
+    expect(d.newAgent).not.toHaveBeenCalled();
+    const e = deps();
+    await runStart(req({ runAs: 'chat', accountId: 'acc', isolated: true }), e);
+    expect(e.startChat).toHaveBeenCalledWith('alpha', '/work/p', 'acc', true);
+    const f = deps();
+    await runStart(req({ runAs: 'chat', isolated: false }), f);
+    expect(f.startChat).toHaveBeenCalledWith('alpha', '/work/p');
+  });
+
   it('a chat without a folder starts nothing and says so', async () => {
     const d = deps();
     expect(await runStart(req({ runAs: 'chat', folder: undefined }), d)).toBeNull();

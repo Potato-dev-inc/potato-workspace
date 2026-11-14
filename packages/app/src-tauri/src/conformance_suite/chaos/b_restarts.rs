@@ -45,7 +45,8 @@ fn chaos_quit_with_three_chats_then_reopen() {
     // Open one: its agent starts and answers.
     rig.say("stream 2");
     assert_eq!(rig.last_answer().as_deref(), Some("w0 w1 "));
-    assert_eq!(rig.alive_pids().len(), 1, "only the opened chat runs an agent");
+    let alive = rig.alive_pids();
+    assert_eq!(alive.len(), 1, "only the opened chat runs an agent; running: {alive:?}");
 }
 
 // B03 "agent and grandchild gone within 5 s (nothing left running)"

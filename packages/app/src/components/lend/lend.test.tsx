@@ -4,10 +4,11 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createFakeLendApi, GRANT_IN, GRANT_IN_PANE, GRANT_IN_PROBLEM, GRANT_OUT, LEND_MEMBERS, lendState, REQUEST_MAYA, REQUEST_OWN } from '../../dev/lend-fixtures';
+import { createFakeLendApi, TEAM_PROFILE, GRANT_IN, GRANT_IN_PANE, GRANT_IN_PROBLEM, GRANT_OUT, LEND_MEMBERS, lendState, REQUEST_MAYA, REQUEST_OWN } from '../../dev/lend-fixtures';
 import { teamConfig } from '../../dev/team-fixtures';
 import type { TeamApi } from '../../lib/team';
 import { buttonByText, click, hasText, pickOption, settle, type as typeInto } from '../settings/test-utils';
+import { registerNewAgentOpener } from '../../lib/newAgentRequest';
 import { BorrowedChip, MemberLends, useLendToasts } from './Borrowed';
 import { IncomingRequestCard, profilesFor } from './IncomingRequestCard';
 import { RequestUsage, sourcesOf } from './RequestUsage';
@@ -48,30 +49,70 @@ describe('Request usage', () => {
     return api;
   }
 
-  it('asks my other PC for an agent, with a length and a reason, then shows Waiting, Ready and Said no', async () => {
+  it('asks my other PC for one of its profiles, with a length and a reason, then shows Waiting, Ready (Start a chat) and Said no', async () => {
     const api = await open();
     const sel = dialog().querySelectorAll('optgroup');
     expect([...sel].map((g) => g.label)).toEqual(['My PCs', 'Teammates']);
-    // Claude, Codex and Gemini are lab drivers (tagged); none is "coming soon".
-    const agents = [...field('Agent').options].map((o) => [o.textContent, o.disabled]);
-    expect(agents).toEqual([['Claude · Lab', false], ['Codex · Lab', false], ['Gemini CLI · Lab', false]]);
+    // What the other PC offers: profiles by name. No agent list, and "Lab" is nowhere in a name.
+    expect(field('Agent')).toBeNull();
+    expect([...dialog().querySelectorAll('[data-testid="lend-offers"] .lend-card strong')].map((e) => e.textContent)).toEqual(['Work account', 'Personal']);
+    expect(dialog().textContent).not.toContain('Lab');
     await typeInto(field('Why'), 'Mine is out of usage.');
     await click(buttonByText(dialog(), 'Ask'));
     await settle(4);
-    expect(api.calls).toContain('request("m-leo","d-lap","claude",28800,"Mine is out of usage.")');
+    expect(api.calls).toContain('request("m-leo","d-lap","claude",28800,"Mine is out of usage.","lp-work")');
+    expect(dialog().textContent).toContain('Asked Leo laptop for Work account · Claude · 8 hours');
     expect(dialog().textContent).toContain('Waiting');
     const id = api.backend.state.requests_out[0].id;
     await act(async () => api.backend.settleOut(id, true));
     await settle(4);
     expect(dialog().textContent).toContain('Ready');
+    // "Start a chat" closes the sheet and asks the cockpit for the New agent page.
+    const opened = vi.fn();
+    registerNewAgentOpener(opened);
+    await click(buttonByText(dialog(), 'Start a chat'));
+    registerNewAgentOpener(null);
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('.lend-sheet')).toBeNull();
+  });
+
+  it('Said no: the sheet says so and offers no chat', async () => {
+    const api = await open();
+    await click(buttonByText(dialog(), 'Ask'));
+    await settle(4);
+    const id = api.backend.state.requests_out[0].id;
     await act(async () => api.backend.settleOut(id, false));
     await settle(4);
     expect(dialog().textContent).toContain('Said no');
+    expect(buttonByText(dialog(), 'Start a chat')).toBeUndefined();
+  });
+
+  it('asks the lender what it can lend when the person is picked, and shows that while it waits', async () => {
+    const api = createFakeLendApi();
+    let answer: (r: { answered: boolean; offers: [] }) => void = () => undefined;
+    api.offers = () => new Promise((resolve) => (answer = resolve as typeof answer));
+    await open(api);
+    expect(dialog().textContent).toContain("Asking Leo laptop's PC what it can lend…");
+    expect(buttonByText(dialog(), 'Ask')!.disabled).toBe(true);
+    await act(async () => answer({ answered: true, offers: [] }));
+    expect(dialog().textContent).toContain('Leo laptop has nothing to lend you yet. Ask them to make a lend profile.');
+  });
+
+  it('no answer from an older build: it falls back to the agent list, says so, and the tag is beside the name', async () => {
+    const api = await open(createFakeLendApi({ offers: { 'm-leo': null } }));
+    expect(dialog().querySelector('[data-testid="lend-no-answer"]')!.textContent).toBe('Leo laptop did not answer. Pick an agent; Leo laptop chooses the account.');
+    const agents = [...field('Agent').options].map((o) => [o.textContent, o.disabled]);
+    expect(agents).toEqual([['Claude', false], ['Codex', false], ['Gemini CLI', false]]);
+    expect(dialog().querySelector('.lend-tag')!.textContent).toBe('Early test');
+    await click(buttonByText(dialog(), 'Ask'));
+    await settle(4);
+    expect(api.calls).toContain('request("m-leo","d-lap","claude",28800,"")');
   });
 
   it('blocks a length over the cap, and 24 hours is the most for another person', async () => {
-    const api = await open();
+    const api = await open(createFakeLendApi({ offers: { 'm-leo': null, 'm-maya': null } }));
     await pickOption(field('Ask'), 'm-maya|');
+    await settle(3);
     await click(buttonByText(dialog(), 'Custom'));
     await typeInto(field('Hours'), '25');
     expect(dialog().textContent).toContain('24 hours at most');
@@ -80,11 +121,20 @@ describe('Request usage', () => {
     expect(buttonByText(dialog(), 'Ask')!.disabled).toBe(false);
     // My own PC may go to 7 days.
     await pickOption(field('Ask'), 'm-leo|d-lap');
+    await settle(3);
     await typeInto(field('Hours'), '168');
     expect(buttonByText(dialog(), 'Ask')!.disabled).toBe(false);
     await typeInto(field('Hours'), '169');
     expect(buttonByText(dialog(), 'Ask')!.disabled).toBe(true);
-    expect(api.calls).toEqual([]);
+    expect(api.calls.filter((c) => c.startsWith('request('))).toEqual([]);
+  });
+
+  it('a profile is capped by what the lender offers: 8 hours here', async () => {
+    await open();
+    await click(buttonByText(dialog(), 'Custom'));
+    await typeInto(field('Hours'), '9');
+    expect(dialog().textContent).toContain('The most here is 8 hours.');
+    expect(buttonByText(dialog(), 'Ask')!.disabled).toBe(true);
   });
 
   it('limits the reason to 280 characters', async () => {
@@ -123,6 +173,14 @@ describe('Incoming request card', () => {
     await settle(2);
     return { api, onDone };
   };
+
+  it('names the profile the borrower picked, and shows no picker when it named one', async () => {
+    const named = { ...REQUEST_MAYA, profile_id: 'prof-team', profile_name: TEAM_PROFILE.name };
+    const { api } = await mount(named, { profiles: [TEAM_PROFILE, { ...TEAM_PROFILE, id: 'prof-team-2', name: 'Other' }] });
+    expect(host.textContent).toContain("Maya's laptop wants Teammates, ask first (Claude) for 8 hours");
+    expect(host.querySelector('select[aria-label="Lend with"]')).toBeNull();
+    expect(api.calls).toEqual([]);
+  });
 
   it('reads like the plan says, with the reason quoted', async () => {
     await mount();
@@ -200,13 +258,17 @@ describe('Member rows', () => {
       </>
     );
   }
-  it('shows lends both ways with Revoke and Give back', async () => {
+  it('shows lends both ways with Take back and Give back', async () => {
     const api = createFakeLendApi({ grants: [GRANT_OUT, GRANT_IN] });
     await act(async () => root.render(<Rows api={api} />));
     await settle(4);
     expect(host.textContent).toMatch(/Lending Claude to Maya · 2h 1\dm left/);
     expect(host.textContent).toMatch(/Borrowing Claude from Sam · 4\dm left/);
-    await click(buttonByText(host, 'Revoke'));
+    // Taking back asks first (the borrower's agent stops at once), then runs.
+    await click(buttonByText(host, 'Take back'));
+    expect(host.textContent).toContain('Take back Claude from Maya? Their agent stops now.');
+    expect(api.calls.some((c) => c.startsWith('revoke('))).toBe(false);
+    await click(buttonByText(host, 'Take back'));
     await settle(3);
     expect(api.calls).toContain('revoke("grant-out-1")');
     await click(buttonByText(host, 'Give back'));
@@ -226,16 +288,17 @@ describe('Time-left chip', () => {
   }
   const el = () => host.querySelector<HTMLButtonElement>('[data-testid="lend-chip"]');
 
-  it('shows "Leo\'s Claude · 1h 59m" on the borrowed pane only', async () => {
+  it('shows "Work account · 1h 59m" on the borrowed pane only (my own other PC: the owner is me)', async () => {
     await chip(119 * 60_000 - 5000);
-    expect(el()!.textContent).toMatch(/^Leo's Claude · 1h 5\dm$/);
+    expect(el()!.textContent).toMatch(/^Work account · 1h 5\dm$/);
+    expect(el()!.title).toBe("Claude · Work account on Leo's PC (borrowed)");
     expect(el()!.dataset.urgency).toBe('calm');
     await act(async () => root.render(<BorrowedChip paneId="another-pane" api={createFakeLendApi({ grants: [GRANT_IN_PANE] })} />));
     await settle(4);
     expect(el()).toBeNull();
   });
 
-  it('turns amber at 10 minutes and red at 1', async () => {
+  it('turns orange at 10 minutes and filled orange at 1', async () => {
     await chip(9 * 60_000);
     expect(el()!.dataset.urgency).toBe('soon');
     await chip(30_000);
@@ -263,7 +326,7 @@ describe('Time-left chip', () => {
   it('opens its details, and Give back now ends the lend', async () => {
     const api = await chip(50 * 60_000);
     await click(el());
-    expect(host.querySelector('.lend-pop')!.textContent).toContain("Borrowed Claude from Leo's PC");
+    expect(host.querySelector('.lend-pop')!.textContent).toContain("Claude · Work account on Leo's PC (borrowed)");
     // The details say what was used (requests and tokens).
     expect(host.querySelector('[data-testid="lend-usage"]')!.textContent).toBe('Used so far: 3 requests · 5.3k tokens');
     expect(host.querySelector('[data-testid="lend-problem"]')).toBeNull();

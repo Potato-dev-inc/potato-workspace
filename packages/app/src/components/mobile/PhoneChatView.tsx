@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { t as translate, useT } from '../../i18n';
 import type { BridgeClient } from '../../lib/bridge-types';
 import { bridgeOutboxTransport } from '../../lib/paneOutbox-bridge';
-import { groupTurns, mergeItems, type ChatItem, type ChatSource, type SessionChatState } from '../../lib/sessionChatModel';
+import { groupTurns, mergeItems, type GroupedChat, type ChatItem, type ChatSource, type SessionChatState } from '../../lib/sessionChatModel';
 import { usePaneOutbox } from '../../hooks/usePaneOutbox';
 import { usePendingBubbles } from '../../hooks/usePendingBubbles';
 import { useOfflineQueue } from '../../hooks/useOfflineQueue';
@@ -33,7 +33,10 @@ import { uploadFile } from '../../lib/phone-upload';
 import { PhoneProgress } from './PhoneProgress';
 import { ResultCard } from './PhoneResult';
 import { PhoneConversation } from './PhoneConversation';
+import { PhoneArtifactScreen } from './PhoneArtifact';
+import type { ArtifactRef } from '../../lib/artifacts';
 import { PhoneNoControl } from './PhoneNoControl';
+import { PhoneRuleLine } from './PhoneRuleLine';
 import { PhoneQueueBar } from './PhoneQueueBar';
 import { PhoneStoppedBar } from './PhoneStoppedBar';
 import '../../styles/phone-chat.css';
@@ -91,6 +94,7 @@ export function PhoneChatView({
   ruleLimit = null,
   acp = false,
   canControl = false,
+  canAnswer = true,
 }: {
   bridge: BridgeClient | null;
   paneId: string;
@@ -114,10 +118,14 @@ export function PhoneChatView({
   acp?: boolean;
   /** This phone may change the agent's settings (`control`). */
   canControl?: boolean;
+  /** This phone may answer the agent's questions (`answer`). Without it a line above the box says so. */
+  canAnswer?: boolean;
 }) {
   const cached = useMemo(() => readChatCache(paneId), [paneId]);
   const [items, setItems] = useState<ChatItem[]>(cached?.items ?? []);
   const [status, setStatus] = useState<Status>(LOADING);
+  /** The page the person opened from a card (full screen), if any. */
+  const [openPage, setOpenPage] = useState<{ ref: ArtifactRef; title: string } | null>(null);
   /** When the list on screen was last read from the PC. */
   const [readAt, setReadAt] = useState<number | null>(cached?.at ?? null);
   const visible = usePageVisible();
@@ -193,7 +201,8 @@ export function PhoneChatView({
     return () => window.clearTimeout(timer);
   }, [paneId, items, readAt, reach]);
 
-  const grouped = useMemo(() => groupTurns(items), [items]);
+  const lastGrouped = useRef<GroupedChat | null>(null);
+  const grouped = useMemo(() => (lastGrouped.current = groupTurns(items, lastGrouped.current)), [items]);
 
   // The message box: its messages come over the bridge, and it needs to read the list (`watch`) as well as send.
   const canSend = canWatch && canType && ruleLimit === null;
@@ -201,7 +210,7 @@ export function PhoneChatView({
   const outbox = usePaneOutbox(outboxTransport, paneId, canSend, true);
   const userTexts = useMemo(() => grouped.turns.flatMap((turn) => (turn.user ? [turn.user.text] : [])), [grouped.turns]);
   const { bubbles, hide } = usePendingBubbles(outbox.messages, userTexts);
-  const pending = canSend ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHold={outbox.hold} onEdit={outbox.edit} onHide={hide} /> : undefined;
+  const pending = canSend ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHold={outbox.hold} onEdit={outbox.edit} onHide={hide} onRetry={(text) => outbox.send(text)} onStartFresh={canType && bridge?.acpCancel ? () => void bridge.acpCancel?.(paneId).catch(() => undefined) : undefined} /> : undefined;
   const t = useT();
 
   // Typed while the PC cannot be reached: kept on the phone, asked about when the PC is back.
@@ -309,6 +318,8 @@ export function PhoneChatView({
       {stoppedBar && <PhoneStoppedBar onContinue={() => outbox.send(t('phone.stopped.continueText'))} onGone={goneBar} />}
       <PhoneQueueBar waiting={queue.waiting} reachable={reach} onSend={() => queue.sendAll((text) => outbox.send(text))} onDiscard={queue.discard} onRemove={queue.remove} onEdit={queue.edit} />
       {above}
+      {/* A rule from the PC is said by the box itself (PhoneNoControl); this line is for what this phone may not do while it can type. */}
+      {canSend && <PhoneRuleLine limit={null} canControl={canControl} canAnswer={canAnswer} />}
     </>
   );
 
@@ -338,7 +349,9 @@ export function PhoneChatView({
         staleAt={!reach && readAt !== null && grouped.turns.length > 0 ? readAt : null}
         onPressMessage={setPressed}
         chatId={paneId}
+        onOpenArtifact={bridge?.paneArtifact ? (ref, title) => setOpenPage({ ref, title }) : undefined}
       />
+      {openPage && <PhoneArtifactScreen bridge={bridge} paneId={paneId} id={openPage.ref.id} version={openPage.ref.version} title={openPage.title} onClose={() => setOpenPage(null)} />}
       {pressed && <MessageActionsSheet message={pressed} handlers={actions} onClose={() => setPressed(null)} />}
     </div>
   );

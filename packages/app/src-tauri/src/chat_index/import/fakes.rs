@@ -204,12 +204,8 @@ pub(super) fn ticking_clock(tick: Duration) -> super::progress::Clock {
 
 /// A hang detector, not a time limit: on a machine running the whole suite an import of a few chats took 20 s
 /// (measured pinned to one core among 12 busy processes).
-pub(super) fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(120);
-    while !done() {
-        assert!(Instant::now() < deadline, "timed out waiting for {what}");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+pub(super) fn wait_until(what: &str, done: impl FnMut() -> bool) {
+    crate::test_support::wait::wait_for(what, 120, done);
 }
 
 /// Waits for the run to end and returns how it ended.

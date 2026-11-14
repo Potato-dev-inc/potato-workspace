@@ -42,6 +42,13 @@ add_headers = [{ name = "anthropic-beta", value = "oauth-2025-04-20" }]
 args = ["-p", "--model", "haiku", "--max-turns", "1", "Reply with OK"]
 before_secs = 240
 
+# Who is signed in, shown on the lender's own PC only ("Signed in as ..."); never sent to anyone. Claude keeps the
+# signed-in account's email in its own config file inside the lend sign-in folder (checked on a real lend folder
+# 2026-11-15).
+[auth.account.identity]
+file = ".claude.json"
+json_pointer = "/oauthAccount/emailAddress"
+
 # How a pane started on a borrowed grant is pointed at the shim. `{base_url}` is the shim's address.
 [hookup]
 set = [

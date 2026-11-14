@@ -146,6 +146,8 @@ describe('the file tab', () => {
   const api = (text = 'one\ntwo\n'): FilesApi => ({
     list: vi.fn(async () => ({ entries: [], truncated: false })),
     read: vi.fn(async (_p, path) => ({ path, name: 'a.txt', size: text.length, kind: 'binary' as const })),
+    readBytes: vi.fn(async (_p, path) => ({ path, name: 'a.txt', size: 0, kind: 'bytes' as const, base64: '' })),
+    openDefault: vi.fn(async () => undefined),
     marks: vi.fn(async () => []),
     reveal: vi.fn(async () => undefined),
     diff: vi.fn(async () => ''),

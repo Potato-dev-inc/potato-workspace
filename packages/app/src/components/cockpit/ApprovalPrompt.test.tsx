@@ -203,6 +203,25 @@ describe('ApprovalPrompt', () => {
     expect(btn("Don't trust")).toBeTruthy();
   });
 
+  it('an answer the app could not send shows a failed note and an Open terminal button, and the buttons still work', () => {
+    const trust: PanePrompt = {
+      promptId: 'p-trust',
+      kind: 'workspace_trust',
+      text: 'raw',
+      choices: [{ id: 'trust', label: 'Trust this folder' }, { id: 'deny', label: "Don't trust" }],
+      risk: { level: 'medium', headline: 'Trust this folder', reasons: ['The agent will be able to read and change files here.'] },
+      failed: true,
+    };
+    const onAnswer = vi.fn();
+    const onOpen = vi.fn();
+    act(() => root.render(<ApprovalPrompt prompt={trust} onAnswer={onAnswer} onOpen={onOpen} variant="card" />));
+    expect(host.textContent).toContain("That didn't reach the agent. Try again, or open the terminal.");
+    act(() => btn('Open terminal')!.click());
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    act(() => btn('Trust this folder')!.click());
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+  });
+
   it('a trust question whose answer did not take says so plainly and keeps both buttons for a retry', () => {
     const trust: PanePrompt = {
       promptId: 'p-trust',

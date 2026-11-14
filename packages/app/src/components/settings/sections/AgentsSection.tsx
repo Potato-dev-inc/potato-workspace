@@ -27,6 +27,7 @@ import { Popup } from '../controls';
 import type { RowDef, SettingsEnv } from '../model';
 import { requestBringChats } from '../../../lib/chatImport';
 import { Btn, SettingRow, SettingToggle } from '../settings-ui';
+import { useMessageRail } from '../../../lib/messageRail';
 import { KeepGoingRows } from './KeepGoingRows';
 import { LinuxRows } from './LinuxRows';
 
@@ -86,6 +87,12 @@ function LiveUpdates({ env }: { env: SettingsEnv }) {
       ))}
     </>
   );
+}
+
+/** Settings > Agents > Chat: the rail beside the chat scroll bar. Kept on this device (the phone has its own), not in settings.json. */
+function MessageRailRow() {
+  const [on, setOn] = useMessageRail();
+  return <SettingToggle label={t('settings.row.message-rail.label')} description={t('settings.row.message-rail.hint')} checked={on} onChange={setOn} />;
 }
 
 /** "Check my setup": one list of what works and one fix per problem. Its id is SETUP_CHECK_ROW_ID (Repair install opens it). */
@@ -261,6 +268,14 @@ export const agentsRows: RowDef[] = [
         onChange={(value) => void env.patch({ show_terminals: value })}
       />
     ),
+  },
+  {
+    id: 'message-rail',
+    label: 'Message rail',
+    hint: 'Thin dashes by the chat scroll bar, one per message. Click or drag to jump.',
+    keywords: 'message rail minimap dashes lines scroll bar jump scrub chat long navigate overview',
+    group: 'Chat',
+    render: () => <MessageRailRow />,
   },
   {
     id: 'agent-lane',

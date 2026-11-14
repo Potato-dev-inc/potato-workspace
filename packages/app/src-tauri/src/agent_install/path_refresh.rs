@@ -140,8 +140,43 @@ pub fn refresh_process_path() -> Refresh {
     Refresh { added }
 }
 
+/// How long a "not found" answer is trusted before the registry PATH is read again.
+const RECHECK_EVERY: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Whether a refresh is due: never done, or the last one is older than `every`.
+pub(crate) fn refresh_due(last: Option<std::time::Instant>, now: std::time::Instant, every: std::time::Duration) -> bool {
+    last.is_none_or(|at| now.saturating_duration_since(at) >= every)
+}
+
+/// Called when an agent's program was not found on PATH: a program the person installed after the app started (by its
+/// own installer, outside the app) sits in a folder this process was never told about. Reads the registry PATH again,
+/// at most once per `RECHECK_EVERY`, and says whether a folder was added (so the caller looks once more).
+pub fn refresh_if_stale() -> bool {
+    static LAST: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+    let now = std::time::Instant::now();
+    {
+        let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+        if !refresh_due(*last, now, RECHECK_EVERY) {
+            return false;
+        }
+        *last = Some(now);
+    }
+    !refresh_process_path().added.is_empty()
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn a_refresh_is_due_the_first_time_and_then_only_after_the_wait() {
+        let t0 = std::time::Instant::now();
+        let every = std::time::Duration::from_secs(20);
+        assert!(refresh_due(None, t0, every));
+        assert!(!refresh_due(Some(t0), t0 + std::time::Duration::from_secs(5), every));
+        assert!(refresh_due(Some(t0), t0 + std::time::Duration::from_secs(20), every));
+    }
+
     use super::*;
 
     const REG_OUT: &str = "\r\nHKEY_CURRENT_USER\\Environment\r\n    Path    REG_EXPAND_SZ    C:\\Users\\a\\.local\\bin;%USERPROFILE%\\AppData\\Local\\Microsoft\\WinGet\\Links\r\n\r\n";

@@ -244,7 +244,7 @@ export function useCockpit(): CockpitApi {
     let off: (() => void) | undefined;
     void cockpitApi
       .onPrompt((e) =>
-        setPrompts((p) => ({ ...p, [e.pane_id]: e.prompt && p[e.pane_id]?.stalled && p[e.pane_id]?.promptId === e.prompt.promptId ? { ...e.prompt, stalled: true } : e.prompt })),
+        setPrompts((p) => ({ ...p, [e.pane_id]: e.prompt && p[e.pane_id]?.promptId === e.prompt.promptId && (p[e.pane_id]?.stalled || p[e.pane_id]?.failed) ? { ...e.prompt, stalled: p[e.pane_id]?.stalled, failed: p[e.pane_id]?.failed } : e.prompt })),
       )
       .then((u) => (disposed ? u() : (off = u)));
     return () => {
@@ -504,6 +504,8 @@ export function useCockpit(): CockpitApi {
       const key = `${paneId}\n${promptId}`;
       if (answering.current.has(key)) return;
       answering.current.add(key);
+      // A new try: the note about the last one goes.
+      setPrompts((cur) => (cur[paneId]?.failed ? { ...cur, [paneId]: { ...cur[paneId]!, failed: false } } : cur));
       try {
         await cockpitApi.answerPanePrompt(paneId, promptId, choiceId, gesture);
         answered.current.set(`${paneId}:${promptId}`, Date.now());
@@ -524,6 +526,8 @@ export function useCockpit(): CockpitApi {
       } catch (err) {
         answering.current.delete(key);
         notify(errorSentence(err));
+        // The toast goes in a few seconds: the card keeps saying it, with the way out (open the terminal).
+        setPrompts((cur) => (cur[paneId]?.promptId === promptId ? { ...cur, [paneId]: { ...cur[paneId]!, failed: true } } : cur));
       }
     },
     [names, notify],

@@ -6,6 +6,7 @@
 use crate::acp::chat::{self, StartRequest};
 use crate::acp::fake_agent;
 use crate::conformance_suite::rig::{start_deps, temp_dir, wait_until, ChatRig};
+use crate::test_support::wait::slow_secs;
 use crate::proc_util::pid_alive;
 
 /// The text of every agent answer in the chat, in order.
@@ -21,14 +22,14 @@ fn send_and_end(rig: &ChatRig, text: &str, secs: u64) -> bool {
 
 /// Silence and slowness: the 2 s windows of these cases (inactivity, grace after a stop request).
 fn short_windows(cfg: &mut crate::acp::config::AgentConfig) {
-    cfg.timeouts.inactivity_secs = 2;
-    cfg.timeouts.hung_grace_secs = 1;
+    cfg.timeouts.inactivity_secs = slow_secs(2);
+    cfg.timeouts.hung_grace_secs = slow_secs(1);
 }
 
 // Person sees: a normal answer; no warning in between, even though the first byte came after 3 s.
 #[test]
 fn chaos_slow_first_byte_is_not_a_failure() {
-    let rig = ChatRig::with("first_byte_ms=3000", |cfg| cfg.timeouts.inactivity_secs = 10);
+    let rig = ChatRig::with("first_byte_ms=3000", |cfg| cfg.timeouts.inactivity_secs = slow_secs(10));
     assert!(send_and_end(&rig, "stream 2", 30), "the turn did not end; kinds {:?}", rig.kinds());
     assert_eq!(rig.last_answer().as_deref(), Some("w0 w1 "), "notices {:?}", rig.notices());
     assert_eq!(rig.outcomes().last().map(String::as_str), Some("completed"), "outcomes {:?}", rig.outcomes());
@@ -62,8 +63,8 @@ fn chaos_stall_mid_stream_keeps_the_text() {
 fn chaos_stall_that_ignores_stop_is_killed() {
     // Silence alone only asks the person (Stop or Keep waiting); the progress window is what stops a turn by itself.
     let rig = ChatRig::with("ignore_cancel=1", |cfg| {
-        cfg.timeouts.progress_secs = 2;
-        cfg.timeouts.hung_grace_secs = 1;
+        cfg.timeouts.progress_secs = slow_secs(2);
+        cfg.timeouts.hung_grace_secs = slow_secs(1);
     });
     rig.send("stall 3 60000").unwrap_or_else(|e| panic!("send refused: {e:?}"));
     let pid = rig.alive_pids().first().copied();
@@ -82,8 +83,8 @@ fn chaos_stall_that_ignores_stop_is_killed() {
 #[test]
 fn chaos_bytes_without_progress() {
     let rig = ChatRig::with("", |cfg| {
-        cfg.timeouts.progress_secs = 2;
-        cfg.timeouts.hung_grace_secs = 1;
+        cfg.timeouts.progress_secs = slow_secs(2);
+        cfg.timeouts.hung_grace_secs = slow_secs(1);
     });
     assert!(send_and_end(&rig, "noise 60000", 30), "the turn did not end; kinds {:?}", rig.kinds());
     assert!(rig.notices().iter().any(|n| n.starts_with("No answer for")), "notices {:?}", rig.notices());
@@ -96,7 +97,7 @@ fn chaos_bytes_without_progress() {
 fn chaos_never_answers_initialize() {
     let dir = temp_dir("chaos-init");
     let mut cfg = fake_agent::agent_config("init_never=1", &dir.join("store"));
-    cfg.timeouts.request_secs = 2;
+    cfg.timeouts.request_secs = slow_secs(2);
     let deps = start_deps();
     let request = StartRequest { agent_id: "fake".into(), folder: dir.clone(), explicit: true, account: None, ..Default::default() };
     let err = match chat::start(&deps, cfg, request) {

@@ -21,6 +21,9 @@ use crate::app_paths;
 use crate::pwa_server::{self, DevInfoPayload};
 use crate::tunnel_config::{self, TunnelConfigInput, TunnelConfigView};
 
+pub(crate) mod stable_link;
+use stable_link::LinkState;
+
 static TUNNEL_STATE: OnceCell<Arc<Mutex<TunnelState>>> = OnceCell::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -39,12 +42,54 @@ struct TunnelState {
     bridge_direct_url: Option<String>,
     cloudflared_child: Option<Child>,
     pwa_server: Option<pwa_server::PwaServerHandle>,
-    /// Effective mode after the env override: env | quick | named | custom.
+    /// Effective mode after the env override: env | quick | named | custom | stable.
     mode: &'static str,
+    /// `stable` mode only: the Worker and where this computer is registered on it.
+    stable: Option<StableInfo>,
     phase: Phase,
     last_error: Option<String>,
     /// Bumped on every (re)launch so a dead tunnel's log readers cannot overwrite the new state.
     generation: u64,
+}
+
+struct StableInfo {
+    worker_url: String,
+    /// The trycloudflare address cloudflared printed last (never advertised to phones).
+    quick_url: Option<String>,
+    link: LinkState,
+}
+
+/// `stable` mode as the Settings tab shows it: "Stable link: <worker> -> linked / not linked yet (<error>)".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StableStatus {
+    pub worker_url: String,
+    pub quick_url: Option<String>,
+    /// waiting | linking | linked | failed
+    pub link: &'static str,
+    pub error: Option<String>,
+}
+
+impl StableInfo {
+    fn view(&self) -> StableStatus {
+        let (link, error) = match &self.link {
+            LinkState::Waiting => ("waiting", None),
+            LinkState::Registering => ("linking", None),
+            LinkState::Linked => ("linked", None),
+            LinkState::Failed(why) => ("failed", Some(why.clone())),
+        };
+        StableStatus { worker_url: self.worker_url.clone(), quick_url: self.quick_url.clone(), link, error }
+    }
+}
+
+/// A secret sent to the UI once (when made, or on "Show secret"). Debug never prints it.
+#[derive(Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct RevealedSecret(String);
+
+impl std::fmt::Debug for RevealedSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RevealedSecret(<redacted>)")
+    }
 }
 
 /// What the Settings tab and the status command show.
@@ -55,6 +100,11 @@ pub struct TunnelStatus {
     pub state: Phase,
     pub error: Option<String>,
     pub config: TunnelConfigView,
+    /// `stable` mode: the Worker, the quick-tunnel address behind it and whether they are linked.
+    pub stable: Option<StableStatus>,
+    /// Set only on the answer to a save that made the secret or asked to show it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_once: Option<RevealedSecret>,
 }
 
 /// Result of "Test connection".
@@ -76,6 +126,7 @@ impl TunnelState {
             cloudflared_child: None,
             pwa_server: None,
             mode: "quick",
+            stable: None,
             phase: Phase::Stopped,
             last_error: None,
             generation: 0,
@@ -164,6 +215,8 @@ pub fn tunnel_status() -> TunnelStatus {
         state: guard.phase,
         error: guard.last_error.clone(),
         config: tunnel_config::load(&tunnel_config::tunnel_file()).view(),
+        stable: guard.stable.as_ref().map(StableInfo::view),
+        secret_once: None,
     }
 }
 
@@ -219,10 +272,20 @@ pub fn apply_tunnel_config(
 ) -> Result<TunnelStatus, String> {
     let path = tunnel_config::tunnel_file();
     let current = tunnel_config::load(&path);
-    let next = tunnel_config::config_from_input(input, &current)?;
+    let next = tunnel_config::config_from_input(input.clone(), &current)?;
+    let reveal = secret_to_reveal(&input, &current, &next);
+    // A new secret replaces the old one: ask the Worker to forget the old one first (best effort).
+    if let (tunnel_config::TunnelConfig::Stable { worker_url, secret: old }, true) = (&current, replaces_secret(&current, &next)) {
+        if !old.is_empty() {
+            stable_link::reset_once(worker_url, old);
+        }
+    }
     tunnel_config::save(&path, &next)?;
-    let restarted = restart_mobile_tunnel(app);
+    // "Show secret" changes nothing: do not drop the tunnel (and its address) just to read a secret.
+    let only_showing = matches!(&input, TunnelConfigInput::Stable { secret_action: tunnel_config::SecretAction::Show, secret: None, .. }) && next == current;
+    let restarted = if only_showing { Ok(tunnel_status()) } else { restart_mobile_tunnel(app) };
     let mut status = tunnel_status();
+    status.secret_once = reveal.map(RevealedSecret);
     if let Err(err) = restarted {
         // The setting is saved; say why it is not live yet.
         status.error = Some(err);
@@ -242,10 +305,17 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
         guard.mode = plan.mode();
         guard.tunnel_url = plan.known_public_url();
         guard.last_error = None;
+        guard.stable = match &plan {
+            tunnel_config::TunnelPlan::Stable { worker_url } => {
+                Some(StableInfo { worker_url: worker_url.clone(), quick_url: None, link: LinkState::Waiting })
+            }
+            _ => None,
+        };
         guard.tunnel_provider = Some(
             match &plan {
                 tunnel_config::TunnelPlan::Quick => "cloudflared",
                 tunnel_config::TunnelPlan::Named { .. } => "cloudflared-named",
+                tunnel_config::TunnelPlan::Stable { .. } => "cloudflared-stable",
                 _ => "custom",
             }
             .into(),
@@ -290,6 +360,13 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
         }
     }
     let named = matches!(plan, tunnel_config::TunnelPlan::Named { .. });
+    // The Worker address and secret travel into the reader thread, which registers each new quick-tunnel URL.
+    let stable = match (&plan, &config) {
+        (tunnel_config::TunnelPlan::Stable { worker_url }, tunnel_config::TunnelConfig::Stable { secret, .. }) => {
+            Some(StableCtx { worker_url: worker_url.clone(), secret: secret.clone() })
+        }
+        _ => None,
+    };
     let mut child = command.spawn().map_err(|err| {
         fail(format!(
             "spawn cloudflared {}: {err}",
@@ -312,10 +389,11 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
     ];
     for (name, reader) in readers {
         let state_for_reader = state.clone();
+        let stable_for_reader = stable.clone();
         thread::Builder::new()
             .name(name.into())
             .spawn(move || {
-                watch_cloudflared_stream(BufReader::new(reader), state_for_reader, generation, named)
+                watch_cloudflared_stream(BufReader::new(reader), state_for_reader, generation, named, stable_for_reader)
             })
             .map_err(|err| fail(format!("spawn {name} reader: {err}")))?;
     }
@@ -325,11 +403,19 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// What a reader thread needs to register a quick-tunnel URL with the person's Worker.
+#[derive(Clone)]
+struct StableCtx {
+    worker_url: String,
+    secret: String,
+}
+
 fn watch_cloudflared_stream(
     reader: BufReader<impl std::io::Read>,
     state: Arc<Mutex<TunnelState>>,
     generation: u64,
     named: bool,
+    stable: Option<StableCtx>,
 ) {
     let url_re = Regex::new(r"https://[a-z0-9-]+\.trycloudflare\.com").expect("url regex");
     for line in reader.lines().map_while(Result::ok) {
@@ -351,7 +437,19 @@ fn watch_cloudflared_stream(
             }
         } else if let Some(found) = url_re.find(&line) {
             let url = found.as_str().to_string();
-            if guard.tunnel_url.as_deref() != Some(url.as_str()) {
+            if let Some(ctx) = &stable {
+                // Phones keep the Worker address; only the Worker is told the new quick-tunnel address.
+                let is_new = guard.stable.as_ref().is_some_and(|s| s.quick_url.as_deref() != Some(url.as_str()));
+                if is_new {
+                    if let Some(info) = guard.stable.as_mut() {
+                        info.quick_url = Some(url.clone());
+                        info.link = LinkState::Registering;
+                    }
+                    guard.phase = Phase::Running;
+                    tracing::info!("cloudflared quick URL ready; registering it with the stable-link Worker");
+                    spawn_registration(state.clone(), generation, ctx.clone(), url);
+                }
+            } else if guard.tunnel_url.as_deref() != Some(url.as_str()) {
                 guard.tunnel_url = Some(url.clone());
                 guard.phase = Phase::Running;
                 tracing::info!(%url, "cloudflared public URL ready");
@@ -363,6 +461,68 @@ fn watch_cloudflared_stream(
     if guard.generation == generation && guard.phase != Phase::Error {
         guard.phase = Phase::Error;
         guard.last_error = Some("cloudflared stopped. Press Restart tunnel.".into());
+    }
+}
+
+/// Register `quick_url` with the Worker in the background, retrying with a growing wait. Stops when a newer
+/// launch or a newer quick-tunnel URL replaced this one.
+fn spawn_registration(state: Arc<Mutex<TunnelState>>, generation: u64, ctx: StableCtx, quick_url: String) {
+    let is_current = {
+        let (state, quick_url) = (state.clone(), quick_url.clone());
+        move || {
+            let guard = state.lock();
+            guard.generation == generation && guard.stable.as_ref().and_then(|s| s.quick_url.as_deref()) == Some(quick_url.as_str())
+        }
+    };
+    let report = {
+        let state = state.clone();
+        let quick_url = quick_url.clone();
+        move |link: LinkState| {
+            let mut guard = state.lock();
+            if guard.generation != generation {
+                return;
+            }
+            if let Some(info) = guard.stable.as_mut().filter(|s| s.quick_url.as_deref() == Some(quick_url.as_str())) {
+                if link == LinkState::Linked {
+                    tracing::info!("stable link registered");
+                }
+                info.link = link;
+            }
+        }
+    };
+    let spawned = thread::Builder::new().name("stable-link-register".into()).spawn(move || {
+        stable_link::register_until_done(
+            || stable_link::register_once(&ctx.worker_url, &ctx.secret, &quick_url),
+            thread::sleep,
+            is_current,
+            report,
+        );
+    });
+    if let Err(err) = spawned {
+        tracing::warn!(%err, "could not start the stable-link registration thread");
+    }
+}
+
+/// The secret to send back to the UI once: a freshly made one, or the stored one when asked to show it.
+fn secret_to_reveal(
+    input: &TunnelConfigInput,
+    before: &tunnel_config::TunnelConfig,
+    after: &tunnel_config::TunnelConfig,
+) -> Option<String> {
+    let TunnelConfigInput::Stable { secret, secret_action, .. } = input else {
+        return None;
+    };
+    let typed_by_person = secret.as_deref().is_some_and(|s| !s.trim().is_empty());
+    let made_now = !typed_by_person && after.stable_secret() != before.stable_secret();
+    let asked = *secret_action == tunnel_config::SecretAction::Show;
+    (made_now || asked).then(|| after.stable_secret().map(str::to_string)).flatten()
+}
+
+/// Whether saving `after` over `before` swaps one stable secret for another.
+fn replaces_secret(before: &tunnel_config::TunnelConfig, after: &tunnel_config::TunnelConfig) -> bool {
+    match (before.stable_secret(), after.stable_secret()) {
+        (Some(old), Some(new)) => old != new,
+        _ => false,
     }
 }
 
@@ -412,6 +572,21 @@ pub fn interpret_health(
 
 /// Fetch `<public>/bridge/health` (blocking). `None` tests the tunnel's current public URL.
 pub fn test_connection(public_url: Option<String>) -> Result<ConnectionTest, String> {
+    // Stable link: the Worker must answer and say it is linked before the bridge behind it is tried.
+    let stable_worker = tunnel_state().lock().stable.as_ref().map(|s| s.worker_url.clone());
+    if let Some(worker) = stable_worker.filter(|w| public_url.as_deref().is_none_or(|u| u.trim().is_empty() || u.trim().trim_end_matches('/') == w)) {
+        let started = std::time::Instant::now();
+        if let Err(message) = stable_link::check_worker(&worker) {
+            return Ok(ConnectionTest {
+                ok: false,
+                url: stable_link::health_url(&worker),
+                http_status: None,
+                latency_ms: started.elapsed().as_millis() as u64,
+                message,
+            });
+        }
+        return test_origin(&worker);
+    }
     let origin = match public_url.filter(|u| !u.trim().is_empty()) {
         Some(raw) => tunnel_config::normalize_origin(&raw, false)?,
         None => tunnel_state()
@@ -420,7 +595,12 @@ pub fn test_connection(public_url: Option<String>) -> Result<ConnectionTest, Str
             .clone()
             .ok_or_else(|| "No public address yet. Start the tunnel first.".to_string())?,
     };
-    let url = tunnel_config::health_url(&origin);
+    test_origin(&origin)
+}
+
+/// `GET <origin>/bridge/health` and what it says.
+fn test_origin(origin: &str) -> Result<ConnectionTest, String> {
+    let url = tunnel_config::health_url(origin);
     let started = std::time::Instant::now();
     let agent = ureq::AgentBuilder::new()
         .timeout(std::time::Duration::from_secs(10))
@@ -492,6 +672,83 @@ mod tests {
         std::env::set_var("POTATO_WORKSPACE_PUBLIC_URL", "https://example.com/bridge/");
         assert_eq!(custom_public_url().as_deref(), Some("https://example.com"));
         std::env::remove_var("POTATO_WORKSPACE_PUBLIC_URL");
+    }
+
+    fn stable_input(secret: Option<&str>, action: tunnel_config::SecretAction) -> TunnelConfigInput {
+        TunnelConfigInput::Stable { worker_url: "https://w.dev".into(), secret: secret.map(Into::into), secret_action: action }
+    }
+
+    fn stable_cfg(secret: &str) -> tunnel_config::TunnelConfig {
+        tunnel_config::TunnelConfig::Stable { worker_url: "https://w.dev".into(), secret: secret.into() }
+    }
+
+    #[test]
+    fn the_secret_goes_back_to_the_ui_only_when_made_or_asked_for() {
+        use tunnel_config::SecretAction::{Keep, Regenerate, Show};
+        use tunnel_config::TunnelConfig::Quick;
+        let old = stable_cfg("old-secret-0123456789");
+        let new = stable_cfg("new-secret-0123456789");
+        // first time: made now
+        assert_eq!(secret_to_reveal(&stable_input(None, Keep), &Quick, &new).as_deref(), Some("new-secret-0123456789"));
+        // kept: nothing to show
+        assert_eq!(secret_to_reveal(&stable_input(None, Keep), &old, &old), None);
+        // asked
+        assert_eq!(secret_to_reveal(&stable_input(None, Show), &old, &old).as_deref(), Some("old-secret-0123456789"));
+        // regenerated
+        assert_eq!(secret_to_reveal(&stable_input(None, Regenerate), &old, &new).as_deref(), Some("new-secret-0123456789"));
+        // a secret the person typed is not echoed back
+        assert_eq!(secret_to_reveal(&stable_input(Some("new-secret-0123456789"), Keep), &old, &new), None);
+        // other modes never reveal
+        assert_eq!(secret_to_reveal(&TunnelConfigInput::Quick, &old, &Quick), None);
+        assert!(replaces_secret(&old, &new) && !replaces_secret(&old, &old) && !replaces_secret(&Quick, &new));
+    }
+
+    #[test]
+    fn a_revealed_secret_is_redacted_in_debug_but_serializes_for_the_ui() {
+        let secret = RevealedSecret("super-secret-value-0123".into());
+        assert!(!format!("{secret:?}").contains("super-secret"));
+        assert_eq!(serde_json::to_string(&secret).unwrap(), "\"super-secret-value-0123\"");
+    }
+
+    #[test]
+    fn stable_status_says_waiting_linking_linked_or_why_not() {
+        let mut info = StableInfo { worker_url: "https://w.dev".into(), quick_url: None, link: LinkState::Waiting };
+        assert_eq!(info.view().link, "waiting");
+        info.link = LinkState::Registering;
+        assert_eq!(info.view().link, "linking");
+        info.link = LinkState::Linked;
+        assert_eq!((info.view().link, info.view().error), ("linked", None));
+        info.link = LinkState::Failed("The secret does not match the one the Worker has.".into());
+        let view = info.view();
+        assert_eq!(view.link, "failed");
+        assert!(view.error.unwrap().contains("secret does not match"));
+    }
+
+    #[test]
+    fn test_connection_in_stable_mode_checks_the_worker_before_the_bridge() {
+        // A loopback "Worker" that says it is not linked: the answer names the Worker, not the bridge.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        let server = std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            let (mut s, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 2048];
+            let n = s.read(&mut buf).unwrap();
+            let body = r#"{"linked":false,"updated_at":null}"#;
+            let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            String::from_utf8_lossy(&buf[..n]).to_string()
+        });
+        {
+            let state = tunnel_state();
+            let mut guard = state.lock();
+            guard.stable = Some(StableInfo { worker_url: url.clone(), quick_url: None, link: LinkState::Waiting });
+        }
+        let result = test_connection(None).unwrap();
+        tunnel_state().lock().stable = None;
+        assert!(!result.ok, "{result:?}");
+        assert!(result.message.contains("not linked"), "{result:?}");
+        assert!(result.url.ends_with("/_pm/link/health"));
+        assert!(server.join().unwrap().starts_with("GET /_pm/link/health "));
     }
 
     #[test]

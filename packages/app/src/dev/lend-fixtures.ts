@@ -3,7 +3,7 @@
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { PANE_CLAUDE } from './fixtures';
 import type { Account, BorrowedSignIn } from '../lib/accounts';
-import type { Grant, LendApi, LendDriver, LendProfile, LendRequest, LendState } from '../lib/lend';
+import type { Grant, LendApi, LendDriver, LendProfile, LendRequest, LendState, Offer, OffersResult, SignInStatus } from '../lib/lend';
 
 const now = Date.now();
 const MIN = 60_000;
@@ -118,7 +118,22 @@ export const GRANT_IN_PANE: Grant = {
   input_tokens: 4_200,
   output_tokens: 1_100,
   problem: null,
+  profile_name: 'Work account',
 };
+
+/** Another person (Ren) lends me their "Work account": the name travels with the grant. A pane of it is open. */
+export const GRANT_IN_REN: Grant = {
+  ...GRANT_IN_PANE,
+  id: 'grant-in-ren',
+  peer_member_id: 'm-ren',
+  peer_name: 'Ren',
+  peer_device_name: "Ren's laptop",
+  for_other_person: true,
+  profile_name: 'Work account',
+};
+
+/** The same, from an older lender build: no profile name was sent. */
+export const GRANT_IN_REN_OLD: Grant = { ...GRANT_IN_REN, id: 'grant-in-ren-old', profile_name: undefined };
 
 /** The lender's sign-in expired: both PCs show it on the lend (the screens use their own sentence, not this text). */
 export const GRANT_IN_PROBLEM: Grant = { ...GRANT_IN_PANE, id: 'grant-in-3', problem: 'sign-in expired' };
@@ -167,7 +182,7 @@ export const REQUEST_OUT: LendRequest = {
   state: 'open',
 };
 
-export function lendState(partial: Partial<LendState> = {}): LendState {
+export function lendState(partial: LendScenario = {}): LendState & { signins?: LendScenario['signins'] } {
   return {
     enabled: true,
     profiles: [MY_PROFILE, TEAM_PROFILE],
@@ -183,11 +198,32 @@ export function lendState(partial: Partial<LendState> = {}): LendState {
 export function borrowedOf(grants: readonly Grant[], now = Date.now()): BorrowedSignIn[] {
   return grants
     .filter((g) => g.direction === 'in' && g.state === 'active' && g.ends_ms > now)
-    .map((g) => ({ id: `lend:${g.id}`, agent_id: g.agent_id, label: `${g.peer_name}'s PC (lent)`, ends_ms: g.ends_ms, grant_id: g.id }));
+    .map((g) => ({
+      id: `lend:${g.id}`,
+      agent_id: g.agent_id,
+      // What the Rust side labels it: the lender's name for the profile, or "<owner>'s PC" from an older lender.
+      label: !g.profile_name
+        ? `${g.peer_name}'s PC (borrowed)`
+        : g.for_other_person
+          ? `${g.peer_name}'s ${g.profile_name} (borrowed)`
+          : `${g.profile_name} on ${g.peer_device_name} (borrowed)`,
+      profile_name: g.profile_name,
+      owner: g.peer_name,
+      ends_ms: g.ends_ms,
+      grant_id: g.id,
+    }));
 }
 
 /** What a harness scenario sets: the state the mocked `lend_*` commands start from. */
-export type LendScenario = Partial<LendState>;
+/** What a lender offers: two Claude profiles. */
+export const OFFER_WORK: Offer = { profile_id: 'lp-work', name: 'Work account', agent_id: 'claude', max_secs: 8 * 3600, default_secs: 8 * 3600, asks_first: true, device_id: 'd-lender', device_name: "Ren's PC" };
+export const OFFER_PERSONAL: Offer = { profile_id: 'lp-personal', name: 'Personal', agent_id: 'claude', max_secs: 3600, default_secs: 3600, asks_first: false, device_id: 'd-lender', device_name: "Ren's PC" };
+
+/**
+ * A scenario seed: parts of the state, where each lend sign-in stands from the start (the sign-in step), and what each member's
+ * PC offers when asked (`offers[memberId]`; `null`: that PC does not answer). Without `offers`, everyone offers two profiles.
+ */
+export type LendScenario = Partial<LendState> & { signins?: Record<string, Partial<SignInStatus>>; offers?: Record<string, Offer[] | null> };
 
 type Handler = { handled: boolean; value?: unknown };
 
@@ -199,11 +235,19 @@ export class LendBackend {
   private ids = 0;
   /** Lend sign-ins added through `accountAdd`. */
   readonly added: Account[] = [];
+  /** What the sign-in step reads for each lend sign-in; a test or scenario sets it with `setSignIn`. */
+  readonly signins = new Map<string, SignInStatus>();
   /** What every command except `state` throws when set (a failing path). */
   failWith: string | null = null;
 
+  /** What `offers` answers per member id (null: no answer). */
+  offered: Record<string, Offer[] | null> = {};
+
   constructor(seed: LendScenario = {}) {
-    this.state = lendState(seed);
+    const { signins, offers, ...rest } = seed;
+    this.offered = offers ?? {};
+    this.state = lendState(rest);
+    for (const [id, st] of Object.entries(signins ?? {})) this.setSignIn(id, st);
   }
 
   private rec(name: string, ...args: unknown[]) {
@@ -241,8 +285,17 @@ export class LendBackend {
     this.changed();
   }
 
-  request(memberId: string, deviceId: string | null, agentId: string, secs: number, reason: string): LendRequest {
-    this.rec('request', memberId, deviceId, agentId, secs, reason);
+  /** `lend_offers`: what that person's PC offers me, or no answer. */
+  offers(memberId: string, deviceId: string | null): OffersResult {
+    this.rec('offers', memberId, deviceId);
+    const mine = this.offered[memberId];
+    if (mine === null) return { answered: false, offers: [] };
+    const list = mine ?? [OFFER_WORK, OFFER_PERSONAL];
+    return { answered: true, offers: list.filter((o) => deviceId === null || o.device_id === deviceId || o.device_id === 'd-lender').map((o) => (deviceId ? { ...o, device_id: deviceId } : o)) };
+  }
+
+  request(memberId: string, deviceId: string | null, agentId: string, secs: number, reason: string, profileId?: string | null, profileName?: string | null): LendRequest {
+    this.rec('request', memberId, deviceId, agentId, secs, reason, ...(profileId ? [profileId] : []));
     const r: LendRequest = {
       id: `req-out-${++this.ids}`,
       direction: 'out',
@@ -255,6 +308,8 @@ export class LendBackend {
       at_ms: Date.now(),
       for_other_person: memberId !== 'm-leo',
       state: 'open',
+      profile_id: profileId ?? null,
+      profile_name: profileName ?? '',
     };
     this.state = { ...this.state, requests_out: [...this.state.requests_out, r] };
     this.changed();
@@ -327,9 +382,42 @@ export class LendBackend {
     return { pane_id };
   }
 
-  /** `lend_account_add`: a new lend-only account folder. */
-  accountAdd(agentId: string, label: string): Account {
-    this.rec('accountAdd', agentId, label);
+  /** Test and scenario control: where the sign-in of `accountId` stands now. */
+  setSignIn(accountId: string, patch: Partial<SignInStatus>): void {
+    const cur = this.signins.get(accountId) ?? { state: 'signed_out' as const, identity: null, pane_alive: false };
+    this.signins.set(accountId, { ...cur, ...patch });
+  }
+
+  /** `lend_signin_start`: the hidden pane starts; nothing is selected and nothing is opened. */
+  signInStart(accountId: string): { pane_id: string } {
+    this.rec('signInStart', accountId);
+    this.setSignIn(accountId, { pane_alive: true });
+    return { pane_id: `signin-pane-${accountId}` };
+  }
+
+  signInStatus(accountId: string): SignInStatus {
+    this.rec('signInStatus', accountId);
+    return this.signins.get(accountId) ?? { state: 'signed_out', identity: null, pane_alive: false };
+  }
+
+  /** `lend_signin_stop`: the pane ends; with `removeIfEmpty` an account that holds no sign-in goes away. */
+  signInStop(accountId: string, removeIfEmpty: boolean): boolean {
+    this.rec('signInStop', accountId, removeIfEmpty);
+    this.setSignIn(accountId, { pane_alive: false });
+    const cur = this.signins.get(accountId);
+    if (removeIfEmpty && cur?.state !== 'signed_in') {
+      const at = this.added.findIndex((a) => a.id === accountId);
+      if (at >= 0) this.added.splice(at, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /** `lend_account_add`: a new lend-only account folder, or the draft's own (`reuse`) while it is still signed out. */
+  accountAdd(agentId: string, label: string, reuse?: string | null): Account {
+    this.rec('accountAdd', agentId, label, ...(reuse ? [reuse] : []));
+    const back = reuse ? this.added.find((a) => a.id === reuse && this.signins.get(a.id)?.state !== 'signed_in') : undefined;
+    if (back) return back;
     const account: Account = { id: `acct-${++this.ids}`, agent_id: agentId, label, home: `C:\\lend\\${agentId}`, lend_only: true };
     this.added.push(account);
     return account;
@@ -353,11 +441,15 @@ export function createFakeLendApi(seed: LendScenario = {}): LendApi & { backend:
     profileSave: async (p) => b.profileSave(p),
     profileDelete: async (id) => b.profileDelete(id),
     request: async (...a) => b.request(...a),
+    offers: async (...a) => b.offers(...a),
     answer: async (...a) => b.answer(...a),
     revoke: async (id) => b.revoke(id),
     giveBack: async (id) => b.giveBack(id),
     startAgent: async (...a) => b.startAgent(...a),
     accountAdd: async (...a) => b.accountAdd(...a),
+    signInStart: async (id) => b.signInStart(id),
+    signInStatus: async (id) => b.signInStatus(id),
+    signInStop: async (...a) => b.signInStop(...a),
     keySet: async (...a) => b.keySet(...a),
     onChanged: async (cb) => b.on(cb),
   };
@@ -378,7 +470,9 @@ export function createLendMock(s: LendScenario | undefined): (cmd: string, args:
       case 'lend_profile_delete':
         return v(b.profileDelete(String(a.id)));
       case 'lend_request':
-        return v(b.request(String(a.member_id), (a.device_id as string | null) ?? null, String(a.agent_id), Number(a.secs), String(a.reason ?? '')));
+        return v(b.request(String(a.member_id), (a.device_id as string | null) ?? null, String(a.agent_id), Number(a.secs), String(a.reason ?? ''), (a.profile_id as string | null) ?? null, (a.profile_name as string | null) ?? null));
+      case 'lend_offers':
+        return v(b.offers(String(a.member_id), (a.device_id as string | null) ?? null));
       case 'lend_answer':
         return v(b.answer(String(a.request_id), a.accept === true, (a.profile_id as string | null) ?? null, (a.secs as number | null) ?? null));
       case 'lend_revoke':
@@ -388,13 +482,32 @@ export function createLendMock(s: LendScenario | undefined): (cmd: string, args:
       case 'lend_start_agent':
         return v(b.startAgent(String(a.grant_id), String(a.project_path)));
       case 'lend_account_add':
-        return v(b.accountAdd(String(a.agent_id), String(a.label)));
+        return v(b.accountAdd(String(a.agent_id), String(a.label), (a.reuse as string | null) ?? null));
+      case 'lend_signin_start':
+        return v(b.signInStart(String(a.account_id)));
+      case 'lend_signin_status':
+        return v(b.signInStatus(String(a.account_id)));
+      case 'lend_signin_stop':
+        return v(b.signInStop(String(a.account_id), a.remove_if_empty === true));
       case 'lend_key_set':
         return v(b.keySet(String(a.profile_id), String(a.key ?? '')));
       default:
         return { handled: false };
     }
   };
+}
+
+/**
+ * Dev scenarios: set a text field the way a person types into it (React hears the input event).
+ * `fill('input[aria-label="Name"]', 'Work account')`.
+ */
+export function fill(selector: string, value: string): boolean {
+  const el = document.querySelector<HTMLInputElement>(selector);
+  if (!el) return false;
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  set?.call(el, value);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
 }
 
 /** The roster for the Request usage sheet: me with a second PC (listed under "My PCs"), Maya and Sam. */

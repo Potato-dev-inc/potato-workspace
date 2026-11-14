@@ -33,6 +33,8 @@ import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
 import { formatElapsed, spinnerStatus, stateText } from './model';
 import { acpResult, acpStatusWords } from './acp-pane';
 import { AcpResultStrip } from './AcpResultStrip';
+import { ChatCopyBar } from './ChatCopyBar';
+import { useChatCopy } from '../../lib/chatCopy';
 import { DoneList } from './DoneList';
 import { ReceiptTab } from './ReceiptTab';
 import { TurnFiles } from './turnfiles/TurnFiles';
@@ -78,6 +80,9 @@ import { composerBlock } from '../../lib/paneOutbox';
 import { onComposerInsert } from '../../lib/composer-insert';
 import { LiveChip } from './live/LiveChip';
 import { FileTab } from '../files/FileTab';
+import { ArtifactTab } from '../artifacts/ArtifactTab';
+import { artifactIdOfPath } from '../../lib/artifact-tabs';
+import { useArtifactSync } from '../../lib/artifact-sync';
 import { FileTabsBar } from '../files/FileTabsBar';
 import { clearFileFocus, fileTabId, pathOfTab, usePaneFiles } from '../../lib/file-tabs';
 import { LiveStatusContext } from './live/useLiveRoom';
@@ -222,6 +227,8 @@ export function PaneView({
     };
   }, [isAcp, sharedTurn, paneId, pane?.status]);
   const lastTurn = sharedTurn ?? ownTurn;
+  // Pages the agent dropped into .potato/artifacts/ get a card once the chat settles.
+  useArtifactSync(paneId, isAcp, pane?.status ?? '');
   const worktree = usePaneWorktree(paneId, pane?.status ?? '');
   const { signals } = useLoopGuard();
   const rail = useRailLayout();
@@ -258,6 +265,10 @@ export function PaneView({
   // "Open in terminal" is a terminal control: hidden while terminals are (a chat that is already in a terminal still shows its way back).
   const showTerminals = useShowTerminals();
   const canHandOver = showTerminals && isAcp && !!acpState && !inTerminal && acpState.conversation !== null;
+  // "Work on a copy": the chat sits in a copy of its project; Keep the changes / Throw away the copy are its two ways out.
+  const copyKind = isAcp ? (acpState?.copy?.kind ?? null) : null;
+  const chatCopy = useChatCopy(paneId, copyKind !== null, pane?.status ?? '');
+  const [copyClose, setCopyClose] = useState(false);
 
   useEffect(() => {
     setTabRaw(rememberedTabs.get(paneId) ?? 'terminal');
@@ -354,6 +365,11 @@ export function PaneView({
     } else if (action === 'copy') void copySelection();
     else if (action === 'details') setDetails(true);
     else if (action === 'close') {
+      // A copy with changes: ask what to do with it first (keep, throw away, or decide later).
+      if (copyKind !== null && (chatCopy.summary?.files ?? 0) > 0) {
+        setCopyClose(true);
+        return;
+      }
       void confirmCloseEnabled().then((on) => {
         if (needsCloseConfirm(paneStatus, on)) setConfirm(true);
         else void c.closePane(paneId);
@@ -447,6 +463,7 @@ export function PaneView({
         )}
         {isAcp && <AcpChatDock c={c} paneId={paneId} paneName={name} api={acp} stopper={acpStop} />}
         {isAcp && result && <AcpResultStrip result={result} />}
+        {copyKind !== null && <ChatCopyBar kind={copyKind} summary={chatCopy.summary} busy={chatCopy.busy} onKeep={() => void chatCopy.keep(c.notify)} onThrowAway={() => chatCopy.discard(c.notify)} />}
         {isAcp && <DoneList paneId={paneId} cwd={info.cwd} />}
         <HelperQuestions c={c} ids={helperAsks} />
         {dockNow && <DockedCards c={c} paneId={paneId} dock={dock} dockNow={dockNow} onMore={cycleDock} />}
@@ -459,6 +476,10 @@ export function PaneView({
   const copyTotals = worktree?.summary ?? null;
   // What the narrow header moved out: the same buttons, one menu row each (lowest priority first).
   const moreActions: MoreAction[] = [];
+  if (copyKind !== null) {
+    moreActions.push({ id: 'copy-keep', label: t('chatCopy.keep'), disabled: chatCopy.busy || (chatCopy.summary?.files ?? 0) === 0, onSelect: () => void chatCopy.keep(c.notify) });
+    moreActions.push({ id: 'copy-discard', label: t('chatCopy.throwAway'), disabled: chatCopy.busy, onSelect: () => chatCopy.discard(c.notify) });
+  }
   if (fold >= 1 && handoff && handoff.allowed(paneId)) {
     moreActions.push({
       id: 'handoff',
@@ -693,8 +714,11 @@ export function PaneView({
               />
             </div>
           )}
-          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && (
+          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && artifactIdOfPath(pathOfTab(tab)!) === null && (
             <FileTab key={tab} paneId={paneId} path={pathOfTab(tab)!} canTell={chatAllowed} refreshKey={pane?.status ?? ''} />
+          )}
+          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && artifactIdOfPath(pathOfTab(tab)!) !== null && (
+            <ArtifactTab key={tab} paneId={paneId} id={artifactIdOfPath(pathOfTab(tab)!)!} />
           )}
           {tab === 'transcript' && (
             <div className="ck-scroll ck-fade-in" key="transcript">
@@ -823,6 +847,50 @@ export function PaneView({
       )}
 
       {handOver.ask && <HandOverSheet ask={handOver.ask} busy={handOver.busy} onConfirm={handOver.confirm} onCancel={handOver.cancel} />}
+
+      {copyClose && (
+        <Sheet labelledBy="ck-copyclose-t" onClose={() => setCopyClose(false)}>
+          <h2 className="ck-section" id="ck-copyclose-t">
+            {t('chatCopy.closeAsk')}
+          </h2>
+          <p className="ck-sub">{t('chatCopy.closeBody', { name })}</p>
+          <div className="ck-sheet-actions">
+            <button type="button" className="ck-btn ck-btn--secondary" autoFocus onClick={() => setCopyClose(false)}>
+              {t('pane.keepRunning')}
+            </button>
+            <button
+              type="button"
+              className="ck-btn ck-btn--secondary"
+              onClick={() => {
+                setCopyClose(false);
+                void c.closePane(paneId);
+              }}
+            >
+              {t('chatCopy.closeLater')}
+            </button>
+            <button
+              type="button"
+              className="ck-btn ck-btn--secondary"
+              onClick={() => {
+                setCopyClose(false);
+                chatCopy.discard(c.notify);
+              }}
+            >
+              {t('chatCopy.throwAway')}
+            </button>
+            <button
+              type="button"
+              className="ck-btn ck-btn--primary"
+              onClick={() => {
+                setCopyClose(false);
+                void chatCopy.keep(c.notify);
+              }}
+            >
+              {t('chatCopy.keep')}
+            </button>
+          </div>
+        </Sheet>
+      )}
 
       {confirm && (
         <Sheet labelledBy="ck-close-t" onClose={() => setConfirm(false)}>

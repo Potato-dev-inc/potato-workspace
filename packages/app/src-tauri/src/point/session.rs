@@ -32,6 +32,8 @@ pub struct PointState {
     /// Id of the live session. It changes each time a new session starts; None when no session is live.
     /// The box clears its text when the id changes, and when it is None (no session).
     pub session: Option<u64>,
+    /// The before and after strip offered when a chat agent's turn ended (N5-21). Not part of a session.
+    pub recheck: Option<super::recheck::RecheckView>,
 }
 
 /// One pick as the Point box shows it.
@@ -214,7 +216,7 @@ impl Session {
             }
         }
         let session = if expired { None } else { self.session_id };
-        PointState { picks, targets, default_target, notice: if expired { None } else { self.notice.clone() }, session }
+        PointState { picks, targets, default_target, notice: if expired { None } else { self.notice.clone() }, session, recheck: None }
     }
 }
 

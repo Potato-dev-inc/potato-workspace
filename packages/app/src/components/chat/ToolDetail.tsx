@@ -7,6 +7,7 @@ import { kindOfCall } from './chatActivity';
 import { diffHunks, diffStats, editPairs, lineDiff, patchLines, patchOf, patchText, type DiffLine, type DiffOp } from './chatDiff';
 import { baseName } from './chatFormat';
 import { useCopy } from './useCopy';
+import { FoldButton, useFold } from './chatFold';
 import { useChatPane } from './ChatPane';
 import { FloatingMenu } from '../cockpit/FloatingMenu';
 import { EditorMenuItems } from '../files/OpenInEditor';
@@ -151,6 +152,7 @@ export function CodeBlock({ label, text }: { label: string; text: string }) {
 /** The tool's output (or that it has none yet) in a terminal look, scrollable with a cap, with a Copy button. */
 export function OutputBlock({ result, failed = false }: { result: ToolResultItem | null; failed?: boolean }) {
   const ref = useRef<HTMLPreElement>(null);
+  const fold = useFold(result?.output ?? '');
   return (
     <>
       <DetailLabel>Output</DetailLabel>
@@ -158,11 +160,12 @@ export function OutputBlock({ result, failed = false }: { result: ToolResultItem
         <div className="ck-agc-term-head">
           <span>{failed ? 'Terminal · failed' : 'Terminal'}</span>
           <span className="ck-agc-grow" />
-          {result && result.output !== '' && <CopyButton text={result.output} target={() => ref.current} />}
+          {result && result.output !== '' && <CopyButton text={result.output} target={() => (fold.folded ? null : ref.current)} />}
         </div>
         <pre ref={ref} data-testid="tool-output" tabIndex={0} className="ck-agc-term-body max-h-48 overflow-auto whitespace-pre-wrap break-all">
-          {result ? result.output : 'No output yet.'}
+          {result ? fold.shown : 'No output yet.'}
         </pre>
+        <FoldButton fold={fold} className="ck-agc-fold" />
       </div>
     </>
   );

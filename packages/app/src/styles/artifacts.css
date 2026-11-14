@@ -1,0 +1,133 @@
+/* Pages an agent made: the chat card and the tab. Tokens only; monochrome. */
+.cockpit .ck-artcard,
+.ph .ck-artcard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 460px;
+  margin: 4px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line, var(--sep));
+  border-radius: 8px;
+  background: var(--surface, var(--fill));
+  color: var(--text, var(--label));
+}
+.ph .ck-artcard button {
+  flex: none;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line, var(--sep));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.ck-artcard-mark {
+  display: inline-flex;
+  color: var(--muted, var(--label-2));
+}
+.ck-artcard-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.ck-artcard-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ck-artcard-meta {
+  font-size: 11px;
+  color: var(--muted, var(--label-2));
+}
+.cockpit .ck-art-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--sep);
+  flex-wrap: wrap;
+}
+.cockpit .ck-art-title {
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-art-select {
+  height: 24px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--label);
+  font: inherit;
+  font-size: 12px;
+}
+.cockpit .ck-art-newer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--fill);
+  border-bottom: 1px solid var(--sep);
+}
+.cockpit .ck-art-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.cockpit .ck-art {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+/* The phone's full-screen page. */
+.ph .ph-art {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.ph .ph-art-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line, var(--sep));
+}
+.ph .ph-art-bar button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line, var(--sep));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.ph .ph-art-bar h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-art-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.ph .ph-art-body .ck-sandbox {
+  height: 100%;
+}

@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+
 
 use parking_lot::Mutex;
 
@@ -71,16 +71,7 @@ fn settle(pool: &Arc<Pool<Fake>>, host: &Fake, now: i64) -> usize {
     started
 }
 
-fn wait_until(secs: u64, mut condition: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(secs);
-    while Instant::now() < deadline {
-        if condition() {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    condition()
-}
+use crate::test_support::wait::wait_until;
 
 #[test]
 fn a_wanted_key_gets_one_warm_session_and_no_more() {

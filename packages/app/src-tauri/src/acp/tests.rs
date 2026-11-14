@@ -43,6 +43,8 @@ struct Rig {
     session: Arc<AcpSession>,
     log: Arc<Mutex<Vec<SessionEvent>>>,
     dir: PathBuf,
+    /// Held while the rig's agent process runs: at most 2 rigs start real processes at once (`PM_TEST_SLOW` stretches the waits).
+    _gate: crate::test_support::wait::Permit<'static>,
 }
 
 impl Rig {
@@ -51,6 +53,7 @@ impl Rig {
     }
 
     fn with(opts: &str, tweak: impl FnOnce(&mut AgentConfig)) -> Rig {
+        let gate = crate::test_support::wait::process_permit();
         let dir = std::env::temp_dir().join(format!("pm-acp-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut cfg = fake_agent::agent_config(opts, &dir.join("store"));
@@ -60,7 +63,7 @@ impl Rig {
         let log = Arc::new(Mutex::new(Vec::new()));
         let sink_log = log.clone();
         session.add_sink(Arc::new(move |event| sink_log.lock().push(event.clone())));
-        Rig { session, log, dir }
+        Rig { session, log, dir, _gate: gate }
     }
 
     fn events(&self) -> Vec<SessionEvent> {
@@ -73,7 +76,7 @@ impl Rig {
 
     /// First event at or after `from` that satisfies `pred`.
     fn wait_event(&self, from: usize, pred: impl Fn(&SessionEvent) -> bool, secs: u64) -> Option<(usize, SessionEvent)> {
-        let deadline = Instant::now() + Duration::from_secs(secs);
+        let deadline = Instant::now() + Duration::from_secs(crate::test_support::wait::slow_secs(secs));
         loop {
             {
                 let log = self.log.lock();
@@ -121,7 +124,7 @@ impl Rig {
 
     fn wait_phase(&self, phase: Phase) -> super::state::Snapshot {
         self.session
-            .wait_for(|s| s.phase == phase, Duration::from_secs(20))
+            .wait_for(|s| s.phase == phase, Duration::from_secs(crate::test_support::wait::slow_secs(20)))
             .unwrap_or_else(|| panic!("never reached {phase:?}; now {}", self.session.snapshot()))
     }
 }
@@ -141,16 +144,7 @@ fn brief(event: &SessionEvent) -> String {
     }
 }
 
-fn wait_until(secs: u64, mut condition: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(secs);
-    while Instant::now() < deadline {
-        if condition() {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    condition()
-}
+use crate::test_support::wait::wait_until;
 
 // ---- handshake and streaming -------------------------------------------------------------------------
 

@@ -241,3 +241,32 @@ fn a_grant_never_raises_above_the_phones_own_level() {
     assert_eq!(status(&full, "POST", &["panes", pane, "input"]), 200);
     pane_rules::set(pane, PaneRule::default()).unwrap();
 }
+
+#[test]
+fn a_locked_agents_pages_are_refused_to_a_phone_and_still_open_on_the_pc() {
+    // Artifacts (N5-20): the phone reads a page through `/panes/{pane}/artifacts[/{id}]`, so the pairing token, the `watch`
+    // right and the agent's own remote rule all apply before the page leaves the PC.
+    let headers = phone(Caps::all());
+    let pane = "rule-art-1";
+    assert_eq!(status(&headers, "GET", &["panes", pane, "artifacts"]), 200, "list, before");
+    assert_eq!(status(&headers, "GET", &["panes", pane, "artifacts", "plan"]), 200, "page, before");
+
+    set(pane, false, Level::Full);
+    assert_eq!(status(&headers, "GET", &["panes", pane, "artifacts"]), 403, "list, locked");
+    assert_eq!(status(&headers, "GET", &["panes", pane, "artifacts", "plan"]), 403, "page, locked");
+    let Err((_, body)) = authorize_caller(&headers, true, &["panes", pane, "artifacts", "plan"], "GET") else { panic!("refused") };
+    assert_eq!(body["code"], "PANE_REMOTE_OFF");
+    // Another agent's pages are not affected, and the PC itself is never limited by the rule.
+    assert_eq!(status(&headers, "GET", &["panes", "rule-art-2", "artifacts", "plan"]), 200);
+    assert!(authorize_caller("", true, &["panes", pane, "artifacts", "plan"], "GET").is_ok());
+}
+
+#[test]
+fn a_phone_without_the_watch_right_is_refused_a_page_and_a_phone_is_never_the_local_caller() {
+    let headers = phone(Caps::none());
+    assert_eq!(status(&headers, "GET", &["panes", "rule-art-3", "artifacts", "plan"]), 403);
+    // `POST /artifacts/show` lets only `Caller::Local` through: a phone, whatever it may do, is a device.
+    let all = phone(Caps::all());
+    assert!(!matches!(authorize_caller(&all, true, &["artifacts", "show"], "POST"), Ok(crate::mobile_pairing::Caller::Local)));
+    assert!(matches!(authorize_caller("", true, &["artifacts", "show"], "POST"), Ok(crate::mobile_pairing::Caller::Local)));
+}

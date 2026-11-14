@@ -34,6 +34,7 @@ pub const NOT_READY_BOX: &str = "The agent is not showing its input box. Check t
 pub const FAIL_NOT_RUNNING: &str = "The agent is not running in this pane.";
 pub const FAIL_CLOSED: &str = "The pane was closed.";
 pub const FAIL_TOO_LONG: &str = "Waited too long. Not sent.";
+pub const FAIL_STOPPED: &str = "Sending stopped unexpectedly. It may not have gone in. Send it again.";
 pub const FAIL_NOT_TAKEN: &str = "The agent did not take the message. Check the terminal.";
 pub const FAIL_IN_BOX: &str = "The message may be in the terminal box, not sent. Check the terminal.";
 pub const FAIL_WRITE: &str = "Could not type the message. Check the terminal.";
@@ -70,6 +71,10 @@ pub struct OutboxMessage {
     pub waiting_for: Option<String>,
     /// When failed: one plain sentence.
     pub error: Option<String>,
+    /// Sent, but the chat showed nothing new for a while. Only a hint: nothing is stopped, and it goes away when a
+    /// reply shows.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub no_answer: bool,
     /// Files and pictures sent with the message.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<ChatAttachment>,
@@ -84,6 +89,15 @@ pub(super) struct Entry {
     pub finished: Option<std::time::Instant>,
     /// Since when the person has it open to edit: it (and so the queue behind it) is not sent meanwhile.
     pub held: Option<std::time::Instant>,
+    /// After a send: the time it was handed over (restarted while the chat wakes up) and how many replies the chat
+    /// had then. `None` when nothing is watched.
+    pub watch: Option<Watch>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Watch {
+    pub since: std::time::Instant,
+    pub replies: usize,
 }
 
 impl Entry {
@@ -98,6 +112,10 @@ impl Entry {
         self.message.error = error.map(str::to_string);
         self.finished = Some(std::time::Instant::now());
         self.held = None;
+        if state != State::Sent {
+            self.watch = None;
+            self.message.no_answer = false;
+        }
     }
 
     pub fn wait(&mut self, why: &str) {

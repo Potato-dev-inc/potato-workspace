@@ -12,6 +12,8 @@ use std::path::{Component, Path, PathBuf};
 pub const MAX_READ_BYTES: u64 = 2 * 1024 * 1024;
 /// A folder shows at most this many entries (the reply says when it cut the list).
 pub const MAX_ENTRIES: usize = 2000;
+/// A Word, Excel or PDF file bigger than this is not opened in a tab (it travels to the screen as text, so it is capped).
+pub const MAX_BYTES_READ: u64 = 15 * 1024 * 1024;
 /// Folders that are skipped when listing a parent, unless the caller asks for them.
 const HEAVY_DIRS: &[&str] = &[".git", "node_modules", "target", ".potato-workspace"];
 
@@ -43,6 +45,18 @@ pub struct FileContent {
     pub kind: String,
     pub text: Option<String>,
     pub data_url: Option<String>,
+}
+
+/// A file's raw bytes for a viewer that needs them (Word, Excel, PDF), as base64.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileBytes {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+    /// `bytes` or `too_large`.
+    pub kind: String,
+    pub base64: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -199,6 +213,53 @@ pub fn read_file(root: &str, rel: &str) -> Result<FileContent, String> {
     }
     out.text = Some(String::from_utf8_lossy(&bytes).into_owned());
     Ok(out)
+}
+
+/// Reads one file of the project as raw bytes (base64), for the Word, Excel and PDF viewers. The same path check as
+/// `read_file`; a file over `MAX_BYTES_READ` is not read (`too_large`).
+pub fn read_bytes(root: &str, rel: &str) -> Result<FileBytes, String> {
+    let (canon_root, file) = resolve_in_root(root, rel)?;
+    let meta = fs::metadata(&file).map_err(|e| format!("FILES_IO: Could not open the file: {e}."))?;
+    if !meta.is_file() {
+        return Err("FILES_NOT_FILE: That is not a file.".to_string());
+    }
+    let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let mut out = FileBytes { path: rel_of(&canon_root, &file), name, size: meta.len(), kind: "bytes".into(), base64: None };
+    if meta.len() > MAX_BYTES_READ {
+        out.kind = "too_large".into();
+        return Ok(out);
+    }
+    let bytes = fs::read(&file).map_err(|e| format!("FILES_IO: Could not read the file: {e}."))?;
+    out.base64 = Some(base64::engine::general_purpose::STANDARD.encode(&bytes));
+    Ok(out)
+}
+
+/// Kinds of file that "Open in the default app" will start. A program or script is never started from here.
+const OPENABLE: &[&str] = &["docx", "doc", "dotx", "xlsx", "xls", "xlsm", "csv", "pptx", "ppt", "pdf", "html", "htm", "txt", "md", "rtf", "odt", "ods"];
+
+/// Opens a file of the project in the program the system chose for it (Word for .docx). Only document kinds.
+pub fn open_default(root: &str, rel: &str) -> Result<(), String> {
+    let (_, path) = resolve_in_root(root, rel)?;
+    if !path.is_file() {
+        return Err("FILES_NOT_FILE: That is not a file.".to_string());
+    }
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !OPENABLE.contains(&ext.as_str()) {
+        return Err("FILES_NOT_OPENABLE: That kind of file is not opened from here.".to_string());
+    }
+    #[cfg(windows)]
+    {
+        let plain = path.to_string_lossy().trim_start_matches(r"\\?\").to_string();
+        crate::proc_util::hidden_command("explorer").arg(plain).spawn().map(|_| ()).map_err(|e| format!("FILES_IO: Could not open the file: {e}."))
+    }
+    #[cfg(not(windows))]
+    {
+        #[cfg(target_os = "macos")]
+        let program = "open";
+        #[cfg(not(target_os = "macos"))]
+        let program = "xdg-open";
+        crate::proc_util::hidden_command(program).arg(&path).spawn().map(|_| ()).map_err(|e| format!("FILES_IO: Could not open the file: {e}."))
+    }
 }
 
 /// Turns `git status --porcelain=v1 -z` output into marks. `prefix` is the folder's place inside the repository

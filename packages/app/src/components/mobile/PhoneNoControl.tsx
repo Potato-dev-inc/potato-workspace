@@ -23,7 +23,7 @@ export function PhoneNoControl({
       (error: unknown) => setState(/ -> 429/.test(errorSentence(error)) ? 'recently' : 'failed'),
     );
   };
-  const sentence = limit === 'off' ? t('phone.control.off') : t('phone.control.watchOnly');
+  const sentence = limit === 'off' ? t('phone.control.off') : limit === 'answer' ? t('phone.control.answerOnly') : t('phone.control.watchOnly');
   const note =
     state === 'asked' ? t('phone.control.asked')
     : state === 'already' ? t('phone.control.already')

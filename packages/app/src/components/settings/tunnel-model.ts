@@ -1,6 +1,6 @@
 // Pure helpers for the "Public address" section in Settings > Mobile PWA.
 import { t } from '../../i18n';
-import type { TunnelConfigInput, TunnelConfigView, TunnelMode, TunnelStatus } from '../../lib/tauri-types';
+import type { TunnelConfigInput, TunnelConfigView, TunnelMode, TunnelStableStatus, TunnelStatus } from '../../lib/tauri-types';
 
 export interface TunnelDraft {
   mode: TunnelMode;
@@ -8,12 +8,17 @@ export interface TunnelDraft {
   /** Empty = keep the stored token. */
   token: string;
   url: string;
+  /** `stable`: the Worker address. */
+  workerUrl?: string;
+  /** `stable`: a secret the person typed. Empty = keep the stored one (or make one). */
+  secret?: string;
 }
 
 export const MODE_LABELS: Record<TunnelMode, string> = {
   quick: 'Automatic (changes on restart)',
   named: 'My Cloudflare tunnel',
   custom: 'My own domain or proxy',
+  stable: 'Stable link (your own Cloudflare Worker)',
 };
 
 export function draftFromConfig(config: TunnelConfigView | null | undefined): TunnelDraft {
@@ -21,7 +26,9 @@ export function draftFromConfig(config: TunnelConfigView | null | undefined): Tu
     mode: config?.mode ?? 'quick',
     hostname: config?.hostname ?? '',
     token: '',
-    url: config?.url ?? '',
+    url: config?.mode === 'stable' ? '' : (config?.url ?? ''),
+    workerUrl: config?.mode === 'stable' ? (config.url ?? '') : '',
+    secret: '',
   };
 }
 
@@ -33,6 +40,11 @@ export function draftProblem(draft: TunnelDraft, config: TunnelConfigView | null
     if (!draft.token.trim() && !hasStoredToken) return t('tunnel.problem.token');
   }
   if (draft.mode === 'custom' && !draft.url.trim()) return t('tunnel.problem.address');
+  if (draft.mode === 'stable') {
+    if (!(draft.workerUrl ?? '').trim()) return t('tunnel.problem.worker');
+    const own = (draft.secret ?? '').trim();
+    if (own && own.length < 16) return t('tunnel.problem.secret');
+  }
   return null;
 }
 
@@ -42,6 +54,10 @@ export function toInput(draft: TunnelDraft): TunnelConfigInput {
     return { mode: 'named', hostname: draft.hostname.trim(), token: token || null };
   }
   if (draft.mode === 'custom') return { mode: 'custom', url: draft.url.trim() };
+  if (draft.mode === 'stable') {
+    const own = (draft.secret ?? '').trim();
+    return { mode: 'stable', worker_url: (draft.workerUrl ?? '').trim(), secret: own || null, secret_action: 'keep' };
+  }
   return { mode: 'quick' };
 }
 
@@ -53,6 +69,8 @@ export interface StatusLine {
 export function statusLine(status: TunnelStatus | null): StatusLine {
   if (!status) return { tone: 'idle', text: t('tunnel.status.desktopOnly') };
   const overridden = status.mode === 'env' ? ` ${t('tunnel.status.outside')}` : '';
+  // Stable link: the phone-facing line is about the Worker, not the automatic address behind it.
+  if (status.mode === 'stable' && status.stable && status.state !== 'error') return stableLine(status.stable, status.state);
   switch (status.state) {
     case 'running':
       return { tone: 'ok', text: `${t('tunnel.status.online')}${overridden}` };
@@ -66,5 +84,23 @@ export function statusLine(status: TunnelStatus | null): StatusLine {
 }
 
 export function isStableMode(mode: TunnelStatus['mode'] | undefined): boolean {
-  return mode === 'named' || mode === 'custom' || mode === 'env';
+  return mode === 'named' || mode === 'custom' || mode === 'env' || mode === 'stable';
+}
+
+/** "Stable link: <worker> → linked / not linked yet (<why>)". */
+function stableLine(stable: TunnelStableStatus, state: TunnelStatus['state']): StatusLine {
+  const worker = stable.worker_url;
+  switch (stable.link) {
+    case 'linked':
+      return { tone: 'ok', text: t('tunnel.stable.linked', { worker }) };
+    case 'failed':
+      return {
+        tone: 'bad',
+        text: stable.error ? t('tunnel.stable.failed', { worker, reason: stable.error }) : t('tunnel.stable.failedNoReason', { worker }),
+      };
+    case 'linking':
+      return { tone: 'wait', text: t('tunnel.stable.linking', { worker }) };
+    default:
+      return { tone: state === 'starting' ? 'wait' : 'idle', text: t('tunnel.stable.waiting', { worker }) };
+  }
 }

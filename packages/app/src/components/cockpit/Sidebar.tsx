@@ -287,7 +287,9 @@ export function Sidebar({
     const startId = c.beginChatStart(agentId, project.path);
     let started: Awaited<ReturnType<AcpChatApi['start']>>;
     try {
-      started = await (accountId === undefined ? acp.start(agentId, project.path, true) : acp.start(agentId, project.path, true, accountId));
+      // The menu's copy switch ("Work on a copy") is on: the chat works in a copy of this project.
+      const onCopy = isolated && supportsCopies(project.state);
+      started = await (onCopy ? acp.start(agentId, project.path, true, accountId, true) : accountId === undefined ? acp.start(agentId, project.path, true) : acp.start(agentId, project.path, true, accountId));
     } catch (err) {
       c.endChatStart(startId);
       throw err;

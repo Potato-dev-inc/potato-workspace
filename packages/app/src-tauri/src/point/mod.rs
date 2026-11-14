@@ -19,6 +19,8 @@ pub mod capture;
 pub mod message;
 pub mod origin;
 pub mod pick;
+pub mod recheck;
+pub mod recheck_live;
 pub mod session;
 pub mod shot;
 pub mod source;

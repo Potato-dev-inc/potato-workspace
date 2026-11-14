@@ -285,8 +285,11 @@ export function foldPlan(plan: readonly PlanItem[], item: PlanChatItem): PlanIte
  * the list as it stood after the turn's last update. A `notice` becomes a step of the turn it came in (after the
  * turn ended: of the turn before), except `title`, which sets `title`, and a pull request link seen before. The
  * files of tool calls are collected into `outputs`. Items of a kind this code does not know are ignored.
+ *
+ * `previous` (the last result): a turn, and each step of it, that holds exactly what it held there is returned as the
+ * same object, so a view can skip it (`memo`). The function stays pure; the caller keeps the last result.
  */
-export function groupTurns(items: readonly ChatItem[]): GroupedChat {
+export function groupTurns(items: readonly ChatItem[], previous?: GroupedChat | null): GroupedChat {
   const turns: ChatTurn[] = [];
   const calls = new Map<string, ToolStep>();
   const outputs = new Map<string, OutputFile>();
@@ -397,5 +400,49 @@ export function groupTurns(items: readonly ChatItem[]): GroupedChat {
       }
     }
   }
-  return { turns, model, cliVersion, usage, plan, title, outputs: [...outputs.values()] };
+  return { turns: previous ? reuseTurns(turns, previous.turns) : turns, model, cliVersion, usage, plan, title, outputs: [...outputs.values()] };
+}
+
+function samePlan(a: PlanItem[] | null, b: PlanItem[] | null): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((task, i) => task.text === b[i]!.text && task.status === b[i]!.status && task.taskId === b[i]!.taskId);
+}
+
+function sameStep(a: TurnStep, b: TurnStep): boolean {
+  if (a === b) return true;
+  if (a.kind !== b.kind || a.id !== b.id) return false;
+  if (a.kind === 'tool' && b.kind === 'tool') return a.call === b.call && a.result === b.result && a.status === b.status;
+  return a.kind !== 'tool' && b.kind !== 'tool' && a.item === b.item;
+}
+
+function sameTurn(a: ChatTurn, b: ChatTurn): boolean {
+  return (
+    a.id === b.id &&
+    a.user === b.user &&
+    a.end === b.end &&
+    a.outcome === b.outcome &&
+    a.durationMs === b.durationMs &&
+    a.contextTokens === b.contextTokens &&
+    a.ending?.id === b.ending?.id &&
+    a.ending?.text === b.ending?.text &&
+    a.ending?.reason === b.ending?.reason &&
+    samePlan(a.plan, b.plan) &&
+    a.steps.length === b.steps.length &&
+    a.steps.every((step, i) => step === b.steps[i])
+  );
+}
+
+/** Swap in the turn (and steps) of `before` wherever `turns` holds the same thing. Item objects keep their identity through `mergeItems`. */
+function reuseTurns(turns: ChatTurn[], before: readonly ChatTurn[]): ChatTurn[] {
+  const old = new Map(before.map((turn) => [turn.id, turn]));
+  return turns.map((turn) => {
+    const known = old.get(turn.id);
+    if (!known) return turn;
+    turn.steps = turn.steps.map((step, i) => {
+      const was = known.steps[i];
+      return was && sameStep(was, step) ? was : step;
+    });
+    return sameTurn(known, turn) ? known : turn;
+  });
 }

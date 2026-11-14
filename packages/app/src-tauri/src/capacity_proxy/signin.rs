@@ -16,6 +16,27 @@ pub enum SigninProblem {
     Expired,
 }
 
+/// Where a lend sign-in stands, for the sign-in step (words for the person, not for the wire).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SigninState {
+    /// A token that can really be lent is there.
+    SignedIn,
+    /// No file, no token in it.
+    SignedOut,
+    /// A token is there but its own expiry has passed.
+    Expired,
+}
+
+impl SigninState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SignedIn => "signed_in",
+            Self::SignedOut => "signed_out",
+            Self::Expired => "expired",
+        }
+    }
+}
+
 /// Where a lend sign-in's token and its expiry are, as the spec says. Holds no secret.
 #[derive(Clone)]
 pub struct SigninFile {
@@ -61,6 +82,15 @@ impl SigninFile {
         Some(if self.expires_in_secs { n.saturating_mul(1000) } else { n })
     }
 
+    /// Whether a token that can be lent is there at `now_ms`. Reads the file and forgets the token at once.
+    pub fn state(&self, now_ms: u64) -> SigninState {
+        match self.token(now_ms) {
+            Ok(_) => SigninState::SignedIn,
+            Err(SigninProblem::Missing) => SigninState::SignedOut,
+            Err(SigninProblem::Expired) => SigninState::Expired,
+        }
+    }
+
     /// The token for ONE request: read now, refused when missing or already expired at `now_ms`.
     pub fn token(&self, now_ms: u64) -> Result<String, SigninProblem> {
         let json = self.json().ok_or(SigninProblem::Missing)?;
@@ -74,5 +104,76 @@ impl SigninFile {
             return Err(SigninProblem::Expired);
         }
         Ok(token)
+    }
+}
+
+/// Who is signed in, read from the spec's identity file inside the lend sign-in folder `home` (for the lender's own
+/// screen only; it is never sent). None when the spec has no identity, the file or value is missing, or the value is not
+/// plain short text.
+pub fn identity(home: &str, spec: &AuthSpec) -> Option<String> {
+    let id = spec.identity.as_ref()?;
+    if id.file.is_empty() || id.file.contains(['/', '\\']) || id.file.contains("..") {
+        return None;
+    }
+    let json: Value = serde_json::from_str(&std::fs::read_to_string(PathBuf::from(home).join(&id.file)).ok()?).ok()?;
+    let who = json.pointer(&id.json_pointer)?.as_str()?.trim();
+    (!who.is_empty() && who.chars().count() <= 120 && !who.chars().any(char::is_control)).then(|| who.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::capacity_proxy::spec::{AuthSpec, IdentitySpec};
+
+    fn spec() -> AuthSpec {
+        AuthSpec {
+            header: "authorization".into(),
+            file: Some(".credentials.json".into()),
+            json_pointer: Some("/oauth/token".into()),
+            expires_pointer: Some("/oauth/expires".into()),
+            expires_unit: Some("ms".into()),
+            identity: Some(IdentitySpec { file: ".claude.json".into(), json_pointer: "/account/email".into() }),
+            ..Default::default()
+        }
+    }
+
+    fn folder(name: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("pm-signin-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn state_is_signed_out_for_no_file_expired_for_a_past_expiry_and_signed_in_otherwise() {
+        let home = folder("state");
+        let file = SigninFile::new(&home, &spec()).unwrap();
+        assert_eq!(file.state(1_000), SigninState::SignedOut);
+        std::fs::write(PathBuf::from(&home).join(".credentials.json"), r#"{"oauth":{"token":"t","expires":5000}}"#).unwrap();
+        assert_eq!(file.state(1_000), SigninState::SignedIn);
+        assert_eq!(file.state(6_000), SigninState::Expired);
+        std::fs::write(PathBuf::from(&home).join(".credentials.json"), r#"{"oauth":{"token":""}}"#).unwrap();
+        assert_eq!(file.state(1_000), SigninState::SignedOut, "an empty token is not a sign-in");
+        assert_eq!(SigninState::SignedIn.as_str(), "signed_in");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn identity_is_read_from_the_pointer_and_is_none_when_missing_or_not_plain_text() {
+        let home = folder("identity");
+        assert_eq!(identity(&home, &spec()), None, "no file yet");
+        let path = PathBuf::from(&home).join(".claude.json");
+        std::fs::write(&path, r#"{"account":{"email":" ren@example.com "}}"#).unwrap();
+        assert_eq!(identity(&home, &spec()).as_deref(), Some("ren@example.com"));
+        std::fs::write(&path, r#"{"account":{}}"#).unwrap();
+        assert_eq!(identity(&home, &spec()), None, "pointer missing");
+        std::fs::write(&path, r#"{"account":{"email":"a
+b"}}"#).unwrap();
+        assert_eq!(identity(&home, &spec()), None, "control characters");
+        std::fs::write(&path, r#"{"account":{"email":7}}"#).unwrap();
+        assert_eq!(identity(&home, &spec()), None, "not text");
+        let none = AuthSpec { identity: None, ..spec() };
+        assert_eq!(identity(&home, &none), None, "a spec with no identity table");
+        let _ = std::fs::remove_dir_all(&home);
     }
 }

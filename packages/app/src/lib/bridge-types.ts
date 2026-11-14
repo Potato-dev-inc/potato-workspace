@@ -461,6 +461,11 @@ export interface BridgeClient {
    * PDF and common text files). Resolves the attachment to send with the next message. Absent on old PCs.
    */
   uploadPaneFile?(paneId: string, body: PhoneUploadBody): Promise<ChatAttachment>;
+  /**
+   * `GET /panes/{id}/artifacts/{artifactId}?v=N`: one version of a page the agent made (needs `watch`; the agent's own remote rule
+   * applies, so a locked agent answers 403). Absent on old PCs.
+   */
+  paneArtifact?(paneId: string, id: string, version?: number): Promise<PhoneArtifact>;
   /** `GET /panes/{id}/result[?patch=1]`: what the agent's last turn did (needs `watch`). Absent on old PCs. */
   paneResult?(paneId: string, withPatch?: boolean): Promise<PaneResult>;
   /** `DELETE /panes/{id}/messages/{messageId}`: cancels a message that has not started to be typed (needs `type`). */
@@ -550,4 +555,17 @@ export interface PhoneClosedChat {
   folder: string;
   updated_ms: number;
   title: string | null;
+}
+
+/** A page the agent made, as the PC tells a phone (never a file path). `content` is left out when the page is too big for the phone. */
+export interface PhoneArtifact {
+  id: string;
+  title: string;
+  kind: 'html' | 'markdown' | 'svg' | 'mermaid';
+  latest: number;
+  version: number;
+  versions: { n: number; at: string; bytes: number }[];
+  updatedAt: string;
+  content?: string;
+  tooLarge?: boolean;
 }

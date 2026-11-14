@@ -3,7 +3,7 @@
 //! in as a prompt when the session is ready; when the agent takes text while it works the message is steered into
 //! the running turn instead (`steer`). Nothing here types into anything.
 
-use super::host::{Attempt, Look};
+use super::host::{Attempt, Look, Pulse};
 use crate::attach::ChatAttachment;
 use crate::acp::chat::{AcpChat, Readiness as ChatReadiness, SendError};
 use crate::agent_runs::readiness::Readiness;
@@ -17,6 +17,14 @@ pub fn look(chat: &AcpChat) -> Option<Look> {
         ChatReadiness::Gone => return None,
     };
     Some(Look { readiness, composer: ComposerState::Empty, idle, waiting: false })
+}
+
+/// What the chat shows now: the agent-side items so far, and whether it is starting or waking up.
+pub fn pulse(chat: &AcpChat) -> Pulse {
+    use crate::session_chat::ChatItem;
+    let replies = chat.items().iter().filter(|item| !matches!(item, ChatItem::User { .. })).count();
+    let waking = matches!(chat.session().snapshot().phase, crate::acp::state::Phase::Starting | crate::acp::state::Phase::Resuming);
+    Pulse { replies, waking }
 }
 
 /// Sends the message as a prompt.

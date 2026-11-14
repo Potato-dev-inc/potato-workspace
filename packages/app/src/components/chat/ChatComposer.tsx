@@ -22,6 +22,7 @@ import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { commandHint, commandText, filterCommands, type AcpCommand } from '../../lib/acpChat';
 import { registerFileDrop } from '../../lib/fileDrop';
 import { draggedFilePath } from '../../lib/dropFiles';
+import { t } from '../../i18n';
 import { registerDropZone, useDragOver } from '../dnd/dragStore';
 import '../../styles/cockpit-acp.css';
 import '../../styles/chat-input-card.css';
@@ -388,13 +389,29 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   useEffect(() => {
     if (!attachFiles) return;
     // One listener for the whole window (lib/fileDrop): each box answers for its own rectangle.
-    return registerFileDrop({
+    // The target is the whole chat (the box's own rectangle when it sits in none), and the chat shows "Drop to attach"
+    // while files are over it (styles/cockpit-chat.css reads data-file-over). A folder is attached by its path.
+    const area = () => form.current?.closest<HTMLElement>('.ck-chat') ?? form.current;
+    const off = registerFileDrop({
       id: `composer-${zoneId}`,
       priority: 1,
-      getRect: () => form.current?.getBoundingClientRect() ?? null,
-      onOver: setFileOver,
+      getRect: () => area()?.getBoundingClientRect() ?? null,
+      onOver: (over) => {
+        setFileOver(over);
+        const el = area();
+        if (!el) return;
+        if (over) {
+          el.dataset.fileOver = 'true';
+          el.dataset.dropLabel = t('dnd.dropToAttach');
+        } else delete el.dataset.fileOver;
+      },
       onDrop: (paths) => void addPathsRef.current(paths),
     });
+    return () => {
+      off();
+      const el = area();
+      if (el) delete el.dataset.fileOver;
+    };
   }, [attachFiles, zoneId]);
 
   // A file dragged from this app's own Changes list and dropped on the box becomes a chip, like an @ mention.

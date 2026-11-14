@@ -110,4 +110,6 @@ export const MOVED_FILES: readonly string[] = [
   // flow: update choice, sign-in fix card, Problems, shared error card, start-up line
   'components/updates/WhatsNewCard.tsx', 'components/acp/SignInFixCard.tsx', 'components/common/ErrorCard.tsx',
   'components/cockpit/problems/ProblemsChip.tsx', 'components/cockpit/StartupCheckLine.tsx',
+  // Point and Fix
+  'components/point/PointBox.tsx', 'components/point/PointBoxApp.tsx', 'components/point/RecheckStrip.tsx',
 ];

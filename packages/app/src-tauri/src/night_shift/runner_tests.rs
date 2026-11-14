@@ -37,6 +37,14 @@ fn task(n: u8, project: &str, checks: bool) -> Task {
     t
 }
 
+/// A task with its own id. The quiet set is process-wide and keyed by the pane/handle the fake start returns
+/// (from the task id), so a test that asserts on it must not share a task id with tests running beside it.
+fn task_with_id(id: &str, project: &str, checks: bool) -> Task {
+    let mut t = task(1, project, checks);
+    t.spec.id = id.to_string();
+    t
+}
+
 fn run_with(id: &str, tasks: Vec<Task>, stop_in: u64) -> NightRun {
     let mut run = sample_run(id);
     run.tasks = tasks;
@@ -512,7 +520,7 @@ fn the_person_stop_ends_the_run_as_stopped() {
 #[test]
 fn a_new_runner_adopts_a_working_task_and_starts_no_duplicate() {
     let first = FakeIo::new(vec![cand("fake_a", "Fake A", Some("va"))]);
-    let mut run = run_with("ns-00000000000c", vec![task(1, "/p/one", true)], 8 * HOUR);
+    let mut run = run_with("ns-00000000000c", vec![task_with_id("nt-adopt0001", "/p/one", true)], 8 * HOUR);
     run.keep_awake = true;
     step(&mut run, &first);
     assert_eq!(first.starts().len(), 1);
@@ -527,7 +535,7 @@ fn a_new_runner_adopts_a_working_task_and_starts_no_duplicate() {
     assert!(second.starts().is_empty(), "the Working task is found again, not started again");
     assert_eq!(second.awake.lock().clone(), vec![true], "the new process takes the hold again");
     assert_eq!(saved.tasks[0].state, TaskState::Working);
-    assert!(crate::night_shift::quiet::is_quiet_pane("pane-nt-00000001-1"), "the quiet set is rebuilt");
+    assert!(crate::night_shift::quiet::is_quiet_pane("pane-nt-adopt0001-1"), "the quiet set is rebuilt");
     crate::night_shift::quiet::unmute_run("ns-00000000000c");
 }
 
@@ -692,13 +700,13 @@ fn a_failed_single_turn_and_a_vanished_record_end_as_needs_a_look() {
 #[test]
 fn quiet_marks_the_panes_a_task_opens_and_the_end_of_the_run_releases_them() {
     let io = FakeIo::new(two_plans());
-    let mut run = run_with("ns-000000000017", vec![task(1, "/p/one", true)], 8 * HOUR);
+    let mut run = run_with("ns-000000000017", vec![task_with_id("nt-quiet0001", "/p/one", true)], 8 * HOUR);
     step(&mut run, &io);
-    assert!(crate::night_shift::quiet::is_quiet_pane("pane-nt-00000001-1"));
-    assert!(crate::night_shift::quiet::is_quiet_project_handle("/p/one", "h-nt-00000001-1"));
-    io.set_watch("nt-00000001:1", Watch::Done);
+    assert!(crate::night_shift::quiet::is_quiet_pane("pane-nt-quiet0001-1"));
+    assert!(crate::night_shift::quiet::is_quiet_project_handle("/p/one", "h-nt-quiet0001-1"));
+    io.set_watch("nt-quiet0001:1", Watch::Done);
     step(&mut run, &io);
-    assert!(!crate::night_shift::quiet::is_quiet_pane("pane-nt-00000001-1"));
+    assert!(!crate::night_shift::quiet::is_quiet_pane("pane-nt-quiet0001-1"));
 }
 
 #[test]

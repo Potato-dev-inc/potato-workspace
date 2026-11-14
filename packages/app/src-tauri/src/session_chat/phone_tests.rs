@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::{Instant, SystemTime};
+use std::time::{SystemTime};
 
 use parking_lot::Mutex;
 
@@ -109,11 +109,7 @@ fn append(path: &Path, text: &str) {
 }
 
 fn wait_until(what: &str, cond: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(60);
-    while !cond() {
-        assert!(Instant::now() < deadline, "timed out waiting for: {what}");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    crate::test_support::wait::wait_for(what, 60, cond);
 }
 
 fn texts(reply: &Value) -> Vec<String> {
