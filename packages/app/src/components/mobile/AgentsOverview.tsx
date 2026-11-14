@@ -183,7 +183,7 @@ export function AgentsOverview({
         {cards}
         <TeamGroup bridge={bridge} bridgeReady={bridgeReady} />
         <DigestCard bridge={bridge} bridgeReady={bridgeReady} onOpen={onOpen} />
-        <PhoneQuiet kind="empty">
+        <PhoneQuiet kind="empty" onStarter={onNew}>
           <button type="button" onClick={onNew} className="ph-btn ph-btn--primary">
             {t('phone.empty.start')}
           </button>

@@ -54,7 +54,7 @@ export interface AcpChatState {
   /** Why the adapter is not running (phase `exited`): `closed` | `crashed` | `hung` | `write_stalled` | `start_failed`. */
   exit?: { kind: string; code: number | null; reason: string | null } | null;
   /** The agent refused the last message until the person signs in (the sign-in card shows). */
-  signIn?: { needed: boolean; hint: string };
+  signIn?: { needed: boolean; hint: string; /** The kept message (at most 2000 characters), when the backend says it. */ text?: string | null };
   /** The saved conversation's id (== the pane id) when the chat is a saved conversation, else null. */
   conversation?: string | null;
   /** The conversation was handed to a terminal pane: this chat is paused. `paneId` is that terminal, when known. */

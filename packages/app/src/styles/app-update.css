@@ -64,3 +64,49 @@
   opacity: 0.75;
   font-variant-numeric: tabular-nums;
 }
+/* Ready while agents work: one line, then the three choices. The chosen one is pressed. */
+.app-update-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.app-update-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.app-update-btn[aria-pressed='true'] {
+  background: var(--fill, rgba(128, 128, 128, 0.18));
+  border-color: var(--label, currentColor);
+  font-weight: 600;
+}
+.app-update-btn:focus-visible {
+  outline: 2px solid var(--accent, currentColor);
+  outline-offset: 2px;
+}
+/* "What is new": shown once after the restart. */
+.app-whatsnew {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--sep, rgba(128, 128, 128, 0.3));
+  border-radius: 10px;
+  background: var(--bg-raised, var(--bg-side));
+  color: var(--label, inherit);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.app-whatsnew ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.app-whatsnew .app-update-btn {
+  align-self: flex-start;
+}

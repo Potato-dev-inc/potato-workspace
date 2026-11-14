@@ -925,6 +925,12 @@ impl AcpChat {
         self.sign_in_held.lock().is_some()
     }
 
+    /// The words of the message that waits for a sign-in (at most 2000 characters), so the card can say what is kept and
+    /// offer it to another agent. `None` when nothing waits.
+    pub fn sign_in_text(&self) -> Option<String> {
+        self.sign_in_held.lock().as_ref().map(|(text, _)| text.chars().take(2000).collect())
+    }
+
     /// "I'm signed in — try again": sends the message that was refused for want of a sign-in. If the agent still wants
     /// a sign-in the card stays.
     pub fn retry_after_sign_in(&self) -> Result<Sent, SendError> {
@@ -1232,7 +1238,7 @@ impl AcpChat {
             "agentAnswering": self.agent_answering(),
             "autoAllow": self.auto_allowed_kinds(),
             "interruptedTurn": self.interrupted.load(Ordering::SeqCst),
-            "signIn": { "needed": self.sign_in_needed(), "hint": self.session.config().addon.signin_hint },
+            "signIn": { "needed": self.sign_in_needed(), "hint": self.session.config().addon.signin_hint, "text": self.sign_in_text() },
         })
     }
 }

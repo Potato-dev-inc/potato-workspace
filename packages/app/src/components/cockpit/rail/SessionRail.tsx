@@ -67,7 +67,7 @@ export function SessionRail({ paneId, status, cwd, agentName, accountLabel, read
       <WhereCard agentName={agentName} model={chat.model} cliVersion={chat.cliVersion} folder={cwd} branch={branch} accountLabel={accountLabel} />
       <ContextCard usage={chat.usage} />
       <TasksCard plan={chat.plan} />
-      <ChangesCard outputs={chat.outputs} cwd={cwd} onOpenChanges={onOpenChanges} />
+      <ChangesCard paneId={paneId} status={status} outputs={chat.outputs} cwd={cwd} onOpenChanges={onOpenChanges} />
       <FilesCard paneId={paneId} cwd={cwd} canMention={readsChat} refreshKey={status} />
       <BackgroundCard paneId={paneId} jobs={jobs} />
       <HelpersCard helpers={helpers} usage={usage} onOpen={onOpenPane} onSaveTeam={onSaveTeam} />

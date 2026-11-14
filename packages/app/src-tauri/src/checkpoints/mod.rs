@@ -10,6 +10,7 @@ pub mod export;
 pub mod http;
 mod git;
 mod runtime;
+pub mod turn_review;
 #[cfg(test)]
 mod export_tests;
 #[cfg(test)]
@@ -17,6 +18,7 @@ mod tests;
 
 pub use engine::{Checkpoint, CheckpointError, FileChange, RestoreReport, TurnPatch};
 pub use export::{export_into, ExportReport};
+pub use turn_review::{PutBackReport, TurnReview};
 /// For tests in other modules that need a real checkpoint store inside a folder.
 #[cfg(test)]
 pub(crate) use engine::{snapshot as test_snapshot, Kind as TestKind, Limits as TestLimits};

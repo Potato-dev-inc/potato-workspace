@@ -249,7 +249,8 @@ describe('start a chat from the phone', () => {
     await flush();
     const screen = host.querySelector('[data-testid="phone-new-chat"]')!;
     expect(screen).not.toBeNull();
-    expect(screen.querySelector('[data-testid="nc-agent-pill"]')?.textContent).toContain('Agent: Codex');
+    expect(screen.querySelector('[data-testid="nc-agent-pill"]')).toBeNull();
+    expect(screen.querySelector('[data-testid="nc-agent-tile"][aria-checked="true"]')?.textContent).toContain('Codex');
     expect(screen.querySelector('[data-testid="nc-project-pill"]')?.textContent).toContain('Project: shop');
     // Codex can do both, so the choice shows; Chat is the default.
     expect(radioNamed('Chat')?.getAttribute('aria-checked')).toBe('true');
@@ -267,8 +268,7 @@ describe('start a chat from the phone', () => {
     await flush();
     await click(byLabel('New chat'));
     await flush();
-    await click(host.querySelector('[data-testid="nc-agent-pill"]'));
-    await click(Array.from(host.querySelectorAll('.ph-nc-list button')).find((b) => b.textContent?.includes('Kilo')));
+    await click(Array.from(host.querySelectorAll('[data-testid="nc-agent-tile"]')).find((b) => b.textContent?.includes('Kilo')));
     expect(host.querySelector('[data-testid="nc-lane"]')).toBeNull();
     await click(host.querySelector('[data-testid="nc-project-pill"]'));
     const names = Array.from(host.querySelectorAll('.ph-nc-list .ph-t')).map((n) => n.textContent);
@@ -356,11 +356,12 @@ describe('the settings picker', () => {
     await open('c1');
     await flush();
     const pill = host.querySelector('[data-testid="phone-pick-pill"]')!;
-    expect(pill.textContent).toContain('Big model');
+    expect(pill.textContent).toContain('Big model · Ask each time');
     await click(pill);
     const sheet = host.querySelector('[data-testid="phone-pick-sheet"]')!;
-    expect(Array.from(sheet.querySelectorAll('h3')).map((n) => n.textContent)).toEqual(['Permissions', 'Model', 'Effort']);
+    expect(Array.from(sheet.querySelectorAll('h3')).map((n) => n.textContent)).toEqual(['How careful', 'Model', 'Effort']);
     expect(sheet.textContent).toContain('Slow and careful');
+    expect(sheet.querySelector('[data-testid="phone-pick-raw"]')?.textContent).toBe('big');
     await click(radioNamed('Fast model'));
     expect(h.acpSetConfig).toHaveBeenCalledWith('c1', 'model', 'fast', false);
     await click(radioNamed('High'));
@@ -443,7 +444,7 @@ describe('closed chats in the drawer', () => {
     await click(host.querySelector('button[aria-label^="Open chats"]'));
     await flush();
     const section = host.querySelector('[data-testid="drawer-closed"]')!;
-    expect(section.querySelector('h2')?.textContent).toBe('Closed');
+    expect(section.querySelector('.ph-dclosed-toggle')?.textContent).toContain('Closed chats');
     expect(section.querySelectorAll('.ph-drow').length).toBe(0);
     await click(section.querySelector('.ph-dclosed-toggle'));
     expect(section.textContent).toContain('fix the login page');

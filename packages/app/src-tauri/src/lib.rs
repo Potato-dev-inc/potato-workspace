@@ -156,6 +156,8 @@ mod wsl;
 mod collision;
 mod notify_levels;
 mod files;
+// Open in my editor (desk review).
+mod editor;
 // Desktop Potato (Labs `desktop_pet_enabled`): a small pet window. Reserved lines at the end.
 mod pet;
 #[cfg(test)]
@@ -837,6 +839,13 @@ pub fn run() {
             commands::pet_start_drag,
             commands::pet_move_by,
             commands::pet_fullscreen_busy,
+            commands::disk_space,
+            // Desk review: file-by-file review, Put back, Open in my editor.
+            commands::checkpoint_turn_review,
+            commands::checkpoint_put_back,
+            commands::checkpoint_file_patch,
+            commands::editors_found,
+            commands::open_in_editor,
         ])
         .setup(|app| {
             commands::startup_probe(app.handle().clone());

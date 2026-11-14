@@ -1,6 +1,7 @@
 // Mocks the Tauri IPC layer so the real UI runs in a plain browser.
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import type { HarnessScenario } from './types';
+import { EXAMPLE_FILE_PATCH, EXAMPLE_TURN_REVIEW } from './desk-review-fixtures';
 import {
   EXAMPLE_CHECKPOINTS,
   EXAMPLE_DIGEST,
@@ -178,6 +179,16 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'checkpoint_restore':
         case 'checkpoint_undo_last':
           return { safetyId: '7', written: 4, removed: 1, failed: [] };
+        case 'checkpoint_turn_review':
+          return a.paneId === PANE_CLAUDE ? EXAMPLE_TURN_REVIEW : null;
+        case 'checkpoint_file_patch':
+          return EXAMPLE_FILE_PATCH;
+        case 'checkpoint_put_back':
+          return { safetyId: '9', action: 'written' };
+        case 'editors_found':
+          return [{ id: 'vscode', name: 'VS Code' }];
+        case 'open_in_editor':
+          return null;
         case 'turn_summaries':
           return a.paneId === PANE_CLAUDE ? EXAMPLE_TURN_SUMMARIES : [];
         case 'companion_list':
@@ -264,6 +275,12 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return null;
         case 'canary_open_captures':
           return 'C:\Users\dev\AppData\Roaming\com.potatodev.workspace\captures';
+        case 'app_update_check':
+          return scenario.appUpdate ? { currentVersion: '1.0.27', version: scenario.appUpdate.version, notes: null } : null;
+        case 'app_update_busy':
+          return scenario.appUpdate?.busy ?? { agents: [], chats: [], terminals: [] };
+        case 'app_update_install':
+          return scenario.appUpdate?.busy?.agents.length ? Promise.reject(new Error('UPDATE_RUNNING: An agent is working.')) : null;
         case 'agents_health':
           return { agents: DOCTOR_ROWS };
         case 'agents_install_plan': {

@@ -857,6 +857,7 @@ fn a_login_that_runs_out_shows_the_sign_in_card_and_try_again_sends_the_same_mes
     });
     rig.say("stream 2");
     assert_eq!(rig.chat.state()["signIn"]["needed"], false);
+    assert!(rig.chat.state()["signIn"]["text"].is_null(), "no message waits yet");
 
     // The adapter sleeps; the login ran out meanwhile.
     assert_eq!(rig.chat.session().tick(Instant::now() + Duration::from_secs(61)), crate::acp::session::TickAction::Slept);
@@ -866,6 +867,7 @@ fn a_login_that_runs_out_shows_the_sign_in_card_and_try_again_sends_the_same_mes
     let state = rig.chat.state();
     assert_eq!(state["signIn"]["needed"], true);
     assert_eq!(state["signIn"]["hint"], "Type /login in the terminal.");
+    assert_eq!(state["signIn"]["text"], "stream 3", "the kept message is named so the card can say it is kept");
     assert!(rig.chat.sign_in_needed());
     assert!(rig.host.states.load(Ordering::SeqCst) >= 1, "viewers are told so the card appears");
 

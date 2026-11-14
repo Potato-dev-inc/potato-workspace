@@ -9,6 +9,7 @@ import { IconClose } from './Icons';
 import { paneHeading } from './titles';
 import { useT } from '../../i18n';
 import { setFocusMode } from '../../lib/focus-mode';
+import { requestPaneAction } from '../../lib/pane-actions';
 import { usePaneTabOrder } from '../../lib/paneTabOrder';
 import { dragSourceProps } from '../dnd/dragSourceProps';
 import { ReorderList } from '../dnd/ReorderList';
@@ -71,7 +72,13 @@ export function PaneTabs({ c, paneId }: { c: CockpitApi; paneId: string }) {
         const title = paneHeading(p.info, agentName).primary;
         const asking = Boolean(c.prompts?.[id]);
         const dot = active ? null : tabDot(p.status, asking);
-        const canClose = !isBusyStatus(p.status) && !asking;
+        // A working agent asks first, the way the sidebar close does (its pane's own view runs the question); an idle one closes and shows the undo bar.
+        const busy = isBusyStatus(p.status) || asking;
+        const close = () => {
+          if (!busy) return void c.closePane(id);
+          c.select(id);
+          requestPaneAction(id, 'close');
+        };
         return (
           <div key={id} className={`ck-ptab${active ? ' is-active' : ''}`} data-pane-tab={id} {...dragSourceProps({ kind: 'tab', id, label: title })}>
             <button
@@ -91,11 +98,9 @@ export function PaneTabs({ c, paneId }: { c: CockpitApi; paneId: string }) {
               <span className="ck-ptab-title">{title}</span>
             </button>
             {dot && <span className={`ck-ptab-dot ck-ptab-dot--${dot}`} role="img" aria-label={dotLabel[dot]} data-testid="pane-tab-dot" />}
-            {canClose && (
-              <button type="button" className="ck-ptab-x" aria-label={t('pane.closeTab', { title })} onClick={() => void c.closePane(id)}>
-                <IconClose />
-              </button>
-            )}
+            <button type="button" className="ck-ptab-x" aria-label={t('pane.closeTab', { title })} onClick={close}>
+              <IconClose />
+            </button>
           </div>
         );
       })}

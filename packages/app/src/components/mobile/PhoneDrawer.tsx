@@ -5,30 +5,24 @@ import { useEffect, useRef, useState, type ReactNode, type TouchEvent as ReactTo
 import type { PaneInfo } from '@potato-workspace/shared';
 import { useT, type MessageKey } from '../../i18n';
 import type { AttentionSnapshot } from '../../lib/attention';
-import { ALL_TAB, companionTab } from '../../lib/mobile-agent-tabs';
+import { companionTab } from '../../lib/mobile-agent-tabs';
 import type { CompanionView } from '../../lib/companion';
 import { stateWord } from '../../lib/companion';
-import { AgentLogo } from '../common/AgentLogo';
+import { PhoneAgentTile } from './PhoneAgentTile';
 import { Avatar } from '../companion/Avatar';
 import { groupByProject, needsPaneIds, rowState, type RowState } from './phoneNav';
 import type { RuleLimit } from '../../lib/pane-rule-view';
 import type { PhoneClosedChat } from '../../lib/bridge-types';
 import { useProgressNote } from '../../lib/phone-progress';
-import { progressWords, useNow } from './PhoneProgress';
+import { useChatMeta } from '../../lib/phone-chatmeta';
+import { useNow } from './PhoneProgress';
+import { isAsking, phoneStatus } from '../../lib/phone-status';
 import '../../styles/phone-shell.css';
 import '../../styles/phone-link.css';
 import '../../styles/phone-newchat.css';
 
 /** A press this long on a row opens its small menu (Stop, Close). */
 export const LONG_PRESS_MS = 500;
-
-const STATE_KEY: Record<RowState, MessageKey> = {
-  needs: 'phone.state.needs',
-  working: 'phone.state.working',
-  risk: 'phone.state.risk',
-  broken: 'phone.state.broken',
-  idle: 'phone.state.idle',
-};
 
 /** A swipe must start this close to the left edge to open the drawer. */
 export const EDGE_PX = 24;
@@ -63,9 +57,9 @@ export function useEdgeSwipe(onOpen: () => void, enabled: boolean) {
 function ageWords(t: ReturnType<typeof useT>, at: number | null, now: number): string | null {
   if (at === null) return null;
   const seconds = Math.max(0, Math.round((now - at) / 1000));
-  if (seconds < 60) return t('phone.ago.now');
-  if (seconds < 3600) return t('phone.ago.min', { n: Math.floor(seconds / 60) });
-  return t('phone.ago.hour', { n: Math.floor(seconds / 3600) });
+  if (seconds < 60) return t('phone.agoShort.now');
+  if (seconds < 3600) return t('phone.agoShort.min', { n: Math.floor(seconds / 60) });
+  return t('phone.agoShort.hour', { n: Math.floor(seconds / 3600) });
 }
 
 function Row({
@@ -78,6 +72,7 @@ function Row({
   onMenu,
   lock,
   now,
+  asking,
 }: {
   pane: PaneInfo;
   title: string;
@@ -90,13 +85,16 @@ function Row({
   /** The PC keeps this phone from going all the way in this agent: a lock on the row. */
   lock: RuleLimit | null;
   now: number;
+  /** The chat waits on a question, not an approval. */
+  asking: boolean;
 }) {
   const t = useT();
   const age = ageWords(t, pane.last_output_at, now);
-  // The progress line of a working agent whose chat this phone reads (P11): the same words as under the header.
+  // The same words as under the header (`phoneStatus`): "Claude · Working · 12s · step 3".
   const note = useProgressNote(pane.id);
   const progressNow = useNow(note !== null && state === 'working');
-  const progress = note && state === 'working' ? progressWords(t, note, progressNow) : null;
+  const meta = useChatMeta(pane.id);
+  const status = phoneStatus(t, { state, note, now: progressNow, asking, sending: meta.sending, doneMs: meta.doneMs, total: meta.total });
   const press = useRef(0);
   const held = useRef(false);
   const endPress = () => window.clearTimeout(press.current);
@@ -134,21 +132,14 @@ function Row({
           onOpen();
         }}
       >
-        <span className="ph-drow-icon">
-          <AgentLogo id={pane.agent_type} name={agentName} size={22} decorative />
-          <span className="ph-dot" data-state={state} aria-hidden="true" />
-        </span>
+        <PhoneAgentTile id={pane.agent_type} name={agentName} dot={status.dot} />
         <span className="ph-drow-text">
           <span className="ph-drow-title">{title}</span>
-          <span className="ph-drow-state" data-progress={progress ? 'true' : undefined}>
-            {progress ?? (
-              <>
-                {t(STATE_KEY[state])}
-                {age ? ` · ${age}` : ''}
-              </>
-            )}
+          <span className="ph-drow-state" data-kind={status.kind}>
+            {agentName} · {status.text}
           </span>
         </span>
+        {age && state !== 'working' && <span className="ph-drow-time">{age}</span>}
         {lock && (
           <svg className="ph-lock" viewBox="0 0 24 24" role="img" aria-label={t(lock === 'off' ? 'phone.lock.off' : lock === 'watch' ? 'phone.lock.watch' : 'phone.lock.answer')} data-lock={lock}>
             <rect x="5" y="11" width="14" height="9" rx="2" />
@@ -172,7 +163,6 @@ export function PhoneDrawer({
   companions = [],
   onSelect,
   onSearch,
-  onOverview,
   onSettings,
   children,
   locks,
@@ -197,7 +187,8 @@ export function PhoneDrawer({
   /** A row was tapped: a pane id or a companion tab. */
   onSelect: (tab: string) => void;
   onSearch: () => void;
-  onOverview: () => void;
+  /** Kept so callers need not change; the drawer has no Overview any more (chat first). */
+  onOverview?: () => void;
   onSettings: () => void;
   /** Night, Review and Focus summaries: cards at the top of the drawer. */
   children?: ReactNode;
@@ -225,6 +216,9 @@ export function PhoneDrawer({
   const drag = useRef<{ x: number; y: number } | null>(null);
   const menuRef = useRef(false);
 
+  // The parent passes a new onClose every render; the effect below must not restart (and steal focus) each time.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     setNow(Date.now());
@@ -235,13 +229,17 @@ export function PhoneDrawer({
         menuRef.current = false;
         setMenu(null);
         setConfirmClose(false);
-      } else onClose();
+      } else onCloseRef.current();
     };
     window.addEventListener('keydown', onKey);
-    // Keyboard and screen reader users land inside the drawer.
+    // Keyboard and screen reader users land inside the drawer, and go back to what opened it when it closes.
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panelRef.current?.querySelector<HTMLElement>('button')?.focus();
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      before?.focus?.({ preventScroll: true });
+    };
+  }, [open]);
 
   menuRef.current = menu !== null;
   if (!open) return null;
@@ -258,6 +256,7 @@ export function PhoneDrawer({
       active={active === pane.id}
       agentName={agentName(pane.agent_type)}
       now={now}
+      asking={isAsking(attention, pane.id)}
       lock={locks?.[pane.id] ?? null}
       onMenu={
         onStopPane || onClosePane
@@ -323,9 +322,12 @@ export function PhoneDrawer({
           ))}
           {closed && closed.length > 0 && (
             <section aria-label={t('phone.closed.title')} data-testid="drawer-closed">
-              <h2 className="ph-dsec">{t('phone.closed.title')}</h2>
               <button type="button" className="ph-dclosed-toggle" aria-expanded={closedOpen} onClick={() => setClosedOpen((v) => !v)}>
-                {closedOpen ? t('phone.closed.hide') : t('phone.closed.show', { count: closed.length })}
+                <span>{t('phone.sh.closedRow')}</span>
+                <span className="ph-dclosed-count">{closed.length}</span>
+                <svg className="ph-dclosed-chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
               </button>
               {closedOpen && (
                 <ul className="ph-dlist">
@@ -344,12 +346,13 @@ export function PhoneDrawer({
                           });
                         }}
                       >
-                        <span className="ph-drow-icon">
-                          <AgentLogo id={chat.agent} name={chat.label} size={22} decorative />
-                        </span>
+                        <PhoneAgentTile id={chat.agent} name={chat.label} />
                         <span className="ph-drow-text">
                           <span className="ph-drow-title">{chat.title ?? t('phone.closed.untitled')}</span>
                           <span className="ph-drow-state">{[chat.folder, ageWords(t, chat.updated_ms, now)].filter(Boolean).join(' · ')}</span>
+                        </span>
+                        <span className="ph-drow-reopen" aria-hidden="true">
+                          {t('phone.sh.reopen')}
                         </span>
                       </button>
                     </li>
@@ -376,7 +379,7 @@ export function PhoneDrawer({
                       aria-current={active === companionTab(companion.id) ? 'true' : undefined}
                       onClick={() => onSelect(companionTab(companion.id))}
                     >
-                      <span className="ph-drow-icon">
+                      <span className="ph-tile">
                         <Avatar id={companion.avatar} size={22} state={companion.state} name={companion.name} />
                       </span>
                       <span className="ph-drow-text">
@@ -451,15 +454,15 @@ export function PhoneDrawer({
           </div>
         )}
         <footer className="ph-dfoot">
-          <button type="button" className="ph-dlink" onClick={onOverview} aria-current={active === ALL_TAB ? 'true' : undefined}>
-            {t('phone.overview')}
-          </button>
-          <div className="ph-dpc" role="status">
+          <div className="ph-dpc" role="status" data-online={bridgeReady || undefined}>
             <span className={`ph-conn${bridgeReady ? '' : ' ph-conn--off'}`} aria-hidden="true" />
-            <span>{bridgeReady ? t('phone.pcOnline') : t('phone.pcConnecting')}</span>
+            <span>{bridgeReady ? t('phone.sh.pcOn') : t('phone.sh.pcOff')}</span>
           </div>
-          <button type="button" className="ph-dlink" onClick={onSettings}>
-            {t('phone.settings')}
+          <button type="button" className="ph-iconbtn ph-dsettings" aria-label={t('phone.settings')} onClick={onSettings}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+            </svg>
           </button>
         </footer>
       </aside>

@@ -11,6 +11,8 @@ import { AnnotatedDiff } from './AnnotatedDiff';
 import { anchorFindings, reviewHasConcerns } from './review-diff';
 import { sendToAuthor, useReviewRun } from './second-opinion-store';
 import { Sheet } from './Sheet';
+import { FloatingMenu } from './FloatingMenu';
+import { EditorMenuItems } from '../files/OpenInEditor';
 import { CreatePrSheet } from './CreatePrSheet';
 import { PrBlock } from './PrBlock';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
@@ -71,6 +73,7 @@ export function Changes({
   api = cockpitApi,
   reviewApi = secondOpinionApi,
   secondOpinion,
+  turnReview,
   hideActions = false,
   ship = shipApi,
   copyLabel,
@@ -91,6 +94,8 @@ export function Changes({
    * comes before the decision; without a worktree to merge it renders on its own.
    */
   secondOpinion?: ReactNode;
+  /** Review the last turn file by file (Keep / Put back), above the whole-copy file list. */
+  turnReview?: ReactNode;
   /** Where "Send to <agent>" on a second-opinion note goes (a test double can stand in). */
   reviewApi?: SecondOpinionApi;
   /** Create PR and the GitHub checks (a test double can stand in). */
@@ -120,6 +125,8 @@ export function Changes({
     };
   }, [view, paneId, listFiles]);
   const [sheet, setSheet] = useState<'merge' | null>(null);
+  // Right-click (or the menu key) on a file: Open in my editor.
+  const [fileMenu, setFileMenu] = useState<{ path: string; anchor: HTMLElement } | null>(null);
   // A copy thrown away: hidden at once, deleted when the undo bar ends (lib/undo-bar.ts). Undo brings it back.
   const discarding = useRef<string | null>(null);
   const [prSheet, setPrSheet] = useState(false);
@@ -354,6 +361,8 @@ export function Changes({
         />
       )}
 
+      {turnReview}
+
       <div className="ck-changes-switch">
         <SegTabs
           label="Show"
@@ -400,6 +409,10 @@ export function Changes({
                 className={`ck-changes-file${isOpen ? ' is-open' : ''}`}
                 aria-expanded={isOpen}
                 onClick={() => setOpen(isOpen ? null : f.path)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setFileMenu({ path: f.path, anchor: e.currentTarget });
+                }}
                 {...dragSourceProps({ kind: 'file', id: f.path, label: splitPath(f.path).name, meta: { paneId } })}
               >
                 <span className={`ck-changes-mark ck-changes-mark--${f.status}`} aria-label={f.status}>
@@ -459,6 +472,11 @@ export function Changes({
           );
         })}
       </ul>
+      {fileMenu && (
+        <FloatingMenu anchorRef={{ current: fileMenu.anchor }} align="start" label={splitPath(fileMenu.path).name} onClose={() => setFileMenu(null)}>
+          <EditorMenuItems paneId={paneId} path={fileMenu.path} onDone={() => setFileMenu(null)} onFail={(text) => setNotice(text)} />
+        </FloatingMenu>
+      )}
       {diff?.changes.truncated && <p className="ck-sub">Only the first {files.length} files are listed.</p>}
 
       {error && (

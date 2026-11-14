@@ -83,7 +83,7 @@ describe('P18: when the PC cannot be reached', () => {
     type('please also add a test');
     await submit();
     expect(sendPaneMessage).not.toHaveBeenCalled();
-    expect(host.querySelector('[data-testid="phone-queue-waiting"]')?.textContent).toBe('1 message is waiting for your PC.');
+    expect(host.querySelector('[data-testid="phone-queue-waiting"] [role="status"]')?.textContent).toBe('1 message is waiting for your PC.');
     expect(field().value).toBe('');
   });
 

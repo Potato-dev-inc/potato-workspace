@@ -176,3 +176,10 @@
 .ph .ph-agent-text {
   -webkit-touch-callout: none;
 }
+/* The raw model id: one small grey line under the model choices. */
+.ph .ph-pick-raw {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  font: 400 12px/1.3 var(--font-mono);
+  color: var(--label-3);
+}

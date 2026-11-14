@@ -1,0 +1,5 @@
+import { phoneRChatScenario } from './phone-r-chat-shared';
+
+// Phone redesign, chat part: zh.
+export default phoneRChatScenario('light', { zh: true });
+// window: { width: 390, height: 844 } (the registry reads the size from this file)

@@ -138,19 +138,19 @@
 /* ---------- quick replies and saved prompts (above the box) ---------- */
 .ph .ph-quick {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
   padding: 0 0 8px;
-  scrollbar-width: none;
 }
 .ph .ph-quick-chip {
   min-height: 44px;
-  flex: none;
+  max-width: 100%;
   padding: 0 16px;
   border: 1px solid var(--sep);
   border-radius: 22px;
   background: var(--bg-raised);
-  font: 400 15px var(--font-ui);
+  font: 400 14px var(--font-ui);
+  text-align: center;
   color: var(--label);
 }
 .ph .ph-quick-chip:active {
@@ -180,7 +180,7 @@
   min-height: 44px;
   padding: 0 12px;
   font: 500 14px var(--font-ui);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .ph .ph-saved-add button:disabled {
   color: var(--label-4);
@@ -394,7 +394,7 @@
   min-height: 44px;
   align-self: flex-start;
   font: 500 15px var(--font-ui);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .ph .ph-rscreen-actions {
   display: flex;
@@ -492,4 +492,75 @@
   .ph .ph-wave i {
     transform: scaleY(0.7);
   }
+}
+
+/* ---------- composer: orange Send only with text, small Stop beside it while the agent works ---------- */
+.ph .ph-comp .ph-comp-send[data-ready] {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.ph .ph-comp .ph-comp-send[data-ready]:active {
+  background: var(--accent-press);
+}
+.ph .ph-comp .ph-comp-stop-small {
+  color: var(--label-2);
+  border: 1px solid var(--sep);
+}
+.ph .ph-comp .ph-comp-stop-small svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  stroke: none;
+}
+.ph .ph-comp-retry {
+  min-height: 44px;
+  margin-left: 8px;
+  padding: 0 12px;
+  font: 600 14px var(--font-ui);
+  color: var(--accent-text, var(--accent));
+  text-decoration: underline;
+}
+
+/* ---------- result card: one button style, one main action ---------- */
+.ph .ph-result-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ph .ph-result-tick {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: var(--live);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ph .ph-result-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+.ph .ph-result-actions button,
+.ph .ph-rscreen-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  text-align: center;
+}
+.ph .ph-result-actions .ph-result-main {
+  flex-basis: 100%;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+.ph .ph-result-actions .ph-result-main:active {
+  background: var(--accent-press);
+}
+.ph .ph-diff pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: visible;
 }

@@ -141,16 +141,37 @@ describe('pane tabs', () => {
     expect(dot('p4')).toBeNull();
   });
 
-  it('close is offered on idle tabs only and closes that pane; a click on a tab selects it', async () => {
+  it('close on an idle tab closes it at once (the undo bar follows); a click on a tab selects it', async () => {
     const select = vi.fn();
     const closePane = vi.fn();
     await show(cockpit(select, closePane));
-    expect(host.querySelector('[data-pane-tab="p2"] .ck-ptab-x')).toBeNull();
-    expect(host.querySelector('[data-pane-tab="p3"] .ck-ptab-x')).toBeNull();
     await act(async () => host.querySelector<HTMLButtonElement>('[data-pane-tab="p4"] .ck-ptab-x')!.click());
     expect(closePane).toHaveBeenCalledWith('p4');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-pane-tab="p2"] [role="tab"]')!.click());
     expect(select).toHaveBeenCalledWith('p2');
+  });
+
+  it('close on a working or waiting tab asks first, like the sidebar: it opens that pane and asks it to close', async () => {
+    const select = vi.fn();
+    const closePane = vi.fn();
+    const asked: unknown[] = [];
+    const listen = (e: Event) => asked.push((e as CustomEvent).detail);
+    window.addEventListener('pm:pane-action', listen);
+    try {
+      await show(cockpit(select, closePane));
+      for (const id of ['p2', 'p3']) {
+        await act(async () => host.querySelector<HTMLButtonElement>(`[data-pane-tab="${id}"] .ck-ptab-x`)!.click());
+      }
+    } finally {
+      window.removeEventListener('pm:pane-action', listen);
+    }
+    expect(closePane).not.toHaveBeenCalled();
+    expect(select).toHaveBeenCalledWith('p2');
+    expect(select).toHaveBeenCalledWith('p3');
+    expect(asked).toEqual([
+      { paneId: 'p2', action: 'close' },
+      { paneId: 'p3', action: 'close' },
+    ]);
   });
 
   it('tabDot: needs you beats working, errors are red, idle has none', () => {

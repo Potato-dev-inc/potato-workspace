@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { setLanguagePref } from '../../i18n';
 import type { AgentHealth } from '../agent-health';
 import { loadTestMemory, rememberTest, timeOf } from './test-memory';
 
@@ -23,5 +24,21 @@ describe('test memory', () => {
     window.localStorage.setItem('pm.setupcheck.tests.v1', '[1,2');
     expect(loadTestMemory()).toEqual({});
     expect(timeOf(new Date(2026, 10, 13, 14, 5).getTime())).toMatch(/\d/);
+  });
+
+  describe('the time follows the language of the app, not the computer', () => {
+    afterEach(() => setLanguagePref('en', false));
+
+    it('Traditional Chinese reads 下午 2:05, never "p.m."', () => {
+      setLanguagePref('zh-TW', false);
+      const at = new Date(2026, 10, 13, 14, 5).getTime();
+      expect(timeOf(at)).toBe('下午 2:05');
+      expect(timeOf(new Date(2026, 10, 13, 9, 30).getTime())).toBe('上午 9:30');
+    });
+
+    it('English keeps the computer time style', () => {
+      setLanguagePref('en', false);
+      expect(timeOf(new Date(2026, 10, 13, 14, 5).getTime())).toMatch(/2:05/);
+    });
   });
 });

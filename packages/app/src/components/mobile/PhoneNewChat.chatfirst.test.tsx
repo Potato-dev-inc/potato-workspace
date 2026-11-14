@@ -59,10 +59,10 @@ describe('the phone new chat', () => {
 
   it('lists chat agents only and says how many need a terminal on the PC', async () => {
     await mount(hidden);
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="nc-agent-pill"]')!.click());
-    const sheet = document.body.textContent ?? '';
-    expect(sheet).toContain('Claude');
-    expect(sheet).not.toContain('Aider');
-    expect(document.querySelector('[data-testid="nc-need-terminals"]')?.textContent).toContain('1 agent needs a terminal');
+    const tiles = host.querySelector('[data-testid="nc-tiles"]')?.textContent ?? '';
+    expect(tiles).toContain('Claude');
+    expect(tiles).not.toContain('Aider');
+    expect(host.querySelector('[data-testid="nc-agent-pill"]')).toBeNull();
+    expect(host.querySelector('[data-testid="nc-need-terminals"]')?.textContent).toContain('1 agent needs a terminal');
   });
 });

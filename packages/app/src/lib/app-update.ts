@@ -60,6 +60,8 @@ export interface UpdateTransport {
   onProgress?(callback: (progress: UpdateProgress) => void): Promise<() => void>;
   /** After `UPDATE_STOPPED`: brings the stopped chats back. Terminal agents are not reopened. */
   reopenChats?(): Promise<void>;
+  /** The version that is running now (for the one-time "What is new" card). Absent: no card. */
+  currentVersion?(): Promise<string | null>;
 }
 
 export const tauriUpdateTransport: UpdateTransport = {
@@ -75,6 +77,14 @@ export const tauriUpdateTransport: UpdateTransport = {
     return listen<{ downloaded: number; total: number | null }>('app-update-progress', (event) => callback(event.payload));
   },
   reopenChats: () => invoke<void>('app_update_install', { confirmRunning: false, reopenChats: true }),
+  currentVersion: async () => {
+    try {
+      const { getVersion } = await import('@tauri-apps/api/app');
+      return await getVersion();
+    } catch {
+      return null;
+    }
+  },
 };
 
 /** The code at the start of a backend error ("UPDATE_RUNNING: ..."), or null for a plain sentence. */

@@ -60,8 +60,11 @@ import { dnd } from './zh-TW/dnd';
 import { files } from './zh-TW/files';
 import { pet } from './zh-TW/pet';
 import { phoneCompose } from './zh-TW/phoneCompose';
+import { phoneShell } from './zh-TW/phoneShell';
 import { chatUx } from './zh-TW/chatUx';
+import { flow } from './zh-TW/flow';
 import { appUx } from './zh-TW/appUx';
+import { deskReview } from './zh-TW/deskReview';
 
 export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...common,
@@ -108,6 +111,9 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...files,
   ...pet,
   ...phoneCompose,
+  ...phoneShell,
   ...chatUx,
+  ...flow,
   ...appUx,
+  ...deskReview,
 };

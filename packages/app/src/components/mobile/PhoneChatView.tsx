@@ -25,6 +25,8 @@ import { PhoneComposer } from './PhoneComposer';
 import { PhonePicker } from './PhonePicker';
 import type { ChatAttachment } from '../../lib/attachFiles';
 import { publishProgress, progressOf } from '../../lib/phone-progress';
+import { labelFromMessage, publishChatMeta } from '../../lib/phone-chatmeta';
+import { currentPlan } from '../chat/PlanCard';
 import { quickRepliesFor } from '../../lib/phone-quick';
 import { lastAnswer } from '../../lib/phone-result';
 import { uploadFile } from '../../lib/phone-upload';
@@ -196,7 +198,7 @@ export function PhoneChatView({
   // The message box: its messages come over the bridge, and it needs to read the list (`watch`) as well as send.
   const canSend = canWatch && canType && ruleLimit === null;
   const outboxTransport = useMemo(() => (bridge ? bridgeOutboxTransport(bridge) : null), [bridge]);
-  const outbox = usePaneOutbox(outboxTransport, paneId, canSend);
+  const outbox = usePaneOutbox(outboxTransport, paneId, canSend, true);
   const userTexts = useMemo(() => grouped.turns.flatMap((turn) => (turn.user ? [turn.user.text] : [])), [grouped.turns]);
   const { bubbles, hide } = usePendingBubbles(outbox.messages, userTexts);
   const pending = canSend ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHold={outbox.hold} onEdit={outbox.edit} onHide={hide} /> : undefined;
@@ -231,6 +233,14 @@ export function PhoneChatView({
     publishProgress(paneId, progress);
   }, [paneId, progress]);
   useEffect(() => () => publishProgress(paneId, null), [paneId]);
+  // What the header and drawer say about this chat: a message on its way, how long the last turn took, the plan size, a label.
+  const sending = outbox.messages.some((m) => m.state === 'sending');
+  const lastEnded = lastTurn?.end ? lastTurn : null;
+  const planTotal = useMemo(() => currentPlan(grouped.turns).length || null, [grouped.turns]);
+  const firstText = grouped.turns.find((turn) => turn.user)?.user?.text ?? null;
+  useEffect(() => {
+    publishChatMeta(paneId, { sending, doneMs: working ? null : (lastEnded?.durationMs ?? null), total: planTotal, label: labelFromMessage(firstText) });
+  }, [paneId, sending, working, lastEnded?.durationMs, planTotal, firstText]);
   const readAll = useCallback((turnId: string) => {
     const node = document.querySelector(`[data-turn-id="${turnId.replace(/["\\]/g, '')}"]`);
     node?.scrollIntoView?.({ block: 'start' });
@@ -290,14 +300,14 @@ export function PhoneChatView({
   const composer = ruleLimit !== null ? (
     <PhoneNoControl limit={ruleLimit} onAsk={askControl} />
   ) : canSend ? (
-    <PhoneComposer key={`${paneId}:${editSeed}`} onSend={sendOrKeep} blockedReason={sendBlock} draftKey={paneId} model={grouped.model} working={working} onStop={onStop} pill={pill} upload={upload} quick={quick} fill={fill} />
+    <PhoneComposer key={`${paneId}:${editSeed}`} onSend={sendOrKeep} blockedReason={sendBlock} draftKey={paneId} model={grouped.model} working={working} onStop={onStop} pill={pill} upload={upload} quick={quick} fill={fill} asking={!!status.waitingFor} offline={!reach} />
   ) : (
     <p className="ph-chat-send-off" data-testid="phone-chat-no-send">{t('phone.conv.noSend')}</p>
   );
   const bars = (
     <>
       {stoppedBar && <PhoneStoppedBar onContinue={() => outbox.send(t('phone.stopped.continueText'))} onGone={goneBar} />}
-      <PhoneQueueBar waiting={queue.waiting} reachable={reach} onSend={() => queue.sendAll((text) => outbox.send(text))} onDiscard={queue.discard} />
+      <PhoneQueueBar waiting={queue.waiting} reachable={reach} onSend={() => queue.sendAll((text) => outbox.send(text))} onDiscard={queue.discard} onRemove={queue.remove} onEdit={queue.edit} />
       {above}
     </>
   );

@@ -241,8 +241,11 @@ describe('PwaApp drawer', () => {
     expect(byState('working')?.querySelector('.ph-dot')).not.toBeNull();
     expect(byState('working')?.querySelector('svg, [class*="agent-logo"], .al')).not.toBeNull();
     expect(byState('working')?.textContent).toContain('Working');
-    expect(byState('broken')?.textContent).toContain('Stopped with an error');
-    expect(byState('idle')?.textContent).toContain('Idle');
+    expect(byState('broken')?.textContent).toContain('Stopped');
+    expect(byState('idle')?.textContent).toContain('Ready');
+    expect(byState('idle')?.textContent).not.toContain('Idle');
+    // Idle chats have no dot: grey means nothing.
+    expect(byState('idle')?.querySelector('.ph-dot')).toBeNull();
   });
 
   it('picking a row opens that chat and closes the drawer; Escape closes it too', async () => {
@@ -298,7 +301,7 @@ describe('PwaApp drawer', () => {
     await flush(2000);
     const header = host.querySelector('.ph-head')!;
     expect(header.querySelectorAll('button')).toHaveLength(3);
-    expect(header.querySelector('.ph-head-state')?.textContent).toBe('Idle');
+    expect(header.querySelector('.ph-head-state')?.textContent).toBe('Ready');
     expect(header.querySelector('[aria-label="New chat"]')).not.toBeNull();
   });
 });

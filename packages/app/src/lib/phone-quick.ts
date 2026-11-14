@@ -10,9 +10,22 @@ const CONTINUE = /\b(continue|next step|step \d+ of \d+|move on|keep going)\b|�
 const TESTS = /\b(tests?|checks?|lint|build)\b|測試|檢查/i;
 const MAX_CHIPS = 3;
 
-/** True when the agent's last words ask the person something. */
+// An open question ("What can I help you with?") has no yes or no answer: no chips for it.
+const OPEN_QUESTION = /^\W*(what|which|how|where|when|who|whom|whose|why)\b|^\W*(什麼|哪|怎麼|如何|為什麼|為何)/i;
+
+/** The last sentence of the text, without a trailing question mark's neighbours (a closing quote or bracket). */
+function lastSentence(text: string): string {
+  const parts = text.trim().split(/(?<=[.!?。！？])\s+|\n+/).filter((p) => p.trim() !== '');
+  return parts[parts.length - 1] ?? '';
+}
+
+/** True when the agent's last words ask the person something that a chip can answer (a yes or no, a go-ahead). */
 export function asksSomething(text: string | null): boolean {
-  return !!text && ASKS.test(text.trim().slice(-400));
+  if (!text) return false;
+  const tail = text.trim().slice(-400);
+  if (!ASKS.test(tail)) return false;
+  // The question itself decides: "What can I help you with today?" is open, "Want me to run the tests?" is not.
+  return !OPEN_QUESTION.test(lastSentence(tail));
 }
 
 /**

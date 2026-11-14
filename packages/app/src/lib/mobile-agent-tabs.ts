@@ -59,9 +59,10 @@ export function projectName(cwd: string): string {
 /**
  * Tab title: the pane's title when it has one, else the agent's display name from the registry
  * listing (`Claude`, `PowerShell`; the raw id when no label is known), numbered when several
- * panes run the same agent (`Claude 2`). Without a listing, the compiled agents' labels apply.
+ * panes run the same agent (`Claude 2`). With no title, a short label from the chat's first message (`firstMessages`) comes before the
+ * numbered name. Without a listing, the compiled agents' labels apply.
  */
-export function tabLabels(panes: PaneInfo[], listing: AgentRegistryListing = fallbackListing()): Map<string, string> {
+export function tabLabels(panes: PaneInfo[], listing: AgentRegistryListing = fallbackListing(), firstMessages?: ReadonlyMap<string, string>): Map<string, string> {
   const ordered = orderPanes(panes);
   const totals = new Map<string, number>();
   for (const pane of ordered) totals.set(pane.agent_type, (totals.get(pane.agent_type) ?? 0) + 1);
@@ -72,7 +73,7 @@ export function tabLabels(panes: PaneInfo[], listing: AgentRegistryListing = fal
     seen.set(pane.agent_type, n);
     const title = pane.title?.trim();
     const name = agentLabel(listing, pane.agent_type) || pane.agent_type;
-    labels.set(pane.id, title || ((totals.get(pane.agent_type) ?? 0) > 1 ? `${name} ${n}` : name));
+    labels.set(pane.id, title || firstMessages?.get(pane.id) || ((totals.get(pane.agent_type) ?? 0) > 1 ? `${name} ${n}` : name));
   }
   return labels;
 }

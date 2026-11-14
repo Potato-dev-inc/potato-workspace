@@ -44,11 +44,9 @@ const ITEMS: ChatItem[] = [
 ];
 
 describe('PhoneConversation chat extras', () => {
-  it('draws the price tag under a finished answer that did work', () => {
+  it('draws no price line under a finished answer (the time is said once, on the result card)', () => {
     act(() => root.render(<PhoneConversation state="ready" reason={null} turns={groupTurns(ITEMS).turns} chatId="ph-1" />));
-    const tags = host.querySelectorAll('[data-testid="turn-price"]');
-    expect(tags).toHaveLength(1);
-    expect(tags[0].textContent).toBe('1m 5s · 1 step · 1 file changed');
+    expect(host.querySelectorAll('[data-testid="turn-price"]')).toHaveLength(0);
   });
 
   it('draws the new-since line and the jump button, and the button drops them', () => {

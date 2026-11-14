@@ -287,3 +287,142 @@
 .ph .ph-link-btn {
   text-align: center;
 }
+
+/* ---- redesign: offline line and the queue list ---- */
+.ph .ph-link {
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+  font: 400 calc(var(--fs, 15px) - 2px)/1.35 var(--font-ui);
+}
+.ph .ph-link > span:not(.ph-link-dot) {
+  flex: 1;
+  min-width: 0;
+}
+.ph .ph-link[data-kind='reconnecting'],
+.ph .ph-link[data-kind='asleep'],
+.ph .ph-link[data-kind='offline'] {
+  background: var(--danger-soft);
+}
+.ph .ph-link[data-kind='reconnecting'] .ph-link-dot,
+.ph .ph-link[data-kind='asleep'] .ph-link-dot,
+.ph .ph-link[data-kind='offline'] .ph-link-dot {
+  border-color: var(--danger);
+}
+.ph .ph-link-btn {
+  min-height: 44px;
+  margin: -6px 0;
+  padding: 0 14px;
+  font: 600 calc(var(--fs, 15px) - 2px)/1 var(--font-ui);
+  background: transparent;
+  color: var(--accent-text, var(--accent));
+}
+.ph .ph-bar--list {
+  flex-wrap: wrap;
+  border: 1px solid var(--line, var(--sep));
+  border-radius: 14px;
+  background: var(--surface, var(--bg-raised));
+  font: 400 calc(var(--fs, 15px) - 2px)/1.35 var(--font-ui);
+}
+.ph .ph-bar--list > span {
+  flex: 1 0 100%;
+  color: var(--faint, var(--label-3));
+  font-size: calc(var(--fs, 15px) - 3px);
+  font-weight: 600;
+}
+.ph .ph-qlist {
+  display: flex;
+  flex: 1 0 100%;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ph .ph-qlist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border-top: 1px solid var(--line, var(--sep));
+}
+.ph .ph-qtext {
+  display: -webkit-box;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ph .ph-bar .ph-qremove {
+  background: transparent;
+  color: var(--muted, var(--label-2));
+  font: 600 calc(var(--fs, 15px) - 2px)/1 var(--font-ui);
+}
+.ph .ph-bar-actions {
+  display: flex;
+  flex: 1 0 100%;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Settings: Text size Small / Normal / Large (PhoneTextSizeRow). */
+.ph .ph-textsize {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ph .ph-seg {
+  display: flex;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: 12px;
+  background: var(--raised);
+}
+.ph .ph-seg button {
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 calc(var(--fs, 15px) - 2px)/1 var(--font-ui);
+}
+.ph .ph-seg button[aria-checked='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.ph .ph-seg button:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 1px;
+}
+
+/* A waiting message being edited on the phone (PhoneQueueBar). */
+.ph .ph-qedit {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+.ph .ph-qedit textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 max(16px, var(--fs, 15px))/1.4 var(--font-ui);
+  resize: vertical;
+}
+.ph .ph-qedit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ph .ph-bar .ph-qbtn {
+  background: transparent;
+  color: var(--muted);
+  font: 600 calc(var(--fs, 15px) - 2px)/1 var(--font-ui);
+}

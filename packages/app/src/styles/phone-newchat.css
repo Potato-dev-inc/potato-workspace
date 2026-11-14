@@ -132,3 +132,70 @@
 .ph .ph-drow[data-closed] .ph-drow-title {
   color: var(--label-2);
 }
+
+/* ---- redesign: agent tiles 2 x 2, one sheet style ---- */
+.ph .ph-nc-top h1 {
+  font: 600 calc(var(--fs, 15px) + 2px)/1 var(--font-ui);
+}
+.ph .ph-nc-body {
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow-y: auto;
+  padding: 16px 14px 8px;
+}
+.ph .ph-nc-pick {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 12px;
+}
+.ph .ph-nc-hint {
+  max-width: none;
+  text-align: left;
+  font: 400 calc(var(--fs, 15px) - 1px)/1.45 var(--font-ui);
+  color: var(--muted, var(--label-2));
+}
+.ph .ph-nc-hint--small {
+  font-size: calc(var(--fs, 15px) - 3px);
+  color: var(--faint, var(--label-3));
+}
+.ph .ph-nc-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.ph .ph-nc-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--line, var(--sep));
+  border-radius: 16px;
+  background: var(--surface, var(--bg-raised));
+  font: 600 var(--fs, 15px)/1.25 var(--font-ui);
+}
+.ph .ph-nc-tile[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.ph .ph-nc-tile-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-nc-pill {
+  min-height: 44px;
+  border: 1px solid var(--line, var(--sep));
+  background: var(--surface, var(--bg-raised));
+  font: 400 calc(var(--fs, 15px) - 1px)/1 var(--font-ui);
+}
+.ph .ph-nc-lane button {
+  min-height: 44px;
+  font: 600 calc(var(--fs, 15px) - 1px)/1 var(--font-ui);
+}
+.ph .ph-nc-lane button[data-on] {
+  background: var(--raised, var(--fill-active));
+}
+/* The tiles pick the agent; there is no second agent control. */

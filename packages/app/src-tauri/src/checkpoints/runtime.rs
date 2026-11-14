@@ -300,6 +300,30 @@ impl Runtime {
         Ok(report)
     }
 
+    /// The files the pane's newest finished turn changed (file-by-file review). `None` = no before/after pair.
+    pub fn turn_review(&self, pane_id: &str) -> Result<Option<super::turn_review::TurnReview>, CheckpointError> {
+        let (project, _) = self.project_of(pane_id)?;
+        super::turn_review::turn_review(&project, pane_id)
+    }
+
+    /// What the turn did to one file, as a unified diff (between the turn's two checkpoints).
+    pub fn file_patch(&self, pane_id: &str, from_id: &str, to_id: &str, path: &str) -> Result<String, CheckpointError> {
+        let (project, _) = self.project_of(pane_id)?;
+        super::turn_review::file_patch(&project, pane_id, from_id, to_id, path)
+    }
+
+    /// Put one file back to its state in checkpoint `before_id`. Refused while the pane is working.
+    pub fn put_back(&self, pane_id: &str, before_id: &str, path: &str) -> Result<super::turn_review::PutBackReport, CheckpointError> {
+        let (project, pane) = self.project_of(pane_id)?;
+        if pane.status == "running" && self.env.run_open(pane_id, &pane) {
+            return Err(CheckpointError::RunOpen);
+        }
+        let report = super::turn_review::put_back(&project, pane_id, before_id, path, pane.status == "running", self.env.now_ms(), &self.limits())?;
+        // The safety snapshot counts as this pane's latest automatic snapshot.
+        self.state.lock().last_at.insert(pane_id.to_string(), self.env.now_ms());
+        Ok(report)
+    }
+
     /// The unified diff from checkpoint `from_id` to checkpoint `to_id` (Review Desk: a range of turns).
     #[allow(dead_code)] // read by Review Desk (its sources and detail)
     pub fn patch_between(&self, pane_id: &str, from_id: &str, to_id: &str, max_bytes: usize) -> Result<Option<engine::TurnPatch>, CheckpointError> {

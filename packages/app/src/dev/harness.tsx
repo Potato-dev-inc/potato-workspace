@@ -70,6 +70,7 @@ export async function bootHarness(name: string): Promise<() => JSX.Element> {
   const langOverride = new URLSearchParams(window.location.search).get('lang');
   if (langOverride === 'zh-TW' || langOverride === 'en') setLanguagePref(langOverride, false);
 
+  (window as unknown as { __pmNoStartupCheck?: boolean }).__pmNoStartupCheck = !scenario.startupCheck;
   blockNetwork();
   // Screenshots are taken under virtual time, so a CSS fade can be caught half way. Land every
   // animation and transition on its final frame so the PNG shows the settled UI.

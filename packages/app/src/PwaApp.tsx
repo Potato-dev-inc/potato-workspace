@@ -66,6 +66,12 @@ import { SetupScreen } from './components/pwa/SetupScreen';
 import { usePhoneLink } from './hooks/usePhoneLink';
 import { usePaneRules } from './hooks/usePaneRules';
 import { PhoneLinkLine } from './components/mobile/PhoneLinkLine';
+import { useNow } from './components/mobile/PhoneProgress';
+import { useProgressNote } from './lib/phone-progress';
+import { useChatLabels, useChatMeta } from './lib/phone-chatmeta';
+import { usePhoneTextSize } from './lib/phone-text-size';
+import { useInertWhile } from './lib/phone-inert';
+import { isAsking, phoneStatus } from './lib/phone-status';
 import { PhoneNeedsPill } from './components/mobile/PhoneNeedsPill';
 import { PhoneSetupSteps } from './components/mobile/PhoneSetupSteps';
 import { limitOf } from './lib/pane-rule-view';
@@ -252,6 +258,7 @@ export default function PwaApp() {
   useVisualViewportSync(!!bridge);
   useKeyboardResizesContent();
 
+  const resyncRef = useRef<() => void>(() => undefined);
   useEffect(() => {
     if (!bridgeUrl) return;
     const client = makeBridgeClient(bridgeUrl);
@@ -287,6 +294,7 @@ export default function PwaApp() {
       void client.listPreviews?.().then((m) => live && setPreviews(m)).catch(() => {});
       refreshAttention();
     };
+    resyncRef.current = resync;
     resync();
     void client.getSettings().then((next) => live && setSettings(next)).catch(() => {});
     void client
@@ -487,7 +495,8 @@ export default function PwaApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent, bridge]);
 
-  const labels = useMemo(() => tabLabels(panes, agentListing), [panes, agentListing]);
+  const firstMessages = useChatLabels();
+  const labels = useMemo(() => tabLabels(panes, agentListing, firstMessages), [panes, agentListing, firstMessages]);
   // A companion has its own tab and home; its pane is not listed a second time under All.
   const overviewPanes = useMemo(() => panes.filter((p) => !isCompanionPane(p.id)), [panes]);
   const activeCompanion = isCompanionTab(active) ? companions.find((c) => companionTab(c.id) === active) : undefined;
@@ -805,16 +814,27 @@ export default function PwaApp() {
   const needsNow = needsPaneIds(agentPanes, attention);
   const edgeSwipe = useEdgeSwipe(() => setDrawer(true), !drawer && sheet === null && !searchOpen);
   const activePaneInfo = agentPanes.find((p) => p.id === active);
-  const stateKeys = {
-    needs: 'phone.state.needs',
-    working: 'phone.state.working',
-    risk: 'phone.state.risk',
-    broken: 'phone.state.broken',
-    idle: 'phone.state.idle',
-  } as const;
+  const headerNote = useProgressNote(active);
+  const headerMeta = useChatMeta(active);
+  const shellRef = useRef<HTMLDivElement>(null);
+  usePhoneTextSize(shellRef);
+  const behindRef = useRef<HTMLDivElement>(null);
+  useInertWhile(behindRef, drawer || sheet !== null || searchOpen || sheetItem !== null || setupOpen);
+  const headerNow = useNow(headerNote !== null);
   const headerTitle =
     active === ALL_TAB ? t('phone.overview') : activeCompanion ? activeCompanion.name : (labels.get(active) ?? activePaneInfo?.agent_type ?? '…');
-  const headerState = activePaneInfo ? t(stateKeys[rowState(activePaneInfo, needsNow, attention)]) : null;
+  const headerStatus = activePaneInfo
+    ? phoneStatus(t, {
+        state: rowState(activePaneInfo, needsNow, attention),
+        note: headerNote,
+        now: headerNow,
+        offline: phoneLink.kind === 'offline' || phoneLink.kind === 'asleep',
+        asking: isAsking(attention, activePaneInfo.id),
+        sending: headerMeta.sending,
+        doneMs: headerMeta.doneMs,
+        total: headerMeta.total,
+      })
+    : null;
 
   if (inviteCode) {
     return (
@@ -852,11 +872,12 @@ export default function PwaApp() {
   }
 
   return (
-    <div className="pwa-shell pwa-shell--fit-visual ph" {...edgeSwipe}>
-      <div className="flex h-full min-h-0 min-w-0 flex-col">
+    <div ref={shellRef} className="pwa-shell pwa-shell--fit-visual ph" {...edgeSwipe}>
+      <div ref={behindRef} className="flex h-full min-h-0 min-w-0 flex-col">
         <PhoneHeader
           title={headerTitle}
-          stateWords={headerState}
+          status={headerStatus}
+          agent={activePaneInfo ? { id: activePaneInfo.agent_type, name: agentLabel(agentListing, activePaneInfo.agent_type) } : null}
           waiting={waitingTotal(agentPanes, attention)}
           bridgeReady={bridgeReady}
           onMenu={() => setDrawer(true)}
@@ -868,7 +889,7 @@ export default function PwaApp() {
               : undefined
           }
         />
-        <PhoneLinkLine kind={phoneLink.kind} recovered={phoneLink.recovered} onPairAgain={() => setEditingUrl(true)} />
+        <PhoneLinkLine kind={phoneLink.kind} recovered={phoneLink.recovered} onPairAgain={() => setEditingUrl(true)} onRetry={() => resyncRef.current()} />
         {active !== ALL_TAB && stuck.get(active) && <StuckNote signal={stuck.get(active)!} />}
         {active !== ALL_TAB && previews[active]?.[0] && <PreviewNote preview={previews[active][0]} />}
         <main

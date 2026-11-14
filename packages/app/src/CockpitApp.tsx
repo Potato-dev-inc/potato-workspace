@@ -31,6 +31,9 @@ import { activityText } from './lib/pane-activity';
 import { tauri } from './lib/tauri';
 import { NUDGE_TEXT } from './lib/potatoCheck';
 import { UsageBar } from './components/cockpit/UsageBar';
+import { StartupCheckLine } from './components/cockpit/StartupCheckLine';
+import { ProblemsChip } from './components/cockpit/problems/ProblemsChip';
+import { useNeedsProblemFeed } from './lib/problems-feed';
 import { SettingsView } from './components/cockpit/SettingsView';
 import { AppUpdateHost } from './components/updates/AppUpdateHost';
 import { PlansMonth } from './components/cockpit/PlansMonth';
@@ -581,6 +584,10 @@ export default function CockpitApp() {
   useLendToasts(lend, c.notify);
   const assistPanes = useMemo(() => c.registry.paneList.map((p) => ({ id: p.info.id, status: p.status })), [c.registry.paneList]);
   const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined, teamRed, lendRequests);
+  useNeedsProblemFeed(needsYou, {
+    nameOf: (id) => c.names.get(id) ?? c.registry.panes.get(id)?.info.agent_type ?? id,
+    agentIdOf: (id) => c.registry.panes.get(id)?.info.agent_type ?? null,
+  });
 
   // Which pane was looked at when: the palette lists the most recent first.
   useEffect(() => {
@@ -909,6 +916,10 @@ export default function CockpitApp() {
       {c.modeExplainer?.open && <IndividualSheet onSwitch={(d) => void c.modeExplainer.confirm(d)} onCancel={c.modeExplainer.cancel} />}
       {stopReport && <PanicSheet report={stopReport} names={c.names} onClose={() => setStopReport(null)} />}
       <AppUpdateHost />
+      <StartupCheckLine
+        bridgeUp={() => c.bridgeLine === ''}
+        actions={{ signIn: (agentId) => void nav.newAgent(agentId, undefined, false, undefined, undefined, 'terminal') }}
+      />
       <ControlAskNotice names={c.names} />
       {/* The "Used" bar along the bottom edge; the root leaves room for it only while it shows. */}
       <CompanionAssist
@@ -934,6 +945,15 @@ export default function CockpitApp() {
       <UsageBar
         working={c.registry.paneList.filter((p) => p.status === 'running' && !needsYou.some((n) => n.paneId === p.info.id)).length}
         needsYou={needsYou.length}
+        trailing={
+          <ProblemsChip
+            actions={{
+              openChat: (id) => nav.select(id),
+              signIn: (agentId) => void nav.newAgent(agentId, undefined, false, undefined, undefined, 'terminal'),
+              tryAgain: (agentId) => void nav.newAgent(agentId),
+            }}
+          />
+        }
       />
       <UndoBar />
       <div className="ck-toasts" aria-live="polite">

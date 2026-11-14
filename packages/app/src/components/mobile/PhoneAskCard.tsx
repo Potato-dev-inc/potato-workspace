@@ -13,6 +13,9 @@ import { RiskGlyph } from '../cockpit/InboxCard';
 import { HoldButton } from './HoldButton';
 import '../../styles/phone-ask.css';
 
+/** A choice that would allow the same thing again later. Not offered on a high-risk prompt. */
+const ALWAYS = /^\s*(always|every time)\b|永遠|一律|總是/i;
+
 export function PhoneAskCard({
   item,
   bridge,
@@ -72,17 +75,19 @@ export function PhoneAskCard({
     );
   }
 
-  // The PC's primary answer leads in weight and sits on the right (on a high-risk prompt that is Deny). On a high-risk prompt every
-  // answer that is not a "No" needs the one-second press and hold.
-  const buttons = view.buttons;
+  // The PC's primary answer leads (full width, orange) and the others sit in a row under it. On a high-risk prompt every
+  // answer that is not a "No" needs the one-second press and hold ("Hold to allow"), and "Always" is not offered at all.
   const denies = new Set((item.prompt?.choices ?? []).filter(isDenyLabel).map((c) => c.id));
+  const buttons = level === 'high' ? view.buttons.filter((b) => !ALWAYS.test(b.label)) : view.buttons;
   const holdIds = new Set(level === 'high' ? buttons.filter((b) => !denies.has(b.id)).map((b) => b.id) : []);
-  const ordered = [...buttons].sort((a, b) => Number(a.role === 'primary') - Number(b.role === 'primary'));
+  const ordered = [...buttons].sort((a, b) => Number(b.role === 'primary') - Number(a.role === 'primary'));
+  // A question with no risk (no command to run): numbered choices, one under the other, full width.
+  const asking = view.riskLevel === null && ordered.length > 1 && view.state === 'open';
 
   return (
     <article
       ref={root}
-      className={`ph-ask ph-ask--${level} ph-ask--${view.state}`}
+      className={`ph-ask ph-ask--${level} ph-ask--${view.state}${asking ? ' ph-ask--choices' : ''}`}
       data-testid="phone-ask-card"
       data-card-state={view.state}
       aria-label={`${view.heading}: ${view.title}`}
@@ -109,10 +114,10 @@ export function PhoneAskCard({
         </p>
       )}
       {(ordered.length > 0 || view.retry || view.lookAgain || view.openPane) && (
-        <div className="ph-ask-actions">
-          {ordered.map((b) =>
+        <div className={`ph-ask-actions${asking ? ' ph-ask-actions--choices' : ''}`}>
+          {ordered.map((b, index) =>
             holdIds.has(b.id) ? (
-              <HoldButton key={b.id} dataChoice={b.id} className={`ph-ask-btn${b.role === 'primary' ? ' ph-ask-btn--primary' : ''}`} label={b.label} disabled={b.disabled} onDone={() => send(b.id)} />
+              <HoldButton key={b.id} dataChoice={b.id} className={`ph-ask-btn${b.role === 'primary' ? ' ph-ask-btn--primary' : ''}`} label={t('phone.ask.holdAllow')} disabled={b.disabled} onDone={() => send(b.id)} />
             ) : (
               <button
                 key={b.id}
@@ -122,6 +127,7 @@ export function PhoneAskCard({
                 disabled={b.disabled}
                 onClick={() => send(b.id)}
               >
+                {asking && <span className="ph-ask-n" aria-hidden="true">{index + 1}</span>}
                 {b.label}
               </button>
             ),

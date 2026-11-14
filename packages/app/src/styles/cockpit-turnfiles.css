@@ -1,0 +1,129 @@
+/* Review the last turn, file by file (components/cockpit/review/TurnFiles.tsx). Tokens only; grayscale with the same
+   quiet add / delete colours as the Changes list. No animation, so reduced motion needs nothing special. */
+.cockpit .ck-tf {
+  margin: 14px 0 0;
+}
+.cockpit .ck-tf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0 0 4px;
+}
+.cockpit .ck-tf-head .ck-caption {
+  margin: 0;
+}
+.cockpit .ck-tf-counter {
+  font-size: 12.5px;
+  color: var(--label);
+}
+.cockpit .ck-tf-looked {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.cockpit .ck-tf-keys {
+  margin: 0 0 8px;
+}
+.cockpit .ck-tf-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cockpit .ck-tf-item + .ck-tf-item {
+  border-top: 1px solid var(--sep);
+}
+.cockpit .ck-tf-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 3px 8px 3px 0;
+}
+.cockpit .ck-tf-row.is-active {
+  background: var(--fill);
+}
+.cockpit .ck-tf-main {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 220px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 0 0 12px;
+  font-size: 12.5px;
+  color: var(--label);
+  cursor: pointer;
+}
+.cockpit .ck-tf-main:focus-visible {
+  box-shadow: var(--focus);
+  border-radius: 6px;
+}
+.cockpit .ck-tf-mark {
+  flex: none;
+  width: 12px;
+  font: var(--fw-medium) var(--fs-label) var(--font-mono);
+  color: var(--label-3);
+}
+.cockpit .ck-tf-mark--A {
+  color: var(--live);
+}
+.cockpit .ck-tf-mark--D {
+  color: var(--danger);
+}
+.cockpit .ck-tf-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-tf-dir {
+  color: var(--label-3);
+}
+.cockpit .ck-tf-counts {
+  flex: none;
+  font: var(--fs-label) var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--label-3);
+  white-space: nowrap;
+}
+.cockpit .ck-tf-badge {
+  flex: none;
+  padding: 1px 7px;
+  border: 1px solid var(--sep);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--label-2);
+  white-space: nowrap;
+}
+.cockpit .ck-tf-badge--quiet {
+  border-color: transparent;
+  color: var(--label-3);
+}
+.cockpit .ck-tf-badge--warn {
+  color: var(--label);
+  border-color: var(--label-3);
+}
+.cockpit .ck-tf-item[data-decision='back'] .ck-tf-name {
+  color: var(--label-3);
+  text-decoration: line-through;
+}
+.cockpit .ck-tf-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+.cockpit .ck-tf-diff {
+  border-top: 1px solid var(--sep);
+}
+.cockpit .ck-tf-notice {
+  margin: 8px 0 0;
+}

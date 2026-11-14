@@ -2,8 +2,11 @@
 // (AgentsOverview takes it as the `night` slot). It shows the summary line of the current (or last) night and
 // the first three task rows, then "and N more" to show them all, from `GET /night`, which is the redacted view: no project
 // names, no paths, no pane ids, no agent sentences. Stop shows only with the `control` cap, while the night runs,
-// and asks once more. Keep and Throw away are on the computer, never here.
+// and asks once more. Keep and Throw away are on the computer, never here (the card no longer says so).
+// The summary is one quiet row; the task rows open behind "Details".
 import { useCallback, useEffect, useState } from 'react';
+import { useT } from '../../i18n';
+import '../../styles/phone-shell.css';
 import type { NightTaskView, NightView } from '../../lib/night';
 import { ngrokRequestHeaders } from '../../lib/bridge-ngrok';
 import { localSecretHeaders } from '../../lib/bridge-local-secret';
@@ -17,7 +20,6 @@ export const TASK_ROWS_FIRST = 3;
 const REFRESH_MS = 10_000;
 const STOP_FAILED = 'Could not stop Night Shift. Try again.';
 const STOP_ASK = 'Stop Night Shift now? Tasks still running are cut off. Their copies are kept.';
-const COMPUTER_ONLY = 'Keep and Throw away are on your computer.';
 
 /** What the card reads and stops. `read` resolves null when no night has run yet (the PC answers 404). */
 export interface NightPhoneApi {
@@ -73,7 +75,9 @@ export function NightSummary({
   /** Bumped when the stream resynced: the card reads again at once. */
   refreshKey?: number;
 }) {
+  const t = useT();
   const [view, setView] = useState<NightView | null>(null);
+  const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -127,35 +131,40 @@ export function NightSummary({
 
   return (
     <div className="ph-night" data-night-state={view.state}>
-      <section aria-label="Night Shift" className="ph-cards">
-        <div className="ph-card">
-          <div className="ph-card-cap">
-            <span>Night Shift</span>
-          </div>
-          <p className="ph-card-q">{view.line}</p>
-          {error && <p className="ph-appr-status">{error}</p>}
-          {stopping && <p className="ph-appr-status">Stopping…</p>}
-          {canStop && !confirming && (
-            <div className="ph-appr-actions">
+      <section aria-label="Night Shift">
+        <div className="ph-qrow">
+          <span className="ph-qrow-label">Night Shift</span>
+          <span className="ph-qrow-text">{view.line}</span>
+          {view.tasks.length > 0 && (
+            <button type="button" className="ph-qrow-btn" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+              {open ? t('phone.sh.hideDetails') : t('phone.sh.details')}
+            </button>
+          )}
+        </div>
+        {(error || stopping || canStop) && (
+          <div className="ph-qrow-extra">
+            {error && <p className="ph-appr-status">{error}</p>}
+            {stopping && <p className="ph-appr-status">Stopping…</p>}
+            {canStop && !confirming && (
               <button type="button" className="ph-btn" disabled={busy} onClick={() => setConfirming(true)}>
                 Stop Night Shift
               </button>
-            </div>
-          )}
-          {canStop && confirming && (
-            <div className="ph-appr-actions">
-              <p className="ph-appr-status">{STOP_ASK}</p>
-              <button type="button" className="ph-btn ph-btn--primary" disabled={busy} onClick={stop}>
-                Stop now
-              </button>
-              <button type="button" className="ph-btn ph-btn--plain" disabled={busy} onClick={() => setConfirming(false)}>
-                Keep running
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+            {canStop && confirming && (
+              <>
+                <p className="ph-appr-status">{STOP_ASK}</p>
+                <button type="button" className="ph-btn ph-btn--primary" disabled={busy} onClick={stop}>
+                  Stop now
+                </button>
+                <button type="button" className="ph-btn ph-btn--plain" disabled={busy} onClick={() => setConfirming(false)}>
+                  Keep running
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </section>
-      {view.tasks.length > 0 && (
+      {open && view.tasks.length > 0 && (
         <section aria-label="Night Shift tasks">
           <ul className="ph-group">
             {shown.map((task) => (
@@ -188,7 +197,6 @@ export function NightSummary({
           )}
         </section>
       )}
-      <p className="ph-foot">{COMPUTER_ONLY}</p>
     </div>
   );
 }

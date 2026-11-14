@@ -182,3 +182,32 @@ describe('a turn the PC has no summary for', () => {
     expect(card()).toBeNull();
   });
 });
+
+describe('step 6: the card and the raw result block', () => {
+  it('Open changes is the one main button and opens the changes screen', async () => {
+    const { bridge } = bridgeWith(fresh);
+    await mount(bridge);
+    const main = card()!.querySelector('[data-testid="phone-result-open"]') as HTMLButtonElement;
+    expect(main.textContent).toBe('Open changes');
+    await act(async () => main.click());
+    expect(document.querySelector('[data-testid="phone-result-screen"]')).not.toBeNull();
+  });
+
+  it('does not show the raw potato-result block in the chat', async () => {
+    const raw = ['All done.', '```potato-result', '{"summary":"ok","files_changed":[],"checks_run":[],"open_questions":[]}', '```'].join(String.fromCharCode(10));
+    const items = ITEMS.map((i) => (i.kind === 'assistant' ? { ...i, text: raw } : i));
+    const { bridge } = bridgeWith(fresh, items);
+    await mount(bridge);
+    expect(host.textContent).not.toContain('potato-result');
+    expect(host.textContent).not.toContain('files_changed');
+    expect(host.textContent).toContain('All done.');
+  });
+
+  it('has no card when no file changed and no check ran', async () => {
+    const quiet: PaneResult = { available: true, turn: 1, sentence: 'Answered.', durationMs: 4000, files: { count: 0, added: 0, deleted: 0, paths: [] }, tests: null };
+    const items = ITEMS.filter((i) => i.kind === 'user' || i.kind === 'assistant' || i.kind === 'turnEnd');
+    const { bridge } = bridgeWith(() => Promise.resolve(quiet), items);
+    await mount(bridge);
+    expect(card()).toBeNull();
+  });
+});

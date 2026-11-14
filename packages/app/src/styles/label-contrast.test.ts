@@ -88,14 +88,16 @@ describe.each(Object.keys(FILES))('%s colour tokens', (file) => {
 
   it('the accent: text 4.5:1 on every ground, --accent-fg 4.5:1 on the fill, the marker 3:1', () => {
     for (const theme of [0, 1] as const) {
-      const accent = hex(values(file, '--accent')[theme]);
+      // The phone's one orange (#F08A24) is a fill for both themes; its text is --accent-text, its markers --accent-line.
+      const accent = hex(values(file, file === 'phone.css' ? '--accent-text' : '--accent')[theme]);
+      const fill = hex(values(file, '--accent')[theme]);
       const fg = hex(values(file, '--accent-fg')[theme]);
       const line = hex(values(file, '--accent-line')[theme]);
       for (const bg of grounds(file, theme)) {
         expect(contrast(accent, bg), `accent text, theme ${theme}`).toBeGreaterThanOrEqual(4.5);
         expect(contrast(line, bg), `accent marker, theme ${theme}`).toBeGreaterThanOrEqual(3);
       }
-      expect(contrast(fg, accent), `accent-fg on accent, theme ${theme}`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(fg, fill), `accent-fg on accent, theme ${theme}`).toBeGreaterThanOrEqual(4.5);
       for (const name of ['--accent-hover', '--accent-press']) {
         expect(contrast(fg, hex(values(file, name)[theme])), `${name}, theme ${theme}`).toBeGreaterThanOrEqual(4.5);
       }
@@ -108,7 +110,8 @@ describe.each(Object.keys(FILES))('%s signal tokens', (file) => {
   for (const name of ['--accent', '--live', '--risk', '--danger']) {
     it(`${name}: readable on every ground and on its own soft tint, dark and light`, () => {
       for (const theme of [0, 1] as const) {
-        const c = hex(values(file, name)[theme]);
+        // phone.css: the orange fill is not a text colour; --accent-text is (checked above), so the text check reads it here.
+        const c = hex(values(file, file === 'phone.css' && name === '--accent' ? '--accent-text' : name)[theme]);
         const soft = rgba(values(file, `${name}-soft`)[theme]);
         const all = grounds(file, theme);
         for (const bg of all) expect(contrast(c, bg), `${name} on ground, theme ${theme}`).toBeGreaterThanOrEqual(4.5);

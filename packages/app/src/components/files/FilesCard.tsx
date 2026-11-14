@@ -11,6 +11,7 @@ import { requestChatTab } from '../../lib/chatTab';
 import { errorSentence } from '../../lib/sayError';
 import { useT } from '../../i18n';
 import { FloatingMenu } from '../cockpit/FloatingMenu';
+import { EditorMenuItems } from './OpenInEditor';
 import { RailCard } from '../cockpit/rail/RailCard';
 import { baseOf, fileMark, folderHasChanges, visibleRows, type Mark } from './tree-model';
 import '../../styles/files.css';
@@ -325,6 +326,7 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
           >
             {t('files.menuReveal')}
           </button>
+          {!menu.isDir && <EditorMenuItems paneId={paneId} path={menu.path} onDone={() => setMenu(null)} onFail={say} />}
           {canMention && (
             <button
               type="button"

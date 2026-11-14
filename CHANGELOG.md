@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.28
+
+This is a beta.
+
+- New phone look: calmer and smaller text, thinking folded into one line, a clear status in the header ("Sending…", "Working · step 3 of 6", "Needs you", "Done · 48s"), chats named by their task, a cleaner drawer with "Needs you" on top, real model names, a new result card with "Open changes", and approval cards where risky steps need a press and hold.
+- Phone: quick replies only when the agent asks, a message shows "Sending…" until the PC has it and a plain error with Retry if it fails, edit queued messages, and a text size setting.
+- New: review the last turn file by file. Keep or put back each file (keys J, K, A, X, T, V), with "looked at" ticks and "Changed since you looked".
+- New: open any file in your own editor (VS Code, Cursor, Windsurf, Zed, Sublime, Notepad++), also at the line with Ctrl+Enter.
+- New: a "Done means" list per project (build passes, tests pass) checked on each result, with "Fix it".
+- Updates wait for your agents: "When they finish", "Tonight" or "Now". After the restart, "What is new" shows once.
+- New: when an agent's sign-in ends, one card keeps your message and sends it again after you sign in.
+- New: a problems list in the status bar, clearer error cards with "Copy for support", and a quiet check at start that only speaks up when something is wrong.
+- Fixed: the tab "x" now asks before closing an agent that is still working; Check my setup shows the time in your language.
+
 ## 1.0.27
 
 This is a beta.

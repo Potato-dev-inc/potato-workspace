@@ -27,6 +27,8 @@ import {
 } from '../../lib/usage';
 import { AgentLogo } from '../common/AgentLogo';
 import { useT } from '../../i18n';
+import { problemsFromUsage, syncProblems } from '../../lib/problems-feed';
+import type { ReactNode } from 'react';
 import '../../styles/chips.css';
 import '../../styles/usage-strip.css';
 import '../../styles/cockpit-statusbar.css';
@@ -219,7 +221,7 @@ const PLUS_WIDTH = 34;
  * that do not fit become "+N". Clicking a chip or "+N" opens the Usage popover above the bar. The cockpit root
  * leaves room for it only while it is shown (cockpit-statusbar.css, `:has`).
  */
-export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: UsageApi; working?: number; needsYou?: number }) {
+export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing = null }: { api?: UsageApi; working?: number; needsYou?: number; /** The Problems chip: sits with the counts, or floats alone when the bar itself is not shown. */ trailing?: ReactNode }) {
   const t = useT();
   const { on, loginReads } = useUsageBarOn();
   const { snap, busy, refresh } = useUsage(api, on === true, loginReads);
@@ -287,8 +289,13 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: 
     };
   }, [open]);
 
+  // A sign-in that ended is a problem to list (and it is fixed when the row is fine again). Only a real answer counts.
+  useEffect(() => {
+    if (snap && Array.isArray(snap.rows)) syncProblems('signin:', problemsFromUsage(snap.rows));
+  }, [snap]);
+
   // Off, or no signed-in agent, or a malformed answer (an older desktop): no bar and no space.
-  if (on !== true || rows.length === 0) return null;
+  if (on !== true || rows.length === 0) return trailing ? <div className="ck-problems-float">{trailing}</div> : null;
   const toggle = (e: { currentTarget: HTMLElement }) => {
     const r = e.currentTarget.getBoundingClientRect();
     setAnchor((a) => (a ? null : { left: r.left, top: r.top }));
@@ -339,6 +346,7 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0 }: { api?: 
           </span>
         )}
         {needsYou > 0 && <span className="ck-sb-count is-needs">{t('status.needsYou', { count: needsYou })}</span>}
+        {trailing}
       </div>
       {/* The same chips, unseen, so their natural widths can be measured. */}
       <div className="ck-sb-measure" ref={measureRow} aria-hidden="true">

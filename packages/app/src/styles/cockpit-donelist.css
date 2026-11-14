@@ -1,0 +1,77 @@
+/* The Done list on the result card (components/cockpit/DoneList.tsx). Tokens only. */
+.cockpit .ck-done {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+}
+.cockpit .ck-done-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cockpit .ck-done-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.cockpit .ck-done-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  font-size: 12.5px;
+  color: var(--label);
+}
+.cockpit .ck-done-glyph {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  font-weight: var(--fw-medium);
+  color: var(--label-3);
+}
+.cockpit .ck-done-row[data-state='pass'] .ck-done-glyph {
+  color: var(--live);
+}
+.cockpit .ck-done-row[data-state='fail'] .ck-done-glyph {
+  color: var(--danger);
+}
+.cockpit .ck-done-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-done-note {
+  margin-right: auto;
+  font-size: 11.5px;
+  color: var(--label-3);
+  white-space: nowrap;
+}
+.cockpit .ck-done-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.cockpit .ck-done-text {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--label);
+  background: var(--bg);
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  resize: vertical;
+}
+.cockpit .ck-done-text:focus-visible {
+  box-shadow: var(--focus);
+  outline: none;
+}
+.cockpit .ck-done-actions {
+  display: flex;
+  gap: 6px;
+}

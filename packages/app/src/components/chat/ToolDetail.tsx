@@ -1,12 +1,15 @@
 // The open part of a tool card: the files it touched as chips, then an edit's diff, a command, or the input as JSON,
 // then the output. Agent text and tool output are data: shown as plain text only.
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { ToolCallItem, ToolResultItem, ToolStep } from '../../lib/sessionChatModel';
 import '../../styles/chat-agent-cards.css';
 import { kindOfCall } from './chatActivity';
 import { diffHunks, diffStats, editPairs, lineDiff, patchLines, patchOf, patchText, type DiffLine, type DiffOp } from './chatDiff';
 import { baseName } from './chatFormat';
 import { useCopy } from './useCopy';
+import { useChatPane } from './ChatPane';
+import { FloatingMenu } from '../cockpit/FloatingMenu';
+import { EditorMenuItems } from '../files/OpenInEditor';
 
 /** The diff of an edit or write call, or null when its input holds no old or new text. */
 export function diffLinesOf(call: ToolCallItem): DiffLine[] | null {
@@ -43,16 +46,48 @@ export function DetailLabel({ children }: { children: string }) {
 
 /** Paths as chips: the file name shows, the full path is the tooltip. */
 export function PathChips({ paths }: { paths: readonly string[] }) {
+  const paneId = useChatPane();
+  const [menu, setMenu] = useState<{ path: string; anchor: HTMLElement } | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   return (
-    <ul className="flex flex-wrap gap-1 ck-chat-chips" aria-label="Files">
-      {paths.map((path) => (
-        <li key={path} className="min-w-0">
-          <span className="inline-block max-w-full truncate font-mono text-[11px] ck-chat-chip" title={path}>
-            {baseName(path)}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="flex flex-wrap gap-1 ck-chat-chips" aria-label="Files">
+        {paths.map((path) => (
+          <li key={path} className="min-w-0">
+            {paneId ? (
+              // A click, Enter or a right-click offers "Open in editor" for the file.
+              <button
+                type="button"
+                className="inline-block max-w-full truncate font-mono text-[11px] ck-chat-chip"
+                title={path}
+                aria-haspopup="menu"
+                onClick={(e) => setMenu({ path, anchor: e.currentTarget })}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ path, anchor: e.currentTarget });
+                }}
+              >
+                {baseName(path)}
+              </button>
+            ) : (
+              <span className="inline-block max-w-full truncate font-mono text-[11px] ck-chat-chip" title={path}>
+                {baseName(path)}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {paneId && menu && (
+        <FloatingMenu anchorRef={{ current: menu.anchor }} align="start" label={baseName(menu.path)} onClose={() => setMenu(null)}>
+          <EditorMenuItems paneId={paneId} path={menu.path} onDone={() => setMenu(null)} onFail={setProblem} />
+        </FloatingMenu>
+      )}
+      {problem && (
+        <p className="ck-sub" role="status">
+          {problem}
+        </p>
+      )}
+    </>
   );
 }
 

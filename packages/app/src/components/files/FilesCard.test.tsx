@@ -128,10 +128,10 @@ describe('Files card', () => {
       });
     };
 
-    it('offers Copy path, Show in Explorer and Mention in chat', async () => {
+    it('offers Copy path, Show in Explorer, Open in editor and Mention in chat', async () => {
       await show();
       await rightClick('README.md');
-      expect(menu().map((b) => b.textContent)).toEqual(['Open', 'Copy path', 'Show in Explorer', 'Mention in chat']);
+      expect(menu().map((b) => b.textContent)).toEqual(['Open', 'Copy path', 'Show in Explorer', 'Open in editor', 'Mention in chat']);
     });
 
     it('Copy path copies the full path', async () => {
@@ -162,7 +162,7 @@ describe('Files card', () => {
       await act(async () => {
         row('README.md').dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }));
       });
-      expect(menu().length).toBe(4);
+      expect(menu().length).toBe(5);
     });
   });
 

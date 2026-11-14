@@ -1,15 +1,14 @@
 // Review Desk on the phone (SPEC n33 3.9): a read-only card under the Night summary on the phone home.
-// It shows `4 to review · 1 high risk`, then up to five rows (mark, title, agent) from `GET /review-desk`.
-// The footer says Keep and Throw away are on the computer. There are no buttons here. Hidden when nothing
-// is waiting, and it keeps the last list it read when a read fails.
+// It shows `4 to review · 1 high risk` from `GET /review-desk`.
+// One quiet row ("On your PC · 4 to review · 1 high risk"), no list and no buttons: where to act is already said by the row's label.
+// Hidden when nothing is waiting, and it keeps the last count it read when a read fails.
 import { useEffect, useState } from 'react';
-import { reviewGlyph, reviewSummaryLine, type PhoneReviewView, type ReviewPhoneApi } from '../../lib/mobile-review';
+import { useT } from '../../i18n';
+import type { PhoneReviewView, ReviewPhoneApi } from '../../lib/mobile-review';
+import '../../styles/phone-shell.css';
 
-/** Rows shown on the phone; the rest of the list stays on the computer. */
-export const REVIEW_ROWS = 5;
 /** The read repeats this often while the card is up (a copy or a turn can finish on the PC at any time). */
 const REFRESH_MS = 10_000;
-const COMPUTER_ONLY = 'Keep and Throw away are on your computer.';
 
 export function ReviewSummary({
   api,
@@ -19,6 +18,7 @@ export function ReviewSummary({
   /** Bumped when the stream resynced: the card reads again at once. */
   refreshKey?: number;
 }) {
+  const t = useT();
   const [view, setView] = useState<PhoneReviewView | null>(null);
 
   useEffect(() => {
@@ -42,38 +42,12 @@ export function ReviewSummary({
   }, [api, refreshKey]);
 
   if (!view || view.count === 0) return null;
-  const rows = view.items.slice(0, REVIEW_ROWS);
+  const line = view.high > 0 ? t('phone.sh.reviewHigh', { count: view.count, high: view.high }) : t('phone.sh.review', { count: view.count });
 
   return (
-    <div className="ph-night" data-review-count={view.count}>
-      <section aria-label="Review Desk" className="ph-cards">
-        <div className="ph-card">
-          <div className="ph-card-cap">
-            <span>Review</span>
-          </div>
-          <p className="ph-card-q">{reviewSummaryLine(view)}</p>
-        </div>
-      </section>
-      {rows.length > 0 && (
-        <section aria-label="Review Desk items">
-          <ul className="ph-group">
-            {rows.map((item, index) => (
-              <li key={`${index}:${item.title}`} data-level={item.levelWord}>
-                <div className="ph-row">
-                  <span className="ph-glyph" aria-hidden="true">
-                    {reviewGlyph(item.levelWord)}
-                  </span>
-                  <span className="ph-txt">
-                    <span className="ph-t">{item.title}</span>
-                    <span className="ph-s">{item.agentLabel}</span>
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <p className="ph-foot">{COMPUTER_ONLY}</p>
+    <div className="ph-qrow" data-review-count={view.count} role="group" aria-label={t('phone.sh.onPc')} data-testid="phone-review-row">
+      <span className="ph-qrow-label">{t('phone.sh.onPc')}</span>
+      <span className="ph-qrow-text">{line}</span>
     </div>
   );
 }

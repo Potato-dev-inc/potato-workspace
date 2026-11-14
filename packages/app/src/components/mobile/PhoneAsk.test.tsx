@@ -173,3 +173,21 @@ describe('P8: the needs-you pill', () => {
     expect(host.querySelector('.ph-pill-main')).not.toBeNull();
   });
 });
+
+describe('step 11: card layout', () => {
+  it('a high-risk card says Hold to allow, offers no Always, and has the danger edge', async () => {
+    const { bridge } = makeBridge();
+    await render(<PhoneAskCard item={ITEM_HIGH} bridge={bridge} canAnswer />);
+    expect(host.querySelector('.ph-ask--high')).not.toBeNull();
+    expect(choice('allow_once').textContent).toBe('Hold to allow');
+    expect(host.querySelector('[data-choice="allow_always"]')).toBeNull();
+    expect(host.querySelector('[data-choice="deny"]')).not.toBeNull();
+  });
+
+  it('a low-risk card leads with one full-width main answer', async () => {
+    const { bridge } = makeBridge();
+    await render(<PhoneAskCard item={ITEM_LOW} bridge={bridge} canAnswer />);
+    const first = host.querySelector('.ph-ask-actions > .ph-ask-btn') as HTMLElement;
+    expect(first.className).toContain('ph-ask-btn--primary');
+  });
+});

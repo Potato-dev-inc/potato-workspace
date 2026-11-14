@@ -15,6 +15,7 @@ export function ReceiptTab({
   copy,
   agentName,
   secondOpinion,
+  review,
 }: {
   /** `undefined` while loading, `null` for a pane with no run. */
   info: PaneRunInfo | null | undefined;
@@ -26,6 +27,8 @@ export function ReceiptTab({
   agentName: string;
   /** The Second opinion block, shown once there is a turn to review. */
   secondOpinion: ReactNode;
+  /** Review the last turn file by file; shown here when the pane has no Changes tab of its own. */
+  review?: ReactNode;
 }) {
   if (error) {
     return (
@@ -59,6 +62,7 @@ export function ReceiptTab({
           </section>
         )}
         {lastTurn && <LastTurn summary={lastTurn} now={now} />}
+        {review}
         {summary && summary.facts.length > 0 && (
           <dl className="ck-facts" aria-label="Facts">
             {summary.facts.map((row) => (

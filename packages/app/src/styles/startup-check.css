@@ -1,0 +1,52 @@
+/* The quiet start-up line: one slim row above the status bar, left side. Grayscale. */
+.cockpit .sc-line {
+  position: fixed;
+  left: calc(var(--ck-side-w, 240px) + 12px);
+  bottom: calc(var(--ck-statusbar-h, 26px) + 8px);
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 24px));
+  padding: 5px 6px 5px 10px;
+  border-radius: 10px;
+  background: var(--bg-raised, var(--bg-side));
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--label-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.cockpit .sc-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cockpit .sc-more {
+  color: var(--label-3);
+}
+.cockpit .sc-fix {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  cursor: pointer;
+}
+.cockpit .sc-x {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--label-3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cockpit .sc-fix:focus-visible,
+.cockpit .sc-x:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

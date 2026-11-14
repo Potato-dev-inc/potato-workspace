@@ -4,6 +4,65 @@
    Generic element resets use :where() so they never out-rank component classes (the Keys panel
    in terminal.css is styled by its own classes). */
 
+/* ---------- shared phone tokens (PHONE-REDESIGN section 2). Every phone-*.css reads these; none redefines them. ----------
+   Type: --fs is the ONE knob (Small 14, Normal 15, Large 17); every other size is calc(var(--fs) - n).
+   Colour names follow the spec (--surface, --raised, --line, --text, --muted, --faint, --ok, --warn); the older
+   --bg / --label / --sep names below stay for the screens not moved over yet. Light values swap in the block after. */
+.ph {
+  --fs: 15px;
+  --fs-sm: calc(var(--fs) - 2px);
+  --fs-xs: calc(var(--fs) - 3px);
+  --fs-label: 11px;
+  --fs-title: calc(var(--fs) + 2px);
+  --lh: 1.5;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --pad-x: 14px;
+  --gap-item: 10px;
+  --r-sm: 9px;
+  --r-btn: 12px;
+  --r-card: 16px;
+  --r-sheet: 20px;
+  --r-composer: 22px;
+  --tap: 44px;
+  --surface: #1f1d1b;
+  --raised: #292623;
+  --line: #34302c;
+  --line-soft: #2a2724;
+  --text: #ece8e2;
+  --muted: #a19a90;
+  --faint: #7a736a;
+  --accent-ink: #1b1104;
+  --accent-text: #f5a04a;
+  --ok: #62b97c;
+  --warn: #e0b341;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  font-size: var(--fs);
+  line-height: var(--lh);
+}
+.ph[data-text='small'] {
+  --fs: 14px;
+}
+.ph[data-text='large'] {
+  --fs: 17px;
+}
+:root[data-theme='light'] .ph {
+  --surface: #ffffff;
+  --raised: #f1ede7;
+  --line: #e0dad1;
+  --line-soft: #ebe6de;
+  --text: #25211c;
+  --muted: #6a635a;
+  --faint: #8f887e;
+  --accent-text: #9a4d02;
+  --ok: #2f8a55;
+  --warn: #9a7410;
+}
+
 .ph {
   --bg: #1e1c1a;
   --bg-side: #161514;
@@ -19,13 +78,13 @@
   --label-4: rgba(240, 238, 234, 0.26);
   --primary-bg: #f0eeea;
   --primary-fg: #1e1c1a;
-  --focus: 0 0 0 2px var(--bg, #1e1c1a), 0 0 0 4px var(--accent);
-  --accent: #f29a3c;
-  --accent-hover: #f7ad5c;
-  --accent-press: #d9852b;
-  --accent-soft: rgba(242, 154, 60, 0.14);
-  --accent-line: #f29a3c;
-  --accent-fg: #1b1409;
+  --focus: 0 0 0 2px var(--bg, #1e1c1a), 0 0 0 4px var(--accent-line);
+  --accent: #F08A24;
+  --accent-hover: #f49a42;
+  --accent-press: #d97a1a;
+  --accent-soft: rgba(240, 138, 36, 0.14);
+  --accent-line: #F08A24;
+  --accent-fg: #1b1104;
   --live: #57c785;
   --live-soft: rgba(87, 199, 133, 0.14);
   --risk: #e8c14e;
@@ -65,13 +124,13 @@
   --label-4: rgba(28, 27, 25, 0.24);
   --primary-bg: #1c1b19;
   --primary-fg: #ffffff;
-  --focus: 0 0 0 2px var(--bg, #fdfcfa), 0 0 0 4px var(--accent);
-  --accent: #9c4804;
-  --accent-hover: #823d03;
-  --accent-press: #6b3302;
-  --accent-soft: rgba(156, 72, 4, 0.1);
-  --accent-line: #b4560a;
-  --accent-fg: #ffffff;
+  --focus: 0 0 0 2px var(--bg, #fdfcfa), 0 0 0 4px var(--accent-line);
+  --accent: #F08A24;
+  --accent-hover: #d97a1a;
+  --accent-press: #c46c12;
+  --accent-soft: rgba(240, 138, 36, 0.12);
+  --accent-line: #c46c12;
+  --accent-fg: #1b1104;
   --live: #136c39;
   --live-soft: rgba(19, 108, 57, 0.1);
   --risk: #7d5a00;

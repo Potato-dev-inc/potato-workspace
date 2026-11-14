@@ -1,6 +1,7 @@
 // The chat over a terminal pane: reads the pane's session file while it is mounted (TerminalPane mounts it
 // only when the person picked Chat). `dock` is what waits on the person, shown under the conversation.
 // `reply`: give the chat a message box (the Cockpit's Chat tab does); `blockedReason` switches the box off.
+import { ChatPaneContext } from './ChatPane';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { keepGoingContinue, keepGoingTargetKey, keepGoingTargets } from '../../lib/keep-going';
 import { openSettingsAt, SETUP_CHECK_ROW_ID } from '../../lib/openSettingsAt';
@@ -133,7 +134,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
       }
     : undefined;
   return (
-    <>
+    <ChatPaneContext.Provider value={paneId}>
       <SessionChatView
         state={chat.state}
         reason={chat.reason}
@@ -186,6 +187,6 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
       {branchFor !== null && (
         <BranchSheet paneId={paneId} from={{ kind: 'message', user_item_id: branchFor, when: 'after' }} onClose={() => setBranchFor(null)} />
       )}
-    </>
+    </ChatPaneContext.Provider>
   );
 }

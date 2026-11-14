@@ -296,6 +296,33 @@ describe('PhoneChatView message box', () => {
     expect(host.querySelector('[data-testid="chat-pending-waiting"]')?.textContent).toBe('Waiting for the agent to finish.');
   });
 
+  it('shows Sending… under the bubble until the PC answers', async () => {
+    let answer: (m: OutboxMessage) => void = () => undefined;
+    const slow = vi.fn((_paneId: string, text: string) => new Promise<OutboxMessage>((resolve) => { answer = (m) => resolve({ ...m, text }); }));
+    const { bridge } = bridgeWithBox({ sendPaneMessage: slow } as Partial<BridgeClient>);
+    await mount({ bridge });
+    typeAndSend('hello there');
+    await act(async () => { await Promise.resolve(); });
+    const bubble = host.querySelector('[data-testid="chat-pending"]');
+    expect(bubble?.getAttribute('data-state')).toBe('sending');
+    expect(bubble?.textContent).toContain('Sending…');
+    await act(async () => { answer(queued({ id: 'm5' })); await Promise.resolve(); });
+    expect(host.querySelectorAll('[data-testid="chat-pending"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="chat-pending"]')?.getAttribute('data-state')).toBe('queued');
+  });
+
+  it('a refused send takes the Sending… bubble away, keeps the text, and offers Retry', async () => {
+    const refuse = vi.fn(async () => { throw new Error('The agent has closed.'); });
+    const { bridge } = bridgeWithBox({ sendPaneMessage: refuse } as unknown as Partial<BridgeClient>);
+    await mount({ bridge });
+    typeAndSend('hello there');
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(host.querySelector('[data-testid="chat-pending"]')).toBeNull();
+    expect(field().value).toBe('hello there');
+    expect(host.querySelector('[data-testid="phone-composer-note"]')?.textContent).toBeTruthy();
+    expect(host.querySelector('[data-testid="phone-retry"]')).not.toBeNull();
+  });
+
   it('a queued bubble can be cancelled through the bridge', async () => {
     const { bridge, cancelPaneMessage } = bridgeWithBox({
       listPaneMessages: vi.fn(async () => [queued()]),

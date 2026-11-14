@@ -8,6 +8,7 @@ import type { CockpitApi } from '../../hooks/useCockpit';
 import type { AcpChatApi, AcpChatState } from '../../lib/acpChat';
 import { fakeAcpApi } from '../../lib/acpChatFake';
 import type { Question } from '../../lib/questions';
+import { takeComposerInserts } from '../../lib/composer-insert';
 import { AcpChatDock } from './AcpChatDock';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -421,28 +422,131 @@ describe('AcpChatDock', () => {
     });
   });
 
-  it('a chat that needs a sign-in shows the card; Open sign-in opens the agent terminal in the pane folder, then try again', async () => {
-    const newAgent = vi.fn(async () => 'term-1');
-    const c = { now: 5, asked: { questions: [], answerQuestion: vi.fn(), dismissQuestion: vi.fn() }, newAgent, registry: { panes: new Map([['p1', { info: { cwd: '/work/app' } }]]) } } as unknown as CockpitApi;
-    const retrySignIn = vi.fn(async () => undefined);
-    const { api, emit } = fakeApi(state({ turnInFlight: false, phase: 'idle', status: 'idle', agent: 'claude', label: 'Claude' }));
-    api.retrySignIn = retrySignIn;
-    await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Claude" api={api} />));
-    await flush();
-    expect(host.querySelector('[data-testid="signin-card"]')).toBeNull();
+  describe('the sign-in fix card', () => {
+    const signedOut = (text: string | null = 'add the date format to the report') =>
+      state({ turnInFlight: false, phase: 'idle', status: 'idle', agent: 'claude', label: 'Claude', signIn: { needed: true, hint: 'Type /login in the terminal.', text } });
+    const setup = (retrySignIn: () => Promise<void>) => {
+      const newAgent = vi.fn(async () => 'term-1');
+      const c = {
+        now: 5,
+        asked: { questions: [], answerQuestion: vi.fn(), dismissQuestion: vi.fn() },
+        newAgent,
+        launchEntries: [
+          { type: 'claude', label: 'Claude' },
+          { type: 'codex', label: 'Codex' },
+        ],
+        registry: { panes: new Map([['p1', { info: { cwd: '/work/app' } }]]) },
+      } as unknown as CockpitApi;
+      const { api, emit } = fakeApi(state({ turnInFlight: false, phase: 'idle', status: 'idle', agent: 'claude', label: 'Claude' }));
+      api.retrySignIn = retrySignIn;
+      return { c, api, emit, newAgent };
+    };
 
-    await emit(state({ turnInFlight: false, phase: 'idle', status: 'idle', agent: 'claude', label: 'Claude', signIn: { needed: true, hint: 'Type /login in the terminal.' } }));
-    const card = host.querySelector('[data-testid="signin-card"]')!;
-    expect(card.textContent).toContain('Sign in to Claude to use Chat');
-    expect(card.textContent).toContain('Type /login in the terminal.');
+    it('says the sign-in ended and the message is kept, with one main button and one other-agent button', async () => {
+      const { c, api, emit } = setup(vi.fn(async () => undefined));
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Claude" api={api} />));
+      await flush();
+      expect(host.querySelector('[data-testid="signin-fix-card"]')).toBeNull();
+      await emit(signedOut());
+      const card = host.querySelector('[data-testid="signin-fix-card"]')!;
+      expect(card.textContent).toContain("Claude's sign-in ended.");
+      expect(card.textContent).toContain('Your message is kept.');
+      expect(card.textContent).toContain('add the date format');
+      expect(button('Sign in again')).toBeTruthy();
+      expect(button('Use Codex for this')).toBeTruthy();
+    });
 
-    await act(async () => button('Open sign-in')!.click());
-    expect(newAgent).toHaveBeenCalledWith('claude', undefined, false, '/work/app', undefined, 'terminal');
-    await act(async () => buttons().find((b) => /signed in — try again/.test(b.textContent ?? ''))!.click());
-    expect(retrySignIn).toHaveBeenCalledWith('p1');
+    it('Sign in again opens the agent terminal in the pane folder, then the kept message is sent again by itself, once', async () => {
+      vi.useFakeTimers();
+      try {
+        let signedIn = false;
+        const retrySignIn = vi.fn(async () => {
+          if (!signedIn) throw new Error('ACP_SIGN_IN_NEEDED: The agent needs you to sign in.');
+        });
+        const { c, api, emit, newAgent } = setup(retrySignIn);
+        await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Claude" api={api} />));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        await emit(signedOut());
+        await act(async () => button('Sign in again')!.click());
+        expect(newAgent).toHaveBeenCalledWith('claude', undefined, false, '/work/app', undefined, 'terminal');
+        expect(host.querySelector('[data-testid="signin-fix-card"]')!.textContent).toContain('Finish signing in');
 
-    // The backend clears the flag once the message went: the card goes.
-    await emit(state({ turnInFlight: true, agent: 'claude', label: 'Claude', signIn: { needed: false, hint: '' } }));
-    expect(host.querySelector('[data-testid="signin-card"]')).toBeNull();
+        // Still signed out: tried, refused, the card stays and nothing is sent.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(6100);
+        });
+        expect(retrySignIn).toHaveBeenCalledTimes(1);
+        expect(host.querySelector('[data-testid="signin-fix-card"]')).not.toBeNull();
+
+        signedIn = true;
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(6100);
+        });
+        expect(retrySignIn).toHaveBeenCalledTimes(2);
+        expect(host.querySelector('[data-testid="signin-fix-card"]')!.textContent).toContain('Sent again');
+        // It stops: no third try, even after a long time.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(60_000);
+        });
+        expect(retrySignIn).toHaveBeenCalledTimes(2);
+
+        // The backend clears the flag once the message went: the card goes.
+        await emit(state({ turnInFlight: true, agent: 'claude', label: 'Claude', signIn: { needed: false, hint: '' } }));
+        expect(host.querySelector('[data-testid="signin-fix-card"]')).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('after three minutes it stops trying by itself and offers one button that sends it now', async () => {
+      vi.useFakeTimers();
+      try {
+        const retrySignIn = vi.fn(async () => {
+          throw new Error('ACP_SIGN_IN_NEEDED: The agent needs you to sign in.');
+        });
+        const { c, api, emit } = setup(retrySignIn);
+        await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Claude" api={api} />));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        await emit(signedOut());
+        await act(async () => button('Sign in again')!.click());
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(181_000);
+        });
+        const tries = retrySignIn.mock.calls.length;
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(30_000);
+        });
+        expect(retrySignIn.mock.calls.length).toBe(tries);
+        expect(button('Send it now')).toBeTruthy();
+        await act(async () => button('Send it now')!.click());
+        expect(host.querySelector('[data-testid="signin-fix-card"]')!.textContent).toContain("Claude's sign-in is still out");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('Use Codex for this opens a chat with Codex and puts the kept words in its message box without sending them', async () => {
+      const { c, api, emit, newAgent } = setup(vi.fn(async () => undefined));
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Claude" api={api} />));
+      await flush();
+      await emit(signedOut());
+      await act(async () => button('Use Codex for this')!.click());
+      expect(newAgent).toHaveBeenCalledWith('codex', undefined, false, '/work/app');
+      expect(takeComposerInserts('term-1')).toBe('add the date format to the report');
+    });
+
+    it('with no other agent the card has only Sign in again', async () => {
+      const { c, api, emit } = setup(vi.fn(async () => undefined));
+      (c as unknown as { launchEntries: unknown[] }).launchEntries = [{ type: 'claude', label: 'Claude' }];
+      await act(async () => root.render(<AcpChatDock c={c} paneId="p1" paneName="Claude" api={api} />));
+      await flush();
+      await emit(signedOut());
+      expect(button('Sign in again')).toBeTruthy();
+      expect(buttons().some((b) => /Use .* for this/.test(b.textContent ?? ''))).toBe(false);
+    });
   });
 });

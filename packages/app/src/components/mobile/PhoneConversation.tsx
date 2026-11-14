@@ -11,7 +11,6 @@ import { NoticeLine } from '../chat/NoticeLine';
 import { PermissionTrace } from '../chat/PermissionTrace';
 import { ThinkingBlock } from '../chat/ThinkingBlock';
 import { currentPlan } from '../chat/PlanCard';
-import { PlanBar } from '../chat/PlanBar';
 import { ToolRow } from '../chat/ToolRow';
 import { clockOf } from '../../lib/phone-link';
 import { JumpToLatest, SinceLine } from '../chat/SinceLine';
@@ -19,8 +18,11 @@ import { TurnPriceTag } from '../chat/TurnPriceTag';
 import { useSinceLine } from '../chat/useSinceLine';
 import { hasPrice, turnPrices, type TurnPrice } from '../../lib/turnPrice';
 import { FoldedSteps } from './FoldedSteps';
+import { PhonePlanLine } from './PhonePlanLine';
+import { usePhoneTextSize } from '../../lib/phone-text-size';
 import { Pressable, type PressedMessage } from './MessageActions';
 import { foldTurnSteps } from './foldSteps';
+import { hideResultBlock } from '../../lib/phone-result';
 import '../../styles/phone-shell.css';
 import '../../styles/phone-link.css';
 
@@ -29,7 +31,7 @@ const AT_BOTTOM_PX = 24;
 
 function TextPiece({ step, markdown }: { step: Extract<TurnStep, { kind: 'text' }>; markdown: boolean }) {
   return markdown ? (
-    <ChatMarkdown text={step.item.text} />
+    <ChatMarkdown text={hideResultBlock(step.item.text)} />
   ) : (
     <div className="ph-conv-plain">{step.item.text}</div>
   );
@@ -39,7 +41,8 @@ function TurnBlock({ turn, fromScreen, markdown, onPress, price }: { price?: Tur
   const t = useT();
   const live = turn.end === null;
   const lastStepId = turn.steps[turn.steps.length - 1]?.id;
-  const ending = turn.ending?.text ?? (turn.outcome === 'interrupted' ? t('phone.conv.stopped') : turn.outcome === 'failed' ? t('phone.conv.failed') : null);
+  // No "Done · 4 s" under every answer: how long it took is said once, in the header and on the result card.
+  const ending = turn.outcome === 'interrupted' ? t('phone.conv.stopped') : turn.outcome === 'failed' ? t('phone.conv.failed') : null;
   return (
     <section className="ph-turn" data-turn-id={turn.id}>
       {turn.user && (
@@ -70,7 +73,7 @@ function TurnBlock({ turn, fromScreen, markdown, onPress, price }: { price?: Tur
             <NoticeLine key={step.id} text={step.item.text} kind={step.item.noticeKind} url={step.item.url} />
           );
         }
-        if (step.kind === 'thinking') return <ThinkingBlock key={step.id} text={step.item.text} durationMs={step.item.durationMs} streaming={live && step.id === lastStepId} />;
+        if (step.kind === 'thinking') return <ThinkingBlock key={step.id} text={step.item.text} durationMs={step.item.durationMs} streaming={live && step.id === lastStepId} folded />;
         return (
           <Pressable key={step.id} className="ph-agent-text" message={{ text: step.item.text, mine: false }} onPress={onPress}>
             <TextPiece step={step} markdown={markdown} />
@@ -78,7 +81,7 @@ function TurnBlock({ turn, fromScreen, markdown, onPress, price }: { price?: Tur
         );
       })}
       {turn.end && ending && <p className="ph-turn-end">{ending}</p>}
-      {turn.end && hasPrice(price) && <TurnPriceTag price={price} />}
+      {turn.end && hasPrice(price) && price.heavy && <TurnPriceTag price={price} />}
     </section>
   );
 }
@@ -129,6 +132,8 @@ export function PhoneConversation({
   const markdown = source === 'file' || source === 'api' || source === 'acp';
   const plan = useMemo(() => currentPlan(turns), [turns]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  usePhoneTextSize(rootRef);
   const atBottom = useRef(true);
   const prices = useMemo(() => turnPrices(turns), [turns]);
   const sinceLine = useSinceLine({ chatId, turns, ready: state === 'ready', scrollRef, atBottom });
@@ -149,7 +154,7 @@ export function PhoneConversation({
   }, []);
 
   return (
-    <div className="ph-conv" data-testid="phone-conversation" data-stale={staleAt !== null ? 'true' : undefined}>
+    <div ref={rootRef} className="ph-conv" data-testid="phone-conversation" data-stale={staleAt !== null ? 'true' : undefined}>
       {fromScreen && state !== 'unavailable' && <p className="ph-conv-note">{t('phone.conv.screenNote')}</p>}
       {staleAt !== null && (
         <p className="ph-asof" data-testid="phone-asof">
@@ -157,7 +162,7 @@ export function PhoneConversation({
         </p>
       )}
       {progress}
-      <PlanBar items={plan} />
+      <PhonePlanLine items={plan} />
       <div
         ref={scrollRef}
         className="ph-conv-body"

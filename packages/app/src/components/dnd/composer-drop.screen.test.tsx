@@ -52,7 +52,7 @@ beforeEach(async () => {
   await act(async () =>
     root.render(
       <>
-        <ChangesCard outputs={[{ path: 'C:/proj/src/a.ts', tool: 'Edit', wrote: true }]} cwd="C:/proj" onOpenChanges={() => {}} />
+        <ChangesCard paneId="p1" status="idle" outputs={[{ path: 'C:/proj/src/a.ts', tool: 'Edit', wrote: true }]} cwd="C:/proj" onOpenChanges={() => {}} />
         <ChatComposer onSend={vi.fn(async () => null)} blockedReason={null} draftKey="pane-1" attachFiles={async () => []} />
         <DragLayer />
       </>,
@@ -93,7 +93,7 @@ describe('drop a changed file on the chat box', () => {
 
   it('a click on the card item still opens Changes and does not drag', async () => {
     const open = vi.fn();
-    await act(async () => root.render(<ChangesCard outputs={[{ path: 'C:/proj/src/a.ts', tool: 'Edit', wrote: true }]} cwd="C:/proj" onOpenChanges={open} />));
+    await act(async () => root.render(<ChangesCard paneId="p1" status="idle" outputs={[{ path: 'C:/proj/src/a.ts', tool: 'Edit', wrote: true }]} cwd="C:/proj" onOpenChanges={open} />));
     const item = host.querySelector<HTMLElement>('.ck-rail-item')!;
     await fire(item, 'pointerdown', 20, 20);
     await fire(window, 'pointermove', 22, 21);

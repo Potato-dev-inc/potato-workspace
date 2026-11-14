@@ -1,0 +1,71 @@
+// English messages: flow. Keys are dotted (`flow.something`). Plural: `<key>_one` / `<key>_other`.
+// Update at a good moment, the sign-in fix card, the Problems list, the shared error card and the quiet start-up check.
+export const flow = {
+  // Update ready while agents work (When they finish / Tonight / Now), and "What is new" after the restart.
+  'flow.update.groupLabel': 'Update ready',
+  'flow.update.ready': 'Update ready.',
+  'flow.update.readyVersion': 'Update ready · {version}.',
+  'flow.update.working_one': '1 agent is working.',
+  'flow.update.working_other': '{count} agents are working.',
+  'flow.update.notStopped': 'They will not be stopped.',
+  'flow.update.whenFinish': 'When they finish',
+  'flow.update.tonight': 'Tonight',
+  'flow.update.now': 'Now',
+  'flow.update.waitingFinish': 'It installs by itself when they finish. Your chats come back after the restart.',
+  'flow.update.waitingTonight': 'It installs at {time}, once they have finished. Your chats come back after the restart.',
+  'flow.whatsNew.title': 'What is new in {version}',
+  'flow.whatsNew.chatsBack_one': 'Your chat is back.',
+  'flow.whatsNew.chatsBack_other': 'Your {count} chats are back.',
+  'flow.whatsNew.close': 'Got it',
+
+  // Sign-in fix card (in the chat where the message failed).
+  'flow.signin.title': "{agent}'s sign-in ended.",
+  'flow.signin.kept': 'Your message is kept.',
+  'flow.signin.sent': 'Sent again.',
+  'flow.signin.again': 'Sign in again',
+  'flow.signin.openAgain': 'Open sign-in again',
+  'flow.signin.waiting': 'Finish signing in. Then your message is sent again by itself.',
+  'flow.signin.gaveUp': 'Still waiting for the sign-in.',
+  'flow.signin.sendNow': 'Send it now',
+  'flow.signin.stillOut': "{agent}'s sign-in is still out.",
+  'flow.signin.useOther': 'Use {agent} for this',
+
+  // Problems list.
+  'flow.problems.title': 'Problems',
+  'flow.problems.count_one': '1 problem',
+  'flow.problems.count_other': '{count} problems',
+  'flow.problems.none': 'Nothing went wrong.',
+  'flow.problems.clear': 'Clear',
+  'flow.problems.fixed': 'Fixed',
+  'flow.problems.notFixed': 'Not fixed',
+  'flow.problems.openChat': 'Open the chat',
+  'flow.problems.signIn': 'Sign in',
+  'flow.problems.tryAgain': 'Try again',
+  'flow.problems.copy': 'Copy details',
+  'flow.problems.stopped': '{agent} stopped because of an error.',
+  'flow.problems.stuck': '{agent} looks stuck.',
+  'flow.problems.signedOut': "{agent}'s sign-in ended.",
+
+  // The shared error card.
+  'flow.error.whatHappened': 'What happened',
+  'flow.error.whatToDo': 'What you can do',
+  'flow.error.showDetails': 'Show details',
+  'flow.error.hideDetails': 'Hide details',
+  'flow.error.copy': 'Copy for support',
+  'flow.error.copied': 'Copied',
+  'flow.error.chatStopped.can': 'Restart the chat. Your conversation is kept.',
+  'flow.error.chatStopped.restart': 'Restart chat',
+  'flow.error.chatStopped.restarting': 'Restarting…',
+  'flow.error.chatStopped.retry': 'Retry',
+  'flow.error.updateFailed.can': 'Your current version keeps working. Try again in a moment.',
+
+  // Quiet start-up check: one line, one Fix.
+  'flow.startup.bridge': "The app's link to your agents is not connected.",
+  'flow.startup.checkSetup': 'Check my setup',
+  'flow.startup.disk': 'Your disk is almost full ({gb} GB left). Agents may not be able to save work.',
+  'flow.startup.update': "Couldn't reach the update address. Updates will wait.",
+  'flow.startup.terminals': 'Your agents only run in a terminal, and terminals are hidden.',
+  'flow.startup.showTerminals': 'Show terminals',
+  'flow.startup.more': '(+{count} more)',
+  'flow.startup.dismiss': 'Dismiss',
+} as const;

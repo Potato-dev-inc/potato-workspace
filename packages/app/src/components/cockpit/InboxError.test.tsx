@@ -52,7 +52,7 @@ describe('Inbox error card', () => {
     expect(host.querySelector('.ib-meta')!.textContent).toBe('shop');
     expect(host.querySelector('.ib-age')!.textContent).toBe('2m');
     expect(host.querySelector('.ib-reason')!.textContent).toBe('It closed unexpectedly. Your files are as it left them.');
-    expect(buttons()).toEqual(['Start again', 'Open', 'Ask another agent']);
+    expect(buttons()).toEqual(['Show details', 'Copy for support', 'Start again', 'Open', 'Ask another agent']);
     expect(host.querySelector('.ck-btn--primary')!.textContent).toBe('Start again');
   });
 

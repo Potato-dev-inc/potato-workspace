@@ -267,3 +267,26 @@ describe('diff helpers', () => {
     expect(['@@ x', '+a', '-b', ' c'].map(lineKind)).toEqual(['hunk', 'add', 'del', 'ctx']);
   });
 });
+
+describe('Changes section: review and editor', () => {
+  it('shows the turn review above the whole-copy file list', async () => {
+    await act(async () => {
+      root.render(<Changes paneId="p1" status="idle" api={fakeApi()} turnReview={<div data-testid="turn-review-slot">review</div>} />);
+    });
+    await act(async () => {});
+    const slot = host.querySelector('[data-testid="turn-review-slot"]')!;
+    expect(slot).not.toBeNull();
+    const list = host.querySelector('.ck-changes-files')!;
+    expect(slot.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('a right-click on a file offers Open in editor', async () => {
+    await mount(fakeApi());
+    const row = host.querySelector('.ck-changes-file')!;
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
+  });
+});
+

@@ -171,11 +171,11 @@ pub fn pane_key(pane: &str) -> String {
     }
 }
 
-fn index_path(shadow: &Shadow, pane: &str) -> PathBuf {
+pub(super) fn index_path(shadow: &Shadow, pane: &str) -> PathBuf {
     shadow.git_dir.join(format!("pm-index-{}", pane_key(pane)))
 }
 
-fn prepare(project: &Path) -> Result<Shadow, CheckpointError> {
+pub(super) fn prepare(project: &Path) -> Result<Shadow, CheckpointError> {
     if !git_available() {
         return Err(CheckpointError::GitMissing);
     }
@@ -352,7 +352,7 @@ pub fn patch_between_trees(project: &Path, from: &str, to: &str, path: &str, max
     if safe_relative(path).is_none() {
         return Err(CheckpointError::Other("That file name is not allowed.".into()));
     }
-    let out = shadow.run(&["diff", "--no-color", "--no-renames", "-U3", from, to, "--", path], None, None, &[])?;
+    let out = shadow.run(&["--literal-pathspecs", "diff", "--no-color", "--no-renames", "-U3", from, to, "--", path], None, None, &[])?;
     let mut patch = String::from_utf8_lossy(&out.stdout).into_owned();
     let truncated = patch.len() > max_bytes;
     if truncated {
@@ -517,7 +517,7 @@ pub fn snapshot_numbered(
     snapshot_locked(&shadow, pane, kind, note, now_ms, limits, turn)
 }
 
-fn snapshot_locked(
+pub(super) fn snapshot_locked(
     shadow: &Shadow,
     pane: &str,
     kind: Kind,

@@ -107,4 +107,7 @@ export const MOVED_FILES: readonly string[] = [
   // phone compose: files, voice, quick replies, the result card and the progress line
   'components/mobile/PhoneAttach.tsx', 'components/mobile/PhoneQuick.tsx', 'components/mobile/PhoneVoiceBar.tsx',
   'components/mobile/PhoneResult.tsx', 'components/mobile/PhoneProgress.tsx',
+  // flow: update choice, sign-in fix card, Problems, shared error card, start-up line
+  'components/updates/WhatsNewCard.tsx', 'components/acp/SignInFixCard.tsx', 'components/common/ErrorCard.tsx',
+  'components/cockpit/problems/ProblemsChip.tsx', 'components/cockpit/StartupCheckLine.tsx',
 ];

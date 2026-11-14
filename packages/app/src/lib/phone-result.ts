@@ -129,3 +129,16 @@ export function keepTurn(paneId: string, turnId: string): void {
     /* private mode: the card comes back next time */
   }
 }
+
+/**
+ * The agent's text without its `potato-result` data block (the card shows that data). A block that has not closed yet
+ * (the agent is still writing it) is hidden too.
+ */
+export function hideResultBlock(text: string): string {
+  if (!text.includes('```potato-result')) return text;
+  return text
+    .replace(/```potato-result[\s\S]*?```/g, '')
+    .replace(/```potato-result[\s\S]*$/, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd();
+}

@@ -130,3 +130,65 @@
 .ph .ph-ask-btn {
   text-align: center;
 }
+
+/* ---------- approval + question cards (redesign): primary full width, the rest in a row, risk shown by the edge ---------- */
+.ph .ph-ask {
+  border-radius: 16px;
+  gap: 8px;
+}
+.ph .ph-ask--high {
+  border-color: var(--danger);
+}
+.ph .ph-ask-title {
+  font: 600 15px/1.35 var(--font-ui);
+}
+.ph .ph-ask-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ph .ph-ask-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 0;
+  flex: 1 1 0;
+  border-radius: 12px;
+  font: 600 14px/1.2 var(--font-ui);
+}
+/* The leading answer takes the whole first line, and is the one orange thing. */
+.ph .ph-ask-actions > .ph-ask-btn:first-child {
+  flex: 1 0 100%;
+}
+.ph .ph-ask-btn--primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.ph .ph-ask--high .ph-ask-btn.ph-hold {
+  border: 1px solid var(--danger);
+}
+.ph .ph-ask-actions--choices {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+.ph .ph-ask-actions--choices > .ph-ask-btn,
+.ph .ph-ask-actions--choices > .ph-ask-btn:first-child {
+  flex: none;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  background: var(--fill-active);
+  color: var(--label);
+}
+.ph .ph-ask-n {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--fill);
+  font: 600 12px var(--font-ui);
+  color: var(--label-2);
+}

@@ -5,6 +5,7 @@ import { DEFAULT_PUBLIC_SETTINGS } from '../lib/bridge-settings';
 import { LS_BRIDGE_URL } from '../lib/bridge-url';
 import { PANE_CODEX } from './fixtures';
 import { PHONE_ASKING_REPLY, PHONE_CHAT_REPLY, PHONE_QUEUED_MESSAGES, phoneLiveReply, phonePlanReply } from './phone-chat-fixtures';
+import { phoneRichReply } from './phone-chat-rich-fixture';
 import { PHONE_TEAM_JOB, PHONE_TEAM_OFF, phoneTeamReply } from './phone-team-fixtures';
 import type { HarnessScenario } from './types';
 
@@ -84,7 +85,7 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
   if (route === '/agents/types') return json(PHONE_AGENT_TYPES);
   const chatRoute = /^\/panes\/([^/]+)\/chat$/.exec(route);
   if (chatRoute && method === 'GET') {
-    const served = phone.chat === 'plan' ? phonePlanReply(Date.now()) : phone.chat === 'live' ? phoneLiveReply(Date.now()) : phone.chat === 'asking' ? PHONE_ASKING_REPLY : PHONE_CHAT_REPLY;
+    const served = phone.chat === 'rich' ? phoneRichReply(Date.now()) : phone.chat === 'plan' ? phonePlanReply(Date.now()) : phone.chat === 'live' ? phoneLiveReply(Date.now()) : phone.chat === 'asking' ? PHONE_ASKING_REPLY : PHONE_CHAT_REPLY;
     return json(path.includes('since=') ? { ...served, items: [] } : served);
   }
   // Phone compose: what the last turn did (P10) and a file sent from the phone (P14).

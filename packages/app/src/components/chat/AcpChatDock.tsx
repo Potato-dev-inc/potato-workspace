@@ -10,10 +10,14 @@ import { errorSentence, interruptedStrip, permissionCards, quietStrip, runStrip,
 import { kindWords, permissionOf } from '../../lib/decisionCard';
 import { DecisionCard, type DecisionAnswer } from './DecisionCard';
 import { AgentAnsweringSwitch } from './AgentAnsweringSwitch';
-import { SignInCard } from '../acp/SignInCard';
+import { ErrorCard } from '../common/ErrorCard';
+import { useT } from '../../i18n';
+import { SignInFixCard } from '../acp/SignInFixCard';
+import { pushComposerInsert } from '../../lib/composer-insert';
 import '../../styles/cockpit-acp.css';
 
 export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stopper }: { c: CockpitApi; paneId: string; paneName: string; api?: AcpChatApi; /** The Stop the message box shares (PaneView); without it the dock keeps its own. */ stopper?: AcpStop }) {
+  const t = useT();
   const state = useAcpChatState(paneId, true, api);
   const running = !!state?.turnInFlight;
   // The person pressed Stop: the box reads "Stopping…" at once, before the backend's state event comes back.
@@ -80,15 +84,17 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
       setOrphan(false);
       return;
     }
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       console.warn('acp chat: waiting for an answer with no card on screen', paneId);
       setOrphan(true);
     }, 2000);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [waitingNoCard, paneId]);
   const quiet = quietStrip(state, asked);
   const strip = quiet ? null : runStrip(state, asked);
   const signIn = state && !state.closed && state.signIn?.needed ? state : null;
+  // The first other agent that can open a visible chat or terminal; none: the card offers only "Sign in again".
+  const otherAgent = signIn ? (c.launchEntries ?? []).find((e) => e.type !== signIn.agent && !e.disabled && !e.shell) : undefined;
   if (cards.length === 0 && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0 && !orphan) return null;
   const keepWaiting = () => {
     api.keepWaiting?.(paneId).catch(() => undefined);
@@ -112,12 +118,19 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
       })}
       {cards.length > 0 && <AgentAnsweringSwitch paneId={paneId} state={state} api={api} />}
       {signIn && (
-        <SignInCard
+        <SignInFixCard
           label={signIn.label}
           hint={signIn.signIn?.hint ?? ''}
+          kept={signIn.signIn?.text ?? null}
+          other={otherAgent ? { id: otherAgent.type, label: otherAgent.label } : null}
           // The agent's own terminal, in a normal pane (the same sign-in the terminal uses).
           onOpen={() => c.newAgent(signIn.agent, undefined, false, c.registry.panes.get(paneId)?.info.cwd, undefined, 'terminal')}
           onRetry={() => api.retrySignIn?.(paneId)}
+          onUseOther={async (id, kept) => {
+            const opened = await c.newAgent(id, undefined, false, c.registry.panes.get(paneId)?.info.cwd);
+            // Nothing is sent: the kept words wait in the new chat's message box for the person to read and send.
+            if (opened && kept) pushComposerInsert(opened, kept);
+          }}
         />
       )}
       {interrupted && !strip && (
@@ -133,16 +146,15 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
         </div>
       )}
       {stopped && !strip && (
-        <div className="ck-acp-strip" data-testid="acp-stopped">
-          <span className="ck-acp-strip-text" role="status">
-            {restartError ? `${stopped.text}. ${restartError}` : stopped.text}
-          </span>
-          {api.restart && (
-            <button type="button" className="ck-btn ck-btn--secondary ck-acp-stop" onClick={restart} disabled={restarting}>
-              {restarting ? 'Restarting…' : restartError ? 'Retry' : 'Restart chat'}
-            </button>
-          )}
-        </div>
+        <ErrorCard
+          testId="acp-stopped"
+          compact
+          who={state?.label ?? paneName}
+          what={restartError ? `${stopped.text}. ${restartError}` : stopped.text}
+          can={t('flow.error.chatStopped.can')}
+          details={state?.exit?.reason ?? null}
+          action={api.restart ? { label: restarting ? t('flow.error.chatStopped.restarting') : restartError ? t('flow.error.chatStopped.retry') : t('flow.error.chatStopped.restart'), onClick: restart, disabled: restarting } : undefined}
+        />
       )}
       {orphan && waitingNoCard && (
         <div className="ck-acp-strip" data-testid="acp-orphan-wait">

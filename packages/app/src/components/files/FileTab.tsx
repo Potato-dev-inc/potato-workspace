@@ -12,6 +12,8 @@ import { SegTabs } from '../cockpit/SegTabs';
 import { isMarkdown } from './languages';
 import type { CodeSelection } from './CodeEditor';
 import { FileDiff } from './FileDiff';
+import { useOpenInEditor } from './OpenInEditor';
+import type { EditorApi } from '../../lib/my-editor';
 import { TellBar } from './TellBar';
 import { tellText } from './tell-text';
 import '../../styles/files.css';
@@ -27,6 +29,7 @@ export function FileTab({
   canTell,
   refreshKey = '',
   api = filesApi,
+  editor,
 }: {
   paneId: string;
   path: string;
@@ -35,8 +38,11 @@ export function FileTab({
   /** Changes when the agent may have changed the file: it is read again. */
   refreshKey?: string;
   api?: FilesApi;
+  /** The editor calls (a test double can stand in). */
+  editor?: EditorApi;
 }) {
   const t = useT();
+  const opener = useOpenInEditor(paneId, editor);
   const [view, setView] = useState<View>('file');
   const [content, setContent] = useState<FileContent | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,10 +91,18 @@ export function FileTab({
     [paneId, t],
   );
 
+  // Open in my editor: the header button, and Ctrl+Enter (at the first picked line, else the top).
+  const openEditor = useCallback(
+    (line?: number) => {
+      void opener.open(path, line).then((problem) => setNotice(problem));
+    },
+    [opener, path],
+  );
+
   const body = () => {
     if (view === 'changes') {
       if (patch === null) return <p className="ck-file-note">{t('files.loading')}</p>;
-      return <FileDiff path={path} patch={patch} canTell={canTell} onTell={send} />;
+      return <FileDiff path={path} patch={patch} canTell={canTell} onTell={send} onOpenAt={openEditor} />;
     }
     if (error) {
       return (
@@ -131,13 +145,32 @@ export function FileTab({
   const name = path.slice(path.lastIndexOf('/') + 1);
   const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
   return (
-    <section className="ck-file" aria-label={t('files.fileLabel', { name })} data-testid="file-tab">
+    <section
+      className="ck-file"
+      aria-label={t('files.fileLabel', { name })}
+      data-testid="file-tab"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.defaultPrevented && view === 'file') {
+          e.preventDefault();
+          openEditor(selection?.from);
+        }
+      }}
+    >
       <header className="ck-file-head">
         <span className="ck-file-name" title={path}>
           {name}
         </span>
         {folder && <span className="ck-file-folder">{folder}</span>}
         <span className="ck-head-gap" aria-hidden="true" />
+        <button
+          type="button"
+          className="ck-btn ck-btn--plain ck-btn--sm"
+          disabled={opener.none}
+          title={opener.none ? t('editor.none') : undefined}
+          onClick={() => openEditor(selection?.from)}
+        >
+          {opener.name ? t('editor.open', { name: opener.name }) : t('editor.openGeneric')}
+        </button>
         {isMarkdown(path) && view === 'file' && content?.kind === 'text' && (
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-pressed={asText} onClick={() => setAsText((v) => !v)}>
             {asText ? t('files.showPage') : t('files.showText')}

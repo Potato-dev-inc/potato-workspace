@@ -12,6 +12,7 @@ import { runStoreCheck } from './lib/agentStoreCheck';
 import { tauriClosedChatsApi } from './lib/closedChats';
 import { requestGettingStarted } from './lib/getting-started';
 import { resetUndoBar, showUndo } from './lib/undo-bar';
+import { reportProblem, resetProblems } from './lib/problems';
 
 // Mutable per-test input for the digest (away) path.
 const away = vi.hoisted(() => ({ digest: null as null | object }));
@@ -127,9 +128,25 @@ vi.mock('./hooks/useAway', () => ({
   useAway: () => ({ digest: away.digest, dismissDigest: () => {}, lastTurn: null }),
 }));
 
+// What the (mocked) Needs-you source reports; the Problems list follows it.
+const needs = vi.hoisted(() => ({ items: [] as Array<{ id: string; kind: string; paneId?: string }> }));
+// The quiet start-up check: on, with fake sources the test sets.
+const startup = vi.hoisted(() => ({ health: [] as unknown[] }));
 vi.mock('./hooks/useNeedsYou', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./hooks/useNeedsYou')>()),
-  useNeedsYouSource: () => [],
+  useNeedsYouSource: () => needs.items,
+}));
+vi.mock('./lib/startup-check', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./lib/startup-check')>()),
+  canStartupCheck: () => true,
+  tauriStartupDeps: () => ({
+    agentHealth: async () => startup.health,
+    bridgeUp: () => true,
+    diskFreeBytes: async () => 100 * 1024 ** 3,
+    updateReachable: async () => true,
+    lanes: async () => null,
+    settings: async () => null,
+  }),
 }));
 
 vi.mock('./lib/loop-guard', async (importOriginal) => ({
@@ -377,6 +394,9 @@ beforeEach(async () => {
   live.notes = [];
   live.stops = 0;
   localStorage.clear();
+  needs.items = [];
+  startup.health = [];
+  resetProblems();
   rust.openSettings = null;
   rust.openView = null;
   settingsMounts = 0;
@@ -409,6 +429,51 @@ describe('CockpitApp: the Used bar', () => {
     expect(bar!.closest('main')).toBeNull();
     expect(bar!.closest('.ck-side')).toBeNull();
     expect(bar!.textContent).toContain('40%');
+  });
+});
+
+describe('CockpitApp: the Problems chip', () => {
+  const chip = () => host.querySelector('.cockpit > .ck-statusbar [data-testid="problems-chip"]');
+  it('is not there while nothing failed', async () => {
+    await act(async () => {});
+    expect(chip()).toBeNull();
+  });
+
+  it('sits in the status bar with the number of open problems, opens the list, and the way out opens the chat', async () => {
+    await act(async () => reportProblem({ id: 'error:p1', what: 'Agent stopped because of an error.', agent: 'Agent', agentId: 'agent-p1', paneId: 'p2', way: 'open_chat' }));
+    expect(chip()!.textContent).toBe('1 problem');
+    await act(async () => (chip() as HTMLButtonElement).click());
+    expect(host.querySelector('[data-testid="problems-sheet"]')!.textContent).toContain('Agent stopped because of an error.');
+    await act(async () => [...host.querySelectorAll<HTMLButtonElement>('.pb-row button')].find((b) => b.textContent === 'Open the chat')!.click());
+    expect(host.querySelector('[data-testid="problems-sheet"]')).toBeNull();
+  });
+
+  it('follows the Needs-you list: an agent that stopped with an error becomes a problem, and is fixed when it is not stopped any more', async () => {
+    needs.items = [{ id: 'error:p1', kind: 'error', paneId: 'p1' }];
+    await act(async () => root.render(createElement(CockpitApp)));
+    expect(chip()?.textContent).toBe('1 problem');
+    needs.items = [];
+    await act(async () => root.render(createElement(CockpitApp, { key: 'again' })));
+    expect(chip()).toBeNull();
+  });
+});
+
+describe('CockpitApp: the quiet start-up check', () => {
+  it('shows nothing when all is fine, and one line with Sign in after the delay when an agent is signed out', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await act(async () => root.unmount());
+      root = createRoot(host);
+      startup.health = [{ id: 'codex', label: 'Codex', state: 'needs_login', installed: true, version: '1', reason: '', install_hint: null, login_hint: null, can_test: true }];
+      await act(async () => root.render(createElement(CockpitApp)));
+      expect(host.querySelector('[data-testid="startup-check"]')).toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4100);
+      });
+      expect(host.querySelector('[data-testid="startup-check"]')!.textContent).toContain('Codex needs sign-in');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

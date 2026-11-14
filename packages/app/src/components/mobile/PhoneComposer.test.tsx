@@ -123,3 +123,45 @@ describe('PhoneComposer', () => {
     }
   });
 });
+
+describe('Step 9 composer states', () => {
+  it('says Retry after a refused message, and Retry sends the same text again', async () => {
+    const onSend = vi.fn(async () => 'Could not reach your PC.' as string | null);
+    mount({ onSend });
+    type('hello');
+    await act(async () => send().click());
+    const retry = host.querySelector('[data-testid="phone-retry"]') as HTMLButtonElement;
+    expect(retry).not.toBeNull();
+    await act(async () => retry.click());
+    expect(onSend).toHaveBeenCalledTimes(2);
+    expect(onSend).toHaveBeenLastCalledWith('hello');
+  });
+
+  it('a send that throws keeps the text and shows a plain error with Retry', async () => {
+    const onSend = vi.fn(async () => {
+      throw new Error('network');
+    });
+    mount({ onSend: onSend as never });
+    type('hello');
+    await act(async () => send().click());
+    expect(field().value).toBe('hello');
+    expect(host.querySelector('[data-testid="phone-composer-note"]')?.textContent).toContain('did not go');
+    expect(host.querySelector('[data-testid="phone-retry"]')).not.toBeNull();
+  });
+
+  it('has a placeholder for each state and Send is orange only with text', () => {
+    mount({ working: true, onStop: async () => null });
+    expect(field().placeholder).toBe('Add to queue');
+    expect(host.querySelector('[data-testid="phone-stop"]')).not.toBeNull();
+    type('more');
+    expect(send().hasAttribute('data-ready')).toBe(true);
+    expect(host.querySelector('[data-testid="phone-stop-small"]')).not.toBeNull();
+  });
+
+  it('says Type an answer when asked and Offline when the PC is away', () => {
+    mount({ asking: true });
+    expect(field().placeholder).toBe('Type an answer');
+    mount({ offline: true });
+    expect(field().placeholder).toBe('Offline. Messages will wait.');
+  });
+});

@@ -95,7 +95,7 @@ describe('ChangesCard', () => {
     { path: '/work/shop/notes.txt', tool: 'Write', wrote: true },
   ];
   it('lists only written files with name and folder', () => {
-    show(<ChangesCard outputs={outputs} cwd="/work/shop" />);
+    show(<ChangesCard paneId="p1" status="idle" outputs={outputs} cwd="/work/shop" />);
     expect(host.textContent).toContain('+2 files');
     expect(host.textContent).toContain('a.ts');
     expect(host.textContent).toContain('src');
@@ -105,12 +105,12 @@ describe('ChangesCard', () => {
   });
   it('opens the Changes tab on a click when there is one', () => {
     const open = vi.fn();
-    show(<ChangesCard outputs={outputs} cwd="/work/shop" onOpenChanges={open} />);
+    show(<ChangesCard paneId="p1" status="idle" outputs={outputs} cwd="/work/shop" onOpenChanges={open} />);
     act(() => host.querySelector<HTMLButtonElement>('button')!.click());
     expect(open).toHaveBeenCalledTimes(1);
   });
   it('is hidden when nothing was written', () => {
-    show(<ChangesCard outputs={[outputs[1]]} cwd="/work/shop" />);
+    show(<ChangesCard paneId="p1" status="idle" outputs={[outputs[1]]} cwd="/work/shop" />);
     expect(host.innerHTML).toBe('');
   });
 });

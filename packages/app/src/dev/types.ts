@@ -62,7 +62,7 @@ export interface HarnessScenario {
      * `live`: the agent is in the middle of a turn (the progress line); `asking`: the turn ended with a question
      * (quick replies).
      */
-    chat?: 'finished' | 'live' | 'asking' | 'plan';
+    chat?: 'finished' | 'live' | 'asking' | 'plan' | 'rich';
   };
   /** Phone route: the abilities this phone was paired with (`GET /pair/me`); default: all four. */
   phoneCaps?: string[];
@@ -73,6 +73,10 @@ export interface HarnessScenario {
   /** Cockpit: start as a brand-new install (no agent was ever opened here). Default: an install that has been used.
    *  A `firstRun` scenario is a brand-new install too. */
   newInstall?: boolean;
+  /** Cockpit: an update was found (`app_update_check`); `busy` is who is working, so the download ends at the ready step (the install says UPDATE_RUNNING). */
+  appUpdate?: { version: string; busy?: { agents: string[]; chats: string[]; terminals: string[] } };
+  /** Cockpit: run the quiet start-up check (off in the harness unless a scenario asks, so it does not show in every screen). */
+  startupCheck?: boolean;
   /** Cockpit: pane id preselected through `?select=`. */
   select?: string;
   /** Settings > Agents > Preload: the stored idle timeout in seconds (default 1200). */

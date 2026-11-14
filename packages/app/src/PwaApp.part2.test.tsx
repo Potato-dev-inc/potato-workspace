@@ -289,7 +289,7 @@ describe('PwaApp: P19 setup after pairing', () => {
     await open('a1');
     await flush(2000);
     await act(async () => menuButton().click());
-    await act(async () => (Array.from(host.querySelectorAll('.ph-dlink')).find((b) => b.textContent === 'Settings') as HTMLButtonElement).click());
+    await act(async () => (host.querySelector('.ph-dsettings[aria-label="Settings"]') as HTMLButtonElement).click());
     expect(text()).toContain('Last connection events');
     expect(host.querySelector('[data-testid="phone-test-push"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="phone-link-events"]')).not.toBeNull();
@@ -316,7 +316,7 @@ describe('PwaApp part 2 in Traditional Chinese', () => {
     expect(ownText(host.querySelector('[data-testid="phone-no-control"]')!)).toEqual([]);
     await act(async () => menuButton().click());
     expect(ownText(drawer()!)).toEqual([]);
-    await act(async () => (Array.from(host.querySelectorAll('.ph-dlink')).pop() as HTMLButtonElement).click());
+    await act(async () => (host.querySelector('.ph-dsettings') as HTMLButtonElement).click());
     expect(ownText(host.querySelector('.ph-sheet')!)).toEqual([]);
   });
 

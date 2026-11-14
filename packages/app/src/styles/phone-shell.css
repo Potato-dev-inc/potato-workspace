@@ -182,7 +182,7 @@
   white-space: nowrap;
 }
 .ph .ph-dsec--needs {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .ph .ph-dlist {
   margin: 0;
@@ -490,7 +490,7 @@
 }
 .ph .ph-comp-btn[aria-pressed='true'] {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .ph .ph-comp-btn:disabled,
 .ph .ph-comp-btn[aria-disabled='true'] {
@@ -601,4 +601,333 @@
 .ph .ph-quiet[data-compact] img {
   width: 64px;
   height: 64px;
+}
+
+/* ======================================================================================================================
+   Phone redesign (2026-11-14), shell part: header, status line, drawer, quiet rows, sheets. Uses the shared tokens from
+   phone.css (--fs, --surface, --raised, --line, --text, --muted, --faint, --accent-text, --ok) with the older names as fallbacks, so
+   this file also works before those tokens land. Text sizes are `calc(var(--fs) - n)`; nothing here is a fixed 16 px.
+   ====================================================================================================================== */
+.ph {
+  --sh-fs: var(--fs, 15px);
+  --sh-raised: var(--raised, var(--fill-hover));
+  --sh-surface: var(--surface, var(--bg-raised));
+  --sh-line: var(--line, var(--sep));
+  --sh-text: var(--text, var(--label));
+  --sh-muted: var(--muted, var(--label-2));
+  --sh-faint: var(--faint, var(--label-3));
+  --sh-accent-text: var(--accent-text, var(--accent));
+  --sh-ok: var(--ok, var(--live));
+}
+
+/* ---- agent tile: the same 30 px mark everywhere ---- */
+.ph .ph-tile {
+  position: relative;
+  display: grid;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--sh-raised);
+  color: var(--sh-text);
+}
+.ph .ph-tile .ph-dot {
+  right: -3px;
+  bottom: -3px;
+  width: 10px;
+  height: 10px;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+/* ---- header: menu (+count), tile, title + status, new chat ---- */
+.ph .ph-head-mid {
+  justify-content: flex-start;
+}
+.ph .ph-head-title {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 2px 8px;
+  text-align: left;
+}
+.ph .ph-head-t {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.ph .ph-head-name {
+  max-width: 100%;
+  font: 600 var(--sh-fs)/1.25 var(--font-ui);
+}
+.ph .ph-head-state {
+  max-width: 100%;
+  overflow: hidden;
+  font: 400 calc(var(--sh-fs) - 3px)/1.3 var(--font-ui);
+  color: var(--sh-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ph .ph-head-state[data-kind='needs'],
+.ph .ph-head-state[data-kind='asking'] {
+  color: var(--sh-accent-text);
+}
+.ph .ph-head-state[data-kind='stopped'],
+.ph .ph-head-state[data-kind='offline'] {
+  color: var(--danger);
+}
+.ph .ph-badge {
+  font: 600 calc(var(--sh-fs) - 3px)/18px var(--font-ui);
+}
+
+/* ---- dots: only when there is something to say ---- */
+.ph .ph-dot {
+  background: transparent;
+  box-shadow: 0 0 0 2px var(--bg-side);
+}
+.ph .ph-dot[data-state='needs'] {
+  background: var(--accent);
+}
+.ph .ph-dot[data-state='working'] {
+  background: var(--sh-ok);
+  animation: ph-dot-pulse 1.6s ease-in-out infinite;
+}
+.ph .ph-dot[data-state='danger'],
+.ph .ph-dot[data-state='broken'] {
+  background: var(--danger);
+}
+@keyframes ph-dot-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---- drawer: 52 px rows, quiet sections, one footer line ---- */
+.ph .ph-dsearch {
+  margin: 10px 10px 6px;
+  font: 400 var(--sh-fs)/1.2 var(--font-ui);
+  background: var(--sh-raised);
+}
+.ph .ph-dsec {
+  padding: 14px 20px 4px;
+  font: 600 11px/1.3 var(--font-ui);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sh-faint);
+}
+.ph .ph-dsec--needs {
+  color: var(--sh-accent-text);
+}
+.ph .ph-dlist {
+  padding: 0 6px;
+}
+.ph .ph-drow {
+  min-height: 52px;
+  gap: 10px;
+  padding: 6px 8px;
+}
+.ph .ph-drow[aria-current='true'] {
+  background: var(--sh-raised);
+}
+.ph .ph-drow:not([aria-current='true']):active {
+  background: var(--sh-surface);
+}
+.ph .ph-drow-title {
+  display: block;
+  overflow: hidden;
+  font: 400 var(--sh-fs)/1.3 var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-drow[data-state='needs'] .ph-drow-title,
+.ph .ph-drow[data-state='risk'] .ph-drow-title {
+  font-weight: 600;
+}
+.ph .ph-drow-state {
+  font: 400 calc(var(--sh-fs) - 3px)/1.35 var(--font-ui);
+  color: var(--sh-muted);
+  font-variant-numeric: tabular-nums;
+}
+.ph .ph-drow[data-state='needs'] .ph-drow-state,
+.ph .ph-drow[data-state='risk'] .ph-drow-state {
+  color: var(--sh-accent-text);
+}
+.ph .ph-drow-time {
+  flex: none;
+  align-self: flex-start;
+  padding-top: 4px;
+  font: 400 calc(var(--sh-fs) - 4px)/1.2 var(--font-ui);
+  color: var(--sh-faint);
+}
+.ph .ph-drow-reopen {
+  flex: none;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--sh-raised);
+  font: 600 calc(var(--sh-fs) - 2px)/28px var(--font-ui);
+  color: var(--sh-text);
+}
+.ph .ph-drow[data-closed]:disabled .ph-drow-reopen {
+  opacity: 0.4;
+}
+.ph .ph-dclosed-toggle {
+  gap: 8px;
+  width: calc(100% - 12px);
+  margin: 6px 6px 0;
+  padding: 0 10px;
+  border-radius: 12px;
+  font: 400 calc(var(--sh-fs) - 2px)/1.2 var(--font-ui);
+  color: var(--sh-muted);
+}
+.ph .ph-dclosed-toggle > span:first-child {
+  flex: 1;
+}
+.ph .ph-dclosed-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--sh-faint);
+}
+.ph .ph-dclosed-chev {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 180ms ease-out;
+}
+.ph .ph-dclosed-toggle[aria-expanded='true'] .ph-dclosed-chev {
+  transform: rotate(90deg);
+}
+.ph .ph-dfoot {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px calc(4px + var(--safe-b)) 16px;
+}
+.ph .ph-dpc {
+  min-height: 44px;
+  padding: 0;
+  font: 400 calc(var(--sh-fs) - 2px)/1.2 var(--font-ui);
+  color: var(--sh-muted);
+}
+.ph .ph-dpc .ph-conn {
+  background: var(--sh-ok);
+}
+.ph .ph-dpc .ph-conn--off {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--danger);
+}
+.ph .ph-dsettings svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- quiet rows: Review and Night Shift, one line each ---- */
+.ph .ph-qrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 8px 10px 0;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--sh-surface);
+  font: 400 calc(var(--sh-fs) - 2px)/1.35 var(--font-ui);
+  color: var(--sh-muted);
+}
+.ph .ph-qrow-label {
+  flex: none;
+  font: 600 11px/1.3 var(--font-ui);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sh-faint);
+}
+.ph .ph-qrow-text {
+  min-width: 0;
+  flex: 1;
+  color: var(--sh-text);
+}
+.ph .ph-qrow-btn {
+  flex: none;
+  min-height: 44px;
+  margin: -6px -8px -6px 0;
+  padding: 0 10px;
+  font: 600 calc(var(--sh-fs) - 2px)/1 var(--font-ui);
+  color: var(--sh-muted);
+}
+.ph .ph-qrow-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 10px 0;
+}
+.ph .ph-night .ph-group {
+  margin: 6px 10px 0;
+}
+
+/* ---- sheets: one style (20 px top radius, solid surface, no glass) ---- */
+.ph .ph-sheet {
+  border-radius: 20px 20px 0 0;
+  background: var(--sh-surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  border-top: 1px solid var(--sh-line);
+}
+.ph .ph-sheet:focus {
+  outline: none;
+}
+.ph .ph-sheet-h {
+  justify-content: flex-start;
+  padding: 0 64px 0 16px;
+}
+.ph .ph-sheet-h b {
+  font: 600 calc(var(--sh-fs) + 2px)/1.2 var(--font-ui);
+}
+
+/* ---- empty state: starters ---- */
+.ph .ph-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.ph .ph-starters-title {
+  width: 100%;
+  margin: 0;
+  font: 400 calc(var(--sh-fs) - 2px)/1.3 var(--font-ui);
+  color: var(--sh-faint);
+}
+.ph .ph-starter {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--sh-line);
+  border-radius: 999px;
+  background: var(--sh-surface);
+  font: 400 calc(var(--sh-fs) - 1px)/1 var(--font-ui);
+  color: var(--sh-text);
+}
+.ph .ph-starter:active {
+  background: var(--sh-raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph .ph-dot[data-state='working'] {
+    animation: none;
+  }
+  .ph .ph-dclosed-chev {
+    transition: none;
+  }
 }

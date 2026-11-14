@@ -1,0 +1,5 @@
+import { phoneFinalScenario } from './phone-final-shared';
+
+// Phone redesign, final pass: phone-final-chat-light-320.
+export default phoneFinalScenario('chat', 'light', { narrow: true });
+// window: { width: 320, height: 844 } (the registry reads the size from this file)

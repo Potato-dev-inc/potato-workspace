@@ -1,0 +1,75 @@
+/* The shared error card: three lines and one button, then quiet links. Grayscale, tokens only. */
+.err-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--label);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.err-card.is-compact {
+  padding: 6px 8px;
+  gap: 2px;
+}
+.err-line {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  min-width: 0;
+}
+.err-cap {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--label-3);
+}
+.err-text {
+  overflow-wrap: anywhere;
+}
+.err-main {
+  margin-top: 4px;
+}
+.err-extras {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 2px;
+}
+.err-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.err-link:hover {
+  color: var(--label);
+}
+.err-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.err-details {
+  flex-basis: 100%;
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-side);
+  color: var(--label-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

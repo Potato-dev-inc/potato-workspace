@@ -79,7 +79,7 @@ describe('PhoneConversation', () => {
     const folds = host.querySelectorAll('[data-testid="phone-fold"]');
     expect(folds).toHaveLength(1);
     const line = folds[0]!.querySelector('button') as HTMLButtonElement;
-    expect(line.textContent).toContain('3 steps');
+    expect(line.textContent).toContain('Read 2 files · Edited 1 file');
     expect(line.getAttribute('aria-expanded')).toBe('false');
     expect(folds[0]!.querySelectorAll('.ck-agc-card, [data-tool-row]').length).toBe(0);
     const before = host.textContent ?? '';

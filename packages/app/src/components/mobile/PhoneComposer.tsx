@@ -38,7 +38,13 @@ export function PhoneComposer({
   upload = null,
   quick = [],
   fill = null,
+  asking = false,
+  offline = false,
 }: {
+  /** The agent asked a question and waits: the box says "Type an answer". */
+  asking?: boolean;
+  /** The PC cannot be reached: messages wait on the phone, and the box says so. */
+  offline?: boolean;
   /** Sends the text, with the files that were added when there are some. Resolves to null when it was accepted, else one plain sentence saying why not. */
   onSend: (text: string, attachments?: ChatAttachment[]) => Promise<string | null>;
   /** Sends one file to the PC for this chat (the "+" menu). Without it the menu items say the PC cannot take files yet. */
@@ -81,6 +87,9 @@ export function PhoneComposer({
   const empty = text.trim() === '' && attach.ready.length === 0;
   const [stopping, setStopping] = useState(false);
   const stopMode = working && !!onStop && empty && blockedReason === null;
+  /** With text typed while the agent works, Send adds to the queue and a small Stop sits beside it. */
+  const stopBeside = working && !!onStop && !empty && blockedReason === null;
+  const placeholderKey: MessageKey = offline ? 'phone.composer.placeholderOffline' : asking ? 'phone.composer.placeholderAsking' : working ? 'phone.composer.placeholderBusy' : 'phone.composer.placeholder';
 
   const mic = useVoiceInput({
     enabled: true,
@@ -155,7 +164,12 @@ export function PhoneComposer({
     mic.halt();
     setBusy(true);
     setError(null);
-    const refused = attach.ready.length > 0 ? await onSend(text.trim(), attach.ready) : await onSend(text.trim());
+    let refused: string | null;
+    try {
+      refused = attach.ready.length > 0 ? await onSend(text.trim(), attach.ready) : await onSend(text.trim());
+    } catch {
+      refused = t('phone.composer.sendFailed');
+    }
     setBusy(false);
     if (refused) {
       setError(refused);
@@ -236,7 +250,7 @@ export function PhoneComposer({
           value={text}
           disabled={blocked}
           aria-label={t('phone.composer.aria')}
-          placeholder={blocked ? '' : t('phone.composer.placeholder')}
+          placeholder={blocked ? '' : t(placeholderKey)}
           enterKeyHint="enter"
           onChange={(event) => {
             setText(event.target.value);
@@ -300,11 +314,20 @@ export function PhoneComposer({
               </svg>
             </button>
           ) : (
-            <button type="submit" className="ph-comp-send" disabled={blocked || busy || empty || tooLong || attach.uploading || mic.recording} aria-label={t('phone.composer.send')}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 19V5M5 12l7-7 7 7" />
-              </svg>
-            </button>
+            <>
+              {stopBeside && (
+                <button type="button" className="ph-comp-btn ph-comp-stop-small" data-testid="phone-stop-small" disabled={stopping} aria-label={t('phone.composer.stop')} onClick={() => void stop()}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="7" y="7" width="10" height="10" rx="2" />
+                  </svg>
+                </button>
+              )}
+              <button type="submit" className="ph-comp-send" data-ready={!(blocked || busy || empty || tooLong || attach.uploading || mic.recording) || undefined} disabled={blocked || busy || empty || tooLong || attach.uploading || mic.recording} aria-label={t('phone.composer.send')}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -317,6 +340,11 @@ export function PhoneComposer({
         <p className="ph-comp-note" role={blocked ? undefined : 'alert'} data-testid="phone-composer-note">
           {note}
         </p>
+      )}
+      {note && error !== null && note === error && !blocked && (
+        <button type="button" className="ph-comp-retry" data-testid="phone-retry" disabled={busy} onClick={() => void submit()}>
+          {t('phone.composer.retry')}
+        </button>
       )}
     </form>
   );

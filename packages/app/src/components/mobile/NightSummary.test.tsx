@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { useEnglish } from '../../i18n/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NightTaskView, NightView } from '../../lib/night';
 import { NightSummary, bridgeNightApi, firstChars, ROW_TITLE_CHARS, TASK_ROWS_FIRST, type NightPhoneApi } from './NightSummary';
@@ -10,6 +11,7 @@ import { NightSummary, bridgeNightApi, firstChars, ROW_TITLE_CHARS, TASK_ROWS_FI
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  useEnglish();
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -112,10 +114,12 @@ function fakeApi(read: NightView | null | Error = night(), stop: NightView | Err
   return { read: readMock, stop: stopMock, readMock, stopMock };
 }
 
-async function mount(api: NightPhoneApi | null, props: { canControl?: boolean; refreshKey?: number } = {}) {
+async function mount(api: NightPhoneApi | null, props: { canControl?: boolean; refreshKey?: number; open?: boolean } = {}) {
   await act(async () => {
     root.render(<NightSummary api={api} canControl={props.canControl ?? true} refreshKey={props.refreshKey} />);
   });
+  // The tasks sit behind "Details"; most tests look at them, so open it unless the test says not to.
+  if (props.open !== false) await click(buttonText('Details'));
 }
 
 async function click(el: Element | null | undefined) {
@@ -129,11 +133,21 @@ const buttonText = (text: string) => buttons().find((b) => b.textContent?.trim()
 const rows = () => Array.from(host.querySelectorAll('[aria-label="Night Shift tasks"] li'));
 
 describe('NightSummary', () => {
+  it('is one quiet row first; the tasks open behind Details and close again', async () => {
+    await mount(fakeApi(night()), { open: false });
+    expect(host.querySelector('.ph-qrow-text')?.textContent).toBe('1 of 3 done, tests green. 1 needs you.');
+    expect(rows()).toHaveLength(0);
+    await click(buttonText('Details'));
+    expect(rows()).toHaveLength(3);
+    await click(buttonText('Hide details'));
+    expect(rows()).toHaveLength(0);
+  });
+
   it('renders the summary line and one row per task from a GET /night fixture', async () => {
     const api = fakeApi(night());
     await mount(api);
     expect(api.readMock).toHaveBeenCalledTimes(1);
-    expect(host.querySelector('.ph-card-q')?.textContent).toBe('1 of 3 done, tests green. 1 needs you.');
+    expect(host.querySelector('.ph-qrow-text')?.textContent).toBe('1 of 3 done, tests green. 1 needs you.');
     expect(rows()).toHaveLength(3);
     const first = rows()[0];
     expect(first.querySelector('.ph-t')?.textContent).toBe('Fix the cart total rounding.');
@@ -142,7 +156,7 @@ describe('NightSummary', () => {
     expect(rows()[1].querySelector('.ph-glyph')?.textContent).toBe('!');
     // A task not classified yet shows its state, not an empty line.
     expect(rows()[2].querySelector('.ph-s')?.textContent).toBe('In the queue');
-    expect(host.textContent).toContain('Keep and Throw away are on your computer.');
+    expect(host.textContent).not.toContain('Keep and Throw away');
   });
 
   it('shows three task rows, then "and N more" that shows them all and folds back', async () => {

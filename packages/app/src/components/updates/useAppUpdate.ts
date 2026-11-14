@@ -13,6 +13,8 @@ import {
   type UpdateOffer,
   type UpdateTransport,
 } from '../../lib/app-update';
+import { readQuiet } from '../../lib/notify-store';
+import { dueToInstall, forgetWhatsNew, rememberWhatsNew, tonightTarget, type UpdateWhen } from '../../lib/update-schedule';
 import { nextSpeed, STALL_HINT_MS, type DownloadReading } from '../../lib/update-progress';
 
 export type UpdatePhase =
@@ -25,7 +27,7 @@ export type UpdatePhase =
   | 'downloading'
   /** Downloaded and checked. Agents may still be working: Restart now asks nothing more, it is the confirmed press. */
   | 'ready'
-  /** The person chose "When agents finish": the page watches and says when they are done. */
+  /** The person chose "When they finish" or "Tonight": the page watches and installs only then. */
   | 'waiting'
   | 'installing'
   /** The installer could not start after the agents were stopped. */
@@ -42,6 +44,10 @@ export interface AppUpdateState {
   busy: UpdateBusyInfo;
   /** Whole percent of the download, or null while it is not known. */
   percent: number | null;
+  /** What the waiting follows: "finish" (default) or "tonight". Null before a choice. */
+  when: UpdateWhen | null;
+  /** For "Tonight": the time (ms) it may install. */
+  target: number | null;
   /** The bytes so far with the speed, or null before the first reading. */
   reading: DownloadReading | null;
   /** No new data for a while: the page says the download is slow or stopped. */
@@ -55,8 +61,10 @@ export interface AppUpdateState {
   update(): Promise<void>;
   /** The press on Restart now: stops the agents and installs. */
   restartNow(): Promise<void>;
-  /** "When agents finish": waits and says when it is safe. */
+  /** "When they finish": waits, and installs by itself once nobody is working. */
   restartWhenIdle(): void;
+  /** "Tonight": waits for the quiet-hours start (02:00 without quiet hours), and for the agents to finish. */
+  restartTonight(): void;
   /** After a failed install: brings the stopped chats back. */
   reopenChats(): Promise<void>;
 }
@@ -80,6 +88,13 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
   const speed = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reopened, setReopened] = useState(false);
+  const [when, setWhen] = useState<UpdateWhen | null>(null);
+  const [target, setTarget] = useState<number | null>(null);
+  const offerRef = useRef<UpdateOffer | null>(null);
+  offerRef.current = offer;
+  const whenRef = useRef<UpdateWhen | null>(null);
+  whenRef.current = when;
+  const busyChats = useRef(0);
   const live = useRef(true);
   const working = useRef(false);
 
@@ -125,7 +140,7 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
   );
 
   const run = useCallback(
-    async (confirmRunning: boolean) => {
+    async (confirmRunning: boolean, fromWait = false) => {
       working.current = true;
       setError(null);
       setReopened(false);
@@ -134,7 +149,7 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
       setStalled(false);
       lastReading.current = null;
       speed.current = null;
-      setPhase(confirmRunning ? 'installing' : 'downloading');
+      setPhase(confirmRunning || fromWait ? 'installing' : 'downloading');
       let stopListening: (() => void) | undefined;
       try {
         if (!confirmRunning && transport.onProgress) {
@@ -148,15 +163,21 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
             setReading({ ...progress, speed: speed.current });
           }).catch(() => undefined);
         }
+        // After the restart the page shows "What is new" once; remember it now, because a good install ends this page.
+        if (offerRef.current) rememberWhatsNew({ version: offerRef.current.version, notes: offerRef.current.notes, chats: busyChats.current });
         await transport.install(confirmRunning);
         // The installer closes the app; if this page is still here the installer did not start.
         if (live.current) setPhase('installing');
       } catch (e) {
         if (!live.current) return;
         const code = updateErrorCode(e);
+        forgetWhatsNew();
         if (code === 'UPDATE_RUNNING') {
-          setBusy(await readBusy());
-          setPhase('ready');
+          const info = await readBusy();
+          busyChats.current = info.chats.length;
+          setBusy(info);
+          // A chosen wait goes on (an agent started in between); with no choice it is the Ready step.
+          setPhase(whenRef.current ? 'waiting' : 'ready');
           return;
         }
         setError(plainUpdateError(e));
@@ -181,7 +202,15 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
 
   const update = useCallback(async () => {
     if (working.current) return;
+    setWhen(null);
+    setTarget(null);
     await run(false);
+  }, [run]);
+
+  /** The wait is over: install with what was downloaded. Never stops an agent (`confirmRunning` stays false). */
+  const installWhenDue = useCallback(async () => {
+    if (working.current) return;
+    await run(false, true);
   }, [run]);
 
   const restartNow = useCallback(async () => {
@@ -189,7 +218,22 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
     await run(true);
   }, [run]);
 
-  const restartWhenIdle = useCallback(() => setPhase('waiting'), []);
+  const restartWhenIdle = useCallback(() => {
+    setWhen('finish');
+    setTarget(null);
+    setPhase('waiting');
+  }, []);
+
+  const restartTonight = useCallback(() => {
+    setWhen('tonight');
+    setTarget(tonightTarget(Date.now(), readQuiet()));
+    setPhase('waiting');
+  }, []);
+
+  // Ready while agents work: "When they finish" is the default, so nothing is stopped and nothing waits for a press.
+  useEffect(() => {
+    if (phase === 'ready' && busy.agents.length > 0 && when === null) restartWhenIdle();
+  }, [phase, busy.agents.length, when, restartWhenIdle]);
 
   const reopenChats = useCallback(async () => {
     try {
@@ -200,18 +244,21 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
     }
   }, [transport]);
 
-  // "When agents finish": look now and then; when nobody is working, go back to Ready with nothing to warn about.
+  // Waiting: look now and then. It installs when nobody is working (and, for Tonight, when the time has come). It never
+  // stops an agent: if one started in between, the install is refused and the wait goes on.
   useEffect(() => {
-    if (phase !== 'waiting') return;
+    if (phase !== 'waiting' || when === null) return;
     const timer = window.setInterval(() => {
       void readBusy().then((info) => {
-        if (!live.current || info.agents.length > 0) return;
+        if (!live.current) return;
+        busyChats.current = info.chats.length;
         setBusy(info);
-        setPhase((p) => (p === 'waiting' ? 'ready' : p));
+        if (!dueToInstall(when, Date.now(), target, info.agents.length)) return;
+        void installWhenDue();
       });
     }, IDLE_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [phase, readBusy]);
+  }, [phase, when, target, readBusy, installWhenDue]);
 
   useEffect(() => {
     live.current = true;
@@ -228,5 +275,5 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
     };
   }, [auto, check]);
 
-  return { phase, failure, offer, busyAgents: busy.agents, busy, percent, reading, stalled, error, reopened, check, update, restartNow, restartWhenIdle, reopenChats };
+  return { phase, failure, offer, busyAgents: busy.agents, busy, percent, reading, stalled, error, reopened, when, target, check, update, restartNow, restartWhenIdle, restartTonight, reopenChats };
 }

@@ -44,8 +44,11 @@ import { dnd } from './en/dnd';
 import { files } from './en/files';
 import { pet } from './en/pet';
 import { phoneCompose } from './en/phoneCompose';
+import { phoneShell } from './en/phoneShell';
 import { chatUx } from './en/chatUx';
+import { flow } from './en/flow';
 import { appUx } from './en/appUx';
+import { deskReview } from './en/deskReview';
 
 export const en = {
   ...common,
@@ -92,8 +95,11 @@ export const en = {
   ...files,
   ...pet,
   ...phoneCompose,
+  ...phoneShell,
   ...chatUx,
+  ...flow,
   ...appUx,
+  ...deskReview,
 } as const;
 
 export type MessageKey = Exclude<keyof typeof en, `${string}_one` | `${string}_other`> | PluralKey;

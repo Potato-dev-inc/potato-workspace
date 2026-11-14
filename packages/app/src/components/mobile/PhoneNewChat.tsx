@@ -5,13 +5,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useT } from '../../i18n';
 import type { BridgeClient, PhoneNewChatOptions } from '../../lib/bridge-types';
 import { errorSentence } from '../../lib/sayError';
-import { AgentLogo } from '../common/AgentLogo';
+import { PhoneAgentTile } from './PhoneAgentTile';
 import { Sheet } from './MobileSheet';
 import { PhoneComposer } from './PhoneComposer';
 import '../../styles/phone-newchat.css';
 
 type Lane = 'chat' | 'terminal';
-type Picking = 'agent' | 'project' | null;
+type Picking = 'project' | null;
 
 /** The phone's grid for a terminal pane, when it is known: the pane starts at it and the phone holds it. */
 export interface SpawnGrid {
@@ -126,14 +126,36 @@ export function PhoneNewChat({
             </button>
           </div>
         )}
-        {options && <p className="ph-nc-hint">{t('phone.nc.hint')}</p>}
+        {options && (
+          <div className="ph-nc-pick">
+            <p className="ph-nc-hint">{t('phone.nc.hint')}</p>
+            <div className="ph-nc-tiles" role="radiogroup" aria-label={t('phone.nc.agent')} data-testid="nc-tiles">
+              {options.agents.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  role="radio"
+                  className="ph-nc-tile"
+                  aria-checked={a.id === agentId}
+                  data-testid="nc-agent-tile"
+                  onClick={() => {
+                    setAgentId(a.id);
+                    setLaneChoice(null);
+                  }}
+                >
+                  <PhoneAgentTile id={a.id} name={a.label} />
+                  <span className="ph-nc-tile-name">{a.label}</span>
+                </button>
+              ))}
+            </div>
+            {(options.need_terminals ?? 0) > 0 && !picking && (
+              <p className="ph-nc-hint ph-nc-hint--small" data-testid="nc-need-terminals">{t('phone.nc.needTerminals', { count: options.need_terminals ?? 0 })}</p>
+            )}
+          </div>
+        )}
       </div>
       {options && (
         <div className="ph-nc-pills" role="group" aria-label={t('phone.nc.title')}>
-          <button type="button" className="ph-nc-pill" data-testid="nc-agent-pill" aria-haspopup="dialog" disabled={options.agents.length === 0} onClick={() => setPicking('agent')}>
-            {agent && <AgentLogo id={agent.id} name={agent.label} size={16} decorative />}
-            <span>{agent ? t('phone.nc.pillAgent', { name: agent.label }) : t('phone.nc.pickAgent')}</span>
-          </button>
           <button type="button" className="ph-nc-pill" data-testid="nc-project-pill" aria-haspopup="dialog" disabled={options.projects.length === 0} onClick={() => setPicking('project')}>
             <span>{project ? t('phone.nc.pillProject', { name: project.name }) : t('phone.nc.pickProject')}</span>
           </button>
@@ -149,38 +171,6 @@ export function PhoneNewChat({
         </div>
       )}
       <PhoneComposer onSend={send} blockedReason={blocked} draftKey="new-chat" model={null} pill={null} />
-      {picking === 'agent' && options && (
-        <Sheet title={t('phone.nc.pickAgent')} onClose={() => setPicking(null)}>
-          <ul className="ph-group ph-nc-list" aria-label={t('phone.nc.agent')}>
-            {options.agents.map((a) => (
-              <li key={a.id}>
-                <button
-                  type="button"
-                  className="ph-row"
-                  aria-current={a.id === agentId ? 'true' : undefined}
-                  onClick={() => {
-                    setAgentId(a.id);
-                    setLaneChoice(null);
-                    setPicking(null);
-                  }}
-                >
-                  <AgentLogo id={a.id} name={a.label} size={22} decorative />
-                  <span className="ph-txt">
-                    <span className="ph-t">{a.label}</span>
-                    <span className="ph-s">{[a.chat && t('phone.nc.laneChat'), a.terminal && terminalsOk && t('phone.nc.laneTerminal')].filter(Boolean).join(' · ')}</span>
-                  </span>
-                  {a.id === agentId && <span aria-hidden="true">✓</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
-          {(options.need_terminals ?? 0) > 0 && (
-            <p className="ph-nc-hint" data-testid="nc-need-terminals">
-              {t('phone.nc.needTerminals', { count: options.need_terminals ?? 0 })}
-            </p>
-          )}
-        </Sheet>
-      )}
       {picking === 'project' && options && (
         <Sheet title={t('phone.nc.pickProject')} onClose={() => setPicking(null)}>
           <ul className="ph-group ph-nc-list" aria-label={t('phone.nc.project')}>

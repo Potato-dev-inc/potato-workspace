@@ -3,13 +3,15 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PhoneReviewItem, PhoneReviewView, ReviewPhoneApi } from '../../lib/mobile-review';
-import { ReviewSummary, REVIEW_ROWS } from './ReviewSummary';
+import { useEnglish } from '../../i18n/test-utils';
+import { ReviewSummary } from './ReviewSummary';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  useEnglish();
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -79,43 +81,28 @@ describe('ReviewSummary', () => {
 
   it('shows the summary line in words and numbers', async () => {
     await mount(apiOf(desk()));
-    expect(host.querySelector('.ph-card-q')?.textContent).toBe('4 to review · 1 high risk');
+    expect(host.querySelector('.ph-qrow-text')?.textContent).toBe('4 to review · 1 high risk');
   });
 
   it('leaves the high-risk part out when nothing is high risk', async () => {
     await mount(apiOf(desk({ count: 2, high: 0 })));
-    expect(host.querySelector('.ph-card-q')?.textContent).toBe('2 to review');
+    expect(host.querySelector('.ph-qrow-text')?.textContent).toBe('2 to review');
   });
 
-  it('shows at most five rows, each with a mark, a title and the agent', async () => {
+  it('is one quiet row labelled "On your PC": no list, no buttons, no computer-only sentence', async () => {
     const many = Array.from({ length: 7 }, (_, i) => item({ title: `Row ${i}`, levelWord: 'Low risk' }));
     await mount(apiOf(desk({ count: 7, high: 0, items: many })));
-    const rows = host.querySelectorAll('ul.ph-group > li');
-    expect(REVIEW_ROWS).toBe(5);
-    expect(rows).toHaveLength(5);
-    expect(rows[0].querySelector('.ph-glyph')?.textContent).toBe('○');
-    expect(rows[0].querySelector('.ph-t')?.textContent).toBe('Row 0');
-    expect(rows[0].querySelector('.ph-s')?.textContent).toBe('Fixture agent');
-  });
-
-  it('marks each row by its level word', async () => {
-    await mount(apiOf(desk()));
-    const marks = Array.from(host.querySelectorAll('.ph-glyph')).map((el) => el.textContent);
-    expect(marks).toEqual(['●', '◐']);
-  });
-
-  it('ends with the computer-only footer and has no buttons or links', async () => {
-    await mount(apiOf(desk()));
-    expect(host.querySelector('.ph-foot')?.textContent).toBe('Keep and Throw away are on your computer.');
+    expect(host.querySelector('.ph-qrow-label')?.textContent).toBe('On your PC');
+    expect(host.querySelectorAll('ul, li')).toHaveLength(0);
+    expect(host.textContent).not.toContain('Keep and Throw away');
     expect(host.querySelectorAll('button, a, input, select, textarea')).toHaveLength(0);
   });
 
-  it('draws titles and agent labels as text, never as markup', async () => {
+  it('draws nothing from the rows as markup', async () => {
     const hostile = '<img src=x onerror="alert(1)"><b>bold</b>';
     await mount(apiOf(desk({ count: 1, high: 0, items: [item({ title: hostile, agentLabel: hostile })] })));
     expect(host.querySelector('img')).toBeNull();
     expect(host.querySelector('b')).toBeNull();
-    expect(host.querySelector('.ph-t')?.textContent).toBe(hostile);
   });
 
   it('reads again on the refresh timer and when the resync key changes, and keeps the last list when a read fails', async () => {
@@ -130,20 +117,20 @@ describe('ReviewSummary', () => {
         .mockResolvedValue(next),
     } as unknown as ReviewPhoneApi;
     await mount(api);
-    expect(host.querySelector('.ph-card-q')?.textContent).toBe('4 to review · 1 high risk');
+    expect(host.querySelector('.ph-qrow-text')?.textContent).toBe('4 to review · 1 high risk');
 
     await act(async () => {
       vi.advanceTimersByTime(10_000);
     });
     await flush();
     // The failed read keeps what was shown.
-    expect(host.querySelector('.ph-card-q')?.textContent).toBe('4 to review · 1 high risk');
+    expect(host.querySelector('.ph-qrow-text')?.textContent).toBe('4 to review · 1 high risk');
 
     await act(async () => {
       root.render(<ReviewSummary api={api} refreshKey={1} />);
     });
     await flush();
-    expect(host.querySelector('.ph-card-q')?.textContent).toBe('5 to review · 2 high risk');
+    expect(host.querySelector('.ph-qrow-text')?.textContent).toBe('5 to review · 2 high risk');
     // One read on mount, one on the timer, one on the resync key.
     expect((api.read as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(3);
   });

@@ -34,7 +34,7 @@ export const phoneChat = {
   'phone.pick.busy': 'The agent is working. You can change these when it stops.',
   'phone.pick.noControl': 'This phone may not change settings. You can change that on your PC.',
   'phone.pick.model': 'Model',
-  'phone.pick.mode': 'Permissions',
+  'phone.pick.mode': 'How careful',
   'phone.pick.effort': 'Effort',
   'phone.pick.full': 'Full access',
   'phone.pick.fullWarn': 'Lets the agent act without asking you.',

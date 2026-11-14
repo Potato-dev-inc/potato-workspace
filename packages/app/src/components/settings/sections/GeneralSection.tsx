@@ -24,6 +24,7 @@ import { CiFixSettings } from '../blocks/CiFixSettings';
 import { DiagnosticFile } from '../blocks/DiagnosticFile';
 import { DiscordAlertsBlock } from '../blocks/DiscordAlerts';
 import { LiveRoomRow } from '../blocks/LiveRoomRow';
+import { MyEditorRow } from '../blocks/MyEditorRow';
 import { LoopGuardSettingsBlock } from '../blocks/LoopGuardSettings';
 import { SharedMemoryToggle } from '../blocks/SharedMemoryToggle';
 import { START_AT_SIGN_IN_HINT, START_AT_SIGN_IN_LABEL, StartAtSignInSettings } from '../blocks/StartAtSignInSettings';
@@ -245,7 +246,13 @@ function WindowLayoutRow({ env }: { env: SettingsEnv }) {
 
 export const generalRows: RowDef[] = [
   ...comfortRows,
-  { id: 'project-folder', label: 'Default project folder', hint: 'Where new panes and agents start.', keywords: 'workspace directory browse path', group: 'Project', render: (env) => <ProjectFolder env={env} /> },
+  { id: 'project-folder', label: 'Default project folder', hint: 'Where new panes and agents start.', keywords: 'workspace directory browse path my editor open in editor vscode vs code cursor zed sublime notepad', group: 'Project', render: (env) => (
+      <>
+        <ProjectFolder env={env} />
+        {/* "My editor": the program that opens a file from Open in editor. Part of this row so the settings layout stays as it is. */}
+        <MyEditorRow onSaved={env.markSaved} />
+      </>
+    ) },
   {
     id: 'your-name',
     label: 'Your name',

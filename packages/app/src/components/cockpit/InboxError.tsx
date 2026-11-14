@@ -5,6 +5,7 @@ import { cockpitApi, type PaneRunInfo } from '../../lib/cockpit-api';
 import { useT } from '../../i18n';
 import { CardButton, InboxCard } from './InboxCard';
 import { OPEN_NEW_MENU } from './StuckCard';
+import { ErrorExtras } from '../common/ErrorCard';
 import { explainError, unknownError } from './error-sentences';
 
 interface Props {
@@ -56,6 +57,7 @@ export function PaneErrorCard({ c, paneId, agentType, name, project, age, onOpen
       meta={project}
       age={age ?? null}
       reason={<span title={code ?? undefined}>{words.sentence}</span>}
+      body={<ErrorExtras what={words.title} can={words.sentence} details={code} who={name} />}
       snoozeKeys={[paneId]}
       data={{ 'data-error-pane': paneId }}
       actions={

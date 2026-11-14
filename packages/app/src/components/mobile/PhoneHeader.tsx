@@ -3,11 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import type { PaneView } from '../../lib/mobile-pane-view';
+import type { PhoneStatus } from '../../lib/phone-status';
+import { PhoneAgentTile } from './PhoneAgentTile';
 import '../../styles/phone-shell.css';
 
 export function PhoneHeader({
   title,
   stateWords,
+  status,
+  agent,
   waiting,
   bridgeReady,
   onMenu,
@@ -16,8 +20,12 @@ export function PhoneHeader({
   onBack,
 }: {
   title: string;
-  /** The chat's state in plain words, under the name. */
-  stateWords: string | null;
+  /** The chat's state in plain words, under the name (used when `status` is not given). */
+  stateWords?: string | null;
+  /** The phone's one status line (`phoneStatus`): words plus a dot. */
+  status?: PhoneStatus | null;
+  /** Which agent the chat runs: its mark sits left of the name. */
+  agent?: { id: string; name: string } | null;
   /** How many chats wait for the person. */
   waiting: number;
   bridgeReady: boolean;
@@ -54,10 +62,18 @@ export function PhoneHeader({
     };
   }, [open]);
 
+  const words = status?.text ?? stateWords ?? null;
   const name = (
     <>
-      <span className="ph-head-name">{title}</span>
-      {stateWords && <span className="ph-head-state">{stateWords}</span>}
+      {agent && <PhoneAgentTile id={agent.id} name={agent.name} dot={status?.dot ?? 'none'} />}
+      <span className="ph-head-t">
+        <span className="ph-head-name">{title}</span>
+        {words && (
+          <span className="ph-head-state" data-kind={status?.kind}>
+            {words}
+          </span>
+        )}
+      </span>
     </>
   );
 
@@ -83,7 +99,7 @@ export function PhoneHeader({
       </button>
       <div className="ph-head-mid" ref={rootRef}>
         {peek ? (
-          <button type="button" className="ph-head-title" aria-haspopup="menu" aria-expanded={open} aria-label={`${title}. ${t('phone.header.options')}`} onClick={() => setOpen((v) => !v)}>
+          <button type="button" className="ph-head-title" aria-haspopup="menu" aria-expanded={open} aria-label={`${title}${words ? `. ${words}` : ''}. ${t('phone.header.options')}`} onClick={() => setOpen((v) => !v)}>
             {name}
           </button>
         ) : (
@@ -134,7 +150,7 @@ export function PhoneHeader({
       </div>
       <button type="button" className="ph-iconbtn" aria-label={t('phone.newChat')} onClick={onNew} disabled={!bridgeReady}>
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" />
+          <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
         </svg>
       </button>
     </header>

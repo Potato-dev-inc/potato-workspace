@@ -22,8 +22,13 @@ export interface PaneOutboxHook {
 
 const NOT_CONNECTED = 'Could not reach your PC.';
 
-export function usePaneOutbox(transport: OutboxTransport | null, paneId: string, enabled: boolean): PaneOutboxHook {
+/**
+ * `showSending`: a message shows as "sending" from the moment it is sent until the PC answers (the phone wants that:
+ * the link can be slow). It goes away when the PC's own copy arrives, or when the send is refused or fails.
+ */
+export function usePaneOutbox(transport: OutboxTransport | null, paneId: string, enabled: boolean, showSending = false): PaneOutboxHook {
   const [messages, setMessages] = useState<OutboxMessage[]>([]);
+  const [local, setLocal] = useState<OutboxMessage | null>(null);
 
   useEffect(() => {
     if (!enabled || !transport) return;
@@ -49,15 +54,18 @@ export function usePaneOutbox(transport: OutboxTransport | null, paneId: string,
   const send = useCallback(
     async (text: string, attachments?: readonly ChatAttachment[]) => {
       if (!transport) return NOT_CONNECTED;
+      if (showSending) setLocal({ id: `local-${Date.now()}`, text, createdAt: Date.now(), state: 'sending', waitingFor: null, error: null });
       try {
         const sent = await transport.send(paneId, text, attachments);
         setMessages((prev) => withSent(prev, sent));
         return null;
       } catch (error) {
         return errorSentence(error, SEND_FAILED);
+      } finally {
+        if (showSending) setLocal(null);
       }
     },
-    [transport, paneId],
+    [transport, paneId, showSending],
   );
 
   const cancel = useCallback(
@@ -97,5 +105,5 @@ export function usePaneOutbox(transport: OutboxTransport | null, paneId: string,
     [transport, paneId, replace],
   );
 
-  return { messages, send, cancel, hold, edit };
+  return { messages: local ? [...messages, local] : messages, send, cancel, hold, edit };
 }

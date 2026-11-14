@@ -35,6 +35,15 @@ function minutesWords(
     : t("phone.result.minutes", { n: minutes });
 }
 
+/** The first sentence of the text, cut at 160 characters. Null for no text. */
+function firstSentence(text: string | null): string | null {
+  if (!text) return null;
+  const flat = text.replace(/\s+/g, " ").trim();
+  const end = flat.search(/[.!?。！？](\s|$)/);
+  const one = end >= 0 ? flat.slice(0, end + 1) : flat;
+  return one.length > 160 ? `${one.slice(0, 157)}…` : one;
+}
+
 function countsLine(
   t: ReturnType<typeof useT>,
   files: readonly ResultFile[],
@@ -115,7 +124,8 @@ export function ResultCard({
   const known = result?.available === true;
   const counts = countsLine(t, files, result);
   const took = minutesWords(t, result?.durationMs ?? turn.durationMs);
-  const summary = known ? (answer ?? result?.sentence ?? "") : "";
+  // One sentence on the outcome: the first sentence of what the agent said last, else the PC's own sentence.
+  const summary = known ? (firstSentence(answer) || result?.sentence?.trim() || "") : "";
   const heading = result?.failed
     ? t("phone.result.failed")
     : took
@@ -124,8 +134,8 @@ export function ResultCard({
   const fixText = t("phone.result.fixText");
 
   if (kept) return null;
-  // A turn with nothing to show (no files, no summary) has no card: the chat says it all.
-  if (files.length === 0 && summary === "") return null;
+  // A turn that changed no file and ran no check has no card: the answer in the chat is enough.
+  if (files.length === 0 && !result?.tests) return null;
 
   const keep = () => {
     keepTurn(paneId, turn.id);
@@ -172,7 +182,12 @@ export function ResultCard({
           onClick={() => setOpen(true)}
           aria-haspopup="dialog"
         >
-          <span className="ph-result-head">{heading}</span>
+          <span className="ph-result-head">
+            <svg className="ph-result-tick" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m5 12.5 4.5 4.5L19 7.5" />
+            </svg>
+            {heading}
+          </span>
           {summary !== "" && <span className="ph-result-sum">{summary}</span>}
           {counts && (
             <span className="ph-result-meta">
@@ -195,6 +210,9 @@ export function ResultCard({
         <div className="ph-result-actions">
           {known ? (
             <>
+              <button type="button" className="ph-result-main" data-testid="phone-result-open" onClick={() => setOpen(true)}>
+                {t("phone.result.openChanges")}
+              </button>
               <button type="button" onClick={askFix}>
                 {t("phone.result.askFix")}
               </button>

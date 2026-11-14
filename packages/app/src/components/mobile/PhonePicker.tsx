@@ -22,6 +22,18 @@ function Shield() {
   );
 }
 
+/**
+ * A name a person can read. The agent's own name for the choice when it differs from the raw id; otherwise the id cleaned up:
+ * the part before "/" dropped, dashes and underscores to spaces ("opencode-go/deepseek-v3" -> "deepseek v3").
+ */
+export function friendlyName(name: string, value: string): string {
+  const raw = name.trim() === '' ? value : name;
+  if (raw !== value && !raw.includes('/')) return raw;
+  const tail = raw.includes('/') ? raw.slice(raw.lastIndexOf('/') + 1) : raw;
+  const spaced = tail.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return spaced === '' ? raw : spaced;
+}
+
 /** The heading of one setting: the kind in plain words when ACP says which kind it is, else the agent's own name for it. */
 function kindOf(chip: ConfigChip, t: ReturnType<typeof useT>): string {
   if (chip.category === 'model') return t('phone.pick.model');
@@ -62,8 +74,12 @@ export function PhonePicker({
   const chips = permissionFirst(configChips(state));
   const model = chips.find((c) => c.category === 'model');
   const shown = (chip: ConfigChip) => picked[chip.id] ?? chip.value;
-  const nameOf = (chip: ConfigChip) => chip.choices.find((c) => c.value === shown(chip))?.name ?? shown(chip);
-  const pill = model ? nameOf(model) : (chips[0] ? nameOf(chips[0]) : fallbackLabel);
+  const nameOf = (chip: ConfigChip) => {
+    const value = shown(chip);
+    return friendlyName(chip.choices.find((c) => c.value === value)?.name ?? value, value);
+  };
+  const modeChip = chips.find((c) => c.category === 'mode');
+  const pill = model ? [nameOf(model), modeChip ? nameOf(modeChip) : null].filter(Boolean).join(' · ') : (chips[0] ? nameOf(chips[0]) : fallbackLabel);
   const off = chipsDisabled(state);
 
   const apply = (chip: ConfigChip, value: string, hold: boolean) => {
@@ -124,7 +140,7 @@ export function PhonePicker({
                       >
                         {full && <Shield />}
                         <span className="ph-pick-txt">
-                          <span className="ph-pick-name">{choice.name}</span>
+                          <span className="ph-pick-name">{chip.category === 'model' ? friendlyName(choice.name, choice.value) : choice.name}</span>
                           {choice.description && <span className="ph-pick-desc">{choice.description}</span>}
                           {full && <span className="ph-pick-desc">{t('phone.pick.fullWarn')}</span>}
                         </span>
@@ -137,6 +153,11 @@ export function PhonePicker({
                     );
                   })}
                 </div>
+                {chip.category === 'model' && (
+                  <p className="ph-pick-raw" data-testid="phone-pick-raw">
+                    {shown(chip)}
+                  </p>
+                )}
                 {holdFor?.chip === chip.id && (
                   <HoldButton className="ph-pick-hold" label={t('phone.pick.holdFull')} onDone={() => apply(chip, holdFor.value, true)} />
                 )}

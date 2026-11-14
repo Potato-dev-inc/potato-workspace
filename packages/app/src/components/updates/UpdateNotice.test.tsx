@@ -63,7 +63,7 @@ describe('the notice', () => {
     expect(hasText(h, 'Open it again when the installer is done')).toBe(true);
   });
 
-  it('downloads first, and asks to restart only when an agent is working once the download is done', async () => {
+  it('downloads first; with agents working it says so, never stops them, and offers When they finish, Tonight and Now', async () => {
     const t = transport({
       install: vi.fn(async (confirm: boolean) => {
         if (!confirm) throw new Error('UPDATE_RUNNING: claude is working or waiting for you.');
@@ -75,11 +75,19 @@ describe('the notice', () => {
     await settle();
     expect(t.install).toHaveBeenCalledTimes(1);
     expect(t.install).toHaveBeenLastCalledWith(false);
-    expect(hasText(h, 'Ready.')).toBe(true);
-    expect(hasText(h, '2 agents are still working or waiting for you (claude, codex)')).toBe(true);
-    expect(hasText(h, 'come back after the restart: claude')).toBe(true);
-    expect(hasText(h, 'not reopened: codex')).toBe(true);
-    await click(buttonByText(h, 'Restart now'));
+    expect(hasText(h, 'Update ready · 1.0.3.')).toBe(true);
+    expect(hasText(h, '2 agents are working.')).toBe(true);
+    expect(hasText(h, 'They will not be stopped.')).toBe(true);
+    expect(buttonByText(h, 'When they finish')).toBeTruthy();
+    expect(buttonByText(h, 'Tonight')).toBeTruthy();
+    // When they finish is the default: it is already chosen and waits for the agents.
+    expect(buttonByText(h, 'When they finish')!.getAttribute('aria-pressed')).toBe('true');
+    expect(hasText(h, 'It installs by itself when they finish.')).toBe(true);
+    // The warning about what stops (and what comes back) is on Now.
+    const now = buttonByText(h, 'Now')!;
+    expect(now.title).toContain('come back after the restart: claude');
+    expect(now.title).toContain('not reopened: codex');
+    await click(now);
     await settle();
     expect(t.install).toHaveBeenLastCalledWith(true);
   });
@@ -171,30 +179,113 @@ describe('the notice', () => {
     expect(t.install).toHaveBeenCalledTimes(1);
   });
 
-  it('When agents finish waits, and offers a plain restart once nobody is working', async () => {
+  it('When they finish installs by itself once nobody is working, and never before', async () => {
     vi.useFakeTimers();
     try {
       let busyNow = ['claude'];
       const t = transport({
         install: vi.fn(async (confirm: boolean) => {
-          if (!confirm) throw new Error('UPDATE_RUNNING: claude is working.');
+          if (!confirm && busyNow.length > 0) throw new Error('UPDATE_RUNNING: claude is working.');
         }),
         busyInfo: vi.fn(async () => ({ agents: busyNow, chats: busyNow, terminals: [] })),
       });
       const h = await mount(<AppUpdateHost transport={t} />);
       await click(buttonByText(h, 'Update'));
       await settle();
-      await click(buttonByText(h, 'When agents finish'));
-      expect(hasText(h, 'Waiting for your agents to finish')).toBe(true);
+      expect(t.install).toHaveBeenCalledTimes(1);
+      // Still working: ten minutes of waiting installs nothing and stops nothing.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10 * 60_000);
+      });
+      expect(t.install).toHaveBeenCalledTimes(1);
+      expect(t.install).not.toHaveBeenCalledWith(true);
       busyNow = [];
       await act(async () => {
         await vi.advanceTimersByTimeAsync(11_000);
       });
-      expect(hasText(h, 'Restart to finish the update.')).toBe(true);
-      expect(t.install).toHaveBeenCalledTimes(1);
+      expect(t.install).toHaveBeenCalledTimes(2);
+      expect(t.install).toHaveBeenLastCalledWith(false);
+      expect(hasText(h, 'Installing the update.')).toBe(true);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('Tonight waits for 02:00 (no quiet hours set) and for the agents, then installs', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 10, 14, 22, 0, 0));
+      let busyNow = ['claude'];
+      const t = transport({
+        install: vi.fn(async (confirm: boolean) => {
+          if (!confirm && busyNow.length > 0) throw new Error('UPDATE_RUNNING: claude is working.');
+        }),
+        busyInfo: vi.fn(async () => ({ agents: busyNow, chats: busyNow, terminals: [] })),
+      });
+      const h = await mount(<AppUpdateHost transport={t} />);
+      await click(buttonByText(h, 'Update'));
+      await settle();
+      await click(buttonByText(h, 'Tonight'));
+      expect(buttonByText(h, 'Tonight')!.getAttribute('aria-pressed')).toBe('true');
+      expect(hasText(h, 'It installs at')).toBe(true);
+      // Nobody is working at 23:00, but it is not night yet: nothing installs.
+      busyNow = [];
+      vi.setSystemTime(new Date(2026, 10, 14, 23, 0, 0));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000);
+      });
+      expect(t.install).toHaveBeenCalledTimes(1);
+      // 02:05 next day, an agent is working again: still nothing.
+      busyNow = ['claude'];
+      vi.setSystemTime(new Date(2026, 10, 15, 2, 5, 0));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000);
+      });
+      expect(t.install).toHaveBeenCalledTimes(1);
+      // The agent finished: now it installs.
+      busyNow = [];
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000);
+      });
+      expect(t.install).toHaveBeenCalledTimes(2);
+      expect(t.install).toHaveBeenLastCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('remembers what is new before the restart, and shows it once after (three lines, chats back)', async () => {
+    window.localStorage.clear();
+    const t = transport({
+      check: vi.fn(async () => ({ currentVersion: '1.0.2', version: '1.0.3', notes: '- First thing\n- Second thing\n- Third thing\n- Fourth thing' })),
+      busyInfo: vi.fn(async () => ({ agents: [], chats: [], terminals: [] })),
+    });
+    const h = await mount(<AppUpdateHost transport={t} />);
+    await click(buttonByText(h, 'Update'));
+    await settle();
+    expect(window.localStorage.getItem('pm.update.whatsNew')).toContain('1.0.3');
+    // After the restart the running version is the new one.
+    await act(async () => root!.unmount());
+    host!.remove();
+    const after = transport({ check: vi.fn(async () => null), currentVersion: vi.fn(async () => '1.0.3') });
+    const h2 = await mount(<AppUpdateHost transport={after} />);
+    await settle();
+    const card = h2.querySelector('[data-testid="whats-new-card"]')!;
+    expect(card.textContent).toContain('What is new in 1.0.3');
+    expect(card.querySelectorAll('li').length).toBe(3);
+    expect(card.textContent).not.toContain('Fourth thing');
+    // Shown once: it is gone from storage, so another start shows nothing.
+    expect(window.localStorage.getItem('pm.update.whatsNew')).toBeNull();
+    await click(buttonByText(h2, 'Got it'));
+    expect(h2.querySelector('[data-testid="whats-new-card"]')).toBeNull();
+  });
+
+  it('shows no What is new card when the running version is not the one that was installed', async () => {
+    window.localStorage.setItem('pm.update.whatsNew', JSON.stringify({ version: '1.0.9', notes: 'x', chats: 0 }));
+    const h = await mount(<AppUpdateHost transport={transport({ check: vi.fn(async () => null), currentVersion: vi.fn(async () => '1.0.3') })} />);
+    await settle();
+    expect(h.querySelector('[data-testid="whats-new-card"]')).toBeNull();
+    window.localStorage.clear();
   });
 
   it('says the agents were stopped when the installer could not start, and Reopen chats brings them back', async () => {

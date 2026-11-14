@@ -8,6 +8,10 @@ export interface OfflineQueue {
   /** Keeps the message. Resolves to null, or one plain sentence (the queue is full). */
   add: (text: string) => string | null;
   discard: () => void;
+  /** Takes one waiting message out. */
+  remove: (id: string) => void;
+  /** Replaces the words of one waiting message (it keeps its place). An empty text removes nothing and is refused (false). */
+  edit: (id: string, text: string) => boolean;
   /** Sends every waiting message with `send`; those that went are removed. Resolves to null, or the first refusal. */
   sendAll: (send: (text: string) => Promise<string | null>) => Promise<string | null>;
 }
@@ -35,6 +39,17 @@ export function useOfflineQueue(paneId: string, fullMessage: string): OfflineQue
   );
 
   const discard = useCallback(() => commit([]), [commit]);
+  const remove = useCallback((id: string) => commit(readQueue(paneId).filter((m) => m.id !== id)), [paneId, commit]);
+
+  const edit = useCallback(
+    (id: string, text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return false;
+      commit(readQueue(paneId).map((m) => (m.id === id ? { ...m, text: trimmed } : m)));
+      return true;
+    },
+    [paneId, commit],
+  );
 
   const sendAll = useCallback(
     async (send: (text: string) => Promise<string | null>) => {
@@ -53,5 +68,5 @@ export function useOfflineQueue(paneId: string, fullMessage: string): OfflineQue
     [paneId, commit],
   );
 
-  return { waiting, add, discard, sendAll };
+  return { waiting, add, discard, remove, edit, sendAll };
 }

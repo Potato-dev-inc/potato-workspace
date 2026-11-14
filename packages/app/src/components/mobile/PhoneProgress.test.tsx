@@ -132,7 +132,7 @@ describe('the drawer row', () => {
       await vi.advanceTimersByTimeAsync(50);
     });
     const row = [...host.querySelectorAll('.ph-drow')].find((el) => el.textContent?.includes('Billing tests'))!;
-    expect(row.querySelector('.ph-drow-state')?.textContent).toBe('Edit bridge/http.rs · step 2 · 6 min');
+    expect(row.querySelector('.ph-drow-state')?.textContent).toBe('codex · Working · 6m · step 2');
     // The other rows keep their state words.
     const other = [...host.querySelectorAll('.ph-drow')].find((el) => el.textContent?.includes('Fix login redirect'))!;
     expect(other.querySelector('.ph-drow-state')?.textContent).not.toContain('step');

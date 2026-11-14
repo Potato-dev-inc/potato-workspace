@@ -33,7 +33,9 @@ import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
 import { formatElapsed, spinnerStatus, stateText } from './model';
 import { acpResult, acpStatusWords } from './acp-pane';
 import { AcpResultStrip } from './AcpResultStrip';
+import { DoneList } from './DoneList';
 import { ReceiptTab } from './ReceiptTab';
+import { TurnFiles } from './turnfiles/TurnFiles';
 import { Changes } from './Changes';
 import { usePaneWorktree } from './usePaneWorktree';
 import { SecondOpinion } from './SecondOpinion';
@@ -445,6 +447,7 @@ export function PaneView({
         )}
         {isAcp && <AcpChatDock c={c} paneId={paneId} paneName={name} api={acp} stopper={acpStop} />}
         {isAcp && result && <AcpResultStrip result={result} />}
+        {isAcp && <DoneList paneId={paneId} cwd={info.cwd} />}
         <HelperQuestions c={c} ids={helperAsks} />
         {dockNow && <DockedCards c={c} paneId={paneId} dock={dock} dockNow={dockNow} onMore={cycleDock} />}
       </>
@@ -685,6 +688,7 @@ export function PaneView({
               <Changes
                 paneId={paneId}
                 status={pane?.status ?? ''}
+                turnReview={<TurnFiles paneId={paneId} status={pane?.status ?? ''} />}
                 secondOpinion={<SecondOpinion paneId={paneId} status={pane?.status ?? ''} />}
               />
             </div>
@@ -747,6 +751,7 @@ export function PaneView({
                 agentName={name}
                 // An isolated pane has its own Changes tab, which holds the second opinion.
                 secondOpinion={!worktree ? <SecondOpinion paneId={paneId} status={pane?.status ?? ''} /> : null}
+                review={!worktree ? <TurnFiles paneId={paneId} status={pane?.status ?? ''} /> : null}
               />
             </div>
           )}
@@ -761,7 +766,7 @@ export function PaneView({
             readsChat={chatAllowed}
             helperOf={helperOf}
             helpers={helperRows(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
-            onOpenChanges={worktree ? () => setTab('changes') : undefined}
+            onOpenChanges={worktree ? () => setTab('changes') : () => setTab('receipt')}
             onOpenPane={(id) => c.select(id)}
             onSaveTeam={() => setSaveTeam(true)}
           />

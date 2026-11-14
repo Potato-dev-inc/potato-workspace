@@ -33,7 +33,6 @@ const s: HarnessScenario = {
     await dom.sleep(700);
     await dom.click('header > button.ph-iconbtn:last-child');
     await dom.waitFor('.ph-nc-pills');
-    await dom.click('[data-testid="nc-agent-pill"]');
     await dom.waitFor('[data-testid="nc-need-terminals"]');
     await dom.sleep(400);
   },

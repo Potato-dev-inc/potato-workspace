@@ -36,7 +36,7 @@ export const phoneChat: Partial<Record<EnglishKey, string>> = {
   'phone.pick.busy': 'AI 助理正在工作，停下來後就可以更改。',
   'phone.pick.noControl': '這支手機不能更改設定。你可以在電腦上更改。',
   'phone.pick.model': '模型',
-  'phone.pick.mode': '權限',
+  'phone.pick.mode': '謹慎程度',
   'phone.pick.effort': '思考程度',
   'phone.pick.full': '完全存取',
   'phone.pick.fullWarn': '讓 AI 助理不先問你就動手。',
