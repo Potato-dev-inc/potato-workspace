@@ -68,6 +68,7 @@ function fakeApi(over: Partial<ArtifactsApi> = {}) {
     shareList: vi.fn(async () => []),
     shareStop: vi.fn(async () => 0),
     popOut: vi.fn(async () => undefined),
+    openInAgentBrowser: vi.fn(async () => undefined),
     ...over,
   };
   return { api, read };

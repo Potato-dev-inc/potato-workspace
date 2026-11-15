@@ -88,12 +88,20 @@ export const SettingsSchema = z.object({
   discord_bot_enabled: z.boolean().optional(),
   /** Project guide (Settings > General > Labs): the person's agent writes a short guide to a project when asked. Off unless chosen. Rust: project_guide. */
   project_guide_enabled: z.boolean().optional(),
+  /** Mark-up bar (Settings > General > Labs): draw, pick and send marks of a page to the chat that made it; Open in agent browser. Off unless chosen. */
+  markup_bar_enabled: z.boolean().optional(),
+  /** The Today page (Settings > General > Labs): one line for the whole day, and a way back to any point on it. Off unless chosen. Rust: timeline. */
+  timeline_day_enabled: z.boolean().optional(),
   /** Desktop Potato: size 'small' | 'medium' | 'large', hidden-until (epoch ms), quiet. Rust: pet. */
   desktop_pet_size: z.enum(['small', 'medium', 'large']).optional(),
   desktop_pet_quiet: z.boolean().optional(),
   desktop_pet_hidden_until_ms: z.number().optional(),
   /** Get early versions (beta): the updater also reads the beta address and takes the newer version. Off unless chosen. Rust: commands/update_channel. */
   early_versions_enabled: z.boolean().optional(),
+  /** Smaller updates (Labs): an update may take the app-only package and leave the built-in tools alone. Off unless chosen. Rust: commands/update_plan. */
+  smaller_updates_enabled: z.boolean().optional(),
+  /** The version whose small update failed (written by the app); that version takes the full package. */
+  app_only_failed_for: z.string().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
   individual_explained: z.boolean().optional(),
   /** How the windows move when the mode switches between Orchestration and Individual: Domino (default), Ink, or Off (a quick fade). Rust reads it (switch_anim). */

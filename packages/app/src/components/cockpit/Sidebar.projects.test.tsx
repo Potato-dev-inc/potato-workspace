@@ -322,7 +322,7 @@ describe('sidebar: footer', () => {
     expect(onOpenPlans).toHaveBeenCalledTimes(1);
     // Theme, Project and Set up agents moved into the menu too.
     await click(byLabel('More'));
-    expect(['Switch to light', 'Project', 'Set up agents'].every((l) => item(l))).toBe(true);
+    expect(['Light, dimmed', 'Project', 'Set up agents'].every((l) => item(l))).toBe(true);
   });
 
   it('closes More with Escape', async () => {

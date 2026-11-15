@@ -1,0 +1,113 @@
+/* The phone Inbox part (Done today, Team activity) and the drawer's Ready row. Tokens only. */
+.ph .ph-ibx {
+  padding-bottom: 4px;
+}
+.ph .ph-ibx-lab {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.ph .ph-ibx-n {
+  color: var(--label-3);
+}
+.ph .ph-ibx-none {
+  margin: 0;
+  padding: 6px 20px 12px;
+  font: 400 13px/1.4 var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-ibx-list {
+  margin: 0;
+  padding: 0 8px;
+  list-style: none;
+}
+.ph .ph-ibx-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--label);
+  text-align: left;
+}
+.ph .ph-ibx-row--plain {
+  cursor: default;
+}
+.ph button.ph-ibx-row:active {
+  background: var(--fill);
+}
+.ph .ph-ibx-tx {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.ph .ph-ibx-tt {
+  overflow: hidden;
+  font: 500 14px/1.3 var(--font-ui);
+  color: var(--label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-ibx-sb {
+  overflow: hidden;
+  font: 400 12px/1.3 var(--font-ui);
+  color: var(--label-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-ibx-when {
+  flex: none;
+  font: 400 12px/1 var(--font-ui);
+  color: var(--label-3);
+}
+.ph .ph-ibx-add {
+  color: var(--add);
+}
+.ph .ph-ibx-del {
+  color: var(--del);
+}
+.ph .ph-ibx-more {
+  margin: 2px 20px 8px;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  font: 500 13px/1.3 var(--font-ui);
+  color: var(--label-2);
+}
+.ph .ph-ibx-tile {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+.ph .ph-ibx-tile--pr {
+  background: color-mix(in srgb, var(--pr) 16%, transparent);
+  box-shadow: inset 0 0 0 9px color-mix(in srgb, var(--pr) 55%, transparent);
+}
+.ph .ph-ibx-tile--push {
+  background: var(--info-soft);
+  box-shadow: inset 0 0 0 9px color-mix(in srgb, var(--info) 55%, transparent);
+}
+.ph .ph-ibx-tile--lend {
+  background: color-mix(in srgb, var(--lend) 16%, transparent);
+  box-shadow: inset 0 0 0 9px color-mix(in srgb, var(--lend) 55%, transparent);
+}
+.ph .ph-ibx-tile--ok {
+  background: var(--live-soft);
+  box-shadow: inset 0 0 0 9px color-mix(in srgb, var(--live) 55%, transparent);
+}
+.ph .ph-ibx-tile--danger {
+  background: var(--danger-soft);
+  box-shadow: inset 0 0 0 9px color-mix(in srgb, var(--danger) 55%, transparent);
+}
+.ph .ph-ibx-tile--note {
+  background: var(--fill);
+}
+.ph .ph-drow--static {
+  cursor: default;
+}

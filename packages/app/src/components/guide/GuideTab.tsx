@@ -12,6 +12,7 @@ import { ChatMarkdown } from '../chat/ChatMarkdown';
 import { ArtifactBody } from '../artifacts/ArtifactBody';
 import { GuideProgress } from './GuideProgress';
 import { GuideSheet } from './GuideSheet';
+import { GuideVideo } from './GuideVideo';
 import '../../styles/files.css';
 import '../../styles/guide.css';
 
@@ -39,6 +40,7 @@ export function GuideTab({ paneId, api = guideApi, project, agentType = '', agen
   const [sheet, setSheet] = useState<'make' | 'refresh' | null>(null);
   const [view, setView] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  const [video, setVideo] = useState(false);
 
   const load = useCallback(() => {
     api.state(paneId).then(
@@ -90,6 +92,8 @@ export function GuideTab({ paneId, api = guideApi, project, agentType = '', agen
     body = <p className="ck-file-note">{t('guide.off')}</p>;
   } else if (state.run && running) {
     body = <GuideProgress paneId={paneId} api={api} run={state.run} />;
+  } else if (video && state.hasGuide) {
+    body = <GuideVideo paneId={paneId} api={api} project={projectName} pollMs={pollMs} onClose={() => setVideo(false)} />;
   } else if (sheet) {
     body = (
       <GuideSheet
@@ -134,6 +138,9 @@ export function GuideTab({ paneId, api = guideApi, project, agentType = '', agen
           </span>
           <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={stale === 0} onClick={() => setSheet('refresh')}>
             {stale > 0 ? t('guide.refreshStale', { n: stale }) : t('guide.upToDate')}
+          </button>
+          <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" data-testid="guide-video-button" disabled={structure.pages.length === 0} onClick={() => setVideo(true)}>
+            {t('guide.videoButton')}
           </button>
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
             {t('guide.more')}

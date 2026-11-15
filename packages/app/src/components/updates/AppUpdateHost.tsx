@@ -2,6 +2,7 @@ import { tauriUpdateTransport, type UpdateTransport } from '../../lib/app-update
 import { useEffect } from 'react';
 import { listenForWhatsNewAsks, useWhatsNewState } from '../../whatsnew/store';
 import { TourDialog } from '../whatsnew/TourDialog';
+import { ToolsMissingNotice } from './ToolsMissingNotice';
 import { UpdateNoticeView } from './UpdateNotice';
 import { useAppUpdate } from './useAppUpdate';
 import { WhatsNewCard } from './WhatsNewCard';
@@ -19,6 +20,7 @@ export function AppUpdateHost({ transport = tauriUpdateTransport, suppressed = f
   return (
     <>
       <UpdateNoticeView state={state} />
+      <ToolsMissingNotice transport={transport} />
       <WhatsNewCard transport={transport} suppressed={suppressed} notify={notify} />
       {whatsNew.tour && <TourDialog version={whatsNew.tour.version} notify={notify} />}
     </>

@@ -94,6 +94,31 @@ export interface GuideDiagram {
   stale: boolean;
 }
 
+/** A video tour being made, or the end state of the last one (the PC's `VideoState`). */
+export interface GuideVideoRun {
+  phase: 'plan' | 'frames' | 'done' | 'stopped' | 'failed';
+  framesDone: number;
+  framesTotal: number;
+  beats: number;
+  seconds: number;
+  error: string | null;
+  /** `video` (an mp4 was made) or `slideshow` (only the captioned page). */
+  outcome: 'video' | 'slideshow' | null;
+  files: string[];
+  notes: string[];
+  startedMs: number;
+  finishedMs: number | null;
+}
+
+export interface GuideVideoState {
+  enabled: boolean;
+  running: boolean;
+  state: GuideVideoRun | null;
+  files: string[];
+  /** This PC has Node, a browser and ffmpeg, so a real video can be made. */
+  canVideo: boolean;
+}
+
 /** The agent name that makes the PC use its built-in stand-in (development builds only). */
 export const DRY_RUN_AGENT = 'dry-run';
 
@@ -114,6 +139,10 @@ export interface GuideApi {
   readPage(paneId: string, id: string): Promise<GuidePage>;
   readDiagram(paneId: string): Promise<GuideDiagram>;
   remove(paneId: string): Promise<boolean>;
+  videoState(paneId: string): Promise<GuideVideoState>;
+  videoStart(paneId: string, opts: { vertical: boolean; language: string }): Promise<void>;
+  videoStop(paneId: string): Promise<boolean>;
+  videoShow(paneId: string): Promise<void>;
 }
 
 export const guideApi: GuideApi = {
@@ -124,7 +153,14 @@ export const guideApi: GuideApi = {
   readPage: (paneId, id) => invoke<GuidePage>('guide_read_page', { paneId, id }),
   readDiagram: (paneId) => invoke<GuideDiagram>('guide_read_diagram', { paneId }),
   remove: (paneId) => invoke<boolean>('guide_delete', { paneId }),
+  videoState: (paneId) => invoke<GuideVideoState>('guide_video_state', { paneId }),
+  videoStart: (paneId, o) => invoke<void>('guide_video_start', { paneId, vertical: o.vertical, language: o.language }),
+  videoStop: (paneId) => invoke<boolean>('guide_video_stop', { paneId }),
+  videoShow: (paneId) => invoke<void>('guide_video_show', { paneId }),
 };
+
+/** A video tour is being made. */
+export const videoRunning = (v: GuideVideoState | null | undefined): boolean => !!v && v.running;
 
 /** A run is going now. */
 export const isRunning = (run: GuideRun | null | undefined): boolean => !!run && run.phase !== 'done' && run.phase !== 'stopped' && run.phase !== 'failed';

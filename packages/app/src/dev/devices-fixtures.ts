@@ -2,7 +2,7 @@
 // The fake keeps its own small state, so pairing, the switch, Remove and a link going down really change what the
 // screens show. A device here is another PC that runs Potato Workspace; its panes are what `GET /panes` answers.
 import { emit, type UnlistenFn } from '@tauri-apps/api/event';
-import type { ActivityEntry, Device, DeviceEvent, DeviceLevel, DevicesApi, DevicesView, HostingView, PendingPair, RoutePref, ScreenFrame } from '../lib/devices';
+import type { ActivityEntry, CopyResult, Device, DeviceEvent, DeviceLevel, DevicesApi, DevicesView, FarError, FileEntry, FileList, FilePreview, FilesFolders, HostingView, OnExists, PendingPair, RoutePref, ScreenFrame, Transfer } from '../lib/devices';
 
 type Handler = { handled: true; value: unknown } | { handled: false };
 
@@ -13,7 +13,7 @@ export const NODE_DESK = 'c3'.repeat(32);
 const NOW = Math.floor(Date.now() / 1000);
 
 /** The newer fields of a device, all "nothing to say". */
-const quiet = (): Pick<Device, 'too_old' | 'lets_web' | 'web_ready' | 'route_override' | 'signed_out' | 'needs_person' | 'connected'> => ({ too_old: false, lets_web: false, web_ready: false, route_override: null, signed_out: [], needs_person: [], connected: false });
+const quiet = (): Pick<Device, 'too_old' | 'lets_files' | 'lets_web' | 'agents_may_send' | 'lets_lend' | 'web_ready' | 'route_override' | 'signed_out' | 'needs_person' | 'connected'> => ({ too_old: false, lets_files: false, lets_web: false, agents_may_send: false, lets_lend: false, web_ready: false, route_override: null, signed_out: [], needs_person: [], connected: false });
 
 export const MAC_MINI: Device = {
   ...quiet(),
@@ -54,7 +54,52 @@ export const MAC_PANES: RemotePane[] = [
   { id: 'p2', agent_type: 'shell', cwd: '/Users/me/app', status: 'idle', title: 'Terminal' },
 ];
 
+/** What the far device's Files answer in the fake: folders by root, then by path ('' is the root itself). */
+export interface FakeFiles {
+  /** root name -> directory path -> entries. */
+  tree: Record<string, Record<string, FileEntry[]>>;
+  /** `root/path` -> what a preview answers. */
+  previews?: Record<string, FilePreview>;
+  /** Every far call answers this error (the far device refuses). */
+  farError?: string;
+  /** File names that already exist in Downloads / on the far side: the first copy or send with `ask` answers `exists`. */
+  existing?: string[];
+  /** What THIS PC shares with the device, and what the person added. */
+  folders?: FilesFolders;
+}
+
+const T0 = NOW - 3 * 86400;
+const PNG_DOT = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+/** The Mac mini's shared folders: "app" (a project) and "notes". */
+export const MAC_FILES: FakeFiles = {
+  tree: {
+    app: {
+      '': [
+        { name: 'src', kind: 'dir', size: 0, mtime: T0 },
+        { name: 'README.md', kind: 'file', size: 1400, mtime: T0 },
+        { name: 'logo.png', kind: 'file', size: 82_000, mtime: T0 + 3600 },
+        { name: 'build.dmg', kind: 'file', size: 48_000_000, mtime: NOW - 600 },
+      ],
+      src: [{ name: 'main.rs', kind: 'file', size: 2200, mtime: T0 }],
+      build: [{ name: 'app.dmg', kind: 'file', size: 48_000_000, mtime: NOW - 600 }],
+    },
+    notes: { '': [{ name: 'todo.txt', kind: 'file', size: 120, mtime: T0 }] },
+  },
+  previews: {
+    'app/README.md': { kind: 'text', text: '# app\n\nA small app. Run it with make.', truncated: false, size: 1400 },
+    'app/logo.png': { kind: 'image', mime: 'image/png', data: PNG_DOT, size: 82_000 },
+    'app/build.dmg': { kind: 'none', size: 48_000_000, too_big: true },
+  },
+  folders: { shared: ['app', 'notes'], chosen: [] },
+};
+
 export interface DevicesScenario {
+  /** Far files, shared folders and transfers. */
+  files?: FakeFiles;
+  transfers?: Transfer[];
+  /** `GET /panes/<id>/chat` items by far pane id. */
+  chats?: Record<string, unknown[]>;
   /** Default true: the switch is on. */
   enabled?: boolean;
   name?: string;
@@ -91,6 +136,7 @@ function baseView(s: DevicesScenario): DevicesView {
     locked_until: null,
     tampered: false,
     devices: (s.devices ?? []).map((d) => ({ ...d })),
+    transfers: (s.transfers ?? []).map((x) => ({ ...x })),
   };
 }
 
@@ -106,11 +152,20 @@ export class DevicesFake implements DevicesApi {
   screens = new Set<(f: ScreenFrame) => void>();
   screenStarts: string[] = [];
   screenStops: string[] = [];
+  files: FakeFiles;
+  chats: Record<string, unknown[]>;
+  /** Every files call, in order. */
+  fileCalls: { cmd: string; args: Record<string, unknown> }[] = [];
+  private nextTransfer = 1;
   /** Make `screenStart` fail (the far side cannot stream): the view falls back to one snapshot. */
   screenFails = false;
 
   constructor(s: DevicesScenario = {}) {
     this.view = baseView(s);
+    this.files = s.files ?? { tree: {} };
+    this.chats = s.chats ?? {};
+    this.nextTransfer = Math.max(0, ...this.view.transfers.map((x) => x.id)) + 1;
+    this.folders = { shared: this.files.folders?.shared ?? [], chosen: this.files.folders?.chosen ?? [] };
     this.activityLog = (s.activity ?? []).map((e) => ({ ...e }));
     this.panes = Object.fromEntries(Object.entries(s.panes ?? {}).map(([k, v]) => [k, v.map((p) => ({ ...p }))]));
   }
@@ -148,6 +203,85 @@ export class DevicesFake implements DevicesApi {
     for (const cb of this.events) cb(e);
   }
 
+  private folders: FilesFolders;
+  private far = (node: string): FarError | null => {
+    const d = this.view.devices.find((x) => x.node === node);
+    if (!d || d.state === 'offline' || d.state === 'unknown') return { ok: false, error: 'That device is offline.', code: 'offline' };
+    return this.files.farError ? { ok: false, error: this.files.farError, code: 'refused' } : null;
+  };
+  setFiles = async (node: string, on: boolean) => {
+    this.fileCalls.push({ cmd: 'setFiles', args: { node, on } });
+    this.setDevice(node, { lets_files: on });
+    return this.view;
+  };
+  filesFolders = async (node: string): Promise<FilesFolders> => {
+    this.fileCalls.push({ cmd: 'filesFolders', args: { node } });
+    return { shared: [...this.folders.shared], chosen: [...this.folders.chosen] };
+  };
+  setFilesFolders = async (node: string, folders: string[]): Promise<FilesFolders> => {
+    this.fileCalls.push({ cmd: 'setFilesFolders', args: { node, folders } });
+    if (folders.some((f) => f.includes('not-a-folder'))) throw new Error('That is not a folder.');
+    this.folders = { ...this.folders, chosen: [...folders] };
+    return { shared: [...this.folders.shared], chosen: [...folders] };
+  };
+  filesRoots = async (node: string): Promise<{ roots: string[] } | FarError> => {
+    this.fileCalls.push({ cmd: 'filesRoots', args: { node } });
+    return this.far(node) ?? { roots: Object.keys(this.files.tree) };
+  };
+  filesList = async (node: string, root: string, path: string): Promise<FileList | FarError> => {
+    this.fileCalls.push({ cmd: 'filesList', args: { node, root, path } });
+    const err = this.far(node);
+    if (err) return err;
+    const dir = this.files.tree[root]?.[path];
+    if (!dir) return { ok: false, error: 'That folder is not shared on this device.', code: 'not_shared' };
+    return { entries: dir.map((e) => ({ ...e })), truncated: false };
+  };
+  filesPreview = async (node: string, root: string, path: string): Promise<FilePreview | FarError> => {
+    this.fileCalls.push({ cmd: 'filesPreview', args: { node, root, path } });
+    const err = this.far(node);
+    if (err) return err;
+    return this.files.previews?.[`${root}/${path}`] ?? { kind: 'none', size: 0 };
+  };
+  private startTransfer(node: string, dir: 'down' | 'up', name: string, total: number): CopyResult {
+    const id = this.nextTransfer++;
+    this.view = { ...this.view, transfers: [{ id, node, dir, name, bytes: 0, total, state: 'running', error: '', saved_as: dir === 'down' ? name : '' }, ...this.view.transfers] };
+    this.emit();
+    return { ok: true, id };
+  }
+  /** The backend pushes progress: this moves one transfer on and tells the screens. */
+  progress(id: number, patch: Partial<Transfer>): void {
+    this.view = { ...this.view, transfers: this.view.transfers.map((x) => (x.id === id ? { ...x, ...patch } : x)) };
+    this.emit();
+  }
+  filesCopy = async (a: { node: string; root: string; paths: string[]; dest?: string | null; on_exists?: OnExists }): Promise<CopyResult> => {
+    this.fileCalls.push({ cmd: 'filesCopy', args: { ...a } });
+    const err = this.far(a.node);
+    if (err) return err;
+    const name = a.paths.length === 1 ? (a.paths[0]!.split('/').pop() ?? '') : `${a.paths.length} items`;
+    if ((a.on_exists ?? 'ask') === 'ask' && a.paths.length === 1 && this.files.existing?.includes(name)) return { exists: true, name };
+    const r = this.startTransfer(a.node, 'down', name, 48_000_000);
+    if (a.on_exists === 'both' && 'id' in r) this.progress(r.id, { saved_as: name.replace(/(\.[^.]*)?$/, ' (2)$1') });
+    return r;
+  };
+  filesSend = async (a: { node: string; root: string; dir: string; local: string[]; on_exists?: OnExists }): Promise<CopyResult> => {
+    this.fileCalls.push({ cmd: 'filesSend', args: { ...a } });
+    const err = this.far(a.node);
+    if (err) return err;
+    const name = (a.local[0] ?? '').split(/[\\/]/).pop() ?? '';
+    if ((a.on_exists ?? 'ask') === 'ask' && a.local.length === 1 && this.files.existing?.includes(name)) return { exists: true, name };
+    return this.startTransfer(a.node, 'up', a.local.length === 1 ? name : `${a.local.length} items`, 8_000_000);
+  };
+  transferCancel = async (id: number) => {
+    this.fileCalls.push({ cmd: 'transferCancel', args: { id } });
+    this.progress(id, { state: 'stopped' });
+    return this.view;
+  };
+  transfersClear = async () => {
+    this.fileCalls.push({ cmd: 'transfersClear', args: {} });
+    this.view = { ...this.view, transfers: this.view.transfers.filter((x) => x.state === 'running') };
+    return this.emit();
+  };
+
   stateCalls = 0;
   state = async () => (this.stateCalls++, this.view);
   showCode = async () => {
@@ -175,6 +309,14 @@ export class DevicesFake implements DevicesApi {
   activity = async (node?: string) => this.activityLog.filter((e) => !node || e.node === node).map((e) => ({ ...e }));
   setWeb = async (node: string, on: boolean) => {
     this.setDevice(node, { lets_web: on });
+    return this.view;
+  };
+  setLend = async (node: string, on: boolean) => {
+    this.setDevice(node, { lets_lend: on });
+    return this.view;
+  };
+  setAgentsSend = async (node: string, on: boolean) => {
+    this.setDevice(node, { agents_may_send: on });
     return this.view;
   };
   setDeviceRoute = async (node: string, pref: RoutePref | null) => {
@@ -270,10 +412,15 @@ export class DevicesFake implements DevicesApi {
       this.emit();
       return { status: 200, body: { pane_id: id, agent: b.agent ?? 'claude', lane: b.lane ?? 'chat' } };
     }
+    // Take the conversation and the work: the far side checks a git bundle out in one of its projects.
+    if (method === 'POST' && path === '/phone/move-work') return { status: 200, body: { ok: true, branch: (body as { branch?: string })?.branch ?? '', sha: 'f'.repeat(40) } };
     if (method === 'POST' && /^\/panes\/[^/]+\/messages/.test(path)) return { status: 200, body: { message: { id: 'm1', text: (body as { text?: string })?.text ?? '', state: 'sent' } } };
     if (method === 'GET' && /^\/panes\/[^/]+\/snapshot/.test(path)) return { status: 200, body: { content: '$ make dmg\nBuilding...' } };
     if (method === 'POST' && /^\/panes\/[^/]+\/input/.test(path)) return { status: 200, body: { ok: true } };
-    if (method === 'GET' && /^\/panes\/[^/]+\/chat/.test(path)) return { status: 200, body: { items: [], revision: 1 } };
+    if (method === 'GET' && /^\/panes\/[^/]+\/chat/.test(path)) {
+      const id = decodeURIComponent(path.split('/')[2] ?? '');
+      return { status: 200, body: { items: this.chats[id] ?? [], revision: 1 } };
+    }
     return { status: 404, body: { error: 'not found' } };
   };
   subscribe = async (node: string) => void this.subscribed.add(node);
@@ -333,6 +480,10 @@ export function createDevicesMock(s: DevicesScenario | undefined): (cmd: string,
         return v(fake.joinLink(String(a.link)));
       case 'devices_activity':
         return v(fake.activity(a.node === undefined ? undefined : String(a.node)));
+      case 'devices_set_lend':
+        return v(fake.setLend(String(a.node), a.on === true));
+      case 'devices_set_agents_send':
+        return v(fake.setAgentsSend(String(a.node), a.on === true));
       case 'devices_set_web':
         return v(fake.setWeb(String(a.node), a.on === true));
       case 'devices_set_device_route':
@@ -344,6 +495,26 @@ export function createDevicesMock(s: DevicesScenario | undefined): (cmd: string,
         return v(fake.screenStart(String(a.node), String(a.pane_id)));
       case 'devices_screen_stop':
         return v(fake.screenStop(String(a.node), String(a.pane_id)));
+      case 'devices_set_files':
+        return v(fake.setFiles(String(a.node), a.on === true));
+      case 'devices_files_folders':
+        return v(fake.filesFolders(String(a.node)));
+      case 'devices_files_set_folders':
+        return v(fake.setFilesFolders(String(a.node), (a.folders as string[]) ?? []));
+      case 'devices_files_roots':
+        return v(fake.filesRoots(String(a.node)));
+      case 'devices_files_list':
+        return v(fake.filesList(String(a.node), String(a.root), String(a.path ?? '')));
+      case 'devices_files_preview':
+        return v(fake.filesPreview(String(a.node), String(a.root), String(a.path ?? '')));
+      case 'devices_files_copy':
+        return v(fake.filesCopy({ node: String(a.node), root: String(a.root), paths: (a.paths as string[]) ?? [], dest: (a.dest as string | null | undefined) ?? null, on_exists: a.on_exists as OnExists | undefined }));
+      case 'devices_files_send':
+        return v(fake.filesSend({ node: String(a.node), root: String(a.root), dir: String(a.dir ?? ''), local: (a.local as string[]) ?? [], on_exists: a.on_exists as OnExists | undefined }));
+      case 'devices_transfer_cancel':
+        return v(fake.transferCancel(Number(a.id)));
+      case 'devices_transfers_clear':
+        return v(fake.transfersClear());
       case 'devices_subscribe':
       case 'devices_unsubscribe':
         return v(null);

@@ -11,6 +11,7 @@ import { useAcpAddons } from '../../../hooks/useAcpAddons';
 import { useDismissable } from '../../../hooks/useDismissable';
 import { AddonPrompt } from '../../acp/AddonPrompt';
 import { SignInCard } from '../../acp/SignInCard';
+import { useCopyOffered } from '../../../lib/copyOffer';
 import { lastRealFolder, projectOfCwd, readStoredCopyPreference, supportsCopies, supportsChatCopy, isPlainCopyFolder, writeCopyPreference, copyDefault } from '../../../lib/ship-model';
 import { folderName, pathKey, useSidebarProjects } from '../../../lib/sidebarProjects';
 import { IconChevronDown, IconFolder, IconPlus, IconSpark } from '../Icons';
@@ -50,6 +51,7 @@ import { readPickedModel, tauriAgentDefaultsApi, presetOnly, tauriModelOptionsAp
 import { isStartBlock } from './start';
 import '../../../styles/cockpit-newagent.css';
 import { Starters } from './Starters';
+import { takeNewAgentDraft } from '../../../lib/team-pass-bridge';
 import { PinnedLine, usePinnedRules } from './PinnedLine';
 import { tauriAgentRulesApi, type AgentRulesApi } from '../../../lib/agentRules';
 
@@ -200,6 +202,16 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
     setSignInFor(trip.pickKey.split(':')[0]);
   }, []);
 
+  // A task a teammate passed: "Start…" leaves its words here. They go in the box only. The person reads and presses Send.
+  const [fromTask, setFromTask] = useState<string | null>(null);
+  useEffect(() => {
+    const d = takeNewAgentDraft();
+    if (!d) return;
+    setPrompt(d.text);
+    setFromTask(d.from);
+    if (d.folder) setChosenFolder({ path: d.folder, name: folderName(d.folder) });
+  }, []);
+
   // What the page reads once. Every read may fail (a browser preview, an older build): the page still works.
   useEffect(() => {
     let live = true;
@@ -293,7 +305,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const runAs: RunAs = canChat ? (chatFirst ? 'chat' : (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null))) : 'terminal';
   // "Work on a copy": a terminal needs Git; a chat also works on a plain trial copy of a folder without Git.
   const canCopy = runAs === 'chat' ? supportsChatCopy(folder?.state) : copiesOk;
-  const isolated = copyDefault(storedCopy) && canCopy;
+  // Settings > Agents can hide the option (all projects, or one). Hidden means off: a remembered "on" never starts a copy.
+  const copyOffered = useCopyOffered(folderKey);
+  const isolated = copyOffered && copyDefault(storedCopy) && canCopy;
 
   // ----- the model: the last pick per agent and sign-in (this page only), else the agent's Default model from Settings -----
   const liveList = useModelOptions(choice?.agentId ?? null, modelApi);
@@ -439,6 +453,11 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
             {t('newAgent.ask')}
           </h1>
 
+          {fromTask && (
+            <p className="ck-na-fromtask" role="note" data-testid="na-from-task">
+              {t('teamHub.tasks.fromNote', { name: fromTask })}
+            </p>
+          )}
           <div className="ck-na-composer" ref={menuRoot}>
             <div className="ck-na-field">
               <textarea
@@ -473,28 +492,32 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                   <span>{t('newAgent.addFiles')}</span>
                   <span className="ck-na-item-hint">{t('newAgent.addFilesHint')}</span>
                 </button>
-                <div className="ck-na-toggle" title={t('newAgent.copyTip')}>
-                  <span id="na-copy-label">{t('newAgent.copy')}</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isolated}
-                    aria-labelledby="na-copy-label"
-                    className="ck-switch"
-                    disabled={!canCopy}
-                    onClick={() => {
-                      setStoredCopy(!isolated);
-                      writeCopyPreference(folderKey, !isolated);
-                    }}
-                  >
-                    <span className="ck-switch-knob" />
-                  </button>
-                </div>
-                {!canCopy ? (
-                  <p className="ck-na-note">{runAs === 'chat' ? t('newAgent.copyMissing') : t('newAgent.needsGit')}</p>
-                ) : runAs === 'chat' && isPlainCopyFolder(folder?.state) ? (
-                  <p className="ck-na-note">{t('newAgent.copyPlain')}</p>
-                ) : null}
+                {copyOffered && (
+                  <>
+                    <div className="ck-na-toggle" title={t('newAgent.copyTip')}>
+                      <span id="na-copy-label">{t('newAgent.copy')}</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={isolated}
+                        aria-labelledby="na-copy-label"
+                        className="ck-switch"
+                        disabled={!canCopy}
+                        onClick={() => {
+                          setStoredCopy(!isolated);
+                          writeCopyPreference(folderKey, !isolated);
+                        }}
+                      >
+                        <span className="ck-switch-knob" />
+                      </button>
+                    </div>
+                    {!canCopy ? (
+                      <p className="ck-na-note">{runAs === 'chat' ? t('newAgent.copyMissing') : t('newAgent.needsGit')}</p>
+                    ) : runAs === 'chat' && isPlainCopyFolder(folder?.state) ? (
+                      <p className="ck-na-note">{t('newAgent.copyPlain')}</p>
+                    ) : null}
+                  </>
+                )}
               </Pop>
 
               <Pop

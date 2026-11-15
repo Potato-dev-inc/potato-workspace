@@ -83,6 +83,19 @@ pub async fn list_paired_mobile_devices(
     Ok(devices)
 }
 
+/// Settings > Phone: what paired phones did here, newest first (a time, a name and a kind; never text).
+#[tauri::command]
+pub async fn phone_activity_list() -> Result<Vec<serde_json::Value>, String> {
+    Ok(crate::phone_log::list())
+}
+
+/// Clear in "Phone and remote activity": empties that list only (the security record stays).
+#[tauri::command]
+pub async fn phone_activity_clear() -> Result<bool, String> {
+    crate::phone_log::clear();
+    Ok(true)
+}
+
 /// Settings > Devices: the person's own name for a paired phone. It shows everywhere (the list, "from <name>" under a
 /// message, the "is typing" chip). Empty text goes back to the name the phone gave.
 #[tauri::command]

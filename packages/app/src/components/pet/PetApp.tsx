@@ -14,6 +14,7 @@ import '../../styles/pet.css';
 import { PetHost, type PetFinished } from './PetHost';
 import type { PetSizeName } from './PetMenu';
 import { tauriPetApi } from './petApi';
+import { petMoodLook } from './petMood';
 import { finishedRun, needsFromSnapshot, petIsQuiet, plainAgentName } from './petSources';
 import type { PetEnv } from './usePetController';
 
@@ -44,7 +45,11 @@ export default function PetApp() {
   const snapshot = useAttention();
   // The pet stands for the default companion: when the person changes the default, the list event brings the new name.
   const companions = useCompanions();
-  const defaultName = defaultCompanion(companions.companions)?.name;
+  const defaultOne = defaultCompanion(companions.companions);
+  const defaultName = defaultOne?.name;
+  // Its saved mood (the same one the sidebar row shows) as a pose. No body state (Labs off): no mood.
+  const moodBody = defaultOne?.body;
+  const mood = useMemo(() => petMoodLook(moodBody), [moodBody?.mood, moodBody?.intensity, moodBody?.sleeping]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Settings: read once, then again whenever any window saves.
   useEffect(() => {
@@ -125,6 +130,7 @@ export default function PetApp() {
       api={tauriPetApi}
       env={env}
       companionName={defaultName}
+      mood={mood}
     />
   );
 }

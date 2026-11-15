@@ -1,5 +1,9 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { PaneContextMenu } from './PaneContextMenu';
+import { helperRows } from './rail/helperRows';
+import { AdoptZone } from '../dnd/AdoptZone';
+import { useAdopt } from './useAdopt';
+import { tauriAdoptApi, type AdoptApi } from '../../lib/helperAdopt';
 import { openHandoffFile, type HandoffDeps } from '../../lib/handoff';
 import { useHandoff, type HandoffControl } from '../../hooks/useHandoff';
 import { requestPaneAction, type PaneAction } from '../../lib/pane-actions';
@@ -40,12 +44,17 @@ import { DropFolderSheet, useFolderDrop } from './DropFolderSheet';
 import { chatItems, rowIdOf } from './sidebar-reorder';
 import { useChatOrder } from '../../lib/sidebarOrder';
 import { requestPotatoCheck } from '../../lib/potatoCheck';
+import { chatSummaryOf, requestPassTask } from '../../lib/team-pass-bridge';
 import { bindingLabel, isMacPlatform } from '../../lib/shortcuts';
 import { groupByProject, useFoldedProjects, useGroupBy, useSidebarProjects } from '../../lib/sidebarProjects';
 import { formatElapsed, spinnerStatus } from './model';
 import { splitPinned, usePinnedPanes } from '../../lib/pinnedPanes';
 import { useHelpersInSidebar } from '../../lib/helpersInSidebar';
-import { descendants, groupHelperTree, helperChipText, readFoldedParents, writeFoldedParents, type HelperNode } from '../../lib/pane-helpers';
+import { descendants, groupHelperTree, readFoldedParents, writeFoldedParents, liveParentId, type HelperNode } from '../../lib/pane-helpers';
+import { openNewStandby, tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelpersApi } from '../../lib/standbyHelpers';
+import { placeHelpers, type StandbyRow } from './standby-rows';
+import { SidebarStandbyRow, type StandbyRowActions } from './SidebarStandbyRow';
+import { folderKey } from './history-model';
 import { multiLoginAgents, paneHeading, paneSubline } from './titles';
 import { LastTurnContext } from './away-context';
 import { projectWithCopy } from './shell-labels';
@@ -94,7 +103,10 @@ export function Sidebar({
   spaces,
   spacesOpen = false,
   onOpenSpaces,
+  onOpenToday,
+  todayOpen = false,
   team,
+  canPassTask,
   onOpenTeam,
   onOpenToSide,
   onOpenPlaced,
@@ -104,9 +116,11 @@ export function Sidebar({
   addons = tauriAcpAddonApi,
   startModeApi = settingsStartModeApi,
   closedChatsApi = tauriClosedChatsApi,
+  adoptApi = tauriAdoptApi,
   handoffDeps,
   handoff,
   devices,
+  standbyApi = tauriStandbyHelpersApi,
 }: {
   c: CockpitApi;
   onOpenPalette: () => void;
@@ -147,9 +161,14 @@ export function Sidebar({
   spacesOpen?: boolean;
   /** Opens the Spaces page. Absent: no Spaces row. */
   onOpenSpaces?: () => void;
+  /** Opens the Today page (Labs `timeline_day_enabled`). Absent: no Today button. */
+  onOpenToday?: () => void;
+  todayOpen?: boolean;
   /** The Team page: its row (always shown) is the active one while `open`; `waiting` is the number on its badge. Absent: no Team row. */
   team?: { open: boolean; waiting: number };
   onOpenTeam?: () => void;
+  /** A team is on: a chat's menu offers "Pass to a teammate…". */
+  canPassTask?: boolean;
   ship?: ShipApi;
   /** Chat sessions (ACP): which agents can run as a chat, and starting one. Replaceable in tests. */
   acp?: AcpChatApi;
@@ -159,12 +178,16 @@ export function Sidebar({
   startModeApi?: StartModeApi;
   /** The closed chats (list, reopen, delete). Replaceable in tests. */
   closedChatsApi?: ClosedChatsApi;
+  /** "Make helper of…" (drag an agent onto another, or the row menu). Replaceable in tests. */
+  adoptApi?: AdoptApi;
   /** The calls "Handoff from here" makes. Replaceable in tests. */
   handoffDeps?: HandoffDeps;
   /** The cockpit's shared handoff (also used by the pane's "Hand off" button). Absent: the sidebar keeps its own. */
   handoff?: HandoffControl;
   /** Devices (Labs): the groups of other PCs under this PC's rows, and what choosing one of their rows does. Absent or no groups: nothing changes. */
   devices?: { groups: DeviceGroup[]; selectedKey: string | null; onOpen: (row: RemoteRow) => void; onRetry?: () => void; where?: WhereProps };
+  /** The standby helpers (list, add, remove, open). Replaceable in tests. */
+  standbyApi?: StandbyHelpersApi;
 }) {
   const t = useT();
   const list = c.registry.paneList;
@@ -174,11 +197,15 @@ export function Sidebar({
   // `Review 4`: how many finished things wait to be looked at. Hidden at 0.
   const reviewCount = useReviewCount(onOpenReview !== undefined);
   // A companion's pane has its own companion row above; it is not listed again as a plain pane.
-  const panes = list.filter((p) => !isCompanionPaneId(p.info.id));
+  // Standby helpers: each sits under its home agent. A chat the person opened on one is that helper's row, not an agent.
+  const { view: standbyView, apply: applyStandby } = useStandbyHelpers(standbyApi);
+  const [showHelperTree] = useHelpersInSidebar();
+  const placement = placeHelpers(showHelperTree ? standbyView.helpers : [], list);
+  // A chat that is a standby's own never counts as an agent row.
+  const panes = list.filter((p) => !isCompanionPaneId(p.info.id) && !placement.hiddenPanes.has(p.info.id));
   // The same list the Inbox badge and the Doto counter use, so the three numbers always agree.
   const needs = useNeedsYou(c);
   const questionPanes = needsYouPaneIds(needs);
-  const [showHelperTree] = useHelpersInSidebar();
   const grouped = groupHelperTree(panes, questionPanes);
   // Pinned chats sit in their own group at the top, newest pin first, whatever they are doing.
   const { pins, setPinned, place: placePin } = usePinnedPanes();
@@ -339,6 +366,94 @@ export function Sidebar({
 
   type Pane = (typeof list)[number];
   const paneTitle = (p: Pane) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary;
+  const adoptName = (id: string) => {
+    const p = c.registry.panes.get(id);
+    return p ? paneTitle(p) : id;
+  };
+  // Drag an agent onto another (or the row menu): it becomes that agent's helper, in the same project only.
+  const adopt = useAdopt({
+    panes,
+    projectOf: (cwd) => groupByProject([cwd], (x) => x, projects).find((g) => g.items.length > 0)?.key ?? 'other',
+    nameOf: adoptName,
+    api: adoptApi,
+    notify: c.notify,
+  });
+  const agentLabelOf = (agent: string) => c.launchEntries.find((e) => e.type === agent)?.label ?? agent;
+  const standbyActions: StandbyRowActions = {
+    open: async (r) => {
+      if (r.paneId) return void c.select(r.paneId);
+      try {
+        const id = await standbyApi.open(r.helper.id);
+        if (id) c.select(id);
+        else c.notify(t('standby.openFailed'));
+      } catch (e) {
+        c.notify(errorSentence(e));
+      }
+    },
+    remove: (r) => {
+      const h = r.helper;
+      void standbyApi.remove(h.id).then(applyStandby).catch(() => {});
+      showUndo({
+        text: t('standby.removed', { name: h.name }),
+        failText: t('undo.failed'),
+        ms: 5000,
+        undo: async () => applyStandby(await standbyApi.add({ name: h.name, agent: h.agent, model: h.model, project: h.project, after_task: h.after_task, home: h.home })),
+      });
+    },
+    rename: (r, name) => void standbyApi.update(r.helper.id, { name }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
+    setModel: (r, model) => void standbyApi.update(r.helper.id, { model }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
+    setAfter: (r, after) => void standbyApi.update(r.helper.id, { after_task: after }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
+    moveUnder: (r, agentId) => void standbyApi.update(r.helper.id, { home: agentId }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
+    start: (r) => void standbyApi.start(r.helper.id).then(applyStandby).catch(() => {}),
+  };
+  /** The other main agents of the helper's project: where "Move under" can send it. */
+  const movableFor = (r: StandbyRow) =>
+    list
+      .filter((p) => !isCompanionPaneId(p.info.id) && !placement.hiddenPanes.has(p.info.id) && !liveParentId(list, p.info.id) && p.info.id !== r.under && folderKey(p.info.cwd) === folderKey(r.helper.project))
+      .map((p) => ({ id: p.info.id, title: paneTitle(p) }));
+  const standbyRowView = (r: StandbyRow) => (
+    <SidebarStandbyRow key={`sb-${r.helper.id}`} row={r} agentLabel={agentLabelOf(r.helper.agent)} active={r.paneId !== null && c.selectedId === r.paneId} movable={movableFor(r)} actions={standbyActions} />
+  );
+  // Told once when a helper's home agent was closed and another agent took it in.
+  const lastUnder = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    const now = new Map<string, string>();
+    const moved = new Map<string, number>();
+    for (const rows of placement.byAgent.values()) for (const r of rows) now.set(r.helper.id, r.under ?? '');
+    const live = new Set(list.map((p) => p.info.id));
+    for (const [id, under] of now) {
+      const before = lastUnder.current.get(id);
+      if (before && before !== under && !live.has(before)) moved.set(under, (moved.get(under) ?? 0) + 1);
+    }
+    lastUnder.current = now;
+    for (const [under, count] of moved) {
+      const agent = list.find((p) => p.info.id === under);
+      if (agent) c.notify(t('standby.moved', { count, agent: paneTitle(agent) }));
+    }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Helpers no agent can hold yet (their project has no main agent): a small group of their own. */
+  const looseGroup = (rows: StandbyRow[]) =>
+    rows.length === 0 ? null : (
+      <div className="ck-sb-loose" role="group" aria-label={t('standby.looseGroup')} data-testid="standby-loose">
+        <div className="ck-sb-loose-head">{t('standby.looseGroup')}</div>
+        {rows.map(standbyRowView)}
+      </div>
+    );
+  // A toast when an agent takes a helper the person was using (it shows even when they look somewhere else).
+  const toldTaken = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const h of standbyView.helpers) {
+      if (!h.taken_over) {
+        toldTaken.current.delete(h.id);
+        continue;
+      }
+      if (toldTaken.current.has(h.id)) continue;
+      toldTaken.current.add(h.id);
+      const parentId = h.pane_id ? liveParentId(list, h.pane_id) : null;
+      const parent = parentId ? list.find((p) => p.info.id === parentId) : undefined;
+      c.notify(parent ? t('standby.tookToast', { agent: paneTitle(parent), name: h.name }) : t('standby.tookAnon', { name: h.name }));
+    }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
   const row = (p: Pane, awayFrom?: Pane, helperCount = 0) => {
     const id = p.info.id;
     const since = c.statusSince.get(id);
@@ -413,6 +528,21 @@ export function Sidebar({
             <span className="ck-row-time">{since ? formatElapsed(c.now - since) : ''}</span>
           ) : null}
         </button>
+        {!awayFrom && !p.info.parent_pane_id && p.info.cwd && (
+          <button
+            type="button"
+            className="ck-row-addhelper"
+            data-testid="row-add-helper"
+            aria-label={t('standby.addAria', { name: heading.primary })}
+            title={t('standby.addTitle')}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              openNewStandby(p.info.cwd, id, { x: r.right + 8, y: r.top });
+            }}
+          >
+            +
+          </button>
+        )}
         <button
           type="button"
           className="ck-row-more"
@@ -427,6 +557,7 @@ export function Sidebar({
         >
           <IconMore />
         </button>
+        <AdoptZone paneId={id} name={heading.primary} refusal={(childId) => adopt.refusal(childId, id)} onAdopt={(childId, parentId) => void adopt.adopt(childId, parentId)} />
         {peek.open?.id === id && (
           <div style={{ display: 'contents', ['--peek-left' as string]: `${peek.open.left}px`, ['--peek-top' as string]: `${peek.open.top}px` }}>
             <PeekCard
@@ -447,7 +578,8 @@ export function Sidebar({
   // A row, and under it its helpers: indented behind a thin guide line, folded by the "N helpers" chip.
   const node = (n: HelperNode<Pane>): JSX.Element => {
     const id = n.pane.info.id;
-    if (n.helpers.length === 0) return row(n.pane, n.awayFrom);
+    const standbyRows = showHelperTree ? (placement.byAgent.get(id) ?? []) : [];
+    if (n.helpers.length === 0 && standbyRows.length === 0) return row(n.pane, n.awayFrom);
     // The helpers bar above the chat is where helpers live: the row only counts them (unless the person wants the tree).
     if (!showHelperTree) return row(n.pane, n.awayFrom, descendants(n).length);
     const open = !folded.has(id);
@@ -462,10 +594,11 @@ export function Sidebar({
             aria-expanded={open}
             title={t(open ? 'sidebar.hideHelpers' : 'sidebar.showHelpers')}
           >
-            {helperChipText(n)}
+            {t('state.helpers', { count: descendants(n).length + standbyRows.length })}
             <span className={`ck-helper-caret${open ? ' is-open' : ''}`} aria-hidden="true" />
           </button>
           {open && n.helpers.map(node)}
+          {open && standbyRows.map(standbyRowView)}
         </div>
       </div>
     );
@@ -595,6 +728,7 @@ export function Sidebar({
             />
             </div>
             {!isFolded && !branchGroups && mainBranch && <ProjectMeta branch={mainBranch} />}
+            {!isFolded && g.path && looseGroup(placement.loose.get(folderKey(g.path) ?? '') ?? [])}
             {!isFolded &&
               (g.items.length > 0 ? (
                 <ReorderList
@@ -648,6 +782,17 @@ export function Sidebar({
     </div>
   );
 
+  // The row menu's extras: "Add a helper" on an agent, "Keep on standby" on a finished helper.
+  const menuPane = rowMenu ? list.find((p) => p.info.id === rowMenu.id) : undefined;
+  const menuParent = rowMenu ? liveParentId(list, rowMenu.id) : null;
+  const keepOnStandby = (p: Pane, home: string) =>
+    void standbyApi
+      .add({ name: paneTitle(p), agent: p.info.agent_type, model: null, project: p.info.cwd ?? '', after_task: 'wait', home })
+      .then((next) => {
+        applyStandby(next);
+        c.notify(t('standby.kept', { name: paneTitle(p) }));
+      })
+      .catch((e) => c.notify(errorSentence(e)));
   // The key of a shortcut as the person set it (CockpitApp draws again when they change it).
   const hint = (id: string) => (isMacPlatform() ? bindingLabel(id) : bindingLabel(id).replace('+', ' '));
   return (
@@ -868,6 +1013,7 @@ export function Sidebar({
             {section(t('sidebar.needsYou'), groups.needs, waiting, asks)}
             {section(t('sidebar.working'), groups.working)}
             {section(t('sidebar.idle'), groups.idle)}
+            {looseGroup([...placement.loose.values()].flat())}
           </>
         )}
         {list.length === 0 && c.registry.initialReady && (
@@ -926,6 +1072,13 @@ export function Sidebar({
           onPin={() => setPinned(rowMenu.id, !pinSet.has(rowMenu.id))}
           onHandoff={hand.allowed(rowMenu.id) && !handoffBusy ? () => hand.start(rowMenu.id) : undefined}
           onPotato={companions && companions.length > 0 ? () => requestPotatoCheck(rowMenu.id) : undefined}
+          helperOf={adopt.targets(rowMenu.id)}
+          onHelperOf={(parentId) => void adopt.adopt(rowMenu.id, parentId)}
+          helperName={adoptName(rowMenu.id)}
+          onMainAgain={adopt.isHelper(rowMenu.id) ? () => void adopt.release(rowMenu.id) : undefined}
+          onPassTask={canPassTask ? () => requestPassTask({ repoPath: c.registry.panes.get(rowMenu.id)?.info.cwd ?? null, summary: chatSummaryOf(rowMenu.id) }) : undefined}
+          onAddHelper={menuPane && !menuParent && menuPane.info.cwd ? () => openNewStandby(menuPane.info.cwd, rowMenu.id, { x: rowMenu.x + 8, y: rowMenu.y }) : undefined}
+          onKeepStandby={menuPane && menuParent && menuPane.status !== 'running' && menuPane.info.cwd ? () => keepOnStandby(menuPane, menuParent) : undefined}
           onAction={(action) => runPaneAction(rowMenu.id, action)}
           onInterrupt={() => void c.interrupt(rowMenu.id)}
           onClose={closeRowMenu}
@@ -939,6 +1092,9 @@ export function Sidebar({
         onMode={(m) => void c.setMode(m)}
         theme={c.theme}
         onToggleTheme={() => void c.toggleTheme()}
+        onSetTheme={(next) => void c.setThemeChoice(next)}
+        helpersOf={(id) => helperRows(c.registry.paneList, id, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
+        onStopHelper={(id) => c.interrupt(id)}
         onOpenSettings={(tab) => void (tab ? c.openSettings(tab) : c.openSettings())}
         bridgeLine={c.bridgeLine}
         onOpenDoctor={onOpenDoctor}
@@ -952,6 +1108,8 @@ export function Sidebar({
         spacesEnabled={spaces?.enabled}
         spacesOpen={spacesOpen}
         onOpenSpaces={onOpenSpaces}
+        onOpenToday={onOpenToday}
+        todayOpen={todayOpen}
       />
       {closedOpen && (
         <ClosedChatsSheet

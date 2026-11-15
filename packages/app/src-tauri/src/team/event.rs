@@ -121,6 +121,12 @@ pub enum TeamEventKind {
     CapacityRevoke,
     #[serde(rename = "session.transfer")]
     SessionTransfer,
+    /// Shelf: "I suggest this skill or tool to you" (`subject.shelf.item`, `to` names who). Never a card.
+    #[serde(rename = "shelf.suggest")]
+    ShelfSuggest,
+    /// Shelf: the ids of the things I added through the shelf (`subject.shelf.have`). Never a card.
+    #[serde(rename = "shelf.have")]
+    ShelfHave,
     /// A kind from a newer build. Parsed so the rest of the batch still reads; never shown.
     #[serde(other)]
     Unknown,
@@ -155,6 +161,8 @@ impl TeamEventKind {
             Self::CapacityGrant => "capacity.grant",
             Self::CapacityRevoke => "capacity.revoke",
             Self::SessionTransfer => "session.transfer",
+            Self::ShelfSuggest => "shelf.suggest",
+            Self::ShelfHave => "shelf.have",
             Self::Unknown => "unknown",
         }
     }
@@ -242,6 +250,9 @@ pub struct Subject {
     /// A push to the default branch: the subject line of its first (oldest) new commit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub first_commit: Option<String>,
+    /// A shelf event: the suggested item, or the ids a teammate has (`team/shelf`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shelf: Option<super::shelf::model::ShelfPayload>,
 }
 
 /// What a person shares about their work in a presence event. Every field is the person's own choice
@@ -485,6 +496,12 @@ pub fn validate_inbound(mut event: TeamEvent, now_ms: u64) -> Result<TeamEvent, 
     }
     if event.kind == TeamEventKind::Presence && event.subject.presence.as_deref().and_then(super::presence::State::parse).is_none() {
         return Err(Rejected("presence names a known state"));
+    }
+    if event.kind == TeamEventKind::ShelfSuggest && event.subject.shelf.as_ref().and_then(|p| p.item.as_ref()).is_none() {
+        return Err(Rejected("a suggestion carries an item"));
+    }
+    if event.kind == TeamEventKind::ShelfHave && event.subject.shelf.is_none() {
+        return Err(Rejected("a have list carries ids"));
     }
     if event.kind == TeamEventKind::Note && event.note.as_deref().map_or(true, |n| clean_text(n, MAX_NOTE_CHARS).is_empty()) {
         return Err(Rejected("a note has text"));

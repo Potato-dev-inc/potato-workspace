@@ -78,7 +78,7 @@ fn frame(px: &mut [u8], w: i64, h: i64, bx: (i64, i64, i64, i64), thick: i64, co
     }
 }
 
-fn clamp_px(v: f64, max: u32) -> u32 {
+pub(crate) fn clamp_px(v: f64, max: u32) -> u32 {
     if v.is_nan() || v <= 0.0 {
         0
     } else if v >= f64::from(max) {
@@ -89,13 +89,13 @@ fn clamp_px(v: f64, max: u32) -> u32 {
 }
 
 /// A decoded picture: size and RGBA8 pixels.
-struct Pixels {
-    w: u32,
-    h: u32,
-    rgba: Vec<u8>,
+pub(crate) struct Pixels {
+    pub(crate) w: u32,
+    pub(crate) h: u32,
+    pub(crate) rgba: Vec<u8>,
 }
 
-fn decode(png: &[u8]) -> Result<Pixels, String> {
+pub(crate) fn decode(png: &[u8]) -> Result<Pixels, String> {
     const NOT_PNG: &str = "The screenshot is not a PNG picture.";
     const BAD_FORMAT: &str = "Only 8-bit RGB or RGBA screenshots are supported.";
     let mut reader = png::Decoder::new(Cursor::new(png))
@@ -124,7 +124,7 @@ fn decode(png: &[u8]) -> Result<Pixels, String> {
     Ok(Pixels { w, h, rgba })
 }
 
-fn encode(w: u32, h: u32, rgba: &[u8]) -> Result<Vec<u8>, String> {
+pub(crate) fn encode(w: u32, h: u32, rgba: &[u8]) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     let mut enc = png::Encoder::new(&mut out, w, h);
     enc.set_color(png::ColorType::Rgba);
@@ -238,7 +238,7 @@ fn rel_of(name: &str) -> String {
 }
 
 /// Local time as `yyyymmdd-hhmmss`. Falls back to zeros if the clock value is out of range.
-fn stamp(now_ms: u64) -> String {
+pub(crate) fn stamp(now_ms: u64) -> String {
     use chrono::TimeZone;
     match chrono::Local.timestamp_millis_opt(now_ms as i64).single() {
         Some(t) => t.format("%Y%m%d-%H%M%S").to_string(),
@@ -247,7 +247,7 @@ fn stamp(now_ms: u64) -> String {
 }
 
 /// Write to a dot-named temp file, then rename it over the final name.
-fn write_atomic(dir: &Path, name: &str, bytes: &[u8]) -> io::Result<()> {
+pub(crate) fn write_atomic(dir: &Path, name: &str, bytes: &[u8]) -> io::Result<()> {
     let tmp = dir.join(format!(".{name}.tmp"));
     {
         let mut file = std::fs::File::create(&tmp)?;

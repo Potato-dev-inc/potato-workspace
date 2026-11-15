@@ -30,6 +30,7 @@ pub mod actions;
 pub mod commands;
 pub mod config;
 pub mod crypto;
+pub mod direct;
 pub mod event;
 pub mod git;
 pub mod invite;
@@ -46,10 +47,12 @@ pub mod project_key;
 pub mod relay_deploy;
 pub mod roster;
 pub mod secure;
+pub mod shelf;
 pub mod service;
 pub mod sources;
 pub mod store;
 pub mod transport;
+pub mod worker_update;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

@@ -316,6 +316,15 @@ export class LendBackend {
     return r;
   }
 
+  /** `lend_request_own`: an ask to one of my own paired PCs (a device node), no Team. */
+  requestOwn(node: string, agentId: string, secs: number, reason: string): LendRequest {
+    this.rec('requestOwn', node, agentId, secs, reason);
+    const r: LendRequest = { id: `req-own-${++this.ids}`, direction: 'out', member_id: 'me', member_name: '', device_name: node.slice(0, 4), agent_id: agentId, secs, reason, at_ms: Date.now(), for_other_person: false, state: 'open', profile_id: null, profile_name: '' };
+    this.state = { ...this.state, requests_out: [...this.state.requests_out, r] };
+    this.changed();
+    return r;
+  }
+
   /** The other side answers one of my asks (tests and scenarios). */
   settleOut(requestId: string, accepted: boolean): void {
     const r = this.state.requests_out.find((x) => x.id === requestId);
@@ -457,6 +466,7 @@ export function createFakeLendApi(seed: LendScenario = {}): LendApi & { backend:
     profileSave: async (p) => b.profileSave(p),
     profileDelete: async (id) => b.profileDelete(id),
     request: async (...a) => b.request(...a),
+    requestOwn: async (...a) => b.requestOwn(...a),
     offers: async (...a) => b.offers(...a),
     answer: async (...a) => b.answer(...a),
     revoke: async (id) => b.revoke(id),

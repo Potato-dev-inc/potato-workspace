@@ -6,6 +6,8 @@
   'use strict';
   var KEY = __PM_BAR_KEY__;
   var STR = __PM_BAR_STR__;
+  // Under the browser bar (`chrome_bar.js`), which is 36 px high.
+  var TOP = __PM_BAR_TOP__;
   try {
     if (window.top !== window.self || window[KEY]) return;
   } catch (e) {
@@ -54,7 +56,7 @@
     host = document.createElement('div');
     // Not part of the page for anyone reading it as a list (an agent's read must never show these buttons).
     host.setAttribute('aria-hidden', 'true');
-    host.style.cssText = 'all:initial;position:fixed;top:0;left:0;right:0;z-index:2147483647;pointer-events:none';
+    host.style.cssText = 'all:initial;position:fixed;top:' + TOP + 'px;left:0;right:0;z-index:2147483647;pointer-events:none';
     var root = host.attachShadow({ mode: 'closed' });
     var bar = el('div', 'pointer-events:none;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;font:600 12px/18px system-ui,Segoe UI,sans-serif;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)');
     var dot = el('span', 'width:8px;height:8px;border-radius:50%;background:#fff;flex:none');
@@ -83,12 +85,16 @@
     var paused = view.state === 'paused';
     ui.bar.style.background = paused ? '#5a5a5a' : '#e87828';
     ui.dot.style.opacity = paused ? '0.5' : '1';
-    ui.label.textContent = paused ? (view.reason === 'stopped' ? S.stopped : S.paused) : S.using.replace('{agent}', view.agent || S.agent);
+    var signIn = paused && view.reason === 'sign_in';
+    ui.label.textContent = signIn ? S.signIn : paused ? (view.reason === 'stopped' ? S.stopped : S.paused) : S.using.replace('{agent}', view.agent || S.agent);
     while (ui.actions.firstChild) ui.actions.removeChild(ui.actions.firstChild);
     var steps = view.steps || [];
     if (steps.length) ui.actions.appendChild(button(S.steps.replace('{n}', String(steps.length)), 'steps'));
     ui.actions.appendChild(button(S.point, 'point'));
-    if (paused) {
+    if (signIn) {
+      ui.actions.appendChild(button(S.continue, 'giveback'));
+      ui.actions.appendChild(button(S.stop, 'stop'));
+    } else if (paused) {
       ui.actions.appendChild(button(S.giveBack, 'giveback'));
     } else {
       ui.actions.appendChild(button(S.takeOver, 'takeover'));

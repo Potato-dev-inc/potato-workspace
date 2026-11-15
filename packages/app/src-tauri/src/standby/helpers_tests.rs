@@ -4,7 +4,7 @@ use super::*;
 use crate::acp::warm::AgentProbe;
 
 fn input(name: &str, agent: &str) -> NewHelper {
-    NewHelper { name: name.into(), agent: agent.into(), model: Some("gpt-5".into()), project: "C:/work/app".into(), after_task: AfterTask::Wait }
+    NewHelper { name: name.into(), agent: agent.into(), model: Some("gpt-5".into()), project: "C:/work/app".into(), after_task: AfterTask::Wait, home: None }
 }
 
 fn temp_file() -> HelperFile {
@@ -131,7 +131,7 @@ fn the_view_says_why_a_standby_cannot_start() {
     store.add(input("Shell", "terminalonly"), "2".into()).unwrap();
     store.add(input("Gone", "codex"), "3".into()).unwrap();
     let mut statuses = BTreeMap::new();
-    statuses.insert("1".to_string(), HelperStatus { state: HelperState::Busy, note: None, pane_id: Some("chat-9".into()) });
+    statuses.insert("1".to_string(), HelperStatus { state: HelperState::Busy, pane_id: Some("chat-9".into()), ..Default::default() });
     let view = build_view(&store, &statuses, |agent| agent == "codex", |project| project != "C:/gone");
     assert_eq!(view.helpers[0].state, HelperState::Busy);
     assert_eq!(view.helpers[0].pane_id.as_deref(), Some("chat-9"));
@@ -154,4 +154,56 @@ fn the_view_serialises_with_the_names_the_screens_read() {
     assert_eq!(entry["after_task"], "wait");
     assert_eq!((entry["name"].as_str(), entry["agent"].as_str(), entry["model"].as_str()), (Some("Reviewer"), Some("codex"), Some("gpt-5")));
     assert_eq!(json["max"], DEFAULT_MAX);
+}
+
+#[test]
+fn a_helper_has_a_home_agent_that_can_change_and_old_files_have_none() {
+    let mut store = HelperStore::default();
+    let mut with_home = input("Reviewer", "codex");
+    with_home.home = Some("  pane-1 ".into());
+    let helper = store.add(with_home, "sb-1".into()).unwrap();
+    assert_eq!(helper.home.as_deref(), Some("pane-1"));
+    store.set_home("sb-1", Some("pane-2".into())).unwrap();
+    assert_eq!(store.helpers[0].home.as_deref(), Some("pane-2"));
+    store.set_home("sb-1", Some("  ".into())).unwrap();
+    assert_eq!(store.helpers[0].home, None);
+    assert!(store.set_home("nope", None).is_err());
+    let old = r#"{"helpers":[{"id":"a","name":"R","agent":"codex","project":"C:/p"}]}"#;
+    let loaded: HelperStore = serde_json::from_str(old).unwrap();
+    assert_eq!(loaded.helpers[0].home, None);
+}
+
+#[test]
+fn the_policy_hands_the_home_to_the_pool_and_the_view_says_who_has_a_busy_helper() {
+    let mut store = HelperStore::default();
+    let mut homed = input("Reviewer", "codex");
+    homed.home = Some("pane-1".into());
+    homed.project = std::env::temp_dir().to_string_lossy().into_owned();
+    store.add(homed, "sb-1".into()).unwrap();
+    let mut policy = Policy::default();
+    extend_policy(&mut policy, &store, &Chat(&["codex"]));
+    assert_eq!(policy.helpers[0].meta.home.as_deref(), Some("pane-1"));
+    let statuses = BTreeMap::from([("sb-1".to_string(), HelperStatus { state: HelperState::Busy, pane_id: Some("chat-1".into()), used_by: Some(HelperUser::Person), ..Default::default() })]);
+    let view = build_view(&store, &statuses, |_| true, |_| true);
+    assert_eq!((view.helpers[0].home.as_deref(), view.helpers[0].used_by), (Some("pane-1"), Some(HelperUser::Person)));
+}
+
+#[test]
+fn an_entry_carries_the_chat_the_person_has_open_and_the_chat_an_agent_took_it_from() {
+    let mut store = HelperStore::default();
+    store.add(input("Reviewer", "codex"), "sb-1".into()).unwrap();
+    store.add(input("Tester", "codex"), "sb-2".into()).unwrap();
+    let statuses = BTreeMap::from([
+        ("sb-1".to_string(), HelperStatus { state: HelperState::Ready, open_pane: Some("chat-1".into()), ..Default::default() }),
+        ("sb-2".to_string(), HelperStatus { state: HelperState::Busy, pane_id: Some("chat-2".into()), used_by: Some(HelperUser::Agent), taken_over: true, person_pane: Some("chat-1".into()), ..Default::default() }),
+    ]);
+    let view = build_view(&store, &statuses, |_| true, |_| true);
+    assert_eq!((view.helpers[0].open_pane.as_deref(), view.helpers[0].person_pane.as_deref()), (Some("chat-1"), None));
+    assert_eq!((view.helpers[1].person_pane.as_deref(), view.helpers[1].pane_id.as_deref(), view.helpers[1].taken_over), (Some("chat-1"), Some("chat-2"), true));
+    let json = serde_json::to_value(&view.helpers[1]).unwrap();
+    assert_eq!(json["person_pane"], "chat-1");
+    assert_eq!(json["open_pane"], serde_json::Value::Null);
+    // A helper with no slot yet: nothing is open.
+    let none = build_view(&store, &BTreeMap::new(), |_| true, |_| true);
+    assert_eq!((none.helpers[0].open_pane.clone(), none.helpers[0].person_pane.clone()), (None, None));
 }

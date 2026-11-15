@@ -19,7 +19,7 @@ fn guard(webview: &tauri::Webview) -> Result<(), String> {
 fn off_view() -> Value {
     serde_json::json!({
         "enabled": false, "name": dl::computer_name(), "route_pref": "auto", "own_route_ready": false,
-        "hosting": null, "pending": null, "joining": null, "message": null, "locked_until": null, "tampered": false, "devices": [],
+        "hosting": null, "pending": null, "joining": null, "message": null, "locked_until": null, "tampered": false, "devices": [], "transfers": [],
     })
 }
 
@@ -115,6 +115,13 @@ pub async fn devices_set_web(webview: tauri::Webview, node: String, on: bool) ->
     dl::app_service()?.set_web(&node, on)
 }
 
+/// "Agents may send work to this device" for one device (off by default).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_set_agents_send(webview: tauri::Webview, node: String, on: bool) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.set_agents_send(&node, on)
+}
+
 /// One device's own route choice (`null`: follow this PC's choice).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn devices_set_device_route(webview: tauri::Webview, node: String, pref: Option<String>) -> Result<Value, String> {
@@ -158,4 +165,77 @@ pub async fn devices_subscribe(webview: tauri::Webview, node: String) -> Result<
 pub async fn devices_unsubscribe(webview: tauri::Webview, node: String) -> Result<(), String> {
     guard(&webview)?;
     dl::app_service()?.unsubscribe(&node)
+}
+
+/// "Borrow my agent sign-ins" for one device: that device may ask this PC to lend an agent (off by default). Nothing is copied.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_set_lend(webview: tauri::Webview, node: String, on: bool) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.set_lend(&node, on)
+}
+
+// ----- files (phase 4): browse a device's shared folders, copy to this PC, send a file there -----
+
+/// What this PC lets that device do with its files here (its own switch, apart from running agents).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_set_files(webview: tauri::Webview, node: String, on: bool) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.set_files(&node, on)
+}
+
+/// The folders this PC shares with that device (project folders, and the ones the person added).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_files_folders(webview: tauri::Webview, node: String) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.files_folders(&node)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_files_set_folders(webview: tauri::Webview, node: String, folders: Vec<String>) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.files_set_folders(&node, &folders)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_files_roots(webview: tauri::Webview, node: String) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.far_roots(&node).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_files_list(webview: tauri::Webview, node: String, root: String, path: String) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.far_list(&node, &root, &path).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_files_preview(webview: tauri::Webview, node: String, root: String, path: String) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.far_preview(&node, &root, &path).await
+}
+
+/// `Copy to this PC`: into Downloads (or `dest`). `on_exists`: `ask`, `replace` or `both`.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_files_copy(webview: tauri::Webview, node: String, root: String, paths: Vec<String>, dest: Option<String>, on_exists: Option<String>) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.far_copy(&node, &root, &paths, dest.as_deref(), on_exists.as_deref().unwrap_or("ask")).await
+}
+
+/// `Send a file there`: local files or folders into a far shared folder.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_files_send(webview: tauri::Webview, node: String, root: String, dir: String, local: Vec<String>, on_exists: Option<String>) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.far_send(&node, &root, &dir, &local, on_exists.as_deref().unwrap_or("ask")).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_transfer_cancel(webview: tauri::Webview, id: u64) -> Result<(), String> {
+    guard(&webview)?;
+    dl::app_service()?.transfer_cancel(id)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_transfers_clear(webview: tauri::Webview) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.transfers_clear()
 }

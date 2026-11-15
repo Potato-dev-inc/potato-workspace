@@ -24,6 +24,13 @@ export function PaneContextMenu({
   onPin,
   onHandoff,
   onPotato,
+  helperOf,
+  onHelperOf,
+  helperName,
+  onMainAgain,
+  onPassTask,
+  onAddHelper,
+  onKeepStandby,
   onAction,
   onInterrupt,
   onClose,
@@ -43,6 +50,19 @@ export function PaneContextMenu({
   onHandoff?: () => void;
   /** "Potato, check on this": the companion reads this chat and says what it is doing. Absent: no companion, no item. */
   onPotato?: () => void;
+  /** "Make helper of…": the main agents this one could help (the keyboard way to a drag onto a row). Empty or absent: no such item. */
+  helperOf?: { id: string; name: string }[];
+  onHelperOf?: (parentId: string) => void;
+  /** This agent's name, for the picker's label. */
+  helperName?: string;
+  /** "Make it a main agent again" (only for a helper). Absent: no such item. */
+  onMainAgain?: () => void;
+  /** "Pass to a teammate…": opens the Pass a task sheet for this chat. Absent: no team, no item. */
+  onPassTask?: () => void;
+  /** An agent's row: "Add a helper" opens the popover under it. Absent: no such item. */
+  onAddHelper?: () => void;
+  /** A finished helper's row: "Keep on standby" turns it into a standby helper. Absent: no such item. */
+  onKeepStandby?: () => void;
   onAction: (action: PaneAction) => void;
   onInterrupt: () => void;
   /** The menu wants to go away (Escape, Tab, a click outside). `refocus` when the keyboard closed it. */
@@ -51,6 +71,8 @@ export function PaneContextMenu({
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
+  // "Make helper of…" swaps the menu for the list of agents to pick from.
+  const [picking, setPicking] = useState(false);
 
   // Keep the menu inside the window, then put the keyboard on its first item.
   useLayoutEffect(() => {
@@ -65,7 +87,7 @@ export function PaneContextMenu({
     const top = Math.max(m, Math.min(wanted, window.innerHeight - r.height - m));
     setPos({ left, top });
     el.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-  }, [x, y]);
+  }, [x, y, picking]);
 
   // Escape is handled in onKeyDown below (it refocuses).
   useDismissable(true, { inside: [ref], anchor: ref, ignore: ['escape'], onDismiss: () => onClose(false) });
@@ -94,14 +116,14 @@ export function PaneContextMenu({
     }
   };
 
-  const item = (label: string, icon: JSX.Element | null, run: () => void, kbd?: string) => (
+  const item = (label: string, icon: JSX.Element | null, run: () => void, kbd?: string, keepOpen = false) => (
     <button
       type="button"
       role="menuitem"
       className="ck-menu-item"
       tabIndex={-1}
       onClick={() => {
-        onClose(false);
+        if (!keepOpen) onClose(false);
         run();
       }}
     >
@@ -121,6 +143,12 @@ export function PaneContextMenu({
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
     >
+      {picking && helperOf ? (
+        <div role="group" aria-label={t('adopt.menuLabel', { name: helperName ?? '' })}>
+          {helperOf.map((target) => <span key={target.id} style={{ display: 'contents' }}>{item(target.name, null, () => onHelperOf?.(target.id))}</span>)}
+        </div>
+      ) : (
+      <>
       {onSide && (
         <>
           {item(t('sidebar.openToSide'), null, onSide)}
@@ -130,14 +158,21 @@ export function PaneContextMenu({
         </>
       )}
       {onPin && item(pinned ? t('sidebar.unpin') : t('sidebar.pin'), <IconPin />, onPin)}
+      {helperOf && helperOf.length > 0 && item(t('adopt.menu'), null, () => setPicking(true), undefined, true)}
+      {onMainAgain && item(t('adopt.mainAgain'), null, onMainAgain)}
       {item(t('sidebar.rename'), <IconRename />, () => onAction('rename'))}
       {item(t('sidebar.reflow'), <IconReflow />, () => onAction('reflow'))}
       {item(t('sidebar.interrupt'), <IconStop />, onInterrupt, '⌃C')}
       {onHandoff && item(t('sidebar.handoffFromHere'), null, onHandoff)}
+      {onAddHelper && item(t('standby.addTitle'), null, onAddHelper)}
+      {onKeepStandby && item(t('standby.keep'), null, onKeepStandby)}
       {onPotato && item(t('potato.check.menu'), null, onPotato)}
+      {onPassTask && item(t('teamHub.pass.menu'), null, onPassTask)}
       {item(t('sidebar.details'), <IconInfo />, () => onAction('details'))}
       <div className="ck-menu-sep" role="separator" />
       {item(t('sidebar.close'), <IconClose />, () => onAction('close'))}
+      </>
+      )}
     </div>
   );
   // Inside the cockpit root (the theme scope the `ck-menu` styles hang on), but outside the sidebar.

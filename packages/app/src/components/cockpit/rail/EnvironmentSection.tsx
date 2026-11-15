@@ -1,13 +1,16 @@
 // Environment: where this chat runs and what it works on. Five plain rows; the Remote control switch is the only control.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useT } from '../../../i18n';
 import { openSettingsAt } from '../../../lib/openSettingsAt';
 import { PANE_REMOTE_LEVELS, type PaneRemote, type PaneRemoteLevel } from '../../../lib/pane-remote';
+import { FloatingMenu } from '../FloatingMenu';
+import { IconCheck, IconChevronDown } from '../Icons';
 import { RailSection } from './RailSection';
 import { tauriRemoteApi, type RemoteApi } from './remoteApi';
 import { baseName } from './railFormat';
 
 const LEVEL_WORD = { watch: 'pane.remoteWatch', answer: 'pane.remoteAnswer', full: 'pane.remoteFull' } as const;
+const LEVEL_TIP = { watch: 'pane.remoteWatchTip', answer: 'pane.remoteAnswerTip', full: 'pane.remoteFullTip' } as const;
 
 export interface EnvironmentProps {
   paneId: string;
@@ -29,6 +32,8 @@ export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFo
   const [rule, setRule] = useState<PaneRemote | null>(null);
   const [phones, setPhones] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
+  const [levelOpen, setLevelOpen] = useState(false);
+  const levelBtn = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -114,12 +119,48 @@ export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFo
         )
       )}
       {rule?.remote && (phones ?? 0) > 0 && (
-        <div className="rp-row rp-sub" role="radiogroup" aria-label={t('pane.remoteLevel')} data-testid="rail-remote-level">
-          {PANE_REMOTE_LEVELS.map((level) => (
-            <button key={level} type="button" role="radio" aria-checked={rule.level === level} className={'rp-mini' + (rule.level === level ? ' is-on' : '')} onClick={() => rule.level !== level && change({ level })}>
-              {t(LEVEL_WORD[level])}
-            </button>
-          ))}
+        <div className="rp-row rp-sub" data-testid="rail-remote-level">
+          <button
+            type="button"
+            ref={levelBtn}
+            className="rp-drop"
+            aria-haspopup="menu"
+            aria-expanded={levelOpen}
+            aria-label={t('rail.env.phoneControlLabel', { level: t(LEVEL_WORD[rule.level]) })}
+            onClick={() => setLevelOpen((v) => !v)}
+          >
+            <span className="rp-drop-k">{t('rail.env.phoneControl')}:</span> <span className="rp-drop-v">{t(LEVEL_WORD[rule.level])}</span>
+            <IconChevronDown />
+          </button>
+          {levelOpen && (
+            <FloatingMenu
+              anchorRef={levelBtn}
+              align="start"
+              label={t('pane.remoteLevel')}
+              onClose={(back) => {
+                setLevelOpen(false);
+                if (back) levelBtn.current?.focus();
+              }}
+            >
+              {PANE_REMOTE_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={rule.level === level}
+                  className={`ck-menu-item${rule.level === level ? ' is-active' : ''}`}
+                  title={t(LEVEL_TIP[level])}
+                  onClick={() => {
+                    setLevelOpen(false);
+                    if (rule.level !== level) change({ level });
+                  }}
+                >
+                  <span className="ck-menu-ic">{rule.level === level ? <IconCheck /> : null}</span>
+                  {t(LEVEL_WORD[level])}
+                </button>
+              ))}
+            </FloatingMenu>
+          )}
         </div>
       )}
       {failed && (

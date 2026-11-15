@@ -4,31 +4,43 @@
 // A device that goes away leaves the last text on screen and says so (nothing lived on this side, so nothing is lost).
 import { useEffect, useMemo, useState } from 'react';
 import { useT } from '../../i18n';
-import { chipText, devicesApi, deviceNotices, requestError, type Device, type DevicesApi } from '../../lib/devices';
+import { chipText, clipText, devicesApi, deviceNotices, requestError, type Device, type DevicesApi } from '../../lib/devices';
 import { errorSentence } from '../../lib/sayError';
 import { makeRemoteClient } from '../../lib/runtime/remote';
 import { PhoneChatView } from '../mobile/PhoneChatView';
+import { lastPart } from '../../lib/deviceFiles';
 import { DeviceNotices } from './DeviceNotices';
+import { FilesView } from './FilesView';
+import { GetItCard } from './GetItCard';
 import type { RemoteRow } from './useDeviceGroups';
 import '../../styles/devices.css';
 
-export function RemotePaneView({ device, row, api = devicesApi, onRetry }: { device: Device; row: Pick<RemoteRow, 'paneId' | 'chat' | 'title'> & Partial<Pick<RemoteRow, 'agent'>>; api?: DevicesApi; onRetry?: () => void }) {
+export function RemotePaneView({ device, row, api = devicesApi, onRetry }: { device: Device; row: Pick<RemoteRow, 'paneId' | 'chat' | 'title'> & Partial<Pick<RemoteRow, 'agent' | 'cwd'>>; api?: DevicesApi; onRetry?: () => void }) {
   const t = useT();
   const bridge = useMemo(() => makeRemoteClient(device.node, api), [device.node, api]);
   const canType = device.state === 'online' && device.level === 'full';
   const chip = chipText(device);
+  const [showFiles, setShowFiles] = useState(false);
+  const folderName = lastPart(row.cwd ?? '');
   return (
     <section className="dev-remote" data-testid="remote-pane" aria-label={device.name}>
       <header className="dev-remote-head">
         <span className={`dev-dot${device.state === 'online' ? ' is-up' : ''}`} aria-hidden="true" />
         <span>{row.chat ? t('devices.remote.chatTitle', { name: device.name }) : t('devices.remote.terminalTitle', { name: device.name })}</span>
         {chip && <span className="dev-chip">{chip}</span>}
+        {!showFiles && (
+          <button type="button" className="dev-btn is-plain dev-remote-folder" onClick={() => setShowFiles(true)} data-testid="open-remote-folder">
+            {t('devices.files.openFolder', { name: clipText(device.name, 40) })}
+          </button>
+        )}
       </header>
       <DeviceNotices notices={deviceNotices(device, row.agent ? [row.agent] : undefined)} onRetry={onRetry} />
       {device.state === 'offline' && <p className="dev-remote-note">{t('devices.remote.offline', { name: device.name })}</p>}
       {device.level === 'watch' && device.state === 'online' && <p className="dev-note" style={{ padding: '6px 14px' }}>{t('devices.remote.watchOnly', { name: device.name })}</p>}
       <div className="dev-remote-body">
-        {row.chat ? (
+        {showFiles ? (
+          <FilesView device={device} api={api} startAt={{ folderName }} onClose={() => setShowFiles(false)} />
+        ) : row.chat ? (
           <PhoneChatView
             key={row.paneId}
             bridge={bridge}
@@ -43,6 +55,7 @@ export function RemotePaneView({ device, row, api = devicesApi, onRetry }: { dev
           <RemoteScreen device={device} paneId={row.paneId} api={api} canType={canType} />
         )}
       </div>
+      {row.chat && !showFiles && <GetItCard device={device} paneId={row.paneId} cwd={row.cwd} api={api} />}
     </section>
   );
 }

@@ -241,3 +241,46 @@ describe('Inbox page: Team activity', () => {
     expect(['pr_opened', 'pushed', 'pr_merged', 'ci_failed'].map(toneOf)).toEqual(['pr', 'push', 'ok', 'danger']);
   });
 });
+
+describe('Inbox page: rows open their chat', () => {
+  const q: Question = { id: 'q1', agent: 'Planner', pane_id: 'p1', question: 'Which table style?', choices: [{ id: 'a', label: 'Like Word' }], allow_free_text: false, urgency: 'normal', created_at_ms: NOW - 60_000, expires_at_ms: NOW + 600_000, state: 'pending' } as Question;
+
+  it('clicking a needs-you card opens its chat; Answer answers in place and does not open it', async () => {
+    const { c, select } = api([q]);
+    mount(c);
+    await flush();
+    const answer = host.querySelector<HTMLButtonElement>('[data-ib="answer"]')!;
+    act(() => answer.click());
+    expect(select).not.toHaveBeenCalled();
+    act(() => host.querySelector<HTMLElement>('.ib-title')!.click());
+    expect(select).toHaveBeenCalledWith('p1');
+  });
+
+  it('Enter on the focused card opens its chat', async () => {
+    const { c, select } = api([q]);
+    mount(c);
+    await flush();
+    const card = host.querySelector<HTMLElement>('[data-ib-card]')!;
+    act(() => {
+      card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    });
+    expect(select).toHaveBeenCalledWith('p1');
+  });
+
+  it('a Done today row opens on click and Enter, and a closed chat only says so', async () => {
+    const { c, select } = api();
+    const notify = vi.fn();
+    (c as unknown as { notify: unknown }).notify = notify;
+    mount(c, new Map([...TURNS, ['gone', turn('gone', 'claude', at(9, 0), null)]]));
+    await flush();
+    const row = (id: string) => host.querySelector<HTMLElement>(`[data-done-row="${id}"]`)!;
+    act(() => row('p2').click());
+    expect(select).toHaveBeenLastCalledWith('p2');
+    act(() => void row('p3').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    expect(select).toHaveBeenLastCalledWith('p3');
+    select.mockClear();
+    act(() => row('gone').click());
+    expect(select).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith('This chat is closed.');
+  });
+});

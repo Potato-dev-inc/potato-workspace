@@ -295,8 +295,16 @@ fn owned(chat: &AcpChat, session: Option<&str>) -> Result<(), OperationError> {
     match (session, chat.started_by()) {
         (None, _) => Ok(()),
         (Some(me), Some(owner)) if me == owner || crate::mcp_sessions::same_coordinator(me, &owner) => Ok(()),
+        // A chat the person dragged under an agent is that agent's helper: the agent in that very pane may steer it. The
+        // pane is the one the router found from the connection's own process (never a header the caller wrote).
+        (Some(_), _) if nested_under_caller(chat, crate::pty::pane_parent::request_caller().as_deref()) => Ok(()),
         (Some(_), _) => Err(not_your_chat("This chat session was not started by you, so you may read it but not steer, answer, stop or close it.")),
     }
+}
+
+/// The chat is nested directly under `caller`, the pane the request came from.
+fn nested_under_caller(chat: &AcpChat, caller: Option<&str>) -> bool {
+    matches!((chat.nested_under(), caller), (Some(parent), Some(caller)) if parent == caller)
 }
 
 /// The refusal for a chat another connection started. A caller that restarted proves it is the same one with the attach
@@ -714,7 +722,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     let started = match super::start::check_gate(labs_on, config.is_some(), crate::acp::lane::RunLane::Acp, true) {
         Err(gate) => Err(gate.into()),
         Ok(()) => match config {
-            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: requested_model.clone(), is_helper: session.is_some() || model_from_helper , ..Default::default() }),
+            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: requested_model.clone(), is_helper: session.is_some() || model_from_helper, parent_pane: caller_pane_of(session), helper_name: text_of(&value, "helper"), ..Default::default() }),
             None => Err(super::start::GateError::NoDefinition.into()),
         },
     };
@@ -817,6 +825,11 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         wait_status(&chat, &default_until(), wait_ms);
     }
     (Some(Ok(view(&chat))), None)
+}
+
+/// The pane of the agent asking, known before its helper starts (the registry's parent link is only written after the start).
+fn caller_pane_of(session: Option<&str>) -> Option<String> {
+    crate::pty::pane_parent::request_caller().or_else(|| session.and_then(crate::mcp_sessions::claimed_session_pane))
 }
 
 fn wait(body: &[u8]) -> Option<Reply> {

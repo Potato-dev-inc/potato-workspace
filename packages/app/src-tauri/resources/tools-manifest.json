@@ -1,0 +1,52 @@
+{
+  "toolsVersion": 1,
+  "node": "22.20.0",
+  "git": "2.56.0.4",
+  "cloudflared": "2026.10.7",
+  "counts": {
+    "node": 2302,
+    "git": 367
+  },
+  "files": [
+    {
+      "path": "node/node.exe",
+      "size": 85588976,
+      "sha256": "fdddbf4581e046b8102815d56208d6a248950bb554570b81519a8a5dacfee95d"
+    },
+    {
+      "path": "node/npm.cmd",
+      "size": 538,
+      "sha256": "21b46c69ad6e2f231f02a9e120f4ba6c8e75fef5a45637103002eab99f888ab8"
+    },
+    {
+      "path": "node/npx.cmd",
+      "size": 538,
+      "sha256": "4dd3574f4396fc3b45c52b6ac80fd52be2dd2660d2a153b4cc807dbbfeefa7a0"
+    },
+    {
+      "path": "git/cmd/git.exe",
+      "size": 44888,
+      "sha256": "20d0dde30a65afb6e5810a883700a94dcd77fbf3b44b32868d45bf7c9b30137c"
+    },
+    {
+      "path": "git/ucrt64/bin/git.exe",
+      "size": 4412760,
+      "sha256": "9c75f3f41eb5686bacde4b7c4fdfcd7970e8b699ee05c8d7a0cc9c8a7ddaffe8"
+    },
+    {
+      "path": "git/ucrt64/bin/git-remote-https.exe",
+      "size": 2614632,
+      "sha256": "ad461657eca12dfeb50f281d107ac3760ac355a20882e4a3b0d470cb6bab77c6"
+    },
+    {
+      "path": "git/ucrt64/bin/git-http-fetch.exe",
+      "size": 2597224,
+      "sha256": "5fdba139c48f348233f93ec5860dd0a3f7323e1cb83cb842cebe319f8816bfac"
+    },
+    {
+      "path": "bin/cloudflared.exe",
+      "size": 55390512,
+      "sha256": "2493dbc168923bb3e59e5e7716f71deced92992eea9acd6e9d74f84ac7751343"
+    }
+  ]
+}

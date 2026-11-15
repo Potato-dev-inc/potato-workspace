@@ -305,6 +305,10 @@ export const tauri = {
     ),
   listPairedMobileDevices: () =>
     safeInvoke<PairedDeviceInfo[]>('list_paired_mobile_devices', undefined, [], true),
+  /** What paired phones did here, newest first: a time, a device and a kind only (never text). */
+  phoneActivityList: () => safeInvoke<unknown[]>('phone_activity_list', undefined, [], true),
+  /** Empties that list (the hash-chained security record is not touched). */
+  phoneActivityClear: () => safeInvoke<boolean>('phone_activity_clear', undefined, false, true),
   revokePairedMobileDevice: (deviceId: string) =>
     safeInvoke<boolean>('revoke_paired_mobile_device', { deviceId }, false, true),
   /** The person's own name for a paired phone (shows under its messages too). Empty text goes back to the phone's own name. */
@@ -357,15 +361,19 @@ export const tauri = {
     safeInvoke<StandbyStatus | null>('standby_set_config', { config }, null, true),
   standbyHelpersGet: () => safeInvoke<StandbyHelpersView | null>('standby_helpers_get', undefined, null, true),
   standbyHelperAdd: (input: NewStandby) => safeInvoke<StandbyHelpersView | null>('standby_helper_add', { input }),
-  standbyHelperUpdate: (id: string, patch: { name?: string; model?: string | null; after_task?: AfterTask }) =>
+  standbyHelperUpdate: (id: string, patch: { name?: string; model?: string | null; after_task?: AfterTask; home?: string | null }) =>
     safeInvoke<StandbyHelpersView | null>('standby_helper_update', {
       id,
       name: patch.name ?? null,
       model: patch.model ?? null,
       changeModel: 'model' in patch,
       afterTask: patch.after_task ?? null,
+      home: patch.home ?? null,
+      changeHome: 'home' in patch,
     }),
   standbyHelperRemove: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_remove', { id }),
+  standbyHelperOpen: (id: string) => safeInvoke<string | null>('standby_helper_open', { id }, null),
+  standbyHelperTakeBack: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_take_back', { id }),
   standbyHelperStart: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_start', { id }, null, true),
   standbyHelpersSetLimits: (max: number, idleMinutes: number) =>
     safeInvoke<StandbyHelpersView | null>('standby_helpers_set_limits', { max, idleMinutes }),

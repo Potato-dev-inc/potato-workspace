@@ -40,6 +40,7 @@ fn act(cx: &Ctx, hub: &crate::push::hub::PushHub, now: u64) -> RouteResult {
     if !device_may_answer(&act.grant.device_id) {
         return Err((403, json!({"error": "not_allowed", "code": "DEVICE_NOT_ALLOWED", "needs": "answer"})));
     }
+    crate::phone_log::note_kind(&act.grant.device_id, crate::device_link::activity::Kind::Answered);
     // A yes/no question has no pane and no prompt on a screen: its token answers the card itself (the choice is the question's own choice id).
     let card = act.grant.item.as_ref().filter(|item| !item.fingerprint.is_empty() || item.yes_no.is_some());
     if let Some(item) = card {

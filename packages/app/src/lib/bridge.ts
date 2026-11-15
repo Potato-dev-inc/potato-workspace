@@ -118,6 +118,8 @@ export function makeBridgeClient(baseUrl: string, transport?: BridgeTransport): 
       return call('GET', `/digest${qs ? `?${qs}` : ''}`);
     },
     teamCards: () => call('GET', '/team/cards'),
+    phoneDone: (since) => call('GET', `/phone/done?since=${Math.max(0, Math.floor(since))}`),
+    phoneHelpers: () => call('GET', '/phone/helpers'),
     teamDismiss: (id) => call('POST', `/team/cards/${encodeURIComponent(id)}/dismiss`, {}),
     teamPull: (id) => call('POST', `/team/cards/${encodeURIComponent(id)}/pull`, {}),
     teamQueue: (id, paneId, when) => call('POST', `/team/cards/${encodeURIComponent(id)}/queue`, { paneId, when }),
@@ -304,6 +306,11 @@ export function makeBridgeClient(baseUrl: string, transport?: BridgeTransport): 
     companionWake: (id) => call('POST', `/companions/${encodeURIComponent(id)}/wake`, {}),
     companionSleep: (id) => call('POST', `/companions/${encodeURIComponent(id)}/sleep`, {}),
     plansReport: (month) => call('GET', `/plans${month ? `?month=${encodeURIComponent(month)}` : ''}`),
+    timelineDay: (date) => call('GET', `/timeline/${encodeURIComponent(date)}`),
+    timelinePointDiff: async (p) => (await call<{ changes: import('./timeline').PointFile[] }>('GET', `/timeline/point/diff?${pointQuery(p)}`)).changes ?? [],
+    timelineNowDiff: (p) => call('GET', `/timeline/point/now-diff?${pointQuery(p)}`),
+    timelinePatch: (p, path, side) => call('GET', `/timeline/point/patch?${pointQuery(p)}&path=${encodeURIComponent(path)}&side=${side}`),
+    timelineGoBack: (p) => call('POST', '/timeline/point/restore', { project: p.project, key: p.key, id: p.id }),
     patchSettings: (patch) => call('PATCH', '/settings', patch),
   };
 }
@@ -346,3 +353,8 @@ async function profileBridgeUrl(): Promise<string | null> {
 }
 
 export { DEFAULT_POLL_HOST, DEFAULT_POLL_INTERVAL_MS };
+
+/** The query of a Today point: the folder, the series and the save point. */
+function pointQuery(p: { project: string; key: string; id: string }): string {
+  return `project=${encodeURIComponent(p.project)}&key=${encodeURIComponent(p.key)}&id=${encodeURIComponent(p.id)}`;
+}

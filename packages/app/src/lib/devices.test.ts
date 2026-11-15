@@ -4,6 +4,7 @@ import { activityLine, cannotPickWhy, chipText, clockText, deviceNotices, device
 
 const view = (devices = [MAC_MINI, WORK_LAPTOP], enabled = true): DevicesView => ({
   enabled,
+  transfers: [],
   name: 'Desk-PC',
   route_pref: 'auto',
   own_route_ready: false,

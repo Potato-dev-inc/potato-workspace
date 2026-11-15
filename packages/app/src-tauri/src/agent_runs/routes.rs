@@ -59,6 +59,10 @@ pub fn handle_request_as(
     session_id: Option<&str>,
     remote_device: bool,
 ) -> Option<Result<Value, OperationError>> {
+    // `run_agent` with `account: "device:<name>"` is work for another device (`crate::agent_dispatch`).
+    if let Some(result) = crate::agent_dispatch::intercept(method, segments, body, remote_device) {
+        return Some(result);
+    }
     // Mission handles (`mission-<id>`) and `run_agent(until_checks_pass)`: `crate::missions`.
     if let Some(result) = crate::missions::routes::intercept(method, segments, body, registry, app, session_id) {
         return Some(result);

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.2
+
+This is a beta.
+
+- New: SSH build boxes. Add a device › Over SSH checks what is installed there, and you can open terminals on it (chats over SSH come later). Your WSL distros are offered as places to start agents too.
+- New: files between your PCs. A Files tab per device, Copy to this PC, Send a file there, and Get it for an agent's result file. Transfers resume after a dropped link, nothing is overwritten without your yes, and sign-in and key files are never shared.
+- New: move a chat to another PC: take the conversation, or the conversation and your changes (through git).
+- New: lend your sign-ins to your own other PCs without a team, and let agents send work to another PC (both off by default; no login ever travels).
+- Helpers: add a helper with + on an agent in the sidebar (agent and model are enough). Helpers sit under their agent, a waiting helper is used by the next matching task, and an agent can take over one you are using (your message goes back to the box). Drag an agent onto another to make it its helper.
+- New: a mark-up bar on artifacts (select, pen, shapes, text, colour, send to chat) and "Open in" beside the chat, its own window, or the agent browser. Point and Fix is now the bar's select tool.
+- Agent browser: any public website (your home network stays blocked), Check it, a sign-in pause where you sign in yourself, and a globe button to browse.
+- Team: pass a task to a teammate (optionally through your lent usage), a Shelf to suggest skills and tools with one click (secrets stripped), and invite links that open the app.
+- Setup steps are one button now: Update Worker and Set up stable link run by themselves, try 3 times, then hand the job to an agent.
+- Labs: a whole-day time machine (go back to any point today, also from the phone), a guide video tour, and smaller app-only updates (from 1.1.3).
+- Windows notifications get Allow / Deny and Yes / No buttons; a log of what your phones did; "Sending stopped · Try again" when a message gets stuck.
+- Share to Potato from any phone app; the phone Inbox shows Done today, and the drawer shows Ready helpers.
+- Search inside files, Material file icons, a Files section that folds, Word page breaks, footnotes and text boxes, the pet shows your companion's mood, and a switch for "Work on a copy".
+- Fixed: Keep all did nothing; Inbox rows did not open their chat; lend sign-ins showed as "Lend Claude 3" and falsely as "Sign-in expired"; Sign in again now opens a small sheet instead of a new agent; the helper's chosen model was ignored; standbys vanished and could not be closed; agents could see "unknown tool" because the installed app pointed at an old tools program.
+- The theme menu offers Light, dimmed; Phone control is a dropdown; the background tasks list opens.
+
 ## 1.1.1
 
 - New look for the chat's right panel: calm sections (Environment, Context, Connectors, Outputs, Changes, Background tasks, Files) with more colour, and "Done means" folded into Changes. The old result strip is gone.

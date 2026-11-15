@@ -209,6 +209,7 @@ fn run_build_lend(
         oauth_state: &state,
         lend,
         identity,
+        renew: &|_| false,
     };
     build(agents, &inputs)
 }

@@ -34,6 +34,10 @@ import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
 import { formatElapsed, spinnerStatus, stateText } from './model';
 import { acpStatusWords } from './acp-pane';
 import { ChatCopyBar } from './ChatCopyBar';
+import { CheckCard } from './CheckCard';
+import { useCheckIt } from './useCheckIt';
+import { fixRequest, openBrowserWindow } from '../../lib/browser-check';
+import { sendPaneMessage } from '../../lib/paneOutbox';
 import { useChatCopy } from '../../lib/chatCopy';
 import { ReceiptTab } from './ReceiptTab';
 import { TurnFiles } from './turnfiles/TurnFiles';
@@ -59,6 +63,7 @@ import { AcpConfigChips } from '../chat/AcpConfigChips';
 import { ForceYesChip } from '../chat/ForceYesChip';
 import { HandedToTerminal, handedBlock } from '../chat/HandedToTerminal';
 import { HandOverSheet } from '../chat/HandOverSheet';
+import { useChatMove } from '../chat/ChatMove';
 import { useAcpChatState } from '../../hooks/useAcpChatState';
 import { useAcpStop } from '../../hooks/useAcpStop';
 import { useHandOver } from '../../hooks/useHandOver';
@@ -184,6 +189,7 @@ export function PaneView({
   c,
   paneId,
   onWhatBroke,
+  onSeeDay,
   acp = tauriAcpChatApi,
   handoff,
   inWindow = false,
@@ -196,6 +202,8 @@ export function PaneView({
   acp?: AcpChatApi;
   /** Opens "What broke the tests?" for this pane (History tab). Absent: no button. */
   onWhatBroke?: (paneId: string) => void;
+  /** Opens the Today page from the History tab (Labs). Absent: no link. */
+  onSeeDay?: () => void;
   /** "Hand off": the cockpit's shared handoff starter (the one "Handoff from here" uses). Absent: no button. */
   handoff?: HandoffControl;
 }) {
@@ -278,6 +286,13 @@ export function PaneView({
   // that was handed to it: then it can hand it back.
   const acpState = useAcpChatState(paneId, isAcp, acp);
   const acpStop = useAcpStop(paneId, !!acpState?.turnInFlight, acp);
+  // "Move to…": this chat to another device (its lock, its note, its sheet).
+  const move = useChatMove(paneId, {
+    agentType,
+    agentLabel: agentLabel(listing, agentType),
+    running: isAcp ? !!acpState?.turnInFlight : pane?.info.status === 'running' || pane?.info.status === 'waiting_input',
+    isChat: isAcp,
+  });
   // A Chat (terminal) pane whose agent has a prompt parser answers its questions from the chat (AnswerableQuestionCard).
   const laneView = useAcpLanes(isTerminalChat, acp);
   const answersPrompts = isTerminalChat && terminalChatCapable(laneView).some((a) => a.id === agentType && a.can_answer_prompts);
@@ -291,6 +306,8 @@ export function PaneView({
   // "Work on a copy": the chat sits in a copy of its project; Keep the changes / Throw away the copy are its two ways out.
   const copyKind = isAcp ? (acpState?.copy?.kind ?? null) : null;
   const chatCopy = useChatCopy(paneId, copyKind !== null, pane?.status ?? '');
+  // "Check it": the agent browser looks at this pane's dev server page (Labs). Its card sits in the Chat tab.
+  const check = useCheckIt(paneId, mainPreview(c.previews, paneId)?.url ?? null, t('check.failed'));
   const [copyClose, setCopyClose] = useState(false);
 
   useEffect(() => {
@@ -474,7 +491,7 @@ export function PaneView({
   const askingPanes = new Set(c.asked.questions.map((q) => q.pane_id).filter((id): id is string => !!id));
   const startedHelpers = chatHelpers(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type, askingPanes);
   const chatDock =
-    dockNow || helperAsks.length > 0 || isAcp ? (
+    dockNow || helperAsks.length > 0 || isAcp || check.shown ? (
       <>
         {inTerminal && (
           <HandedToTerminal
@@ -485,6 +502,20 @@ export function PaneView({
           />
         )}
         {isAcp && <AcpChatDock c={c} paneId={paneId} paneName={name} api={acp} stopper={acpStop} />}
+        {check.shown && (
+          <CheckCard
+            report={check.report}
+            busy={check.busy}
+            error={check.error}
+            onAgain={check.run}
+            onClose={check.close}
+            onFix={(r) =>
+              void sendPaneMessage(paneId, fixRequest(r, t('check.fixLead')))
+                .then(() => c.notify(t('check.sent')))
+                .catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('check.failed')))
+            }
+          />
+        )}
         {copyKind !== null && <ChatCopyBar kind={copyKind} summary={chatCopy.summary} busy={chatCopy.busy} onKeep={() => void chatCopy.keep(c.notify)} onThrowAway={() => chatCopy.discard(c.notify)} />}
         <HelperQuestions c={c} ids={helperAsks} />
         {dockNow && <DockedCards c={c} paneId={paneId} dock={dock} dockNow={dockNow} onMore={cycleDock} />}
@@ -644,6 +675,11 @@ export function PaneView({
             <span>{t('pane.preview')}</span>
           </button>
         )}
+        {preview && check.available && fold < 2 && (
+          <button type="button" className="ck-preview-chip" data-testid="pane-check-it" disabled={check.busy} title={t('check.chipTip')} onClick={check.run}>
+            <span>{t('check.chip')}</span>
+          </button>
+        )}
         {preview && fold < 1 && (
           <button
             type="button"
@@ -678,6 +714,16 @@ export function PaneView({
             { id: 'history', label: t('pane.moreHistory') },
           ]}
         />
+        <button
+          type="button"
+          className="ck-icon-btn"
+          data-testid="open-browser"
+          aria-label={t('check.openBrowser')}
+          title={t('check.openBrowserTip')}
+          onClick={() => void openBrowserWindow().catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('check.openBrowserFailed')))}
+        >
+          <IconGlobe />
+        </button>
         {rail.fits && (
           <button
             type="button"
@@ -735,8 +781,9 @@ export function PaneView({
                 screenAsk={screenAsk}
                 headerSlot={chatSlot ? { el: chatSlot, compact: fold >= 3 } : undefined}
                 helpers={startedHelpers}
+                move={move}
                 reply={{
-                  blockedReason: inTerminal ? handedBlock() : composerBlock(pane, !chatAllowed, isAcp),
+                  blockedReason: move.blockedReason ?? (inTerminal ? handedBlock() : composerBlock(pane, !chatAllowed, isAcp)),
                   // A Chat (terminal) pane: while the agent works, the box shows Stop (the pane menu's Interrupt).
                   // A chat session over ACP: the same Stop the dock's quiet question uses; the words ride in the box footer.
                   running: isAcp ? !!acpState?.turnInFlight : isTerminalChat && pane.status === 'running',
@@ -815,6 +862,7 @@ export function PaneView({
               agentName={name}
               sharedWith={panesSharingFolder(c.registry.paneList, c.names, paneId)}
               onWhatBroke={onWhatBroke}
+              onSeeDay={onSeeDay}
             />
           )}
           {tab === 'receipt' && (
@@ -848,6 +896,7 @@ export function PaneView({
             helpers={helperRows(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
             copy={copyKind ? { kind: copyKind } : null}
             canCreatePr={!!worktree}
+            worktree={worktree}
             ask={pane.status === 'waiting_input' ? (acpState?.permissions[0]?.title ?? (asking ? dockHeadline : t('pane.question'))) : null}
             onAnswer={() => {
               setTab('chat');

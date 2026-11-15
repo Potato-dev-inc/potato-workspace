@@ -10,8 +10,9 @@ export interface Standby {
   /** What the chip says: the role, such as "Reviewer". */
   name: string;
   model?: string | null;
-  /** `ready`: waiting. `busy`: a task is using it (the chip then reads as a working helper). */
-  state: 'ready' | 'busy';
+  /** `ready`: waiting. `busy`: a task is using it (the chip then reads as a working helper). `starting`: it is (re)starting, for
+   * instance filling up again after a task took it. A standby that exists is always drawn. */
+  state: 'ready' | 'busy' | 'starting';
   /** The project folder it belongs to. */
   project?: string | null;
 }

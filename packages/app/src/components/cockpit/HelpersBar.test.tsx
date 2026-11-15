@@ -7,10 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { t } from '../../i18n';
 import { useChinese, useEnglish, visibleEnglish } from '../../i18n/test-utils';
-import type { Standby } from '../../lib/helper-standbys';
+import { setStandbys, type Standby } from '../../lib/helper-standbys';
+import { setHelpersInSidebar } from '../../lib/helpersInSidebar';
 import { cancelDrag } from '../dnd/dragStore';
 import { HelpersBar } from './HelpersBar';
-import { NEW_STANDBY_EVENT } from '../../lib/standbyHelpers';
+import { NEW_STANDBY_EVENT, useStandbyFeed, type StandbyHelperEntry, type StandbyHelpersApi, type StandbyHelpersView } from '../../lib/standbyHelpers';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -134,7 +135,7 @@ describe('helpers bar', () => {
     await show(api(LIST));
     await act(async () => void chip('h3').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 30 })));
     const items = [...host.querySelectorAll('[data-testid="helpers-menu"] [role="menuitem"]')];
-    expect(items.map((i) => i.textContent)).toEqual(['Open beside', 'Rename', 'Stop this helper', 'Make this a standby']);
+    expect(items.map((i) => i.textContent)).toEqual(['Open beside', 'Rename', 'Stop this helper', 'Keep on standby']);
     await act(async () => (items[0] as HTMLButtonElement).click());
     expect(onOpenBeside).toHaveBeenCalledWith('h3');
     expect(host.querySelector('[data-testid="helpers-menu"]')).toBeNull();
@@ -183,7 +184,7 @@ describe('standby chips', () => {
   ];
   it('outlined chips after a Standby label: Ready with a hollow ring, in use with the working dot', async () => {
     await show(api(LIST), 'a', ['a'], standbys);
-    expect(host.querySelector('.ck-hbar-grp')!.textContent).toBe('Standby');
+    expect(host.querySelector('.ck-hbar-grp')).toBeNull();
     const [ready, busy] = [...host.querySelectorAll('[data-testid="standby-chip"]')];
     expect(ready.className).toContain('is-standby');
     expect(ready.textContent).toBe('ReviewerReady');
@@ -193,7 +194,7 @@ describe('standby chips', () => {
     expect(busy.textContent).toBe('Quick fixer');
   });
 
-  it('with standbys only, the bar reads crumb, Standby, chips and has no helper arrow', async () => {
+  it('with standbys only, the bar reads crumb, chips and has no helper arrow', async () => {
     await show(api(LIST), 'b', ['b'], standbys);
     expect(host.querySelector('[data-testid="helpers-bar"]')).not.toBeNull();
     expect(host.querySelector('.ck-hbar-gt')).toBeNull();
@@ -240,7 +241,6 @@ describe('words', () => {
     expect(t('hbar.label')).toBe('\u5e6b\u624b');
     expect(chip('h2').textContent).toContain(t('pane.needsYou'));
     expect(chip('h4').textContent).toContain(t('hbar.stopped'));
-    expect(host.querySelector('.ck-hbar-grp')!.textContent).toBe(t('hbar.standby'));
     expect(host.querySelector('[data-testid="standby-chip"]')!.textContent).toContain(t('hbar.ready'));
     expect(host.querySelector('[data-testid="helpers-crumb"]')!.getAttribute('title')).toBe(t('hbar.back'));
     // Titles and agent names are data; every other word on the bar is translated.
@@ -249,14 +249,16 @@ describe('words', () => {
 });
 
 describe('helpers bar: making standbys', () => {
-  it('"+ Standby" asks the cockpit for the new-standby form, starting with the folder of this agent', async () => {
+  beforeEach(() => setHelpersInSidebar(false));
+  afterEach(() => setHelpersInSidebar(true));
+  it('the "+" asks the cockpit for the Add a helper popover, with the folder and the agent it goes under', async () => {
     const seen: unknown[] = [];
     const on = (e: Event) => seen.push((e as CustomEvent).detail);
     window.addEventListener(NEW_STANDBY_EVENT, on);
     await show(api(LIST));
     await act(async () => host.querySelector<HTMLElement>('[data-testid="standby-add"]')!.click());
     window.removeEventListener(NEW_STANDBY_EVENT, on);
-    expect(seen).toEqual([{ project: LIST[0].info.cwd }]);
+    expect(seen).toEqual([{ project: LIST[0].info.cwd, home: 'a', anchor: expect.any(Object) }]);
   });
 
   it('only the standbys for the project in front are drawn', async () => {
@@ -266,15 +268,100 @@ describe('helpers bar: making standbys', () => {
     expect([...host.querySelectorAll('[data-testid="standby-chip"]')].map((e) => e.textContent)).toEqual([expect.stringContaining('Reviewer')]);
   });
 
-  it('a finished helper offers "Make this a standby" in its menu', async () => {
+  it('a finished helper offers "Keep on standby" in its menu', async () => {
     await show(api(LIST));
     await act(async () => {
       chip('h3').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 5, clientY: 5 }));
     });
-    expect([...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent)).toContain('Make this a standby');
+    expect([...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent)).toContain('Keep on standby');
     await act(async () => {
       chip('h1').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 5, clientY: 5 }));
     });
-    expect([...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent)).not.toContain('Make this a standby');
+    expect([...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent)).not.toContain('Keep on standby');
+  });
+});
+
+describe('a standby through a task (the feed and the bar together)', () => {
+  beforeEach(() => setHelpersInSidebar(false));
+  afterEach(() => setHelpersInSidebar(true));
+  const entry = (state: StandbyHelperEntry['state']): StandbyHelperEntry => ({ id: 's1', name: 'Reviewer', agent: 'codex', model: 'gpt-5', project: 'C:/work/shop', after_task: 'wait', state, note: null, pane_id: state === 'busy' ? 'chat-1' : null, home: null, used_by: state === 'busy' ? 'agent' : null, taken_over: false, open_pane: null, person_pane: null });
+
+  it('run_agent takes it: Working, then Starting…, then Ready. The chip is never absent', async () => {
+    vi.useFakeTimers();
+    try {
+      let current: StandbyHelpersView = { helpers: [entry('ready')], max: 4, idle_minutes: 30 };
+      const get = vi.fn(async () => current);
+      const standbyApi = { get } as unknown as StandbyHelpersApi;
+      function Screen() {
+        useStandbyFeed(standbyApi);
+        return <HelpersBar c={api(LIST)} focusedId="a" shown={['a']} onOpen={onOpen} onOpenBeside={onOpenBeside} />;
+      }
+      const chips = () => [...host.querySelectorAll<HTMLElement>('[data-testid="standby-chip"]')];
+      const next = async (state: StandbyHelperEntry['state']) => {
+        current = { ...current, helpers: [entry(state)] };
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(3000);
+        });
+      };
+      await act(async () => root.render(<Screen />));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      expect(chips().map((c) => c.dataset.state)).toEqual(['ready']);
+      await next('busy');
+      expect(chips().map((c) => c.dataset.state)).toEqual(['working']);
+      await next('starting');
+      expect(chips().map((c) => c.dataset.state)).toEqual(['starting']);
+      expect(chips()[0].textContent).toBe('ReviewerStarting…');
+      await next('ready');
+      expect(chips().map((c) => c.dataset.state)).toEqual(['ready']);
+    } finally {
+      vi.useRealTimers();
+      act(() => setStandbys([]));
+    }
+  });
+});
+
+describe('removing a standby from the bar', () => {
+  beforeEach(() => setHelpersInSidebar(false));
+  afterEach(() => setHelpersInSidebar(true));
+  const one: Standby[] = [{ id: 's1', agent: 'opencode', name: 'Reviewer', model: 'gpt-5', state: 'ready', project: 'C:/work/shop' }];
+  const mkApi = () => ({ remove: vi.fn(async () => null), add: vi.fn(async () => null) }) as unknown as StandbyHelpersApi & { remove: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
+  const mount = async (standbyApi: StandbyHelpersApi) => {
+    act(() => setStandbys(one));
+    await act(async () => root.render(<HelpersBar c={api(LIST)} focusedId="a" shown={['a']} onOpen={onOpen} standbyApi={standbyApi} />));
+  };
+  afterEach(() => act(() => setStandbys([])));
+
+  it('the X on a chip removes it, closes its session, and Undo makes it again', async () => {
+    const a = mkApi();
+    await mount(a);
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="standby-remove"]')!.click());
+    expect(a.remove).toHaveBeenCalledWith('s1');
+    expect(host.querySelector('[data-testid="standby-chip"]')).toBeNull();
+    expect(host.querySelector('[data-testid="standby-undo"]')!.textContent).toContain('Reviewer removed.');
+    await act(async () => [...host.querySelectorAll('[data-testid="standby-undo"] button')][0].dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(a.add).toHaveBeenCalledWith(expect.objectContaining({ name: 'Reviewer', agent: 'opencode', model: 'gpt-5', project: 'C:/work/shop' }));
+    expect(host.querySelector('[data-testid="standby-undo"]')).toBeNull();
+  });
+
+  it('right-click shows "Remove standby"', async () => {
+    const a = mkApi();
+    await mount(a);
+    await act(async () => host.querySelector('[data-testid="standby-chip"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })));
+    const item = host.querySelector<HTMLButtonElement>('[data-testid="helpers-menu"] [role="menuitem"]')!;
+    expect(item.textContent).toBe('Remove standby');
+    await act(async () => item.click());
+    expect(a.remove).toHaveBeenCalledWith('s1');
+  });
+});
+
+describe('with the sidebar list on (the default)', () => {
+  it('the sidebar shows the standbys: the live feed draws no chips here and there is no + button', async () => {
+    act(() => setStandbys([{ id: 's1', agent: 'codex', name: 'Reviewer', state: 'ready', project: 'C:/work/shop' }]));
+    await act(async () => root.render(<HelpersBar c={api(LIST)} focusedId="a" shown={['a']} onOpen={onOpen} />));
+    expect(host.querySelector('[data-testid="standby-chip"]')).toBeNull();
+    expect(host.querySelector('[data-testid="standby-add"]')).toBeNull();
+    act(() => setStandbys([]));
   });
 });

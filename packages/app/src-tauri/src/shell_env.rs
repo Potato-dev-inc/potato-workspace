@@ -318,15 +318,11 @@ fn registry_or_fallback_path() -> String {
     build_fallback_path()
 }
 
-/// The tools the installer puts next to the app: Node.js with npm (`resources/node`) and MinGit
-/// (`resources/git/cmd`). Only the folders that exist, in that order.
+/// The tools the installer puts next to the app, or the staged copy after an app-only update: Node.js with npm (`node`)
+/// and MinGit (`git/cmd`). Only the folders that exist, in that order. The one tools resolver decides where they are.
 pub(crate) fn bundled_tool_dirs(exe_dir: &std::path::Path) -> Vec<PathBuf> {
-    let resources = bundled_resources_root(exe_dir);
-    [["node"].as_slice(), ["git", "cmd"].as_slice()]
-        .iter()
-        .map(|parts| parts.iter().fold(resources.clone(), |dir, part| dir.join(part)))
-        .filter(|dir| dir.is_dir())
-        .collect()
+    let Some(home) = crate::tools_home::resolve_for_exe_dir(exe_dir) else { return Vec::new() };
+    [home.node_dir(), home.git_cmd_dir()].into_iter().filter(|dir| dir.is_dir()).collect()
 }
 
 /// Where the bundle resources live. Beside the executable on Windows, but inside
@@ -534,11 +530,33 @@ mod tests {
         assert!(path.contains("/usr/local/bin"));
     }
 
+    /// The install folder says which tools version it holds (the tools resolver wants that), with no files to check.
+    fn declare_tools(exe_dir: &std::path::Path) {
+        std::fs::write(exe_dir.join("resources").join("tools-manifest.json"), r#"{"toolsVersion":1}"#).unwrap();
+    }
+
+    /// Makes this thread need tools version 1 (and keep no staged folder) until dropped.
+    struct TestTools;
+    impl TestTools {
+        fn new() -> Self {
+            let manifest = crate::tools_home::ToolsManifest { tools_version: 1, node: String::new(), git: String::new(), cloudflared: String::new(), counts: Default::default(), files: Vec::new() };
+            crate::tools_home::set_test_home(Some((manifest, None)));
+            TestTools
+        }
+    }
+    impl Drop for TestTools {
+        fn drop(&mut self) {
+            crate::tools_home::set_test_home(None);
+        }
+    }
+
     #[test]
     fn bundled_tools_are_appended_last_and_only_when_present() {
         let exe_dir = std::env::temp_dir().join(format!("pm-bundled-tools-{}", uuid::Uuid::new_v4()));
         let node_dir = exe_dir.join("resources").join("node");
         std::fs::create_dir_all(&node_dir).unwrap();
+        declare_tools(&exe_dir);
+        let _guard = TestTools::new();
         let sep = if cfg!(windows) { ";" } else { ":" };
         let user = "/opt/user-tools";
         let node = node_dir.to_string_lossy().into_owned();
@@ -578,6 +596,8 @@ mod tests {
         let exe_dir = std::env::temp_dir().join(format!("pm-compose-{}", uuid::Uuid::new_v4()));
         let node = exe_dir.join("resources").join("node");
         std::fs::create_dir_all(&node).unwrap();
+        declare_tools(&exe_dir);
+        let _guard = TestTools::new();
         let node_s = node.to_string_lossy().into_owned();
         let out = compose_spawn_path(&format!(r"{};C:\A", node_s.to_uppercase()), &[r"C:\New;C:\A"], Some(&exe_dir));
         assert_eq!(out, format!(r"C:\A;C:\New;{node_s}"));

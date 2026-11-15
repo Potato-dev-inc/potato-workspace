@@ -11,6 +11,11 @@ use crate::push::triggers::{Kind, PromptInfo};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+/// One short pause for the background worker to pick a change up (the tests below have no event to wait for).
+fn settle() {
+    std::thread::sleep(Duration::from_millis(40));
+}
+
 /// Paired and on (the `FakeHost` default), with a token in the store.
 fn on() -> Rig {
     rig(FakeHost::new()).with_token()
@@ -46,7 +51,7 @@ fn polls(r: &Rig) -> usize {
 /// No new poll for a moment: the old poller is really gone.
 fn polls_settled(r: &Rig) -> bool {
     let before = polls(r);
-    std::thread::sleep(Duration::from_millis(40));
+    settle();
     polls(r) == before
 }
 
@@ -218,7 +223,7 @@ fn a_companion_reply_comes_only_inside_a_conversation_the_chat_started() {
     r.rt.apply();
     wait_for("listening", || r.rt.listening());
     r.rt.companion_reply("mochi", "Mochi", "The build is green.");
-    std::thread::sleep(Duration::from_millis(40));
+    settle();
     assert!(r.bot.texts().is_empty(), "no window, no message (D-8)");
     r.rt.engine.refs().lock().open_window(&Target::Companion("mochi".into()), T0);
     r.rt.companion_reply("mochi", "Mochi", "The build is green.");
@@ -268,7 +273,7 @@ fn a_summary_that_shows_up_after_the_tick_that_could_have_seen_the_turn_is_still
     // The turn ended at T0+1 s, but its summary is only published at T0+10 s (settle step).
     r.host.set_now(T0 + 5_000);
     r.rt.tick();
-    std::thread::sleep(Duration::from_millis(40));
+    settle();
     assert!(r.bot.texts().is_empty(), "no summary yet");
     r.host.set_now(T0 + 7_000);
     r.rt.tick();
@@ -282,7 +287,7 @@ fn a_summary_that_shows_up_after_the_tick_that_could_have_seen_the_turn_is_still
     r.rt.tick();
     r.host.set_now(T0 + 20_000);
     r.rt.tick();
-    std::thread::sleep(Duration::from_millis(40));
+    settle();
     assert_eq!(r.bot.texts().len(), 1, "{:?}", r.bot.texts());
     r.rt.stop();
 }
@@ -297,7 +302,7 @@ fn a_turn_older_than_the_lookback_is_never_reported() {
     r.turns.lock().push(turn("p1", T0 + 1_000, "Ran the tests, 42 passed."));
     r.host.set_now(T0 + 300_000);
     r.rt.tick();
-    std::thread::sleep(Duration::from_millis(40));
+    settle();
     assert!(r.bot.texts().is_empty());
     r.rt.stop();
 }
@@ -311,7 +316,7 @@ fn a_turn_in_a_pane_the_chat_never_texted_is_not_reported() {
     r.turns.lock().push(turn("p1", T0 + 2_000, "Ran the tests, 42 passed."));
     r.host.set_now(T0 + 5_000);
     r.rt.tick();
-    std::thread::sleep(Duration::from_millis(40));
+    settle();
     assert!(r.bot.texts().is_empty());
     r.rt.stop();
 }
@@ -332,7 +337,7 @@ fn turns_that_ended_while_the_chat_was_off_are_not_reported_after_it_is_turned_o
     r.rt.engine.refs().lock().open_window(&Target::Pane("p1".into()), T0 + 10_000);
     r.host.set_now(T0 + 15_000);
     r.rt.tick();
-    std::thread::sleep(Duration::from_millis(40));
+    settle();
     assert!(r.bot.texts().is_empty());
     r.rt.stop();
 }

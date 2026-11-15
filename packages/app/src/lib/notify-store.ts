@@ -10,6 +10,7 @@ import { defaultBellLevel, parseBellLevel, QUIET_OFF, SNOOZE_MS, type BellLevel,
 
 export const BELL_KEY = 'pm.notify.bells';
 export const QUIET_KEY = 'pm.notify.quiet';
+export const PC_KEY = 'pm.notify.pc';
 
 const onPc = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -20,6 +21,8 @@ interface Copy {
   quiet: QuietHours;
   /** Snooze key -> end time (ms). */
   snoozes: Record<string, number>;
+  /** "Notifications on this PC": a Windows toast when something needs you and the app is not in front. */
+  pcToasts: boolean;
 }
 
 let pc: Copy | null = null; // set once the PC answered
@@ -59,7 +62,7 @@ const inDay = (n: unknown, fallback: number): number => (typeof n === 'number' &
 
 /** What the PC sent, made safe: unknown levels dropped, minutes inside the day. */
 function fromPc(raw: unknown): Copy {
-  const r = (raw && typeof raw === 'object' ? raw : {}) as { bells?: Record<string, unknown>; quiet?: Partial<QuietHours>; snoozes?: Record<string, unknown> };
+  const r = (raw && typeof raw === 'object' ? raw : {}) as { bells?: Record<string, unknown>; quiet?: Partial<QuietHours>; snoozes?: Record<string, unknown>; desktop_toasts?: unknown };
   const bells: Record<string, BellLevel> = {};
   for (const [k, v] of Object.entries(r.bells ?? {})) {
     const level = parseBellLevel(v);
@@ -68,7 +71,7 @@ function fromPc(raw: unknown): Copy {
   const snoozes: Record<string, number> = {};
   for (const [k, v] of Object.entries(r.snoozes ?? {})) if (typeof v === 'number') snoozes[k] = v;
   const q = r.quiet ?? {};
-  return { bells, quiet: { enabled: q.enabled === true, start: inDay(q.start, QUIET_OFF.start), end: inDay(q.end, QUIET_OFF.end) }, snoozes };
+  return { bells, quiet: { enabled: q.enabled === true, start: inDay(q.start, QUIET_OFF.start), end: inDay(q.end, QUIET_OFF.end) }, snoozes, pcToasts: r.desktop_toasts !== false };
 }
 
 export function readBells(): Record<string, BellLevel> {
@@ -77,6 +80,19 @@ export function readBells(): Record<string, BellLevel> {
 
 export function readQuiet(): QuietHours {
   return pc ? pc.quiet : readLocalQuiet();
+}
+
+function readLocalPc(): boolean {
+  try {
+    return localStorage.getItem(PC_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+/** "Notifications on this PC" (on unless the person turned it off). */
+export function readPcToasts(): boolean {
+  return pc ? pc.pcToasts : readLocalPc();
 }
 
 /** The level for one agent: its saved choice, else the default for a helper or a plain agent. */
@@ -137,7 +153,7 @@ function save(command: string, args: Record<string, unknown>): void {
 export function writeBell(agent: string, level: BellLevel): void {
   if (!agent) return;
   if (onPc()) {
-    pc = { bells: { ...readBells(), [agent]: level }, quiet: readQuiet(), snoozes: pc?.snoozes ?? {} };
+    pc = { bells: { ...readBells(), [agent]: level }, quiet: readQuiet(), snoozes: pc?.snoozes ?? {}, pcToasts: readPcToasts() };
     changed();
     save('notify_bell_set', { key: agent, level });
     return;
@@ -150,9 +166,25 @@ export function writeBell(agent: string, level: BellLevel): void {
   changed();
 }
 
+/** Turn the Windows toasts on this PC on or off. Saved on the PC, where the alerts are sent from. */
+export function writePcToasts(enabled: boolean): void {
+  if (onPc()) {
+    pc = { bells: readBells(), quiet: readQuiet(), snoozes: pc?.snoozes ?? {}, pcToasts: enabled };
+    changed();
+    save('notify_pc_set', { enabled });
+    return;
+  }
+  try {
+    localStorage.setItem(PC_KEY, enabled ? 'on' : 'off');
+  } catch {
+    // Not remembered; the default (on) applies next time.
+  }
+  changed();
+}
+
 export function writeQuiet(quiet: QuietHours): void {
   if (onPc()) {
-    pc = { bells: readBells(), quiet, snoozes: pc?.snoozes ?? {} };
+    pc = { bells: readBells(), quiet, snoozes: pc?.snoozes ?? {}, pcToasts: readPcToasts() };
     changed();
     save('notify_quiet_set', { quiet });
     return;
@@ -171,7 +203,7 @@ export function snooze(keys: string[], now: number = Date.now()): void {
   const mine = { ...(pc?.snoozes ?? {}) };
   for (const k of keys) mine[k] = until;
   if (onPc()) {
-    pc = { bells: readBells(), quiet: readQuiet(), snoozes: mine };
+    pc = { bells: readBells(), quiet: readQuiet(), snoozes: mine, pcToasts: readPcToasts() };
     changed();
     save('notify_snooze', { keys });
   }
@@ -209,6 +241,12 @@ export function useBellLevel(agent: string, isHelper: boolean): [BellLevel, (lev
 export function useQuietHours(): [QuietHours, (next: QuietHours) => void] {
   useCopyVersion();
   return [readQuiet(), writeQuiet];
+}
+
+/** "Notifications on this PC", with a setter that remembers it. */
+export function usePcNotifications(): [boolean, (enabled: boolean) => void] {
+  useCopyVersion();
+  return [readPcToasts(), writePcToasts];
 }
 
 /** Is a card snoozed right now, and a way to snooze it. */

@@ -236,10 +236,10 @@ describe('Team page: Tasks, Shelf, Feed, Setup', () => {
     expect(host.querySelector('[data-testid="tasks-empty"]')!.textContent).toContain('Nothing passed around yet');
   });
 
-  it('Shelf is an honest empty state', async () => {
+  it('Shelf says one quiet line when the backend cannot answer (older build, no desktop shell)', async () => {
     await show(teamFake(), lendFake(null).api);
     await open('shelf');
-    expect(host.querySelector('[data-testid="shelf-empty"]')!.textContent).toContain('coming soon');
+    expect(host.querySelector('[data-testid="shelf-unavailable"]')!.textContent).toContain('not available');
   });
 
   it('Feed shows the cards, day separators and filters', async () => {

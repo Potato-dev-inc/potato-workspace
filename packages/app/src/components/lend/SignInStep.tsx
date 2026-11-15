@@ -32,8 +32,10 @@ export interface SignInStepProps {
   onAccount: (id: string) => void;
   /** Lend sign-ins of this agent that already exist. */
   accounts: Account[];
-  /** The name a new lend sign-in gets. */
+  /** The name a new lend sign-in gets: the lend profile's name. */
   newLabel: string;
+  /** Per lend sign-in id: the name of the lend profile that uses it (absent: no profile uses it yet). */
+  profileNames?: Record<string, string>;
   keyValue: string;
   onKeyValue: (v: string) => void;
   hasKey: boolean;
@@ -56,6 +58,8 @@ export function SignInStep(p: SignInStepProps) {
   const startedAt = useRef(0);
   // A sign-in is being started right now: an older "where does it stand" answer must not undo it.
   const starting = useRef(false);
+  // Who is signed in under each existing lend sign-in, to tell them apart in the list (read on this PC, never sent).
+  const [who, setWho] = useState<Record<string, string>>({});
   const live = useRef({ phase, accountId });
   live.current = { phase, accountId };
   const onSignedIn = useRef(p.onSignedIn);
@@ -211,6 +215,28 @@ export function SignInStep(p: SignInStepProps) {
     await begin(true);
   };
 
+  const listed = how === 'existing' ? p.accounts.map((a) => a.id).join('|') : '';
+  useEffect(() => {
+    if (!listed) return;
+    let alive = true;
+    for (const id of listed.split('|')) {
+      api
+        .signInStatus(id)
+        .then((s) => alive && s.identity && setWho((w) => (w[id] === s.identity ? w : { ...w, [id]: s.identity as string })))
+        .catch(() => {});
+    }
+    return () => {
+      alive = false;
+    };
+  }, [api, listed]);
+
+  const optionText = (a: Account) => {
+    const name = p.profileNames?.[a.id];
+    const account = who[a.id];
+    const head = name ?? t('lend.signin.unattached');
+    return account ? `${head} · ${account}` : head;
+  };
+
   const choose = (h: SignInHow) => {
     if (h === how) return;
     if (phase === 'running') void cancel();
@@ -258,7 +284,7 @@ export function SignInStep(p: SignInStepProps) {
             </option>
             {p.accounts.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.label}
+                {optionText(a)}
               </option>
             ))}
           </select>

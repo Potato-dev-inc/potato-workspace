@@ -33,6 +33,11 @@ export function StepSignIn({
   const agentId = draft.profile.agent_ids[0] ?? '';
   const name = agentLabel(state, agentId);
   const noSignIn = signInProblem(state.drivers, [agentId]);
+  // Each lend sign-in is told apart by the profile that uses it (never by its internal label).
+  const profileNames: Record<string, string> = {};
+  for (const p of state.profiles) if (p.account.kind === 'account') profileNames[p.account.id] = p.name;
+  if (draft.accountId && draft.profile.name.trim()) profileNames[draft.accountId] = draft.profile.name.trim();
+  for (const a of accounts) if (!profileNames[a.id] && a.lend_profile) profileNames[a.id] = a.lend_profile;
   return (
     <div className="lend-step" data-step="signin">
       <SignInStep
@@ -45,7 +50,8 @@ export function StepSignIn({
         accountId={draft.accountId}
         onAccount={onAccount}
         accounts={accounts.filter((a) => a.agent_id === agentId)}
-        newLabel={t('lend.signInLabel', { agent: name })}
+        newLabel={draft.profile.name.trim() || t('lend.signInLabel')}
+        profileNames={profileNames}
         keyValue={draft.key}
         onKeyValue={onKey}
         hasKey={draft.hadKey}

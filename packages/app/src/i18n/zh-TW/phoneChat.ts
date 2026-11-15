@@ -74,4 +74,6 @@ export const phoneChat: Partial<Record<EnglishKey, string>> = {
   'phone.msg.retried': '已再送出為新的訊息。',
   'phone.msg.retryFailed': '沒有送出，請再試一次。',
   'phone.msg.close': '關閉',
+  'phone.share.title': '用這個開新對話',
+  'phone.share.hint': '選一個 AI 助理和專案。你按下送出之前，什麼都不會傳出去。',
 };

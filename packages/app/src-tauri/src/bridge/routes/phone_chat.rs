@@ -61,7 +61,7 @@ pub(crate) fn project_id(path: &str) -> String {
 }
 
 /// The projects the PC knows and that still exist, as `(path, name, state)`.
-fn known_projects(cx: &Ctx) -> Vec<(String, String, String)> {
+pub(super) fn known_projects(cx: &Ctx) -> Vec<(String, String, String)> {
     let mut others = crate::operations::indexed_project_paths();
     others.push(crate::standby::default_project(cx.registry));
     let store = crate::app_paths::app_data_dir();

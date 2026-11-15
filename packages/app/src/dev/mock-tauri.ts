@@ -1,7 +1,9 @@
+import { guideMock } from './guide-fixtures';
 // Mocks the Tauri IPC layer so the real UI runs in a plain browser.
 import { standbyHelpersView } from './standby-helpers-fixtures';
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import type { HarnessScenario } from './types';
+import { FIXTURE_TURN_FILES, SAMPLE_PATCH, sampleDay, sampleNowDiff } from './timeline-fixtures';
 import type { DeskAway, DeskLength } from '../lib/desk-away-types';
 import { EXAMPLE_FILE_PATCH, EXAMPLE_TURN_REVIEW } from './desk-review-fixtures';
 import {
@@ -33,6 +35,7 @@ import {
 } from './fixtures';
 import { TEAM_DIFF, teamConfig } from './team-fixtures';
 import { borrowedOf, createLendMock } from './lend-fixtures';
+import { previewFor } from './shelf-fixtures';
 import { createDevicesMock } from './devices-fixtures';
 import { shipMock } from './ship-fixtures';
 import { sidebarBranch, sidebarWorktree } from './fixtures-sidebar';
@@ -48,6 +51,7 @@ import { routinesMock } from './routines-fixtures';
 import { packageCheckMock } from './package-check-fixtures';
 import { reviewDeskMock } from './review-desk-fixtures';
 import { wslMock } from './wsl-fixtures';
+import { sshMock } from './ssh-fixtures';
 import { closedChatsMock } from './closed-chats-fixtures';
 import { bringChatsMock, newBringChatsState } from './bring-chats-fixtures';
 import type { ClosedChat } from '../lib/closedChats';
@@ -104,7 +108,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
   // In-memory plugin-store (one store, rid 1), keyed as the app writes it.
   // The two agent-authority switches, at the shipped defaults unless the scenario says otherwise.
   let authority = scenario.authority ?? { ask_before_agent_control: true, agents_may_merge: false };
-  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}), ...(scenario.devices && scenario.devices.enabled !== false ? { devices_enabled: true } : {}), show_terminals: !scenario.chatFirst }]]);
+  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}), ...(scenario.markup ? { markup_bar_enabled: true } : {}), ...(scenario.timeline ? { timeline_day_enabled: true } : {}), ...(scenario.devices && scenario.devices.enabled !== false ? { devices_enabled: true } : {}), show_terminals: !scenario.chatFirst }]]);
   // Settings > Phone > Devices: one phone with full control in daily use, one watch-and-answer.
   const now = Math.floor(Date.now() / 1000);
   const day = 24 * 60 * 60;
@@ -153,6 +157,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (packageCheck.handled) return packageCheck.value;
       const reviewDesk = reviewDeskMock(scenario.reviewDesk, cmd, a);
       if (reviewDesk.handled) return reviewDesk.value;
+      const guide = guideMock(scenario.guide, cmd);
+      if (guide.handled) return guide.value;
       const lend = lendMock(cmd, a);
       if (lend.handled) return lend.value;
       const devices = devicesMock(cmd, a);
@@ -163,6 +169,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (bringChats.handled) return bringChats.value;
       const wsl = wslMock(scenario.wsl, cmd, a);
       if (wsl.handled) return wsl.value;
+      const ssh = sshMock(scenario.ssh, cmd, a);
+      if (ssh.handled) return ssh.value;
       const whatBroke = whatBrokeItMock(scenario.whatBroke, cmd, a);
       if (whatBroke.handled) return whatBroke.value;
       const wbResult = whatBrokeItResultMock(scenario.whatBrokeItResult, cmd, a); if (wbResult.handled) return wbResult.value;
@@ -221,6 +229,23 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return a.paneId === PANE_CLAUDE ? EXAMPLE_CHECKPOINTS : { state: 'ok', message: '', items: [] };
         case 'checkpoint_diff':
           return EXAMPLE_FILE_CHANGES;
+        case 'timeline_day': {
+          const day = sampleDay();
+          const asked = String(a.date ?? day.date);
+          const empty = typeof scenario.timeline === 'object' && scenario.timeline.empty;
+          return { ...day, lanes: empty ? [] : day.lanes, date: asked, today: asked, dates: [asked] };
+        }
+        case 'timeline_point_diff':
+          return FIXTURE_TURN_FILES;
+        case 'timeline_now_diff': {
+          const refused = typeof scenario.timeline === 'object' ? scenario.timeline.refused : undefined;
+          if (refused) throw refused;
+          return sampleNowDiff();
+        }
+        case 'timeline_file_patch':
+          return [SAMPLE_PATCH, false];
+        case 'timeline_go_back':
+          return { safetyId: '9', written: 4, removed: 1, failed: [] };
         case 'checkpoint_restore':
         case 'checkpoint_undo_last':
           return { safetyId: '7', written: 4, removed: 1, failed: [] };
@@ -348,6 +373,12 @@ export function installTauriMock(scenario: HarnessScenario): void {
               .map((p) => ({ pane_id: p.id, agent_type: p.agent_type, cwd: p.cwd })),
             failed: [],
           };
+        case 'agent_signin_start':
+          return { pane_id: 'hidden-signin-1' };
+        case 'agent_signin_status':
+          return { alive: true, asking: false, pane_id: 'hidden-signin-1' };
+        case 'agent_signin_stop':
+          return null;
         case 'usage_snapshot':
           return scenario.usage ?? { rows: [], refreshed_at_ms: Date.now() };
         case 'canary_status':
@@ -606,6 +637,11 @@ export function installTauriMock(scenario: HarnessScenario): void {
         }
         case 'list_paired_mobile_devices':
           return pairedDevices;
+        case 'phone_activity_list':
+          return scenario.phoneActivity ?? [];
+        case 'phone_activity_clear':
+          scenario.phoneActivity = [];
+          return true;
         case 'set_paired_mobile_device_caps': {
           const device = pairedDevices.find((d) => d.id === a.deviceId);
           if (device) device.caps = (a.caps as string[]) ?? [];
@@ -673,10 +709,38 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { candidates: TOOLBELT_IMPORT };
         case 'toolbelt_import_apply':
           return { added: [] };
+        case 'shelf_state':
+          if (!scenario.shelf) throw new Error('unknown command');
+          return scenario.shelf;
+        case 'shelf_preview':
+          return previewFor(String(a?.cardId), (a?.agents as string[]) ?? [], scenario.shelf);
+        case 'shelf_add': {
+          const p = previewFor(String(a?.cardId), (a?.agents as string[]) ?? [], scenario.shelf);
+          return { id: p.id, name: p.name, kind: p.kind, addedTo: p.writes.flatMap((w) => w.agents.map((x) => x.label)), agentIds: a?.agents, writes: p.writes, undo: 'undo-1' };
+        }
+        case 'shelf_suggest':
+          return { sent: true, id: String(a?.itemId) };
+        case 'shelf_undo':
+          return { restored: 1, skipped: [] };
+        case 'shelf_dismiss':
+          return true;
         case 'team_default_name':
           return 'Maya';
         case 'team_state':
           return scenario.team ?? null;
+        case 'team_tasks_state':
+          return scenario.tasks ?? { sent: [], received: [], handoverOn: false, lendOn: false, repoCapBytes: 2 * 1024 * 1024 };
+        case 'team_task_repo_check':
+          return { ok: true, name: 'potato-workspace', branch: 'main', reason: '' };
+        case 'team_task_pass':
+        case 'team_task_withdraw':
+        case 'team_task_seen':
+        case 'team_task_accept':
+        case 'team_task_decline':
+        case 'team_task_started':
+        case 'team_task_done':
+        case 'team_tasks_handover_set':
+          return null;
         case 'team_config_get':
         case 'team_config_set':
         case 'team_create':

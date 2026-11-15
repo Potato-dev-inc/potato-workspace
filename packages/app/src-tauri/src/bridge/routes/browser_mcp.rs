@@ -55,7 +55,7 @@ fn status_of(code: &str) -> (u16, bool) {
         "NO_PAGE" => (404, true),
         "SITE_NOT_ALLOWED" | "PORT_NOT_ALLOWED" | "SENSITIVE_FIELD" => (403, false),
         "STALE_REF" | "PAGE_NOT_REACHED" | "NOT_VISIBLE" => (409, true),
-        "PAUSED_BY_PERSON" | "STOPPED_BY_PERSON" => (409, false),
+        "PAUSED_BY_PERSON" | "STOPPED_BY_PERSON" | "SIGN_IN_WAITING" => (409, false),
         "PAGE_TIMEOUT" => (504, true),
         _ => (500, false),
     }
@@ -255,6 +255,7 @@ mod tests {
             ("SITE_NOT_ALLOWED", 403, false),
             ("PAUSED_BY_PERSON", 409, false),
             ("STOPPED_BY_PERSON", 409, false),
+            ("SIGN_IN_WAITING", 409, false),
             ("STALE_REF", 409, true),
             ("NO_PAGE", 404, true),
             ("INVALID_ARGUMENT", 400, true),

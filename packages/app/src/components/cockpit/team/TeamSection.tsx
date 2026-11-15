@@ -1,5 +1,7 @@
 import { teamApi, type TeamApi } from '../../../lib/team';
 import { lendApi, type LendApi } from '../../../lib/lend';
+import type { TeamTasksApi } from '../../../lib/team-tasks';
+import { InboxTasks } from '../../team-page/InboxTasks';
 import { TeamActivity } from '../inbox/TeamActivity';
 import { useLend } from '../../lend/useLend';
 import { TellTeamPrompt } from './TellTeam';
@@ -13,7 +15,7 @@ import '../../../styles/cockpit-team.css';
  * there is one line with "Set up a team". Request usage lives on the Team page (Settings › Team), not here.
  * Team events do not add to the Needs-you count: they wait for me but block no agent.
  */
-export function TeamSection({ api = teamApi, now, paneNames, team, lend: lendClient = lendApi }: { api?: TeamApi; now: number; paneNames?: Map<string, string>; team?: TeamHandle; lend?: LendApi }) {
+export function TeamSection({ api = teamApi, now, paneNames, team, lend: lendClient = lendApi, tasksApi }: { api?: TeamApi; now: number; paneNames?: Map<string, string>; team?: TeamHandle; lend?: LendApi; tasksApi?: TeamTasksApi }) {
   const own = useTeam(api, !team);
   const { state, refresh } = team ?? own;
   // Share an agent (Labs): the requests to borrow from me show as Team activity rows.
@@ -76,6 +78,7 @@ export function TeamSection({ api = teamApi, now, paneNames, team, lend: lendCli
         </ul>
       )}
 
+      <InboxTasks now={now} api={tasksApi} />
     </section>
     {activity}
     </>

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { setHelpersInSidebar } from './lib/helpersInSidebar';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +15,7 @@ import { tauriClosedChatsApi } from './lib/closedChats';
 import { requestGettingStarted } from './lib/getting-started';
 import { resetUndoBar, showUndo } from './lib/undo-bar';
 import { reportProblem, resetProblems } from './lib/problems';
+import { closeSignInAgain } from './lib/agentSignIn';
 import { devicesApi } from './lib/devices';
 import { tauri } from './lib/tauri';
 import { deskStore, setDeskSheetOpen, NOT_AWAY, type DeskAway } from './lib/desk-away';
@@ -21,6 +23,8 @@ import { MAC_MINI, NODE_MAC } from './dev/devices-fixtures';
 
 // Mutable per-test input for the digest (away) path.
 const away = vi.hoisted(() => ({ digest: null as null | object }));
+// The real Inbox: on, the Inbox mock hands over to the real page, with these turn summaries and this clock.
+const inb = vi.hoisted(() => ({ real: false, now: 0, turns: new Map() as Map<string, unknown>, names: new Map<string, string>(), notes: [] as string[] }));
 // The spawn the (mocked) cockpit hook reports: null, running, or failed.
 const ui = vi.hoisted(() => ({ spawn: null as null | { failed: string | null } }));
 // The chat that is starting, as the (mocked) cockpit hook reports it: null when none.
@@ -29,6 +33,8 @@ const chatStart = vi.hoisted(() => ({ starting: null as null | { agentId: string
 const cockpit = vi.hoisted(() => ({
   mode: 'orchestration' as 'orchestration' | 'individual',
   openSettings: (async () => {}) as (tab?: string) => Promise<void>,
+  // Every `newAgent(...)` call: a sign-in must never start an agent (a sidebar row or pane) in the main workspace.
+  newAgents: [] as unknown[][],
   // The pane list is known (the split restores on start only then). Off by default, as before.
   ready: false,
   // More panes than p1 and p2 (the split grid needs up to four). None by default, so other tests see two.
@@ -59,10 +65,44 @@ const rust = vi.hoisted(() => ({
 
 // The companions the (mocked) list hook reports: null is no companion backend.
 const comps = vi.hoisted(() => ({ list: null as null | object[] }));
+// The desktop shell's event channel, for the OS-link tests below (it does nothing for every other test).
+const shell = vi.hoisted(() => ({ handlers: new Map<string, (e: { payload: unknown }) => void>(), pending: null as unknown }));
+vi.mock('@tauri-apps/api/event', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tauri-apps/api/event')>()),
+  listen: async (name: string, fn: (e: { payload: unknown }) => void) => {
+    shell.handlers.set(name, fn);
+    return () => void shell.handlers.delete(name);
+  },
+}));
+vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tauri-apps/api/core')>()),
+  invoke: async (cmd: string) => {
+    if (cmd !== 'take_pending_join_link') return new Promise(() => undefined); // other commands never answer
+    const link = shell.pending;
+    shell.pending = null;
+    return link;
+  },
+}));
+
 vi.mock('./hooks/useCompanions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./hooks/useCompanions')>()),
   useCompanions: () => ({ companions: comps.list, refresh: () => {} }),
 }));
+
+// The Today page's Labs switch the (mocked) hook reports, and the page itself (its own tests are in components/timeline).
+const today = vi.hoisted(() => ({ on: false }));
+vi.mock('./lib/timeline', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./lib/timeline')>()),
+  useTimelineEnabled: () => today.on,
+}));
+vi.mock('./components/timeline/TodayPage', async () => {
+  const { createElement: h } = await import('react');
+  return {
+    defaultAgentName: (type: string) => type,
+    TodayPage: ({ onClose, panes }: { onClose: () => void; panes?: { id: string }[] }) =>
+      h('div', null, `TODAY VIEW ${(panes ?? []).map((x) => x.id).join(',')}`, h('button', { type: 'button', onClick: onClose }, 'Close today')),
+  };
+});
 
 // The devices state the (mocked) group hook reports: null is the Labs switch off.
 const dev = vi.hoisted(() => ({ view: null as null | { enabled: boolean; devices: unknown[] } }));
@@ -93,12 +133,17 @@ vi.mock('./hooks/useCockpit', async () => {
         setMode: async () => {},
         modeExplainer: cockpit.explainer,
         openSettings: cockpit.openSettings,
-        newAgent: async () => {},
-        notify: (text: string) => void live.notes.push(text),
+        newAgent: async (...a: unknown[]) => void cockpit.newAgents.push(a),
+        notify: (text: string) => void (live.notes.push(text), inb.notes.push(text)),
         theme: 'dark',
-        now: 0,
+        now: inb.now,
         toasts: [],
-        names: new Map<string, string>(),
+        names: inb.real ? inb.names : new Map<string, string>(),
+        asked: { questions: [], answerQuestion: async () => {}, dismissQuestion: async () => {} },
+        prompts: {},
+        statusSince: new Map(),
+        launchEntries: [],
+        readyAgents: new Set<string>(),
         registry: {
           spawnPane: (a: unknown) => imp.spawnPane(a),
           paneList: ids.map((id) => ({ info: infoOf(id), status: cockpit.statuses[id] ?? 'idle' })),
@@ -149,7 +194,7 @@ vi.mock('./lib/live-room', async (importOriginal) => {
 });
 
 vi.mock('./hooks/useAway', () => ({
-  useAway: () => ({ digest: away.digest, dismissDigest: () => {}, lastTurn: null }),
+  useAway: () => ({ digest: away.digest, dismissDigest: () => {}, lastTurn: inb.real ? inb.turns : null }),
 }));
 
 // What the (mocked) Needs-you source reports; the Problems list follows it.
@@ -206,6 +251,7 @@ vi.mock('./components/cockpit/Sidebar', async () => {
     onOpenDoctor: () => void;
     onOpenMemory: () => void;
     onOpenScores: () => void;
+    onOpenToday?: () => void;
     onOpenReview?: () => void;
     onOpenMorning?: () => void;
     onOpenRoutines?: () => void;
@@ -220,7 +266,7 @@ vi.mock('./components/cockpit/Sidebar', async () => {
     onNewCompanion?: () => void;
   };
   return {
-    Sidebar: ({ c, onOpenDoctor, onOpenMemory, onOpenScores, onOpenReview, onOpenMorning, onOpenRoutines, onOpenTeam, onOpenStore, onOpenToSide, onOpenPlaced, onOpenNewAgent, newAgentOpen, companions, onOpenCompanion, onNewCompanion }: Props) =>
+    Sidebar: ({ c, onOpenDoctor, onOpenMemory, onOpenScores, onOpenToday, onOpenReview, onOpenMorning, onOpenRoutines, onOpenTeam, onOpenStore, onOpenToSide, onOpenPlaced, onOpenNewAgent, newAgentOpen, companions, onOpenCompanion, onNewCompanion }: Props) =>
       h(
         'div',
         null,
@@ -233,6 +279,7 @@ vi.mock('./components/cockpit/Sidebar', async () => {
         h('button', { type: 'button', onClick: () => onOpenPlaced?.('p3', 'down') }, 'Open p3 below'),
         h('button', { type: 'button', onClick: onOpenMemory }, 'Project memory'),
         h('button', { type: 'button', onClick: onOpenScores }, 'Scores'),
+        ...(onOpenToday ? [h('button', { key: 'today', type: 'button', onClick: onOpenToday }, 'Today row')] : []),
         h('button', { type: 'button', onClick: onOpenReview }, 'Review'),
         h('button', { type: 'button', onClick: onOpenMorning }, 'Night Shift chip'),
         h('button', { type: 'button', onClick: onOpenRoutines }, 'Routines row'),
@@ -352,14 +399,19 @@ vi.mock('./components/cockpit/SplitView', async () => {
 });
 vi.mock('./components/cockpit/PaneView', async () => {
   const { createElement: h } = await import('react');
-  return { PaneView: ({ paneId }: { paneId: string }) => h('div', null, `PANE VIEW ${paneId}`) };
+  return {
+    PaneView: ({ paneId, onSeeDay }: { paneId: string; onSeeDay?: () => void }) =>
+      h('div', null, `PANE VIEW ${paneId}`, onSeeDay ? h('button', { type: 'button', onClick: onSeeDay }, 'See the whole day') : null),
+  };
 });
 vi.mock('./components/cockpit/Inbox', async () => {
   const { createElement: h } = await import('react');
+  const real = await vi.importActual<typeof import('./components/cockpit/Inbox')>('./components/cockpit/Inbox');
   type Props = { c: { openSettings: (tab?: string) => Promise<void> } };
   return {
-    Inbox: ({ c }: Props) =>
-      h('div', null, 'INBOX VIEW', h('button', { type: 'button', onClick: () => void c.openSettings('preload') }, 'Inbox deep link')),
+    Inbox: (p: Props & Record<string, unknown>) =>
+      inb.real ? h(real.Inbox as never, p) : h(
+        'div', null, 'INBOX VIEW', h('button', { type: 'button', onClick: () => void p.c.openSettings('preload') }, 'Inbox deep link')),
   };
 });
 let settingsMounts = 0;
@@ -434,6 +486,7 @@ vi.mock('./components/cockpit/PanicSheet', () => ({ PanicSheet: () => null }));
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(async () => {
+  today.on = false;
   away.digest = null;
   dev.view = null;
   comps.list = null;
@@ -441,6 +494,7 @@ beforeEach(async () => {
   chatStart.starting = null;
   cockpit.mode = 'orchestration';
   cockpit.openSettings = vi.fn(async () => {});
+  cockpit.newAgents = [];
   cockpit.ready = false;
   cockpit.parents = {};
   cockpit.statuses = {};
@@ -449,6 +503,11 @@ beforeEach(async () => {
   live.notes = [];
   live.stops = 0;
   localStorage.clear();
+  inb.real = false;
+  inb.now = 0;
+  inb.turns = new Map();
+  inb.names = new Map();
+  inb.notes = [];
   needs.items = [];
   startup.health = [];
   resetProblems();
@@ -507,6 +566,19 @@ describe('CockpitApp: the Problems chip', () => {
     expect(host.querySelector('[data-testid="problems-sheet"]')!.textContent).toContain('Agent stopped because of an error.');
     await act(async () => [...host.querySelectorAll<HTMLButtonElement>('.pb-row button')].find((b) => b.textContent === 'Open the chat')!.click());
     expect(host.querySelector('[data-testid="problems-sheet"]')).toBeNull();
+  });
+
+  it('Sign in (an expired sign-in) opens the small sign-in sheet over the cockpit and starts no agent, no pane, no sidebar row', async () => {
+    await act(async () => reportProblem({ id: 'signin:claude:', what: 'The Claude sign-in has expired.', agent: 'Claude', agentId: 'claude', paneId: null, way: 'sign_in' }));
+    await act(async () => (chip() as HTMLButtonElement).click());
+    await act(async () => [...host.querySelectorAll<HTMLButtonElement>('.pb-row button')].find((b) => b.textContent === 'Sign in')!.click());
+    const sheet = host.querySelector('[data-testid="signin-again-sheet"]');
+    expect(sheet).not.toBeNull();
+    expect(sheet!.closest('.lend-sheet')).not.toBeNull();
+    expect(sheet!.textContent).toContain('Sign in to Claude');
+    expect(cockpit.newAgents).toEqual([]);
+    await act(async () => closeSignInAgain());
+    expect(host.querySelector('[data-testid="signin-again-sheet"]')).toBeNull();
   });
 
   it('follows the Needs-you list: an agent that stopped with an error becomes a problem, and is fixed when it is not stopped any more', async () => {
@@ -885,6 +957,30 @@ describe('Settings in the cockpit', () => {
     expect(mainText()).toBe('SCORES VIEW /proj/p1');
     clickButton('pane p2');
     expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('the Today page opens from the sidebar and from a chat History link, only with the Labs switch on', () => {
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent === 'Today row')).toBe(false);
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent === 'See the whole day')).toBe(false);
+  });
+
+  it('with the Labs switch on, the Today row opens the page with the live chats, and a chat replaces it', () => {
+    today.on = true;
+    act(() => root.render(createElement(CockpitApp)));
+    clickButton('Today row');
+    expect(mainText()).toBe('TODAY VIEW p1,p2Close today');
+    clickButton('pane p2');
+    expect(mainText()).toContain('PANE VIEW p2');
+    clickButton('Today row');
+    clickButton('Close today');
+    expect(mainText()).toContain('PANE VIEW p2');
+  });
+
+  it('with the Labs switch on, the History tab link opens the page', () => {
+    today.on = true;
+    act(() => root.render(createElement(CockpitApp)));
+    clickButton('See the whole day');
+    expect(mainText()).toBe('TODAY VIEW p1,p2Close today');
   });
 
   it('the last click wins: a pane, Project memory or Set up agents replaces Settings, and Settings replaces them', () => {
@@ -1597,13 +1693,15 @@ describe('CockpitApp helpers bar', () => {
   });
 
   it('standby helpers show as outlined Ready chips, even with no helpers of the agent', async () => {
+    // With the sidebar list off the bar holds the standbys (with it on, the sidebar rows do).
+    setHelpersInSidebar(false);
     act(() => setStandbys([{ id: 's1', agent: 'codex', name: 'Reviewer', state: 'ready' }]));
     await rerender('s1');
     const chip = host.querySelector('[data-testid="standby-chip"]');
     expect(chip?.textContent).toContain('Reviewer');
     expect(chip?.textContent).toContain('Ready');
-    expect(host.querySelector('.ck-hbar-grp')?.textContent).toBe('Standby');
     expect(chips()).toEqual([]);
+    setHelpersInSidebar(true);
   });
 
   it('stays in split view and follows the focused pane: focusing the other side swaps the crumb and the chips', async () => {
@@ -1772,5 +1870,89 @@ describe('CockpitApp: the Join popup', () => {
     expect(popup()).toBeNull();
     await act(async () => void window.dispatchEvent(new CustomEvent('pm:join-link', { detail: { link: LINK } })));
     expect(popup()).toBeNull();
+  });
+
+  describe('a link the operating system opened (potato-workspace://join/...)', () => {
+    const DEEP = 'potato-workspace://join/ABCDEFGH23456789?w=pm-relay.maya.workers.dev';
+    const inShell = () => (window as unknown as Record<string, unknown>);
+    const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))));
+    afterEach(() => {
+      delete inShell().__TAURI_INTERNALS__;
+      shell.handlers.clear();
+      shell.pending = null;
+    });
+
+    it('a link sent by the shell while the app runs shows the popup', async () => {
+      inShell().__TAURI_INTERNALS__ = {};
+      await act(async () => void root.render(createElement(CockpitApp, { key: 'shell' })));
+      await settle();
+      expect(shell.handlers.has('pm-join-link')).toBe(true);
+      expect(popup()).toBeNull();
+      await act(async () => void shell.handlers.get('pm-join-link')!({ payload: DEEP }));
+      expect(popup()).not.toBeNull();
+    });
+
+    it('a link that came before the window was ready shows the popup once the window opens', async () => {
+      inShell().__TAURI_INTERNALS__ = {};
+      shell.pending = DEEP;
+      await act(async () => void root.render(createElement(CockpitApp, { key: 'shell' })));
+      await settle();
+      expect(popup()).not.toBeNull();
+    });
+
+    it('a payload that is not an invite link shows nothing', async () => {
+      inShell().__TAURI_INTERNALS__ = {};
+      await act(async () => void root.render(createElement(CockpitApp, { key: 'shell' })));
+      await settle();
+      await act(async () => void shell.handlers.get('pm-join-link')!({ payload: 'potato-workspace://open/ABCDEFGH23456789?w=pm-relay.maya.workers.dev' }));
+      await act(async () => void shell.handlers.get('pm-join-link')!({ payload: { link: DEEP } }));
+      expect(popup()).toBeNull();
+    });
+  });
+});
+
+// Inbox rows open their chat (the 1.1.1 redesign: only a hover-only button did). Through the real Inbox in the real cockpit.
+describe('Inbox rows open their chat', () => {
+  const NOW = new Date(2026, 10, 16, 14, 30, 0).getTime();
+  const at = (h: number, m: number) => new Date(2026, 10, 16, h, m, 0).getTime();
+  const turn = (paneId: string, agent: string, endedAtMs: number) => ({ paneId, agent, turn: 1, startedAtMs: endedAtMs - 60_000, endedAtMs, durationMs: 60_000, files: null, approvals: [], end: { kind: 'idle' }, sentence: 'Done.' });
+  const openInbox = () => {
+    inb.real = true;
+    inb.now = NOW;
+    inb.names = new Map([['p2', 'Word viewer pages']]);
+    inb.turns = new Map([['p2', turn('p2', 'codex', at(11, 40))], ['gone', turn('gone', 'claude', at(10, 5))]]);
+    localStorage.setItem('pm.cockpit.everSpawned', '1');
+    act(() => root.render(createElement(CockpitApp)));
+    clickButton('Inbox');
+    expect(mainText()).toContain('Done today');
+  };
+  const row = (id: string) => host.querySelector<HTMLElement>(`[data-done-row="${id}"]`)!;
+
+  it('clicking a Done today row opens its chat in the work area', () => {
+    openInbox();
+    act(() => row('p2').click());
+    expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('Enter on a focused Done today row opens its chat', () => {
+    openInbox();
+    act(() => {
+      row('p2').focus();
+      row('p2').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    });
+    expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('the row button still opens it, once', () => {
+    openInbox();
+    act(() => row('p2').querySelector<HTMLButtonElement>('button')!.click());
+    expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('a row of a closed chat says so and stays on the Inbox', () => {
+    openInbox();
+    act(() => row('gone').click());
+    expect(inb.notes).toContain('This chat is closed.');
+    expect(mainText()).toContain('Done today');
   });
 });

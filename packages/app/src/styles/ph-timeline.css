@@ -1,0 +1,279 @@
+/* "Today" on the phone (components/mobile/PhoneToday.tsx). Built on the phone tokens (phone.css): grayscale, the one
+   orange is the handle and the picked tick, every tap target at least 44 px, and it fits a 375 px width. */
+
+.ph-tl {
+  padding: 4px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ph-tl-empty,
+.ph-tl-limits {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.ph-tl-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.ph-tl-chip {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--raised);
+  color: var(--muted);
+  font: 500 var(--fs-sm) var(--font-ui);
+}
+.ph-tl-chip[aria-pressed='true'] {
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* The strip: every project in one line of ticks. */
+.ph-tl-strip {
+  position: relative;
+  height: 44px;
+  border-radius: var(--r-sm);
+  background: var(--raised);
+  touch-action: none;
+  overflow: hidden;
+}
+.ph-tl-tick {
+  position: absolute;
+  top: 12px;
+  width: 2px;
+  height: 20px;
+  margin-left: -1px;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: var(--muted);
+}
+.ph-tl-tick[data-faded='true'] {
+  opacity: 0.35;
+}
+.ph-tl-tick[data-selected='true'] {
+  background: var(--accent-text);
+}
+.ph-tl-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid var(--accent-text);
+  pointer-events: none;
+}
+
+/* The list: by hour, newest first. */
+.ph-tl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ph-tl-hourh {
+  margin: 8px 0 4px;
+  color: var(--faint);
+  font: 600 var(--fs-label) var(--font-ui);
+  letter-spacing: 0.04em;
+}
+.ph-tl-hour ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--r-card);
+  background: var(--raised);
+  overflow: hidden;
+}
+.ph-tl-hour li + li {
+  border-top: 1px solid var(--line-soft);
+}
+.ph-tl-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: 400 var(--fs-sm) var(--font-ui);
+}
+.ph-tl-row:active {
+  background: var(--fill-active);
+}
+.ph-tl-row[aria-current='true'] {
+  box-shadow: inset 3px 0 0 var(--accent-text);
+}
+.ph-tl-row[data-faded='true'] {
+  opacity: 0.5;
+}
+.ph-tl-time {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ph-tl-back {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  color: var(--muted);
+}
+.ph-tl-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ph-tl-project {
+  color: var(--text);
+}
+.ph-tl-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.ph-tl-files {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.ph-tl-delta {
+  color: var(--faint);
+}
+
+/* "Went back to ..." with Undo. */
+.ph-tl-went {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--tap);
+  padding: 8px 14px;
+  border-radius: var(--r-sm);
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+.ph-tl-undo {
+  min-height: var(--tap);
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font: 600 var(--fs-sm) var(--font-ui);
+}
+
+/* The point's sheet. */
+.ph-tl-sheet {
+  padding: 4px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ph-tl-count {
+  margin: 0;
+  color: var(--text);
+  font: 500 var(--fs) var(--font-ui);
+}
+.ph-tl-h {
+  margin: 8px 0 0;
+  color: var(--text);
+  font: 600 var(--fs) var(--font-ui);
+}
+.ph-tl-filelist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ph-tl-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: 400 var(--fs-sm) var(--font-mono, monospace);
+}
+.ph-tl-fstatus {
+  flex: none;
+  width: 14px;
+  color: var(--muted);
+}
+.ph-tl-fpath {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph-tl-patch {
+  margin: 0 0 6px;
+  padding: 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  overflow-x: auto;
+  font: 400 var(--fs-xs) var(--font-mono, monospace);
+  color: var(--muted);
+}
+.ph-tl-line--add {
+  color: var(--ok);
+}
+.ph-tl-line--del {
+  color: var(--text);
+  opacity: 0.7;
+}
+.ph-tl-line--hunk {
+  color: var(--faint);
+}
+.ph-tl-why {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.ph-tl-go,
+.ph-tl-cancel {
+  min-height: var(--tap);
+  border: 0;
+  border-radius: var(--r-btn);
+  font: 600 var(--fs) var(--font-ui);
+}
+.ph-tl-go {
+  margin-top: 8px;
+  background: var(--text);
+  color: var(--surface);
+}
+.ph-tl-go:disabled {
+  opacity: 0.35;
+}
+.ph-tl-cancel {
+  background: var(--raised);
+  color: var(--text);
+}
+
+.ph-tl-hold {
+  min-height: var(--tap);
+  margin-top: 8px;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: var(--text);
+  color: var(--surface);
+  font: 600 var(--fs) var(--font-ui);
+}

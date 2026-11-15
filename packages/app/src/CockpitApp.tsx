@@ -30,6 +30,7 @@ import type { WhereProps } from './components/devices/NewAgentWhere';
 import { remoteId, type Device } from './lib/devices';
 import { ConnectedBanner } from './components/devices/ConnectedBanner';
 import { RemotePaneView } from './components/devices/RemotePaneView';
+import { OPEN_REMOTE_EVENT } from './lib/moveChat';
 import { useDeviceGroups, type RemoteRow } from './components/devices/useDeviceGroups';
 import { CompanionAssist } from './components/cockpit/companion/CompanionAssist';
 import { paneHeading } from './components/cockpit/titles';
@@ -107,6 +108,8 @@ import { ImportHost } from './components/history/ImportHost';
 import { AddAgentActionHost } from './components/cockpit/AddAgentActionHost';
 import { isTypingTarget } from './components/cockpit/rail/useRailLayout';
 import { agentLabel, useAgentRegistry } from './lib/agentRegistry';
+import { openSignInAgain } from './lib/agentSignIn';
+import { SignInAgainHost } from './components/signin/SignInAgainHost';
 import { LiveBar } from './components/cockpit/live/LiveBar';
 import { GoLiveSheet } from './components/cockpit/live/GoLiveSheet';
 import { LiveStatusContext, useLiveRoom } from './components/cockpit/live/useLiveRoom';
@@ -121,16 +124,20 @@ import './styles/night.css';
 import { registerNewAgentOpener } from './lib/newAgentRequest';
 import { registerSettingsOpener } from './lib/openSettingsAt';
 import { SpacesPage } from './components/spaces/SpacesPage';
+import { TodayPage, defaultAgentName } from './components/timeline/TodayPage';
+import { useTimelineEnabled } from './lib/timeline';
 import { AgentBoard } from './components/cockpit/board/AgentBoard';
 import { useSpacesEnabled } from './lib/spaces';
 import { useLend } from './components/lend/useLend';
 import { TeamHost } from './components/team-page/TeamHost';
 import { CockpitJoinLink } from './components/team-page/CockpitJoinLink';
+import { PassTaskHost } from './components/team-page/PassTaskHost';
 import { useTeamPresenceReport } from './components/team-page/useTeamPresenceReport';
 import { sidebarCount } from './components/team-page/team-page-model';
 import { useLendToasts } from './components/lend/Borrowed';
 import { useStandbyFeed } from './lib/standbyHelpers';
-import { StandbyNewDialog } from './components/cockpit/StandbyNewDialog';
+import { rootPaneId } from './components/cockpit/helpers-bar-model';
+import { AddHelperPopover } from './components/cockpit/AddHelperPopover';
 import './styles/night-morning.css';
 import './styles/cockpit-routines.css';
 import './styles/night-chip.css';
@@ -154,6 +161,8 @@ export default function CockpitApp() {
   // Warm agents (Settings > Preload) follow the folder of the focused pane, a moment after it is focused.
   useFollowFocusedProject(c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : null);
   const spacesOn = useSpacesEnabled();
+  // The Today page (Labs `timeline_day_enabled`): one line for the whole day, and a way back to any point on it.
+  const todayOn = useTimelineEnabled();
   // Devices (Labs): the other PCs' groups in the sidebar, and the chat or terminal of one of them in the main area.
   const deviceGroups = useDeviceGroups();
   const [remoteRow, setRemoteRow] = useState<RemoteRow | null>(null);
@@ -161,6 +170,7 @@ export default function CockpitApp() {
     ? {
         view: deviceGroups.view,
         onAddDevice: () => void c.openSettings('devices'),
+        onStartedHere: (paneId: string) => c.select(paneId),
         onStarted: (device: Device, paneId: string, chat: boolean) => {
           deviceGroups.refresh();
           setRemoteRow({ key: remoteId(device.node, paneId), node: device.node, paneId, title: '', agent: '', status: 'idle', cwd: '', chat });
@@ -168,6 +178,19 @@ export default function CockpitApp() {
         },
       }
     : undefined;
+  // "Open it there" under a chat that moved to another device: show that chat.
+  useEffect(() => {
+    const open = (e: Event) => {
+      const d = (e as CustomEvent<{ node: string; paneId: string }>).detail;
+      if (!d?.node || !d.paneId) return;
+      deviceGroups.refresh();
+      setRemoteRow({ key: remoteId(d.node, d.paneId), node: d.node, paneId: d.paneId, title: '', agent: '', status: 'idle', cwd: '', chat: true });
+      setView('device');
+    };
+    window.addEventListener(OPEN_REMOTE_EVENT, open);
+    return () => window.removeEventListener(OPEN_REMOTE_EVENT, open);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   // Ctrl+Shift+F opens the palette in "Search all chats"; Ctrl+K in its commands.
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands');
@@ -440,6 +463,10 @@ export default function CockpitApp() {
   // The chats on screen, and the one with the focus (a split's focused side): the helpers bar follows it.
   const shownNow = splitOn && split !== null && c.selectedId !== null ? shownIds(c.selectedId, split, belowNow) : c.selectedId !== null ? [c.selectedId] : [];
   const focusedPane = splitOn && split !== null && c.selectedId !== null ? (slotIds(c.selectedId, split, belowNow)[side] ?? c.selectedId) : c.selectedId;
+  // `standby.new` (What's new "Try it") adds a helper under the agent in front (its main agent when a helper is in front).
+  const frontRoot = focusedPane ? rootPaneId(c.registry.paneList, focusedPane) : null;
+  const frontInfo = frontRoot ? c.registry.paneList.find((p) => p.info.id === frontRoot)?.info : undefined;
+  const frontForHelper = frontInfo ? { id: frontInfo.id, cwd: frontInfo.cwd ?? null, agent: frontInfo.agent_type } : null;
   // The chat that was in front before: it comes up beside a dragged chat that was the only one open.
   const recentRef = useRef<string[]>([]);
   useEffect(() => {
@@ -864,7 +891,10 @@ export default function CockpitApp() {
         onOpenRoutines={() => setView('routines')}
         team={{ open: view === 'team', waiting: teamWaiting }}
         onOpenTeam={() => setView('team')}
+        canPassTask={!!team.state?.active}
         onOpenScores={() => setView('scores')}
+        onOpenToday={todayOn ? () => setView('today') : undefined}
+        todayOpen={view === 'today' && todayOn}
         onOpenReview={() => openReview()}
         onOpenStore={openStore}
         companions={companions.companions}
@@ -905,7 +935,10 @@ export default function CockpitApp() {
       <main className="ck-main">
         <ConnectedBanner view={deviceGroups.view} onDone={deviceGroups.refresh} />
         <EndedAgentsLine ended={session.ended} onReopen={session.reopen} onDismiss={session.dismiss} />
-        <StandbyNewDialog />
+        <AddHelperPopover front={frontForHelper} homeLabel={(id) => {
+          const p = c.registry.paneList.find((x) => x.info.id === id);
+          return p ? paneHeading(p.info, nav.names.get(id) ?? p.info.agent_type).primary : id;
+        }} />
         {view === 'pane' && focusedPane && c.mode !== 'individual' && <HelpersBar c={nav} focusedId={focusedPane} shown={shownNow} onOpen={openInFocused} onOpenBeside={openToSide} />}
         {c.mode === 'individual' ? (
           <div className="ck-spawn ck-spawn--plain">
@@ -973,6 +1006,15 @@ export default function CockpitApp() {
           <NewAgentHost c={nav} where={where} project={newAgentProject} onSetUp={() => setView('doctor')} onReopenedRun={onReopenedRun} />
         ) : view === 'spaces' && spacesOn ? (
           <SpacesPage />
+        ) : view === 'today' && todayOn ? (
+          <ErrorBoundary where="Today">
+            <TodayPage
+              onClose={closeOverlay}
+              notify={c.notify}
+              panes={c.registry.paneList.map((p) => ({ id: p.info.id, cwd: p.info.cwd, name: c.names.get(p.info.id) ?? p.info.id, status: p.status }))}
+              agentName={(type) => c.launchEntries.find((e) => e.type === type)?.label ?? defaultAgentName(type)}
+            />
+          </ErrorBoundary>
         ) : view === 'device' && remoteRow && deviceGroups.enabled && deviceGroups.view?.devices.find((d) => d.node === remoteRow.node) ? (
           <ErrorBoundary where="Device pane" resetKeys={[remoteRow.key]}>
             <RemotePaneView key={remoteRow.key} device={deviceGroups.view!.devices.find((d) => d.node === remoteRow.node)!} row={remoteRow} onRetry={deviceGroups.refresh} />
@@ -1015,7 +1057,7 @@ export default function CockpitApp() {
           />
         ) : view === 'pane' && c.selectedId ? (
           <ErrorBoundary where="Pane" resetKeys={[c.selectedId]}>
-            <PaneView c={c} paneId={c.selectedId} key={c.selectedId} onWhatBroke={setWhatBrokePane} handoff={handoff} />
+            <PaneView c={c} paneId={c.selectedId} key={c.selectedId} onWhatBroke={setWhatBrokePane} onSeeDay={todayOn ? () => setView('today') : undefined} handoff={handoff} />
           </ErrorBoundary>
         ) : (
           <Inbox
@@ -1148,10 +1190,13 @@ export default function CockpitApp() {
       {stopReport && <PanicSheet report={stopReport} names={c.names} onClose={() => setStopReport(null)} />}
       <AppUpdateHost suppressed={welcomeShown} notify={c.notify} />
       <CockpitJoinLink onJoined={team.refresh} />
+      <PassTaskHost teamState={team.state} lend={lend} />
       <StartupCheckLine
         bridgeUp={() => c.bridgeLine === ''}
-        actions={{ signIn: (agentId) => void nav.newAgent(agentId, undefined, false, undefined, undefined, 'terminal') }}
+        actions={{ signIn: (agentId) => openSignInAgain({ agentId, label: agentLabel(agentListing, agentId) }) }}
       />
+      {/* "Sign in again" (Usage card, Problems, startup check): a small sheet; the sign-in runs in a hidden pane. */}
+      <SignInAgainHost />
       <ControlAskNotice names={c.names} />
       <DeskAwayHost />
       {/* The "Used" bar along the bottom edge; the root leaves room for it only while it shows. */}
@@ -1184,7 +1229,7 @@ export default function CockpitApp() {
             <ProblemsChip
               actions={{
                 openChat: (id) => nav.select(id),
-                signIn: (agentId) => void nav.newAgent(agentId, undefined, false, undefined, undefined, 'terminal'),
+                signIn: (agentId) => openSignInAgain({ agentId, label: agentLabel(agentListing, agentId) }),
                 tryAgain: (agentId) => void nav.newAgent(agentId),
               }}
             />

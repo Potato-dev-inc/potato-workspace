@@ -19,6 +19,12 @@ pub fn notify_quiet_set(quiet: QuietHours) -> Prefs {
     store().set_quiet(quiet)
 }
 
+/// "Notifications on this PC": a Windows toast when something needs you and the app is not in front.
+#[tauri::command]
+pub fn notify_pc_set(enabled: bool) -> Prefs {
+    store().set_desktop_toasts(enabled)
+}
+
 /// Snooze alerts for these keys (the card id, its pane id) for 30 minutes. Returns when the snooze ends.
 #[tauri::command]
 pub fn notify_snooze(keys: Vec<String>) -> u64 {

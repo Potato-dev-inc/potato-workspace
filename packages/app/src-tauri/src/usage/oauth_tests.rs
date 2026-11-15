@@ -163,6 +163,11 @@ fn run_with(user: &Path, http: &dyn UsageHttp, state: &State, now: SystemTime, a
 }
 
 fn run_inner(user: &Path, http: &dyn UsageHttp, state: &State, now: SystemTime, force: bool, accounts: &[Account]) -> UsageSnapshot {
+    run_full(user, http, state, now, force, accounts, &LendView::default(), &|_| false)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_full(user: &Path, http: &dyn UsageHttp, state: &State, now: SystemTime, force: bool, accounts: &[Account], lend: &LendView, renew: &dyn Fn(&str) -> bool) -> UsageSnapshot {
     let claude = AgentUsage {
         id: "claude".into(),
         label: "Claude".into(),
@@ -187,8 +192,9 @@ fn run_inner(user: &Path, http: &dyn UsageHttp, state: &State, now: SystemTime, 
         may_fetch: true,
         force,
         oauth_state: state,
-        lend: &LendView::default(),
+        lend,
         identity: &|_, _, _| None,
+        renew,
     };
     build(&[claude], &inputs)
 }
@@ -310,5 +316,78 @@ fn the_main_login_and_an_account_are_read_from_their_own_homes() {
     assert_eq!(snap.rows[1].state, "ok");
     let keys: Vec<String> = state.lock().keys().cloned().collect();
     assert!(keys.iter().any(|k| k.ends_with(".claude")) && keys.iter().any(|k| k.ends_with("lend")), "{keys:?}");
+    let _ = std::fs::remove_dir_all(user);
+}
+
+/// A lend sign-in folder whose access token has run out while its refresh token is fine (the sign-in sat idle).
+fn idle_lend(expires_at: u64) -> (PathBuf, Account) {
+    let user = std::env::temp_dir().join(format!("pm-usage-lend-{}", uuid::Uuid::new_v4()));
+    let home = user.join("lend_a");
+    std::fs::create_dir_all(&home).unwrap();
+    write_creds(&home, expires_at);
+    let acc = Account { id: "lend_a".into(), agent_id: "claude".into(), label: "Lend Claude 3".into(), home: home.to_string_lossy().into_owned(), lend_only: true };
+    (user, acc)
+}
+
+fn write_creds(home: &Path, expires_at: u64) {
+    let body = format!("{{\"claudeAiOauth\":{{\"accessToken\":\"{TOKEN}\",\"refreshToken\":\"rt-SYNTHETIC\",\"expiresAt\":{expires_at}}}}}");
+    std::fs::write(home.join(".credentials.json"), body).unwrap();
+}
+
+fn show(name: &str) -> LendView {
+    LendView { profiles: vec![LendProfileView { account_id: "lend_a".into(), name: name.into(), show_usage: true }], borrowed: vec![] }
+}
+
+#[test]
+fn an_idle_lend_sign_in_with_an_expired_access_token_is_renewed_and_read_not_called_expired() {
+    let (user, acc) = idle_lend(T0 * 1000 - 1);
+    let answer: serde_json::Value = serde_json::from_str(ANSWER).unwrap();
+    let http = Scripted::new(vec![Fetch::Ok(answer)]);
+    let state = State::default();
+    let renewed = AtomicUsize::new(0);
+    let home = PathBuf::from(&acc.home);
+    // The agent's own CLI renews the token and rewrites the file; the app only asks for that.
+    let renew = |id: &str| {
+        assert_eq!(id, "lend_a");
+        renewed.fetch_add(1, Ordering::SeqCst);
+        write_creds(&home, 99_999_999_999_999);
+        true
+    };
+    let snap = run_full(&user, &http, &state, at(T0), false, std::slice::from_ref(&acc), &show("Work account"), &renew);
+    let row = snap.rows.iter().find(|r| r.link == Some("lend")).expect("the lend row");
+    assert_eq!(renewed.load(Ordering::SeqCst), 1);
+    assert_eq!(http.calls(), 1, "the usage was fetched");
+    assert_eq!(row.state, "ok");
+    assert_eq!(row.windows[1].used_percent, 81.0);
+    assert_eq!(row.account_label.as_deref(), Some("Work account"), "titled by the profile, never an internal label");
+    let _ = std::fs::remove_dir_all(user);
+}
+
+#[test]
+fn a_lend_sign_in_is_called_expired_only_when_renewing_did_not_help() {
+    let (user, acc) = idle_lend(T0 * 1000 - 1);
+    let http = Scripted::new(vec![]);
+    let state = State::default();
+    let asked = AtomicUsize::new(0);
+    let renew = |_: &str| {
+        asked.fetch_add(1, Ordering::SeqCst);
+        false
+    };
+    let snap = run_full(&user, &http, &state, at(T0), false, std::slice::from_ref(&acc), &show("Work account"), &renew);
+    let row = snap.rows.iter().find(|r| r.link == Some("lend")).unwrap();
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+    assert_eq!(http.calls(), 0, "an expired token is never sent");
+    assert_eq!(row.state, "expired");
+    let _ = std::fs::remove_dir_all(user);
+}
+
+#[test]
+fn my_own_sign_in_is_never_renewed_by_the_usage_bar() {
+    let user = claude_home(T0 * 1000 - 1);
+    let http = Scripted::new(vec![]);
+    let state = State::default();
+    let renew = |_: &str| -> bool { panic!("only a lend sign-in is renewed") };
+    let snap = run_full(&user, &http, &state, at(T0), true, &[], &LendView::default(), &renew);
+    assert_eq!(snap.rows[0].state, "expired");
     let _ = std::fs::remove_dir_all(user);
 }

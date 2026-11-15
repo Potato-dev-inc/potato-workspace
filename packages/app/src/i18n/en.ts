@@ -1,6 +1,7 @@
 // English: the source of truth. Every message lives in a group file under ./en; zh-TW.ts mirrors the same keys.
 // Plural messages are written as `<key>_one` and `<key>_other` and called as t('<key>', { count }).
 import { common } from './en/common';
+import { timeline } from './en/timeline';
 import { sidebar } from './en/sidebar';
 import { whatsnew } from './en/whatsnew';
 import { inbox } from './en/inbox';
@@ -39,6 +40,7 @@ import { settingsLend } from './en/settingsLend';
 import { settingsTeam } from './en/settingsTeam';
 import { settingsConnect } from './en/settingsConnect';
 import { settingsPhone } from './en/settingsPhone';
+import { workerUpdate } from './en/workerUpdate';
 import { notify } from './en/notify';
 import { board } from './en/board';
 import { routines } from './en/routines';
@@ -60,6 +62,8 @@ import { phoneHalf } from './en/phoneHalf';
 import { chatUx } from './en/chatUx';
 import { chatMore } from './en/chatMore';
 import { point } from './en/point';
+import { markup } from './en/markup';
+import { check } from './en/check';
 import { flow } from './en/flow';
 import { appUx } from './en/appUx';
 import { deskReview } from './en/deskReview';
@@ -107,6 +111,7 @@ export const en = {
   ...settingsTeam,
   ...settingsConnect,
   ...settingsPhone,
+  ...workerUpdate,
   ...notify,
   ...board,
   ...routines,
@@ -129,11 +134,14 @@ export const en = {
   ...chatMore,
   ...flow,
   ...point,
+  ...markup,
+  ...check,
   ...appUx,
   ...deskReview,
   ...devices,
   ...agentRules,
   ...rail,
+  ...timeline,
 } as const;
 
 export type MessageKey = Exclude<keyof typeof en, `${string}_one` | `${string}_other`> | PluralKey;

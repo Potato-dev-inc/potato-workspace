@@ -139,6 +139,16 @@ pub fn cdp_port_in(args: &str) -> Option<u16> {
 /// Parse `url` to a local origin, without the own-port check. Errors are `NotLocal` for a host
 /// that is not loopback, and `BadUrl` for everything else.
 fn parse(url: &str) -> Result<PreviewOrigin, Refusal> {
+    let origin = parse_any(url)?;
+    if !LOOPBACK_HOSTS.contains(&origin.host.as_str()) {
+        return Err(Refusal::NotLocal);
+    }
+    Ok(origin)
+}
+
+/// Parse `url` to an origin of any host (plain http or https, no user info, host as typed, lower case). The agent
+/// browser (`browser::guard`) decides which hosts it may open; this only reads the address.
+pub fn parse_any(url: &str) -> Result<PreviewOrigin, Refusal> {
     if url.is_empty() || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
         return Err(Refusal::BadUrl);
     }
@@ -155,8 +165,8 @@ fn parse(url: &str) -> Result<PreviewOrigin, Refusal> {
     }
     let (host_text, port_text) = split_host_port(authority)?;
     let host = host_text.to_ascii_lowercase();
-    if !LOOPBACK_HOSTS.contains(&host.as_str()) {
-        return Err(Refusal::NotLocal);
+    if host.is_empty() {
+        return Err(Refusal::BadUrl);
     }
     let port = match port_text {
         None if scheme == "https" => 443,

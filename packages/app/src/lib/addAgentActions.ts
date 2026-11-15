@@ -9,6 +9,8 @@ export type AddAgentActionKind = 'chat' | 'terminal';
 export interface AddAgentActionRequest {
   kind: AddAgentActionKind;
   agentId: string;
+  /** A chat starts with this text in its message box (never sent by itself): the person presses Send. */
+  task?: string;
   nonce: number;
 }
 
@@ -23,14 +25,14 @@ const emitChange = () => {
 };
 
 /** Ask for a chat or a terminal pane for `agentId`. Safe to call from any window. */
-export function requestAddAgentAction(kind: AddAgentActionKind, agentId: string): void {
+export function requestAddAgentAction(kind: AddAgentActionKind, agentId: string, task?: string): void {
   if (hosts > 0) {
-    pending = { kind, agentId, nonce: ++nonce };
+    pending = { kind, agentId, ...(task ? { task } : {}), nonce: ++nonce };
     emitChange();
     return;
   }
   // No host in this window: tell the other windows. A plain browser has no events, which is fine.
-  void emit(ADD_AGENT_ACTION_EVENT, { kind, agentId }).catch(() => undefined);
+  void emit(ADD_AGENT_ACTION_EVENT, { kind, agentId, ...(task ? { task } : {}) }).catch(() => undefined);
 }
 
 export function useAddAgentActionRequest(): AddAgentActionRequest | null {
@@ -54,10 +56,10 @@ export function registerAddAgentActionHost(): () => void {
   hosts += 1;
   let stop: (() => void) | null = null;
   let gone = false;
-  void listen<{ kind: AddAgentActionKind; agentId: string }>(ADD_AGENT_ACTION_EVENT, (e) => {
-    const { kind, agentId } = e.payload ?? ({} as { kind?: AddAgentActionKind; agentId?: string });
+  void listen<{ kind: AddAgentActionKind; agentId: string; task?: string }>(ADD_AGENT_ACTION_EVENT, (e) => {
+    const { kind, agentId, task } = e.payload ?? ({} as { kind?: AddAgentActionKind; agentId?: string; task?: string });
     if ((kind === 'chat' || kind === 'terminal') && typeof agentId === 'string' && agentId) {
-      pending = { kind, agentId, nonce: ++nonce };
+      pending = { kind, agentId, ...(kind === 'chat' && typeof task === 'string' && task ? { task } : {}), nonce: ++nonce };
       emitChange();
     }
   })

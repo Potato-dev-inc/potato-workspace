@@ -35,6 +35,8 @@ pub const FAIL_NOT_RUNNING: &str = "The agent is not running in this pane.";
 pub const FAIL_CLOSED: &str = "The pane was closed.";
 pub const FAIL_TOO_LONG: &str = "Waited too long. Not sent.";
 pub const FAIL_STOPPED: &str = "Sending stopped unexpectedly. It may not have gone in. Send it again.";
+/// A worker that kept stopping unexpectedly: the waiting message was not sent. The chat shows "Sending stopped" and Try again.
+pub const FAIL_SENDING_STOPPED: &str = "Sending stopped. Try again.";
 pub const FAIL_NOT_TAKEN: &str = "The agent did not take the message. Check the terminal.";
 pub const FAIL_IN_BOX: &str = "The message may be in the terminal box, not sent. Check the terminal.";
 pub const FAIL_WRITE: &str = "Could not type the message. Check the terminal.";

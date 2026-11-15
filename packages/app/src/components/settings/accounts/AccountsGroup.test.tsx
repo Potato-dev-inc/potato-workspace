@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Account, AccountsApi, AccountsOverview } from '../../../lib/accounts';
 import { fallbackListing } from '../../../lib/agentRegistry';
 import { AccountsGroup } from './AccountsGroup';
+import { closeSignInAgain, peekSignInAgain } from '../../../lib/agentSignIn';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -103,15 +104,16 @@ describe('AccountsGroup', () => {
     expect(host.querySelector('[data-testid="accounts-claude"]')?.querySelector('input[aria-label="Name of Work"]')).toBeTruthy();
   });
 
-  it('Open login pane starts that agent under that account', async () => {
+  it('Sign in again opens the small sign-in sheet for that account, never a pane', async () => {
     const api = fakeApi([{ id: 'acc_9', agent_id: 'codex', label: 'Personal', home: 'C:/a' }]);
     await render(api);
     const codex = host.querySelector('[data-testid="accounts-codex"]') as HTMLElement;
     await act(async () => {
       button(codex, 'Sign in again')!.click();
     });
-    expect(api.openLoginPane).toHaveBeenCalledWith('codex', 'acc_9');
-    expect(host.textContent).toContain('Sign in there once');
+    expect(api.openLoginPane).not.toHaveBeenCalled();
+    expect(peekSignInAgain()).toMatchObject({ agentId: 'codex', accountId: 'acc_9' });
+    closeSignInAgain();
   });
 
   it('remove keeps the folder (deleteHome stays false)', async () => {

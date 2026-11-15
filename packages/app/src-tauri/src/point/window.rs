@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
 /// Every preview window's label starts with this. No capability may match it (pinned by a test).
 pub const PREVIEW_PREFIX: &str = "preview-";
@@ -48,6 +48,16 @@ const CROP_PAD: f64 = 24.0;
 const WIDTH_SHARE: f64 = 0.60;
 const HEIGHT_SHARE: f64 = 0.85;
 
+/// What kind of window it is. A Point and Fix window only goes to local pages (`origin::nav`). The agent browser's
+/// windows, and the one the person opens, go where `browser::guard` allows (public pages and local dev servers) and
+/// carry the browser bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Point,
+    Agent,
+    Person,
+}
+
 /// What the open command returns.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +77,11 @@ struct Preview {
     key: String,
     /// The name of the agent bar's hidden property in the page (the agent browser, `crate::browser`).
     bar_key: String,
+    /// The name of the browser bar's hidden property (back, forward, address); empty for a Point and Fix window.
+    chrome_key: String,
+    markup_key: String,
+    /// The window the person opened with the globe button: any agent that uses the browser joins it.
+    shared: bool,
     /// The pane that runs the dev server (the "opener") and its folder.
     opener: String,
     cwd: String,
@@ -226,7 +241,7 @@ pub fn open(app: &AppHandle, pane_id: &str, port: u16, armed: bool) -> Result<Pr
     if let Some(info) = reuse(app, &origin, &url, armed, Show::Focus, false) {
         return Ok(info);
     }
-    create(app, url, origin, pane.id.clone(), pane.cwd.clone(), armed, Show::Focus)
+    create(app, url, origin, pane.id.clone(), pane.cwd.clone(), armed, Show::Focus, Kind::Point)
 }
 
 /// The agent browser's window: the preview window of `origin` if there is one (it goes to `url`), else a new one with
@@ -235,8 +250,39 @@ pub fn open_for_browser(app: &AppHandle, url: &str, origin: PreviewOrigin, show:
     if let Some(info) = reuse(app, &origin, url, false, show, true) {
         return Ok(info);
     }
+    // The person's own browser window (the globe button) is the one browser: an agent joins it.
+    if let Some(rec) = PREVIEWS.lock().iter().find(|p| p.shared && !p.gone.load(Ordering::Relaxed)).cloned() {
+        if let Some(window) = app.get_webview_window(&rec.id) {
+            if matches!(show, Show::Beside) {
+                let _ = window.show();
+            }
+            return Ok(PreviewInfo { preview_id: rec.id, url: url.to_string(), title: preview_title(&origin) });
+        }
+    }
     // The page is loaded by the caller (DevTools `Page.navigate`), so the window starts empty.
-    create(app, "about:blank".to_string(), origin, String::new(), String::new(), false, show)
+    create(app, "about:blank".to_string(), origin, String::new(), String::new(), false, show, Kind::Agent)
+}
+
+/// The browser window of the person: the globe button opens it (or brings it forward). `url` is an address the caller
+/// has checked with `browser::guard::check_url`; without one the window starts empty, with its address box ready.
+pub fn open_person_browser(app: &AppHandle, url: Option<&str>) -> Result<PreviewInfo, String> {
+    let existing = PREVIEWS.lock().iter().find(|p| p.shared && !p.gone.load(Ordering::Relaxed)).cloned();
+    if let Some(rec) = existing {
+        if let Some(window) = app.get_webview_window(&rec.id) {
+            if let Some(target) = url.and_then(|u| tauri::Url::parse(u).ok()) {
+                let _ = window.navigate(target);
+            }
+            focus(&window);
+            return Ok(PreviewInfo { preview_id: rec.id, url: url.unwrap_or("").to_string(), title: "Browser".to_string() });
+        }
+    }
+    let origin = PreviewOrigin { scheme: "about".to_string(), host: "blank".to_string(), port: 0 };
+    create(app, url.unwrap_or("about:blank").to_string(), origin, String::new(), String::new(), false, Show::Focus, Kind::Person)
+}
+
+/// The id of the window the person opened, if it is open.
+pub fn shared_window_id() -> Option<String> {
+    PREVIEWS.lock().iter().find(|p| p.shared && !p.gone.load(Ordering::Relaxed)).map(|p| p.id.clone())
 }
 
 /// The open window of `origin`, brought forward as `show` says. `go` leaves the navigation to the caller.
@@ -262,8 +308,12 @@ fn reuse(app: &AppHandle, origin: &PreviewOrigin, url: &str, armed: bool, show: 
     Some(PreviewInfo { preview_id: rec.id, url: url.to_string(), title: preview_title(origin) })
 }
 
-fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, cwd: String, armed: bool, show: Show) -> Result<PreviewInfo, String> {
-    let title = preview_title(&origin);
+#[allow(clippy::too_many_arguments)]
+fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, cwd: String, armed: bool, show: Show, kind: Kind) -> Result<PreviewInfo, String> {
+    let title = if kind == Kind::Person { "Browser".to_string() } else { preview_title(&origin) };
+    let chrome_key = if kind == Kind::Point { String::new() } else { new_key() };
+    let markup_key = if kind == Kind::Point { String::new() } else { new_key() };
+    let dev_port = app.config().build.dev_url.as_ref().and_then(|u| u.port());
     let n = NEXT_PREVIEW.fetch_add(1, Ordering::Relaxed);
     let id = preview_label(n);
     let key = new_key();
@@ -283,11 +333,21 @@ fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, c
         .initialization_script(crate::browser::bar::script(&bar_key))
         // Its own cookies and storage, apart from Potato Workspace's pages (S13).
         .data_directory(crate::app_paths::app_data_dir().join("preview-web"))
-        .on_navigation(move |next| match origin::nav(&nav_origin, next.as_str()) {
-            Nav::Allow => true,
-            Nav::Block { host } => {
-                note_blocked(&nav_app, &nav_id, &host, next.as_str());
-                false
+        .on_navigation(move |next| {
+            let verdict = if kind == Kind::Point {
+                origin::nav(&nav_origin, next.as_str())
+            } else if crate::browser::guard::nav_allowed(next.as_str(), dev_port) {
+                // Every navigation, redirects too, is judged again: a public name that now points at the router is refused.
+                Nav::Allow
+            } else {
+                Nav::Block { host: next.host_str().unwrap_or("an unknown address").to_string() }
+            };
+            match verdict {
+                Nav::Allow => true,
+                Nav::Block { host } => {
+                    note_blocked(&nav_app, &nav_id, &host, next.as_str());
+                    false
+                }
             }
         })
         .on_new_window(move |next, _features| {
@@ -296,6 +356,13 @@ fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, c
             NewWindowResponse::Deny
         })
         .on_download(|_webview, _event| false);
+    if kind != Kind::Point {
+        builder = builder.initialization_script(crate::browser::chrome::script(&chrome_key));
+        // The mark-up bar (Labs `markup_bar_enabled`): drawn only when the person opens it, in the top document.
+        if markup_on(app) {
+            builder = builder.initialization_script(crate::markup::bar::script(&markup_key, crate::browser::chrome::HEIGHT));
+        }
+    }
     let knob = std::env::var("PM_PREVIEW_CDP_PORT").ok().and_then(|v| v.trim().parse::<u16>().ok());
     let process_args = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").ok();
     match preview_cdp(knob, process_args.as_deref()) {
@@ -319,6 +386,9 @@ fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, c
         origin,
         key,
         bar_key,
+        chrome_key,
+        markup_key,
+        shared: kind == Kind::Person,
         opener,
         cwd,
         armed_until: Arc::new(AtomicU64::new(0)),
@@ -354,6 +424,10 @@ fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, c
     let pull_app = app.clone();
     let pull_rec = rec.clone();
     std::thread::spawn(move || pull_loop(pull_app, pull_rec));
+    if kind != Kind::Point {
+        let (chrome_app, chrome_rec) = (app.clone(), rec.clone());
+        std::thread::spawn(move || chrome_loop(chrome_app, chrome_rec, dev_port));
+    }
     Ok(PreviewInfo { preview_id: id, url, title })
 }
 
@@ -370,13 +444,14 @@ pub fn arm_preview(app: &AppHandle, preview_id: &str) -> bool {
 pub struct BrowserWindow {
     pub preview_id: String,
     pub bar_key: String,
+    pub markup_key: String,
 }
 
 /// The open preview window of `preview_id`, if it is still there.
 pub fn browser_window(app: &AppHandle, preview_id: &str) -> Option<(BrowserWindow, WebviewWindow)> {
     let rec = PREVIEWS.lock().iter().find(|p| p.id == preview_id && !p.gone.load(Ordering::Relaxed)).cloned()?;
     let window = app.get_webview_window(&rec.id)?;
-    Some((BrowserWindow { preview_id: rec.id, bar_key: rec.bar_key }, window))
+    Some((BrowserWindow { preview_id: rec.id, bar_key: rec.bar_key, markup_key: rec.markup_key }, window))
 }
 
 /// The URL to open for `port` of this pane, and its checked origin.
@@ -501,6 +576,86 @@ fn pull_loop(app: AppHandle, rec: Preview) {
         }
     }
     tracing::debug!(preview = %rec.id, "point: preview pull thread stopped");
+}
+
+/// The browser bar's loop: carries the person's clicks (back, forward, reload) and typed addresses out of the page,
+/// and tells the bar the address the page is at. A typed address goes through the same guard as an agent's.
+fn chrome_loop(app: AppHandle, rec: Preview, dev_port: Option<u16>) {
+    use crate::browser::chrome::{self, ChromeKind};
+    let mut error = "";
+    // The artifact tab this window shows now (its secret address token), so it can end with the tab.
+    let mut tab_token: Option<String> = None;
+    let mut marking = crate::markup::live::Loop::default();
+    loop {
+        std::thread::sleep(Duration::from_millis(300));
+        let Some(window) = app.get_webview_window(&rec.id) else { break };
+        if rec.gone.load(Ordering::Relaxed) {
+            break;
+        }
+        if let Some(raw) = ask_text(&window, chrome::call(&rec.chrome_key, "take", "")) {
+            for event in chrome::parse_events(&raw) {
+                error = "";
+                match event.kind {
+                    ChromeKind::Back => {
+                        let _ = window.eval("history.back()");
+                    }
+                    ChromeKind::Forward => {
+                        let _ = window.eval("history.forward()");
+                    }
+                    ChromeKind::Reload => {
+                        let _ = window.eval("location.reload()");
+                    }
+                    ChromeKind::Mark => {
+                        if markup_on(&app) {
+                            let _ = window.eval(crate::markup::bar::set_script(&rec.markup_key, &serde_json::json!({ "open": true })));
+                        }
+                    }
+                    ChromeKind::Side => {
+                        // Back to the side pane: tell the chat screen, drop the tab's address, leave the page.
+                        let here = ask_text(&window, "location.href".to_string()).unwrap_or_default();
+                        if let Some((pane_id, id)) = crate::artifacts::owner_of(&here) {
+                            let _ = app.emit("artifact-to-side", serde_json::json!({ "paneId": pane_id, "id": id }));
+                            if let Some(token) = crate::artifacts::live_token(&here) {
+                                crate::artifacts::close_tab_address(&token);
+                            }
+                            if let Ok(blank) = tauri::Url::parse("about:blank") {
+                                let _ = window.navigate(blank);
+                            }
+                        }
+                    }
+                    ChromeKind::Go => match chrome::go_target(&event.url, dev_port) {
+                        Ok(address) => {
+                            if let Ok(target) = tauri::Url::parse(&address) {
+                                let _ = window.navigate(target);
+                            }
+                        }
+                        Err(word) => error = word,
+                    },
+                }
+            }
+        }
+        crate::markup::live::tick(&app, &rec.id, &rec.markup_key, &window, &mut marking);
+        let here = ask_text(&window, "location.href".to_string()).unwrap_or_default();
+        let here = if here == "about:blank" { String::new() } else { here };
+        // A tab's access ends when the tab leaves its page (the token is dropped, never kept for a later visit).
+        let now_token = crate::artifacts::live_token(&here);
+        if tab_token != now_token {
+            if let Some(old) = tab_token.take() {
+                crate::artifacts::close_tab_address(&old);
+            }
+            tab_token = now_token;
+        }
+        let _ = window.eval(chrome::set_script_with(&rec.chrome_key, &here, error, markup_on(&app)));
+    }
+    if let Some(old) = tab_token {
+        crate::artifacts::close_tab_address(&old);
+    }
+    crate::markup::live::end(&rec.id, &mut marking);
+}
+
+/// Whether the Labs switch "Mark up pages" is on (a development build reads it as on).
+pub(crate) fn markup_on(app: &AppHandle) -> bool {
+    crate::settings_store::read_public_settings(app).get("markup_bar_enabled").and_then(serde_json::Value::as_bool).unwrap_or(false)
 }
 
 /// Ends an expired session: deletes its shots and hides the box.

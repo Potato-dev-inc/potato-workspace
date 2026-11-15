@@ -1,0 +1,426 @@
+/* The mark-up bar: a solid pill at the bottom-centre of the page area, a clear drawing layer, the one outline of the
+   Select tool. Tokens only (the mark colours the person picks are data, not styling). No glass, no blur. */
+.cockpit .mk-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cockpit .mk-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+.cockpit .mk-ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  touch-action: none;
+}
+.cockpit .mk-ink.is-live {
+  pointer-events: all;
+  cursor: crosshair;
+}
+.cockpit .mk-ink.is-text {
+  cursor: text;
+}
+.cockpit .mk-pop-in {
+  animation: mk-pop-in 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes mk-pop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* The Select outline: one box that is moved, never rebuilt. The transition is set by the script (off with less motion). */
+.cockpit .mk-blob {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 4px;
+  box-sizing: border-box;
+  will-change: transform, width, height;
+}
+.cockpit .mk-blob i {
+  position: absolute;
+  left: -2px;
+  top: -21px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: 11px/17px ui-monospace, Consolas, monospace;
+  font-style: normal;
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit .mk-layer.is-shooting .mk-blob {
+  visibility: hidden;
+}
+.cockpit .mk-note {
+  position: absolute;
+  min-width: 150px;
+  padding: 3px 6px;
+  border: 2px solid var(--accent);
+  border-radius: 5px;
+  background: var(--bg-float);
+  color: var(--label);
+  font: 13px system-ui, sans-serif;
+  pointer-events: all;
+  z-index: 2;
+}
+.cockpit .mk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  list-style: none;
+}
+.cockpit .ck-art-held {
+  overflow: hidden;
+}
+/* The dock: the status line, the send row and the bar, one above the other. */
+.cockpit .mk-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.cockpit .mk-dock > * {
+  pointer-events: auto;
+}
+.cockpit .mk-dock.is-shooting {
+  visibility: hidden;
+}
+.cockpit .mk-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  color: var(--label);
+  animation: mk-rise 160ms ease-out;
+  max-width: calc(100% - 16px);
+}
+@keyframes mk-rise {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.cockpit .mk-tb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--label-2);
+  cursor: pointer;
+}
+.cockpit .mk-tb:hover:not(:disabled) {
+  background: var(--fill);
+  color: var(--label);
+}
+.cockpit .mk-tb[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.cockpit .mk-tb:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.cockpit .mk-tb:focus-visible,
+.cockpit .mk-send:focus-visible,
+.cockpit .mk-pop button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.cockpit .mk-tb svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cockpit .mk-tb--caret {
+  width: 14px;
+  margin-left: -4px;
+}
+.cockpit .mk-tb--caret svg {
+  width: 9px;
+  height: 9px;
+}
+.cockpit .mk-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--sep);
+}
+.cockpit .mk-dot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-raised);
+  box-shadow: 0 0 0 1px var(--sep);
+}
+.cockpit .mk-send {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cockpit .mk-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.cockpit .mk-send--icon {
+  width: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.cockpit .mk-send--icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+}
+.cockpit .mk-pop {
+  position: absolute;
+  bottom: 42px;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.cockpit .mk-pop--col {
+  flex-direction: column;
+  min-width: 150px;
+}
+.cockpit .mk-pop--col button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  cursor: pointer;
+}
+.cockpit .mk-pop--col button:hover:not(:disabled) {
+  background: var(--fill);
+}
+.cockpit .mk-pop--col button:disabled {
+  opacity: 0.4;
+}
+.cockpit .mk-pop--col svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cockpit .mk-pop kbd {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 1px solid var(--sep);
+  border-radius: 4px;
+  font: 11px ui-monospace, Consolas, monospace;
+  color: var(--label-2);
+}
+.cockpit .mk-sw {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+.cockpit .mk-sw:hover {
+  background: var(--fill);
+}
+.cockpit .mk-status {
+  padding: 3px 9px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--label-2);
+  font-size: 12px;
+}
+.cockpit .mk-sendrow {
+  display: flex;
+  gap: 8px;
+  width: min(520px, calc(100% - 32px));
+  padding: 8px;
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  background: var(--bg-raised);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  color: var(--label);
+}
+.cockpit .mk-thumb {
+  flex: none;
+  align-self: center;
+  width: 92px;
+  max-height: 80px;
+  object-fit: contain;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: var(--fill);
+}
+.cockpit .mk-thumb--none {
+  display: grid;
+  place-items: center;
+  min-height: 52px;
+  padding: 4px;
+  font-size: 11px;
+  color: var(--label-2);
+  text-align: center;
+}
+.cockpit .mk-col {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.cockpit .mk-req {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+}
+.cockpit .mk-req:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.cockpit .mk-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label-2);
+  font-size: 12px;
+}
+.cockpit .mk-grow {
+  flex: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .mk-bar,
+  .cockpit .mk-pop-in {
+    animation: none;
+  }
+  .cockpit .mk-blob {
+    transition: none !important;
+  }
+}
+:root[data-motion='less'] .cockpit .mk-bar,
+:root[data-motion='less'] .cockpit .mk-pop-in {
+  animation: none;
+}
+:root[data-motion='less'] .cockpit .mk-blob {
+  transition: none !important;
+}
+/* The "Open in" menu in the page header. */
+.cockpit .ck-openin {
+  position: relative;
+  display: inline-flex;
+}
+.cockpit .ck-openin-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 230px;
+  padding: 4px;
+  border: 1px solid var(--sep);
+  border-radius: 9px;
+  background: var(--bg-raised);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.cockpit .ck-openin-menu button {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cockpit .ck-openin-menu button:hover {
+  background: var(--fill);
+}
+.cockpit .ck-openin-menu small {
+  display: block;
+  color: var(--label-2);
+}
+.cockpit .ck-openin-ck {
+  width: 14px;
+  color: var(--accent);
+}

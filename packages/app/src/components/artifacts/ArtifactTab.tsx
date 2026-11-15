@@ -3,6 +3,11 @@
 // path and Reload (and, in the side pane, Open in a window, Full width and Close). While it is open it asks now and then
 // whether the agent made a newer version, and says so with a "Show it" button; nothing jumps under the reader.
 //
+// Mark up (Labs `markup_bar_enabled`): a floating bar over the page (Select, Pen, Shape, Text, Colour, Undo, Clear, Send). It
+// is Point and Fix with drawing: Select is the old Point picker, and what is marked goes to the chat as one picture and a
+// numbered list (`components/markup/`). "Open in" chooses where the page lives: beside the chat, its own window, or the
+// agent browser. With the switch off, Point works as it always did.
+//
 // Point: the next click in the page is a pick; the person says what should change and it goes to the chat that made the
 // page (`paneId`), as a message in that chat. Share: a read-only link to this version (`ArtifactShare`).
 import { useCallback, useEffect, useState } from 'react';
@@ -13,8 +18,12 @@ import { noteArtifactTitle } from '../../lib/artifact-tabs';
 import { canPoint, composeArtifactPointMessage, MAX_PICK_REQUEST, pickLabel, type ArtifactPick } from '../../lib/artifact-point';
 import { sendPaneMessage } from '../../lib/paneOutbox';
 import { errorSentence } from '../../lib/sayError';
-import { ArtifactBody } from './ArtifactBody';
+import { ArtifactBody, type BodyMarkup } from './ArtifactBody';
 import { ArtifactShare } from './ArtifactShare';
+import { OpenInMenu } from './OpenInMenu';
+import { MarkupHost } from '../markup/MarkupHost';
+import { markupApi, type MarkupApi } from '../../lib/markup/api';
+import { useMarkupEnabled } from '../../lib/markup/labs';
 import '../../styles/files.css';
 import '../../styles/artifacts.css';
 
@@ -35,6 +44,8 @@ export function ArtifactTab({
   pollMs = POLL_MS,
   side,
   send = sendPaneMessage,
+  markupOn,
+  markup = markupApi,
 }: {
   paneId: string;
   id: string;
@@ -43,8 +54,15 @@ export function ArtifactTab({
   side?: SideChrome;
   /** Puts a message into a chat (a test double can stand in). */
   send?: (paneId: string, text: string) => Promise<unknown>;
+  /** The mark-up bar is on (the Labs switch). Left out, the switch is read. */
+  markupOn?: boolean;
+  /** The picture and the send of the mark-up bar (a test double can stand in). */
+  markup?: MarkupApi;
 }) {
   const t = useT();
+  const labsOn = useMarkupEnabled();
+  const bar = markupOn ?? labsOn;
+  const [markOpen, setMarkOpen] = useState(false);
   const [page, setPage] = useState<ArtifactPage | null>(null);
   /** The version the person picked; null follows the newest one at the time of loading. */
   const [picked, setPicked] = useState<number | null>(null);
@@ -117,8 +135,11 @@ export function ArtifactTab({
 
   // "Try it" on Point and fix opens the page already waiting for a click.
   useEffect(() => {
-    if (side && pointable && takeArtifactPoint(paneId)) setPicking(true);
-  }, [side, pointable, paneId]);
+    if (side && pointable && takeArtifactPoint(paneId)) {
+      if (bar) setMarkOpen(true);
+      else setPicking(true);
+    }
+  }, [side, pointable, paneId, bar]);
 
   const onPick = useCallback((p: ArtifactPick) => {
     setPicking(false);
@@ -165,6 +186,28 @@ export function ArtifactTab({
     );
   };
 
+  const body = (bridge?: BodyMarkup) => (
+    <div className="ck-art-body">
+      {error ? (
+        <p className="ck-file-note" role="alert">
+          {error}
+        </p>
+      ) : !page ? (
+        <p className="ck-file-note">{t('artifacts.loading')}</p>
+      ) : (
+        <ArtifactBody
+          key={`${page.version}:${reloads}`}
+          kind={page.artifact.kind}
+          content={page.content}
+          title={title}
+          picking={!bridge && picking}
+          onPick={!bridge && pointable ? onPick : undefined}
+          markup={bridge}
+        />
+      )}
+    </div>
+  );
+
   return (
     <section
       className="ck-art ck-file"
@@ -190,7 +233,34 @@ export function ArtifactTab({
             ))}
           </select>
         )}
-        {page && (
+        {page && bar && (
+          <button
+            type="button"
+            className={`ck-btn ck-btn--plain ck-btn--sm${markOpen ? ' is-on' : ''}`}
+            aria-pressed={markOpen}
+            title={t('markup.openTip')}
+            onClick={() => setMarkOpen((v) => !v)}
+            data-testid="artifact-point"
+          >
+            {t('markup.open')}
+          </button>
+        )}
+        {page && bar && (
+          <OpenInMenu
+            beside={!!side}
+            onWindow={side ? side.onPopOut : undefined}
+            onBrowser={() =>
+              void api.openInAgentBrowser(paneId, id).then(
+                () => {
+                  setNotice(null);
+                  side?.onClose();
+                },
+                (err: unknown) => setNotice(errorSentence(err) || t('markup.openIn.failed')),
+              )
+            }
+          />
+        )}
+        {page && !bar && (
           <button
             type="button"
             className={`ck-btn ck-btn--plain ck-btn--sm${picking ? ' is-on' : ''}`}
@@ -223,9 +293,11 @@ export function ArtifactTab({
         </button>
         {side && (
           <>
-            <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={side.onPopOut} data-testid="artifact-popout">
-              {t('artifacts.popOut')}
-            </button>
+            {!bar && (
+              <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={side.onPopOut} data-testid="artifact-popout">
+                {t('artifacts.popOut')}
+              </button>
+            )}
             <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-pressed={side.full} onClick={side.onFull} data-testid="artifact-full">
               {side.full ? t('artifacts.backToChat') : t('artifacts.full')}
             </button>
@@ -282,17 +354,13 @@ export function ArtifactTab({
           {notice}
         </p>
       )}
-      <div className="ck-art-body">
-        {error ? (
-          <p className="ck-file-note" role="alert">
-            {error}
-          </p>
-        ) : !page ? (
-          <p className="ck-file-note">{t('artifacts.loading')}</p>
-        ) : (
-          <ArtifactBody key={`${page.version}:${reloads}`} kind={page.artifact.kind} content={page.content} title={title} picking={picking} onPick={pointable ? onPick : undefined} />
-        )}
-      </div>
+      {bar ? (
+        <MarkupHost open={markOpen} onOpenChange={setMarkOpen} paneId={paneId} title={title} id={id} version={page?.version ?? 0} selectDisabled={!pointable} api={markup}>
+          {body}
+        </MarkupHost>
+      ) : (
+        body()
+      )}
     </section>
   );
 }

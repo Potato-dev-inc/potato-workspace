@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createProjectFileSearcher, PROJECT_FILE_LIMIT, type ProjectFileHit, type ProjectFileSearcher } from '../../lib/projectFiles';
+import { FileGlyph } from '../cockpit/rail/FileGlyph';
 import '../../styles/project-file-picker.css';
 
 export const PROJECT_FILE_DEBOUNCE_MS = 120;
@@ -48,15 +49,6 @@ export function removeMention(text: string, start: number, caret: number): strin
   const from = Math.max(0, Math.min(start, text.length));
   const to = Math.max(from, Math.min(caret, text.length));
   return text.slice(0, from) + text.slice(to);
-}
-
-function FileIcon() {
-  return (
-    <svg className="ck-pfp-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 3v5h5" />
-    </svg>
-  );
 }
 
 /** Bolds the first case-insensitive match of `query` inside `name`. */
@@ -188,7 +180,7 @@ export const ProjectFilePicker = forwardRef<ProjectFilePickerHandle, ProjectFile
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onPick(hit)}
               >
-                <FileIcon />
+                <FileGlyph name={hit.name} />
                 <span className="ck-pfp-text">
                   <span className="ck-pfp-name">{renderName(hit.name, query)}</span>
                   <span className="ck-pfp-dir">{folderOf(hit.path, hit.name)}</span>

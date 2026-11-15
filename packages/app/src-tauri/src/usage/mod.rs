@@ -112,6 +112,8 @@ pub struct Inputs<'a> {
     pub lend: &'a LendView,
     /// Who is signed in at `(agent id, folder, is the main login)`; the account identity the dedupe uses. None: unknown.
     pub identity: &'a dyn Fn(&str, &Path, bool) -> Option<String>,
+    /// Renews an idle lend sign-in at `(account id)` with the agent's own CLI; true when it ran fine. Never moves a login.
+    pub renew: &'a dyn Fn(&str) -> bool,
 }
 
 /// What shows of the lend side: one entry per lend profile that uses a lend sign-in, and the grants lent to this PC.
@@ -174,7 +176,7 @@ pub fn failure_text(failure: LastFailure, provider: &str, next_in_ms: u64) -> St
     let when = if next_in_ms == 0 { "trying again now".to_string() } else { format!("trying again in {}", minutes_text(next_in_ms)) };
     match failure {
         LastFailure::RateLimited => format!("{provider} said slow down (429); {when}."),
-        LastFailure::Unauthorized => "The sign-in has expired. Open the agent and sign in again.".into(),
+        LastFailure::Unauthorized => "The sign-in has expired. Press Sign in again to fix it.".into(),
         LastFailure::Other(oauth::Failure::Status(code)) => format!("{provider} answered {code}; {when}."),
         LastFailure::Other(oauth::Failure::Network) => format!("Could not reach {provider}; {when}."),
         LastFailure::Other(oauth::Failure::BadAnswer) => format!("{provider}'s answer could not be read; {when}."),
@@ -201,7 +203,7 @@ enum LoginNote {
     Failing(String),
 }
 
-fn read_login(agent: &AgentUsage, home: Option<&Path>, inputs: &Inputs<'_>) -> (Option<Reading>, LoginNote) {
+fn read_login(agent: &AgentUsage, home: Option<&Path>, lend_id: Option<&str>, inputs: &Inputs<'_>) -> (Option<Reading>, LoginNote) {
     let Reader::OauthUsage { credentials_file, token, expires_at, url, headers, used, resets_at, windows, .. } = &agent.source.reader else {
         return (None, LoginNote::None);
     };
@@ -212,7 +214,15 @@ fn read_login(agent: &AgentUsage, home: Option<&Path>, inputs: &Inputs<'_>) -> (
     let now = ms(inputs.now);
     let mut all = inputs.oauth_state.lock();
     let state = all.entry(home.to_string_lossy().into_owned()).or_default();
-    match oauth::read_token(home, credentials_file, token, expires_at.as_deref(), now) {
+    let mut found = oauth::read_token(home, credentials_file, token, expires_at.as_deref(), now);
+    // An idle lend sign-in's token runs out every few hours and only the agent renews it. "Expired" is said only after the
+    // agent was asked to renew it and the token is still out (never from the file's time alone).
+    if let (oauth::Token::Expired, Some(id)) = (&found, lend_id) {
+        if (inputs.force || inputs.may_fetch) && now >= state.next_ms && (inputs.renew)(id) {
+            found = oauth::read_token(home, credentials_file, token, expires_at.as_deref(), now_after_renew(now));
+        }
+    }
+    match found {
         oauth::Token::Missing => {}
         oauth::Token::Expired => state.expired = true,
         oauth::Token::Valid(secret) => {
@@ -274,6 +284,11 @@ fn read_login(agent: &AgentUsage, home: Option<&Path>, inputs: &Inputs<'_>) -> (
         LoginNote::None
     };
     (reading, note)
+}
+
+/// The renewal takes a while; the token is judged at the same moment as before.
+fn now_after_renew(now: u64) -> u64 {
+    now
 }
 
 fn ms(t: SystemTime) -> u64 {
@@ -396,7 +411,7 @@ fn row_for(agent: &AgentUsage, login: &Login, inputs: &Inputs<'_>) -> Option<Usa
     let (reading, note) = if signed == Signed::Out || signed == Signed::Expired {
         (None, LoginNote::None)
     } else if matches!(agent.source.reader, Reader::OauthUsage { .. }) {
-        read_login(agent, login.home.as_deref(), inputs)
+        read_login(agent, login.home.as_deref(), login.account.as_ref().filter(|a| a.lend_only).map(|a| a.id.as_str()), inputs)
     } else {
         (read(&agent.source, login.home.as_deref(), inputs.now), LoginNote::None)
     };
@@ -429,7 +444,7 @@ fn row_for(agent: &AgentUsage, login: &Login, inputs: &Inputs<'_>) -> Option<Usa
     }
     if signed == Signed::Expired || (note == LoginNote::Expired && reading.is_none()) {
         row.state = "expired";
-        row.reason = Some("The sign-in has expired. Open the agent and sign in again.".into());
+        row.reason = Some("The sign-in has expired. Press Sign in again to fix it.".into());
         return Some(row);
     }
     if let Some(reading) = reading {
@@ -655,6 +670,7 @@ pub fn compute(when: Refresh, focused: bool) -> UsageSnapshot {
         oauth_state: &state,
         lend: &lend,
         identity: &crate::capacity_proxy::usage_identity,
+        renew: &crate::capacity_proxy::renew_signin,
     };
     let snap = build(&live_agents(), &inputs);
     *OAUTH_STATE.lock() = Some(state.into_inner());

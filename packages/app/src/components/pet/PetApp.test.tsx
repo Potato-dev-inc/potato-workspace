@@ -152,4 +152,44 @@ describe('the Desktop Potato window', () => {
     expect(host.querySelector<HTMLElement>('.pet-sprite')!.dataset.sprite).toBe('celebrate');
     expect(host.querySelector('.pet-bubble')!.textContent).toContain('Claude finished');
   });
+
+  const withBody = (mood: string, intensity: number, sleeping = false) => [
+    { id: 'bit', name: 'Bit', isDefault: true, body: { mood, intensity, sleeping } },
+    { id: 'mochi', name: 'Mochi', isDefault: false, body: { mood: 'genki', intensity: 3, sleeping: false } },
+  ];
+
+  it("the default companion's saved mood shows as a Potato pose, with its words on the pet", async () => {
+    m.companions = withBody('sleepy', 1);
+    await mount();
+    expect(host.querySelector<HTMLElement>('.pet-sprite')!.dataset.sprite).toBe('sleepy');
+    expect(host.querySelector<HTMLElement>('.pet-body')!.getAttribute('aria-label')).toBe('Bit: Sleepy');
+    expect(host.querySelector<HTMLElement>('.pet-body')!.getAttribute('title')).toBe('Bit: Sleepy');
+    m.companions = withBody('sleepy', 3);
+    await mount();
+    expect(host.querySelector<HTMLElement>('.pet-sprite')!.dataset.sprite).toBe('sleep');
+  });
+
+  it("a lively companion plays a lively pose; a hungry one rests on one frame; another companion's mood is ignored", async () => {
+    m.companions = withBody('genki', 3);
+    await mount();
+    expect(host.querySelector<HTMLElement>('.pet-sprite')!.dataset.sprite).toBe('celebrate');
+    expect(host.querySelector<HTMLElement>('.pet-sprite')!.dataset.play).toBe('loop');
+    m.companions = withBody('hungry', 2);
+    await mount();
+    expect(host.querySelector<HTMLElement>('.pet-sprite')!.dataset.sprite).toBe('idle');
+    expect(host.querySelector<HTMLElement>('.pet-sprite')!.dataset.play).toBe('still');
+    expect(host.querySelector<HTMLElement>('.pet-body')!.getAttribute('aria-label')).toBe('Bit: Hungry');
+  });
+
+  it('a waiting agent still comes first, and no body state means no mood face', async () => {
+    m.companions = withBody('sleepy', 3);
+    m.snapshot = snapshot('claude_code');
+    await mount();
+    expect(host.querySelector<HTMLElement>('.pet-sprite')!.dataset.sprite).toBe('wave-hello');
+    m.snapshot = null;
+    m.companions = [{ id: 'bit', name: 'Bit', isDefault: true, body: null }];
+    await mount();
+    expect(host.querySelector<HTMLElement>('.pet-sprite')!.dataset.sprite).toBe('idle');
+    expect(host.querySelector<HTMLElement>('.pet-body')!.getAttribute('aria-label')).toBe('Bit, resting');
+  });
 });

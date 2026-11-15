@@ -247,7 +247,7 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
   const filtering = query.trim() !== '';
 
   return (
-    <RailSection id="files" title={t('files.title')} summary={baseOf(cwd)} testId="rail-files">
+    <RailSection id="files" title={t('files.title')} summary={rootLoaded ? `${baseOf(cwd)} · ${rootLoaded.entries.length}` : baseOf(cwd)} testId="rail-files">
       <input
         ref={filterRef}
         type="search"
@@ -265,6 +265,11 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
           </button>
         ))}
       </div>
+      {!filtering && open.size > 0 && (
+        <button type="button" className="ck-ftree-collapse" data-testid="files-collapse-all" onClick={() => setOpen(new Set())}>
+          {t('files.collapseAll')}
+        </button>
+      )}
       {notice && (
         <p className="ck-rail-line" role="status">
           {notice}
@@ -351,7 +356,7 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
                   <span className="ck-ftree-twist" aria-hidden="true">
                     {entry.isDir ? (row.open ? '▾' : '▸') : ''}
                   </span>
-                  {!entry.isDir && <FileGlyph name={entry.name} />}
+                  <FileGlyph name={entry.name} dir={entry.isDir} open={row.open} />
                   <span className="ck-ftree-name">{entry.name}</span>
                   {dirty && <span className="ck-ftree-dot" role="img" aria-label={t('files.hasChanges')} />}
                   {mark && (

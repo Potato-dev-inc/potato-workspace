@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": [
+      "resources/mcp-stdio.bundle.cjs",
+      "resources/puppet-master-cli.bundle.mjs",
+      "resources/pwa-dist/*",
+      "resources/pwa-dist/assets/*",
+      "resources/relay-worker/*",
+      "resources/adapters/**/*",
+      "resources/definitions/*.toml",
+      "resources/legal/**/*"
+    ]
+  }
+}

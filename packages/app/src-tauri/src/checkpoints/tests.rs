@@ -216,7 +216,7 @@ fn unchanged_tree_is_skipped_and_ids_keep_counting() {
 #[test]
 fn retention_keeps_only_the_newest_n_per_pane() {
     let t = Tmp::new("retain");
-    let small = Limits { keep: 5, ..Limits::default() };
+    let small = Limits { keep: 5, day_ms: 0, ..Limits::default() };
     for i in 0..9 {
         t.write("a.txt", &format!("v{i}"));
         created(engine::snapshot(t.p(), "p1", Kind::After, None, 1_000 + i, &small).unwrap());

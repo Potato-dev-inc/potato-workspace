@@ -6,6 +6,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AcpAddonApi, AddonStatus } from '../../../lib/acpAddon';
 import type { AgentDescriptor } from '../../../lib/agentRegistry';
+import { setCopyOfferGlobal, setProjectOffer } from '../../../lib/copyOffer';
+import { writeCopyPreference } from '../../../lib/ship-model';
 import { forceShowTerminals } from '../../../lib/showTerminals';
 import type { GitState, RecentProject } from '../../../lib/ship-api';
 import type { NewAgentApi } from './api';
@@ -42,6 +44,7 @@ let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
   localStorage.clear();
+  setCopyOfferGlobal(true);
   forceShowTerminals(false);
   host = document.createElement('div');
   host.className = 'cockpit';
@@ -114,6 +117,42 @@ describe('Work on a copy, for a chat on the New agent page', () => {
     expect(onStart.mock.calls[0][0]).toMatchObject({ runAs: 'chat', isolated: true });
   });
 
+});
+
+describe('Settings can hide "Work on a copy" (Offer "Work on a copy")', () => {
+  it('on by default: the switch is there', async () => {
+    await mount('repo');
+    await openPlus();
+    expect(copySwitch()).not.toBeNull();
+  });
+
+  it('with the global switch off the option is gone, and a remembered "on" no longer starts a copy', async () => {
+    writeCopyPreference('/work/alpha-app', true);
+    setCopyOfferGlobal(false);
+    const { onStart } = await mount('repo');
+    await openPlus();
+    expect(copySwitch()).toBeNull();
+    expect(host.querySelector('#na-copy-label')).toBeNull();
+    await send();
+    expect(onStart.mock.calls[0][0]).toMatchObject({ runAs: 'chat', isolated: false });
+  });
+
+  it('a project set to "Always offer" shows it even when the global switch is off', async () => {
+    setCopyOfferGlobal(false);
+    setProjectOffer('/work/alpha-app', 'on');
+    await mount('repo');
+    await openPlus();
+    expect(copySwitch()).not.toBeNull();
+  });
+
+  it('a project set to "Never offer" hides it even when the global switch is on', async () => {
+    setProjectOffer('/work/alpha-app', 'off');
+    await mount('repo');
+    await openPlus();
+    expect(copySwitch()).toBeNull();
+    // The "Add files" item is still in the same menu.
+    expect(host.textContent).toContain('Add files');
+  });
 });
 
 describe('which folders a chat can copy', () => {

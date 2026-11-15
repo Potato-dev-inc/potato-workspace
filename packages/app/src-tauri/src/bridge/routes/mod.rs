@@ -16,10 +16,14 @@ mod browser_mcp;
 mod guide_mcp;
 mod companion_mcp;
 mod checkpoints;
+mod timeline;
 mod chats;
 mod phone_chat;
+mod phone_move;
 mod phone_control;
 mod phone_result;
+mod own_lend;
+mod phone_home;
 pub(super) mod phone_upload;
 mod companions;
 mod digest;
@@ -95,10 +99,12 @@ pub(super) fn dispatch(cx: &Ctx) -> Option<RouteResult> {
         .or_else(|| session::handle(cx))
         .or_else(|| wait::handle(cx))
         .or_else(|| standby::handle(cx))
+        .or_else(|| own_lend::handle(cx))
         .or_else(|| accounts::handle(cx))
         .or_else(|| opencode::handle(cx))
         .or_else(|| worktrees::handle(cx))
         .or_else(|| checkpoints::handle(cx))
+        .or_else(|| timeline::handle(cx))
         .or_else(|| tamper::handle(cx))
         .or_else(|| missions::handle(cx))
         .or_else(|| night::handle(cx))
@@ -116,8 +122,10 @@ pub(super) fn dispatch(cx: &Ctx) -> Option<RouteResult> {
         .or_else(|| acp_chat::handle(cx))
         .or_else(|| phone_control::handle(cx))
         .or_else(|| phone_chat::handle(cx))
+        .or_else(|| phone_move::handle(cx))
         .or_else(|| phone_upload::handle(cx))
         .or_else(|| phone_result::handle(cx))
+        .or_else(|| phone_home::handle(cx))
         .or_else(|| chat_more::handle(cx))
         .or_else(|| artifacts::handle(cx))
         .or_else(|| panes::handle(cx))

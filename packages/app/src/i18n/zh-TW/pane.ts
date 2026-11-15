@@ -126,6 +126,7 @@ export const pane: Partial<Record<EnglishKey, string>> = {
   'hbar.label': '幫手',
   'hbar.standby': '待命',
   'hbar.ready': '就緒',
+  'hbar.starting': '啟動中…',
   'hbar.done': '完成',
   'hbar.stopped': '已停止',
   'hbar.back': '回到這個助理',

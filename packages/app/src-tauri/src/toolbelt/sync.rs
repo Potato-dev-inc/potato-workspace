@@ -112,7 +112,7 @@ pub fn collect_hosts() -> (Vec<HostSpec>, Vec<Unsupported>) {
 }
 
 /// Agents sharing one config file, in one scope.
-pub(super) struct Group {
+pub(crate) struct Group {
     pub agents: Vec<AgentRef>,
     pub installed: bool,
     pub scope: Scope,
@@ -120,7 +120,7 @@ pub(super) struct Group {
     pub table: McpHostTable,
 }
 
-pub(super) fn groups(hosts: &[HostSpec], opts: &SyncOptions) -> Vec<Group> {
+pub(crate) fn groups(hosts: &[HostSpec], opts: &SyncOptions) -> Vec<Group> {
     let mut out: Vec<Group> = Vec::new();
     for h in hosts {
         let mut scopes = vec![(Scope::Global, h.table.config_path.clone())];
@@ -250,7 +250,7 @@ fn write_with_backup(path: &Path, existed: bool, text: &str) -> Result<Option<Pa
     Ok(backup)
 }
 
-fn plan_group(g: &Group, servers: &[ToolServer], opts: &SyncOptions, apply: bool) -> HostReport {
+fn plan_group(g: &Group, servers: &[ToolServer], opts: &SyncOptions, apply: bool, prune: bool) -> HostReport {
     let table = &g.table;
     let mut report = HostReport {
         agents: g.agents.clone(),
@@ -326,7 +326,7 @@ fn plan_group(g: &Group, servers: &[ToolServer], opts: &SyncOptions, apply: bool
         report.changes.push(Change { key: key.clone(), name: name.clone(), kind });
     }
     for (key, _) in &existing {
-        if key.starts_with(KEY_PREFIX) && !desired.iter().any(|(k, _, _)| k == key) {
+        if prune && key.starts_with(KEY_PREFIX) && !desired.iter().any(|(k, _, _)| k == key) {
             ops.push(Op::Remove { key: key.clone() });
             report.changes.push(Change { key: key.clone(), name: strip_prefix_name(key, servers), kind: ChangeKind::Remove });
         }
@@ -358,7 +358,15 @@ fn plan_group(g: &Group, servers: &[ToolServer], opts: &SyncOptions, apply: bool
 
 /// Plan (and, with `apply`, write) the sync. `servers` are the real, unredacted toolbelt entries.
 pub fn run(servers: &[ToolServer], hosts: &[HostSpec], unsupported: Vec<Unsupported>, opts: &SyncOptions, apply: bool) -> SyncReport {
-    let reports = groups(hosts, opts).iter().map(|g| plan_group(g, servers, opts, apply)).collect();
+    let reports = groups(hosts, opts).iter().map(|g| plan_group(g, servers, opts, apply, true)).collect();
     SyncReport { dry_run: !apply, hosts: reports, unsupported }
+}
+
+/// Plan (and, with `apply`, write) ONLY the given servers into `hosts`: the same writer as [`run`], but it
+/// adds or updates those keys and removes nothing, so no other toolbelt entry in any config is touched.
+/// The Team shelf's "Add" uses this to write exactly the entry it showed.
+pub fn run_only(servers: &[ToolServer], hosts: &[HostSpec], opts: &SyncOptions, apply: bool) -> SyncReport {
+    let reports = groups(hosts, opts).iter().map(|g| plan_group(g, servers, opts, apply, false)).collect();
+    SyncReport { dry_run: !apply, hosts: reports, unsupported: Vec::new() }
 }
 

@@ -104,12 +104,12 @@ fn to_server(key: &str, entry: &Value, host: &HostSpec, scope: Scope) -> Option<
     http.url.filter(|u| !u.is_empty()).map(|url| ToolServer { url: Some(url), headers: http.headers, ..base(Transport::Http) })
 }
 
-fn same_server(a: &ToolServer, b: &ToolServer) -> bool {
+pub(crate) fn same_server(a: &ToolServer, b: &ToolServer) -> bool {
     a.transport == b.transport && a.command == b.command && a.args == b.args && a.url == b.url
 }
 
 /// Every importable server found in the agents' configs, with the real values (callers redact).
-fn scan(hosts: &[HostSpec], opts: &SyncOptions, existing: &[ToolServer]) -> Vec<(String, Vec<AgentRef>, ToolServer, bool)> {
+pub(crate) fn scan(hosts: &[HostSpec], opts: &SyncOptions, existing: &[ToolServer]) -> Vec<(String, Vec<AgentRef>, ToolServer, bool)> {
     let mut out: Vec<(String, Vec<AgentRef>, ToolServer, bool)> = Vec::new();
     for g in groups(hosts, opts) {
         let Ok(path) = &g.path else { continue };

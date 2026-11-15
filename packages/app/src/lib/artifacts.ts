@@ -95,6 +95,8 @@ export interface ArtifactsApi {
   shareStop(paneId: string, id: string): Promise<number>;
   /** Opens the page in a window of its own. */
   popOut(paneId: string, id: string, title: string): Promise<void>;
+  /** Opens the page as a tab of the agent browser (the agent can then read and click it). The PC serves it to that tab only. */
+  openInAgentBrowser(paneId: string, id: string): Promise<void>;
 }
 
 /** A link just made. `link` is null when this PC has no public address (`reason` says so). */
@@ -123,6 +125,7 @@ export const artifactsApi: ArtifactsApi = {
   shareList: (paneId, id) => invoke<ArtifactShareView[]>('artifacts_share_list', { paneId, id }),
   shareStop: (paneId, id) => invoke<number>('artifacts_share_stop', { paneId, id }),
   popOut: (paneId, id, title) => invoke<void>('artifacts_pop_out', { paneId, id, title }),
+  openInAgentBrowser: (paneId, id) => invoke<void>('artifacts_open_in_agent_browser', { paneId, id }),
 };
 
 /** Whether the system's browser can show this kind by itself. */

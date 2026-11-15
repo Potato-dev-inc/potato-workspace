@@ -263,6 +263,36 @@ export interface PaneViewportResponse {
   restored?: { cols: number; rows: number } | null;
 }
 
+/** One row of `GET /phone/done`: a chat whose last turn finished today. */
+export interface PhoneDoneRow {
+  paneId: string;
+  agent: string;
+  endedAtMs: number;
+  files: { count: number; added: number; deleted: number };
+  checks: string | null;
+  sentence: string;
+}
+export interface PhoneDoneReply {
+  now: number;
+  since: number;
+  rows: PhoneDoneRow[];
+}
+
+/** One standby helper of `GET /phone/helpers` (the folder's name only, never the path). */
+export interface PhoneHelper {
+  id: string;
+  name: string;
+  agent: string;
+  model: string | null;
+  folder: string;
+  state: 'ready' | 'busy' | 'starting' | 'asleep' | 'problem';
+  note: string | null;
+}
+export interface PhoneHelpersReply {
+  helpers: PhoneHelper[];
+  max: number;
+}
+
 /** Body of `GET /team/cards`; `can` is what this phone's pairing allows. */
 export interface TeamCardsReply {
   enabled: boolean;
@@ -331,6 +361,10 @@ export interface BridgeClient {
   digest?(opts?: { since?: number; seen?: boolean }): Promise<import('./cockpit-api').Digest & { empty: boolean; previousSeenMs: number | null }>;
   /** `GET /team/cards` (needs `watch`): teammates' updates and my queued ones. Absent on old bridges. */
   teamCards?(): Promise<TeamCardsReply>;
+  /** `GET /phone/done?since=` (needs `watch`): the chats whose turn finished since `since` (the phone's local midnight). Absent on old PCs. */
+  phoneDone?(since: number): Promise<PhoneDoneReply>;
+  /** `GET /phone/helpers` (needs `watch`): the standby helpers and their state. Absent on old PCs. */
+  phoneHelpers?(): Promise<PhoneHelpersReply>;
   /** The team action routes (`/team/cards/{id}/dismiss|pull|queue`, `/team/jobs/{id}/apply|discard`). */
   teamDismiss?(cardId: string): Promise<{ ok: boolean }>;
   teamPull?(cardId: string): Promise<{ ok: boolean; result: string }>;
@@ -514,6 +548,12 @@ export interface BridgeClient {
   companionSleep?(id: string): Promise<CompanionView>;
   /** "Your plans" (`GET /plans?month=2026-10`, read only). Absent on old PCs. */
   plansReport?(month?: string): Promise<PlansReport>;
+  /** The Today page (`GET /timeline/{date}`, `/timeline/point/*`; reads need `watch`, the restore needs `control`). Absent on old PCs. */
+  timelineDay?(date: string): Promise<import('./timeline').TimelineDay>;
+  timelinePointDiff?(point: import('./timeline').PointRef): Promise<import('./timeline').PointFile[]>;
+  timelineNowDiff?(point: import('./timeline').PointRef): Promise<import('./timeline').NowDiff>;
+  timelinePatch?(point: import('./timeline').PointRef, path: string, side: 'now' | 'turn'): Promise<{ patch: string; truncated: boolean }>;
+  timelineGoBack?(point: import('./timeline').PointRef): Promise<import('./timeline').GoBackReport>;
   patchSettings(patch: Partial<PublicSettings>): Promise<PublicSettings>;
 }
 

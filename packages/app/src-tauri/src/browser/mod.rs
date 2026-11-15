@@ -14,8 +14,17 @@
 //!    and Stop. A click or key press by the person pauses the agent. Every step is in the audit log.
 //! 6. **Same tools for every agent** (`tools.rs`, bridge route `browser_mcp.rs`, catalog `catalog/browser.rs`).
 //! 7. **Page words are data** (`guard::untrusted`): what a page says is wrapped and marked, never obeyed.
+//! 8. **Check it** (R4-11, `tab::Tab::check`, `live::check_it`, command `browser_check_it`): a button next to a pane's
+//!    Preview opens the page, reads the console and the network, takes a picture and answers pass, fail or sign-in.
+//!    The card is in the pane's Chat tab (frontend `CheckCard`). No new agent tool: an agent gets the same facts from
+//!    `browser_open` (`console_problems`) and `browser_console`.
+//! 9. **You sign in, the agent continues** (R4-12, `driver::Phase::SignIn`): when the page in front shows a password
+//!    box, the agent stops (`SIGN_IN_WAITING`), the bar says "Sign in here, then press Continue" and the person signs
+//!    in. The agent never sees what is typed and its tools refuse password boxes anyway (`guard`). Continue gives the
+//!    page back; the same page does not stop the agent a second time.
 
 pub mod bar;
+pub mod chrome;
 pub mod cdp;
 pub mod console;
 pub mod driver;

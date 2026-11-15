@@ -32,7 +32,7 @@ use crate::standby::key::canonical_project;
 use crate::standby::config::{StandbyConfig, MAX_PRELOAD_TOTAL};
 
 mod helpers;
-pub use helpers::{HelperMeta, HelperState, HelperStatus, HelperWant};
+pub use helpers::{Claimed, HelperClaim, HelperMeta, HelperState, HelperStatus, HelperUser, HelperWant};
 
 /// What a warm session is keyed by: everything fixed when its adapter starts.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -115,6 +115,8 @@ pub trait WarmHost: Send + Sync + 'static {
     fn working(&self, _pane_id: &str) -> Option<bool> {
         None
     }
+    /// Stops the turn the person has running in chat `pane_id` (an agent takes their standby over). The chat is not closed.
+    fn cancel_turn(&self, _pane_id: &str) {}
 }
 
 const BACKOFF_FIRST_MS: i64 = 30_000;
@@ -149,11 +151,13 @@ struct Slot<T> {
     busy: Option<helpers::Busy>,
     /// Why the last start failed (for the helper's status line).
     last_error: Option<String>,
+    /// The visible chat the person opened on this helper's waiting session (it shares that session; see `warm/helpers.rs`).
+    opened: Option<String>,
 }
 
 impl<T> Slot<T> {
     fn new(folder: PathBuf) -> Self {
-        Slot { folder, state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None, helper: None, busy: None, last_error: None }
+        Slot { folder, state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None, helper: None, busy: None, last_error: None, opened: None }
     }
 }
 
@@ -273,10 +277,19 @@ impl<H: WarmHost> Pool<H> {
             let idle_ms = if key.slot.is_some() { helper_idle_ms } else { plain_idle_ms };
             if let State::Ready { item, since } = &slot.state {
                 let dead = !self.host.alive(item);
-                let idle = now - *since >= idle_ms;
-                if dead || idle || !wanted_now {
+                // A session the person has open (or is using) is theirs while they do: never closed for sitting idle.
+                let person_held = slot.opened.is_some() || slot.busy.as_ref().is_some_and(|b| b.by == HelperUser::Person);
+                let gone = slot.opened.as_deref().is_some_and(|pane| self.host.working(pane).is_none());
+                let idle = now - *since >= idle_ms && !person_held;
+                if dead || gone || idle || !wanted_now {
+                    slot.opened = None;
                     if let State::Ready { item, .. } = std::mem::replace(&mut slot.state, State::Empty) {
-                        close.push(item);
+                        if person_held && !dead && !gone && !idle {
+                            // The standby was taken off the list: the person's open chat keeps its session.
+                            drop(item);
+                        } else {
+                            close.push(item);
+                        }
                     }
                     if dead && wanted_now {
                         slot.fails += 1;
@@ -583,6 +596,12 @@ impl WarmHost for LiveHost {
         let chat = super::chat::get(pane_id)?;
         Some(chat.state().get("turnInFlight").and_then(|v| v.as_bool()).unwrap_or(false))
     }
+
+    fn cancel_turn(&self, pane_id: &str) {
+        if let Some(chat) = super::chat::get(pane_id) {
+            let _ = chat.cancel();
+        }
+    }
 }
 
 // ---- the app's pool ---------------------------------------------------------------------------------------------------
@@ -626,16 +645,36 @@ pub fn claim_waiting(cfg: &AgentConfig, folder: &Path, account: Option<&str>, wa
     Some(warm)
 }
 
-/// A standby helper that fits this start (agent, folder, account, and a model that agrees), taken for it. Waits for one that
-/// is still starting. The session is checked like `claim`'s: a changed agent definition makes it a miss.
-pub fn claim_helper(cfg: &AgentConfig, folder: &Path, account: Option<&str>, model: Option<&str>, wait: Duration) -> Option<(WarmChat, HelperMeta)> {
+/// A standby helper that fits this start, taken for it: the caller's own helpers come first, a helper can be asked for by
+/// name, and a helper the person is using or has open is taken over only when no free one fits (the result is then `fresh`:
+/// no session comes with it, the start opens a new one). Waits for one that is still starting. A session is checked like
+/// `claim`'s: a changed agent definition makes it a miss.
+pub fn claim_helper_for(cfg: &AgentConfig, claim: &HelperClaim, wait: Duration) -> Option<Claimed<WarmChat>> {
     let pool = pool()?;
-    let (warm, meta) = pool.claim_helper_waiting(&cfg.id, folder, account, model, wait)?;
-    if warm.config != config_fingerprint(cfg) || warm.account.as_deref() != account.map(str::trim).filter(|a| !a.is_empty()) {
-        pool.host.close(warm);
+    let mut claimed = pool.claim_helper_waiting_for(claim, wait)?;
+    if let Some(item) = claimed.item.take_if(|item| item.config != config_fingerprint(cfg) || item.account.as_deref() != claim.account.map(str::trim).filter(|a| !a.is_empty())) {
+        // Nobody starts a chat for it: it is given back at the next pass.
+        pool.set_helper_task_pane(&claimed.meta.id, "");
+        pool.host.close(item);
         return None;
     }
-    Some((warm, meta))
+    Some(claimed)
+}
+
+/// A message was sent in chat `pane_id`: when it is a standby the person opened, the helper is theirs ("With you") until the
+/// turn ends.
+pub fn note_person_send(pane_id: &str) {
+    if let Some(pool) = pool() {
+        pool.person_sent(pane_id, crate::event_log::now_ms());
+    }
+}
+
+/// An agent's task for helper `helper_id` runs in chat `pane_id` (a taken-over helper starts a fresh chat): the helper is busy
+/// until that chat has finished a turn. An empty `pane_id`: the start failed, the helper is released at the next pass.
+pub fn set_helper_task_pane(helper_id: &str, pane_id: &str) {
+    if let Some(pool) = pool() {
+        pool.set_helper_task_pane(helper_id, pane_id);
+    }
 }
 
 /// How long a hint keeps a session for a chat that has not been started yet.

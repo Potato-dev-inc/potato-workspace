@@ -60,7 +60,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Add an agent', rows: ['add-agent'] },
     { group: 'Your agents', rows: ['agent-list'] },
     { group: SIGN_IN.group, rows: ['accounts'] },
-    { group: 'Where agents start', rows: ['project-folder', 'linux'] },
+    { group: 'Where agents start', rows: ['project-folder', 'copy-offer', 'linux'] },
     { group: 'Moving work', rows: ['handoff-mode', 'keep-going'] },
     { group: 'All agents', rows: ['show-terminals', 'message-rail', 'chat-view', 'done-card', 'preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions'] },
     { group: 'Standby helpers', rows: ['standby-helpers'] },
@@ -83,7 +83,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Comfort', rows: ['text-size', 'strong-contrast', 'less-motion', 'speak-results'] },
     { group: 'You', rows: ['your-name'] },
     { group: 'Startup', rows: ['start-at-sign-in'] },
-    { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours'] },
+    { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours', 'pc-notifications'] },
   ],
   connect: [
     { group: 'Phone', rows: ['pairing', 'paired-devices', { row: 'phone-notifications', label: 'Phone alerts' }] },

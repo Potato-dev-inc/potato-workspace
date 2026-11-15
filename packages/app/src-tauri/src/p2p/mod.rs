@@ -104,8 +104,8 @@ impl Permissions for LabsGated {
             self.lend.load(Ordering::SeqCst)
         } else if capability == capability::AGENTS_REMOTE {
             self.devices.load(Ordering::SeqCst)
-        } else if capability == capability::PAIR || capability == capability::PAIR_LINK {
-            // Pairing serves My computers and Devices: either switch may open it.
+        } else if capability == capability::PAIR || capability == capability::PAIR_LINK || capability == capability::FILES {
+            // Pairing and Files serve My computers and Devices: either switch may open them.
             self.desk.load(Ordering::SeqCst) || self.devices.load(Ordering::SeqCst)
         } else {
             self.desk.load(Ordering::SeqCst)
@@ -239,7 +239,7 @@ impl P2p {
             self.lend_labs.load(Ordering::SeqCst)
         } else if capability == capability::AGENTS_REMOTE {
             self.devices_labs.load(Ordering::SeqCst)
-        } else if capability == capability::PAIR || capability == capability::PAIR_LINK {
+        } else if capability == capability::PAIR || capability == capability::PAIR_LINK || capability == capability::FILES {
             self.labs() || self.devices_labs.load(Ordering::SeqCst)
         } else {
             self.labs()

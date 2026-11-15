@@ -386,3 +386,282 @@
   border-radius: 6px;
   padding: 6px 8px;
 }
+
+/* Pass a task: the sheet, the cards, the own-risk box */
+.cockpit .tpg-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg-side) 72%, transparent);
+}
+.cockpit .tpg-sheet--pass {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  background: var(--bg-raised);
+  box-shadow: var(--float-shadow);
+  gap: 14px;
+}
+.cockpit .tpg-step {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cockpit .tpg-step-h {
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label-2);
+}
+.cockpit .tpg-who {
+  align-items: center;
+}
+.cockpit .tpg-avatar--small {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+.cockpit .tpg-input {
+  font: inherit;
+  color: var(--label);
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.cockpit .tpg-field small[data-over='true'] {
+  color: var(--danger);
+  font-weight: 600;
+}
+.cockpit .tpg-why {
+  color: var(--label-3);
+}
+.cockpit .tpg-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cockpit .tpg-path {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.cockpit .tpg-lendpick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.cockpit .tpg-lendpick select {
+  font: inherit;
+  color: var(--label);
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+.cockpit .tpg-tick {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--label);
+}
+.cockpit .tpg-risk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--label-2);
+  font-size: 12px;
+}
+.cockpit .tpg-risk strong {
+  color: var(--label);
+}
+.cockpit .tpg-risk p {
+  margin: 0;
+}
+.cockpit .tpg-review {
+  margin: 0;
+}
+.cockpit .tpg-task-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cockpit .tpg-task {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--fill);
+}
+.cockpit .tpg-task--closed {
+  padding: 6px 12px;
+  background: none;
+}
+.cockpit .tpg-task-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.cockpit .tpg-task-head .tpg-sub {
+  margin-left: auto;
+}
+.cockpit .tpg-task-title {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cockpit .tpg-quote {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--sep);
+  color: var(--label-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cockpit .tpg-risk-line {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--label);
+  overflow-wrap: anywhere;
+}
+.cockpit .tpg-panel-in {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+.cockpit .tpg-chip[data-state='done'] {
+  color: var(--label);
+}
+.cockpit .tpg-tasks-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sep);
+}
+/* shelf */
+.cockpit .tpg-shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cockpit .tpg-shelf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cockpit .tpg-shelf-card {
+  gap: 6px;
+}
+.cockpit .tpg-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cockpit .tpg-shelf-why {
+  margin: 0;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--sep);
+  color: var(--label-2);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.cockpit .tpg-shelf-needs {
+  color: var(--label-2);
+}
+.cockpit .tpg-shelf-sheet {
+  margin-bottom: 4px;
+}
+.cockpit .tpg-radio .tpg-shelf-agent {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cockpit .tpg-shelf-code {
+  margin: 4px 0;
+  padding: 8px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--label);
+  font: 12px/1.45 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 260px;
+  overflow: auto;
+}
+.cockpit .tpg-shelf-risk {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+}
+.cockpit .tpg-shelf-reasons {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+  color: var(--label-2);
+  font-size: 12px;
+}
+.cockpit .tpg-shelf-writes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cockpit .tpg-shelf-write {
+  padding: 8px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+}
+.cockpit .tpg-shelf-path {
+  font-family: var(--font-mono);
+}
+.cockpit .tpg-chip[data-status='conflict'],
+.cockpit .tpg-chip[data-status='error'] {
+  background: var(--accent-soft);
+  color: var(--label);
+}
+@media (max-width: 640px) {
+  .cockpit .tpg-shelf-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    overflow: auto;
+    border-radius: 0;
+    background: var(--bg);
+  }
+}

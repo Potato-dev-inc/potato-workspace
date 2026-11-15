@@ -650,6 +650,10 @@ fn resolve_cloudflared_bin(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 fn cloudflared_bin(resource_dir: Option<&Path>, exe_dir: Option<&Path>, from_env: Option<&str>) -> Result<PathBuf, String> {
+    // The one tools resolver first: the install folder, or the staged copy after an app-only update.
+    if let Some(path) = exe_dir.and_then(crate::tools_home::resolve_for_exe_dir).map(|home| home.cloudflared_bin()).filter(|p| p.is_file()) {
+        return Ok(path);
+    }
     let bundled_name = if cfg!(target_os = "windows") { "bin/cloudflared.exe" } else { "bin/cloudflared" };
     if let Some(path) = crate::mcp_runtime::installed_resource(resource_dir, exe_dir, bundled_name) {
         return Ok(path);
@@ -814,6 +818,21 @@ mod tests {
         let own = install.join("mine.exe");
         std::fs::write(&own, "x").unwrap();
         assert_eq!(cloudflared_bin(None, None, own.to_str()), Ok(own.clone()));
+        std::fs::remove_dir_all(&install).ok();
+    }
+
+    #[test]
+    fn after_an_app_only_update_cloudflared_comes_from_the_staged_tools_folder() {
+        let install = scratch("cf-staged");
+        let local = install.join("local-tools");
+        let staged = local.join("1");
+        std::fs::create_dir_all(staged.join("bin")).unwrap();
+        std::fs::write(staged.join("tools-manifest.json"), r#"{"toolsVersion":1}"#).unwrap();
+        let name = if cfg!(target_os = "windows") { "cloudflared.exe" } else { "cloudflared" };
+        std::fs::write(staged.join("bin").join(name), "x").unwrap();
+        let manifest = crate::tools_home::ToolsManifest { tools_version: 1, node: String::new(), git: String::new(), cloudflared: String::new(), counts: Default::default(), files: Vec::new() };
+        let found = crate::tools_home::with_test_home(manifest, Some(local), || cloudflared_bin(Some(&install), Some(&install), None));
+        assert_eq!(found, Ok(staged.join("bin").join(name)));
         std::fs::remove_dir_all(&install).ok();
     }
 }

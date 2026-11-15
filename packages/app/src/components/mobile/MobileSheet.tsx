@@ -261,6 +261,7 @@ export function MenuSheet({
   onEditConnection,
   onStopAll,
   onOpenPlans,
+  onOpenToday,
   linkEvents,
   onOpenSetup,
   onTestNotification,
@@ -282,6 +283,8 @@ export function MenuSheet({
   onStopAll?: () => void;
   /** Opens "Your plans" (read only) over this menu. */
   onOpenPlans?: () => void;
+  /** Opens "Today" (the whole-day time machine) over this menu. Absent: no row. */
+  onOpenToday?: () => void;
   /** The last connection events (newest last), for Help. */
   linkEvents?: LinkEvent[];
   /** Opens the three setup steps again. */
@@ -387,6 +390,19 @@ export function MenuSheet({
               )}
             </div>
           </>
+        )}
+
+        {onOpenToday && (
+          <div className="ph-group">
+            <button type="button" onClick={onOpenToday} className="ph-row" data-testid="phone-menu-today">
+              <span className="ph-rowtext">{t('timeline.phone.title')}</span>
+              <span className="ph-chev" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="m9 5 7 7-7 7" />
+                </svg>
+              </span>
+            </button>
+          </div>
         )}
 
         {onOpenPlans && (

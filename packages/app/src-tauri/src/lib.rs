@@ -48,6 +48,7 @@ mod mobile_pairing;
 mod mobile_tunnel;
 pub mod night_shift;
 mod tunnel_config;
+mod tools_home;
 mod uninstall;
 mod one_brain;
 mod companion;
@@ -65,6 +66,7 @@ mod pane_activity;
 mod pane_jobs;
 mod pane_preview;
 mod point;
+mod markup;
 // The agent browser (Labs `agent_browser_enabled`): agents read and click pages on this computer.
 pub mod browser;
 mod loop_guard;
@@ -95,8 +97,11 @@ mod switch_anim;
 mod window_layout;
 mod ui_mode;
 mod pane_windows;
+mod deep_link;
+mod desktop_toast;
 mod tray;
 mod pane_wait;
+mod phone_log;
 mod pane_wait_notify;
 mod platform;
 pub mod redirection_trust;
@@ -121,6 +126,7 @@ mod tunnel_auth_tests;
 mod device_caps_tests;
 mod session_context;
 mod chat_index;
+mod chat_move;
 mod import_orca;
 mod session_chat;
 mod scores;
@@ -147,11 +153,14 @@ mod keys;
 mod p2p;
 // Devices: pair another PC and run agents on it (Labs `devices_enabled`).
 mod device_identity;
+mod agent_dispatch;
+mod own_lend;
 mod device_link;
 mod terminal_chat;
 pub mod tool_registry;
 mod toolbelt;
 mod agent_pack;
+mod timeline;
 mod tui;
 pub mod turn_summary;
 mod worker_launch;
@@ -165,6 +174,7 @@ mod model_bridge;
 mod capacity_proxy;
 mod keep_awake;
 mod wsl;
+mod ssh;
 mod collision;
 mod notify_levels;
 mod artifacts;
@@ -247,17 +257,22 @@ pub fn run() {
                 }
             }
         }))
+        // After single-instance (its `deep-link` feature hands a link opened while we run to this plugin).
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(autostart::plugin())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::new())
+        .manage(deep_link::PendingJoinLink::default())
         .register_asynchronous_uri_scheme_protocol("pmfile", commands::files_stream_protocol)
+        .register_asynchronous_uri_scheme_protocol("potato-artifact", commands::artifact_serve_protocol)
         .manage(commands::SessionChatState::default())
         .manage(live_room::service::LiveRoomState::default())
         .manage(commands::ChatImportState::default())
         .invoke_handler(tauri::generate_handler![
+            deep_link::take_pending_join_link,
             commands::list_panes,
             spaces::commands::spaces_view,
             spaces::commands::space_create,
@@ -287,6 +302,9 @@ pub fn run() {
             commands::chat_signin_start,
             commands::chat_signin_status,
             commands::chat_signin_stop,
+            commands::agent_signin_start,
+            commands::agent_signin_status,
+            commands::agent_signin_stop,
             commands::chat_earlier,
             commands::chat_picture,
             commands::chat_draft_get,
@@ -311,6 +329,13 @@ pub fn run() {
             commands::chat_export_html,
             commands::chat_export_markdown,
             commands::chat_export_save,
+            commands::pane_set_helper_of,
+            commands::chat_move_status,
+            commands::chat_move_begin,
+            commands::chat_move_history,
+            commands::chat_move_prepare_work,
+            commands::chat_move_finish,
+            commands::chat_move_abort,
             commands::live_room_preview,
             commands::live_room_start,
             commands::live_room_stop,
@@ -340,6 +365,8 @@ pub fn run() {
             commands::devices_join_link,
             commands::devices_activity,
             commands::devices_set_web,
+            commands::devices_set_agents_send,
+            commands::devices_set_lend,
             commands::devices_set_device_route,
             commands::devices_disconnect,
             commands::devices_screen_start,
@@ -347,6 +374,16 @@ pub fn run() {
             commands::devices_request,
             commands::devices_subscribe,
             commands::devices_unsubscribe,
+            commands::devices_set_files,
+            commands::devices_files_folders,
+            commands::devices_files_set_folders,
+            commands::devices_files_roots,
+            commands::devices_files_list,
+            commands::devices_files_preview,
+            commands::devices_files_copy,
+            commands::devices_files_send,
+            commands::devices_transfer_cancel,
+            commands::devices_transfers_clear,
             commands::lend_state,
             commands::lend_test_link,
             commands::lend_profile_save,
@@ -357,6 +394,7 @@ pub fn run() {
             commands::lend_signin_status,
             commands::lend_signin_stop,
             commands::lend_request,
+            commands::lend_request_own,
             commands::lend_offers,
             commands::lend_answer,
             commands::lend_revoke,
@@ -396,6 +434,9 @@ pub fn run() {
             commands::handoff_file::handoff_quick_archive,
             commands::handoff_file::handoff_pane_account,
             commands::point_open_preview,
+            commands::browser_check_enabled,
+            commands::browser_check_it,
+            commands::browser_open_window,
             commands::point_state,
             commands::point_arm,
             commands::point_remove_pick,
@@ -413,6 +454,12 @@ pub fn run() {
             team::commands::team_ping,
             team::commands::team_presence_report,
             team::commands::team_share_set,
+            team::shelf::commands::shelf_state,
+            team::shelf::commands::shelf_suggest,
+            team::shelf::commands::shelf_preview,
+            team::shelf::commands::shelf_add,
+            team::shelf::commands::shelf_undo,
+            team::shelf::commands::shelf_dismiss,
             team::commands::team_default_name,
             team::commands::team_config_set,
             team::commands::team_send,
@@ -430,6 +477,7 @@ pub fn run() {
             team::commands::team_invite_lookup,
             team::commands::team_invite_accept,
             team::commands::worker_check,
+            team::worker_update::worker_update_step,
             team::commands::team_leave,
             team::commands::team_join_approve,
             team::commands::team_join_decline,
@@ -440,12 +488,29 @@ pub fn run() {
             team::commands::team_job_start,
             team::commands::team_member_confirm_github,
             team::commands::team_relay_deploy,
+            team::direct::commands::team_tasks_state,
+            team::direct::commands::team_task_pass,
+            team::direct::commands::team_task_withdraw,
+            team::direct::commands::team_task_seen,
+            team::direct::commands::team_task_accept,
+            team::direct::commands::team_task_decline,
+            team::direct::commands::team_task_started,
+            team::direct::commands::team_task_done,
+            team::direct::commands::team_task_unpack,
+            team::direct::commands::team_tasks_handover_set,
+            team::direct::commands::team_task_repo_check,
             commands::spawn_pane,
             commands::wsl_status,
             commands::wsl_check,
             commands::wsl_places_get,
             commands::wsl_place_set,
             commands::spawn_pane_in_linux,
+            commands::ssh_hosts,
+            commands::ssh_check,
+            commands::ssh_add,
+            commands::ssh_check_saved,
+            commands::ssh_remove,
+            commands::ssh_open,
             commands::kill_pane_cmd,
             commands::kill_all_panes,
             uninstall::commands::uninstall_allowed,
@@ -576,6 +641,8 @@ pub fn run() {
             commands::dev_labs_override_active,
             commands::create_mobile_pairing_session,
             commands::list_paired_mobile_devices,
+            commands::phone_activity_list,
+            commands::phone_activity_clear,
             commands::revoke_paired_mobile_device,
             commands::rename_paired_mobile_device,
             commands::device_names,
@@ -603,6 +670,8 @@ pub fn run() {
             commands::app_update_check,
             commands::app_update_busy,
             commands::app_update_install,
+            commands::tools_status,
+            commands::tools_repair,
             commands::get_worker_launch,
             commands::exit_app,
             commands::get_opencode_key_status,
@@ -629,6 +698,8 @@ pub fn run() {
             commands::standby_helper_add,
             commands::standby_helper_update,
             commands::standby_helper_remove,
+            commands::standby_helper_open,
+            commands::standby_helper_take_back,
             commands::standby_helper_start,
             commands::standby_helpers_set_limits,
             commands::get_ui_mode,
@@ -670,6 +741,11 @@ pub fn run() {
             commands::checkpoint_diff,
             commands::checkpoint_restore,
             commands::checkpoint_undo_last,
+            commands::timeline_day,
+            commands::timeline_point_diff,
+            commands::timeline_now_diff,
+            commands::timeline_file_patch,
+            commands::timeline_go_back,
             commands::wb_overview,
             commands::wb_declare,
             commands::wb_start,
@@ -933,6 +1009,7 @@ pub fn run() {
             commands::notify_prefs_get,
             commands::notify_bell_set,
             commands::notify_quiet_set,
+            commands::notify_pc_set,
             commands::notify_snooze,
             commands::notify_prefs_import,
             commands::path_kind::path_kinds,
@@ -948,11 +1025,19 @@ pub fn run() {
             commands::guide_read_page,
             commands::guide_read_diagram,
             commands::guide_delete,
+            commands::guide_video_state,
+            commands::guide_video_start,
+            commands::guide_video_stop,
+            commands::guide_video_show,
             commands::artifacts_open_in_browser,
             commands::artifacts_share_make,
             commands::artifacts_share_list,
             commands::artifacts_share_stop,
             commands::artifacts_pop_out,
+            commands::artifacts_open_in_agent_browser,
+            commands::markup_capture,
+            commands::markup_send,
+            commands::markup_less_motion,
             commands::tab_window_open,
             commands::tab_window_put_back,
             commands::files_read,
@@ -979,7 +1064,10 @@ pub fn run() {
         ])
         .setup(|app| {
             startup_trace::mark("setup_begin");
+            deep_link::setup(app.handle());
+            desktop_toast::init(app.handle());
             commands::startup_probe(app.handle().clone());
+            tools_home::tidy_on_start();
             // The window hears when an agent's capability table changes (agent-caps://changed).
             {
                 use tauri::Emitter;
@@ -1032,6 +1120,12 @@ pub fn run() {
             };
             if let Some(resource) = find_resource(rust_mcp_name) {
                 mcp_runtime::set_bundled_mcp_binary(resource);
+            }
+            if mcp_runtime::bundled_mcp_binary().is_none() && !cfg!(debug_assertions) {
+                // An installed (release) copy: the program next to the app, before any dev location.
+                if let Some(installed) = mcp_runtime::installed_mcp_binary(exe_dir.as_deref()) {
+                    mcp_runtime::set_bundled_mcp_binary(installed);
+                }
             }
             if mcp_runtime::bundled_mcp_binary().is_none() {
                 // A dev build has no installed resource folder: look where the binary is built or
@@ -1203,6 +1297,7 @@ pub fn run() {
             team::init(app.handle().clone(), registry_for_panes.clone());
             // Share an agent keeps only the handle here; nothing is built until its Labs switch is on.
             capacity_proxy::init(app.handle().clone());
+            team::direct::init(app.handle().clone());
             device_link::app::init(app.handle().clone());
             issue_intake::live::start(registry_for_panes.clone(), app.handle().clone());
             ci_fix::live::start(registry_for_panes.clone(), app.handle().clone());

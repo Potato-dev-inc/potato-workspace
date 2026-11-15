@@ -1,5 +1,6 @@
 import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useT } from "../../i18n";
 import {
   cockpitApi,
   type Checkpoint,
@@ -34,6 +35,7 @@ export function History({
   sharedWith = [],
   agentName = "the agent",
   onWhatBroke,
+  onSeeDay,
 }: {
   paneId: string;
   status: string;
@@ -46,7 +48,10 @@ export function History({
   agentName?: string;
   /** Opens "What broke the tests?" for this pane. Absent: no button. */
   onWhatBroke?: (paneId: string) => void;
+  /** Opens the Today page (Labs). Absent: no link. */
+  onSeeDay?: () => void;
 }) {
+  const t = useT();
   const [listing, setListing] = useState<CheckpointList | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -193,6 +198,11 @@ export function History({
               }}
             >
               Undo last turn
+            </button>
+          )}
+          {onSeeDay && (
+            <button type="button" className="ck-btn ck-btn--sm ck-btn--secondary" onClick={onSeeDay}>
+              {t("timeline.seeDay")}
             </button>
           )}
           {onWhatBroke && (

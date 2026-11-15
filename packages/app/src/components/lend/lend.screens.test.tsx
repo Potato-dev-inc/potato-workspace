@@ -93,6 +93,8 @@ const lendIs = (seed: LendScenario | null, own: unknown[] = []) => {
   shell.accounts = { accounts: own, borrowed: seed ? borrowedOf(seed.grants ?? []) : [] };
 };
 
+// The fixtures' grants end a fixed time after the module loaded, so the minutes left drift while a long suite runs: the
+// expectations match the shape (hours and minutes), not the exact minute.
 // ---- Settings > Team and Inbox > Team ---------------------------------------------------------------------------------
 
 describe('Request usage is reachable from Teams', () => {
@@ -104,8 +106,8 @@ describe('Request usage is reachable from Teams', () => {
     await settle(8);
     const people = host.querySelector('[aria-label="People"]')!;
     expect(buttonByText(people.closest('section')!, 'Request usage')).toBeTruthy();
-    expect(host.textContent).toMatch(/Lending Claude to Maya · 2h 1\dm left/);
-    expect(host.textContent).toMatch(/Borrowing Claude from Sam · 4\dm left/);
+    expect(host.textContent).toMatch(/Lending Claude to Maya · 2h \d+m left/);
+    expect(host.textContent).toMatch(/Borrowing Claude from Sam · \d+m left/);
     expect(buttonByText(host, 'Take back')).toBeTruthy();
     expect(buttonByText(host, 'Give back')).toBeTruthy();
     // It opens the sheet, and my other PC comes first.
@@ -398,7 +400,7 @@ describe('New agent menu: a borrowed grant is a sign-in', () => {
     await click(claudeRow(menu));
     await settle(4);
     const labels = items(host.querySelector<HTMLElement>('[role="menu"]')!).map((i) => i.textContent);
-    expect(labels.some((l) => /^Leo's PC \(borrowed\) · 1h 5\dm left$/.test(l ?? ''))).toBe(true);
+    expect(labels.some((l) => /^Leo's PC \(borrowed\) · 1h \d+m left$/.test(l ?? ''))).toBe(true);
   });
 
   it('shows "Work account on Leo\'s PC (borrowed) · 1h 5Xm left" in the sign-in step next to my own logins, and starts the pane on it', async () => {
@@ -416,7 +418,7 @@ describe('New agent menu: a borrowed grant is a sign-in', () => {
     const labels = items(step).map((i) => i.textContent);
     expect(labels[0]).toBe('Default sign-in');
     expect(labels[1]).toBe('Work');
-    expect(labels[2]).toMatch(/^Work account on Leo's PC \(borrowed\) · 1h 5\dm left$/);
+    expect(labels[2]).toMatch(/^Work account on Leo's PC \(borrowed\) · 1h \d+m left$/);
     expect(labels).toHaveLength(4); // Default, Work, the borrowed one, Back
     await click(items(step)[2]);
     await settle(4);
@@ -476,7 +478,7 @@ describe('Pane header: time-left chip', () => {
     await act(async () => root.render(<PaneView c={paneCockpit()} paneId="pane-claude-1" />));
     await settle(8);
     const chip = host.querySelector<HTMLButtonElement>('[data-testid="lend-chip"]')!;
-    expect(chip.textContent).toMatch(/^Work account · 1h 5\dm$/);
+    expect(chip.textContent).toMatch(/^Work account · 1h \d+m$/);
     await click(chip);
     await click(buttonByText(host, 'Give back now'));
     await settle(4);
@@ -503,7 +505,7 @@ describe('Pane header: time-left chip', () => {
 
   it("shows the lender's name for it: Ren's Work account with the time, the full name in the tooltip and the details", async () => {
     const chip = await chipOf(GRANT_IN_REN);
-    expect(chip.textContent).toMatch(/^Ren's Work account · 1h 5\dm$/);
+    expect(chip.textContent).toMatch(/^Ren's Work account · 1h \d+m$/);
     expect(chip.title).toBe("Claude · Ren's Work account (borrowed)");
     await click(chip);
     expect(host.querySelector('.lend-pop-title')!.textContent).toBe("Claude · Ren's Work account (borrowed)");
@@ -511,7 +513,7 @@ describe('Pane header: time-left chip', () => {
 
   it("an older lender sent no name: it falls back to Ren's Claude and Claude · Ren's PC (borrowed)", async () => {
     const chip = await chipOf(GRANT_IN_REN_OLD);
-    expect(chip.textContent).toMatch(/^Ren's Claude · 1h 5\dm$/);
+    expect(chip.textContent).toMatch(/^Ren's Claude · 1h \d+m$/);
     await click(chip);
     expect(host.querySelector('.lend-pop-title')!.textContent).toBe("Claude · Ren's PC (borrowed)");
   });

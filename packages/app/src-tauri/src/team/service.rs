@@ -255,8 +255,12 @@ pub(crate) struct Received {
     pub refresh: bool,
     /// A Share-an-agent item for some device (`crate::capacity_proxy` opens it, or ignores one for another device).
     pub capacity: Option<super::secure::CapacityIn>,
+    /// A pass-a-task item for some device of the team (`super::direct` opens it, or ignores one for another device).
+    pub direct: Option<super::secure::DirectIn>,
     /// A teammate's presence beat: (sender member, what they share, when they sent it). Never a card.
     pub presence: Option<(String, presence::Shared, u64)>,
+    /// A teammate's shelf event (a suggestion for me, or the ids they have). Never a card.
+    pub shelf: Option<super::shelf::inbound::Read>,
 }
 
 /// Open an envelope with every check (`Session::open`), then `ingest` what passed. The relay
@@ -276,6 +280,11 @@ pub(crate) fn open_and_ingest(session: &Session, store: &mut TeamStore, config: 
                 out.presence = read_presence(config, &member, verified.into_event(), inbound.received_at_ms);
                 return out;
             }
+            if matches!(kind, TeamEventKind::ShelfSuggest | TeamEventKind::ShelfHave) {
+                // Shelf events are read here and go no further: not stored as events, not a card, not in `team_events`.
+                out.shelf = super::shelf::inbound::read(config, &member, verified.into_event(), inbound.received_at_ms);
+                return out;
+            }
             match ingest(store, config, verified, inbound.received_at_ms) {
                 Ingested::Card(id) => out.card = Some((id, member, kind)),
                 Ingested::Ignored(why) => tracing::debug!(why, "team: event not shown"),
@@ -283,6 +292,7 @@ pub(crate) fn open_and_ingest(session: &Session, store: &mut TeamStore, config: 
         }
         Ok(Opened::RosterChanged(_)) => out.refresh = true,
         Ok(Opened::Capacity(item)) => out.capacity = Some(item),
+        Ok(Opened::Direct(item)) => out.direct = Some(item),
         Ok(Opened::Mine) => {}
         Err(reject) => {
             tracing::debug!(why = reject.as_str(), from = %short_id(&inbound.envelope.from), "team: envelope refused");
@@ -472,9 +482,18 @@ impl Service {
         if let Some(item) = outcome.capacity {
             crate::capacity_proxy::on_team_item(item);
         }
+        if let Some(item) = outcome.direct {
+            super::direct::on_team_item(item);
+        }
         if let Some((member, shared, at_ms)) = outcome.presence {
             self.inner.lock().presence.apply(&member, shared, at_ms, now_ms());
             self.changed();
+        }
+        if let Some(read) = outcome.shelf {
+            let file = self.dir.join(super::shelf::FILE);
+            if super::shelf::apply_inbound(&file, read, now_ms()) {
+                self.changed();
+            }
         }
     }
 
@@ -595,6 +614,7 @@ impl Service {
             self.poll_github(&config, now);
             self.advance_jobs();
             self.beat_presence(&config, now);
+            self.beat_shelf(&config, now);
         }
     }
 
@@ -1333,6 +1353,81 @@ impl Service {
             Ok(()) => self.inner.lock().last_beat = Some(presence::Sent { shared, at_ms: now }),
             // A failed send is tried again on the next tick.
             Err(error) => tracing::debug!(%error, "team: presence not sent"),
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------- the shelf
+
+/// Who I am on the team and who else is on it, for the Shelf tab and for sending to it.
+#[derive(Debug, Clone)]
+pub struct ShelfCtx {
+    pub team: String,
+    pub member: String,
+    pub device: String,
+    pub name: String,
+    /// (member id, name), me included.
+    pub members: Vec<(String, String)>,
+    /// `shelf.json` in the team folder.
+    pub file: PathBuf,
+}
+
+pub fn shelf_ctx() -> Result<ShelfCtx, String> {
+    let svc = service()?;
+    let inner = svc.inner.lock();
+    if !inner.config.enabled || !inner.config.is_active() {
+        return Err("Join or start a team first.".into());
+    }
+    let session = inner.session.as_ref().ok_or("Join a team first.")?;
+    Ok(ShelfCtx {
+        team: session.team().to_string(),
+        member: session.my_member()?,
+        device: session.my_device()?,
+        name: inner.config.me.name.clone(),
+        members: session.roster.members.iter().map(|m| (m.id.clone(), event::clean_text(&m.display, 40))).collect(),
+        file: svc.dir.join(super::shelf::FILE),
+    })
+}
+
+/// Seal and send one shelf event (a suggestion, or my list of ids). A sentence when it cannot go.
+pub fn shelf_send(build: impl FnOnce(&ShelfCtx, u64) -> TeamEvent) -> Result<(), String> {
+    let svc = service()?;
+    svc.keep_roster_fresh(now_ms(), SEND_FRESH_MS);
+    let ctx = shelf_ctx()?;
+    let (transport, session) = {
+        let inner = svc.inner.lock();
+        (inner.transport.clone().ok_or("Team is off. Turn it on in Settings first.")?, inner.session.clone().ok_or("Join a team first.")?)
+    };
+    let event = build(&ctx, now_ms());
+    seal_and_send(svc, &session, transport.as_ref(), &event)
+}
+
+/// A change the cockpit should look at (a suggestion arrived, the list of who has what changed).
+pub fn shelf_changed() {
+    if let Ok(svc) = service() {
+        svc.changed();
+    }
+}
+
+impl Service {
+    /// Tell the team which shelf items I have (ids only): when the list changed, and now and then so a
+    /// teammate who joined later learns it. Nothing goes while the list was never sent and is empty.
+    fn beat_shelf(&self, config: &TeamConfig, now: u64) {
+        let (session, transport) = {
+            let inner = self.inner.lock();
+            (inner.session.clone(), inner.transport.clone())
+        };
+        let (Some(session), Some(transport)) = (session, transport) else { return };
+        let file = self.dir.join(super::shelf::FILE);
+        let ids = super::shelf::store::read(&file).my_have();
+        if !super::shelf::store::have_due(&ids, now) {
+            return;
+        }
+        let (Ok(member), Ok(device)) = (session.my_member(), session.my_device()) else { return };
+        let event = super::shelf::inbound::have_event(session.team(), &member, &device, &config.me.name, ids.clone(), now);
+        match seal_and_send(self, &session, transport.as_ref(), &event) {
+            Ok(()) => super::shelf::store::have_sent(ids, now),
+            Err(error) => tracing::debug!(%error, "team: shelf list not sent"),
         }
     }
 }

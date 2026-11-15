@@ -1,6 +1,7 @@
 // Settings: the version line and "Check for updates". The same flow as the notice, with a button that says what it found.
 import { useT } from '../../../i18n';
 import { tauriUpdateTransport, type UpdateTransport } from '../../../lib/app-update';
+import { ToolsRepairLine } from '../../updates/ToolsMissingNotice';
 import { UpdateNoticeView } from '../../updates/UpdateNotice';
 import { useAppUpdate } from '../../updates/useAppUpdate';
 import { Btn, Note, SettingRow } from '../settings-ui';
@@ -20,6 +21,7 @@ export function UpdateRow({ transport = tauriUpdateTransport, versionLine = '' }
         </Btn>
         {state.phase === 'none' && <Note>{t('overview.version.newest')}</Note>}
         <UpdateNoticeView state={state} />
+        <ToolsRepairLine transport={transport} />
       </div>
     </SettingRow>
   );

@@ -17,6 +17,7 @@
 pub mod box_window;
 pub mod capture;
 pub mod message;
+pub mod message_marks;
 pub mod origin;
 pub mod pick;
 pub mod recheck;

@@ -223,6 +223,18 @@ impl WebCall for AppWebCall {
     }
 }
 
+/// The project folders this PC knows (the ones a device may open by default). Folders that are gone are left out.
+pub fn project_folders() -> Vec<PathBuf> {
+    let others = crate::operations::indexed_project_paths();
+    let store = crate::app_paths::app_data_dir();
+    crate::worktrees::folder::recent_light(&store, &others, 12).into_iter().filter(|p| p.state != "missing").map(|p| PathBuf::from(p.path)).collect()
+}
+
+/// Where received files land: the person's Downloads folder.
+pub fn downloads_dir() -> PathBuf {
+    crate::project_path::home_dir().map(|h| h.join("Downloads")).unwrap_or_else(|| std::env::temp_dir().join("pm-downloads"))
+}
+
 pub fn computer_name() -> String {
     crate::device_identity::computer_name()
 }
@@ -274,6 +286,11 @@ pub fn app_service() -> Result<Arc<DeviceLink>, String> {
         web_call: Arc::new(AppWebCall),
         web_address: Arc::new(web_address),
         health: Arc::new(app_health),
+        send_work_store: store("send-work.json"),
+        folders_store: store("files-folders.json"),
+        project_folders: Arc::new(project_folders),
+        downloads: Arc::new(downloads_dir),
+        deny_paths: vec![crate::app_paths::app_data_dir()],
     };
     let deps = Deps {
         keys: KeyStore::app_scoped("devices"),
@@ -291,6 +308,7 @@ pub fn app_service() -> Result<Arc<DeviceLink>, String> {
         options,
     };
     let svc = DeviceLink::new(deps)?;
+    crate::agent_dispatch::set_sender(Arc::new(AppSender));
     if SERVICE.set(svc.clone()).is_err() {
         return SERVICE.get().cloned().ok_or_else(|| "Devices could not start.".to_string());
     }
@@ -320,3 +338,59 @@ pub fn shutdown() {
     }
 }
 
+
+
+/// What `agent_dispatch` (MCP `run_agent` with account `device:<name>`) uses to reach the service. Sync: the bridge
+/// route is sync, so the async request runs on its own thread with a bounded wait.
+struct AppSender;
+
+impl crate::agent_dispatch::DeviceSender for AppSender {
+    fn resolve(&self, wanted: &str) -> Result<crate::agent_dispatch::Target, String> {
+        let svc = SERVICE.get().ok_or(OFF)?;
+        svc.resolve_device(wanted).map(|(node, name)| crate::agent_dispatch::Target { node, name })
+    }
+    fn may_send(&self, node: &str) -> bool {
+        SERVICE.get().is_some_and(|s| s.agents_may_send(node))
+    }
+    fn request(&self, node: &str, method: &str, path: &str, body: Value) -> Result<(u16, Value), String> {
+        let svc = SERVICE.get().cloned().ok_or(OFF)?;
+        let (node, method, path) = (node.to_string(), method.to_string(), path.to_string());
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(tauri::async_runtime::block_on(svc.request(&node, &method, &path, Some(body))));
+        });
+        rx.recv_timeout(Duration::from_secs(150)).map_err(|_| "That device did not answer in time.".to_string())?
+    }
+}
+
+/// What lending between my own PCs uses to reach the device link (`capacity_proxy::service::OwnPort`). Sync: lend's own calls
+/// are sync, so the async request runs on its own thread with a bounded wait.
+pub struct AppOwn;
+
+impl crate::capacity_proxy::service::OwnPort for AppOwn {
+    fn send(&self, node: &str, item: &crate::capacity_proxy::service::OwnItem) -> Result<(), String> {
+        let svc = SERVICE.get().cloned().ok_or(OFF)?;
+        let name = svc.own_peers().into_iter().find(|(n, _)| n == node).map(|(_, name)| name).unwrap_or_else(|| "That PC".into());
+        let body = serde_json::to_value(item).map_err(|e| e.to_string())?;
+        let node = node.to_string();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(tauri::async_runtime::block_on(svc.request(&node, "POST", "/lend/item", Some(body))));
+        });
+        match rx.recv_timeout(Duration::from_secs(20)) {
+            Ok(Ok((200, _))) => Ok(()),
+            Ok(Ok((403, _))) => Err(format!("{name} does not let this PC borrow yet. Turn on Borrow my agent sign-ins for this PC there: Settings > Devices.")),
+            Ok(Ok((_, v))) => Err(v["error"].as_str().unwrap_or("That PC refused it.").to_string()),
+            Ok(Err(_)) | Err(_) => Err(format!("{name} did not answer.")),
+        }
+    }
+    fn peers(&self) -> Vec<(String, String)> {
+        SERVICE.get().map(|s| s.own_peers()).unwrap_or_default()
+    }
+    fn my_node(&self) -> Option<String> {
+        SERVICE.get().and_then(|s| s.p2p().node_id()).map(|n| n.to_hex())
+    }
+    fn my_name(&self) -> String {
+        SERVICE.get().map(|s| s.self_name()).unwrap_or_default()
+    }
+}

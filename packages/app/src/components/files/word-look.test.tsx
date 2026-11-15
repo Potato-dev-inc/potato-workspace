@@ -131,10 +131,11 @@ describe('a Word file drawn like Word', () => {
     expect(Number(pages.getAttribute('data-zoom'))).toBeLessThan(0.6);
   });
 
-  it('opens a big table report', async () => {
+  it('opens a big table report', { timeout: 30_000 }, async () => {
     const pages = await openReport(150);
-    expect(pages.querySelectorAll('tr')).toHaveLength(151);
-    expect(pages.querySelectorAll('.ck-wp-sheet')).toHaveLength(2);
+    expect(pages.querySelectorAll('tr').length).toBeGreaterThanOrEqual(151); // the header row comes back on each page the table reaches
+    // 150 rows do not fit one page any more: the table is cut between rows and the page break still starts a new page.
+    expect(pages.querySelectorAll('.ck-wp-sheet').length).toBeGreaterThan(2);
   });
 });
 

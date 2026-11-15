@@ -73,6 +73,8 @@ pub enum Via {
     LockScreen,
     /// A tap or a reply in the Telegram chat (`channels/`).
     Telegram,
+    /// A button on a Windows notification on this PC (`desktop_toast`). The person at the desktop decides.
+    DesktopToast,
 }
 
 /// The paired device that is answering.
@@ -127,7 +129,8 @@ pub trait Env {
     /// Held while the live screen is re-read and the key is typed, so two answers cannot both pass.
     fn lock_answers(&self) -> Box<dyn std::any::Any>;
     fn deliver(&self, pane_id: &str, prompt_id: &str, choice: &str, permit: &AnswerPermit) -> Delivered;
-    fn answer_question(&self, question_id: &str, choice: Option<&str>, text: Option<&str>) -> QuestionResult;
+    /// `by` is who answered (`phone` or `desktop`), for the card's receipt.
+    fn answer_question(&self, question_id: &str, choice: Option<&str>, text: Option<&str>, by: &str) -> QuestionResult;
     /// The kind a question card was raised with (`budget`, `issue_start`...); `None` for an agent's own question.
     fn question_kind(&self, question_id: &str) -> Option<String>;
     /// The tombstone of this item will say how it was answered.
@@ -330,6 +333,7 @@ fn answer_prompt(env: &dyn Env, caller: &Caller, item: &Item, request: &Request,
         Via::Card => Decider::Device(caller.device_id.clone()),
         Via::LockScreen => Decider::LockScreen(caller.device_id.clone()),
         Via::Telegram => Decider::Channel(caller.device_id.clone()),
+        Via::DesktopToast => Decider::Desktop,
     };
     for attempt in 0..MAX_ATTEMPTS {
         let Some(live) = env.live_prompt(&pane.id) else { return gone("moved_on") };
@@ -387,7 +391,7 @@ fn answer_card(env: &dyn Env, caller: &Caller, item: &Item, request: &Request, k
     if let Some(label) = key.and_then(|k| env.ledger().lock().get(&caller.device_id, k, env.now_ms())) {
         return already_by_you(&label);
     }
-    match env.answer_question(subject, choice, text) {
+    match env.answer_question(subject, choice, text, if caller.via == Via::DesktopToast { "desktop" } else { "phone" }) {
         QuestionResult::Answered { label } => {
             let now = env.now_ms();
             let label = label.unwrap_or_else(|| "Answered".to_string());
@@ -409,15 +413,17 @@ fn recorded(env: &dyn Env, caller: &Caller, item: &Item, label: &str, key: Optio
     if let Some(key) = key {
         env.ledger().lock().put(&caller.device_id, key, label.to_string(), now);
     }
+    // A button on this PC's own notification is the person at the desktop, not a phone: its receipt says so.
+    let on_pc = caller.via == Via::DesktopToast;
     env.note_resolution(
         &item.key,
         Resolution {
             state: "answered".into(),
-            by: Some("phone".into()),
+            by: Some(if on_pc { "desktop" } else { "phone" }.into()),
             choice_label: Some(label.to_string()),
             at_ms: now,
-            device_name: Some(caller.device_name.clone()),
-            device_id: Some(caller.device_id.clone()),
+            device_name: (!on_pc).then(|| caller.device_name.clone()),
+            device_id: (!on_pc).then(|| caller.device_id.clone()),
             ..Resolution::default()
         },
     );
@@ -426,6 +432,7 @@ fn recorded(env: &dyn Env, caller: &Caller, item: &Item, label: &str, key: Optio
         Via::LockScreen => (format!("A phone answered from its lock screen: {label}"), "push"),
         Via::Card => (format!("A phone answered a card: {label}"), "card"),
         Via::Telegram => (format!("Answered from Telegram: {label}"), "telegram"),
+        Via::DesktopToast => (format!("Answered from a notification on this PC: {label}"), "desktop_toast"),
     };
     env.audit(caller, &summary, json!({"kind": item.kind.as_str(), "choice": label, "via": via}));
 }
@@ -483,9 +490,9 @@ impl Env for RealEnv {
         }
     }
 
-    fn answer_question(&self, question_id: &str, choice: Option<&str>, text: Option<&str>) -> QuestionResult {
+    fn answer_question(&self, question_id: &str, choice: Option<&str>, text: Option<&str>, by: &str) -> QuestionResult {
         let now = crate::questions::now_ms();
-        match crate::questions::store().answer(question_id, choice, text, "phone", now) {
+        match crate::questions::store().answer(question_id, choice, text, by, now) {
             Ok(resolution) => {
                 let label = resolution.question.answer.as_ref().and_then(|a| {
                     a.choice_id
@@ -519,6 +526,7 @@ impl Env for RealEnv {
         let (kind, who) = match caller.via {
             Via::Telegram => (crate::audit::Kind::ChannelAnswer, crate::audit::Who::Channel("telegram".into())),
             Via::LockScreen | Via::Card => (crate::audit::Kind::Approval, crate::audit::Who::Device(Some(caller.device_id.clone()))),
+            Via::DesktopToast => (crate::audit::Kind::Approval, crate::audit::Who::Desktop),
         };
         crate::audit::record(kind, who, summary, detail);
     }
@@ -688,7 +696,7 @@ pub(crate) mod testing {
             self.typed.lock().push((pane_id.to_string(), choice.to_string()));
             Delivered::Typed
         }
-        fn answer_question(&self, _id: &str, choice: Option<&str>, _text: Option<&str>) -> QuestionResult {
+        fn answer_question(&self, _id: &str, choice: Option<&str>, _text: Option<&str>, _by: &str) -> QuestionResult {
             self.question_result.lock().take().unwrap_or(QuestionResult::Answered { label: choice.map(str::to_string) })
         }
         fn question_kind(&self, question_id: &str) -> Option<String> {

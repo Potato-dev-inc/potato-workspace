@@ -8,7 +8,9 @@ import { PHONE_ASKING_REPLY, PHONE_CHAT_REPLY, PHONE_QUEUED_MESSAGES, phoneLiveR
 import { phoneRichReply } from './phone-chat-rich-fixture';
 import { phoneCompanionChat, phoneCompanionFeed, phoneCompanionView, phoneRenderArtifact, phoneRenderReply } from './phone-render-fixture';
 import { PHONE_TEAM_JOB, PHONE_TEAM_OFF, phoneTeamReply } from './phone-team-fixtures';
+import { PHONE_HELPERS, phoneDoneReply } from './phone-home-fixtures';
 import type { HarnessScenario } from './types';
+import { FIXTURE_TURN_FILES, SAMPLE_PATCH, sampleDay, sampleNowDiff } from './timeline-fixtures';
 
 export const MOCK_BRIDGE_URL = 'http://127.0.0.1:17421/bridge';
 
@@ -61,7 +63,16 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
     return json({ month: { id: '2026-11', label: 'November 2026', startMs: 0, endMs: 1 }, months: [], rows: [], totals: { turns: 41, busyMs: 0, filesChanged: 0, added: 0, deleted: 0, merged: 0, limitHits: 0, limitedMs: 0 }, notes: [] });
   }
   if (route === '/previews') return json({ previews: PHONE_PREVIEWS });
-  if (route === '/settings') return json({ ...DEFAULT_PUBLIC_SETTINGS });
+  if (route === '/settings') return json({ ...DEFAULT_PUBLIC_SETTINGS, ...(phone.timeline ? { timeline_day_enabled: true } : {}) });
+  if (route.startsWith('/timeline/') && phone.timeline) {
+    if (route === '/timeline/point/diff') return json({ changes: FIXTURE_TURN_FILES });
+    if (route === '/timeline/point/now-diff') return json(sampleNowDiff());
+    if (route === '/timeline/point/patch') return json({ patch: SAMPLE_PATCH, truncated: false });
+    if (route === '/timeline/point/restore') return json({ safetyId: '9', written: 4, removed: 1, failed: [] });
+    const asked = decodeURIComponent(route.slice('/timeline/'.length));
+    const day = sampleDay();
+    return json({ ...day, date: asked, today: asked, dates: [asked] });
+  }
   if (route === '/attention' && method === 'GET' && phone.attention) {
     const { blocking, ready = 0, items, device } = phone.attention;
     const open = items?.filter((i) => i.state === 'open') ?? [];
@@ -85,6 +96,8 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
     return json(outcome);
   }
   if (route === '/questions') return json({ questions: phone.questions === false ? [] : (phone.questionList ?? [PHONE_QUESTION]) });
+  if (phone.home && route.startsWith('/phone/done') && method === 'GET') return json(phoneDoneReply());
+  if (phone.home && route === '/phone/helpers' && method === 'GET') return json(PHONE_HELPERS);
   if (route === '/digest') return json(phone.digest === false ? { ...PHONE_DIGEST, empty: true } : PHONE_DIGEST);
   if (route === '/agents/types') return json(PHONE_AGENT_TYPES);
   if (phone.companion) {

@@ -5,9 +5,10 @@ use super::AppState;
 use crate::artifacts::{self, Artifact};
 use serde::Serialize;
 use std::path::PathBuf;
-use tauri::State;
+use tauri::http::{Request, Response};
+use tauri::{Runtime, State, UriSchemeContext, UriSchemeResponder};
 
-fn project_of(state: &AppState, pane_id: &str) -> Result<PathBuf, String> {
+pub(super) fn project_of(state: &AppState, pane_id: &str) -> Result<PathBuf, String> {
     let registry = state.registry.lock();
     let cwd = registry.get(pane_id).map(|pane| pane.info.cwd.clone()).unwrap_or_else(|| registry.project_path.clone());
     if cwd.trim().is_empty() {
@@ -120,4 +121,36 @@ pub async fn artifacts_pop_out(app: tauri::AppHandle, state: State<'_, AppState>
     // The pane must exist and have a project: the window is only ever for a page of that agent's own project.
     project_of(&state, &pane_id)?;
     crate::app_windows::open_artifact_window(&app, &pane_id, &id, &title)
+}
+
+/// Opens a page as a tab of the agent browser, at its app-only address (`artifacts::serve`). The agent browser must be
+/// on (Labs). The page keeps its lock (the address is served with a sandbox policy) and the person's window stays theirs:
+/// every agent joins it, as with any page in that browser.
+#[tauri::command]
+pub async fn artifacts_open_in_agent_browser(app: tauri::AppHandle, state: State<'_, AppState>, pane_id: String, id: String) -> Result<(), String> {
+    if !crate::browser::live::enabled(&app) {
+        return Err("BROWSER_OFF: Turn on the agent browser in Settings > Labs first.".into());
+    }
+    let project = project_of(&state, &pane_id)?;
+    blocking(move || {
+        let address = artifacts::open_tab_address(project, &id, &pane_id)?;
+        crate::point::window::open_person_browser(&app, Some(&address)).map(|_| ())
+    })
+    .await
+}
+
+/// The reply to one request for an artifact tab's address (`potato-artifact`). Only agent browser windows may ask (the
+/// app's own windows never load it), only GET is answered, and the token in the path is the only credential.
+pub fn artifact_serve_protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u8>>, responder: UriSchemeResponder) {
+    let from_browser = ctx.webview_label().starts_with("preview-");
+    let method = request.method().as_str().to_string();
+    let path = request.uri().path().to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        let page = if from_browser { artifacts::respond_to_tab(&method, &path) } else { artifacts::respond_to_tab("GET", "/x/") };
+        let mut builder = Response::builder().status(page.status);
+        for (name, value) in &page.headers {
+            builder = builder.header(*name, value.as_str());
+        }
+        responder.respond(builder.body(page.body).unwrap_or_else(|_| Response::builder().status(500).body(Vec::new()).expect("empty response")));
+    });
 }

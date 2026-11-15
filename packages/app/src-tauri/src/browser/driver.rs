@@ -29,6 +29,8 @@ pub enum Phase {
     Driving,
     /// The person has the page. `stopped` is true when they pressed Stop (the agent should not come back).
     Paused { stopped: bool },
+    /// The page is a sign-in page. The person signs in; the agent waits until they press Continue (R4-12).
+    SignIn,
 }
 
 /// Why a step was not allowed.
@@ -45,6 +47,11 @@ pub const PAUSED: Refused = Refused {
 pub const STOPPED: Refused = Refused {
     code: "STOPPED_BY_PERSON",
     message: "The person pressed Stop on the browser. Do not use the browser again unless they ask you to.",
+};
+
+pub const SIGN_IN: Refused = Refused {
+    code: "SIGN_IN_WAITING",
+    message: "This page needs the person to sign in. They are doing it in the browser window now. Never type a password. Wait: they press Continue when they are done, then you may go on.",
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -106,6 +113,7 @@ impl Driver {
         match self.phase {
             Phase::Paused { stopped: true } => return Err(STOPPED),
             Phase::Paused { stopped: false } => return Err(PAUSED),
+            Phase::SignIn => return Err(SIGN_IN),
             Phase::Idle | Phase::Driving => {}
         }
         if self.phase == Phase::Idle {
@@ -154,9 +162,28 @@ impl Driver {
         true
     }
 
+    /// The page in front is a sign-in page: the agent stops and the person signs in. The step list says so.
+    pub fn need_sign_in(&mut self, now: u64) {
+        if !matches!(self.phase, Phase::Driving | Phase::Idle) {
+            return;
+        }
+        self.phase = Phase::SignIn;
+        self.last_step_ms = now;
+        let n = self.next_n;
+        self.next_n += 1;
+        self.steps.push_back(Step { n, text: "Waiting for you to sign in".to_string() });
+        while self.steps.len() > KEEP_STEPS {
+            self.steps.pop_front();
+        }
+    }
+
+    pub fn signing_in(&self) -> bool {
+        self.phase == Phase::SignIn
+    }
+
     /// The person pressed "Take over".
     pub fn take_over(&mut self) {
-        if self.phase != Phase::Idle {
+        if !matches!(self.phase, Phase::Idle | Phase::SignIn) {
             self.phase = Phase::Paused { stopped: false };
         }
     }
@@ -168,7 +195,7 @@ impl Driver {
 
     /// The person pressed "Give back".
     pub fn give_back(&mut self, now: u64) {
-        if matches!(self.phase, Phase::Paused { .. }) {
+        if matches!(self.phase, Phase::Paused { .. } | Phase::SignIn) {
             self.phase = Phase::Driving;
             self.last_step_ms = now;
         }
@@ -182,6 +209,7 @@ impl Driver {
         match self.phase {
             Phase::Idle => BarView::hidden(),
             Phase::Driving => BarView { visible: true, state: "driving".into(), reason: String::new(), agent: self.agent.clone(), steps: self.steps.iter().cloned().collect() },
+            Phase::SignIn => BarView { visible: true, state: "paused".into(), reason: "sign_in".into(), agent: self.agent.clone(), steps: self.steps.iter().cloned().collect() },
             Phase::Paused { stopped } => BarView {
                 visible: true,
                 state: "paused".into(),
@@ -286,6 +314,37 @@ mod tests {
         let mut idle = Driver::default();
         idle.take_over();
         assert_eq!(idle.phase(), Phase::Idle);
+    }
+
+    #[test]
+    fn a_sign_in_page_stops_the_agent_until_the_person_presses_continue() {
+        let mut d = Driver::default();
+        let n = driving(&mut d, 1_000);
+        d.finish(n, None, 1_100);
+        d.need_sign_in(1_200);
+        assert!(d.signing_in());
+        let view = d.view(1_300);
+        assert!(view.visible && view.state == "paused" && view.reason == "sign_in");
+        assert_eq!(view.steps.last().unwrap().text, "Waiting for you to sign in");
+        // Every step is refused, and the person typing their password does not change anything.
+        assert_eq!(d.begin("Claude Code", "Type", 1_400).unwrap_err(), SIGN_IN);
+        assert!(!d.person_input(1_500));
+        d.take_over();
+        assert!(d.signing_in(), "Take over must not turn the wait into an ordinary pause");
+        // It does not time out while the person signs in.
+        assert!(d.view(1_200 + IDLE_HIDE_MS * 10).visible);
+        d.give_back(900_000);
+        assert!(!d.signing_in());
+        assert!(d.begin("Claude Code", "Read the page", 900_100).is_ok());
+    }
+
+    #[test]
+    fn stop_beats_a_sign_in_wait() {
+        let mut d = Driver::default();
+        driving(&mut d, 1_000);
+        d.need_sign_in(1_100);
+        d.stop();
+        assert_eq!(d.begin("A", "x", 1_200).unwrap_err(), STOPPED);
     }
 
     #[test]

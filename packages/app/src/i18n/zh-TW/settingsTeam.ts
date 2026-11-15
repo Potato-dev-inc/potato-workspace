@@ -102,7 +102,7 @@ export const settingsTeam: Partial<Record<EnglishKey, string>> = {
   'teamPage.joinLinkOpen': '查看這個邀請',
   'teamPage.inviteWorkerLink': '只要傳這一個連結。它只能用一次，24 小時內有效。',
   'teamPage.inviteOlder': '或傳舊版邀請（連結加代碼）',
-  'teamPage.inviteUpdate': '你的 Worker 版本較舊，還不能產生一次性連結。請更新你的 Worker：',
+  'teamPage.inviteUpdate': '你的 Worker 版本較舊，還不能產生一次性連結。請按下方的按鈕更新：',
   'join.notLink': '這不是 Potato Worker 的邀請連結。',
   'join.needsNewer': '這個版本無法開啟邀請連結。請更新 Potato Workspace。',
   'join.thisTeam': '這個團隊',

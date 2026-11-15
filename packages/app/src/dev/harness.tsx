@@ -11,6 +11,7 @@ import { scenarios } from './scenarios';
 import { setLanguagePref } from '../i18n';
 import { applyTheme } from '../lib/settings';
 import type { HarnessDom, HarnessScenario } from './types';
+import { seedShare } from './share-seed';
 
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
@@ -86,6 +87,7 @@ export async function bootHarness(name: string): Promise<() => JSX.Element> {
       /* storage blocked: the phone follows its own setting */
     }
     installMockBridge(scenario);
+    if (scenario.phone?.share) await seedShare(scenario.phone.share);
   } else {
     installTauriMock(scenario);
   }
@@ -93,6 +95,7 @@ export async function bootHarness(name: string): Promise<() => JSX.Element> {
   if (scenario.route === 'phone') {
     q.set('pwa', '1');
     for (const [key, value] of new URLSearchParams(scenario.phone?.search ?? '')) q.set(key, value);
+    if (scenario.phone?.share) q.set('share', '1');
   } else if (scenario.route === 'settings') {
     q.set('settings', '1');
     if (scenario.settingsTab) q.set('tab', scenario.settingsTab);

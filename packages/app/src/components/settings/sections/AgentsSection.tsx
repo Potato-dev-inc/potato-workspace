@@ -35,6 +35,7 @@ import { useMessageRail } from '../../../lib/messageRail';
 import { useHelpersInSidebar } from '../../../lib/helpersInSidebar';
 import { KeepGoingRows } from './KeepGoingRows';
 import { LinuxRows } from './LinuxRows';
+import { copyOfferRow } from './CopyOfferRow';
 
 type HookMode = 'off' | 'shadow' | 'evidence';
 
@@ -207,7 +208,7 @@ export const agentsRows: RowDef[] = [
     hint: 'Helpers you make. They wait ready with no tokens used; the next task that fits uses one.',
     keywords: 'standby helper helpers ready waiting idle reviewer warm agent model project name limit at most close after task',
     group: 'Standby helpers',
-    render: (env) => <StandbyHelpersSettings defaultProject={env.settings.project_path ?? null} onSaved={env.markSaved} />,
+    render: (env) => <StandbyHelpersSettings onSaved={env.markSaved} />,
   },
   {
     id: 'agent-default-models',
@@ -386,6 +387,7 @@ export const agentsRows: RowDef[] = [
     group: 'Keep going',
     render: (env) => <KeepGoingRows onSaved={env.markSaved} />,
   },
+  copyOfferRow,
   {
     id: 'linux',
     label: 'Run agents in Linux (WSL)',

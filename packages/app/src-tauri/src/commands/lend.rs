@@ -207,3 +207,21 @@ pub async fn lend_import_pm(webview: tauri::Webview) -> Result<(), String> {
     guard(&webview)?;
     Err(NOT_IN_THIS_MODE.into())
 }
+
+/// Ask one of my own paired PCs to lend an agent (no Team needed): over the device link. The other PC must have
+/// "Borrow my agent sign-ins" switched on for this PC; if not, it says so in plain words.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_request_own(
+    webview: tauri::Webview,
+    node: String,
+    agent_id: String,
+    secs: u64,
+    reason: String,
+    profile_id: Option<String>,
+    profile_name: Option<String>,
+) -> Result<LendRequest, String> {
+    let svc = on(&webview)?;
+    tauri::async_runtime::spawn_blocking(move || svc.request_own(&node, &agent_id, secs, &reason, profile_id.as_deref(), profile_name.as_deref()))
+        .await
+        .map_err(|e| e.to_string())?
+}

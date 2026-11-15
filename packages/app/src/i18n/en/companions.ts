@@ -23,4 +23,5 @@ export const companions = {
   'companions.accent.sun': 'Sun',
   'companions.awakeNote': 'Three companions can be awake at once. The others sleep until you wake them.',
   'pet.companion.resting': '{name}, resting',
+  'pet.companion.mood': '{name}: {mood}',
 } as const;

@@ -59,6 +59,7 @@ export const sidebar: Partial<Record<EnglishKey, string>> = {
   'sidebar.setUpAgents': '設定 AI 助理',
   'sidebar.yourPlans': '你的方案',
   'sidebar.scores': '評分',
+  'sidebar.theme': '主題',
   'sidebar.switchToLight': '切換為淺色',
   'sidebar.switchToDark': '切換為深色',
   'sidebar.mode': '模式',

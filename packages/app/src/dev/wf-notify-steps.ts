@@ -29,3 +29,11 @@ export const agentRows = async (dom: HarnessDom) => {
   document.querySelector('select[aria-label="Notifications for Claude"]')?.scrollIntoView({ block: 'center' });
   await dom.sleep(500);
 };
+
+export const pcRow = async (dom: HarnessDom) => {
+  await dom.waitFor('.st-adv-toggle');
+  await dom.click('.st-adv-toggle');
+  await dom.waitFor('[data-row="pc-notifications"]');
+  document.querySelector('[data-row="pc-notifications"]')?.scrollIntoView({ block: 'center' });
+  await dom.sleep(300);
+};

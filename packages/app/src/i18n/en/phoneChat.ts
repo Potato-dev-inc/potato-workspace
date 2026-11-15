@@ -72,4 +72,6 @@ export const phoneChat = {
   'phone.msg.retried': 'Sent again as a new message.',
   'phone.msg.retryFailed': 'It did not go. Try again.',
   'phone.msg.close': 'Close',
+  'phone.share.title': 'New chat with this',
+  'phone.share.hint': 'Pick an agent and a project. Nothing is sent until you press Send.',
 } as const;

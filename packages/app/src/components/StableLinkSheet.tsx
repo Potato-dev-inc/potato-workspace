@@ -3,18 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../i18n';
 import { errorSentence } from '../lib/sayError';
-import { tauri } from '../lib/tauri';
 import { teamApi } from '../lib/team';
 import type { TunnelStatus } from '../lib/tauri-types';
 import { Btn, FieldInput } from './settings/settings-ui';
 import { WorkerSuggestion } from './settings/WorkerSuggestion';
-import { workersDevAddress, WORKER_GUIDE_URL, type WorkerHealth } from '../lib/worker';
+import { WorkerUpdateButton } from './settings/WorkerUpdateButton';
+import { workersDevAddress, type WorkerHealth } from '../lib/worker';
+import type { UpdateApi } from '../lib/workerUpdate';
 import { draftFromConfig, draftProblem, statusLine, toInput } from './settings/tunnel-model';
 import type { TunnelApi } from './settings/TunnelSection';
-
-export const STABLE_GUIDE_URL = WORKER_GUIDE_URL;
-/** The three commands, run inside the Worker folder (relay/worker in the Potato Workspace folder). One Worker: team relay, phone link and invites. */
-const COMMANDS = ['cd relay/worker && npm install', 'npx wrangler login', 'npm run deploy']; // i18n-ok: shell commands
 
 /** A team relay address saved in Settings > Team, when it is a workers.dev address. */
 async function defaultRelaySuggestion(): Promise<string | null> {
@@ -56,6 +53,7 @@ export function StableLinkSheet({
   onClose,
   relaySuggestion = defaultRelaySuggestion,
   checkWorker,
+  updateApi,
 }: {
   api: TunnelApi;
   initial: TunnelStatus | null;
@@ -65,6 +63,8 @@ export function StableLinkSheet({
   relaySuggestion?: () => Promise<string | null>;
   /** Asks a Worker what it can do (tests give their own; the default asks over the desktop shell). */
   checkWorker?: (address: string) => Promise<WorkerHealth | null>;
+  /** Runs the "Set up stable link" steps (tests give their own; the default uses the desktop shell). */
+  updateApi?: UpdateApi;
 }) {
   const t = useT();
   const [status, setStatus] = useState<TunnelStatus | null>(initial);
@@ -147,12 +147,7 @@ export function StableLinkSheet({
           <li>
             <strong>{t('stable.step2')}</strong>
             <p>{t('stable.deployHelp')}</p>
-            {COMMANDS.map((c) => (
-              <CopyLine key={c} text={c} label={`${t('settings.copy')}: ${c}`} />
-            ))}
-            <button type="button" className="st-linkbtn" data-testid="stable-guide" onClick={() => void tauri.openExternalUrl(STABLE_GUIDE_URL)}>
-              {t('stable.guide')}
-            </button>
+            <WorkerUpdateButton address={workersDevAddress(worker) ?? relay} label="wu.setupLink" api={updateApi} onDone={(url) => url && setWorker(url)} />
           </li>
           <li>
             <strong>{t('stable.step3')}</strong>
@@ -165,6 +160,7 @@ export function StableLinkSheet({
               noteKey="stable.relayNote"
               onUse={setWorker}
               check={checkWorker}
+              updateApi={updateApi}
             />
             <div className="flex gap-2 items-center">
               <FieldInput

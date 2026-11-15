@@ -5,7 +5,7 @@
 import { useLanguage, useT } from '../../i18n';
 import { ErrorCard } from '../common/ErrorCard';
 import type { AppUpdateState } from './useAppUpdate';
-import { checkFailureLine, runningJobWarning } from '../../lib/app-update';
+import { checkFailureLine, offerLine, runningJobWarning } from '../../lib/app-update';
 import { downloadLine } from '../../lib/update-progress';
 import { targetLabel } from '../../lib/update-schedule';
 import '../../styles/app-update.css';
@@ -13,11 +13,21 @@ import '../../styles/app-update.css';
 /** "Downloading 42%", the bar, and under it "58 MB of 138 MB · 3.1 MB/s · about 30 seconds left". Full: "Installing…". */
 function DownloadingView({ state }: { state: AppUpdateState }) {
   const t = useT();
-  const { percent, reading, stalled } = state;
+  const { percent, reading, stalled, step } = state;
   const full = reading !== null && reading.total !== null && reading.downloaded >= reading.total;
-  if (full) return <span>{t('overview.update.installingStep')}</span>;
+  if (full && step !== 'preparing') return <span>{t('overview.update.installingStep')}</span>;
   return (
     <>
+      {step === 'preparing' && (
+        <span className="app-update-detail" data-testid="update-step">
+          {t('overview.update.preparing')}
+        </span>
+      )}
+      {step === 'fallback' && (
+        <span className="app-update-detail" data-testid="update-step">
+          {t('overview.update.fallbackFull')}
+        </span>
+      )}
       <span>{percent === null ? t('overview.update.downloading') : t('overview.update.downloadingPercent', { percent })}</span>
       {percent !== null && <progress className="app-update-bar" max={100} value={percent} aria-label={t('overview.update.progress')} />}
       {reading && (
@@ -79,7 +89,7 @@ export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
     <div className="app-update-notice" role="status" data-phase={phase}>
       {phase === 'available' && offer && (
         <>
-          <span>{t('overview.update.available', { version: offer.version })}</span>
+          <span>{offerLine(offer)}</span>
           <button type="button" className="app-update-btn" onClick={() => void state.update()}>
             {t('overview.update.update')}
           </button>

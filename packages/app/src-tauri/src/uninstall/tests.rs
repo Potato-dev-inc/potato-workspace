@@ -240,8 +240,8 @@ fn no_windows_integration_beyond_the_ones_the_uninstall_knows() {
     let spawns = ["hidden_command(", "Command::new(", "hidden_tokio_command(", "shell_exec"];
     for file in all {
         let path = file.to_string_lossy().replace('\\', "/");
-        // Test files name the needles in strings; the autostart module goes through the plugin, not the registry.
-        if path.contains("/uninstall/tests") || path.ends_with("/autostart.rs") {
+        // Test files name the needles in strings; the autostart module goes through the plugin, not the registry; deep_link.rs only registers the scheme in debug builds (the installer owns it, and its uninstaller removes it).
+        if path.contains("/uninstall/tests") || path.ends_with("/autostart.rs") || path.ends_with("/deep_link.rs") {
             continue;
         }
         let text = read(&file);
@@ -251,8 +251,10 @@ fn no_windows_integration_beyond_the_ones_the_uninstall_knows() {
                     assert!(!line.contains(&format!("\"{p}")), "{path} starts `{p}`: add a row to the uninstall inventory (5.1 B) and a remover first");
                 }
             }
+            // Wiring the plugin and our own module is not a registration; `register_all` still counts.
+            let wired = line.replace("mod deep_link", "").replace("deep_link::", "").replace("tauri_plugin_deep_link::init", "");
             for a in &anywhere {
-                assert!(!line.contains(a.as_str()), "{path} uses `{a}`: add a row to the uninstall inventory (5.1 B) and a remover first");
+                assert!(!wired.contains(a.as_str()), "{path} uses `{a}`: add a row to the uninstall inventory (5.1 B) and a remover first");
             }
         }
     }

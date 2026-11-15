@@ -93,7 +93,8 @@ describe('TunnelSection: stable link', () => {
     expect([...select.options].at(-1)!.textContent).toBe('Stable link (your own Cloudflare Worker)');
 
     act(() => setValue(select, 'stable'));
-    expect(host.textContent).toContain('relay/worker/README.md');
+    expect(host.textContent).toContain('Set it up once with one button');
+    expect(host.textContent).not.toMatch(/npm |wrangler|README/);
     expect(host.textContent).toContain('pair once again');
     expect(button('Save and restart')!.disabled).toBe(true); // no address yet
     act(() => setValue(host.querySelector('input[aria-label="Worker address"]')!, WORKER));

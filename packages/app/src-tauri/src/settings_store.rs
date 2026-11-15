@@ -23,6 +23,9 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "companion_vault_enabled",
     "discord_bot_enabled",
     "project_guide_enabled",
+    "markup_bar_enabled",
+    "timeline_day_enabled",
+    "smaller_updates_enabled",
 ];
 
 /// Tests turn the override on through this; it is off in every test unless a test sets it.
@@ -97,6 +100,8 @@ const PATCHABLE_KEYS: &[&str] = &[
     "companion_vault_enabled",
     "discord_bot_enabled",
     "project_guide_enabled",
+    "markup_bar_enabled",
+    "timeline_day_enabled",
     "desktop_pet_size",
     "desktop_pet_quiet",
     "desktop_pet_hidden_until_ms",
@@ -104,6 +109,8 @@ const PATCHABLE_KEYS: &[&str] = &[
     "helper_default_models",
     "agent_default_models",
     "early_versions_enabled",
+    "smaller_updates_enabled",
+    "app_only_failed_for",
 ];
 
 pub fn default_public_settings() -> Value {
@@ -160,6 +167,10 @@ pub fn default_public_settings() -> Value {
         "discord_bot_enabled": false,
         // Project guide (Labs): the person's agent writes a short guide to a project, only when asked. Off until chosen. Rust: project_guide.
         "project_guide_enabled": false,
+        // Mark up pages (Labs): the floating bar on a page an agent made, and "Open in agent browser". Off until chosen. Rust: markup.
+        "markup_bar_enabled": false,
+        // The Today page (Labs): one line for the whole day with a way back to any point on it. Off until chosen. Rust: timeline.
+        "timeline_day_enabled": false,
         "desktop_pet_size": "medium",
         "desktop_pet_quiet": false,
         "desktop_pet_hidden_until_ms": 0,
@@ -171,6 +182,10 @@ pub fn default_public_settings() -> Value {
         "agent_default_models": {},
         // Get early versions (beta): the updater also reads the beta address and takes the newer. Off until chosen; not a Labs flag.
         "early_versions_enabled": false,
+        // Smaller updates (Labs): an update may take the app-only package and leave the built-in tools alone. Off until chosen. Rust: commands/update_plan.
+        "smaller_updates_enabled": false,
+        // The version whose small update failed; it takes the full package from then on. Written by the app, empty when none.
+        "app_only_failed_for": "",
     })
 }
 
@@ -463,6 +478,13 @@ mod spaces_labs_tests {
     }
 
     #[test]
+    fn the_today_page_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "timeline_day_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"timeline_day_enabled"));
+        assert_eq!(default_public_settings()["timeline_day_enabled"], serde_json::json!(false));
+    }
+
+    #[test]
     fn project_guide_is_a_dev_labs_key_patchable_and_off_by_default() {
         assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "project_guide_enabled").count(), 1);
         assert!(PATCHABLE_KEYS.contains(&"project_guide_enabled"));
@@ -477,6 +499,13 @@ mod spaces_labs_tests {
         assert_eq!(default_public_settings()["agent_browser_enabled"], serde_json::json!(false));
         // The route reads the same key the Labs switch writes.
         assert_eq!(crate::browser::live::LABS_KEY, "agent_browser_enabled");
+    }
+
+    #[test]
+    fn markup_bar_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "markup_bar_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"markup_bar_enabled"));
+        assert_eq!(default_public_settings()["markup_bar_enabled"], serde_json::json!(false));
     }
 
     #[test]
@@ -507,6 +536,17 @@ mod early_versions_tests {
         assert_eq!(with_dev_labs(&default_public_settings(), true)["early_versions_enabled"], json!(false));
         let on = merge_public_settings(&default_public_settings(), &json!({"early_versions_enabled": true}));
         assert!(crate::commands::update_channel::early_versions_on(&on));
+    }
+
+    #[test]
+    fn smaller_updates_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == crate::commands::update_plan::SETTING_KEY).count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"smaller_updates_enabled") && PATCHABLE_KEYS.contains(&"app_only_failed_for"));
+        assert_eq!(default_public_settings()["smaller_updates_enabled"], json!(false));
+        assert_eq!(default_public_settings()["app_only_failed_for"], json!(""));
+        assert_eq!(with_dev_labs(&default_public_settings(), true)["smaller_updates_enabled"], json!(true));
+        let failed = merge_public_settings(&default_public_settings(), &json!({"app_only_failed_for": "1.2.1"}));
+        assert_eq!(failed["app_only_failed_for"], json!("1.2.1"));
     }
 }
 

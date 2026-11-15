@@ -835,3 +835,31 @@ fn followup_on_a_closed_chat_without_a_session_id_says_so_instead_of_starting_fr
     assert!(error.context["recovery"].as_str().unwrap().contains("run_agent"));
     assert!(get(&id).is_none(), "nothing was started");
 }
+
+#[test]
+fn an_agent_may_steer_a_chat_the_person_put_under_its_pane_and_loses_it_when_it_is_taken_back() {
+    use crate::pty::pane_parent::RequestCaller;
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.adopt_under(Some("pane-boss"));
+    assert_eq!(rig.conversations.record(&id).unwrap().parent_pane_id.as_deref(), Some("pane-boss"), "kept for a restart");
+    // An agent in another pane, and one with no pane the app could place: still strangers.
+    for caller in [Some("pane-other"), None] {
+        let _scope = RequestCaller::enter(caller.map(str::to_string));
+        let result = call(&rig, "POST", "agents/interrupt", json!({ "handle": id }), Some("session-B")).unwrap();
+        assert_eq!(result.unwrap_err().code, "NOT_YOUR_CHAT", "{caller:?}");
+    }
+    // The agent in the parent pane may send it the next task and stop it.
+    {
+        let _scope = RequestCaller::enter(Some("pane-boss".into()));
+        let done = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 1", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-B")).unwrap().unwrap();
+        assert_eq!(done["status"], "completed");
+        assert!(call(&rig, "POST", "agents/interrupt", json!({ "handle": id }), Some("session-B")).unwrap().is_ok());
+    }
+    // "Make it a main agent again": the right goes with the link.
+    rig.chat.adopt_under(None);
+    assert_eq!(rig.conversations.record(&id).unwrap().parent_pane_id, None);
+    let _scope = RequestCaller::enter(Some("pane-boss".into()));
+    let result = call(&rig, "POST", "agents/interrupt", json!({ "handle": id }), Some("session-B")).unwrap();
+    assert_eq!(result.unwrap_err().code, "NOT_YOUR_CHAT");
+}

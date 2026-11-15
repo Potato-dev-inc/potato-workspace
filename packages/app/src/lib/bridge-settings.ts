@@ -35,6 +35,7 @@ export type PublicSettings = Pick<
   | 'agent_hooks_agents'
   | 'helper_default_models'
   | 'agent_default_models'
+  | 'timeline_day_enabled'
 >;
 
 export function toPublicSettings(settings: Settings): PublicSettings {

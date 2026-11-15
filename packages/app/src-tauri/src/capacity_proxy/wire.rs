@@ -72,6 +72,10 @@ pub enum Body {
         /// The lender's profile the borrower picked from an `Offers` answer. None: the lender chooses (an older borrower).
         #[serde(default)]
         profile_id: Option<String>,
+        /// Pass a task "run it through my lent usage": the id of the task whose sender promised this lend (`team::direct`).
+        /// The lender answers yes by itself only for a request that matches that promise. An older lender ignores it.
+        #[serde(default)]
+        offer_ref: Option<String>,
     },
     /// "Yes": sent by the lender to the device that asked.
     Grant {

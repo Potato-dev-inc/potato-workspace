@@ -15,12 +15,14 @@
 mod model;
 mod service;
 mod share;
+mod serve;
 mod share_page;
 mod store;
 
 pub use model::{phone_view, Artifact, ArtifactKind, MAX_PHONE_BYTES};
 pub use service::{announce, announce_folder, now_ms, reply, share_address, share_index_file, show};
 pub use share::{active_links, create_link, created_json, revoke_links, ShareError, ShareView};
+pub use serve::{chip_of, owner_of, tab_address_origin, close as close_tab_address, is_live_address, live_token, open as open_tab_address, respond as respond_to_tab};
 pub use share_page::{respond as respond_to_share, SharePage};
 pub use store::{file_of, list, read, ArtifactError};
 
@@ -34,3 +36,8 @@ pub fn add_version_for_tests(project: &std::path::Path, id: &str, title: &str, k
 mod tests;
 #[cfg(test)]
 mod share_tests;
+
+/// The title and newest version number of a page (for the words of a mark-up message).
+pub fn read_for_mark(project: &std::path::Path, id: &str) -> Option<(String, u32)> {
+    store::read(project, id, None).ok().map(|r| (r.artifact.title, r.version))
+}

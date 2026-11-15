@@ -71,7 +71,7 @@ use tauri::AppHandle;
 
 use crate::mobile_pairing;
 use crate::pty::PaneRegistry;
-pub(crate) use observe::{checkpoint_pane_facts, pane_facts, pane_has_open_run,checkpoint_public_settings, live_app, live_registry};
+pub(crate) use observe::{checkpoint_all_pane_facts, checkpoint_pane_facts, pane_facts, pane_has_open_run,checkpoint_public_settings, live_app, live_registry};
 pub(crate) use approvals::declined_error as startup_decline_error;
 #[cfg(test)]
 pub(crate) use link::with_node_for_test as link_with_node_for_test;

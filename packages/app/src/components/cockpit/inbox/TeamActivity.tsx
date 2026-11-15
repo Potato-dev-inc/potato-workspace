@@ -7,6 +7,7 @@ import type { TeamApi, TeamState } from '../../../lib/team';
 import type { LendApi, LendState } from '../../../lib/lend';
 import { openSettingsAt } from '../../../lib/openSettingsAt';
 import { IncomingRequestCard } from '../../lend/IncomingRequestCard';
+import { rowOpenProps } from './row-open';
 import { TeamCard } from '../team/TeamCard';
 import { IconAlert, IconLend, IconNoteSmall, IconPullRequest, IconPush, IconTick } from './ActivityIcons';
 
@@ -71,7 +72,7 @@ export function TeamActivity({
             const expanded = open === r.id;
             return (
               <li key={r.id} data-team-activity={r.id}>
-                <div className="ib-row">
+                <div className="ib-row" tabIndex={0} {...rowOpenProps(() => setOpen(expanded ? null : r.id))}>
                   <span className={`ib-tile ib-tile--${r.tone}`} data-tone={r.tone}>
                     <Icon />
                   </span>

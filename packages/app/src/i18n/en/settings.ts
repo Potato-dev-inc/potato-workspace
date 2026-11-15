@@ -236,6 +236,8 @@ export const settings = {
   "settings.row.away-minutes.hint": "After this many minutes without keyboard or mouse, shows what agents did. 0 is off.",
   "settings.row.quiet-hours.label": "Quiet hours",
   "settings.row.quiet-hours.hint": "Pause alerts at night. A high-risk approval still comes through.",
+  "settings.row.pc-notifications.label": "Notifications on this PC",
+  "settings.row.pc-notifications.hint": "A Windows alert when an agent needs you. You can answer easy ones from it.",
   "settings.row.pairing.label": "Pair a phone",
   "settings.row.paired-devices.label": "Paired phones",
   "settings.row.phone-notifications.label": "Phone alerts",

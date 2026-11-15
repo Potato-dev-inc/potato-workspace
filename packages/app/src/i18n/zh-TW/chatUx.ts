@@ -69,5 +69,12 @@ export const chatUx: Partial<Record<EnglishKey, string>> = {
   'files.agentTabTip': '回到與 {name} 的對話（Ctrl+1 或 Esc）',
   'files.moreActions': '更多檔案動作',
   'settings.row.helpers-in-sidebar.label': '在側邊欄顯示幫手',
-  'settings.row.helpers-in-sidebar.hint': '幫手會顯示在對話上方的列。開啟後，也會列在各自的助理底下。',
+  'settings.row.helpers-in-sidebar.hint': '幫手會列在啟動它的助理底下，也會顯示在對話上方的列。關閉後只顯示在上方的列。',
+  'settings.row.copy-offer.label': '提供「在副本上工作」',
+  'settings.row.copy-offer.hint': '開始助理時，顯示「在副本上工作」開關。如果你從不使用，可以關掉。已建立的副本仍可繼續使用。',
+  'copyOffer.projectAria': '這個專案的「在副本上工作」',
+  'copyOffer.thisProject': '這個專案',
+  'copyOffer.follow': '和上面相同',
+  'copyOffer.always': '一律提供',
+  'copyOffer.never': '一律不提供',
 };

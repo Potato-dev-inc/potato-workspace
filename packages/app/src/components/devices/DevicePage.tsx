@@ -6,6 +6,9 @@ import { chipText, devicesApi, deviceNotices, stateSentence, type Device, type D
 import { DEVICE_NAMES_CHANGED } from '../../lib/deviceNames';
 import { errorSentence } from '../../lib/sayError';
 import { DeviceActivity } from './DeviceActivity';
+import { DeviceFolders } from './DeviceFolders';
+import { FilesView } from './FilesView';
+import { Transfers } from './TransferRow';
 import { DeviceNotices } from './DeviceNotices';
 import { DeviceRoute } from './DeviceRoute';
 import '../../styles/devices.css';
@@ -15,6 +18,7 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry }: { devi
   const [name, setName] = useState(device.name);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [tab, setTab] = useState<'overview' | 'files'>('overview');
   const run = (p: Promise<unknown>) => p.then(() => setError(null)).catch((e: unknown) => setError(errorSentence(e)));
   const chip = chipText(device);
   const notices = deviceNotices(device);
@@ -32,6 +36,16 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry }: { devi
           </span>
         )}
       </p>
+      <div className="dev-tabs" role="tablist">
+        {(['overview', 'files'] as const).map((k) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={`dev-tab${tab === k ? ' is-on' : ''}`} onClick={() => setTab(k)} data-testid={`device-tab-${k}`}>
+            {k === 'overview' ? t('devices.tab.overview') : t('devices.tab.files')}
+          </button>
+        ))}
+      </div>
+      {tab === 'files' && <FilesView device={device} api={api} />}
+      {tab === 'overview' && (
+        <>
       <DeviceNotices notices={notices.filter((n) => n.kind !== 'state')} />
       {onRetry && notices.some((n) => n.retry) && (
         <button type="button" className="dev-btn" onClick={onRetry} data-testid="try-again">
@@ -65,8 +79,31 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry }: { devi
           ))}
         </div>
       )}
+      <label className="dev-opt dev-switch">
+        <input type="checkbox" role="switch" checked={device.agents_may_send} onChange={(e) => void run(api.setAgentsSend(device.node, e.target.checked))} data-testid="perm-send-work" />
+        <span>
+          <b>{t('devices.perm.sendWork')}</b>
+          <small>{t('devices.perm.sendWorkHelp')}</small>
+        </span>
+      </label>
+      <label className="dev-opt dev-switch">
+        <input type="checkbox" role="switch" checked={device.lets_lend} onChange={(e) => void run(api.setLend(device.node, e.target.checked))} data-testid="perm-lend" />
+        <span>
+          <b>{t('devices.perm.lend')}</b>
+          <small>{t('devices.perm.lendHelp')}</small>
+        </span>
+      </label>
+      <label className="dev-opt dev-switch">
+        <input type="checkbox" role="switch" checked={device.lets_files} onChange={(e) => void run(api.setFiles(device.node, e.target.checked))} data-testid="perm-files" />
+        <span>
+          <b>{t('devices.perm.files')}</b>
+          <small>{t('devices.perm.filesHelp')}</small>
+        </span>
+      </label>
+      {device.lets_files && <DeviceFolders device={device} api={api} />}
       <DeviceRoute device={device} api={api} run={run} />
       <p className="dev-note">{t('devices.loginsStay')}</p>
+      <Transfers api={api} node={device.node} />
       <DeviceActivity device={device} api={api} />
       {error && (
         <p className="dev-error" role="alert">
@@ -89,6 +126,8 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry }: { devi
         <button type="button" className="dev-btn" onClick={() => setConfirmRemove(true)} data-testid="remove-device">
           {t('devices.remove')}
         </button>
+      )}
+        </>
       )}
     </section>
   );

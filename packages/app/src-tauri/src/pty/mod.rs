@@ -15,6 +15,7 @@ pub mod keys;
 pub mod launch_session;
 pub mod pane_facts;
 pub mod pane_origin;
+pub mod pane_adopt;
 pub mod pane_parent;
 pub mod proc_tree;
 pub mod registry;

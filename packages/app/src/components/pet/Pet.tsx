@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
+import type { MessageKey } from '../../i18n';
 import { PetMenu, type PetSizeName } from './PetMenu';
 import { PetSprite } from './PetSprite';
 import type { PetView } from './petModel';
@@ -28,6 +29,8 @@ export interface PetProps {
   onTouch?: () => void;
   /** The default companion this pet stands for: its name is on the pet (hover and screen reader). */
   companionName?: string;
+  /** The default companion's mood words (the sidebar's): said to screen readers and shown on hover. */
+  moodKey?: MessageKey;
 }
 
 /** The pet: the Potato, its speech bubble and its right-click menu. Presentational: all rules are in petModel. */
@@ -60,7 +63,9 @@ export function Pet(props: PetProps) {
     ? t('pet.aria.quiet')
     : view.needsCount > 0
       ? t('pet.aria.needs', { count: view.needsCount })
-      : props.companionName
+      : props.companionName && props.moodKey
+        ? t('pet.companion.mood', { name: props.companionName, mood: t(props.moodKey) })
+        : props.companionName
         ? t('pet.companion.resting', { name: props.companionName })
         : t('pet.aria.resting');
 
@@ -108,7 +113,7 @@ export function Pet(props: PetProps) {
         role="button"
         tabIndex={0}
         aria-label={label}
-        title={props.companionName}
+        title={props.companionName && props.moodKey ? `${props.companionName}: ${t(props.moodKey)}` : props.companionName}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onPointerDown={(event) => {

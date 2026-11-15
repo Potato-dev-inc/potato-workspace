@@ -1,5 +1,5 @@
-// The "Show helpers in the sidebar" switch (Settings > Agents > How helpers run). OFF by default: helpers live in the bar above
-// the chat, and the agent's row only shows how many it has. On brings back the indented list under the agent.
+// The "Show helpers in the sidebar" switch (Settings > Agents > How helpers run). ON by default (founder 2026-11-15: helpers show
+// under the agent that started them, as before). Off leaves them only in the bar above the chat, with a count on the agent's row.
 // It lives in this device's browser storage (the phone keeps its own indented list); reads and writes never throw.
 import { useSyncExternalStore } from 'react';
 
@@ -7,9 +7,9 @@ export const HELPERS_IN_SIDEBAR_KEY = 'potato.helpersInSidebar.v1';
 
 function readStored(): boolean {
   try {
-    return typeof localStorage === 'undefined' ? false : localStorage.getItem(HELPERS_IN_SIDEBAR_KEY) === '1';
+    return typeof localStorage === 'undefined' ? true : localStorage.getItem(HELPERS_IN_SIDEBAR_KEY) !== '0';
   } catch {
-    return false;
+    return true;
   }
 }
 

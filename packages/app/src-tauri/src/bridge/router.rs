@@ -66,7 +66,9 @@ pub(super) fn route(
     peer_loopback: bool,
     peer: Option<crate::companion::peer::Peer>,
 ) -> RouteResult {
-    mobile_pairing::authorize_bridge_request(headers, peer_loopback, segments, method)?;
+    let caller = mobile_pairing::authorize_caller(headers, peer_loopback, segments, method)?;
+    // A paired phone leaves one line in "Phone and remote activity" (a kind only, never the body).
+    crate::phone_log::note_authorized(&caller, method, segments);
     route_authorized(method, segments, query, body, registry, app, headers, peer_loopback, peer)
 }
 

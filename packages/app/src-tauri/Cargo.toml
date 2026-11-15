@@ -24,7 +24,9 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 tauri-plugin-updater = "2"
-tauri-plugin-single-instance = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+# Official Tauri plugin (MIT OR Apache-2.0): the OS hands `potato-workspace://join/...` links to the app.
+tauri-plugin-deep-link = "2"
 # "Start Potato Workspace when I sign in": Run entry on Windows, Launch Agent on macOS. Official Tauri
 # plugin, MIT OR Apache-2.0 (its auto-launch dependency is MIT). Built against tauri 2.12.
 tauri-plugin-autostart = "2"
@@ -103,7 +105,8 @@ keyring = { version = "3.6", features = ["windows-native"] }
 # Point and Fix screenshots: WebView2 CapturePreview. Same versions wry uses, so the
 # `controller()` types match (`cargo tree -d` shows one webview2-com).
 webview2-com = "0.39"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell"] }
+# Desktop toasts (`desktop_toast/win.rs`): the WinRT notification API, through the crate that is already here.
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "UI_Notifications", "Data_Xml_Dom", "Foundation"] }
 # Night Shift keep-awake (`night_shift/power.rs`): SetThreadExecutionState. 0.52 is already in Cargo.lock.
 windows-sys = { version = "0.52", features = ["Win32_System_Power", "Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security_Credentials", "Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_System_ApplicationInstallationAndServicing", "Win32_UI_WindowsAndMessaging", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_RestartManager"] }
 

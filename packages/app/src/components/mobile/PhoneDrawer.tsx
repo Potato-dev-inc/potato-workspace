@@ -10,6 +10,9 @@ import type { CompanionView } from '../../lib/companion';
 import { stateWord } from '../../lib/companion';
 import { PhoneAgentTile } from './PhoneAgentTile';
 import { PhoneQuiet } from './PhoneQuiet';
+import { PhoneReadyHelpers } from './PhoneReadyHelpers';
+import { PhoneInboxHome } from './PhoneInboxHome';
+import type { BridgeClient } from '../../lib/bridge-types';
 import { Avatar } from '../companion/Avatar';
 import { groupByProject, needsPaneIds, nestHelpers, rowState, type RowState } from './phoneNav';
 import type { RuleLimit } from '../../lib/pane-rule-view';
@@ -176,6 +179,7 @@ export function PhoneDrawer({
   canReopen = false,
   onReopen,
   usage,
+  bridge,
 }: {
   open: boolean;
   onClose: () => void;
@@ -211,6 +215,8 @@ export function PhoneDrawer({
   onReopen?: (id: string) => Promise<string | null>;
   /** The foot's usage line: this month's turns (null until known) and a tap that opens the usage sheet. Absent: no such line. */
   usage?: { turns: number | null; onOpen: () => void };
+  /** For the Inbox part (Done today, Team activity) and the "Ready" standby helpers. Absent: no such parts. */
+  bridge?: Pick<BridgeClient, 'phoneHelpers' | 'phoneDone' | 'teamCards'>;
 }) {
   const t = useT();
   const [menu, setMenu] = useState<{ paneId: string; title: string } | null>(null);
@@ -321,6 +327,8 @@ export function PhoneDrawer({
               </ul>
             </section>
           )}
+          {bridge && <PhoneInboxHome bridge={bridge} bridgeReady={bridgeReady} labels={labels} onOpen={onSelect} inDrawer />}
+          {bridge && <PhoneReadyHelpers bridge={bridge} open={open} />}
           {groups.map((group) => (
             <section key={group.project} aria-label={group.project}>
               <h2 className="ph-dsec">{group.project}</h2>

@@ -23,12 +23,16 @@ export interface HarnessScenario {
     /** Answer `/questions` with these instead of the example question. */
     questionList?: Question[];
     digest?: boolean;
+    /** Answer `/phone/done` and `/phone/helpers` (the Inbox part and the drawer's Ready helpers). */
+    home?: boolean;
     /**
      * The Team group: absent or `false` = Team is off (the bridge answers `enabled: false`). An object
      * turns it on; `can` is what this phone may do (default: everything), `missing` the count of
      * updates the PC could not read.
      */
     team?: false | { can?: { dismiss: boolean; act: boolean }; missing?: number };
+    /** The Today page on the phone: the PC's switch is on and `/timeline` answers with the example day. */
+    timeline?: boolean;
     /** Spoof navigator.userAgent (e.g. an iPhone, for the Add to Home Screen hint). */
     userAgent?: string;
     /** Bridge events delivered once the stream opens (`event: <name>`). */
@@ -49,6 +53,8 @@ export interface HarnessScenario {
        */
       answer?: 'answered' | 'changed' | 'gone' | 'already_pc' | 'failed' | 'hang' | 'offline';
     };
+    /** Share to Potato: what the phone's Share menu handed over (the service worker's cache is seeded before the app starts). */
+    share?: { title?: string; text?: string; url?: string; picture?: boolean };
     /** Extra launch query, as a notification tap would open it (`item=<id>`, `pane=<id>`). */
     search?: string;
     /** Phone part 2: the agents that have their own remote rule on the PC (`GET /pane-rules`). */
@@ -125,8 +131,14 @@ export interface HarnessScenario {
   audit?: { seq: number; ts_ms: number; kind: string; who: string; summary: string }[];
   /** Turn summaries the mocked `turn_summaries` returns per pane id (Inbox > Done today). Absent: the example ones. */
   turnSummaries?: Record<string, import('../lib/cockpit-api').TurnSummary[]>;
+  /** The Today page (Labs): on, with a believable day (`dev/timeline-fixtures.ts`). `refused` makes the going-back question fail with that sentence. */
+  timeline?: boolean | { refused?: string; empty?: boolean };
   /** Team (Inbox > Team, the toast, Settings > Labs): what the mocked `team_state` returns. */
   team?: import('../lib/team').TeamState;
+  /** Team page > Tasks: what the mocked `team_tasks_state` returns (tasks passed to me and by me). Absent: none. */
+  tasks?: import('../lib/team-tasks').TasksView;
+  /** Team page > Shelf: what the mocked `shelf_state` returns (absent: an older backend, the command fails). */
+  shelf?: import('../lib/shelf').ShelfState;
   /** Simple mode: turns the switch on and gives the panes, pages and answers it shows (see simple-fixtures.ts). */
   simple?: import('./simple-fixtures').SimpleScenario;
   /** First-run welcome: where it starts and what the mocked first task does. Absent = the welcome never shows. */
@@ -153,6 +165,8 @@ export interface HarnessScenario {
   usage?: import('../lib/usage').UsageSnapshot;
   /** Package check: the packages the mocked approval carries and what the mocked `package_check_*` commands answer. */
   packageCheck?: import('./package-check-fixtures').PackageCheckScenario;
+  /** Settings > Phone > "Phone and remote activity": the lines the mocked `phone_activity_list` answers (absent: none). */
+  phoneActivity?: { at: number; node: string; name: string; dir: 'in' | 'out'; kind: string }[];
   /** Leaving my desk: the state the mocked `get_desk_away` starts with (absent: one phone paired, the switch off). */
   desk?: import('../lib/desk-away-types').DeskAway;
   /** Review Desk: what the mocked `review_desk_*` commands answer (see review-desk-fixtures.ts). */
@@ -163,6 +177,8 @@ export interface HarnessScenario {
   bringChats?: import('./bring-chats-fixtures').BringChatsScenario;
   /** Linux Inside: what the mocked `wsl_*` commands answer (Settings > Agents > Run agents in Linux). Absent = the block stays hidden. */
   wsl?: import('./wsl-fixtures').WslScenario;
+  /** Over SSH: the saved machines and what a check answers (`ssh_*` commands). */
+  ssh?: import('./ssh-fixtures').SshScenario;
   /** What broke the tests?: what the mocked `wb_*` commands answer (see what-broke-it-fixtures.ts). */
   whatBroke?: import('./what-broke-it-fixtures').WhatBrokeItScenario;
   /** What broke it: the result card. What the mocked `wb_*` result commands answer (see what-broke-it-result-fixtures.ts). */
@@ -170,7 +186,11 @@ export interface HarnessScenario {
   /** Chat first: "Show terminals" is off and Claude and Codex can chat (Aider and the rest cannot). Absent: terminals are shown, as before. */
   chatFirst?: boolean;
   /** Share an agent (Labs `lend_enabled`): the state the mocked `lend_*` commands start from. Absent = the switch is off and nothing shows. */
+  /** The "Mark up pages" Labs switch is on. */
+  markup?: boolean;
   lend?: import('./lend-fixtures').LendScenario;
+  /** Project guide (Labs `project_guide_enabled`): a finished guide, and what the video tour card shows. */
+  guide?: import('./guide-fixtures').GuideScenario;
   /** Devices (Labs `devices_enabled`): the state the mocked `devices_*` commands start from. Absent = the switch is off and nothing shows. */
   devices?: import('./devices-fixtures').DevicesScenario;
   /** Settings > Labs > Team: overrides on top of the example config (on a team as admin) the mocked `team_config_get` returns. */

@@ -114,11 +114,11 @@ export interface TabCounts {
   setup: number;
 }
 
-/** The numbers on the tabs: only things waiting for me (a join request for an admin, a lend ask, a task). */
-export function tabCounts(state: TeamState | null, config: TeamConfigView | null, lend: LendState | null): TabCounts {
+/** The numbers on the tabs: only things waiting for me (a join request for an admin, a lend ask, a review card, a task passed to me that waits for an answer, a shelf suggestion). */
+export function tabCounts(state: TeamState | null, config: TeamConfigView | null, lend: LendState | null, tasksWaiting = 0, shelf = 0): TabCounts {
   const joins = config?.admin ? config.joins.length : 0;
   const asks = lend?.requests_in.filter((r) => r.state === 'open').length ?? 0;
-  return { people: joins, usage: asks, tasks: tasksForMe(state?.cards ?? []).length, shelf: 0, feed: 0, setup: 0 };
+  return { people: joins, usage: asks, tasks: tasksForMe(state?.cards ?? []).length + tasksWaiting, shelf: Math.max(0, shelf), feed: 0, setup: 0 };
 }
 
 /** The number on the sidebar row: join requests (admin) and lend asks. */

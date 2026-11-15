@@ -4,9 +4,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'node:path';
 import { bridgeProxyConfig } from './vite-bridge-proxy';
 import { devInfoPlugin } from './vite-dev-info';
+import { SHARE_TARGET_MANIFEST } from './src/pwa/share-target';
 
 /** Chunks the service worker never precaches (see `injectManifest.globIgnores`). */
-const LAZY_VIEWER_IGNORES = ['**/DocxView-*.js', '**/SheetView-*.js', '**/PdfView-*.js', '**/HtmlView-*.js', '**/SandboxFrame-*.js', '**/CodeEdit-*.js', '**/office.worker-*.js', '**/docx-engine-*.js', '**/office-client-*.js'];
+const LAZY_VIEWER_IGNORES = ['**/DocxView-*.js', '**/SheetView-*.js', '**/PdfView-*.js', '**/HtmlView-*.js', '**/SandboxFrame-*.js', '**/CodeEdit-*.js', '**/office.worker-*.js', '**/docx-engine-*.js', '**/office-client-*.js', '**/docx-paginate-*.js'];
 
 export default defineConfig({
   plugins: [
@@ -36,6 +37,8 @@ export default defineConfig({
         display: 'standalone',
         background_color: '#1b1a19',
         theme_color: '#1b1a19',
+        // The phone's Share menu lists Potato (installed PWA): the service worker takes the post (src/sw.ts).
+        share_target: SHARE_TARGET_MANIFEST as never,
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },

@@ -231,3 +231,121 @@ pub async fn guide_delete(app: AppHandle, state: State<'_, AppState>, pane_id: S
     let _ = app.emit("guide://changed", project.to_string_lossy().to_string());
     Ok(done)
 }
+
+// ---- video tour -------------------------------------------------------------------------------------------------
+// Captions only: made on this PC from the guide's own pages and diagram. No model, nothing uploaded, so no consent token;
+// the person starts it with one click and can stop it.
+
+use crate::project_guide::video::render::{self as vrender, RenderOptions, VideoProgress, VideoState};
+
+struct VideoActive {
+    progress: VideoProgress,
+    stop: Arc<AtomicBool>,
+}
+
+static VIDEO_ACTIVE: Mutex<Option<HashMap<String, VideoActive>>> = Mutex::new(None);
+static VIDEO_LAST: Mutex<Option<HashMap<String, VideoState>>> = Mutex::new(None);
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoView {
+    pub enabled: bool,
+    /// A tour is being made now.
+    pub running: bool,
+    /// Progress of the running tour, or the end state of the last one until the next starts.
+    pub state: Option<VideoState>,
+    /// Files already in the video folder, relative to the project (`tour.mp4`, `tour-vertical.mp4`, `tour.html`).
+    pub files: Vec<String>,
+    /// This PC has what a real video needs (Node, Edge or Chrome, ffmpeg). Without it only a slideshow is made.
+    pub can_video: bool,
+}
+
+fn video_files(project: &std::path::Path) -> Vec<String> {
+    let dir = crate::project_guide::video::video_dir(project);
+    ["tour.mp4", "tour-vertical.mp4", "tour.html"].iter().filter(|f| dir.join(f).is_file()).map(|f| format!(".potato/guide/video/{f}")).collect()
+}
+
+fn resource_dirs(app: &AppHandle) -> (Option<PathBuf>, Option<PathBuf>) {
+    use tauri::Manager;
+    (app.path().resource_dir().ok(), std::env::current_exe().ok().and_then(|e| e.parent().map(PathBuf::from)))
+}
+
+#[tauri::command]
+pub async fn guide_video_state(app: AppHandle, state: State<'_, AppState>, pane_id: String) -> Result<VideoView, String> {
+    let enabled = labs_on(&app);
+    let project = project_of(&state, &pane_id)?;
+    let (resource_dir, exe_dir) = resource_dirs(&app);
+    blocking(move || {
+        if !enabled {
+            return Ok(VideoView { enabled, running: false, state: None, files: vec![], can_video: false });
+        }
+        let key = key_of(&project);
+        let active = VIDEO_ACTIVE.lock().as_ref().and_then(|m| m.get(&key).map(|a| a.progress.snapshot()));
+        let running = active.is_some();
+        let state = active.or_else(|| VIDEO_LAST.lock().as_ref().and_then(|m| m.get(&key).cloned()));
+        Ok(VideoView { enabled, running, state, files: video_files(&project), can_video: vrender::find_tools(resource_dir.as_deref(), exe_dir.as_deref()).is_ok() })
+    })
+    .await
+}
+
+/// Starts the tour. `vertical`: also make the tall one for phones. `language`: the app language (the guide's own
+/// language setting wins).
+#[tauri::command]
+pub async fn guide_video_start(app: AppHandle, state: State<'_, AppState>, pane_id: String, vertical: Option<bool>, language: Option<String>) -> Result<(), String> {
+    gate(&app)?;
+    let project = project_of(&state, &pane_id)?;
+    if !store::has_guide(&project) {
+        return Err("VIDEO_NO_GUIDE: Make a project guide first.".into());
+    }
+    let (resource_dir, exe_dir) = resource_dirs(&app);
+    let started = {
+        let (project, app) = (project.clone(), app.clone());
+        blocking(move || {
+            let key = key_of(&project);
+            let mut guard = VIDEO_ACTIVE.lock();
+            let map = guard.get_or_insert_with(HashMap::new);
+            if map.contains_key(&key) {
+                return Err("VIDEO_BUSY: A video tour is already being made in this project.".into());
+            }
+            let progress = VideoProgress::new();
+            let stop = Arc::new(AtomicBool::new(false));
+            map.insert(key.clone(), VideoActive { progress: progress.clone(), stop: stop.clone() });
+            drop(guard);
+            let name = project.file_name().map(|n| n.to_string_lossy().to_string()).filter(|n| !n.is_empty()).unwrap_or_else(|| "this project".into());
+            let opts = RenderOptions { vertical: vertical.unwrap_or(false), lang_hint: language.unwrap_or_default(), resource_dir, exe_dir, ..Default::default() };
+            std::thread::Builder::new()
+                .name("project-guide-video".into())
+                .spawn(move || {
+                    let end = vrender::make(&project, &name, &opts, &progress, &stop);
+                    if let Some(map) = VIDEO_ACTIVE.lock().as_mut() {
+                        map.remove(&key);
+                    }
+                    VIDEO_LAST.lock().get_or_insert_with(HashMap::new).insert(key, end);
+                    let _ = app.emit("guide://changed", project.to_string_lossy().to_string());
+                })
+                .map_err(|e| format!("GUIDE_THREAD: {e}"))?;
+            Ok(())
+        })
+        .await
+    };
+    let _ = app.emit("guide://changed", project.to_string_lossy().to_string());
+    started
+}
+
+#[tauri::command]
+pub async fn guide_video_stop(state: State<'_, AppState>, pane_id: String) -> Result<bool, String> {
+    let project = project_of(&state, &pane_id)?;
+    Ok(VIDEO_ACTIVE.lock().as_ref().and_then(|m| m.get(&key_of(&project))).map(|a| a.stop.store(true, Ordering::SeqCst)).is_some())
+}
+
+/// Shows the video (or, without one, the slideshow) in the file manager.
+#[tauri::command]
+pub async fn guide_video_show(app: AppHandle, state: State<'_, AppState>, pane_id: String) -> Result<(), String> {
+    gate(&app)?;
+    let project = project_of(&state, &pane_id)?;
+    blocking(move || {
+        let file = video_files(&project).into_iter().next().ok_or_else(|| "VIDEO_NONE: There is no video tour yet.".to_string())?;
+        crate::files::reveal(&project.to_string_lossy(), &file)
+    })
+    .await
+}

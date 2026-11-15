@@ -22,6 +22,7 @@ pub mod run;
 pub mod scan;
 pub mod stale;
 pub mod store;
+pub mod video;
 
 /// The Labs switch (also in `DEV_LABS_KEYS`).
 pub const LABS_KEY: &str = "project_guide_enabled";

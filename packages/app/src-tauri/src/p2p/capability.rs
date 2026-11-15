@@ -27,9 +27,12 @@ pub const PAIR_LINK: &str = "pair/link";
 /// This PC lets that device also reach it through its own web address (stable link / tunnel), with a device token.
 /// Only ever set together with `agents/remote`.
 pub const AGENTS_REMOTE_WEB: &str = "agents/remote/web";
+/// This PC lets that device ask to borrow its agent sign-ins (the lend ask / yes / take-back items travel on the device link).
+/// Independent of `agents/remote`; the device is still let in on the agents link so the items can arrive.
+pub const LEND_CONTROL: &str = "agents/lend/control";
 
 /// What the person may turn on per computer, in the order the page shows them. Everything starts off.
-pub const PERMISSIONABLE: [&str; 6] = [DESK_INPUT, DESK_CLIPBOARD, FILES, AGENTS_REMOTE, AGENTS_REMOTE_FULL, AGENTS_REMOTE_WEB];
+pub const PERMISSIONABLE: [&str; 7] = [DESK_INPUT, DESK_CLIPBOARD, FILES, AGENTS_REMOTE, AGENTS_REMOTE_FULL, AGENTS_REMOTE_WEB, LEND_CONTROL];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelayPolicy {

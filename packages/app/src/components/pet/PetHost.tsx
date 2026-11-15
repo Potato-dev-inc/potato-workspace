@@ -3,6 +3,7 @@ import { Pet } from './Pet';
 import type { PetSizeName } from './PetMenu';
 import type { PetNeed } from './petModel';
 import type { PetApi } from './petApi';
+import { petMoodId, type PetMoodLook } from './petMood';
 import { usePetController, type PetEnv } from './usePetController';
 
 /** A run that just finished. `n` changes with every one, so two in a row for the same agent both count. */
@@ -27,6 +28,8 @@ export interface PetHostProps {
   env: PetEnv;
   /** The default companion's name: shown on the pet (hover and screen reader). Missing: just the Potato. */
   companionName?: string;
+  /** The default companion's saved mood as a pose. Missing or null: no mood face. */
+  mood?: PetMoodLook | null;
   /** A hook for tests and the headless pictures. */
   onModel?: (model: ReturnType<typeof usePetController>['model']) => void;
 }
@@ -38,6 +41,8 @@ export function PetHost(props: PetHostProps) {
 
   useEffect(() => props.onModel?.(model));
   useEffect(() => dispatch({ type: 'quiet', on: quiet }), [quiet, dispatch]);
+  const moodId = petMoodId(props.mood ?? null);
+  useEffect(() => dispatch({ type: 'mood', mood: props.mood ?? null }), [moodId]); // eslint-disable-line react-hooks/exhaustive-deps
   const needsKey = needs.map((n) => `${n.key}|${n.paneId ?? ''}|${n.agent}`).join('\n');
   useEffect(() => dispatch({ type: 'needs', needs }), [needsKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const lastFinished = useRef<number | null>(null);
@@ -98,8 +103,9 @@ export function PetHost(props: PetHostProps) {
         onExpandedChange={onExpandedChange}
         onTouch={() => dispatch({ type: 'touch' })}
         companionName={props.companionName}
+        moodKey={props.mood?.key}
       />
     ),
-    [view, size, props.companionName, props.quietChoice, openAgent, dispatch, onDragStart, api, onExpandedChange],
+    [view, size, props.companionName, props.mood?.key, props.quietChoice, openAgent, dispatch, onDragStart, api, onExpandedChange],
   );
 }

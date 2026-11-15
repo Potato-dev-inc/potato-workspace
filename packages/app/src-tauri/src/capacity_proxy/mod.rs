@@ -23,6 +23,7 @@ pub mod env;
 pub mod forward;
 pub mod frame;
 pub mod gate;
+pub mod key_merge;
 pub mod link;
 pub mod meter;
 pub mod ping;
@@ -39,7 +40,11 @@ mod agents_e2e_tests;
 #[cfg(test)]
 mod e2e_tests;
 #[cfg(test)]
+mod own_tests;
+#[cfg(test)]
 mod link_tests;
+#[cfg(test)]
+mod offer_tests;
 #[cfg(test)]
 mod wan_tests;
 #[cfg(test)]
@@ -175,13 +180,16 @@ pub fn app_service() -> Result<Arc<Lend>, String> {
         }),
         refresh: refresh::app_refresh(),
         env_names: Arc::new(env::inherited_names),
+        own: Arc::new(crate::device_link::app::AppOwn),
         #[cfg(test)]
         test_upstream: None,
     };
     let svc = Lend::new(deps);
+    svc.set_offer_gate(crate::team::direct::offer_gate());
     if SERVICE.set(svc.clone()).is_err() {
         return SERVICE.get().cloned().ok_or_else(|| "Share an agent could not start.".to_string());
     }
+    crate::own_lend::set_inbox(svc.clone());
     if let Some(public) = LAST_SETTINGS.lock().ok().and_then(|l| l.clone()) {
         svc.apply_settings(&public);
     }
@@ -266,6 +274,11 @@ pub fn usage_view() -> crate::usage::LendView {
         return crate::usage::LendView::default();
     }
     SERVICE.get().map(|s| s.usage_view()).unwrap_or_default()
+}
+
+/// Renews an idle lend sign-in's token with the agent's own CLI (blocking; for the usage bar). False: not done.
+pub fn renew_signin(account_id: &str) -> bool {
+    SERVICE.get().map(|s| s.renew_signin_blocking(account_id)).unwrap_or(false)
 }
 
 /// The lend profile name that uses the lend sign-in `account_id` (for Settings > Sign in: "Work account", never "Lend Claude 3").

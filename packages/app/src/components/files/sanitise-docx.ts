@@ -12,7 +12,7 @@ const CSS_PROPS = new Set([
   'padding', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right', 'text-align', 'text-indent', 'line-height',
   'font-family', 'font-size', 'font-weight', 'font-style', 'font-variant', 'text-decoration', 'text-transform', 'color',
   'background-color', 'vertical-align', 'border', 'border-top', 'border-bottom', 'border-left', 'border-right', 'table-layout',
-  'border-collapse', 'list-style-type', 'overflow-wrap', 'align-self', 'display',
+  'border-collapse', 'list-style-type', 'overflow-wrap', 'align-self', 'display', 'float', 'box-sizing',
 ]);
 /** A value may not fetch, escape or nest anything. */
 const CSS_VALUE = /^[\w\s.,%#"'\-\u0080-￿/]*$/;
@@ -27,6 +27,8 @@ export function safeStyle(style: string): string {
     const value = decl.slice(at + 1).trim();
     if (!CSS_PROPS.has(prop) || !CSS_VALUE.test(value) || /url|expression|import/i.test(value)) continue;
     if (prop === 'display' && value !== 'none') continue;
+    if (prop === 'float' && !['left', 'right', 'none'].includes(value)) continue;
+    if (prop === 'box-sizing' && value !== 'border-box') continue;
     kept.push(`${prop}:${value}`);
   }
   return kept.join(';');

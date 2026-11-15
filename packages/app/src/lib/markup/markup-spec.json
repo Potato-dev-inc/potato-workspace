@@ -1,0 +1,36 @@
+{
+  "tools": [
+    { "id": "select", "key": "v" },
+    { "id": "pen", "key": "p" },
+    { "id": "shape", "key": "r" },
+    { "id": "text", "key": "t" }
+  ],
+  "shapes": [
+    { "id": "rect", "key": "r" },
+    { "id": "arrow", "key": "a" },
+    { "id": "ellipse", "key": "o" }
+  ],
+  "colors": [
+    { "id": "orange", "value": "#e8590c" },
+    { "id": "red", "value": "#e03131" },
+    { "id": "blue", "value": "#1971c2" },
+    { "id": "black", "value": "#111111" }
+  ],
+  "icons": {
+    "select": "M5 3l12 7-5.2 1.4L14.5 17l-2.2 1-2.6-5.5L6 16z",
+    "pen": "M3 17l1-4L14 3l3 3L7 16z M12 5l3 3",
+    "rect": "M4.5 4.5h11a1.5 1.5 0 011.5 1.5v8a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 14V6a1.5 1.5 0 011.5-1.5z",
+    "arrow": "M4 16L16 4 M9 4h7v7",
+    "ellipse": "M3 10a7 5.5 0 1014 0 7 5.5 0 10-14 0z",
+    "text": "M4 5h12 M10 5v11",
+    "undo": "M7 5L3 9l4 4 M3 9h8a5 5 0 010 7h-3",
+    "clear": "M4 6h12 M8 6V4h4v2 M6 6l1 10h6l1-10",
+    "close": "M5 5l10 10M15 5L5 15",
+    "more": "M5 10h.01 M10 10h.01 M15 10h.01",
+    "send": "M3 10l14-6-5 14-2.5-5.5z",
+    "caret": "M2 3.5l2.5 3L7 3.5"
+  },
+  "sizes": { "button": 32, "radius": 12, "stroke": 3, "halo": 3, "badge": 9, "noteMax": 200, "tinyPx": 8, "penMinPoints": 3 },
+  "narrow": { "foldUndoClear": 420, "sendAsIcon": 340 },
+  "blob": { "ms": 160, "curve": "cubic-bezier(0.34, 1.56, 0.64, 1)" }
+}

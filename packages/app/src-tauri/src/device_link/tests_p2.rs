@@ -450,3 +450,71 @@ async fn a_live_terminal_needs_the_right_to_watch_and_ends_when_the_pane_is_gone
     // The request helper still works on the same link (one link carries requests and the stream).
     assert!(ask_blocking(&a.link, &b_node, "GET", "/panes").is_some());
 }
+
+// ----- agents sending work to another device -----
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn agents_may_send_work_is_off_by_default_per_device_and_forgotten_on_remove() {
+    let (_net, a, b) = memory();
+    pair(&b, &a).await;
+    let b_node = b.node();
+    assert_eq!(a.link.view()["devices"][0]["agents_may_send"], false, "off after pairing");
+    assert!(!a.link.agents_may_send(&b_node));
+    assert_eq!(a.link.resolve_device("nobody").unwrap_err(), "No paired device is called \"nobody\".");
+    let after = a.link.set_agents_send(&b_node, true).unwrap();
+    assert_eq!(after["devices"][0]["agents_may_send"], true);
+    assert!(a.link.agents_may_send(&b_node));
+    let name = after["devices"][0]["name"].as_str().unwrap().to_string();
+    assert_eq!(a.link.resolve_device(&name.to_uppercase()).unwrap().0, b_node);
+    assert_eq!(a.link.resolve_device(&b_node[..8]).unwrap().0, b_node);
+    assert!(a.link.set_agents_send(&"0".repeat(64), true).is_err(), "an unpaired device cannot be switched on");
+    a.link.remove(&b_node).await.unwrap();
+    assert!(!a.link.agents_may_send(&b_node));
+}
+
+// ----- lending between my own devices -----
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_lend_switch_is_off_by_default_and_grants_the_lend_right_alone() {
+    let (_net, a, b) = memory();
+    pair(&b, &a).await;
+    let b_node = b.node();
+    assert_eq!(a.link.view()["devices"][0]["lets_lend"], false, "off after pairing");
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["lend", "item"], "POST").is_err(), "no right before the switch");
+    let after = a.link.set_lend(&b_node, true).unwrap();
+    assert_eq!(after["devices"][0]["lets_lend"], true);
+    assert_eq!(after["devices"][0]["lets_run"], false, "borrowing does not let it run agents");
+    // The right is exactly `lend`: the item route, and nothing a run switch would give.
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["lend", "item"], "POST").is_ok());
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["panes", "p1", "chat"], "GET").is_err());
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["agents", "run"], "POST").is_err());
+    assert!(a.link.set_lend(&"0".repeat(64), true).is_err(), "an unpaired device cannot be switched on");
+    // Turning it off takes the right away at once.
+    a.link.set_lend(&b_node, false).unwrap();
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["lend", "item"], "POST").is_err());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_run_level_never_carries_the_lend_right_and_both_switches_add_up() {
+    let (_net, a, b) = memory();
+    pair(&b, &a).await;
+    let b_node = b.node();
+    a.link.set_permission(&b_node, true, Some("full")).unwrap();
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["lend", "item"], "POST").is_err(), "Full control is not the lend right");
+    a.link.set_lend(&b_node, true).unwrap();
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["lend", "item"], "POST").is_ok());
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["agents", "run"], "POST").is_ok());
+    a.link.set_permission(&b_node, false, None).unwrap();
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["lend", "item"], "POST").is_ok(), "the lend switch stands alone");
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["agents", "run"], "POST").is_err());
+}
+
+#[test]
+fn a_phone_never_has_the_lend_right() {
+    use crate::mobile_pairing::{route_need, Cap, Caps, Need};
+    assert!(!Caps::all().has(Cap::Lend));
+    assert!(Caps::parse_names(&["lend"]).is_err(), "a pairing cannot be asked for it");
+    assert_eq!(route_need("POST", &["lend", "item"]), Need::Cap(Cap::Lend));
+    assert!(!Caps::all().satisfies(route_need("POST", &["lend", "item"])));
+    assert!(Caps::all().with(Cap::Lend, true).satisfies(route_need("POST", &["lend", "item"])));
+}

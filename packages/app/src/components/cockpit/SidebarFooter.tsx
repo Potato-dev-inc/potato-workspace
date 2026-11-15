@@ -6,12 +6,20 @@ import { useRef, useState } from 'react';
 import { FloatingMenu } from './FloatingMenu';
 import { IconChart, IconCheck, IconClock, IconGlobe, IconMoon, IconMore, IconNote, IconSun, IconTerminal } from './Icons';
 import { JobsChip } from './rail/JobsChip';
+import type { HelperRow } from './rail/BackgroundSection';
 import { NightChip } from './night/NightChip';
 import { HelpMenu } from '../whatsnew/HelpMenu';
 import '../../styles/individual-mode.css';
 import '../../styles/sidebar-footer.css';
 import { useT } from '../../i18n';
 import { isDarkTheme, type ThemeChoice } from '../../lib/theme-tone';
+
+const THEME_CHOICES = [
+  ['dark', 'lookFeel.theme.dark'],
+  ['light', 'lookFeel.theme.light'],
+  ['dim', 'lookFeel.theme.dim'],
+  ['auto', 'lookFeel.theme.auto'],
+] as const;
 
 type Mode = 'orchestration' | 'individual';
 
@@ -39,6 +47,11 @@ export interface SidebarFooterProps {
   onMode: (mode: Mode) => void;
   theme: ThemeChoice;
   onToggleTheme: () => void;
+  /** Pick a theme by name: the "Theme" menu item. Without it the item is the old dark/light switch. */
+  onSetTheme?: (next: ThemeChoice) => void;
+  /** The helpers a pane started, shown in the background tasks list. */
+  helpersOf?: (paneId: string) => readonly HelperRow[];
+  onStopHelper?: (id: string) => Promise<void> | void;
   onOpenSettings: (tab?: string) => void;
   bridgeLine?: string | null;
   onOpenDoctor?: () => void;
@@ -53,6 +66,9 @@ export interface SidebarFooterProps {
   spacesEnabled?: boolean;
   spacesOpen?: boolean;
   onOpenSpaces?: () => void;
+  /** The Today button shows only when this is given (Labs `timeline_day_enabled`). */
+  onOpenToday?: () => void;
+  todayOpen?: boolean;
 }
 
 export function SidebarFooter(p: SidebarFooterProps) {
@@ -78,7 +94,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
             </button>
           </div>
         )}
-        <JobsChip names={p.names} onOpenPane={p.onOpenPane} />
+        <JobsChip names={p.names} onOpenPane={p.onOpenPane} helpersOf={p.helpersOf} onStopHelper={p.onStopHelper} />
         {p.onOpenMorning && <NightChip onOpenMorning={p.onOpenMorning} />}
       </div>
       <div className="ck-foot-icons">
@@ -92,6 +108,12 @@ export function SidebarFooter(p: SidebarFooterProps) {
             <IconCheck />
             <Label>{p.reviewCount > 0 ? t('sidebar.reviewCount', { n: p.reviewCount }) : t('sidebar.review')}</Label>
             {p.reviewCount > 0 && <span className="ck-side-count ck-foot-badge">{p.reviewCount}</span>}
+          </button>
+        )}
+        {p.onOpenToday && (
+          <button type="button" className={`ck-icon-btn${p.todayOpen ? ' is-active' : ''}`} aria-label={t('sidebar.today')} title={t('sidebar.today')} aria-current={p.todayOpen ? 'page' : undefined} onClick={p.onOpenToday}>
+            <IconClock />
+            <Label>{t('sidebar.today')}</Label>
           </button>
         )}
         <span className="ck-foot-spacer" />
@@ -158,10 +180,29 @@ export function SidebarFooter(p: SidebarFooterProps) {
                   {t('sidebar.routines')}
                 </button>
               )}
-              <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onToggleTheme)}>
-                <span className="ck-menu-ic">{isDarkTheme(p.theme) ? <IconSun /> : <IconMoon />}</span>
-                {isDarkTheme(p.theme) ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}
-              </button>
+              {p.onSetTheme ? (
+                <>
+                  <div className="ck-menu-cap">{t('sidebar.theme')}</div>
+                  {THEME_CHOICES.map(([value, key]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={p.theme === value}
+                      className={`ck-menu-item${p.theme === value ? ' is-active' : ''}`}
+                      onClick={pick(() => p.theme !== value && p.onSetTheme?.(value))}
+                    >
+                      <span className="ck-menu-ic">{p.theme === value ? <IconCheck /> : value === 'dark' ? <IconMoon /> : <IconSun />}</span>
+                      {t(key)}
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onToggleTheme)}>
+                  <span className="ck-menu-ic">{isDarkTheme(p.theme) ? <IconSun /> : <IconMoon />}</span>
+                  {isDarkTheme(p.theme) ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}
+                </button>
+              )}
               <div className="ck-menu-sep" role="separator" />
               <div className="ck-menu-cap">{t('sidebar.mode')}</div>
               <div className="ck-seg" role="radiogroup" aria-label={t('sidebar.mode')} title={t('sidebar.modeTip')}>

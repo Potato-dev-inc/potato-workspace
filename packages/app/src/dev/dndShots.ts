@@ -34,3 +34,13 @@ export async function sidebarDrag(dom: HarnessDom): Promise<void> {
   const first = rows[0].getBoundingClientRect();
   await dragTo(dom, rows[1], { x: first.left + 40, y: first.top + 2 });
 }
+
+/** Sidebar: the second agent is dragged onto the middle of the first one's row: the row says "Make helper of ...". */
+export async function adoptDrag(dom: HarnessDom): Promise<void> {
+  await dom.sleep(900);
+  const rows = [...document.querySelectorAll<HTMLElement>('nav [data-pane-row]')];
+  const [onto, from] = rows;
+  if (!from || !onto) return;
+  const r = onto.getBoundingClientRect();
+  await dragTo(dom, from, { x: r.left + 60, y: r.top + r.height / 2 });
+}

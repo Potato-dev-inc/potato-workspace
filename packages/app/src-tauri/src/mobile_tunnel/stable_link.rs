@@ -58,7 +58,7 @@ impl Outcome {
             Self::Linked => None,
             Self::SecretMismatch => Some("The secret does not match the one the Worker has. Make a new secret, or reset the Worker.".into()),
             Self::AddressRefused => Some("The Worker refused this tunnel address. Is it a stable-link Worker?".into()),
-            Self::WorkerTooOld => Some("Update your Worker: this address does not have the stable link yet. Deploy the latest Potato Worker (cd relay/worker && npm install && npx wrangler login && npm run deploy).".into()),
+            Self::WorkerTooOld => Some("Update your Worker: this address does not have the stable link yet. Open Settings > Connect and press Update Worker.".into()),
             Self::Retry(why) => Some(why.clone()),
         }
     }

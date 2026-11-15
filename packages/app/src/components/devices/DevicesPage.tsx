@@ -1,6 +1,6 @@
 // Settings > Devices: the paired devices, Add a device, Show a code, the route setting. Everything draws nothing
 // while the Labs switch is off. The words are plain: "device" and "Where", never "runtime".
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import { chipText, devicesApi, stateSentence, stateWord, type DevicesApi } from '../../lib/devices';
 import { AddDeviceSheet } from './AddDeviceSheet';
@@ -9,29 +9,45 @@ import { PairedDevices } from '../settings/blocks/PairedDevices';
 import { PairConfirm } from './PairConfirm';
 import { RouteSetting } from './RouteSetting';
 import { ShowCodeSheet } from './ShowCodeSheet';
+import { SshMachines } from './SshMachines';
+import type { SshApi } from '../../lib/ssh';
 import { useDevices } from './useDevices';
 import '../../styles/devices.css';
 
-export function DevicesPage({ api = devicesApi, onSaved, onOpenPhone }: { api?: DevicesApi; onSaved?: () => void; /** "Pair a phone": opens the phone pairing row in Settings. */ onOpenPhone?: () => void }) {
+export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone }: { api?: DevicesApi; /** The SSH command layer (tests give a fake). */ ssh?: SshApi; onSaved?: () => void; /** "Pair a phone": opens the phone pairing row in Settings. */ onOpenPhone?: () => void }) {
   const t = useT();
   const { view, enabled, refresh } = useDevices(api);
   const [sheet, setSheet] = useState<'add' | 'show' | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [sshSaved, setSshSaved] = useState(0);
+  // One stable object: the screens below start their reads from `api`, so a new one each render would restart them.
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
+  const deviceApi = useMemo<DevicesApi>(() => {
+    const saved = (v: unknown) => {
+      onSavedRef.current?.();
+      refresh();
+      return v;
+    };
+    return {
+      ...api,
+      setPermission: (...args) => api.setPermission(...args).then(saved) as ReturnType<DevicesApi['setPermission']>,
+      rename: (...args) => api.rename(...args).then(saved) as ReturnType<DevicesApi['rename']>,
+      remove: (node) => api.remove(node).then(saved) as ReturnType<DevicesApi['remove']>,
+      setFiles: (...args) => api.setFiles(...args).then(saved) as ReturnType<DevicesApi['setFiles']>,
+      setWeb: (...args) => api.setWeb(...args).then(saved) as ReturnType<DevicesApi['setWeb']>,
+      setAgentsSend: (...args) => api.setAgentsSend(...args).then(saved) as ReturnType<DevicesApi['setAgentsSend']>,
+      setLend: (...args) => api.setLend(...args).then(saved) as ReturnType<DevicesApi['setLend']>,
+      setDeviceRoute: (...args) => api.setDeviceRoute(...args).then(saved) as ReturnType<DevicesApi['setDeviceRoute']>,
+    };
+  }, [api, refresh]);
   if (!enabled || !view) return null;
-  const device = selected ? view.devices.find((d) => d.node === selected) : undefined;
   const saved = (v: unknown) => {
     onSaved?.();
     refresh();
     return v;
   };
-  const deviceApi: DevicesApi = {
-    ...api,
-    setPermission: (...args) => api.setPermission(...args).then(saved) as ReturnType<DevicesApi['setPermission']>,
-    rename: (...args) => api.rename(...args).then(saved) as ReturnType<DevicesApi['rename']>,
-    remove: (node) => api.remove(node).then(saved) as ReturnType<DevicesApi['remove']>,
-    setWeb: (...args) => api.setWeb(...args).then(saved) as ReturnType<DevicesApi['setWeb']>,
-    setDeviceRoute: (...args) => api.setDeviceRoute(...args).then(saved) as ReturnType<DevicesApi['setDeviceRoute']>,
-  };
+  const device = selected ? view.devices.find((d) => d.node === selected) : undefined;
   return (
     <section className="dev-page" data-testid="devices-page" aria-label={t('devices.title')}>
       {view.pending && <PairConfirm pending={view.pending} api={api} />}
@@ -84,6 +100,7 @@ export function DevicesPage({ api = devicesApi, onSaved, onOpenPhone }: { api?: 
               })}
             </ul>
           )}
+          <SshMachines api={ssh} refreshKey={sshSaved} />
           <RouteSetting value={view.route_pref} ownReady={view.own_route_ready} onChange={(pref) => void api.setRoute(pref).then(saved)} />
           <h4>{t('devices.phones')}</h4>
           <p className="dev-note">{t('devices.phonesBlurb')}</p>
@@ -99,7 +116,16 @@ export function DevicesPage({ api = devicesApi, onSaved, onOpenPhone }: { api?: 
           )}
         </>
       )}
-      {sheet === 'add' && <AddDeviceSheet view={view} api={api} onClose={() => setSheet(null)} onPaired={refresh} />}
+      {sheet === 'add' && <AddDeviceSheet
+          view={view}
+          api={api}
+          ssh={ssh}
+          onClose={() => setSheet(null)}
+          onPaired={() => {
+            setSshSaved((n) => n + 1);
+            refresh();
+          }}
+        />}
       {sheet === 'show' && <ShowCodeSheet view={view} api={api} onClose={() => setSheet(null)} />}
     </section>
   );

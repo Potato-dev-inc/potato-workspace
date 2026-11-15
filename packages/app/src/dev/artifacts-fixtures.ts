@@ -29,6 +29,13 @@ const PAGE_V2 = `<!DOCTYPE html>
 
 const PAGE_V1 = PAGE_V2.replace('Sign-in problems, last 7 days', 'Sign-in problems (draft)');
 
+/** A small drawn picture standing in for the screenshot of the page area (example data only). */
+const PICTURE =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240"><rect width="360" height="240" fill="#fff"/><rect x="16" y="16" width="200" height="14" rx="3" fill="#3a3a3f"/><rect x="16" y="48" width="120" height="12" rx="3" fill="#3a3a3f"/><rect x="16" y="72" width="260" height="12" rx="3" fill="#3a3a3f"/><rect x="16" y="100" width="150" height="120" rx="6" fill="#f6f6f8" stroke="#dcdce0"/><ellipse cx="90" cy="150" rx="80" ry="40" fill="none" stroke="#e8590c" stroke-width="4"/><circle cx="14" cy="104" r="9" fill="#e8590c"/><text x="14" y="108" font-size="11" font-weight="700" text-anchor="middle" fill="#fff">1</text></svg>',
+  );
+
 export const SAMPLE_ARTIFACT = {
   id: 'signin-report',
   title: 'Sign-in report',
@@ -49,6 +56,12 @@ export function artifactsMock(cmd: string, args: Record<string, unknown>): { han
       const version = typeof args.version === 'number' ? args.version : 2;
       return { handled: true, value: { artifact: SAMPLE_ARTIFACT, version, content: version === 1 ? PAGE_V1 : PAGE_V2, path: `C:/work/shop/.potato/artifacts/signin-report/v${version}.html` } };
     }
+    case 'artifacts_open_in_agent_browser':
+    case 'markup_less_motion':
+    case 'markup_send':
+      return { handled: true, value: null };
+    case 'markup_capture':
+      return { handled: true, value: { shotId: 'mk-demo', thumb: PICTURE } };
     case 'artifacts_open_in_browser':
       return { handled: true, value: null };
     case 'artifacts_share_make':

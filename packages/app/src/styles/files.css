@@ -638,6 +638,60 @@
 .cockpit .ck-wp-sheet img.is-missing {
   outline: 1px dashed gray;
 }
+/* Notes at the foot of a page, text boxes and floating pictures (docx-render.ts, docx-paginate.ts). */
+.cockpit .ck-wp-fns {
+  flex: none;
+  box-sizing: border-box;
+  margin-top: 6px;
+  font-size: 10pt;
+}
+.cockpit .ck-wp-fns::before,
+.cockpit .ck-wp-enrule {
+  content: '';
+  display: block;
+  width: 33%;
+  height: 0;
+  border-top: 1px solid black;
+  margin: 0 0 6px;
+}
+.cockpit .ck-wp-enrule {
+  margin-top: 18px;
+}
+.cockpit .ck-wp-fn,
+.cockpit .ck-wp-fn p {
+  font-size: 10pt;
+}
+.cockpit .ck-wp-fn {
+  margin-bottom: 2px;
+}
+.cockpit .ck-wp-fnref,
+.cockpit .ck-wp-fnmark {
+  font-size: 0.75em;
+  vertical-align: super;
+  line-height: 0;
+}
+.cockpit .ck-wp-box {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.cockpit .ck-wp-box.ck-wp-ibox {
+  display: inline-block;
+  vertical-align: top;
+}
+.cockpit .ck-wp-boxp {
+  display: block;
+  white-space: pre-wrap;
+}
+.cockpit .ck-wp-sheet img.ck-wp-float {
+  display: block;
+}
+.cockpit .ck-wp-fblock {
+  float: none;
+  clear: both;
+}
+.cockpit .ck-wp-sheet p:has(.ck-wp-float) {
+  display: flow-root;
+}
 
 /* Excel files with a look of their own: a white sheet, light grid lines, the file's fills and borders on top. */
 .cockpit .ck-xl-table.is-styled {

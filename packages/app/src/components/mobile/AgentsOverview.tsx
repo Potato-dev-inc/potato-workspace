@@ -13,6 +13,7 @@ import { blockingCount, type AttentionSnapshot } from '../../lib/attention';
 import { QuestionsView, useQuestionPolling } from './QuestionsList';
 import { NeedsYouList } from './NeedsYouList';
 import { TeamGroup } from './TeamGroup';
+import { PhoneInboxHome } from './PhoneInboxHome';
 import { PhoneQuiet } from './PhoneQuiet';
 import { useT } from '../../i18n';
 
@@ -181,6 +182,7 @@ export function AgentsOverview({
         {night}
         {header}
         {cards}
+        <PhoneInboxHome bridge={bridge} bridgeReady={bridgeReady} labels={labels} onOpen={onOpen} />
         <TeamGroup bridge={bridge} bridgeReady={bridgeReady} />
         <DigestCard bridge={bridge} bridgeReady={bridgeReady} onOpen={onOpen} />
         <PhoneQuiet kind="empty" onStarter={onNew}>
@@ -199,6 +201,7 @@ export function AgentsOverview({
       {header}
       {cards}
       {Number(waiting) === 0 && <PhoneQuiet kind="done" compact />}
+      <PhoneInboxHome bridge={bridge} bridgeReady={bridgeReady} labels={labels} onOpen={onOpen} />
       <TeamGroup bridge={bridge} bridgeReady={bridgeReady} />
       <DigestCard bridge={bridge} bridgeReady={bridgeReady} onOpen={onOpen} />
       {groupPanes(panes).map((group) => (

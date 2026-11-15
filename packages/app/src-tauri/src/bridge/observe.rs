@@ -228,6 +228,13 @@ pub(crate) fn checkpoint_pane_facts(pane_id: &str) -> Option<crate::checkpoints:
     guard.panes.get(pane_id).map(pane_facts)
 }
 
+/// Every live pane's id with its folder, agent and live status (Today page: is anything working in a folder).
+pub(crate) fn checkpoint_all_pane_facts() -> Vec<(String, crate::checkpoints::PaneFacts)> {
+    let Some(registry) = BRIDGE_REGISTRY.get() else { return Vec::new() };
+    let guard = registry.lock();
+    guard.panes.iter().map(|(id, pane)| (id.clone(), pane_facts(pane))).collect()
+}
+
 /// Folder, agent and LIVE status of a pane. `PaneState::info` is a spawn-time snapshot whose
 /// `status` stays `"running"` forever; the real status lives behind `PaneState::status`.
 pub(crate) fn pane_facts(pane: &crate::pty::registry::PaneState) -> crate::checkpoints::PaneFacts {

@@ -9,8 +9,9 @@ import { isBusyStatus } from '../../lib/close-policy';
 import { useT } from '../../i18n';
 import { requestPaneAction } from '../../lib/pane-actions';
 import { usePaneTabOrder } from '../../lib/paneTabOrder';
-import { useStandbys, type Standby } from '../../lib/helper-standbys';
-import { openNewStandby, tauriStandbyHelpersApi } from '../../lib/standbyHelpers';
+import { useHelpersInSidebar } from '../../lib/helpersInSidebar';
+import { setStandbys, useStandbys, type Standby } from '../../lib/helper-standbys';
+import { openNewStandby, tauriStandbyHelpersApi, type StandbyHelpersApi } from '../../lib/standbyHelpers';
 import { AgentLogo } from '../common/AgentLogo';
 import { dragSourceProps } from '../dnd/dragSourceProps';
 import { ReorderList } from '../dnd/ReorderList';
@@ -33,6 +34,8 @@ export function tabDot(status: string, asking: boolean): TabDot {
 
 interface MenuState {
   id: string;
+  /** A standby chip's menu (the id is the standby's). */
+  standby?: boolean;
   x: number;
   y: number;
   /** A list of chips (the "+N" button) instead of one chip's actions. */
@@ -46,6 +49,7 @@ export function HelpersBar({
   onOpen,
   onOpenBeside,
   standbys,
+  standbyApi = tauriStandbyHelpersApi,
 }: {
   c: CockpitApi;
   /** The chat that has the focus (in a split: the side with the accent line). */
@@ -58,6 +62,8 @@ export function HelpersBar({
   onOpenBeside?: (id: string) => void;
   /** Tests: the standbys to draw (default: the live list). */
   standbys?: readonly Standby[];
+  /** Tests: where "Remove standby" goes. */
+  standbyApi?: StandbyHelpersApi;
 }) {
   const t = useT();
   const live = useStandbys();
@@ -66,11 +72,32 @@ export function HelpersBar({
   const root = list.find((p) => p.info.id === rootId);
   const key = folderKey(root?.info.cwd) ?? '';
   // Only the standbys for the project in front (one with no project shows everywhere).
-  const parked = (standbys ?? live).filter((s) => !s.project || !key || folderKey(s.project) === key);
+  // With the sidebar list on, the sidebar shows the standbys under their agents; the bar then holds only what the sidebar does not.
+  const [inSidebar] = useHelpersInSidebar();
+  const parked = inSidebar && !standbys ? [] : (standbys ?? live).filter((s) => !s.project || !key || folderKey(s.project) === key);
   const { order, setOrder } = usePaneTabOrder(`helpers:${rootId}:${key}`);
   const barRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState<number | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  // A standby the person just removed, for the Undo bar (5 s).
+  const [removed, setRemoved] = useState<Standby | null>(null);
+  useEffect(() => {
+    if (!removed) return;
+    const timer = window.setTimeout(() => setRemoved(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [removed]);
+  const removeStandby = (s: Standby) => {
+    // Gone from the bar at once; the backend closes its waiting session.
+    setStandbys(live.filter((x) => x.id !== s.id));
+    setRemoved(s);
+    void standbyApi.remove(s.id).catch(() => {});
+  };
+  const undoRemove = () => {
+    if (!removed) return;
+    const s = removed;
+    setRemoved(null);
+    void standbyApi.add({ name: s.name, agent: s.agent, model: s.model ?? null, project: s.project ?? '', after_task: 'wait' }).catch(() => {});
+  };
   useEffect(() => {
     const el = barRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
@@ -186,12 +213,23 @@ export function HelpersBar({
     const busy = s.state === 'busy';
     const tip = t('hbar.tipStandby', { name: s.name, agent: s.model ? `${s.agent} · ${s.model}` : s.agent });
     return (
-      <div key={`standby-${s.id}`} className="ck-hchip is-standby" data-testid="standby-chip" data-state={busy ? 'working' : 'ready'}>
+      <div
+        key={`standby-${s.id}`}
+        className="ck-hchip is-standby"
+        data-testid="standby-chip"
+        data-state={busy ? 'working' : s.state === 'starting' ? 'starting' : 'ready'}
+        onContextMenu={(e: MouseEvent) => {
+          e.preventDefault();
+          setMenu({ id: s.id, standby: true, x: e.clientX, y: e.clientY });
+        }}
+      >
         <span className="ck-hchip-main" role="tab" aria-selected={false} tabIndex={0} title={tip}>
           <AgentLogo id={s.agent} name={s.name} size={14} decorative />
           <span className="ck-hchip-name">{s.name}</span>
           {busy ? (
             <span className="ck-hchip-dot is-working" role="img" aria-label={t('pane.working')} />
+          ) : s.state === 'starting' ? (
+            <span className="ck-hchip-word">{t('hbar.starting')}</span>
           ) : (
             <>
               <span className="ck-hchip-ring" aria-hidden="true" />
@@ -199,6 +237,9 @@ export function HelpersBar({
             </>
           )}
         </span>
+        <button type="button" className="ck-hchip-x" data-testid="standby-remove" aria-label={t('standby.removeAria', { name: s.name })} onClick={() => removeStandby(s)}>
+          <IconClose />
+        </button>
       </div>
     );
   };
@@ -257,17 +298,49 @@ export function HelpersBar({
         {parked.length > 0 && (
           <>
             <span className="ck-hbar-vsep" aria-hidden="true" />
-            <span className="ck-hbar-grp">{t('hbar.standby')}</span>
             {parked.map(standbyChip)}
           </>
         )}
       </ReorderList>
-      <button type="button" className="ck-hchip ck-hchip-more" data-testid="standby-add" aria-label={t('standby.barAddAria')} onClick={() => openNewStandby(root.info.cwd)}>
-        {t('standby.barAdd')}
-      </button>
+      {!inSidebar && (
+        <button
+          type="button"
+          className="ck-hchip ck-hchip-more"
+          data-testid="standby-add"
+          aria-label={t('standby.addAria', { name: rootTitle })}
+          title={t('standby.addTitle')}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            openNewStandby(root.info.cwd, rootId, { x: r.left, y: r.bottom + 4 });
+          }}
+        >
+          +
+        </button>
+      )}
+      {removed && (
+        <div className="ck-hbar-undo" role="status" data-testid="standby-undo">
+          <span>{t('standby.removed', { name: removed.name })}</span>
+          <button type="button" onClick={undoRemove}>
+            {t('standby.undo')}
+          </button>
+        </div>
+      )}
       {menu && (
         <div ref={menuRef} className="ck-menu ck-menu--fixed ck-menu--compact ck-hbar-menu" role="menu" style={{ left: menu.x, top: menu.y }} onPointerDown={(e) => e.stopPropagation()} data-testid="helpers-menu">
-          {menu.more
+          {menu.standby ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="ck-menu-item"
+              onClick={() => {
+                const s = parked.find((x) => x.id === menu.id);
+                setMenu(null);
+                if (s) removeStandby(s);
+              }}
+            >
+              <span>{t('standby.removeMenu')}</span>
+            </button>
+          ) : menu.more
             ? more.map((m) => (
                 <button
                   key={m.id}
@@ -289,10 +362,10 @@ export function HelpersBar({
                 { key: 'stop', label: t('hbar.stop'), run: () => close(menu.id) },
                 chips.find((x) => x.id === menu.id)?.state === 'done' && {
                   key: 'standby',
-                  label: t('standby.makeFromHelper'),
+                  label: t('standby.keep'),
                   run: () => {
                     const p = list.find((x) => x.info.id === menu.id);
-                    if (p) void tauriStandbyHelpersApi.add({ name: titleOf(menu.id), agent: p.info.agent_type, model: null, project: p.info.cwd ?? '', after_task: 'wait' }).catch(() => openNewStandby(p.info.cwd));
+                    if (p) void tauriStandbyHelpersApi.add({ name: titleOf(menu.id), agent: p.info.agent_type, model: null, project: p.info.cwd ?? '', after_task: 'wait', home: rootId }).catch(() => openNewStandby(p.info.cwd, rootId));
                   },
                 },
               ].flatMap((m) =>

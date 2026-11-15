@@ -25,4 +25,5 @@ export const companions: Partial<Record<EnglishKey, string>> = {
   'companions.accent.sun': '陽光',
   'companions.awakeNote': '同一時間最多有三位夥伴醒著，其他的會睡著，等你叫醒。',
   'pet.companion.resting': '{name}，休息中',
+  'pet.companion.mood': '{name}：{mood}',
 };

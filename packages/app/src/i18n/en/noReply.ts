@@ -3,6 +3,7 @@ export const noReply = {
   'chat.noAnswer': 'No answer yet',
   'chat.noAnswer.retry': 'Try again',
   'chat.noAnswer.fresh': 'Start fresh',
+  'chat.sendingStopped': 'Sending stopped',
   'chat.waking': 'Waking up…',
   'phone.st.waking': 'Waking up…',
 } as const;

@@ -6,6 +6,7 @@ import { t } from '../../i18n';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { useProjectPath } from '../../hooks/useProjectPath';
 import { clearAddAgentActionRequest, registerAddAgentActionHost, useAddAgentActionRequest } from '../../lib/addAgentActions';
+import { writeDraft } from '../../lib/composerDraft';
 import { errorSentence } from '../../lib/sayError';
 import { startChatSession } from './newagent/start';
 
@@ -32,7 +33,7 @@ export function AddAgentActionHost({
   useEffect(() => {
     if (!request || working.current === request.nonce) return;
     working.current = request.nonce;
-    const { kind, agentId } = request;
+    const { kind, agentId, task } = request;
     clearAddAgentActionRequest(request);
     const host = cRef.current;
     void (async () => {
@@ -43,7 +44,9 @@ export function AddAgentActionHost({
             host.notify(t('addAgent.host.pickFolder'));
             return;
           }
-          host.select(await startChat(agentId, where));
+          const paneId = await startChat(agentId, where);
+          if (task) writeDraft(paneId, task);
+          host.select(paneId);
         } else {
           const paneId = await host.newAgent(agentId);
           if (paneId) host.select(paneId);

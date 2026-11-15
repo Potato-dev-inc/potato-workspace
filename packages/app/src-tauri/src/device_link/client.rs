@@ -96,6 +96,8 @@ pub enum AskError {
     Offline,
     #[error("That device does not let this PC run agents. Turn it on there: Settings > Devices.")]
     NotAllowed,
+    #[error("That device does not let this PC use its files. Turn it on there: Settings > Devices.")]
+    FilesOff,
     #[error("That device runs an older Potato Workspace. Update it to connect.")]
     TooOld,
     #[error("{0}")]
@@ -124,6 +126,8 @@ pub type ScreenSink = Arc<dyn Fn(&str, &str, &str) + Send + Sync>;
 struct Slot {
     /// Held while dialing, so two requests do not dial twice.
     link: tokio::sync::Mutex<Option<Arc<dyn Link>>>,
+    /// The link for files (`pm/files/1`), kept apart from the agents link.
+    files: tokio::sync::Mutex<Option<Arc<dyn Link>>>,
     status: Mutex<Status>,
     health: Mutex<Health>,
 }
@@ -284,6 +288,9 @@ impl Client {
             if let Some(link) = slot.link.lock().await.take() {
                 link.close(0, "done");
             }
+            if let Some(link) = slot.files.lock().await.take() {
+                link.close(0, "done");
+            }
         }
     }
 
@@ -381,6 +388,50 @@ impl Client {
                 Ok(link)
             }
         }
+    }
+
+    /// The open link for files to a device, dialing when there is none. It does not change the device's state words:
+    /// those are about running agents.
+    pub async fn files_link(self: &Arc<Self>, node: &NodeId) -> Result<Arc<dyn Link>, AskError> {
+        let slot = self.slot(node);
+        let mut guard = slot.files.lock().await;
+        if let Some(link) = guard.as_ref() {
+            if !Self::is_closed(link).await {
+                return Ok(link.clone());
+            }
+            *guard = None;
+        }
+        let mut peer = self.p2p.addrs().peer(*node);
+        if self.route_for(node) == RoutePref::Own {
+            peer.relay = None;
+        }
+        match tokio::time::timeout(self.timeouts.dial, self.p2p.dial(&peer, capability::FILES)).await {
+            Err(_) | Ok(Err(_)) => Err(AskError::Offline),
+            Ok(Ok(link)) => {
+                *guard = Some(link.clone());
+                Ok(link)
+            }
+        }
+    }
+
+    /// A files link failed: forget it, and say why from its close code.
+    pub async fn files_failed(&self, node: &NodeId, link: &Arc<dyn Link>) -> AskError {
+        let code = tokio::time::timeout(Duration::from_millis(500), link.closed()).await.unwrap_or(0);
+        let slot = self.slot(node);
+        let mut guard = slot.files.lock().await;
+        if guard.as_ref().is_some_and(|l| Arc::ptr_eq(l, link)) {
+            *guard = None;
+        }
+        match code {
+            CLOSE_NOT_ALLOWED => AskError::FilesOff,
+            CLOSE_UNKNOWN_ALPN => AskError::TooOld,
+            _ => AskError::Offline,
+        }
+    }
+
+    /// How long one files answer header may take.
+    pub fn answer_timeout(&self) -> Duration {
+        self.timeouts.answer
     }
 
     /// When the link ends, say why at once (a goodbye is "closed", a refusal is "not allowed", silence is "asleep").

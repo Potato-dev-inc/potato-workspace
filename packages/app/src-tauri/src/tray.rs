@@ -206,6 +206,10 @@ pub fn second_launch_action(args: &[String]) -> SecondLaunch {
     if crate::autostart::is_background_start(args) {
         return SecondLaunch::Quiet;
     }
+    // A button on a Windows notification started this copy: `desktop_toast` decides what comes forward.
+    if args.iter().any(|a| crate::desktop_toast::rules::is_toast_link(a)) {
+        return SecondLaunch::Quiet;
+    }
     args.iter()
         .position(|a| a == "--new-pane")
         .and_then(|i| args.get(i + 1))

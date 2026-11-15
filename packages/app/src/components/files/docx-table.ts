@@ -96,12 +96,15 @@ export function renderTable(tbl: XEl, ctx: Ctx, blocks: Blocks): string {
   const out: string[] = [`<table class="ck-wp-tbl" style="${tableCss}">`];
   if (grid.length) out.push('<colgroup>', ...grid.map((w) => `<col style="width:${w}px">`), '</colgroup>');
   out.push('<tbody>');
+  let headRows = 0;
   placed.forEach((list, r) => {
     const trPr = child(rows[r], 'trPr');
     const h = child(trPr, 'trHeight');
     const height = num(h?.attrs.val);
     const before = num(val(trPr, 'gridBefore')) ?? 0;
-    out.push(`<tr${height ? ` style="height:${px(height)}px"` : ''}>`);
+    // Leading rows marked "repeat as header row" get a class, so a table split over pages can repeat them.
+    if (headRows === r && child(trPr, 'tblHeader')) headRows++;
+    out.push(`<tr${r < headRows ? ' class="ck-wp-thead"' : ''}${height ? ` style="height:${px(height)}px"` : ''}>`);
     if (before) out.push(`<td colspan="${before}" style="border:none"></td>`);
     const head = firstRowOn && r === 0 && st.firstRow;
     const band = bandsOn ? ((r - (firstRowOn && st.firstRow ? 1 : 0)) % 2 === 0 ? st.band1 : st.band2) : undefined;

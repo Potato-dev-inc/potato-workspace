@@ -11,6 +11,7 @@ import { isGuidePath } from '../../lib/guide-tabs';
 import { useT } from '../../i18n';
 import { isDirty, useDraftKeys } from '../../lib/file-drafts';
 import { AgentLogo } from '../common/AgentLogo';
+import { FileGlyph } from '../cockpit/rail/FileGlyph';
 import { IconClose } from '../cockpit/Icons';
 import '../../styles/files.css';
 
@@ -78,6 +79,7 @@ export function FileTabsBar({ paneId, files, active, onPick, agent }: { paneId: 
                 if (e.button === 1) close();
               }}
             >
+              {!isPage && <FileGlyph name={name} />}
               {unsaved && <span className="ck-ftab-dot" role="img" aria-label={t('files.unsaved')} />}
               {name}
             </button>

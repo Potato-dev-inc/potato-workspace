@@ -49,6 +49,21 @@ pub trait Env: Send + Sync {
     fn max_total_bytes(&self) -> u64 {
         Limits::default().max_total_bytes
     }
+
+    /// Where the Today page's day journal lives (`None` = no journal is written).
+    fn journal_dir(&self) -> Option<PathBuf> {
+        None
+    }
+
+    /// The chat's own title, for the journal row.
+    fn pane_title(&self, _pane_id: &str) -> Option<String> {
+        None
+    }
+
+    /// Every live pane (id and facts): which folders have an agent working in them right now.
+    fn all_panes(&self) -> Vec<(String, PaneFacts)> {
+        Vec::new()
+    }
 }
 
 /// What an automatic trigger did.
@@ -211,6 +226,9 @@ impl Runtime {
                 if self.too_big.lock().remove(&project).is_some() {
                     tracing::info!(project = %project.display(), "checkpoints are back on for this folder");
                 }
+                if let Snapshot::Created(c) = &snapshot {
+                    self.note_created(&project, pane_id, c, &pane.agent_type);
+                }
                 Ok(snapshot)
             }
             Err(CheckpointError::TooLarge(bytes)) => {
@@ -222,6 +240,73 @@ impl Runtime {
             }
             Err(e) => Err(Outcome::Failed(e.to_string())),
         }
+    }
+
+    /// The Today page's day journal, when this runtime writes one.
+    pub fn journal(&self) -> Option<crate::timeline::Journal> {
+        self.env.journal_dir().map(crate::timeline::Journal::new)
+    }
+
+    /// Add a journal row for a save point that was really created. A journal that cannot be written
+    /// is logged and ignored: it never breaks a snapshot.
+    fn note_created(&self, project: &std::path::Path, key: &str, c: &Checkpoint, agent_type: &str) {
+        let Some(journal) = self.journal() else { return };
+        let who = crate::timeline::Who { agent_type: agent_type.to_string(), chat_title: self.env.pane_title(key).unwrap_or_default(), via_phone: false };
+        let row = crate::timeline::Row::from_checkpoint(&project.to_string_lossy(), key, c, &who);
+        if let Err(e) = journal.append(&row) {
+            tracing::warn!(error = %e, "day journal row not written");
+        }
+    }
+
+    pub fn now_ms(&self) -> u64 {
+        self.env.now_ms()
+    }
+
+    /// The limits snapshots and restores run with (the keep setting, the day window, the size guards).
+    pub fn day_limits(&self) -> Limits {
+        self.limits()
+    }
+
+    /// Why nobody may go back in `project` right now: a chat in that folder (or a folder inside it, or
+    /// one it sits inside, like a worktree) is working or has a run open.
+    pub fn busy_in_folder(&self, project: &std::path::Path) -> Option<CheckpointError> {
+        let folder = project.to_string_lossy().to_string();
+        for (id, pane) in self.env.all_panes() {
+            let related = crate::timeline::journal::same_or_inside(&pane.cwd, &folder) || crate::timeline::journal::same_or_inside(&folder, &pane.cwd);
+            if !related {
+                continue;
+            }
+            if pane.status == "running" {
+                return Some(CheckpointError::Running);
+            }
+            if self.env.run_open(&id, &pane) {
+                return Some(CheckpointError::RunOpen);
+            }
+        }
+        None
+    }
+
+    /// Go back to the save point `key`/`id` of `project` from the Today page. The chat that made it may be
+    /// closed. Refused while any chat works in the folder. The safety copy goes to the `day` series.
+    pub fn go_back(&self, project: &std::path::Path, key: &str, id: &str) -> Result<RestoreReport, CheckpointError> {
+        if !self.env.settings().enabled {
+            return Err(CheckpointError::Disabled);
+        }
+        if !project.is_dir() {
+            return Err(CheckpointError::FolderGone);
+        }
+        if let Some(busy) = self.busy_in_folder(project) {
+            return Err(busy);
+        }
+        let target = engine::list(project, key).ok().and_then(|items| items.into_iter().find(|c| c.id == id));
+        let report = engine::restore_at(project, key, id, false, self.env.now_ms(), &self.limits())?;
+        if let Some(made) = &report.safety_made {
+            self.note_created(project, engine::DAY_KEY, made, "");
+        }
+        if let Some(target) = target {
+            crate::scores::undo_log::note_restore(key, &target.kind, target.at_ms, self.env.now_ms());
+        }
+        Ok(report)
     }
 
     /// Capture for a transition. A turn-end snapshot that lands inside the debounce window is
@@ -291,6 +376,9 @@ impl Runtime {
         // Read before the files move. Best effort: a target that cannot be found is simply not noted.
         let target = self.list(pane_id).ok().and_then(|items| items.into_iter().find(|c| c.id == id));
         let report = engine::restore(&project, pane_id, id, pane.status == "running", self.env.now_ms(), &self.limits())?;
+        if let Some(made) = &report.safety_made {
+            self.note_created(&project, pane_id, made, &pane.agent_type);
+        }
         // The safety snapshot counts as this pane's latest automatic snapshot.
         self.state.lock().last_at.insert(pane_id.to_string(), self.env.now_ms());
         // Scores counts the turns this Undo put back. Best effort: a log error never breaks Undo.
@@ -395,6 +483,15 @@ impl Env for LiveEnv {
     }
     fn run_open(&self, pane_id: &str, pane: &PaneFacts) -> bool {
         crate::bridge::pane_has_open_run(pane_id, &pane.cwd)
+    }
+    fn journal_dir(&self) -> Option<PathBuf> {
+        Some(crate::app_paths::app_data_dir().join("timeline"))
+    }
+    fn pane_title(&self, pane_id: &str) -> Option<String> {
+        crate::ambient::store::get(pane_id)
+    }
+    fn all_panes(&self) -> Vec<(String, PaneFacts)> {
+        crate::bridge::checkpoint_all_pane_facts()
     }
 }
 

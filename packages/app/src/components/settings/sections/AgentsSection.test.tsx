@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // Settings > Agents: the three rows render with their key controls, each control calls its own command,
 // nothing here is destructive, and search finds each row by the words inside it.
+import { closeSignInAgain, peekSignInAgain } from '../../../lib/agentSignIn';
 import { unsearchableLabels } from '../test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tauriAccountsApi } from '../../../lib/accounts';
@@ -211,10 +212,10 @@ describe('Agents: every row renders', () => {
     expect(buttonByText(m.host, 'Save changes')).toBeUndefined();
   });
 
-  it('groups the rows: Sign in, Your chats, Speed, Standby helpers, Models, Rules for all agents, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
+  it('groups the rows: Sign in, Your chats, Speed, Standby helpers, Models, Rules for all agents, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Where agents start, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
     await mount();
     const heads = [...m.host.querySelectorAll('section.st-group')].map((g) => g.querySelector(':scope > h2')?.textContent?.trim() ?? '');
-    expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Your chats', 'Speed', 'Standby helpers', 'Models', 'Rules for all agents', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Linux', 'Same file', '']);
+    expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Your chats', 'Speed', 'Standby helpers', 'Models', 'Rules for all agents', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Where agents start', 'Linux', 'Same file', '']);
   });
 
   it('mounts the same-file switch under Same file and it is found by search', async () => {
@@ -244,11 +245,14 @@ describe('Agents: each control saves through its own command', () => {
     expect(tauriAccountsApi.add).toHaveBeenCalledExactlyOnceWith('claude', 'Personal');
   });
 
-  it('Accounts: Open login pane starts that agent under that account', async () => {
+  it('Accounts: Sign in again opens the sign-in sheet for that account, not a pane', async () => {
     await mount();
     await click(buttonByText(m.host, 'Sign in again'));
     await settle();
-    expect(tauriAccountsApi.openLoginPane).toHaveBeenCalledExactlyOnceWith('claude', 'acc_9');
+    // The sign-in is a small sheet over Settings (a hidden pane), not a new pane.
+    expect(tauriAccountsApi.openLoginPane).not.toHaveBeenCalled();
+    expect(peekSignInAgain()).toMatchObject({ agentId: 'claude', accountId: 'acc_9' });
+    closeSignInAgain();
   });
 
   it('Accounts: the Agents screen shows "Helpers use" per agent and saves the pick through the accounts command', async () => {
@@ -413,7 +417,7 @@ describe('Agents: search finds the rows', () => {
   });
 
   it('"work" finds Accounts', () => {
-    expect(idsFor('work')).toEqual(['helper-tools', 'accounts']);
+    expect(idsFor('work')).toEqual(['copy-offer', 'helper-tools', 'accounts']);
   });
 
   it('"keep going" finds Keep going, and "runs out" finds it too', () => {
@@ -471,13 +475,17 @@ describe('Agents: Standby helpers', () => {
     state: 'ready',
     note: null,
     pane_id: null,
+    home: null,
+    used_by: null,
+    taken_over: false,
+    open_pane: null,
+    person_pane: null,
     ...over,
   });
   const viewOf = (helpers: StandbyHelperEntry[], max = 4): StandbyHelpersView => ({ helpers, max, idle_minutes: 30 });
   const rowsOnScreen = () => [...m.host.querySelectorAll<HTMLElement>('[data-testid^="standby-row-"]')];
-  const form = () => m.host.querySelector('[data-testid="standby-form"]')!;
 
-  it('shows the row in Agents with its list, the form and the limits', async () => {
+  it('shows the row in Agents with its list and the limits', async () => {
     vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([entry()]));
     await mount();
     expect(rowOf('standby-helpers')).toBeTruthy();
@@ -487,46 +495,14 @@ describe('Agents: Standby helpers', () => {
     expect(m.host.textContent).toContain('Codex CLI · gpt-5');
     expect(byLabel(m.host, 'Most standbys at once')).toBeTruthy();
     expect(byLabel(m.host, 'Minutes before an unused standby closes')).toBeTruthy();
-    expect(buttonByText(m.host, 'Add standby')).toBeTruthy();
+    expect(m.host.textContent).toContain("Add helpers from an agent's row in the sidebar.");
+    expect(m.host.querySelector('[data-testid="standby-form"]')).toBeNull();
   });
 
-  it('says plainly when there are none and when the limit is reached', async () => {
+  it('says plainly when there are none', async () => {
     vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([]));
     await mount();
-    expect(m.host.textContent).toContain('No standbys yet.');
-    await m.unmount();
-    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([entry(), entry({ id: 'sb-2', name: 'Tester' })], 2));
-    await mount();
-    expect(m.host.textContent).toContain('You have 2 standbys, the most allowed.');
-    expect(buttonByText(m.host, 'Add standby')!.disabled).toBe(true);
-  });
-
-  it('makes a standby from the form with the name, agent, model and project typed', async () => {
-    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([]));
-    vi.mocked(tauri.standbyHelperAdd).mockResolvedValue(viewOf([entry({ state: 'starting' })]));
-    await mount();
-    expect(buttonByText(m.host, 'Add standby')!.disabled).toBe(true);
-    await typeInto(byLabel<HTMLInputElement>(form(), 'Name')!, ' Reviewer ');
-    await typeInto(byLabel<HTMLInputElement>(form(), 'Project folder')!, 'C:/work/app');
-    await click(buttonByText(m.host, 'Add standby'));
-    await settle(10);
-    expect(tauri.standbyHelperAdd).toHaveBeenCalledTimes(1);
-    const input = vi.mocked(tauri.standbyHelperAdd).mock.calls[0][0];
-    expect(input).toMatchObject({ name: 'Reviewer', project: 'C:/work/app', model: null, after_task: 'wait' });
-    expect(input.agent).not.toBe('');
-    expect(rowsOnScreen()).toHaveLength(1);
-    expect(m.host.querySelector('[data-testid="standby-state-sb-1"]')!.textContent).toBe('Starting');
-  });
-
-  it('shows a refusal from the backend in words', async () => {
-    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([]));
-    vi.mocked(tauri.standbyHelperAdd).mockRejectedValue('That project folder does not exist.');
-    await mount();
-    await typeInto(byLabel<HTMLInputElement>(form(), 'Name')!, 'Reviewer');
-    await typeInto(byLabel<HTMLInputElement>(form(), 'Project folder')!, 'C:/nope');
-    await click(buttonByText(m.host, 'Add standby'));
-    await settle(10);
-    expect(m.host.querySelector('[role="alert"]')!.textContent).toContain('That project folder does not exist.');
+    expect(m.host.textContent).toContain('No helpers on standby yet.');
   });
 
   it('changes what happens after a task, starts a sleeping one and removes one', async () => {
@@ -535,7 +511,7 @@ describe('Agents: Standby helpers', () => {
     vi.mocked(tauri.standbyHelperStart).mockResolvedValue(viewOf([entry({ state: 'starting' })]));
     vi.mocked(tauri.standbyHelperRemove).mockResolvedValue(viewOf([]));
     await mount();
-    expect(m.host.querySelector('[data-testid="standby-state-sb-1"]')!.textContent).toBe('Closed to save memory');
+    expect(m.host.querySelector('[data-testid="standby-state-sb-1"]')!.textContent).toBe('Resting');
     await pickOption(byLabel<HTMLSelectElement>(m.host, 'What Reviewer does after a task')!, 'close');
     expect(tauri.standbyHelperUpdate).toHaveBeenCalledWith('sb-1', { after_task: 'close' });
     await click(buttonByText(m.host, 'Start'));
@@ -575,22 +551,22 @@ describe('Agents: Standby helpers', () => {
 describe('Agents: show helpers in the sidebar', () => {
   afterEach(() => setHelpersInSidebar(false));
 
-  it('is off by default, sits with the helper rows, and the switch turns the sidebar tree on and off (kept on this device)', async () => {
+  it('is on by default, sits with the helper rows, and the switch turns the sidebar tree off and on (kept on this device)', async () => {
     await mount();
     const row = rowOf('helpers-in-sidebar');
     expect(row).toBeTruthy();
     expect(row?.closest('section.st-group')?.querySelector(':scope > h2')?.textContent?.trim()).toBe('Helpers');
-    expect(row?.textContent).toContain('Helpers show in the bar above the chat.');
-    expect(switchFor('Show helpers in the sidebar')!.getAttribute('aria-checked')).toBe('false');
-    expect(getHelpersInSidebar()).toBe(false);
-    await click(switchFor('Show helpers in the sidebar'));
-    expect(getHelpersInSidebar()).toBe(true);
-    expect(localStorage.getItem(HELPERS_IN_SIDEBAR_KEY)).toBe('1');
+    expect(row?.textContent).toContain('Helpers are listed under the agent that started them');
     expect(switchFor('Show helpers in the sidebar')!.getAttribute('aria-checked')).toBe('true');
+    expect(getHelpersInSidebar()).toBe(true);
+    await click(switchFor('Show helpers in the sidebar'));
+    expect(getHelpersInSidebar()).toBe(false);
+    expect(localStorage.getItem(HELPERS_IN_SIDEBAR_KEY)).toBe('0');
+    expect(switchFor('Show helpers in the sidebar')!.getAttribute('aria-checked')).toBe('false');
     // This device only: nothing is written to settings.json.
     expect(m.env.patches).toEqual([]);
     await click(switchFor('Show helpers in the sidebar'));
-    expect(getHelpersInSidebar()).toBe(false);
+    expect(getHelpersInSidebar()).toBe(true);
   });
 
   it('is found by search', async () => {

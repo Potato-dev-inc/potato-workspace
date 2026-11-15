@@ -5,6 +5,7 @@
 //! See `docs/features/checkpoints.md`.
 
 pub mod bisect;
+pub mod day;
 pub mod engine;
 pub mod export;
 pub mod http;
@@ -25,7 +26,7 @@ pub(crate) use engine::{snapshot as test_snapshot, Kind as TestKind, Limits as T
 pub use runtime::{before_answer, before_dispatch, before_stop, live, note_dispatched, on_pane_status, PaneFacts, Runtime};
 /// For Review Desk's real-git tests: the environment a test `Runtime` is built with (`Runtime::new`).
 #[cfg(test)]
-pub(crate) use runtime::{Env as TestEnv, Settings as TestSettings};
+pub(crate) use runtime::{Env as TestEnv, Outcome as TestOutcome, Settings as TestSettings};
 
 /// What the History tab and `GET /panes/{id}/checkpoints` show.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -78,6 +79,9 @@ pub struct MissionPoint {
 pub fn mission_snapshot(copy: &std::path::Path, key: &str, round: u32, note: &str) -> Result<MissionPoint, CheckpointError> {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
     let made = engine::snapshot_numbered(copy, key, engine::Kind::After, Some(note), now, &engine::Limits::default(), Some(round.max(1)))?;
+    if let engine::Snapshot::Created(c) = &made {
+        crate::timeline::note_helper_point(copy, key, c);
+    }
     let point = match made {
         engine::Snapshot::Created(c) => c,
         engine::Snapshot::Unchanged(Some(c)) => c,

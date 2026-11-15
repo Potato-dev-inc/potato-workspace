@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { teamConfig } from '../../../dev/team-fixtures';
 import { JOIN_LINK_EVENT } from '../../../lib/join-link';
 import type { InviteLookup, InviteView, TeamApi, TeamConfigView } from '../../../lib/team';
-import { WORKER_UPDATE_COMMAND, type WorkerHealth } from '../../../lib/worker';
+import type { WorkerHealth } from '../../../lib/worker';
 import { buttonByText, click, hasText, settle, type as typeInto } from '../test-utils';
 import { TeamPage } from './TeamPage';
 
@@ -173,7 +173,9 @@ describe('Make an invite on a Potato Worker', () => {
     await settle(3);
     expect(host.querySelector('[data-testid="invite-join-url"]')).toBeNull();
     expect(hasText(host, 'KQ7M-4XPD')).toBe(true);
-    expect(host.querySelector('[data-testid="invite-update-worker"]')!.textContent).toContain(WORKER_UPDATE_COMMAND);
+    const note = host.querySelector('[data-testid="invite-update-worker"]')!;
+    expect(note.querySelector('[data-testid="worker-update-go"]')!.textContent).toBe('Update Worker');
+    expect(note.textContent).not.toMatch(/wrangler|npm run|relay.worker/);
   });
 });
 
@@ -202,7 +204,8 @@ describe('One Worker for the relay and the phone link', () => {
     expect(host.querySelector('[data-testid="stable-relay-suggestion"]')).toBeNull();
     const update = host.querySelector('[data-testid="worker-update"]')!;
     expect(update.textContent).toContain('Update your Worker');
-    expect(update.textContent).toContain(WORKER_UPDATE_COMMAND);
+    expect(update.querySelector('[data-testid="worker-update-go"]')!.textContent).toBe('Update Worker');
+    expect(update.textContent).not.toMatch(/wrangler|npm run|relay.worker/);
     expect(relayField().value).toBe('');
   });
 
@@ -216,5 +219,62 @@ describe('One Worker for the relay and the phone link', () => {
     await openStart({ savedLink: async () => null, check: withFeatures(['team']) });
     expect(host.querySelector('[data-testid="stable-relay-suggestion"]')).toBeNull();
     expect(host.querySelector('[data-testid="worker-update"]')).toBeNull();
+  });
+});
+
+describe('Team > Invite: an older Worker is updated by one button', () => {
+  const OLD: Partial<InviteView> = { link: 'pm://team/join?t=Acme&k=abc', code: 'KQ7M-4XPD', joinUrlNote: 'update-worker' };
+  const stepsApi = (failStep?: string) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      pauseMs: 0,
+      step: async (id: string) => {
+        calls.push(id);
+        return id === failStep ? { ok: false, output: 'Error: no network' } : { ok: true, output: '' };
+      },
+      check: async () => ({ reachable: true, features: ['team', 'invites'], legacyLink: false }),
+    };
+  };
+  const openInvite = async (update: ReturnType<typeof stepsApi>) => {
+    let made = 0;
+    await mount(
+      teamConfig({ relay: 'https://pm-relay.maya.workers.dev' }),
+      {
+        invite: async () => {
+          made += 1;
+          return made === 1
+            ? ({ ...OLD, expiresAtMs: Date.now() + 600_000 } as InviteView)
+            : ({ link: 'pm://team/join?t=Acme&k=abc', code: 'KQ7M-4XPD', expiresAtMs: Date.now() + 600_000, joinUrl: LINK } as InviteView);
+        },
+      },
+      { update: update as never },
+    );
+    await click(buttonStarting('Make an invite') ?? buttonByText(host, 'Make an invite'));
+    await settle(3);
+    return () => made;
+  };
+
+  it('Update Worker runs the steps, then the invite is made again with a one-time link', async () => {
+    const update = stepsApi();
+    const made = await openInvite(update);
+    await click(host.querySelector('[data-testid="invite-update-worker"] [data-testid="worker-update-go"]'));
+    await settle(12);
+    expect(update.calls).toEqual(['prepare', 'install', 'login', 'deploy']);
+    expect(host.querySelector('[data-testid="invite-update-worker"]')).toBeNull();
+    expect(made()).toBe(2);
+    expect(host.querySelector<HTMLInputElement>('[data-testid="invite-join-url"]')!.value).toBe(LINK);
+  });
+
+  it('a step that fails 3 times shows that it was handed over, with no command on screen', async () => {
+    const update = stepsApi('login');
+    await openInvite(update);
+    await click(host.querySelector('[data-testid="invite-update-worker"] [data-testid="worker-update-go"]'));
+    await settle(14);
+    expect(update.calls.filter((c) => c === 'login')).toHaveLength(3);
+    const failed = host.querySelector('[data-testid="worker-update-failed"]')!;
+    expect(failed.textContent).toContain('Signing in to Cloudflare');
+    expect(host.querySelector('[data-testid="worker-update-copy-note"]')).not.toBeNull();
+    expect(host.textContent).not.toMatch(/wrangler|npm run|relay.worker/);
   });
 });

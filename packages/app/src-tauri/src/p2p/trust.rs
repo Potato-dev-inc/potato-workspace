@@ -346,6 +346,11 @@ impl TrustList {
         Some(if e.allowed.contains(capability::AGENTS_REMOTE_FULL) { RemoteLevel::Full } else { RemoteLevel::Watch })
     }
 
+    /// Whether this computer lets `node` ask to borrow its agent sign-ins.
+    pub fn lend_allowed(&self, node: &NodeId) -> bool {
+        self.get(node).is_some_and(|e| e.allowed.contains(capability::LEND_CONTROL))
+    }
+
     /// Whether this computer lets `node` also reach it through its web address (only with the run switch on).
     pub fn web_allowed(&self, node: &NodeId) -> bool {
         self.get(node).is_some_and(|e| e.allowed.contains(capability::AGENTS_REMOTE) && e.allowed.contains(capability::AGENTS_REMOTE_WEB))
@@ -382,7 +387,13 @@ impl Permissions for TrustList {
         if capability == capability::PAIR_LINK {
             return self.link_pairing_open();
         }
-        self.entries.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|e| e.node == *peer && e.allowed.contains(capability))
+        self.entries.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|e| {
+            e.node == *peer
+                && (e.allowed.contains(capability)
+                    // A device that may only borrow still has to be let in on the agents link, so its items can arrive. What it may
+                    // do there is its bridge rights (`Cap::Lend` alone); `remote_level` stays strict.
+                    || (capability == capability::AGENTS_REMOTE && e.allowed.contains(capability::LEND_CONTROL)))
+        })
     }
 
     /// The person's switch. Unknown computers and capabilities that are not switchable are ignored.

@@ -55,7 +55,7 @@ interface Made {
   token: string;
 }
 
-export function ChatExportMenu({ paneId, api = tauriChatExportApi, variant = 'icon' }: { paneId: string; api?: ChatExportApi; /** `text`: a quiet "Share" button (the pane header), so it is not a second ⋯. */ variant?: 'icon' | 'text' }) {
+export function ChatExportMenu({ paneId, api = tauriChatExportApi, variant = 'icon', onMove }: { paneId: string; api?: ChatExportApi; /** "Move to…" in the menu (Devices): absent hides the entry. */ onMove?: () => void; /** `text`: a quiet "Share" button (the pane header), so it is not a second ⋯. */ variant?: 'icon' | 'text' }) {
   const t = useT();
   const [menuOpen, setMenuOpen] = useState(false);
   const [preview, setPreview] = useState<ExportFormat | null>(null);
@@ -104,6 +104,20 @@ export function ChatExportMenu({ paneId, api = tauriChatExportApi, variant = 'ic
             >
               Go live…
             </button>
+            {onMove && (
+              <button
+                type="button"
+                className="ck-menu-item"
+                role="menuitem"
+                data-testid="chat-menu-move"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onMove();
+                }}
+              >
+                {t('move.menu')}
+              </button>
+            )}
           </FloatingMenu>
         )}
       </div>

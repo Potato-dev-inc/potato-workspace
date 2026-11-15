@@ -37,6 +37,13 @@ use crate::secure_core::crypto::{b64, random_bytes, unb64};
 use crate::team::secure::{CapacityIn, Payload, Session};
 use crate::tui::LaunchEnv;
 
+/// Pass a task (`team::direct`): the sender's earlier click, "run it through my lent usage", kept as one bound promise.
+/// `claim` is true at most once for a request that names the task, comes from the member it was promised to, asks for the
+/// promised profile and no more time than promised. Anything else is left for the lender's own card.
+pub trait OfferGate: Send + Sync {
+    fn claim(&self, offer_ref: &str, member_id: &str, device_id: &str, profile_id: Option<&str>, secs: u64) -> bool;
+}
+
 pub const HOUR: u64 = 3600;
 pub const CAP_SECS: u64 = 7 * 24 * HOUR;
 pub const CAP_OTHER_SECS: u64 = 24 * HOUR;
@@ -449,6 +456,56 @@ impl TeamPort for AppTeam {
     }
 }
 
+/// One lend control item between two of the person's OWN paired PCs. The sender is never named here: the far side takes it
+/// from the device link that carried it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OwnItem {
+    pub msg_id: String,
+    pub sent_ms: u64,
+    pub body: Body,
+}
+
+/// The device link, as the lend service needs it for items between my own PCs (no Team needed).
+pub trait OwnPort: Send + Sync {
+    /// Delivers `item` to the paired PC `node` (64 hex). A refusal or an unreachable PC is an error in plain words.
+    fn send(&self, node: &str, item: &OwnItem) -> Result<(), String>;
+    /// The paired PCs that may be used for lending: `(node hex, name)`.
+    fn peers(&self) -> Vec<(String, String)>;
+    /// This PC's node id on the device link, when it is up.
+    fn my_node(&self) -> Option<String>;
+    fn my_name(&self) -> String;
+}
+
+/// No device link: lending between my own PCs is not available (the Team path is unchanged).
+#[cfg(test)]
+pub struct NoOwn;
+
+#[cfg(test)]
+impl OwnPort for NoOwn {
+    fn send(&self, _node: &str, _item: &OwnItem) -> Result<(), String> {
+        Err("Devices is off, so this PC cannot reach your other PCs.".into())
+    }
+    fn peers(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+    fn my_node(&self) -> Option<String> {
+        None
+    }
+    fn my_name(&self) -> String {
+        String::new()
+    }
+}
+
+/// Own PCs have no team member id: the person is always "me".
+pub const OWN_MEMBER: &str = "me";
+/// An own device id is `node:<64 hex>` (the device-link node), so it can never be mistaken for a team device id.
+pub const OWN_PREFIX: &str = "node:";
+
+/// The node hex of an own device id, when it is one.
+pub fn own_node(device: &str) -> Option<&str> {
+    device.strip_prefix(OWN_PREFIX).filter(|h| crate::own_lend::is_node_hex(h))
+}
+
 pub type Spawn = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
 
 /// One renewal of a lend sign-in's token by the agent's own CLI.
@@ -489,6 +546,8 @@ pub struct Deps {
     pub refresh: Refresh,
     /// Inherited environment variable names (for the pane env: which provider variables to remove).
     pub env_names: Arc<dyn Fn() -> Vec<String> + Send + Sync>,
+    /// The device link for items between my own PCs.
+    pub own: Arc<dyn OwnPort>,
     /// Tests only: forward to a fake upstream on this machine instead of the spec's host.
     #[cfg(test)]
     pub test_upstream: Option<String>,
@@ -555,6 +614,7 @@ pub struct Lend {
     awake_on: Mutex<bool>,
     /// Offers I asked for and have not finished collecting (nonce -> who and what came back).
     offers_wait: Mutex<HashMap<String, PendingOffers>>,
+    offer_gate: Mutex<Option<Arc<dyn OfferGate>>>,
     me: Weak<Lend>,
 }
 
@@ -580,11 +640,18 @@ impl Lend {
             .ok()
             .and_then(|t| serde_json::from_str::<Saved>(&t).ok())
             .unwrap_or_default();
+        // Older builds named a lend sign-in "Lend Claude 3"; it now carries the name of the profile that uses it.
+        for p in &saved.profiles {
+            if let LendAccount::Account { id } = &p.account {
+                super::signin_pane::relabel_for_profile(&deps.accounts, id, &p.name);
+            }
+        }
         let svc = Arc::new_cyclic(|me| Self {
             deps,
             inner: Mutex::new(Inner { saved, out: HashMap::new(), inn: HashMap::new(), in_grants: HashMap::new(), shared: HashMap::new() }),
             awake_on: Mutex::new(false),
             offers_wait: Mutex::new(HashMap::new()),
+            offer_gate: Mutex::new(None),
             me: me.clone(),
         });
         let book: Weak<dyn LenderBook> = svc.me.clone();
@@ -596,8 +663,155 @@ impl Lend {
         self.deps.net.clone()
     }
 
+    /// Pass a task: the one place a lend can be answered without a click (see [`OfferGate`]).
+    pub fn set_offer_gate(&self, gate: Arc<dyn OfferGate>) {
+        *lock(&self.offer_gate) = Some(gate);
+    }
+
+    /// A profile of mine that may be promised to `member_id` with a task: its name and agents (words only).
+    pub fn profile_for_task(&self, member_id: &str, profile_id: &str, secs: u64) -> Result<(String, Vec<String>), String> {
+        let inner = lock(&self.inner);
+        let p = inner.saved.profiles.iter().find(|p| p.id == profile_id).ok_or("That lend profile is gone.")?;
+        if !profile_allows(p, member_id, true) {
+            return Err("That lend profile is not for this person.".into());
+        }
+        if secs < MIN_SECS || secs > p.max_secs.min(CAP_OTHER_SECS) {
+            return Err("That is longer than this profile allows.".into());
+        }
+        Ok((clean_profile_name(&p.name), p.agent_ids.clone()))
+    }
+
     fn now(&self) -> u64 {
         (self.deps.now)()
+    }
+
+    /// This PC's id among my own devices (`node:<hex>`), when the device link is up.
+    fn my_own_device(&self) -> String {
+        self.deps.own.my_node().map(|h| format!("{OWN_PREFIX}{h}")).unwrap_or_default()
+    }
+
+    /// The name I gave a paired PC, for a row.
+    fn own_name(&self, node_hex: &str) -> String {
+        self.deps.own.peers().into_iter().find(|(n, _)| n == node_hex).map(|(_, name)| name).unwrap_or_default()
+    }
+
+    /// The team session, unless every device named is one of my own PCs (those need no Team).
+    fn session_for(&self, devices: &[&str]) -> Result<Option<Session>, String> {
+        if !devices.is_empty() && devices.iter().all(|d| own_node(d).is_some()) {
+            return Ok(None);
+        }
+        self.deps.team.session().map(Some)
+    }
+
+    /// Sends one item to a device: a `node:` id goes over the device link, any other over the team relay.
+    fn send_to(&self, session: Option<&Session>, to: &str, body: Body) -> Result<(), String> {
+        let now = self.now();
+        if let Some(node) = own_node(to) {
+            let item = OwnItem { msg_id: wire::new_msg_id(now), sent_ms: now, body };
+            return self.deps.own.send(node, &item);
+        }
+        let session = session.ok_or("The team is not connected.")?;
+        let (payload, _) = wire::seal(session, to, body, now)?;
+        self.deps.team.send(&payload)
+    }
+
+    /// An item from one of my own PCs, over the device link. `from_node` is the sender the link proved (never from the
+    /// body); the body is an [`OwnItem`]. It goes through the same checks and rules as a team item.
+    pub fn on_own_item(&self, from_node: &str, raw: serde_json::Value) -> Result<serde_json::Value, String> {
+        if !crate::own_lend::is_node_hex(from_node) || !self.deps.own.peers().iter().any(|(n, _)| n == from_node) {
+            return Err("That PC is not one of yours.".into());
+        }
+        let own: OwnItem = serde_json::from_value(raw).map_err(|_| "That is not a lend item.".to_string())?;
+        let now = self.now();
+        if own.sent_ms > now.saturating_add(wire::MAX_FUTURE_MS) || own.msg_id.is_empty() || own.msg_id.len() > 64 {
+            return Err("That item was refused.".into());
+        }
+        if let Body::Request { reason, .. } = &own.body {
+            if reason.chars().count() > wire::MAX_REASON {
+                return Err("That item was refused.".into());
+            }
+        }
+        let me = self.my_own_device();
+        let item = Item {
+            v: wire::VERSION,
+            msg_id: own.msg_id,
+            team: String::new(),
+            from_member: OWN_MEMBER.into(),
+            from_device: format!("{OWN_PREFIX}{from_node}"),
+            to: me,
+            sent_ms: own.sent_ms,
+            body: own.body,
+        };
+        {
+            let mut inner = lock(&self.inner);
+            inner.saved.guard.fresh(&item.msg_id, now).map_err(|_| "That item was already received.".to_string())?;
+            self.save(&inner);
+        }
+        self.apply(None, item, now).map(|_| serde_json::json!({ "ok": true })).map_err(|r| match r {
+            WireReject::Replay => "That item was already received.".to_string(),
+            _ => "That item was refused.".to_string(),
+        })
+    }
+
+    /// Ask one of my own PCs (a paired device with Borrow switched on there) to lend an agent. No Team needed.
+    pub fn request_own(&self, node_hex: &str, agent_id: &str, secs: u64, reason: &str, profile_id: Option<&str>, profile_name: Option<&str>) -> Result<LendRequest, String> {
+        if self.spec(agent_id).is_none() {
+            return Err(format!("{agent_id} can't be borrowed through a PC."));
+        }
+        let reason = reason.trim();
+        if reason.chars().count() > wire::MAX_REASON {
+            return Err("The reason is too long (280 characters at most).".into());
+        }
+        if !crate::own_lend::is_node_hex(node_hex) {
+            return Err("That PC is not one of yours.".into());
+        }
+        let peer_name = self.deps.own.peers().into_iter().find(|(n, _)| n == node_hex).map(|(_, name)| name).ok_or("That PC is not one of yours.")?;
+        if secs < MIN_SECS || secs > cap_for(false) {
+            return Err("The most is 7 days.".into());
+        }
+        let node = self.deps.net.my_node()?.to_hex();
+        let now = self.now();
+        let request_id = short_id("lr");
+        let device = format!("{OWN_PREFIX}{node_hex}");
+        let body = Body::Request {
+            request_id: request_id.clone(),
+            agent_id: agent_id.to_string(),
+            mode: MODE.into(),
+            duration_ms: secs * 1000,
+            reason: reason.to_string(),
+            device_name: self.deps.own.my_name(),
+            node_hint: node.clone(),
+            profile_id: profile_id.map(str::to_string),
+            offer_ref: None,
+        };
+        let view = LendRequest {
+            id: request_id,
+            direction: Direction::Out,
+            member_id: OWN_MEMBER.into(),
+            member_name: String::new(),
+            device_name: peer_name,
+            agent_id: agent_id.to_string(),
+            secs,
+            reason: reason.to_string(),
+            at_ms: now,
+            for_other_person: false,
+            state: RequestState::Open,
+            profile_id: profile_id.map(str::to_string),
+            profile_name: profile_name.map(clean_profile_name).unwrap_or_default(),
+        };
+        let mut inner = lock(&self.inner);
+        inner.saved.requests.push(RequestRec { view: view.clone(), devices: vec![device.clone()], node_hint: node });
+        self.save(&inner);
+        drop(inner);
+        // The record exists before the item leaves: an answer may come back at once.
+        if let Err(e) = self.send_to(None, &device, body) {
+            let mut inner = lock(&self.inner);
+            inner.saved.requests.retain(|r| r.view.id != view.id);
+            self.save(&inner);
+            return Err(e);
+        }
+        self.changed();
+        Ok(view)
     }
 
     fn save(&self, inner: &Inner) {
@@ -644,6 +858,36 @@ impl Lend {
             })
             .collect();
         crate::usage::LendView { profiles, borrowed }
+    }
+
+    /// Renews an idle lend sign-in for the usage bar: the access token of a sign-in nobody uses runs out every few hours, and
+    /// only the agent's own CLI renews it. Runs that CLI once, hidden (the same renewal the refresher does for a lent
+    /// sign-in), at most once in 30 minutes per sign-in. BLOCKING (the usage read runs on a blocking thread). Returns
+    /// whether the CLI ran and finished fine; the caller reads the token again to see.
+    pub fn renew_signin_blocking(&self, account_id: &str) -> bool {
+        static LAST: Mutex<Option<HashMap<String, u64>>> = Mutex::new(None);
+        let Ok((acc, spec)) = self.signin_target(account_id) else { return false };
+        let Some(refresh) = spec.auth.account.as_ref().and_then(|a| a.refresh.clone()) else { return false };
+        let now = self.now();
+        {
+            let mut last = lock(&LAST);
+            let map = last.get_or_insert_with(HashMap::new);
+            if map.get(account_id).is_some_and(|t| now.saturating_sub(*t) < 30 * 60_000) {
+                return false;
+            }
+            map.insert(account_id.to_string(), now);
+        }
+        let job = RefreshJob {
+            agent_id: acc.agent_id.clone(),
+            account_id: account_id.to_string(),
+            args: refresh.args.clone(),
+            timeout_secs: refresh.timeout_secs,
+            scratch: self.deps.dir.join("refresh"),
+        };
+        let wait = Duration::from_secs(refresh.timeout_secs + 10);
+        let ran = tauri::async_runtime::block_on(tokio::time::timeout(wait, (self.deps.refresh)(job)));
+        tracing::info!(ran_ok = matches!(ran, Ok(Ok(()))), "lend: idle sign-in renewed for the usage bar");
+        matches!(ran, Ok(Ok(())))
     }
 
     pub fn sync_usage_view_pub(&self) {
@@ -721,7 +965,7 @@ impl Lend {
     /// Lender: send the borrower of each running lend the limit numbers of the account behind it, when the profile says so.
     /// `numbers(account id)` gives the plan name and windows the usage bar read for that sign-in.
     pub fn share_usage(&self, numbers: &dyn Fn(&str) -> Option<(Option<String>, Vec<crate::usage::readers::Window>)>) {
-        let Ok(session) = self.deps.team.session() else { return };
+        let session = self.deps.team.session().ok();
         let sends: Vec<(String, String, Option<String>, Vec<wire::WireWindow>)> = {
             let inner = lock(&self.inner);
             inner
@@ -748,9 +992,10 @@ impl Lend {
         };
         for (grant_id, device, plan, windows) in sends {
             let body = Body::Usage { grant_id, plan, windows };
-            if let Ok((payload, _)) = wire::seal(&session, &device, body, self.now()) {
-                let _ = self.deps.team.send(&payload);
+            if own_node(&device).is_none() && session.is_none() {
+                continue;
             }
+            let _ = self.send_to(session.as_ref(), &device, body);
         }
     }
 
@@ -929,6 +1174,9 @@ impl Lend {
                 return Err("That sign-in belongs to another agent.".into());
             }
         }
+        if let LendAccount::Account { id } = &p.account {
+            super::signin_pane::relabel_for_profile(&self.deps.accounts, id, &p.name);
+        }
         let mut inner = lock(&self.inner);
         if p.id.is_empty() {
             p.id = short_id("lp");
@@ -1085,6 +1333,16 @@ impl Lend {
 
     /// `request`, naming the lender's profile picked from its offers (None: the lender chooses).
     pub fn request_with_profile(&self, member_id: &str, device_id: Option<&str>, agent_id: &str, secs: u64, reason: &str, profile_id: Option<&str>, profile_name: Option<&str>) -> Result<LendRequest, String> {
+        self.request_inner(member_id, device_id, agent_id, secs, reason, profile_id, profile_name, None)
+    }
+
+    /// `request_with_profile` for a passed task: the request names the task (`offer_ref`), so the sender's promise can match it.
+    pub fn request_for_task(&self, member_id: &str, device_id: &str, agent_id: &str, secs: u64, reason: &str, profile_id: &str, profile_name: &str, task_id: &str) -> Result<LendRequest, String> {
+        self.request_inner(member_id, Some(device_id), agent_id, secs, reason, Some(profile_id), Some(profile_name), Some(task_id))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn request_inner(&self, member_id: &str, device_id: Option<&str>, agent_id: &str, secs: u64, reason: &str, profile_id: Option<&str>, profile_name: Option<&str>, offer_ref: Option<&str>) -> Result<LendRequest, String> {
         if self.spec(agent_id).is_none() {
             return Err(format!("{agent_id} can't be borrowed through a PC."));
         }
@@ -1126,6 +1384,7 @@ impl Lend {
                 device_name: my_name.clone(),
                 node_hint: node.clone(),
                 profile_id: profile_id.map(str::to_string),
+                offer_ref: offer_ref.map(str::to_string),
             };
             let (payload, _) = wire::seal(&session, d, body, now)?;
             self.deps.team.send(&payload)?;
@@ -1160,6 +1419,23 @@ impl Lend {
 
     // ------------------------------------------------------------------------------------------------- lending
 
+    /// A request that names a passed task: if the sender's own earlier click promised exactly this (same person, same
+    /// profile, no more time, not used yet), say yes now. Everything else about the lend is the normal `answer`.
+    fn answer_if_promised(&self, request_id: &str, offer_ref: Option<&str>, member_id: &str, device_id: &str, profile_id: Option<&str>, secs: u64) {
+        let Some(offer_ref) = offer_ref.filter(|r| !r.is_empty() && r.len() <= 64) else { return };
+        let Some(gate) = lock(&self.offer_gate).clone() else { return };
+        if !gate.claim(offer_ref, member_id, device_id, profile_id, secs) {
+            return;
+        }
+        let Some(me) = self.me.upgrade() else { return };
+        let (id, profile, secs) = (request_id.to_string(), profile_id.map(str::to_string), secs);
+        (self.deps.spawn)(Box::pin(async move {
+            if let Err(why) = me.answer(&id, true, profile.as_deref(), Some(secs)).await {
+                tracing::info!(why, "lend: the promised lend could not start");
+            }
+        }));
+    }
+
     /// Yes or no to a request that came in. Yes makes the grant and sends it to the device that asked.
     pub async fn answer(&self, request_id: &str, accept: bool, profile_id: Option<&str>, secs: Option<u64>) -> Result<Option<Grant>, String> {
         let req = {
@@ -1170,11 +1446,10 @@ impl Lend {
         if req.view.state != RequestState::Open {
             return Err("That request was already answered.".into());
         }
-        let session = self.deps.team.session()?;
         let to = req.devices.first().cloned().ok_or("That request is gone.")?;
+        let session = self.session_for(&[to.as_str()])?;
         if !accept {
-            let (payload, _) = wire::seal(&session, &to, Body::Decline { request_id: request_id.into() }, self.now())?;
-            self.deps.team.send(&payload)?;
+            self.send_to(session.as_ref(), &to, Body::Decline { request_id: request_id.into() })?;
             self.set_request_state(request_id, Direction::In, RequestState::Declined);
             return Ok(None);
         }
@@ -1216,7 +1491,7 @@ impl Lend {
         let secret = random_bytes::<32>().to_vec();
         let limits = Limits { max_requests: profile.max_requests, max_tokens: profile.max_tokens };
         let gate = Gate::new(tokio::time::Instant::now() + Duration::from_secs(secs), limits);
-        let peer = session.roster.member(&req.view.member_id);
+        let peer = session.as_ref().and_then(|s| s.roster.member(&req.view.member_id));
         let view = Grant {
             id: grant_id.clone(),
             direction: Direction::Out,
@@ -1249,10 +1524,12 @@ impl Lend {
             limits,
             node: hint,
             link_secret: b64(&secret),
-            device_name: session.roster.device(&session.my_device()?).map(|(_, d)| d.name.clone()).unwrap_or_default(),
+            device_name: match &session {
+                Some(s) => s.roster.device(&s.my_device()?).map(|(_, d)| d.name.clone()).unwrap_or_default(),
+                None => self.deps.own.my_name(),
+            },
             profile_name: clean_profile_name(&profile.name),
         };
-        let (payload, _) = wire::seal(&session, &to, body, now)?;
         // The grant is live before it is sent, so the borrower's first dial finds it.
         {
             let mut inner = lock(&self.inner);
@@ -1263,7 +1540,10 @@ impl Lend {
             );
             inner.saved.grants.push(GrantRec {
                 view: view.clone(),
-                lender_device: session.my_device()?,
+                lender_device: match &session {
+                    Some(s) => s.my_device()?,
+                    None => self.my_own_device(),
+                },
                 borrower_device: to.clone(),
                 borrower_node: borrower_node.to_hex(),
                 node: None,
@@ -1279,7 +1559,7 @@ impl Lend {
         if let Some(plan) = plan {
             self.keep_fresh(&grant_id, plan);
         }
-        if let Err(e) = self.deps.team.send(&payload) {
+        if let Err(e) = self.send_to(session.as_ref(), &to, body) {
             self.finish_out(&grant_id, EndReason::Stopped);
             return Err(e);
         }
@@ -1386,18 +1666,16 @@ impl Lend {
         if rec.view.state == GrantState::Active {
             self.finish_out(grant_id, EndReason::Revoked);
         }
-        let session = self.deps.team.session()?;
-        let (payload, _) = wire::seal(&session, &rec.borrower_device, Body::Revoke { grant_id: grant_id.into(), reason: String::new() }, self.now())?;
-        self.deps.team.send(&payload)
+        let session = self.session_for(&[rec.borrower_device.as_str()])?;
+        self.send_to(session.as_ref(), &rec.borrower_device, Body::Revoke { grant_id: grant_id.into(), reason: String::new() })
     }
 
     /// Give back now (borrower).
     pub fn give_back(&self, grant_id: &str) -> Result<(), String> {
         let rec = self.grant_rec(grant_id).filter(|g| g.view.direction == Direction::In).ok_or("That lend is gone.")?;
         self.finish_in(grant_id, Some(GrantEnd::Returned));
-        let session = self.deps.team.session()?;
-        let (payload, _) = wire::seal(&session, &rec.lender_device, Body::Return { grant_id: grant_id.into() }, self.now())?;
-        self.deps.team.send(&payload)
+        let session = self.session_for(&[rec.lender_device.as_str()])?;
+        self.send_to(session.as_ref(), &rec.lender_device, Body::Return { grant_id: grant_id.into() })
     }
 
     fn grant_rec(&self, grant_id: &str) -> Option<GrantRec> {
@@ -1658,18 +1936,24 @@ impl Lend {
             inner.saved.guard.fresh(&item.msg_id, now)?;
             self.save(&inner);
         }
-        self.apply(&session, item, now)
+        self.apply(Some(&session), item, now)
     }
 
-    fn apply(&self, session: &Session, item: Item, now: u64) -> Result<(), WireReject> {
-        let me_member = session.my_member().map_err(|_| WireReject::Undecryptable)?;
-        let names = |member: &str, device: &str| {
-            let m = session.roster.member(member).map(|m| m.display.clone()).unwrap_or_default();
-            let d = session.roster.device(device).map(|(_, d)| d.name.clone()).unwrap_or_default();
-            (m, d)
+    fn apply(&self, session: Option<&Session>, item: Item, now: u64) -> Result<(), WireReject> {
+        let me_member = match session {
+            Some(s) => s.my_member().map_err(|_| WireReject::Undecryptable)?,
+            None => OWN_MEMBER.to_string(),
+        };
+        let names = |member: &str, device: &str| match session {
+            Some(session) => {
+                let m = session.roster.member(member).map(|m| m.display.clone()).unwrap_or_default();
+                let d = session.roster.device(device).map(|(_, d)| d.name.clone()).unwrap_or_default();
+                (m, d)
+            }
+            None => (String::new(), own_node(device).map(|n| self.own_name(n)).unwrap_or_default()),
         };
         match item.body {
-            Body::Request { request_id, agent_id, mode, duration_ms, reason, device_name, node_hint, profile_id } => {
+            Body::Request { request_id, agent_id, mode, duration_ms, reason, device_name, node_hint, profile_id, offer_ref } => {
                 if mode != MODE || self.spec(&agent_id).is_none() || node_from_hex(&node_hint).is_none() {
                     return Err(WireReject::BadItem);
                 }
@@ -1695,8 +1979,11 @@ impl Lend {
                     profile_id: profile_id.filter(|p| !p.is_empty() && p.len() <= 64 && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')),
                     profile_name: String::new(),
                 };
+                let (asked_profile, asked_secs, asked_id) = (view.profile_id.clone(), view.secs, view.id.clone());
                 inner.saved.requests.push(RequestRec { view, devices: vec![item.from_device.clone()], node_hint });
                 self.save(&inner);
+                drop(inner);
+                self.answer_if_promised(&asked_id, offer_ref.as_deref(), &item.from_member, &item.from_device, asked_profile.as_deref(), asked_secs);
             }
             Body::Grant { request_id, grant_id, agent_id, mode, duration_ms, not_after_ms, limits, node, link_secret, device_name, profile_name } => {
                 let secret = unb64(&link_secret).filter(|s| s.len() == 32).ok_or(WireReject::BadItem)?;
@@ -1729,7 +2016,10 @@ impl Lend {
                     let left = duration_ms.min(not_after_ms.saturating_sub(item.sent_ms)).min(cap_for(req.view.for_other_person) * 1000);
                     let ends_ms = now + left;
                     let (peer_name, roster_device) = names(&item.from_member, &item.from_device);
-                    let my_device = session.my_device().unwrap_or_default();
+                    let my_device = match session {
+                        Some(s) => s.my_device().unwrap_or_default(),
+                        None => self.my_own_device(),
+                    };
                     inner.saved.grants.push(GrantRec {
                         view: Grant {
                             id: grant_id.clone(),
@@ -1768,9 +2058,7 @@ impl Lend {
                 };
                 let _ = self.deps.secrets.set(&link_slot(&grant_id), &b64(&secret));
                 self.start_shim(&grant_id, node, secret, ends_ms);
-                if let Ok((payload, _)) = wire::seal(session, &item.from_device, Body::Ack { of: item.msg_id.clone() }, now) {
-                    let _ = self.deps.team.send(&payload);
-                }
+                let _ = self.send_to(session, &item.from_device, Body::Ack { of: item.msg_id.clone() });
             }
             Body::Decline { request_id } => {
                 let ok = lock(&self.inner).saved.requests.iter().any(|r| {
@@ -1822,8 +2110,7 @@ impl Lend {
             Body::OffersAsk { nonce } => {
                 // Only what THIS asker may use. Nothing changes here, so the screens need no refresh.
                 let offers = self.offers_for(&item.from_member, &me_member);
-                let (payload, _) = wire::seal(session, &item.from_device, Body::Offers { nonce, offers }, now).map_err(|_| WireReject::BadItem)?;
-                let _ = self.deps.team.send(&payload);
+                self.send_to(session, &item.from_device, Body::Offers { nonce, offers }).map_err(|_| WireReject::BadItem)?;
                 return Ok(());
             }
             Body::Offers { nonce, offers } => {
@@ -1931,11 +2218,18 @@ impl Lend {
         if pending.is_empty() {
             return 0;
         }
-        let Ok(session) = self.deps.team.session() else { return pending.len() };
+        let team = self.deps.team.session().ok();
         let mut done = Vec::new();
         for p in &pending {
             let body = Body::Revoke { grant_id: p.grant_id.clone(), reason: RESTARTED.into() };
-            match wire::seal(&session, &p.device, body, self.now()) {
+            if own_node(&p.device).is_some() {
+                if self.send_to(None, &p.device, body).is_ok() {
+                    done.push(p.grant_id.clone());
+                }
+                continue;
+            }
+            let Some(session) = team.as_ref() else { continue };
+            match wire::seal(session, &p.device, body, self.now()) {
                 Ok((payload, _)) => {
                     if self.deps.team.send(&payload).is_ok() {
                         done.push(p.grant_id.clone());
@@ -2071,5 +2365,11 @@ impl LenderBook for Lend {
             l.links.retain(|x| !x.peer().eq(&link.peer()) || !Arc::ptr_eq(x, &link));
             l.links.push(link);
         }
+    }
+}
+
+impl crate::own_lend::Inbox for Lend {
+    fn deliver(&self, from_node: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
+        self.on_own_item(from_node, body)
     }
 }

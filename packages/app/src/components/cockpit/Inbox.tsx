@@ -31,6 +31,7 @@ import { SIGN_IN } from '../../lib/glossary';
 import { TeamSection } from './team/TeamSection';
 import { DoneToday } from './inbox/DoneToday';
 import { IconTick } from './inbox/ActivityIcons';
+import { rowOpenProps } from './inbox/row-open';
 import { LastTurnContext } from './away-context';
 import '../../styles/inbox.css';
 import { RedBanners } from './team/RedBanner';
@@ -47,6 +48,8 @@ import { CompanionStoppedCard } from './companion/StoppedCard';
 interface Entry extends InboxEntry {
   /** A number key can answer it (not high risk, not consent). Drives the keyboard hint. */
   quick: boolean;
+  /** The chat this card belongs to: clicking the card (or Enter on it) opens it. */
+  paneId?: string;
   render: (first: boolean) => ReactNode;
 }
 
@@ -132,12 +135,14 @@ export function Inbox({
     const age = (since?: number) => (since === undefined ? null : c.now - since);
 
     for (const q of c.asked.questions) {
+      const qPane = q.consent?.pane_id ?? q.pane_id;
       const paneName = (q.consent?.pane_id ?? q.pane_id) ? c.names.get((q.consent?.pane_id ?? q.pane_id)!) : undefined;
       if (isConsent(q)) {
         out.push({
           key: `consent:${q.id}`,
           kind: 'consent',
           since: q.created_at_ms,
+          paneId: qPane,
           quick: false,
           render: (first) => (
             <ConsentCard q={q} paneName={paneName} now={c.now} autoFocus={first} onAnswer={answer(q.id)} onOpenPane={open(q.consent?.pane_id)} />
@@ -148,6 +153,7 @@ export function Inbox({
           key: `budget:${q.id}`,
           kind: 'budget',
           since: q.created_at_ms,
+          paneId: qPane,
           quick: true,
           render: () => (
             <BudgetCard q={q} paneName={paneName} now={c.now} onAnswer={answer(q.id)} onDismiss={() => void c.asked.dismissQuestion(q.id)} onOpenPane={open(q.pane_id)} />
@@ -158,6 +164,7 @@ export function Inbox({
           key: `limit:${q.id}`,
           kind: 'limit',
           since: q.created_at_ms,
+          paneId: qPane,
           quick: true,
           render: () => (
             <LimitCard
@@ -179,6 +186,7 @@ export function Inbox({
           key: `issue:${q.id}`,
           kind: 'question',
           since: q.created_at_ms,
+          paneId: qPane,
           quick: false,
           render: () => <IssueCard q={q} now={c.now} onAnswer={answer(q.id)} onOpenPane={open(q.pane_id)} />,
         });
@@ -188,6 +196,7 @@ export function Inbox({
           key: `ci:${q.id}`,
           kind: 'question',
           since: q.created_at_ms,
+          paneId: qPane,
           quick: false,
           render: () => <CiFixCard q={q} now={c.now} onAnswer={answer(q.id)} onOpenPane={open(q.pane_id)} />,
         });
@@ -196,6 +205,7 @@ export function Inbox({
           key: `question:${q.id}`,
           kind: 'question',
           since: q.created_at_ms,
+          paneId: qPane,
           quick: q.choices.length > 0,
           render: () => (
             <QuestionCard q={q} paneName={paneName} now={c.now} onAnswer={answer(q.id)} onDismiss={() => void c.asked.dismissQuestion(q.id)} onOpenPane={open(q.pane_id)} onAddLogin={() => openSettingsAt('agents', 'accounts')} />
@@ -215,6 +225,7 @@ export function Inbox({
         kind: 'approval',
         risk,
         since,
+        paneId: id,
         quick: hasChoices && risk !== 'high',
         render: (first) => <PaneApprovalCard c={c} paneId={id} autoFocus={first} onOpen={() => c.select(id)} />,
       });
@@ -227,6 +238,7 @@ export function Inbox({
         key: `error:${id}`,
         kind: 'error',
         since,
+        paneId: id,
         quick: true,
         render: () => (
           <PaneErrorCard
@@ -243,13 +255,14 @@ export function Inbox({
     }
 
     for (const id of stuckIds) {
-      out.push({ key: `stuck:${id}`, kind: 'stuck', quick: true, render: () => <PaneStuckCard c={c} paneId={id} dock={false} /> });
+      out.push({ key: `stuck:${id}`, kind: 'stuck', paneId: id, quick: true, render: () => <PaneStuckCard c={c} paneId={id} dock={false} /> });
     }
     for (const x of companions ?? []) {
       if (x.state !== 'stopped' || !onRestartCompanion) continue;
       out.push({
         key: `companion:${x.id}`,
         kind: 'companion',
+        paneId: x.paneId ?? undefined,
         quick: true,
         render: () => <CompanionStoppedCard companion={x} onTryAgain={onRestartCompanion} onOpenPane={open(x.paneId ?? undefined)} />,
       });
@@ -386,7 +399,7 @@ export function Inbox({
       {entries.length > 0 && (
         <ul className="ib-list" aria-label={t('inbox.needsYouList')}>
           {entries.map((e, i) => (
-            <li key={e.key} data-ib-key={e.key}>
+            <li key={e.key} data-ib-key={e.key} {...rowOpenProps(e.paneId && c.registry.panes.has(e.paneId) ? () => c.select(e.paneId!) : undefined)}>
               {e.render(i === 0)}
             </li>
           ))}
@@ -401,7 +414,7 @@ export function Inbox({
       <HiddenRuns />
       <ImportChatsCard />
 
-      {!firstRun && <DoneToday summaries={lastTurns} names={c.names} now={c.now} onOpen={(id) => c.select(id)} onMorning={onOpenMorning} />}
+      {!firstRun && <DoneToday summaries={lastTurns} names={c.names} now={c.now} onOpen={(id) => c.select(id)} onMorning={onOpenMorning} hasPane={(id) => c.registry.panes.has(id)} onClosed={() => c.notify(t('inbox.doneClosed'))} />}
 
       {!firstRun && <TeamSection now={c.now} paneNames={c.names} team={team} />}
     </div>

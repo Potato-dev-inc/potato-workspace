@@ -1,6 +1,7 @@
 // Desktop Potato: what the pet does. Pure: no timers, no window, no DOM. Every function takes the time it is
 // asked at, so the rules are tested with plain numbers. The hook (usePetController) feeds it real events and
 // sets one timer for the next deadline, so an idle pet wakes nothing at all.
+import type { PetMoodLook } from './petMood';
 
 /** Frames per state in the sheets (one sheet per state in assets/potato/pet). All play at `FPS`. */
 export const SPRITE_FRAMES = {
@@ -60,6 +61,8 @@ export interface PetBubble {
 }
 
 export interface PetModel {
+  /** The default companion's saved mood as a pose (petMood.ts). Null: no mood; the pet is as before. */
+  mood: PetMoodLook | null;
   /** Last time anything happened (an event, a click, a drop): sleep is measured from here. */
   lastActive: number;
   needs: PetNeed[];
@@ -81,6 +84,7 @@ export interface PetModel {
 
 export function newPet(at: number): PetModel {
   return {
+    mood: null,
     lastActive: at,
     needs: [],
     deferred: {},
@@ -110,6 +114,7 @@ export type PetEvent =
   | { type: 'walkEnd' }
   | { type: 'quiet'; on: boolean }
   | { type: 'touch' }
+  | { type: 'mood'; mood: PetMoodLook | null }
   | { type: 'tick' };
 
 /** The needs-you bubble: the first need that "Later" is not hiding. Null in quiet. */
@@ -143,6 +148,9 @@ export function petReduce(model: PetModel, event: PetEvent, at: number): PetMode
   switch (event.type) {
     case 'tick':
       return m;
+    case 'mood':
+      // A mood is a feeling, not an event: it never wakes the pet or restarts its sleep timer.
+      return { ...m, mood: event.mood };
     case 'needs': {
       const known = new Set(m.needs.map((n) => n.key));
       const fresh = event.needs.filter((n) => !known.has(n.key));
@@ -237,6 +245,7 @@ export function petView(model: PetModel, now: number, lessMotion = false): PetVi
   const idleFor = now - m.lastActive;
   if (idleFor >= SLEEP_AFTER_MS) return pick('sleep', 'still', true);
   if (idleFor >= SLEEPY_AFTER_MS) return pick('sleepy', 'still', true);
+  if (m.mood) return pick(m.mood.sprite, m.mood.play, m.mood.resting);
   return pick('idle', 'still');
 }
 

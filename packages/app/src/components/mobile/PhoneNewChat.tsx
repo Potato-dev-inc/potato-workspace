@@ -1,10 +1,14 @@
 // "New chat" on the phone: an empty chat with three pills (the agent, the project, and Chat or Terminal when the agent can do
 // both) over the same message box as every chat. Send starts it on the PC with the first message. The agents and projects are
 // the PC's own (`GET /phone/new-chat`): only a project the PC already knows can be picked, and the path never reaches the phone.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import type { BridgeClient, PhoneNewChatOptions } from '../../lib/bridge-types';
 import { errorSentence } from '../../lib/sayError';
+import type { ChatAttachment } from '../../lib/attachFiles';
+import { clearDraft } from '../../lib/composerDraft';
+import { uploadFile } from '../../lib/phone-upload';
+import { shareToDraft, type SharedContent } from '../../pwa/share-target';
 import { PhoneAgentTile } from './PhoneAgentTile';
 import { Sheet } from './MobileSheet';
 import { PhoneComposer } from './PhoneComposer';
@@ -13,6 +17,10 @@ import '../../styles/phone-newchat.css';
 
 type Lane = 'chat' | 'terminal';
 type Picking = 'project' | null;
+
+/** The box's own draft while a share is open: kept apart from the plain new chat's, and forgotten when the screen closes. */
+const SHARE_DRAFT_KEY = 'share-chat';
+const STAGED = 'staged:';
 
 /** The phone's grid for a terminal pane, when it is known: the pane starts at it and the phone holds it. */
 export interface SpawnGrid {
@@ -27,6 +35,7 @@ export function PhoneNewChat({
   grid,
   onClose,
   onStarted,
+  shared = null,
 }: {
   bridge: BridgeClient;
   /** This phone may start things (`control`). Without it the box says so. */
@@ -35,6 +44,8 @@ export function PhoneNewChat({
   onClose: () => void;
   /** The chat is running on the PC. `sent` is false when the first message did not go (the chat opens anyway). */
   onStarted: (paneId: string, lane: Lane, sent: boolean) => void;
+  /** Something the person shared from another app: it fills the box (words) and the chips (pictures, files). Nothing goes until Send. */
+  shared?: SharedContent | null;
 }) {
   const t = useT();
   const [options, setOptions] = useState<PhoneNewChatOptions | null>(null);
@@ -46,6 +57,18 @@ export function PhoneNewChat({
   // While Send is on its way: which step the PC is on, and for how long (the chat program can take several seconds to wake).
   const [starting, setStarting] = useState<{ step: 'wake' | 'send'; since: number } | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  // Pictures and files from a share are held here until the chat exists: `upload` has to name a pane, and there is none yet.
+  const staged = useRef(new Map<string, File>());
+  const fill = useMemo(() => (shared ? { text: shareToDraft(shared), nonce: 1 } : null), [shared]);
+  const stage = useCallback(async (file: File): Promise<ChatAttachment> => {
+    const key = `${STAGED}${staged.current.size + 1}-${Date.now()}`;
+    staged.current.set(key, file);
+    return { name: file.name, path: key, kind: file.type.startsWith('image/') ? 'image' : 'file', size: file.size, mime: file.type };
+  }, []);
+  const closeScreen = useCallback(() => {
+    if (shared) clearDraft(SHARE_DRAFT_KEY);
+    onClose();
+  }, [shared, onClose]);
   /** The model picked for the new chat, per agent (null: the agent's own default). */
   const [modelPick, setModelPick] = useState<{ agent: string; value: string } | null>(null);
 
@@ -69,11 +92,11 @@ export function PhoneNewChat({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !picking) onClose();
+      if (event.key === 'Escape' && !picking) closeScreen();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, picking]);
+  }, [closeScreen, picking]);
 
   const agent = options?.agents.find((a) => a.id === agentId) ?? null;
   const project = options?.projects.find((p) => p.id === projectId) ?? null;
@@ -103,7 +126,7 @@ export function PhoneNewChat({
   const chosenModel = modelPick && modelPick.agent === agentId ? modelPick.value : null;
 
   const send = useCallback(
-    async (text: string): Promise<string | null> => {
+    async (text: string, attachments: ChatAttachment[] = []): Promise<string | null> => {
       if (!agent || !project || !bridge.phoneStartChat) return t('phone.nc.loadFailed');
       let started: { pane_id: string };
       setStarting({ step: 'wake', since: Date.now() });
@@ -123,17 +146,30 @@ export function PhoneNewChat({
           /* the chat starts on its own default; the settings pill in the chat still works */
         }
       }
+      // Shared pictures and files go to the new chat first; if one cannot go, the message waits (the chat is open, send it again).
+      const files: ChatAttachment[] = [];
       try {
-        if (!bridge.sendPaneMessage) throw new Error('no route');
-        await bridge.sendPaneMessage(started.pane_id, text);
+        for (const item of attachments) {
+          const held = item.path.startsWith(STAGED) ? staged.current.get(item.path) : undefined;
+          files.push(held ? await uploadFile(bridge, started.pane_id, held, t('phone.attach.failed')) : item);
+        }
       } catch {
         sent = false;
       }
+      try {
+        if (!sent) throw new Error('files did not go');
+        if (!bridge.sendPaneMessage) throw new Error('no route');
+        await (files.length > 0 ? bridge.sendPaneMessage(started.pane_id, text, files) : bridge.sendPaneMessage(started.pane_id, text));
+      } catch {
+        sent = false;
+      }
+      if (shared) clearDraft(SHARE_DRAFT_KEY);
+      staged.current.clear();
       setStarting(null);
       onStarted(started.pane_id, lane, sent);
       return null;
     },
-    [agent, project, bridge, lane, grid, onStarted, t, chosenModel, modelList],
+    [agent, project, bridge, lane, grid, onStarted, t, chosenModel, modelList, shared],
   );
 
   const blocked = useMemo(() => {
@@ -145,14 +181,14 @@ export function PhoneNewChat({
   }, [canControl, options, loadError, t]);
 
   return (
-    <div className="ph-nc" role="dialog" aria-modal="true" aria-label={t('phone.nc.title')} data-testid="phone-new-chat">
+    <div className="ph-nc" role="dialog" aria-modal="true" aria-label={shared ? t('phone.share.title') : t('phone.nc.title')} data-testid="phone-new-chat">
       <div className="ph-nc-top">
-        <button type="button" className="ph-nc-x" aria-label={t('phone.nc.close')} onClick={onClose}>
+        <button type="button" className="ph-nc-x" aria-label={t('phone.nc.close')} onClick={closeScreen}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M6 6l12 12M18 6 6 18" />
           </svg>
         </button>
-        <h1>{t('phone.nc.title')}</h1>
+        <h1>{shared ? t('phone.share.title') : t('phone.nc.title')}</h1>
       </div>
       <div className="ph-nc-body">
         {!options && !loadError && <p className="ph-nc-hint" role="status">{t('phone.nc.loading')}</p>}
@@ -182,7 +218,7 @@ export function PhoneNewChat({
         )}
         {options && !starting && (
           <div className="ph-nc-pick">
-            <p className="ph-nc-hint">{t('phone.nc.hint')}</p>
+            <p className="ph-nc-hint">{shared ? t('phone.share.hint') : t('phone.nc.hint')}</p>
             <div className="ph-nc-tiles" role="radiogroup" aria-label={t('phone.nc.agent')} data-testid="nc-tiles">
               {options.agents.map((a) => (
                 <button
@@ -230,7 +266,7 @@ export function PhoneNewChat({
           )}
         </div>
       )}
-      <PhoneComposer onSend={send} blockedReason={blocked} draftKey="new-chat" model={null} pill={lane === 'chat' && agent ? <PhoneNewChatModel list={modelList} picked={chosenModel} onPick={(value) => setModelPick(value && agentId ? { agent: agentId, value } : null)} /> : null} />
+      <PhoneComposer onSend={send} blockedReason={blocked} draftKey={shared ? SHARE_DRAFT_KEY : 'new-chat'} model={null} fill={fill} upload={shared && shared.files.length > 0 ? stage : null} initialFiles={shared?.files} pill={lane === 'chat' && agent ? <PhoneNewChatModel list={modelList} picked={chosenModel} onPick={(value) => setModelPick(value && agentId ? { agent: agentId, value } : null)} /> : null} />
       {picking === 'project' && options && (
         <Sheet title={t('phone.nc.pickProject')} onClose={() => setPicking(null)}>
           <ul className="ph-group ph-nc-list" aria-label={t('phone.nc.project')}>

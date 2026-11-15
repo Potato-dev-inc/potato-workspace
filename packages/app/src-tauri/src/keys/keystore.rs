@@ -79,6 +79,25 @@ impl KeyStore {
         self.get_or_make("device-sign", || new_signing_key().to_bytes()).map(|b| SigningKey::from_bytes(&b))
     }
 
+    /// The node key if one exists. Never makes one (a merge must not create what it is looking for).
+    pub fn peek_p2p_node(&self) -> Result<Option<[u8; 32]>, String> {
+        self.get32("p2p-node")
+    }
+
+    /// Stores `key` as the node key unless one already exists. Returns whether it was stored.
+    pub fn adopt_p2p_node(&self, key: &[u8; 32]) -> Result<bool, String> {
+        if self.get32("p2p-node")?.is_some() {
+            return Ok(false);
+        }
+        self.set32("p2p-node", key)?;
+        Ok(self.get32("p2p-node")?.as_ref() == Some(key))
+    }
+
+    /// Forgets the node key (the identity is retired).
+    pub fn forget_p2p_node(&self) -> Result<(), String> {
+        self.backend.delete(&self.name("p2p-node"))
+    }
+
     pub fn p2p_node(&self) -> Result<SigningKey, String> {
         self.get_or_make("p2p-node", || new_signing_key().to_bytes()).map(|b| SigningKey::from_bytes(&b))
     }

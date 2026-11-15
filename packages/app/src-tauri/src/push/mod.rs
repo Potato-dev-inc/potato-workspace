@@ -142,12 +142,13 @@ pub fn flush_outbox(hub: &Arc<PushHub>) {
 /// No phone is subscribed AND the chat (Telegram) is not listening AND Discord alerts are off: only then is a notification not worth
 /// building. A person with Telegram on and no phone paired still hears about what needs them.
 fn nobody_to_tell(ctx: &Ctx) -> bool {
-    !ctx.hub.has_subscribers() && !crate::channels::listening() && !crate::discord_alerts::listening()
+    !ctx.hub.has_subscribers() && !crate::channels::listening() && !crate::discord_alerts::listening() && !crate::desktop_toast::listening()
 }
 
 /// Hook for `push_pane_status_sse`. Cheap when nobody subscribed.
 pub fn notify_pane_status(pane_id: &str, status: &str) {
     crate::channels::pane_status(pane_id, status);
+    crate::desktop_toast::note_pane_status(pane_id, status);
     let Some(ctx) = CTX.get() else { return };
     let Some(kind) = ctx.hub.note_pane_status(pane_id, status) else { return };
     // A Night Shift pane is quiet: no push while the person sleeps (the morning push covers it).
@@ -502,6 +503,8 @@ fn dispatch(ctx: &Ctx, candidate: Candidate) {
     crate::channels::offer(&candidate);
     // Discord alerts (a webhook the person pasted) get the same card; they ignore phones and Telegram.
     crate::discord_alerts::offer(&candidate);
+    // A Windows toast on this PC when the app is not in front (its own switch in Settings).
+    crate::desktop_toast::offer(&candidate);
     if !ctx.hub.has_subscribers() {
         return;
     }

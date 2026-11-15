@@ -10,6 +10,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'rea
 import { useT } from '../../i18n';
 import type { ChatSignIn } from '../../lib/chatMore';
 import { errorSentence } from '../../lib/sayError';
+import { requestUsageRefresh } from '../../lib/usage';
 import '../../styles/cockpit-acp.css';
 
 export interface SignInFixCardProps {
@@ -37,6 +38,10 @@ export interface SignInFixCardProps {
   pollMs?: number;
   /** After this long the card stops trying by itself and offers a button. */
   giveUpMs?: number;
+  /** "Sign in again" with no chat (Usage card, Problems, Settings): no kept message, plainer words. */
+  plain?: boolean;
+  /** The first time the check goes through. */
+  onSent?: () => void;
 }
 
 // The terminal (xterm) is loaded only when Details is opened.
@@ -50,7 +55,7 @@ type Step = 'ask' | 'waiting' | 'gaveUp' | 'sent';
 
 const shorten = (text: string, max = 60): string => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
-export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUseOther, signIn, renderTerminal, lookMs = SIGNIN_LOOK_MS, pollMs = SIGNIN_POLL_MS, giveUpMs = SIGNIN_GIVE_UP_MS }: SignInFixCardProps) {
+export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUseOther, signIn, renderTerminal, lookMs = SIGNIN_LOOK_MS, pollMs = SIGNIN_POLL_MS, giveUpMs = SIGNIN_GIVE_UP_MS, plain = false, onSent }: SignInFixCardProps) {
   const t = useT();
   const [step, setStep] = useState<Step>('ask');
   /** The hidden sign-in pane (without a terminal), its terminal under Details, and what the sign-in is doing. */
@@ -64,6 +69,8 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
   const [busy, setBusy] = useState(false);
   const sentOnce = useRef(false);
   const trying = useRef(false);
+  const onSentRef = useRef(onSent);
+  onSentRef.current = onSent;
   const retryRef = useRef(onRetry);
   retryRef.current = onRetry;
 
@@ -75,6 +82,9 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
       await retryRef.current();
       sentOnce.current = true;
       setStep('sent');
+      // The sign-in is back: the Usage bar reads fresh numbers, so its "Sign-in expired" row clears.
+      requestUsageRefresh();
+      onSentRef.current?.();
       // The message went through: the sign-in worked, and its hidden pane is not needed any more.
       void signInRef.current?.stop().catch(() => undefined);
       setHiddenPane(null);
@@ -175,10 +185,10 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
   return (
     <div className="ck-acp-card" data-testid="signin-fix-card" role="group" aria-label={t('flow.signin.title', { agent: label })}>
       <div className="ck-acp-card-body">
-        <p className="ck-acp-card-title">{t('flow.signin.title', { agent: label })}</p>
+        <p className="ck-acp-card-title">{plain ? t('signin.again.title', { agent: label }) : t('flow.signin.title', { agent: label })}</p>
         <p className="ck-acp-card-line">
-          {step === 'sent' ? t('flow.signin.sent') : t('flow.signin.kept')}
-          {kept && step !== 'sent' && <> “{shorten(kept)}”</>}
+          {plain ? (step === 'sent' ? t('signin.again.done') : t('signin.again.lead')) : step === 'sent' ? t('flow.signin.sent') : t('flow.signin.kept')}
+          {!plain && kept && step !== 'sent' && <> “{shorten(kept)}”</>}
         </p>
         {signIn && step === 'ask' && (
           <ol className="ck-acp-card-steps" data-testid="signin-steps">
@@ -188,7 +198,7 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
         )}
         {step === 'waiting' && signIn && (
           <p className="ck-acp-card-line" role="status" data-testid="signin-working">
-            {closedEarly ? t('chat.signin.closed') : asking ? t('chat.signin.asking') : t('chat.signin.working')}
+            {closedEarly ? t('chat.signin.closed') : asking ? t('chat.signin.asking') : plain ? t('signin.again.working') : t('chat.signin.working')}
           </p>
         )}
         {step === 'waiting' && !signIn && (
@@ -207,7 +217,7 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
             {detailsOpen && (renderTerminal ? renderTerminal(hiddenPane) : <Suspense fallback={null}><SignInTerminal paneId={hiddenPane} label={t('chat.signin.details')} /></Suspense>)}
           </details>
         )}
-        {step === 'gaveUp' && <p className="ck-acp-card-line">{t('flow.signin.gaveUp')}</p>}
+        {step === 'gaveUp' && <p className="ck-acp-card-line">{plain ? t('signin.again.gaveUp') : t('flow.signin.gaveUp')}</p>}
         {error && (
           <p className="ck-acp-card-line is-error" role="alert">
             {error}
@@ -218,7 +228,7 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
         <div className="ck-acp-card-actions">
           {step === 'gaveUp' ? (
             <button type="button" className="ck-btn" onClick={() => void sendNow()}>
-              {t('flow.signin.sendNow')}
+              {plain ? t('signin.again.check') : t('flow.signin.sendNow')}
             </button>
           ) : (
             <button type="button" className="ck-btn" disabled={busy} onClick={() => void signInAgain()}>

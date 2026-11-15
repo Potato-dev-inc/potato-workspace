@@ -3,9 +3,9 @@
 // "Update your Worker" with the one command, and nothing is sent to it. Nothing here sends a secret.
 import { useEffect, useState } from 'react';
 import { useT } from '../../i18n';
-import { tauri } from '../../lib/tauri';
-import { verdictFor, workerCheck, WORKER_GUIDE_URL, WORKER_UPDATE_COMMAND, type WorkerFeature, type WorkerHealth, type WorkerVerdict } from '../../lib/worker';
-import { Btn } from './settings-ui';
+import { verdictFor, workerCheck, type WorkerFeature, type WorkerHealth, type WorkerVerdict } from '../../lib/worker';
+import type { UpdateApi } from '../../lib/workerUpdate';
+import { WorkerUpdateButton } from './WorkerUpdateButton';
 
 export function WorkerSuggestion({
   address,
@@ -15,6 +15,7 @@ export function WorkerSuggestion({
   noteKey,
   onUse,
   check = workerCheck,
+  updateApi,
 }: {
   /** The address saved in the other place, if any. */
   address: string | null;
@@ -27,10 +28,12 @@ export function WorkerSuggestion({
   noteKey?: 'stable.relayNote' | 'worker.linkNote';
   onUse: (url: string) => void;
   check?: (address: string) => Promise<WorkerHealth | null>;
+  /** Tests give their own; the default runs the steps in the desktop shell. */
+  updateApi?: UpdateApi;
 }) {
   const t = useT();
   const [verdict, setVerdict] = useState<WorkerVerdict | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [again, setAgain] = useState(0);
   useEffect(() => {
     setVerdict(null);
     if (!address) return;
@@ -42,7 +45,7 @@ export function WorkerSuggestion({
     return () => {
       alive = false;
     };
-  }, [address, feature, check]);
+  }, [address, feature, check, again]);
 
   if (!address || verdict === null || address === current.trim().replace(/\/+$/, '')) return null;
 
@@ -51,22 +54,7 @@ export function WorkerSuggestion({
       <div data-testid="worker-update" className="stable-update">
         <strong>{t('worker.update')}</strong>
         <p>{t('worker.updateWhy', { url: address })}</p>
-        <div className="stable-cmd">
-          <code className="font-mono break-all">{WORKER_UPDATE_COMMAND}</code>
-          <Btn
-            small
-            aria-label={`${t('settings.copy')}: ${WORKER_UPDATE_COMMAND}`}
-            onClick={() => {
-              void navigator.clipboard?.writeText(WORKER_UPDATE_COMMAND).catch(() => undefined);
-              setCopied(true);
-            }}
-          >
-            {copied ? t('tunnel.secretCopied') : t('settings.copy')}
-          </Btn>
-        </div>
-        <button type="button" className="st-linkbtn" onClick={() => void tauri.openExternalUrl(WORKER_GUIDE_URL)}>
-          {t('stable.guide')}
-        </button>
+        <WorkerUpdateButton address={address} label="wu.update" api={updateApi} onDone={() => setAgain((n) => n + 1)} />
       </div>
     );
   }

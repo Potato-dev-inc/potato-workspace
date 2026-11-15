@@ -9,6 +9,11 @@ import { loadSettings } from './settings';
 
 /** The event the desktop sends (`usage::EVENT`). */
 export const USAGE_EVENT = 'usage://changed';
+/** A sign-in was just made again: every Usage bar reads fresh numbers (a window event, so any screen can ask). */
+export const USAGE_REFRESH_EVENT = 'pm:usage-refresh';
+export const requestUsageRefresh = (): void => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(USAGE_REFRESH_EVENT));
+};
 
 export interface UsageWindow {
   /** "5-hour", "Weekly", "Monthly"... */
@@ -372,10 +377,17 @@ export function useUsage(api: UsageApi = usageApi, enabled = true, loginReads = 
         () => {},
       );
     window.addEventListener('focus', onFocus);
+    const onAsk = () =>
+      void api.snapshot(true, loginReads).then(
+        (s) => live && setSnap(s),
+        () => {},
+      );
+    window.addEventListener(USAGE_REFRESH_EVENT, onAsk);
     return () => {
       live = false;
       un?.();
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener(USAGE_REFRESH_EVENT, onAsk);
     };
   }, [api, enabled, loginReads]);
   const refresh = useCallback(async () => {

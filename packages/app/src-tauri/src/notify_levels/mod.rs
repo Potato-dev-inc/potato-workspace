@@ -65,7 +65,7 @@ impl QuietHours {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
     /// One level per bell key (an agent id, or `helper:<id>`). Missing = the default for that kind of agent.
@@ -75,6 +75,15 @@ pub struct Prefs {
     pub snoozes: BTreeMap<String, u64>,
     /// The old browser-storage choices were moved here (once).
     pub imported: bool,
+    /// "Notifications on this PC": a Windows toast (Allow / Deny, Yes / No or Open) while the app is not in front.
+    /// On unless the person turns it off. The bells, quiet hours and snoozes above still decide what is shown.
+    pub desktop_toasts: bool,
+}
+
+impl Default for Prefs {
+    fn default() -> Self {
+        Self { bells: BTreeMap::new(), quiet: QuietHours::default(), snoozes: BTreeMap::new(), imported: false, desktop_toasts: true }
+    }
 }
 
 /// What the filter needs to know about one alert.
@@ -208,6 +217,10 @@ impl Store {
 
     pub fn set_quiet(&self, quiet: QuietHours) -> Prefs {
         self.change(|p| p.quiet = quiet.clamped())
+    }
+
+    pub fn set_desktop_toasts(&self, on: bool) -> Prefs {
+        self.change(|p| p.desktop_toasts = on)
     }
 
     /// Snooze these keys for `SNOOZE_MS` from `now_ms`. Returns the end time with the new choices.

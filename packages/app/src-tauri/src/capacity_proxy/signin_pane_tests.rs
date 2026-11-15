@@ -240,3 +240,64 @@ fn an_agents_own_sign_in_runs_hidden_with_its_normal_login_and_is_stopped_on_req
     assert!(fake.killed.lock().unwrap().contains(&id));
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_lend_sign_in_is_labelled_with_its_profile_name_not_lend_claude() {
+    let (store, root) = store("relabel");
+    let old = store.add_lend("claude", "Lend Claude 3").unwrap();
+    let other = store.add_lend("claude", "Work account").unwrap();
+    let own = store.add("claude", "Mine", None).unwrap();
+    relabel_for_profile(&store, &old.id, "Work account");
+    assert_eq!(store.get(&old.id).unwrap().label, "Work account 2", "the store refuses two with one name");
+    relabel_for_profile(&store, &old.id, "Work account");
+    assert_eq!(store.get(&old.id).unwrap().label, "Work account 2", "a second run changes nothing");
+    relabel_for_profile(&store, &other.id, "Family");
+    assert_eq!(store.get(&other.id).unwrap().label, "Family");
+    relabel_for_profile(&store, &own.id, "Family");
+    assert_eq!(store.get(&own.id).unwrap().label, "Mine", "a person's own account is never renamed");
+    relabel_for_profile(&store, &other.id, "  ");
+    assert_eq!(store.get(&other.id).unwrap().label, "Family", "a blank name changes nothing");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_sign_in_again_with_no_chat_runs_hidden_as_the_chosen_account_and_never_selects_anything() {
+    let (store, root) = store("standalone");
+    let acc = store.add("claude", "Work", None).unwrap();
+    let key = standalone_key("claude", Some(&acc.id));
+    assert_ne!(key, standalone_key("claude", None), "the main login and an extra sign-in are different panes");
+    assert!(check_standalone(&store, "claude", Some(&acc.id)).is_ok());
+    let (panes, fake) = (SigninPanes::new(), Arc::new(Fake::default()));
+    let cwd = root.join("lend").join("signin");
+    let id = panes.start_for_agent_account(fake.clone(), &key, "claude", Some(acc.id.clone()), cwd.clone()).unwrap();
+    assert!(crate::pty::hidden::is_hidden(&id), "no pane list may show it");
+    assert_eq!(*fake.hidden_at_spawn.lock().unwrap(), vec![true], "hidden BEFORE the spawn");
+    let args = fake.spawned.lock().unwrap()[0].clone();
+    assert_eq!(args.account.as_deref(), Some(acc.id.as_str()));
+    assert_eq!(args.cwd.as_deref(), Some(cwd.to_string_lossy().as_ref()), "an app-owned folder, not a project");
+    // The same sign-in again: the same pane (reuse), one spawn.
+    assert_eq!(panes.start_for_agent_account(fake.clone(), &key, "claude", Some(acc.id.clone()), cwd).unwrap(), id);
+    assert_eq!(fake.count.load(Ordering::SeqCst), 1);
+    panes.stop(&key);
+    assert_eq!(panes.pane_alive(&key), None);
+    assert!(fake.killed.lock().unwrap().contains(&id));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_standalone_sign_in_refuses_a_borrowed_a_missing_or_another_agents_account() {
+    let (store, root) = store("standalone-check");
+    let codex = store.add("codex", "Home", None).unwrap();
+    assert!(check_standalone(&store, "claude", None).is_ok(), "the main login always passes");
+    assert!(check_standalone(&store, "claude", Some("")).is_ok());
+    assert!(check_standalone(&store, "claude", Some("lend:abc")).is_err(), "a borrowed sign-in");
+    assert!(check_standalone(&store, "claude", Some("nope")).is_err(), "unknown");
+    assert!(check_standalone(&store, "claude", Some(&codex.id)).is_err(), "another agent's account");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn the_standalone_sign_in_commands_never_present_a_pane() {
+    let src = include_str!("../commands/chat_signin.rs");
+    assert!(!src.contains("present_pane") && !src.contains("cockpit://select") && !src.contains("emit_select"));
+}

@@ -9,6 +9,7 @@ import type { CockpitApi } from '../../hooks/useCockpit';
 import type { AcpChatApi, AcpChatState } from '../../lib/acpChat';
 import { fakeAcpApi } from '../../lib/acpChatFake';
 import type { ChatSignIn, SignInStatus } from '../../lib/chatMore';
+import { USAGE_REFRESH_EVENT } from '../../lib/usage';
 import { AcpChatDock } from './AcpChatDock';
 
 vi.mock('../lend/SignInTerminal', async () => {
@@ -135,6 +136,9 @@ describe('the sign-in card without a terminal', () => {
     const retry = vi.fn(async () => {
       if (!signedIn) throw new Error('ACP_SIGN_IN_NEEDED: still out');
     });
+    let refreshes = 0;
+    const count = () => void refreshes++;
+    window.addEventListener(USAGE_REFRESH_EVENT, count);
     const s = setup(retry);
     await mount(s);
     await s.emit(state());
@@ -148,6 +152,9 @@ describe('the sign-in card without a terminal', () => {
     expect(card()!.textContent).toContain('Sent again');
     expect(s.driver.stop).toHaveBeenCalled();
     expect(host.querySelector('[data-testid="signin-details"]')).toBeNull();
+    // The usage row of this agent is read again (its "Sign-in expired" clears), once.
+    expect(refreshes).toBe(1);
+    window.removeEventListener(USAGE_REFRESH_EVENT, count);
     // Sent once only.
     await tick(60_000);
     expect(retry).toHaveBeenCalledTimes(2);

@@ -212,3 +212,17 @@
     animation: none;
   }
 }
+
+.cockpit .ck-hbar-undo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--label-2);
+  white-space: nowrap;
+}
+.cockpit .ck-hbar-undo button {
+  color: var(--label);
+  text-decoration: underline;
+}

@@ -55,7 +55,7 @@ export function exampleUsage(now = Date.now()): UsageSnapshot {
         account_id: null,
         account_label: null,
         state: 'expired',
-        reason: 'The sign-in has expired. Open the agent and sign in again.',
+        reason: 'The sign-in has expired. Press Sign in again to fix it.',
         windows: [],
         plan: null,
         observed_at_ms: null,

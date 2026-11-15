@@ -124,6 +124,7 @@ export const pane = {
   "hbar.label": "Helpers",
   "hbar.standby": "Standby",
   "hbar.ready": "Ready",
+  "hbar.starting": "Starting…",
   "hbar.done": "Done",
   "hbar.stopped": "Stopped",
   "hbar.back": "Back to this agent",

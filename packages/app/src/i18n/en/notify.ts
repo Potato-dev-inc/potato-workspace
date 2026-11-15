@@ -14,6 +14,8 @@ export const notify = {
   "notify.quiet.to": "to",
   "notify.quiet.fromAria": "Quiet hours start",
   "notify.quiet.toAria": "Quiet hours end",
+  "notify.pc.label": "Notifications on this PC",
+  "notify.pc.hint": "A Windows alert when an agent needs you and the app is not in front. Easy questions have buttons.",
   "notify.agent.label": "Notifications",
   "notify.agent.hint": "How much {agent} may interrupt you. A high-risk approval always comes through.",
   "notify.agent.aria": "Notifications for {agent}",

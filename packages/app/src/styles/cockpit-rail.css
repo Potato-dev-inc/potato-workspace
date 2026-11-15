@@ -612,3 +612,81 @@
   background: var(--fill-active);
   border-color: transparent;
 }
+
+/* Material Icon Theme pictures beside file and folder names (lib/material-icons). Their own colours; light themes swap
+   the few pale ones for their `_light` picture. */
+.mi {
+  display: inline-flex;
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.mi svg {
+  width: 100%;
+  height: 100%;
+}
+.mi--themed > span {
+  display: inline-flex;
+  width: 100%;
+  height: 100%;
+}
+.mi--themed .mi-l,
+[data-theme='light'] .mi--themed .mi-d {
+  display: none;
+}
+[data-theme='light'] .mi--themed .mi-l {
+  display: inline-flex;
+}
+.cockpit .ck-ftree-collapse {
+  align-self: flex-start;
+  margin: 0 0 2px 6px;
+  padding: 1px 4px;
+  border: 0;
+  background: none;
+  color: var(--label-3);
+  font: inherit;
+  font-size: var(--fs-label);
+  cursor: pointer;
+}
+.cockpit .ck-ftree-collapse:hover {
+  color: var(--label);
+}
+/* Phone control: a compact dropdown button ("Phone control: Full v"). */
+.cockpit .rp-drop {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label);
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+}
+.cockpit .rp-drop:hover {
+  background: var(--fill-hover);
+}
+.cockpit .rp-drop-k {
+  color: var(--label-2);
+}
+.cockpit .rp-drop svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* Keep all on a copy: the question on its own line, the two buttons under it. */
+.cockpit .rp-row.rp-ask-row {
+  flex-wrap: wrap;
+  padding: 4px 8px;
+}
+.cockpit .rp-row.rp-ask-row .rp-name {
+  flex: 1 1 100%;
+  white-space: normal;
+}
+.cockpit .rp-acts .rp-kept-all {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+}

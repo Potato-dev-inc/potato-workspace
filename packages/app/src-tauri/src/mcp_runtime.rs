@@ -48,6 +48,13 @@ pub fn dev_mcp_binary_candidates(manifest_dir: &Path, exe_dir: Option<&Path>) ->
     list
 }
 
+/// The MCP program an installed copy ships: right next to the app's own exe. A release build uses this before
+/// any dev location, because the folder it was compiled in may still exist on the building PC (it did on the
+/// founder's PC, so agents were pointed at a build folder instead of Program Files).
+pub fn installed_mcp_binary(exe_dir: Option<&Path>) -> Option<PathBuf> {
+    exe_dir.map(|dir| dir.join(mcp_binary_name())).filter(|path| path.is_file())
+}
+
 /// The first of [`dev_mcp_binary_candidates`] that exists.
 pub fn dev_mcp_binary(manifest_dir: &Path, exe_dir: Option<&Path>) -> Option<PathBuf> {
     dev_mcp_binary_candidates(manifest_dir, exe_dir).into_iter().find(|path| path.is_file())
@@ -294,5 +301,23 @@ mod installed_layout_tests {
         std::fs::write(dir.join("a.cjs"), "x").unwrap();
         assert_eq!(installed_resource(Some(&dir), None, "a.cjs"), Some(dir.join("a.cjs")));
         std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
+#[cfg(test)]
+mod installed_binary_tests {
+    use super::*;
+
+    #[test]
+    fn an_installed_copy_uses_the_program_next_to_the_app_and_nothing_else() {
+        let dir = std::env::temp_dir().join(format!("pm-installed-mcp-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(installed_mcp_binary(Some(&dir)), None, "missing: none");
+        let exe = dir.join(mcp_binary_name());
+        std::fs::write(&exe, b"x").unwrap();
+        assert_eq!(installed_mcp_binary(Some(&dir)), Some(exe));
+        assert_eq!(installed_mcp_binary(None), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

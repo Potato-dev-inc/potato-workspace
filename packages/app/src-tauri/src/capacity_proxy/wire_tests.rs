@@ -42,6 +42,7 @@ fn request() -> Body {
         device_name: "Maya's laptop".into(),
         node_hint: "ab".repeat(32),
         profile_id: None,
+        offer_ref: None,
     }
 }
 

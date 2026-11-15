@@ -8,6 +8,7 @@ import { useT } from '../../i18n';
 import type { FileSource } from '../../lib/files-api';
 import { IMAGE_ID_PREFIX } from './docx-engine';
 import { openDocx, type DocxSession } from './office-client';
+import { paginateDocx } from './docx-paginate';
 import { DOCX_BLOCK_CAP, sanitiseDocxPage } from './sanitise-docx';
 
 /** After this long without a page the file counts as too heavy to show here. */
@@ -38,10 +39,14 @@ export function DocxView({ source, asText, actions }: { source: FileSource; asTe
       setPhase({ state: 'heavy' });
     }, DOCX_HEAVY_MS);
     opened.opened.then(
-      ({ html, styled, openMs }) => {
+      async ({ html, styled, openMs }) => {
         if (cancelled) return;
         clearTimeout(timer);
-        setPhase({ state: 'ready', styled, ...sanitiseDocxPage(html, DOCX_BLOCK_CAP), timing: openMs === undefined ? '' : `${openMs} ms in the worker` });
+        const safe = sanitiseDocxPage(html, DOCX_BLOCK_CAP);
+        // Long pages are cut by their measured height here (the worker has no layout); a failure leaves the pages as the file has them.
+        const cut = styled ? await paginateDocx(safe.html, document.querySelector('.cockpit') ?? document.body).catch(() => safe.html) : safe.html;
+        if (cancelled) return;
+        setPhase({ state: 'ready', styled, html: cut, truncated: safe.truncated, timing: openMs === undefined ? '' : `${openMs} ms in the worker` });
       },
       () => {
         if (cancelled) return;

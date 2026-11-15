@@ -250,7 +250,7 @@ pub(crate) fn shutdown_pane(mut pane: PaneState) {
     }
     let _ = pane.child.kill();
     // A pane that ran inside Linux: its `wsl.exe` tree is gone, now stop what it left in the distro.
-    if let Some(place) = pane.info.place.as_ref() {
+    if let Some(place) = pane.info.place.as_ref().filter(|place| place.kind == "linux") {
         crate::wsl::live::stop_pane(&place.distro, &pane.info.id);
     }
 }

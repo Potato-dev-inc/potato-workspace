@@ -25,7 +25,7 @@ use crate::team::secure::{Opened, Payload, SeqTracker, Session};
 use crate::team::tests_v1::{folder, temp_dir, world};
 use crate::team::transport::{Inbound, TeamTransport};
 
-const LENDER_KEY: &str = "sk-lender-FAKE";
+pub(super) const LENDER_KEY: &str = "sk-lender-FAKE";
 
 fn now() -> u64 {
     crate::team::transport::now_ms()
@@ -94,6 +94,8 @@ pub(super) struct Side {
     pub(super) secrets: Arc<MemoryBackend>,
     rx: Mutex<Receiver<Inbound>>,
     tracker: Mutex<SeqTracker>,
+    /// Pass a task on this PC, when a test wires it in (`offer_tests`): its items are delivered by `pump` too.
+    pub(super) direct: Mutex<Option<Arc<crate::team::direct::service::Direct>>>,
 }
 
 impl World2 {
@@ -115,6 +117,14 @@ impl Side {
             let wait = if mine > 0 { Duration::from_millis(300) } else { deadline.saturating_duration_since(std::time::Instant::now()) };
             let Ok(inbound) = rx.recv_timeout(wait) else { break };
             let opened = self.team.session.open(&inbound.envelope, &mut self.tracker.lock().unwrap(), now());
+            if let Ok(Opened::Direct(cin)) = &opened {
+                if let Some(direct) = self.direct.lock().unwrap().clone() {
+                    if cin.to == me {
+                        mine += 1;
+                    }
+                    let _ = direct.on_item(cin);
+                }
+            }
             if let Ok(Opened::Capacity(cin)) = opened {
                 if cin.to == me {
                     mine += 1;
@@ -186,12 +196,13 @@ fn side_on(name: &str, session: Session, transport: &Arc<dyn TeamTransport>, net
             })
         }),
         env_names: Arc::new(|| ["ANTHROPIC_API_KEY", "OPENAI_MODEL", "CODEX_HOME", "PATH"].map(String::from).to_vec()),
+        own: Arc::new(super::service::NoOwn),
         test_upstream: upstream,
     };
     let lend = Lend::new(deps);
     lend.apply_settings(&json!({ "lend_enabled": true }));
     let rx = Mutex::new(transport.subscribe(0).unwrap());
-    Side { awake, dir, refresh, lend, pinger, team, secrets, rx, tracker: Mutex::new(SeqTracker::default()) }
+    Side { awake, dir, refresh, lend, pinger, team, secrets, rx, tracker: Mutex::new(SeqTracker::default()), direct: Mutex::new(None) }
 }
 
 pub(super) async fn world2(script: Script) -> World2 {
@@ -216,7 +227,7 @@ pub(super) async fn world2_with(script: Script, net: impl Fn(&MemoryNet, &str) -
     World2 { maya, leo, sam, up, _mem: mem }
 }
 
-fn profile(w: &World2) -> String {
+pub(super) fn profile(w: &World2) -> String {
     profile_with(w, true)
 }
 
@@ -584,7 +595,7 @@ fn problem_of(side: &Side, grant_id: &str) -> Option<String> {
     side.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap().problem
 }
 
-async fn until(what: &str, f: impl Fn() -> bool) {
+pub(super) async fn until(what: &str, f: impl Fn() -> bool) {
     for _ in 0..100 {
         if f() {
             return;

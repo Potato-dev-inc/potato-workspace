@@ -22,10 +22,13 @@ pub enum Cap {
     Type,
     /// Start and close agents, run shell commands, change settings: everything else that acts.
     Control,
+    /// Send lend ask / yes / take-back items to this PC (`POST /lend/item`). Only the device link grants it, from the
+    /// person's own switch; a phone never has it (`Caps::all()` leaves it out and `parse_names` does not know it).
+    Lend,
 }
 
 impl Cap {
-    pub const ALL: [Cap; 4] = [Cap::Watch, Cap::Answer, Cap::Type, Cap::Control];
+    pub const ALL: [Cap; 5] = [Cap::Watch, Cap::Answer, Cap::Type, Cap::Control, Cap::Lend];
 
     fn bit(self) -> u8 {
         match self {
@@ -33,6 +36,7 @@ impl Cap {
             Cap::Answer => 2,
             Cap::Type => 4,
             Cap::Control => 8,
+            Cap::Lend => 16,
         }
     }
 
@@ -42,6 +46,7 @@ impl Cap {
             Cap::Answer => "answer",
             Cap::Type => "type",
             Cap::Control => "control",
+            Cap::Lend => "lend",
         }
     }
 }
@@ -177,6 +182,12 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // does not see it. Written out so the route stays in the list with the other read routes.
         ("GET", ["plans"]) => Need::Cap(Watch),
 
+        // The Today page (`timeline/http.rs`): the day line itself is a list of sentences and counts (`watch`). A file's patch
+        // and "what going back would change" show the project's file contents and names, so they need `control`, like the
+        // go back. Written out so a later timeline route falls through to watch or control, never above this.
+        ("GET", ["timeline", "point", "patch" | "now-diff"]) => Need::Cap(Control),
+        ("GET", ["timeline", _]) | ("GET", ["timeline", "point", "diff"]) => Need::Cap(Watch),
+
         ("GET", ["questions"]) => Need::AnyOf(Watch, Answer),
         // The attention list (what needs the person): sentences, not terminal bytes.
         ("GET", ["attention"]) => Need::AnyOf(Watch, Answer),
@@ -198,9 +209,11 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // chat, changing the agent's model, mode or effort, and bringing a closed chat back act (`control`). Written out so
         // they stay in the list; the ones about one agent also meet that agent's remote rule (`pane_of_route`).
         ("GET", ["phone", "new-chat"]) | ("GET", ["acp", "closed"]) => Need::Cap(Watch),
+        // The phone home: what finished today and the standby helpers (`bridge/routes/phone_home.rs`). Reads, so `watch`; written out so they stay listed.
+        ("GET", ["phone", "done"] | ["phone", "helpers"]) => Need::Cap(Watch),
         // The agent's model list may start its program to read it, so it acts (`control`), like warming.
         ("GET", ["phone", "new-chat", "models"]) => Need::Cap(Control),
-        ("POST", ["phone", "chats"]) | ("POST", ["phone", "warm"]) | ("POST", ["acp", "sessions", _, "config"]) | ("POST", ["acp", "closed", _, "reopen"]) => {
+        ("POST", ["phone", "chats"]) | ("POST", ["phone", "warm"]) | ("POST", ["phone", "move-work"]) | ("POST", ["acp", "sessions", _, "config"]) | ("POST", ["acp", "closed", _, "reopen"]) => {
             Need::Cap(Control)
         }
         // The Chat tab's message box (`pane_outbox`): writing or cancelling a message is typing; the list
@@ -236,6 +249,10 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // are under `/panes/{id}`, so the agent's own remote rule applies as well. Written out so they stay in this list.
         ("POST", ["panes", _, "uploads"]) => Need::Cap(Type),
         ("GET", ["panes", _, "result"]) => Need::Cap(Watch),
+
+        // Lend items from one of the person's own paired PCs (`bridge/routes/own_lend.rs`): only the device link ever holds
+        // `lend`. Written out so the route is never a plain `control` POST.
+        ("POST", ["lend", "item"]) => Need::Cap(Lend),
 
         ("GET", _) => Need::Cap(Watch),
         _ => Need::Cap(Control),
@@ -479,6 +496,13 @@ data: {\"v\":1,\"companions\":[]}
         assert!(Caps::none().with(Cap::Watch, true).satisfies(route_need("GET", &["chats", "search"])));
         // Only the one GET is a read: a write under the same path is an action.
         assert_eq!(route_need("POST", &["chats", "search"]), Need::Cap(Cap::Control));
+        // Today: the day line and a turn's file list are `watch`; a patch, the going-back diff and the go back are `control`.
+        assert_eq!(route_need("GET", &["timeline", "2026-11-15"]), Need::Cap(Cap::Watch));
+        assert_eq!(route_need("GET", &["timeline", "point", "diff"]), Need::Cap(Cap::Watch));
+        assert_eq!(route_need("GET", &["timeline", "point", "patch"]), Need::Cap(Cap::Control));
+        assert_eq!(route_need("GET", &["timeline", "point", "now-diff"]), Need::Cap(Cap::Control));
+        assert_eq!(route_need("POST", &["timeline", "point", "restore"]), Need::Cap(Cap::Control));
+        assert!(!Caps::watch_and_answer().satisfies(route_need("GET", &["timeline", "point", "patch"])));
     }
 
     #[test]

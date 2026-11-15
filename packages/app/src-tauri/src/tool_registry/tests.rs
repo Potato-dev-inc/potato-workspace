@@ -404,7 +404,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "84-a94ff39ff4dd11b8");
+    assert_eq!(catalog_version(), "84-b818de933613a0e2");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one
@@ -557,7 +557,9 @@ fn the_five_browser_tools_are_in_the_catalog_with_the_documented_routes_safety_a
         assert!(t.visibility.external_mcp, "{name}");
         assert_eq!(t.input_schema["type"], "object", "{name}");
     }
-    assert_eq!(tool("browser_open").input_schema["required"], json!(["url"]));
+    // `url` or `artifact` (the agent's own page): neither is required alone.
+    assert!(tool("browser_open").input_schema["required"].as_array().map_or(true, |r| r.is_empty()));
+    assert_eq!(tool("browser_open").input_schema["properties"]["artifact"]["pattern"], "^[a-z0-9][a-z0-9-]*$");
     assert_eq!(tool("browser_click").input_schema["required"], json!(["ref"]));
     assert_eq!(tool("browser_type").input_schema["required"], json!(["ref", "text"]));
     assert!(tool("browser_read").input_schema["required"].as_array().map_or(true, |r| r.is_empty()));
@@ -579,7 +581,8 @@ fn browser_tool_descriptions_state_the_safety_rules() {
         assert!(d.contains("NO_PAGE") && d.contains("PAUSED_BY_PERSON") && d.contains("STOPPED_BY_PERSON"), "{name}: {d}");
     }
     let open = tool("browser_open").description;
-    assert!(open.contains("Only pages on this computer") && open.contains("take over") && open.contains("BROWSER_OFF"), "{open}");
+    assert!(open.contains("Any public web page") && open.contains("never another computer on a private network") && open.contains("take over") && open.contains("BROWSER_OFF"), "{open}");
+    assert!(open.contains("each redirect is checked again") && open.contains("SIGN_IN_WAITING") && open.contains("you never type passwords"), "{open}");
     let typing = tool("browser_type").description;
     assert!(typing.contains("SENSITIVE_FIELD") && typing.contains("password") && typing.contains("one-time code"), "{typing}");
 }

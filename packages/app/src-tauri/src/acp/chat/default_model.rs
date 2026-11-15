@@ -138,6 +138,22 @@ pub fn apply_with(chat: &AcpChat, settings: &Value, store: &LastPicked, request:
     }
 }
 
+/// A claimed standby helper was made for `wanted`: put the session on it. When the agent does not offer it (or refuses it) the
+/// chat keeps its own model and the result says so, never silently.
+pub fn apply_standby_model(chat: &AcpChat, wanted: &str) {
+    let now = || super::choice::in_use(chat).0.unwrap_or_else(|| "its own default model".to_string());
+    match super::choice::offered_model(chat, wanted) {
+        Some(value) => {
+            if super::choice::in_use(chat).0.as_deref() != Some(value.as_str()) {
+                if let Err(error) = chat.set_config("model", &value) {
+                    chat.set_choice_warnings(vec![format!("{} started on {} because the standby's model {wanted} could not be set: {error}", chat.label(), now())]);
+                }
+            }
+        }
+        None => chat.set_choice_warnings(vec![format!("{} started on {} because the standby's model {wanted} isn't available here.", chat.label(), now())]),
+    }
+}
+
 /// The person picked `value` for `option_id` in this chat: remember it when it is the model setting.
 pub fn remember_pick(chat: &AcpChat, option_id: &str, value: &str) {
     if chat.session().config().default_model.is_some() && super::choice::is_model_option(chat, option_id) {

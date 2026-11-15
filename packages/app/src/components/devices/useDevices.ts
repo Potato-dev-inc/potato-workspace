@@ -17,7 +17,10 @@ function saneDevice(d: Device): Device {
   return {
     ...d,
     too_old: d.too_old === true,
+    lets_files: d.lets_files === true,
     lets_web: d.lets_web === true,
+    agents_may_send: d.agents_may_send === true,
+    lets_lend: d.lets_lend === true,
     web_ready: d.web_ready === true,
     route_override: d.route_override ?? null,
     signed_out: Array.isArray(d.signed_out) ? d.signed_out.filter((x) => typeof x === 'string') : [],
@@ -46,6 +49,7 @@ function sane(value: unknown): DevicesView | null {
     locked_until: v.locked_until ?? null,
     tampered: v.tampered === true,
     devices: v.devices.map(saneDevice),
+    transfers: Array.isArray(v.transfers) ? v.transfers.filter((x) => x && typeof x.id === 'number') : [],
   };
 }
 

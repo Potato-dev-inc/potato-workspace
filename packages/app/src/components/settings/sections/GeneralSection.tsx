@@ -1,7 +1,7 @@
 // Settings > General: project folder, appearance, safety nets (confirm close, loop guard, checkpoints,
 // project memory, away digest), coordination storage, version and updates, export and uninstall.
 // This section is the reference for the others: rows are plain data (`RowDef`), each control saves itself.
-import { QuietHoursRow } from '../NotifyRows';
+import { PcNotificationsRow, QuietHoursRow } from '../NotifyRows';
 import { errorSentence } from '../../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir } from '@tauri-apps/api/path';
@@ -408,6 +408,14 @@ export const generalRows: RowDef[] = [
     render: (env) => <QuietHoursRow onSaved={env.markSaved} />,
   },
   {
+    id: 'pc-notifications',
+    label: 'Notifications on this PC',
+    hint: 'A Windows alert when an agent needs you. You can answer easy ones from it.',
+    keywords: 'notifications pc windows desktop toast popup alert banner action center allow deny yes no',
+    group: 'While agents work',
+    render: (env) => <PcNotificationsRow onSaved={env.markSaved} />,
+  },
+  {
     id: 'loop-guard',
     label: 'Warn when an agent seems stuck',
     hint: 'Warns when an agent repeats an error or steps, or works long with nothing new.',
@@ -726,6 +734,22 @@ export const generalRows: RowDef[] = [
     ),
   },
   {
+    id: 'timeline-labs',
+    label: 'Today page',
+    hint: 'See every change agents made today on one line, and go back to any point.',
+    keywords: 'today time machine timeline day history go back undo line labs early',
+    group: 'Labs',
+    labs: { name: 'Today page', about: 'See the whole day and go back to any point.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.timeline-labs.label')}
+        description={t('settings.row.timeline-labs.hint')}
+        checked={env.settings.timeline_day_enabled ?? false}
+        onChange={(value) => void env.patch({ timeline_day_enabled: value })}
+      />
+    ),
+  },
+  {
     id: 'project-guide-labs',
     label: 'Project guide',
     hint: 'Your agent writes a short guide to a project, only when you ask.',
@@ -738,6 +762,38 @@ export const generalRows: RowDef[] = [
         description={t('settings.row.project-guide-labs.hint')}
         checked={env.settings.project_guide_enabled ?? false}
         onChange={(value) => void env.patch({ project_guide_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'markup-bar-labs',
+    label: 'Mark up pages',
+    hint: 'Draw and point on a page your agent made, then send it to the chat.',
+    keywords: 'mark up markup draw pen annotate screenshot select point fix artifact page agent browser labs early',
+    group: 'Labs',
+    labs: { name: 'Mark up pages', about: 'Draw and point on a page your agent made and send it back.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.markup-bar-labs.label')}
+        description={t('settings.row.markup-bar-labs.hint')}
+        checked={env.settings.markup_bar_enabled ?? false}
+        onChange={(value) => void env.patch({ markup_bar_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'smaller-updates-labs',
+    label: 'Smaller updates',
+    hint: 'Updates download only the app, about a third of the size. Built-in tools stay.',
+    keywords: 'smaller updates app only download size tools node git cloudflared labs early',
+    group: 'Labs',
+    labs: { name: 'Smaller updates', about: 'Download only the app when you update, not the built-in tools.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.smaller-updates-labs.label')}
+        description={t('settings.row.smaller-updates-labs.hint')}
+        checked={env.settings.smaller_updates_enabled ?? false}
+        onChange={(value) => void env.patch({ smaller_updates_enabled: value })}
       />
     ),
   },

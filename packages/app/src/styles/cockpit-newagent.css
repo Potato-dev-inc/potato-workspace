@@ -699,3 +699,11 @@
   justify-content: space-between;
   align-items: center;
 }
+
+/* "From Ren. Read it before you send it." over the box when a passed task filled it */
+.cockpit .ck-na-fromtask {
+  margin: 0 0 8px;
+  color: var(--label-2);
+  font-size: 12px;
+  text-align: center;
+}

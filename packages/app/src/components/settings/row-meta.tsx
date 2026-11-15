@@ -78,6 +78,9 @@ export const ROW_META: Record<string, Meta> = {
   'companion-vault-labs': { keys: ['companion_vault_enabled'] },
   'discord-bot-labs': { keys: ['discord_bot_enabled'] },
   'project-guide-labs': { keys: ['project_guide_enabled'] },
+  'markup-bar-labs': { keys: ['markup_bar_enabled'] },
+  'timeline-labs': { keys: ['timeline_day_enabled'] },
+  'smaller-updates-labs': { keys: ['smaller_updates_enabled'] },
   'early-versions': { keys: ['early_versions_enabled'] },
   'show-developer-settings': { keys: ['show_developer_settings'] },
 };

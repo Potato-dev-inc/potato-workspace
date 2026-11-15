@@ -40,6 +40,9 @@ pub enum Payload {
     /// `msg_id` is also the envelope id. An older build doesn't know this kind and drops it as a bad payload
     /// (after its replay guard has recorded the envelope).
     Capacity { msg_id: String, to: String, enc: String, ct: String },
+    /// Pass a task (`crate::team::direct`): the same shape as `Capacity`, its own kind, so Lend being off never drops a
+    /// task and a task item never reaches the lend code. An older build drops it as a bad payload.
+    Direct { msg_id: String, to: String, enc: String, ct: String },
 }
 
 /// A `Payload::Capacity` that passed every envelope check: who sent it (from the roster) and the still-sealed
@@ -53,6 +56,10 @@ pub struct CapacityIn {
     pub enc: String,
     pub ct: String,
 }
+
+/// A `Payload::Direct` that passed every envelope check (same fields as [`CapacityIn`]). `crate::team::direct::wire`
+/// opens it with this device's key.
+pub type DirectIn = CapacityIn;
 
 /// A teammate's event that passed every check. `store::ingest` takes only this.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,6 +101,8 @@ pub enum Opened {
     RosterChanged(u64),
     /// A lend item for some device of the team (maybe not this one).
     Capacity(CapacityIn),
+    /// A pass-a-task item for some device of the team (maybe not this one).
+    Direct(DirectIn),
     /// My own message, echoed back.
     Mine,
 }
@@ -236,7 +245,7 @@ impl Session {
         let id = match payload {
             Payload::Event { event } => event.id.clone(),
             Payload::RosterChanged { .. } => new_event_id(now_ms),
-            Payload::Capacity { msg_id, .. } => msg_id.clone(),
+            Payload::Capacity { msg_id, .. } | Payload::Direct { msg_id, .. } => msg_id.clone(),
         };
         let mut env = Envelope {
             v: 1,
@@ -297,6 +306,15 @@ impl Session {
                     return Err(Reject::NotAllowed);
                 }
                 Ok(Opened::Capacity(CapacityIn { member: member.id.clone(), device: device.id.clone(), msg_id, to, enc, ct }))
+            }
+            Payload::Direct { msg_id, to, enc, ct } => {
+                if msg_id != env.id {
+                    return Err(Reject::Impersonation);
+                }
+                if !member.has(Role::Watch) {
+                    return Err(Reject::NotAllowed);
+                }
+                Ok(Opened::Direct(CapacityIn { member: member.id.clone(), device: device.id.clone(), msg_id, to, enc, ct }))
             }
             Payload::Event { event } => {
                 if event.id != env.id || event.team != env.team {

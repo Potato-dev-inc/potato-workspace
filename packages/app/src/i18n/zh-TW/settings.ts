@@ -238,6 +238,8 @@ export const settings: Partial<Record<EnglishKey, string>> = {
   'settings.row.away-minutes.hint': '超過這個分鐘數沒有動鍵盤或滑鼠後，顯示 AI 助理做了哪些事。設為 0 即關閉。',
   'settings.row.quiet-hours.label': '勿擾時段',
   'settings.row.quiet-hours.hint': '夜間暫停通知。高風險的確認仍會通知你。',
+  'settings.row.pc-notifications.label': '這台電腦的通知',
+  'settings.row.pc-notifications.hint': 'AI 助理需要你時跳出 Windows 通知。簡單的問題可以直接在通知上回答。',
   'settings.row.pairing.label': '配對手機',
   'settings.row.paired-devices.label': '已配對的手機',
   'settings.row.phone-notifications.label': '手機通知',

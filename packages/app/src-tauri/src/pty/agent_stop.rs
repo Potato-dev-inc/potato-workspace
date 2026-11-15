@@ -61,7 +61,8 @@ pub fn stop_agent(registry: &Arc<Mutex<PaneRegistry>>, pane_id: &str, wait_ms: u
             stop_pid(pid, wait_ms, &look, &proc_tree::kill_process_tree)
         }
     };
-    if let Some(place) = place {
+    // Only a Linux place has anything left inside a distro to stop (an ssh pane's far side ends with its connection).
+    if let Some(place) = place.filter(|place| place.kind == "linux") {
         crate::wsl::live::stop_pane(&place.distro, pane_id);
     }
     stopped

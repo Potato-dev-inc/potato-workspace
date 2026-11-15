@@ -38,7 +38,7 @@ export const settingsConnect = {
   "tunnel.mode.stable": "Stable link (your own Cloudflare Worker)",
   "tunnel.workerAddress": "Worker address",
   "tunnel.workerAria": "Worker address",
-  "tunnel.stableHelp": "Put a free Cloudflare Worker in front of the automatic address and your phone keeps one link that never changes. Set it up once: see relay/worker/README.md. Your phone must pair once again from the new address.",
+  "tunnel.stableHelp": "Put a free Cloudflare Worker in front of the automatic address and your phone keeps one link that never changes. Set it up once with one button. Your phone must pair once again from the new address.",
   "tunnel.problem.worker": "Enter the Worker address, for example https://potato-stable-link.you.workers.dev.",
   "tunnel.problem.secret": "The secret needs at least 16 characters.",
   "tunnel.secret": "Secret",

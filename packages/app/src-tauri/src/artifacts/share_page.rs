@@ -83,6 +83,15 @@ fn plain(status: u16, title: &str, message: &str) -> SharePage {
     page(status, false, format!("<!DOCTYPE html><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{t}</title><style>{STYLE}</style><main><h1>{t}</h1><p>{m}</p></main>", t = escape(title), m = escape(message)))
 }
 
+/// The page of one version, the same document a share link serves (used by the app-only address too).
+pub(super) fn render(title: &str, kind: ArtifactKind, content: &str) -> SharePage {
+    show(&Shared { title: title.to_string(), kind, version: 0, content: content.to_string(), expires_at: 0 })
+}
+
+pub(super) fn plain_page(status: u16, title: &str, message: &str) -> SharePage {
+    plain(status, title, message)
+}
+
 fn show(shared: &Shared) -> SharePage {
     let title = escape(&shared.title);
     let head = format!("<!DOCTYPE html><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex\"><title>{title}</title>");

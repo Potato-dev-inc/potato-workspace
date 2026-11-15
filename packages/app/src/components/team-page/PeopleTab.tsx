@@ -20,6 +20,7 @@ export function PeopleTab({
   now,
   lendOn,
   onAskUsage,
+  onPassTask,
   onChanged,
 }: {
   people: Person[];
@@ -29,6 +30,8 @@ export function PeopleTab({
   now: number;
   lendOn: boolean;
   onAskUsage: () => void;
+  /** Opens the Pass a task sheet with this person chosen. */
+  onPassTask: (memberId: string) => void;
   onChanged: () => void;
 }) {
   const t = useT();
@@ -107,11 +110,16 @@ export function PeopleTab({
                     </button>
                   </p>
                 )}
-                {!m.me && lendOn && (
+                {!m.me && (
                   <div className="tpg-actions">
-                    <button type="button" className="ck-btn ck-btn--secondary" onClick={onAskUsage}>
-                      {t('teamHub.askUsage')}
+                    <button type="button" className="ck-btn ck-btn--secondary" data-testid={`pass-task-${m.id}`} onClick={() => onPassTask(m.id)}>
+                      {t('teamHub.pass.button')}
                     </button>
+                    {lendOn && (
+                      <button type="button" className="ck-btn ck-btn--secondary" onClick={onAskUsage}>
+                        {t('teamHub.askUsage')}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

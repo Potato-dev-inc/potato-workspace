@@ -785,6 +785,9 @@ impl LiveIo for RealIo {
     }
     fn snapshot_now(&self, project: &Path, key: &str, now_ms: u64) -> Result<String, CheckpointError> {
         let made = engine::snapshot(project, key, engine::Kind::After, Some("What broke it: now"), now_ms, &engine::Limits::default())?;
+        if let engine::Snapshot::Created(cp) = &made {
+            crate::timeline::note_helper_point(project, key, cp);
+        }
         match made {
             engine::Snapshot::Created(cp) | engine::Snapshot::Unchanged(Some(cp)) => Ok(cp.tree),
             engine::Snapshot::Unchanged(None) => Err(CheckpointError::NotFound),

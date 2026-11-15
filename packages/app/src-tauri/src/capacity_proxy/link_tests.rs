@@ -386,6 +386,7 @@ fn restart(w: &World2, side: &Side, name: &str, team: Arc<dyn TeamPort>) -> Arc<
         }),
         refresh: Arc::new(|_job| Box::pin(async { Err("no refresh in this test".to_string()) })),
         env_names: Arc::new(|| vec!["PATH".to_string()]),
+        own: Arc::new(super::service::NoOwn),
         test_upstream: None,
     };
     let lend = Lend::new(deps);

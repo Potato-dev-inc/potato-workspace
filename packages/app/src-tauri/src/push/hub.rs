@@ -108,6 +108,53 @@ pub struct Delivery {
     pub kind: Kind,
 }
 
+/// The buttons a notification may carry. The phone's lock screen and the PC's toast share this one rule, so a
+/// prompt that is open-only on the phone is open-only on the PC.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Buttons {
+    /// A calm (low-risk) command approval: Allow once / Deny.
+    AllowDeny,
+    /// A plain yes / no question: Yes / No.
+    YesNo,
+    /// Anything else, risky or unclear: only a way to open the app.
+    OpenOnly,
+}
+
+/// Which buttons a candidate gets (the fullest version of the notification decides: every phone's own
+/// version is cut down from it).
+pub fn buttons_for(candidate: &Candidate) -> Buttons {
+    let full = copy_for_view(candidate.kind, &candidate.agent_label, candidate.heading.as_deref(), candidate.prompt.as_ref(), candidate.detail.as_deref(), View::Full);
+    // Nothing secret goes to a push service. If redaction changed the text, the body no longer
+    // shows the whole command exactly, so the notification is open-only (no Allow button).
+    let redaction_changed = crate::redact::text(&full.title).as_str() != full.title
+        || crate::redact::text(&full.body).as_str() != full.body
+        || candidate.prompt.as_ref().is_some_and(|p| crate::redact::text(&p.text).as_str() != p.text);
+    if redaction_changed {
+        return Buttons::OpenOnly;
+    }
+    // Allow is only offered when the body shows the WHOLE command and cwd: a long command is cut
+    // at 120 characters, and the cut tail could be what actually runs. Then it is open-only.
+    let allow_deny = candidate.kind == Kind::WaitingInput
+        && candidate.prompt.as_ref().is_some_and(|p| {
+            // Belt and braces: `actionable` already means low risk; check again here.
+            let calm = p.risk.as_ref().is_some_and(|r| r.level == crate::prompt_risk::RiskLevel::Low);
+            p.actionable && calm && shown_in_full(&p.text)
+        })
+        && candidate.pane_id.is_some();
+    if allow_deny {
+        return Buttons::AllowDeny;
+    }
+    // A simple yes/no question: the body shows the whole question, nothing was redacted, and the card is known.
+    let yes_no = candidate.kind == Kind::Question
+        && candidate.item.as_ref().is_some_and(|i| i.yes_no.is_some())
+        && candidate.prompt.as_ref().is_some_and(|p| shown_in_full(&p.text) && p.text.chars().count() <= YES_NO_MAX_CHARS);
+    if yes_no {
+        Buttons::YesNo
+    } else {
+        Buttons::OpenOnly
+    }
+}
+
 pub struct PushHub {
     vapid: VapidKeys,
     store: Mutex<SubscriptionStore>,
@@ -337,30 +384,8 @@ impl PushHub {
         }
         // This one is going out now: whatever was held for the key is covered by it.
         self.held.lock().remove(&candidate.key);
-        // What the fullest version of the notification says (Android, desktop browsers). It decides
-        // whether Allow / Deny can be offered at all: every phone's own version is cut down from it.
-        let full = copy_for_view(candidate.kind, &candidate.agent_label, candidate.heading.as_deref(), candidate.prompt.as_ref(), candidate.detail.as_deref(), View::Full);
-        // Nothing secret goes to a push service. If redaction changed the text, the body no longer
-        // shows the whole command exactly, so the notification is open-only (no Allow button).
-        let redaction_changed = crate::redact::text(&full.title).as_str() != full.title
-            || crate::redact::text(&full.body).as_str() != full.body
-            || candidate.prompt.as_ref().is_some_and(|p| crate::redact::text(&p.text).as_str() != p.text);
-        // Allow is only offered when the body shows the WHOLE command and cwd: a long command is cut
-        // at 120 characters, and the cut tail could be what actually runs. Then it is open-only.
-        let actionable = candidate.kind == Kind::WaitingInput
-            && candidate.prompt.as_ref().is_some_and(|p| {
-                // Belt and braces: `actionable` already means low risk; check again here.
-                let calm = p.risk.as_ref().is_some_and(|r| r.level == crate::prompt_risk::RiskLevel::Low);
-                p.actionable && calm && shown_in_full(&p.text)
-            })
-            && candidate.pane_id.is_some()
-            && !redaction_changed;
-        // A simple yes/no question: the body shows the whole question, nothing was redacted, and the card is known.
-        let yes_no_buttons = candidate.kind == Kind::Question
-            && candidate.item.as_ref().is_some_and(|i| i.yes_no.is_some())
-            && candidate.prompt.as_ref().is_some_and(|p| shown_in_full(&p.text) && p.text.chars().count() <= YES_NO_MAX_CHARS)
-            && !redaction_changed;
-        let actionable = actionable || yes_no_buttons;
+        // Which buttons it can carry (the one rule the PC toast uses too): every phone's own version is cut down from it.
+        let actionable = buttons_for(candidate) != Buttons::OpenOnly;
         let words = |view| {
             copy_for_view(candidate.kind, &candidate.agent_label, candidate.heading.as_deref(), candidate.prompt.as_ref(), candidate.detail.as_deref(), view)
         };

@@ -112,6 +112,10 @@ function fakeApi(s: GuideState, over: Partial<GuideApi> = {}) {
       stale: false,
     })),
     remove: vi.fn(async () => true),
+    videoState: vi.fn(async () => ({ enabled: true, running: false, state: null, files: [], canVideo: true })),
+    videoStart: vi.fn(async () => undefined),
+    videoStop: vi.fn(async () => true),
+    videoShow: vi.fn(async () => undefined),
     ...over,
   };
   return api;

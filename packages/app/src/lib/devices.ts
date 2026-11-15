@@ -11,6 +11,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useEffect, useState } from 'react';
 import { t } from '../i18n';
 import { loadSettings } from './settings';
+import type { SshHost } from './ssh';
 
 export type RoutePref = 'auto' | 'public' | 'own';
 export type DeviceLevel = 'watch' | 'full';
@@ -32,8 +33,14 @@ export interface Device {
   level: DeviceLevel;
   /** That device runs an older Potato Workspace: it cannot connect until it is updated. */
   too_old: boolean;
+  /** THIS PC lets that device open this PC's shared folders. Off after pairing. */
+  lets_files: boolean;
   /** THIS PC lets that device reach it through its web address too. */
   lets_web: boolean;
+  /** Agents on THIS PC may send work to that device (MCP `run_agent`, account `device:<name>`). Off by default; the device must also give Full control. */
+  agents_may_send: boolean;
+  /** THIS PC lets that device ask to borrow its agent sign-ins ("Borrow my agent sign-ins"). Off after pairing; nothing is ever copied. */
+  lets_lend: boolean;
   /** THIS PC holds a web address and a token for that device, so "Your link" works toward it. */
   web_ready: boolean;
   /** How this device connects when it is not "same as this PC". */
@@ -55,7 +62,7 @@ export interface HostingView {
   expires_at: number;
 }
 
-export type ActivityKind = 'connected' | 'started' | 'typed' | 'messaged' | 'answered' | 'stopped' | 'changed' | 'refused';
+export type ActivityKind = 'connected' | 'started' | 'typed' | 'messaged' | 'answered' | 'stopped' | 'changed' | 'refused' | 'copied' | 'sent';
 
 /** One line of "Device activity". Never holds prompt text. `in`: that device did it on THIS PC. `out`: this PC did it there. */
 export interface ActivityEntry {
@@ -89,7 +96,51 @@ export interface DevicesView {
   locked_until: number | null;
   tampered: boolean;
   devices: Device[];
+  /** Files moving to or from a device, newest first. */
+  transfers: Transfer[];
 }
+
+/** An error the FAR device answers (not a thrown error). `error` is untrusted text. */
+export interface FarError {
+  ok: false;
+  error: string;
+  code?: string;
+}
+
+/** One file transfer. `name` and `error` are untrusted text. `saved_as` is the name in Downloads once done. */
+export interface Transfer {
+  id: number;
+  node: string;
+  /** `down`: from that device to this PC. `up`: from this PC to it. */
+  dir: 'down' | 'up';
+  name: string;
+  bytes: number;
+  total: number;
+  state: 'running' | 'done' | 'failed' | 'stopped';
+  error: string;
+  saved_as: string;
+}
+
+export type OnExists = 'ask' | 'replace' | 'both';
+export interface FilesFolders {
+  /** Folder names THIS PC shares with that device. */
+  shared: string[];
+  /** Absolute paths the person added for it. */
+  chosen: string[];
+}
+export interface FileEntry {
+  name: string;
+  kind: 'dir' | 'file';
+  size: number;
+  /** Unix seconds. */
+  mtime: number;
+}
+export interface FileList {
+  entries: FileEntry[];
+  truncated: boolean;
+}
+export type FilePreview = { kind: 'text'; text: string; truncated: boolean; size: number } | { kind: 'image'; mime: string; data: string; size: number } | { kind: 'none'; size: number; too_big?: boolean };
+export type CopyResult = { ok: true; id: number } | { exists: true; name: string } | FarError;
 
 export interface RequestResult {
   status: number;
@@ -125,6 +176,10 @@ export interface DevicesApi {
   activity: (node?: string) => Promise<ActivityEntry[]>;
   /** "Also allow through my web address": only meaningful while that device may run agents here. */
   setWeb: (node: string, on: boolean) => Promise<DevicesView>;
+  /** "Agents may send work to this device" (this PC's own switch). */
+  setAgentsSend: (node: string, on: boolean) => Promise<DevicesView>;
+  /** "Borrow my agent sign-ins" for one device: that device may ask this PC to lend an agent. */
+  setLend: (node: string, on: boolean) => Promise<DevicesView>;
   /** How one device connects; null follows this PC's choice. */
   setDeviceRoute: (node: string, pref: RoutePref | null) => Promise<DevicesView>;
   /** Turns that device's "run agents here" switch off and closes its link now. */
@@ -133,6 +188,21 @@ export interface DevicesApi {
   screenStart: (node: string, paneId: string) => Promise<void>;
   screenStop: (node: string, paneId: string) => Promise<void>;
   onScreen: (cb: (e: ScreenFrame) => void) => Promise<UnlistenFn>;
+  /** THIS PC lets that device open its shared folders (or not). */
+  setFiles: (node: string, on: boolean) => Promise<DevicesView>;
+  /** The folders THIS PC shares with that device. `setFilesFolders` replaces the chosen list. */
+  filesFolders: (node: string) => Promise<FilesFolders>;
+  setFilesFolders: (node: string, folders: string[]) => Promise<FilesFolders>;
+  /** The far device's shared folder names. */
+  filesRoots: (node: string) => Promise<{ roots: string[] } | FarError>;
+  filesList: (node: string, root: string, path: string) => Promise<FileList | FarError>;
+  filesPreview: (node: string, root: string, path: string) => Promise<FilePreview | FarError>;
+  /** Copy from the far device into Downloads on this PC. Never pass `replace` without the person's click. */
+  filesCopy: (a: { node: string; root: string; paths: string[]; dest?: string | null; on_exists?: OnExists }) => Promise<CopyResult>;
+  /** Send files of this PC (absolute paths) into a folder of the far device. */
+  filesSend: (a: { node: string; root: string; dir: string; local: string[]; on_exists?: OnExists }) => Promise<CopyResult>;
+  transferCancel: (id: number) => Promise<DevicesView>;
+  transfersClear: () => Promise<DevicesView>;
   /** Runs one bridge route on the far device through the PC link. The far device enforces its rights. */
   request: (node: string, method: string, path: string, body?: unknown) => Promise<RequestResult>;
   subscribe: (node: string) => Promise<void>;
@@ -163,11 +233,23 @@ export const devicesApi: DevicesApi = {
   joinLink: (link) => call('devices_join_link', { link }),
   activity: (node) => call('devices_activity', { node }),
   setWeb: (node, on) => call('devices_set_web', { node, on }),
+  setAgentsSend: (node, on) => call('devices_set_agents_send', { node, on }),
+  setLend: (node, on) => call('devices_set_lend', { node, on }),
   setDeviceRoute: (node, pref) => call('devices_set_device_route', { node, pref }),
   disconnect: (node) => call('devices_disconnect', { node }),
   screenStart: (node, paneId) => call('devices_screen_start', { node, pane_id: paneId }),
   screenStop: (node, paneId) => call('devices_screen_stop', { node, pane_id: paneId }),
   onScreen: (cb) => (isTauri() ? listen<ScreenFrame>('device://screen', (e) => cb(e.payload)) : Promise.resolve(noop)),
+  setFiles: (node, on) => call('devices_set_files', { node, on }),
+  filesFolders: (node) => call('devices_files_folders', { node }),
+  setFilesFolders: (node, folders) => call('devices_files_set_folders', { node, folders }),
+  filesRoots: (node) => call('devices_files_roots', { node }),
+  filesList: (node, root, path) => call('devices_files_list', { node, root, path }),
+  filesPreview: (node, root, path) => call('devices_files_preview', { node, root, path }),
+  filesCopy: (a) => call('devices_files_copy', { ...a }),
+  filesSend: (a) => call('devices_files_send', { ...a }),
+  transferCancel: (id) => call('devices_transfer_cancel', { id }),
+  transfersClear: () => call('devices_transfers_clear'),
   request: (node, method, path, body) => call('devices_request', { node, method, path, ...(body === undefined ? {} : { body }) }),
   subscribe: (node) => call('devices_subscribe', { node }),
   unsubscribe: (node) => call('devices_unsubscribe', { node }),
@@ -333,7 +415,7 @@ export function deviceNotices(d: Device, agentsOfPane?: readonly string[]): Devi
   return out;
 }
 
-const ACTIVITY_KINDS: readonly ActivityKind[] = ['connected', 'started', 'typed', 'messaged', 'answered', 'stopped', 'changed', 'refused'];
+const ACTIVITY_KINDS: readonly ActivityKind[] = ['connected', 'started', 'typed', 'messaged', 'answered', 'stopped', 'changed', 'refused', 'copied', 'sent'];
 
 /** Newest first; an entry that is not one of ours is dropped (a bad answer is no line at all). */
 export function sortActivity(list: unknown): ActivityEntry[] {
@@ -354,10 +436,11 @@ export function activityLine(e: ActivityEntry): string {
 export type Runtime =
   | { kind: 'this'; id: 'this'; label: string }
   | { kind: 'wsl'; id: string; label: string; distro: string }
+  | { kind: 'ssh'; id: string; label: string; host: SshHost }
   | { kind: 'device'; id: string; label: string; device: Device; pickable: boolean; why: string | null };
 
-/** This PC first, then the Linux places of this PC, then each paired device. */
-export function runtimesOf(view: DevicesView | null, wslDistros: readonly string[] = []): Runtime[] {
+/** This PC first, then the Linux places of this PC, then each paired device, then each SSH machine (terminals only). */
+export function runtimesOf(view: DevicesView | null, wslDistros: readonly string[] = [], sshHosts: readonly SshHost[] = []): Runtime[] {
   const out: Runtime[] = [{ kind: 'this', id: 'this', label: t('devices.thisPc') }];
   for (const distro of wslDistros) out.push({ kind: 'wsl', id: `wsl:${distro}`, label: distro, distro });
   if (view?.enabled) {
@@ -365,6 +448,7 @@ export function runtimesOf(view: DevicesView | null, wslDistros: readonly string
       const why = cannotPickWhy(device);
       out.push({ kind: 'device', id: device.node, label: device.name, device, pickable: why === null, why });
     }
+    for (const host of sshHosts) out.push({ kind: 'ssh', id: `ssh:${host.id}`, label: host.name, host });
   }
   return out;
 }

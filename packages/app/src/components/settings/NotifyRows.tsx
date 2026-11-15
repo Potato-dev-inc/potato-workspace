@@ -2,7 +2,7 @@
 // The choices are kept on the PC (`lib/notify-store`), so the phone and chat alerts obey them too.
 import { useT } from '../../i18n';
 import { BELL_LEVELS, type BellLevel, type QuietHours } from '../../lib/notify-levels';
-import { useBellLevel, useQuietHours } from '../../lib/notify-store';
+import { useBellLevel, usePcNotifications, useQuietHours } from '../../lib/notify-store';
 import { Popup, Switch } from './controls';
 import { SettingRow } from './settings-ui';
 
@@ -41,6 +41,26 @@ export function QuietHoursRow({ onSaved }: { onSaved?: () => void }) {
           </>
         )}
         <Switch checked={quiet.enabled} label={t('notify.quiet.on')} onChange={(enabled) => save({ ...quiet, enabled })} />
+      </span>
+    </SettingRow>
+  );
+}
+
+/** "Notifications on this PC": a Windows toast when something needs you and the app is not in front. */
+export function PcNotificationsRow({ onSaved }: { onSaved?: () => void }) {
+  const t = useT();
+  const [on, setOn] = usePcNotifications();
+  return (
+    <SettingRow label={t('notify.pc.label')} description={t('notify.pc.hint')}>
+      <span data-testid="pc-notifications">
+        <Switch
+          checked={on}
+          label={t('notify.pc.label')}
+          onChange={(next) => {
+            setOn(next);
+            onSaved?.();
+          }}
+        />
       </span>
     </SettingRow>
   );

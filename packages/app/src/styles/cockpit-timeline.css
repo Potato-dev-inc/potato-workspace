@@ -1,0 +1,471 @@
+/* The Today page: one line for the day. Charcoal surface, monochrome lanes and marks; the one orange is the time
+   handle and the picked mark. Cockpit tokens only, no colour literals, so light, dimmed and dark all follow. */
+.cockpit .ck-tl-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 24px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ---------- controls ---------- */
+.cockpit .ck-tl-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.cockpit .ck-tl-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.cockpit .ck-tl-seg-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cockpit .ck-tl-seg-btn:hover:not(:disabled) {
+  color: var(--label);
+  background: var(--fill-hover);
+}
+.cockpit .ck-tl-seg-btn[aria-pressed='true'] {
+  color: var(--label);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.cockpit .ck-tl-seg-btn:disabled {
+  color: var(--label-4);
+  cursor: default;
+}
+.cockpit .ck-tl-select {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--label);
+  font: inherit;
+  font-size: 12.5px;
+}
+.cockpit .ck-tl-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+.cockpit .ck-tl-seg-btn:focus-visible,
+.cockpit .ck-tl-select:focus-visible,
+.cockpit .ck-tl-check input:focus-visible {
+  outline: 2px solid var(--label-2);
+  outline-offset: 1px;
+}
+
+/* ---------- the line ---------- */
+.cockpit .ck-tl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 8px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.cockpit .ck-tl-grid {
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr);
+  gap: 0 12px;
+}
+.cockpit .ck-tl-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 28px;
+  min-width: 0;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+.cockpit .ck-tl-name--ticks {
+  height: 22px;
+}
+.cockpit .ck-tl-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--label);
+}
+.cockpit .ck-tl-state {
+  flex: none;
+  color: var(--label-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ck-tl-tracks {
+  position: relative;
+  min-width: 0;
+  touch-action: none;
+  cursor: col-resize;
+}
+.cockpit .ck-tl-ticks {
+  position: relative;
+  height: 22px;
+}
+.cockpit .ck-tl-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  color: var(--label-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cockpit .ck-tl-tick--now {
+  color: var(--label);
+}
+.cockpit .ck-tl-lane {
+  position: relative;
+  height: 28px;
+}
+.cockpit .ck-tl-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--sep);
+}
+.cockpit .ck-tl-fold {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  border-left: 1px dashed var(--label-4);
+  border-right: 1px dashed var(--label-4);
+  background: var(--bg-raised);
+}
+
+/* A mark: 8 px dot inside a 24 px hit area. */
+.cockpit .ck-tl-mark {
+  position: absolute;
+  top: 2px;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.cockpit .ck-tl-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--label-2);
+  box-sizing: border-box;
+  transition: transform 120ms var(--ease);
+}
+.cockpit .ck-tl-mark:hover .ck-tl-dot {
+  transform: scale(1.4);
+}
+.cockpit .ck-tl-mark[data-shape='hollow'] .ck-tl-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--label-2);
+}
+.cockpit .ck-tl-mark[data-shape='stop'] .ck-tl-dot {
+  border-radius: 1px;
+}
+.cockpit .ck-tl-mark[data-shape='undo'] .ck-tl-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  border-left: 2px solid var(--label-2);
+  border-bottom: 2px solid var(--label-2);
+  transform: rotate(45deg) scale(0.75);
+}
+.cockpit .ck-tl-mark[data-helper='true'] .ck-tl-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--label-3);
+  border-radius: 2px;
+}
+.cockpit .ck-tl-mark[data-branch='true']::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  width: 1px;
+  height: 5px;
+  background: var(--label-3);
+}
+.cockpit .ck-tl-mark[data-faded='true'] {
+  opacity: 0.35;
+}
+.cockpit .ck-tl-mark[aria-pressed='true'] .ck-tl-dot {
+  background: var(--accent);
+  box-shadow: none;
+  border-color: var(--accent);
+}
+.cockpit .ck-tl-mark[aria-pressed='true'][data-shape='hollow'] .ck-tl-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.cockpit .ck-tl-mark[aria-pressed='true'][data-shape='undo'] .ck-tl-dot {
+  background: transparent;
+  border-left-color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.cockpit .ck-tl-mark:focus-visible {
+  outline: 2px solid var(--label-2);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+.cockpit .ck-tl-cluster {
+  position: absolute;
+  top: 4px;
+  height: 20px;
+  margin-left: -6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--fill-active);
+  color: var(--label);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.cockpit .ck-tl-cluster:hover {
+  background: var(--fill-hover);
+}
+.cockpit .ck-tl-cluster:focus-visible {
+  outline: 2px solid var(--label-2);
+  outline-offset: 1px;
+}
+
+/* The time handle: a thin vertical line across every lane. */
+.cockpit .ck-tl-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid var(--accent);
+  pointer-events: none;
+  transition: left 120ms var(--ease);
+}
+.cockpit .ck-tl-handle-time {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, 0);
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ck-tl-hint {
+  margin: 0;
+  color: var(--label-3);
+  font-size: 11.5px;
+}
+
+/* ---------- the card ---------- */
+.cockpit .ck-tl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  transition: opacity 120ms var(--ease);
+}
+.cockpit .ck-tl-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+.cockpit .ck-tl-card-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--label);
+}
+.cockpit .ck-tl-card-project {
+  color: var(--label);
+}
+.cockpit .ck-tl-card-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--label-2);
+}
+.cockpit .ck-tl-card-note {
+  color: var(--label-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.cockpit .ck-tl-card-meta {
+  color: var(--label-3);
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ck-tl-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .cockpit .ck-tl-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cockpit .ck-tl-grid {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+}
+.cockpit .ck-tl-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.cockpit .ck-tl-sum {
+  margin: 0;
+  color: var(--label);
+  font-size: 13px;
+}
+.cockpit .ck-tl-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.cockpit .ck-tl-file-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.cockpit .ck-tl-file-btn:hover {
+  background: var(--fill-hover);
+}
+.cockpit .ck-tl-file-btn:focus-visible {
+  outline: 2px solid var(--label-2);
+  outline-offset: -2px;
+}
+.cockpit .ck-tl-file-status {
+  flex: none;
+  width: 14px;
+  color: var(--label-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.cockpit .ck-tl-file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.cockpit .ck-tl-file-delta {
+  flex: none;
+  color: var(--label-3);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+}
+.cockpit .ck-tl-patch {
+  padding: 4px 0 8px 22px;
+}
+.cockpit .ck-tl-go {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 6px;
+}
+.cockpit .ck-tl-why {
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+.cockpit .ck-tl-memory {
+  margin: 0;
+}
+.cockpit .ck-tl-spin {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--label-4);
+  border-top-color: var(--label-2);
+  vertical-align: -1px;
+  animation: ck-tl-spin 0.9s linear infinite;
+}
+@keyframes ck-tl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.cockpit .ck-tl-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+.cockpit .ck-tl-empty,
+.cockpit .ck-tl-legend,
+.cockpit .ck-tl-limits {
+  margin: 0;
+}
+
+/* Less motion: the handle and the card jump. */
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-tl-handle,
+  .cockpit .ck-tl-card,
+  .cockpit .ck-tl-dot {
+    transition: none;
+  }
+  .cockpit .ck-tl-spin {
+    animation: none;
+  }
+}
+
+/* Simple mode: the page over the project. */
+.cockpit .ck-tl-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow-y: auto;
+  background: var(--bg);
+}

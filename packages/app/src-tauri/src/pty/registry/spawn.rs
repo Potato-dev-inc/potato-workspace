@@ -254,6 +254,12 @@ pub fn spawn_pane(
         &cwd,
     )?;
 
+    // Over SSH: a one-shot launch recorded by `commands::ssh::ssh_open` for this pane id (never from JSON). The pane is a
+    // local PTY that runs `ssh -t ...`; the far machine is where the agent runs.
+    let ssh = crate::ssh::once::take(&pane_id);
+    // A pane that runs on another machine gets nothing of this PC's logins, hooks or environment.
+    let remote = linux.is_some() || ssh.is_some();
+
     // This spawn's number: the id's earlier reader and exit watcher go stale from here on.
     let generation = begin_generation(&pane_id);
     let mut cleanup = SpawnCleanup::new(&pane_id, generation);
@@ -284,7 +290,7 @@ pub fn spawn_pane(
     // the agent has no hooks or they are off, so such a pane starts exactly as before.
     let user_args = args.extra_args.clone().unwrap_or_default();
     // A Linux pane has no hooks in v1: nothing is installed or recorded for it.
-    let hooks = if linux.is_some() {
+    let hooks = if remote {
         crate::agent_hooks::HookLaunch::default()
     } else {
         crate::agent_hooks::prepare_spawn(profile.id(), &pane_id, &cwd, &user_args)
@@ -292,7 +298,7 @@ pub fn spawn_pane(
     // Potato Workspace's own helper tools (`run_agent`, `wait_agents`) for this one launch, where the agent
     // can take a server that way. Nothing is added for a Linux pane (the app's program is a Windows
     // one) or when the Settings switch is off. The person's own config files are never written.
-    let pane_mcp = if linux.is_some() {
+    let pane_mcp = if remote {
         crate::tui::pane_mcp::PaneMcpLaunch::default()
     } else {
         crate::pane_mcp::prepare(profile.as_ref(), &pane_id, &user_args)
@@ -304,7 +310,7 @@ pub fn spawn_pane(
     // Nothing for a Linux pane, and nothing while the Labs switch is off.
     // A borrowed sign-in (Share an agent, `lend:<grant>`) talks only to its lend shim: no Model Bridge key either.
     let borrowed = args.account.as_deref().is_some_and(|a| a.trim().starts_with(crate::capacity_proxy::ACCOUNT_PREFIX));
-    if linux.is_none() && !borrowed {
+    if !remote && !borrowed {
         own_env.extend(crate::model_bridge::launch_env(profile.id()));
     }
     let account_env = compose_pane_env(account_env, own_env, &pane_id, guard_env);
@@ -318,18 +324,24 @@ pub fn spawn_pane(
     };
     let extra_args: Vec<String> =
         user_args.into_iter().chain(hooks.extra_args).chain(api_args).chain(session_args).chain(pane_mcp.args).collect();
-    let cmd = linux::pane_command(
-        profile.as_ref(),
-        &crate::tui::SpawnRequest {
-            cwd: &cwd,
-            extra_args: &extra_args,
-            cols,
-            rows,
-            read_only: args.read_only,
-        },
-        &account_env,
-        linux.as_ref(),
-    )?;
+    let cmd = match &ssh {
+        Some(launch) => build_launch_spec_command(
+            &crate::tui::LaunchSpec::new(launch.exe.to_string_lossy().into_owned(), launch.argv.clone(), std::path::PathBuf::from(&cwd), false),
+            &crate::tui::LaunchEnv::default(),
+        ),
+        None => linux::pane_command(
+            profile.as_ref(),
+            &crate::tui::SpawnRequest {
+                cwd: &cwd,
+                extra_args: &extra_args,
+                cols,
+                rows,
+                read_only: args.read_only,
+            },
+            &account_env,
+            linux.as_ref(),
+        )?,
+    };
     let PtyChild { master, child, pid } = open_pty_child(cmd, rows, cols)?;
     // From here on a failure must not leave the new process running with no pane.
     cleanup.pid = pid;
@@ -378,7 +390,7 @@ pub fn spawn_pane(
         title: None,
         parent_pane_id: None,
         origin: None,
-        place: linux.as_ref().map(crate::wsl::place::pane_place),
+        place: linux.as_ref().map(crate::wsl::place::pane_place).or_else(|| ssh.as_ref().map(crate::ssh::once::pane_place)),
         lane: None,
     };
 

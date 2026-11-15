@@ -57,6 +57,7 @@ export const sidebar = {
   'sidebar.setUpAgents': 'Set up agents',
   'sidebar.yourPlans': 'Your plans',
   'sidebar.scores': 'Scores',
+  'sidebar.theme': 'Theme',
   'sidebar.switchToLight': 'Switch to light',
   'sidebar.switchToDark': 'Switch to dark',
   'sidebar.mode': 'Mode',

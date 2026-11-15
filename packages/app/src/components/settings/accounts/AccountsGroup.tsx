@@ -15,6 +15,7 @@ import {
 import { agentLabel, useAgentRegistry } from '../../../lib/agentRegistry';
 import { SettingBlock, Tip } from '../settings-ui';
 import { CodeText } from '../../common/CodeText';
+import { openSignInAgain } from '../../../lib/agentSignIn';
 import { openSettingsAt } from '../../../lib/openSettingsAt';
 
 const BTN = 'rounded-lg border border-pm-border px-3 py-1.5 text-xs font-medium hover:bg-pm-border/40 disabled:opacity-50';
@@ -123,7 +124,7 @@ export function AccountsGroup({ api = tauriAccountsApi, only }: { api?: Accounts
                       type="button"
                       className={BTN}
                       disabled={busy}
-                      onClick={() => void run(() => api.openLoginPane(agent.agent_id, a.id), t('accounts.opened'))}
+                      onClick={() => openSignInAgain({ agentId: agent.agent_id, label: agentLabel(registry, agent.agent_id), accountId: a.id })}
                     >
                       {t('accounts.again')}
                     </button>

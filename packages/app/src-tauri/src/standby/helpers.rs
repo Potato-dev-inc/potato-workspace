@@ -42,6 +42,10 @@ pub struct StandbyHelper {
     pub project: String,
     #[serde(default)]
     pub after_task: AfterTask,
+    /// The pane id of the agent this helper is shown under. The project owns the helper; `home` only says where it sits.
+    /// Old files have none.
+    #[serde(default)]
+    pub home: Option<String>,
 }
 
 /// What the person typed in the form.
@@ -53,6 +57,7 @@ pub struct NewHelper {
     pub model: Option<String>,
     pub project: String,
     pub after_task: AfterTask,
+    pub home: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,6 +80,10 @@ impl Default for HelperSettings {
 pub struct HelperStore {
     pub settings: HelperSettings,
     pub helpers: Vec<StandbyHelper>,
+}
+
+fn tidy_home(home: Option<String>) -> Option<String> {
+    home.map(|h| h.trim().to_string()).filter(|h| !h.is_empty())
 }
 
 fn tidy(text: &str) -> String {
@@ -114,9 +123,16 @@ impl HelperStore {
         if project.is_empty() {
             return Err("Pick a project folder.".into());
         }
-        let helper = StandbyHelper { id, name, agent, model: input.model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty()), project, after_task: input.after_task };
+        let helper = StandbyHelper { id, name, agent, model: input.model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty()), project, after_task: input.after_task, home: tidy_home(input.home) };
         self.helpers.push(helper.clone());
         Ok(helper)
+    }
+
+    /// Moves a helper under another agent (`None`: under none; the screens pick the most recent agent of the project).
+    pub fn set_home(&mut self, id: &str, home: Option<String>) -> Result<(), String> {
+        let helper = self.helpers.iter_mut().find(|h| h.id == id).ok_or("That standby is gone.")?;
+        helper.home = tidy_home(home);
+        Ok(())
     }
 
     /// Renames a helper or changes what it does after a task.
@@ -211,13 +227,15 @@ pub fn extend_policy(policy: &mut Policy, store: &HelperStore, probe: &dyn Agent
         if !folder.is_dir() || !probe.runs_as_chat(&helper.agent) {
             continue;
         }
-        let meta = HelperMeta { id: helper.id.clone(), name: helper.name.clone(), model: helper.model.clone(), close_after_use: helper.after_task == AfterTask::Close };
+        let meta = HelperMeta { id: helper.id.clone(), name: helper.name.clone(), model: helper.model.clone(), close_after_use: helper.after_task == AfterTask::Close, home: helper.home.clone() };
         policy.helpers.push(HelperWant::new(meta, &helper.agent, folder, None));
         policy.cap += 1;
     }
 }
 
 // ---- the view -----------------------------------------------------------------------------------------------------------
+
+pub use crate::acp::warm::HelperUser;
 
 /// A standby as the screens read it. The top bar chips and the Settings list use this one shape.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -228,12 +246,22 @@ pub struct HelperEntry {
     pub model: Option<String>,
     pub project: String,
     pub after_task: AfterTask,
+    /// The agent (pane id) it is shown under; `None`: the screens choose.
+    pub home: Option<String>,
+    /// Who has it while `busy`: `agent` (an agent's task) or `person` (the person is using it).
+    pub used_by: Option<HelperUser>,
+    /// An agent took it over while the person was using it.
+    pub taken_over: bool,
     /// `ready`, `busy`, `starting`, `asleep` or `problem`.
     pub state: HelperState,
     /// Why it is a problem: `needs_chat`, `folder_missing`, `did_not_start`, `needs_sign_in`.
     pub note: Option<String>,
     /// The chat doing the task, while `busy`.
     pub pane_id: Option<String>,
+    /// The chat the person has open on it, while `ready` or `busy` by `person` (opening it does not take it from the pool).
+    pub open_pane: Option<String>,
+    /// While `taken_over`: the person's chat, whose turn was stopped. It stays as a plain chat.
+    pub person_pane: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -249,17 +277,29 @@ pub fn build_view(store: &HelperStore, statuses: &BTreeMap<String, HelperStatus>
         .helpers
         .iter()
         .map(|h| {
-            let (state, note, pane_id) = if !runs_as_chat(&h.agent) {
-                (HelperState::Problem, Some("needs_chat".to_string()), None)
+            let status = if !runs_as_chat(&h.agent) {
+                HelperStatus { state: HelperState::Problem, note: Some("needs_chat".to_string()), ..Default::default() }
             } else if !folder_ok(&h.project) {
-                (HelperState::Problem, Some("folder_missing".to_string()), None)
+                HelperStatus { state: HelperState::Problem, note: Some("folder_missing".to_string()), ..Default::default() }
             } else {
-                match statuses.get(&h.id) {
-                    Some(s) => (s.state, s.note.clone(), s.pane_id.clone()),
-                    None => (HelperState::Starting, None, None),
-                }
+                statuses.get(&h.id).cloned().unwrap_or_default()
             };
-            HelperEntry { id: h.id.clone(), name: h.name.clone(), agent: h.agent.clone(), model: h.model.clone(), project: h.project.clone(), after_task: h.after_task, state, note, pane_id }
+            HelperEntry {
+                id: h.id.clone(),
+                name: h.name.clone(),
+                agent: h.agent.clone(),
+                model: h.model.clone(),
+                project: h.project.clone(),
+                after_task: h.after_task,
+                home: h.home.clone(),
+                used_by: status.used_by,
+                taken_over: status.taken_over,
+                state: status.state,
+                note: status.note,
+                pane_id: status.pane_id,
+                open_pane: status.open_pane,
+                person_pane: status.person_pane,
+            }
         })
         .collect();
     HelpersView { helpers, max: store.settings.max, idle_minutes: store.settings.idle_minutes }

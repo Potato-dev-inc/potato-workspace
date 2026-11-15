@@ -16,6 +16,8 @@ export const notify: Partial<Record<EnglishKey, string>> = {
   'notify.quiet.to': '到',
   'notify.quiet.fromAria': '勿擾時段開始時間',
   'notify.quiet.toAria': '勿擾時段結束時間',
+  'notify.pc.label': '這台電腦的通知',
+  'notify.pc.hint': 'AI 助理需要你、而應用程式不在最上層時，Windows 會跳出通知。簡單的問題會有按鈕。',
   'notify.agent.label': '通知',
   'notify.agent.hint': '{agent} 可以打擾你到什麼程度。高風險的確認一定會通知你。',
   'notify.agent.aria': '{agent} 的通知',

@@ -2,8 +2,9 @@
 // app shows HTML it did not write (an .html file, later an Artifact). The frame has an opaque origin (never
 // `allow-same-origin`), cannot navigate the app, open windows, submit forms or reach the network (the policy inside
 // the page allows only pictures and styles that are written into it).
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { cleanPick, PICK_ARM, PICK_DONE, PICK_SCRIPT, type ArtifactPick } from '../../lib/artifact-point';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { cleanPick, PICK_ARM, PICK_AT, PICK_AT_REPLY, PICK_DONE, PICK_HOVER, PICK_SCRIPT, type ArtifactPick } from '../../lib/artifact-point';
+import { cleanHover, cleanRectPick, type Hover, type RectPick } from '../../lib/markup/model';
 
 /** The only addresses a page may load a script, style or font from (and only with `cdn`). Fixed, short, no wildcards. */
 export const CDN_HOSTS = ['https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com'] as const;
@@ -52,6 +53,20 @@ const FIT_SCRIPT = `<script>(function(){function r(){try{parent.postMessage({t:'
 /** The smallest a wide page is shrunk to; a wider page scrolls sideways after that. */
 export const MIN_FIT_SCALE = 0.35;
 
+/** Asks the page what element is at a point (frame coordinates). Null when there is none or the page does not answer. */
+export type FrameProbe = (x: number, y: number) => Promise<ArtifactPick | null>;
+
+/** What the mark-up bar asks of a frame: report the box under the mouse, pick and stay armed, hold scrolling, answer "what is at x,y". */
+export interface FrameMarkup {
+  selecting: boolean;
+  hold: boolean;
+  /** The stage the bar draws over; boxes are reported relative to it. */
+  stage: RefObject<HTMLElement | null>;
+  onHover: (hover: Hover | null) => void;
+  onPick: (pick: RectPick) => void;
+  registerProbe: (probe: FrameProbe | null) => void;
+}
+
 export function SandboxFrame({
   html,
   src,
@@ -63,6 +78,7 @@ export function SandboxFrame({
   pickable = false,
   picking = false,
   onPick,
+  markup,
 }: {
   /** The page as text (shown with the policy added). */
   html?: string;
@@ -80,9 +96,12 @@ export function SandboxFrame({
   /** The picker is on: the next click in the page is a pick (and does nothing else). */
   picking?: boolean;
   onPick?: (pick: ArtifactPick) => void;
+  /** The mark-up bar's Select tool (needs scripts). Replaces `picking`/`onPick`. */
+  markup?: FrameMarkup;
 }) {
   const fitting = fit && allowScripts && html !== undefined;
-  const withPicker = pickable && allowScripts && html !== undefined;
+  const withPicker = (pickable || !!markup) && allowScripts && html !== undefined;
+  const wantPick = markup ? markup.selecting : picking;
   const doc = useMemo(
     () => (html === undefined ? undefined : sandboxDocument((fitting ? html + FIT_SCRIPT : html) + (withPicker ? PICK_SCRIPT : ''), { allowScripts, cdn })),
     [html, allowScripts, cdn, fitting, withPicker],
@@ -95,26 +114,73 @@ export function SandboxFrame({
   const arm = (on: boolean) => {
     armed.current = on;
     try {
-      frame.current?.contentWindow?.postMessage({ t: PICK_ARM, on }, '*');
+      frame.current?.contentWindow?.postMessage(markup ? { t: PICK_ARM, on, keep: true, hover: true, hold: markup.hold } : { t: PICK_ARM, on }, '*');
     } catch {
       // The page is not there (yet).
     }
   };
+  const hold = markup?.hold ?? false;
   useEffect(() => {
-    if (withPicker) arm(picking);
-  }, [withPicker, picking]);
+    if (withPicker) arm(wantPick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withPicker, wantPick, hold]);
   useEffect(() => {
     if (!withPicker) return;
     const onMessage = (event: MessageEvent) => {
-      const d = event.data as { t?: unknown; pick?: unknown } | null;
+      const d = event.data as { t?: unknown; pick?: unknown; hover?: unknown } | null;
       // Only this frame, only a pick, and only while the person asked for one.
-      if (event.source !== frame.current?.contentWindow || d?.t !== PICK_DONE || !armed.current) return;
+      if (event.source !== frame.current?.contentWindow || !armed.current) return;
+      if (markup && d?.t === PICK_HOVER) {
+        const h = d.hover === null ? null : cleanHover(d.hover);
+        const o = offsetIn(frame.current, markup.stage.current);
+        markup.onHover(h ? { ...h, x: h.x + o.x, y: h.y + o.y, cx: h.cx + o.x, cy: h.cy + o.y } : null);
+        return;
+      }
+      if (d?.t !== PICK_DONE) return;
+      if (markup) {
+        const rp = cleanRectPick(d.pick);
+        if (!rp) return;
+        const o = offsetIn(frame.current, markup.stage.current);
+        markup.onPick({ pick: rp.pick, rect: rp.rect ? { ...rp.rect, x: rp.rect.x + o.x, y: rp.rect.y + o.y } : null });
+        return;
+      }
       const pick = cleanPick(d.pick);
       if (pick) onPick?.(pick);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [withPicker, onPick]);
+  }, [withPicker, onPick, markup]);
+  // "What element is at x,y?" The page answers by `postMessage`; no answer in 400 ms means none.
+  const registerProbe = markup?.registerProbe;
+  useEffect(() => {
+    if (!withPicker || !registerProbe) return;
+    let seq = 0;
+    registerProbe((x, y) => {
+      const win = frame.current?.contentWindow;
+      if (!win) return Promise.resolve(null);
+      const id = ++seq;
+      return new Promise<ArtifactPick | null>((resolve) => {
+        const done = (value: ArtifactPick | null) => {
+          window.removeEventListener('message', onReply);
+          clearTimeout(timer);
+          resolve(value);
+        };
+        const onReply = (event: MessageEvent) => {
+          const d = event.data as { t?: unknown; id?: unknown; pick?: unknown } | null;
+          if (event.source !== win || d?.t !== PICK_AT_REPLY || d.id !== id) return;
+          done(d.pick ? cleanPick(d.pick) : null);
+        };
+        const timer = setTimeout(() => done(null), 400);
+        window.addEventListener('message', onReply);
+        try {
+          win.postMessage({ t: PICK_AT, id, x, y }, '*');
+        } catch {
+          done(null);
+        }
+      });
+    });
+    return () => registerProbe(null);
+  }, [withPicker, registerProbe]);
   const [room, setRoom] = useState({ w: 0, h: 0 });
   useEffect(() => {
     if (!fitting) return;
@@ -145,7 +211,7 @@ export function SandboxFrame({
       data-testid="sandbox-frame"
       sandbox={sandboxAttribute({ allowScripts })}
       referrerPolicy="no-referrer"
-      onLoad={withPicker ? () => arm(picking) : undefined}
+      onLoad={withPicker ? () => arm(wantPick) : undefined}
       srcDoc={doc}
       src={doc === undefined ? src : undefined}
       style={scale < 1 ? { width: room.w / scale, height: room.h / scale, transform: `scale(${scale})`, transformOrigin: '0 0' } : fitting ? { width: '100%' } : undefined}
@@ -157,4 +223,12 @@ export function SandboxFrame({
       {frameEl}
     </div>
   );
+}
+
+/** Where the frame's top-left sits inside the stage (zero when they are the same box). */
+function offsetIn(frame: HTMLElement | null, stage: HTMLElement | null): { x: number; y: number } {
+  if (!frame || !stage) return { x: 0, y: 0 };
+  const f = frame.getBoundingClientRect();
+  const s = stage.getBoundingClientRect();
+  return { x: f.left - s.left, y: f.top - s.top };
 }

@@ -8,6 +8,12 @@ export interface UpdateOffer {
   currentVersion: string;
   version: string;
   notes: string | null;
+  /** Download size in bytes, when the release says (older releases do not). */
+  size?: number | null;
+  /** The full download brings new built-in tools (so it is big on purpose). */
+  newTools?: boolean;
+  /** The small download (the app only) was chosen. */
+  smaller?: boolean;
 }
 
 /** A channel that could not be read: the stable address, or the early-versions (beta) one. */
@@ -62,6 +68,21 @@ export interface UpdateTransport {
   reopenChats?(): Promise<void>;
   /** The version that is running now (for the one-time "What is new" card). Absent: no card. */
   currentVersion?(): Promise<string | null>;
+  /** A step above the progress: `preparing` (copying the built-in tools) or `fallback` (the full update instead). */
+  onStep?(callback: (step: UpdateStep) => void): Promise<() => void>;
+  /** Whether the built-in tools (Node, Git, the tunnel program) are in place. Absent: nothing is shown. */
+  toolsStatus?(): Promise<ToolsStatus>;
+  /** Repair: downloads the full installer of the running version and runs it. Rejects `UPDATE_RUNNING` while agents work. */
+  repairTools?(confirmRunning: boolean): Promise<void>;
+}
+
+export type UpdateStep = "preparing" | "fallback";
+
+/** `ok` is false only when an installed app has no whole tools folder. */
+export interface ToolsStatus {
+  ok: boolean;
+  source: string;
+  toolsVersion: number;
 }
 
 export const tauriUpdateTransport: UpdateTransport = {
@@ -77,6 +98,12 @@ export const tauriUpdateTransport: UpdateTransport = {
     return listen<{ downloaded: number; total: number | null }>('app-update-progress', (event) => callback(event.payload));
   },
   reopenChats: () => invoke<void>('app_update_install', { confirmRunning: false, reopenChats: true }),
+  onStep: async (callback) => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen<{ step: UpdateStep }>('app-update-step', (event) => callback(event.payload.step));
+  },
+  toolsStatus: () => invoke<ToolsStatus>('tools_status'),
+  repairTools: (confirmRunning) => invoke<void>('tools_repair', { confirmRunning }),
   currentVersion: async () => {
     try {
       const { getVersion } = await import('@tauri-apps/api/app');
@@ -148,4 +175,16 @@ export function runningJobWarning(agents: string[], split?: { chats: string[]; t
   if (split.chats.length > 0) parts.push(t('overview.update.chatsSaved', { list: split.chats.join(', ') }));
   if (split.terminals.length > 0) parts.push(t('overview.update.terminalsStop', { list: split.terminals.join(', ') }));
   return parts.join(' ');
+}
+
+/** Megabytes for the offer line: whole numbers, never 0 for a real file. */
+export function sizeInMb(bytes: number): number {
+  return Math.max(1, Math.round(bytes / 1_000_000));
+}
+
+/** The line of the offer: `Update available: 1.2.1 (39 MB)`, with a note when the full download brings new tools. */
+export function offerLine(offer: UpdateOffer): string {
+  if (!offer.size || offer.size <= 0) return t('overview.update.available', { version: offer.version });
+  const key = offer.newTools ? 'overview.update.availableNewTools' : 'overview.update.availableSize';
+  return t(key, { version: offer.version, size: sizeInMb(offer.size) });
 }

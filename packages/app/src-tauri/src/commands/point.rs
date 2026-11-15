@@ -172,16 +172,16 @@ pub fn point_open_blocked_link(_app: AppHandle) -> Result<(), String> {
 // ---------------------------------------------------------------- helpers
 
 /// The one way a message reaches a pane: the pane outbox.
-trait SendHost: Send + Sync {
+pub(crate) trait SendHost: Send + Sync {
     fn send(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String>;
     /// The pane's messages as the outbox lists them now (a failure shows there after the send was queued).
     fn list(&self, pane_id: &str) -> Vec<OutboxMessage>;
 }
 
 /// The live outbox (`pane_outbox::global`).
-struct LiveOutbox {
-    app: AppHandle,
-    registry: Arc<Mutex<PaneRegistry>>,
+pub(crate) struct LiveOutbox {
+    pub(crate) app: AppHandle,
+    pub(crate) registry: Arc<Mutex<PaneRegistry>>,
 }
 
 impl SendHost for LiveOutbox {
@@ -195,7 +195,7 @@ impl SendHost for LiveOutbox {
 }
 
 /// Hands the text to the pane outbox, once. Its error is returned unchanged (the person reads it under the box).
-fn send_with(host: &dyn SendHost, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
+pub(crate) fn send_with(host: &dyn SendHost, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
     host.send(pane_id, text, attachments)
 }
 
@@ -237,7 +237,7 @@ fn outgoing(picks: Vec<Pick>, request: &str, target: &TargetFacts) -> Result<Out
 }
 
 /// Why a message to this pane is refused before anything is queued (the "To:" list greys it out for the same reason).
-fn refusal(target: &TargetFacts) -> Option<String> {
+pub(crate) fn refusal(target: &TargetFacts) -> Option<String> {
     let (can_send, why) = crate::point::target::gate(target);
     (!can_send).then(|| why.unwrap_or_else(|| NOT_A_TARGET.to_string()))
 }
@@ -279,7 +279,7 @@ fn watch_for_failure(app: &AppHandle, registry: Arc<Mutex<PaneRegistry>>, pane_i
 }
 
 /// The pane the person picked in the "To:" list, from the live registry.
-fn target_of(state: &AppState, pane_id: &str) -> Result<TargetFacts, String> {
+pub(crate) fn target_of(state: &AppState, pane_id: &str) -> Result<TargetFacts, String> {
     let infos = state.registry.lock().list();
     window::target_facts(&state.registry, &infos).into_iter().find(|t| t.pane_id == pane_id).ok_or_else(|| NO_PANE.to_string())
 }

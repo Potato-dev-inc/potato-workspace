@@ -161,6 +161,8 @@ export interface LendApi {
   profileSave: (profile: LendProfile) => Promise<LendProfile>;
   profileDelete: (id: string) => Promise<void>;
   request: (memberId: string, deviceId: string | null, agentId: string, secs: number, reason: string, profileId?: string | null, profileName?: string | null) => Promise<LendRequest>;
+  /** Ask one of my own paired PCs (a device node) to lend an agent, over the device link. No Team needed. */
+  requestOwn?: (node: string, agentId: string, secs: number, reason: string) => Promise<LendRequest>;
   /** What can I borrow from this person (or this PC of mine)? Waits a few seconds for the answer. */
   offers: (memberId: string, deviceId: string | null) => Promise<OffersResult>;
   answer: (requestId: string, accept: boolean, profileId: string | null, secs: number | null) => Promise<Grant | null>;
@@ -202,6 +204,7 @@ export const lendApi: LendApi = {
   profileDelete: (id) => call('lend_profile_delete', { id }),
   request: (memberId, deviceId, agentId, secs, reason, profileId, profileName) =>
     call('lend_request', { member_id: memberId, device_id: deviceId, agent_id: agentId, secs, reason, profile_id: profileId ?? null, profile_name: profileName ?? null }),
+  requestOwn: (node, agentId, secs, reason) => call('lend_request_own', { node, agent_id: agentId, secs, reason, profile_id: null, profile_name: null }),
   offers: (memberId, deviceId) => call('lend_offers', { member_id: memberId, device_id: deviceId }),
   answer: (requestId, accept, profileId, secs) => call('lend_answer', { request_id: requestId, accept, profile_id: profileId, secs }),
   revoke: (grantId) => call('lend_revoke', { grant_id: grantId }),

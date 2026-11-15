@@ -23,6 +23,8 @@ pub fn strings() -> Value {
             "takeOver": "Take over",
             "stop": "Stop",
             "giveBack": "Give back",
+            "signIn": "Sign in here, then press Continue.",
+            "continue": "Continue",
             "point": "Point",
             "steps": "Steps ({n})",
         },
@@ -34,6 +36,8 @@ pub fn strings() -> Value {
             "takeOver": "我來接手",
             "stop": "停止",
             "giveBack": "交還",
+            "signIn": "請在這裡登入，完成後按「繼續」。",
+            "continue": "繼續",
             "point": "指一下",
             "steps": "步驟 ({n})",
         },
@@ -43,7 +47,7 @@ pub fn strings() -> Value {
 /// The bar's script for one window. `key` is the hidden property name, put in as a JSON string.
 pub fn script(key: &str) -> String {
     let json = |v: &Value| serde_json::to_string(v).unwrap_or_else(|_| "\"\"".into());
-    BAR_JS.replace("__PM_BAR_KEY__", &json(&Value::String(key.to_string()))).replace("__PM_BAR_STR__", &json(&strings()))
+    BAR_JS.replace("__PM_BAR_KEY__", &json(&Value::String(key.to_string()))).replace("__PM_BAR_STR__", &json(&strings())).replace("__PM_BAR_TOP__", &super::chrome::HEIGHT.to_string())
 }
 
 /// A call into the bar's frozen API, safe when the bar is absent (another page).
@@ -93,7 +97,8 @@ mod tests {
     #[test]
     fn the_script_gets_its_key_and_words_as_json_and_no_placeholder_is_left() {
         let js = script("__pm_0123456789abcdef");
-        assert!(!js.contains("__PM_BAR_KEY__") && !js.contains("__PM_BAR_STR__"));
+        assert!(!js.contains("__PM_BAR_KEY__") && !js.contains("__PM_BAR_STR__") && !js.contains("__PM_BAR_TOP__"));
+        assert!(js.contains("var TOP = 36;"));
         assert!(js.contains("var KEY = \"__pm_0123456789abcdef\";"));
         assert!(js.contains("\"Take over\"") && js.contains("\u{6211}\u{4f86}\u{63a5}\u{624b}"));
     }
@@ -121,6 +126,15 @@ mod tests {
         // The page fills these in, so both languages must keep them.
         assert!(all["zh-TW"]["using"].as_str().unwrap().contains("{agent}"));
         assert!(all["zh-TW"]["steps"].as_str().unwrap().contains("{n}"));
+    }
+
+    #[test]
+    fn the_sign_in_wait_has_its_own_words_and_a_continue_button_that_gives_the_page_back() {
+        let all = strings();
+        assert_eq!(all["en"]["signIn"], "Sign in here, then press Continue.");
+        assert_eq!(all["en"]["continue"], "Continue");
+        // The bar shows Continue where a pause shows Give back: the same event reaches Rust.
+        assert!(BAR_JS.contains("view.reason === 'sign_in'") && BAR_JS.contains("S.continue, 'giveback'"));
     }
 
     #[test]

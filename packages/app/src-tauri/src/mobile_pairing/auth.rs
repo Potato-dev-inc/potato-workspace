@@ -238,6 +238,7 @@ pub fn viewer_for(caller: &Caller) -> Viewer {
     }
 }
 
+#[cfg(test)]
 pub fn authorize_bridge_request(
     headers: &str,
     peer_loopback: bool,

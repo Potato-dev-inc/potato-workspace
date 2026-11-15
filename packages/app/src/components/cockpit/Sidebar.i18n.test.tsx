@@ -128,7 +128,7 @@ describe('sidebar in Traditional Chinese', () => {
     await act(async () => {});
     const more = document.querySelector<HTMLElement>('[role="menu"][aria-label="' + t('pane.more') + '"]');
     expect(more).not.toBeNull();
-    expect(more!.textContent).toContain(t('sidebar.switchToLight'));
+    expect(more!.textContent).toContain(t('sidebar.theme'));
     expect(more!.textContent).toContain(t('sidebar.modeOrchestration'));
     expect(more!.textContent).toContain(t('sidebar.modeIndividual'));
     expect(visibleEnglish(more!)).toEqual([]);

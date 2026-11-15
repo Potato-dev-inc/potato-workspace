@@ -87,6 +87,8 @@ export interface CockpitApi {
   /** The first-switch sheet for Individual mode: `open` while it is up; Switch applies the mode, Cancel closes it. */
   modeExplainer: { open: boolean; confirm: (dontShowAgain: boolean) => Promise<void>; cancel: () => void };
   toggleTheme: () => Promise<void>;
+  /** Pick a theme by name (the same setting as Settings > Appearance). */
+  setThemeChoice: (next: AppTheme) => Promise<void>;
   /** Opens a new agent pane. Resolves to its pane id, or null when it could not start (the starting view says why). */
   /**
    * Opens an agent. While "Show terminals" is off it starts a chat (the default folder when `projectPath` is absent); an agent
@@ -451,6 +453,19 @@ export function useCockpit(): CockpitApi {
     };
   }, [notify]);
 
+  const setThemeChoice = useCallback(
+    async (next: AppTheme) => {
+      setTheme(next);
+      applyTheme(next);
+      try {
+        await patchSettings({ theme: next });
+      } catch (err) {
+        notify(`Theme not saved: ${errorSentence(err)}`);
+      }
+    },
+    [notify],
+  );
+
   const toggleTheme = useCallback(async () => {
     const next: AppTheme = toggledTheme(theme);
     setTheme(next);
@@ -628,6 +643,7 @@ export function useCockpit(): CockpitApi {
     setMode,
     modeExplainer,
     toggleTheme,
+    setThemeChoice,
     newAgent,
     answer,
     interrupt,

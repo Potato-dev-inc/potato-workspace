@@ -21,11 +21,15 @@
 pub mod activity;
 pub mod app;
 pub mod client;
+pub mod files;
+pub mod files_client;
 pub mod route;
 pub mod serve;
 pub mod web;
 pub mod wire;
 
+#[cfg(test)]
+mod files_tests;
 #[cfg(test)]
 mod local_net_tests;
 #[cfg(test)]
@@ -42,6 +46,8 @@ use serde_json::{json, Value};
 
 use self::activity::{ActivityLog, Dir, Kind};
 use self::client::{AskError, Client, Reach, Timeouts};
+use self::files::{Deny, Folders, FilesEnv, FilesHandler};
+use self::files_client::{Files, FilesError, OnExists};
 use self::route::{PrefsStore, RoutePref};
 use self::serve::{AgentsHandler, Extras, HostBridge, Live, SelfInfo};
 #[cfg(test)]
@@ -91,6 +97,16 @@ pub struct Options {
     pub web_address: Arc<dyn Fn() -> Option<String> + Send + Sync>,
     /// What only the person at this PC can fix: `{ signed_out, needs_person }`.
     pub health: Arc<dyn Fn() -> Value + Send + Sync>,
+    /// Which paired devices agents on this PC may send work to (a JSON list of node hex; off for every device by default).
+    pub send_work_store: Arc<dyn PrefsStore>,
+    /// The folders the person chose to share with each device, besides the project folders.
+    pub folders_store: Arc<dyn PrefsStore>,
+    /// The project folders: what a device may open by default.
+    pub project_folders: Arc<dyn Fn() -> Vec<std::path::PathBuf> + Send + Sync>,
+    /// Where received files land.
+    pub downloads: Arc<dyn Fn() -> std::path::PathBuf + Send + Sync>,
+    /// Places that are never shared, besides the sign-in folders in the home folder (this app's own data).
+    pub deny_paths: Vec<std::path::PathBuf>,
 }
 
 impl Options {
@@ -105,6 +121,11 @@ impl Options {
             web_call: Arc::new(NoWebCall),
             web_address: Arc::new(|| None),
             health: Arc::new(|| json!({ "signed_out": [], "needs_person": [] })),
+            send_work_store: route::MemoryPrefs::new(),
+            folders_store: route::MemoryPrefs::new(),
+            project_folders: Arc::new(Vec::new),
+            downloads: Arc::new(|| std::env::temp_dir().join("pm-downloads")),
+            deny_paths: Vec::new(),
         }
     }
 }
@@ -158,7 +179,11 @@ pub struct DeviceLink {
     prefs: Arc<dyn PrefsStore>,
     addr_store: Arc<dyn PrefsStore>,
     overrides: Arc<dyn PrefsStore>,
+    send_work: Arc<dyn PrefsStore>,
     activity: Arc<ActivityLog>,
+    files: Arc<Files>,
+    files_live: Arc<Live>,
+    folders: Arc<Folders>,
     web_grant: Arc<dyn WebGrant>,
     web_address: Arc<dyn Fn() -> Option<String> + Send + Sync>,
     route: Mutex<RoutePref>,
@@ -228,8 +253,31 @@ impl DeviceLink {
         registry
             .register(Capability::new(capability::AGENTS_REMOTE, alpn::AGENTS, RelayPolicy::Allowed, Arc::new(handler)))
             .map_err(|e| e.to_string())?;
+        // Files (`pm/files/1`): its own switch per device, its own open links, its own folder choices.
+        let folders = Folders::new(deps.options.folders_store.clone(), deps.options.project_folders.clone());
+        let files_live = Arc::new(Live::default());
+        let files_still: Arc<dyn Fn(&NodeId) -> bool + Send + Sync> = {
+            let (trust, enabled) = (trust.clone(), enabled.clone());
+            Arc::new(move |peer: &NodeId| enabled.load(Ordering::SeqCst) && crate::p2p::capability::Permissions::allowed(trust.as_ref(), peer, capability::FILES))
+        };
+        let name_of: Arc<dyn Fn(&NodeId) -> String + Send + Sync> = {
+            let trust = trust.clone();
+            Arc::new(move |peer: &NodeId| trust.get(peer).map(|d| d.name).unwrap_or_default())
+        };
+        let files_env = FilesEnv {
+            folders: folders.clone(),
+            deny: Deny::new(&deps.options.deny_paths),
+            activity: activity.clone(),
+            name_of: name_of.clone(),
+            still_allowed: files_still,
+            now: deps.now_secs.clone(),
+        };
+        registry
+            .register(Capability::new(capability::FILES, alpn::FILES, RelayPolicy::Allowed, Arc::new(FilesHandler { env: files_env, live: files_live.clone() })))
+            .map_err(|e| e.to_string())?;
         let web_store = Arc::new(WebStore::new(deps.options.secrets.clone()));
         let client = Client::new(p2p.clone(), deps.timeouts, deps.now_secs.clone(), web_store, deps.options.web_call.clone());
+        let files = Files::new(client.clone(), activity.clone(), name_of, deps.now_secs.clone(), deps.options.downloads.clone(), &deps.name);
         let route = route::load(deps.prefs.as_ref());
         client.set_global_route(route);
         for (hex, pref) in load_overrides(deps.options.route_overrides.as_ref()) {
@@ -246,7 +294,11 @@ impl DeviceLink {
             prefs: deps.prefs,
             addr_store: deps.addr_store,
             overrides: deps.options.route_overrides,
+            send_work: deps.options.send_work_store,
             activity,
+            files,
+            files_live,
+            folders,
             web_grant: deps.options.web_grant,
             web_address: deps.options.web_address,
             route: Mutex::new(route),
@@ -269,6 +321,14 @@ impl DeviceLink {
             }
         }));
         me.client.set_changed(Arc::new({
+            let weak = weak.clone();
+            move || {
+                if let Some(me) = weak.upgrade() {
+                    me.changed();
+                }
+            }
+        }));
+        me.files.set_changed(Arc::new({
             let weak = weak.clone();
             move || {
                 if let Some(me) = weak.upgrade() {
@@ -308,7 +368,6 @@ impl DeviceLink {
         self.enabled.load(Ordering::SeqCst)
     }
 
-    #[cfg(test)]
     pub fn p2p(&self) -> &Arc<P2p> {
         &self.p2p
     }
@@ -334,6 +393,7 @@ impl DeviceLink {
         }
         self.sync_grants();
         self.live.close_where(|_| false);
+        self.files_live.close_where(|_| false);
         self.mgr.cancel_hosting();
         if let Some(h) = self.probe_task.lock().unwrap_or_else(|p| p.into_inner()).take() {
             h.abort();
@@ -356,6 +416,9 @@ impl DeviceLink {
         }
         self.sync_relay().await;
         self.p2p.want(capability::AGENTS_REMOTE).await.map_err(|e| e.to_string())?;
+        // Files is a second protocol name on the same endpoint; it needs no extra switch of its own to be listening, because every
+        // device's own `files` switch is checked at the door.
+        let _ = self.p2p.want(capability::FILES).await;
         self.load_addrs();
         self.sync_grants();
         self.start_probing();
@@ -421,8 +484,12 @@ impl DeviceLink {
         let mut now = BTreeSet::new();
         if on {
             for d in self.trust.list() {
-                if let Some(level) = self.trust.remote_level(&d.node) {
-                    set_link_caps(&d.node.to_hex(), Some(caps_of(level)));
+                let level = self.trust.remote_level(&d.node);
+                let lend = self.trust.lend_allowed(&d.node);
+                if level.is_some() || lend {
+                    // What the person switched on, and nothing else: a device that may only borrow holds `lend` alone.
+                    let base = level.map(caps_of).unwrap_or_else(Caps::none);
+                    set_link_caps(&d.node.to_hex(), Some(base.with(crate::mobile_pairing::Cap::Lend, lend)));
                     observe_identity(&d.node.to_hex(), &d.name);
                     now.insert(d.node.to_hex());
                 }
@@ -438,7 +505,8 @@ impl DeviceLink {
     /// A switch changed: rights follow at once, and a link whose switch is off is closed now.
     fn rights_changed(&self) {
         self.sync_grants();
-        self.live.close_where(|peer| self.enabled() && self.trust.remote_level(peer).is_some());
+        self.live.close_where(|peer| self.enabled() && (self.trust.remote_level(peer).is_some() || self.trust.lend_allowed(peer)));
+        self.files_live.close_where(|peer| self.enabled() && self.files_allowed(peer));
         // A device that may not use the web address any more loses its token now.
         for d in self.trust.list() {
             if !self.trust.web_allowed(&d.node) {
@@ -521,11 +589,14 @@ impl DeviceLink {
                     "lets_run": level.is_some(),
                     "level": if level == Some(RemoteLevel::Full) { "full" } else { "watch" },
                     "lets_web": self.trust.web_allowed(&d.node),
+                    "lets_lend": self.trust.lend_allowed(&d.node),
+                    "agents_may_send": self.agents_may_send(&d.node.to_hex()),
                     "web_ready": self.client.web_ready(&d.node),
                     "route_override": self.client.device_route(&d.node).map(|p| p.as_str()),
                     "signed_out": health.signed_out,
                     "needs_person": health.needs_person.iter().map(|(pane, what)| json!({ "pane": pane, "what": what })).collect::<Vec<_>>(),
                     "connected": level.is_some() && self.live.in_use(&d.node, now),
+                    "lets_files": self.files_allowed(&d.node),
                 })
             })
             .collect();
@@ -542,6 +613,7 @@ impl DeviceLink {
             "locked_until": pair["locked_until"],
             "tampered": pair["tampered"],
             "devices": devices,
+            "transfers": self.files.rows_json(),
         })
     }
 
@@ -635,8 +707,11 @@ impl DeviceLink {
         self.rights_changed();
         self.web_grant.revoke(&id.to_hex());
         self.activity.forget(&id.to_hex());
+        self.files.forget(&id.to_hex());
+        self.folders.forget(&id.to_hex());
         self.client.set_device_route(&id, None);
         self.save_overrides();
+        self.forget_send_work(&id.to_hex());
         self.client.forget_all_of(&id).await;
         self.save_addrs();
         self.sync_relay().await;
@@ -702,6 +777,101 @@ impl DeviceLink {
             self.web_grant.revoke(&id.to_hex());
         }
         self.changed();
+        Ok(self.view())
+    }
+
+    // ----- agents sending work to another device (MCP `run_agent`, account `device:<name>`) -----
+
+    fn send_work_set(&self) -> BTreeSet<String> {
+        self.send_work
+            .load()
+            .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
+            .map(|v| v.into_iter().collect())
+            .unwrap_or_default()
+    }
+
+    fn save_send_work(&self, set: &BTreeSet<String>) -> Result<(), String> {
+        self.send_work.save(&serde_json::to_string(&set.iter().collect::<Vec<_>>()).map_err(|e| e.to_string())?)
+    }
+
+    /// Whether agents on this PC may send work to that device. Off for every device until the person turns it on.
+    pub fn agents_may_send(&self, node_hex: &str) -> bool {
+        self.trust.list().iter().any(|d| d.node.to_hex() == node_hex) && self.send_work_set().contains(node_hex)
+    }
+
+    fn forget_send_work(&self, node_hex: &str) {
+        let mut set = self.send_work_set();
+        if set.remove(node_hex) {
+            let _ = self.save_send_work(&set);
+        }
+    }
+
+    /// The person's switch: "Agents may send work to this device". It is this PC's own choice, so it is not in the trust
+    /// list; the far device still needs to have given Full control, and it decides at its end.
+    pub fn set_agents_send(&self, node: &str, on: bool) -> Result<Value, String> {
+        self.require_on()?;
+        let id = node_of(node)?;
+        if !self.trust.is_trusted(&id) {
+            return Err(NOT_PAIRED.into());
+        }
+        let mut set = self.send_work_set();
+        if on {
+            set.insert(id.to_hex());
+        } else {
+            set.remove(&id.to_hex());
+        }
+        self.save_send_work(&set)?;
+        self.changed();
+        Ok(self.view())
+    }
+
+    /// A paired device by its name (any case) or by the start of its node id: `(node hex, name)`.
+    pub fn resolve_device(&self, wanted: &str) -> Result<(String, String), String> {
+        let wanted = wanted.trim();
+        if wanted.is_empty() {
+            return Err("Name a device, for example account \"device:Mac mini\".".into());
+        }
+        let lower = wanted.to_lowercase();
+        let all = self.trust.list();
+        let by_name: Vec<_> = all.iter().filter(|d| d.name.to_lowercase() == lower).collect();
+        let found: Vec<_> = if by_name.is_empty() {
+            all.iter().filter(|d| lower.len() >= 6 && d.node.to_hex().starts_with(&lower)).collect()
+        } else {
+            by_name
+        };
+        match found.as_slice() {
+            [] => Err(format!("No paired device is called \"{wanted}\".")),
+            [one] => Ok((one.node.to_hex(), one.name.clone())),
+            many => Err(format!(
+                "More than one device matches \"{wanted}\": {}. Use the start of its id instead.",
+                many.iter().map(|d| format!("{} ({})", d.name, &d.node.to_hex()[..8])).collect::<Vec<_>>().join(", ")
+            )),
+        }
+    }
+
+    /// The paired PCs as `(node hex, name)`, for lending between my own PCs.
+    pub fn own_peers(&self) -> Vec<(String, String)> {
+        if !self.enabled() {
+            return Vec::new();
+        }
+        self.trust.list().iter().map(|d| (d.node.to_hex(), observe_identity(&d.node.to_hex(), &d.name))).collect()
+    }
+
+    /// This PC's own name on the link.
+    pub fn self_name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// Lets (or stops letting) a device ask to borrow this PC's agent sign-ins. Independent of the run switch. Nothing is copied: a
+    /// borrowed sign-in only ever works through this PC (the lend proxy).
+    pub fn set_lend(&self, node: &str, on: bool) -> Result<Value, String> {
+        self.require_on()?;
+        let id = node_of(node)?;
+        if !self.trust.is_trusted(&id) {
+            return Err(NOT_PAIRED.into());
+        }
+        self.mgr.set_permission(&id, capability::LEND_CONTROL, on).map_err(|e| e.to_string())?;
+        self.rights_changed();
         Ok(self.view())
     }
 
@@ -785,6 +955,109 @@ impl DeviceLink {
         Ok(())
     }
 
+    // ----- files (phase 4) -----
+
+    /// Whether this PC lets `node` open its shared folders (its own switch, apart from running agents).
+    fn files_allowed(&self, node: &NodeId) -> bool {
+        crate::p2p::capability::Permissions::allowed(self.trust.as_ref(), node, capability::FILES)
+    }
+
+    /// The person's switch: may that device look in this PC's shared folders and copy files to and from it? Off after pairing.
+    pub fn set_files(&self, node: &str, on: bool) -> Result<Value, String> {
+        self.require_on()?;
+        let id = node_of(node)?;
+        if !self.trust.is_trusted(&id) {
+            return Err(NOT_PAIRED.into());
+        }
+        self.mgr.set_permission(&id, capability::FILES, on).map_err(|e| e.to_string())?;
+        self.rights_changed();
+        Ok(self.view())
+    }
+
+    /// The folders this PC shares with a device: the project folders and the ones the person added for it.
+    pub fn files_folders(&self, node: &str) -> Result<Value, String> {
+        self.require_on()?;
+        let id = node_of(node)?;
+        if !self.trust.is_trusted(&id) {
+            return Err(NOT_PAIRED.into());
+        }
+        let hex = id.to_hex();
+        let shared: Vec<String> = self.folders.roots(&hex).into_iter().map(|r| r.name).collect();
+        Ok(json!({ "shared": shared, "chosen": self.folders.chosen(&hex) }))
+    }
+
+    /// Only the person at this screen decides which folders a device may open here.
+    pub fn files_set_folders(&self, node: &str, folders: &[String]) -> Result<Value, String> {
+        self.require_on()?;
+        let id = node_of(node)?;
+        if !self.trust.is_trusted(&id) {
+            return Err(NOT_PAIRED.into());
+        }
+        self.folders.set_chosen(&id.to_hex(), folders)?;
+        self.files_folders(node)
+    }
+
+    fn trusted(&self, node: &str) -> Result<NodeId, String> {
+        self.require_on()?;
+        let id = node_of(node)?;
+        if !self.trust.is_trusted(&id) {
+            return Err(NOT_PAIRED.into());
+        }
+        Ok(id)
+    }
+
+    fn files_say(e: FilesError) -> Value {
+        json!({ "ok": false, "error": e.to_string(), "code": e.code() })
+    }
+
+    /// The shared folders of a far device, as it answers.
+    pub async fn far_roots(&self, node: &str) -> Result<Value, String> {
+        let id = self.trusted(node)?;
+        Ok(self.files.roots(&id).await.unwrap_or_else(Self::files_say))
+    }
+
+    pub async fn far_list(&self, node: &str, root: &str, path: &str) -> Result<Value, String> {
+        let id = self.trusted(node)?;
+        Ok(self.files.list(&id, root, path).await.unwrap_or_else(Self::files_say))
+    }
+
+    pub async fn far_preview(&self, node: &str, root: &str, path: &str) -> Result<Value, String> {
+        let id = self.trusted(node)?;
+        Ok(self.files.preview(&id, root, path).await.unwrap_or_else(Self::files_say))
+    }
+
+    /// Copies from a far device to this PC (Downloads, or `dest`). `on_exists`: `ask`, `replace` or `both`.
+    pub async fn far_copy(self: &Arc<Self>, node: &str, root: &str, paths: &[String], dest: Option<&str>, on_exists: &str) -> Result<Value, String> {
+        let id = self.trusted(node)?;
+        let on_exists = OnExists::parse(on_exists).ok_or_else(|| "Pick ask, replace or keep both.".to_string())?;
+        Ok(self.files.copy_here(id, root, paths, dest.map(std::path::PathBuf::from), on_exists).await.unwrap_or_else(Self::files_say))
+    }
+
+    /// Sends files or folders of this PC into a far device's shared folder.
+    pub async fn far_send(self: &Arc<Self>, node: &str, root: &str, dir: &str, local: &[String], on_exists: &str) -> Result<Value, String> {
+        let id = self.trusted(node)?;
+        let on_exists = OnExists::parse(on_exists).ok_or_else(|| "Pick ask, replace or keep both.".to_string())?;
+        let local: Vec<std::path::PathBuf> = local.iter().map(std::path::PathBuf::from).collect();
+        Ok(self.files.send_to(id, root, dir, &local, on_exists).await.unwrap_or_else(Self::files_say))
+    }
+
+    pub fn transfer_cancel(&self, id: u64) -> Result<(), String> {
+        self.require_on()?;
+        self.files.cancel(id);
+        Ok(())
+    }
+
+    pub fn transfers_clear(&self) -> Result<Value, String> {
+        self.require_on()?;
+        self.files.clear_done();
+        Ok(self.view())
+    }
+
+    #[cfg(test)]
+    pub fn files_retry_wait_for_tests(&self, wait: Duration) {
+        self.files.set_retry_wait(wait);
+    }
+
     fn require_on(&self) -> Result<(), String> {
         if self.enabled() {
             Ok(())
@@ -802,6 +1075,8 @@ impl DeviceLink {
             std::thread::sleep(Duration::from_millis(150));
         }
         self.live.close_where(|_| false);
+        self.files_live.goodbye();
+        self.files_live.close_where(|_| false);
         for g in self.granted.lock().unwrap_or_else(|p| p.into_inner()).iter() {
             set_link_caps(g, None);
         }

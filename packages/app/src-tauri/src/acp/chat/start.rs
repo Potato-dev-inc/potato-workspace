@@ -48,6 +48,11 @@ pub struct StartRequest {
     /// The project the chat belongs to when it works in a copy of it (the rules of Force yes, Fences and Pins are the
     /// project's). `None`: the folder the chat starts in.
     pub project: Option<PathBuf>,
+    /// The pane of the agent that asks for this chat as its helper. Its own standby helpers are used before others (the link
+    /// is written to the registry only after the chat starts, so it is handed in here).
+    pub parent_pane: Option<String>,
+    /// A standby helper asked for by name.
+    pub helper_name: Option<String>,
 }
 
 /// Why a chat session did not start. `fallback`: the terminal is the way to run this agent instead.
@@ -155,6 +160,12 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, mut request: StartRequest) -> R
     }
 }
 
+/// The model a standby helper is matched on: the one the caller named, else (for a helper an agent started) the person's
+/// "Default model for helpers" for this agent, so a standby made for that model is the one that gets used.
+fn match_model(agent_id: &str, request: &StartRequest) -> Option<String> {
+    request.model.clone().or_else(|| if request.is_helper { crate::agent_run_mode::helper_default_for(&super::default_model::settings(), agent_id) } else { None })
+}
+
 fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
     // Timing only: the stages are logged (`startup_stage`). Until the pane exists they sit under a temporary key, then move
     // to the pane's id (`startup_timing::carry`). The key holds no folder: logs stay free of paths.
@@ -175,11 +186,27 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     let account_id = account_env.as_ref().map(|(id, _)| id.clone());
     // A standby helper the person made that fits this start comes first (agent, folder, account, and a model that agrees); a
     // helper that is still starting is not waited for here, a plain warm session is.
-    let helper = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_helper(&cfg, &folder, account_id.as_deref(), request.model.as_deref(), std::time::Duration::ZERO));
+    let helper = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_helper_for(
+            &cfg,
+            &crate::acp::warm::HelperClaim { agent: &cfg.id, folder: &folder, account: account_id.as_deref(), model: match_model(&cfg.id, &request).as_deref(), caller: request.parent_pane.as_deref(), name: request.helper_name.as_deref() },
+            std::time::Duration::ZERO,
+        ));
+    let mut taken_from: Option<String> = None;
     let (warm, helper_meta) = match helper {
-        Some((warm, meta)) => (Some(warm), Some(meta)),
+        Some(claimed) => {
+            taken_from = claimed.person_pane.clone();
+            // A taken-over standby comes without its session (`claimed.fresh`): the person's chat keeps it, this start is cold.
+            (claimed.item, Some(claimed.meta))
+        }
         None => (deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_waiting(&cfg, &folder, account_id.as_deref(), WARM_WAIT)), None),
     };
+    if let Some(pane) = &taken_from {
+        // An agent took a standby the person had open or was using; their turn was stopped (`warm::HelperClaim`).
+        tracing::info!(pane = %pane, "acp: a standby helper was taken over from the person; the task starts a fresh session");
+    }
+    // Where the task's chat is, told to the pool once it exists (a fresh start has no chat at the claim). A start that fails
+    // leaves it empty and the helper is given back.
+    let mut task_pane = TaskPane { helper: helper_meta.as_ref().map(|meta| meta.id.clone()), pane: None };
     crate::startup_timing::mark(&timing_key, if warm.is_some() { "chat_warm_hit" } else { "chat_warm_miss" });
     if warm.is_none() {
         // A reviewed adapter whose last health check failed (or that fails now, when its agent's version is not the tested
@@ -223,23 +250,8 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
         }
     };
     crate::startup_timing::carry(&timing_key, &pane_id);
-    let chat = AcpChat::build(&pane_id, &label, session.clone(), deps.host.clone(), deps.conversations.clone());
-    chat.set_image_folder(&folder);
-    chat.attach();
-    chat.set_project_hint(request.project.as_deref());
-    if warm_claimed {
-        chat.set_warm_claimed(true);
-        // The chat has seen what the session said while it waited (it was kept for this sink); from now on events come live.
-        session.stop_buffering();
-    }
-    if !cfg!(test) {
-        // Test agents are fakes with no tool server by design.
-        chat.note_workspace_tools();
-    }
-    CHATS.lock().insert(pane_id.clone(), chat.clone());
-    pushed::register(&pane_id, chat.clone());
-    crate::startup_timing::mark(&pane_id, "chat_pane_registered");
-    SWEEPER.get_or_init(|| supervisor::global().start_thread());
+    let chat = build_registered_chat(deps, &pane_id, &label, &session, &folder, request.project.as_deref(), warm_claimed);
+    ensure_sweeper();
 
     if let Err(error) = session.ensure_running() {
         chat.retire();
@@ -254,11 +266,70 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
 
     // The starting model: request, helper default, app setting, last pick, the agent's own default (`default_model::choose`).
     // A standby helper's own model counts as asked for, when the task named none.
-    let model = request.model.clone().or_else(|| helper_meta.as_ref().and_then(|meta| meta.model.clone()));
-    super::default_model::apply_at_start(&chat, model.as_deref(), request.is_helper);
+    let standby_model = if request.model.is_none() { helper_meta.as_ref().and_then(|meta| meta.model.clone()) } else { None };
+    let model = request.model.clone().or_else(|| standby_model.clone());
+    match &standby_model {
+        // The standby was made for this model: the claimed session is put on it (never left on the agent's own default), or the
+        // chat says why it is not.
+        Some(wanted) => super::default_model::apply_standby_model(&chat, wanted),
+        None => super::default_model::apply_at_start(&chat, request.model.as_deref(), request.is_helper),
+    }
     // The pins of the project (model, mode, Force yes) and the agent's own Force yes switch (`rules.rs`).
     super::rules::apply_at_start(&chat, model.is_some());
 
+    let grant = account_env.as_ref().and_then(|(id, _)| id.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX));
+    show_pane(deps, &chat, &session, agent_id, &folder, grant);
+    deps.host.panes_changed();
+    deps.host.state_changed(&pane_id, &chat.state());
+    task_pane.pane = Some(pane_id);
+    Ok(chat)
+}
+
+/// Tells the pool where a claimed standby's task runs when `start_in` is done (or that it did not start: an empty pane).
+struct TaskPane {
+    helper: Option<String>,
+    pane: Option<String>,
+}
+
+impl Drop for TaskPane {
+    fn drop(&mut self) {
+        if let Some(helper) = &self.helper {
+            crate::acp::warm::set_helper_task_pane(helper, self.pane.as_deref().unwrap_or(""));
+        }
+    }
+}
+
+/// Starts the sweeper that watches the sessions (once).
+pub(super) fn ensure_sweeper() {
+    SWEEPER.get_or_init(|| supervisor::global().start_thread());
+}
+
+/// The chat around `session`, registered under `pane_id` (the chats table and the pushed views). `warm_claimed`: the session was
+/// started ahead of time (a standby or a warm session): the chat has seen what it said while it waited.
+pub(super) fn build_registered_chat(deps: &StartDeps, pane_id: &str, label: &str, session: &Arc<AcpSession>, folder: &Path, project: Option<&Path>, warm_claimed: bool) -> Arc<AcpChat> {
+    let chat = AcpChat::build(pane_id, label, session.clone(), deps.host.clone(), deps.conversations.clone());
+    chat.set_image_folder(folder);
+    chat.attach();
+    chat.set_project_hint(project);
+    if warm_claimed {
+        chat.set_warm_claimed(true);
+        // The chat has seen what the session said while it waited (it was kept for this sink); from now on events come live.
+        session.stop_buffering();
+    }
+    if !cfg!(test) {
+        // Test agents are fakes with no tool server by design.
+        chat.note_workspace_tools();
+    }
+    CHATS.lock().insert(pane_id.to_string(), chat.clone());
+    pushed::register(pane_id, chat.clone());
+    crate::startup_timing::mark(pane_id, "chat_pane_registered");
+    chat
+}
+
+/// The chat's pane in the pane list (so the screens, the bridge and the phone see it). `grant`: a borrowed sign-in
+/// (`lend:<grant>`) the chat runs on, listed on its grant so the chip and the usage find it.
+pub(super) fn show_pane(deps: &StartDeps, chat: &Arc<AcpChat>, session: &Arc<AcpSession>, agent_id: String, folder: &Path, grant: Option<&str>) {
+    let pane_id = chat.pane_id().to_string();
     let on_close = {
         let pane_id = pane_id.clone();
         Arc::new(move || super::on_pane_closed(&pane_id)) as Arc<dyn Fn() + Send + Sync>
@@ -275,13 +346,9 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
         on_close,
     );
     chat.set_handles(handles);
-    // A chat on a borrowed sign-in (`lend:<grant>`) is listed on its grant, so the chip and the usage find it.
-    if let Some(grant) = account_env.as_ref().and_then(|(id, _)| id.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX)) {
+    if let Some(grant) = grant {
         crate::capacity_proxy::note_pane(grant, &pane_id);
     }
-    deps.host.panes_changed();
-    deps.host.state_changed(&pane_id, &chat.state());
-    Ok(chat)
 }
 
 /// What the person reads when the chat program of `label` would not start: one cause, one thing to do. No path and no
@@ -364,6 +431,9 @@ pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
         let live = crate::pty::pane_parent::claimed_pane(&deps.registry, &parent).is_some_and(|pane| !pane.exited);
         if live {
             crate::pty::pane_parent::set_parent(&deps.registry, &child, &parent);
+            if let Some(chat) = crate::acp::chat::get(&child) {
+                chat.set_nested_under(Some(&parent));
+            }
         }
     }
     if !restored.is_empty() {

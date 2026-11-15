@@ -1,9 +1,11 @@
-// "Add a device": nearby (not available yet), with a code, far away (a pairing link), over SSH (later).
+// "Add a device": nearby (not available yet), with a code, far away (a pairing link), over SSH (any machine with an SSH login).
 import { useState } from 'react';
 import { useT } from '../../i18n';
 import { devicesApi, type DevicesApi, type DevicesView } from '../../lib/devices';
 import { errorSentence } from '../../lib/sayError';
 import { FarAwayTab } from './FarAwayTab';
+import { SshForm } from './SshForm';
+import type { SshApi } from '../../lib/ssh';
 import '../../styles/devices.css';
 
 type Tab = 'nearby' | 'code' | 'far' | 'ssh';
@@ -11,11 +13,14 @@ type Tab = 'nearby' | 'code' | 'far' | 'ssh';
 export function AddDeviceSheet({
   view,
   api = devicesApi,
+  ssh,
   onClose,
   onPaired,
 }: {
   view: DevicesView | null;
   api?: DevicesApi;
+  /** The SSH command layer (tests give a fake). */
+  ssh?: SshApi;
   onClose: () => void;
   /** The pairing finished: both people said yes. */
   onPaired?: () => void;
@@ -44,7 +49,7 @@ export function AddDeviceSheet({
     { id: 'nearby', label: t('devices.nearby') },
     { id: 'code', label: t('devices.withCode') },
     { id: 'far', label: t('devices.farAway') },
-    { id: 'ssh', label: t('devices.overSsh'), soon: true },
+    { id: 'ssh', label: t('devices.overSsh') },
   ];
   return (
     <div className="dev-scrim" data-testid="add-device-sheet">
@@ -102,16 +107,28 @@ export function AddDeviceSheet({
             }}
           />
         )}
-        <div className="dev-actions">
-          <button type="button" className="dev-btn" onClick={onClose}>
-            {t('devices.cancel')}
-          </button>
-          {tab === 'code' && (
-            <button type="button" className="dev-btn is-primary" disabled={busy || address.trim() === '' || code.trim() === ''} onClick={join} data-testid="join-go">
-              {busy ? t('devices.joining') : t('devices.join')}
+        {tab === 'ssh' && (
+          <SshForm
+            api={ssh}
+            onCancel={onClose}
+            onSaved={() => {
+              onPaired?.();
+              onClose();
+            }}
+          />
+        )}
+        {tab !== 'ssh' && (
+          <div className="dev-actions">
+            <button type="button" className="dev-btn" onClick={onClose}>
+              {t('devices.cancel')}
             </button>
-          )}
-        </div>
+            {tab === 'code' && (
+              <button type="button" className="dev-btn is-primary" disabled={busy || address.trim() === '' || code.trim() === ''} onClick={join} data-testid="join-go">
+                {busy ? t('devices.joining') : t('devices.join')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

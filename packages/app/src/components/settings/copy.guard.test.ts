@@ -39,7 +39,9 @@ const COPY: Record<string, [string, string]> = {
   'agent-browser-labs': ['Agent browser', 'Agents open and click pages of your app on this PC. You can take over.'],
   'companion-vault-labs': ['Companion memory and mood', "Companions keep a journal and a diary, and show how they feel. Plain text files."],
   'discord-bot-labs': ['Discord bot', 'A companion answers in your chosen Discord channels, with your own bot.'],
+  'timeline-labs': ['Today page', 'See every change agents made today on one line, and go back to any point.'],
   'project-guide-labs': ['Project guide', 'Your agent writes a short guide to a project, only when you ask.'],
+  'smaller-updates-labs': ['Smaller updates', 'Updates download only the app, about a third of the size. Built-in tools stay.'],
   telegram: ['Telegram', 'Answer your agents by Telegram text. Read the warning first.'],
   'opencode-automation': ['Switch OpenCode keys at the limit', "Uses your other key when one is limited. Check your provider's terms."],
 };

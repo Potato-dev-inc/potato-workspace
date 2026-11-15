@@ -1,6 +1,7 @@
 // Puts the comfort prefs on the page: one root scale variable (--ui-scale, read by html { zoom }), the
 // strong-contrast and less-motion switches as attributes, and the Ctrl keys that change the text size.
 import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { COMFORT_KEY, reducedMotion, scaleFactor, stepTextScale, type ComfortPrefs } from './model';
 import { getComfort, refreshComfortFromStorage, setComfort, useComfort } from './store';
 
@@ -38,6 +39,8 @@ export function useComfortRoot(): void {
 
   useEffect(() => {
     applyComfortToRoot(document.documentElement, prefs, systemReduce);
+    // The mark-up bar inside the agent browser's window follows the same switch (the PC remembers it for that window).
+    if ('__TAURI_INTERNALS__' in window) void invoke('markup_less_motion', { on: document.documentElement.dataset.motion === 'less' }).catch(() => undefined);
     // Terminals measure their box on resize: a size change must reach them.
     const frame = window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
     return () => window.cancelAnimationFrame(frame);

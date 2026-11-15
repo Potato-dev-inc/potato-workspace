@@ -3,6 +3,7 @@
 // A chip warns at 80 % used. Clicking the strip opens the Usage popover: every sign-in, tightest limit first,
 // a bar per window with its reset time, the agent's own usage page, and Refresh.
 // Off with Settings > General > "Show usage bar". Nothing shows until there is a signed-in agent.
+import { openSignInAgain } from '../../lib/agentSignIn';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -179,6 +180,18 @@ function PopRow({ row, now, api, picked }: { row: UsageRow; now: number; api: Us
         </div>
       )}
       {row.reason && <p className="ck-usage-pop-reason">{row.reason}</p>}
+      {row.state === 'expired' && row.link !== 'borrowed' && (
+        <div className="ck-usage-pop-foot">
+          <button
+            type="button"
+            className="ck-btn ck-btn--secondary"
+            data-testid="usage-sign-in-again"
+            onClick={() => openSignInAgain({ agentId: row.agent_id, label: row.label, accountId: row.account_id })}
+          >
+            {t('signin.again.row')}
+          </button>
+        </div>
+      )}
       <div className="ck-usage-pop-foot">
         <span>{row.observed_at_ms ? t('status.readAgo', { time: formatLeftLong(now - row.observed_at_ms) }) : ''}</span>
         {row.page && (

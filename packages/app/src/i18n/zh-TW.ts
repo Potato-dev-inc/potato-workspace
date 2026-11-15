@@ -33,6 +33,7 @@ import { state } from './zh-TW/state';
 import { overview } from './zh-TW/overview';
 import { team } from './zh-TW/team';
 import { companion } from './zh-TW/companion';
+import { timeline } from './zh-TW/timeline';
 import { companions } from './zh-TW/companions';
 import { settingsRows } from './zh-TW/settingsRows';
 import { settingsPreviews } from './zh-TW/settingsPreviews';
@@ -55,6 +56,7 @@ import { settingsLend } from './zh-TW/settingsLend';
 import { settingsTeam } from './zh-TW/settingsTeam';
 import { settingsConnect } from './zh-TW/settingsConnect';
 import { settingsPhone } from './zh-TW/settingsPhone';
+import { workerUpdate } from './zh-TW/workerUpdate';
 import { notify } from './zh-TW/notify';
 import { board } from './zh-TW/board';
 import { routines } from './zh-TW/routines';
@@ -76,6 +78,8 @@ import { phoneHalf } from './zh-TW/phoneHalf';
 import { chatUx } from './zh-TW/chatUx';
 import { chatMore } from './zh-TW/chatMore';
 import { point } from './zh-TW/point';
+import { markup } from './zh-TW/markup';
+import { check } from './zh-TW/check';
 import { flow } from './zh-TW/flow';
 import { appUx } from './zh-TW/appUx';
 import { deskReview } from './zh-TW/deskReview';
@@ -102,6 +106,7 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...team,
   ...companion,
   ...companions,
+  ...timeline,
   ...settingsRows,
   ...settingsPreviews,
   ...settingsLane,
@@ -123,6 +128,7 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...settingsTeam,
   ...settingsConnect,
   ...settingsPhone,
+  ...workerUpdate,
   ...notify,
   ...board,
   ...routines,
@@ -145,6 +151,8 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...chatMore,
   ...flow,
   ...point,
+  ...markup,
+  ...check,
   ...appUx,
   ...deskReview,
   ...devices,

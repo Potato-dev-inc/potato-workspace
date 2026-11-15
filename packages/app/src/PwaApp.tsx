@@ -22,6 +22,9 @@ import { ALL_TAB, companionTab, isCompanionPane, isCompanionTab, orderPanes, pho
 import { bridgeCompanionTransport, type CompanionView } from './lib/companion';
 import { bridgePlansApi } from './lib/plans-report';
 import { PhonePlans } from './components/mobile/PhonePlans';
+import { PhoneToday } from './components/mobile/PhoneToday';
+import { defaultAgentName } from './components/timeline/agent-name';
+import { bridgeTimelineApi } from './lib/timeline';
 import { usePhoneTheme } from './lib/phone-theme';
 import { useAppBadge } from './lib/phone-badge';
 import { usePlansTurns } from './lib/phone-usage-line';
@@ -54,6 +57,7 @@ import { DockedCard } from './components/mobile/DockedCard';
 import { helpersAskingFor } from './lib/helper-questions';
 import { CardSheet } from './components/mobile/CardSheet';
 import { usePushIntents } from './hooks/usePushIntents';
+import { useSharedContent } from './hooks/useSharedContent';
 import { usePhoneName } from './hooks/usePhoneName';
 import { usePhoneAbilities } from './hooks/usePhoneAbilities';
 import { inputRefusalNote } from './lib/input-refusal';
@@ -174,7 +178,7 @@ export default function PwaApp() {
   /** Per agent tab: its terminal (the default) or its read-only chat. Only chats are remembered. */
   const [paneViews, setPaneViews] = useState<Record<string, PaneView>>(readPaneViews);
   const [editingUrl, setEditingUrl] = useState(false);
-  const [sheet, setSheet] = useState<'menu' | 'new' | 'plans' | null>(null);
+  const [sheet, setSheet] = useState<'menu' | 'new' | 'plans' | 'today' | null>(null);
   // What's new: opens once per version when the phone is connected and the first-run steps are done.
   const whatsNew = usePhoneWhatsNew(bridgeReady && !setupOpen);
   /** The list of chats (the drawer from the top-left) is open. */
@@ -208,6 +212,8 @@ export default function PwaApp() {
   const companionTransport = useMemo(() => (bridge ? bridgeCompanionTransport(bridge) : null), [bridge]);
   // Memoised: the plans sheet refetches when its api changes.
   const plansTransport = useMemo(() => (bridge ? bridgePlansApi(bridge) : null), [bridge]);
+  // The Today page (Labs on the PC): its calls, memoised because the sheet loads again when they change.
+  const timelineTransport = useMemo(() => (bridge ? bridgeTimelineApi(bridge) : null), [bridge]);
   // Night Shift on the phone: read and stop only (`GET /night`, `POST /night/stop`).
   const nightApi = useMemo(() => (bridge ? bridgeNightApi(bridge.baseUrl) : null), [bridge]);
   // Review Desk on the phone: read only (`GET /review-desk`), under the Night summary.
@@ -382,6 +388,12 @@ export default function PwaApp() {
       stream.unsubscribe();
     };
   }, [bridgeUrl, applyPanes, publishEcho, noteInputRefused]);
+
+  // Something shared from another phone app (the Share menu): it opens "New chat with this", and nothing goes until Send.
+  const { shared, clear: clearShared } = useSharedContent();
+  useEffect(() => {
+    if (shared) setSheet('new');
+  }, [shared]);
 
   usePushIntents(bridgeUrl, {
     onOpenItem: (itemId, paneId) => {
@@ -1027,6 +1039,7 @@ export default function PwaApp() {
         closed={closedChats}
         canReopen={canControl}
         onReopen={reopenClosed}
+        bridge={bridge ?? undefined}
         usage={plansTransport ? { turns: usageTurns, onOpen: () => { setDrawer(false); setSheet('plans'); } } : undefined}
         onSearch={() => {
           setDrawer(false);
@@ -1060,8 +1073,15 @@ export default function PwaApp() {
           bridge={bridge}
           canControl={canControl}
           grid={lastFitGridRef.current ? { ...lastFitGridRef.current, viewer: VIEWER_ID } : null}
-          onClose={() => setSheet(null)}
-          onStarted={(paneId, lane, sent) => void newChatStarted(paneId, lane, sent)}
+          shared={shared}
+          onClose={() => {
+            setSheet(null);
+            clearShared();
+          }}
+          onStarted={(paneId, lane, sent) => {
+            clearShared();
+            void newChatStarted(paneId, lane, sent);
+          }}
         />
       )}
       {sheet === 'new' && !(bridge && bridge.phoneNewChat) && (
@@ -1096,6 +1116,7 @@ export default function PwaApp() {
             setSheet(null);
           }}
           onOpenPlans={() => setSheet('plans')}
+          onOpenToday={settings.timeline_day_enabled && timelineTransport ? () => setSheet('today') : undefined}
           linkEvents={phoneLink.events}
           onOpenSetup={() => {
             setSheet(null);
@@ -1129,6 +1150,14 @@ export default function PwaApp() {
         />
       )}
       {sheet === 'plans' && plansTransport && <PhonePlans api={plansTransport} onClose={() => setSheet(null)} />}
+      {sheet === 'today' && timelineTransport && (
+        <PhoneToday
+          api={timelineTransport}
+          panes={panes.map((p) => ({ id: p.id, cwd: p.cwd ?? null, name: labels.get(p.id) ?? p.agent_type, status: p.status }))}
+          agentName={defaultAgentName}
+          onClose={() => setSheet(null)}
+        />
+      )}
       {bridge && sheetItem && (
         <CardSheet
           item={sheetItem}

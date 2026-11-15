@@ -65,6 +65,25 @@ pub fn check_account(store: &Store, account_id: &str) -> Result<Account, String>
     Ok(acc)
 }
 
+/// One hidden sign-in pane per agent and account, for the sign-ins that start with no chat (Usage card, Problems, Settings).
+pub fn standalone_key(agent_id: &str, account_id: Option<&str>) -> String {
+    format!("agent-signin:{agent_id}:{}", account_id.unwrap_or(""))
+}
+
+/// The account of a standalone sign-in must exist, belong to this agent and not be a borrowed id. `None` is the agent's main
+/// login and always passes. Anything else is refused, so this never opens a folder the person did not add.
+pub fn check_standalone(store: &Store, agent_id: &str, account_id: Option<&str>) -> Result<(), String> {
+    let Some(id) = account_id.filter(|a| !a.is_empty()) else { return Ok(()) };
+    if id.starts_with(crate::capacity_proxy::ACCOUNT_PREFIX) {
+        return Err("A borrowed sign-in can't be signed in to here.".into());
+    }
+    let acc = store.get(id).ok_or("That sign-in no longer exists.")?;
+    if !acc.agent_id.eq_ignore_ascii_case(agent_id) {
+        return Err("That sign-in belongs to another agent.".into());
+    }
+    Ok(())
+}
+
 /// Where the sign-in state of `acc` is: the spec's token file inside its folder.
 pub fn signin_file(spec: &ProxySpec, acc: &Account) -> Result<SigninFile, String> {
     let auth = spec.auth.account.as_ref().ok_or("This agent can't lend a sign-in through this PC.")?;
@@ -94,17 +113,32 @@ pub fn add_or_reuse(store: &Store, spec: &ProxySpec, agent_id: &str, label: &str
             }
         }
     }
-    store.add_lend(agent_id, &free_label(store, agent_id, label))
+    store.add_lend(agent_id, &free_label(store, agent_id, label, None))
 }
 
-/// A label no other account of this agent has (the store refuses two with the same name): "Lend Claude", "Lend Claude 2", ...
-fn free_label(store: &Store, agent_id: &str, label: &str) -> String {
-    let taken = |l: &str| store.list().iter().any(|a| a.agent_id.eq_ignore_ascii_case(agent_id) && a.label.eq_ignore_ascii_case(l));
+/// A label no other account of this agent has (the store refuses two with the same name): "Work", "Work 2", ... `skip` is
+/// an account that does not count (the one being renamed).
+fn free_label(store: &Store, agent_id: &str, label: &str, skip: Option<&str>) -> String {
+    let taken = |l: &str| store.list().iter().any(|a| Some(a.id.as_str()) != skip && a.agent_id.eq_ignore_ascii_case(agent_id) && a.label.eq_ignore_ascii_case(l));
     let base: String = label.chars().take(36).collect();
     if !taken(label) {
         return label.to_string();
     }
     (2..100).map(|n| format!("{base} {n}")).find(|l| !taken(l)).unwrap_or_else(|| label.to_string())
+}
+
+/// A lend sign-in's stored label is the name of the lend profile that uses it (never "Lend Claude 3"). Best effort: a failed
+/// rename leaves the old label, which is never shown anyway (the screens show the profile name).
+pub fn relabel_for_profile(store: &Store, account_id: &str, profile_name: &str) {
+    let name = profile_name.trim();
+    let Some(acc) = store.get(account_id) else { return };
+    if name.is_empty() || !acc.lend_only || acc.label == name {
+        return;
+    }
+    let label = free_label(store, &acc.agent_id, name, Some(account_id));
+    if label != acc.label {
+        let _ = store.rename(account_id, &label);
+    }
 }
 
 /// Stops the pane and, when asked, forgets the account if it holds no sign-in (the person backed out before signing in).
@@ -143,6 +177,13 @@ impl SigninPanes {
     /// the agent runs in `cwd` (the chat's folder) with the login it normally uses, kept under `key` (one per agent). The
     /// person never sees it as a pane; the chat's card shows its terminal under "Details".
     pub fn start_for_agent(self: &Arc<Self>, ports: Arc<dyn Ports>, key: &str, agent_id: &str, cwd: PathBuf) -> Result<String, String> {
+        self.start_for_agent_account(ports, key, agent_id, None, cwd)
+    }
+
+    /// The same, for "Sign in again" from the Usage card, Problems and Settings (no chat): the agent signs in as `account`
+    /// (one of the person's extra sign-ins), or with its normal login when `account` is `None`. The pane lives in `cwd`, an
+    /// app-owned folder. It is hidden, never presented and never selected, like the lend sign-in.
+    pub fn start_for_agent_account(self: &Arc<Self>, ports: Arc<dyn Ports>, key: &str, agent_id: &str, account: Option<String>, cwd: PathBuf) -> Result<String, String> {
         let args = |pane_id: String| SpawnPaneArgs {
             agent_type: agent_id.to_string(),
             cwd: Some(cwd.to_string_lossy().into_owned()),
@@ -151,7 +192,7 @@ impl SigninPanes {
             extra_args: None,
             pane_id: Some(pane_id),
             read_only: false,
-            account: None,
+            account: account.clone(),
             guard_env: None,
         };
         self.start_keyed(ports, key, &cwd, args)

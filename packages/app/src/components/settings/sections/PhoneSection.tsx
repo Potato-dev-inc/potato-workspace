@@ -13,6 +13,7 @@ import { SendTest, type TestResult } from '../previews/Previews';
 import { Btn, SettingRow, SettingToggle } from '../settings-ui';
 import { TunnelSection } from '../TunnelSection';
 import { PairedDevices } from '../blocks/PairedDevices';
+import { PhoneActivity } from '../blocks/PhoneActivity';
 import { TelegramSetup } from '../blocks/TelegramSetup';
 
 type PairedDevice = Awaited<ReturnType<typeof tauri.listPairedMobileDevices>>[number];
@@ -172,9 +173,14 @@ export const phoneRows: RowDef[] = [
     id: 'paired-devices',
     label: 'Paired phones',
     hint: 'What each phone may do, and when it signs out if unused.',
-    keywords: 'devices phones abilities permissions watch answer terminal start tasks expiry revoke sign out',
+    keywords: 'devices phones abilities permissions watch answer terminal start tasks expiry revoke sign out phone and remote activity log history clear',
     group: 'Devices',
-    render: () => <PairedDevices />,
+    render: () => (
+      <>
+        <PairedDevices />
+        <PhoneActivity />
+      </>
+    ),
   },
   {
     id: 'revoke-all-devices',

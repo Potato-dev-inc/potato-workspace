@@ -8,7 +8,8 @@ const dir = (path: string) => ({ name: path.slice(path.lastIndexOf('/') + 1), pa
 const file = (path: string, size = 900) => ({ name: path.slice(path.lastIndexOf('/') + 1), path, isDir: false, size });
 
 const TREE: Record<string, { entries: ReturnType<typeof file>[]; truncated: boolean }> = {
-  '': { truncated: false, entries: [dir('docs'), dir('src'), dir('tests'), file('README.md'), file('package.json', 420), file('logo.png', 5200), file('plan.docx', 2900), file('shop.xlsx', 7000), file('people.csv', 70), file('paper.pdf', 600)] },
+  '.github': { truncated: false, entries: [file('.github/ci.yml', 500)] },
+  '': { truncated: false, entries: [dir('.github'), dir('docs'), dir('node_modules'), dir('src'), dir('tests'), file('.gitignore', 60), file('Cargo.toml', 300), file('README.md'), file('package.json', 420), file('logo.png', 5200), file('plan.docx', 2900), file('shop.xlsx', 7000), file('people.csv', 70), file('paper.pdf', 600)] },
   src: { truncated: false, entries: [dir('src/billing'), file('src/auth.ts', 1400), file('src/index.ts', 300), file('src/session.ts', 2100), file('src/tokens.ts', 800)] },
   'src/billing': { truncated: false, entries: [file('src/billing/invoice.ts', 1800), file('src/billing/plans.ts', 700)] },
   docs: { truncated: false, entries: [file('docs/setup.md', 1200)] },

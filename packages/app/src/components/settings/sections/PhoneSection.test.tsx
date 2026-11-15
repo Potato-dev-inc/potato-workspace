@@ -7,12 +7,18 @@ import { phoneRows } from './PhoneSection';
 
 const mocks = vi.hoisted(() => ({
   devices: [] as Array<{ id: string; name: string; public_key: string; paired_at: number }>,
+  activity: [] as unknown[],
 }));
 
 vi.mock('../../../lib/tauri', () => ({
   tauri: {
     listPairedMobileDevices: vi.fn(async () => mocks.devices),
     revokePairedMobileDevice: vi.fn(async () => true),
+    phoneActivityList: vi.fn(async () => mocks.activity),
+    phoneActivityClear: vi.fn(async () => {
+      mocks.activity = [];
+      return true;
+    }),
   },
 }));
 vi.mock('../TunnelSection', async () => {
@@ -118,6 +124,31 @@ describe('Phone: every control renders', () => {
     expect(last.querySelectorAll('[data-row]')).toHaveLength(1);
     expect(last.textContent).toContain('Revoke all devices');
     expect(lists.slice(0, -1).some((s) => s.textContent?.includes('Revoke all devices'))).toBe(false);
+  });
+});
+
+describe('Phone: phone and remote activity', () => {
+  it('says "Nothing yet." when no phone did anything', async () => {
+    mocks.activity = [];
+    await mount();
+    expect(m.host.querySelector('[data-testid="phone-activity-none"]')?.textContent).toBe('Nothing yet.');
+    expect(buttonByText(m.host, 'Clear')).toBeUndefined();
+  });
+
+  it('lists what phones did (newest first, a kind and a name only) and Clear empties the list', async () => {
+    mocks.activity = [
+      { at: 1_700_000_000, node: 'aa', name: 'Pixel 8', dir: 'in', kind: 'connected' },
+      { at: 1_700_000_100, node: 'aa', name: 'Pixel 8', dir: 'in', kind: 'answered' },
+    ];
+    await mount();
+    const lines = [...m.host.querySelectorAll('[data-testid="phone-activity-list"] li')].map((li) => li.textContent ?? '');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('Pixel 8 answered a question');
+    expect(lines[1]).toContain('Pixel 8 connected');
+    await click(buttonByText(m.host, 'Clear'));
+    await settle(5);
+    expect(tauri.phoneActivityClear).toHaveBeenCalledTimes(1);
+    expect(m.host.querySelector('[data-testid="phone-activity-none"]')).not.toBeNull();
   });
 });
 

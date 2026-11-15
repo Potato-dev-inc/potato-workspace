@@ -45,6 +45,7 @@ export const inbox: Partial<Record<EnglishKey, string>> = {
   'inbox.doneClear': '清除',
   'inbox.doneReview': '檢查',
   'inbox.doneOpen': '開啟',
+  'inbox.doneClosed': '這個對話已關閉。',
   'inbox.doneMorning': '早晨報告',
   'inbox.doneNone': '今天還沒有完成的工作。完成的工作會顯示在這裡。',
   'inbox.doneFiles_one': '{count} 個檔案',

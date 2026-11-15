@@ -9,6 +9,8 @@
 // Part 2 is push: show a notification for every push (iOS revokes subscriptions that stay
 // silent), with Allow / Deny buttons when the payload carries a one-shot token, and open or
 // focus the pane on tap.
+//
+// Part 3 takes a share from the phone's Share menu (a POST to /share-target) and opens "New chat with this".
 import { clientsClaim } from 'workbox-core';
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
@@ -25,6 +27,7 @@ import {
 } from './pwa/push-core';
 import { handleNotificationClick, type ClickedNotification } from './pwa/notification-click';
 import { writeIntent } from './pwa/push-intent';
+import { handleShareRequest, isShareRequest } from './pwa/share-target';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -57,6 +60,15 @@ if (isDesktopAppOrigin(self.location)) {
   );
   registerRoute(({ url }) => url.pathname.startsWith('/bridge/'), new NetworkOnly());
 }
+
+// --- share to Potato ---------------------------------------------------------------------
+// The phone's Share menu posts text, a link or pictures to /share-target (manifest `share_target`). The worker keeps
+// them in Cache Storage and sends the window to /?share=1; the app opens "New chat with this". Nothing is sent to the PC.
+
+self.addEventListener('fetch', (event) => {
+  if (!isShareRequest(event.request, self.registration.scope)) return;
+  event.respondWith(handleShareRequest(event.request, self.caches, Date.now(), self.registration.scope));
+});
 
 // --- push ---------------------------------------------------------------------------------
 

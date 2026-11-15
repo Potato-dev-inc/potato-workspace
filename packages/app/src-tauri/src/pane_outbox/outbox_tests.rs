@@ -155,6 +155,7 @@ fn fast() -> Timing {
         after_send: Duration::ZERO,
         gate_retry: Duration::from_millis(100),
         no_answer_after: Duration::from_millis(150),
+        restart_backoff: Duration::from_millis(5),
     }
 }
 
@@ -930,22 +931,42 @@ fn letting_a_hold_go_sends_the_old_text_and_an_empty_or_late_edit_is_refused() {
 // ---- a message never waits for ever ---------------------------------------------------------------------------
 
 #[test]
-fn a_worker_that_panics_does_not_block_the_next_message() {
-    // Two panics: the first worker dies and is started once more, that one dies too and is not started again.
+fn a_message_is_not_stranded_when_the_restarted_worker_panics_too() {
+    // Regression: two panics in a row used to leave the message queued with no worker until the NEXT send.
     let host = Fake::new(ready());
     *host.panics.lock() = 2;
     let outbox = outbox(&host);
     let first = outbox.send("p", "one").unwrap();
-    // The line "worker stopped after an unexpected error" is written by the FIRST panic, while the restarted worker
-    // still runs; only the header "worker stopped." (flag cleared) says the second one is over. Waiting on the line
-    // let `send` see a running flag, start no worker, and strand the message when the second panic came.
-    until("the worker flag to be cleared after the second panic", || outbox.support_text("p").contains("worker stopped."));
-    assert_eq!(state(&outbox, &first.id).unwrap().state, State::Queued, "still waiting, nobody drains it");
-    // The next message starts a new worker, which delivers both in order.
+    until_state(&outbox, &first.id, State::Sent);
+    assert_eq!(host.typed(), ["one"], "it goes out with no second send to wake the queue");
+}
+
+#[test]
+fn after_three_restarts_the_waiting_message_is_marked_sending_stopped_and_can_be_sent_again() {
+    // The first worker and its three restarts all panic: the message must not wait for ever.
+    let host = Fake::new(ready());
+    *host.panics.lock() = 4;
+    let outbox = outbox(&host);
+    let first = outbox.send("p", "one").unwrap();
+    until_state(&outbox, &first.id, State::Failed);
+    assert_eq!(state(&outbox, &first.id).unwrap().error.as_deref(), Some(FAIL_SENDING_STOPPED));
+    assert!(host.typed().is_empty());
+    // A new send starts a fresh worker with a fresh count, and it goes in.
     let second = outbox.send("p", "two").unwrap();
     until_state(&outbox, &second.id, State::Sent);
-    until_state(&outbox, &first.id, State::Sent);
-    assert_eq!(host.typed(), ["one", "two"]);
+    assert_eq!(host.typed(), ["two"]);
+}
+
+#[test]
+fn the_restarts_wait_longer_each_time() {
+    let host = Fake::new(ready());
+    *host.panics.lock() = 3;
+    let outbox = Outbox::with_timing(host.clone(), Timing { restart_backoff: Duration::from_millis(40), ..fast() });
+    let started = Instant::now();
+    let message = outbox.send("p", "one").unwrap();
+    until_state(&outbox, &message.id, State::Sent);
+    // 40 + 80 + 160 ms of waiting before the fourth worker.
+    assert!(started.elapsed() >= Duration::from_millis(280), "waited only {:?}", started.elapsed());
 }
 
 #[test]

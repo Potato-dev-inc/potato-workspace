@@ -265,6 +265,20 @@ mod tests {
     }
 
     #[test]
+    fn opencode_provider_slash_model_ids_map_to_the_offered_option_value() {
+        let g = group_with(json!([
+            {"value": "opencode/iceman-free", "name": "OpenCode Zen/Iceman Free"},
+            {"value": "anthropic/claude-sonnet-4-5", "name": "Anthropic/Claude Sonnet 4.5"},
+            {"value": "openai/gpt-5", "name": "OpenAI/GPT-5"}
+        ]));
+        // The saved default is written the way the agent lists it, or as the bare model.
+        assert_eq!(select(&g, "openai/gpt-5").unwrap().0, "openai/gpt-5");
+        assert_eq!(select(&g, "gpt-5").unwrap().0, "openai/gpt-5");
+        assert_eq!(select(&g, "anthropic/claude-sonnet-4-5").unwrap().0, "anthropic/claude-sonnet-4-5");
+        assert!(select(&g, "openai/gpt-6").is_err(), "an unknown model is refused, never swapped for the agent's default");
+    }
+
+    #[test]
     fn an_exact_value_wins() {
         let g = group_with(json!([{"value": "sonnet", "name": "Sonnet"}, {"value": "opus", "name": "Opus"}]));
         assert_eq!(select(&g, "opus").unwrap().0, "opus");

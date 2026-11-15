@@ -4,10 +4,13 @@ import { useEffect, useState } from 'react';
 import '../../styles/settings.css';
 import '../../styles/join-popup-cockpit.css';
 import { teamApi, type TeamApi } from '../../lib/team';
+import { startJoinLinkBridge } from '../../lib/join-link-bridge';
 import { JoinLinkHost } from '../settings/blocks/JoinTeamPopup';
 
 export function CockpitJoinLink({ api = teamApi, onJoined }: { api?: TeamApi; onJoined?: () => void }) {
   const [guess, setGuess] = useState('');
+  // The OS link (`potato-workspace://join/...`) arrives from the shell; this window turns it into `pm:join-link`.
+  useEffect(() => startJoinLinkBridge(), []);
   useEffect(() => {
     let alive = true;
     void Promise.resolve(api.defaultName?.())

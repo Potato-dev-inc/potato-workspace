@@ -10,6 +10,7 @@ import { useSessionChat } from '../../../hooks/useSessionChat';
 import { usePaneJobs } from '../../../lib/pane-jobs';
 import { FilesCard } from '../../files/FilesCard';
 import { BackgroundSection, type HelperRow } from './BackgroundSection';
+import type { WorktreeItem } from '../../../lib/cockpit-api';
 import { ChangesSection } from './ChangesSection';
 import { ConnectorsSection } from './ConnectorsSection';
 import { ContextSection } from './ContextSection';
@@ -50,6 +51,8 @@ export interface SessionRailProps {
   onAnswer?: () => void;
   /** Set when the pane has a Changes tab; a file in the Changes section opens it. */
   onOpenChanges?: () => void;
+  /** The chat's copy (separate folder), when it works on one: Keep all in Changes merges it. */
+  worktree?: WorktreeItem | null;
   onOpenCopy?: () => void;
   onOpenPane: (id: string) => void;
   onStopHelper?: (id: string) => Promise<void> | void;
@@ -77,6 +80,7 @@ export function SessionRail({
   ask = null,
   onAnswer,
   onOpenChanges,
+  worktree = null,
   onOpenCopy,
   onOpenPane,
   onStopHelper,
@@ -133,7 +137,7 @@ export function SessionRail({
           onReconnect={() => (canReconnect ? void drift.reconnect(paneId, t('rail.con.reconnect')) : undefined)}
         />
         <OutputsSection paneId={paneId} cwd={cwd} outputs={chat.outputs} />
-        <ChangesSection paneId={paneId} status={status} cwd={cwd} outputs={chat.outputs} canCreatePr={canCreatePr} showDone={readsChat} onOpenChanges={onOpenChanges} onNotify={onNotify} />
+        <ChangesSection paneId={paneId} status={status} cwd={cwd} outputs={chat.outputs} canCreatePr={canCreatePr} showDone={readsChat} onOpenChanges={onOpenChanges} onNotify={onNotify} worktree={worktree} />
         <BackgroundSection
           helpers={helpers}
           usage={usage}

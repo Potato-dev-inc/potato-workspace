@@ -37,6 +37,10 @@ pub enum Kind {
     Stopped,
     Changed,
     Refused,
+    /// A file or folder was copied from one PC to the other (never its name).
+    Copied,
+    /// A file or folder was sent to one PC from the other (never its name).
+    Sent,
 }
 
 impl Kind {
@@ -50,11 +54,13 @@ impl Kind {
             Kind::Stopped => "stopped",
             Kind::Changed => "changed",
             Kind::Refused => "refused",
+            Kind::Copied => "copied",
+            Kind::Sent => "sent",
         }
     }
 
     fn parse(text: &str) -> Option<Self> {
-        [Kind::Connected, Kind::Started, Kind::Typed, Kind::Messaged, Kind::Answered, Kind::Stopped, Kind::Changed, Kind::Refused]
+        [Kind::Connected, Kind::Started, Kind::Typed, Kind::Messaged, Kind::Answered, Kind::Stopped, Kind::Changed, Kind::Refused, Kind::Copied, Kind::Sent]
             .into_iter()
             .find(|k| k.as_str() == text)
     }
@@ -140,6 +146,12 @@ impl ActivityLog {
             Some(n) => rows.into_iter().filter(|r| r["node"] == n).collect(),
             None => rows,
         }
+    }
+
+    /// Empties the list (the view; nothing else is kept elsewhere).
+    pub fn clear(&self) {
+        self.entries.lock().unwrap_or_else(|p| p.into_inner()).clear();
+        let _ = self.store.save("[]");
     }
 
     /// A device was removed: its lines go with it.

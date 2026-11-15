@@ -111,17 +111,15 @@ describe('Connect > Phone: keep one address', () => {
     expect(q('keep-one-address')).toBeNull();
   });
 
-  it('the sheet shows the steps, copy buttons for three commands, and the guide link', async () => {
+  it('the sheet shows the steps and one "Set up stable link" button, and no command', async () => {
     await mount(fakeApi(quick));
     await click(q('keep-one-address'));
     const sheet = q('stable-sheet')!;
     expect(sheet.textContent).toContain('free Cloudflare Worker');
-    const commands = [...sheet.querySelectorAll('.stable-cmd code')].map((c) => c.textContent);
-    expect(commands).toEqual(['cd relay/worker && npm install', 'npx wrangler login', 'npm run deploy']);
-    await click(sheet.querySelector('.stable-cmd button'));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('cd relay/worker && npm install');
-    await click(q('stable-guide'));
-    expect(mocks.opened[0]).toContain('relay/worker');
+    expect(sheet.querySelector('.stable-cmd code')).toBeNull();
+    expect(sheet.textContent).not.toMatch(/wrangler|npm |relay.worker/);
+    expect(q('worker-update-go')!.textContent).toBe('Set up stable link');
+    expect(q('stable-guide')).toBeNull();
     expect(q('stable-status')!.textContent).toContain('Not linked yet');
   });
 
@@ -258,7 +256,8 @@ describe('one Worker: the team relay address is offered for the phone link only 
     expect(find('stable-relay-suggestion')).toBeNull();
     const update = find('worker-update')!;
     expect(update.textContent).toContain('Update your Worker');
-    expect(update.textContent).toContain('cd relay/worker && npm install && npx wrangler login && npm run deploy');
+    expect(update.querySelector('[data-testid="worker-update-go"]')!.textContent).toBe('Update Worker');
+    expect(update.textContent).not.toMatch(/wrangler|npm run|relay.worker/);
     expect(host.querySelector<HTMLInputElement>('input[aria-label="Worker address"]')!.value).toBe('');
   });
 
@@ -267,4 +266,80 @@ describe('one Worker: the team relay address is offered for the phone link only 
     expect(find('stable-relay-suggestion')).toBeNull();
     expect(find('worker-unreachable')).not.toBeNull();
   });
+
+  describe('the buttons that run the steps', () => {
+    const GOOD = { reachable: true, features: ['team', 'rooms', 'stable-link', 'invites'], legacyLink: false };
+    const stepsApi = (failStep?: string, url?: string) => {
+      const calls: string[] = [];
+      return {
+        calls,
+        pauseMs: 0,
+        step: async (id: string) => {
+          calls.push(id);
+          return id === failStep ? { ok: false, output: 'Error: no network' } : { ok: true, output: '', url: id === 'deploy' ? url : undefined };
+        },
+        check: async () => GOOD,
+      };
+    };
+    const open = async (opts: { relay: string | null; health: () => { reachable: boolean; features: string[]; legacyLink: boolean }; update: ReturnType<typeof stepsApi> }) => {
+      host = document.createElement('div');
+      document.body.appendChild(host);
+      root = createRoot(host);
+      await act(async () =>
+        root.render(
+          <StableLinkSheet
+            api={fakeApi(quick)}
+            initial={quick}
+            onStatus={() => undefined}
+            onClose={() => undefined}
+            relaySuggestion={async () => opts.relay}
+            checkWorker={async () => opts.health()}
+            updateApi={opts.update as never}
+          />,
+        ),
+      );
+      await settle(4);
+    };
+    const field = () => host.querySelector<HTMLInputElement>('input[aria-label="Worker address"]')!;
+    const go = () => host.querySelector<HTMLElement>('[data-testid="worker-update-button"] [data-testid="worker-update-go"]');
+
+    it('"Set up stable link" runs every step and puts the new address in the box', async () => {
+      const update = stepsApi(undefined, 'https://potato-stable-link.me.workers.dev');
+      await open({ relay: null, health: () => GOOD, update });
+      expect(go()!.textContent).toBe('Set up stable link');
+      await click(go());
+      await settle(10);
+      expect(update.calls).toEqual(['prepare', 'install', 'login', 'deploy']);
+      expect(host.querySelectorAll('[data-step][data-status="done"]')).toHaveLength(5);
+      expect(field().value).toBe('https://potato-stable-link.me.workers.dev');
+    });
+
+    it('an old Worker: "Update Worker" finishes, the notice goes away and the address can be used', async () => {
+      let updated = false;
+      const update = stepsApi();
+      const send = update.step;
+      update.step = async (id: string) => {
+        if (id === 'deploy') updated = true;
+        return send(id);
+      };
+      await open({ relay: 'https://team-relay.me.workers.dev', health: () => (updated ? GOOD : { reachable: true, features: ['team'], legacyLink: false }), update });
+      expect(find('worker-update')).not.toBeNull();
+      await click(host.querySelector('[data-testid="worker-update"] [data-testid="worker-update-go"]'));
+      await settle(10);
+      expect(find('worker-update')).toBeNull();
+      expect(find('stable-relay-suggestion')).not.toBeNull();
+    });
+
+    it('three failures: the job is handed over (a note to copy when no agent can chat) and no command is shown', async () => {
+      const update = stepsApi('install');
+      await open({ relay: 'https://team-relay.me.workers.dev', health: () => ({ reachable: true, features: ['team'], legacyLink: false }), update });
+      await click(host.querySelector('[data-testid="worker-update"] [data-testid="worker-update-go"]'));
+      await settle(14);
+      expect(update.calls.filter((c) => c === 'install')).toHaveLength(3);
+      expect(find('worker-update-failed')!.textContent).toContain('did not work after 3 tries');
+      expect(find('worker-update-copy-note')).not.toBeNull();
+      expect(host.textContent).not.toMatch(/wrangler|npm run|relay.worker/);
+    });
+  });
+
 });

@@ -15,8 +15,10 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } 
 import { createPortal } from "react-dom";
 import { formatCode, parsePastedInvite } from "../../../lib/team-invite";
 import { findJoinLink } from "../../../lib/join-link";
-import { savedLinkWorker, WORKER_UPDATE_COMMAND, type WorkerHealth } from "../../../lib/worker";
+import { savedLinkWorker, workersDevAddress, type WorkerHealth } from "../../../lib/worker";
+import type { UpdateApi } from "../../../lib/workerUpdate";
 import { WorkerSuggestion } from "../WorkerSuggestion";
+import { WorkerUpdateButton } from "../WorkerUpdateButton";
 import { JoinLinkHost, JoinTeamPopup } from "./JoinTeamPopup";
 import {
   pingText,
@@ -218,7 +220,7 @@ export function TeamPage({
   displayName?: string;
   onSaved?: () => void;
   /** Worker addresses: the one saved for the phone link, and a way to ask a Worker what it can do (tests give their own). */
-  workers?: { savedLink?: () => Promise<string | null>; check?: (address: string) => Promise<WorkerHealth | null> };
+  workers?: { savedLink?: () => Promise<string | null>; check?: (address: string) => Promise<WorkerHealth | null>; update?: UpdateApi };
 }) {
   const t = useT();
   const [view, setView] = useState<TeamConfigView | null>(null);
@@ -350,6 +352,7 @@ export function TeamPage({
             api={api}
             savedLink={workers?.savedLink}
             checkWorker={workers?.check}
+            updateApi={workers?.update}
             busy={busy}
             guess={guess}
             onBack={() => setMode("choose")}
@@ -412,6 +415,8 @@ export function TeamPage({
         {view.admin && (
           <InviteBlock
             api={api}
+            relay={view.relay}
+            updateApi={workers?.update}
             auto={justCreated || view.members.length <= 1}
           />
         )}
@@ -640,12 +645,13 @@ export function TeamPage({
 
 // ---------- invite ----------
 
-function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
+function InviteBlock({ api, auto, relay, updateApi }: { api: TeamApi; auto: boolean; relay: string; updateApi?: UpdateApi }) {
   const t = useT();
   const [invite, setInvite] = useState<InviteView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
+  const [workerFixed, setWorkerFixed] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const alive = useRef(true);
 
@@ -751,12 +757,18 @@ function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
                   </Btn>
                 </div>
               )}
-              {invite.joinUrlNote === "update-worker" && (
+              {invite.joinUrlNote === "update-worker" && !workerFixed && (
                 <div data-testid="invite-update-worker" className="stable-update">
                   <p>{t("teamPage.inviteUpdate")}</p>
-                  <div className="stable-cmd">
-                    <code className="font-mono break-all">{WORKER_UPDATE_COMMAND}</code>
-                  </div>
+                  <WorkerUpdateButton
+                    address={workersDevAddress(relay)}
+                    label={"wu.update" /* i18n-ok: key */}
+                    api={updateApi}
+                    onDone={() => {
+                      setWorkerFixed(true);
+                      void make();
+                    }}
+                  />
                 </div>
               )}
               {invite.joinUrlNote && invite.joinUrlNote !== "update-worker" && <small>{invite.joinUrlNote}</small>}
@@ -787,6 +799,7 @@ export function StartForm({
   onCreate,
   savedLink = savedLinkWorker,
   checkWorker,
+  updateApi,
 }: {
   api: TeamApi;
   busy: boolean;
@@ -795,6 +808,7 @@ export function StartForm({
   onCreate: (input: TeamCreateInput) => Promise<boolean>;
   savedLink?: () => Promise<string | null>;
   checkWorker?: (address: string) => Promise<WorkerHealth | null>;
+  updateApi?: UpdateApi;
 }) {
   const t = useT();
   const [teamName, setTeamName] = useState("");
@@ -937,7 +951,7 @@ export function StartForm({
                   onChange={(e) => setRelay(e.target.value)}
                 />
               </label>
-              <WorkerSuggestion address={linkWorker} current={relay} feature="team" useKey="worker.useLink" noteKey="worker.linkNote" onUse={setRelay} check={checkWorker} />
+              <WorkerSuggestion address={linkWorker} current={relay} feature="team" useKey="worker.useLink" noteKey="worker.linkNote" onUse={setRelay} check={checkWorker} updateApi={updateApi} />
               <p className="tp-sub">
                 {t("teamPage.hostOwn")}{" "}
                 <ExternalLink href={RELAY_HELP_URL}>

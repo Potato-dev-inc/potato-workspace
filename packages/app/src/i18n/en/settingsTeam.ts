@@ -100,7 +100,7 @@ export const settingsTeam = {
   "teamPage.joinLinkOpen": "Look at this invite",
   "teamPage.inviteWorkerLink": "Send this one link. It works once, for 24 hours.",
   "teamPage.inviteOlder": "Or send the older invite (link and code)",
-  "teamPage.inviteUpdate": "Your Worker is older, so it cannot make one-time links yet. Update your Worker:",
+  "teamPage.inviteUpdate": "Your Worker is older, so it cannot make one-time links yet. Press the button below:",
   "join.notLink": "That is not an invite link from a Potato Worker.",
   "join.needsNewer": "This version cannot open invite links. Update Potato Workspace.",
   "join.thisTeam": "this team",

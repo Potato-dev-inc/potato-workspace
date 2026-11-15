@@ -35,6 +35,7 @@ pub mod ending;
 pub mod images;
 pub mod lanes;
 pub mod mapper;
+mod standby_open;
 mod start;
 pub mod copy;
 pub mod trial;
@@ -86,6 +87,7 @@ use cards::Card;
 use mapper::Mapper;
 
 pub use choice::{Applied, ChoiceError};
+pub use standby_open::open_standby_chat;
 pub use start::{restore_panes, start_gated, StartDeps, StartError, StartRequest};
 #[cfg(test)]
 pub(crate) use start::start;
@@ -218,6 +220,10 @@ pub struct AcpChat {
     /// The MCP session of the agent that started this chat through the agent tools, if an agent did. Such an agent
     /// may steer, answer (when allowed), stop and close it; no other agent may. `None`: the person started it.
     started_by: Mutex<Option<String>>,
+    /// The pane this chat is nested under as a helper (the sidebar link). An agent running in that very pane may steer
+    /// the chat too, so a chat the person dragged under an agent can be driven by it (`surface::owned`). In memory;
+    /// put back from the saved link when chats are restored.
+    nested_under: Mutex<Option<String>>,
     /// `{lane_used, lane_reason}` of the `run_agent` that started this chat; also saved with its conversation.
     lane_note: Mutex<Option<serde_json::Value>>,
     /// This chat was taken from the warm (ready-made) chats instead of started fresh; the receipt says so.
@@ -415,6 +421,7 @@ impl AcpChat {
             rules: rules::ChatRules::default(),
             waking: AtomicBool::new(false),
             started_by: Mutex::new(None),
+            nested_under: Mutex::new(None),
             lane_note: Mutex::new(None),
             warm_claimed: AtomicBool::new(false),
             run_meta: Mutex::new(receipt::RunMeta::default()),
@@ -457,10 +464,29 @@ impl AcpChat {
         *self.started_by.lock() = session.map(str::to_string);
     }
 
+    /// The pane this chat is nested under, if any (see the field).
+    pub fn nested_under(&self) -> Option<String> {
+        self.nested_under.lock().clone()
+    }
+
+    pub fn set_nested_under(&self, parent: Option<&str>) {
+        *self.nested_under.lock() = parent.map(str::to_string);
+    }
+
+    /// The person moved this chat under another agent (or back to a main agent): kept with the conversation, so a
+    /// restart brings it back. The agent that started it keeps its own control.
+    pub fn adopt_under(&self, parent: Option<&str>) {
+        self.set_nested_under(parent);
+        if let Some(conversations) = &self.conversations {
+            conversations.update(&self.pane_id, |r| r.parent_pane_id = parent.map(str::to_string));
+        }
+    }
+
     /// Saves the helper-of link (the starting agent's session and the pane the chat is nested under) with the
     /// conversation, so a restart brings it back.
     pub(crate) fn persist_link(&self, started_by: Option<&str>, parent: Option<&str>) {
         let Some(conversations) = &self.conversations else { return };
+        self.set_nested_under(parent);
         conversations.update(&self.pane_id, |r| {
             r.started_by = started_by.map(str::to_string);
             r.parent_pane_id = parent.map(str::to_string);
@@ -1065,6 +1091,8 @@ impl AcpChat {
         match self.session.prompt_message(&wire, attachments) {
             Ok(_) => {
                 self.sign_in_held.lock().take();
+                // A standby the person opened is theirs ("With you") while this turn runs.
+                crate::acp::warm::note_person_send(&self.pane_id);
                 Ok(Sent::Started)
             }
             Err(error) => {

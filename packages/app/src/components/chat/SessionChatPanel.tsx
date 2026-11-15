@@ -16,8 +16,11 @@ import { useSlashCommands } from '../../lib/slashCommands';
 import { desktopDraft } from '../../lib/chatMore';
 import { BranchSheet } from '../cockpit/BranchSheet';
 import { BranchBanner } from './BranchBanner';
+import { TakeoverBanner, useTakenOver } from './TakeoverBanner';
+import { useT } from '../../i18n';
 import { ChatComposer } from './ChatComposer';
 import { ChatExportMenu } from './ChatExportMenu';
+import type { ChatMove } from './ChatMove';
 import { CollisionBanner } from './CollisionBanner';
 import { ToolsOutOfDateBanner } from './ToolsOutOfDateBanner';
 import { KeepGoingBanner, plainKeepGoingError } from './KeepGoingBanner';
@@ -110,7 +113,7 @@ export interface ScreenAsk {
   answerable?: string | null;
 }
 
-export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, screenAsk, helpers, slashCommands, slashAgent, slashWaiting = false, onWarm, composerTop, headerSlot }: { paneId: string; /** A place in the pane's header for the view switch and the chat buttons (the chat then draws no header row). */ headerSlot?: { el: HTMLElement; compact: boolean }; dock?: ReactNode; reply?: ChatReply; emptyNote?: ReactNode; onOpenPane?: (paneId: string) => void; screenAsk?: ScreenAsk; /** The helpers this pane started through Potato Workspace (rows in the turn they began in). */ helpers?: readonly ChatHelper[]; /** A chat session over ACP: the agent's slash commands for the message box (typing "/" opens a menu). */ slashCommands?: readonly AcpCommand[]; /** A chat session over ACP: its agent's id. With it the "/" menu keeps the agent's last list per adapter version and always offers the app's own commands. */ slashAgent?: string; /** The agent's session is still starting (the menu says "Loading commands" until its list comes). */ slashWaiting?: boolean; /** The message box got the focus. */ onWarm?: () => void; /** Drawn right above the message box (a chat session's settings chips). */ composerTop?: ReactNode }) {
+export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, screenAsk, helpers, slashCommands, slashAgent, slashWaiting = false, onWarm, composerTop, headerSlot, move }: { /** "Move to…": the menu entry, the note under the banners and the sheet (the pane view owns them). */ move?: ChatMove; paneId: string; /** A place in the pane's header for the view switch and the chat buttons (the chat then draws no header row). */ headerSlot?: { el: HTMLElement; compact: boolean }; dock?: ReactNode; reply?: ChatReply; emptyNote?: ReactNode; onOpenPane?: (paneId: string) => void; screenAsk?: ScreenAsk; /** The helpers this pane started through Potato Workspace (rows in the turn they began in). */ helpers?: readonly ChatHelper[]; /** A chat session over ACP: the agent's slash commands for the message box (typing "/" opens a menu). */ slashCommands?: readonly AcpCommand[]; /** A chat session over ACP: its agent's id. With it the "/" menu keeps the agent's last list per adapter version and always offers the app's own commands. */ slashAgent?: string; /** The agent's session is still starting (the menu says "Loading commands" until its list comes). */ slashWaiting?: boolean; /** The message box got the focus. */ onWarm?: () => void; /** Drawn right above the message box (a chat session's settings chips). */ composerTop?: ReactNode }) {
   const chat = useSessionChat(paneId, true);
   const slash = useSlashCommands(slashAgent ?? '', chat.cliVersion, slashCommands, slashWaiting);
   const menu = slashAgent ? slash.commands : slashCommands;
@@ -129,7 +132,18 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
   // A chat with no message box is read-only (the terminal pane's chat): no Branch there.
   const canBranch = hasChat && !!reply;
   // The Point and Fix draft ('Edit in Chat') for this pane's box: taken only while the box is shown.
-  const draft = useComposerDraft(reply ? paneId : null);
+  const t = useT();
+  // An agent took the standby this chat was: the person's last message goes back in the box, and the box waits for the task.
+  const takeover = useTakenOver(paneId);
+  const lastSent = userTexts.length > 0 ? userTexts[userTexts.length - 1] : '';
+  const [restored, setRestored] = useState<{ paneId: string; text: string; nonce: number } | null>(null);
+  const tookId = takeover.helper?.id ?? null;
+  useEffect(() => {
+    if (tookId && lastSent.trim()) setRestored({ paneId, text: lastSent, nonce: Date.now() });
+    // Only when the take-over begins (the helper id appears), not on every new message.
+  }, [tookId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pointDraft = useComposerDraft(reply ? paneId : null);
+  const draft = restored && restored.paneId === paneId ? restored : pointDraft;
   // The buttons on the newest turn's ending line.
   const newest = chat.turns[chat.turns.length - 1];
   const keepGoing = useKeepGoingOffer(paneId, hasChat && !!reply && newest?.ending?.reason === 'usage_limit');
@@ -166,9 +180,11 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
         emptyNote={emptyNote}
         headerExtra={chat.state === 'unavailable' ? undefined : side.button}
         headerSlot={headerSlot}
-        headerMenu={hasChat ? <ChatExportMenu paneId={paneId} variant={headerSlot ? 'text' : 'icon'} /> : undefined}
+        headerMenu={hasChat ? <ChatExportMenu paneId={paneId} variant={headerSlot ? 'text' : 'icon'} onMove={move?.onMove} /> : undefined}
         banner={
           <>
+            {move?.note}
+            {takeover.helper && <TakeoverBanner helper={takeover.helper} api={takeover.api} apply={takeover.apply} />}
             <ToolsOutOfDateBanner paneId={paneId} />
             <CollisionBanner paneId={paneId} onOpenPane={onOpenPane} />
             <KeepGoingBanner paneId={paneId} onOpenPane={onOpenPane} />
@@ -198,9 +214,10 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
         }
         pending={reply ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHold={outbox.hold} onEdit={outbox.edit} onHide={hide} onSendNow={reply.onInterrupt} onRetry={outbox.send} onStartFresh={reply.onInterrupt} /> : undefined}
         composer={reply ? (
-          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} remoteDraft={remoteDraft} draft={draft} slashCommands={menu} slashLoading={!!slashAgent && slash.loading} onWarm={slashAgent ? onWarm : undefined} toolbar={composerTop} running={reply.running} onStop={reply.onStop} status={reply.status} attachFiles={pickFiles} contextUsage={contextReading} history={userTexts} footnote={branch ? <>Work lands on <span className="ck-chat-where-branch">{branch}</span></> : undefined} />
+          <ChatComposer onSend={outbox.send} blockedReason={takeover.helper ? t('standby.locked') : reply.blockedReason} draftKey={paneId} remoteDraft={remoteDraft} draft={draft} slashCommands={menu} slashLoading={!!slashAgent && slash.loading} onWarm={slashAgent ? onWarm : undefined} toolbar={composerTop} running={reply.running} onStop={reply.onStop} status={reply.status} attachFiles={pickFiles} contextUsage={contextReading} history={userTexts} footnote={branch ? <>Work lands on <span className="ck-chat-where-branch">{branch}</span></> : undefined} />
         ) : undefined}
       />
+      {move?.sheet}
       {branchFor !== null && (
         <BranchSheet paneId={paneId} from={{ kind: 'message', user_item_id: branchFor, when: 'after' }} onClose={() => setBranchFor(null)} />
       )}

@@ -313,3 +313,55 @@ describe('Labs off', () => {
     expect(host.innerHTML).toBe('');
   });
 });
+
+describe('agents may send work to a device', () => {
+  const open = async (fake: DevicesFake) => {
+    await act(async () => root.render(<DevicesPage api={fake} />));
+    await settle(6);
+    await click(q('.dev-item'));
+    await settle(4);
+  };
+
+  it('is off by default, sits under the agents switch, and the switch calls the api', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
+    await open(fake);
+    const sw = q<HTMLInputElement>('[data-testid="perm-send-work"]')!;
+    expect(sw.closest('label')!.textContent).toContain('Agents may send work to this device');
+    expect(sw.closest('label')!.textContent).toContain('Off by default');
+    expect(sw.checked).toBe(false);
+    await click(sw);
+    await settle(4);
+    expect(fake.view.devices[0]!.agents_may_send).toBe(true);
+    expect(q<HTMLInputElement>('[data-testid="perm-send-work"]')!.checked).toBe(true);
+    await click(q('[data-testid="perm-send-work"]'));
+    await settle(4);
+    expect(fake.view.devices[0]!.agents_may_send).toBe(false);
+  });
+});
+
+describe('Borrow my agent sign-ins (lending over the device link)', () => {
+  const open = async (fake: DevicesFake) => {
+    await act(async () => root.render(<DevicesPage api={fake} />));
+    await settle(6);
+    await click(q('.dev-item'));
+    await settle(4);
+  };
+
+  it('is off by default, stands on its own, and the switch calls the api both ways', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
+    await open(fake);
+    const sw = q<HTMLInputElement>('[data-testid="perm-lend"]')!;
+    expect(sw.closest('label')!.textContent).toContain('Borrow my agent sign-ins');
+    expect(sw.closest('label')!.textContent).toContain('The sign-in never leaves it');
+    expect(sw.checked).toBe(false);
+    expect(fake.view.devices[0]!.lets_run).toBe(false);
+    await click(sw);
+    await settle(4);
+    expect(fake.view.devices[0]!.lets_lend).toBe(true);
+    expect(fake.view.devices[0]!.lets_run).toBe(false);
+    expect(q<HTMLInputElement>('[data-testid="perm-lend"]')!.checked).toBe(true);
+    await click(q('[data-testid="perm-lend"]'));
+    await settle(4);
+    expect(fake.view.devices[0]!.lets_lend).toBe(false);
+  });
+});

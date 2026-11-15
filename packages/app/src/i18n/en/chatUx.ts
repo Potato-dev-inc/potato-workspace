@@ -67,5 +67,12 @@ export const chatUx = {
   'files.agentTabTip': 'Back to the chat with {name} (Ctrl+1 or Esc)',
   'files.moreActions': 'More file actions',
   'settings.row.helpers-in-sidebar.label': 'Show helpers in the sidebar',
-  'settings.row.helpers-in-sidebar.hint': 'Helpers show in the bar above the chat. Turn this on to list them under their agent too.',
+  'settings.row.helpers-in-sidebar.hint': 'Helpers are listed under the agent that started them, and also in the bar above the chat. Turn this off to keep them in the bar only.',
+  'settings.row.copy-offer.label': 'Offer "Work on a copy"',
+  'settings.row.copy-offer.hint': 'Shows the "Work on a copy" switch when you start an agent. Off hides it. Copies you already made keep working.',
+  'copyOffer.projectAria': 'Work on a copy for this project',
+  'copyOffer.thisProject': 'For this project',
+  'copyOffer.follow': 'Same as above',
+  'copyOffer.always': 'Always offer',
+  'copyOffer.never': 'Never offer',
 } as const;

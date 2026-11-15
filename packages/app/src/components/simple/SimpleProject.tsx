@@ -24,6 +24,9 @@ import { simpleApproval, blockChoice } from './approval-text';
 import { AskCard, BlockedCard, ProblemCard } from './Cards';
 import { ConversationTab } from './ConversationTab';
 import { GoBackTab } from './GoBackTab';
+import { TodayPage } from '../timeline/TodayPage';
+import { useTimelineEnabled } from '../../lib/timeline';
+import { t as say } from '../../i18n';
 import { PreviewTab } from './PreviewTab';
 import { F, T } from './copy';
 import { currentProblem } from './error-text';
@@ -96,6 +99,9 @@ export function SimpleProject({
   const [blocked, setBlocked] = useState<{ what: string; stoppable: boolean } | null>(null);
   const [sheet, setSheet] = useState<'keep' | 'throw' | null>(null);
   const [busy, setBusy] = useState(false);
+  // "See your whole day" (Labs): the Today page, in Simple wording, over the project.
+  const todayOn = useTimelineEnabled();
+  const [dayOpen, setDayOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [queuedNote, setQueuedNote] = useState(false);
   const getSelectionRef = useRef<(() => string) | null>(null);
@@ -354,7 +360,18 @@ export function SimpleProject({
             <Changes paneId={paneId} status={settle} plain hideActions />
           </div>
         )}
-        {tab === 'goback' && <GoBackTab paneId={paneId} status={status} now={c.now} agent={agent} notify={c.notify} />}
+        {tab === 'goback' && (
+          <>
+            <GoBackTab paneId={paneId} status={status} now={c.now} agent={agent} notify={c.notify} />
+            {todayOn && (
+              <div className="sx-pad">
+                <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => setDayOpen(true)}>
+                  {say('timeline.simple.seeDay')}
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {showScreen && (
@@ -424,6 +441,11 @@ export function SimpleProject({
             </button>
           </div>
         </Sheet>
+      )}
+      {dayOpen && todayOn && (
+        <div className="ck-tl-overlay">
+          <TodayPage simple onClose={() => setDayOpen(false)} notify={c.notify} />
+        </div>
       )}
     </div>
   );

@@ -156,9 +156,12 @@ function NoAnswer({ message, onRetry, onStartFresh, onHide }: Pick<BubbleProps, 
 }
 
 function Bubble({ message, index, onCancel, onHold, onEdit, onHide, onSendNow, onRetry, onStartFresh }: BubbleProps) {
+  const t = useT();
   const [note, setNote] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const { state } = message;
+  // The outbox's worker stopped for good (pane_outbox FAIL_SENDING_STOPPED, or FAIL_STOPPED for the one in flight).
+  const stopped = state === 'failed' && (message.error ?? '').startsWith('Sending stopped');
   const canEdit = state === 'queued' && !!onHold && !!onEdit;
   if (state === 'sent' && message.noAnswer) return <NoAnswer message={message} onRetry={onRetry} onStartFresh={onStartFresh} onHide={onHide} />;
   return (
@@ -230,8 +233,26 @@ function Bubble({ message, index, onCancel, onHold, onEdit, onHide, onSendNow, o
           {state === 'failed' && (
             <>
               <span role="alert" data-testid="chat-pending-error">
-                {message.error ?? 'Could not send the message.'}
+                {stopped ? t('chat.sendingStopped') : (message.error ?? 'Could not send the message.')}
               </span>
+              {stopped && onRetry && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className="ck-chat-link"
+                    data-testid="chat-pending-try-again"
+                    onClick={() => {
+                      void onRetry(message.text).then((refused) => {
+                        if (refused) setNote(refused);
+                        else onHide(message.id);
+                      });
+                    }}
+                  >
+                    {t('chat.noAnswer.retry')}
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 className="ck-chat-link"

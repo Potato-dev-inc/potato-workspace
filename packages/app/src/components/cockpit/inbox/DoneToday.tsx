@@ -5,6 +5,7 @@ import { useT } from '../../../i18n';
 import { AgentLogo } from '../../common/AgentLogo';
 import { clearDoneToday, clockTime, DONE_SHOWN, doneClearedToday, doneToday, type DoneRow } from '../../../lib/done-today';
 import type { TurnSummary } from '../../../lib/cockpit-api';
+import { rowOpenProps } from './row-open';
 
 const num = (n: number) => n.toLocaleString('en-US');
 
@@ -14,6 +15,8 @@ export function DoneToday({
   now,
   onOpen,
   onMorning,
+  hasPane,
+  onClosed,
 }: {
   summaries: ReadonlyMap<string, TurnSummary>;
   names: ReadonlyMap<string, string>;
@@ -21,12 +24,22 @@ export function DoneToday({
   onOpen: (paneId: string) => void;
   /** The Morning report page; absent: a night-shift row opens its chat like any other. */
   onMorning?: () => void;
+  /** Is this chat still open? Absent: every row is open. */
+  hasPane?: (paneId: string) => boolean;
+  /** A row of a closed chat was picked: the page says so in plain words. */
+  onClosed?: (paneId: string) => void;
 }) {
   const t = useT();
   const [cleared, setCleared] = useState(() => doneClearedToday(now));
   const [all, setAll] = useState(false);
   const rows = cleared ? [] : doneToday(summaries.values(), now);
   const shown = all ? rows : rows.slice(0, DONE_SHOWN);
+
+  const go = (r: DoneRow) => () => {
+    if (r.kind === 'night' && onMorning) onMorning();
+    else if (hasPane && !hasPane(r.paneId)) onClosed?.(r.paneId);
+    else onOpen(r.paneId);
+  };
 
   const second = (r: DoneRow) =>
     r.files > 0 ? (
@@ -65,13 +78,13 @@ export function DoneToday({
             const title = names.get(r.paneId) ?? r.agent;
             const label = r.kind === 'night' ? t('inbox.doneMorning') : r.kind === 'review' ? t('inbox.doneReview') : t('inbox.doneOpen');
             return (
-              <li key={r.paneId} className="ib-row" data-done-row={r.paneId} data-kind={r.kind}>
+              <li key={r.paneId} className="ib-row" data-done-row={r.paneId} data-kind={r.kind} tabIndex={0} {...rowOpenProps(go(r))}>
                 <AgentLogo id={r.agent} size={16} decorative />
                 <div className="ib-row-tx">
                   <span className="ib-row-tt">{title}</span>
                   <span className="ib-row-sb">{second(r)}</span>
                 </div>
-                <button type="button" className="ib-row-go ck-btn ck-btn--sm ck-btn--secondary" aria-label={`${label}: ${title}`} onClick={() => (r.kind === 'night' && onMorning ? onMorning() : onOpen(r.paneId))}>
+                <button type="button" className="ib-row-go ck-btn ck-btn--sm ck-btn--secondary" aria-label={`${label}: ${title}`} onClick={go(r)}>
                   {label}
                 </button>
                 <time className="ib-when" dateTime={new Date(r.endedAtMs).toISOString()}>

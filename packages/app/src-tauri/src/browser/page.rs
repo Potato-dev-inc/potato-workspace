@@ -36,6 +36,9 @@ impl From<CdpError> for ToolError {
     }
 }
 
+/// True when a password box is on the screen (not hidden, not zero size).
+const SIGN_IN_JS: &str = "(function(){var p=document.querySelectorAll('input[type=password]');for(var i=0;i<p.length;i++){var e=p[i];var r=e.getBoundingClientRect();var s=getComputedStyle(e);if(r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none')return true}return false})()";
+
 /// The page and the refs the agent was last given.
 pub struct Page {
     cdp: Arc<dyn Cdp>,
@@ -246,6 +249,21 @@ impl Page {
         Ok(with_note(format!("{done} {id} ({} \"{}\"). {} characters.", r.target.role, r.target.name, text.chars().count()), r.note))
     }
 
+    /// Whether the page in front asks for a password: a password box the person can see. That is a sign-in page, and
+    /// the person signs in (R4-12). It looks at the box's own type, never at what is typed in it.
+    pub fn shows_sign_in(&self) -> bool {
+        self.eval(SIGN_IN_JS).ok().and_then(|v| v.as_bool()).unwrap_or(false)
+    }
+
+    /// A picture of the page as it looks now (base64 JPEG, no prefix). Used by "Check it".
+    pub fn screenshot(&self) -> Result<String, ToolError> {
+        let answer = self.cdp.call("Page.captureScreenshot", json!({ "format": "jpeg", "quality": 65 }))?;
+        match answer.get("data").and_then(Value::as_str) {
+            Some(data) if !data.is_empty() => Ok(data.to_string()),
+            _ => Err(ToolError::new("PAGE_ERROR", "The page gave no picture.")),
+        }
+    }
+
     /// Goes to a (checked) address. The caller has already checked it.
     pub fn go(&self, url: &str) -> Result<(), ToolError> {
         *self.origin_before.lock() = self.eval("performance.timeOrigin").ok().and_then(|v| v.as_f64());
@@ -279,7 +297,7 @@ impl Page {
         }
     }
 
-    #[cfg(test)]
+    /// The refs the last read made (empty before the agent has read the page).
     pub fn known_refs(&self) -> Vec<RefTarget> {
         self.refs.lock().clone()
     }

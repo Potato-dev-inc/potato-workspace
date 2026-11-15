@@ -12,10 +12,6 @@ export interface WorkerHealth {
   legacyLink: boolean;
 }
 
-/** The one command that brings a Worker up to date. */
-export const WORKER_UPDATE_COMMAND = 'cd relay/worker && npm install && npx wrangler login && npm run deploy'; // i18n-ok: shell command
-export const WORKER_GUIDE_URL = 'https://github.com/Potato-dev-inc/potato-workspace/tree/main/relay/worker#readme';
-
 export type WorkerVerdict =
   /** The Worker lists the feature. */
   | 'ok'

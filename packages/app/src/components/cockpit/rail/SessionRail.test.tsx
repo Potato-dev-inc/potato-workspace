@@ -223,8 +223,24 @@ describe('Remote control: how far a phone can go', () => {
     await act(async () => root.render(<EnvironmentSection paneId="p1" cwd="/work/shop" runsOn={null} branch={null} copy={null} api={api} />));
     await act(async () => {});
     const group = host.querySelector('[data-testid="rail-remote-level"]')!;
-    expect([...group.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Watch', 'Answer', 'Full']);
-    await act(async () => [...group.querySelectorAll('button')].find((b) => b.textContent === 'Watch')!.click());
+    // One compact dropdown, not three buttons in a row.
+    expect([...group.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Phone control: Full']);
+    expect(group.querySelector('[role="radiogroup"]')).toBeNull();
+    await act(async () => group.querySelector('button')!.click());
+    const menu = document.querySelector('[role="menu"]')!;
+    const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+    expect(items.map((i) => i.textContent)).toEqual(['Watch', 'Answer', 'Full']);
+    expect(items.map((i) => i.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true']);
+    await act(async () => items[0].click());
     expect(set).toHaveBeenCalledWith('p1', { level: 'watch' });
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(group.textContent).toContain('Phone control: Watch');
+    // Escape closes the menu without changing anything.
+    await act(async () => group.querySelector('button')!.click());
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(set).toHaveBeenCalledTimes(1);
   });
 });

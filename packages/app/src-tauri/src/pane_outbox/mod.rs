@@ -69,6 +69,8 @@ pub struct Timing {
     pub gate_retry: Duration,
     /// A sent message with no new item in the chat after this long is marked "no answer yet" (it only informs).
     pub no_answer_after: Duration,
+    /// A worker that died of a panic is started again after this long, doubled for each further restart (at most 3).
+    pub restart_backoff: Duration,
 }
 
 impl Default for Timing {
@@ -81,6 +83,7 @@ impl Default for Timing {
             after_send: Duration::from_millis(1500),
             gate_retry: GATE_RETRY,
             no_answer_after: NO_ANSWER_AFTER,
+            restart_backoff: Duration::from_secs(1),
         }
     }
 }
@@ -150,6 +153,9 @@ impl Outbox {
     /// `send_with` for a message that came from another device (`from`: its identity id; `None`: this PC).
     pub fn send_from(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment], from: Option<&str>) -> Result<OutboxMessage, String> {
         let text = text.trim();
+        if let Some(sentence) = crate::chat_move::book().send_refusal(pane_id) {
+            return Err(sentence);
+        }
         if text.is_empty() && attachments.is_empty() {
             return Err(EMPTY.into());
         }
@@ -202,6 +208,10 @@ impl Outbox {
             };
             queue.entries.push(Entry { message: message.clone(), created: Instant::now(), finished: None, held: None, watch: None });
             let start_worker = !queue.worker;
+            if start_worker {
+                // A new send after the worker gave up is a fresh start: the restarts count from zero again.
+                queue.restarts = 0;
+            }
             queue.worker = true;
             (message, worker::snapshot(queue), start_worker)
         };

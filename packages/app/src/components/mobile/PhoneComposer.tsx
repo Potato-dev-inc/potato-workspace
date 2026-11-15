@@ -47,11 +47,14 @@ export function PhoneComposer({
   offline = false,
   onTyping,
   remoteDraft = null,
+  initialFiles,
 }: {
   /** Called while the person types (at most every 3 seconds), so the PC can show "<this phone> is typing…". */
   onTyping?: () => void;
   /** The PC's copy of this chat's half-written message (words only): an empty box takes it, typing is written to it. */
   remoteDraft?: RemoteDraft | null;
+  /** Files that start in the box as chips (a share from another app). They go through `upload` once, when the box opens. */
+  initialFiles?: readonly File[];
   /** The agent asked a question and waits: the box says "Type an answer". */
   asking?: boolean;
   /** The PC cannot be reached: messages wait on the phone, and the box says so. */
@@ -87,6 +90,12 @@ export function PhoneComposer({
   const [micUsed, setMicUsed] = useState(false);
   const [interim, setInterim] = useState('');
   const attach = useAttachments(upload);
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current || !initialFiles || initialFiles.length === 0 || !upload) return;
+    seeded.current = true;
+    attach.add(initialFiles);
+  }, [initialFiles, upload, attach]);
   const [saved, setSaved] = useState<string[] | null>(() => readSavedPrompts());
   const [slashClosed, setSlashClosed] = useState(false);
   /** The box as it was when this dictation began: the cross puts it back. */

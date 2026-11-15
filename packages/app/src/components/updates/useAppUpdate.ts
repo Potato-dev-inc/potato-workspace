@@ -11,6 +11,7 @@ import {
   type CheckFailure,
   type UpdateBusyInfo,
   type UpdateOffer,
+  type UpdateStep,
   type UpdateTransport,
 } from '../../lib/app-update';
 import { readQuiet } from '../../lib/notify-store';
@@ -48,6 +49,8 @@ export interface AppUpdateState {
   when: UpdateWhen | null;
   /** For "Tonight": the time (ms) it may install. */
   target: number | null;
+  /** A step above the progress: copying the built-in tools, or the full update instead of the small one. */
+  step: UpdateStep | null;
   /** The bytes so far with the speed, or null before the first reading. */
   reading: DownloadReading | null;
   /** No new data for a while: the page says the download is slow or stopped. */
@@ -84,6 +87,7 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
   const [percent, setPercent] = useState<number | null>(null);
   const [reading, setReading] = useState<DownloadReading | null>(null);
   const [stalled, setStalled] = useState(false);
+  const [step, setStep] = useState<UpdateStep | null>(null);
   const lastReading = useRef<{ downloaded: number; at: number } | null>(null);
   const speed = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -147,10 +151,12 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
       setPercent(null);
       setReading(null);
       setStalled(false);
+      setStep(null);
       lastReading.current = null;
       speed.current = null;
       setPhase(confirmRunning || fromWait ? 'installing' : 'downloading');
       let stopListening: (() => void) | undefined;
+      let stopSteps: (() => void) | undefined;
       try {
         if (!confirmRunning && transport.onProgress) {
           stopListening = await transport.onProgress((progress) => {
@@ -161,6 +167,11 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
             speed.current = nextSpeed(lastReading.current, { downloaded: progress.downloaded, at }, speed.current);
             lastReading.current = { downloaded: progress.downloaded, at };
             setReading({ ...progress, speed: speed.current });
+          }).catch(() => undefined);
+        }
+        if (!confirmRunning && transport.onStep) {
+          stopSteps = await transport.onStep((next) => {
+            if (live.current) setStep(next);
           }).catch(() => undefined);
         }
         // After the restart the page shows "What is new" once; remember it now, because a good install ends this page.
@@ -184,6 +195,7 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
         setPhase(code === 'UPDATE_STOPPED' ? 'stopped' : 'error');
       } finally {
         stopListening?.();
+        stopSteps?.();
         working.current = false;
       }
     },
@@ -275,5 +287,5 @@ export function useAppUpdate(transport: UpdateTransport = tauriUpdateTransport, 
     };
   }, [auto, check]);
 
-  return { phase, failure, offer, busyAgents: busy.agents, busy, percent, reading, stalled, error, reopened, when, target, check, update, restartNow, restartWhenIdle, restartTonight, reopenChats };
+  return { phase, failure, offer, busyAgents: busy.agents, busy, percent, step, reading, stalled, error, reopened, when, target, check, update, restartNow, restartWhenIdle, restartTonight, reopenChats };
 }

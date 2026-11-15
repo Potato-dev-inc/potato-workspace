@@ -18,6 +18,11 @@ impl DeviceCaps {
         Self { can_answer: true, can_type: true, can_control: true }
     }
 
+    /// The person at this PC (a button on a notification here): not a paired device, never limited.
+    pub const fn desktop() -> Self {
+        Self { can_answer: true, can_type: true, can_control: true }
+    }
+
     pub const fn none() -> Self {
         Self { can_answer: false, can_type: false, can_control: false }
     }

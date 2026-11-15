@@ -1,10 +1,13 @@
 // Changes: what the agent changed in this chat. A totals row, the four most changed files, "Done means" as one row,
 // and one line of buttons. A file whose only change is line endings shows that in words and is left out of the totals.
 import { useState } from 'react';
+import { cockpitApi, type WorktreeItem } from '../../../lib/cockpit-api';
+import { errorCode, errorSentence } from '../../../lib/sayError';
+import { plainMergeError } from '../Changes';
 import { useT } from '../../../i18n';
 import { openFileTab } from '../../../lib/file-tabs';
 import type { OutputFile } from '../../../lib/sessionChatModel';
-import { keepFile, useReviewMarks, useTurnReview, type ReviewFile } from '../../../lib/turn-review';
+import { keepFile, stateOf, useReviewMarks, useTurnReview, type ReviewFile } from '../../../lib/turn-review';
 import { dragSourceProps } from '../../dnd/dragSourceProps';
 import { DoneList } from '../DoneList';
 import { ThenSheet } from '../routines/ThenSheet';
@@ -74,6 +77,8 @@ export function ChangesSection({
   showDone,
   onOpenChanges,
   onNotify,
+  worktree = null,
+  mergeApi = cockpitApi,
 }: {
   paneId: string;
   status: string;
@@ -85,16 +90,48 @@ export function ChangesSection({
   showDone: boolean;
   onOpenChanges?: () => void;
   onNotify?: (text: string) => void;
+  /** The chat works on a copy: Keep all merges the copy into the project. Null: the chat works in the project itself. */
+  worktree?: WorktreeItem | null;
+  mergeApi?: Pick<typeof cockpitApi, 'worktreeMerge'>;
 }) {
   const t = useT();
   const { load } = useTurnReview(paneId, status);
   useReviewMarks();
   const [thenOpen, setThenOpen] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [keepError, setKeepError] = useState<string | null>(null);
   const reviewFiles = load.state === 'ready' ? load.review.files : [];
   const rows = changeRows(reviewFiles, outputs);
   const totals = changeTotals(rows);
   const top = topChanges(rows).slice(0, SHOWN);
   const empty = rows.length === 0;
+  const keptPaths = new Set(reviewFiles.filter((f) => stateOf(paneId, f).decision === 'kept').map((f) => f.path));
+  const allKept = reviewFiles.length > 0 && keptPaths.size === reviewFiles.length;
+
+  /** Marks every file of the turn as kept: the same Keep as Review's file-by-file list. */
+  const markAllKept = () => reviewFiles.forEach((f) => keepFile(paneId, f));
+  const keepAll = async () => {
+    setKeepError(null);
+    if (!worktree) {
+      markAllKept();
+      return;
+    }
+    setBusy(true);
+    try {
+      const out = await mergeApi.worktreeMerge(worktree.repo, worktree.handle);
+      markAllKept();
+      onNotify?.(out.merged ? t('rail.chg.keptInto', { into: out.into ?? worktree.base }) : t('rail.chg.keepNothing'));
+    } catch (e) {
+      const said = errorSentence(e);
+      const withCode = `${errorCode(e) ?? ''} ${said}`;
+      const plain = plainMergeError(withCode);
+      setKeepError(plain.text === withCode ? said : plain.text);
+    } finally {
+      setBusy(false);
+      setAsking(false);
+    }
+  };
 
   const rowLabel = (n: number) => t('rail.chg.files', { count: n, n });
   const summary = empty ? t('rail.chg.noneSummary') : <Numbers added={totals.added} deleted={totals.deleted} />;
@@ -124,6 +161,11 @@ export function ChangesSection({
               <FileGlyph name={row.path} />
               <span className="rp-name">{baseName(row.path)}</span>
               {row.lineEndingsOnly ? <span className="rp-v is-dim rp-small">{t('rail.chg.lineEndings')}</span> : <Numbers added={row.added} deleted={row.deleted} />}
+              {keptPaths.has(row.path) && (
+                <span className="rp-v is-ok rp-small" data-testid="rail-row-kept">
+                  {t('rail.chg.kept')}
+                </span>
+              )}
             </button>
           ))}
           {rows.length > SHOWN && onOpenChanges && (
@@ -141,11 +183,16 @@ export function ChangesSection({
               {t('rail.chg.review')}
             </button>
           )}
-          {reviewFiles.length > 0 && (
-            <button type="button" className="rp-btn-sec" onClick={() => reviewFiles.forEach((f) => keepFile(paneId, f))}>
-              {t('rail.chg.keepAll')}
-            </button>
-          )}
+          {reviewFiles.length > 0 &&
+            (allKept ? (
+              <span className="rp-v is-ok rp-small rp-kept-all" role="status">
+                {t('rail.chg.kept')}
+              </span>
+            ) : (
+              <button type="button" className="rp-btn-sec" disabled={busy} onClick={() => (worktree ? setAsking(true) : void keepAll())}>
+                {t('rail.chg.keepAll')}
+              </button>
+            ))}
           {canCreatePr && onOpenChanges && (
             <button type="button" className="rp-btn-sec" onClick={onOpenChanges}>
               {t('rail.chg.createPr')}
@@ -157,6 +204,22 @@ export function ChangesSection({
             </button>
           )}
         </div>
+      )}
+      {asking && worktree && (
+        <div className="rp-row rp-ask-row" role="group" aria-label={t('rail.chg.keepAsk', { count: reviewFiles.length, n: reviewFiles.length, base: worktree.base })}>
+          <span className="rp-name">{t('rail.chg.keepAsk', { count: reviewFiles.length, n: reviewFiles.length, base: worktree.base })}</span>
+          <button type="button" className="rp-mini" disabled={busy} onClick={() => void keepAll()}>
+            {t('rail.chg.keepYes')}
+          </button>
+          <button type="button" className="rp-mini" disabled={busy} onClick={() => setAsking(false)}>
+            {t('rail.chg.keepNo')}
+          </button>
+        </div>
+      )}
+      {keepError && (
+        <p className="rp-note" role="alert">
+          {keepError}
+        </p>
       )}
       {thenOpen && (
         <ThenSheet

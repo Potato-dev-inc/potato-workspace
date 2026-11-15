@@ -14,7 +14,7 @@ use serde::Serialize;
 
 use super::git::{git_available, GitError, Shadow};
 
-const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+pub(crate) const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 #[derive(Debug, Clone)]
 pub struct Limits {
@@ -24,11 +24,22 @@ pub struct Limits {
     pub max_file_bytes: u64,
     /// A snapshot whose new or changed files add up to more than this is refused.
     pub max_total_bytes: u64,
+    /// Every checkpoint younger than this many milliseconds is kept, beyond `keep`, so the whole day
+    /// can be gone back through (the Today page). 0 = only `keep` counts.
+    pub day_ms: u64,
+    /// The most checkpoints one pane keeps because they are young (a chat that works all day).
+    /// Never less than `keep`.
+    pub day_cap: usize,
 }
+
+/// How long today's checkpoints are kept past `Limits::keep`: 24 hours.
+pub const DAY_MS: u64 = 24 * 60 * 60 * 1000;
+/// The hard cap on checkpoints kept per pane because they are from today.
+pub const DAY_CAP: usize = 300;
 
 impl Default for Limits {
     fn default() -> Self {
-        Self { keep: 50, max_file_bytes: 20 * 1024 * 1024, max_total_bytes: 1024 * 1024 * 1024 }
+        Self { keep: 50, max_file_bytes: 20 * 1024 * 1024, max_total_bytes: 1024 * 1024 * 1024, day_ms: DAY_MS, day_cap: DAY_CAP }
     }
 }
 
@@ -44,6 +55,8 @@ pub enum CheckpointError {
     Running,
     /// An agent run is still open on the pane.
     RunOpen,
+    /// The project folder no longer exists.
+    FolderGone,
     Other(String),
 }
 
@@ -56,6 +69,7 @@ impl std::fmt::Display for CheckpointError {
             Self::NotFound => f.write_str("That checkpoint no longer exists."),
             Self::Running => f.write_str("The agent is working. Interrupt it first, then undo."),
             Self::RunOpen => f.write_str("A run is still open on this pane. Interrupt it first, then undo."),
+            Self::FolderGone => f.write_str("The folder is gone."),
             Self::Other(m) => f.write_str(m),
         }
     }
@@ -153,11 +167,15 @@ pub struct RestoreReport {
     pub written: u32,
     pub removed: u32,
     pub failed: Vec<String>,
+    /// The safety checkpoint, when this restore really wrote a new one (not when the newest was
+    /// already equal). The Today page's journal records it. Not sent to the UI.
+    #[serde(skip)]
+    pub safety_made: Option<Checkpoint>,
 }
 
 static LOCKS: Lazy<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub(super) fn lock_for(shadow: &Shadow) -> Arc<Mutex<()>> {
+pub(crate) fn lock_for(shadow: &Shadow) -> Arc<Mutex<()>> {
     LOCKS.lock().entry(shadow.git_dir.clone()).or_default().clone()
 }
 
@@ -174,7 +192,7 @@ pub fn pane_key(pane: &str) -> String {
     }
 }
 
-pub(super) fn index_path(shadow: &Shadow, pane: &str) -> PathBuf {
+pub(crate) fn index_path(shadow: &Shadow, pane: &str) -> PathBuf {
     shadow.git_dir.join(format!("pm-index-{}", pane_key(pane)))
 }
 
@@ -423,7 +441,7 @@ fn label_for(kind: Kind, turn: u32) -> String {
 
 /// Untracked + modified files (per the pane index): those over the per-file limit, and a guard
 /// on the total size of the rest.
-pub(super) fn scan(shadow: &Shadow, index: &Path, limits: &Limits) -> Result<Vec<String>, CheckpointError> {
+pub(crate) fn scan(shadow: &Shadow, index: &Path, limits: &Limits) -> Result<Vec<String>, CheckpointError> {
     let out = shadow.run(&["ls-files", "-z", "-o", "-m", "--exclude-standard"], Some(index), None, &[])?;
     let mut big = Vec::new();
     let mut total = 0_u64;
@@ -448,7 +466,7 @@ pub(super) fn scan(shadow: &Shadow, index: &Path, limits: &Limits) -> Result<Vec
     Ok(big)
 }
 
-pub(super) fn stage_all(shadow: &Shadow, index: &Path, big: &[String]) -> Result<(), CheckpointError> {
+pub(crate) fn stage_all(shadow: &Shadow, index: &Path, big: &[String]) -> Result<(), CheckpointError> {
     let run = || -> Result<(), GitError> {
         if big.is_empty() {
             shadow.run(&["add", "-A"], Some(index), None, &[])?;
@@ -577,7 +595,7 @@ pub(super) fn snapshot_locked(
     let commit = shadow.run(&["commit-tree", tree.as_str(), "-m", message.as_str()], None, None, &env)?.text();
     let refname = format!("refs/pm/{}/{n}", pane_key(pane));
     shadow.run(&["update-ref", refname.as_str(), commit.as_str()], None, None, &[])?;
-    prune_locked(shadow, pane, limits.keep);
+    prune_locked(shadow, pane, limits, now_ms);
     if n % 10 == 0 {
         // Occasional housekeeping, off the snapshot path: `git gc --auto` can run for seconds.
         schedule_gc(shadow);
@@ -634,12 +652,24 @@ pub fn prune(project: &Path, pane: &str, keep: usize) -> Result<usize, Checkpoin
     let shadow = prepare(project)?;
     let gate = lock_for(&shadow);
     let _held = gate.lock();
-    Ok(prune_locked(&shadow, pane, keep))
+    // Only the newest `keep` count here: no day window.
+    Ok(prune_locked(&shadow, pane, &Limits { keep, day_ms: 0, ..Limits::default() }, 0))
 }
 
-fn prune_locked(shadow: &Shadow, pane: &str, keep: usize) -> usize {
-    let keep = keep.max(1);
+/// How many of `items` (oldest first) to keep: the newest `limits.keep`, plus every one younger than
+/// `limits.day_ms`, up to the day cap (which is never below `keep`).
+pub(crate) fn kept_count(items: &[Checkpoint], limits: &Limits, now_ms: u64) -> usize {
+    let keep = limits.keep.max(1);
+    if limits.day_ms == 0 {
+        return keep;
+    }
+    let young = items.iter().filter(|c| c.at_ms.saturating_add(limits.day_ms) > now_ms).count();
+    keep.max(young.min(limits.day_cap.max(keep)))
+}
+
+fn prune_locked(shadow: &Shadow, pane: &str, limits: &Limits, now_ms: u64) -> usize {
     let Ok(items) = list_in(shadow, pane) else { return 0 };
+    let keep = kept_count(&items, limits, now_ms);
     if items.len() <= keep {
         return 0;
     }
@@ -888,21 +918,56 @@ pub fn restore(
     now_ms: u64,
     limits: &Limits,
 ) -> Result<RestoreReport, CheckpointError> {
+    restore_series(project, pane, pane, id, pane_running, now_ms, limits)
+}
+
+/// The series every Today-page go-back writes its safety checkpoint to (`refs/pm/day/<n>`, kind
+/// `undo`). A fixed key, so the safety copy survives even when the chat that made the target is gone.
+pub const DAY_KEY: &str = "day";
+
+/// Put the project's files back to checkpoint `id` of the series `key`, which may belong to a chat
+/// that is closed. `busy` is the caller's view of the whole folder (any chat working in it, or a run
+/// open). The safety checkpoint goes to the `day` series.
+pub fn restore_at(
+    project: &Path,
+    key: &str,
+    id: &str,
+    busy: bool,
+    now_ms: u64,
+    limits: &Limits,
+) -> Result<RestoreReport, CheckpointError> {
+    restore_series(project, key, DAY_KEY, id, busy, now_ms, limits)
+}
+
+/// `restore`, with the target read from series `target_key` and the safety copy (and its index) kept
+/// in series `safety_key`.
+fn restore_series(
+    project: &Path,
+    target_key: &str,
+    safety_key: &str,
+    id: &str,
+    pane_running: bool,
+    now_ms: u64,
+    limits: &Limits,
+) -> Result<RestoreReport, CheckpointError> {
     if pane_running {
         return Err(CheckpointError::Running);
     }
     let shadow = prepare(project)?;
     let gate = lock_for(&shadow);
     let _held = gate.lock();
-    let items = list_in(&shadow, pane)?;
+    let items = list_in(&shadow, target_key)?;
     let target = items[find(&items, id)?].clone();
     let mut report = RestoreReport::default();
-    let safety = snapshot_locked(&shadow, pane, Kind::Undo, None, now_ms, limits, None)?;
+    let safety = snapshot_locked(&shadow, safety_key, Kind::Undo, None, now_ms, limits, None)?;
     report.safety_id = match &safety {
         Snapshot::Created(c) => Some(c.id.clone()),
         Snapshot::Unchanged(c) => c.as_ref().map(|c| c.id.clone()),
     };
-    let index = index_path(&shadow, pane);
+    if let Snapshot::Created(c) = &safety {
+        report.safety_made = Some(c.clone());
+    }
+    let index = index_path(&shadow, safety_key);
     // The index now mirrors the disk, so this tree is "what is there now".
     let current = shadow.run(&["write-tree"], Some(&index), None, &[])?.text();
     let rows = name_status(&shadow, &current, &target.tree)?;

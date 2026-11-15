@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { SettingsPanel } from './components/SettingsPanel';
+import { SignInAgainHost } from './components/signin/SignInAgainHost';
 import { BringChatsHost } from './components/history/ImportHost';
 import type { SettingsPageId } from './components/settings/model';
 import { useProjectPath } from './hooks/useProjectPath';
@@ -62,6 +63,8 @@ export default function SettingsApp() {
       />
       {/* The Bring-chats card in Settings > General asks for its panel here (this window has no cockpit). */}
       <BringChatsHost standalone />
+      {/* "Sign in again" in Settings > Accounts: a small sheet here, the sign-in runs in a hidden pane. */}
+      <SignInAgainHost />
     </>
   );
 }

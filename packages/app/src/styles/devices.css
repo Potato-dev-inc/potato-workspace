@@ -24,7 +24,7 @@
   overflow-y: auto;
   padding: 20px;
   border-radius: 14px;
-  background: var(--bg-raised);
+  background: var(--bg-raised, var(--window));
   border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
   box-shadow: var(--float-shadow, 0 12px 32px rgba(0, 0, 0, 0.45));
   color: var(--label-2);
@@ -170,7 +170,7 @@
   cursor: default;
 }
 .dev-btn.is-primary {
-  color: var(--bg);
+  color: var(--bg, var(--window));
   background: var(--accent);
   border-color: transparent;
   font-weight: 500;
@@ -538,4 +538,259 @@
   border-radius: 6px;
   padding: 6px 8px;
   word-break: break-all;
+}
+
+/* Over SSH and the Where bodies of a Linux distro or an SSH machine */
+.dev-check h4 {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.dev-check ul,
+.dev-check-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.dev-check-inline {
+  margin: 6px 0 8px 12px;
+  color: var(--label-2);
+}
+.dev-check li.is-missing {
+  color: var(--label-3);
+}
+.dev-check li.is-found span {
+  color: var(--label);
+}
+.dev-place {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0;
+}
+.dev-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.dev-field small.dev-note {
+  margin: 0;
+}
+
+.dev-more summary {
+  cursor: pointer;
+  color: var(--label-2);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.dev-more[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dev-place .dev-tab {
+  padding: 4px 12px;
+  color: var(--label-2);
+  background: transparent;
+  border: 1px solid var(--sep, rgba(128, 128, 128, 0.3));
+  border-radius: 999px;
+}
+.dev-place .dev-tab.is-on {
+  color: var(--label);
+  background: var(--fill, rgba(128, 128, 128, 0.16));
+  border-color: var(--label-3);
+}
+.dev-place .dev-field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.dev-place .dev-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+/* Files and transfers (Devices): the Files tab, the table, the preview, transfer rows, the Get it card. Tokens only. */
+.dev-remote-folder {
+  margin-left: auto;
+}
+.dev-files {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--label-2);
+}
+.dev-remote-body > .dev-files {
+  padding: 12px 14px;
+}
+.dev-files h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label-3);
+}
+.dev-field select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--label);
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
+}
+.dev-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  color: var(--label-3);
+}
+.dev-crumbs .dev-btn {
+  padding: 2px 6px;
+}
+.dev-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.dev-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--label-3);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
+}
+.dev-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--sep, rgba(255, 255, 255, 0.06));
+  color: var(--label-2);
+  white-space: nowrap;
+}
+.dev-table td:nth-child(2) {
+  width: 100%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dev-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dev-link:hover {
+  text-decoration: underline;
+}
+.dev-link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus, 0 0 0 3px rgba(232, 121, 58, 0.45));
+}
+.dev-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--fill, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
+}
+.dev-preview-text {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--label);
+}
+.dev-preview-img {
+  max-width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  align-self: flex-start;
+  border-radius: 6px;
+}
+.dev-xfers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dev-xfer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  list-style: none;
+  border-radius: 8px;
+  background: var(--fill, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--sep, rgba(255, 255, 255, 0.08));
+}
+.dev-xfer-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dev-xfer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--label);
+}
+.dev-xfer small {
+  color: var(--label-3);
+}
+.dev-xfer-error {
+  color: var(--label);
+}
+.dev-bar {
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--sep, rgba(255, 255, 255, 0.12));
+}
+.dev-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--label-2);
+}
+.dev-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  list-style: none;
+  border-radius: 6px;
+  background: var(--fill, rgba(255, 255, 255, 0.04));
+  color: var(--label-2);
+  word-break: break-all;
+}
+.dev-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 24px;
+}
+.dev-getit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 40px;
+  border-top: 1px solid var(--sep, rgba(255, 255, 255, 0.08));
+  color: var(--label);
+}
+.dev-crumbs .dev-btn:disabled {
+  opacity: 1;
+  color: var(--label);
+}
+.dev-getit .dev-btn {
+  padding: 6px 14px;
 }

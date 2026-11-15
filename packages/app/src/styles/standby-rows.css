@@ -1,0 +1,198 @@
+/* Standby helpers in the sidebar: a quiet row under the agent, a small state mark on the right. Colour tokens only. */
+.cockpit .ck-sb-row .ck-row-main {
+  min-width: 0;
+}
+.cockpit .ck-sb-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  font-size: 11px;
+  color: var(--label-2);
+}
+.cockpit .ck-sb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.cockpit .ck-sb-state.is-ready .ck-sb-dot {
+  border: 1.5px solid var(--info);
+}
+.cockpit .ck-sb-state.is-ready .ck-sb-word {
+  color: var(--info);
+}
+.cockpit .ck-sb-state.is-working .ck-sb-dot,
+.cockpit .ck-sb-state.is-withYou .ck-sb-dot {
+  background: var(--live);
+  animation: ck-sb-pulse 1.6s ease-in-out infinite;
+}
+.cockpit .ck-sb-state.is-working .ck-sb-word,
+.cockpit .ck-sb-state.is-withYou .ck-sb-word {
+  color: var(--live);
+}
+.cockpit .ck-sb-state.is-resting .ck-sb-dot {
+  border: 1.5px solid var(--label-3, var(--label-2));
+}
+.cockpit .ck-sb-state.is-problem .ck-sb-dot {
+  background: var(--danger);
+}
+.cockpit .ck-sb-state.is-problem .ck-sb-word {
+  color: var(--danger);
+}
+.cockpit .ck-sb-spin {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--label-2);
+  border-top-color: transparent;
+  animation: ck-sb-spin 0.9s linear infinite;
+}
+@keyframes ck-sb-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes ck-sb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* On hover the state word gives way to an X. */
+.cockpit .ck-sb-x {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--bg-row-hover, var(--fill));
+  color: var(--label-2);
+  cursor: pointer;
+}
+.cockpit .ck-sb-wrap:hover .ck-sb-x,
+.cockpit .ck-sb-wrap:focus-within .ck-sb-x {
+  display: inline-flex;
+}
+.cockpit .ck-sb-wrap:hover .ck-sb-state,
+.cockpit .ck-sb-wrap:focus-within .ck-sb-state {
+  visibility: hidden;
+}
+.cockpit .ck-sb-x:hover {
+  color: var(--label);
+}
+.cockpit .ck-sb-x svg {
+  width: 10px;
+  height: 10px;
+}
+.cockpit .ck-sb-edit {
+  width: 100%;
+  min-width: 0;
+  background: var(--fill);
+  color: var(--label);
+  border: 1px solid var(--sep);
+  border-radius: 4px;
+  font: inherit;
+  padding: 0 4px;
+}
+.cockpit .ck-sb-menuhead {
+  padding: 4px 10px 2px;
+  font-size: 11px;
+  color: var(--label-2);
+}
+/* The "+" on an agent's row: Add a helper. */
+.cockpit .ck-row-addhelper {
+  position: absolute;
+  right: 50px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--label-2);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cockpit .ck-rowwrap:hover .ck-row-addhelper,
+.cockpit .ck-rowwrap:focus-within .ck-row-addhelper {
+  display: inline-flex;
+}
+.cockpit .ck-row-addhelper:hover {
+  color: var(--label);
+  background: var(--fill);
+}
+.cockpit .ck-sb-loose-head {
+  padding: 4px 8px 2px 14px;
+  font-size: 11px;
+  color: var(--label-2);
+}
+/* The take-over banner in a chat. */
+.cockpit .takeover-banner,
+.takeover-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 6px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.takeover-banner b {
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-sb-state .ck-sb-dot,
+  .cockpit .ck-sb-spin {
+    animation: none;
+  }
+}
+
+/* The Add a helper popover (drawn in the cockpit root, so it takes the same colour tokens as the sidebar). */
+.cockpit .ah-pop {
+  background: var(--bg-raised, var(--fill));
+  border: 1px solid var(--sep);
+  color: var(--label);
+}
+.cockpit .ah-muted {
+  color: var(--label-2);
+}
+.cockpit .ah-text {
+  color: var(--label);
+}
+.cockpit .ah-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-2);
+  cursor: pointer;
+}
+.cockpit .ah-chip:hover {
+  color: var(--label);
+}
+.cockpit .ah-chip.is-on {
+  color: var(--label);
+  background: var(--fill);
+  border-color: var(--label-2);
+}
+.cockpit .ah-chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

@@ -29,6 +29,15 @@ export const flow = {
   'flow.signin.sendNow': 'Send it now',
   'flow.signin.stillOut': "{agent}'s sign-in is still out.",
   'flow.signin.useOther': 'Use {agent} for this',
+  // "Sign in again" with no chat (Usage card, Problems, Settings): the same two steps in a small sheet.
+  'signin.again.title': 'Sign in to {agent} again',
+  'signin.again.lead': 'The sign-in stays on this PC. Nothing is added to your chats or agents.',
+  'signin.again.working': 'Waiting for you to finish. The Usage card updates by itself.',
+  'signin.again.done': 'Signed in. You can close this.',
+  'signin.again.gaveUp': 'Still waiting for the sign-in.',
+  'signin.again.check': 'Check now',
+  'signin.again.close': 'Close',
+  'signin.again.row': 'Sign in again',
 
   // Problems list.
   'flow.problems.title': 'Problems',

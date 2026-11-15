@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../../i18n';
 import { lendApi, type LendApi } from '../../lib/lend';
+import { teamTasksApi, type TeamTasksApi } from '../../lib/team-tasks';
+import { shelfApi, type ShelfApi } from '../../lib/shelf';
 import { teamApi, type TeamApi, type TeamConfigView } from '../../lib/team';
 import { useLend, type LendHandle } from '../lend/useLend';
 import { useTeam, type TeamHandle } from '../cockpit/team/useTeam';
 import { EmptyTeam } from './EmptyTeam';
+import type { FolderPicker } from './pickFolder';
 import { TeamPage } from './TeamPage';
 import '../../styles/cockpit-team-page.css';
 
@@ -15,6 +18,9 @@ import '../../styles/cockpit-team-page.css';
 export function TeamHost({
   api = teamApi,
   lendClient = lendApi,
+  tasksApi = teamTasksApi,
+  pick,
+  shelfClient = shelfApi,
   team,
   lend,
   now,
@@ -23,6 +29,9 @@ export function TeamHost({
 }: {
   api?: TeamApi;
   lendClient?: LendApi;
+  tasksApi?: TeamTasksApi;
+  pick?: FolderPicker;
+  shelfClient?: ShelfApi;
   team?: TeamHandle;
   lend?: LendHandle;
   now?: number;
@@ -90,5 +99,5 @@ export function TeamHost({
       </div>
     );
   }
-  return <TeamPage state={state} config={config} lend={lendHandle} api={api} lendClient={lendClient} now={now ?? lendHandle.now} paneNames={paneNames} displayName={displayName} onRefresh={refreshAll} />;
+  return <TeamPage state={state} config={config} lend={lendHandle} api={api} lendClient={lendClient} shelfClient={shelfClient} tasksApi={tasksApi} pick={pick} now={now ?? lendHandle.now} paneNames={paneNames} displayName={displayName} onRefresh={refreshAll} />;
 }

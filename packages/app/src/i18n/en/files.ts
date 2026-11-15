@@ -71,6 +71,7 @@ export const files = {
   "files.searchModeLabel": "What to search",
   "files.searchNames": "File names",
   "files.searchInside": "Inside files",
+  "files.collapseAll": "Collapse all",
   "files.searchPlaceholder": "Search inside files",
   "files.searchLabel": "Search for words inside the files",
   "files.searching": "Searching…",

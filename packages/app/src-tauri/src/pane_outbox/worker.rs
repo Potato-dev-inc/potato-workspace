@@ -9,7 +9,7 @@ use crate::agent_runs::readiness::Readiness;
 use crate::tui::ComposerState;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// What one look at the pane means for the first waiting message.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,31 +97,76 @@ impl Drop for EndGuard {
                 entry.finish(State::Failed, Some(FAIL_STOPPED));
             }
             let waiting = queue.entries.iter().any(|e| e.message.state == State::Queued);
-            let restart = waiting && queue.restarts < 1 && !self.inner.closed.load(Ordering::SeqCst);
+            let open = !self.inner.closed.load(Ordering::SeqCst);
+            let restart = waiting && queue.restarts < MAX_RESTARTS && open;
+            let mut delay = Duration::ZERO;
             if restart {
                 queue.restarts += 1;
                 queue.worker = true;
+                delay = backoff(self.inner.timing.restart_backoff, queue.restarts);
+            } else if waiting && open {
+                // The worker kept dying: nothing will drain the queue, and a message that only waits for the next
+                // send would be stuck without a word. Say so on each one; "Try again" sends it as a fresh message.
+                record(queue, "worker stopped for good");
+                for entry in queue.entries.iter_mut().filter(|e| e.message.state == State::Queued) {
+                    entry.finish(State::Failed, Some(FAIL_SENDING_STOPPED));
+                }
             }
-            (snapshot(queue), restart)
+            (snapshot(queue), restart.then_some(delay))
         };
         self.inner.host.publish(&self.pane, &list);
-        if restart {
-            spawn(self.inner.clone(), &self.pane);
+        if let Some(delay) = restart {
+            spawn_after(self.inner.clone(), &self.pane, delay);
         }
     }
 }
 
 pub(super) fn spawn(inner: Arc<Inner>, pane_id: &str) {
+    spawn_after(inner, pane_id, Duration::ZERO);
+}
+
+/// How many times a worker that died of a panic is started again for the messages that wait.
+const MAX_RESTARTS: u8 = 3;
+
+/// The wait before restart number `n` (1, 2, 3): the base, then twice, then four times as long.
+fn backoff(base: Duration, n: u8) -> Duration {
+    base.saturating_mul(1u32 << n.saturating_sub(1).min(5))
+}
+
+/// Waits `delay` in short steps, so a closed outbox does not hold a thread for the whole backoff.
+fn wait_unless_closed(inner: &Inner, delay: Duration) {
+    let end = Instant::now() + delay;
+    while !inner.closed.load(Ordering::SeqCst) {
+        let left = end.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return;
+        }
+        std::thread::sleep(left.min(Duration::from_millis(100)));
+    }
+}
+
+/// Starts the worker thread; a restart waits `delay` first (the thread already owns the pane's worker flag).
+fn spawn_after(inner: Arc<Inner>, pane_id: &str, delay: Duration) {
     let pane = pane_id.to_string();
     let worker_inner = inner.clone();
     let started = std::thread::Builder::new().name(format!("pane-outbox-{pane}")).spawn(move || {
         let _end = EndGuard { inner: worker_inner.clone(), pane: pane.clone() };
+        if !delay.is_zero() {
+            wait_unless_closed(&worker_inner, delay);
+        }
         run(worker_inner, pane);
     });
     if started.is_err() {
-        if let Some(queue) = inner.panes.lock().get_mut(pane_id) {
+        let list = {
+            let mut panes = inner.panes.lock();
+            let Some(queue) = panes.get_mut(pane_id) else { return };
             queue.worker = false;
-        }
+            for entry in queue.entries.iter_mut().filter(|e| e.message.state == State::Queued) {
+                entry.finish(State::Failed, Some(FAIL_SENDING_STOPPED));
+            }
+            snapshot(queue)
+        };
+        inner.host.publish(pane_id, &list);
     }
 }
 

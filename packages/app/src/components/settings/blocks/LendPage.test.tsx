@@ -34,7 +34,9 @@ const accountsApi = {
   list: async () => ({
     agents: [],
     accounts: [
-      { id: 'acct-lend', agent_id: 'claude', label: 'Lend login', home: 'C:\\lend', lend_only: true },
+      { id: 'acct-lend', agent_id: 'claude', label: 'Lend Claude 3', home: 'C:\\lend', lend_only: true },
+      // A lend sign-in no profile uses yet.
+      { id: 'acct-spare', agent_id: 'claude', label: 'Lend Claude 2', home: 'C:\\spare', lend_only: true },
       // My own login: never a choice for lending.
       { id: 'acct-own', agent_id: 'claude', label: 'Work', home: 'C:\\work' },
     ],
@@ -77,6 +79,21 @@ async function toStepThree(name = 'Work account') {
 }
 
 describe('Lend profiles', () => {
+  it('step 2 lists existing sign-ins by profile name and account, never by an internal "Lend Claude" label', async () => {
+    const { api } = await mount({ profiles: [MY_PROFILE] });
+    api.backend.setSignIn('acct-spare', { state: 'signed_in', identity: 'sam@example.com' });
+    await click(buttonByText(host, 'New lend profile'));
+    await stepOne('Weekend');
+    await next();
+    await click(card('Use a sign-in I already added'));
+    await settle(3);
+    const options = [...input(sheet(), 'Lend sign-in').querySelectorAll('option')].map((o) => o.textContent);
+    expect(options.join('|')).not.toContain('Lend Claude');
+    expect(options).toContain(`${MY_PROFILE.name} · ren@example.com`);
+    expect(options).toContain('Not used by a profile yet · sam@example.com');
+    expect(sheet().textContent).not.toContain('Lend Claude');
+  });
+
   it('lists the profiles with who, how long, whether it asks first and its limits', async () => {
     await mount({ profiles: [MY_PROFILE, KEY_PROFILE] });
     const text = section('Lend profiles').textContent!;
@@ -132,7 +149,7 @@ describe('Lend profiles', () => {
     await next();
     await click(buttonByText(sheet(), 'Sign in'));
     await settle(3);
-    expect(api.calls).toContain('accountAdd("claude","Lend Claude")');
+    expect(api.calls).toContain('accountAdd("claude","Work account")');
     expect(api.calls).toContain('signInStart("acct-1")');
     // Never the Accounts-page helper, never a normal pane: Settings stays and the draft is still there.
     expect(openLoginPane).not.toHaveBeenCalled();

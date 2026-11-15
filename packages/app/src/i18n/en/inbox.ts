@@ -43,6 +43,7 @@ export const inbox = {
   'inbox.doneClear': "Clear",
   'inbox.doneReview': "Review",
   'inbox.doneOpen': "Open",
+  'inbox.doneClosed': "This chat is closed.",
   'inbox.doneMorning': "Morning report",
   'inbox.doneNone': "Nothing finished yet today. Finished work shows up here.",
   'inbox.doneFiles_one': "{count} file",

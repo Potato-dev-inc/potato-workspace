@@ -1,0 +1,30 @@
+/* Drop preview on a main agent's row: "Make helper of <name>". Colour tokens only. */
+.cockpit .ck-adopt-mark {
+  display: none;
+}
+.cockpit .ck-adopt-over {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid var(--accent-line);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 100px var(--accent-soft);
+  color: var(--label);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.cockpit .ck-adopt-over.is-refused {
+  border-style: dashed;
+  border-color: var(--sep);
+  background: var(--bg-raised);
+  color: var(--label-3);
+}

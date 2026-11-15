@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { t, useT } from '../../i18n';
 import { teamApi, type MemberView, type TeamApi } from '../../lib/team';
+import { devicesApi, type Device, type DevicesApi } from '../../lib/devices';
+import { useDevices } from '../devices/useDevices';
 import { agentLabel, cleanName, comingSoonAgents, comingSoonText, DEFAULT_SECS, durationProblem, durationWords, errText, lendApi, MAX_REASON, offerable, supportTag, type LendApi, type LendRequest, type LendState, type Offer, type OffersResult } from '../../lib/lend';
 import { requestNewAgent } from '../../lib/newAgentRequest';
 import { DurationField } from './Duration';
@@ -15,10 +17,12 @@ export interface Source {
   memberId: string;
   deviceId: string | null;
   mine: boolean;
+  /** One of my own paired PCs on the device link (no Team needed): its node. */
+  node?: string;
 }
 
 /** My other computers first ("My PCs"), then the teammates. A member's devices come from the roster. */
-export function sourcesOf(members: readonly MemberView[]): { mine: Source[]; others: Source[] } {
+export function sourcesOf(members: readonly MemberView[], devices: readonly Device[] = []): { mine: Source[]; others: Source[] } {
   const mine: Source[] = [];
   const others: Source[] = [];
   for (const m of members) {
@@ -33,8 +37,17 @@ export function sourcesOf(members: readonly MemberView[]): { mine: Source[]; oth
       others.push({ value: `${m.id}|`, label: m.name, memberId: m.id, deviceId: null, mine: false });
     }
   }
-  return { mine, others };
+  // My other PCs are the Devices list: the ones that let me borrow come first. A team roster PC with the same name is the same PC.
+  const names = new Set(devices.map((d) => d.name.toLowerCase()));
+  const fromTeam = mine.filter((s) => !names.has(s.label.toLowerCase()));
+  const fromDevices: Source[] = devices.filter((d) => d.lets_lend).map((d) => ({ value: `node:${d.node}`, label: d.name, memberId: '', deviceId: null, mine: true, node: d.node }));
+  return { mine: [...fromDevices, ...fromTeam], others };
 }
+
+/** Paired PCs that do not let borrowing happen yet: each gets one plain line. */
+export const waitingDevices = (devices: readonly Device[]): Device[] => devices.filter((d) => !d.lets_lend);
+
+const NO_DEVICES: Device[] = [];
 
 /** Waiting / Ready / Said no. */
 export const askStatus = (r: Pick<LendRequest, 'state'>): string => (r.state === 'open' ? t('lend.ask.waiting') : r.state === 'accepted' ? t('lend.ask.ready') : t('lend.ask.saidNo'));
@@ -56,11 +69,13 @@ export const recentAsks = (state: LendState | null, now: number): LendRequest[] 
 export function RequestUsage({
   api = lendApi,
   team = teamApi,
+  devices,
   lend,
   variant = 'inbox',
 }: {
   api?: LendApi;
   team?: TeamApi;
+  devices?: DevicesApi;
   /** A parent that already reads the state shares it. */
   lend?: LendHandle;
   variant?: 'inbox' | 'settings';
@@ -88,13 +103,14 @@ export function RequestUsage({
           ))}
         </ul>
       )}
-      {open && <RequestSheet api={api} team={team} lend={handle} onClose={() => setOpen(false)} />}
+      {open && <RequestSheet api={api} team={team} devices={devices} lend={handle} onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
-function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamApi; lend: LendHandle; onClose: () => void }) {
+function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; team: TeamApi; devices?: DevicesApi; lend: LendHandle; onClose: () => void }) {
   const t = useT();
+  const deviceList = useDevices(devices ?? devicesApi);
   const [members, setMembers] = useState<MemberView[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [from, setFrom] = useState('');
@@ -120,7 +136,9 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
     };
   }, [team]);
 
-  const { mine, others } = useMemo(() => sourcesOf(members ?? []), [members]);
+  const paired = (deviceList.enabled && deviceList.view?.devices) || NO_DEVICES;
+  const { mine, others } = useMemo(() => sourcesOf(members ?? [], paired), [members, paired]);
+  const waiting = waitingDevices(paired);
   const all = [...mine, ...others];
   const agents = offerable(state.drivers);
   const picked = all.find((s) => s.value === (from || all[0]?.value));
@@ -129,9 +147,14 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
   // When the person to ask is picked, ask their PC what it can lend (the answer comes in a few seconds, or not at all).
   useEffect(() => {
     if (!picked) return;
+    setOfferKey('');
+    // One of my own PCs on the device link: there is no offers list to ask for. I pick the agent and that PC chooses the account.
+    if (picked.node) {
+      setOffered({ answered: false, offers: [] });
+      return;
+    }
     let alive = true;
     setOffered(null);
-    setOfferKey('');
     api
       .offers(picked.memberId, picked.deviceId)
       .then((r) => {
@@ -164,7 +187,9 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
     setBusy(true);
     setError(null);
     try {
-      const r = offer
+      const r = picked.node
+        ? await api.requestOwn!(picked.node, agentId, secs, reason.trim())
+        : offer
         ? await api.request(picked.memberId, offer.device_id, offer.agent_id, secs, reason.trim(), offer.profile_id, offer.name)
         : await api.request(picked.memberId, picked.deviceId, agentId, secs, reason.trim());
       setSent({ id: r.id, offer });
@@ -243,6 +268,11 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
           </select>
         </label>
       )}
+      {waiting.map((d) => (
+        <p key={d.node} className="lend-note" data-testid="lend-turn-on">
+          {t('lend.request.turnOn', { name: d.name })}
+        </p>
+      ))}
       {picked && (
         <fieldset className="lend-cards" aria-label={t('lend.request.what')} data-testid="lend-offers">
           <legend className="lend-legend">{t('lend.request.what')}</legend>
@@ -276,9 +306,11 @@ function RequestSheet({ api, team, lend, onClose }: { api: LendApi; team: TeamAp
           {nothing && <p className="lend-note">{t('lend.request.nothing', { name: askedName })}</p>}
           {fallback && (
             <>
-              <p className="lend-note" role="note" data-testid="lend-no-answer">
-                {t('lend.request.noAnswer', { name: askedName })}
-              </p>
+              {!picked.node && (
+                <p className="lend-note" role="note" data-testid="lend-no-answer">
+                  {t('lend.request.noAnswer', { name: askedName })}
+                </p>
+              )}
               <label className="lend-field">
                 <span>{t('lend.request.agent')}</span>
                 <select aria-label={t('lend.request.agent')} value={agentId} onChange={(e) => setAgent(e.target.value)}>
