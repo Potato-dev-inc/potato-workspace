@@ -488,3 +488,27 @@ fn a_free_helper_still_goes_first_and_no_helper_is_claimed_twice() {
     assert_eq!((second.meta.id.as_str(), second.fresh), ("a", true), "then the opened one, fresh");
     assert!(pool.claim_helper_for(&any_claim(None), 3).is_none(), "both are taken");
 }
+
+#[test]
+fn a_task_that_names_no_model_takes_a_standby_of_its_agent_whatever_its_model_and_its_own_come_first() {
+    let mut mine = meta("mine", Some("gpt-5"), false);
+    mine.home = Some("pane-A".into());
+    let (pool, host) = pool(vec![want("other", "codex", Some("o3"), false), HelperWant::new(mine, "codex", &PathBuf::from(FOLDER), None), want("claude-one", "claude", Some("opus"), false)], 6);
+    settle(&pool, &host, 0);
+    let ask = |caller, model, now| pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model, caller, name: None }, now);
+    assert_eq!(ask(Some("pane-A"), None, 1).unwrap().meta.id, "mine", "the caller's own standby first, on its own model");
+    assert_eq!(ask(Some("pane-A"), None, 2).unwrap().meta.id, "other", "then the other standby, whatever its model");
+    assert!(ask(Some("pane-A"), None, 3).is_none(), "another agent type is never taken");
+    assert_eq!(state(&pool, "claude-one"), HelperState::Ready);
+}
+
+#[test]
+fn a_task_that_names_a_model_takes_only_a_standby_with_that_model_or_none() {
+    let (pool, host) = pool(vec![want("a", "codex", Some("gpt-5"), false), want("b", "codex", None, false)], 4);
+    settle(&pool, &host, 0);
+    let ask = |model, now| pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model, caller: None, name: None }, now).map(|c| c.meta.id);
+    assert_eq!(ask(Some("o3"), 1).as_deref(), Some("b"), "a standby with no model takes any model");
+    assert_eq!(ask(Some("o3"), 2), None, "the one with gpt-5 does not take o3");
+    assert_eq!(ask(Some("gpt-5"), 3).as_deref(), Some("a"));
+}
+

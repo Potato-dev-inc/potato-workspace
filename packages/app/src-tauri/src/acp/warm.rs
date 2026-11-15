@@ -102,6 +102,10 @@ pub trait WarmHost: Send + Sync + 'static {
     type Item: Send + 'static;
     /// Starts a session for `key` in `folder` (blocking: until it is ready).
     fn start(&self, key: &WarmKey, folder: &Path) -> Result<Self::Item, WarmFail>;
+    /// `start` for a standby helper made for `model`: the session is put on that model while it warms, so a task finds it ready on it.
+    fn start_for(&self, key: &WarmKey, folder: &Path, _model: Option<&str>) -> Result<Self::Item, WarmFail> {
+        self.start(key, folder)
+    }
     /// Still running and ready.
     fn alive(&self, item: &Self::Item) -> bool;
     /// Stops it for good.
@@ -325,7 +329,8 @@ impl<H: WarmHost> Pool<H> {
 
     /// Runs one start (blocking) and records the outcome.
     pub fn run(&self, job: Job, now: impl Fn() -> i64) {
-        let result = self.host.start(&job.key, &job.folder);
+        let model = self.inner.lock().slots.get(&job.key).and_then(|slot| slot.helper.as_ref()).and_then(|meta| meta.model.clone());
+        let result = self.host.start_for(&job.key, &job.folder, model.as_deref());
         self.finish(&job.key, job.generation, result, now());
     }
 
@@ -563,6 +568,10 @@ impl WarmHost for LiveHost {
     type Item = WarmChat;
 
     fn start(&self, key: &WarmKey, folder: &Path) -> Result<WarmChat, WarmFail> {
+        self.start_for(key, folder, None)
+    }
+
+    fn start_for(&self, key: &WarmKey, folder: &Path, model: Option<&str>) -> Result<WarmChat, WarmFail> {
         let fail = |message: String| WarmFail { message, auth: false };
         // The same refusals a real start makes: a blocked adapter or a missing add-on is not warmed.
         if let Some(reason) = super::adapter_health::check_before_start(&key.agent) {
@@ -576,6 +585,15 @@ impl WarmHost for LiveHost {
         if let Err(error) = session.ensure_running() {
             session.close();
             return Err(WarmFail { auth: matches!(error, AcpError::AuthRequired { .. }), message: error.to_string() });
+        }
+        // A standby made for a model is put on it now, while it waits (a task finds it ready, on its model). A model the agent
+        // does not offer, or refuses, is left for the claim to say in words (`default_model::apply_standby_model`).
+        if let Some(model) = model.map(str::trim).filter(|m| !m.is_empty()) {
+            match super::chat::choice::apply_model_to_session(&session, model) {
+                Ok(Some(value)) => tracing::info!(agent = %key.agent, model = %value, "acp: a standby warmed on its model"),
+                Ok(None) => tracing::info!(agent = %key.agent, "acp: a standby's model is not offered by the agent"),
+                Err(error) => tracing::warn!(agent = %key.agent, %error, "acp: a standby's model could not be set while warming"),
+            }
         }
         Ok(WarmChat { id, session, folder: folder.to_path_buf(), account: key.account.clone(), config: config_fingerprint(&cfg) })
     }

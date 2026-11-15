@@ -52,10 +52,12 @@ export function rowState(h: StandbyHelperEntry): StandbyRowState {
 
 const ORDER: Record<StandbyRowState, number> = { working: 0, withYou: 1, ready: 2, starting: 3, resting: 4, problem: 5 };
 
-/** Puts every helper in its place. `panes` is the live pane list in the order the sidebar knows (newest last). */
-export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: ReadonlyArray<PaneLike>): Placement {
+/** Puts every helper in its place. `panes` is the live pane list in the order the sidebar knows (newest last). `opening`: chats
+ * that appeared while a helper was being opened: they are the helper's own chat (its row says so as soon as the list is read
+ * again), so they never show as an agent in the meantime. */
+export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: ReadonlyArray<PaneLike>, opening: ReadonlySet<string> = new Set()): Placement {
   const ids = new Set(panes.map((p) => p.info.id));
-  const hiddenPanes = new Set<string>();
+  const hiddenPanes = new Set<string>(opening);
   const byAgent = new Map<string, StandbyRow[]>();
   const loose = new Map<string, StandbyRow[]>();
   // Panes that are a helper's own chat never count as agents of the project.

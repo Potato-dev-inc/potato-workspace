@@ -64,4 +64,10 @@ describe('placeHelpers', () => {
     expect(rowState(helper({ state: 'asleep' }))).toBe('resting');
     expect(rowState(helper({ state: 'busy', used_by: 'person' }))).toBe('withYou');
   });
+  it('a chat that appeared while the helper was opening is hidden, and the row keeps its home (never the newest agent)', () => {
+    const live = [pane('a1'), pane('a2'), pane('chat-9')];
+    const p = placeHelpers([helper({ home: 'a1' })], live, new Set(['chat-9']));
+    expect(p.hiddenPanes.has('chat-9')).toBe(true);
+    expect(p.byAgent.get('a1')?.map((r) => r.helper.id)).toEqual(['sb-1']);
+  });
 });

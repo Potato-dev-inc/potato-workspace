@@ -26,7 +26,7 @@
 
 pub mod api;
 pub mod cards;
-mod choice;
+pub(crate) mod choice;
 pub mod decide;
 pub mod default_model;
 pub mod drive;

@@ -242,8 +242,8 @@ fn instructions_lead_with_the_five_tool_happy_path_in_order() {
     assert!(text.starts_with("For a subagent or delegated task beyond a one-shot lookup, use run_agent"));
     assert!(text.contains("
 Potato Workspace MCP"));
-    // 3200 before the agent browser tools were named here (about 115 characters).
-    assert!(text.len() < 3300, "instructions go out every session: {}", text.len());
+    // 3200 before the agent browser tools were named here (about 115 characters); 3300 before the standbys line (about 160).
+    assert!(text.len() < 3500, "instructions go out every session: {}", text.len());
     assert!(text.contains("Five tools"));
     assert!(text.contains("SCHEMA_DRIFT"));
     assert!(text.contains("Rebuild or reinstall the Potato Workspace MCP"));

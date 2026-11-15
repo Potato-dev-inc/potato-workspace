@@ -1,7 +1,7 @@
 // A compact model dropdown, used by the New agent page and by Settings > Agents > Helper agents. "Default" comes
 // first (it names the default model when that is known). A long list gets a search box; with no list (loading failed,
 // or the agent lists none) the same box takes a typed model id.
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useDismissable } from '../../hooks/useDismissable';
 import { useT } from '../../i18n';
@@ -69,9 +69,12 @@ export interface ModelPickerProps {
   label: string;
   className?: string;
   testId?: string;
+  /** Filled with the open menu (it floats in a portal, outside the card around the picker). A card that closes on outside
+   * presses lists it as inside, so using the menu does not close the card. */
+  menuRef?: MutableRefObject<HTMLDivElement | null>;
 }
 
-export function ModelPicker({ state, value, onChange, defaultWord: defaultWordProp, label, className, testId }: ModelPickerProps) {
+export function ModelPicker({ state, value, onChange, defaultWord: defaultWordProp, label, className, testId, menuRef }: ModelPickerProps) {
   const t = useT();
   const defaultWord = defaultWordProp ?? t('state.model.default');
   const [open, setOpen] = useState(false);
@@ -79,7 +82,14 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
   const root = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLInputElement>(null);
   const chipEl = useRef<HTMLButtonElement>(null);
-  const menuEl = useRef<HTMLDivElement>(null);
+  const menuEl = useRef<HTMLDivElement | null>(null);
+  const setMenuEl = useCallback(
+    (el: HTMLDivElement | null) => {
+      menuEl.current = el;
+      if (menuRef) menuRef.current = el;
+    },
+    [menuRef],
+  );
   const [place, setPlace] = useState<Place | null>(null);
   const id = useId();
   const options = state.status === 'ready' ? state.options : null;
@@ -142,7 +152,7 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
         </svg>
       </button>
       {open && createPortal(
-        <div ref={menuEl} className="mp-menu" id={id} role="listbox" aria-label={label} style={place ? { left: place.left, top: place.top, bottom: place.top === undefined ? place.bottom : undefined, maxHeight: place.maxHeight, minWidth: place.minWidth, position: 'fixed' } : { visibility: 'hidden', position: 'fixed' }}>
+        <div ref={setMenuEl} className="mp-menu" id={id} role="listbox" aria-label={label} style={place ? { left: place.left, top: place.top, bottom: place.top === undefined ? place.bottom : undefined, maxHeight: place.maxHeight, minWidth: place.minWidth, position: 'fixed' } : { visibility: 'hidden', position: 'fixed' }}>
           {searchable && (
             <input
               ref={box}

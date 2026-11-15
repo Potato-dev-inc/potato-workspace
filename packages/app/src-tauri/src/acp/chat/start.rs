@@ -160,10 +160,11 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, mut request: StartRequest) -> R
     }
 }
 
-/// The model a standby helper is matched on: the one the caller named, else (for a helper an agent started) the person's
-/// "Default model for helpers" for this agent, so a standby made for that model is the one that gets used.
-fn match_model(agent_id: &str, request: &StartRequest) -> Option<String> {
-    request.model.clone().or_else(|| if request.is_helper { crate::agent_run_mode::helper_default_for(&super::default_model::settings(), agent_id) } else { None })
+/// The model a standby helper is matched on: only one the caller named. A task that names none takes a standby of its agent type
+/// whatever model the standby has (the person made it for that model on purpose); "Default model for helpers" is a default for
+/// a helper nobody gave a standby for, never a reason to skip one.
+fn match_model(request: &StartRequest) -> Option<String> {
+    request.model.clone()
 }
 
 fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
@@ -188,7 +189,7 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     // helper that is still starting is not waited for here, a plain warm session is.
     let helper = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_helper_for(
             &cfg,
-            &crate::acp::warm::HelperClaim { agent: &cfg.id, folder: &folder, account: account_id.as_deref(), model: match_model(&cfg.id, &request).as_deref(), caller: request.parent_pane.as_deref(), name: request.helper_name.as_deref() },
+            &crate::acp::warm::HelperClaim { agent: &cfg.id, folder: &folder, account: account_id.as_deref(), model: match_model(&request).as_deref(), caller: request.parent_pane.as_deref(), name: request.helper_name.as_deref() },
             std::time::Duration::ZERO,
         ));
     let mut taken_from: Option<String> = None;

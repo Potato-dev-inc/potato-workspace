@@ -200,7 +200,10 @@ export function Sidebar({
   // Standby helpers: each sits under its home agent. A chat the person opened on one is that helper's row, not an agent.
   const { view: standbyView, apply: applyStandby } = useStandbyHelpers(standbyApi);
   const [showHelperTree] = useHelpersInSidebar();
-  const placement = placeHelpers(showHelperTree ? standbyView.helpers : [], list);
+  // Opening a standby makes its chat before the list of helpers says so: until it does, a chat that just appeared is not an agent.
+  const [openingFrom, setOpeningFrom] = useState<ReadonlySet<string> | null>(null);
+  const opening = new Set(openingFrom ? list.filter((p) => !openingFrom.has(p.info.id)).map((p) => p.info.id) : []);
+  const placement = placeHelpers(showHelperTree ? standbyView.helpers : [], list, opening);
   // A chat that is a standby's own never counts as an agent row.
   const panes = list.filter((p) => !isCompanionPaneId(p.info.id) && !placement.hiddenPanes.has(p.info.id));
   // The same list the Inbox badge and the Doto counter use, so the three numbers always agree.
@@ -382,12 +385,17 @@ export function Sidebar({
   const standbyActions: StandbyRowActions = {
     open: async (r) => {
       if (r.paneId) return void c.select(r.paneId);
+      setOpeningFrom(new Set(list.map((p) => p.info.id)));
       try {
         const id = await standbyApi.open(r.helper.id);
+        // The row learns which chat is its own before the chat is shown: it never leaves its place.
+        applyStandby(await standbyApi.get().catch(() => null));
         if (id) c.select(id);
         else c.notify(t('standby.openFailed'));
       } catch (e) {
         c.notify(errorSentence(e));
+      } finally {
+        setOpeningFrom(null);
       }
     },
     remove: (r) => {

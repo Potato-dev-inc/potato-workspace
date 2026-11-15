@@ -280,20 +280,32 @@ fn a_standby_model_the_agent_does_not_offer_is_said_in_the_result() {
 }
 
 #[test]
-fn a_helper_with_no_model_takes_the_standby_that_has_the_helper_default_model() {
+fn a_helper_with_no_model_takes_the_standby_even_when_the_helper_default_model_is_another() {
     let _slot = WARM_SLOT.lock();
     let rig = Rig::new("init_delay_ms=20;new_delay_ms=20");
-    let _installed = standby_pool(&rig, &[("s-a", Some("a")), ("s-b", Some("b"))]);
+    let _installed = standby_pool(&rig, &[("s-a", Some("a"))]);
+    // "Default model for helpers" is b, the standby was made for a: the caller named no model, so the standby is used, on a.
     crate::acp::chat::default_model::note_settings(&serde_json::json!({ "helper_default_models": { "fake": "b" } }));
     let chat = start(&rig.deps, rig.cfg.clone(), StartRequest { is_helper: true, ..rig.request() }).expect("starts");
     crate::acp::chat::default_model::note_settings(&serde_json::Value::Null);
-    assert!(chat.warm_claimed());
-    assert_eq!(model_of(&chat).as_deref(), Some("b"), "the helper default model decided which standby, and the session is on it");
-    let statuses = warm::pool().unwrap().helper_statuses();
-    assert_eq!(statuses["s-b"].state, warm::HelperState::Busy);
-    assert_eq!(statuses["s-a"].state, warm::HelperState::Ready, "the other standby is untouched");
+    assert!(chat.warm_claimed(), "the standby was used, not a fresh helper");
+    assert_eq!(model_of(&chat).as_deref(), Some("a"), "on the model the standby was made for");
+    assert_eq!(warm::pool().unwrap().helper_statuses()["s-a"].state, warm::HelperState::Busy);
     chat.retire();
     let _ = rig.conversations.close(chat.pane_id());
+}
+
+#[test]
+fn a_standby_is_on_its_model_while_it_waits_before_any_task_takes_it() {
+    let _slot = WARM_SLOT.lock();
+    let rig = Rig::new("init_delay_ms=20;new_delay_ms=20");
+    let _installed = standby_pool(&rig, &[("s1", Some("b"))]);
+    // Taken straight from the pool, no chat and no claim-time setting around it: the agent's own default is "a".
+    let (item, meta) = warm::pool().unwrap().claim_helper("fake", &rig.dir, None, None, crate::event_log::now_ms()).expect("ready");
+    assert_eq!(meta.model.as_deref(), Some("b"));
+    let current = item.session.snapshot().config_options.iter().find(|o| o.get("id").and_then(|v| v.as_str()) == Some("model")).and_then(|o| o.get("currentValue").and_then(|v| v.as_str()).map(str::to_string));
+    assert_eq!(current.as_deref(), Some("b"), "it warmed on the person's model");
+    item.session.close();
 }
 
 #[test]

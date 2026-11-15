@@ -100,7 +100,7 @@ inline = true
 /**
  * `reuse`: start again on the data folder of an earlier start with the same `runId` (a restart inside a test): the saved
  * settings, the fake agent's script and log stay as they are.
- * @param {{ runId: string, profile?: string, anchor?: string, headless?: boolean, window?: [number, number], settings?: object, reuse?: boolean }} opts
+ * @param {{ realAgents?: boolean, runId: string, profile?: string, anchor?: string, headless?: boolean, window?: [number, number], settings?: object, reuse?: boolean }} opts
  */
 export async function startApp(opts) {
   installHooks();
@@ -128,7 +128,11 @@ export async function startApp(opts) {
   fs.mkdirSync(path.join(dataDir, 'agents'), { recursive: true });
 
   // Agent definitions plus the fake programs they name.
-  const fixtures = agentFixtures();
+  // `realAgents`: a proof run with the person's own agents (their logins live under the real home folder): the home and the
+  // agents' data folders stay real, the app's own folders (APPDATA, LOCALAPPDATA, the web view) stay in the temp run folder,
+  // and no fake agents are installed.
+  const real = !!opts.realAgents;
+  const fixtures = real ? [] : agentFixtures();
   for (const fx of fixtures) {
     fs.writeFileSync(path.join(dataDir, 'agents', fx.file), fx.text);
     for (const n of fx.names) fs.copyFileSync(fake, path.join(dirs.bin, process.platform === 'win32' ? `${n}.exe` : n));
@@ -159,9 +163,7 @@ export async function startApp(opts) {
     POTATO_WORKSPACE_PROFILE: profile,
     APPDATA: dirs.appdata,
     LOCALAPPDATA: dirs.local,
-    HOME: dirs.home,
-    USERPROFILE: dirs.home,
-    XDG_DATA_HOME: dirs.local,
+    ...(real ? {} : { HOME: dirs.home, USERPROFILE: dirs.home, XDG_DATA_HOME: dirs.local }),
     WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'), // the browser profile (localStorage, cache) is per run too
     PM_WINDOW_ANCHOR: anchor,
     // A normal start now opens the cockpit by itself, but that window is created before the debugging port is

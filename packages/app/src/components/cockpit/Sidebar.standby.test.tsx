@@ -226,4 +226,33 @@ describe('standby helpers in the sidebar', () => {
     await flush();
     expect(api.add).toHaveBeenCalledWith({ name: 'Checker', agent: 'codex', model: null, project: 'C:/work/shop', after_task: 'wait', home: 'a1' });
   });
+
+  it('a click on a new standby never moves its row: the chat it opens is not shown as an agent while the list catches up', async () => {
+    // The chat exists (the pane list has it) before the helper list says it is the helper's own: the old sidebar drew it as an agent
+    // for that moment and the row jumped up. Every render between the click and the end is checked.
+    const { api, set } = fakeApi([helper({ id: 'y', name: 'Fresh', state: 'ready' })]);
+    const before = cockpit([pane('a1', 'idle', 'Right panel rebuild')]);
+    await show(before, api);
+    const place = () => ({ under: rows()[0]?.closest('.ck-node')?.querySelector('[data-pane-row="a1"]') !== null && rows().length === 1, topLevel: [...host.querySelectorAll('[data-pane-row]')].map((e) => e.getAttribute('data-pane-row')) });
+    expect(place()).toEqual({ under: true, topLevel: ['a1'] });
+    const seen: Array<ReturnType<typeof place>> = [];
+    api.open.mockImplementation(async () => {
+      // 1. the chat appears in the pane list; the helper list has not heard yet
+      await show(cockpit([pane('a1', 'idle', 'Right panel rebuild'), pane('chat-9', 'idle', 'Fresh chat')]), api);
+      seen.push(place());
+      // 2. the backend now says the chat is the helper's own
+      set([helper({ id: 'y', name: 'Fresh', state: 'ready', open_pane: 'chat-9' })]);
+      return 'chat-9';
+    });
+    await act(async () => rows()[0].querySelector<HTMLButtonElement>('.ck-row')!.click());
+    await flush();
+    await flush();
+    seen.push(place());
+    expect(api.open).toHaveBeenCalledWith('y');
+    for (const step of seen) expect(step).toEqual({ under: true, topLevel: ['a1'] });
+    expect(seen.length).toBe(2);
+    // After the click the chat is still the helper's row, and a later poll changes nothing.
+    await show(cockpit([pane('a1', 'idle', 'Right panel rebuild'), pane('chat-9', 'idle', 'Fresh chat')]), api);
+    expect(place()).toEqual({ under: true, topLevel: ['a1'] });
+  });
 });
