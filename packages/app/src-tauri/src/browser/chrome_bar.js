@@ -62,10 +62,12 @@
     input.setAttribute('placeholder', S.placeholder);
     input.addEventListener('focus', function () {
       editing = true;
+      input.style.borderColor = '#d9a066';
       input.select();
     });
     input.addEventListener('blur', function () {
       editing = false;
+      input.style.borderColor = '#3a3733';
       input.value = shownUrl;
     });
     input.addEventListener('keydown', function (e) {
@@ -74,7 +76,7 @@
         input.blur();
       }
     });
-    var note = el('span', 'flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f2756b;font:12px/18px system-ui,Segoe UI,sans-serif');
+    var note = el('span', 'flex:none;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f2756b;font:12px/18px system-ui,Segoe UI,sans-serif');
     bar.appendChild(button('←', S.back, 'back'));
     bar.appendChild(button('→', S.forward, 'forward'));
     bar.appendChild(button('↻', S.reload, 'reload'));
@@ -115,6 +117,13 @@
     ui.side.style.display = view.side ? 'block' : 'none';
     ui.mark.style.display = view.mark ? 'block' : 'none';
     ui.input.readOnly = !!view.side;
+    // On the app's own start page the box is ready for typing: asked again each tick until it holds the focus
+    // (a window that is still opening cannot take it yet).
+    if (view.start && document.activeElement !== host) {
+      try {
+        ui.input.focus();
+      } catch (e) {}
+    }
   }
 
   var api = {

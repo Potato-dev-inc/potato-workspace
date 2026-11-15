@@ -61,9 +61,14 @@ pub fn set_script(key: &str, url: &str, error: &str) -> String {
 
 /// `set_script`, and whether the "Mark up" button shows (the Labs switch is on).
 pub fn set_script_with(key: &str, url: &str, error: &str, mark: bool) -> String {
+    set_script_full(key, url, error, mark, false)
+}
+
+/// `set_script_with`, and whether the page is the app's own start page (the address box is then focused for typing).
+pub fn set_script_full(key: &str, url: &str, error: &str, mark: bool, start: bool) -> String {
     let view = match crate::artifacts::chip_of(url) {
-        Some(chip) => json!({ "url": chip, "error": error, "side": true, "mark": mark }),
-        None => json!({ "url": url, "error": error, "mark": mark }),
+        Some(chip) => json!({ "url": chip, "error": error, "side": true, "mark": mark, "start": false }),
+        None => json!({ "url": url, "error": error, "mark": mark, "start": start }),
     }
     .to_string();
     call(key, "set", &serde_json::to_string(&view).unwrap_or_default())
@@ -200,6 +205,24 @@ mod tests {
         assert_eq!(got[3].url, "example.com");
         assert_eq!(parse_events(r#"[{"kind":"side"}]"#)[0].kind, ChromeKind::Side);
         assert!(parse_events("nope").is_empty() && parse_events(r#"[{"kind":"launch"}]"#).is_empty());
+    }
+
+    #[test]
+    fn the_start_page_flag_reaches_the_bar_so_the_box_takes_the_focus() {
+        let on = set_script_full("k", "", "", false, true);
+        assert!(on.contains("\\\"start\\\":true"), "{on}");
+        assert!(set_script_with("k", "https://example.com/", "", false).contains("\\\"start\\\":false"));
+        // The bar's script asks for the focus on the start page and draws the refusal word as text only.
+        assert!(CHROME_JS.contains("view.start") && CHROME_JS.contains("ui.input.focus()"));
+    }
+
+    #[test]
+    fn a_refused_typed_address_gets_the_word_the_start_page_explains() {
+        // The word the window navigates to the start page with is one the page knows, for every refusal.
+        for typed in ["hello", "192.168.1.1", "localhost:9333"] {
+            let word = go_target(typed, None).unwrap_err();
+            assert!(super::super::start::is_start_address(&super::super::start::address(Some(word))), "{typed}");
+        }
     }
 
     #[test]

@@ -154,3 +154,23 @@ pub fn artifact_serve_protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request
         responder.respond(builder.body(page.body).unwrap_or_else(|_| Response::builder().status(500).body(Vec::new()).expect("empty response")));
     });
 }
+
+/// The browser window's own start page (`potato-start`, see `browser::start`): the same for every request, GET only,
+/// and only answered to a browser window (a preview window); the cockpit and the other windows get a plain 404.
+pub fn start_page_protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u8>>, responder: UriSchemeResponder) {
+    let from_browser = ctx.webview_label().starts_with("preview-");
+    let method = request.method().as_str().to_string();
+    let path = request.uri().path().to_string();
+    let query = request.uri().query().unwrap_or("").to_string();
+    let language = request.headers().get("accept-language").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    let (status, headers, body) = if from_browser {
+        crate::browser::start::respond(&method, &path, &query, &language)
+    } else {
+        crate::browser::start::respond("GET", "/missing", "", "")
+    };
+    let mut builder = Response::builder().status(status);
+    for (name, value) in &headers {
+        builder = builder.header(*name, value.as_str());
+    }
+    responder.respond(builder.body(body).unwrap_or_else(|_| Response::builder().status(500).body(Vec::new()).expect("empty response")));
+}

@@ -242,7 +242,7 @@ pub fn check_url_with(url: &str, dev_url_port: Option<u16>, resolve: Resolver) -
 
 /// Whether a window of the agent browser may go to `url` (every navigation, redirects included).
 pub fn nav_allowed(url: &str, dev_url_port: Option<u16>) -> bool {
-    url == "about:blank" || check_url(url, dev_url_port).is_ok()
+    url == "about:blank" || super::start::is_start_address(url) || check_url(url, dev_url_port).is_ok()
 }
 
 /// Wraps text that came from a page, so nobody mistakes it for an instruction.
@@ -430,6 +430,9 @@ mod tests {
     #[test]
     fn every_navigation_of_the_window_is_judged_by_the_same_rule() {
         assert!(nav_allowed("about:blank", None));
+        // The window's own start page (and only it) passes; a look-alike does not.
+        assert!(nav_allowed(&crate::browser::start::address(None), None));
+        assert!(!nav_allowed("http://potato-start.localhost.evil.test/", None));
         assert!(nav_allowed("http://localhost:5173/x", None));
         assert!(!nav_allowed("http://localhost:9333/", None));
         assert!(!nav_allowed("file:///c:/secret", None));

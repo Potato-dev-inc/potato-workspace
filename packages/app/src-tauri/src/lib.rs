@@ -268,6 +268,7 @@ pub fn run() {
         .manage(deep_link::PendingJoinLink::default())
         .register_asynchronous_uri_scheme_protocol("pmfile", commands::files_stream_protocol)
         .register_asynchronous_uri_scheme_protocol("potato-artifact", commands::artifact_serve_protocol)
+        .register_asynchronous_uri_scheme_protocol("potato-start", commands::start_page_protocol)
         .manage(commands::SessionChatState::default())
         .manage(live_room::service::LiveRoomState::default())
         .manage(commands::ChatImportState::default())
