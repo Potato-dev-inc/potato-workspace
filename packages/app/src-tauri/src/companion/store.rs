@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 use super::model::{valid_id, CompanionError, CompanionProfile, CompanionResult, FeedItem, MemoryFile};
 use crate::secure_file;
 
-pub const STORE_VERSION: u32 = 1;
+/// 2 = adds `defaultId`. A version 1 file loads unchanged and is written as 2 on the next save.
+pub const STORE_VERSION: u32 = 2;
 pub const FEED_CAP: usize = 500;
 
 const STORE_INVALID: &str = "COMPANION_STORE_INVALID";
@@ -23,7 +24,19 @@ const STORE_INVALID: &str = "COMPANION_STORE_INVALID";
 #[serde(rename_all = "camelCase")]
 pub struct CompanionsFile {
     pub v: u32,
+    /// The companion the bubble, the pet and the phone's first tab use. Missing in a version 1 file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_id: Option<String>,
     pub companions: Vec<CompanionProfile>,
+}
+
+/// The default companion: `saved` when it is still there and not archived, else the first one that is not archived.
+pub fn resolve_default(profiles: &[CompanionProfile], saved: Option<&str>) -> Option<String> {
+    let live = |p: &&CompanionProfile| !p.archived;
+    saved
+        .and_then(|id| profiles.iter().filter(live).find(|p| p.id == id))
+        .or_else(|| profiles.iter().find(live))
+        .map(|p| p.id.clone())
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -47,6 +60,11 @@ pub struct Runtime {
     pub last_nap_ms: Option<i64>,
     /// A move that waits until the companion is free (`moving.rs`).
     pub pending_move: Option<PendingMove>,
+    /// The day (`YYYY-MM-DD`) a diary was last asked for, and when (epoch ms). One ask per day.
+    pub diary_asked_day: Option<String>,
+    pub diary_asked_ms: Option<i64>,
+    /// When a drive last woke the companion to reach out (epoch ms): the 2 h rule.
+    pub last_drive_wake_ms: Option<i64>,
 }
 
 /// A move to another agent that has not run yet: the person asked while the companion was busy, or the
@@ -86,12 +104,19 @@ pub fn approved_skill_path(root: &Path, id: &str, slug: &str) -> CompanionResult
     Ok(companion_dir(root, id)?.join("approved").join("skills").join(format!("{slug}.md")))
 }
 
-/// Every saved companion, in file order. A missing file is an empty list.
+/// Every saved companion, in file order. A missing file is an empty list. (The service reads `load_all`.)
+#[cfg(test)]
 pub fn load(root: &Path) -> CompanionResult<Vec<CompanionProfile>> {
+    load_all(root).map(|(profiles, _)| profiles)
+}
+
+/// The saved companions and the default one (resolved: a version 1 file, or a default that is gone or
+/// archived, gives the first companion that is not archived). Nothing is written.
+pub fn load_all(root: &Path) -> CompanionResult<(Vec<CompanionProfile>, Option<String>)> {
     let path = companions_path(root);
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((Vec::new(), None)),
         Err(e) => return Err(CompanionError::new(STORE_INVALID, format!("Could not read companions.json: {e}."))),
     };
     let file: CompanionsFile = serde_json::from_str(&text)
@@ -102,7 +127,15 @@ pub fn load(root: &Path) -> CompanionResult<Vec<CompanionProfile>> {
             "companions.json was written by a newer Potato Workspace.",
         ));
     }
-    Ok(file.companions.into_iter().map(remap_legacy_folder).collect())
+    let profiles: Vec<CompanionProfile> = file.companions.into_iter().map(remap_legacy_folder).collect();
+    let default = resolve_default(&profiles, file.default_id.as_deref());
+    Ok((profiles, default))
+}
+
+/// The default id the file on disk holds now (unresolved), for a save that does not change it.
+fn saved_default(root: &Path) -> Option<String> {
+    let text = fs::read_to_string(companions_path(root)).ok()?;
+    serde_json::from_str::<CompanionsFile>(&text).ok()?.default_id
 }
 
 /// A companion created by the other product points at `~/PuppetMaster/companions/<id>`. When the
@@ -118,9 +151,17 @@ fn remap_legacy_folder(mut profile: CompanionProfile) -> CompanionProfile {
     profile
 }
 
-/// Writes the whole list (version 1), atomically.
+/// Writes the whole list (version 2), atomically. The default stays what the file says while that companion
+/// is still there and not archived; otherwise the first one that is not archived becomes the default.
 pub fn save(root: &Path, companions: &[CompanionProfile]) -> CompanionResult<()> {
-    let file = CompanionsFile { v: STORE_VERSION, companions: companions.to_vec() };
+    let default = saved_default(root);
+    save_with_default(root, companions, default.as_deref())
+}
+
+/// Like `save`, with the default the person just picked.
+pub fn save_with_default(root: &Path, companions: &[CompanionProfile], default_id: Option<&str>) -> CompanionResult<()> {
+    let default_id = resolve_default(companions, default_id);
+    let file = CompanionsFile { v: STORE_VERSION, default_id, companions: companions.to_vec() };
     let text = serde_json::to_string_pretty(&file)
         .map_err(|e| CompanionError::new(STORE_INVALID, format!("Could not save companions: {e}.")))?;
     secure_file::write_private(&companions_path(root), &text)
@@ -208,6 +249,7 @@ mod tests {
             id: id.into(),
             name: "Mochi".into(),
             avatar: "mochi".into(),
+            look: None,
             persona: "calm".into(),
             agent_type: "shell".into(),
             launch_args: vec![],
@@ -259,10 +301,67 @@ mod tests {
     #[test]
     fn newer_store_version_and_damaged_file_are_refused() {
         let dir = root();
-        fs::write(companions_path(&dir), r#"{"v": 2, "companions": []}"#).unwrap();
+        fs::write(companions_path(&dir), r#"{"v": 3, "companions": []}"#).unwrap();
         assert_eq!(load(&dir).unwrap_err().code, "COMPANION_STORE_INVALID");
         fs::write(companions_path(&dir), "{ not json").unwrap();
         assert_eq!(load(&dir).unwrap_err().code, "COMPANION_STORE_INVALID");
+    }
+
+    fn v1_file(ids: &[&str]) -> String {
+        let items: Vec<String> = ids
+            .iter()
+            .map(|id| {
+                format!(
+                    r#"{{"id":"{id}","name":"Mochi","avatar":"mochi","persona":"calm","agentType":"shell","folder":"C:/x/{id}","createdMs":1}}"#
+                )
+            })
+            .collect();
+        format!(r#"{{"v":1,"companions":[{}]}}"#, items.join(","))
+    }
+
+    #[test]
+    fn a_version_1_file_loads_unchanged_with_a_default_and_is_not_rewritten() {
+        let dir = root();
+        let text = v1_file(&["mochi"]);
+        fs::write(companions_path(&dir), &text).unwrap();
+        let (list, default) = load_all(&dir).unwrap();
+        assert_eq!((list.len(), default.as_deref()), (1, Some("mochi")));
+        assert!(list[0].look.is_none());
+        assert_eq!(fs::read_to_string(companions_path(&dir)).unwrap(), text, "nothing is written at load");
+        save(&dir, &list).unwrap();
+        let after = fs::read_to_string(companions_path(&dir)).unwrap();
+        assert!(after.contains("\"v\": 2") && after.contains("\"defaultId\": \"mochi\""), "{after}");
+    }
+
+    #[test]
+    fn version_2_round_trips_the_default_and_the_look() {
+        let dir = root();
+        let mut a = profile("mochi");
+        a.look = Some(super::super::model::Look { avatar: "mochi".into(), accent: "sky".into() });
+        let b = profile("bit");
+        save_with_default(&dir, &[a.clone(), b.clone()], Some("bit")).unwrap();
+        let (list, default) = load_all(&dir).unwrap();
+        assert_eq!(list, vec![a.clone(), b.clone()]);
+        assert_eq!(default.as_deref(), Some("bit"));
+        // A plain save keeps the default.
+        save(&dir, &[a.clone(), b.clone()]).unwrap();
+        assert_eq!(load_all(&dir).unwrap().1.as_deref(), Some("bit"));
+        let text = fs::read_to_string(companions_path(&dir)).unwrap();
+        assert!(text.contains("\"accent\": \"sky\""), "{text}");
+    }
+
+    #[test]
+    fn an_archived_or_deleted_default_hands_over_to_the_next_one() {
+        let dir = root();
+        let (a, b) = (profile("mochi"), profile("bit"));
+        save_with_default(&dir, &[a.clone(), b.clone()], Some("mochi")).unwrap();
+        let mut archived = a.clone();
+        archived.archived = true;
+        save(&dir, &[archived, b.clone()]).unwrap();
+        assert_eq!(load_all(&dir).unwrap().1.as_deref(), Some("bit"));
+        save(&dir, &[]).unwrap();
+        assert_eq!(load_all(&dir).unwrap().1, None);
+        assert_eq!(resolve_default(&[a], Some("gone")).as_deref(), Some("mochi"));
     }
 
     #[test]

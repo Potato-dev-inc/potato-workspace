@@ -8,7 +8,7 @@ import type { CockpitApi } from '../../hooks/useCockpit';
 import type { GitState, ShipApi } from '../../lib/ship-api';
 import { Sidebar } from '../cockpit/Sidebar';
 import { DragLayer } from './DragLayer';
-import { WorkAreaDropZones } from './WorkAreaDropZones';
+import { WorkAreaDrop } from './WorkAreaDrop';
 import { cancelDrag } from './dragStore';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -27,11 +27,10 @@ beforeEach(() => {
   host.className = 'cockpit';
   document.body.appendChild(host);
   root = createRoot(host);
-  // The work area is 1000 wide: left zone 0-500, right zone 500-1000.
+  // The work area is 1000 x 600: the middle line is 452-548, the bottom zone is below y = 408.
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-    const id = this.getAttribute('data-testid');
-    const [l, r] = id === 'dropzone-left' ? [0, 500] : id === 'dropzone-right' ? [500, 1000] : [0, 0];
-    return { left: l, right: r, top: 0, bottom: 600, width: r - l, height: 600, x: l, y: 0, toJSON() {} } as DOMRect;
+    const [l, r] = this.getAttribute('data-testid') === 'work-drop' ? [0, 1000] : [0, 0];
+    return { left: l, right: r, top: 0, bottom: r === 0 ? 0 : 600, width: r - l, height: r === 0 ? 0 : 600, x: l, y: 0, toJSON() {} } as DOMRect;
   });
 });
 afterEach(() => {
@@ -69,13 +68,13 @@ function fakeApi(select = vi.fn()): CockpitApi {
 function makeShip(): ShipApi {
   return { recent: vi.fn(async () => []), gitState: vi.fn(async () => 'repo' as unknown as GitState), gitInitPlan: vi.fn(), gitInit: vi.fn(), forget: vi.fn(), pickFolder: vi.fn() } as unknown as ShipApi;
 }
-async function render(select: () => void, onDropChat: (id: string, side: string) => void) {
+async function render(select: () => void, onDropChat: (id: string, zone: string, column: string) => void) {
   await act(async () =>
     root.render(
       <>
         <Sidebar c={fakeApi(select as never)} onOpenPalette={() => {}} ship={makeShip()} />
         <div style={{ position: 'relative' }}>
-          <WorkAreaDropZones onDropChat={onDropChat} />
+          <WorkAreaDrop shown={['p1']} remembered={0.58} partnerOf={() => 'p1'} nameOf={(id) => (id === 'p1' ? 'Codex' : 'Codex two')} onDrop={onDropChat} />
         </div>
         <DragLayer />
       </>,
@@ -89,26 +88,71 @@ const fire = (target: EventTarget, type: string, x: number, y: number) =>
   act(async () => void target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })));
 
 describe('drag a chat from the sidebar', () => {
-  it('dragging a row to the right half drops that chat there', async () => {
+  const zoneNow = () => host.querySelector('[data-testid="work-drop"]')?.getAttribute('data-zone');
+  const take = () => host.querySelector('[data-testid="drop-take"]')!.textContent;
+
+  it('right of the middle band: the preview shows the right half, and the drop says right', async () => {
     const onDrop = vi.fn();
     await render(vi.fn(), onDrop);
     await fire(row(), 'pointerdown', 20, 20);
     await fire(window, 'pointermove', 200, 40);
     expect(host.querySelector('[data-testid="drag-ghost"]')?.textContent).toBe('Codex two');
     await fire(window, 'pointermove', 800, 100);
-    expect(host.querySelector('[data-testid="dropzone-right"]')?.className).toContain('is-over');
+    expect(zoneNow()).toBe('right');
+    expect(take()).toBe('Codex two');
+    expect(host.querySelector('[data-testid="drop-stay"]')?.textContent).toBe('Stays here');
     await fire(window, 'pointerup', 800, 100);
-    expect(onDrop).toHaveBeenCalledWith('p2', 'right');
+    expect(onDrop).toHaveBeenCalledWith('p2', 'right', 'right');
     expect(host.querySelector('[data-testid="drag-ghost"]')).toBeNull();
+    expect(host.querySelector('[data-testid="work-drop"]')).toBeNull();
   });
 
-  it('dragging to the left half drops on the left', async () => {
+  it('left of the middle band drops on the left', async () => {
     const onDrop = vi.fn();
     await render(vi.fn(), onDrop);
     await fire(row(), 'pointerdown', 20, 20);
     await fire(window, 'pointermove', 100, 100);
+    expect(zoneNow()).toBe('left');
     await fire(window, 'pointerup', 100, 100);
-    expect(onDrop).toHaveBeenCalledWith('p2', 'left');
+    expect(onDrop).toHaveBeenCalledWith('p2', 'left', 'left');
+  });
+
+  it('on the middle line (48 px either side of the centre) the line turns on and the label says half and half', async () => {
+    const onDrop = vi.fn();
+    await render(vi.fn(), onDrop);
+    await fire(row(), 'pointerdown', 20, 20);
+    await fire(window, 'pointermove', 540, 100);
+    expect(zoneNow()).toBe('mid');
+    expect(host.querySelector('[data-testid="drop-midline"]')?.className).toContain('is-on');
+    expect(take()).toBe('Codex two · half and half');
+    await fire(window, 'pointermove', 453, 100);
+    expect(zoneNow()).toBe('mid');
+    await fire(window, 'pointermove', 451, 100);
+    expect(zoneNow()).toBe('left');
+    expect(host.querySelector('[data-testid="drop-midline"]')?.className).not.toContain('is-on');
+    await fire(window, 'pointermove', 500, 100);
+    await fire(window, 'pointerup', 500, 100);
+    expect(onDrop).toHaveBeenCalledWith('p2', 'mid', 'right');
+  });
+
+  it('the lowest third wins over the middle band: the preview says below and the other half stays on top', async () => {
+    const onDrop = vi.fn();
+    await render(vi.fn(), onDrop);
+    await fire(row(), 'pointerdown', 20, 20);
+    await fire(window, 'pointermove', 500, 450);
+    expect(zoneNow()).toBe('down');
+    expect(take()).toBe('Codex two · below');
+    expect(host.querySelector('[data-testid="drop-stay"]')?.textContent).toBe('Stays on top');
+    expect(host.querySelector('[data-testid="drop-midline"]')).toBeNull();
+    await fire(window, 'pointerup', 500, 450);
+    expect(onDrop).toHaveBeenCalledWith('p2', 'down', 'right');
+  });
+
+  it('shows the hint while dragging', async () => {
+    await render(vi.fn(), vi.fn());
+    await fire(row(), 'pointerdown', 20, 20);
+    await fire(window, 'pointermove', 800, 100);
+    expect(host.querySelector('[data-testid="drop-hint"]')?.textContent).toBe('Left or right: beside · Bottom: below · Esc cancels');
   });
 
   it('a plain click still selects and does not drag; a move under 6 px is a click', async () => {
@@ -139,13 +183,15 @@ describe('drag a chat from the sidebar', () => {
     await render(vi.fn(), onDrop);
     await fire(row(), 'pointerdown', 20, 20);
     await fire(window, 'pointermove', 800, 100);
+    expect(host.querySelector('[data-testid="drop-take"]')).not.toBeNull();
     await act(async () => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(host.querySelector('[data-testid="drag-ghost"]')).toBeNull();
+    expect(host.querySelector('[data-testid="drop-take"]')).toBeNull();
     await fire(window, 'pointerup', 800, 100);
     expect(onDrop).not.toHaveBeenCalled();
   });
 
-  it('releasing outside both zones drops nothing', async () => {
+  it('releasing outside the work area drops nothing', async () => {
     const onDrop = vi.fn();
     await render(vi.fn(), onDrop);
     await fire(row(), 'pointerdown', 20, 20);

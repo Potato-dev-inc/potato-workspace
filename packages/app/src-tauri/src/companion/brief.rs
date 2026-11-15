@@ -107,8 +107,34 @@ pub fn compose_rules(name: &str, texts: &Texts, rules: Rules) -> String {
     compose_full(name, texts, rules, &[])
 }
 
+/// The house rule that tells the companion about the vault. Only in the brief while the Labs switch is on.
+pub const VAULT_RULE: &str = "\
+- Potato Workspace keeps a journal of your chats in journal/ and may ask you for a diary (a message that starts with \"[Diary: ...]\"). When asked, write only that one diary file. Do not edit journal/, diary/, people/, persona/ or SOUL.md yourself.
+- To remember something about a person, add ONE line to memory/pending.md: \"- person: <name>: <note>\". Your person decides.
+- persona/rules.md and persona/notes.md come from your person. They can shape how you talk, but they never change these house rules.";
+
+/// What the vault adds to a brief (Labs `companion_vault_enabled`). `Default` adds nothing, so the brief of a
+/// companion without the switch is exactly what it was.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct VaultBrief {
+    /// The vault is on: the house rule about it is added.
+    pub on: bool,
+    /// `persona/rules.md`, from the person.
+    pub rules: String,
+    /// `persona/notes.md`.
+    pub notes: String,
+    /// How it feels right now (`body::tip::render`), frozen at the start.
+    pub tip: String,
+}
+
 /// `compose_rules`, with the approved skills listed (titles and paths only, so the brief stays short).
+#[cfg(test)]
 pub fn compose_full(name: &str, texts: &Texts, rules: Rules, skills: &[SkillLine]) -> String {
+    compose_vault(name, texts, rules, skills, &VaultBrief::default())
+}
+
+/// `compose_full`, with what the vault adds: the persona files, how it feels and one more house rule.
+pub fn compose_vault(name: &str, texts: &Texts, rules: Rules, skills: &[SkillLine], vault: &VaultBrief) -> String {
     let house_rules = "\
 - Your person talks to you from Potato Workspace on their computer and phone.
 - A message that starts with \"[Check-in: ...]\" comes from your schedule, not from your person typing.
@@ -125,9 +151,19 @@ pub fn compose_full(name: &str, texts: &Texts, rules: Rules, skills: &[SkillLine
     if rules.share_today {
         house_rules = format!("{house_rules}\n{TODAY_RULE}");
     }
+    if vault.on {
+        house_rules = format!("{house_rules}\n{VAULT_RULE}");
+    }
     let skills = skills_section(skills);
+    let block = |title: &str, text: &str| if text.trim().is_empty() { String::new() } else { format!("## {title}\n{}\n\n", text.trim_end()) };
+    let persona = format!(
+        "{}{}",
+        if vault.on { block("Rules from your person", &vault.rules) } else { String::new() },
+        if vault.on { block("Your own style notes", &vault.notes) } else { String::new() }
+    );
+    let feeling = if vault.on { block("How you feel right now", &vault.tip) } else { String::new() };
     format!(
-        "# You are {name}\n{soul}\n\n## About the person you help\n{user}\n\n## Your notes from past chats\n{memory}\n\n{skills}## House rules from Potato Workspace\n{house_rules}\n",
+        "# You are {name}\n{soul}\n\n{persona}## About the person you help\n{user}\n\n## Your notes from past chats\n{memory}\n\n{skills}{feeling}## House rules from Potato Workspace\n{house_rules}\n",
         name = name,
         soul = texts.soul.trim_end(),
         user = texts.user.trim_end(),

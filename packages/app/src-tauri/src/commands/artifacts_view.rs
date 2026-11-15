@@ -75,3 +75,49 @@ pub async fn artifacts_open_in_browser(state: State<'_, AppState>, pane_id: Stri
     })
     .await
 }
+
+/// A share link just made. `link` is `None` when this PC has no public address (then `reason` says so).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareMade {
+    pub link: Option<String>,
+    pub version: u32,
+    pub expires_at: u64,
+    pub reason: Option<String>,
+}
+
+/// Makes a read-only link to one version of a page (`version` empty: the newest) that ends after `ttl_hours` (a day by
+/// default, at most seven days). The secret is in the link, shown once.
+#[tauri::command]
+pub async fn artifacts_share_make(state: State<'_, AppState>, pane_id: String, id: String, version: Option<u32>, ttl_hours: Option<u64>) -> Result<ShareMade, String> {
+    let project = project_of(&state, &pane_id)?;
+    blocking(move || {
+        let made = artifacts::create_link(&artifacts::share_index_file(), &project, &id, version, ttl_hours.map(|h| h.saturating_mul(3600)), artifacts::now_ms()).map_err(|e| format!("{}: {}", e.code(), e.message()))?;
+        let link = artifacts::share_address(&made.token);
+        let reason = link.is_none().then(|| "This PC has no public address yet. Turn one on in Settings, then share again.".to_string());
+        Ok(ShareMade { link, version: made.version, expires_at: made.expires_at, reason })
+    })
+    .await
+}
+
+/// The links of a page that have not ended (never the secrets).
+#[tauri::command]
+pub async fn artifacts_share_list(state: State<'_, AppState>, pane_id: String, id: String) -> Result<Vec<artifacts::ShareView>, String> {
+    let project = project_of(&state, &pane_id)?;
+    blocking(move || Ok(artifacts::active_links(&project, &id, artifacts::now_ms()))).await
+}
+
+/// Stops every link of a page. Returns how many were stopped.
+#[tauri::command]
+pub async fn artifacts_share_stop(state: State<'_, AppState>, pane_id: String, id: String) -> Result<usize, String> {
+    let project = project_of(&state, &pane_id)?;
+    blocking(move || artifacts::revoke_links(&artifacts::share_index_file(), &project, &id).map_err(|e| format!("{}: {}", e.code(), e.message()))).await
+}
+
+/// Opens a page in its own window. The window reads it through the same calls as the side panel.
+#[tauri::command]
+pub async fn artifacts_pop_out(app: tauri::AppHandle, state: State<'_, AppState>, pane_id: String, id: String, title: String) -> Result<(), String> {
+    // The pane must exist and have a project: the window is only ever for a page of that agent's own project.
+    project_of(&state, &pane_id)?;
+    crate::app_windows::open_artifact_window(&app, &pane_id, &id, &title)
+}

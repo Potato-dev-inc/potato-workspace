@@ -166,3 +166,46 @@
   align-self: flex-end;
   padding-bottom: 4px;
 }
+
+/* The usage strip is ONE button (one tab stop): the label, the chips and "+N" are pictures inside it. */
+.cockpit .ck-sb-usage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cockpit .ck-sb-usage:hover .ck-usage-chip,
+.cockpit .ck-sb-usage:hover .ck-sb-more {
+  color: var(--label);
+}
+.cockpit .ck-sb-usage:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-usage-pop-row.is-picked {
+  border-radius: 8px;
+  animation: ck-usage-flash 900ms ease-out;
+}
+@keyframes ck-usage-flash {
+  from { background: var(--accent-soft); }
+  to { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-usage-pop-row.is-picked { animation: none; }
+}
+.cockpit .ck-usage-pop:focus { outline: none; }
+.cockpit .ck-sb-usage .ck-sb-more {
+  display: inline-grid;
+  place-items: center;
+  line-height: 20px;
+}

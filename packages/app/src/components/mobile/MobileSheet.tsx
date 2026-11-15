@@ -264,6 +264,7 @@ export function MenuSheet({
   linkEvents,
   onOpenSetup,
   onTestNotification,
+  onOpenWhatsNew,
 }: {
   onClose: () => void;
   bridgeUrl: string;
@@ -287,6 +288,8 @@ export function MenuSheet({
   onOpenSetup?: () => void;
   /** Shows a test notification on this phone. Resolves to one plain sentence about what happened. */
   onTestNotification?: () => Promise<string>;
+  /** About > What's new (the phone's sheet). */
+  onOpenWhatsNew?: () => void;
 }) {
   const t = useT();
   const [testNote, setTestNote] = useState<string | null>(null);
@@ -392,6 +395,22 @@ export function MenuSheet({
             <div className="ph-group">
               <button type="button" onClick={onOpenPlans} className="ph-row">
                 <span className="ph-rowtext">{t('phone.menu.plans')}</span>
+                <span className="ph-chev" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="m9 5 7 7-7 7" />
+                  </svg>
+                </span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {onOpenWhatsNew && (
+          <>
+            <h2 className="ph-sec">{t('phone.menu.about')}</h2>
+            <div className="ph-group">
+              <button type="button" onClick={onOpenWhatsNew} className="ph-row" data-testid="phone-menu-whatsnew">
+                <span className="ph-rowtext">{t('phone.menu.whatsNew')}</span>
                 <span className="ph-chev" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="m9 5 7 7-7 7" />

@@ -14,6 +14,10 @@ import QRCode from "qrcode";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { formatCode, parsePastedInvite } from "../../../lib/team-invite";
+import { findJoinLink } from "../../../lib/join-link";
+import { savedLinkWorker, WORKER_UPDATE_COMMAND, type WorkerHealth } from "../../../lib/worker";
+import { WorkerSuggestion } from "../WorkerSuggestion";
+import { JoinLinkHost, JoinTeamPopup } from "./JoinTeamPopup";
 import {
   pingText,
   teamApi,
@@ -206,12 +210,15 @@ export function TeamPage({
   lend: lendClient = lendApi,
   displayName = "",
   onSaved,
+  workers,
 }: {
   api?: TeamApi;
   /** Share an agent (Labs): Request usage and the lends on each person's row. */
   lend?: LendApi;
   displayName?: string;
   onSaved?: () => void;
+  /** Worker addresses: the one saved for the phone link, and a way to ask a Worker what it can do (tests give their own). */
+  workers?: { savedLink?: () => Promise<string | null>; check?: (address: string) => Promise<WorkerHealth | null> };
 }) {
   const t = useT();
   const [view, setView] = useState<TeamConfigView | null>(null);
@@ -341,6 +348,8 @@ export function TeamPage({
         return (
           <StartForm
             api={api}
+            savedLink={workers?.savedLink}
+            checkWorker={workers?.check}
             busy={busy}
             guess={guess}
             onBack={() => setMode("choose")}
@@ -355,10 +364,12 @@ export function TeamPage({
       if (mode === "join") {
         return (
           <JoinForm
+            api={api}
             busy={busy}
             guess={guess}
             onBack={() => setMode("choose")}
             onJoin={(input) => run(() => api.join(input), true)}
+            onJoinedByLink={() => void api.configGet().then(take).catch(() => undefined)}
           />
         );
       }
@@ -585,6 +596,9 @@ export function TeamPage({
         </Note>
       )}
       {body()}
+      <Sheet>
+        <JoinLinkHost api={api} guess={guess} onJoined={() => void api.configGet().then(take).catch(() => undefined)} />
+      </Sheet>
       {view && view.team === "" && !view.joining && view.error && (
         <Note role="alert">{view.error}</Note>
       )}
@@ -660,7 +674,7 @@ function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
   useEffect(() => {
     if (!invite || !canvasRef.current) return;
     // The same look as the phone pairing code. A QR that cannot be drawn leaves the link and the code.
-    QRCode.toCanvas(canvasRef.current, invite.link, {
+    QRCode.toCanvas(canvasRef.current, invite.joinUrl ?? invite.link, {
       width: 132,
       margin: 2,
       color: { dark: "#e8e8e8", light: "#121212" },
@@ -671,7 +685,7 @@ function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
     if (!invite) return;
     try {
       await navigator.clipboard.writeText(
-        what === "link" ? invite.link : invite.code,
+        what === "link" ? (invite.joinUrl ?? invite.link) : invite.code,
       );
       setCopied(what);
       window.setTimeout(() => setCopied(null), 1500);
@@ -692,7 +706,7 @@ function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
         </div>
       ) : (
         <>
-          <p className="tp-send">{t("teamPage.sendThis")}</p>
+          <p className="tp-send">{invite.joinUrl ? t("teamPage.inviteWorkerLink") : t("teamPage.sendThis")}</p>
           <div className="tp-invite-body">
             <canvas
               ref={canvasRef}
@@ -704,23 +718,48 @@ function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
                 <input
                   className="st-field is-mono"
                   readOnly
-                  value={invite.link}
+                  value={invite.joinUrl ?? invite.link}
                   aria-label={t("teamPage.linkAria")}
+                  data-testid={invite.joinUrl ? "invite-join-url" : undefined}
                   onFocus={(e) => e.currentTarget.select()}
                 />
                 <Btn onClick={() => void copy("link")}>
                   {copied === "link" ? t("teamPage.copied") : t("settings.copy")}
                 </Btn>
               </div>
-              <div className="tp-code-line">
-                <small>{t("teamPage.code")}</small>
-                <span className="st-invite-code" aria-label={t("teamPage.codeAria")}>
-                  {invite.code}
-                </span>
-                <Btn small onClick={() => void copy("code")}>
-                  {copied === "code" ? t("teamPage.copied") : t("teamPage.copyCode")}
-                </Btn>
-              </div>
+              {invite.joinUrl ? (
+                <details className="tp-older">
+                  <summary>{t("teamPage.inviteOlder")}</summary>
+                  <div className="st-invite-link">
+                    <input className="st-field is-mono" readOnly value={invite.link} aria-label={t("teamPage.linkAria")} onFocus={(e) => e.currentTarget.select()} />
+                  </div>
+                  <div className="tp-code-line">
+                    <small>{t("teamPage.code")}</small>
+                    <span className="st-invite-code" aria-label={t("teamPage.codeAria")}>
+                      {invite.code}
+                    </span>
+                  </div>
+                </details>
+              ) : (
+                <div className="tp-code-line">
+                  <small>{t("teamPage.code")}</small>
+                  <span className="st-invite-code" aria-label={t("teamPage.codeAria")}>
+                    {invite.code}
+                  </span>
+                  <Btn small onClick={() => void copy("code")}>
+                    {copied === "code" ? t("teamPage.copied") : t("teamPage.copyCode")}
+                  </Btn>
+                </div>
+              )}
+              {invite.joinUrlNote === "update-worker" && (
+                <div data-testid="invite-update-worker" className="stable-update">
+                  <p>{t("teamPage.inviteUpdate")}</p>
+                  <div className="stable-cmd">
+                    <code className="font-mono break-all">{WORKER_UPDATE_COMMAND}</code>
+                  </div>
+                </div>
+              )}
+              {invite.joinUrlNote && invite.joinUrlNote !== "update-worker" && <small>{invite.joinUrlNote}</small>}
               <div className="tp-invite-foot">
                 <small>{t("teamPage.expiresAt", { time: clock(invite.expiresAtMs) })}</small>
                 <Btn small disabled={making} onClick={() => void make()}>
@@ -740,18 +779,22 @@ function InviteBlock({ api, auto }: { api: TeamApi; auto: boolean }) {
 
 type Way = "relay" | "address" | "folder";
 
-function StartForm({
+export function StartForm({
   api,
   busy,
   guess,
   onBack,
   onCreate,
+  savedLink = savedLinkWorker,
+  checkWorker,
 }: {
   api: TeamApi;
   busy: boolean;
   guess: string;
   onBack: () => void;
   onCreate: (input: TeamCreateInput) => Promise<boolean>;
+  savedLink?: () => Promise<string | null>;
+  checkWorker?: (address: string) => Promise<WorkerHealth | null>;
 }) {
   const t = useT();
   const [teamName, setTeamName] = useState("");
@@ -762,6 +805,18 @@ function StartForm({
   const [relay, setRelay] = useState("");
   const [folder, setFolder] = useState("");
   const [deploying, setDeploying] = useState(false);
+  // The phone link already has a Worker? One Worker can be the relay too ("Use ...").
+  const [linkWorker, setLinkWorker] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void Promise.resolve()
+      .then(savedLink)
+      .then((a) => alive && setLinkWorker(a))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
   const shownName = nameEdited ? name : guess;
   const named = !!teamName.trim() && !!shownName.trim();
   const create = (input: { relay?: string; folder?: string }) =>
@@ -882,6 +937,7 @@ function StartForm({
                   onChange={(e) => setRelay(e.target.value)}
                 />
               </label>
+              <WorkerSuggestion address={linkWorker} current={relay} feature="team" useKey="worker.useLink" noteKey="worker.linkNote" onUse={setRelay} check={checkWorker} />
               <p className="tp-sub">
                 {t("teamPage.hostOwn")}{" "}
                 <ExternalLink href={RELAY_HELP_URL}>
@@ -919,16 +975,20 @@ function StartForm({
 
 // ---------- join ----------
 
-function JoinForm({
+export function JoinForm({
+  api,
   busy,
   guess,
   onBack,
   onJoin,
+  onJoinedByLink,
 }: {
+  api: TeamApi;
   busy: boolean;
   guess: string;
   onBack: () => void;
   onJoin: (input: TeamJoinInput) => Promise<boolean>;
+  onJoinedByLink: () => void;
 }) {
   const t = useT();
   const [text, setText] = useState("");
@@ -937,6 +997,9 @@ function JoinForm({
   const [nameEdited, setNameEdited] = useState(false);
   const [github, setGithub] = useState("");
   const found = useMemo(() => parsePastedInvite(text), [text]);
+  // A one-time link from a Potato Worker (https://<worker>/join/<code>): opens the "Join?" popup instead.
+  const workerLink = useMemo(() => findJoinLink(text), [text]);
+  const [popup, setPopup] = useState(false);
   const shownName = nameEdited ? name : guess;
   const teamName = found.link ? inviteTeamName(found.link) : null;
   const ready =
@@ -967,8 +1030,27 @@ function JoinForm({
           }}
         />
       </label>
-      {text.trim() && !found.link && (
+      {text.trim() && !found.link && !workerLink && (
         <Note role="alert">{t("teamPage.notInvite")}</Note>
+      )}
+      {workerLink && (
+        <div className="tp-found" role="status" data-testid="join-link-found">
+          <span>{t("teamPage.joinLinkFound")} </span>
+          <Btn small primary onClick={() => setPopup(true)}>
+            {t("teamPage.joinLinkOpen")}
+          </Btn>
+        </div>
+      )}
+      {popup && workerLink && (
+        <Sheet>
+          <JoinTeamPopup
+            link={workerLink.text}
+            api={api}
+            guess={guess}
+            onClose={() => setPopup(false)}
+            onJoined={onJoinedByLink}
+          />
+        </Sheet>
       )}
       {found.link && (
         <p className="tp-found" role="status">

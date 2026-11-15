@@ -1031,3 +1031,26 @@ describe('AgentDefinitions: a list that comes back empty', () => {
     expect(shownError('INVALID_ARGUMENT: name is taken')).toBe('name is taken');
   });
 });
+
+describe('AgentDefinitions: turning a built-in agent off', () => {
+  const withBundled = (): DefinitionsListing => {
+    const l = fixture();
+    return { ...l, definitions: [...l.definitions, { id: 'aider', file: 'bundled/aider.toml', source: 'bundled', state: 'active', errors: [], fingerprint: null, shadowed_by: null }] } as DefinitionsListing;
+  };
+
+  it('Hide takes a built-in agent off the list (and out of the menus); Show hidden brings it back', async () => {
+    globalThis.localStorage.removeItem('pm.newAgent.hidden');
+    await render(mockApi(withBundled()));
+    expect(host.querySelector('[aria-label="Remove aider"]')).toBeNull();
+    await click(host.querySelector('button[aria-label="Hide aider"]'));
+    expect(JSON.parse(globalThis.localStorage.getItem('pm.newAgent.hidden') ?? '[]')).toEqual(['aider']);
+    expect(host.textContent).not.toContain('bundled/aider.toml');
+    expect(host.querySelector('[data-testid="hidden-bundled"]')?.textContent).toContain('1 built-in agent is hidden');
+    await click(button('Show hidden'));
+    expect(host.textContent).toContain('bundled/aider.toml');
+    await click(host.querySelector('button[aria-label="Show aider again"]'));
+    expect(globalThis.localStorage.getItem('pm.newAgent.hidden')).toBe('[]');
+    expect(host.querySelector('[data-testid="hidden-bundled"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="Hide aider"]')).toBeTruthy();
+  });
+});

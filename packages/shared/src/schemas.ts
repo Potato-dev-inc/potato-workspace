@@ -23,7 +23,7 @@ export const SettingsSchema = z.object({
   /** Orchestrator sidebar width in the workspace (px). */
   sidebar_width: z.number().int().min(300).max(800).default(360),
   /** Desktop UI chrome theme. */
-  theme: z.enum(['dark', 'light']).default('dark'),
+  theme: z.enum(['dark', 'light', 'dim', 'auto']).default('dark'),
   /** Where panes are shown: one cockpit window (orchestration) or a pop-out per pane (individual). Owned by Rust (set_ui_mode). */
   ui_mode: z.enum(['orchestration', 'individual']).default('orchestration'),
   /** Ask before closing a pane window, a cockpit pane or the app while an agent is working. */
@@ -48,6 +48,8 @@ export const SettingsSchema = z.object({
   budget_default_turns: z.number().int().min(0).max(10000).default(0),
   /** Same, in wall-clock minutes; 0 = no limit. */
   budget_default_minutes: z.number().int().min(0).max(10080).default(0),
+  /** After a turn, a quiet line may say a cheaper or stronger model would fit better. On unless false. Rust: acp::chat::right_size. */
+  right_size_suggest: z.boolean().optional(),
   /** Live updates from agents (Claude, Codex): off, or watch only for now. Owned by Rust (settings_store). */
   agent_hooks_mode: z.enum(['off', 'shadow', 'evidence']).optional(),
   /** Per-agent override of agent_hooks_mode, keyed by agent id. */
@@ -80,6 +82,12 @@ export const SettingsSchema = z.object({
   /** Desktop Potato (Settings > General > Labs): a small pet window on the desktop. Off unless chosen. Rust: pet. */
   desktop_pet_enabled: z.boolean().optional(),
   agent_browser_enabled: z.boolean().optional(),
+  /** Companion memory and mood (Settings > General > Labs): daily journal, diary and mood per companion. Off unless chosen. */
+  companion_vault_enabled: z.boolean().optional(),
+  /** Discord bot (Settings > General > Labs): a companion answers in chosen Discord channels with the person's own bot. Off unless chosen. */
+  discord_bot_enabled: z.boolean().optional(),
+  /** Project guide (Settings > General > Labs): the person's agent writes a short guide to a project when asked. Off unless chosen. Rust: project_guide. */
+  project_guide_enabled: z.boolean().optional(),
   /** Desktop Potato: size 'small' | 'medium' | 'large', hidden-until (epoch ms), quiet. Rust: pet. */
   desktop_pet_size: z.enum(['small', 'medium', 'large']).optional(),
   desktop_pet_quiet: z.boolean().optional(),

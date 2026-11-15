@@ -1,0 +1,183 @@
+/* Inbox page (Inbox.tsx): one column, the calm "Nothing needs you" line, Done today and Team activity. Tokens only. */
+.cockpit .ck-inbox {
+  max-width: 720px;
+}
+.cockpit .ib-clear {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--live-soft);
+  color: var(--label);
+}
+.cockpit .ib-clear-ok {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--live);
+  color: var(--bg);
+  display: grid;
+  place-items: center;
+}
+.cockpit .ib-clear .ib-clear-t {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 400;
+}
+.cockpit .ib-clear .ib-clear-s {
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--fs-meta);
+}
+.cockpit .ib-clear-acts {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.cockpit .ib-sec {
+  margin: 0;
+}
+.cockpit .ib-lab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 0 4px;
+  padding: 0 12px;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  color: var(--label-3);
+}
+.cockpit .ib-sp {
+  flex: 1;
+}
+.cockpit .ib-lab-btn,
+.cockpit .ib-more {
+  color: var(--label-3);
+  font-size: var(--fs-label);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.cockpit .ib-lab-btn:hover,
+.cockpit .ib-more:hover {
+  color: var(--label);
+}
+.cockpit .ib-more {
+  margin: 4px 12px 0;
+}
+.cockpit .ib-none {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--label-3);
+}
+.cockpit .ib-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cockpit .ib-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  min-width: 0;
+}
+.cockpit .ib-row:hover {
+  background: var(--fill-hover);
+}
+.cockpit .ib-rows > li + li {
+  box-shadow: 0 -1px 0 var(--sep);
+}
+.cockpit .ib-rows > li:hover,
+.cockpit .ib-rows > li:hover + li {
+  box-shadow: none;
+}
+.cockpit .ib-row-tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cockpit .ib-row-tt {
+  color: var(--label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit .ib-row-sb {
+  color: var(--label-3);
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit .ib-when {
+  color: var(--label-3);
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ib-row-go {
+  opacity: 0;
+}
+.cockpit .ib-row:hover .ib-row-go,
+.cockpit .ib-row:focus-within .ib-row-go,
+.cockpit .ib-row-go[aria-expanded='true'] {
+  opacity: 1;
+}
+.cockpit .ib-row-body {
+  padding: 4px 12px 10px;
+}
+.cockpit .ib-add {
+  color: var(--add);
+}
+.cockpit .ib-del {
+  color: var(--del);
+}
+.cockpit .ib-tile {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+}
+.cockpit .ib-tile--pr {
+  background: color-mix(in srgb, var(--pr) 16%, transparent);
+  color: var(--pr);
+}
+.cockpit .ib-tile--push {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.cockpit .ib-tile--lend {
+  background: color-mix(in srgb, var(--lend) 16%, transparent);
+  color: var(--lend);
+}
+.cockpit .ib-tile--ok {
+  background: var(--live-soft);
+  color: var(--live);
+}
+.cockpit .ib-tile--danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.cockpit .ib-tile--note {
+  background: var(--fill);
+  color: var(--label-2);
+}
+@media (max-width: 640px) {
+  .cockpit .ib-row {
+    min-height: 48px;
+  }
+  .cockpit .ib-row-go {
+    opacity: 1;
+  }
+}

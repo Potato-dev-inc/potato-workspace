@@ -8,6 +8,7 @@
 //
 // Needs Rust (cargo) for the Rust parts. Set CARGO_TARGET_DIR to keep build output out of the repo.
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -98,6 +99,8 @@ try {
     LIMIT_UNAUTH_PER_IP_PER_HOUR: "100000",
     LIMIT_ROOMS_PER_ADDRESS_PER_HOUR: "100000",
     LIMIT_ROOM_VIEWS_PER_MINUTE: "100000",
+    ALLOWED_ORIGIN_RE: "^http://127\\.0\\.0\\.1:[0-9]+$",
+    RATE_LIMIT_PER_HOUR: "100000",
   });
   console.log(`worker with test hooks: ${hooked}`);
   if (only !== "app") {
@@ -106,6 +109,20 @@ try {
     run("Worker tests (node)", process.execPath, ["--test", "--test-concurrency=1", join(worker, "test", "worker.test.mjs")], {
       cwd: worker,
       env: { ...process.env, PM_RELAY_TEST_URL: hooked, PM_RELAY_STRICT_URL: strict },
+    });
+    // The stable phone link: a Worker that only accepts a setup secret (nobody can claim it first).
+    const linkSecret = "setup-secret-for-the-strict-test-worker";
+    const linkStrict = await startWorker("link-strict", {
+      ALLOWED_ORIGIN_RE: "^http://127\\.0\\.0\\.1:[0-9]+$",
+      SETUP_SECRET_SHA256: createHash("sha256").update(linkSecret).digest("hex"),
+    });
+    run("Potato Worker tests: features, invites (node)", process.execPath, ["--test", "--test-concurrency=1", join(worker, "test", "potato.test.mjs")], {
+      cwd: worker,
+      env: { ...process.env, PM_RELAY_TEST_URL: hooked, PM_RELAY_STRICT_URL: strict },
+    });
+    run("Stable link tests (node)", process.execPath, ["--test", "--test-concurrency=1", join(worker, "test", "stable.test.mjs")], {
+      cwd: worker,
+      env: { ...process.env, PM_LINK_URL: hooked, PM_LINK_STRICT_URL: linkStrict, PM_LINK_SETUP_SECRET: linkSecret },
     });
     run("Live Room tests (node)", process.execPath, ["--test", "--test-concurrency=1", join(worker, "test", "room.test.mjs")], {
       cwd: worker,

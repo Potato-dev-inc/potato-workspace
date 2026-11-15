@@ -21,7 +21,7 @@ import type { ContextReading } from '../cockpit/rail/railFormat';
 import { ProjectFilePicker, findMentionQuery, removeMention, type ProjectFilePickerHandle } from './ProjectFilePicker';
 import type { ProjectFileHit } from '../../lib/projectFiles';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
-import { commandHint, commandText, filterCommands, type AcpCommand } from '../../lib/acpChat';
+import { commandHint, commandText, filterCommands, slashQuery, type AcpCommand } from '../../lib/acpChat';
 import { registerFileDrop } from '../../lib/fileDrop';
 import { draggedFilePath } from '../../lib/dropFiles';
 import { t } from '../../i18n';
@@ -54,6 +54,10 @@ export interface ChatComposerProps {
   remoteDraft?: RemoteDraft | null;
   /** The slash commands the agent offers (a chat session over ACP). With some, typing "/" opens a menu above the box. */
   slashCommands?: readonly AcpCommand[];
+  /** The agent has not sent its commands yet: the menu shows a "Loading commands…" row. */
+  slashLoading?: boolean;
+  /** The box got the focus: the chat can start what "/" needs (the agent's session). */
+  onWarm?: () => void;
   /** Controls drawn inside the box under the text (the agent's settings), left of the send button. */
   toolbar?: ReactNode;
   /** The agent is working: the button reads Stop (and Esc stops too) while this is true and `onStop` is set. */
@@ -98,7 +102,7 @@ export function ChatComposer(props: ChatComposerProps) {
   return <ChatComposerBox key={props.draftKey ?? ''} {...props} />;
 }
 
-function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, remoteDraft, slashCommands, toolbar, running = false, onStop, status, attachFiles, contextUsage, footnote, history }: ChatComposerProps) {
+function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, remoteDraft, slashCommands, slashLoading = false, onWarm, toolbar, running = false, onStop, status, attachFiles, contextUsage, footnote, history }: ChatComposerProps) {
   const stoppable = running && !!onStop;
   const [restored] = useState(() => (draftKey ? readDraftState(draftKey) : { text: '', attachments: [] as ChatAttachment[] }));
   const [text, setText] = useState(restored.text);
@@ -128,7 +132,8 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   const [menuAt, setMenuAt] = useState(0);
   const [menuShut, setMenuShut] = useState(false);
   const menuItems = slashCommands && !blocked && !menuShut ? filterCommands(slashCommands, text) : [];
-  const menuOpen = menuItems.length > 0;
+  const loadingRow = !!slashCommands && slashLoading && !blocked && !menuShut && slashQuery(text) !== null;
+  const menuOpen = menuItems.length > 0 || loadingRow;
   // The `@` mention: typing "@word" at the caret opens the project file picker. Needs the same pane as the + button.
   const mentionsOn = !!attachFiles && !!draftKey && !blocked;
   const [mention, setMention] = useState<{ start: number; query: string; rect: DOMRect | null } | null>(null);
@@ -525,6 +530,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
       value={text}
       disabled={blocked}
       aria-label="Message to the agent"
+      onFocus={onWarm}
       placeholder={blocked ? '' : (hint ?? 'Write a message for the agent')}
       {...(slashCommands && slashCommands.length > 0
         ? {
@@ -615,6 +621,11 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
                 <span className="ck-slash-desc">{command.description}</span>
               </li>
             ))}
+            {loadingRow && (
+              <li className="ck-slash-opt ck-slash-loading" role="presentation" data-testid="slash-loading">
+                <span className="ck-slash-desc">{t('chatUx.slash.loading')}</span>
+              </li>
+            )}
           </ul>
         </div>
       )}

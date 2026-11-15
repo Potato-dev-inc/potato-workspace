@@ -648,9 +648,31 @@ pub fn changes_with(reference: &WorktreeRef, env: &[(String, String)]) -> Result
     let wt = require_checkout(reference)?;
     let env = harden::with_filters_off(&wt, env)?;
     let tree = snapshot_tree(&wt, &env)?;
-    let numstat = git_ok_raw(&wt, &["diff", "--numstat", "-z", "--no-renames", &reference.base_commit, &tree])?;
+    let numstat = numstat_ignoring_eol(&wt, &reference.base_commit, &tree)?;
     let names = git_ok_raw(&wt, &["diff", "--name-status", "-z", "--no-renames", &reference.base_commit, &tree])?;
     Ok(parse_changes(&numstat, &names))
+}
+
+/// `git diff --numstat -z` between `base` and `tree`, with a file whose only change is CRLF vs LF counted as 0/0
+/// (still listed, so Keep and Review see it) instead of rewriting every line.
+fn numstat_ignoring_eol(wt: &Path, base: &str, tree: &str) -> Result<String, OperationError> {
+    let plain = git_ok_raw(wt, &["diff", "--numstat", "-z", "--no-renames", base, tree])?;
+    let calm = git_ok_raw(wt, &["diff", "--numstat", "-z", "--no-renames", "--ignore-cr-at-eol", base, tree])?;
+    let path_of = |rec: &str| rec.splitn(3, '\t').nth(2).map(str::to_string);
+    let calm_paths: std::collections::HashSet<String> = calm.split('\0').filter_map(path_of).collect();
+    let mut out = String::new();
+    for rec in plain.split('\0').filter(|r| !r.is_empty()) {
+        let counted = path_of(rec).is_some_and(|p| calm_paths.contains(&p));
+        if counted {
+            out.push_str(rec);
+        } else if let Some(p) = path_of(rec) {
+            out.push_str(&format!("0\t0\t{p}"));
+        } else {
+            continue;
+        }
+        out.push('\0');
+    }
+    Ok(out)
 }
 
 fn git_ok_raw(dir: &Path, args: &[&str]) -> Result<String, OperationError> {
@@ -669,7 +691,7 @@ fn git_ok_raw(dir: &Path, args: &[&str]) -> Result<String, OperationError> {
 pub fn diff(reference: &WorktreeRef, path: Option<&str>) -> Result<DiffView, OperationError> {
     let wt = require_checkout(reference)?;
     let tree = snapshot_tree(&wt, &[])?;
-    let numstat = git_ok_raw(&wt, &["diff", "--numstat", "-z", "--no-renames", &reference.base_commit, &tree])?;
+    let numstat = numstat_ignoring_eol(&wt, &reference.base_commit, &tree)?;
     let names = git_ok_raw(&wt, &["diff", "--name-status", "-z", "--no-renames", &reference.base_commit, &tree])?;
     let mut args = vec![
         "diff".to_string(),

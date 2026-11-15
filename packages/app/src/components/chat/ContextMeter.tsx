@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { formatTokens, type ContextReading } from '../cockpit/rail/railFormat';
 import '../../styles/chat-input-card.css';
+import { useDismissable } from '../../hooks/useDismissable';
 
 /** Circle of radius 8 in a 20 box. */
 const CIRCUMFERENCE = 2 * Math.PI * 8;
@@ -17,14 +18,8 @@ export function ContextMeter({ reading }: { reading: ContextReading | null }) {
   useEffect(() => {
     if (open) pop.current?.focus();
   }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const away = (event: PointerEvent) => {
-      if (root.current && !root.current.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', away);
-    return () => document.removeEventListener('pointerdown', away);
-  }, [open]);
+  // Escape is handled on the popover itself (it returns the focus to the ring and stops the event).
+  useDismissable(open, { inside: [root], anchor: root, ignore: ['escape'], onDismiss: () => setOpen(false) });
 
   if (!reading) return null;
   const { percent, used, window: size } = reading;

@@ -109,6 +109,9 @@ pub(super) fn claude_mcp_needs_refresh(cwd: &Path, source: McpLaunchSource) -> b
     if source == McpLaunchSource::NpmPackage && !json_server_uses_npm_package(server) {
         return true;
     }
+    if super::stale::current_for(source).is_some_and(|current| super::stale::json_server_is_stale(server, &current)) {
+        return true;
+    }
     if server
         .get("args")
         .and_then(Value::as_array)

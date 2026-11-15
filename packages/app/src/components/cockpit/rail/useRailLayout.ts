@@ -37,6 +37,8 @@ export interface RailLayout {
   /** Show it: open and fits. */
   visible: boolean;
   toggle: () => void;
+  /** Hide it (dragging the edge under the snap width). */
+  close: () => void;
 }
 
 export function useRailLayout(): RailLayout {
@@ -51,6 +53,11 @@ export function useRailLayout(): RailLayout {
     });
   }, []);
 
+  const close = useCallback(() => {
+    setOpen(false);
+    writeOpen(false);
+  }, []);
+
   useEffect(() => {
     if (!fits) return;
     const onKey = (e: KeyboardEvent) => {
@@ -62,5 +69,5 @@ export function useRailLayout(): RailLayout {
     return () => window.removeEventListener('keydown', onKey);
   }, [fits, toggle]);
 
-  return { open, fits, visible: open && fits && !focus, toggle };
+  return { open, fits, visible: open && fits && !focus, toggle, close };
 }

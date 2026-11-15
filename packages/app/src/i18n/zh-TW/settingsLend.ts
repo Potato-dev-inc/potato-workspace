@@ -216,4 +216,11 @@ export const settingsLend: Partial<Record<EnglishKey, string>> = {
   'lend.request.asked': '已向 {name} 申請{profile} · {agent} · {time}',
   'lend.wantsProfile': '{who} 想借{profile}（{agent}）{time}',
   'lend.startChat': '開始聊天',
+  'lend.showUsage': '在使用量列顯示使用量',
+  'lend.showUsageHint': '借用的人也會看到這些數字。',
+  'lend.past.lends': '過去借出（{n}）',
+  'lend.past.borrows': '過去借入（{n}）',
+  'lend.past.dismiss': '移除這一列',
+  'lend.past.clear': '清除',
+  'lend.past.showAll': '顯示全部 {n} 筆',
 };

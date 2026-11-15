@@ -23,8 +23,11 @@ interface Meta {
 const turnsWords = (n: number | undefined): string => (!n ? t('settings.value.noLimit') : t('settings.value.turnsUnit', { count: n }));
 const minutesWords = (n: number | undefined): string => (!n ? t('settings.value.noLimit') : t('settings.value.minUnit', { count: n }));
 
+const themeLabel = (theme: Settings['theme'] | undefined): string =>
+  theme === 'light' ? t('lookFeel.theme.light') : theme === 'dim' ? t('lookFeel.theme.dim') : theme === 'auto' ? t('lookFeel.theme.auto') : t('lookFeel.theme.dark');
+
 export const ROW_META: Record<string, Meta> = {
-  theme: { keys: ['theme'], valueText: (s) => t('settings.value.theme', { value: s.theme === 'light' ? t('lookFeel.theme.light') : t('lookFeel.theme.dark') }) },
+  theme: { keys: ['theme'], valueText: (s) => t('settings.value.theme', { value: themeLabel(s.theme) }) },
   'mode-switch-animation': {
     keys: ['mode_switch_animation'],
     valueText: (s) => t('settings.value.modeSwitch', { value: styleLabel(parseSwitchStyle(s.mode_switch_animation)) }),
@@ -46,6 +49,7 @@ export const ROW_META: Record<string, Meta> = {
   checkpoints: { keys: ['checkpoints_enabled'] },
   'checkpoints-keep': { keys: ['checkpoints_keep'], valueText: (s) => t('settings.value.checkpointsKept', { value: s.checkpoints_keep ?? 50 }) },
   'budget-turns': { keys: ['budget_default_turns'], valueText: (s) => t('settings.value.turns', { value: turnsWords(s.budget_default_turns) }) },
+  'right-size': { keys: ['right_size_suggest'] },
   'budget-minutes': { keys: ['budget_default_minutes'], valueText: (s) => t('settings.value.time', { value: minutesWords(s.budget_default_minutes) }) },
   'handoff-mode': {
     keys: ['handoff_mode'],
@@ -71,6 +75,9 @@ export const ROW_META: Record<string, Meta> = {
   'devices-labs': { keys: ['devices_enabled'] },
   'desktop-potato-labs': { keys: ['desktop_pet_enabled'] },
   'agent-browser-labs': { keys: ['agent_browser_enabled'] },
+  'companion-vault-labs': { keys: ['companion_vault_enabled'] },
+  'discord-bot-labs': { keys: ['discord_bot_enabled'] },
+  'project-guide-labs': { keys: ['project_guide_enabled'] },
   'early-versions': { keys: ['early_versions_enabled'] },
   'show-developer-settings': { keys: ['show_developer_settings'] },
 };

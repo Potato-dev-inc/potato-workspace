@@ -128,6 +128,8 @@ export const settingsRows = {
   "settings.row.lend-labs.hint": "Lend a sign-in to another PC, or borrow one. Adds a card to Connect.",
   "settings.row.desktop-potato-labs.hint": "A small Potato on your desktop. It sleeps, and waves when an agent needs you.",
   "settings.row.agent-browser-labs.hint": "Agents open and click pages of your app on this PC. You can take over.",
+  "settings.row.companion-vault-labs.hint": "Companions keep a journal and a diary, and show how they feel. Plain text files.",
+  "settings.row.discord-bot-labs.hint": "A companion answers in your chosen Discord channels, with your own bot.",
   "settings.row.telegram.hint": "Answer your agents by Telegram text. Read the warning first.",
   "settings.row.storage.hint": "Tasks, file locks and what happened in each pane are kept per project.",
   "settings.row.settings-file.hint": "Where your settings are saved. Export a copy with keys removed.",

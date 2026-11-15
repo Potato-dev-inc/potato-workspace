@@ -155,6 +155,7 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
   if (route === '/phone/new-chat' && method === 'GET' && phone.acp?.newChat) return json(phone.acp.newChat);
   if (route === '/acp/closed' && method === 'GET' && phone.acp) return json({ chats: phone.acp.closed ?? [] });
   if (route === '/pane-rules' && method === 'GET') return json({ rules: phone.rules ?? {} });
+  if (route === '/desk-away' && method === 'GET') return phone.desk ? json(phone.desk) : json({ error: 'not found' }, 404);
   if (/^\/panes\/[^/]+\/interrupt$/.test(route) && method === 'POST') return json({ pane_id: route.split('/')[2], stopped: true });
   if (route === '/control-asks' && method === 'POST') return json({ asked: true, id: 'ask-harness' }, 202);
   if (route === '/panes/stop-all') return json({ stopped: [{ pane_id: PANE_CODEX, agent_type: 'codex', cwd: '' }], failed: [] });

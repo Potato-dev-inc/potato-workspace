@@ -36,6 +36,7 @@ import { uploadFile } from '../../lib/phone-upload';
 import { PhoneProgress } from './PhoneProgress';
 import { ResultCard } from './PhoneResult';
 import { PhoneConversation } from './PhoneConversation';
+import { ChatAnswerContext } from '../chat/chatAnswer';
 import { PhoneArtifactScreen } from './PhoneArtifact';
 import type { ArtifactRef } from '../../lib/artifacts';
 import { PhoneNoControl } from './PhoneNoControl';
@@ -368,6 +369,7 @@ export function PhoneChatView({
   }
   return (
     <div className="ph-chat" data-testid="phone-chat">
+      <ChatAnswerContext.Provider value={canSend ? sendOrKeep : null}>
       <PhoneConversation
         state={status.state}
         reason={status.reason}
@@ -389,6 +391,7 @@ export function PhoneChatView({
         earlier={earlier}
         pictures={pictures}
       />
+      </ChatAnswerContext.Provider>
       {openPage && <PhoneArtifactScreen bridge={bridge} paneId={paneId} id={openPage.ref.id} version={openPage.ref.version} title={openPage.title} onClose={() => setOpenPage(null)} />}
       {pressed && <MessageActionsSheet message={pressed} handlers={actions} onClose={() => setPressed(null)} />}
     </div>

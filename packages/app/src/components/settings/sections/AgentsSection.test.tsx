@@ -5,10 +5,12 @@ import { unsearchableLabels } from '../test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tauriAccountsApi } from '../../../lib/accounts';
 import { tauriAgentDefinitionsApi } from '../../../lib/agentDefinitions';
+import { HELPERS_IN_SIDEBAR_KEY, getHelpersInSidebar, setHelpersInSidebar } from '../../../lib/helpersInSidebar';
 import { DEFAULT_STANDBY_CONFIG } from '../../../lib/standby';
 import type { KeepGoingSettings } from '../../../lib/keep-going';
 import { tauri } from '../../../lib/tauri';
 import type { StandbyConfig, StandbyStatus } from '../../../lib/tauri-types';
+import type { StandbyHelperEntry, StandbyHelpersView } from '../../../lib/standbyHelpers';
 import { rowMatches, searchSections, type SectionDef } from '../model';
 import { BASE_SETTINGS, blur, buttonByText, byLabel, click, hasText, mountRows, pickOption, settle, type as typeInto, type Mounted } from '../test-utils';
 import { agentsRows } from './AgentsSection';
@@ -17,7 +19,17 @@ vi.mock('../../../lib/tauri', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/tauri')>();
   return {
     ...real,
-    tauri: { ...real.tauri, standbyGetStatus: vi.fn(async () => null), standbySetConfig: vi.fn(async () => null) },
+    tauri: {
+      ...real.tauri,
+      standbyGetStatus: vi.fn(async () => null),
+      standbySetConfig: vi.fn(async () => null),
+      standbyHelpersGet: vi.fn(async () => null),
+      standbyHelperAdd: vi.fn(async () => null),
+      standbyHelperUpdate: vi.fn(async () => null),
+      standbyHelperRemove: vi.fn(async () => null),
+      standbyHelperStart: vi.fn(async () => null),
+      standbyHelpersSetLimits: vi.fn(async () => null),
+    },
   };
 });
 
@@ -199,10 +211,10 @@ describe('Agents: every row renders', () => {
     expect(buttonByText(m.host, 'Save changes')).toBeUndefined();
   });
 
-  it('groups the rows: Sign in, Your chats, Speed, Models, Rules for all agents, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
+  it('groups the rows: Sign in, Your chats, Speed, Standby helpers, Models, Rules for all agents, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
     await mount();
     const heads = [...m.host.querySelectorAll('section.st-group')].map((g) => g.querySelector(':scope > h2')?.textContent?.trim() ?? '');
-    expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Your chats', 'Speed', 'Models', 'Rules for all agents', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Linux', 'Same file', '']);
+    expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Your chats', 'Speed', 'Standby helpers', 'Models', 'Rules for all agents', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Linux', 'Same file', '']);
   });
 
   it('mounts the same-file switch under Same file and it is found by search', async () => {
@@ -445,5 +457,143 @@ describe('Agents: Show terminals', () => {
     const sections = [{ id: 'agents', title: 'Agents', rows: agentsRows }] as unknown as SectionDef[];
     const hits = searchSections(sections, 'terminal').flatMap((s) => s.rows.map((r) => r.id));
     expect(hits).toContain('show-terminals');
+  });
+});
+
+describe('Agents: Standby helpers', () => {
+  const entry = (over: Partial<StandbyHelperEntry> = {}): StandbyHelperEntry => ({
+    id: 'sb-1',
+    name: 'Reviewer',
+    agent: 'codex',
+    model: 'gpt-5',
+    project: 'C:/work/app',
+    after_task: 'wait',
+    state: 'ready',
+    note: null,
+    pane_id: null,
+    ...over,
+  });
+  const viewOf = (helpers: StandbyHelperEntry[], max = 4): StandbyHelpersView => ({ helpers, max, idle_minutes: 30 });
+  const rowsOnScreen = () => [...m.host.querySelectorAll<HTMLElement>('[data-testid^="standby-row-"]')];
+  const form = () => m.host.querySelector('[data-testid="standby-form"]')!;
+
+  it('shows the row in Agents with its list, the form and the limits', async () => {
+    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([entry()]));
+    await mount();
+    expect(rowOf('standby-helpers')).toBeTruthy();
+    expect(rowsOnScreen()).toHaveLength(1);
+    expect(m.host.querySelector('[data-testid="standby-state-sb-1"]')!.textContent).toBe('Ready');
+    expect(byLabel<HTMLInputElement>(m.host, 'Name of standby Reviewer')!.value).toBe('Reviewer');
+    expect(m.host.textContent).toContain('Codex CLI · gpt-5');
+    expect(byLabel(m.host, 'Most standbys at once')).toBeTruthy();
+    expect(byLabel(m.host, 'Minutes before an unused standby closes')).toBeTruthy();
+    expect(buttonByText(m.host, 'Add standby')).toBeTruthy();
+  });
+
+  it('says plainly when there are none and when the limit is reached', async () => {
+    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([]));
+    await mount();
+    expect(m.host.textContent).toContain('No standbys yet.');
+    await m.unmount();
+    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([entry(), entry({ id: 'sb-2', name: 'Tester' })], 2));
+    await mount();
+    expect(m.host.textContent).toContain('You have 2 standbys, the most allowed.');
+    expect(buttonByText(m.host, 'Add standby')!.disabled).toBe(true);
+  });
+
+  it('makes a standby from the form with the name, agent, model and project typed', async () => {
+    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([]));
+    vi.mocked(tauri.standbyHelperAdd).mockResolvedValue(viewOf([entry({ state: 'starting' })]));
+    await mount();
+    expect(buttonByText(m.host, 'Add standby')!.disabled).toBe(true);
+    await typeInto(byLabel<HTMLInputElement>(form(), 'Name')!, ' Reviewer ');
+    await typeInto(byLabel<HTMLInputElement>(form(), 'Project folder')!, 'C:/work/app');
+    await click(buttonByText(m.host, 'Add standby'));
+    await settle(10);
+    expect(tauri.standbyHelperAdd).toHaveBeenCalledTimes(1);
+    const input = vi.mocked(tauri.standbyHelperAdd).mock.calls[0][0];
+    expect(input).toMatchObject({ name: 'Reviewer', project: 'C:/work/app', model: null, after_task: 'wait' });
+    expect(input.agent).not.toBe('');
+    expect(rowsOnScreen()).toHaveLength(1);
+    expect(m.host.querySelector('[data-testid="standby-state-sb-1"]')!.textContent).toBe('Starting');
+  });
+
+  it('shows a refusal from the backend in words', async () => {
+    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([]));
+    vi.mocked(tauri.standbyHelperAdd).mockRejectedValue('That project folder does not exist.');
+    await mount();
+    await typeInto(byLabel<HTMLInputElement>(form(), 'Name')!, 'Reviewer');
+    await typeInto(byLabel<HTMLInputElement>(form(), 'Project folder')!, 'C:/nope');
+    await click(buttonByText(m.host, 'Add standby'));
+    await settle(10);
+    expect(m.host.querySelector('[role="alert"]')!.textContent).toContain('That project folder does not exist.');
+  });
+
+  it('changes what happens after a task, starts a sleeping one and removes one', async () => {
+    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([entry({ state: 'asleep' })]));
+    vi.mocked(tauri.standbyHelperUpdate).mockResolvedValue(viewOf([entry({ state: 'asleep', after_task: 'close' })]));
+    vi.mocked(tauri.standbyHelperStart).mockResolvedValue(viewOf([entry({ state: 'starting' })]));
+    vi.mocked(tauri.standbyHelperRemove).mockResolvedValue(viewOf([]));
+    await mount();
+    expect(m.host.querySelector('[data-testid="standby-state-sb-1"]')!.textContent).toBe('Closed to save memory');
+    await pickOption(byLabel<HTMLSelectElement>(m.host, 'What Reviewer does after a task')!, 'close');
+    expect(tauri.standbyHelperUpdate).toHaveBeenCalledWith('sb-1', { after_task: 'close' });
+    await click(buttonByText(m.host, 'Start'));
+    expect(tauri.standbyHelperStart).toHaveBeenCalledWith('sb-1');
+    expect(m.host.querySelector('[data-testid="standby-state-sb-1"]')!.textContent).toBe('Starting');
+    await click(byLabel(m.host, 'Remove standby Reviewer'));
+    expect(tauri.standbyHelperRemove).toHaveBeenCalledWith('sb-1');
+    expect(rowsOnScreen()).toHaveLength(0);
+  });
+
+  it('explains a standby that cannot start and offers no Start for an agent that needs Chat', async () => {
+    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([entry({ state: 'problem', note: 'needs_chat' })]));
+    await mount();
+    expect(m.host.textContent).toContain('needs Chat turned on');
+    expect(buttonByText(m.host, 'Start')).toBeUndefined();
+  });
+
+  it('saves the limits through its own command', async () => {
+    vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([entry()]));
+    vi.mocked(tauri.standbyHelpersSetLimits).mockResolvedValue({ helpers: [entry()], max: 6, idle_minutes: 30 });
+    await mount();
+    const max = byLabel<HTMLInputElement>(m.host, 'Most standbys at once')!;
+    await typeInto(max, '6');
+    await blur(max);
+    await settle(10);
+    expect(tauri.standbyHelpersSetLimits).toHaveBeenCalledWith(6, 30);
+  });
+
+  it('search finds the row by the words people use', () => {
+    const sections = [{ id: 'agents', title: 'Agents', rows: agentsRows }] as unknown as SectionDef[];
+    for (const query of ['standby', 'reviewer', 'waiting helper']) {
+      expect(searchSections(sections, query).flatMap((section) => section.rows.map((row) => row.id)), query).toContain('standby-helpers');
+    }
+  });
+});
+
+describe('Agents: show helpers in the sidebar', () => {
+  afterEach(() => setHelpersInSidebar(false));
+
+  it('is off by default, sits with the helper rows, and the switch turns the sidebar tree on and off (kept on this device)', async () => {
+    await mount();
+    const row = rowOf('helpers-in-sidebar');
+    expect(row).toBeTruthy();
+    expect(row?.closest('section.st-group')?.querySelector(':scope > h2')?.textContent?.trim()).toBe('Helpers');
+    expect(row?.textContent).toContain('Helpers show in the bar above the chat.');
+    expect(switchFor('Show helpers in the sidebar')!.getAttribute('aria-checked')).toBe('false');
+    expect(getHelpersInSidebar()).toBe(false);
+    await click(switchFor('Show helpers in the sidebar'));
+    expect(getHelpersInSidebar()).toBe(true);
+    expect(localStorage.getItem(HELPERS_IN_SIDEBAR_KEY)).toBe('1');
+    expect(switchFor('Show helpers in the sidebar')!.getAttribute('aria-checked')).toBe('true');
+    // This device only: nothing is written to settings.json.
+    expect(m.env.patches).toEqual([]);
+    await click(switchFor('Show helpers in the sidebar'));
+    expect(getHelpersInSidebar()).toBe(false);
+  });
+
+  it('is found by search', async () => {
+    expect(rowMatches(agentsRows.find((r) => r.id === 'helpers-in-sidebar')!, 'sidebar helpers')).toBe(true);
   });
 });

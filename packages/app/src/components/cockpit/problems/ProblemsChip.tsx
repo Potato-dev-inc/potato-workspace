@@ -6,6 +6,7 @@ import { useLanguage, useT } from '../../../i18n';
 import { clearFixedProblems, openProblems, useProblems, type Problem, type ProblemWay } from '../../../lib/problems';
 import { useCopy } from '../../chat/useCopy';
 import '../../../styles/problems.css';
+import { useDismissable } from '../../../hooks/useDismissable';
 
 export interface ProblemActions {
   openChat: (paneId: string) => void;
@@ -69,22 +70,15 @@ export function ProblemsChip({ actions }: { actions: ProblemActions }) {
   useEffect(() => {
     if (!shown) return;
     sheet.current?.querySelector<HTMLElement>('button')?.focus();
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      setShown(false);
-      button.current?.focus();
-    };
-    const away = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (!sheet.current?.contains(target) && !button.current?.contains(target)) setShown(false);
-    };
-    document.addEventListener('keydown', key);
-    document.addEventListener('mousedown', away);
-    return () => {
-      document.removeEventListener('keydown', key);
-      document.removeEventListener('mousedown', away);
-    };
   }, [shown]);
+  useDismissable(shown, {
+    inside: [sheet, button],
+    anchor: button,
+    onDismiss: (why) => {
+      setShown(false);
+      if (why === 'escape') button.current?.focus();
+    },
+  });
 
   if (open === 0 && !shown) return null;
   return (

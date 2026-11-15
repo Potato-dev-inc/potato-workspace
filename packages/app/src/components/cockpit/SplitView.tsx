@@ -20,7 +20,8 @@ import { SplitDivider } from './SplitDivider';
 import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
 import { IconClose, IconRail, IconSplitDown } from './Icons';
 import { SplitRowDivider } from './SplitRowDivider';
-import { NO_BELOW, canSplitDown, hasBelow, shownIds, slotIds, type SplitBelow, type SplitColumn, type SplitSlot } from './split-grid';
+import { dragSourceProps } from '../dnd/dragSourceProps';
+import { NO_BELOW, canSplitDown, hasLayout, isStacked, isWide, shownIds, slotIds, type SplitBelow, type SplitColumn, type SplitSlot } from './split-grid';
 import { dockItems } from './pane-chrome';
 import { spinnerStatus, stateText } from './model';
 import { SessionRail } from './rail/SessionRail';
@@ -78,6 +79,7 @@ export function SplitView({
   /** Opens another chat below a column. Without it the Split down button is not shown. */
   onSplitDown?: (column: SplitColumn) => void;
 }) {
+  const t = useT();
   const rail = useRailLayout();
   const colsRef = useRef<HTMLDivElement>(null);
   const ids = slotIds(leftId, rightId, below);
@@ -88,16 +90,34 @@ export function SplitView({
   const agentType = fp?.info.agent_type ?? '';
   const chatAllowed = listing.agents.find((a) => a.id === agentType)?.kind !== 'shell';
   const shown = shownIds(leftId, rightId, below).length;
-  const grid = hasBelow(below);
+  const grid = hasLayout(below);
+  const stacked = isStacked(below);
+  const wide = isWide(below);
+  const wideRef = useRef<HTMLDivElement>(null);
+  const railToggle = rail.fits ? (
+    <button
+      type="button"
+      className="ck-icon-btn"
+      aria-label={rail.open ? 'Hide session details' : 'Show session details'}
+      aria-pressed={rail.open}
+      title={`${rail.open ? 'Hide' : 'Show'} session details ( ] )`}
+      onClick={rail.toggle}
+    >
+      <IconRail />
+    </button>
+  ) : null;
   const column = (col: SplitColumn) => {
     const top = col === 'left' ? leftId : rightId;
-    const down = col === 'left' ? below.leftDown : below.rightDown;
+    // Two stacked chats share one column: the second sits below the first (its slot is "right"). With a full-width chat
+    // at the bottom, the two columns on top hold one chat each.
+    const down = stacked ? rightId : wide ? null : col === 'left' ? below.leftDown : below.rightDown;
     return (
       <SplitColumnView
         c={c}
         column={col}
         topId={top}
         downId={down}
+        stackedPair={stacked}
         rows={col === 'left' ? below.leftRows : below.rightRows}
         focus={focus}
         grid={grid}
@@ -107,34 +127,48 @@ export function SplitView({
         onClose={onClose}
         onCloseChat={onCloseChat}
         onSplitDown={onSplitDown}
-        topActions={
-          col === 'right' && rail.fits ? (
-            <button
-              type="button"
-              className="ck-icon-btn"
-              aria-label={rail.open ? 'Hide session details' : 'Show session details'}
-              aria-pressed={rail.open}
-              title={`${rail.open ? 'Hide' : 'Show'} session details ( ] )`}
-              onClick={rail.toggle}
-            >
-              <IconRail />
-            </button>
-          ) : null
-        }
+        topActions={col === 'right' || stacked ? railToggle : null}
       />
     );
   };
   return (
     <div className="ck-split">
-      <div ref={colsRef} className="ck-split-cols" style={{ ['--ck-split-ratio' as string]: String(ratio) } as CSSProperties}>
-        {column('left')}
-        <SplitDivider colsRef={colsRef} ratio={ratio} onRatio={onRatio} />
-        {column('right')}
-      </div>
+      {stacked ? (
+        <div className="ck-split-cols">{column('left')}</div>
+      ) : wide && below.leftDown !== null ? (
+        <div ref={wideRef} className="ck-split-wide" data-testid="split-wide">
+          <div className="ck-split-wide-top" style={{ ['--ck-split-rows' as string]: String(below.leftRows) } as CSSProperties}>
+            <div ref={colsRef} className="ck-split-cols" style={{ ['--ck-split-ratio' as string]: String(ratio) } as CSSProperties}>
+              {column('left')}
+              <SplitDivider colsRef={colsRef} ratio={ratio} onRatio={onRatio} />
+              {column('right')}
+            </div>
+          </div>
+          <SplitRowDivider colRef={wideRef} rows={below.leftRows} onRows={(rows) => onRows?.('left', rows)} label={t('split.rowResize')} />
+          <ErrorBoundary where="Pane" resetKeys={[below.leftDown]}>
+            <SplitSideView
+              c={c}
+              paneId={below.leftDown}
+              side="leftDown"
+              focused={focus === 'leftDown'}
+              onFocus={onFocus}
+              onClose={onClose}
+              closeChat={onCloseChat ? () => onCloseChat('leftDown') : undefined}
+            />
+          </ErrorBoundary>
+        </div>
+      ) : (
+        <div ref={colsRef} className="ck-split-cols" style={{ ['--ck-split-ratio' as string]: String(ratio) } as CSSProperties}>
+          {column('left')}
+          <SplitDivider colsRef={colsRef} ratio={ratio} onRatio={onRatio} />
+          {column('right')}
+        </div>
+      )}
       {rail.visible && fp && (
         <SessionRail
           paneId={focusedId}
           status={fp.status}
+          agentType={fp.info.agent_type}
           cwd={fp.info.cwd}
           agentName={agentName}
           accountLabel={fp.info.account_label}
@@ -142,6 +176,8 @@ export function SplitView({
           helperOf={helperOfLabel(c.registry.paneList, focusedId, (p) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary)}
           helpers={helperRows(c.registry.paneList, focusedId, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
           onOpenPane={(id) => c.select(id)}
+          onClose={rail.close}
+          onStopHelper={(id) => c.interrupt(id)}
         />
       )}
     </div>
@@ -154,6 +190,7 @@ function SplitColumnView({
   column,
   topId,
   downId,
+  stackedPair = false,
   rows,
   focus,
   grid,
@@ -169,6 +206,8 @@ function SplitColumnView({
   column: SplitColumn;
   topId: string;
   downId: string | null;
+  /** Two stacked chats: the column is the whole width and its second chat is the "right" slot. */
+  stackedPair?: boolean;
   rows: number;
   focus: SplitSlot;
   grid: boolean;
@@ -182,7 +221,7 @@ function SplitColumnView({
 }) {
   const t = useT();
   const colRef = useRef<HTMLDivElement>(null);
-  const downSlot: SplitSlot = column === 'left' ? 'leftDown' : 'rightDown';
+  const downSlot: SplitSlot = stackedPair ? 'right' : column === 'left' ? 'leftDown' : 'rightDown';
   const side = (slot: SplitSlot, paneId: string, actions?: ReactNode, splitDown?: boolean, top?: boolean) => (
     <ErrorBoundary where="Pane" resetKeys={[paneId]}>
       <SplitSideView
@@ -204,7 +243,7 @@ function SplitColumnView({
   return (
     <div
       ref={colRef}
-      className={`ck-split-col ck-split-col-${column}${downId !== null ? ' has-down' : ''}`}
+      className={`ck-split-col ck-split-col-${column}${downId !== null ? ' has-down' : ''}${stackedPair ? ' ck-split-col--full' : ''}`}
       style={{ ['--ck-split-rows' as string]: String(rows) } as CSSProperties}
     >
       {side(column, topId, topActions, canDown, true)}
@@ -295,6 +334,7 @@ function SplitSideView({
     >
       <header
         className="ck-split-head"
+        {...dragSourceProps({ kind: 'tab', id: paneId, label: heading.primary })}
         onDoubleClick={(e) => {
           // Double-click on the header (not on a button) fills the window with this side.
           if ((e.target as HTMLElement).closest('button')) return;

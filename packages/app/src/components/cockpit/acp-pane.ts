@@ -42,7 +42,7 @@ export function acpResult(turn: TurnSummary | undefined, receipt: unknown): AcpR
   const reported = strings(sr?.files_changed);
   const paths = turnFiles?.paths.length ? turnFiles.paths : reported;
   const files = turnFiles
-    ? `${turnFiles.count} ${turnFiles.count === 1 ? 'file' : 'files'} +${turnFiles.added} −${turnFiles.deleted}`
+    ? `${turnFiles.count} ${turnFiles.count === 1 ? 'file' : 'files'}${turnFiles.added === 0 && turnFiles.deleted === 0 ? ' · line endings only' : ` +${turnFiles.added} −${turnFiles.deleted}`}`
     : reported.length > 0
       ? `${reported.length} ${reported.length === 1 ? 'file' : 'files'}`
       : null;

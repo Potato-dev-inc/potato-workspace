@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLanguagePref } from '../../i18n';
 import { ARTIFACT_NOTICE, framePage, MERMAID_SRC, parseArtifactRef, type Artifact, type ArtifactPage, type ArtifactsApi } from '../../lib/artifacts';
 import { artifactTabPath, openArtifactTab, artifactTabTitle } from '../../lib/artifact-tabs';
+import { resetArtifactSideForTests, useArtifactSide } from '../../lib/artifact-side';
 import { resetFileTabs, usePaneFiles } from '../../lib/file-tabs';
 import type { BridgeClient, PhoneArtifact } from '../../lib/bridge-types';
 import { groupTurns, type ChatItem } from '../../lib/sessionChat';
@@ -26,6 +27,7 @@ let root: Root;
 beforeEach(() => {
   setLanguagePref('en', false);
   resetFileTabs();
+  resetArtifactSideForTests();
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -58,7 +60,16 @@ function fakeApi(over: Partial<ArtifactsApi> = {}) {
     const v = version ?? 2;
     return { artifact: artifact(), version: v, content: `<h1>version ${v}</h1>`, path: 'C:/proj/.potato/artifacts/plan/v' + v + '.html' };
   });
-  const api: ArtifactsApi = { sync: vi.fn(async () => [artifact()]), read, openInBrowser: vi.fn(async () => undefined), ...over };
+  const api: ArtifactsApi = {
+    sync: vi.fn(async () => [artifact()]),
+    read,
+    openInBrowser: vi.fn(async () => undefined),
+    shareMake: vi.fn(async () => ({ link: 'https://example.test/bridge/share/abc', version: 2, expiresAt: Date.now() + 3_600_000 })),
+    shareList: vi.fn(async () => []),
+    shareStop: vi.fn(async () => 0),
+    popOut: vi.fn(async () => undefined),
+    ...over,
+  };
   return { api, read };
 }
 
@@ -143,10 +154,16 @@ describe('the card in the chat screen', () => {
   }
   function Tabs() {
     const files = usePaneFiles('p-art');
-    return <ul data-testid="tabs">{files.files.map((f) => <li key={f}>{f}</li>)}</ul>;
+    const side = useArtifactSide('p-art');
+    return (
+      <>
+        <ul data-testid="tabs">{files.files.map((f) => <li key={f}>{f}</li>)}</ul>
+        <p data-testid="side">{side?.id ?? ''}</p>
+      </>
+    );
   }
 
-  it('a page notice is a card with its title, kind and version, and Open puts a tab beside the chat', () => {
+  it('a page notice is a card with its title, kind and version, and Open puts the page beside the chat (not a tab that hides it)', () => {
     act(() =>
       root.render(
         <>
@@ -161,7 +178,8 @@ describe('the card in the chat screen', () => {
     expect(card.textContent).toContain('Web page · version 1');
     expect(host.querySelector('[data-notice="artifact"]')).toBeNull();
     act(() => void card.querySelector('button')!.click());
-    expect([...host.querySelectorAll('[data-testid="tabs"] li')].map((n) => n.textContent)).toEqual([artifactTabPath('plan')]);
+    expect(host.querySelector('[data-testid="side"]')?.textContent).toBe('plan');
+    expect(host.querySelectorAll('[data-testid="tabs"] li')).toHaveLength(0);
     expect(artifactTabTitle(artifactTabPath('plan'))).toBe('Launch plan');
   });
 

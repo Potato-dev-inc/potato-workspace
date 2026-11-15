@@ -60,3 +60,22 @@ export function writtenFiles(outputs: readonly OutputFile[]): OutputFile[] {
 export function filesCount(n: number): string {
   return `+${n} ${n === 1 ? 'file' : 'files'}`;
 }
+
+/** `abs` relative to the project folder, with `/`; the path as it is (with `/`) when it is not inside. */
+export function relativeTo(cwd: string, abs: string): string {
+  const root = slashes(cwd).replace(/[/]+$/, '');
+  const path = slashes(abs);
+  return path.toLowerCase().startsWith(`${root.toLowerCase()}/`) ? path.slice(root.length + 1) : path;
+}
+
+/** "1,204": a count with thousands separators. */
+export const withCommas = (n: number): string => n.toLocaleString('en-US');
+
+/** "48s", "2m 14s", "1h 05m": how long something has run, to the second while it is short. */
+export function clockText(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+}

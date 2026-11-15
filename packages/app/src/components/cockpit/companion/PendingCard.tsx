@@ -2,6 +2,7 @@
 // Flags never block: a link or an instruction-like line shows a small tag and still waits for the person.
 import { useState } from 'react';
 import type { CompanionTransport, MemoryView, PendingDecision, PendingItem } from '../../../lib/companion';
+import { useT } from '../../../i18n';
 import { SkillProposalRow } from './SkillProposalRow';
 
 export function PendingCard({
@@ -17,6 +18,7 @@ export function PendingCard({
   transport: CompanionTransport;
   onChanged: (next: MemoryView) => void;
 }) {
+  const t = useT();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   if (items.length === 0) return null;
@@ -65,7 +67,7 @@ export function PendingCard({
             />
           ) : (
             <li className="ck-companion-pending" key={item.id}>
-              <p className="ck-companion-pending-text">{item.text}</p>
+              {item.kind === 'person' ? <PersonNote text={item.text} t={t} /> : <p className="ck-companion-pending-text">{item.text}</p>}
               {item.targetLine && <p className="ck-sub ck-companion-pending-target">Removes: {item.targetLine}</p>}
               {item.flagged && <span className="ck-memory-tag">{item.flagged}</span>}
               <span className="ck-companion-pending-actions">
@@ -96,5 +98,22 @@ export function PendingCard({
         </p>
       )}
     </section>
+  );
+}
+
+/** A note about a person the companion met: the text is "<Name>: <note>". */
+function PersonNote({ text, t }: { text: string; t: ReturnType<typeof useT> }) {
+  const at = text.indexOf(':');
+  const who = at > 0 ? text.slice(0, at).trim() : '';
+  const note = at > 0 ? text.slice(at + 1).trim() : text;
+  return (
+    <>
+      <p className="ck-companion-pending-text">
+        {who && <strong>{t('companion.pending.person', { name: who })}</strong>}
+        {who && ' '}
+        {note}
+      </p>
+      <span className="ck-memory-tag">{t('companion.pending.personTag')}</span>
+    </>
   );
 }

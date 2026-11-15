@@ -3,7 +3,7 @@
 // pose (components/cockpit/PotatoFace.tsx); the line is a translation key plus its values.
 import { useEffect, useRef, useState } from 'react';
 import type { PotatoState } from '../components/cockpit/PotatoFace';
-import type { CompanionState } from './companion';
+import type { BodyMood, CompanionState } from './companion';
 import type { MessageKey } from '../i18n';
 
 export interface MoodInput {
@@ -23,6 +23,8 @@ export interface MoodInput {
   justFinished: boolean;
   /** Local hour, 0..23. */
   hour: number;
+  /** The companion's body state (Labs: companion vault). Missing or null: the flag is off, nothing changes. */
+  body?: { mood: BodyMood; intensity: number; sleeping?: boolean } | null;
 }
 
 export interface Mood {
@@ -51,6 +53,13 @@ export function companionMood(i: MoodInput): Mood {
     return i.agents > 0
       ? { face: 'working', key: 'companion.mood.watching', vars: { count: i.agents }, urgent: false }
       : { face: 'working', key: 'companion.mood.working', urgent: false };
+  }
+  if (i.body) {
+    const b = i.body;
+    if (b.mood === 'sleepy') return { face: b.sleeping || b.intensity >= 3 ? 'sleep' : 'sleepy', key: 'companion.mood.sleepy', urgent: false };
+    if (b.mood === 'hungry') return { face: 'idle', key: 'companion.mood.hungry', urgent: false };
+    if (b.mood === 'genki') return { face: b.intensity >= 3 ? 'celebrate' : 'idle', key: 'companion.mood.genki', urgent: false };
+    if (b.mood === 'tsundere') return { face: 'idle', key: 'companion.mood.tsundere', urgent: false };
   }
   if (isSleepyHour(i.hour) || i.state === 'sleeping') {
     const asleep = isAsleepHour(i.hour) || i.state === 'sleeping';

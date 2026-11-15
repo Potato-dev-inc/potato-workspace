@@ -20,6 +20,7 @@ import { useCopy } from './use-copy';
 import { HelpersScreen } from './HelpersScreen';
 import { PaneView } from '../cockpit/PaneView';
 import { patchSettings } from '../../lib/settings';
+import { useThemeAttrs } from '../../lib/theme-tone';
 import { T } from './copy';
 
 type Screen = 'home' | 'make' | 'helpers';
@@ -50,6 +51,7 @@ export function SimpleCockpit({
   needsYou: NeedsYouItem[];
   lastTurn: ReadonlyMap<string, TurnSummary>;
 }) {
+  const themeProps = useThemeAttrs(c.theme);
   const [screen, setScreen] = useState<Screen>('home');
   // A project that was just started opens as soon as its pane is listed. The start answer may come
   // before the pane exists, so the project is also found by its folder.
@@ -76,7 +78,7 @@ export function SimpleCockpit({
     <LoopGuardContext.Provider value={loop}>
       <NeedsYouContext.Provider value={needsYou}>
         <LastTurnContext.Provider value={lastTurn}>
-          <div className="cockpit sx" data-theme={c.theme} data-simple="on">
+          <div className="cockpit sx" {...themeProps} data-simple="on">
             <main className="sx-main">
               {showProject && selected ? (
                 <Project c={c} paneId={selected} onBack={() => c.select(null)} />

@@ -210,6 +210,7 @@ fn file_stats_total_and_cap() {
             added: 2,
             deleted: 1,
             binary: false,
+            line_endings_only: false,
         })
         .collect();
     let stats = FileStats::from_changes(&changes);

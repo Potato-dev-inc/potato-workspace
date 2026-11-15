@@ -1,6 +1,8 @@
 // Mocks the Tauri IPC layer so the real UI runs in a plain browser.
+import { standbyHelpersView } from './standby-helpers-fixtures';
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import type { HarnessScenario } from './types';
+import type { DeskAway, DeskLength } from '../lib/desk-away-types';
 import { EXAMPLE_FILE_PATCH, EXAMPLE_TURN_REVIEW } from './desk-review-fixtures';
 import {
   EXAMPLE_CHECKPOINTS,
@@ -38,6 +40,7 @@ import { simpleMock } from './simple-fixtures';
 import { firstRunMock, firstRunStore } from './first-run-fixtures';
 import { missionMock } from './mission-fixtures';
 import { keepGoingMock } from './keep-going-fixtures';
+import { projectBudgetMock } from './project-budget-fixtures';
 import { branchMock } from './branch-fixtures';
 import { FAKE_UNINSTALL_PLAN, runFakeUninstall } from './uninstall-fixtures';
 import { nightMock } from './night-fixtures';
@@ -66,6 +69,32 @@ const DOCTOR_ROWS = [
 /** The notification choices the mock PC keeps (a real PC keeps them on disk). */
 const NOTIFY_PREFS = { bells: {} as Record<string, string>, quiet: { enabled: false, start: 1320, end: 420 }, snoozes: {} as Record<string, number>, imported: true };
 
+const EXAMPLE_BODY = {
+  mood: 'genki',
+  intensity: 2,
+  energy: 78,
+  hunger: 35,
+  boredom: 52,
+  longing: 20,
+  battery: 88,
+  drives: [
+    { name: 'Say hello', value: 7, max: 10, threshold: 8, waiting: true },
+    { name: 'Tidy notes', value: 3, max: 10, threshold: 8, waiting: false },
+    { name: 'Look around', value: 5, max: 10, threshold: 7, waiting: false },
+  ],
+  awayMinutes: 125,
+  sleeping: false,
+};
+const EXAMPLE_JOURNAL = {
+  days: [
+    { date: '2026-11-15', lines: ['Ren came back after a nap.', 'We fixed the sign-in page.', 'I wrote down that Ren likes short answers.'] },
+    { date: '2026-11-14', lines: ['A quiet day. I watched two agents finish.'] },
+  ],
+  diary: { date: '2026-11-15', text: 'Today Ren came back after a long nap. We looked at the sign-in page together. It was slow, but it got done. I think tomorrow will be easier. I also met Mei, who asked about the build.' },
+  people: [{ name: 'Ren', closeness: 3 }, { name: 'Mei', closeness: 1 }],
+  personaFiles: ['SOUL.md'],
+};
+
 export function installTauriMock(scenario: HarnessScenario): void {
   const lendMock = createLendMock(scenario.lend);
   const devicesMock = createDevicesMock(scenario.devices);
@@ -80,6 +109,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
   const now = Math.floor(Date.now() / 1000);
   const day = 24 * 60 * 60;
   const paneRemote: Record<string, { remote: boolean; level: string }> = {};
+  // "Leaving my desk": one paired phone, the switch off unless the scenario says otherwise.
+  let desk: DeskAway = scenario.desk ?? { away: false, lock_screen: false, phones: 1 };
   let pairedDevices = [
     { id: '6f1c2a90-aaaa-4bbb-8ccc-000000000001', name: "Maya's iPhone", public_key: 'pk1', paired_at: now - 40 * day, caps: ['watch', 'answer', 'type', 'control'], expires_at: now + 30 * day - 600, last_seen: now - 600, expired: false, idle_expiry_secs: 30 * day },
     { id: '6f1c2a90-aaaa-4bbb-8ccc-000000000002', name: 'Pixel 8', public_key: 'pk2', paired_at: now - 9 * day, caps: ['watch', 'answer'], expires_at: now + 21 * day, last_seen: now - 9 * day, expired: false, idle_expiry_secs: 30 * day },
@@ -98,6 +129,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (shipped.handled) return shipped.value;
       const mission = missionMock(scenario.missions, cmd, a);
       if (mission.handled) return mission.value;
+      const projectBudget = projectBudgetMock(scenario.projectBudget, cmd);
+      if (projectBudget.handled) return projectBudget.value;
       const keepGoing = keepGoingMock(scenario.keepGoing, cmd, a);
       if (keepGoing.handled) return keepGoing.value;
       const branch = branchMock(scenario.branch, cmd, a);
@@ -151,6 +184,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return 'orchestration';
         case 'standby_set_current_project':
           return false;
+        case 'standby_helpers_get':
+          return standbyHelpersView;
         case 'standby_get_status':
           return standbyStatus(scenario.standbyIdleSecs, scenario.standbyBlocked);
         case 'agents_list':
@@ -200,11 +235,51 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'open_in_editor':
           return null;
         case 'turn_summaries':
-          return a.paneId === PANE_CLAUDE ? EXAMPLE_TURN_SUMMARIES : [];
+          return scenario.turnSummaries?.[a.paneId as string] ?? (a.paneId === PANE_CLAUDE ? EXAMPLE_TURN_SUMMARIES : []);
+        case 'companion_agents':
+          return [
+            { id: 'claude', label: 'Claude', ok: true, reason: null },
+            { id: 'codex', label: 'Codex', ok: true, reason: null },
+          ];
         case 'companion_list':
+          if (scenario.companion && scenario.moreCompanions) {
+            const base = { persona: 'calm', agentType: 'claude', agentLabel: 'Claude', folderName: 'home', stateLine: '', paneId: null, needs: null, pendingMemory: 0, nextCheckin: null, restarts: 0, autoStart: true };
+            return [
+              { ...base, id: 'mochi', name: 'Mochi', avatar: 'mochi', accent: 'potato', isDefault: true, state: scenario.companion, pendingMemory: 2 },
+              { ...base, id: 'bit', name: 'Bit', avatar: 'bit', accent: 'sky', isDefault: false, state: 'sleeping' },
+              { ...base, id: 'nib', name: 'Nib', avatar: 'nib', accent: 'mint', isDefault: false, state: 'sleeping' },
+            ];
+          }
           return scenario.companion
-            ? [{ id: 'mochi', name: 'Mochi', avatar: 'mochi', persona: 'calm', agentType: 'claude', agentLabel: 'Claude', folderName: 'home', state: scenario.companion, stateLine: '', paneId: null, needs: null, pendingMemory: 2, nextCheckin: null, restarts: 0, autoStart: true }]
+            ? [{ id: 'mochi', name: 'Mochi', avatar: 'mochi', persona: 'calm', agentType: 'claude', agentLabel: 'Claude', folderName: 'home', state: scenario.companion, stateLine: '', paneId: null, needs: null, pendingMemory: 2, nextCheckin: null, restarts: 0, autoStart: true, ...(scenario.companionBody ? { body: EXAMPLE_BODY } : {}) }]
             : [];
+        case 'companion_journal':
+          return EXAMPLE_JOURNAL;
+        case 'discord_bot_status':
+        case 'discord_bot_set_token':
+        case 'discord_bot_clear':
+        case 'discord_bot_save_settings':
+          return {
+            enabled: !!scenario.companionDiscord,
+            storeAvailable: true,
+            set: true,
+            last4: 'ab12',
+            botName: 'Mochi Bot',
+            state: 'online',
+            callsToday: 4,
+            callsCap: 50,
+            settings: {
+              on: true,
+              allow: [{ guildId: '111111111111111111', channels: ['222222222222222222', '333333333333333333'], ambient: false }],
+              owners: ['444444444444444444'],
+              dms: 'owners',
+              names: ['Mochi'],
+              gate: 'heuristic',
+              budget: { count: 3, minutes: 60 },
+            },
+          };
+        case 'discord_bot_test':
+          return { ok: true, message: 'The token is saved and looks right.' };
         case 'side_question_target':
           return { agent: 'claude', label: 'Claude' };
         case 'side_question_ask':
@@ -328,6 +403,33 @@ export function installTauriMock(scenario: HarnessScenario): void {
         }
         case 'agents_health_test':
           return { ...DOCTOR_ROWS[0], state: 'ready', reason: 'Ready. It answered the test question.' };
+        case 'mcp_tools_drift':
+          return [{ paneId: 'pane-demo', agentCatalog: '0f3a91c2d8b46e17', appCatalog: 'cee25c6f0af83be1', canReconnect: true }];
+        case 'mcp_reconnect':
+          return null;
+        // Project guide (Labs): a small finished guide, so the tab can be looked at in the browser mock.
+        case 'guide_state':
+          return {
+            enabled: true,
+            hasGuide: true,
+            structure: {
+              commit: 'a1b2c3d', writtenAtMs: Date.now() - 3 * 86_400_000, agent: 'claude', model: null, complete: true, diagram: true, diagramStale: false,
+              pages: [
+                { id: 'overview', title: 'Overview', purpose: 'What it is', stale: false, needsReview: false },
+                { id: 'sync', title: 'Sync', purpose: 'How sync works', stale: true, needsReview: false },
+              ],
+            },
+            run: null,
+            last: null,
+            dryRun: true,
+          };
+        case 'guide_read_page':
+          return { id: 'overview', title: 'Overview', markdown: '# Overview\n\nA small notes app. The queue is in [[src/sync/queue.ts:40-88]].', stale: false, changed: [], needsReview: false };
+        case 'guide_read_diagram':
+          return { mermaid: 'flowchart LR\n  n0["Overview"]\n  n1["Sync"]\n  n0 --> n1\n', boxes: [{ label: 'Overview', path: 'src/main.ts', page: 'overview' }], stale: false };
+        case 'guide_stop':
+        case 'guide_delete':
+          return true;
         case 'get_mcp_status':
           return {
             bridgeReachable: true,
@@ -487,6 +589,14 @@ export function installTauriMock(scenario: HarnessScenario): void {
             qr_payload: { v: 1, u: url, pk: 'bW9jay1zZXJ2ZXItcHVibGljLWtleQ==', c: 'K7Q2M9XD', e: 1_900_000_000 },
           };
         }
+        case 'get_desk_away':
+          return desk;
+        case 'start_desk_away':
+          desk = { away: true, length: a.length as DeskLength, until_ms: a.length === 'until_back' ? null : Date.now() + 3_600_000, by: 'pc', lock_screen: a.lockScreen === true, phones: desk.phones };
+          return desk;
+        case 'end_desk_away':
+          desk = { away: false, lock_screen: false, phones: desk.phones };
+          return desk;
         case 'get_pane_remote':
           return paneRemote[a.paneId as string] ?? { remote: true, level: 'full' };
         case 'set_pane_remote': {
@@ -577,8 +687,22 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'team_member_remove':
         case 'team_member_confirm_github':
           return teamConfig({ enabled: !!scenario.team?.enabled, name: scenario.team?.me ?? 'Leo', ...scenario.teamConfig });
-        case 'team_invite':
-          return { link: 'pm://team/join?t=Acme&r=relay.acme.dev&k=8Vh2mQ0pXn4cD7wLrT1uYb3sZaE5gJfK', code: 'KQ7M-4XPD', expiresAtMs: Date.now() + 10 * 60_000 };
+        case 'team_invite': {
+          const w = scenario.worker;
+          return {
+            link: 'pm://team/join?t=Acme&r=relay.acme.dev&k=8Vh2mQ0pXn4cD7wLrT1uYb3sZaE5gJfK',
+            code: 'KQ7M-4XPD',
+            expiresAtMs: Date.now() + (w?.inviteLink ? 24 * 3600_000 : 10 * 60_000),
+            ...(w?.inviteLink ? { joinUrl: 'https://pm-relay.acme.workers.dev/join/KQ7M4XPDH5WZ9RTB' } : {}),
+            ...(w?.inviteNote ? { joinUrlNote: w.inviteNote } : {}),
+          };
+        }
+        case 'team_invite_lookup':
+          return { host: 'pm-relay.acme.workers.dev', teamName: 'Acme crew', inviter: 'Maya', expiresAtMs: Date.now() + 20 * 3600_000 };
+        case 'team_invite_accept':
+          return teamConfig({ enabled: false, team: '', teamName: '', joining: 'Acme crew' });
+        case 'worker_check':
+          return { reachable: true, features: scenario.worker?.features ?? ['team', 'rooms', 'stable-link', 'invites'], legacyLink: false };
         case 'team_relay_deploy':
           return { status: 'done', url: 'https://pm-relay.acme.workers.dev' };
         case 'team_gaps_clear':

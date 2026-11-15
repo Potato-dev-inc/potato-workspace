@@ -136,11 +136,11 @@ describe('the companion speaks first', () => {
     expect(host.querySelector('[data-testid="speak-bubble"]')).toBeNull();
   });
 
-  it('Too much halves the budget and closes the bubble', async () => {
+  it('Too much closes the bubble and keeps the budget (the kind is muted instead)', async () => {
     setSpeakSaved({ on: true, perHour: 3, offered: true });
     await render(props({ needsYou: [waitingItem('p1', 12)] }));
     await act(async () => button('Too much').click());
-    expect(getSpeak().perHour).toBe(1);
+    expect(getSpeak().perHour).toBe(3);
     expect(host.querySelector('[data-testid="speak-bubble"]')).toBeNull();
   });
 

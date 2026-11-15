@@ -15,6 +15,9 @@ export const DEV_LABS_KEYS = [
   'devices_enabled',
   'desktop_pet_enabled',
   'agent_browser_enabled',
+  'companion_vault_enabled',
+  'discord_bot_enabled',
+  'project_guide_enabled',
 ] as const;
 
 /** The one line the Labs page shows while the override is on. */

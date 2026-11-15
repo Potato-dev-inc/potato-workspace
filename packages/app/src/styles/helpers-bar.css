@@ -1,0 +1,214 @@
+/* The helpers bar: the main agent in front (crumb), the helpers it started, and standby helpers. Tokens only. */
+.cockpit .ck-hbar {
+  flex: none;
+  height: 36px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: var(--bg-side);
+  border-bottom: 1px solid var(--sep);
+  overflow: hidden;
+}
+.cockpit .ck-hbar-in {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cockpit .ck-hcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  min-width: 60px;
+  max-width: 180px;
+  flex: 0 1 auto;
+  border-radius: 7px;
+  color: var(--label);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cockpit .ck-hcrumb > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit .ck-hcrumb:hover {
+  background: var(--fill-hover);
+}
+.cockpit .ck-hcrumb.is-on {
+  background: var(--fill-active);
+}
+.cockpit .ck-hbar-gt {
+  flex: none;
+  color: var(--label-4);
+}
+.cockpit .ck-hbar-grp {
+  flex: none;
+  padding: 0 4px 0 2px;
+  font-size: var(--fs-label);
+  color: var(--label-3);
+  white-space: nowrap;
+}
+.cockpit .ck-hbar-vsep {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--sep);
+}
+.cockpit .ck-hchip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  min-width: 0;
+  flex: 0 1 auto;
+  border-radius: 7px;
+  color: var(--label-2);
+  white-space: nowrap;
+  user-select: none;
+  touch-action: none;
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.cockpit .ck-hchip:hover {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .ck-hchip.is-on {
+  background: var(--bg);
+  color: var(--label);
+  box-shadow: inset 0 0 0 1px var(--sep), inset 0 -2px 0 var(--accent-line);
+}
+.cockpit .ck-hchip.is-standby {
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.cockpit .ck-hchip-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px;
+  color: inherit;
+  font-size: var(--fs-body);
+  border-radius: inherit;
+}
+.cockpit .ck-hchip:hover .ck-hchip-main {
+  padding-right: 24px;
+}
+.cockpit .ck-hchip-main:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-hchip-name {
+  min-width: 5ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit .ck-hchip-word {
+  flex: none;
+  font-size: var(--fs-label);
+  color: var(--label-3);
+}
+.cockpit .ck-hchip-word.is-needs {
+  color: var(--accent);
+}
+.cockpit .ck-hchip-word.is-stopped {
+  color: var(--danger);
+}
+.cockpit .ck-hchip-word.is-ready {
+  color: var(--info);
+}
+.cockpit .ck-hchip-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.cockpit .ck-hchip-dot.is-working {
+  background: var(--live);
+  animation: ck-hpulse 1.6s ease-in-out infinite;
+}
+.cockpit .ck-hchip-dot.is-needs {
+  background: var(--accent);
+}
+.cockpit .ck-hchip-dot.is-stopped {
+  background: var(--danger);
+}
+.cockpit .ck-hchip-ring {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 1.5px solid var(--info);
+}
+.cockpit .ck-hchip-check {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--label-3);
+}
+.cockpit .ck-hchip-x {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--label-2);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+.cockpit .ck-hchip:hover .ck-hchip-x,
+.cockpit .ck-hchip-x:focus-visible {
+  opacity: 1;
+}
+.cockpit .ck-hchip-x:hover {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-hchip-x:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-hchip-more {
+  padding: 0 8px;
+  color: var(--label-3);
+  font-size: var(--fs-meta);
+}
+.cockpit .ck-hbar-menu {
+  position: fixed;
+}
+@keyframes ck-hpulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+@media (hover: none) {
+  .cockpit .ck-hchip-x {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-hchip,
+  .cockpit .ck-hchip-x {
+    transition: none;
+  }
+  .cockpit .ck-hchip-dot.is-working {
+    animation: none;
+  }
+}

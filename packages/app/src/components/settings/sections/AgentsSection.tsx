@@ -16,6 +16,7 @@ import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings'
 import { CloseHelpersWithAgentToggle, HelperAgentsChoice, KeepHelpersOpenToggle, MostHelpersAtOnce } from '../blocks/HelperAgents';
 import { HELPER_MODELS_HINT, HELPER_MODELS_LABEL, HelperDefaultModels } from '../blocks/HelperModels';
 import { HiddenAgentsRow } from '../blocks/HiddenAgentsRow';
+import { StandbyHelpersSettings } from '../blocks/StandbyHelpersSettings';
 import { PreloadSettings } from '../blocks/PreloadSettings';
 import { HANDOFF_MODE_HINT, HANDOFF_MODE_LABEL, QuickHandoffRows } from '../blocks/QuickHandoffRows';
 import { useEffect, useState } from 'react';
@@ -27,8 +28,11 @@ import { SetupCheckPage } from '../SetupCheckPage';
 import { Popup } from '../controls';
 import type { RowDef, SettingsEnv } from '../model';
 import { requestBringChats } from '../../../lib/chatImport';
+import { CHAT_VIEW_MODES, useChatViewDefault, type ChatViewMode } from '../../chat/chatViewMode';
+import { useDoneCardSwitch } from '../../../lib/done-card';
 import { Btn, SettingRow, SettingToggle } from '../settings-ui';
 import { useMessageRail } from '../../../lib/messageRail';
+import { useHelpersInSidebar } from '../../../lib/helpersInSidebar';
 import { KeepGoingRows } from './KeepGoingRows';
 import { LinuxRows } from './LinuxRows';
 
@@ -94,6 +98,35 @@ function LiveUpdates({ env }: { env: SettingsEnv }) {
 function MessageRailRow() {
   const [on, setOn] = useMessageRail();
   return <SettingToggle label={t('settings.row.message-rail.label')} description={t('settings.row.message-rail.hint')} checked={on} onChange={setOn} />;
+}
+
+/** Settings > Agents > Chat: how much of the work a new chat shows (Summary until changed). Each chat keeps its own choice from its View menu. */
+const VIEW_KEY = { summary: 'chatView.summary', normal: 'chatView.normal', verbose: 'chatView.verbose' } as const;
+function ChatDetailRow() {
+  const [mode, setMode] = useChatViewDefault();
+  return (
+    <SettingRow label={t('settings.row.chat-view.label')} description={t('settings.row.chat-view.hint')}>
+      <Popup aria-label={t('settings.row.chat-view.label')} value={mode} onChange={(event) => setMode(event.target.value as ChatViewMode)}>
+        {CHAT_VIEW_MODES.map((m) => (
+          <option key={m} value={m}>
+            {t(VIEW_KEY[m])}
+          </option>
+        ))}
+      </Popup>
+    </SettingRow>
+  );
+}
+
+/** Settings > Agents > Chat: the small "Done means" line above the message box. On this device only. */
+function DoneCardRow() {
+  const [on, setOn] = useDoneCardSwitch();
+  return <SettingToggle label={t('settings.row.done-card.label')} description={t('settings.row.done-card.hint')} checked={on} onChange={setOn} />;
+}
+
+/** Settings > Agents > How helpers run: bring the indented helper list back under each agent in the sidebar. Kept on this device. */
+function HelpersInSidebarRow() {
+  const [on, setOn] = useHelpersInSidebar();
+  return <SettingToggle label={t('settings.row.helpers-in-sidebar.label')} description={t('settings.row.helpers-in-sidebar.hint')} checked={on} onChange={setOn} />;
 }
 
 /** "Check my setup": one list of what works and one fix per problem. Its id is SETUP_CHECK_ROW_ID (Repair install opens it). */
@@ -169,6 +202,14 @@ export const agentsRows: RowDef[] = [
     render: (env) => <PreloadSettings onSaved={env.markSaved} />,
   },
   {
+    id: 'standby-helpers',
+    label: 'Standby helpers',
+    hint: 'Helpers you make. They wait ready with no tokens used; the next task that fits uses one.',
+    keywords: 'standby helper helpers ready waiting idle reviewer warm agent model project name limit at most close after task',
+    group: 'Standby helpers',
+    render: (env) => <StandbyHelpersSettings defaultProject={env.settings.project_path ?? null} onSaved={env.markSaved} />,
+  },
+  {
     id: 'agent-default-models',
     label: AGENT_MODELS_LABEL,
     hint: AGENT_MODELS_HINT,
@@ -206,6 +247,14 @@ export const agentsRows: RowDef[] = [
     keywords: 'hidden helper helpers headless background invisible no window pane subagent sub-agent agent hide show visible watch inbox always show choose',
     group: 'Helpers',
     render: (env) => <HelperAgentsChoice onSaved={env.markSaved} />,
+  },
+  {
+    id: 'helpers-in-sidebar',
+    label: 'Show helpers in the sidebar',
+    hint: 'Helpers show in the bar above the chat. Turn this on to list them under their agent too.',
+    keywords: 'helpers sidebar tree list under agent bar top subagents show hide',
+    group: 'Helpers',
+    render: () => <HelpersInSidebarRow />,
   },
   {
     id: 'helper-default-models',
@@ -285,6 +334,22 @@ export const agentsRows: RowDef[] = [
     keywords: 'message rail minimap dashes lines scroll bar jump scrub chat long navigate overview',
     group: 'Chat',
     render: () => <MessageRailRow />,
+  },
+  {
+    id: 'chat-view',
+    label: 'Chat detail',
+    hint: 'How much a new chat shows to start with: Summary, Normal or Verbose.',
+    keywords: 'chat detail view summary normal verbose default level activity lines how much',
+    group: 'Chat',
+    render: () => <ChatDetailRow />,
+  },
+  {
+    id: 'done-card',
+    label: 'Done means line',
+    hint: 'A small line above the message box that says if the build and tests passed.',
+    keywords: 'done means card checks build tests result strip hide show line composer',
+    group: 'Chat',
+    render: () => <DoneCardRow />,
   },
   {
     id: 'agent-lane',

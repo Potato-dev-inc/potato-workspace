@@ -5,6 +5,7 @@ import { useLend, type LendHandle } from './useLend';
 import { TakeBack } from './TakeBack';
 import { TestLink } from './TestLink';
 import '../../styles/lend.css';
+import { useDismissable } from '../../hooks/useDismissable';
 
 /** Active lends with this member, both ways, as short lines with Revoke or Give back. Used in Settings > Team's People list. */
 export function MemberLends({ memberId, lend, api = lendApi }: { memberId: string; lend: LendHandle; api?: LendApi }) {
@@ -73,19 +74,7 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
   const [error, setError] = useState<string | null>(null);
   const wrap = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  useDismissable(open, { inside: [wrap], anchor: wrap, onDismiss: () => setOpen(false) });
 
   const state = handle.state;
   const grant = state?.grants.find((g) => isActiveIn(g, handle.now) && g.pane_ids.includes(paneId));

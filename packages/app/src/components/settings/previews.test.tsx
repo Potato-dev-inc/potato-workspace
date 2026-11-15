@@ -34,17 +34,21 @@ afterEach(async () => {
 });
 
 describe('Theme', () => {
-  it('Theme shows two thumbnails and marks the chosen one', async () => {
+  it('Theme shows four thumbnails (Light, Light dimmed, Dark, Auto) and marks the chosen one', async () => {
     const picked: string[] = [];
     await draw(<ThemeThumbs value="light" onPick={(t) => picked.push(t)} />);
     const radios = [...host.querySelectorAll('[role="radiogroup"][aria-label="Theme"] [role="radio"]')];
-    expect(radios.map((r) => r.getAttribute('aria-label'))).toEqual(['Dark', 'Light']);
-    expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'true']);
+    expect(radios.map((r) => r.getAttribute('aria-label'))).toEqual(['Light', 'Light, dimmed', 'Dark', 'Auto']);
+    expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'false']);
     expect(radios.every((r) => r.querySelector('svg'))).toBe(true); // each one is a small picture of a window
-    await click(radios[0]);
+    await click(radios[2]);
     expect(picked).toEqual(['dark']);
-    await click(radios[1]); // the chosen one does not save again
-    expect(picked).toEqual(['dark']);
+    await click(radios[1]);
+    expect(picked).toEqual(['dark', 'dim']);
+    await click(radios[3]);
+    expect(picked).toEqual(['dark', 'dim', 'auto']);
+    await click(radios[0]); // the chosen one does not save again
+    expect(picked).toEqual(['dark', 'dim', 'auto']);
   });
 
   it('Window layout shows a diagram for each choice', async () => {

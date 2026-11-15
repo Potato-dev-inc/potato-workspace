@@ -79,7 +79,7 @@ export function PaneMoreMenu<T extends string>({
               {i.label}
             </button>
           ))}
-          {actions.length > 0 && <div className="ck-menu-sep" role="separator" />}
+          {actions.length > 0 && items.length > 0 && <div className="ck-menu-sep" role="separator" />}
           {actions.map((a) => (
             <button
               key={a.id}

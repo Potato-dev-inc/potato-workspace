@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The page: rows from the checks, one fix button per problem calls its action, Copy report sends scrubbed text.
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AddonList } from '../../lib/acpAddon';
 import type { AgentHealth } from '../../lib/agent-health';
 import type { SetupCheckDeps } from '../../lib/setup-checks';
@@ -108,4 +108,61 @@ describe('SetupCheckPage', () => {
     expect(a.test).toHaveBeenNthCalledWith(2, 'codex');
     await m.unmount();
   });
+
+  it('shows the saved answer at once with its age, and does not read again while it is fresh', async () => {
+    const first = deps();
+    const m1 = await mountRows([pageRow(first, actions())]);
+    await settle(6);
+    await m1.unmount();
+    const again = vi.fn(async () => []);
+    const m2 = await mountRows([pageRow(deps({ agentHealth: again }), actions())]);
+    await settle(2);
+    expect(hasText(m2.host, 'Claude needs sign-in')).toBe(true);
+    expect(hasText(m2.host, 'Checked just now')).toBe(true);
+    expect(again).not.toHaveBeenCalled();
+    expect(hasText(m2.host, 'Checking')).toBe(false);
+    await m2.unmount();
+  });
+
+  it('reads again in the background when the saved answer is older than ten minutes', async () => {
+    window.localStorage.setItem(
+      'pm.setupcheck.rows.v1',
+      JSON.stringify({ at: Date.now() - 11 * 60_000, lang: 'en', groups: [{ id: 'agents', rows: [{ id: 'agent-claude', status: 'ok', sentence: 'Old answer', fix: null }] }] }),
+    );
+    let release: (v: AgentHealth[]) => void = () => {};
+    const read = vi.fn(() => new Promise<AgentHealth[]>((resolve) => (release = resolve)));
+    const m = await mountRows([pageRow(deps({ agentHealth: read }), actions())]);
+    expect(hasText(m.host, 'Old answer')).toBe(true);
+    expect(m.host.querySelector('[data-busy="true"]')).not.toBeNull();
+    release([]);
+    await settle(6);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(hasText(m.host, 'Old answer')).toBe(false);
+    await m.unmount();
+  });
+
+  it('rows appear as each check finishes, and a slow one has its own spinner row', async () => {
+    let release: (v: AgentHealth[]) => void = () => {};
+    const slow = new Promise<AgentHealth[]>((resolve) => (release = resolve));
+    const m = await mountRows([pageRow(deps({ agentHealth: () => slow }), actions())]);
+    await settle(3);
+    expect(hasText(m.host, 'Potato Workspace is running')).toBe(true);
+    expect(m.host.querySelector('[data-status="checking"]')).not.toBeNull();
+    expect(hasText(m.host, 'Checking your agents')).toBe(true);
+    release([]);
+    await settle(6);
+    expect(m.host.querySelector('[data-status="checking"]')).toBeNull();
+    await m.unmount();
+  });
+
+  it('a check that never answers says why instead of hanging', async () => {
+    vi.useFakeTimers();
+    const m = await mountRows([pageRow(deps({ agentHealth: () => new Promise<AgentHealth[]>(() => {}) }), actions())]);
+    await vi.advanceTimersByTimeAsync(9000);
+    await settle(3);
+    expect(hasText(m.host, 'your agents did not answer in time')).toBe(true);
+    await m.unmount();
+  });
+
+  afterEach(() => vi.useRealTimers());
 });

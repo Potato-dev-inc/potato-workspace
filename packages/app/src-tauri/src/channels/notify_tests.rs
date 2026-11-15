@@ -84,6 +84,7 @@ fn item() -> ItemRef {
         id: "item-1".to_string(),
         occurrence: 3,
         fingerprint: "fp1".to_string(),
+        ..Default::default()
     }
 }
 

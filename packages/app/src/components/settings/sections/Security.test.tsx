@@ -104,4 +104,30 @@ describe('Security rows', () => {
     expect(whenText(new Date(2026, 9, 14, 9, 5).getTime(), noon)).toBe('09:05');
     expect(whenText(new Date(2026, 9, 13, 23, 30).getTime(), noon)).toMatch(/13/);
   });
+
+  it('is folded by default, groups repeats, shows the last 10 and Show all, and Clear leaves the log file alone', async () => {
+    const t0 = Date.now();
+    mocks.entries = [
+      ...Array.from({ length: 9 }, (_, i) => ({ seq: 100 - i, ts_ms: t0 - i * 1000, kind: 'pairing', who: 'desktop', summary: 'You made a pairing code for a phone' })),
+      ...Array.from({ length: 12 }, (_, i) => ({ seq: 50 - i, ts_ms: t0 - 60_000 - i * 1000, kind: 'setting', who: 'desktop', summary: `You changed setting ${i}` })),
+    ];
+    mocks.verify = { ok: true, entries: 21, broken: null };
+    const m = await mountRows(securityRows);
+    await settle(5);
+    const fold = m.host.querySelector<HTMLDetailsElement>('[data-testid="audit-fold"]');
+    expect(fold?.open).toBe(false);
+    const rows = [...m.host.querySelectorAll('.st-audit-row')];
+    expect(rows).toHaveLength(10);
+    expect(rows[0]?.textContent).toContain('You made a pairing code for a phone ×9');
+    await click([...m.host.querySelectorAll('button')].find((b) => b.textContent === 'Show all (13)') as HTMLElement);
+    expect(m.host.querySelectorAll('.st-audit-row')).toHaveLength(13);
+    await click([...m.host.querySelectorAll('button')].find((b) => b.textContent === 'Clear') as HTMLElement);
+    expect(m.host.querySelectorAll('.st-audit-row')).toHaveLength(0);
+    expect(m.host.textContent).toContain('The saved log file is not changed');
+    expect(m.host.textContent).toContain('Log checked: 21 entries, none changed.');
+    expect(agentAuthorityApi.auditVerify).toHaveBeenCalled();
+    await click([...m.host.querySelectorAll('button')].find((b) => b.textContent === 'Show cleared lines') as HTMLElement);
+    expect(m.host.querySelectorAll('.st-audit-row').length).toBeGreaterThan(0);
+    await m.unmount();
+  });
 });

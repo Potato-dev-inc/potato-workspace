@@ -11,6 +11,7 @@ import {
   readStoredPublicBridgeUrl,
 } from './public-bridge-url';
 import { tauri } from './tauri';
+import { resolveTheme, systemPrefersLight, watchSystemTheme } from './theme-tone';
 
 /** Canonical on-disk settings file (app config dir). */
 export const SETTINGS_STORE_FILENAME = 'settings.json';
@@ -45,9 +46,21 @@ export function clampSidebarWidth(width: number): number {
 
 export type AppTheme = Settings['theme'];
 
+let stopWatchingSystem: (() => void) | null = null;
+
+/** Put the stored choice on the page: data-theme (dark or light) and data-tone (dim). Auto follows the system and re-resolves when it flips. */
 export function applyTheme(theme: AppTheme): void {
   if (typeof document === 'undefined') return;
-  document.documentElement.dataset.theme = theme;
+  const root = document.documentElement;
+  const write = () => {
+    const r = resolveTheme(theme, systemPrefersLight());
+    root.dataset.theme = r.theme;
+    if (r.tone) root.dataset.tone = r.tone;
+    else delete root.dataset.tone;
+  };
+  stopWatchingSystem?.();
+  stopWatchingSystem = theme === 'auto' ? watchSystemTheme(write) : null;
+  write();
 }
 
 function store(): LazyStore {

@@ -23,13 +23,27 @@
   --accent-line: #f29a3c;
   --accent-fg: #1b1409;
   --live: #57c785;
-  --live-soft: rgba(87, 199, 133, 0.14);
+  --live-soft: rgba(87, 199, 133, 0.13);
   --risk: #e8c14e;
   --risk-soft: rgba(232, 193, 78, 0.14);
   --danger: #f2756b;
   --danger-soft: rgba(242, 117, 107, 0.1);
   --icon-claude: #d97757;
   --icon-blue: #6ea2f7;
+  --info: #6ea2f7;
+  --info-soft: rgba(110, 162, 247, 0.14);
+  --add: var(--live);
+  --del: var(--danger);
+  --ft-code: #6ea2f7;
+  --ft-style: #c58af9;
+  --ft-data: #e8c14e;
+  --ft-doc: #5cc4bd;
+  --ft-image: #f08fb4;
+  --ft-web: #f29a3c;
+  --ft-plain: var(--label-3);
+  --pr: #a892ee;
+  --lend: #5cc4bd;
+  --paper: #ffffff;
   --raise-hi: inset 0 1px 0 rgba(255, 248, 240, 0.06);
   --float-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.45);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -70,8 +84,65 @@
   --danger-soft: rgba(176, 46, 36, 0.1);
   --icon-claude: #c15f3c;
   --icon-blue: #2f6fde;
+  --info: #2b68d3;
+  --info-soft: rgba(47, 111, 222, 0.1);
+  --add: var(--live);
+  --del: var(--danger);
+  --ft-code: #2f6fde;
+  --ft-style: #8a3fd0;
+  --ft-data: #7d5a00;
+  --ft-doc: #1c7d77;
+  --ft-image: #b83a6e;
+  --ft-web: #9c4804;
+  --ft-plain: var(--label-3);
+  --pr: #6a4fc4;
+  --lend: #1a7771;
+  --paper: #ffffff;
   --raise-hi: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --float-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.14);
+}
+
+/* "Light, dimmed": the light theme (data-theme='light' stays, so logos and viewers keep working) with warmer, darker surfaces. */
+.cockpit[data-theme='light'][data-tone='dim'],
+[data-theme='light'][data-tone='dim'] .cockpit {
+  --bg: #ece8e1;
+  --bg-side: #e2ddd5;
+  --bg-raised: #f2eee8;
+  --bg-float: rgba(242, 238, 232, 0.94);
+  --fill: rgba(50, 38, 24, 0.055);
+  --fill-hover: rgba(50, 38, 24, 0.085);
+  --fill-active: rgba(50, 38, 24, 0.12);
+  --sep: rgba(50, 38, 24, 0.13);
+  --label: #24211d;
+  --label-2: rgba(36, 33, 29, 0.78);
+  --label-3: rgba(36, 33, 29, 0.72);
+  --label-4: rgba(36, 33, 29, 0.28);
+  --primary-bg: #2a2622;
+  --primary-fg: #f2eee8;
+  --focus: 0 0 0 2px var(--bg, #ece8e1), 0 0 0 4px var(--accent);
+  --accent: #8f4406;
+  --accent-hover: #7a3a05;
+  --accent-press: #663004;
+  --accent-soft: rgba(143, 68, 6, 0.1);
+  --accent-line: #b4560a;
+  --accent-fg: #ffffff;
+  --live: #126235;
+  --live-soft: rgba(18, 98, 53, 0.1);
+  --risk: #6f5000;
+  --risk-soft: rgba(111, 80, 0, 0.1);
+  --danger: #a3291f;
+  --danger-soft: rgba(163, 41, 31, 0.1);
+  --info: #285ebd;
+  --info-soft: rgba(40, 94, 189, 0.1);
+  --ft-code: #285ebd;
+  --ft-style: #833cc6;
+  --ft-doc: #186d68;
+  --ft-image: #a93565;
+  --pr: #684dc0;
+  --lend: #186d68;
+  --paper: #f2eee8;
+  --raise-hi: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --float-shadow: 0 1px 2px rgba(40, 30, 15, 0.1), 0 12px 32px rgba(40, 30, 15, 0.16);
 }
 
 .cockpit {

@@ -1,0 +1,388 @@
+/* The Team page. Charcoal and greys from the cockpit tokens. Colour only where it means something:
+   --accent on the active tab underline and focus ring, the under-10-minutes chip; green / amber / grey for presence;
+   six muted hues on the avatar circle only. */
+
+.cockpit .tpg {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 16px;
+  max-width: 880px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--label);
+}
+.cockpit .tpg-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cockpit .tpg-head-main {
+  min-width: 0;
+}
+.cockpit .tpg-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cockpit .tpg-h {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label-2);
+}
+.cockpit .tpg-sub,
+.cockpit .tpg-note {
+  margin: 2px 0 0;
+  color: var(--label-3);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.cockpit .tpg-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  color: var(--label-2);
+  font-size: 12px;
+}
+.cockpit .tpg-link-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--label-3);
+  box-sizing: border-box;
+}
+.cockpit .tpg-link-dot[data-link='live'],
+.cockpit .tpg-link-dot[data-link='polling'] {
+  background: var(--live);
+  border-color: var(--live);
+}
+.cockpit .tpg-link-dot[data-link='offline'],
+.cockpit .tpg-link-dot[data-link='denied'] {
+  border-color: var(--danger);
+}
+.cockpit .tpg-promise {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 12px;
+}
+
+/* tabs */
+.cockpit .tpg-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--sep);
+}
+.cockpit .tpg-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--label-3);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cockpit .tpg-tab:hover {
+  color: var(--label);
+}
+.cockpit .tpg-tab[aria-selected='true'] {
+  color: var(--label);
+  border-bottom-color: var(--accent);
+}
+.cockpit .tpg-tab:focus-visible,
+.cockpit .tpg-filter:focus-visible,
+.cockpit .tpg-link-btn:focus-visible,
+.cockpit .tpg-radio input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .tpg-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* people */
+.cockpit .tpg-usage,
+.cockpit .tpg-tasks,
+.cockpit .tpg-feed,
+.cockpit .tpg-people {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cockpit .tpg-cards,
+.cockpit .tpg-list,
+.cockpit .tpg-joins {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cockpit .tpg-person,
+.cockpit .tpg-lend,
+.cockpit .tpg-join,
+.cockpit .tpg-card,
+.cockpit .tpg-sheet {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--fill);
+}
+.cockpit .tpg-card,
+.cockpit .tpg-sheet {
+  flex-direction: column;
+}
+.cockpit .tpg-join {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+.cockpit .tpg-person-main {
+  min-width: 0;
+  flex: 1;
+}
+.cockpit .tpg-person-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cockpit .tpg-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cockpit .tpg-working {
+  margin: 4px 0 0;
+  color: var(--label-2);
+  overflow-wrap: anywhere;
+}
+.cockpit .tpg-chip {
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--fill-hover);
+  color: var(--label-2);
+  font-size: 11px;
+}
+.cockpit .tpg-avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label);
+  background: var(--fill-hover);
+}
+.cockpit .tpg-avatar[data-hue='0'] {
+  background: color-mix(in srgb, var(--live) 30%, var(--fill));
+}
+.cockpit .tpg-avatar[data-hue='1'] {
+  background: color-mix(in srgb, var(--risk) 30%, var(--fill));
+}
+.cockpit .tpg-avatar[data-hue='2'] {
+  background: color-mix(in srgb, var(--accent) 24%, var(--fill));
+}
+.cockpit .tpg-avatar[data-hue='3'] {
+  background: color-mix(in srgb, var(--danger) 22%, var(--fill));
+}
+.cockpit .tpg-avatar[data-hue='4'] {
+  background: color-mix(in srgb, var(--label-2) 28%, var(--fill));
+}
+.cockpit .tpg-avatar[data-hue='5'] {
+  background: color-mix(in srgb, var(--label-3) 22%, var(--fill));
+}
+
+/* presence: a dot and always a word next to it */
+.cockpit .tpg-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--label-2);
+  font-size: 12px;
+}
+.cockpit .tpg-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 1.5px solid var(--label-3);
+}
+.cockpit .tpg-presence[data-kind='here'] .tpg-dot {
+  background: var(--live);
+  border-color: var(--live);
+}
+.cockpit .tpg-presence[data-kind='away'] .tpg-dot {
+  background: var(--risk);
+  border-color: var(--risk);
+}
+
+/* usage */
+.cockpit .tpg-lend {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.cockpit .tpg-lend-main {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cockpit .tpg-time {
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--fill-hover);
+  color: var(--label-2);
+  font-size: 12px;
+}
+.cockpit .tpg-time[data-urgency='soon'],
+.cockpit .tpg-time[data-urgency='now'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.cockpit .tpg-warn {
+  color: var(--label-2);
+  font-weight: 500;
+}
+.cockpit .tpg-error {
+  margin: 0;
+  color: var(--label);
+  font-weight: 500;
+}
+
+/* share sheet, filters, feed */
+.cockpit .tpg-radios {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cockpit .tpg-radio {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.cockpit .tpg-radio span {
+  display: flex;
+  flex-direction: column;
+}
+.cockpit .tpg-radio small,
+.cockpit .tpg-field small {
+  color: var(--label-3);
+}
+.cockpit .tpg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cockpit .tpg-field textarea {
+  font: inherit;
+  color: var(--label);
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.cockpit .tpg-sheet-title {
+  margin: 0;
+  font-size: 14px;
+}
+.cockpit .tpg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.cockpit .tpg-link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.cockpit .tpg-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cockpit .tpg-filter {
+  padding: 3px 10px;
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cockpit .tpg-filter[aria-pressed='true'] {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .tpg-day {
+  list-style: none;
+  margin: 8px 0 0;
+  color: var(--label-3);
+  font-size: 12px;
+}
+.cockpit .tpg-empty-team {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 24px 0;
+}
+.cockpit .tpg-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 640px) {
+  .cockpit .tpg {
+    padding: 16px;
+  }
+  .cockpit .tpg-head {
+    flex-direction: column;
+  }
+}
+.cockpit .tpg-field-input {
+  width: 100%;
+  font: 12px/1.4 var(--font-mono);
+  color: var(--label);
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  padding: 6px 8px;
+}

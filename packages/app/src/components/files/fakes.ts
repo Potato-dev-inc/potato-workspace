@@ -34,6 +34,8 @@ export function fakeApi(over: Partial<FilesApi> = {}, contents: Record<string, F
       { path: 'src/app.ts', mark: 'M' as const },
       { path: 'src/new.ts', mark: 'N' as const },
     ]),
+    searchContents: vi.fn(async () => ({ hits: [], truncated: false, cancelled: false, filesScanned: 0 })),
+    cancelSearch: vi.fn(async () => undefined),
     reveal: vi.fn(async () => undefined),
     diff: vi.fn(async () => ''),
     write: vi.fn(async (_p: string, path: string, text: string) => ({ path, size: text.length, version: `v-${text.length}` })),

@@ -388,7 +388,7 @@
   width: 100%;
   border: 1px solid var(--sep);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--paper, white);
 }
 
 .sx .sx-preview-bar {

@@ -5,9 +5,9 @@ import { useT } from '../../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri, type StandbyConfig, type StandbyStatus } from '../../../lib/tauri';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
+import { useHiddenAgents } from '../../../lib/hiddenAgents';
 import {
   DEFAULT_STANDBY_CONFIG,
-  MAX_WARM_PER_PROVIDER,
   followWhyText,
   formatDuration,
   holdKeyLabel,
@@ -23,6 +23,7 @@ import {
   withPreloadEnabled,
 } from '../../../lib/standby';
 import { NumberControl, Popup } from '../controls';
+import { WarmCountStepper } from './WarmCountStepper';
 import { SettingBlock, SettingToggle } from '../settings-ui';
 
 export interface PreloadApi {
@@ -65,7 +66,9 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
       setError(errorSentence(e));
     }
   };
-  const providers = preloadProviders(registry.agents);
+  const { hidden } = useHiddenAgents();
+  // An agent turned off in Settings > Agents > Definitions is not offered here (unless it is already kept warm).
+  const providers = preloadProviders(registry.agents).filter((p) => !hidden.includes(p.id) || preloadCount(config, p.id) > 0);
 
   return (
     <>
@@ -105,18 +108,12 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
                 {provider.supported ? (
                   <label className="flex items-center gap-2 text-pm-muted">
                     {t('preload.keep')}
-                    <select
-                      aria-label={t('preload.warmCount', { label: provider.label })}
+                    <WarmCountStepper
+                      label={provider.label}
                       disabled={count === 0}
                       value={count || 1}
-                      onChange={(event) => void save(withPreloadCount(config, provider.id, Number(event.target.value)))}
-                    >
-                      {Array.from({ length: MAX_WARM_PER_PROVIDER }, (_, i) => i + 1).map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(next) => void save(withPreloadCount(config, provider.id, next))}
+                    />
                     {t('preload.warm')}
                   </label>
                 ) : (

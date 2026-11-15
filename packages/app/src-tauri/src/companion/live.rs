@@ -14,7 +14,7 @@ use parking_lot::Mutex;
 use serde_json::json;
 use tauri::{AppHandle, Manager};
 
-use super::host::{AgentLimit, Blocking, FinishedTurn, Host, RecallAnswer, RecallHit, Reply, SpawnSpec};
+use super::host::{AgentLimit, Blocking, ChatLine, FinishedTurn, Host, RecallAnswer, RecallHit, Reply, SpawnSpec};
 use super::keeper::Pane;
 use super::model::CompanionView;
 use super::service::Service;
@@ -223,6 +223,34 @@ impl Host for LiveHost {
             }
         }
         None
+    }
+
+    fn vault_on(&self) -> bool {
+        crate::settings_store::read_public_settings(&self.app).get("companion_vault_enabled").and_then(serde_json::Value::as_bool).unwrap_or(false)
+    }
+
+    fn chat_lines(&self, pane_id: &str, companion_id: &str) -> Vec<ChatLine> {
+        let Some(agent) = self.agent_of(pane_id) else { return Vec::new() };
+        let Some(opening) = Opening::for_pane(pane_id, &agent) else { return Vec::new() };
+        let watchers = self.app.state::<SessionChatState>().watchers(&self.app, &self.registry);
+        let holder = format!("companion#{companion_id}");
+        if self.readers.lock().insert(format!("{pane_id}|{companion_id}")) {
+            let _ = opening.open(&watchers, pane_id, holder.as_str().into());
+        }
+        let Some(items) = watchers.since(pane_id, None, 200).map(|s| s.items) else { return Vec::new() };
+        let at_of = |at: &Option<String>| at.as_deref().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).map(|d| d.timestamp_millis());
+        items
+            .iter()
+            .filter_map(|item| match item {
+                ChatItem::User { id, at, text, .. } if !text.trim().is_empty() => {
+                    Some(ChatLine { id: id.clone(), at_ms: at_of(at), from_person: true, text: text.clone() })
+                }
+                ChatItem::Assistant { id, at, text, .. } if !text.trim().is_empty() => {
+                    Some(ChatLine { id: id.clone(), at_ms: at_of(at), from_person: false, text: text.clone() })
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     fn last_sentence(&self, pane_id: &str) -> Option<Reply> {

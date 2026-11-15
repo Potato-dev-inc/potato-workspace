@@ -15,6 +15,7 @@ use tauri::Emitter;
 
 use super::{Ctx, RouteResult};
 use crate::mobile_pairing::control_ask::{self, Refusal};
+use crate::mobile_pairing::desk_away::{self, By, Length};
 use crate::mobile_pairing::pane_rules;
 
 /// The event the desktop's notice listens to.
@@ -25,6 +26,11 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
         ("POST", ["panes", pane_id, "interrupt"]) if !super::panes::is_reserved_pane_id(pane_id) => Some(interrupt(cx, pane_id)),
         ("GET", ["pane-rules"]) => Some(Ok((200, rules_body()))),
         ("POST", ["control-asks"]) => Some(control_ask(cx)),
+        // "Leaving my desk": the same switch as the PC's status bar. Reading it needs `watch`, starting and ending it `control`
+        // (the defaults of a GET and a POST). A phone's own switch lifts nothing: see `mobile_pairing::desk_away`.
+        ("GET", ["desk-away"]) => Some(Ok((200, desk_away::status_json(control_ask::now_ms())))),
+        ("POST", ["desk-away"]) => Some(desk_start(cx)),
+        ("POST", ["desk-away", "back"]) => Some(desk_back(cx)),
         _ => None,
     }
 }
@@ -79,6 +85,42 @@ fn control_ask(cx: &Ctx) -> RouteResult {
         }
         Err(Refusal::Busy) => Err((429, json!({ "error": "Too many asks wait on the PC.", "code": "BUSY" }))),
     }
+}
+
+fn desk_start(cx: &Ctx) -> RouteResult {
+    let Some(device_id) = paired_device(cx) else {
+        return Err((403, json!({ "error": "paired_device_required", "code": "PERSON_ONLY", "hint": "Only a paired phone can switch this on from the phone." })));
+    };
+    let length = cx.request_body.get("length").and_then(|v| v.as_str()).unwrap_or("until_back");
+    let length = Length::parse(length).map_err(|error| (400, json!({ "error": error, "code": "INVALID_ARGUMENT" })))?;
+    let lock_screen = cx.request_body.get("lock_screen").and_then(|v| v.as_bool()).unwrap_or(false);
+    let name = crate::attention::caps::device_name(&device_id).unwrap_or_else(|| "A phone".to_string());
+    // Started on the phone: it keeps push on and screen control locked as asked, but it does not raise what the PC kept to itself.
+    let away = desk_away::start(length, lock_screen, By::Phone, Some(name));
+    crate::audit::record(
+        crate::audit::Kind::Pairing,
+        crate::audit::Who::Device(Some(device_id)),
+        "A phone switched on Leaving my desk",
+        json!({ "length": away.length, "lock_screen": away.lock_screen }),
+    );
+    Ok((200, announce(cx)))
+}
+
+fn desk_back(cx: &Ctx) -> RouteResult {
+    let Some(device_id) = paired_device(cx) else {
+        return Err((403, json!({ "error": "paired_device_required", "code": "PERSON_ONLY", "hint": "Only a paired phone can end this from the phone." })));
+    };
+    if desk_away::back() {
+        crate::audit::record(crate::audit::Kind::Pairing, crate::audit::Who::Device(Some(device_id)), "A phone said you are back", json!({}));
+    }
+    Ok((200, announce(cx)))
+}
+
+/// The new state, also sent to the PC's screen so its chip changes at once.
+fn announce(cx: &Ctx) -> serde_json::Value {
+    let status = desk_away::status_json(control_ask::now_ms());
+    let _ = cx.app.emit(desk_away::AWAY_EVENT, &status);
+    status
 }
 
 /// The paired device that is calling, when it is a person's phone (not an agent's MCP session).

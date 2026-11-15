@@ -1139,3 +1139,40 @@ fn range_wrappers_go_through_the_pane_folder_and_its_turn_baseline() {
     assert_eq!(rt.last_after_id("p1"), None);
     assert!(matches!(rt.patch_between("p1", &before, &last, 1 << 20), Err(CheckpointError::Disabled)));
 }
+
+#[test]
+fn a_file_whose_only_change_is_line_endings_adds_no_lines_and_is_flagged() {
+    let t = Tmp::new("lineendings");
+    let lf: String = (0..200).map(|i| format!("line {i}\n")).collect();
+    t.write("lock.json", &lf);
+    t.write("code.txt", "one\ntwo\n");
+    snap(&t, "p1", Kind::Before, 1_000);
+    // lock.json is rewritten with CRLF endings only; code.txt gets a real new line.
+    t.write("lock.json", &lf.replace('\n', "\r\n"));
+    t.write("code.txt", "one\ntwo\nthree\n");
+    snap(&t, "p1", Kind::After, 5_000);
+    let changes = engine::turn_changes(t.p(), "p1", 1_000).unwrap().expect("baseline exists");
+    let lock = changes.iter().find(|c| c.path == "lock.json").expect("listed as changed");
+    assert!(lock.line_endings_only, "flagged");
+    assert_eq!((lock.added, lock.deleted), (0, 0), "no lines counted");
+    let code = changes.iter().find(|c| c.path == "code.txt").unwrap();
+    assert!(!code.line_endings_only);
+    assert_eq!((code.added, code.deleted), (1, 0));
+}
+
+#[test]
+fn a_line_ending_only_change_counts_no_lines() {
+    let t = Tmp::new("eolonly");
+    t.write("a.txt", "one\ntwo\nthree\n");
+    t.write("b.txt", "x\n");
+    snap(&t, "p1", Kind::Before, 1_000);
+    // a.txt is rewritten with CRLF endings (every line differs byte-for-byte); b.txt really changes.
+    t.write("a.txt", "one\r\ntwo\r\nthree\r\n");
+    t.write("b.txt", "x\ny\n");
+    snap(&t, "p1", Kind::After, 20_000);
+    let changes = engine::turn_changes(t.p(), "p1", 1_000).unwrap().expect("baseline exists");
+    let a = changes.iter().find(|c| c.path == "a.txt").expect("still listed");
+    assert_eq!((a.added, a.deleted), (0, 0), "line endings only: no lines counted");
+    let b = changes.iter().find(|c| c.path == "b.txt").unwrap();
+    assert_eq!((b.added, b.deleted), (1, 0));
+}

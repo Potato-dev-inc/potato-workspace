@@ -10,7 +10,7 @@ use chrono::TimeZone;
 use parking_lot::Mutex;
 use serde_json::json;
 
-use super::host::{AgentLimit, Blocking, FinishedTurn, Host, RecallAnswer, RecallHit, Reply, SpawnSpec};
+use super::host::{AgentLimit, Blocking, ChatLine, FinishedTurn, Host, RecallAnswer, RecallHit, Reply, SpawnSpec};
 use super::keeper::{Pane, Status};
 use super::manage::Draft;
 use super::model::CompanionView;
@@ -64,6 +64,9 @@ pub struct FakeHost {
     pub recall_asked: Mutex<Vec<Vec<String>>>,
     /// The account's known folders (`Host::places`): a fake home that is not a real folder.
     pub places: Mutex<super::broad::Places>,
+    /// The Labs switch `companion_vault_enabled`, and the chat lines `chat_lines` returns (every pane).
+    pub vault: AtomicBool,
+    pub chat: Mutex<Vec<ChatLine>>,
 }
 
 impl FakeHost {
@@ -101,6 +104,8 @@ impl FakeHost {
             recall_hits: Mutex::new(Vec::new()),
             recall_asked: Mutex::new(Vec::new()),
             places: Mutex::new(super::broad::Places::for_home(std::path::Path::new("C:/Users/you"))),
+            vault: AtomicBool::new(false),
+            chat: Mutex::new(Vec::new()),
         })
     }
 
@@ -218,6 +223,14 @@ impl Host for FakeHost {
 
     fn release_reader(&self, pane_id: &str, _companion_id: &str) {
         self.released.lock().push(pane_id.to_string());
+    }
+
+    fn vault_on(&self) -> bool {
+        self.vault.load(Ordering::SeqCst)
+    }
+
+    fn chat_lines(&self, _pane_id: &str, _companion_id: &str) -> Vec<ChatLine> {
+        self.chat.lock().clone()
     }
 
     fn recall_on(&self) -> bool {

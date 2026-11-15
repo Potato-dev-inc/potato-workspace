@@ -2,6 +2,7 @@
 
 mod agents;
 pub mod browser;
+pub mod guide;
 mod artifacts;
 mod companion;
 mod context;
@@ -77,6 +78,7 @@ pub fn tools() -> Vec<ToolDefinition> {
     all.extend(multi::tools());
     multi::add_review_by(&mut all);
     all.extend(browser::tools());
+    all.extend(guide::tools());
     all
 }
 

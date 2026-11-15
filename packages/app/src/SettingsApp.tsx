@@ -10,9 +10,15 @@ import { useProjectPath } from './hooks/useProjectPath';
 import { cockpitApi } from './lib/cockpit-api';
 import { settingsEntryTarget } from './lib/settings-target';
 import { useComfortRoot } from './lib/comfort/root';
+import { setWhatsNewRemote } from './whatsnew/store';
 
 export default function SettingsApp() {
   useComfortRoot();
+  // This window has no tour or guide: "Take the tour" and "Feature guide" are answered by the cockpit window.
+  useEffect(() => {
+    setWhatsNewRemote(true);
+    return () => setWhatsNewRemote(false);
+  }, []);
   const target = useMemo(() => settingsEntryTarget(window.location.search), []);
   const initialTab = target.page;
   const { projectPath, setProjectPath } = useProjectPath();

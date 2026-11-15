@@ -1,6 +1,25 @@
 // Plain rules for the desktop companion screens (SPEC-1028 sections 1, 6, 8). Pure functions only: the cards and the
 // sheets call them, and the tests pin them.
-import type { CheckIn, CompanionPersona, CompanionView, HhMm, MemoryFile, When } from '../../../lib/companion';
+import type { AccentId, CheckIn, CompanionPersona, CompanionView, HhMm, MemoryFile, When } from '../../../lib/companion';
+
+/** Saved companions at most (`MAX_COMPANIONS` in companion/model.rs). Three may be awake at once. */
+export const MAX_COMPANIONS = 8;
+export const MAX_AWAKE_COMPANIONS = 3;
+
+/** The colours a companion may wear. Each is a colour token in cockpit-companion.css (`[data-accent]`). */
+export const ACCENTS: AccentId[] = ['potato', 'sky', 'mint', 'rose', 'sun'];
+
+/** The default companion: the one marked, else the first (a list from before the flag existed). Null: none. */
+export function defaultCompanion<T extends { isDefault?: boolean }>(list: T[] | null | undefined): T | null {
+  if (!list || list.length === 0) return null;
+  return list.find((c) => c.isDefault) ?? list[0];
+}
+
+/** The list with the default companion first (the phone's first tab); the rest keep their order. */
+export function defaultFirst<T extends { isDefault?: boolean }>(list: T[]): T[] {
+  const first = defaultCompanion(list);
+  return first ? [first, ...list.filter((c) => c !== first)] : list;
+}
 
 /** A companion's pane is `companion-<id>` (SPEC section 4). Panes with this prefix are not listed as plain panes. */
 export const COMPANION_PANE_PREFIX = 'companion-';

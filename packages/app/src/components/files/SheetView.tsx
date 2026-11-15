@@ -6,6 +6,7 @@ import { useT } from '../../i18n';
 import type { FileSource } from '../../lib/files-api';
 import { openSheets } from './office-client';
 import { SHEET_COLUMN_CAP, SHEET_ROW_CAP, type Sheet } from './sheet-read';
+import { SheetTable } from './SheetTable';
 
 export { SHEET_COLUMN_CAP, SHEET_ROW_CAP, readSheets } from './sheet-read';
 
@@ -67,15 +68,7 @@ export function SheetView({ source, csv, onCapped, actions }: { source: FileSour
         <p className="ck-file-note">{t('files.sheetEmpty')}</p>
       ) : (
         <div className="ck-xl-scroll">
-          <table className="ck-xl-table">
-            <tbody>
-              {sheet.rows.map((row, r) => (
-                <tr key={r}>
-                  {row.map((cell, c) => (r === 0 ? <th key={c}>{cell}</th> : <td key={c}>{cell}</td>))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <SheetTable sheet={sheet} />
         </div>
       )}
       {capped && (

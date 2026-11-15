@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The header's view switch: three buttons on the desktop; under 600 px one pill, "Normal ▾", that opens a small menu.
+// The header's view switch: at every width one small dropdown, "View: Summary ▾", that opens a menu of three.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,18 +50,20 @@ function render(mode: 'summary' | 'normal' | 'verbose', onChange = vi.fn()) {
 }
 
 describe('ViewModeToggle on the desktop', () => {
-  it('shows the three modes as buttons, the current one pressed', () => {
+  it('is one small dropdown, not a row of three buttons', () => {
     stubNarrow(false);
-    render('normal');
-    expect(modeButtons().map((b) => b.textContent)).toEqual(['Summary', 'Normal', 'Verbose']);
-    expect(modeButtons().find((b) => b.textContent === 'Normal')?.getAttribute('aria-pressed')).toBe('true');
-    expect(host.querySelector('.ck-chat-mode-pill')).toBeNull();
+    render('summary');
+    expect(modeButtons()).toHaveLength(0);
+    expect(pill().textContent).toBe('View: Summary ▾');
+    expect(pill().getAttribute('aria-label')).toBe('Chat view: Summary');
+    expect(host.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('reports the mode the person picks', () => {
     stubNarrow(false);
     const onChange = render('normal');
-    act(() => modeButtons().find((b) => b.textContent === 'Verbose')!.click());
+    act(() => pill().click());
+    act(() => menuItems().find((b) => b.textContent === 'Verbose')!.click());
     expect(onChange).toHaveBeenCalledWith('verbose');
   });
 });
@@ -71,7 +73,7 @@ describe('ViewModeToggle on a phone (under 600 px)', () => {
     stubNarrow(true);
     render('normal');
     expect(modeButtons()).toHaveLength(0);
-    expect(pill().textContent).toBe('Normal ▾');
+    expect(pill().textContent).toBe('View: Normal ▾');
     expect(pill().getAttribute('aria-expanded')).toBe('false');
     expect(host.querySelector('[role="menu"]')).toBeNull();
   });

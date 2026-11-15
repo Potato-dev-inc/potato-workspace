@@ -239,6 +239,7 @@ fn profile_with(w: &World2, keep_awake: bool) -> String {
             max_tokens: None,
             keep_awake,
             has_key: false,
+            show_usage: false,
         })
         .unwrap();
     w.maya.lend.key_set(&p.id, LENDER_KEY).unwrap();
@@ -469,6 +470,7 @@ async fn the_profile_needs_a_credential_and_a_cap_holds_for_another_person() {
             max_tokens: None,
             keep_awake: true,
             has_key: false,
+            show_usage: false,
         })
         .unwrap();
     let req = w.leo.lend.request(&w.maya.member(), None, "claude", 3600, "").unwrap();
@@ -518,6 +520,7 @@ async fn a_profile_request_limit_holds_end_to_end() {
             max_tokens: None,
             keep_awake: true,
             has_key: false,
+            show_usage: false,
         })
         .unwrap();
     w.maya.lend.key_set(&p.id, LENDER_KEY).unwrap();
@@ -565,6 +568,7 @@ fn sign_in_profile(w: &World2, expires_ms: u64) -> (String, String) {
             max_tokens: None,
             keep_awake: true,
             has_key: false,
+            show_usage: false,
         })
         .unwrap();
     (p.id, acc.home)
@@ -723,6 +727,7 @@ async fn the_screens_see_a_key_profile_a_lend_sign_in_a_borrowed_pane_and_the_ro
             max_tokens: Some(1000),
             keep_awake: true,
             has_key: true,
+            show_usage: false,
         })
         .unwrap();
     assert!(!saved.has_key, "a flag sent back from the screen is not stored");
@@ -1033,6 +1038,7 @@ fn named_profile(w: &World2, name: &str, who: LendWho, members: Vec<String>) -> 
             max_tokens: None,
             keep_awake: true,
             has_key: false,
+            show_usage: false,
         })
         .unwrap();
     w.maya.lend.key_set(&p.id, LENDER_KEY).unwrap();
@@ -1153,4 +1159,80 @@ async fn a_request_that_names_profile_b_is_answered_with_b_and_a_profile_that_is
     let ghost = w.leo.lend.request_with_profile(&w.maya.member(), None, "claude", 1800, "", Some("lp_nothing"), None).unwrap();
     w.maya.pump();
     assert!(w.maya.lend.answer(&ghost.id, true, None, None).await.is_err());
+}
+
+// ---------------------------------------------------------------- usage in the bar, and past lends (1.1.1)
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_lender_shares_numbers_only_when_the_profile_shows_usage_and_the_borrower_row_uses_the_profile_name() {
+    let w = world2(sse_script()).await;
+    let (profile_id, _home) = sign_in_profile(&w, hour_from_now());
+    let (grant, _base) = lend_one_with(&w, 3600, &profile_id).await;
+    let window = crate::usage::readers::Window { name: "5-hour".into(), used_percent: 76.0, minutes: Some(300), resets_at_ms: Some(hour_from_now()), reset_since: false };
+    let numbers = |_: &str| Some((Some("Max".to_string()), vec![window.clone()]));
+
+    // Off (the default): nothing is sent, and the borrower's row says nothing is shared.
+    w.maya.lend.share_usage(&numbers);
+    let view = w.leo.lend.usage_view();
+    assert_eq!(view.borrowed.len(), 1);
+    assert!(view.borrowed[0].shared.is_none());
+    assert!(view.borrowed[0].name.contains("Sign-in"), "named by the lender's profile: {}", view.borrowed[0].name);
+    assert!(view.borrowed[0].name.ends_with("(borrowed)"));
+    assert!(!view.borrowed[0].name.contains("Lend"), "never an internal label");
+
+    // On: the numbers go through the lend link, and nothing else (no login, no email).
+    let mut p = w.maya.lend.state(true).profiles.into_iter().find(|p| p.id == profile_id).unwrap();
+    p.show_usage = true;
+    w.maya.lend.profile_save(p).unwrap();
+    w.maya.lend.share_usage(&numbers);
+    w.leo.pump();
+    let shared = w.leo.lend.usage_view().borrowed[0].shared.clone().expect("the borrower got the numbers");
+    assert_eq!(shared.windows[0].used_percent, 76.0);
+    assert_eq!(shared.plan.as_deref(), Some("Max"));
+
+    // A lend that ended leaves no usage row behind on either PC.
+    w.leo.lend.give_back(&grant).unwrap();
+    assert!(w.leo.lend.usage_view().borrowed.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn usage_numbers_for_a_grant_come_only_from_the_lender_of_that_grant() {
+    let w = world2(sse_script()).await;
+    let (_grant, _base) = lend_one(&w, 3600).await;
+    let leo_view = w.leo.lend.usage_view();
+    assert_eq!(leo_view.borrowed.len(), 1);
+    // The lender's own PC has no incoming grant, so numbers sent for it are refused.
+    assert!(w.maya.lend.usage_view().borrowed.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn past_lends_can_be_dismissed_cleared_and_expire_after_a_week() {
+    let w = world2(sse_script()).await;
+    let (grant, _base) = lend_one(&w, 3600).await;
+    assert!(!w.leo.lend.dismiss_grant(&grant), "a lend that still runs is never removed");
+    w.leo.lend.give_back(&grant).unwrap();
+    w.maya.pump();
+    assert_eq!(w.leo.lend.state(true).grants.len(), 1);
+
+    // The X on the row.
+    assert!(w.leo.lend.dismiss_grant(&grant));
+    assert!(w.leo.lend.state(true).grants.is_empty());
+
+    // Clear all: only that side's ended rows.
+    assert_eq!(w.maya.lend.clear_past(Direction::In), 0);
+    assert_eq!(w.maya.lend.state(true).grants.len(), 1);
+    assert_eq!(w.maya.lend.clear_past(Direction::Out), 1);
+    assert!(w.maya.lend.state(true).grants.is_empty());
+
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_week_later_an_ended_lend_is_gone_from_the_saved_state_not_only_hidden() {
+    let w = world2(sse_script()).await;
+    let (grant2, _) = lend_one(&w, 3600).await;
+    w.leo.lend.give_back(&grant2).unwrap();
+    assert!(!w.leo.lend.prune_past(), "a fresh end stays");
+    w.leo.lend.age_ended_for_test(8 * 24 * 3600 * 1000);
+    assert!(w.leo.lend.prune_past());
+    assert!(w.leo.lend.state(true).grants.is_empty());
 }

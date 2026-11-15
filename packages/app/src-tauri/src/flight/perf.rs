@@ -39,6 +39,34 @@ pub struct PerfSummary {
     pub chat_cold: Stat,
     /// Cold starts only: how long the agent took to answer its first hello.
     pub handshake: Stat,
+    /// From sending a message to the first sign of an answer (`startup_first_reply`).
+    pub first_reply: Stat,
+    /// One run of "Check my setup" (`startup_setup_check`).
+    pub setup_check: Stat,
+    /// Chat starts that took a session that was ready ahead of time, and those that had to start one.
+    pub warm_hits: usize,
+    pub warm_misses: usize,
+    /// The steps of the last app start (`startup-last.json`), filled in by the command, not by the log.
+    pub startup_steps: Vec<StartupStep>,
+    pub startup_total_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupStep {
+    pub name: String,
+    pub step_ms: u64,
+}
+
+/// The steps and total of the last app start, from the JSON `startup_trace::finish` writes.
+pub fn startup_from_json(text: &str) -> (Vec<StartupStep>, Option<u64>) {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else { return (Vec::new(), None) };
+    let steps = value
+        .get("steps")
+        .and_then(|s| s.as_array())
+        .map(|list| list.iter().filter_map(|s| Some(StartupStep { name: s.get("name")?.as_str()?.to_string(), step_ms: s.get("step_ms")?.as_u64()? })).collect())
+        .unwrap_or_default();
+    (steps, value.get("total_ms").and_then(|t| t.as_u64()))
 }
 
 fn field<'a>(line: &'a str, name: &str) -> Option<&'a str> {
@@ -55,12 +83,17 @@ fn line_time_ms(line: &str) -> Option<u64> {
 /// Work out the summary from log lines, oldest first. `now_ms` is the current time (UTC, ms).
 pub fn summarize<'a>(lines: impl Iterator<Item = &'a str>, now_ms: u64) -> PerfSummary {
     let mut stages: HashMap<String, Vec<(String, u64, usize)>> = HashMap::new();
+    let (mut first_reply, mut setup_check) = (Vec::new(), Vec::new());
     let mut alias: HashMap<String, String> = HashMap::new();
     for (seq, line) in lines.enumerate() {
         if line_time_ms(line).is_some_and(|t| now_ms.saturating_sub(t) > WINDOW_MS) {
             continue;
         }
-        if line.contains("startup_carry") {
+        if line.contains("startup_first_reply") || line.contains("startup_setup_check") {
+            if let Some(ms) = field(line, "ms").and_then(|v| v.parse::<u64>().ok()) {
+                if line.contains("startup_first_reply") { first_reply.push(ms) } else { setup_check.push(ms) }
+            }
+        } else if line.contains("startup_carry") {
             if let (Some(from), Some(to)) = (field(line, "from"), field(line, "to")) {
                 alias.insert(from.to_string(), to.to_string());
             }
@@ -86,10 +119,16 @@ pub fn summarize<'a>(lines: impl Iterator<Item = &'a str>, now_ms: u64) -> PerfS
     }
     // (when it finished, value), so "last" is the most recent one.
     let (mut app, mut warm, mut cold, mut handshake) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut warm_hits, mut warm_misses) = (0, 0);
     for list in merged.values() {
         let at = |name: &str| list.iter().find(|(n, _, _)| n == name).map(|(_, ms, seq)| (*ms, *seq));
         if let Some((ms, seq)) = at("app_setup_done") {
             app.push((seq, ms));
+        }
+        if at("chat_warm_hit").is_some() {
+            warm_hits += 1;
+        } else if at("chat_warm_miss").is_some() {
+            warm_misses += 1;
         }
         let Some((ready, seq)) = at("chat_session_ready") else { continue };
         if at("chat_warm_hit").is_some() {
@@ -106,7 +145,17 @@ pub fn summarize<'a>(lines: impl Iterator<Item = &'a str>, now_ms: u64) -> PerfS
         v.into_iter().map(|(_, ms)| ms).collect::<Vec<u64>>()
     };
     let (app, warm, cold, handshake) = (by_time(app), by_time(warm), by_time(cold), by_time(handshake));
-    PerfSummary { app_start: stat(&app), chat_warm: stat(&warm), chat_cold: stat(&cold), handshake: stat(&handshake) }
+    PerfSummary {
+        app_start: stat(&app),
+        chat_warm: stat(&warm),
+        chat_cold: stat(&cold),
+        handshake: stat(&handshake),
+        first_reply: stat(&first_reply),
+        setup_check: stat(&setup_check),
+        warm_hits,
+        warm_misses,
+        ..Default::default()
+    }
 }
 
 /// Read every log file in `dir` (oldest file first) and summarize.
@@ -170,6 +219,31 @@ mod tests {
         assert_eq!(s.chat_cold.count, 3);
         assert_eq!(s.chat_cold.median_ms, Some(2000));
         assert_eq!(s.chat_cold.last_ms, Some(2000));
+    }
+
+    #[test]
+    fn first_replies_setup_checks_and_warm_hits_are_counted() {
+        let lines = vec![
+            stage(900, "chat-start-x-1", "chat_warm_hit", 3),
+            stage(900, "chat-start-x-2", "chat_warm_miss", 3),
+            stage(900, "chat-start-x-3", "chat_warm_miss", 3),
+            format!("{}  INFO startup_first_reply ms=1800 pane=a", ts(800)),
+            format!("{}  INFO startup_first_reply ms=2600 pane=b", ts(700)),
+            format!("{}  INFO startup_setup_check ms=450 agents=6", ts(600)),
+            format!("{}  INFO startup_first_reply ms=9999 pane=old", ts(9 * 24 * 3600 * 1000)),
+        ];
+        let s = summarize(lines.iter().map(String::as_str), NOW);
+        assert_eq!((s.warm_hits, s.warm_misses), (1, 2));
+        assert_eq!((s.first_reply.count, s.first_reply.last_ms), (2, Some(2600)));
+        assert_eq!(s.setup_check.median_ms, Some(450));
+    }
+
+    #[test]
+    fn the_last_start_steps_are_read_from_the_trace_file() {
+        let (steps, total) = startup_from_json(r#"{"total_ms":900,"steps":[{"name":"bridge","step_ms":120,"at_ms":300},{"name":"mcp_resources","step_ms":40,"at_ms":340}]}"#);
+        assert_eq!(total, Some(900));
+        assert_eq!(steps.iter().map(|s| (s.name.as_str(), s.step_ms)).collect::<Vec<_>>(), [("bridge", 120), ("mcp_resources", 40)]);
+        assert_eq!(startup_from_json("not json"), (Vec::new(), None));
     }
 
     #[test]

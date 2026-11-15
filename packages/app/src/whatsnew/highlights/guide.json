@@ -1,0 +1,8 @@
+{
+  "version": "guide",
+  "date": "2026-11-17",
+  "highlights": [
+    { "id": "keep-going", "since": "1.0.20", "title": "Keep going", "line": "Long tasks carry on by themselves when a step limit is reached.", "area": "Agents", "demo": "standby", "tour": false, "tryLabel": "Open agent settings", "try": { "action": "settings.open", "args": { "page": "agents" } }, "platforms": ["desktop"], "labs": null },
+    { "id": "point-fix", "since": "1.0.15", "title": "Point and fix", "line": "Pick something on a page and say what to change.", "area": "Files", "demo": "artifact", "tour": false, "tryLabel": "Try it", "try": { "action": "point.start", "args": {} }, "platforms": ["desktop"], "labs": null }
+  ]
+}

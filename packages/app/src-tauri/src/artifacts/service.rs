@@ -100,3 +100,21 @@ pub fn announce(pane_id: &str, artifact: &Artifact, version: u32) -> bool {
         None => false,
     }
 }
+
+/// Where the share links' locator file lives (the app's data folder).
+pub fn share_index_file() -> std::path::PathBuf {
+    crate::app_paths::app_data_dir().join("artifact-shares.json")
+}
+
+/// Now, in milliseconds since 1970 (what share links count in).
+pub fn now_ms() -> u64 {
+    chrono::Utc::now().timestamp_millis().max(0) as u64
+}
+
+/// The address a share link is opened at: the app's public address (the stable link or the tunnel), then `/bridge/share/`
+/// and the secret. `None` while the app has no public address (the phone and other people cannot reach the PC then).
+pub fn share_address(secret: &str) -> Option<String> {
+    let base = crate::mobile_tunnel::tunnel_status().public_url.or_else(crate::mobile_tunnel::custom_public_url)?;
+    let base = base.trim().trim_end_matches('/');
+    (!base.is_empty()).then(|| format!("{base}/bridge/share/{secret}"))
+}

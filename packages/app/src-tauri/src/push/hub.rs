@@ -20,6 +20,9 @@ const MAX_GRANTS: usize = 64;
 /// Where the service worker posts an Allow / Deny tap (relative to the PWA origin).
 pub const ACT_PATH: &str = "/bridge/push/act";
 
+/// A question shown with Yes / No buttons must fit its notification line whole (after "Question · ").
+const YES_NO_MAX_CHARS: usize = super::triggers::MAX_FIRST_LINE_CHARS - 11;
+
 /// How the hub learns who is calling. The real one asks the pairing store.
 pub trait DeviceDirectory: Send + Sync {
     fn device_for_token(&self, token: &str) -> Option<String>;
@@ -46,12 +49,22 @@ pub struct Grant {
 }
 
 /// The attention item a notification is about (the deep link, and what a lock-screen tap answers).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ItemRef {
     /// The opaque item id; the phone opens `/?item=<id>`.
     pub id: String,
     pub occurrence: u32,
     pub fingerprint: String,
+    /// Set for a simple yes/no question: the ids of its two choices. The notification then carries
+    /// Yes / No buttons (a one-time token, answered through the same route as the phone card).
+    pub yes_no: Option<YesNo>,
+}
+
+/// The two choice ids of a yes/no question.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct YesNo {
+    pub yes: String,
+    pub no: String,
 }
 
 /// What the dispatcher wants to tell the phones.
@@ -238,7 +251,13 @@ impl PushHub {
     pub fn redeem_grant(&self, token: &str, now_ms: u64) -> Result<Grant, &'static str> {
         let grant = self.grants.lock().remove(token).ok_or("unknown_or_used_token")?;
         // Answering once settles the prompt: no other grant for this pane may answer a later one.
-        self.grants.lock().retain(|_, g| g.pane_id != grant.pane_id);
+        if grant.pane_id.is_empty() {
+            // A question has no pane: the same card's tokens on other phones die with it.
+            let card = grant.item.as_ref().map(|item| item.id.clone());
+            self.grants.lock().retain(|_, g| g.item.as_ref().map(|item| item.id.clone()) != card);
+        } else {
+            self.grants.lock().retain(|_, g| g.pane_id != grant.pane_id);
+        }
         if grant.expires_ms <= now_ms {
             return Err("expired_token");
         }
@@ -336,6 +355,12 @@ impl PushHub {
             })
             && candidate.pane_id.is_some()
             && !redaction_changed;
+        // A simple yes/no question: the body shows the whole question, nothing was redacted, and the card is known.
+        let yes_no_buttons = candidate.kind == Kind::Question
+            && candidate.item.as_ref().is_some_and(|i| i.yes_no.is_some())
+            && candidate.prompt.as_ref().is_some_and(|p| shown_in_full(&p.text) && p.text.chars().count() <= YES_NO_MAX_CHARS)
+            && !redaction_changed;
+        let actionable = actionable || yes_no_buttons;
         let words = |view| {
             copy_for_view(candidate.kind, &candidate.agent_label, candidate.heading.as_deref(), candidate.prompt.as_ref(), candidate.detail.as_deref(), view)
         };
@@ -381,13 +406,15 @@ impl PushHub {
             if actionable && view == View::Full && self.directory.device_can_answer(&device_id) {
                 let pane_id = candidate.pane_id.as_deref().unwrap_or_default();
                 let prompt_id = prompt_id.unwrap_or_default();
-                extra.insert(
-                    "act".into(),
-                    json!({
-                        "url": ACT_PATH,
-                        "token": self.issue_grant(&device_id, pane_id, prompt_id, candidate.item.as_ref(), now_ms),
-                    }),
-                );
+                let mut act = json!({
+                    "url": ACT_PATH,
+                    "token": self.issue_grant(&device_id, pane_id, prompt_id, candidate.item.as_ref(), now_ms),
+                });
+                if candidate.kind == Kind::Question {
+                    // The phone shows Yes / No instead of Allow / Deny.
+                    act["yes_no"] = json!(true);
+                }
+                extra.insert("act".into(), act);
             }
             let payload = super::sender::PushPayload::new(&title, &body, extra);
             let delivery = Delivery {
@@ -968,7 +995,7 @@ Kilo");
     fn a_grant_binds_the_card_the_notification_announced() {
         let hub = two_device_hub("grant-item");
         let mut candidate = waiting("pane-1", Some(command_prompt("pid-1")));
-        candidate.item = Some(ItemRef { id: "a7Kp2xQ9".into(), occurrence: 7, fingerprint: "f3c1f3c1f3c1f3c1".into() });
+        candidate.item = Some(ItemRef { id: "a7Kp2xQ9".into(), occurrence: 7, fingerprint: "f3c1f3c1f3c1f3c1".into(), ..Default::default() });
         let (_, d) = hub.plan(&candidate, 1_000);
         let payload = payload_of(&d, "dev-a");
         assert_eq!(payload["item_id"], "a7Kp2xQ9", "the tap opens this card");
@@ -1029,5 +1056,62 @@ Kilo");
             let payload: Value = serde_json::from_slice(&delivery.payload).unwrap();
             assert!(payload.get("act").is_none(), "a body that was edited by redaction is open-only");
         }
+    }
+
+    fn yes_no_question(id: &str, text: &str, with_pair: bool) -> Candidate {
+        let mut c = question(id, text);
+        c.item = Some(ItemRef {
+            id: format!("item-{id}"),
+            yes_no: with_pair.then(|| YesNo { yes: "c-yes".into(), no: "c-no".into() }),
+            ..Default::default()
+        });
+        c
+    }
+
+    #[test]
+    fn a_simple_yes_no_question_gets_yes_no_buttons_with_its_own_token() {
+        let hub = two_device_hub("yesno");
+        let (_, d) = hub.plan(&yes_no_question("y1", "Deploy to staging?", true), 1_000);
+        assert_eq!(d.len(), 2);
+        for delivery in &d {
+            let act = act_of(delivery).expect("a yes/no question carries buttons");
+            assert_eq!(act["yes_no"], json!(true));
+            assert_eq!(act["url"], ACT_PATH);
+            assert!(act["token"].as_str().is_some_and(|t| t.len() > 20));
+        }
+        assert_eq!(hub.grants.lock().len(), 2, "one token per phone");
+    }
+
+    #[test]
+    fn a_question_that_is_not_plain_yes_no_stays_open_only() {
+        let hub = two_device_hub("yesno-not");
+        // No yes/no pair (a menu of options, free text, a card raised by the app): no buttons.
+        let (_, d) = hub.plan(&yes_no_question("y2", "Which branch?", false), 1_000);
+        assert!(d.iter().all(|x| act_of(x).is_none()));
+        // A question too long to show whole is open-only: the cut tail could change the answer.
+        let long = "Is it fine to remove everything under the build folder and then reinstall all the packages from scratch now?";
+        let (_, d) = hub.plan(&yes_no_question("y3", long, true), 1_000);
+        assert!(d.iter().all(|x| act_of(x).is_none()), "cut question text: open-only");
+        // A phone that may not answer gets none; a phone that hides details gets none.
+        let dir = Arc::new(FakeDirectory::new(&[("tok-a", "dev-a")]));
+        dir.cannot_answer.lock().push("dev-a".into());
+        let hub = hub_with("yesno-caps", dir);
+        let (sub, _, _) = test_subscription("https://fcm.googleapis.com/a");
+        hub.store().lock().upsert("dev-a", sub).unwrap();
+        let (_, d) = hub.plan(&yes_no_question("y4", "Deploy?", true), 1_000);
+        assert!(act_of(&d[0]).is_none(), "watch-only phone: no answer buttons");
+    }
+
+    #[test]
+    fn a_yes_no_token_answers_once_and_wakes_nothing_else() {
+        let hub = two_device_hub("yesno-redeem");
+        let (_, d) = hub.plan(&yes_no_question("y5", "Deploy?", true), 1_000);
+        let token = act_of(&d[0]).unwrap()["token"].as_str().unwrap().to_string();
+        let grant = hub.redeem_grant(&token, 2_000).unwrap();
+        assert_eq!(grant.item.unwrap().yes_no.unwrap().yes, "c-yes");
+        // The other phone's token for the same card died with it; a second use is refused.
+        assert_eq!(hub.redeem_grant(&token, 2_001), Err("unknown_or_used_token"));
+        let other = act_of(&d[1]).unwrap()["token"].as_str().unwrap().to_string();
+        assert_eq!(hub.redeem_grant(&other, 2_002), Err("unknown_or_used_token"));
     }
 }

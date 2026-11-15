@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaneInfo } from '@potato-workspace/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { GitState, ShipApi } from '../../lib/ship-api';
+import { setHelpersInSidebar } from '../../lib/helpersInSidebar';
 import { Sidebar } from '../cockpit/Sidebar';
 import { DragLayer } from './DragLayer';
 import { cancelDrag } from './dragStore';
@@ -44,6 +45,7 @@ function layout(this: Element): DOMRect {
 
 beforeEach(() => {
   localStorage.clear();
+  setHelpersInSidebar(true); // these tests are about the indented helper list, which is off by default
   localStorage.setItem(LS_SIDEBAR_PROJECTS, JSON.stringify([{ path: 'C:\\proj\\a' }, { path: 'C:\\proj\\b' }]));
   select.mockClear();
   host = document.createElement('div');
@@ -53,6 +55,7 @@ beforeEach(() => {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(layout);
 });
 afterEach(() => {
+  setHelpersInSidebar(false);
   act(() => cancelDrag());
   act(() => root.unmount());
   host.remove();

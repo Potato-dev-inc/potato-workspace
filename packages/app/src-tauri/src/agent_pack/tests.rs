@@ -821,3 +821,71 @@ fn an_entry_that_already_has_the_approval_is_left_as_it_is() {
     assert_eq!(v["agents"][0]["mcp"]["status"], "unchanged");
     assert_eq!(read(&home.join(".codex/config.toml")), mine, "the person's own choice stands");
 }
+
+// ---- an entry the app wrote that points at an older install ----
+
+fn launch_at(path: &str) -> HostLaunch {
+    HostLaunch { command: path.into(), ..bundled_launch() }
+}
+
+#[test]
+fn an_entry_the_app_wrote_is_pointed_at_the_new_program_on_refresh() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("refresh-own");
+    let old = "C:/Old Install/bin/puppet-master-mcp.exe";
+    let new = "C:/New Install/bin/puppet-master-mcp.exe";
+    let e_old = env_with(vec![spec("cursor_agent", true)], &home, launch_at(old));
+    service::call(&e_old, "apply").unwrap();
+    assert!(read(&home.join(".cursor/mcp.json")).contains(old));
+
+    let e_new = env_with(vec![spec("cursor_agent", true)], &home, launch_at(new));
+    let done = service::refresh_stale(&e_new).unwrap();
+    assert_eq!(done.len(), 1, "{done:?}");
+    let text = read(&home.join(".cursor/mcp.json"));
+    assert!(text.contains(new) && !text.contains(old), "{text}");
+    // Nothing more to do the second time.
+    assert!(service::refresh_stale(&e_new).unwrap().is_empty());
+}
+
+#[test]
+fn refresh_never_touches_an_entry_the_app_did_not_write_or_the_person_changed() {
+    let _serial = crate::tui::registry::test_serial();
+    // 1. A person's own entry, no install record at all.
+    let home = temp("refresh-foreign");
+    let user = "{\n  \"mcpServers\": {\n    \"potato-workspace\": {\n      \"command\": \"C:/mine/pm-mcp.exe\"\n    }\n  }\n}\n";
+    seed(&home, ".cursor/mcp.json", user);
+    let e = env_with(vec![spec("cursor_agent", true)], &home, bundled_launch());
+    assert!(service::refresh_stale(&e).unwrap().is_empty());
+    assert_eq!(read(&home.join(".cursor/mcp.json")), user);
+
+    // 2. The app wrote it, then the person edited it: it is theirs now.
+    let home = temp("refresh-edited");
+    let e_old = env_with(vec![spec("cursor_agent", true)], &home, launch_at("C:/Old/puppet-master-mcp.exe"));
+    service::call(&e_old, "apply").unwrap();
+    let path = home.join(".cursor/mcp.json");
+    let edited = read(&path).replace("C:/Old/puppet-master-mcp.exe", "C:/Old/puppet-master-mcp.exe\", \"note\": \"mine");
+    fs::write(&path, &edited).unwrap();
+    let e_new = env_with(vec![spec("cursor_agent", true)], &home, launch_at("C:/New/puppet-master-mcp.exe"));
+    assert!(service::refresh_stale(&e_new).unwrap().is_empty());
+    assert_eq!(read(&path), edited);
+
+    // 3. This install has no program: nothing is written.
+    let e_missing = env_with(vec![spec("cursor_agent", true)], &home, missing_launch());
+    assert!(service::refresh_stale(&e_missing).unwrap().is_empty());
+}
+
+#[test]
+fn refresh_adds_nothing_new_and_leaves_other_servers_in_the_file() {
+    let _serial = crate::tui::registry::test_serial();
+    let home = temp("refresh-other");
+    let other = "{\n  \"mcpServers\": {\n    \"other\": {\n      \"command\": \"node\"\n    }\n  }\n}\n";
+    seed(&home, ".cursor/mcp.json", other);
+    // An install record exists (apply on an old launch), but a second agent that has no entry yet gets none from refresh.
+    let e_old = env_with(vec![spec("cursor_agent", true)], &home, launch_at("C:/Old/puppet-master-mcp.exe"));
+    service::call(&e_old, "apply").unwrap();
+    let e_new = env_with(vec![spec("cursor_agent", true)], &home, launch_at("C:/New/puppet-master-mcp.exe"));
+    service::refresh_stale(&e_new).unwrap();
+    let text = read(&home.join(".cursor/mcp.json"));
+    assert!(text.contains("\"other\"") && text.contains("\"node\""), "{text}");
+    assert!(text.contains("C:/New/puppet-master-mcp.exe"), "{text}");
+}

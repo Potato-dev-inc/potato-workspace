@@ -4,7 +4,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fakeCompanionTransport, type CompanionAgentOption } from '../../../lib/companion';
+import { fakeCompanionTransport, type CompanionAgentOption, type CompanionView } from '../../../lib/companion';
 import type { ShipApi } from '../../../lib/ship-api';
 import { CompanionSetupSheet } from './CompanionSetupSheet';
 
@@ -39,11 +39,17 @@ function setValue(el: HTMLInputElement, value: string) {
   });
 }
 
-async function render(agents: CompanionAgentOption[] = AGENTS, ship: Pick<ShipApi, 'pickFolder'> = { pickFolder: vi.fn(async () => null) }) {
-  const transport = fakeCompanionTransport({ agents });
+async function render(
+  agents: CompanionAgentOption[] = AGENTS,
+  ship: Pick<ShipApi, 'pickFolder'> = { pickFolder: vi.fn(async () => null) },
+  existing: CompanionView[] = [],
+) {
+  const transport = fakeCompanionTransport({ agents, companions: existing, memory: { soul: 'Warm and short.' } });
   const onCreated = vi.fn();
   const onClose = vi.fn();
-  await act(async () => root.render(<CompanionSetupSheet transport={transport} ship={ship} onClose={onClose} onCreated={onCreated} />));
+  await act(async () =>
+    root.render(<CompanionSetupSheet transport={transport} ship={ship} companions={existing} onClose={onClose} onCreated={onCreated} />),
+  );
   await act(async () => {});
   return { transport, onCreated, onClose, ship };
 }
@@ -77,6 +83,7 @@ describe('CompanionSetupSheet', () => {
     expect(create?.args[0]).toEqual({
       name: 'Lumi',
       avatar: 'lumen',
+      accent: 'potato',
       persona: 'plain',
       agentType: 'claude',
       folder: '',
@@ -144,5 +151,55 @@ describe('CompanionSetupSheet', () => {
     const alert = host.querySelector('[role="alert"]')!.textContent!;
     expect(alert).toBe("Pick a folder of its own. Your Desktop has other projects in it, and agents there would read Mochi's notes. Try C:\\x\\mochi.");
     expect(button('Wake up Mochi').disabled).toBe(false);
+  });
+
+  describe('a second companion', () => {
+    const mochi: CompanionView = {
+      id: 'mochi',
+      name: 'Mochi',
+      avatar: 'mochi',
+      isDefault: true,
+      persona: 'calm',
+      agentType: 'claude',
+      agentLabel: 'Claude',
+      folderName: 'mochi',
+      state: 'idle',
+      stateLine: 'Here.',
+      paneId: 'companion-mochi',
+      needs: null,
+      pendingMemory: 0,
+      nextCheckin: null,
+      restarts: 0,
+      autoStart: true,
+    };
+
+    it('says it is another one, picks its own face, name and colour, and starts empty', async () => {
+      const { transport, onCreated } = await render(AGENTS, undefined, [mochi]);
+      expect(host.textContent).toContain('Make another companion');
+      act(() => host.querySelector<HTMLButtonElement>('button[title="Kit"]')!.click());
+      setValue(nameInput(), 'Kit');
+      act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Sky"]')!.click());
+      await act(async () => button('Wake up Kit').click());
+      const create = transport.calls.find((c) => c.method === 'create');
+      expect(create?.args[0]).toMatchObject({ name: 'Kit', avatar: 'kit', accent: 'sky' });
+      expect(transport.calls.some((c) => c.method === 'saveMemory')).toBe(false);
+      expect(onCreated).toHaveBeenCalledTimes(1);
+    });
+
+    it('can copy how another companion talks, and only that', async () => {
+      const { transport } = await render(AGENTS, undefined, [mochi]);
+      setValue(nameInput(), 'Pip');
+      act(() => button('Copy how Mochi talks').click());
+      expect(host.textContent).toContain('Only its "Who it is" text is copied');
+      await act(async () => button('Wake up Pip').click());
+      const saves = transport.calls.filter((c) => c.method === 'saveMemory');
+      expect(saves).toHaveLength(1);
+      expect(saves[0].args).toEqual(['pip', 'soul', 'Warm and short.']);
+    });
+
+    it('the first companion sheet has no "Start from" choice', async () => {
+      await render();
+      expect(host.textContent).not.toContain('Start from');
+    });
   });
 });

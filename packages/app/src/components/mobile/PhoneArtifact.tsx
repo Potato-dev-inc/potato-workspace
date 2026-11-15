@@ -16,6 +16,8 @@ export function PhoneArtifactScreen({ bridge, paneId, id, version, title, onClos
   const [page, setPage] = useState<PhoneArtifact | null>(null);
   const [error, setError] = useState<string | null>(null);
   const close = useRef<HTMLButtonElement>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     close.current?.focus();
@@ -46,6 +48,37 @@ export function PhoneArtifactScreen({ bridge, paneId, id, version, title, onClos
     };
   }, [bridge, paneId, id, picked, t]);
 
+  // Share: a read-only link to the version on screen. The phone's share sheet takes it; without one it is copied.
+  const share = () => {
+    if (!page || !bridge?.shareArtifact || sharing) return;
+    setSharing(true);
+    setNote(null);
+    bridge.shareArtifact(paneId, id, page.version).then(
+      async (made) => {
+        setSharing(false);
+        if (!made.link) {
+          setNote(made.reason ?? t('artifacts.shareNoAddress'));
+          return;
+        }
+        try {
+          if (typeof navigator.share === 'function') {
+            await navigator.share({ title: page.title, url: made.link });
+            return;
+          }
+          await navigator.clipboard.writeText(made.link);
+          setNote(t('artifacts.shareCopied'));
+        } catch (err) {
+          // Closing the share sheet is not an error.
+          if (!(err instanceof Error && err.name === 'AbortError')) setNote(t('artifacts.copyFailed'));
+        }
+      },
+      (err: unknown) => {
+        setSharing(false);
+        setNote(errorSentence(err));
+      },
+    );
+  };
+
   const shown = page?.title ?? title;
   const body = error ? (
     <p className="ph-conv-sub" role="alert">
@@ -71,10 +104,20 @@ export function PhoneArtifactScreen({ bridge, paneId, id, version, title, onClos
             ))}
           </select>
         )}
+        {page && bridge?.shareArtifact && (
+          <button type="button" onClick={share} disabled={sharing} data-testid="phone-artifact-share">
+            {t('artifacts.phoneShare')}
+          </button>
+        )}
         <button ref={close} type="button" onClick={onClose}>
           {t('artifacts.phoneClose')}
         </button>
       </div>
+      {note && (
+        <p className="ph-conv-sub" role="status" data-testid="phone-artifact-note">
+          {note}
+        </p>
+      )}
       <div className="ph-art-body">{body}</div>
     </div>,
     document.querySelector('.ph') ?? document.body,

@@ -283,3 +283,30 @@ pub fn read_project_file(project: &Path, path: &str) -> Result<String, ArtifactE
     }
     String::from_utf8(fs::read(full).map_err(io)?).map_err(|_| ArtifactError::NotText)
 }
+
+/// The artifact's `meta.json`, or `None` (unknown id, not an artifact, unreadable).
+pub(super) fn meta_of(project: &Path, id: &str) -> Option<Artifact> {
+    if !valid_id(id) {
+        return None;
+    }
+    load_meta(&artifacts_dir(project), id)
+}
+
+/// Changes an artifact's `meta.json` under the store's one writer lock (the share slot is the only caller).
+pub(super) fn update_meta<T>(project: &Path, id: &str, change: impl FnOnce(&mut Artifact) -> T) -> Result<T, ArtifactError> {
+    if !valid_id(id) {
+        return Err(ArtifactError::BadId);
+    }
+    let _one = WRITE.lock();
+    let dir = artifacts_dir(project);
+    let mut artifact = load_meta(&dir, id).ok_or(ArtifactError::NotFound)?;
+    let out = change(&mut artifact);
+    write_atomic(&meta_path(&dir, id), &serde_json::to_vec_pretty(&artifact).map_err(|e| ArtifactError::Io(e.to_string()))?)?;
+    Ok(out)
+}
+
+/// The text of one version, with no size limit other than the store's own.
+pub(super) fn version_text(project: &Path, artifact: &Artifact, n: u32) -> Result<String, ArtifactError> {
+    let bytes = fs::read(version_file(&artifacts_dir(project), artifact, n)).map_err(|_| ArtifactError::NotFound)?;
+    String::from_utf8(bytes).map_err(|_| ArtifactError::NotText)
+}

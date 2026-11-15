@@ -87,12 +87,42 @@ export interface ArtifactsApi {
   sync(paneId: string): Promise<Artifact[]>;
   read(paneId: string, id: string, version?: number): Promise<ArtifactPage>;
   openInBrowser(paneId: string, id: string, version?: number): Promise<void>;
+  /** Makes a read-only link to one version (`ttlHours`: 1 to 168, a day when left out). The secret is inside the link, shown once. */
+  shareMake(paneId: string, id: string, version: number, ttlHours: number): Promise<ArtifactShareMade>;
+  /** The links of this page that have not ended (never their secrets). */
+  shareList(paneId: string, id: string): Promise<ArtifactShareView[]>;
+  /** Stops every link of this page. */
+  shareStop(paneId: string, id: string): Promise<number>;
+  /** Opens the page in a window of its own. */
+  popOut(paneId: string, id: string, title: string): Promise<void>;
 }
+
+/** A link just made. `link` is null when this PC has no public address (`reason` says so). */
+export interface ArtifactShareMade {
+  link: string | null;
+  version: number;
+  /** Milliseconds since 1970. */
+  expiresAt: number;
+  reason?: string | null;
+}
+
+export interface ArtifactShareView {
+  version: number;
+  createdAt: number;
+  expiresAt: number;
+}
+
+/** The times the share box offers (hours). The PC keeps them between one hour and seven days. */
+export const SHARE_HOURS = [1, 24, 168] as const;
 
 export const artifactsApi: ArtifactsApi = {
   sync: (paneId) => invoke<Artifact[]>('artifacts_sync', { paneId }),
   read: (paneId, id, version) => invoke<ArtifactPage>('artifacts_read', { paneId, id, version }),
   openInBrowser: (paneId, id, version) => invoke<void>('artifacts_open_in_browser', { paneId, id, version }),
+  shareMake: (paneId, id, version, ttlHours) => invoke<ArtifactShareMade>('artifacts_share_make', { paneId, id, version, ttlHours }),
+  shareList: (paneId, id) => invoke<ArtifactShareView[]>('artifacts_share_list', { paneId, id }),
+  shareStop: (paneId, id) => invoke<number>('artifacts_share_stop', { paneId, id }),
+  popOut: (paneId, id, title) => invoke<void>('artifacts_pop_out', { paneId, id, title }),
 };
 
 /** Whether the system's browser can show this kind by itself. */

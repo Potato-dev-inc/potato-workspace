@@ -283,6 +283,8 @@ export const settings: Partial<Record<EnglishKey, string>> = {
   'settings.row.lend-labs.label': '出借 AI 助理',
   'settings.row.desktop-potato-labs.label': '桌面小馬鈴薯',
   'settings.row.agent-browser-labs.label': 'AI 助理瀏覽器',
+  'settings.row.companion-vault-labs.label': '夥伴的記憶與心情',
+  'settings.row.discord-bot-labs.label': 'Discord 機器人',
   'settings.row.telegram.label': 'Telegram',
   'settings.row.storage.label': '任務與活動資料',
   'settings.row.settings-file.label': '設定檔',

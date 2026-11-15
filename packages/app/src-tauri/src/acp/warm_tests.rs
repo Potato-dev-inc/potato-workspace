@@ -48,7 +48,7 @@ fn want(agent: &str) -> WarmWant {
 }
 
 fn policy(agents: &[&str], cap: usize) -> Policy {
-    Policy { wanted: agents.iter().map(|a| want(a)).collect(), reusable_agents: agents.iter().map(|a| a.to_string()).collect(), cap, idle_ms: 20 * 60_000, recent_ms: 6 * 3_600_000 }
+    Policy { wanted: agents.iter().map(|a| want(a)).collect(), reusable_agents: agents.iter().map(|a| a.to_string()).collect(), cap, idle_ms: 20 * 60_000, recent_ms: 6 * 3_600_000, ..Policy::default() }
 }
 
 fn pool(policy: Policy) -> (Arc<Pool<Fake>>, Arc<Fake>) {

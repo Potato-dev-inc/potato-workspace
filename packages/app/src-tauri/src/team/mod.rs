@@ -10,6 +10,7 @@
 //! - [`invite`], [`membership`]: invites, joining, approving, removing (with key rotation);
 //! - [`transport`]: the `TeamTransport` trait, the `FolderTransport` and the `RelayTransport`;
 //! - [`config`]: `team.json`;
+//! - [`presence`]: who is here or away, and what each person chose to share (memory only, never a card);
 //! - [`sources`]: pushes from remote-tracking refs, PRs and CI through `gh`;
 //! - [`store`]: drafts, cards, queued updates, the replay guard and gap counters;
 //! - [`actions`], [`merge_green`]: what a click does in git and on GitHub, with the safety rules;
@@ -32,6 +33,7 @@ pub mod crypto;
 pub mod event;
 pub mod git;
 pub mod invite;
+pub mod invite_web;
 pub mod keystore;
 #[cfg(any(test, feature = "dev-fake-tui"))]
 pub mod leakcheck;
@@ -39,6 +41,7 @@ pub mod mcp;
 pub mod membership;
 pub mod merge_green;
 pub mod phone;
+pub mod presence;
 pub mod project_key;
 pub mod relay_deploy;
 pub mod roster;
@@ -55,6 +58,8 @@ pub(crate) mod tests_v1;
 mod tests_hardening;
 #[cfg(test)]
 mod tests_mcp;
+#[cfg(test)]
+mod tests_presence;
 #[cfg(test)]
 mod tests_war_room;
 

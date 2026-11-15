@@ -107,7 +107,31 @@ pub enum Body {
     /// An older build drops it as a bad item (the asker times out and falls back to asking for an agent).
     OffersAsk { nonce: String },
     Offers { nonce: String, offers: Vec<Offer> },
+    /// The lender's limit numbers for the account behind a grant (percent, reset times and the plan name; nothing else),
+    /// sent only when the profile's "Show usage in the usage bar" is on. An older build drops it as a bad item.
+    Usage {
+        grant_id: String,
+        #[serde(default)]
+        plan: Option<String>,
+        #[serde(default)]
+        windows: Vec<WireWindow>,
+    },
 }
+
+/// One limit window as sent to a borrower.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WireWindow {
+    pub name: String,
+    /// Whole percent used.
+    pub used_percent: u32,
+    #[serde(default)]
+    pub minutes: Option<u64>,
+    #[serde(default)]
+    pub resets_at_ms: Option<u64>,
+}
+
+/// The most windows kept from another PC.
+pub const MAX_WIRE_WINDOWS: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Item {

@@ -102,3 +102,20 @@ fn the_phone_routes_are_not_exposed_to_mcp_sessions() {
         assert!(result.is_err(), "{method} {path} must be refused for an MCP session");
     }
 }
+
+#[test]
+fn the_desk_switch_routes_need_watch_to_read_and_control_to_start_or_end() {
+    assert_eq!(route_need("GET", &["desk-away"]), Need::Cap(Cap::Watch));
+    assert_eq!(route_need("POST", &["desk-away"]), Need::Cap(Cap::Control));
+    assert_eq!(route_need("POST", &["desk-away", "back"]), Need::Cap(Cap::Control));
+    let watch_only = phone(Caps::none().with(Cap::Watch, true));
+    assert_eq!(status(&watch_only, "GET", &["desk-away"]), 200, "a watching phone may see the state");
+    assert_eq!(status(&watch_only, "POST", &["desk-away"]), 403, "but not switch it on");
+    assert_eq!(status(&watch_only, "POST", &["desk-away", "back"]), 403, "or end it");
+    let answer_only = phone(Caps::watch_and_answer());
+    assert_eq!(status(&answer_only, "POST", &["desk-away"]), 403);
+    let full = phone(Caps::all());
+    assert_eq!(status(&full, "POST", &["desk-away"]), 200);
+    assert_eq!(status(&full, "POST", &["desk-away", "back"]), 200);
+}
+

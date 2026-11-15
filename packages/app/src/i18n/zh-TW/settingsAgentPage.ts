@@ -84,4 +84,9 @@ export const settingsAgentPage: Partial<Record<EnglishKey, string>> = {
   'chatAdapter.change': '更換',
   'chatAdapter.changeAria': '更換 {label} 的對話轉接器',
   'chatAdapter.added.status': '已儲存 {label} 的對話轉接器。',
+  'accounts.usedForLending': '用於借出',
+  'accounts.usedForLendingHelp': '這些登入是由借出功能建立的。要改名請到「借出」頁面。',
+  'accounts.lendProfileTag': '用於借出',
+  'accounts.openLend': '開啟借出',
+  'accounts.lendNoProfile': '沒有設定檔的借出登入',
 };

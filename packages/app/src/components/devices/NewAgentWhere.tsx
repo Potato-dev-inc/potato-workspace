@@ -7,6 +7,7 @@ import { devicesApi, runtimesOf, stateSentence, type Device, type DevicesApi, ty
 import { makeRemoteClient } from '../../lib/runtime/remote';
 import { PhoneNewChat } from '../mobile/PhoneNewChat';
 import '../../styles/devices.css';
+import { useDismissable } from '../../hooks/useDismissable';
 
 export interface WhereProps {
   view: DevicesView | null;
@@ -27,12 +28,7 @@ export function NewAgentWhere({ where, children }: { where?: WhereProps; childre
   const picked = where?.view?.devices.find((d) => d.node === pickedNode) ?? null;
   const bridge = useMemo(() => (picked ? makeRemoteClient(picked.node, api) : null), [picked?.node, api]);
   // A closed menu and a click elsewhere end the picker; a device that went away ends the pick.
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => !wrap.current?.contains(e.target as Node) && setOpen(false);
-    document.addEventListener('mousedown', away);
-    return () => document.removeEventListener('mousedown', away);
-  }, [open]);
+  useDismissable(open, { inside: [wrap], anchor: wrap, ignore: ['escape'], onDismiss: () => setOpen(false) });
   useEffect(() => {
     if (pickedNode && !picked) setPickedNode(null);
   }, [pickedNode, picked]);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { projectWithCopy } from './shell-labels';
@@ -29,6 +29,10 @@ import { useNextCard } from './useNextCard';
 import { accountsFor, pickableAccounts, signInLabel, tauriAccountsApi, type Account } from '../../lib/accounts';
 import { SIGN_IN } from '../../lib/glossary';
 import { TeamSection } from './team/TeamSection';
+import { DoneToday } from './inbox/DoneToday';
+import { IconTick } from './inbox/ActivityIcons';
+import { LastTurnContext } from './away-context';
+import '../../styles/inbox.css';
 import { RedBanners } from './team/RedBanner';
 import { useTeam } from './team/useTeam';
 import { teamApi } from '../../lib/team';
@@ -55,6 +59,7 @@ export function Inbox({
   onRestartCompanion,
   companionTransport,
   visit = 0,
+  onOpenMorning,
 }: {
   c: CockpitApi;
   /**
@@ -63,6 +68,8 @@ export function Inbox({
    * Each new count moves the keyboard back to the first card.
    */
   visit?: number;
+  /** The Morning report page: a night-shift row in Done today opens it. */
+  onOpenMorning?: () => void;
   /** The companions, so a stopped one gets its card (absent: none). */
   companions?: CompanionView[] | null;
   /** The card's "Try again": the desktop calls `companion_restart`. */
@@ -87,6 +94,8 @@ export function Inbox({
   const missions = useMissions();
   // One Team read for the red-branch banner on top and the Team section below.
   const team = useTeam();
+  // The latest finished turn of every chat: Done today lists the ones that ended since midnight.
+  const lastTurns = useContext(LastTurnContext);
   // The pane cards use the same de-duplicated list the badge counts (a pane has one problem card, not two).
   const blocking = blockingItems(needs);
   const waiting = c.registry.paneList.filter((p) => !isCompanionPaneId(p.info.id) && itemsOfKind(blocking, 'approval').some((i) => i.paneId === p.info.id));
@@ -345,12 +354,33 @@ export function Inbox({
         {nextCard.next !== null && t('inbox.next', { name: nextCard.next })}
       </p>
       {!firstRun && count === 0 && (
-        <EmptyState
-          title={t('inbox.nothingNeedsYou')}
-          line={t('inbox.nothingNeedsYouLine')}
-          action={noPanes && onStartAgent ? { label: t('inbox.startAgent'), onClick: onStartAgent } : noPanes && setUp ? { label: t('inbox.setUpAgents'), onClick: setUp } : null}
-          alternatives={noPanes && onStartAgent && setUp ? [{ label: t('inbox.setUpAgents'), onClick: setUp }] : []}
-        />
+        <div className="ib-clear" role="status" data-empty-state="">
+          <span className="ib-clear-ok" aria-hidden="true">
+            <IconTick size={12} />
+          </span>
+          <span className="ck-empty-title ib-clear-t">{t('inbox.nothingNeedsYou')}</span>
+          <small className="ck-empty-line ib-clear-s">{t('inbox.nothingNeedsYouLine')}</small>
+          {noPanes && (onStartAgent || setUp) && (
+            <span className="ib-clear-acts">
+              {onStartAgent ? (
+                <>
+                  <button type="button" className="ck-btn ck-btn--sm ck-btn--primary" onClick={onStartAgent}>
+                    {t('inbox.startAgent')}
+                  </button>
+                  {setUp && (
+                    <button type="button" className="ck-btn ck-btn--sm ck-btn--plain ck-empty-alt" onClick={setUp}>
+                      {t('inbox.setUpAgents')}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button type="button" className="ck-btn ck-btn--sm ck-btn--primary" onClick={setUp!}>
+                  {t('inbox.setUpAgents')}
+                </button>
+              )}
+            </span>
+          )}
+        </div>
       )}
 
       {entries.length > 0 && (
@@ -371,7 +401,9 @@ export function Inbox({
       <HiddenRuns />
       <ImportChatsCard />
 
-      <TeamSection now={c.now} paneNames={c.names} team={team} />
+      {!firstRun && <DoneToday summaries={lastTurns} names={c.names} now={c.now} onOpen={(id) => c.select(id)} onMorning={onOpenMorning} />}
+
+      {!firstRun && <TeamSection now={c.now} paneNames={c.names} team={team} />}
     </div>
   );
 }

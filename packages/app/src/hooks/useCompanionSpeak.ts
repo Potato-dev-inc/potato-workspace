@@ -4,14 +4,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NeedsYouItem } from '../lib/attention';
 import type { CompanionView } from '../lib/companion';
 import {
-  SPEAK_MEMORY_START,
+  MEMORY_CHANGED_EVENT,
   WAIT_SPEAK_MS,
   afterLater,
   afterShown,
-  halveBudget,
+  afterTooMuch,
+  loadMemory,
   minutesSince,
   pickSpeak,
-  setSpeak,
+  saveMemory,
+  usageThreshold,
   type SpeakEvent,
   type SpeakMemory,
   type SpeakSettings,
@@ -60,7 +62,12 @@ export function speakCandidates(
   }
   for (const row of input.usageRows ?? []) {
     if (!warns(row)) continue;
-    out.push({ key: `usage:${row.agent_id}:${row.account_id ?? ''}`, kind: 'usage', name: row.label, percent: row.state === 'ok' ? Math.round(headline(row)?.used_percent ?? 100) : 100 });
+    const percent = row.state === 'ok' ? Math.round(headline(row)?.used_percent ?? 100) : 100;
+    const threshold = usageThreshold(percent);
+    if (threshold === null) continue;
+    // One bubble per threshold per reset window: the window is the row's reset time, or today's date when it has none.
+    const windowId = headline(row)?.resets_at_ms ?? new Date(now).toDateString();
+    out.push({ key: `usage:${row.agent_id}:${row.account_id ?? ''}:${threshold}:${windowId}`, kind: 'usage', name: row.label, percent, threshold });
   }
   return out;
 }
@@ -86,13 +93,25 @@ export function useCompanionSpeak(input: CompanionSpeakInput): CompanionSpeak {
     shownRef.current = next;
     setEvent(next);
   }, []);
-  const memory = useRef<SpeakMemory>(SPEAK_MEMORY_START);
+  const memory = useRef<SpeakMemory | null>(null);
   const lastTyped = useRef<number | null>(null);
   const prevStatus = useRef<Map<string, string>>(new Map());
   const finished = useRef<Array<{ paneId: string; at: number }>>([]);
   const latest = useRef(input);
   latest.current = input;
   const clock = input.now ?? Date.now;
+  /** The memory, read from storage the first time (so a reload does not forget what was said). */
+  const mem = (): SpeakMemory => (memory.current ??= loadMemory(clock()));
+
+  // Settings turned a kind back on: read the saved memory again (the budget of bubbles shown is kept).
+  useEffect(() => {
+    const onChanged = () => {
+      const saved = loadMemory(clock());
+      memory.current = { ...saved, shownAt: memory.current?.shownAt ?? [] };
+    };
+    window.addEventListener(MEMORY_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(MEMORY_CHANGED_EVENT, onChanged);
+  }, [clock]);
 
   // The person types: stay quiet for a few seconds.
   useEffect(() => {
@@ -128,9 +147,10 @@ export function useCompanionSpeak(input: CompanionSpeakInput): CompanionSpeak {
       if (shown.kind === 'waiting' && !candidates.some((c) => c.key === shown.key)) show(null);
       return;
     }
-    const pick = pickSpeak(cur.settings, memory.current, { now, lastTypedAt: lastTyped.current, inQuietHours: inQuietHours(minuteOfDay, readQuiet()), asleep }, candidates);
+    const pick = pickSpeak(cur.settings, mem(), { now, lastTypedAt: lastTyped.current, inQuietHours: inQuietHours(minuteOfDay, readQuiet()), asleep }, candidates);
     if (!pick) return;
-    memory.current = afterShown(memory.current, pick, now);
+    memory.current = afterShown(mem(), pick, now);
+    saveMemory(memory.current);
     show(pick);
   }, [clock, show]);
 
@@ -146,13 +166,19 @@ export function useCompanionSpeak(input: CompanionSpeakInput): CompanionSpeak {
 
   const done = useCallback(() => show(null), [show]);
   const later = useCallback(() => {
-    if (shownRef.current) memory.current = afterLater(memory.current, shownRef.current, clock());
+    if (shownRef.current) {
+      memory.current = afterLater(mem(), shownRef.current, clock());
+      saveMemory(memory.current);
+    }
     show(null);
   }, [clock, show]);
   const tooMuch = useCallback(() => {
-    setSpeak({ perHour: halveBudget(latest.current.settings.perHour) });
+    if (shownRef.current) {
+      memory.current = afterTooMuch(mem(), shownRef.current.kind);
+      saveMemory(memory.current);
+    }
     show(null);
-  }, [show]);
+  }, [clock, show]);
 
   return { event, open: done, later, tooMuch };
 }

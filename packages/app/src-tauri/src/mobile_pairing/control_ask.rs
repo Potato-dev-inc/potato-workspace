@@ -138,7 +138,7 @@ pub fn answer(id: &str, allow: bool) -> Result<Ask, String> {
         return Err("That ask is not waiting any more.".into());
     };
     // A grant that already runs (maybe from before a restart) keeps the rule the person had set.
-    let rule_now = pane_rules::grant_before(&pane).unwrap_or_else(|| pane_rules::rule(&pane));
+    let rule_now = pane_rules::grant_before(&pane).unwrap_or_else(|| pane_rules::stored(&pane));
     let Some((ask, before)) = asks.answer(id, allow, rule_now, now) else {
         return Err("That ask is not waiting any more.".into());
     };

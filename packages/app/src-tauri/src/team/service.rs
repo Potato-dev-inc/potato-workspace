@@ -22,6 +22,7 @@ use super::keystore::KeyStore;
 use super::mcp::{self, McpError};
 use super::membership;
 use super::merge_green;
+use super::presence;
 use super::project_key;
 use super::roster::{Role, Roster, SignedOp};
 use super::secure::{Opened, Payload, Session, Verified};
@@ -29,7 +30,7 @@ use super::sources::git_refs::{self, PaneFacts, PushFact, RepoWatch};
 use super::sources::github::{self, Gh, GhCli, RepoPoll};
 use super::sources::pr::{GhCli as PrGh, PrLookup, RETRY_AFTER_MS};
 use super::store::{apply_claim, ingest, Card, CardState, Draft, Ingested, Job, JobState, TeamStore};
-use super::transport::{folder::FolderTransport, relay::RelayTransport, Inbound, TeamTransport};
+use super::transport::{self, folder::FolderTransport, relay::RelayTransport, Inbound, TeamTransport};
 use crate::audit::{self, Kind, Who};
 use crate::pty::PaneRegistry;
 use notify::{RecursiveMode, Watcher};
@@ -84,6 +85,12 @@ struct Inner {
     removed: bool,
     /// Red-default-branch banners raised in the attention list (`team_ci:<card id>`).
     raised: HashSet<String>,
+    /// Teammates' presence (memory only: never saved, never a card).
+    presence: presence::Table,
+    /// The last facts the cockpit reported about me, and when.
+    report: Option<(presence::Report, u64)>,
+    /// What this PC last sent as presence, so a beat only goes when something changed or a minute passed.
+    last_beat: Option<presence::Sent>,
 }
 
 pub struct Service {
@@ -248,6 +255,8 @@ pub(crate) struct Received {
     pub refresh: bool,
     /// A Share-an-agent item for some device (`crate::capacity_proxy` opens it, or ignores one for another device).
     pub capacity: Option<super::secure::CapacityIn>,
+    /// A teammate's presence beat: (sender member, what they share, when they sent it). Never a card.
+    pub presence: Option<(String, presence::Shared, u64)>,
 }
 
 /// Open an envelope with every check (`Session::open`), then `ingest` what passed. The relay
@@ -262,6 +271,11 @@ pub(crate) fn open_and_ingest(session: &Session, store: &mut TeamStore, config: 
         Ok(Opened::Event(verified)) => {
             let member = verified.member().unwrap_or_default().to_string();
             let kind = verified.event().kind;
+            if kind == TeamEventKind::Presence {
+                // Presence is read here and goes no further: it is not stored, not remembered as seen and never a card.
+                out.presence = read_presence(config, &member, verified.into_event(), inbound.received_at_ms);
+                return out;
+            }
             match ingest(store, config, verified, inbound.received_at_ms) {
                 Ingested::Card(id) => out.card = Some((id, member, kind)),
                 Ingested::Ignored(why) => tracing::debug!(why, "team: event not shown"),
@@ -276,6 +290,16 @@ pub(crate) fn open_and_ingest(session: &Session, store: &mut TeamStore, config: 
         }
     }
     out
+}
+
+/// A teammate's presence beat that passed every check: from a verified member other than me, for this team, in the
+/// schema's limits. The sender is the signed member, never a name the event claims.
+pub(crate) fn read_presence(config: &TeamConfig, member: &str, event: TeamEvent, now: u64) -> Option<(String, presence::Shared, u64)> {
+    let event = event::validate_inbound(event, now).ok()?;
+    if event.team != config.team || member.is_empty() || (!config.me.id.is_empty() && member == config.me.id) {
+        return None;
+    }
+    Some((member.to_string(), presence::read_event(&event)?, event.at_ms))
 }
 
 /// `team.received` in the audit log.
@@ -322,6 +346,9 @@ impl Service {
                 last_join_poll_ms: 0,
                 removed: false,
                 raised: HashSet::new(),
+                presence: presence::Table::default(),
+                report: None,
+                last_beat: None,
             }),
             wake: Mutex::new(None),
         }
@@ -445,6 +472,10 @@ impl Service {
         if let Some(item) = outcome.capacity {
             crate::capacity_proxy::on_team_item(item);
         }
+        if let Some((member, shared, at_ms)) = outcome.presence {
+            self.inner.lock().presence.apply(&member, shared, at_ms, now_ms());
+            self.changed();
+        }
     }
 
     /// A GitHub fact this app found itself.
@@ -563,6 +594,7 @@ impl Service {
             }
             self.poll_github(&config, now);
             self.advance_jobs();
+            self.beat_presence(&config, now);
         }
     }
 
@@ -1277,6 +1309,61 @@ pub fn mcp_notify(args: &Value, session_id: &str) -> Result<Value, McpError> {
     mcp_service()?.mcp_notify(args, session_id)
 }
 
+// ----------------------------------------------------------------------------------- presence
+
+impl Service {
+    /// Tell the team where I am, at most once a minute (or at once when it changes), within what I chose to share
+    /// (`presence::share`). Nothing goes while the cockpit reports nothing, or while the level is `nothing`.
+    fn beat_presence(&self, config: &TeamConfig, now: u64) {
+        let (plan, session, transport) = {
+            let inner = self.inner.lock();
+            let report = inner.report.as_ref().map(|(r, at)| (r, *at));
+            let plan = presence::plan_beat(config.share_level, &config.share_exclude, report, inner.last_beat.as_ref(), now);
+            (plan, inner.session.clone(), inner.transport.clone())
+        };
+        let shared = match plan {
+            presence::Beat::Nothing => return,
+            presence::Beat::Send(shared) => shared,
+            presence::Beat::Gone => presence::Shared { state: presence::State::Gone, project: None, title: None, running: 0, waiting: 0 },
+        };
+        let (Some(session), Some(transport)) = (session, transport) else { return };
+        let (Ok(member), Ok(device)) = (session.my_member(), session.my_device()) else { return };
+        let event = presence::build_event(session.team(), &member, &device, &config.me.name, &shared, now);
+        match seal_and_send(self, &session, transport.as_ref(), &event) {
+            Ok(()) => self.inner.lock().last_beat = Some(presence::Sent { shared, at_ms: now }),
+            // A failed send is tried again on the next tick.
+            Err(error) => tracing::debug!(%error, "team: presence not sent"),
+        }
+    }
+}
+
+/// The cockpit's facts about me (every 30 s and on change). What goes out is decided by `presence::share`.
+pub fn presence_report(report: presence::Report) -> Result<(), String> {
+    let svc = service()?;
+    svc.inner.lock().report = Some((report, now_ms()));
+    svc.poke();
+    Ok(())
+}
+
+/// What I share, as the Team page shows it.
+pub fn share_view() -> Result<presence::ShareView, String> {
+    let svc = service()?;
+    let inner = svc.inner.lock();
+    Ok(presence::ShareView { level: inner.config.share_level, exclude: inner.config.share_exclude.clone() })
+}
+
+/// "Share what I am doing": the level and the projects kept private. Saved, and the next beat follows it.
+pub fn share_set(level: presence::ShareLevel, exclude: Vec<String>) -> Result<presence::ShareView, String> {
+    let svc = service()?;
+    let mut next = svc.inner.lock().config.clone();
+    next.share_level = level;
+    next.share_exclude = presence::clean_exclude(exclude);
+    save_config(svc, next)?;
+    svc.poke();
+    svc.changed();
+    share_view()
+}
+
 // ---------------------------------------------------------------------- what the cockpit reads
 
 #[derive(Debug, Clone, Serialize)]
@@ -1352,6 +1439,10 @@ pub struct TeamView {
     pub drafts: Vec<Draft>,
     pub cards: Vec<CardView>,
     pub jobs: Vec<Job>,
+    /// Where teammates are (memory only; a teammate who shares nothing is simply absent).
+    pub presence: Vec<presence::View>,
+    /// What I share about myself.
+    pub share: presence::ShareView,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1442,8 +1533,11 @@ fn config_view(svc: &Service, inner: &Inner) -> ConfigView {
 
 pub fn view() -> Result<TeamView, String> {
     let svc = service()?;
-    let (config, store, transport, link, error, names) = {
-        let inner = svc.inner.lock();
+    let (config, store, transport, link, error, names, presence_views) = {
+        let mut inner = svc.inner.lock();
+        // People who are no longer on the roster do not show.
+        let on_roster: HashSet<String> = inner.session.as_ref().map(|s| s.roster.members.iter().map(|m| m.id.clone()).collect()).unwrap_or_default();
+        inner.presence.retain_members(|m| on_roster.contains(m));
         let me = inner.session.as_ref().and_then(|s| s.my_member().ok()).unwrap_or_default();
         let names: Vec<String> = inner
             .session
@@ -1457,6 +1551,7 @@ pub fn view() -> Result<TeamView, String> {
             inner.transport.as_ref().map(|t| t.status()),
             inner.error.clone().or_else(|| inner.read_error.clone()),
             names,
+            inner.presence.views(now_ms()),
         )
     };
     let panes = svc.pane_facts();
@@ -1496,6 +1591,8 @@ pub fn view() -> Result<TeamView, String> {
         drafts: store.drafts.iter().rev().cloned().collect(),
         cards,
         jobs: store.jobs.iter().rev().filter(|j| j.state != JobState::Discarded).cloned().collect(),
+        presence: presence_views,
+        share: presence::ShareView { level: config.share_level, exclude: config.share_exclude.clone() },
     })
 }
 
@@ -1594,7 +1691,16 @@ pub struct InviteView {
     /// `ABCD-EFGH`.
     pub code: String,
     pub expires_at_ms: u64,
+    /// The one-time link on the Potato Worker (`https://<worker>/join/<code>`), when the relay can make one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub join_url: Option<String>,
+    /// Why there is no one-time link: `update-worker` (an older deploy), or a short plain sentence.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub join_url_note: Option<String>,
 }
+
+/// How long an invite made with a one-time link on the Worker works (the Worker caps it at the same).
+pub const INVITE_LINK_TTL_MS: u64 = 24 * 60 * 60 * 1000;
 
 /// **Invite**: a new link and code (admin).
 pub fn create_invite() -> Result<InviteView, String> {
@@ -1607,10 +1713,39 @@ pub fn create_invite() -> Result<InviteView, String> {
         return Err("Only the team's admin can invite people.".into());
     }
     let now = now_ms();
-    let (inv, code) = invite::new_invite(now);
+    let (mut inv, code) = invite::new_invite(now);
     svc.keystore.set_invite_code(&config.team, &inv.id, &code)?;
     let link = membership::invite_link(&session.roster, &svc.keystore, Some(&config.relay), Some(&config.folder), &inv.id)?;
-    let view = InviteView { link: link.to_url(), code: invite::show_code(&code), expires_at_ms: inv.expires_ms };
+    let mut view = InviteView {
+        link: link.to_url(),
+        code: invite::show_code(&code),
+        expires_at_ms: inv.expires_ms,
+        join_url: None,
+        join_url_note: None,
+    };
+    // A relay that is a Potato Worker can hold the invite behind one link that works once. The invite then
+    // lives as long as the link (24 hours); the owner still approves every join.
+    if !config.relay.trim().is_empty() {
+        let request = transport::InviteLinkRequest {
+            payload: serde_json::json!({ "link": view.link, "code": view.code }).to_string(),
+            team_name: link.name.clone(),
+            inviter: config.me.name.clone(),
+            ttl_ms: INVITE_LINK_TTL_MS,
+        };
+        match make_transport(&config, &config.team, &svc.keystore).and_then(|t| t.publish_invite_link(&request).map_err(|e| e.0)) {
+            Ok(Some(made)) => {
+                inv.expires_ms = made.expires_at_ms.max(now);
+                view.expires_at_ms = inv.expires_ms;
+                view.join_url = Some(made.url);
+            }
+            Ok(None) => {}
+            Err(e) if e == transport::UPDATE_WORKER => view.join_url_note = Some(transport::UPDATE_WORKER.to_string()),
+            Err(e) => {
+                tracing::info!(error = %e, "team: no one-time invite link; the pasted invite still works");
+                view.join_url_note = Some("The relay could not make a one-time link. The invite below still works.".into());
+            }
+        }
+    }
     {
         let mut inner = svc.inner.lock();
         for closed in inner.store.invites.iter().filter(|i| !i.is_open(now)) {
@@ -2260,3 +2395,18 @@ pub fn merge_when_green(card_id: &str, head_sha: &str) -> Result<String, String>
 #[cfg(test)]
 #[path = "tests_mcp_service.rs"]
 mod tests_mcp_service;
+
+/// **Join from a Worker invite link.** Looks again at the link's own checks first (so a mistake cannot use
+/// the one-time invite up), then claims it and joins like the pasted invite does. The owner still approves.
+pub fn join_by_link(link: &str, name: String, github: Option<String>) -> Result<ConfigView, String> {
+    let svc = service()?;
+    if svc.inner.lock().session.is_some() {
+        return Err("This computer is already on a team. Leave it first.".into());
+    }
+    if event::clean_text(&name, 40).is_empty() {
+        return Err("Type your name first; teammates see it on their cards.".into());
+    }
+    let target = super::invite_web::parse_target(link)?;
+    let claimed = super::invite_web::claim(&target.base_url(), &target)?;
+    join(JoinInput { link: claimed.link, code: claimed.code, name, github })
+}

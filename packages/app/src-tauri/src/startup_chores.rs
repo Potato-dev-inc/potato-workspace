@@ -60,6 +60,8 @@ pub fn chores_for_setup(
             move || crate::channels::start(app, registry)
         }),
         chore("discord_alerts", crate::discord_alerts::init),
+        // The Discord bot: starts only if the Labs switch is on and a token and a list are saved.
+        chore("discord_bot", crate::discord_bot::live::reconcile_all),
         #[cfg(not(debug_assertions))]
         chore("phone_tunnel", move || {
             if let Some(url) = bridge_url {

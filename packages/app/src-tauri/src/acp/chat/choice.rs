@@ -107,6 +107,12 @@ pub fn in_use(chat: &AcpChat) -> (Option<String>, Option<String>) {
     (current(MODEL_CATEGORY, MODEL_IDS), current(REASONING_CATEGORY, REASONING_IDS))
 }
 
+/// The models the agent offers (value, name), for the right-size line.
+pub fn model_choices(chat: &AcpChat) -> Vec<(String, String)> {
+    let options = chat.session().snapshot().config_options;
+    group(&options, MODEL_CATEGORY, MODEL_IDS).map(choices).unwrap_or_default()
+}
+
 /// The value the agent offers for `requested` in its model setting, when it offers one. Nothing is sent.
 pub fn offered_model(chat: &AcpChat, requested: &str) -> Option<String> {
     let options = chat.session().snapshot().config_options;

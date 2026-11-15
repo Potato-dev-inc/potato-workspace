@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JobsApi, JobsMap, PaneJob } from '../../../lib/pane-jobs';
 import { jobCount, jobsRunning, runTime } from '../../../lib/pane-jobs';
-import { BackgroundCard } from './BackgroundCard';
+import { JobsOnly } from './card-wrapper';
 import { JobsChip } from './JobsChip';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -37,6 +37,7 @@ const job = (pid: number, over: Partial<PaneJob> = {}): PaneJob => ({
 const api = (all: JobsMap = {}): JobsApi & { stop: ReturnType<typeof vi.fn> } => ({ all: vi.fn(async () => all), stop: vi.fn(async () => {}) });
 const click = (el: Element | null) => act(() => void (el as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true })));
 const button = (label: string) => [...document.querySelectorAll('button')].find((b) => b.textContent === label) ?? null;
+const stopBtn = () => document.querySelector('[aria-label="Stop python"]');
 
 describe('pane-jobs helpers', () => {
   it('formats the time, the count and the sentence', () => {
@@ -47,44 +48,44 @@ describe('pane-jobs helpers', () => {
   });
 });
 
-describe('BackgroundCard', () => {
-  it('is hidden with no jobs', () => {
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[]} api={api()} />));
-    expect(host.innerHTML).toBe('');
+describe('Background tasks section', () => {
+  it('says "Nothing running" with no jobs', () => {
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[]} api={api()} />));
+    expect(host.textContent).toContain('Nothing running');
   });
 
   it('shows the name, the port chip, the run time and the short command', () => {
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7)]} api={api()} />));
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7)]} api={api()} />));
     const text = host.textContent ?? '';
-    expect(text).toContain('Background');
+    expect(text).toContain('Background tasks');
     expect(text).toContain('python');
     expect(text).toContain(':8765');
     expect(text).toContain('2m');
     // One line per task: the full command is the row's hover text, not a second line.
     expect(host.querySelector('code')).toBeNull();
-    expect(host.querySelector('.ck-job-top')?.getAttribute('title')).toBe('python -m http.server 8765');
+    expect(host.querySelector('[data-testid="background-job"]')?.getAttribute('title')).toBe('python -m http.server 8765');
   });
 
   it('opens the port in your browser on Shift+click (a plain click opens the app preview)', () => {
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7)]} api={api()} />));
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7)]} api={api()} />));
     act(() => void (button(':8765') as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })));
     expect(opened).toEqual(['http://localhost:8765/']);
   });
 
   it('asks before it stops and No changes nothing', () => {
     const a = api();
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7)]} api={a} />));
-    click(button('Stop'));
-    expect(host.textContent).toContain('Stop this job?');
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7)]} api={a} />));
+    click(stopBtn());
+    expect(host.querySelector('[aria-label="Stop this one?"]')).not.toBeNull();
     click(button('No'));
-    expect(host.textContent).not.toContain('Stop this job?');
+    expect(host.querySelector('[aria-label="Stop this one?"]')).toBeNull();
     expect(a.stop).not.toHaveBeenCalled();
   });
 
   it('stops exactly that pid of that pane, with the start time the job was listed with, on Yes', async () => {
     const a = api();
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7, { startedAtMs: 1_700_000_000_123 }), job(8)]} api={a} />));
-    click(host.querySelectorAll('.ck-job-stop')[0]);
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7, { startedAtMs: 1_700_000_000_123 }), job(8)]} api={a} />));
+    click(host.querySelectorAll('.rp-stop')[0]);
     await act(async () => click(button('Yes')));
     expect(a.stop).toHaveBeenCalledTimes(1);
     // The start time travels with the pid: a pid the system reused for a new process has another one, and is refused.
@@ -94,11 +95,11 @@ describe('BackgroundCard', () => {
   it('says why when the stop is refused', async () => {
     const a = api();
     a.stop.mockRejectedValueOnce('That job is already gone.');
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7)]} api={a} />));
-    click(button('Stop'));
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7)]} api={a} />));
+    click(stopBtn());
     await act(async () => click(button('Yes')));
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('That job is already gone.');
-    expect(button('Stop')).not.toBeNull();
+    expect(stopBtn()).not.toBeNull();
   });
 });
 

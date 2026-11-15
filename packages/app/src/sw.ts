@@ -17,13 +17,13 @@ import {
   OPEN_ITEM_MESSAGE,
   OPEN_PANE_MESSAGE,
   OPEN_VIEW_MESSAGE,
-  clickIntent,
   isDesktopAppOrigin,
   openUrl,
   parsePushPayload,
   planNotification,
   type OpenTarget,
 } from './pwa/push-core';
+import { handleNotificationClick, type ClickedNotification } from './pwa/notification-click';
 import { writeIntent } from './pwa/push-intent';
 
 declare const self: ServiceWorkerGlobalScope;
@@ -103,21 +103,15 @@ async function openTarget(target: OpenTarget): Promise<void> {
 }
 
 self.addEventListener('notificationclick', (event) => {
-  const intent = clickIntent(event.action, event.notification.data);
-  event.notification.close();
-  if (intent.type === 'open') {
-    event.waitUntil(openTarget({ itemId: intent.itemId, paneId: intent.paneId, view: intent.view }));
-    return;
-  }
+  const notification = event.notification;
+  const data = notification.data as ClickedNotification['data'];
+  notification.close();
   event.waitUntil(
-    (async () => {
-      if (await answer(intent.url, intent.token, intent.choice)) return;
-      // Expired, already answered at the PC, or offline: say so and let a tap open the card.
-      await self.registration.showNotification("Couldn't send your answer", {
-        body: 'It may already be answered. Tap to see.',
-        tag: event.notification.tag,
-        data: { pane_id: event.notification.data?.pane_id, item_id: event.notification.data?.item_id },
-      });
-    })(),
+    handleNotificationClick(event.action, { tag: notification.tag, data }, {
+      fetch: (url, init) => fetch(url, init),
+      scope: self.registration.scope,
+      open: openTarget,
+      notify: (title, options) => self.registration.showNotification(title, options),
+    }),
   );
 });

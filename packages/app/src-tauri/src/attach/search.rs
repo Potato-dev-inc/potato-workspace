@@ -74,6 +74,11 @@ fn walk(root: &Path) -> Vec<String> {
     files
 }
 
+/// Every file of the folder that git does not ignore (a plain walk outside a git repository), read fresh each call.
+pub(crate) fn fresh_file_list(cwd: &str) -> Vec<String> {
+    git_listing(cwd).unwrap_or_else(|| walk(Path::new(cwd)))
+}
+
 fn listing(cwd: &str) -> Listing {
     if let Some((at, files)) = cache().lock().get(cwd) {
         if at.elapsed() < CACHE_FOR {

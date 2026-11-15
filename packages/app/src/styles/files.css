@@ -134,6 +134,30 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The pinned agent tab: icon and name, no close button, and it keeps its width when many files are open. */
+.cockpit .ck-ftab--agent {
+  flex: 0 0 auto;
+  max-width: 180px;
+  margin-right: 4px;
+  padding-right: 4px;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+.cockpit .ck-ftab--agent.is-active {
+  background: var(--bg);
+}
+.cockpit .ck-ftab--agent .ck-ftab-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 6px;
+}
+.cockpit .ck-ftab--agent .ck-ftab-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cockpit .ck-ftab-main:focus-visible,
 .cockpit .ck-ftab-x:focus-visible {
   outline: none;
@@ -415,7 +439,7 @@
   display: block;
   width: 100%;
   border: 0;
-  background: white;
+  background: var(--paper, white);
 }
 .cockpit .ck-sandbox--fill {
   height: 100%;
@@ -491,4 +515,268 @@
   padding: 8px 20px;
   align-items: center;
   border-bottom: 1px solid var(--line, rgba(127, 127, 127, 0.2));
+}
+
+/* Word files drawn as pages (docx-render.ts). The paper stays white in dark mode, like Word's reading view. */
+.cockpit .ck-wp-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.cockpit .ck-wp-bar {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--sep);
+}
+.cockpit .ck-wp-zoom {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cockpit .ck-wp-zoom:hover {
+  background: var(--fill-hover);
+}
+.cockpit .ck-wp-zoom.is-active {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-wp-zoom:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-wp-desk {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  background: color-mix(in srgb, var(--label) 9%, var(--bg-side));
+}
+.cockpit .ck-wp-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  width: max-content;
+  margin: 0 auto;
+}
+.cockpit .ck-wp-sheet {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  flex: none;
+  background: white;
+  color: black;
+  color-scheme: light;
+  font-family: Calibri, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+  font-size: 11pt;
+  line-height: 1.2;
+  box-shadow: 0 1px 4px color-mix(in srgb, black 35%, transparent);
+}
+.cockpit .ck-wp-head,
+.cockpit .ck-wp-foot {
+  flex: none;
+  box-sizing: border-box;
+}
+.cockpit .ck-wp-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.cockpit .ck-wp-foot {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.cockpit .ck-wp-sheet p,
+.cockpit .ck-wp-sheet h1,
+.cockpit .ck-wp-sheet h2,
+.cockpit .ck-wp-sheet h3,
+.cockpit .ck-wp-sheet h4,
+.cockpit .ck-wp-sheet h5,
+.cockpit .ck-wp-sheet h6 {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 8;
+}
+.cockpit .ck-wp-sheet .ck-wp-list {
+  margin: 0;
+  padding: 0;
+  list-style-position: outside;
+}
+.cockpit .ck-wp-sheet li {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cockpit .ck-wp-sheet a {
+  color: rgb(5, 99, 193);
+  text-decoration: underline;
+}
+.cockpit .ck-wp-sheet a:not([href]) {
+  color: inherit;
+  text-decoration: none;
+}
+.cockpit .ck-wp-sheet td p,
+.cockpit .ck-wp-sheet td li {
+  min-width: 0;
+}
+.cockpit .ck-wp-sheet img {
+  display: inline-block;
+  vertical-align: bottom;
+}
+.cockpit .ck-wp-sheet img.is-missing {
+  outline: 1px dashed gray;
+}
+
+/* Excel files with a look of their own: a white sheet, light grid lines, the file's fills and borders on top. */
+.cockpit .ck-xl-table.is-styled {
+  background: white;
+  color: black;
+  color-scheme: light;
+  font-family: Calibri, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+  font-size: 11pt;
+}
+.cockpit .ck-xl-table.is-styled td {
+  border: 1px solid rgb(212, 212, 212);
+  padding: 1px 4px;
+  max-width: none;
+  overflow: hidden;
+  text-overflow: clip;
+  vertical-align: bottom;
+}
+
+/* Search inside files: a two-way switch under the box, then the lines found, grouped by file. */
+.cockpit .ck-fsearch-modes {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 6px;
+}
+.cockpit .ck-fsearch-mode {
+  flex: 1 1 0;
+  height: 22px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.cockpit .ck-fsearch-mode[aria-pressed='true'] {
+  background: var(--fill-active);
+  color: var(--label);
+}
+.cockpit .ck-fsearch-mode:hover {
+  background: var(--fill-hover);
+}
+.cockpit .ck-fsearch-mode:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-fsearch-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 2px;
+  font-size: 12px;
+  color: var(--label);
+}
+.cockpit .ck-fsearch-line {
+  gap: 8px;
+  align-items: baseline;
+}
+.cockpit .ck-fsearch-no {
+  flex: none;
+  min-width: 2.5ch;
+  text-align: right;
+  font-size: 11px;
+  color: var(--label-3);
+  font-variant-numeric: tabular-nums;
+}
+.cockpit .ck-fsearch-text {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--label-2);
+}
+.cockpit .ck-fsearch-text mark {
+  background: var(--fill-active);
+  color: var(--label);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* A tab that is open in its own window: the note that takes the place of the chat, and a notice in the tab row. */
+.cockpit .ck-ftab-note {
+  align-self: center;
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--label-3);
+}
+.cockpit .ck-tabout {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 24px;
+}
+.cockpit .ck-tabout h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--label);
+}
+.cockpit .ck-tabout p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--label-2);
+}
+/* The window of a pulled-out tab: a slim bar with "Put back", then the tab. */
+.cockpit.ck-tabwin {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cockpit.ck-tabwin > .ck-tabwin-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--sep);
+  font-size: 12px;
+  color: var(--label-2);
+}
+.cockpit.ck-tabwin > .ck-tabwin-bar .ck-tabwin-name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit.ck-tabwin > .ck-tabwin-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* The line a search hit opened the file at. */
+.cockpit .ck-fcode .cm-hit-line {
+  background: var(--fill-active);
+  box-shadow: inset 2px 0 0 var(--accent);
 }

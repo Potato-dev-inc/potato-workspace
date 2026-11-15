@@ -98,6 +98,8 @@ const lendIs = (seed: LendScenario | null, own: unknown[] = []) => {
 describe('Request usage is reachable from Teams', () => {
   it('Settings > Team: a Request usage button next to the people, and lends on each member row', async () => {
     lendIs(lendState({ grants: [GRANT_OUT, GRANT_IN] }));
+    // Request usage is a lazy chunk here (the Inbox no longer imports it): load it first so the page does not race it.
+    await import('./RequestUsage');
     await act(async () => root.render(<TeamPage />));
     await settle(8);
     const people = host.querySelector('[aria-label="People"]')!;
@@ -155,11 +157,20 @@ describe('Request usage is reachable from Teams', () => {
     await settle(8);
   };
 
-  it('Inbox > Team: a Request usage button, and a request to borrow shows as a card with the warning', async () => {
+  /** The Inbox draws a borrow request as a Team activity row; "Answer" opens its card in place. */
+  const answerRow = async (id: string) => {
+    const row = host.querySelector<HTMLElement>(`[data-team-activity="lend:${id}"]`)!;
+    await click(buttonByText(row, 'Answer'));
+    await settle(2);
+  };
+
+  it('Inbox > Team: no Request usage (it lives on the Team page); a request to borrow is an activity row that opens its card with the warning', async () => {
     lendIs(lendState({ requests_in: [REQUEST_MAYA] }));
     await inbox();
-    const team = host.querySelector('section[aria-label="Team"]')!;
-    expect(buttonByText(team, 'Request usage')).toBeTruthy();
+    const team = host.querySelector('[data-testid="team-activity"]')!;
+    expect(buttonByText(host, 'Request usage')).toBeUndefined();
+    expect(team.querySelector('[data-team-activity="lend:req-in-maya"]')?.textContent).toContain('asked to borrow Claude');
+    await answerRow('req-in-maya');
     const card = team.querySelector<HTMLElement>('[data-lend-request="req-in-maya"]')!;
     expect(card.textContent).toContain("Maya's laptop wants Claude for 8 hours");
     expect(card.textContent).toContain('Use at your own risk');
@@ -171,7 +182,8 @@ describe('Request usage is reachable from Teams', () => {
   it('Inbox > Team: the incoming card lends with the profile after "I understand", and Say no declines', async () => {
     lendIs(lendState({ requests_in: [REQUEST_MAYA, { ...REQUEST_MAYA, id: 'req-in-2', reason: 'Another one.' }] }));
     await inbox();
-    const team = host.querySelector('section[aria-label="Team"]')!;
+    const team = host.querySelector('[data-testid="team-activity"]')!;
+    await answerRow('req-in-maya');
     const first = team.querySelector<HTMLElement>('[data-lend-request="req-in-maya"]')!;
     const tick = [...first.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((i) => i.parentElement?.textContent?.includes('I understand'))!;
     await click(tick);
@@ -180,6 +192,7 @@ describe('Request usage is reachable from Teams', () => {
     const lend = shell.invoked.find((i) => i.cmd === 'lend_answer')!;
     expect(lend.args).toMatchObject({ request_id: 'req-in-maya', accept: true, profile_id: 'prof-team' });
     expect(team.querySelector('[data-lend-request="req-in-maya"]')).toBeNull();
+    await answerRow('req-in-2');
     await click(buttonByText(team.querySelector<HTMLElement>('[data-lend-request="req-in-2"]')!, 'Say no'));
     await settle(4);
     expect(shell.invoked.filter((i) => i.cmd === 'lend_answer').pop()!.args).toMatchObject({ request_id: 'req-in-2', accept: false });
@@ -189,6 +202,7 @@ describe('Request usage is reachable from Teams', () => {
   it('Inbox > Team: the incoming card names the profile the borrower picked, with no picker, and lends with it', async () => {
     lendIs(lendState({ requests_in: [{ ...REQUEST_MAYA, profile_id: 'prof-team', profile_name: 'Teammates, ask first' }] }));
     await inbox();
+    await answerRow('req-in-maya');
     const card = host.querySelector<HTMLElement>('[data-lend-request="req-in-maya"]')!;
     expect(card.textContent).toContain("Maya's laptop wants Teammates, ask first (Claude) for 8 hours");
     expect(card.querySelector('select')).toBeNull();

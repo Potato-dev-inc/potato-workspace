@@ -3,6 +3,7 @@
 // or the agent lists none) the same box takes a typed model id.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useDismissable } from '../../hooks/useDismissable';
 import { useT } from '../../i18n';
 import type { ModelListState } from '../../lib/modelOptions';
 import '../../styles/model-picker.css';
@@ -94,28 +95,13 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
   const q = query.trim();
   const custom = q !== '' && !models.some((m) => m.toLowerCase() === q.toLowerCase()) && !(live ?? []).some((m) => m.name.toLowerCase() === q.toLowerCase());
 
+  // One shared closing rule: outside press, Escape, focus leaving, the page scrolling behind it. A resize closes it too.
+  useDismissable(open, { inside: [root, menuEl], anchor: chipEl, onDismiss: () => setOpen(false) });
   useEffect(() => {
     if (!open) return undefined;
-    const away = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (!root.current?.contains(t) && !menuEl.current?.contains(t)) setOpen(false);
-    };
-    const moved = (e: Event) => {
-      if (!menuEl.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('mousedown', away);
-    window.addEventListener('keydown', esc);
-    window.addEventListener('scroll', moved, true);
-    window.addEventListener('resize', moved);
-    return () => {
-      window.removeEventListener('mousedown', away);
-      window.removeEventListener('keydown', esc);
-      window.removeEventListener('scroll', moved, true);
-      window.removeEventListener('resize', moved);
-    };
+    const closeIt = () => setOpen(false);
+    window.addEventListener('resize', closeIt);
+    return () => window.removeEventListener('resize', closeIt);
   }, [open]);
 
   useLayoutEffect(() => {

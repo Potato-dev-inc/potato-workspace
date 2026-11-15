@@ -1,48 +1,33 @@
-import { isRedBanner, teamApi, type TeamApi } from '../../../lib/team';
+import { teamApi, type TeamApi } from '../../../lib/team';
 import { lendApi, type LendApi } from '../../../lib/lend';
-import { IncomingRequestCard } from '../../lend/IncomingRequestCard';
-import { RequestUsage } from '../../lend/RequestUsage';
+import { TeamActivity } from '../inbox/TeamActivity';
 import { useLend } from '../../lend/useLend';
 import { TellTeamPrompt } from './TellTeam';
-import { TeamCard } from './TeamCard';
 import { TeamJobCard } from './TeamJobCard';
 import { useTeam, type TeamHandle } from './useTeam';
 import '../../../styles/cockpit-team.css';
 
 /**
- * Inbox › Team: below "Needs you". My unsent "Tell the team?" drafts, my queued updates and their
- * results, and teammates' cards. Renders nothing while Team is off (Settings › General › Labs).
- * Team cards do not add to the Needs-you count: they wait for me but block no agent. They are the
- * same card as everything else in the Inbox, 12px apart.
+ * Inbox › Team: below "Done today". My unsent "Tell the team?" drafts and my queued updates and their results,
+ * then "Team activity": the team's events as short rows (a row opens its full card in place). While Team is off
+ * there is one line with "Set up a team". Request usage lives on the Team page (Settings › Team), not here.
+ * Team events do not add to the Needs-you count: they wait for me but block no agent.
  */
 export function TeamSection({ api = teamApi, now, paneNames, team, lend: lendClient = lendApi }: { api?: TeamApi; now: number; paneNames?: Map<string, string>; team?: TeamHandle; lend?: LendApi }) {
   const own = useTeam(api, !team);
   const { state, refresh } = team ?? own;
-  // Share an agent (Labs): the Request usage button and the requests to borrow from me. Nothing while it is off.
+  // Share an agent (Labs): the requests to borrow from me show as Team activity rows.
   const lend = useLend(lendClient);
   const asked = lend.state?.requests_in.filter((r) => r.state === 'open') ?? [];
-  if (!state?.enabled) return null;
+  const activity = (
+    <TeamActivity state={state} lendState={lend.state} asked={asked} api={api} lendApi={lendClient} now={now} onDone={refresh} onLendDone={lend.refresh} />
+  );
+  if (!state?.enabled) return activity;
   const jobs = state.jobs.filter((j) => j.state !== 'discarded');
-  // A red default branch is the banner on top of the Inbox (RedBanners), not a card here.
-  const cards = state.cards.filter((c) => !isRedBanner(c));
-  const empty = state.drafts.length === 0 && jobs.length === 0 && cards.length === 0 && asked.length === 0;
 
   return (
+    <>
     <section className="ck-team" aria-label="Team">
-      <h2 className="ck-caption ck-team-caption">
-        Team
-        {!state.active && <span className="ck-sub-inline"> · finish setting it up in Settings › General</span>}
-      </h2>
-      <RequestUsage api={lendClient} team={api} lend={lend} variant="inbox" />
-      {lend.state && asked.length > 0 && (
-        <ul className="ib-list" aria-label="Requests to borrow">
-          {asked.map((r) => (
-            <li key={r.id}>
-              <IncomingRequestCard request={r} state={lend.state!} api={lendClient} now={now} onDone={lend.refresh} />
-            </li>
-          ))}
-        </ul>
-      )}
       {state.error && (
         <p className="ck-team-error" role="alert">
           {state.error}
@@ -71,8 +56,6 @@ export function TeamSection({ api = teamApi, now, paneNames, team, lend: lendCli
           </button>
         </div>
       )}
-      {empty && state.active && <p className="ck-sub ck-team-empty">When a teammate pushes, it shows up here.</p>}
-
       {state.drafts.length > 0 && (
         <ul className="ib-list" aria-label="Unsent">
           {state.drafts.map((d) => (
@@ -93,15 +76,8 @@ export function TeamSection({ api = teamApi, now, paneNames, team, lend: lendCli
         </ul>
       )}
 
-      {cards.length > 0 && (
-        <ul className="ib-list" aria-label="From your team">
-          {cards.map((card) => (
-            <li key={card.id}>
-              <TeamCard card={card} api={api} now={now} onDone={refresh} />
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
+    {activity}
+    </>
   );
 }

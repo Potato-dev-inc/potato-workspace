@@ -9,11 +9,13 @@
 //! - `leases`: release, takeover, transfer and token reattach
 //! - `lineage`: who started a pane or run, and whether a caller may treat it as its own
 //! - `pane_hint`: the pane each connection says its agent runs in (a display-only hint)
+//! - `catalog_seen`: the tool catalog each connection was started with (is its tool list out of date?)
 //! - `authorize`: the route gate (mode + ownership)
 //! - `handles`: pane-id resolution and the denial/not-found errors
 
 mod access;
 mod authorize;
+mod catalog_seen;
 mod coalesce;
 mod handles;
 mod identity;
@@ -26,6 +28,7 @@ mod state;
 
 pub use access::*;
 pub use authorize::*;
+pub use catalog_seen::*;
 pub use handles::*;
 pub use identity::*;
 pub use leases::*;

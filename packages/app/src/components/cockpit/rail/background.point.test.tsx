@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-// The job port chips in the Background card and the jobs sheet. A click opens the app in the in-app
+// The job port chips in the Background tasks section and the jobs sheet. A click opens the app in the in-app
 // preview, Shift+click opens your browser, and "Point" opens the preview with the picker on (Point and Fix).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JobsApi, JobsMap, PaneJob } from '../../../lib/pane-jobs';
-import { BackgroundCard } from './BackgroundCard';
+import { JobsOnly } from './card-wrapper';
 import { JobsChip } from './JobsChip';
 
 const invoke = vi.fn(async () => null as unknown);
@@ -47,9 +47,9 @@ const flush = () => act(async () => {
 /** Command names sent to the desktop shell, in order. */
 const commands = () => (invoke.mock.calls as unknown[][]).map((c) => c[0]);
 
-describe('job port chips in the Background card', () => {
+describe('job port chips in the Background tasks section', () => {
   it('a plain click opens the app in the in-app preview for this pane', async () => {
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7)]} api={api()} />));
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7)]} api={api()} />));
     click(button(':8765'));
     await flush();
     expect(invoke).toHaveBeenCalledWith('point_open_preview', { paneId: 'p1', port: 8765 });
@@ -58,7 +58,7 @@ describe('job port chips in the Background card', () => {
   });
 
   it('Shift+click opens your browser and never the app preview', async () => {
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7)]} api={api()} />));
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7)]} api={api()} />));
     click(button(':8765'), { shiftKey: true });
     await flush();
     expect(invoke).toHaveBeenCalledWith('open_external_url', { url: 'http://localhost:8765/' });
@@ -66,7 +66,7 @@ describe('job port chips in the Background card', () => {
   });
 
   it('the Point button opens the preview and arms the picker, in that order', async () => {
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7)]} api={api()} />));
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7)]} api={api()} />));
     click(host.querySelector('[aria-label="Point and fix on localhost:8765"]'));
     await flush();
     expect(commands()).toEqual(['point_open_preview', 'point_arm']);
@@ -74,7 +74,7 @@ describe('job port chips in the Background card', () => {
   });
 
   it('says what a click does in the chip title', () => {
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7)]} api={api()} />));
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7)]} api={api()} />));
     expect(button(':8765')?.getAttribute('title')).toBe('Preview :8765 (Shift+click: your browser)');
   });
 
@@ -82,7 +82,7 @@ describe('job port chips in the Background card', () => {
     invoke.mockImplementation(async () => {
       throw 'That preview is not running any more.';
     });
-    act(() => root.render(<BackgroundCard paneId="p1" jobs={[job(7)]} api={api()} />));
+    act(() => root.render(<JobsOnly paneId="p1" jobs={[job(7)]} api={api()} />));
     click(button(':8765'));
     await flush();
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('That preview is not running any more.');

@@ -9,6 +9,7 @@ import type { AttentionSnapshot } from '../../lib/attention';
 const m = vi.hoisted(() => ({
   settings: { desktop_pet_enabled: true, theme: 'dark' } as Record<string, unknown>,
   snapshot: null as unknown,
+  companions: null as unknown,
   handlers: new Map<string, (payload: unknown) => void>(),
   statusHandlers: [] as Array<(e: { pane_id: string; status: string }) => void>,
   invoke: vi.fn(async (_c: string, _a?: unknown): Promise<unknown> => undefined),
@@ -29,6 +30,7 @@ vi.mock('../../lib/settings', () => ({
 }));
 vi.mock('../../lib/cockpit-api', () => ({ cockpitApi: { openCockpit: m.openCockpit }, isTauri: () => false }));
 vi.mock('../../hooks/useAttention', () => ({ useAttention: () => m.snapshot }));
+vi.mock('../../hooks/useCompanions', () => ({ useCompanions: () => ({ companions: m.companions, refresh: () => undefined }) }));
 vi.mock('../../lib/agentRegistry', () => ({ useAgentRegistry: () => ({ agents: [{ id: 'claude_code', label: 'Claude' }] }) }));
 vi.mock('../../lib/notify-store', () => ({ loadNotifyPrefs: vi.fn(async () => undefined), readQuiet: () => ({ enabled: false, start: 1320, end: 420 }) }));
 vi.mock('../../lib/tauri', () => ({
@@ -78,6 +80,7 @@ const flush = () => act(async () => void (await Promise.resolve()));
 beforeEach(async () => {
   m.settings = { desktop_pet_enabled: true, theme: 'dark' };
   m.snapshot = null;
+  m.companions = null;
   m.statusHandlers = [];
   m.openCockpit.mockClear();
   host = document.createElement('div');
@@ -107,6 +110,28 @@ describe('the Desktop Potato window', () => {
     expect(host.querySelector('.pet-sprite')).not.toBeNull();
     expect(host.querySelector('.pet-bubble')).toBeNull();
     expect(document.documentElement.classList.contains('pet-page')).toBe(true);
+  });
+
+  it('stands for the default companion: its name is on the pet, and it follows a new default', async () => {
+    m.companions = [
+      { id: 'mochi', name: 'Mochi', isDefault: false },
+      { id: 'bit', name: 'Bit', isDefault: true },
+    ];
+    await mount();
+    const body = host.querySelector<HTMLElement>('.pet-body')!;
+    expect(body.getAttribute('aria-label')).toBe('Bit, resting');
+    expect(body.getAttribute('title')).toBe('Bit');
+    m.companions = [
+      { id: 'mochi', name: 'Mochi', isDefault: true },
+      { id: 'bit', name: 'Bit', isDefault: false },
+    ];
+    await mount();
+    expect(host.querySelector<HTMLElement>('.pet-body')!.getAttribute('title')).toBe('Mochi');
+  });
+
+  it('without a companion it is the plain Desktop Potato', async () => {
+    await mount();
+    expect(host.querySelector<HTMLElement>('.pet-body')!.getAttribute('aria-label')).toContain('Desktop Potato is resting');
   });
 
   it('a waiting agent gets a wave and a bubble with its plain name; a click opens it', async () => {

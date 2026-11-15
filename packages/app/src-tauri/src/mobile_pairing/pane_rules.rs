@@ -114,6 +114,7 @@ impl PaneRules {
         }
     }
 
+    #[cfg(test)]
     pub fn refuses_at(&self, pane_id: &str, cap: Cap, now: u64) -> bool {
         !self.rule_at(pane_id, now).allows(cap)
     }
@@ -222,8 +223,34 @@ pub fn rule(pane_id: &str) -> PaneRule {
 }
 
 pub fn rule_at(pane_id: &str, now: u64) -> PaneRule {
+    lifted(stored_at(pane_id, now), now)
+}
+
+/// The rule the person set (an "Allow 15 min" grant counts), never raised by "Leaving my desk". What the Remote
+/// control card shows and changes.
+pub fn stored(pane_id: &str) -> PaneRule {
+    stored_at(pane_id, super::control_ask::now_ms())
+}
+
+fn stored_at(pane_id: &str, now: u64) -> PaneRule {
     settle_at(now);
     RULES.read().rule_at(pane_id, now)
+}
+
+/// While "Leaving my desk" is on (set on the PC), an agent the phone could only watch or answer in counts as
+/// "everything". A switched-off agent stays off, and the phone's own abilities are never widened.
+fn lifted(rule: PaneRule, now: u64) -> PaneRule {
+    lifted_if(rule, super::desk_away::lifts_levels(now))
+}
+
+/// The rule once "Leaving my desk" is taken into account: `lift` raises a watch or answer rule to everything, and
+/// never switches an agent on that the person switched off.
+pub(crate) fn lifted_if(rule: PaneRule, lift: bool) -> PaneRule {
+    if lift && rule.remote && rule.level != Level::Full {
+        PaneRule { remote: true, level: Level::Full }
+    } else {
+        rule
+    }
 }
 
 /// `true` when a phone may not use `cap` on this agent (switched off, or the level is lower).
@@ -232,14 +259,14 @@ pub fn refuses(pane_id: &str, cap: Cap) -> bool {
 }
 
 pub fn refuses_at(pane_id: &str, cap: Cap, now: u64) -> bool {
-    settle_at(now);
-    RULES.read().refuses_at(pane_id, cap, now)
+    !rule_at(pane_id, now).allows(cap)
 }
 
 /// Every agent that has its own rule (not the default), for the phone's lock icons.
 pub fn all() -> Vec<(String, PaneRule)> {
-    settle_at(super::control_ask::now_ms());
-    RULES.read().rules.iter().map(|(pane, rule)| (pane.clone(), *rule)).collect()
+    let now = super::control_ask::now_ms();
+    settle_at(now);
+    RULES.read().rules.iter().map(|(pane, rule)| (pane.clone(), lifted(*rule, now))).collect()
 }
 
 fn store(next: PaneRules, mut rules: parking_lot::RwLockWriteGuard<'_, PaneRules>) -> Result<(), String> {

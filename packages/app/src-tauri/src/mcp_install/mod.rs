@@ -9,10 +9,12 @@ mod claude;
 mod codex;
 pub mod declarative;
 mod opencode;
+mod stale;
 
 use claude::*;
 use codex::*;
 use opencode::*;
+pub use stale::refresh_on_start;
 
 pub const MCP_SERVER_NAME: &str = "potato-workspace";
 

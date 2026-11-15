@@ -1009,3 +1009,58 @@
 .ph .ph-dhelper .ph-drow {
   min-height: 46px;
 }
+
+/* "Leaving my desk" card in the drawer (components/mobile/PhoneDeskSwitch.tsx). Tokens only. */
+.ph .ph-desk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--sh-surface, var(--bg-raised));
+  box-shadow: inset 0 0 0 1px var(--line, var(--sep));
+  font: 400 calc(var(--sh-fs) - 1px)/1.4 var(--font-ui);
+  color: var(--sh-fg, var(--label));
+}
+.ph .ph-desk[data-away] {
+  box-shadow: inset 0 0 0 1px var(--line, var(--sep)), inset 3px 0 0 var(--accent);
+}
+.ph .ph-desk p {
+  margin: 0;
+}
+.ph .ph-desk .ph-desk-sub {
+  color: var(--sh-muted);
+}
+.ph .ph-desk-lengths {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ph .ph-desk-lengths legend {
+  padding: 0;
+  margin-bottom: 4px;
+  color: var(--sh-muted);
+}
+.ph .ph-desk-lengths label,
+.ph .ph-desk-lock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+.ph .ph-desk-btn {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  font: 500 calc(var(--sh-fs) - 1px)/1 var(--font-ui);
+}
+.ph .ph-desk-btn:disabled {
+  opacity: 0.5;
+}

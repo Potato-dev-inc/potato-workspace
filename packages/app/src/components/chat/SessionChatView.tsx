@@ -28,7 +28,7 @@ import { placeHelpers, type ChatHelper } from '../../lib/chat-helpers';
 import { NoticeLine } from './NoticeLine';
 import { ArtifactCard } from '../artifacts/ArtifactCard';
 import { ARTIFACT_NOTICE } from '../../lib/artifacts';
-import { openArtifactTab } from '../../lib/artifact-tabs';
+import { openArtifactBeside } from '../../lib/artifact-side';
 import { PermissionTrace } from './PermissionTrace';
 import { ResponseActions } from './ResponseActions';
 import { ThinkingBlock } from './ThinkingBlock';
@@ -222,7 +222,7 @@ const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canB
         }
         if (step.kind === 'notice') {
           // A page the agent made is a card whatever the view mode: it is the answer, not chatter.
-          if (step.item.noticeKind === ARTIFACT_NOTICE && paneId) return <ArtifactCard key={step.id} title={step.item.text} url={step.item.url} onOpen={(ref, title) => openArtifactTab(paneId, ref.id, title)} />;
+          if (step.item.noticeKind === ARTIFACT_NOTICE && paneId) return <ArtifactCard key={step.id} title={step.item.text} url={step.item.url} onOpen={(ref, title) => openArtifactBeside(ref.id, paneId, title)} />;
           if (mode === 'summary') return null;
           if (step.item.noticeKind === 'permission') return <PermissionTrace key={step.id} text={step.item.text} />;
           return <NoticeLine key={step.id} text={step.item.text} kind={step.item.noticeKind} url={step.item.url} />;
@@ -360,7 +360,8 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
         createPortal(
           <>
             {headerExtra && <span className="flex shrink-0 items-center ck-chat-head-extra">{headerExtra}</span>}
-            <ViewModeToggle mode={mode} onChange={setMode} compact={headerSlot.compact} />
+            {/* In the pane header the menu is drawn in the top layer at every width: the header would clip a menu inside it. */}
+            <ViewModeToggle mode={mode} onChange={setMode} compact />
             {headerMenu && <span className="flex shrink-0 items-center ck-chat-head-menu">{headerMenu}</span>}
           </>,
           headerSlot.el,

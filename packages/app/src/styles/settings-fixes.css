@@ -3,9 +3,7 @@
    picture). Everything else stays grey. Loaded after settings-rows.css, so it wins ties. */
 
 /* ---------- Overview cards ---------- */
-.settings .st-card[data-tone='fix'] {
-  border-left: 2px solid var(--accent);
-}
+/* No stripe on the card: the card keeps the plain grey frame, only its small round glyph carries the orange. */
 .settings .st-card[data-tone='fix'] .st-glyph {
   border-color: var(--accent);
   color: var(--accent);

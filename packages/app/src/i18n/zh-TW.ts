@@ -18,6 +18,7 @@
 import type { EnglishKey } from './en';
 import { common } from './zh-TW/common';
 import { sidebar } from './zh-TW/sidebar';
+import { whatsnew } from './zh-TW/whatsnew';
 import { inbox } from './zh-TW/inbox';
 import { status } from './zh-TW/status';
 import { newAgent } from './zh-TW/newAgent';
@@ -32,6 +33,7 @@ import { state } from './zh-TW/state';
 import { overview } from './zh-TW/overview';
 import { team } from './zh-TW/team';
 import { companion } from './zh-TW/companion';
+import { companions } from './zh-TW/companions';
 import { settingsRows } from './zh-TW/settingsRows';
 import { settingsPreviews } from './zh-TW/settingsPreviews';
 import { settingsLane } from './zh-TW/settingsLane';
@@ -46,6 +48,7 @@ import { settingsKeys } from './zh-TW/settingsKeys';
 import { settingsPack } from './zh-TW/settingsPack';
 import { settingsAgentPage } from './zh-TW/settingsAgentPage';
 import { settingsPreload } from './zh-TW/settingsPreload';
+import { standbyHelpers } from './zh-TW/standbyHelpers';
 import { settingsAgents } from './zh-TW/settingsAgents';
 import { settingsTelegram } from './zh-TW/settingsTelegram';
 import { settingsLend } from './zh-TW/settingsLend';
@@ -55,13 +58,17 @@ import { settingsPhone } from './zh-TW/settingsPhone';
 import { notify } from './zh-TW/notify';
 import { board } from './zh-TW/board';
 import { routines } from './zh-TW/routines';
+import { teamPage } from './zh-TW/teamPage';
 import { phone } from './zh-TW/phone';
 import { phoneChat } from './zh-TW/phoneChat';
 import { noReply } from './zh-TW/noReply';
+import { desk } from './zh-TW/desk';
 import { sentFrom } from './zh-TW/sentFrom';
+import { projectBudget } from './zh-TW/projectBudget';
 import { dnd } from './zh-TW/dnd';
 import { files } from './zh-TW/files';
 import { artifacts } from './zh-TW/artifacts';
+import { guide } from './zh-TW/guide';
 import { pet } from './zh-TW/pet';
 import { phoneCompose } from './zh-TW/phoneCompose';
 import { phoneShell } from './zh-TW/phoneShell';
@@ -74,11 +81,13 @@ import { appUx } from './zh-TW/appUx';
 import { deskReview } from './zh-TW/deskReview';
 import { devices } from './zh-TW/devices';
 import { agentRules } from './zh-TW/agentRules';
+import { rail } from './zh-TW/rail';
 
 export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...common,
   ...sidebar,
   ...inbox,
+  ...whatsnew,
   ...status,
   ...newAgent,
   ...pane,
@@ -92,6 +101,7 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...overview,
   ...team,
   ...companion,
+  ...companions,
   ...settingsRows,
   ...settingsPreviews,
   ...settingsLane,
@@ -106,6 +116,7 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...settingsPack,
   ...settingsAgentPage,
   ...settingsPreload,
+  ...standbyHelpers,
   ...settingsAgents,
   ...settingsTelegram,
   ...settingsLend,
@@ -115,13 +126,17 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...notify,
   ...board,
   ...routines,
+  ...teamPage,
   ...phone,
   ...phoneChat,
   ...noReply,
+  ...desk,
   ...sentFrom,
+  ...projectBudget,
   ...dnd,
   ...files,
   ...artifacts,
+  ...guide,
   ...pet,
   ...phoneCompose,
   ...phoneShell,
@@ -134,4 +149,5 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...deskReview,
   ...devices,
   ...agentRules,
+  ...rail,
 };

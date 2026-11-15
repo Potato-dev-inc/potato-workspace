@@ -1,0 +1,11 @@
+/* The join popup in the main window: Settings' own sheet look, without Settings' full-window frame. */
+.settings.jl-host {
+  display: block;
+  background: transparent;
+  pointer-events: none;
+  z-index: 1000;
+}
+.settings.jl-host .st-scrim {
+  position: fixed;
+  pointer-events: auto;
+}

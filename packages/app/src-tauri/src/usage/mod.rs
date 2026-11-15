@@ -64,6 +64,12 @@ pub struct UsageRow {
     pub limited_until_ms: Option<u64>,
     /// The agent's own usage page.
     pub page: Option<String>,
+    /// `lend` (a lend profile's own sign-in, named by the profile) or `borrowed` (a sign-in lent to this PC). None: my own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<&'static str>,
+    /// A lend profile signed in to the same account as the main sign-in (found by the signed-in identity, never by name).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub same_as_main: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -102,6 +108,43 @@ pub struct Inputs<'a> {
     pub may_fetch: bool,
     pub force: bool,
     pub oauth_state: &'a Mutex<std::collections::HashMap<String, OauthState>>,
+    /// The lend profiles' sign-ins and the sign-ins lent to this PC.
+    pub lend: &'a LendView,
+    /// Who is signed in at `(agent id, folder, is the main login)`; the account identity the dedupe uses. None: unknown.
+    pub identity: &'a dyn Fn(&str, &Path, bool) -> Option<String>,
+}
+
+/// What shows of the lend side: one entry per lend profile that uses a lend sign-in, and the grants lent to this PC.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LendView {
+    pub profiles: Vec<LendProfileView>,
+    pub borrowed: Vec<BorrowedView>,
+}
+
+/// A lend profile's sign-in. `show_usage` is the lender's "Show usage in the usage bar" (off unless turned on).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LendProfileView {
+    pub account_id: String,
+    pub name: String,
+    pub show_usage: bool,
+}
+
+/// A grant lent to this PC: `name` is "Ren's Work account (borrowed)" (the lender's profile name), never an internal label.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BorrowedView {
+    pub grant_id: String,
+    pub agent_id: String,
+    pub name: String,
+    /// The numbers the lender sent through the lend link. None: the lender does not share usage.
+    pub shared: Option<Shared>,
+}
+
+/// Limit numbers a lender shares with a borrower (percent, reset times and the plan name only).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shared {
+    pub plan: Option<String>,
+    pub windows: Vec<Window>,
+    pub at_ms: u64,
 }
 
 /// What is kept per sign-in between login-based reads. Numbers and times only, never the token.
@@ -259,6 +302,10 @@ fn logins(agent: &AgentUsage, inputs: &Inputs<'_>) -> Vec<Login> {
     let mut out = vec![Login { account: None, home: main_home, env: Vec::new() }];
     if let Some(scheme) = &agent.scheme {
         for account in inputs.accounts.iter().filter(|a| a.agent_id.eq_ignore_ascii_case(&agent.id)) {
+            // A lend sign-in is a row only when its profile asks for one; its name is the profile's, never "Lend Claude 3".
+            if account.lend_only && !inputs.lend.profiles.iter().any(|p| p.account_id == account.id && p.show_usage) {
+                continue;
+            }
             out.push(Login {
                 account: Some(account.clone()),
                 home: Some(PathBuf::from(&account.home)),
@@ -373,7 +420,13 @@ fn row_for(agent: &AgentUsage, login: &Login, inputs: &Inputs<'_>) -> Option<Usa
         observed_at_ms: None,
         limited_until_ms: None,
         page: agent.source.page.clone(),
+        link: None,
+        same_as_main: false,
     };
+    if let Some(acc) = login.account.as_ref().filter(|a| a.lend_only) {
+        row.link = Some("lend");
+        row.account_label = inputs.lend.profiles.iter().find(|p| p.account_id == acc.id && p.show_usage).map(|p| p.name.clone());
+    }
     if signed == Signed::Expired || (note == LoginNote::Expired && reading.is_none()) {
         row.state = "expired";
         row.reason = Some("The sign-in has expired. Open the agent and sign in again.".into());
@@ -423,11 +476,81 @@ fn row_for(agent: &AgentUsage, login: &Login, inputs: &Inputs<'_>) -> Option<Usa
 
 /// Every row, agents in registry order, the main login before the accounts.
 pub fn build(agents: &[AgentUsage], inputs: &Inputs<'_>) -> UsageSnapshot {
-    let rows = agents
-        .iter()
-        .flat_map(|agent| logins(agent, inputs).into_iter().filter_map(move |login| row_for(agent, &login, inputs)))
-        .collect();
+    let mut rows = Vec::new();
+    for agent in agents {
+        let logins = logins(agent, inputs);
+        // Who the main login is, so a lend profile on the same account is told apart by identity (never by its label).
+        let main = logins.first().and_then(|l| l.home.as_deref()).and_then(|h| (inputs.identity)(&agent.id, h, true));
+        let mut seen: Vec<String> = Vec::new();
+        for login in &logins {
+            let Some(mut row) = row_for(agent, login, inputs) else { continue };
+            if row.link == Some("lend") {
+                let who = login.home.as_deref().and_then(|h| (inputs.identity)(&agent.id, h, false));
+                if let Some(who) = who {
+                    // Two lend profiles on one account are one row.
+                    if seen.contains(&who) {
+                        continue;
+                    }
+                    row.same_as_main = main.as_deref() == Some(who.as_str());
+                    seen.push(who);
+                }
+            }
+            rows.push(row);
+        }
+    }
+    rows.extend(borrowed_rows(agents, inputs));
     UsageSnapshot { rows, refreshed_at_ms: ms(inputs.now) }
+}
+
+/// The accounts lent to this PC: a row each when the lender shares numbers (named by the lender's profile name), and one
+/// "not shared" row for all the others, so it is said once and not per profile.
+fn borrowed_rows(agents: &[AgentUsage], inputs: &Inputs<'_>) -> Vec<UsageRow> {
+    let now_ms = ms(inputs.now);
+    let base = |agent: &AgentUsage, id: String, name: String| UsageRow {
+        agent_id: agent.id.clone(),
+        label: agent.label.clone(),
+        account_id: Some(id),
+        account_label: Some(name),
+        state: "unknown",
+        reason: None,
+        windows: Vec::new(),
+        totals: None,
+        plan: None,
+        observed_at_ms: None,
+        limited_until_ms: None,
+        page: None,
+        link: Some("borrowed"),
+        same_as_main: false,
+    };
+    let mut out = Vec::new();
+    let mut unshared: Option<&AgentUsage> = None;
+    for b in &inputs.lend.borrowed {
+        let Some(agent) = agents.iter().find(|a| a.id.eq_ignore_ascii_case(&b.agent_id)) else { continue };
+        let Some(shared) = b.shared.as_ref().filter(|s| !s.windows.is_empty()) else {
+            unshared.get_or_insert(agent);
+            continue;
+        };
+        let mut row = base(agent, format!("lend:{}", b.grant_id), b.name.clone());
+        row.windows = shared.windows.clone();
+        for w in &mut row.windows {
+            if w.resets_at_ms.is_some_and(|r| r <= now_ms) {
+                w.used_percent = 0.0;
+                w.resets_at_ms = None;
+                w.reset_since = true;
+            }
+        }
+        row.plan = shared.plan.clone().filter(|p| !p.is_empty());
+        row.observed_at_ms = Some(shared.at_ms);
+        let full = row.windows.iter().any(|w| !w.reset_since && w.used_percent >= 100.0);
+        row.state = if full { "limited" } else { "ok" };
+        out.push(row);
+    }
+    if let Some(agent) = unshared {
+        let mut row = base(agent, "lend:borrowed".into(), "Borrowed accounts".into());
+        row.reason = Some("The lender does not share usage numbers.".into());
+        out.push(row);
+    }
+    out
 }
 
 /// The registered agents that declare a usage source.
@@ -516,6 +639,7 @@ pub fn compute(when: Refresh, focused: bool) -> UsageSnapshot {
     let env = |key: &str| std::env::var(key).ok();
     let probe = HiddenProbe { reuse: when != Refresh::Now };
     let state = Mutex::new(OAUTH_STATE.lock().take().unwrap_or_default());
+    let lend = crate::capacity_proxy::usage_view();
     let inputs = Inputs {
         accounts: &accounts,
         limits: &limits,
@@ -529,6 +653,8 @@ pub fn compute(when: Refresh, focused: bool) -> UsageSnapshot {
         may_fetch: when != Refresh::Timer || focused,
         force: when == Refresh::Now,
         oauth_state: &state,
+        lend: &lend,
+        identity: &crate::capacity_proxy::usage_identity,
     };
     let snap = build(&live_agents(), &inputs);
     *OAUTH_STATE.lock() = Some(state.into_inner());
@@ -567,6 +693,27 @@ pub fn snapshot(when: Refresh, focused: bool) -> (UsageSnapshot, bool) {
     (next, changed)
 }
 
+static LEND_VIEW: Mutex<Option<LendView>> = Mutex::new(None);
+
+/// The lend service tells the usage bar how the lend side looks now. Returns whether it changed.
+pub fn set_lend_view(view: LendView) -> bool {
+    let mut last = LEND_VIEW.lock();
+    if last.as_ref() == Some(&view) {
+        return false;
+    }
+    *last = Some(view);
+    true
+}
+
+/// The plan name and windows the last snapshot read for one lend sign-in (what a lender shares with its borrower).
+/// Reads the cache only; it never asks the agent.
+pub fn lend_numbers(account_id: &str) -> Option<(Option<String>, Vec<Window>)> {
+    let cache = CACHE.lock();
+    let (_, snap) = cache.as_ref()?;
+    let row = snap.rows.iter().find(|r| r.link == Some("lend") && r.account_id.as_deref() == Some(account_id))?;
+    (!row.windows.is_empty()).then(|| (row.plan.clone(), row.windows.clone()))
+}
+
 /// Drop the cached snapshot so the next call reads again (a setting changed).
 pub fn invalidate() {
     *CACHE.lock() = None;
@@ -590,4 +737,9 @@ pub fn start_refresher(app: tauri::AppHandle) {
             tracing::warn!(error = %e, "usage: could not start the refresh thread");
         }
     });
+}
+
+/// The last snapshot, whatever its age. Reads nothing and fetches nothing (the project budget uses it).
+pub fn cached() -> Option<UsageSnapshot> {
+    CACHE.lock().as_ref().map(|(_, snap)| snap.clone())
 }

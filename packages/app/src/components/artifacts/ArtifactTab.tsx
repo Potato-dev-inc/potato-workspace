@@ -1,18 +1,49 @@
-// A page the agent made, open beside the chat. The page is drawn in the locked frame (see `ArtifactBody`). Above it: the
-// title, a version picker, Open in browser, Copy file path and Reload. While the tab is open it asks now and then
+// A page the agent made, open beside the chat (in the side pane, in a tab or in a window of its own). The page is drawn
+// in the locked frame (see `ArtifactBody`). Above it: the title, a version picker, Point, Share, Open in browser, Copy file
+// path and Reload (and, in the side pane, Open in a window, Full width and Close). While it is open it asks now and then
 // whether the agent made a newer version, and says so with a "Show it" button; nothing jumps under the reader.
+//
+// Point: the next click in the page is a pick; the person says what should change and it goes to the chat that made the
+// page (`paneId`), as a message in that chat. Share: a read-only link to this version (`ArtifactShare`).
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../../i18n';
 import { artifactsApi, opensInBrowser, type ArtifactPage, type ArtifactsApi } from '../../lib/artifacts';
+import { takeArtifactPoint } from '../../lib/artifact-side';
 import { noteArtifactTitle } from '../../lib/artifact-tabs';
+import { canPoint, composeArtifactPointMessage, MAX_PICK_REQUEST, pickLabel, type ArtifactPick } from '../../lib/artifact-point';
+import { sendPaneMessage } from '../../lib/paneOutbox';
 import { errorSentence } from '../../lib/sayError';
 import { ArtifactBody } from './ArtifactBody';
+import { ArtifactShare } from './ArtifactShare';
 import '../../styles/files.css';
 import '../../styles/artifacts.css';
 
 const POLL_MS = 4000;
 
-export function ArtifactTab({ paneId, id, api = artifactsApi, pollMs = POLL_MS }: { paneId: string; id: string; api?: ArtifactsApi; pollMs?: number }) {
+/** What the side pane adds to the toolbar (the tab and the window have none of it). */
+export interface SideChrome {
+  full: boolean;
+  onFull: () => void;
+  onPopOut: () => void;
+  onClose: () => void;
+}
+
+export function ArtifactTab({
+  paneId,
+  id,
+  api = artifactsApi,
+  pollMs = POLL_MS,
+  side,
+  send = sendPaneMessage,
+}: {
+  paneId: string;
+  id: string;
+  api?: ArtifactsApi;
+  pollMs?: number;
+  side?: SideChrome;
+  /** Puts a message into a chat (a test double can stand in). */
+  send?: (paneId: string, text: string) => Promise<unknown>;
+}) {
   const t = useT();
   const [page, setPage] = useState<ArtifactPage | null>(null);
   /** The version the person picked; null follows the newest one at the time of loading. */
@@ -21,6 +52,11 @@ export function ArtifactTab({ paneId, id, api = artifactsApi, pollMs = POLL_MS }
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
+  const [picking, setPicking] = useState(false);
+  const [pick, setPick] = useState<ArtifactPick | null>(null);
+  const [request, setRequest] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,8 +113,64 @@ export function ArtifactTab({ paneId, id, api = artifactsApi, pollMs = POLL_MS }
 
   const title = page?.artifact.title ?? id;
   const kind = page?.artifact.kind;
+  const pointable = !!page && canPoint(page.artifact.kind);
+
+  // "Try it" on Point and fix opens the page already waiting for a click.
+  useEffect(() => {
+    if (side && pointable && takeArtifactPoint(paneId)) setPicking(true);
+  }, [side, pointable, paneId]);
+
+  const onPick = useCallback((p: ArtifactPick) => {
+    setPicking(false);
+    setPick(p);
+  }, []);
+  const stopPointing = () => {
+    setPicking(false);
+    setPick(null);
+    setRequest('');
+  };
+  const togglePoint = () => {
+    if (picking) {
+      stopPointing();
+      return;
+    }
+    setPick(null);
+    setSharing(false);
+    setPicking(true);
+  };
+  const toggleShare = () => {
+    stopPointing();
+    setSharing((v) => !v);
+  };
+  const sendPoint = () => {
+    if (!page || !pick || sending) return;
+    let text: string;
+    try {
+      text = composeArtifactPointMessage({ title, id, version: page.version, pick, request });
+    } catch (err) {
+      setNotice(errorSentence(err));
+      return;
+    }
+    setSending(true);
+    send(paneId, text).then(
+      () => {
+        setSending(false);
+        stopPointing();
+        setNotice(t('artifacts.pointSent'));
+      },
+      (err: unknown) => {
+        setSending(false);
+        setNotice(errorSentence(err));
+      },
+    );
+  };
+
   return (
-    <section className="ck-art ck-file" aria-label={t('artifacts.tabLabel', { title })} data-testid="artifact-tab">
+    <section
+      className="ck-art ck-file"
+      aria-label={side ? t('artifacts.sideLabel', { title }) : t('artifacts.tabLabel', { title })}
+      data-testid={side ? 'artifact-side-view' : 'artifact-tab'}
+    >
       <header className="ck-art-head">
         <span className="ck-art-title" title={title}>
           {title}
@@ -98,6 +190,24 @@ export function ArtifactTab({ paneId, id, api = artifactsApi, pollMs = POLL_MS }
             ))}
           </select>
         )}
+        {page && (
+          <button
+            type="button"
+            className={`ck-btn ck-btn--plain ck-btn--sm${picking ? ' is-on' : ''}`}
+            aria-pressed={picking}
+            disabled={!pointable}
+            title={pointable ? undefined : t('artifacts.pointSvg')}
+            onClick={togglePoint}
+            data-testid="artifact-point"
+          >
+            {picking ? t('artifacts.pointStop') : t('artifacts.point')}
+          </button>
+        )}
+        {page && (
+          <button type="button" className={`ck-btn ck-btn--plain ck-btn--sm${sharing ? ' is-on' : ''}`} aria-expanded={sharing} onClick={toggleShare} data-testid="artifact-share-open">
+            {t('artifacts.share')}
+          </button>
+        )}
         {page && kind && opensInBrowser(kind) && (
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={() => void api.openInBrowser(paneId, id, page.version).then(() => setNotice(null), (err: unknown) => setNotice(errorSentence(err)))}>
             {t('artifacts.openBrowser')}
@@ -111,7 +221,54 @@ export function ArtifactTab({ paneId, id, api = artifactsApi, pollMs = POLL_MS }
         <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={showNewest}>
           {t('artifacts.reload')}
         </button>
+        {side && (
+          <>
+            <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={side.onPopOut} data-testid="artifact-popout">
+              {t('artifacts.popOut')}
+            </button>
+            <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-pressed={side.full} onClick={side.onFull} data-testid="artifact-full">
+              {side.full ? t('artifacts.backToChat') : t('artifacts.full')}
+            </button>
+            <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={side.onClose} data-testid="artifact-close">
+              {t('artifacts.close')}
+            </button>
+          </>
+        )}
       </header>
+      {sharing && page && <ArtifactShare paneId={paneId} id={id} version={page.version} title={title} api={api} onClose={() => setSharing(false)} />}
+      {picking && (
+        <p className="ck-art-hint" role="status" data-testid="artifact-point-hint">
+          {t('artifacts.pointHint')}
+        </p>
+      )}
+      {pick && (
+        <div className="ck-art-point" data-testid="artifact-point-box">
+          <p className="ck-art-point-what">{t('artifacts.pointedAt', { what: pickLabel(pick) })}</p>
+          <textarea
+            className="ck-art-point-input"
+            rows={2}
+            maxLength={MAX_PICK_REQUEST}
+            value={request}
+            placeholder={t('artifacts.pointPlaceholder')}
+            aria-label={t('artifacts.pointRequest')}
+            onChange={(e) => setRequest(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                sendPoint();
+              } else if (e.key === 'Escape') stopPointing();
+            }}
+          />
+          <div className="ck-art-point-row">
+            <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={sending || request.trim() === ''} onClick={sendPoint} data-testid="artifact-point-send">
+              {t('artifacts.pointSend')}
+            </button>
+            <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={stopPointing}>
+              {t('artifacts.pointCancel')}
+            </button>
+          </div>
+        </div>
+      )}
       {page && newest > page.version && (
         <div className="ck-art-newer" role="status" data-testid="artifact-newer">
           <span>{t('artifacts.newer')}</span>
@@ -133,7 +290,7 @@ export function ArtifactTab({ paneId, id, api = artifactsApi, pollMs = POLL_MS }
         ) : !page ? (
           <p className="ck-file-note">{t('artifacts.loading')}</p>
         ) : (
-          <ArtifactBody key={`${page.version}:${reloads}`} kind={page.artifact.kind} content={page.content} title={title} />
+          <ArtifactBody key={`${page.version}:${reloads}`} kind={page.artifact.kind} content={page.content} title={title} picking={picking} onPick={pointable ? onPick : undefined} />
         )}
       </div>
     </section>

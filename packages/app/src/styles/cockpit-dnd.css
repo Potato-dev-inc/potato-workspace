@@ -32,44 +32,95 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
-.cockpit .ck-dropzones {
+/* Work-area drop preview (WorkAreaDrop.tsx): the half the dragged agent takes, the half that stays, the centre line. */
+.cockpit .ck-workdrop {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
   z-index: 900;
-  display: flex;
-  gap: 8px;
-  padding: 8px;
   pointer-events: none;
 }
-.cockpit .ck-dropzones--edge {
-  justify-content: flex-end;
+.cockpit .ck-workdrop-box {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 46px;
+  border-radius: 8px;
+  transition: left var(--dur-fast) var(--ease), top var(--dur-fast) var(--ease), width var(--dur-fast) var(--ease), height var(--dur-fast) var(--ease);
 }
-.cockpit .ck-dropzones--edge .ck-dropzone {
-  flex: 0 0 32%;
+.cockpit .ck-workdrop-box > span {
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-meta, 12px);
+  padding: 3px 10px;
+  border-radius: 12px;
 }
-.cockpit .ck-dropzone[hidden] {
+.cockpit .ck-workdrop-box.is-take {
+  background: var(--accent-soft);
+  border: 1.5px solid var(--accent);
+}
+.cockpit .ck-workdrop-box.is-take > span {
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+.cockpit .ck-workdrop-box.is-stay {
+  border: 1.5px dashed var(--label-4);
+}
+.cockpit .ck-workdrop-box.is-stay > span {
+  background: var(--fill-active);
+  color: var(--label-2);
+  font-weight: 500;
+}
+.cockpit .ck-workdrop-mid {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+  width: 0;
+  border-left: 2px dashed var(--label-4);
+  transform: translateX(-1px);
+}
+.cockpit .ck-workdrop-mid i {
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  transform: translate(-50%, 0);
+  font-style: normal;
+  white-space: nowrap;
+  font-size: var(--fs-label, 11px);
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-float);
+  border: 1px solid var(--sep);
+  color: var(--label-2);
+}
+.cockpit .ck-workdrop-mid.is-on {
+  border-left-style: solid;
+  border-left-color: var(--accent);
+}
+/* On the line the orange pill (above) already says "half and half". */
+.cockpit .ck-workdrop-mid.is-on i {
   display: none;
 }
-.cockpit .ck-dropzone {
-  flex: 1 1 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  border: 1px dashed var(--sep);
+.cockpit .ck-workdrop-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: var(--fs-label, 11px);
+  padding: 2px 10px;
+  border-radius: 10px;
   background: var(--bg-float);
-  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
-}
-.cockpit .ck-dropzone.is-over {
-  border-style: solid;
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-}
-.cockpit .ck-dropzone-label {
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: var(--bg-raised);
+  border: 1px solid var(--sep);
+  color: var(--label-3);
 }
 /* Files dragged in from Windows: the sidebar says it takes a folder; a terminal pane takes a path. */
 .cockpit .ck-side.is-file-over {
@@ -126,7 +177,7 @@ body.pm-dragging {
   cursor: grabbing;
 }
 @media (prefers-reduced-motion: reduce) {
-  .cockpit .ck-dropzone {
+  .cockpit .ck-workdrop-box {
     transition: none;
   }
 }

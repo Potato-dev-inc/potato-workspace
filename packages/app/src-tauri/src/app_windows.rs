@@ -6,6 +6,8 @@ pub const SETTINGS_LABEL: &str = "settings";
 pub const SETTINGS_TITLE: &str = "Potato Workspace Settings";
 pub const COCKPIT_LABEL: &str = crate::ui_mode::COCKPIT_LABEL;
 pub const COCKPIT_TITLE: &str = "Potato Workspace";
+/// Emitted when a tab's own window closes: `{ paneId, tab }`. The cockpit puts the tab back.
+pub const TAB_CLOSED_EVENT: &str = "tabwin://closed";
 
 /// `index.html?cockpit=1`: the route `src/main.tsx` renders as the cockpit. A window created for a
 /// "show this pane" request also carries `&select=<pane id>` so the selection survives the webview
@@ -32,6 +34,57 @@ pub fn cockpit_settings_url(tab: Option<&str>) -> String {
 pub fn settings_url(tab: Option<&str>) -> String {
     let tab = tab.map(str::trim).filter(|t| !t.is_empty() && t.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
     format!("index.html?settings=1&tab={}", tab.unwrap_or("agents"))
+}
+
+/// `index.html?artifactwin=1&pane=..&id=..`: the route `src/main.tsx` renders as one artifact in its own window.
+pub fn artifact_url(pane_id: &str, id: &str) -> String {
+    format!("index.html?artifactwin=1&pane={}&id={}", url_encode(pane_id), url_encode(id))
+}
+
+/// The label of an artifact's own window: letters, digits and dashes only (an artifact id is already that), so the
+/// label matches the `artifact-window-*` capability and one artifact has one window.
+pub fn artifact_label(id: &str) -> Option<String> {
+    let ok = !id.is_empty() && id.len() <= 48 && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+    ok.then(|| format!("artifact-window-{id}"))
+}
+
+/// One tab of a pane that lives in its own window: the chat, or one file of the project.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TabKind {
+    Chat,
+    File(String),
+}
+
+/// `chat` or `file:<path>` as the frontend names a tab. Anything else (an empty path, a `..`, a page or guide) is refused.
+pub fn parse_tab(tab: &str) -> Option<TabKind> {
+    if tab == "chat" {
+        return Some(TabKind::Chat);
+    }
+    let path = tab.strip_prefix("file:")?;
+    let bad = path.is_empty() || path.len() > 500 || path.split(['/', '\\']).any(|part| part == ".." || part.is_empty()) || path.contains('\0');
+    (!bad).then(|| TabKind::File(path.to_string()))
+}
+
+/// `index.html?tabwin=1&pane=..&tab=..`: the route `src/main.tsx` renders as one tab of a pane in its own window.
+pub fn tab_url(pane_id: &str, tab: &str) -> String {
+    format!("index.html?tabwin=1&pane={}&tab={}", url_encode(pane_id), url_encode(tab))
+}
+
+/// The label of a tab's own window (`tab-window-*`, the capability): one tab has one window. A file's name is hashed so
+/// the label stays short and has only letters, digits and dashes after the pane part.
+pub fn tab_label(pane_id: &str, tab: &str) -> Option<String> {
+    let kind = match parse_tab(tab)? {
+        TabKind::Chat => "chat".to_string(),
+        TabKind::File(path) => {
+            let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+            for b in path.bytes() {
+                hash = (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+            }
+            format!("f{hash:016x}")
+        }
+    };
+    let safe: String = pane_id.chars().map(|ch| if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') { ch } else { '_' }).collect();
+    (!safe.is_empty() && safe.len() <= 96).then(|| format!("tab-window-{safe}-{kind}"))
 }
 
 /// Same URL the frontend builds in `detachedPaneUrl` (`src/lib/detached-pane-window.ts`).
@@ -242,6 +295,77 @@ mod runtime {
                 Err(e) => tracing::warn!(error = %e, "settings window failed to open"),
             }
         });
+    }
+
+    /// Opens one artifact in its own window (or brings that window to the front). The window only shows the page and its
+    /// own tools (Point, Share); the chat and the app stay where they are.
+    pub fn open_artifact_window(app: &AppHandle, pane_id: &str, id: &str, title: &str) -> Result<(), String> {
+        let label = artifact_label(id).ok_or_else(|| "That page id is not valid.".to_string())?;
+        let (app, pane_id, id, title) = (app.clone(), pane_id.to_string(), id.to_string(), title.to_string());
+        std::thread::spawn(move || {
+            if let Some(window) = app.get_webview_window(&label) {
+                show(&window, true);
+                return;
+            }
+            let title = if title.trim().is_empty() { id.clone() } else { title.chars().take(80).collect() };
+            let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(artifact_url(&pane_id, &id).into()))
+                .title(title)
+                .inner_size(960.0, 720.0)
+                .min_inner_size(360.0, 300.0)
+                .resizable(true)
+                .focused(true);
+            if let Some((x, y)) = next_position(&app) {
+                builder = builder.position(x, y);
+            }
+            match builder.build() {
+                Ok(window) => show(&window, true),
+                Err(e) => tracing::warn!(error = %e, "artifact window failed to open"),
+            }
+        });
+        Ok(())
+    }
+
+    /// Opens one tab of a pane (its chat, or a file) in its own window, or brings that window to the front. The window
+    /// shows the same pane live: no second agent starts. When it closes, `tabwin://closed` tells the cockpit.
+    pub fn open_tab_window(app: &AppHandle, pane_id: &str, tab: &str, title: &str) -> Result<(), String> {
+        let label = tab_label(pane_id, tab).ok_or_else(|| "That tab cannot open in a window.".to_string())?;
+        let (app, pane_id, tab, title) = (app.clone(), pane_id.to_string(), tab.to_string(), title.to_string());
+        std::thread::spawn(move || {
+            if let Some(window) = app.get_webview_window(&label) {
+                show(&window, true);
+                return;
+            }
+            let title = if title.trim().is_empty() { "Potato Workspace".to_string() } else { title.chars().take(80).collect() };
+            let (event_app, event_pane, event_tab) = (app.clone(), pane_id.clone(), tab.clone());
+            let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(tab_url(&pane_id, &tab).into()))
+                .title(title)
+                .inner_size(960.0, 720.0)
+                .min_inner_size(420.0, 320.0)
+                .resizable(true)
+                .focused(true);
+            if let Some((x, y)) = next_position(&app) {
+                builder = builder.position(x, y);
+            }
+            match builder.build() {
+                Ok(window) => {
+                    window.on_window_event(move |event| {
+                        if matches!(event, tauri::WindowEvent::Destroyed) {
+                            let _ = tauri::Emitter::emit(&event_app, TAB_CLOSED_EVENT, serde_json::json!({ "paneId": event_pane, "tab": event_tab }));
+                        }
+                    });
+                    show(&window, true);
+                }
+                Err(e) => tracing::warn!(error = %e, "tab window failed to open"),
+            }
+        });
+        Ok(())
+    }
+
+    /// Closes a tab's window (the "Put back" button). The close tells the cockpit through `tabwin://closed`.
+    pub fn close_tab_window(app: &AppHandle, pane_id: &str, tab: &str) {
+        if let Some(window) = tab_label(pane_id, tab).and_then(|label| app.get_webview_window(&label)) {
+            let _ = window.close();
+        }
     }
 
     /// Build the cockpit window at `url`. False when it could not be created.
@@ -527,7 +651,7 @@ mod runtime {
 
 pub use runtime::{
     ask_settings_to_move_inline, close_warm_pane_window, current_anchor, destroy_pane_windows, hide_cockpit_window, on_close_requested, open_cockpit_settings, open_cockpit_window, open_pane_window,
-    open_pane_window_hidden, open_settings_window, open_warm_pane_window, open_worker_host_window, outer_rect, peek_slot, reserve_slots, show_pop_out,
+    open_artifact_window, open_tab_window, close_tab_window, open_pane_window_hidden, open_settings_window, open_warm_pane_window, open_worker_host_window, outer_rect, peek_slot, reserve_slots, show_pop_out,
 };
 
 #[cfg(test)]
@@ -610,6 +734,39 @@ mod tests {
     fn pane_url_matches_the_frontend_route() {
         assert_eq!(pane_url("abc-123"), "index.html?terminal=1&pane=abc-123&detached=1");
         assert_eq!(pane_url("a b/c"), "index.html?terminal=1&pane=a%20b%2Fc&detached=1");
+    }
+
+    #[test]
+    fn an_artifact_window_has_its_own_route_and_a_label_the_capability_matches() {
+        assert_eq!(artifact_url("a b", "plan-1"), "index.html?artifactwin=1&pane=a%20b&id=plan-1");
+        assert_eq!(artifact_label("plan-1").as_deref(), Some("artifact-window-plan-1"));
+        for bad in ["", "A", "a b", "a/b", "../x", &"x".repeat(49)] {
+            assert_eq!(artifact_label(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_tab_window_has_its_own_route_and_a_label_the_capability_matches() {
+        assert_eq!(tab_url("p 1", "chat"), "index.html?tabwin=1&pane=p%201&tab=chat");
+        assert_eq!(tab_url("p1", "file:src/a.ts"), "index.html?tabwin=1&pane=p1&tab=file%3Asrc%2Fa.ts");
+        assert_eq!(tab_label("p1", "chat").as_deref(), Some("tab-window-p1-chat"));
+        let a = tab_label("p1", "file:src/a.ts").unwrap();
+        assert!(a.starts_with("tab-window-p1-f") && a.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'), "{a}");
+        assert_ne!(a, tab_label("p1", "file:src/b.ts").unwrap(), "one file, one window");
+        assert_eq!(a, tab_label("p1", "file:src/a.ts").unwrap(), "the same file always has the same window");
+        assert_eq!(tab_label("p/1:x", "chat").as_deref(), Some("tab-window-p_1_x-chat"));
+    }
+
+    #[test]
+    fn only_the_chat_and_a_plain_file_path_open_in_a_tab_window() {
+        assert_eq!(parse_tab("chat"), Some(TabKind::Chat));
+        assert_eq!(parse_tab("file:a/b.txt"), Some(TabKind::File("a/b.txt".into())));
+        for bad in ["", "terminal", "changes", "file:", "file:../x", "file:a/../x", "file:/abs", "file:a//b", "file:a\\..\\b", "chat2"] {
+            assert_eq!(parse_tab(bad), None, "{bad}");
+            assert_eq!(tab_label("p1", bad), None, "{bad}");
+        }
+        assert_eq!(tab_label("", "chat"), None);
+        assert_eq!(tab_label(&"x".repeat(97), "chat"), None);
     }
 
     #[test]

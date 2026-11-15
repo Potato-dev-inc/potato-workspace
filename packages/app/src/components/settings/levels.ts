@@ -29,6 +29,7 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'helper-default-models',
   'keep-helpers-open',
   'close-helpers-with-agent',
+  'standby-helpers',
   // Agents: Hand off does (and the fixed notes)
   'handoff-mode',
   // Keys: all of them

@@ -5,7 +5,7 @@ import { jobCount, jobsOfPanes, jobsRunning, tauriJobsApi, usePaneJobs, type Job
 import { useT } from '../../../i18n';
 import { IconTerminal } from '../Icons';
 import { Sheet } from '../Sheet';
-import { previewJobPort, stopJob } from './BackgroundCard';
+import { previewJobPort, stopJob } from './jobActions';
 import { BackgroundJobs } from './BackgroundJobs';
 
 export interface JobsChipProps {

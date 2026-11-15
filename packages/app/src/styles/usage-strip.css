@@ -272,3 +272,9 @@
 .cockpit .ck-usage-totals .ck-usage-model {
   color: var(--label-3);
 }
+
+.cockpit .ck-usage-same {
+  margin: 2px 0 4px;
+  font-size: 11px;
+  color: var(--pm-muted, currentColor);
+}

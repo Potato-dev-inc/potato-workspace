@@ -265,6 +265,8 @@ export function makeBridgeClient(baseUrl: string, transport?: BridgeTransport): 
       (await call<{ attachment: ChatAttachment }>('POST', `/panes/${encodeURIComponent(paneId)}/uploads`, body)).attachment,
     paneArtifact: (paneId, id, version) =>
       call('GET', `/panes/${encodeURIComponent(paneId)}/artifacts/${encodeURIComponent(id)}${version ? `?v=${version}` : ''}`),
+    shareArtifact: (paneId, id, version, ttlHours) =>
+      call('POST', `/panes/${encodeURIComponent(paneId)}/artifacts/${encodeURIComponent(id)}/share`, { version, ...(ttlHours ? { ttlHours } : {}) }),
     paneResult: (paneId, withPatch) =>
       call('GET', `/panes/${encodeURIComponent(paneId)}/result${withPatch ? '?patch=1' : ''}`),
     cancelPaneMessage: async (paneId, messageId) =>

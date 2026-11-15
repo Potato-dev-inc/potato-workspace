@@ -4,7 +4,9 @@ import { peekAgentRegistry, type AgentDescriptor } from './agentRegistry';
 import type { StandbyConfig, StandbyStatus } from './tauri-types';
 
 /** Most warm workers one provider may keep (mirrors the backend clamp). */
-export const MAX_WARM_PER_PROVIDER = 2;
+export const MAX_WARM_PER_PROVIDER = 10;
+/** Above this many warm agents of one kind, the page says each one uses memory. */
+export const WARM_MEMORY_WARN_ABOVE = 4;
 
 export const DEFAULT_STANDBY_CONFIG: StandbyConfig = {
   preload: { enabled: false, providers: {} },

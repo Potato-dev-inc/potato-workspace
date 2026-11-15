@@ -214,4 +214,11 @@ export const settingsLend = {
   "lend.request.asked": "Asked {name} for {profile} · {agent} · {time}",
   "lend.wantsProfile": "{who} wants {profile} ({agent}) for {time}",
   "lend.startChat": "Start a chat",
+  "lend.showUsage": "Show usage in the usage bar",
+  "lend.showUsageHint": "The person who borrows it sees these numbers too.",
+  "lend.past.lends": "Past lends ({n})",
+  "lend.past.borrows": "Past borrows ({n})",
+  "lend.past.dismiss": "Remove this row",
+  "lend.past.clear": "Clear",
+  "lend.past.showAll": "Show all {n}",
 } as const;

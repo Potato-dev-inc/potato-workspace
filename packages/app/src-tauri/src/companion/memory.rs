@@ -55,6 +55,7 @@ pub fn parse_line(line: &str) -> Option<(PendingKind, String)> {
         "note" => PendingKind::Note,
         "user" => PendingKind::User,
         "forget" => PendingKind::Forget,
+        "person" => PendingKind::Person,
         _ => return None,
     };
     let plain: String = text.chars().filter(|c| !c.is_control()).collect();
@@ -64,7 +65,11 @@ pub fn parse_line(line: &str) -> Option<(PendingKind, String)> {
     }
     let redacted = redact::text(plain).into_inner();
     let cut = cut_chars(redacted.trim(), PENDING_LINE_CAP);
-    if cut.is_empty() { None } else { Some((kind, cut)) }
+    if cut.is_empty() || (kind == PendingKind::Person && super::vault::people::split_pending(&cut).is_none()) {
+        None
+    } else {
+        Some((kind, cut))
+    }
 }
 
 /// One proposal in `pending.md` with the lines it covers (indexes into the file's lines, both included).
@@ -245,6 +250,14 @@ fn apply_keep(home: &Path, item: &PendingItem) -> CompanionResult<Vec<MemoryFile
             Ok(Vec::new())
         }
         PendingKind::Skill => Ok(Vec::new()),
+        PendingKind::Person => {
+            // The note goes to the person's own file; no memory file changes. A name and a note were checked at parse.
+            if let Some((name, note)) = super::vault::people::split_pending(&item.text) {
+                super::vault::people::add_note(home, &name, &note)
+                    .map_err(|e| CompanionError::new("COMPANION_FOLDER_INVALID", format!("Could not write the note about {name}: {e}.")))?;
+            }
+            Ok(Vec::new())
+        }
     }
 }
 

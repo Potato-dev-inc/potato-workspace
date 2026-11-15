@@ -562,9 +562,9 @@ mod tests {
     #[test]
     fn save_point_changes_become_copy_changes() {
         let points = vec![
-            PointChange { path: "a.ts".into(), status: "A".into(), added: 3, deleted: 0, binary: false },
-            PointChange { path: "b.ts".into(), status: "D".into(), added: 0, deleted: 4, binary: false },
-            PointChange { path: "c.png".into(), status: "M".into(), added: 0, deleted: 0, binary: true },
+            PointChange { path: "a.ts".into(), status: "A".into(), added: 3, deleted: 0, binary: false, line_endings_only: false },
+            PointChange { path: "b.ts".into(), status: "D".into(), added: 0, deleted: 4, binary: false, line_endings_only: false },
+            PointChange { path: "c.png".into(), status: "M".into(), added: 0, deleted: 0, binary: true, line_endings_only: false },
         ];
         let changes = changes_of(&points);
         let statuses: Vec<&str> = changes.files.iter().map(|f| f.status.as_str()).collect();

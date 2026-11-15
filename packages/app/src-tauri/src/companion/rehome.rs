@@ -45,7 +45,10 @@ fn unit_files() -> Vec<String> {
 
 /// The companion's own folders inside a home folder.
 fn unit_dirs() -> Vec<String> {
-    vec![files::JOURNAL_REL.to_string(), skills::SKILLS_REL.to_string(), today::DAYS_DIR.to_string()]
+    let mut dirs = vec![files::JOURNAL_REL.to_string(), skills::SKILLS_REL.to_string(), today::DAYS_DIR.to_string()];
+    // The vault folders exist only when the Labs switch was on; a folder that is not there is skipped.
+    dirs.extend(super::vault::FOLDERS.iter().map(|dir| (*dir).to_string()));
+    dirs
 }
 
 /// What a copy made. Relative paths, `/`-separated.

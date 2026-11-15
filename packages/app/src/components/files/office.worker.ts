@@ -19,7 +19,7 @@ scope.onmessage = async (e) => {
     if (msg.type === 'docx') {
       const t0 = performance.now();
       doc = await convertFrom(await urlReader(msg.url).catch(() => null), () => fetchBuffer(msg.url));
-      scope.postMessage({ id: msg.id, ok: true, html: doc.html, pictures: doc.readers.length, openMs: Math.round(performance.now() - t0) });
+      scope.postMessage({ id: msg.id, ok: true, html: doc.html, styled: doc.styled, pictures: doc.readers.length, openMs: Math.round(performance.now() - t0) });
     } else if (msg.type === 'text') {
       scope.postMessage({ id: msg.id, ok: true, text: doc ? await rawText(doc.buffer) : '' });
     } else if (msg.type === 'image') {

@@ -58,6 +58,18 @@ pub struct AgentLimit {
     pub reset_at_ms: Option<i64>,
 }
 
+/// One line of a companion's own chat.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChatLine {
+    /// Stable id of the chat item, so a line is journaled once.
+    pub id: String,
+    /// When it was said (epoch ms), when the chat says.
+    pub at_ms: Option<i64>,
+    /// The person typed it (not the companion, not a check-in).
+    pub from_person: bool,
+    pub text: String,
+}
+
 /// One thing that was said in a companion's chats, found by the search index.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecallHit {
@@ -122,6 +134,17 @@ pub trait Host: Send + Sync + 'static {
     }
     /// Lets go of the session-chat reader this companion holds on the pane.
     fn release_reader(&self, pane_id: &str, companion_id: &str);
+
+    /// Whether the Labs switch `companion_vault_enabled` is on: the journal, the diary, the persona files and the
+    /// body state. The default says no, so nothing of it runs.
+    fn vault_on(&self) -> bool {
+        false
+    }
+    /// The newest lines of the companion's own chat, oldest first (what the person typed and what it answered).
+    /// The default knows none.
+    fn chat_lines(&self, _pane_id: &str, _companion_id: &str) -> Vec<ChatLine> {
+        Vec::new()
+    }
 
     /// Whether the chat search index is on (it feeds `companion_recall`). The default says no.
     fn recall_on(&self) -> bool {

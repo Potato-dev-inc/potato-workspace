@@ -82,4 +82,9 @@ export const settingsAgentPage = {
   "chatAdapter.change": "Change",
   "chatAdapter.changeAria": "Change the chat adapter of {label}",
   "chatAdapter.added.status": "Chat adapter saved for {label}.",
+  "accounts.usedForLending": "Used for lending",
+  "accounts.usedForLendingHelp": "These sign-ins are made by Lend. Rename them on the Lend page.",
+  "accounts.lendProfileTag": "Used for lending",
+  "accounts.openLend": "Open Lend",
+  "accounts.lendNoProfile": "A lend sign-in with no profile",
 } as const;

@@ -5,7 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const MAX_COMPANIONS: usize = 3;
+/// Saved companions (not archived). Only `MAX_AWAKE_COMPANIONS` of them run a pane at once.
+pub const MAX_COMPANIONS: usize = 8;
+/// Companions that may be awake (a pane open) at the same time; the others sleep.
+pub const MAX_AWAKE_COMPANIONS: usize = 3;
 pub const SOUL_CAP: usize = 1_500;
 pub const USER_CAP: usize = 1_400;
 pub const MEMORY_CAP: usize = 2_200;
@@ -23,6 +26,17 @@ pub const CHECKIN_LABEL_CAP: usize = 40;
 pub const CHECKIN_TEXT_CAP: usize = 2_000;
 
 pub const AVATAR_IDS: [&str; 8] = ["mochi", "bit", "nib", "tofu", "lumen", "hoot", "sprout", "kit"];
+/// The accent colours a companion may pick (colour tokens in the UI; the saved word is the token's name).
+pub const ACCENT_IDS: [&str; 5] = ["potato", "sky", "mint", "rose", "sun"];
+
+/// A companion's own look. `avatar` stays the source of truth on the profile (older readers use it); the
+/// look repeats it so the pair is one value.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Look {
+    pub avatar: String,
+    pub accent: String,
+}
 
 fn yes() -> bool {
     true
@@ -63,6 +77,9 @@ pub struct CompanionProfile {
     pub name: String,
     /// One of `AVATAR_IDS`.
     pub avatar: String,
+    /// Its own look (avatar and accent colour). Missing in files from before 1.1.1.
+    #[serde(default)]
+    pub look: Option<Look>,
     /// Persona preset id: cheerful | calm | coach | plain | custom.
     pub persona: String,
     /// Registry id of the agent; must pass `agents::agent_ok`.
@@ -193,6 +210,10 @@ pub struct CompanionView {
     pub id: String,
     pub name: String,
     pub avatar: String,
+    /// The accent colour word (`ACCENT_IDS`); None = the app default.
+    pub accent: Option<String>,
+    /// The companion the speak bubble, the pet and the phone's first tab use.
+    pub is_default: bool,
     pub persona: String,
     pub agent_type: String,
     pub agent_label: String,
@@ -230,6 +251,70 @@ pub struct CompanionView {
     /// agents below it read the companion's brief. The card offers `Move to its own folder`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub home_problem: Option<super::broad::HomeProblem>,
+    /// How it feels (mood, drives). Present only while the Labs switch `companion_vault_enabled` is on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<BodyView>,
+}
+
+/// The body state the companion page shows. Whole numbers only; no names of files or folders.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BodyView {
+    /// `sleepy` | `hungry` | `genki` | `tsundere`
+    pub mood: String,
+    pub intensity: u8,
+    pub energy: u8,
+    pub hunger: u8,
+    pub boredom: u8,
+    pub longing: u8,
+    pub battery: u8,
+    pub drives: Vec<BodyDriveView>,
+    /// How long the app was away before this run, when it was 3 minutes or more.
+    pub away_minutes: Option<u32>,
+    pub sleeping: bool,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BodyDriveView {
+    pub name: String,
+    pub value: u32,
+    pub max: u32,
+    pub threshold: u32,
+    pub waiting: bool,
+}
+
+/// One day of the journal, newest line last.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct JournalDay {
+    pub date: String,
+    pub lines: Vec<String>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiaryView {
+    pub date: String,
+    pub text: String,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonView {
+    pub name: String,
+    pub closeness: u8,
+}
+
+/// What `companion_journal` returns (desktop only).
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct JournalView {
+    pub days: Vec<JournalDay>,
+    pub diary: Option<DiaryView>,
+    pub people: Vec<PersonView>,
+    /// Which persona files exist: `SOUL.md`, `persona/rules.md`, `persona/notes.md`.
+    pub persona_files: Vec<String>,
 }
 
 /// A move that is waiting for the companion to be free ("Moves when Mochi is free").
@@ -264,6 +349,8 @@ pub enum PendingKind {
     Forget,
     /// A proposed skill: `- skill: <title>` and an indented body. Never kept on its own (`memory::auto_keep_ids`).
     Skill,
+    /// A note about a person: `- person: <name>: <note>`. Kept into `people/<name>.md` (Labs `companion_vault_enabled`).
+    Person,
 }
 
 impl PendingKind {
@@ -273,6 +360,7 @@ impl PendingKind {
             PendingKind::User => "user",
             PendingKind::Forget => "forget",
             PendingKind::Skill => "skill",
+            PendingKind::Person => "person",
         }
     }
 }
@@ -443,6 +531,11 @@ pub fn validate_profile(profile: &CompanionProfile) -> CompanionResult<()> {
     }
     if !AVATAR_IDS.contains(&profile.avatar.as_str()) {
         return Err(CompanionError::new("COMPANION_AVATAR_INVALID", "Pick one of the faces in the list."));
+    }
+    if let Some(look) = &profile.look {
+        if look.avatar != profile.avatar || !ACCENT_IDS.contains(&look.accent.as_str()) {
+            return Err(CompanionError::new("COMPANION_AVATAR_INVALID", "Pick one of the colours in the list."));
+        }
     }
     if !crate::companion::personas::is_persona(&profile.persona) {
         return Err(CompanionError::new("COMPANION_PERSONA_INVALID", "Pick one of the ways to talk."));

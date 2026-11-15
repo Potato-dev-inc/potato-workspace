@@ -77,5 +77,10 @@ export const settingsPhone = {
   "stable.notYet": "Paste your address in step 3.",
   "stable.close": "Close",
   "stable.useRelay": "Use {url} (your team relay)",
-  "stable.relayNote": "This Worker must also include the stable-link part. We will merge both Workers into one in 1.1.1.",
+  "stable.relayNote": "One Worker does both jobs: your team relay and your phone link.",
+  "worker.useLink": "Use {url} (your phone link Worker)",
+  "worker.linkNote": "One Worker does both jobs: your phone link and your team relay.",
+  "worker.update": "Update your Worker",
+  "worker.updateWhy": "{url} was deployed before the latest version, so it cannot do this yet. Run this one command in the Potato Workspace folder:",
+  "worker.unreachable": "Can't reach {url} right now. Check the address, or try again in a minute.",
 } as const;

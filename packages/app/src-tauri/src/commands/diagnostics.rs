@@ -79,7 +79,16 @@ pub fn app_log_lines(needle: String, max: usize) -> Vec<String> {
 pub async fn perf_summary() -> crate::flight::perf::PerfSummary {
     let dir = crate::app_paths::app_data_dir().join(crate::flight::logfile::LOG_DIR);
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
-    tauri::async_runtime::spawn_blocking(move || crate::flight::perf::summarize_dir(&dir, now)).await.unwrap_or_default()
+    let trace = crate::app_paths::app_data_dir().join(crate::startup_trace::FILE_NAME);
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut summary = crate::flight::perf::summarize_dir(&dir, now);
+        if let Ok(text) = std::fs::read_to_string(trace) {
+            (summary.startup_steps, summary.startup_total_ms) = crate::flight::perf::startup_from_json(&text);
+        }
+        summary
+    })
+    .await
+    .unwrap_or_default()
 }
 
 /// Did the last run end with a crash report? (Checked once at start.)

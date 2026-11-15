@@ -16,6 +16,7 @@ import { t, useT } from '../../../i18n';
 import { styleLabel } from '../i18n-labels';
 import { tauri, type AppInstallInfo, type CoordinationStorageInfo } from '../../../lib/tauri';
 import { budgetRows } from './BudgetRows';
+import { projectBudgetRows } from './ProjectBudgetRows';
 import { AskBarSettingsBlock } from '../blocks/AskBarSettings';
 import { AssignIssueSettings } from '../blocks/AssignIssueSettings';
 import { BringChatsSettings } from '../blocks/BringChatsSettings';
@@ -289,7 +290,7 @@ export const generalRows: RowDef[] = [
     group: 'Appearance',
     render: (env) => (
       <SettingRow label={t('lookFeel.theme.label')} description={t('lookFeel.theme.hint')}>
-        <ThemeThumbs value={env.settings.theme === 'light' ? 'light' : 'dark'} onPick={(theme) => void env.patch({ theme })} />
+        <ThemeThumbs value={env.settings.theme ?? 'dark'} onPick={(theme) => void env.patch({ theme })} />
       </SettingRow>
     ),
   },
@@ -444,6 +445,7 @@ export const generalRows: RowDef[] = [
     ),
   },
   ...budgetRows,
+  ...projectBudgetRows,
   {
     id: 'discord-alerts',
     label: 'Discord alerts',
@@ -688,6 +690,54 @@ export const generalRows: RowDef[] = [
         description={t('settings.row.agent-browser-labs.hint')}
         checked={env.settings.agent_browser_enabled ?? false}
         onChange={(value) => void env.patch({ agent_browser_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'companion-vault-labs',
+    label: 'Companion memory and mood',
+    hint: "Companions keep a journal and a diary, and show how they feel. Plain text files.",
+    keywords: 'companion memory mood journal diary vault markdown feel labs early',
+    group: 'Labs',
+    labs: { name: 'Companion memory and mood', about: 'Companions keep a journal and a diary, and show how they feel.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.companion-vault-labs.label')}
+        description={t('settings.row.companion-vault-labs.hint')}
+        checked={env.settings.companion_vault_enabled ?? false}
+        onChange={(value) => void env.patch({ companion_vault_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'discord-bot-labs',
+    label: 'Discord bot',
+    hint: 'A companion answers in your chosen Discord channels, with your own bot.',
+    keywords: 'discord bot companion server channel chat token labs early',
+    group: 'Labs',
+    labs: { name: 'Discord bot', about: 'A companion can answer in your Discord server, with your own bot.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.discord-bot-labs.label')}
+        description={t('settings.row.discord-bot-labs.hint')}
+        checked={env.settings.discord_bot_enabled ?? false}
+        onChange={(value) => void env.patch({ discord_bot_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'project-guide-labs',
+    label: 'Project guide',
+    hint: 'Your agent writes a short guide to a project, only when you ask.',
+    keywords: 'project guide wiki overview map architecture diagram docs onboarding explain labs early',
+    group: 'Labs',
+    labs: { name: 'Project guide', about: 'Let your agent write a short guide to a project.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.project-guide-labs.label')}
+        description={t('settings.row.project-guide-labs.hint')}
+        checked={env.settings.project_guide_enabled ?? false}
+        onChange={(value) => void env.patch({ project_guide_enabled: value })}
       />
     ),
   },

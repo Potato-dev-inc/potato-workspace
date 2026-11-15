@@ -47,6 +47,30 @@ fn is_broken_fallback(table: &McpHostTable, existing: &Value, launch: &HostLaunc
     [launch.env.clone(), Vec::new()].into_iter().any(|env| render_entry_plain(table, &fallback(env)).map(|v| v == existing).unwrap_or(false))
 }
 
+/// The entry in the host's config is exactly what Potato Workspace wrote earlier (the install record says so and the
+/// person has not changed it) but it no longer matches this app's launch (an older install folder, an older
+/// package). Only such an entry is replaced; a person's own edit or another tool's entry never is.
+fn is_stale_own_write(rec: &Record, path: &Path, segs: &[&str], existing: &Value, table: &McpHostTable, launch: &HostLaunch) -> bool {
+    if launch.program_missing {
+        return false;
+    }
+    let probe = Entry::Mcp {
+        path: path_str(path),
+        format: String::new(),
+        key_path: segs.join("."),
+        file_created: false,
+        created_dirs: vec![],
+        backup: None,
+        written: Value::Null,
+        written_file_sha: String::new(),
+    };
+    let Some(Entry::Mcp { written, .. }) = rec.find(&probe) else { return false };
+    if written.is_null() || written != existing {
+        return false;
+    }
+    render_entry(table, launch).is_ok_and(|now| &now != existing)
+}
+
 /// One agent and what it declares.
 #[derive(Debug, Clone)]
 pub struct AgentSpec {
@@ -277,7 +301,7 @@ fn missing_lines(format: crate::tui::declarative::schema::McpHostFormat, text: &
     Some(lines.join(eol) + if text.ends_with('\n') { eol } else { "" })
 }
 
-fn plan_mcp_group(table: McpHostTable, path: Result<PathBuf, String>, installed: bool, agents: Vec<usize>, launch: &HostLaunch) -> McpGroup {
+fn plan_mcp_group(table: McpHostTable, path: Result<PathBuf, String>, installed: bool, agents: Vec<usize>, launch: &HostLaunch, rec: &Record) -> McpGroup {
     let mut g = McpGroup {
         agents,
         installed,
@@ -327,7 +351,7 @@ fn plan_mcp_group(table: McpHostTable, path: Result<PathBuf, String>, installed:
     let repair = match &present {
         // Only the exact shape 1.0.6 wrote for a package that does not exist is ours to replace.
         Some(v) => {
-            if !is_broken_fallback(&table, v, launch) {
+            if !is_broken_fallback(&table, v, launch) && !is_stale_own_write(rec, &path, &segs, v, &table, launch) {
                 // Otherwise already registered and not ours to rewrite; only the own-entry keys it lacks are added.
                 let missing: Vec<(String, Value)> = own_entry_extra(&table)
                     .map(|extra| extra.into_iter().filter(|(k, _)| v.get(k).is_none()).collect())
@@ -395,7 +419,7 @@ struct Plan {
     mcp: Vec<McpGroup>,
 }
 
-fn build(specs: &[AgentSpec], opts: &Options) -> Plan {
+fn build(specs: &[AgentSpec], opts: &Options, rec: &Record) -> Plan {
     let mut skills: Vec<SkillGroup> = Vec::new();
     let mut mcp: Vec<McpGroup> = Vec::new();
     for (i, s) in specs.iter().enumerate() {
@@ -416,7 +440,7 @@ fn build(specs: &[AgentSpec], opts: &Options) -> Plan {
                     g.agents.push(i);
                     g.installed |= s.installed;
                 }
-                None => mcp.push(plan_mcp_group(t.clone(), path, s.installed, vec![i], &opts.launch)),
+                None => mcp.push(plan_mcp_group(t.clone(), path, s.installed, vec![i], &opts.launch, rec)),
             }
         }
     }
@@ -429,7 +453,7 @@ fn build(specs: &[AgentSpec], opts: &Options) -> Plan {
     }
     for g in mcp.iter_mut() {
         if g.status == "skipped" && g.installed {
-            *g = plan_mcp_group(g.table.clone(), g.path.clone(), true, std::mem::take(&mut g.agents), &opts.launch);
+            *g = plan_mcp_group(g.table.clone(), g.path.clone(), true, std::mem::take(&mut g.agents), &opts.launch, rec);
         }
     }
     Plan { skills, mcp }
@@ -566,8 +590,8 @@ fn apply_mcp_group(g: &mut McpGroup, opts: &Options, rec: &mut Record) {
 
 /// Plan the pack for every agent in `specs`; with `apply`, write it and record what changed.
 pub fn run(specs: &[AgentSpec], opts: &Options, apply: bool) -> Result<PackReport, String> {
-    let mut plan = build(specs, opts);
     let mut rec = Record::load(&opts.state_dir)?;
+    let mut plan = build(specs, opts, &rec);
     if apply {
         for g in plan.skills.iter_mut().filter(|g| g.status == "ready") {
             apply_skill_group(g, opts, &mut rec);
@@ -577,6 +601,27 @@ pub fn run(specs: &[AgentSpec], opts: &Options, apply: bool) -> Result<PackRepor
         }
     }
     Ok(report(specs, &plan, &rec, !apply))
+}
+
+/// App start / update: rewrite ONLY the MCP entries Potato Workspace wrote itself (the install record proves it) that
+/// now start an older program. Nothing new is added, no skill is touched, and an entry the person changed stays.
+/// Returns the config files that were rewritten.
+pub fn refresh_stale(specs: &[AgentSpec], opts: &Options) -> Result<Vec<String>, String> {
+    let mut rec = Record::load(&opts.state_dir)?;
+    if rec.entries.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut plan = build(specs, opts, &rec);
+    let mut done = Vec::new();
+    for g in plan.mcp.iter_mut().filter(|g| g.status == "ready" && g.change == FileKind::Update && !g.key_only) {
+        apply_mcp_group(g, opts, &mut rec);
+        if g.written {
+            if let Ok(path) = &g.path {
+                done.push(path_str(path));
+            }
+        }
+    }
+    Ok(done)
 }
 
 fn report(specs: &[AgentSpec], plan: &Plan, rec: &Record, dry_run: bool) -> PackReport {

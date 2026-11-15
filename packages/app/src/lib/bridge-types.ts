@@ -489,6 +489,11 @@ export interface BridgeClient {
    * applies, so a locked agent answers 403). Absent on old PCs.
    */
   paneArtifact?(paneId: string, id: string, version?: number): Promise<PhoneArtifact>;
+  /**
+   * `POST /panes/{id}/artifacts/{artifactId}/share`: a read-only link to one version of a page that ends by itself (needs `control`).
+   * `link` is null when the PC has no public address. Absent on old PCs.
+   */
+  shareArtifact?(paneId: string, id: string, version: number, ttlHours?: number): Promise<{ link: string | null; version: number; expiresAt: number; reason?: string | null }>;
   /** `GET /panes/{id}/result[?patch=1]`: what the agent's last turn did (needs `watch`). Absent on old PCs. */
   paneResult?(paneId: string, withPatch?: boolean): Promise<PaneResult>;
   /** `DELETE /panes/{id}/messages/{messageId}`: cancels a message that has not started to be typed (needs `type`). */

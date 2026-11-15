@@ -17,9 +17,9 @@ fn catalog_version_moved_when_the_listed_surface_was_introduced() {
     let version = catalog_version();
     assert_ne!(version, CATALOG_VERSION_BEFORE_SURFACE);
     // 68 tools before the Team tools were added (team_roster, team_events, team_wait, team_notify): 72, then 73 with companion_recall.
-    // The five agent browser tools (browser_open, browser_read, browser_click, browser_type, browser_console) are the 77th to 81st (show_artifact is the 76th).
-    assert!(version.starts_with("81-"), "{version}");
-    assert_eq!(external_mcp_tool_count(), 81);
+    // The five agent browser tools (browser_open, browser_read, browser_click, browser_type, browser_console) are the 77th to 81st (show_artifact is the 76th); the three project guide tools (read_guide_structure, read_guide_page, ask_guide) are the 82nd to 84th.
+    assert!(version.starts_with("84-"), "{version}");
+    assert_eq!(external_mcp_tool_count(), 84);
 }
 
 #[test]
@@ -126,7 +126,7 @@ fn listed_tool_count_per_mode_is_pinned() {
     assert_eq!(names_for(McpMode::Shell).len(), 16, "{:?}", names_for(McpMode::Shell));
     assert_eq!(names_for(McpMode::Both).len(), 12, "{:?}", names_for(McpMode::Both));
     // The full list behind mode `all`: every tool except the six aliases.
-    assert_eq!(names_for(McpMode::All).len(), 81 - ALIASES.len());
+    assert_eq!(names_for(McpMode::All).len(), 84 - ALIASES.len());
     assert_eq!(names_for(McpMode::All).len() + ALIASES.len(), external_mcp_tool_count());
 }
 
@@ -190,11 +190,11 @@ fn unlisted_advanced_tools_are_still_callable_where_they_were() {
 fn nothing_became_callable_or_uncallable_in_agent_and_shell_modes() {
     // The callable sets of agent and shell are the pre-change lists (33 and 18 names, with
     // set_mode counted in agent mode only through its always-visible rule), plus the four Team
-    // tools in agent mode only. companion_recall (agent, both, all) is the 73rd; run_agents and review_agent are the 74th and 75th; show_artifact (agent, both, all) is the 76th; the five browser tools (agent, both, all) are the 77th to 81st.
-    assert_eq!(callable_tools_for_mode(McpMode::Agent).len(), 46);
+    // tools in agent mode only. companion_recall (agent, both, all) is the 73rd; run_agents and review_agent are the 74th and 75th; show_artifact (agent, both, all) is the 76th; the five browser tools (agent, both, all) are the 77th to 81st; the three project guide tools (agent, both, all) are the 82nd to 84th.
+    assert_eq!(callable_tools_for_mode(McpMode::Agent).len(), 49);
     assert_eq!(callable_tools_for_mode(McpMode::Shell).len(), 19);
-    assert_eq!(callable_tools_for_mode(McpMode::Both).len(), 81);
-    assert_eq!(callable_tools_for_mode(McpMode::All).len(), 81);
+    assert_eq!(callable_tools_for_mode(McpMode::Both).len(), 84);
+    assert_eq!(callable_tools_for_mode(McpMode::All).len(), 84);
 }
 
 #[test]

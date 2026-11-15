@@ -13,6 +13,7 @@ mod channels;
 mod chat;
 mod chat_more;
 mod browser_mcp;
+mod guide_mcp;
 mod companion_mcp;
 mod checkpoints;
 mod chats;
@@ -107,6 +108,7 @@ pub(super) fn dispatch(cx: &Ctx) -> Option<RouteResult> {
         .or_else(|| team_mcp::handle(cx))
         .or_else(|| companion_mcp::handle(cx))
         .or_else(|| browser_mcp::handle(cx))
+        .or_else(|| guide_mcp::handle(cx))
         .or_else(|| team::handle(cx))
         .or_else(|| attention::handle(cx))
         .or_else(|| companions::handle(cx))

@@ -104,10 +104,15 @@
 .cockpit[data-focus-mode] > .ck-resize--side,
 .cockpit[data-focus-mode] .ck-rail,
 .cockpit[data-focus-mode] .ck-resize--rail,
-.cockpit[data-focus-mode] .ck-ptabs {
+.cockpit[data-focus-mode] .ck-hbar {
   display: none;
 }
 .cockpit[data-focus-mode] .ck-split-cols > .ck-split-col:not(:has(.is-focused)) {
+  display: none;
+}
+.cockpit[data-focus-mode] .ck-split-wide > .ck-split-rowdivider,
+.cockpit[data-focus-mode] .ck-split-wide > .ck-split-side:not(.is-focused),
+.cockpit[data-focus-mode] .ck-split-wide-top:not(:has(.is-focused)) {
   display: none;
 }
 .cockpit[data-focus-mode] .ck-split-col .ck-split-side:not(.is-focused) {

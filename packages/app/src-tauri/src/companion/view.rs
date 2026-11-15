@@ -4,7 +4,7 @@
 //! event) never does: it also has the folder's name removed from every sentence and goes through the
 //! same redaction as the chat.
 
-use super::model::{CompanionProfile, CompanionState, CompanionView, NeedsRef, NextCheckIn, QueuedMove};
+use super::model::{BodyView, CompanionProfile, CompanionState, CompanionView, NeedsRef, NextCheckIn, QueuedMove};
 
 /// What the service knows about a companion right now, besides its saved profile.
 #[derive(Clone, Debug)]
@@ -23,6 +23,10 @@ pub struct Live {
     pub queued_move: Option<QueuedMove>,
     /// The home folder is too broad (`broad::problem_of`).
     pub home_problem: Option<super::broad::HomeProblem>,
+    /// This is the default companion (`store::resolve_default`).
+    pub is_default: bool,
+    /// How it feels; only while the Labs switch `companion_vault_enabled` is on.
+    pub body: Option<BodyView>,
 }
 
 /// The last path segment of a folder (either slash), or the whole text when it has none.
@@ -42,6 +46,8 @@ pub fn build(profile: &CompanionProfile, live: &Live) -> CompanionView {
         id: profile.id.clone(),
         name: profile.name.clone(),
         avatar: profile.avatar.clone(),
+        accent: profile.look.as_ref().map(|l| l.accent.clone()),
+        is_default: live.is_default,
         persona: profile.persona.clone(),
         agent_type: profile.agent_type.clone(),
         agent_label: live.agent_label.clone(),
@@ -63,6 +69,7 @@ pub fn build(profile: &CompanionProfile, live: &Live) -> CompanionView {
         until_ms: profile.until_ms,
         queued_move: live.queued_move.clone(),
         home_problem: live.home_problem.clone(),
+        body: live.body.clone(),
     }
 }
 
@@ -100,6 +107,7 @@ mod tests {
             id: "mochi".into(),
             name: "Mochi".into(),
             avatar: "mochi".into(),
+            look: None,
             persona: "calm".into(),
             agent_type: "claude".into(),
             launch_args: vec![],
@@ -132,6 +140,8 @@ mod tests {
             previous_agent_label: None,
             queued_move: None,
             home_problem: None,
+            is_default: true,
+            body: None,
         }
     }
 

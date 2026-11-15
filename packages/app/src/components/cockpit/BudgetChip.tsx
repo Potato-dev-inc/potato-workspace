@@ -14,6 +14,7 @@ import {
 } from '../../lib/budgets';
 import '../../styles/chips.css';
 import '../../styles/budgets.css';
+import { useDismissable } from '../../hooks/useDismissable';
 
 export function BudgetChip({
   paneId,
@@ -31,19 +32,7 @@ export function BudgetChip({
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  useDismissable(open, { inside: [wrap], anchor: wrap, onDismiss: () => setOpen(false) });
 
   if (!view) return null;
 

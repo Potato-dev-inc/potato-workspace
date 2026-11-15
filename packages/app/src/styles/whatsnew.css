@@ -1,0 +1,282 @@
+/* What's new: the after-update card, the tour dialog, the Feature guide and the Help menu. Tokens only. */
+.cockpit .wn-newtag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.cockpit .wn-sp {
+  flex: 1;
+}
+/* after-update card: bottom right, does not block work */
+.cockpit .wn-upcard {
+  position: fixed;
+  right: 14px;
+  bottom: 42px;
+  width: 300px;
+  max-width: calc(100vw - 28px);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: var(--bg-float);
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  box-shadow: var(--float-shadow);
+  color: var(--label);
+  z-index: 45;
+}
+.cockpit .wn-uphd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cockpit .wn-uphd b {
+  font-weight: 600;
+}
+.cockpit .wn-upx {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--label-2);
+  font-size: 16px;
+  line-height: 1;
+}
+.cockpit .wn-upx:hover {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .wn-upcard p {
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--fs-meta);
+}
+.cockpit .wn-upr {
+  display: flex;
+  gap: 6px;
+}
+/* tour dialog */
+.cockpit .wn-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+.cockpit .wn-tour {
+  width: min(780px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--label);
+  border: 1px solid var(--sep);
+  border-radius: 14px;
+  box-shadow: var(--float-shadow);
+}
+.cockpit .wn-stage {
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: var(--bg-side);
+  border-right: 1px solid var(--sep);
+}
+.cockpit .wn-stage .wn-demo {
+  width: 100%;
+}
+.cockpit .wn-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 300px;
+  padding: 16px 18px 14px;
+}
+.cockpit .wn-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label-3);
+  font-size: var(--fs-meta);
+}
+.cockpit .wn-h {
+  margin: 10px 0 0;
+  font-size: var(--fs-title);
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.cockpit .wn-line {
+  margin: 0;
+  color: var(--label-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.cockpit .wn-try {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+.cockpit .wn-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+.cockpit .wn-dots {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+}
+.cockpit .wn-dots button {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+}
+.cockpit .wn-dots button::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--label-4);
+  transition:
+    width var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+.cockpit .wn-dots button[aria-current='true']::after {
+  width: 14px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+@media (max-width: 640px) {
+  .cockpit .wn-tour {
+    grid-template-columns: 1fr;
+  }
+  .cockpit .wn-stage {
+    padding: 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--sep);
+  }
+  .cockpit .wn-txt {
+    min-height: 220px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .wn-dots button::after {
+    transition: none;
+  }
+}
+/* Feature guide */
+.cockpit .wn-guide {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 22px 24px 80px;
+}
+.cockpit .wn-ghead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 6px;
+}
+.cockpit .wn-ghead input {
+  height: 28px;
+  width: 220px;
+  padding: 0 10px;
+  border: 1px solid var(--sep);
+  border-radius: 7px;
+  background: var(--bg-raised);
+  color: var(--label);
+}
+.cockpit .wn-gsub {
+  margin: 0 0 6px;
+  color: var(--label-3);
+}
+.cockpit .wn-garea {
+  margin: 22px 0 8px;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  color: var(--label-3);
+}
+.cockpit .wn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+.cockpit .wn-gcard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  border-radius: 10px;
+}
+.cockpit .wn-gcard h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.cockpit .wn-gcard p {
+  flex: 1;
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+}
+.cockpit .wn-gtry {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+/* Help menu (sidebar footer) */
+.cockpit .wn-help-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cockpit .wn-help-item .wn-newtag {
+  margin-left: auto;
+}
+.wn-set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.cockpit .wn-page {
+  height: 100%;
+  overflow: auto;
+  min-width: 0;
+}
+
+/* The phone's sheet: one column, demo on top of each card. */
+.wn-phone {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px 0 8px;
+}
+.wn-phone-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--sep);
+}
+.wn-phone-demo .wn-demo {
+  width: 100%;
+}
+.wn-phone-card .wn-h {
+  margin: 0;
+  font-size: 16px;
+}
+.wn-phone-card .wn-line {
+  margin: 0;
+  color: var(--label-2);
+}

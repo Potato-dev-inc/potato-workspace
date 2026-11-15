@@ -20,7 +20,7 @@ fn summary(receipt: Option<ReceiptFacts>) -> TurnSummary {
 }
 
 fn change(path: &str, added: u32, deleted: u32) -> FileChange {
-    FileChange { path: path.into(), status: "M".into(), added, deleted, binary: false }
+    FileChange { path: path.into(), status: "M".into(), added, deleted, binary: false, line_endings_only: false }
 }
 
 #[test]

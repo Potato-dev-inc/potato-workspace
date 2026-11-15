@@ -3,7 +3,7 @@
 // that pane runs them. When the pane is not the open one yet it is selected first, so the request waits here
 // until its view mounts.
 
-export type PaneAction = 'rename' | 'reflow' | 'copy' | 'details' | 'close';
+export type PaneAction = 'rename' | 'reflow' | 'copy' | 'details' | 'close' | 'guide';
 
 const EVENT = 'pm:pane-action';
 /** A request nobody picked up in this time (its pane never opened) is dropped. */

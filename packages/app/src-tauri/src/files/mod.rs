@@ -359,8 +359,10 @@ pub fn reveal(root: &str, rel: &str) -> Result<(), String> {
     }
 }
 
+mod search;
 mod stream;
 mod write;
+pub use search::{begin_search, cancel_search, end_search, search_contents, ContentSearch};
 pub use stream::{open_info, preflight, serve, split_request_path, FileStreamInfo, StreamReply};
 pub use write::{write_file, FileSaved};
 #[cfg(test)]

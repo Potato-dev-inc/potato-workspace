@@ -130,6 +130,8 @@ export const settingsRows: Partial<Record<EnglishKey, string>> = {
   'settings.row.lend-labs.hint': '把登入借給另一台電腦，或向別人借用。會在「連結」新增一張卡片。',
   'settings.row.desktop-potato-labs.hint': '桌面上的小馬鈴薯。平常在睡覺，AI 助理需要你時會揮手。',
   'settings.row.agent-browser-labs.hint': 'AI 助理可開啟並點擊你的應用程式頁面，只限這台電腦。你隨時可接手。',
+  'settings.row.companion-vault-labs.hint': '夥伴會寫日誌和日記，也會顯示自己的心情。檔案是純文字。',
+  'settings.row.discord-bot-labs.hint': '夥伴會在你選的 Discord 頻道裡回答，用你自己的機器人。',
   'settings.row.telegram.hint': '用 Telegram 文字訊息回覆你的 AI 助理。請先閱讀警告。',
   'settings.row.storage.hint': '任務、檔案鎖，以及每個窗格發生過的事，都是依專案保存。',
   'settings.row.settings-file.hint': '你的設定存放的位置。可以匯出一份不含金鑰的副本。',

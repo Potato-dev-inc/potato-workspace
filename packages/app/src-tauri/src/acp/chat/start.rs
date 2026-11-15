@@ -173,7 +173,13 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     // A session started ahead of time for this agent, folder and account (`acp::warm`): the same chat, minus the adapter's
     // startup. The checks below ran when it was warmed; nothing about the chat differs.
     let account_id = account_env.as_ref().map(|(id, _)| id.clone());
-    let warm = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_waiting(&cfg, &folder, account_id.as_deref(), WARM_WAIT));
+    // A standby helper the person made that fits this start comes first (agent, folder, account, and a model that agrees); a
+    // helper that is still starting is not waited for here, a plain warm session is.
+    let helper = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_helper(&cfg, &folder, account_id.as_deref(), request.model.as_deref(), std::time::Duration::ZERO));
+    let (warm, helper_meta) = match helper {
+        Some((warm, meta)) => (Some(warm), Some(meta)),
+        None => (deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_waiting(&cfg, &folder, account_id.as_deref(), WARM_WAIT)), None),
+    };
     crate::startup_timing::mark(&timing_key, if warm.is_some() { "chat_warm_hit" } else { "chat_warm_miss" });
     if warm.is_none() {
         // A reviewed adapter whose last health check failed (or that fails now, when its agent's version is not the tested
@@ -247,9 +253,11 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     crate::startup_timing::mark(&pane_id, "chat_session_ready");
 
     // The starting model: request, helper default, app setting, last pick, the agent's own default (`default_model::choose`).
-    super::default_model::apply_at_start(&chat, request.model.as_deref(), request.is_helper);
+    // A standby helper's own model counts as asked for, when the task named none.
+    let model = request.model.clone().or_else(|| helper_meta.as_ref().and_then(|meta| meta.model.clone()));
+    super::default_model::apply_at_start(&chat, model.as_deref(), request.is_helper);
     // The pins of the project (model, mode, Force yes) and the agent's own Force yes switch (`rules.rs`).
-    super::rules::apply_at_start(&chat, request.model.is_some());
+    super::rules::apply_at_start(&chat, model.is_some());
 
     let on_close = {
         let pane_id = pane_id.clone();

@@ -6,6 +6,7 @@ afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
   document.documentElement.removeAttribute('data-theme');
+  document.documentElement.removeAttribute('data-tone');
 });
 
 describe('phone theme', () => {
@@ -30,6 +31,19 @@ describe('phone theme', () => {
     expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#fdfcfa');
     applyPhoneTheme('dark');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+  it('Dimmed is the light theme with data-tone=dim; any other choice removes the tone', () => {
+    document.head.innerHTML = '<meta name="theme-color" content="#000">';
+    expect(parsePhoneTheme('dim')).toBe('dim');
+    expect(resolvePhoneTheme('dim')).toBe('light');
+    applyPhoneTheme('dim');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.dataset.tone).toBe('dim');
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#ece8e1');
+    applyPhoneTheme('light');
+    expect(document.documentElement.dataset.tone).toBeUndefined();
+    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#fdfcfa');
   });
   it('set keeps the choice and tells the page', () => {
     const seen = vi.fn();

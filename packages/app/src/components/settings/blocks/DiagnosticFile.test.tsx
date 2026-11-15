@@ -126,6 +126,7 @@ describe('the open list keeps itself current', () => {
 describe('Speed on this PC and the closed-unexpectedly line', () => {
   const stat = (count: number, medianMs: number | null, lastMs: number | null) => ({ count, medianMs, lastMs });
   const none = stat(0, null, null);
+  const base = { firstReply: none, setupCheck: none, warmHits: 0, warmMisses: 0, startupSteps: [], startupTotalMs: null };
 
   afterEach(() => {
     mocks.lastRun = { closedUnexpectedly: false, crashedAtMs: null };
@@ -139,19 +140,60 @@ describe('Speed on this PC and the closed-unexpectedly line', () => {
   }
 
   it('is part of the screen: shows typical and latest times in plain words', async () => {
-    mocks.perf = { appStart: stat(3, 1500, 1400), chatWarm: stat(2, 400, 350), chatCold: stat(1, 2100, 2100), handshake: none };
+    mocks.perf = { ...base, appStart: stat(3, 1500, 1400), chatWarm: stat(2, 400, 350), chatCold: stat(1, 2100, 2100), handshake: none };
     await remount();
     expect(m.host.textContent).toContain('Speed on this PC');
-    expect(m.host.textContent).toContain('Starting a chat that was ready ahead of time');
-    expect(m.host.textContent).toContain('usually 1.5 s, last time 1.4 s (3 times)');
-    expect(m.host.textContent).toContain('usually 400 ms');
+    const row = (id: string) => [...m.host.querySelectorAll('[data-speed-row]')].find((r) => r.getAttribute('data-speed-row') === id)!;
+    expect(row('chatWarm').textContent).toContain('Starting a chat that was ready ahead of time');
+    expect([...row('appStart').querySelectorAll('td')].map((c) => c.textContent)).toEqual(['1.5 s', '1.4 s', '3']);
+    expect(row('chatWarm').querySelector('td')!.textContent).toBe('400 ms');
     expect(m.host.textContent).not.toContain('Waiting for the agent to say hello');
+    expect(m.host.querySelectorAll('[data-testid="speed-slow"]').length).toBe(0);
   });
 
   it('says so when nothing has been measured yet', async () => {
-    mocks.perf = { appStart: none, chatWarm: none, chatCold: none, handshake: none };
+    mocks.perf = { ...base, appStart: none, chatWarm: none, chatCold: none, handshake: none };
     await remount();
     expect(m.host.textContent).toContain('Nothing measured yet');
+  });
+
+  it('marks the slow ones, shows the app start step by step, and the share of ready-made chat starts', async () => {
+    mocks.perf = {
+      ...base,
+      appStart: none,
+      chatWarm: stat(2, 400, 350),
+      chatCold: stat(4, 9000, 8000),
+      handshake: none,
+      firstReply: stat(5, 2500, 3000),
+      setupCheck: stat(2, 600, 600),
+      warmHits: 1,
+      warmMisses: 5,
+      startupSteps: [{ name: 'bridge', stepMs: 2200 }, { name: 'pty_cleanup', stepMs: 3 }],
+      startupTotalMs: 3100,
+    };
+    await remount();
+    const slow = [...m.host.querySelectorAll('[data-speed-row][data-slow="true"]')].map((r) => r.getAttribute('data-speed-row'));
+    expect(slow).toEqual(['step:bridge', 'chatCold', 'warm']);
+    expect(m.host.textContent).toContain('App start: bridge');
+    expect(m.host.textContent).not.toContain('pty cleanup');
+    expect(m.host.textContent).toContain('First sign of an answer');
+    expect(m.host.textContent).toContain('Checking my setup');
+    expect(m.host.textContent).toContain('1 of 6');
+  });
+
+  it('Copy for support puts the numbers on the clipboard as plain text, with the slow marks', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    mocks.perf = { ...base, appStart: none, chatWarm: none, chatCold: stat(4, 9000, 8000), handshake: none };
+    await remount();
+    const copy = [...m.host.querySelectorAll('button')].find((b) => b.textContent === 'Copy for support')!;
+    await act(async () => copy.click());
+    await settle();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const text = (writeText.mock.calls[0] as unknown as [string])[0];
+    expect(text).toContain('Speed report');
+    expect(text).toContain('Starting a chat from scratch: 9.0 s (last 8.0 s), seen 4 [Slow]');
+    expect(m.host.textContent).toContain('Copied');
   });
 
   it('shows no closed-unexpectedly line after a normal run', async () => {

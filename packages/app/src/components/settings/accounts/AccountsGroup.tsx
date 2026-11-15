@@ -15,6 +15,7 @@ import {
 import { agentLabel, useAgentRegistry } from '../../../lib/agentRegistry';
 import { SettingBlock, Tip } from '../settings-ui';
 import { CodeText } from '../../common/CodeText';
+import { openSettingsAt } from '../../../lib/openSettingsAt';
 
 const BTN = 'rounded-lg border border-pm-border px-3 py-1.5 text-xs font-medium hover:bg-pm-border/40 disabled:opacity-50';
 
@@ -86,7 +87,10 @@ export function AccountsGroup({ api = tauriAccountsApi, only }: { api?: Accounts
       )}
       <div className="space-y-4">
         {shownAgents.map((agent) => {
-          const mine = accountsFor(data.accounts, agent.agent_id);
+          const all = accountsFor(data.accounts, agent.agent_id);
+          // Sign-ins made by Lend are listed apart, by their lend profile's name.
+          const mine = all.filter((a) => !a.lend_only);
+          const lending = all.filter((a) => a.lend_only);
           const draft = drafts[agent.agent_id] ?? '';
           return (
             <section key={agent.agent_id} aria-label={t('accounts.signIns', { agent: agent.agent_id })} data-testid={`accounts-${agent.agent_id}`}>
@@ -135,6 +139,23 @@ export function AccountsGroup({ api = tauriAccountsApi, only }: { api?: Accounts
                   </li>
                 ))}
               </ul>
+              {lending.length > 0 && (
+                <div className="mt-3" data-testid={`lending-${agent.agent_id}`}>
+                  <h5 className="text-xs font-medium">{t('accounts.usedForLending')}</h5>
+                  <p className="mt-0.5 text-xs text-pm-muted">{t('accounts.usedForLendingHelp')}</p>
+                  <ul className="mt-1 divide-y divide-pm-border rounded-lg border border-pm-border">
+                    {lending.map((a) => (
+                      <li key={a.id} className="flex items-center gap-2 px-3 py-2">
+                        <span className="min-w-0 flex-1 truncate text-sm">{a.lend_profile || t('accounts.lendNoProfile')}</span>
+                        <span className="text-xs text-pm-muted">{t('accounts.lendProfileTag')}</span>
+                        <button type="button" className={BTN} onClick={() => openSettingsAt('lend')}>
+                          {t('accounts.openLend')}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="mt-3 flex items-center gap-2" data-testid={`helper-login-${agent.agent_id}`}>
                 <label htmlFor={`helper-login-${agent.agent_id}`} className="text-xs text-pm-muted">
                   {t('accounts.runHelpers')}

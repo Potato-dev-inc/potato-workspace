@@ -20,6 +20,9 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "devices_enabled",
     "desktop_pet_enabled",
     "agent_browser_enabled",
+    "companion_vault_enabled",
+    "discord_bot_enabled",
+    "project_guide_enabled",
 ];
 
 /// Tests turn the override on through this; it is off in every test unless a test sets it.
@@ -75,6 +78,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "away_minutes",
     "budget_default_turns",
     "budget_default_minutes",
+    "right_size_suggest",
     "agent_hooks_mode",
     "agent_hooks_agents",
     "pane_mcp_enabled",
@@ -90,6 +94,9 @@ const PATCHABLE_KEYS: &[&str] = &[
     "devices_enabled",
     "desktop_pet_enabled",
     "agent_browser_enabled",
+    "companion_vault_enabled",
+    "discord_bot_enabled",
+    "project_guide_enabled",
     "desktop_pet_size",
     "desktop_pet_quiet",
     "desktop_pet_hidden_until_ms",
@@ -115,6 +122,7 @@ pub fn default_public_settings() -> Value {
         // Budgets: 0 = off, which is today's behaviour.
         "budget_default_turns": 0,
         "budget_default_minutes": 0,
+        "right_size_suggest": true,
         // Hook Lane (founder decision 2026-10-14): watch-only hooks for agents that declare them.
         "agent_hooks_mode": "shadow",
         "agent_hooks_agents": {},
@@ -146,6 +154,12 @@ pub fn default_public_settings() -> Value {
         "desktop_pet_enabled": false,
         // Agent browser (Labs): agents open, read and click pages on this computer, in the Point and Fix preview window. Off until chosen. Rust: browser.
         "agent_browser_enabled": false,
+        // Companion memory and mood (Labs): journal, diary and mood for each companion. Off until chosen.
+        "companion_vault_enabled": false,
+        // Discord bot (Labs): a companion answers in the Discord channels the person lists, with their own bot. Off until chosen.
+        "discord_bot_enabled": false,
+        // Project guide (Labs): the person's agent writes a short guide to a project, only when asked. Off until chosen. Rust: project_guide.
+        "project_guide_enabled": false,
         "desktop_pet_size": "medium",
         "desktop_pet_quiet": false,
         "desktop_pet_hidden_until_ms": 0,
@@ -214,6 +228,7 @@ fn apply_public_settings(effective: &Value) {
     crate::device_link::app::apply_settings(effective);
     crate::keep_awake::apply_settings(effective);
     crate::pet::apply_settings(effective);
+    crate::discord_bot::apply_settings(effective);
 }
 
 /// Merge `patch` into the public mirror (bridge state + mobile SSE) without any window event.
@@ -431,6 +446,28 @@ mod spaces_labs_tests {
         assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "desktop_pet_enabled").count(), 1);
         assert!(PATCHABLE_KEYS.contains(&"desktop_pet_enabled"));
         assert_eq!(default_public_settings()["desktop_pet_enabled"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn companion_vault_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "companion_vault_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"companion_vault_enabled"));
+        assert_eq!(default_public_settings()["companion_vault_enabled"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn discord_bot_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "discord_bot_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"discord_bot_enabled"));
+        assert_eq!(default_public_settings()["discord_bot_enabled"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn project_guide_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "project_guide_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"project_guide_enabled"));
+        assert_eq!(default_public_settings()["project_guide_enabled"], serde_json::json!(false));
+        assert_eq!(crate::project_guide::LABS_KEY, "project_guide_enabled");
     }
 
     #[test]

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { setChatViewDefault } from './chatViewMode';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -11,6 +12,7 @@ let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  setChatViewDefault('normal'); // these tests were written for the Normal view; the default for new chats is Summary
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -143,7 +145,7 @@ describe('SessionChatView ready', () => {
 
   it('folds the tool rows of a turn into one activity line; a click opens the rows, and a row opens its output', () => {
     render({ state: 'ready', turns: turnsFrom(SAMPLE) });
-    const line = host.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+    const line = host.querySelector<HTMLButtonElement>('button[aria-expanded]:not(.ck-chat-mode-pill)')!;
     expect(line.textContent).toBe('Ran 1 command');
     expect(text()).not.toContain('README.md');
     expect(host.querySelector('.ck-chat-row')).toBeNull();
@@ -173,7 +175,7 @@ describe('SessionChatView ready', () => {
       { kind: 'toolCall', id: '2:0', at: null, callId: 'c9', name: 'Edit', summary: 'src/a.ts' },
     ];
     render({ state: 'ready', turns: turnsFrom(items) });
-    const line = host.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+    const line = host.querySelector<HTMLButtonElement>('button[aria-expanded]:not(.ck-chat-mode-pill)')!;
     expect(line.textContent).toBe('Working · Edit src/a.ts');
     expect(host.querySelector('[aria-label="Working"]')).not.toBeNull();
     act(() => line.click());
@@ -239,7 +241,7 @@ describe('SessionChatView read from the screen', () => {
 
   it('counts the rows of a screen chat in the activity line, and a row shows just its text and says output is not read', () => {
     render({ state: 'ready', source: 'screen', turns: turnsFrom(SCREEN) });
-    const line = host.querySelector('button[aria-expanded]') as HTMLButtonElement;
+    const line = host.querySelector('button[aria-expanded]:not(.ck-chat-mode-pill)') as HTMLButtonElement;
     expect(line.textContent).toBe('Ran 1 command');
     act(() => line.click());
     const row = host.querySelector('.ck-chat-row button') as HTMLButtonElement;

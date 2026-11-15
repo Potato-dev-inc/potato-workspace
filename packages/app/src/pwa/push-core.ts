@@ -6,6 +6,8 @@ export interface PushAct {
   url: string;
   /** One-shot token bound to one prompt on one pane. */
   token: string;
+  /** A simple yes/no question: the buttons say Yes / No and answer with `yes` / `no`. */
+  yes_no?: boolean;
 }
 
 export interface PushPayload {
@@ -21,6 +23,8 @@ export interface PushPayload {
   target?: 'questions';
 }
 
+export type PushChoice = 'allow' | 'deny' | 'yes' | 'no';
+
 export interface NotificationPlan {
   title: string;
   options: {
@@ -30,7 +34,7 @@ export interface NotificationPlan {
     icon: string;
     badge: string;
     data: { pane_id?: string; item_id?: string; act?: PushAct; target?: 'questions' };
-    actions?: { action: 'allow' | 'deny'; title: string }[];
+    actions?: { action: PushChoice; title: string }[];
   };
 }
 
@@ -61,7 +65,7 @@ export function parsePushPayload(text: string | null | undefined): PushPayload {
       pane_id: str(raw.pane_id, 80),
       item_id: str(raw.item_id, 40),
       prompt_id: str(raw.prompt_id, 80),
-      act: actUrl && actToken && actUrl.startsWith('/') ? { url: actUrl, token: actToken } : undefined,
+      act: actUrl && actToken && actUrl.startsWith('/') ? { url: actUrl, token: actToken, ...(actRaw?.yes_no === true ? { yes_no: true } : {}) } : undefined,
       target: raw.target === 'questions' ? 'questions' : undefined,
     };
   } catch {
@@ -80,17 +84,22 @@ export function planNotification(payload: PushPayload, iconBase = '/'): Notifica
       badge: `${iconBase}icon-192.png`,
       data: { pane_id: payload.pane_id, item_id: payload.item_id, act: payload.act, target: payload.target },
       actions: payload.act
-        ? [
-            { action: 'allow', title: 'Allow' },
-            { action: 'deny', title: 'Deny' },
-          ]
+        ? payload.act.yes_no
+          ? [
+              { action: 'yes', title: 'Yes' },
+              { action: 'no', title: 'No' },
+            ]
+          : [
+              { action: 'allow', title: 'Allow' },
+              { action: 'deny', title: 'Deny' },
+            ]
         : undefined,
     },
   };
 }
 
 export type ClickIntent =
-  | { type: 'answer'; url: string; token: string; choice: 'allow' | 'deny' }
+  | { type: 'answer'; url: string; token: string; choice: PushChoice }
   | { type: 'open'; paneId: string | null; itemId?: string | null; view?: 'questions' };
 
 /** What a tap on the notification (or one of its buttons) should do. */
@@ -98,8 +107,11 @@ export function clickIntent(
   action: string,
   data: { pane_id?: string; item_id?: string; act?: PushAct; target?: 'questions' } | undefined,
 ): ClickIntent {
-  if ((action === 'allow' || action === 'deny') && data?.act) {
-    return { type: 'answer', url: data.act.url, token: data.act.token, choice: action };
+  // Allow / Deny belong to an approval's token and Yes / No to a question's: a button that does not
+  // match the token opens the app instead of answering.
+  const matches = data?.act?.yes_no === true ? action === 'yes' || action === 'no' : action === 'allow' || action === 'deny';
+  if (data?.act && matches) {
+    return { type: 'answer', url: data.act.url, token: data.act.token, choice: action as PushChoice };
   }
   return {
     type: 'open',

@@ -1022,6 +1022,8 @@ fn phone_team_routes_follow_device_caps_and_refuse_agents() {
         drafts: vec![],
         cards: vec![],
         jobs: vec![],
+        presence: vec![],
+        share: super::presence::ShareView { level: Default::default(), exclude: vec![] },
     };
     let json = phone::cards_view(view, phone::can(&answer));
     assert_eq!(json["can"], serde_json::json!({ "dismiss": true, "act": false }));

@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CockpitApp from './CockpitApp';
 import { startDrag } from './components/dnd/dragStore';
+import { setStandbys } from './lib/helper-standbys';
 import { resetSideWidth, setSideWidth } from './lib/panel-widths';
 import { setFocusMode } from './lib/focus-mode';
 import { requestGoLive, type LiveStatus } from './lib/live-room';
@@ -14,6 +15,8 @@ import { requestGettingStarted } from './lib/getting-started';
 import { resetUndoBar, showUndo } from './lib/undo-bar';
 import { reportProblem, resetProblems } from './lib/problems';
 import { devicesApi } from './lib/devices';
+import { tauri } from './lib/tauri';
+import { deskStore, setDeskSheetOpen, NOT_AWAY, type DeskAway } from './lib/desk-away';
 import { MAC_MINI, NODE_MAC } from './dev/devices-fixtures';
 
 // Mutable per-test input for the digest (away) path.
@@ -30,6 +33,10 @@ const cockpit = vi.hoisted(() => ({
   ready: false,
   // More panes than p1 and p2 (the split grid needs up to four). None by default, so other tests see two.
   extraIds: [] as string[],
+  // A helper's parent: { p2: 'p1' } makes p2 a helper of p1 (the helpers bar then shows it).
+  parents: {} as Record<string, string>,
+  // Panes that are working or need you (status by id); the rest are idle.
+  statuses: {} as Record<string, string>,
   // The first-switch sheet the (mocked) hook reports, and what Switch / Cancel did.
   explainer: { open: false, confirm: (async () => {}) as (d: boolean) => Promise<void>, cancel: () => {} },
 }));
@@ -50,6 +57,13 @@ const rust = vi.hoisted(() => ({
   openView: null as null | ((e: { view: string; bot?: string | null }) => void),
 }));
 
+// The companions the (mocked) list hook reports: null is no companion backend.
+const comps = vi.hoisted(() => ({ list: null as null | object[] }));
+vi.mock('./hooks/useCompanions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./hooks/useCompanions')>()),
+  useCompanions: () => ({ companions: comps.list, refresh: () => {} }),
+}));
+
 // The devices state the (mocked) group hook reports: null is the Labs switch off.
 const dev = vi.hoisted(() => ({ view: null as null | { enabled: boolean; devices: unknown[] } }));
 vi.mock('./components/devices/useDeviceGroups', () => ({
@@ -62,7 +76,7 @@ vi.mock('./hooks/useCockpit', async () => {
     useCockpit: () => {
       const [selectedId, setSelectedId] = useState<string | null>('p1');
       const ids = ['p1', 'p2', ...cockpit.extraIds];
-      const infoOf = (id: string) => ({ id, cwd: `/proj/${id}`, agent_type: `agent-${id}` });
+      const infoOf = (id: string) => ({ id, cwd: `/proj/${id}`, agent_type: `agent-${id}`, parent_pane_id: cockpit.parents[id] ?? null });
       return {
         selectedId,
         // Like the real hook: picking a pane keeps a running spawn and clears a failed one.
@@ -87,8 +101,8 @@ vi.mock('./hooks/useCockpit', async () => {
         names: new Map<string, string>(),
         registry: {
           spawnPane: (a: unknown) => imp.spawnPane(a),
-          paneList: ids.map((id) => ({ info: infoOf(id) })),
-          panes: new Map(ids.map((id) => [id, { info: infoOf(id), status: 'idle' }])),
+          paneList: ids.map((id) => ({ info: infoOf(id), status: cockpit.statuses[id] ?? 'idle' })),
+          panes: new Map(ids.map((id) => [id, { info: infoOf(id), status: cockpit.statuses[id] ?? 'idle' }])),
           initialReady: cockpit.ready,
         },
       };
@@ -195,24 +209,34 @@ vi.mock('./components/cockpit/Sidebar', async () => {
     onOpenReview?: () => void;
     onOpenMorning?: () => void;
     onOpenRoutines?: () => void;
+    onOpenTeam?: () => void;
     onOpenStore?: () => void;
     onOpenToSide?: (id: string) => void;
+    onOpenPlaced?: (id: string, where: 'left' | 'down') => void;
     onOpenNewAgent?: () => void;
     newAgentOpen?: boolean;
+    companions?: { id: string; name: string }[] | null;
+    onOpenCompanion?: (id: string) => void;
+    onNewCompanion?: () => void;
   };
   return {
-    Sidebar: ({ c, onOpenDoctor, onOpenMemory, onOpenScores, onOpenReview, onOpenMorning, onOpenRoutines, onOpenStore, onOpenToSide, onOpenNewAgent, newAgentOpen }: Props) =>
+    Sidebar: ({ c, onOpenDoctor, onOpenMemory, onOpenScores, onOpenReview, onOpenMorning, onOpenRoutines, onOpenTeam, onOpenStore, onOpenToSide, onOpenPlaced, onOpenNewAgent, newAgentOpen, companions, onOpenCompanion, onNewCompanion }: Props) =>
       h(
         'div',
         null,
+
         h('button', { type: 'button', onClick: onOpenDoctor }, 'Set up agents'),
         h('button', { type: 'button', onClick: () => onOpenNewAgent?.(), 'aria-current': newAgentOpen ? 'page' : undefined }, 'New agent row'),
         h('button', { type: 'button', onClick: () => onOpenToSide?.('p2') }, 'Open p2 to the side'),
+        h('button', { type: 'button', onClick: () => onOpenToSide?.('p3') }, 'Open p3 to the side'),
+        h('button', { type: 'button', onClick: () => onOpenPlaced?.('p2', 'left') }, 'Open p2 on the left'),
+        h('button', { type: 'button', onClick: () => onOpenPlaced?.('p3', 'down') }, 'Open p3 below'),
         h('button', { type: 'button', onClick: onOpenMemory }, 'Project memory'),
         h('button', { type: 'button', onClick: onOpenScores }, 'Scores'),
         h('button', { type: 'button', onClick: onOpenReview }, 'Review'),
         h('button', { type: 'button', onClick: onOpenMorning }, 'Night Shift chip'),
         h('button', { type: 'button', onClick: onOpenRoutines }, 'Routines row'),
+        h('button', { type: 'button', onClick: onOpenTeam }, 'Team row'),
         // The "More agents…" row of the "+" menu (its own wiring is tested in NewAgentMenu.test.tsx).
         h('button', { type: 'button', onClick: onOpenStore }, 'More agents…'),
         h('button', { type: 'button', onClick: () => void c.openSettings() }, 'Settings'),
@@ -220,6 +244,8 @@ vi.mock('./components/cockpit/Sidebar', async () => {
         ...c.registry.paneList.map((p) =>
           h('button', { key: p.info.id, type: 'button', onClick: () => c.select(p.info.id) }, `pane ${p.info.id}`),
         ),
+        ...(companions ?? []).map((x) => h('button', { key: x.id, type: 'button', onClick: () => onOpenCompanion?.(x.id) }, `companion ${x.name}`)),
+        h('button', { type: 'button', onClick: () => onNewCompanion?.() }, 'New companion row'),
       ),
   };
 });
@@ -242,6 +268,10 @@ vi.mock('./components/cockpit/ProjectMemory', async () => {
 vi.mock('./components/cockpit/routines/RoutinesPage', async () => {
   const { createElement: h } = await import('react');
   return { RoutinesPage: ({ onClose }: { onClose: () => void }) => h('div', null, 'ROUTINES VIEW', h('button', { type: 'button', onClick: onClose }, 'Close routines')) };
+});
+vi.mock('./components/team-page/TeamHost', async () => {
+  const { createElement: h } = await import('react');
+  return { TeamHost: () => h('div', null, 'TEAM VIEW') };
 });
 vi.mock('./components/cockpit/night/MorningPage', async () => {
   const { createElement: h } = await import('react');
@@ -293,7 +323,7 @@ vi.mock('./components/store/StoreHost', async () => {
 // The split view's own rendering is tested in SplitView.test.tsx; here only its wiring from CockpitApp.
 vi.mock('./components/cockpit/SplitView', async () => {
   const { createElement: h, useEffect, useState } = await import('react');
-  type Below = { leftDown: string | null; rightDown: string | null; leftRows: number; rightRows: number };
+  type Below = { leftDown: string | null; rightDown: string | null; leftRows: number; rightRows: number; wide?: boolean; stacked?: boolean };
   type Props = { leftId: string; rightId: string; focus: string; ratio: number; below?: Below; onClose: () => void; onFocus: (side: string) => void; onRatio: (r: number) => void; onCloseChat?: (slot: string) => void; onSplitDown?: (column: string) => void };
   return {
     useWindowWidth: () => {
@@ -305,11 +335,13 @@ vi.mock('./components/cockpit/SplitView', async () => {
       }, []);
       return w;
     },
-    SplitView: ({ leftId, rightId, focus, ratio, below, onClose, onFocus, onCloseChat, onSplitDown }: Props) =>
+    SplitView: ({ leftId, rightId, focus, ratio, below, onClose, onFocus, onRatio, onCloseChat, onSplitDown }: Props) =>
       h(
         'div',
         null,
-        `SPLIT VIEW ${leftId}|${rightId}|${focus}|${ratio}${below && (below.leftDown || below.rightDown) ? `|down:${below.leftDown ?? '-'},${below.rightDown ?? '-'}` : ''}`,
+        `SPLIT VIEW ${leftId}|${rightId}|${focus}|${ratio}${below && (below.leftDown || below.rightDown) ? `|down:${below.leftDown ?? '-'},${below.rightDown ?? '-'}` : ''}${below?.stacked ? '|stacked' : ''}${below?.wide ? '|wide' : ''}`,
+        h('button', { type: 'button', onClick: () => onRatio(0.58) }, 'Set divider 58'),
+        h('button', { type: 'button', onClick: () => onFocus('left') }, 'Focus left'),
         h('button', { type: 'button', onClick: onClose }, 'Close split'),
         h('button', { type: 'button', onClick: () => onSplitDown?.('left') }, 'Split down left'),
         h('button', { type: 'button', onClick: () => onCloseChat?.(focus) }, 'Close focused chat'),
@@ -404,11 +436,14 @@ let root: Root;
 beforeEach(async () => {
   away.digest = null;
   dev.view = null;
+  comps.list = null;
   ui.spawn = null;
   chatStart.starting = null;
   cockpit.mode = 'orchestration';
   cockpit.openSettings = vi.fn(async () => {});
   cockpit.ready = false;
+  cockpit.parents = {};
+  cockpit.statuses = {};
   live.status = { live: false, paused: false, viewers: 0, endsAtMs: 0, paneIds: [], hidden: 0, stopped: null };
   live.listeners = [];
   live.notes = [];
@@ -439,6 +474,12 @@ function clickButton(text: string) {
   act(() => button.click());
 }
 // The main view is the first child of <main>; the away digest, when shown, comes after it.
+// The work area is 1000 x 600 (the middle line is 452-548; below y = 408 is the bottom zone).
+const workAreaRect = () =>
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    const w = this.getAttribute('data-testid') === 'work-drop';
+    return { left: 0, right: w ? 1000 : 0, top: 0, bottom: w ? 600 : 0, width: w ? 1000 : 0, height: w ? 600 : 0, x: 0, y: 0, toJSON() {} } as DOMRect;
+  });
 const mainText = () => host.querySelector('main')?.firstElementChild?.textContent;
 
 describe('CockpitApp: the Used bar', () => {
@@ -566,6 +607,13 @@ describe('CockpitApp main view precedence', () => {
     expect(mainText()).toContain('ROUTINES VIEW');
     clickButton('Close routines');
     expect(mainText()).toBe('PANE VIEW p1');
+  });
+
+  it('Team: the sidebar row opens the page over the pane and the next pane click leaves it', () => {
+    clickButton('Team row');
+    expect(mainText()).toBe('TEAM VIEW');
+    clickButton('pane p2');
+    expect(mainText()).toBe('PANE VIEW p2');
   });
 
   it('Morning: the last click wins over Project memory', () => {
@@ -994,11 +1042,7 @@ describe('CockpitApp split view wiring', () => {
   });
 
   it('a chat dragged onto the right half opens beside the selected one; onto the left half it takes the left', () => {
-    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      const side = this.getAttribute('data-testid');
-      const [l, r] = side === 'dropzone-left' ? [0, 500] : side === 'dropzone-right' ? [500, 1000] : [0, 0];
-      return { left: l, right: r, top: 0, bottom: 600, width: r - l, height: 600, x: l, y: 0, toJSON() {} } as DOMRect;
-    });
+    workAreaRect();
     const move = (type: string, x: number) => act(() => void window.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: 50, button: 0 })));
     act(() => startDrag({ kind: 'chat', id: 'p2', label: 'p2' }, { clientX: 10, clientY: 10, button: 0 }));
     move('pointermove', 700);
@@ -1400,5 +1444,333 @@ describe('CockpitApp: devices connected to this PC', () => {
     expect(host.querySelector('[data-testid="connected-banner"]')).toBeNull();
     await show([{ ...MAC_MINI, lets_run: true, connected: true }], false);
     expect(host.querySelector('[data-testid="connected-banner"]')).toBeNull();
+  });
+});
+
+// Drag an agent onto the work area: the four zones, the 50/50 reset, replacing a side, Esc, and the layouts they build.
+describe('CockpitApp drop zones', () => {
+  const press = (init: KeyboardEventInit) => act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })));
+  const at = (type: string, x: number, y: number) => act(() => void window.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, button: 0 })));
+  /** Drags `id` from the sidebar to (x, y) and lets go there. */
+  const dragTo = (id: string, x: number, y: number, finish = true) => {
+    act(() => startDrag({ kind: 'chat', id, label: id }, { clientX: 10, clientY: 10, button: 0 }));
+    at('pointermove', x, y);
+    at('pointermove', x, y); // the drop target is drawn by the first move: the second one finds it
+    if (!finish) return;
+    at('pointerup', x, y);
+    at('click', x, y);
+  };
+  const splitLine = () => [...host.querySelectorAll('main div')].map((d) => d.firstChild?.textContent ?? '').find((t) => t.startsWith('SPLIT VIEW')) ?? '';
+  beforeEach(async () => {
+    window.innerWidth = 1280;
+    act(() => window.dispatchEvent(new Event('resize')));
+    cockpit.extraIds = ['p3', 'p4'];
+    workAreaRect();
+    await act(async () => root.render(createElement(CockpitApp, { key: 'drops' })));
+  });
+  afterEach(() => {
+    cockpit.extraIds = [];
+    vi.restoreAllMocks();
+    window.innerWidth = 1024;
+    act(() => window.dispatchEvent(new Event('resize')));
+  });
+
+  it('right of the middle band opens beside, with the divider where it was left (58); the middle line resets it to 50', () => {
+    clickButton('Open p2 to the side');
+    clickButton('Set divider 58');
+    expect(splitLine()).toContain('SPLIT VIEW p1|p2|left|0.58');
+    clickButton('Close split');
+    dragTo('p2', 800, 100);
+    expect(splitLine()).toContain('SPLIT VIEW p1|p2|right|0.58');
+    clickButton('Close split');
+    dragTo('p2', 520, 100);
+    expect(splitLine()).toContain('SPLIT VIEW p1|p2|right|0.5');
+    expect(splitLine()).not.toContain('0.58');
+  });
+
+  it('left of the middle band puts the dragged chat on the left with the mirrored divider', () => {
+    clickButton('Open p2 to the side');
+    clickButton('Set divider 58');
+    clickButton('Close split');
+    dragTo('p2', 100, 100);
+    expect(splitLine()).toMatch(/SPLIT VIEW p2\|p1\|left\|0\.42/);
+  });
+
+  it('the lowest part stacks two chats; a third goes below, full width; a fourth makes a 2 x 2', () => {
+    dragTo('p2', 500, 500);
+    expect(splitLine()).toBe('SPLIT VIEW p1|p2|right|0.5|stacked');
+    dragTo('p3', 300, 500);
+    expect(splitLine()).toBe('SPLIT VIEW p1|p2|leftDown|0.5|down:p3,-|wide');
+    dragTo('p4', 300, 500);
+    expect(splitLine()).toContain('|down:p3,p4');
+    expect(splitLine()).not.toContain('|wide');
+  });
+
+  it('with two open, a drop on the left replaces the left chat and one on the right replaces the right one', () => {
+    clickButton('Open p2 to the side');
+    dragTo('p3', 100, 100);
+    expect(splitLine()).toContain('SPLIT VIEW p3|p2|left');
+    dragTo('p4', 800, 100);
+    expect(splitLine()).toContain('SPLIT VIEW p3|p4|right');
+    dragTo('p1', 500, 100); // the middle line also replaces the right one
+    expect(splitLine()).toContain('SPLIT VIEW p3|p1|right|0.5');
+  });
+
+  it('dragging the only open chat brings the chat that was in front before to the other side', () => {
+    clickButton('pane p2');
+    clickButton('pane p1');
+    dragTo('p1', 800, 100);
+    expect(splitLine()).toContain('SPLIT VIEW p2|p1|right');
+  });
+
+  it('Esc during a drag leaves the layout alone, and so does letting go outside the work area', () => {
+    dragTo('p2', 800, 100, false);
+    expect(host.querySelector('[data-testid="drop-take"]')).not.toBeNull();
+    press({ key: 'Escape' });
+    at('pointerup', 800, 100);
+    expect(host.querySelector('[data-testid="drop-take"]')).toBeNull();
+    expect(mainText()).toBe('PANE VIEW p1');
+    dragTo('p2', 1500, 100);
+    expect(mainText()).toBe('PANE VIEW p1');
+  });
+
+  it('shows the live preview while dragging, and nothing after the drop', () => {
+    dragTo('p2', 500, 100, false);
+    const zone = () => host.querySelector('[data-testid="work-drop"]')?.getAttribute('data-zone');
+    expect(zone()).toBe('mid');
+    expect(host.querySelector('[data-testid="drop-take"]')?.textContent).toBe('p2 · half and half');
+    at('pointermove', 800, 100);
+    expect(zone()).toBe('right');
+    at('pointermove', 800, 480);
+    expect(zone()).toBe('down');
+    at('pointerup', 800, 480);
+    at('click', 800, 480);
+    expect(host.querySelector('[data-testid="work-drop"]')).toBeNull();
+  });
+
+  it('the row menu has the keyboard way: open on the left, open below', () => {
+    clickButton('Open p2 on the left');
+    expect(splitLine()).toContain('SPLIT VIEW p2|p1|left');
+    clickButton('Open p3 below');
+    expect(splitLine()).toContain('|down:p3,-|wide');
+  });
+});
+
+// The helpers bar above the work area: helpers only, standby helpers, kept in split view.
+describe('CockpitApp helpers bar', () => {
+  const bar = () => host.querySelector<HTMLElement>('[data-testid="helpers-bar"]');
+  const chips = () => [...host.querySelectorAll<HTMLElement>('[data-testid="helpers-bar"] [data-pane-tab]')].map((el) => el.getAttribute('data-pane-tab'));
+  const crumb = () => host.querySelector('[data-testid="helpers-crumb"]')?.textContent;
+  const rerender = async (key: string) => act(async () => root.render(createElement(CockpitApp, { key })));
+  afterEach(() => {
+    act(() => setStandbys([]));
+    cockpit.extraIds = [];
+    window.innerWidth = 1024;
+    act(() => window.dispatchEvent(new Event('resize')));
+  });
+
+  it('is not drawn when the agent has no helpers and there are no standbys', () => {
+    expect(bar()).toBeNull();
+  });
+
+  it('shows the crumb and a chip for each helper; the main agent is never a chip', async () => {
+    cockpit.parents = { p2: 'p1' };
+    cockpit.statuses = { p2: 'running' };
+    await rerender('h1');
+    expect(bar()).not.toBeNull();
+    expect(crumb()).toBe('agent-p1');
+    expect(chips()).toEqual(['p2']);
+    expect(host.querySelector('[data-testid="helper-dot"]')).not.toBeNull();
+  });
+
+  it('a chip opens that helper in the front pane, and the crumb brings the main agent back', async () => {
+    cockpit.parents = { p2: 'p1' };
+    await rerender('h2');
+    act(() => host.querySelector<HTMLButtonElement>('[data-pane-tab="p2"] [role="tab"]')!.click());
+    expect(host.querySelector('.ck-hchip.is-on')?.getAttribute('data-pane-tab')).toBe('p2');
+    // The helper is in front, and the crumb still names the main agent it belongs to: the way back.
+    expect(crumb()).toBe('agent-p1');
+    expect(host.querySelector('[data-testid="helpers-crumb"]')?.className).not.toContain('is-on');
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="helpers-crumb"]')!.click());
+    expect(host.querySelector('[data-testid="helpers-crumb"]')?.className).toContain('is-on');
+    expect(host.querySelector('.ck-hchip.is-on')).toBeNull();
+  });
+
+  it('standby helpers show as outlined Ready chips, even with no helpers of the agent', async () => {
+    act(() => setStandbys([{ id: 's1', agent: 'codex', name: 'Reviewer', state: 'ready' }]));
+    await rerender('s1');
+    const chip = host.querySelector('[data-testid="standby-chip"]');
+    expect(chip?.textContent).toContain('Reviewer');
+    expect(chip?.textContent).toContain('Ready');
+    expect(host.querySelector('.ck-hbar-grp')?.textContent).toBe('Standby');
+    expect(chips()).toEqual([]);
+  });
+
+  it('stays in split view and follows the focused pane: focusing the other side swaps the crumb and the chips', async () => {
+    cockpit.extraIds = ['p3', 'p4'];
+    cockpit.parents = { p2: 'p1', p4: 'p3' };
+    window.innerWidth = 1280;
+    act(() => window.dispatchEvent(new Event('resize')));
+    await rerender('split');
+    clickButton('Open p3 to the side');
+    expect(host.textContent).toContain('SPLIT VIEW p1|p3|left');
+    expect(bar()).not.toBeNull();
+    expect(crumb()).toBe('agent-p1');
+    expect(chips()).toEqual(['p2']);
+    clickButton('Focus right');
+    expect(crumb()).toBe('agent-p3');
+    expect(chips()).toEqual(['p4']);
+    clickButton('Focus left');
+    expect(crumb()).toBe('agent-p1');
+  });
+
+  it('a chip click in a split replaces the focused side', async () => {
+    cockpit.extraIds = ['p3'];
+    cockpit.parents = { p3: 'p2' };
+    window.innerWidth = 1280;
+    act(() => window.dispatchEvent(new Event('resize')));
+    await rerender('split2');
+    clickButton('Open p2 to the side');
+    clickButton('Focus right');
+    act(() => host.querySelector<HTMLButtonElement>('[data-pane-tab="p3"] [role="tab"]')!.click());
+    expect(host.textContent).toContain('SPLIT VIEW p1|p3|right');
+  });
+});
+
+describe('CockpitApp: more than one companion', () => {
+  const companion = (id: string, name: string, isDefault: boolean) => ({
+    id,
+    name,
+    avatar: 'mochi',
+    isDefault,
+    persona: 'calm',
+    agentType: 'claude',
+    agentLabel: 'Claude',
+    folder: 'C:\\work\\home',
+    folderName: 'home',
+    state: 'sleeping',
+    stateLine: 'Asleep',
+    paneId: null,
+    needs: null,
+    pendingMemory: 0,
+    nextCheckin: null,
+    restarts: 0,
+    autoStart: true,
+  });
+  const show = async () => {
+    comps.list = [companion('mochi', 'Mochi', true), companion('bit', 'Bit', false)];
+    await act(async () => root.render(createElement(CockpitApp)));
+    await act(async () => {});
+  };
+
+  it('"New companion" opens the setup sheet as "Make another companion", and Cancel closes it', async () => {
+    await show();
+    clickButton('New companion row');
+    await act(async () => {});
+    expect(host.textContent).toContain('Make another companion');
+    expect(host.textContent).toContain('Start from');
+    clickButton('Cancel');
+    expect(host.textContent).not.toContain('Make another companion');
+  });
+
+  it('a companion row opens its page with the switcher, and the switcher goes to the other companion', async () => {
+    await show();
+    clickButton('companion Mochi');
+    await act(async () => {});
+    expect(host.querySelector('.ck-companion-name')?.textContent).toBe('Mochi');
+    expect(host.querySelector('.ck-companion-badge')?.textContent).toBe('Default');
+    clickButton('Switch companion ▾');
+    const bit = [...host.querySelectorAll<HTMLButtonElement>('.ck-companion-switch [role="menuitem"]')].find((b) => b.textContent === 'Bit')!;
+    act(() => bit.click());
+    await act(async () => {});
+    expect(host.querySelector('.ck-companion-name')?.textContent).toBe('Bit');
+    expect(host.querySelector('.ck-companion-badge')).toBeNull();
+  });
+});
+
+describe('CockpitApp: Leaving my desk', () => {
+  const state = (over: Partial<DeskAway> = {}): DeskAway => ({ away: false, lock_screen: false, phones: 1, ...over });
+  const bar = () => host.querySelector('.cockpit > .ck-statusbar');
+  const chip = () => bar()?.querySelector<HTMLButtonElement>('[data-testid="desk-chip"]') ?? null;
+  const banner = () => host.querySelector('[data-testid="desk-banner"]');
+  const sheet = () => document.querySelector('[data-testid="desk-sheet"]');
+  const setServerState = async (next: DeskAway) => {
+    vi.spyOn(tauri, 'getDeskAway').mockResolvedValue(next);
+    await act(async () => deskStore().refresh());
+  };
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    setDeskSheetOpen(false);
+    await act(async () => {
+      vi.spyOn(tauri, 'getDeskAway').mockResolvedValue(NOT_AWAY);
+      await deskStore().refresh();
+    });
+    vi.restoreAllMocks();
+  });
+
+  it('has no chip while no phone is paired', async () => {
+    await setServerState(state({ phones: 0 }));
+    expect(chip()).toBeNull();
+    expect(banner()).toBeNull();
+  });
+
+  it('the chip in the status bar asks how long, hands the day to the phone, and shows "Away · phone has control" with I\'m back', async () => {
+    await setServerState(state());
+    expect(chip()!.textContent).toBe('Leaving my desk');
+    expect(banner()).toBeNull();
+    await act(async () => chip()!.click());
+    expect(sheet()).not.toBeNull();
+    const radios = [...sheet()!.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+    expect(radios.map((r) => r.parentElement!.textContent)).toEqual(["Until I'm back", '1 hour', '4 hours', 'Tonight, until 6 am']);
+    await act(async () => radios[2].click());
+    await act(async () => sheet()!.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+    const start = vi.spyOn(tauri, 'startDeskAway').mockResolvedValue(state({ away: true, length: 'four_hours', until_ms: Date.now() + 4 * 3_600_000, by: 'pc', lock_screen: true }));
+    await act(async () => sheet()!.querySelector<HTMLButtonElement>('[data-testid="desk-start"]')!.click());
+    expect(start).toHaveBeenCalledWith('four_hours', true);
+    expect(sheet()).toBeNull();
+    expect(banner()!.textContent).toContain('Away · phone has control');
+    expect(banner()!.textContent).toContain('Screen control is locked');
+    expect(chip()).toBeNull();
+
+    const end = vi.spyOn(tauri, 'endDeskAway').mockResolvedValue(state());
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="desk-back"]')!.click());
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(banner()).toBeNull();
+    expect(chip()).not.toBeNull();
+  });
+
+  it('a switch the phone flipped says so, and "until I\'m back" shows no time', async () => {
+    await setServerState(state({ away: true, length: 'until_back', until_ms: null, by: 'phone', device_name: 'Mia' }));
+    expect(banner()!.textContent).toContain('your phone switched this on');
+    expect(banner()!.textContent).toContain("Until you press I'm back");
+  });
+
+  it('a switch whose time has passed is not shown, even before the PC says it ended', async () => {
+    await setServerState(state({ away: true, length: 'one_hour', until_ms: Date.now() - 1000, by: 'pc' }));
+    expect(banner()).toBeNull();
+    expect(chip()).not.toBeNull();
+  });
+});
+
+describe('CockpitApp: the Join popup', () => {
+  const LINK = 'https://pm-relay.maya.workers.dev/join/ABCDEFGH23456789';
+  const popup = () => host.querySelector('[data-testid="join-popup"]');
+
+  it('a delivered invite link shows "Join?" on whatever screen is open, not only on the Team page', async () => {
+    expect(mainText()).toBe('PANE VIEW p1');
+    expect(popup()).toBeNull();
+    await act(async () => void window.dispatchEvent(new CustomEvent('pm:join-link', { detail: LINK })));
+    expect(popup()).not.toBeNull();
+    // It sits in a frame that takes no room and does not block the page behind it.
+    expect(host.querySelector('[data-testid="cockpit-join-host"]')?.className).toContain('jl-host');
+    act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(popup()).toBeNull();
+  });
+
+  it('text that is not a Worker invite link is dropped before anything is asked of the network', async () => {
+    await act(async () => void window.dispatchEvent(new CustomEvent('pm:join-link', { detail: 'https://evil.example/not-a-join' })));
+    expect(popup()).toBeNull();
+    await act(async () => void window.dispatchEvent(new CustomEvent('pm:join-link', { detail: { link: LINK } })));
+    expect(popup()).toBeNull();
   });
 });

@@ -20,6 +20,7 @@
 //! `tui/<agent>/` behind `TuiProfile::{standby_support, standby_screen, headless_standby_*}`.
 
 pub mod config;
+pub mod helpers;
 mod host;
 pub mod key;
 pub mod pool;

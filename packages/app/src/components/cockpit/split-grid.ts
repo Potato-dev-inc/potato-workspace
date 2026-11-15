@@ -11,6 +11,10 @@ export interface SplitBelow {
   rightDown: string | null;
   leftRows: number;
   rightRows: number;
+  /** Three chats: the one in `leftDown` runs the full width under the two on top (a drop on the bottom edge). */
+  wide?: boolean;
+  /** Two chats stacked: `left` on top, `right` underneath, full width each. `leftRows` is the top one's share. */
+  stacked?: boolean;
 }
 
 export const NO_BELOW: SplitBelow = { leftDown: null, rightDown: null, leftRows: 0.5, rightRows: 0.5 };
@@ -25,6 +29,20 @@ export const SPLIT_MAX_PANES = 4;
 
 export function hasBelow(b: SplitBelow): boolean {
   return b.leftDown !== null || b.rightDown !== null;
+}
+
+/** Whether the layout is more than the plain two side-by-side chats (chats below, or two stacked). */
+export function hasLayout(b: SplitBelow): boolean {
+  return hasBelow(b) || b.stacked === true;
+}
+
+export function isStacked(b: SplitBelow): boolean {
+  return b.stacked === true;
+}
+
+/** Three chats with the lower one across the full width. */
+export function isWide(b: SplitBelow): boolean {
+  return b.wide === true && b.leftDown !== null && b.rightDown === null;
 }
 
 export function columnOf(slot: SplitSlot): SplitColumn {
@@ -56,8 +74,11 @@ export function sanitizeBelow(b: SplitBelow, left: string, right: string, hasPan
   const leftDown = keep(b.leftDown);
   const rightDown = keep(b.rightDown);
   const ok = (r: number) => (Number.isFinite(r) && r > 0 && r < 1 ? r : SPLIT_ROW_DEFAULT);
-  if (leftDown === b.leftDown && rightDown === b.rightDown && ok(b.leftRows) === b.leftRows && ok(b.rightRows) === b.rightRows) return b;
-  return { leftDown, rightDown, leftRows: ok(b.leftRows), rightRows: ok(b.rightRows) };
+  // Stacked is two chats and nothing below; wide needs exactly the one chat below on the left.
+  const stacked = b.stacked === true && leftDown === null && rightDown === null;
+  const wide = b.wide === true && leftDown !== null && rightDown === null;
+  if (leftDown === b.leftDown && rightDown === b.rightDown && ok(b.leftRows) === b.leftRows && ok(b.rightRows) === b.rightRows && stacked === (b.stacked === true) && wide === (b.wide === true)) return b;
+  return { leftDown, rightDown, leftRows: ok(b.leftRows), rightRows: ok(b.rightRows), ...(stacked ? { stacked } : {}), ...(wide ? { wide } : {}) };
 }
 
 /** Reads a saved `below` (anything else is no chats below). */
@@ -67,7 +88,8 @@ export function parseBelow(v: unknown): SplitBelow {
   const id = (x: unknown) => (typeof x === 'string' && x !== '' ? x : null);
   const rows = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x > 0 && x < 1 ? x : SPLIT_ROW_DEFAULT);
   const parsed: SplitBelow = { leftDown: id(o.leftDown), rightDown: id(o.rightDown), leftRows: rows(o.leftRows), rightRows: rows(o.rightRows) };
-  return hasBelow(parsed) ? parsed : NO_BELOW;
+  if (hasBelow(parsed)) return o.wide === true && parsed.rightDown === null ? { ...parsed, wide: true } : parsed;
+  return o.stacked === true ? { ...NO_BELOW, leftRows: parsed.leftRows, stacked: true } : NO_BELOW;
 }
 
 /**
@@ -87,12 +109,14 @@ export function downPartner(paneIds: readonly string[], shown: readonly string[]
 
 /** Puts `id` below a column (replacing nothing: a column with a chat below is left alone). */
 export function splitColumnDown(b: SplitBelow, column: SplitColumn, id: string): SplitBelow {
-  if (column === 'left') return b.leftDown !== null ? b : { ...b, leftDown: id, leftRows: SPLIT_ROW_DEFAULT };
-  return b.rightDown !== null ? b : { ...b, rightDown: id, rightRows: SPLIT_ROW_DEFAULT };
+  if (b.stacked) return b;
+  // A new chat under one column ends the full-width bottom chat: it becomes an ordinary 2x2 cell.
+  if (column === 'left') return b.leftDown !== null ? b : { ...b, leftDown: id, leftRows: SPLIT_ROW_DEFAULT, wide: false };
+  return b.rightDown !== null ? b : { ...b, rightDown: id, rightRows: SPLIT_ROW_DEFAULT, wide: false };
 }
 
 export function canSplitDown(b: SplitBelow, column: SplitColumn, shownCount: number): boolean {
-  if (shownCount >= SPLIT_MAX_PANES) return false;
+  if (shownCount >= SPLIT_MAX_PANES || b.stacked) return false;
   return column === 'left' ? b.leftDown === null : b.rightDown === null;
 }
 
@@ -161,6 +185,11 @@ export function belowAfterSelect(b: SplitBelow, prev: string | null, next: strin
 
 /** The slot next to `from` in a direction, skipping empty ones; null at the edge. */
 export function moveSlot(from: SplitSlot, dir: 'left' | 'right' | 'up' | 'down', b: SplitBelow): SplitSlot | null {
+  // Two stacked chats: `left` is on top, `right` underneath.
+  if (b.stacked) return dir === 'down' && from === 'left' ? 'right' : dir === 'up' && from === 'right' ? 'left' : null;
+  // Three chats with a full-width one at the bottom: down from either top chat reaches it; the bottom one only goes up.
+  if (isWide(b) && dir === 'down') return from === 'left' || from === 'right' ? 'leftDown' : null;
+  if (isWide(b) && from === 'leftDown') return dir === 'up' ? 'left' : null;
   const col = columnOf(from);
   const down = isDownSlot(from);
   if (dir === 'left') return col === 'right' ? (down && b.leftDown !== null ? 'leftDown' : 'left') : null;

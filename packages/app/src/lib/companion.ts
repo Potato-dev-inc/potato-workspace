@@ -9,6 +9,9 @@ import { bridgeRefusalText } from './paneOutbox-bridge';
 /** The eight faces (components/companion/avatars.ts). */
 export type AvatarId = 'mochi' | 'bit' | 'nib' | 'tofu' | 'lumen' | 'hoot' | 'sprout' | 'kit';
 
+/** The accent colours a companion may wear. Each word is a colour token in the cockpit (`ACCENT_IDS` in companion/model.rs). */
+export type AccentId = 'potato' | 'sky' | 'mint' | 'rose' | 'sun';
+
 /** Preset ids from the setup sheet; `custom` means the person wrote the SOUL.md text. */
 export type CompanionPersona = 'cheerful' | 'calm' | 'coach' | 'plain' | 'custom';
 
@@ -51,6 +54,10 @@ export interface CompanionView {
   id: string;
   name: string;
   avatar: AvatarId;
+  /** Its own colour. Missing or null: the app's own accent. */
+  accent?: AccentId | null;
+  /** The companion the speak bubble, the pet and the phone's first tab use. Missing on an older view: the first one. */
+  isDefault?: boolean;
   persona: CompanionPersona;
   agentType: string;
   agentLabel: string;
@@ -83,6 +90,8 @@ export interface CompanionView {
    * read the companion's brief. Missing or null: the home is fine.
    */
   homeProblem?: HomeProblem | null;
+  /** Body state. Present only when the Labs flag is on; missing or null: off. */
+  body?: BodyView | null;
 }
 
 /** Why a companion's home is a problem, and where `Move to its own folder` would put it. */
@@ -98,7 +107,42 @@ export interface QueuedMove {
   untilMs: number | null;
 }
 
-export type PendingKind = 'note' | 'user' | 'forget' | 'skill';
+export type PendingKind = 'note' | 'user' | 'forget' | 'skill' | 'person';
+
+/** How the companion feels (its body state). Present on the view only while the Labs flag is on. */
+export type BodyMood = 'sleepy' | 'hungry' | 'genki' | 'tsundere';
+export interface BodyDrive {
+  name: string;
+  value: number;
+  max: number;
+  threshold: number;
+  waiting: boolean;
+}
+export interface BodyView {
+  mood: BodyMood;
+  intensity: 1 | 2 | 3;
+  /** 0..100 */
+  energy: number;
+  hunger: number;
+  boredom: number;
+  longing: number;
+  battery: number;
+  drives: BodyDrive[];
+  awayMinutes: number | null;
+  sleeping: boolean;
+}
+
+/** One day of the companion's journal. `date` is 'YYYY-MM-DD'; the newest line is last. */
+export interface JournalDay {
+  date: string;
+  lines: string[];
+}
+export interface JournalView {
+  days: JournalDay[];
+  diary: { date: string; text: string } | null;
+  people: { name: string; closeness: number }[];
+  personaFiles: string[];
+}
 export type PendingDecision = 'keep' | 'drop';
 export type MemoryFile = 'soul' | 'user' | 'memory';
 
@@ -164,6 +208,7 @@ export interface CompanionAgentOption {
 export interface CompanionDraft {
   name: string;
   avatar: AvatarId;
+  accent?: AccentId;
   persona: CompanionPersona;
   agentType: string;
   launchArgs?: string[];
@@ -184,6 +229,45 @@ export interface CompanionDraft {
  */
 export type CompanionPatch = Partial<CompanionDraft> & { untilMs?: number | null };
 
+/** Discord bot (Labs): one companion answers in chosen Discord channels with the person's own bot. Rust: companion discord. */
+export type DiscordBotState = 'off' | 'no_token' | 'connecting' | 'online' | 'token_rejected' | 'intent_missing' | 'stopped';
+export interface DiscordAllow {
+  guildId: string;
+  channels: string[];
+  /** Also join in on its own, without being asked. */
+  ambient: boolean;
+}
+export interface DiscordBotSettings {
+  on: boolean;
+  allow: DiscordAllow[];
+  owners: string[];
+  dms: 'owners' | 'off';
+  names: string[];
+  gate: 'heuristic' | 'llm';
+  budget: { count: number; minutes: number };
+}
+/** What the card may know. The token itself never comes back: only whether it is set and its last four characters. */
+export interface DiscordBotStatus {
+  enabled: boolean;
+  storeAvailable: boolean;
+  set: boolean;
+  last4: string | null;
+  botName: string | null;
+  state: DiscordBotState;
+  callsToday: number;
+  callsCap: number;
+  settings: DiscordBotSettings;
+}
+export interface DiscordBotTransport {
+  status(id: string): Promise<DiscordBotStatus>;
+  /** Rejects with a plain sentence when the token looks wrong or this computer has no safe credential store. */
+  setToken(id: string, token: string): Promise<DiscordBotStatus>;
+  clear(id: string): Promise<DiscordBotStatus>;
+  saveSettings(id: string, settings: DiscordBotSettings): Promise<DiscordBotStatus>;
+  /** An offline check only: the token is saved and shaped right. It never connects. */
+  test(id: string): Promise<{ ok: boolean; message: string }>;
+}
+
 export interface CompanionTransport {
   list(): Promise<CompanionView[]>;
   get(id: string): Promise<CompanionView>;
@@ -197,7 +281,9 @@ export interface CompanionTransport {
   create(input: CompanionDraft): Promise<CompanionView>;
   update(id: string, patch: CompanionPatch): Promise<CompanionView>;
   archive(id: string): Promise<void>;
-  /** Removes it for good: it stops counting toward the three-companion limit. Its home folder is kept. */
+  /** Makes it the default companion (the bubble, the pet and the phone's first tab). */
+  setDefault(id: string): Promise<CompanionView>;
+  /** Removes it for good: it stops counting toward the eight-companion limit. Its home folder is kept. */
   delete(id: string): Promise<void>;
   restart(id: string): Promise<CompanionView>;
   /** Moves the companion out of a broad home into a folder of its own. An error leaves everything as it was. */
@@ -213,6 +299,10 @@ export interface CompanionTransport {
   removeSkill(id: string, slug: string): Promise<MemoryView>;
   setCheckIns(id: string, checkins: CheckIn[]): Promise<CompanionView>;
   openFolder(id: string): Promise<void>;
+  /** Desktop only: the journal, the diary and the people it knows. The phone transport has none. */
+  journal?(id: string): Promise<JournalView>;
+  /** Desktop only (Labs: Discord bot). The phone transport has none. */
+  discordBot?: DiscordBotTransport;
   /** Desktop: the `companion://changed` event with every companion. */
   onChanged?(cb: (companions: CompanionView[]) => void): Promise<UnlistenFn>;
 }
@@ -242,6 +332,7 @@ export const tauriCompanionTransport: CompanionTransport = {
   create: (input) => call<CompanionView>('companion_create', { input }),
   update: (id, patch) => call<CompanionView>('companion_update', { id, patch }),
   archive: (id) => call<void>('companion_archive', { id }),
+  setDefault: (id) => call<CompanionView>('companion_set_default', { id }),
   delete: (id) => call<void>('companion_delete', { id }),
   restart: (id) => call<CompanionView>('companion_restart', { id }),
   rehome: (id) => call<CompanionView>('companion_rehome', { id }),
@@ -255,6 +346,14 @@ export const tauriCompanionTransport: CompanionTransport = {
   removeSkill: (id, slug) => call<MemoryView>('companion_skill_remove', { id, slug }),
   setCheckIns: (id, checkins) => call<CompanionView>('companion_checkins_set', { id, checkins }),
   openFolder: (id) => call<void>('companion_open_folder', { id }),
+  journal: (id) => call<JournalView>('companion_journal', { id }),
+  discordBot: {
+    status: (id) => call<DiscordBotStatus>('discord_bot_status', { id }),
+    setToken: (id, token) => call<DiscordBotStatus>('discord_bot_set_token', { id, token }),
+    clear: (id) => call<DiscordBotStatus>('discord_bot_clear', { id }),
+    saveSettings: (id, settings) => call<DiscordBotStatus>('discord_bot_save_settings', { id, settings }),
+    test: (id) => call<{ ok: boolean; message: string }>('discord_bot_test', { id }),
+  },
   onChanged: (cb) => {
     if (!isTauri()) return Promise.resolve((() => {}) as UnlistenFn);
     return listen<CompanionView[]>('companion://changed', (e) => cb(Array.isArray(e.payload) ? e.payload : []));
@@ -292,6 +391,7 @@ export function bridgeCompanionTransport(bridge: BridgeClient): CompanionTranspo
     create: refuse,
     update: refuse,
     archive: refuse,
+    setDefault: refuse,
     delete: refuse,
     restart: refuse,
     rehome: refuse,
@@ -408,6 +508,11 @@ export function fakeCompanionTransport(seed: FakeCompanionSeed = {}): FakeCompan
     return view;
   };
   const withState = (id: string, state: CompanionState): CompanionView => put({ ...find(id), state });
+  // When the default one leaves, the first one that is left becomes the default.
+  const handOverDefault = (): void => {
+    const rest = [...companions.values()];
+    if (rest.length > 0 && !rest.some((c) => c.isDefault)) companions.set(rest[0].id, { ...rest[0], isDefault: true });
+  };
 
   return {
     calls,
@@ -429,6 +534,8 @@ export function fakeCompanionTransport(seed: FakeCompanionSeed = {}): FakeCompan
           id: input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'companion',
           name: input.name,
           avatar: input.avatar,
+          accent: input.accent ?? null,
+          isDefault: companions.size === 0,
           persona: input.persona,
           agentType: input.agentType,
           agentLabel: input.agentType,
@@ -450,6 +557,7 @@ export function fakeCompanionTransport(seed: FakeCompanionSeed = {}): FakeCompan
         const next = { ...find(id) };
         if (patch.name !== undefined) next.name = patch.name;
         if (patch.avatar !== undefined) next.avatar = patch.avatar;
+        if (patch.accent !== undefined) next.accent = patch.accent;
         if (patch.persona !== undefined) next.persona = patch.persona;
         if (patch.pushReplies !== undefined) next.pushReplies = patch.pushReplies;
         if (patch.shareToday !== undefined) next.shareToday = patch.shareToday;
@@ -477,15 +585,23 @@ export function fakeCompanionTransport(seed: FakeCompanionSeed = {}): FakeCompan
         if (patch.autoStart !== undefined) next.autoStart = patch.autoStart;
         return put(next);
       }),
+    setDefault: (id) =>
+      log('setDefault', [id], () => {
+        find(id);
+        for (const [key, view] of companions) companions.set(key, { ...view, isDefault: key === id });
+        return { ...find(id) };
+      }),
     archive: (id) =>
       log('archive', [id], () => {
         find(id);
         companions.delete(id);
+        handOverDefault();
       }),
     delete: (id) =>
       log('delete', [id], () => {
         find(id);
         companions.delete(id);
+        handOverDefault();
       }),
     restart: (id) => log('restart', [id], () => withState(id, 'starting')),
     rehome: (id) =>

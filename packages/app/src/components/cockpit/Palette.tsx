@@ -1,9 +1,11 @@
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
+import { isDarkTheme } from '../../lib/theme-tone';
 import { previewLabel } from '../../lib/pane-preview';
 import { pointApi } from '../../lib/point-api';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
 import { requestChatJump } from '../../lib/chatJump';
+import { requestContentSearch } from '../../lib/files-search-request';
 import { requestBringChats, requestImportedChat } from '../../lib/chatImport';
 import { liveRoomApi, requestGoLive } from '../../lib/live-room';
 import { LiveStatusContext } from './live/useLiveRoom';
@@ -20,7 +22,8 @@ import { useKeybindingsVersion } from '../../hooks/useKeybindings';
 import { ChatFilterChips, type ChipKey } from './ChatFilterChips';
 import { T as WELCOME } from '../firstrun/copy';
 import { AgentLogo } from '../common/AgentLogo';
-import { IconChart, IconInbox, IconClose, IconCopy, IconGlobe, IconInfo, IconLayers, IconMoon, IconNote, IconPlus, IconReflow, IconRename, IconSearch, IconSettings, IconStop, IconSun, IconTerminal } from './Icons';
+import { IconChart, IconInbox, IconClose, IconCopy, IconGlobe, IconInfo, IconLayers, IconMoon, IconNote, IconPlus, IconReflow, IconRename, IconSearch, IconSettings, IconStop, IconSun, IconTerminal, IconTeam } from './Icons';
+import { t } from '../../i18n';
 import { isCompanionPaneId } from './companion/model';
 import { requestPaneAction } from '../../lib/pane-actions';
 import { matchesQuery, stateText } from './model';
@@ -30,11 +33,16 @@ import { chatAgentIds } from '../../lib/chatFirst';
 import { useShowTerminals } from '../../lib/showTerminals';
 import { useAcpLanes } from '../../hooks/useAcpLanes';
 import { useNightEnabled } from '../../lib/night';
+import { guidePaletteRows, useGuideEnabled } from '../../lib/guide-tabs';
 import { projectWithCopy } from './shell-labels';
 import { multiLoginAgents, paneHeading, paneSubline } from './titles';
 import type { CompanionView } from '../../lib/companion';
+import { useT } from '../../i18n';
 import { stateWord } from '../../lib/companion';
 import { Avatar } from '../companion/Avatar';
+import { t as tr } from '../../i18n';
+import { isAway, openDeskSheet, useDeskAway } from '../../lib/desk-away';
+import { openTour, requestGuide } from '../../whatsnew/store';
 
 interface Item {
   id: string;
@@ -62,6 +70,7 @@ export function Palette({
   onOpenPlans,
   onOpenMorning,
   onOpenScores,
+  onOpenTeam,
   onOpenReview,
   onReviewRiskiest,
   onOpenStore,
@@ -87,6 +96,8 @@ export function Palette({
   onOpenMorning?: () => void;
   /** Opens "Scores on your code". Absent: no Scores action. */
   onOpenScores?: () => void;
+  /** Opens the Team page. Absent: no Team action. */
+  onOpenTeam?: () => void;
   /** Opens the Review Desk. Absent: no Review Desk action. */
   onOpenReview?: () => void;
   /** Opens the Review Desk on its first row (the riskiest item). Absent: no such action. */
@@ -137,9 +148,12 @@ export function Palette({
   const liveStatus = useContext(LiveStatusContext);
   const liveOn = liveStatus?.live === true;
   const nightOn = useNightEnabled();
+  const [deskAway, deskStore] = useDeskAway();
+  const guideOn = useGuideEnabled();
   // The panes that need you list first, then the one you used last. The hints follow the keys you chose.
   const needsYou = useContext(NeedsYouContext) ?? NO_ITEMS;
   const keysVersion = useKeybindingsVersion();
+  const t = useT();
   const items = useMemo<Item[]>(() => {
     const out: Item[] = [];
     const multiLogin = multiLoginAgents(c.registry.paneList.map((p) => p.info));
@@ -147,7 +161,7 @@ export function Palette({
       out.push({
         id: `companion:${companion.id}`,
         group: 'Panes',
-        title: `Open ${companion.name}`,
+        title: t('companions.goTo', { name: companion.name }),
         desc: `Companion · ${stateWord(companion.state)}`,
         keywords: 'companion',
         icon: <Avatar id={companion.avatar} size={16} state={companion.state} name={companion.name} />,
@@ -250,6 +264,9 @@ export function Palette({
           run: () => requestPaneAction(sel, a.id),
         });
       }
+      for (const row of guidePaletteRows(guideOn)) {
+        out.push({ id: row.id, group: 'Actions', title: row.title, desc: c.names.get(sel), keywords: row.keywords, icon: <IconInfo />, run: () => requestPaneAction(sel, 'guide') });
+      }
       if (onUndoLastTurn) {
         out.push({
           id: 'act:undo',
@@ -296,6 +313,19 @@ export function Palette({
         });
       }
     }
+    // Search the words inside the selected agent's project files (the right panel's Files section).
+    if (c.selectedId && c.registry.panes.has(c.selectedId) && !isCompanionPaneId(c.selectedId)) {
+      const paneId = c.selectedId;
+      out.push({
+        id: 'act:search-files',
+        group: 'Actions',
+        title: 'Search in files',
+        desc: 'Find words inside the files of this project',
+        keywords: 'search find text inside contents files code grep',
+        icon: <IconSearch />,
+        run: () => requestContentSearch(paneId),
+      });
+    }
     out.push({
       id: 'act:search-chats',
       group: 'Actions',
@@ -340,6 +370,28 @@ export function Palette({
         run: () => requestGoLive(c.selectedId),
       });
     }
+    // "Leaving my desk": hand the day to the phone, and "I'm back" while it is on. Only when a phone is paired.
+    if (isAway(deskAway)) {
+      out.push({
+        id: 'act:desk-back',
+        group: 'Actions',
+        title: tr('desk.palette.back'),
+        desc: tr('desk.away'),
+        keywords: 'away back leaving desk phone return',
+        icon: <IconMoon />,
+        run: () => void deskStore.back().catch(() => undefined),
+      });
+    } else if (deskAway.phones > 0) {
+      out.push({
+        id: 'act:desk-away',
+        group: 'Actions',
+        title: tr('desk.title'),
+        desc: tr('desk.palette.desc'),
+        keywords: 'away leaving desk phone remote hand over lunch',
+        icon: <IconMoon />,
+        run: openDeskSheet,
+      });
+    }
     if (onStopAll) {
       out.push({
         id: 'act:stop-all',
@@ -381,6 +433,24 @@ export function Palette({
         run: onStartCrew,
       });
     }
+    out.push({
+      id: 'act:whatsnew',
+      group: 'Actions',
+      title: tr('whatsnew.menuWhatsNew'),
+      desc: tr('whatsnew.paletteWhatsNewDesc'),
+      keywords: 'whats new tour release notes changes update highlights',
+      icon: <IconInfo />,
+      run: () => openTour(),
+    });
+    out.push({
+      id: 'act:guide',
+      group: 'Actions',
+      title: tr('whatsnew.menuGuide'),
+      desc: tr('whatsnew.paletteGuideDesc'),
+      keywords: 'feature guide features demo help learn what can it do',
+      icon: <IconNote />,
+      run: requestGuide,
+    });
     if (onOpenShortcuts) {
       out.push({
         id: 'act:shortcuts',
@@ -424,6 +494,17 @@ export function Palette({
         keywords: 'scores best agent compare results history',
         icon: <IconChart />,
         run: onOpenScores,
+      });
+    }
+    if (onOpenTeam) {
+      out.push({
+        id: 'act:team',
+        group: 'Actions',
+        title: t('teamHub.side'),
+        desc: t('teamHub.palette.desc'),
+        keywords: 'team people teammates usage tasks shelf feed lend invite',
+        icon: <IconTeam />,
+        run: onOpenTeam,
       });
     }
     if (onOpenReview) {
@@ -488,13 +569,13 @@ export function Palette({
       {
         id: 'act:theme',
         group: 'Actions',
-        title: c.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
-        icon: c.theme === 'dark' ? <IconSun /> : <IconMoon />,
+        title: isDarkTheme(c.theme) ? 'Switch to light theme' : 'Switch to dark theme',
+        icon: isDarkTheme(c.theme) ? <IconSun /> : <IconMoon />,
         run: () => void c.toggleTheme(),
       },
     );
     return out;
-  }, [c, terminals, laneView, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, keysVersion, missionsOn, nightOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn]);
+  }, [c, terminals, laneView, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenTeam, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, keysVersion, missionsOn, nightOn, guideOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn, deskAway, deskStore, t]);
 
   const filtered = useMemo(
     () => items.filter((i) => matchesQuery(`${i.title} ${i.desc ?? ''} ${i.keywords ?? ''} ${i.group}`, query)),

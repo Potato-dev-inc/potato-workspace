@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AgentLogo } from '../common/AgentLogo';
 import { IconMore, IconPlus } from './Icons';
 import { useT } from '../../i18n';
+import { useDismissable } from '../../hooks/useDismissable';
 
 export type ProjectSignal = 'needs' | 'error' | 'working' | null;
 
@@ -56,21 +57,15 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
   useEffect(() => {
     if (!menu) return;
     menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-    const away = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenu(null);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      setMenu(null);
-      moreRef.current?.focus();
-    };
-    window.addEventListener('mousedown', away);
-    window.addEventListener('keydown', esc);
-    return () => {
-      window.removeEventListener('mousedown', away);
-      window.removeEventListener('keydown', esc);
-    };
   }, [menu]);
+  useDismissable(menu !== null, {
+    inside: [menuRef],
+    anchor: menuRef,
+    onDismiss: (why) => {
+      setMenu(null);
+      if (why === 'escape') moreRef.current?.focus();
+    },
+  });
 
   const openMenu = (x: number, y: number) => hasFolder && setMenu({ x, y });
   const finishRename = (save: boolean) => {

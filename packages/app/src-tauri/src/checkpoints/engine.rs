@@ -140,6 +140,9 @@ pub struct FileChange {
     pub added: u32,
     pub deleted: u32,
     pub binary: bool,
+    /// Only the line endings (CR/LF) changed: `added` and `deleted` are 0 and the file is left out of totals.
+    #[serde(default)]
+    pub line_endings_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -475,8 +478,20 @@ pub(super) fn stage_all(shadow: &Shadow, index: &Path, big: &[String]) -> Result
     }
 }
 
+/// Line counts per file. A change that is only CR/LF at the end of lines counts as no lines (git `--ignore-cr-at-eol`), so a file whose
+/// line endings were rewritten does not show thousands of added and removed lines.
 pub(crate) fn numstat(shadow: &Shadow, from: &str, to: &str) -> Result<Vec<(String, u32, u32, bool)>, CheckpointError> {
-    let out = shadow.run(&["diff-tree", "-r", "-z", "--numstat", "--no-renames", from, to], None, None, &[])?;
+    numstat_with(shadow, from, to, true)
+}
+
+/// `numstat`, with the CR/LF-only rule on or off.
+fn numstat_with(shadow: &Shadow, from: &str, to: &str, ignore_cr: bool) -> Result<Vec<(String, u32, u32, bool)>, CheckpointError> {
+    let mut args = vec!["diff-tree", "-r", "-z", "--numstat", "--no-renames"];
+    if ignore_cr {
+        args.push("--ignore-cr-at-eol");
+    }
+    args.extend([from, to]);
+    let out = shadow.run(&args, None, None, &[])?;
     let mut rows = Vec::new();
     for rec in out.stdout.split(|b| *b == 0) {
         let line = String::from_utf8_lossy(rec);
@@ -663,12 +678,19 @@ pub(crate) fn changes_between(shadow: &Shadow, prev: &str, tree: &str) -> Result
         .into_iter()
         .map(|(p, a, d, b)| (p, (a, d, b)))
         .collect();
+    // The same stats without the CR/LF rule: a file that has lines there but none above only changed its line endings.
+    let raw: HashMap<String, (u32, u32, bool)> = numstat_with(shadow, prev, tree, false)?
+        .into_iter()
+        .map(|(p, a, d, b)| (p, (a, d, b)))
+        .collect();
     let mut changes: Vec<FileChange> = name_status(shadow, prev, tree)?
         .into_iter()
         .map(|(status, path)| {
             let (added, deleted, binary) = stats.get(&path).copied().unwrap_or((0, 0, false));
+            let (raw_added, raw_deleted, _) = raw.get(&path).copied().unwrap_or((added, deleted, binary));
+            let line_endings_only = !binary && status == 'M' && added + deleted == 0 && raw_added + raw_deleted > 0;
             let status = if status == 'T' { 'M' } else { status };
-            FileChange { path, status: status.to_string(), added, deleted, binary }
+            FileChange { path, status: status.to_string(), added, deleted, binary, line_endings_only }
         })
         .collect();
     changes.sort_by(|a, b| a.path.cmp(&b.path));

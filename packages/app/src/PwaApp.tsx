@@ -29,6 +29,7 @@ import { NightSummary, bridgeNightApi } from './components/mobile/NightSummary';
 import { ReviewSummary } from './components/mobile/ReviewSummary';
 import { bridgeReviewApi } from './lib/mobile-review';
 import { useBridgeCompanions } from './hooks/useBridgeCompanions';
+import { defaultFirst } from './components/cockpit/companion/model';
 import { CompanionHome } from './components/mobile/CompanionHome';
 import {
   PairInviteScreen,
@@ -38,6 +39,7 @@ import {
 import { BridgePaneTerminal, useBridgePaneTransport } from './components/BridgePaneTerminal';
 import { PhoneHeader } from './components/mobile/PhoneHeader';
 import { PhoneDrawer, useEdgeSwipe } from './components/mobile/PhoneDrawer';
+import { PhoneDeskSwitch, bridgeDeskApi } from './components/mobile/PhoneDeskSwitch';
 import { needsPaneIds, pickLanding, rowState, waitingTotal } from './components/mobile/phoneNav';
 import { PhoneQuiet } from './components/mobile/PhoneQuiet';
 import { useT } from './i18n';
@@ -66,6 +68,7 @@ import { useAcpPhoneState } from './hooks/useAcpPhoneState';
 import { composerBlock } from './lib/paneOutbox';
 import { publishBridgeOutbox } from './lib/paneOutbox-bridge';
 import { chatAllowedFor, keepViewsOf, readPaneViews, writePaneViews, type PaneView } from './lib/mobile-pane-view';
+import { PhoneWhatsNewSheet, usePhoneWhatsNew } from './components/mobile/PhoneWhatsNew';
 import { MenuSheet, NewAgentSheet, type TypingEchoStats } from './components/mobile/MobileSheet';
 import { SetupScreen } from './components/pwa/SetupScreen';
 import { usePhoneLink } from './hooks/usePhoneLink';
@@ -172,6 +175,8 @@ export default function PwaApp() {
   const [paneViews, setPaneViews] = useState<Record<string, PaneView>>(readPaneViews);
   const [editingUrl, setEditingUrl] = useState(false);
   const [sheet, setSheet] = useState<'menu' | 'new' | 'plans' | null>(null);
+  // What's new: opens once per version when the phone is connected and the first-run steps are done.
+  const whatsNew = usePhoneWhatsNew(bridgeReady && !setupOpen);
   /** The list of chats (the drawer from the top-left) is open. */
   const [drawer, setDrawer] = useState(false);
   /** The app has chosen the chat it opens in (once per start), or the person chose first. */
@@ -207,8 +212,10 @@ export default function PwaApp() {
   const nightApi = useMemo(() => (bridge ? bridgeNightApi(bridge.baseUrl) : null), [bridge]);
   // Review Desk on the phone: read only (`GET /review-desk`), under the Night summary.
   const reviewApi = useMemo(() => (bridge ? bridgeReviewApi(bridge.baseUrl) : null), [bridge]);
+  const deskApi = useMemo(() => (bridge ? bridgeDeskApi(bridge.baseUrl) : null), [bridge]);
   const companionList = useBridgeCompanions(companionTransport, resyncKey, companionPush);
-  const companions = companionList.companions;
+  // The default companion's tab comes first (the phone opens on it); the others keep their order.
+  const companions = useMemo(() => defaultFirst(companionList.companions), [companionList.companions]);
   /** The grid that fits the open agent's terminal on this phone; the pane is sized to it. */
   const [fitGrid, setFitGrid] = useState<{ cols: number; rows: number } | null>(null);
   /** Last grid measured on this phone: a pane spawned from here is created at this size. */
@@ -1033,6 +1040,7 @@ export default function PwaApp() {
       >
         {nightApi && <NightSummary api={nightApi} canControl={canControl} refreshKey={resyncKey} />}
         {reviewApi && <ReviewSummary api={reviewApi} refreshKey={resyncKey} />}
+        {deskApi && <PhoneDeskSwitch api={deskApi} canControl={canControl} refreshKey={resyncKey} />}
       </PhoneDrawer>
       {searchOpen && bridge && (
         <PhoneSearch
@@ -1094,6 +1102,10 @@ export default function PwaApp() {
             setSetupOpen(true);
           }}
           onTestNotification={testNotification}
+          onOpenWhatsNew={() => {
+            setSheet(null);
+            whatsNew.open();
+          }}
         />
       )}
       {setupOpen && bridgeUrl && (
@@ -1102,6 +1114,17 @@ export default function PwaApp() {
           onDone={() => {
             markSetupDone();
             setSetupOpen(false);
+          }}
+        />
+      )}
+      {whatsNew.shown && (
+        <PhoneWhatsNewSheet
+          version={whatsNew.version}
+          onClose={whatsNew.close}
+          onTry={() => {
+            // The only thing a phone can try is the look: the menu has the Display rows.
+            whatsNew.close();
+            setSheet('menu');
           }}
         />
       )}

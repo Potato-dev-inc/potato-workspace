@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import type { CompanionTransport, CompanionView } from '../../../lib/companion';
 import { stateWord } from '../../../lib/companion';
 import { useCompanionMemory } from '../../../hooks/useCompanions';
+import { useT } from '../../../i18n';
 import { Avatar } from '../../companion/Avatar';
 import { SessionChatPanel } from '../../chat/SessionChatPanel';
 import { IconInfo, IconMore } from '../Icons';
@@ -14,6 +15,9 @@ import { Sheet } from '../Sheet';
 import { CheckInsCard } from './CheckInsCard';
 import { MemoryCard } from './MemoryCard';
 import { AgentRow } from './AgentRow';
+import { BodyCard } from './BodyCard';
+import { JournalCard } from './JournalCard';
+import { DiscordBotCard } from './DiscordBotCard';
 import { HomeProblemCard } from './HomeProblemCard';
 import { PendingCard } from './PendingCard';
 import { SpeakCard } from './SpeakCard';
@@ -35,10 +39,17 @@ export interface CompanionPageProps {
   onChanged: () => void;
   /** Called after the companion is archived: the page leaves. */
   onArchived: () => void;
+  /** Every companion, for the quick switcher in the header. Missing or one: no switcher. */
+  companions?: CompanionView[] | null;
+  /** Opens another companion's page. */
+  onSwitch?: (id: string) => void;
 }
 
 export function CompanionPage(props: CompanionPageProps) {
-  const { companion, transport, onShowTerminal, onOpenCard, onNotify, onChanged, onArchived } = props;
+  const { companion, transport, onShowTerminal, onOpenCard, onNotify, onChanged, onArchived, companions, onSwitch } = props;
+  const t = useT();
+  const [switchOpen, setSwitchOpen] = useState(false);
+  const several = (companions?.length ?? 0) > 1;
   // The companion's own terminal view is a terminal control: hidden while terminals are.
   const showTerminals = useShowTerminals();
   const [railOpen, setRailOpen] = useState(true);
@@ -99,10 +110,16 @@ export function CompanionPage(props: CompanionPageProps) {
     void run(() => transport.update(companion.id, { name: next }), 'Could not rename it.');
   };
 
+  const makeDefault = () =>
+    run(async () => {
+      await transport.setDefault(companion.id);
+      onNotify(t('companions.makeDefaultDone', { name }));
+    }, t('companions.makeDefaultFailed'));
+
   return (
     <div className="ck-companion-page">
       <div className="ck-companion-main">
-        <header className="ck-companion-head">
+        <header className="ck-companion-head" data-accent={companion.accent ?? undefined}>
           <Avatar id={companion.avatar} size={72} state={companion.state} name={name} className="ck-companion-face-big" />
           <div className="ck-companion-head-main">
             {renaming ? (
@@ -127,6 +144,40 @@ export function CompanionPage(props: CompanionPageProps) {
                 {name}
               </button>
             )}
+            {several && (
+              <span className="ck-companion-switch">
+                {companion.isDefault && <span className="ck-companion-badge">{t('companions.default')}</span>}
+                <button
+                  type="button"
+                  className="ck-companion-switch-btn"
+                  aria-haspopup="menu"
+                  aria-expanded={switchOpen}
+                  onClick={() => setSwitchOpen((v) => !v)}
+                >
+                  {t('companions.switch')} ▾
+                </button>
+                {switchOpen && (
+                  <div className="ck-menu ck-menu--wide ck-menu--start" role="menu" aria-label={t('companions.switch')}>
+                    {companions!
+                      .filter((other) => other.id !== companion.id)
+                      .map((other) => (
+                        <button
+                          key={other.id}
+                          type="button"
+                          className="ck-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setSwitchOpen(false);
+                            onSwitch?.(other.id);
+                          }}
+                        >
+                          {other.name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </span>
+            )}
             <p className="ck-sub ck-companion-stateline">{stateLineOf(companion, stateWord(companion.state))}</p>
             {companion.queuedMove && <p className="ck-sub ck-companion-stateline">{movesWhenFree(name)}</p>}
             {companion.needs && (
@@ -150,6 +201,11 @@ export function CompanionPage(props: CompanionPageProps) {
               </button>
               {menuOpen && (
                 <div className="ck-menu ck-menu--wide" role="menu">
+                  {several && !companion.isDefault && (
+                    <button type="button" className="ck-menu-item" role="menuitem" onClick={() => { setMenuOpen(false); void makeDefault(); }}>
+                      {t('companions.makeDefault')}
+                    </button>
+                  )}
                   <button type="button" className="ck-menu-item" role="menuitem" onClick={() => { setMenuOpen(false); void run(() => transport.restart(companion.id), 'Could not restart it.'); }}>
                     Restart
                   </button>
@@ -240,6 +296,11 @@ export function CompanionPage(props: CompanionPageProps) {
               }}
             />
           )}
+          {companion.body && <BodyCard name={name} body={companion.body} />}
+          {companion.body && transport.journal && (
+            <JournalCard companionId={companion.id} name={name} transport={transport} refreshKey={`${companion.state}|${companion.body.mood}`} />
+          )}
+          {transport.discordBot && <DiscordBotCard companionId={companion.id} transport={transport} />}
           <CheckInsCard
             companionId={companion.id}
             checkins={checkins}

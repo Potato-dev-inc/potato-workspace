@@ -70,6 +70,12 @@ pub struct TeamConfig {
     /// Set while a join request waits for the admin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub join: Option<PendingJoin>,
+    /// What I share on the Team page: here or away by default; the project and the chat title only when I turn them on.
+    #[serde(default)]
+    pub share_level: super::presence::ShareLevel,
+    /// Project folders that are shared as "here" only, whatever the level.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub share_exclude: Vec<String>,
 }
 
 impl Default for TeamConfig {
@@ -87,6 +93,8 @@ impl Default for TeamConfig {
             github: None,
             projects: Vec::new(),
             join: None,
+            share_level: super::presence::ShareLevel::default(),
+            share_exclude: Vec::new(),
         }
     }
 }

@@ -17,14 +17,14 @@
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0;
-  opacity: 0.8;
+  opacity: 1;
 }
 .cockpit .ck-pane-logo {
   align-self: center;
-  color: var(--label-2);
+  color: var(--label);
 }
 .cockpit .ck-menu-item .ck-menu-logo {
-  color: var(--label-2);
+  color: var(--label);
 }
 .aa-title .aa-logo { vertical-align: -2px; margin-right: 2px; }
 .pm-agent-mono::before {

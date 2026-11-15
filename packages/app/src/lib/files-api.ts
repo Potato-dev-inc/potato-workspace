@@ -71,6 +71,29 @@ export interface FileMark {
   mark: 'M' | 'N';
 }
 
+/** One line of a file that has the words searched for. */
+export interface ContentHit {
+  path: string;
+  name: string;
+  /** 1-based. */
+  line: number;
+  /** The line, trimmed. */
+  text: string;
+  /** The match inside `text` (characters; `end` is exclusive). */
+  start: number;
+  end: number;
+}
+
+/** What "search inside files" found. */
+export interface ContentSearch {
+  hits: ContentHit[];
+  /** There were more matching lines than the list holds (200). */
+  truncated: boolean;
+  /** The search was stopped before it finished. */
+  cancelled: boolean;
+  filesScanned: number;
+}
+
 /** The calls the Files card and the file tab need (a test double can stand in). */
 export interface FilesApi {
   list(paneId: string, path: string, showHeavy?: boolean): Promise<FolderListing>;
@@ -82,6 +105,10 @@ export interface FilesApi {
   /** Opens the file in the program the system chose for it (Word for .docx). */
   openDefault(paneId: string, path: string): Promise<void>;
   marks(paneId: string): Promise<FileMark[]>;
+  /** Searches the text inside the project's files. A newer search with the same `searchId` stops the older one. */
+  searchContents(paneId: string, query: string, searchId: string): Promise<ContentSearch>;
+  /** Stops a running search. */
+  cancelSearch(searchId: string): Promise<void>;
   reveal(paneId: string, path: string): Promise<void>;
   /** A unified diff of the file against the last commit ("" when nothing changed). */
   diff(paneId: string, path: string): Promise<string>;
@@ -102,6 +129,8 @@ export const filesApi: FilesApi = {
   },
   openDefault: (paneId, path) => invoke<void>('files_open_default', { paneId, path }),
   marks: (paneId) => invoke<FileMark[]>('files_marks', { paneId }),
+  searchContents: (paneId, query, searchId) => invoke<ContentSearch>('files_search_contents', { paneId, query, searchId }),
+  cancelSearch: (searchId) => invoke<void>('files_search_cancel', { searchId }),
   reveal: (paneId, path) => invoke<void>('files_reveal', { paneId, path }),
   diff: (paneId, path) => invoke<string>('files_diff', { paneId, path }),
   write: (paneId, path, text, baseVersion, overwrite) => invoke<FileSaved>('files_write', { paneId, path, text, baseVersion, overwrite: overwrite ?? false }),

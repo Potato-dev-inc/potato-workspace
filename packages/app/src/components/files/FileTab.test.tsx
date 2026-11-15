@@ -171,3 +171,36 @@ describe('File tab', () => {
     expect(takeComposerInserts('p1')).toBe('`src/a.ts` lines 2-3:\n```\nline two\nline three\n```\n');
   });
 });
+
+describe('File tab header at a narrow width', () => {
+  it('folds "Open in …" and "Show text" into one "…" menu instead of cutting them off', async () => {
+    const proto = HTMLElement.prototype;
+    const scroll = Object.getOwnPropertyDescriptor(proto, 'scrollWidth');
+    const client = Object.getOwnPropertyDescriptor(proto, 'clientWidth');
+    // The header is too wide until its right-side buttons are folded away.
+    Object.defineProperty(proto, 'clientWidth', { configurable: true, get: () => 300 });
+    Object.defineProperty(proto, 'scrollWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains('ck-file-head') && Number(this.dataset.fold ?? 0) < 1 ? 500 : 100;
+      },
+    });
+    try {
+      await show('notes.md', content({ path: 'notes.md', name: 'notes.md', text: '# Hi' }));
+      expect(host.querySelector('.ck-file-head')?.getAttribute('data-fold')).toBe('1');
+      expect(button('Show as text')).toBeUndefined();
+      expect([...host.querySelectorAll('.ck-file-head button')].some((b) => /^Open in/.test(b.textContent ?? ''))).toBe(false);
+      const more = host.querySelector<HTMLButtonElement>('.ck-file-head button[aria-label="More file actions"]')!;
+      expect(more).not.toBeNull();
+      await click(more);
+      const items = [...document.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent ?? '');
+      expect(items.some((i) => /^Open in|Open in my editor|Open in an editor/i.test(i))).toBe(true);
+      expect(items).toContain('Show as text');
+    } finally {
+      if (scroll) Object.defineProperty(proto, 'scrollWidth', scroll);
+      else delete (proto as { scrollWidth?: unknown }).scrollWidth;
+      if (client) Object.defineProperty(proto, 'clientWidth', client);
+      else delete (proto as { clientWidth?: unknown }).clientWidth;
+    }
+  });
+});

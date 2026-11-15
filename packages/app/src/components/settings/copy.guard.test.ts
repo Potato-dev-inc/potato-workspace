@@ -37,6 +37,9 @@ const COPY: Record<string, [string, string]> = {
   'lend-labs': ['Lend an agent', 'Lend a sign-in to another PC, or borrow one. Adds a card to Connect.'],
   'desktop-potato-labs': ['Desktop Potato', 'A small Potato on your desktop. It sleeps, and waves when an agent needs you.'],
   'agent-browser-labs': ['Agent browser', 'Agents open and click pages of your app on this PC. You can take over.'],
+  'companion-vault-labs': ['Companion memory and mood', "Companions keep a journal and a diary, and show how they feel. Plain text files."],
+  'discord-bot-labs': ['Discord bot', 'A companion answers in your chosen Discord channels, with your own bot.'],
+  'project-guide-labs': ['Project guide', 'Your agent writes a short guide to a project, only when you ask.'],
   telegram: ['Telegram', 'Answer your agents by Telegram text. Read the warning first.'],
   'opencode-automation': ['Switch OpenCode keys at the limit', "Uses your other key when one is limited. Check your provider's terms."],
 };

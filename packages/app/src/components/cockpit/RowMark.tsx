@@ -1,6 +1,6 @@
 // The one-line mark of a slim sidebar row: one mark, two readings. The brand icon says who (the agent); a small dot on
 // its corner says what: green and breathing while it works, orange when it needs you, red when it is broken, and
-// nothing when idle (the icon dims instead). The state is also spoken (role img) and the row's right side repeats it in words.
+// nothing when idle, a hollow ring when ended (the icon is never dimmed). The state is also spoken (role img) and the row's right side repeats it in words.
 import { AgentLogo } from '../common/AgentLogo';
 import { useT } from '../../i18n';
 
@@ -33,7 +33,7 @@ export function RowMark({
       <span className="ck-mark-agent" aria-hidden="true">
         <AgentLogo id={agentId} name={agentName} size={14} decorative />
       </span>
-      {kind !== 'idle' && kind !== 'ended' && <span className="ck-mark-shape" aria-hidden="true" />}
+      {kind !== 'idle' && <span className="ck-mark-shape" aria-hidden="true" />}
     </span>
   );
 }

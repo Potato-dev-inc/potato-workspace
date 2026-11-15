@@ -251,6 +251,10 @@ pub fn local_minute_of_day() -> u32 {
 
 /// The filter on the real choices and the real clock. `true` = send it.
 pub fn allows(alert: &Alert<'_>, now_ms: u64) -> bool {
+    // "Leaving my desk" is on: what needs the person reaches the phone whatever the levels, quiet hours or snooze say.
+    if level_wants(BellLevel::Needs, alert.kind) && crate::mobile_pairing::desk_away::wants_push(now_ms) {
+        return true;
+    }
     let decision = decide(&store().get(), alert, local_minute_of_day(), now_ms);
     if !decision.notify {
         tracing::debug!(reason = ?decision.reason, kind = ?alert.kind, "alert held back by the notification levels");

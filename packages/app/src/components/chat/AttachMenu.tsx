@@ -2,6 +2,7 @@
 // and prepares the files (see lib/attachFiles). It opens upward, because the button sits at the bottom of the box.
 import { useEffect, useRef, useState } from 'react';
 import '../../styles/cockpit-chat-attachments.css';
+import { useDismissable } from '../../hooks/useDismissable';
 
 export interface AttachMenuProps {
   onPickFiles: () => void;
@@ -52,12 +53,9 @@ export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = 
   useEffect(() => {
     if (!open) return;
     wrap.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-    const away = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
-    };
-    window.addEventListener('mousedown', away);
-    return () => window.removeEventListener('mousedown', away);
   }, [open]);
+  // Escape is handled in onKeyDown below (it returns the focus to the button).
+  useDismissable(open, { inside: [wrap], anchor: wrap, ignore: ['escape'], onDismiss: () => setOpen(false) });
 
   useEffect(() => {
     if (disabled) setOpen(false);

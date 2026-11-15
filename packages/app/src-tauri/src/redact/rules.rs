@@ -87,6 +87,7 @@ static SHAPES: Lazy<Vec<(Regex, String)>> = Lazy::new(|| {
         (r"AIza[0-9A-Za-z_\-]{30,}", m.into()),   // Google API keys
         (r"\b(?:sk|pk|rk)_(?:live|test)_[0-9A-Za-z]{10,}", m.into()), // Stripe
         (r"xox[abprs]-[A-Za-z0-9\-]{6,}", m.into()), // Slack
+        (r"\b[A-Za-z0-9_\-]{23,28}\.[A-Za-z0-9_\-]{6,7}\.[A-Za-z0-9_\-]{27,40}\b", m.into()), // Discord bot token
         (r"\bnpm_[A-Za-z0-9]{30,}", m.into()),
         (r"\bhf_[A-Za-z0-9]{30,}", m.into()), // Hugging Face
         (r"\bSG\.[A-Za-z0-9_\-]{16,}\.[A-Za-z0-9_\-]{16,}", m.into()), // SendGrid

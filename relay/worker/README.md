@@ -1,4 +1,4 @@
-# Puppet Master relay on Cloudflare
+# Potato Worker (Puppet Master relay on Cloudflare)
 
 The team relay ("Heads-up") as a Cloudflare Worker with one Durable Object per team. It speaks the
 same wire protocol as the Rust server in `../server`, so the app's team settings work against it
@@ -160,6 +160,40 @@ npm run build:wasm                                          # writes src/wasm/, 
   connection that stays silent for too long, so the app does this every 45 seconds. A dropped connection is
   noticed by the app, which falls back to polling and tries the socket again.
 - Cloudflare terminates TLS, so there is nothing to put in front of it.
+
+## Potato Worker: one Worker for the team, the phone and invites
+
+This one deployment does three jobs. They share the Worker and nothing else (separate Durable Objects):
+
+| Job | Routes | Object |
+|---|---|---|
+| Team relay and Live Rooms | `/v1/teams/...`, `/v1/rooms/...`, `/r/` | `Team`, `IpGate`, `Room`, `RoomIndex` |
+| Stable phone link | `/_pm/link/...`, and every other path goes to your PC once it is linked | `StableLink` |
+| Invite links | `/join/<code>`, `/v1/invites/<code>`, `/v1/teams/<team>/invite-links` | `InviteBox` (one per code) |
+
+**One deploy:** `cd relay/worker && npm install && npx wrangler login && npm run deploy`. Keep the name `pm-relay`
+to upgrade an earlier relay in place (a new name would be a new, empty Worker).
+
+**Health says what it can do.** `GET /v1/health` and `GET /_pm/health` return
+`{"ok":true,"protocol":"pm-relay/1","worker":"potato-worker/1","features":["team","rooms","stable-link","invites"]}`.
+The app reads `features` before it sends anything. A Worker deployed before this merge lacks a feature, so the app
+says "Update your Worker" with the one deploy command. A secret is only ever sent to an address that lists the
+feature it is for: the stable link secret goes to `/_pm/link/...` on a Worker that lists `stable-link`, and nowhere else.
+
+**The phone link's path rule.** The Worker owns `/v1/`, `/r/`, `/join/` and `/_pm/`. Every other path
+(including `/`) is forwarded to your PC's quick-tunnel address once one is linked. Before a PC is linked, `/` shows the
+relay's front page.
+
+**Invite links.** A team device asks the Worker for a link (`POST /v1/teams/<team>/invite-links`, signed like every
+team call). The Worker makes a random 16-character code and keeps the invite for at most 24 hours.
+`GET /v1/invites/<code>` says who invited and which team (it never burns). `POST /v1/invites/<code>/claim` hands out
+the invite once and burns it: a second claim, from anyone, is a 410. `GET /join/<code>` is the page a person opens in a
+browser ("Open the app" and a download link). It only looks, so a link preview cannot use the invite up. The team owner
+still approves every join in the app. What the Worker stores for an invite is the invite itself (link and code), so a
+Worker you do not trust could read an open invite: host your own, as with the relay.
+
+Optional settings: `SETUP_SECRET_SHA256` (nobody can claim the phone link first), `RATE_LIMIT_PER_HOUR`,
+`DOWNLOAD_URL` (where the invite page sends someone without the app). See `wrangler.toml`.
 
 ## Tests
 

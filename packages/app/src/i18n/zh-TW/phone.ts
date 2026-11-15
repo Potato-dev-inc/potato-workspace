@@ -185,6 +185,8 @@ export const phone: Partial<Record<EnglishKey, string>> = {
   'phone.menu.stopAll': '停止所有 AI 助理',
   'phone.menu.closeOne': '關閉 {name}',
   'phone.menu.usage': '使用量',
+  'phone.menu.about': '關於',
+  'phone.menu.whatsNew': '新功能',
   'phone.menu.plans': '你的方案',
   'phone.menu.classic': '經典手機版（協調器）',
   'phone.menu.stopAllAsk': '要停止所有 AI 助理嗎？',

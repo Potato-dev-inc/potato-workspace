@@ -72,4 +72,15 @@ describe('PendingCard', () => {
     await act(async () => button('Keep').click());
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('This note is out of date.');
   });
+
+  it('shows a person note with its name, a Person tag and the same Keep and Drop buttons', async () => {
+    const transport = fakeCompanionTransport();
+    const pending = [item({ kind: 'person', text: 'Ren: Likes tea and short answers.' })];
+    await act(async () => root.render(<PendingCard companionId="mochi" name="Mochi" items={pending} transport={transport} onChanged={() => {}} />));
+    expect(host.textContent).toContain('About Ren');
+    expect(host.textContent).toContain('Likes tea and short answers.');
+    expect(host.querySelector('.ck-memory-tag')?.textContent).toBe('Person');
+    await act(async () => button('Keep').click());
+    expect(transport.calls.find((c) => c.method === 'decidePending')?.args).toEqual(['mochi', 'a1b2c3d4e5f6', 'keep']);
+  });
 });

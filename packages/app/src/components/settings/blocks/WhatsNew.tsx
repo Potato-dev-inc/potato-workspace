@@ -1,6 +1,7 @@
 // Settings > General > About: what changed in this release, in a few plain lines. Each line jumps to the setting
 // it talks about (the panel's `openRow`), so the list is also a short tour.
 import { useT, type MessageKey } from '../../../i18n';
+import { openTour, requestGuide, whatsNewVersion } from '../../../whatsnew/store';
 import type { SettingsEnv } from '../model';
 import { SettingBlock } from '../settings-ui';
 
@@ -29,6 +30,14 @@ export function WhatsNew({ env }: { env: SettingsEnv }) {
           </li>
         ))}
       </ul>
+      <div className="wn-set-actions">
+        <button type="button" className="st-btn" onClick={() => openTour(whatsNewVersion())}>
+          {t('whatsnew.takeTour')}
+        </button>
+        <button type="button" className="st-btn" onClick={requestGuide}>
+          {t('whatsnew.openGuide')}
+        </button>
+      </div>
     </SettingBlock>
   );
 }

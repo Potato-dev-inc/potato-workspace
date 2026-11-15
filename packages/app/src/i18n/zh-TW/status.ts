@@ -20,4 +20,5 @@ export const status: Partial<Record<EnglishKey, string>> = {
   'status.working': '{n} 個工作中',
   'status.needsYou_one': '{count} 個需要你',
   'status.needsYou_other': '{count} 個需要你',
+  'status.sameAccount': '和 {name} 是同一個帳號',
 };

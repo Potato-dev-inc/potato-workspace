@@ -1,5 +1,5 @@
 import { errorSentence } from '../../lib/sayError';
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { PaneMoreMenu, type MoreAction } from './PaneMoreMenu';
 import { bellMenuActions } from './bell-menu';
 import { useBellLevel } from '../../lib/notify-store';
@@ -26,16 +26,15 @@ import { IconGlobe, IconRail } from './Icons';
 import { subscribePaneActions, type PaneAction } from '../../lib/pane-actions';
 import { SessionRail } from './rail/SessionRail';
 import { useRailLayout } from './rail/useRailLayout';
+import { usePaneTourActions } from './usePaneTourActions';
 import { helperRows } from './rail/helperRows';
 import { chatHelpers } from '../../lib/chat-helpers';
 import { DockedCards } from './DockedCards';
 import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
 import { formatElapsed, spinnerStatus, stateText } from './model';
-import { acpResult, acpStatusWords } from './acp-pane';
-import { AcpResultStrip } from './AcpResultStrip';
+import { acpStatusWords } from './acp-pane';
 import { ChatCopyBar } from './ChatCopyBar';
 import { useChatCopy } from '../../lib/chatCopy';
-import { DoneList } from './DoneList';
 import { ReceiptTab } from './ReceiptTab';
 import { TurnFiles } from './turnfiles/TurnFiles';
 import { Changes } from './Changes';
@@ -46,7 +45,6 @@ import { panesSharingFolder } from './history-model';
 import { RenameTitle } from './RenameTitle';
 import { useLastTurn } from './away-context';
 import { SegTabs } from './SegTabs';
-import { PaneTabs } from './PaneTabs';
 import { Sheet } from './Sheet';
 import { paneHeading } from './titles';
 import { helperOfLabel, startedByLabel } from '../../lib/pane-helpers';
@@ -82,9 +80,16 @@ import { onComposerInsert } from '../../lib/composer-insert';
 import { LiveChip } from './live/LiveChip';
 import { FileTab } from '../files/FileTab';
 import { ArtifactTab } from '../artifacts/ArtifactTab';
+import { ArtifactSide } from '../artifacts/ArtifactSide';
+import { setActiveArtifactPane } from '../../lib/artifact-side';
 import { artifactIdOfPath } from '../../lib/artifact-tabs';
+import { isGuidePath, openGuideTab } from '../../lib/guide-tabs';
+import { GuideTab } from '../guide/GuideTab';
 import { useArtifactSync } from '../../lib/artifact-sync';
 import { FileTabsBar } from '../files/FileTabsBar';
+import { ChatOutNote } from './ChatOutNote';
+import { openChatInWindow, useChatInWindow } from '../../lib/tab-windows';
+import { clearContentSearchRequest, usePendingContentSearch } from '../../lib/files-search-request';
 import { clearFileFocus, fileTabId, pathOfTab, usePaneFiles } from '../../lib/file-tabs';
 import { LiveStatusContext } from './live/useLiveRoom';
 
@@ -181,9 +186,12 @@ export function PaneView({
   onWhatBroke,
   acp = tauriAcpChatApi,
   handoff,
+  inWindow = false,
 }: {
   c: CockpitApi;
   paneId: string;
+  /** This view is the pane's own window ("Open in a new window"): it cannot be pulled out again. */
+  inWindow?: boolean;
   /** The chat-session calls (state, settings, hand-over). Replaceable in tests. */
   acp?: AcpChatApi;
   /** Opens "What broke the tests?" for this pane (History tab). Absent: no button. */
@@ -230,9 +238,23 @@ export function PaneView({
   const lastTurn = sharedTurn ?? ownTurn;
   // Pages the agent dropped into .potato/artifacts/ get a card once the chat settles.
   useArtifactSync(paneId, isAcp, pane?.status ?? '');
+  // The right panel's Outputs rows call `openArtifactBeside(id)` without a pane: it opens beside this chat.
+  useEffect(() => {
+    setActiveArtifactPane(paneId);
+    return () => setActiveArtifactPane(null);
+  }, [paneId]);
   const worktree = usePaneWorktree(paneId, pane?.status ?? '');
   const { signals } = useLoopGuard();
   const rail = useRailLayout();
+  usePaneTourActions(paneId, rail);
+  const chatOut = useChatInWindow(paneId) && !inWindow;
+  // The palette's "Search in files" needs the right panel: open it (the Files card does the rest).
+  const askedSearch = usePendingContentSearch();
+  useEffect(() => {
+    if (askedSearch?.paneId !== paneId) return;
+    if (!rail.fits) clearContentSearchRequest(askedSearch); // no room for the right panel: the request would only wait
+    else if (!rail.open) rail.toggle();
+  }, [askedSearch, paneId, rail]);
   // The header folds its lowest-priority actions into the ⋯ menu when the pane is narrow (see usePaneHeadFold).
   const headRef = useRef<HTMLElement>(null);
   const [chatSlot, setChatSlot] = useState<HTMLElement | null>(null);
@@ -365,6 +387,7 @@ export function PaneView({
       setReflowKey((k) => k + 1);
     } else if (action === 'copy') void copySelection();
     else if (action === 'details') setDetails(true);
+    else if (action === 'guide') openGuideTab(paneId);
     else if (action === 'close') {
       // A copy with changes: ask what to do with it first (keep, throw away, or decide later).
       if (copyKind !== null && (chatCopy.summary?.files ?? 0) > 0) {
@@ -450,7 +473,6 @@ export function PaneView({
   // person counts as "needs you" whatever the helper's status says.
   const askingPanes = new Set(c.asked.questions.map((q) => q.pane_id).filter((id): id is string => !!id));
   const startedHelpers = chatHelpers(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type, askingPanes);
-  const result = isAcp ? acpResult(lastTurn, run.info?.receipt) : null;
   const chatDock =
     dockNow || helperAsks.length > 0 || isAcp ? (
       <>
@@ -463,9 +485,7 @@ export function PaneView({
           />
         )}
         {isAcp && <AcpChatDock c={c} paneId={paneId} paneName={name} api={acp} stopper={acpStop} />}
-        {isAcp && result && <AcpResultStrip result={result} paneId={paneId} cwd={info.cwd} onNotify={c.notify} />}
         {copyKind !== null && <ChatCopyBar kind={copyKind} summary={chatCopy.summary} busy={chatCopy.busy} onKeep={() => void chatCopy.keep(c.notify)} onThrowAway={() => chatCopy.discard(c.notify)} />}
-        {isAcp && <DoneList paneId={paneId} cwd={info.cwd} />}
         <HelperQuestions c={c} ids={helperAsks} />
         {dockNow && <DockedCards c={c} paneId={paneId} dock={dock} dockNow={dockNow} onMore={cycleDock} />}
       </>
@@ -474,12 +494,31 @@ export function PaneView({
   // The ⋯ menu carries the bell's four levels (the hook runs above the early return).
   const bellActions = bellMenuActions(bell, setBell, t);
 
+  // With a file in front, Ctrl+1 (Cmd+1) and Esc go back to the agent's own view (the pinned first tab does the same by click).
+  // Esc leaves alone what has its own Esc: a text box, the editor, a menu or a card.
+  const backToAgent = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (pathOfTab(tab) === null || e.defaultPrevented) return;
+    if (e.key === '1' && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      setTab(home);
+      return;
+    }
+    if (e.key !== 'Escape') return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.('input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"], [role="listbox"]')) return;
+    e.preventDefault();
+    setTab(home);
+  };
+
   const copyTotals = worktree?.summary ?? null;
   // What the narrow header moved out: the same buttons, one menu row each (lowest priority first).
   const moreActions: MoreAction[] = [];
   if (copyKind !== null) {
     moreActions.push({ id: 'copy-keep', label: t('chatCopy.keep'), disabled: chatCopy.busy || (chatCopy.summary?.files ?? 0) === 0, onSelect: () => void chatCopy.keep(c.notify) });
     moreActions.push({ id: 'copy-discard', label: t('chatCopy.throwAway'), disabled: chatCopy.busy, onSelect: () => chatCopy.discard(c.notify) });
+  }
+  if (chatAllowed && !inWindow && !chatOut) {
+    moreActions.push({ id: 'chat-window', label: t('tabwin.openChat'), onSelect: () => void openChatInWindow(paneId, name).catch(() => c.notify(t('tabwin.failed'))) });
   }
   if (fold >= 1 && handoff && handoff.allowed(paneId)) {
     moreActions.push({
@@ -504,8 +543,7 @@ export function PaneView({
   }
 
   return (
-    <div className="ck-pane" data-pane-tile={paneId}>
-      <PaneTabs c={c} paneId={paneId} />
+    <div className="ck-pane" data-pane-tile={paneId} onKeyDown={backToAgent}>
       <header className="ck-pane-head" ref={headRef} data-fold={fold}>
         <div className="ck-pane-id">
           <RenameTitle
@@ -654,7 +692,13 @@ export function PaneView({
         )}
       </header>
 
-      <FileTabsBar paneId={paneId} files={openFiles.files} active={tab} onPick={(id) => setTabRaw(id)} />
+      <FileTabsBar
+        paneId={paneId}
+        files={openFiles.files}
+        active={tab}
+        onPick={(id) => setTabRaw(id)}
+        agent={{ agentId: info.agent_type, name, active: pathOfTab(tab) === null, onPick: () => setTab(home) }}
+      />
 
       {dockNow && tab !== 'terminal' && tab !== 'chat' && (
         <button type="button" className="ck-dock-bar" onClick={() => setTab('terminal')} aria-label={t('pane.dockBarAria', { headline: dockHeadline })}>
@@ -682,7 +726,8 @@ export function PaneView({
               </div>
             </div>
           )}
-          {tab === 'chat' && chatAllowed && (
+          {tab === 'chat' && chatAllowed && chatOut && <ChatOutNote paneId={paneId} />}
+          {tab === 'chat' && chatAllowed && !chatOut && (
             <div className="ck-scroll ck-fade-in" key="chat" data-pane-id={paneId}>
               <SessionChatPanel
                 paneId={paneId}
@@ -702,6 +747,9 @@ export function PaneView({
                 }}
                 onOpenPane={(id) => c.select(id)}
                 slashCommands={isAcp ? acpState?.commands : undefined}
+                slashAgent={isAcp ? (acpState?.agent || agentType) : undefined}
+                slashWaiting={isAcp && !!acpState && ['starting', 'resuming', 'dormant'].includes(acpState.phase)}
+                onWarm={isAcp ? () => void acp.warm?.(paneId)?.catch(() => undefined) : undefined}
                 composerTop={isAcp ? <AcpConfigChips paneId={paneId} state={acpState} api={acp} /> : undefined}
               />
             </div>
@@ -716,11 +764,14 @@ export function PaneView({
               />
             </div>
           )}
-          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && artifactIdOfPath(pathOfTab(tab)!) === null && (
-            <FileTab key={tab} paneId={paneId} path={pathOfTab(tab)!} canTell={chatAllowed} refreshKey={pane?.status ?? ''} />
+          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && artifactIdOfPath(pathOfTab(tab)!) === null && !isGuidePath(pathOfTab(tab)!) && (
+            <FileTab key={tab} paneId={paneId} path={pathOfTab(tab)!} canTell={chatAllowed} refreshKey={pane?.status ?? ''} goTo={openFiles.lines[pathOfTab(tab)!]} />
           )}
           {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && artifactIdOfPath(pathOfTab(tab)!) !== null && (
             <ArtifactTab key={tab} paneId={paneId} id={artifactIdOfPath(pathOfTab(tab)!)!} />
+          )}
+          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && isGuidePath(pathOfTab(tab)!) && (
+            <GuideTab key={tab} paneId={paneId} project={projectWithCopy(info.cwd)} agentType={info.agent_type} agentName={name} />
           )}
           {tab === 'transcript' && (
             <div className="ck-scroll ck-fade-in" key="transcript">
@@ -782,19 +833,37 @@ export function PaneView({
             </div>
           )}
         </div>
+        <ArtifactSide paneId={paneId} railVisible={rail.visible} />
         {rail.visible && (
           <SessionRail
             paneId={paneId}
             status={pane.status}
             cwd={info.cwd}
+            agentType={info.agent_type}
             agentName={name}
             accountLabel={info.account_label}
+            runsOn={placeLabel(info.place) || null}
             readsChat={chatAllowed}
             helperOf={helperOf}
             helpers={helperRows(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
+            copy={copyKind ? { kind: copyKind } : null}
+            canCreatePr={!!worktree}
+            ask={pane.status === 'waiting_input' ? (acpState?.permissions[0]?.title ?? (asking ? dockHeadline : t('pane.question'))) : null}
+            onAnswer={() => {
+              setTab('chat');
+              window.setTimeout(() => {
+                const dock = document.querySelector<HTMLElement>('[data-testid="acp-dock"]');
+                dock?.scrollIntoView({ block: 'center' });
+                dock?.querySelector<HTMLElement>('button')?.focus();
+              }, 0);
+            }}
             onOpenChanges={worktree ? () => setTab('changes') : () => setTab('receipt')}
+            onOpenCopy={() => setDetails(true)}
             onOpenPane={(id) => c.select(id)}
+            onStopHelper={(id) => c.interrupt(id)}
             onSaveTeam={() => setSaveTeam(true)}
+            onClose={rail.close}
+            onNotify={c.notify}
           />
         )}
       </div>

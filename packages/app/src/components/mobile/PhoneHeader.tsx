@@ -6,6 +6,7 @@ import type { PaneView } from '../../lib/mobile-pane-view';
 import type { PhoneStatus } from '../../lib/phone-status';
 import { PhoneAgentTile } from './PhoneAgentTile';
 import '../../styles/phone-shell.css';
+import { useDismissable } from '../../hooks/useDismissable';
 
 export function PhoneHeader({
   title,
@@ -46,21 +47,7 @@ export function PhoneHeader({
     setOpen(false);
     setConfirm(false);
   }, [title]);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    const onDown = (event: PointerEvent) => {
-      if (rootRef.current && event.target instanceof Node && !rootRef.current.contains(event.target)) setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    document.addEventListener('pointerdown', onDown);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.removeEventListener('pointerdown', onDown);
-    };
-  }, [open]);
+  useDismissable(open, { inside: [rootRef], anchor: rootRef, onDismiss: () => setOpen(false) });
 
   const words = status?.text ?? stateWords ?? null;
   const name = (

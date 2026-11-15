@@ -83,4 +83,5 @@ export const sidebar = {
   'sidebar.dragLive': 'Dragging {name}. Drop on the left or right side. Esc cancels.',
   'sidebar.dropLeft': 'Open on the left',
   'sidebar.dropRight': 'Open on the right',
+  'sidebar.helperCount': '{count} helpers',
 } as const;

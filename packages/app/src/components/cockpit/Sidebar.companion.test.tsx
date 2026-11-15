@@ -174,4 +174,41 @@ describe('sidebar: companions', () => {
     expect(host.querySelector('.ck-companion-row')).toBeNull();
     expect(host.querySelector('.ck-companion-make')).toBeNull();
   });
+
+  it('with two companions shows both rows, the default mark and a "New companion" row', async () => {
+    const onNewCompanion = vi.fn();
+    await render({
+      companions: [companion({ isDefault: true }), companion({ id: 'bit', name: 'Bit', avatar: 'bit', paneId: 'companion-bit', accent: 'sky' })],
+      onNewCompanion,
+    });
+    const rows = [...host.querySelectorAll('.ck-companion-row')];
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.ck-companion-default')).not.toBeNull();
+    expect(rows[1].querySelector('.ck-companion-default')).toBeNull();
+    expect(rows[1].getAttribute('data-accent')).toBe('sky');
+    const add = host.querySelector<HTMLButtonElement>('.ck-companion-new')!;
+    expect(add.textContent?.replace(/\s+/g, ' ').trim()).toBe('+ New companion');
+    act(() => add.click());
+    expect(onNewCompanion).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.ck-companion-make')).toBeNull();
+  });
+
+  it('a single companion has no default mark, and the "New companion" row is there', async () => {
+    await render({ companions: [companion({ isDefault: true })], onNewCompanion: () => {} });
+    expect(host.querySelector('.ck-companion-default')).toBeNull();
+    expect(host.querySelector('.ck-companion-new')).not.toBeNull();
+  });
+
+  it('hides "New companion" at the limit of eight', async () => {
+    const eight = Array.from({ length: 8 }, (_, i) => companion({ id: `c${i}`, name: `C${i}`, paneId: `companion-c${i}`, isDefault: i === 0 }));
+    await render({ companions: eight, onNewCompanion: () => {} });
+    expect(host.querySelectorAll('.ck-companion-row')).toHaveLength(8);
+    expect(host.querySelector('.ck-companion-new')).toBeNull();
+  });
+
+  it('with no companion the quiet "Make" line stays and there is no "New companion" row', async () => {
+    await render({ companions: [], onNewCompanion: () => {} });
+    expect(host.querySelector('.ck-companion-make')).not.toBeNull();
+    expect(host.querySelector('.ck-companion-new')).toBeNull();
+  });
 });

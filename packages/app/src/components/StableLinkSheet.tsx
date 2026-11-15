@@ -7,17 +7,18 @@ import { tauri } from '../lib/tauri';
 import { teamApi } from '../lib/team';
 import type { TunnelStatus } from '../lib/tauri-types';
 import { Btn, FieldInput } from './settings/settings-ui';
+import { WorkerSuggestion } from './settings/WorkerSuggestion';
+import { workersDevAddress, WORKER_GUIDE_URL, type WorkerHealth } from '../lib/worker';
 import { draftFromConfig, draftProblem, statusLine, toInput } from './settings/tunnel-model';
 import type { TunnelApi } from './settings/TunnelSection';
 
-export const STABLE_GUIDE_URL = 'https://github.com/Potato-dev-inc/potato-workspace/tree/main/relay/stable-link#readme';
-/** The three commands, run inside the Worker folder (relay/stable-link in the Potato Workspace folder). */
-const COMMANDS = ['cd relay/stable-link && npm install', 'npx wrangler login', 'npm run deploy']; // i18n-ok: shell commands
+export const STABLE_GUIDE_URL = WORKER_GUIDE_URL;
+/** The three commands, run inside the Worker folder (relay/worker in the Potato Workspace folder). One Worker: team relay, phone link and invites. */
+const COMMANDS = ['cd relay/worker && npm install', 'npx wrangler login', 'npm run deploy']; // i18n-ok: shell commands
 
 /** A team relay address saved in Settings > Team, when it is a workers.dev address. */
 async function defaultRelaySuggestion(): Promise<string | null> {
-  const url = (await teamApi.configGet()).relay?.trim().replace(/\/+$/, '') ?? '';
-  return /^https:\/\/[^/]+\.workers\.dev$/i.test(url) ? url : null;
+  return workersDevAddress((await teamApi.configGet()).relay);
 }
 
 async function copyText(text: string): Promise<void> {
@@ -54,6 +55,7 @@ export function StableLinkSheet({
   onStatus,
   onClose,
   relaySuggestion = defaultRelaySuggestion,
+  checkWorker,
 }: {
   api: TunnelApi;
   initial: TunnelStatus | null;
@@ -61,6 +63,8 @@ export function StableLinkSheet({
   onClose: () => void;
   /** The saved team relay address, if any (a workers.dev address). Tests give their own. */
   relaySuggestion?: () => Promise<string | null>;
+  /** Asks a Worker what it can do (tests give their own; the default asks over the desktop shell). */
+  checkWorker?: (address: string) => Promise<WorkerHealth | null>;
 }) {
   const t = useT();
   const [status, setStatus] = useState<TunnelStatus | null>(initial);
@@ -153,14 +157,15 @@ export function StableLinkSheet({
           <li>
             <strong>{t('stable.step3')}</strong>
             <p>{t('stable.pasteHelp')}</p>
-            {relay && relay !== worker.trim() && (
-              <p data-testid="stable-relay-suggestion">
-                <button type="button" className="st-linkbtn stable-keep" onClick={() => setWorker(relay)}>
-                  {t('stable.useRelay', { url: relay })}
-                </button>
-                <span className="block">{t('stable.relayNote')}</span>
-              </p>
-            )}
+            <WorkerSuggestion
+              address={relay}
+              current={worker}
+              feature="stable-link"
+              useKey="stable.useRelay"
+              noteKey="stable.relayNote"
+              onUse={setWorker}
+              check={checkWorker}
+            />
             <div className="flex gap-2 items-center">
               <FieldInput
                 aria-label={t('tunnel.workerAria')}

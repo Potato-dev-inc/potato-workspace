@@ -4,6 +4,7 @@ export const phoneHalf = {
   'phone.theme.title': 'Theme',
   'phone.theme.auto': 'Auto',
   'phone.theme.light': 'Light',
+  'phone.theme.dim': 'Dimmed',
   'phone.theme.dark': 'Dark',
   'phone.rule.noControl': 'This phone cannot stop or close agents. Your PC decides.',
   'phone.rule.noAnswer': 'This phone cannot answer questions. Your PC decides.',

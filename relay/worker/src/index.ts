@@ -22,10 +22,15 @@
 
 import { addressKeyOf } from "./addr";
 import { type Env, limitsFrom } from "./env";
+import type { InviteBox } from "./invites";
 import { addressKey } from "./gate";
 import { readBody, refuse, json } from "./http";
 import { scopedKey } from "./room";
 import { authenticate, C, checkRegistration, isTeamId } from "./proto";
+import { FEATURES, WORKER_NAME } from "./features";
+import { codeKey, isCode, joinPage } from "./invites";
+import { bearer, sha256Hex } from "./stablecrypto";
+import { offlineResponse } from "./offline";
 import { isRoomId, isSeatId, parseRegistration, readHashOf, registrationError, ROOM, unb64 } from "./roomproto";
 // The viewer, built by relay/viewer, is bundled as text (wrangler `[[rules]] type = "Text"`).
 import viewerCss from "../../viewer/dist/viewer.css";
@@ -37,6 +42,8 @@ import viewerJs from "../../viewer/dist/viewer.js";
 export { IpGate } from "./gate";
 export { Room, RoomIndex } from "./room";
 export { Team } from "./team";
+export { StableLink } from "./stable";
+export { InviteBox } from "./invites";
 
 interface Spec {
   route: string;
@@ -79,6 +86,9 @@ function match(method: string, parts: string[], testHooks: boolean): Spec | "met
     case "ws":
       if (parts.length !== 4) return undefined;
       return method === "GET" ? { route: "ws", team, auth: true, ip: false, max: 0 } : "method";
+    case "invite-links":
+      if (parts.length !== 4) return undefined;
+      return method === "POST" ? { route: "invite-put", team, auth: true, ip: false, max: 8 * KIB } : "method";
     case "joins":
       if (parts.length !== 4) return undefined;
       // Join requests are limited per address *and team*, by the team's object (it is given the address).
@@ -247,9 +257,136 @@ async function releaseSlot(env: Env, room: string): Promise<void> {
   }
 }
 
+// ------------------------------------------------------------------------- invite links (/v1/invites, /join)
+
+const INVITE_TRIES_PER_HOUR = 60;
+
+/** An invite code's object, after the per-address budget. Unknown shapes are the same 404 as unknown codes. */
+async function inviteBox(request: Request, env: Env, code: string): Promise<DurableObjectStub<InviteBox> | Response> {
+  if (!isCode(code)) return refuse(404, "invite not found");
+  const gate = env.GATE.get(env.GATE.idFromName(await scopedKey("invite-try", addressKeyOf(request.headers.get("cf-connecting-ip")))));
+  if (!(await gate.hit(HOUR_MS, INVITE_TRIES_PER_HOUR))) return refuse(429, "slow down");
+  return env.INVITES.get(env.INVITES.idFromName(await codeKey(code)));
+}
+
+function inviteAnswer(result: { state: string }): Response {
+  const status = result.state === "unknown" ? 404 : result.state === "open" || result.state === "claimed" ? 200 : 410;
+  return noStore(json(result, status));
+}
+
+/** `GET /v1/invites/{code}` (what to show, never burns) and `POST /v1/invites/{code}/claim` (burns). */
+async function inviteRoute(request: Request, env: Env, parts: string[]): Promise<Response> {
+  const code = parts[2] ?? "";
+  const claim = parts.length === 4 && parts[3] === "claim";
+  if (parts.length !== 3 && !claim) return noStore(refuse(404, "not found"));
+  if (request.method !== (claim ? "POST" : "GET")) return noStore(refuse(405, "method not allowed"));
+  const box = await inviteBox(request, env, code);
+  if (box instanceof Response) return noStore(box);
+  return inviteAnswer(claim ? await box.claim() : await box.peek());
+}
+
+/** `GET /join/{code}`: the page a person sees. It only peeks, so a link preview cannot use the invite up. */
+async function joinRoute(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method !== "GET") return refuse(405, "method not allowed");
+  const code = url.pathname.slice("/join/".length).replace(/\/$/, "");
+  const box = await inviteBox(request, env, code);
+  const peek = box instanceof Response ? ({ state: "unknown" } as const) : await box.peek();
+  return noStore(joinPage(isCode(code) ? code : "", url.host, peek, env.DOWNLOAD_URL));
+}
+
+// ------------------------------------------------------------------------------- stable phone link
+
+const LINK_PREFIX = "link/";
+const MAX_REGISTER_BODY = 1024;
+
+function stableJson(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+}
+
+/** What the Worker can do. The app reads `features` before it sends anything (a secret goes only where it is listed). */
+const healthBody = () => ({ ok: true, protocol: C.protocol, worker: WORKER_NAME, features: FEATURES });
+
+/** The one stable-link object: one Worker serves one PC. */
+const linkOf = (env: Env) => env.LINK.get(env.LINK.idFromName("link"));
+
+async function readOrigin(request: Request): Promise<unknown> {
+  try {
+    const text = await request.text();
+    if (text.length > MAX_REGISTER_BODY) return null;
+    return (JSON.parse(text) as { origin?: unknown }).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** `/_pm/health`, `/_pm/link/health`, `/_pm/link/register`, `/_pm/link/reset`. The link secret only ever arrives here. */
+async function pmRoute(request: Request, env: Env, path: string): Promise<Response> {
+  if (path === "health") {
+    return request.method === "GET" ? noStore(json(healthBody())) : stableJson(405, { error: "method_not_allowed" });
+  }
+  if (!path.startsWith(LINK_PREFIX)) return stableJson(404, { error: "not_found" });
+  const name = path.slice(LINK_PREFIX.length);
+  const stub = linkOf(env);
+  if (name === "health") {
+    if (request.method !== "GET") return stableJson(405, { error: "method_not_allowed" });
+    return stableJson(200, await stub.health());
+  }
+  if (name !== "register" && name !== "reset") return stableJson(404, { error: "not_found" });
+  if (request.method !== "POST") return stableJson(405, { error: "method_not_allowed" });
+  const token = bearer(request.headers.get("authorization"));
+  if (!token) return stableJson(401, { error: "secret_required" });
+  const hash = await sha256Hex(token);
+  const address = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const outcome = name === "reset" ? await stub.reset(hash, address) : await stub.register(hash, await readOrigin(request), address);
+  return outcome.status === 200 ? stableJson(200, { ok: true }) : stableJson(outcome.status, { error: outcome.error });
+}
+
+/** Turn an address the PC sent back (a redirect) into one on this Worker, so the phone never leaves it. */
+function rewriteLocation(location: string, origin: string, self: URL): string {
+  return location.startsWith(origin) ? `${self.origin}${location.slice(origin.length)}` : location;
+}
+
+/** Everything the relay side does not own goes to the PC's quick-tunnel address, once one is linked. */
+async function forwardToPc(request: Request, origin: string): Promise<Response> {
+  const self = new URL(request.url);
+  const headers = new Headers(request.headers);
+  headers.delete("host");
+  headers.set("x-forwarded-host", self.host);
+  headers.set("x-forwarded-proto", "https");
+  let upstream: Response;
+  try {
+    // The request body is passed on as a stream, never buffered. A WebSocket upgrade passes straight through.
+    upstream = await fetch(`${origin}${self.pathname}${self.search}`, {
+      method: request.method,
+      headers,
+      body: request.body,
+      redirect: "manual",
+    });
+  } catch {
+    return offlineResponse();
+  }
+  if (upstream.status === 502 || upstream.status === 530) return offlineResponse();
+  if (upstream.status === 101) return upstream; // WebSocket: keep the socket object as it is
+  const out = new Response(upstream.body, upstream);
+  const location = out.headers.get("location");
+  if (location) out.headers.set("location", rewriteLocation(location, origin, self));
+  return out;
+}
+
+/** What the relay side owns: `/v1/...`, the Live Room viewer under `/r/`, `/join/...`, `/_pm/...`. Any other path is the phone link's. */
+const ownedByRelay = (path: string): boolean =>
+  path.startsWith("/v1/") || path === "/r/" || path === "/r/viewer.js" || path === "/r/viewer.css";
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/_pm/")) return pmRoute(request, env, url.pathname.slice("/_pm/".length));
+    if (url.pathname.startsWith("/join/")) return joinRoute(request, env, url);
+    if (!ownedByRelay(url.pathname)) {
+      // The phone link: anything else goes to the PC. Not linked yet: the relay's own front page, as before.
+      const origin = await linkOf(env).origin();
+      if (origin) return forwardToPc(request, origin);
+    }
     const page = viewerPage(request, url);
     if (page !== undefined) return page;
     // The relay may live under a path prefix (`https://example.com/pm/v1/...`); the app signs the
@@ -260,8 +397,9 @@ export default {
     }
     const parts = url.pathname.slice(at + 1).split("/");
     if (parts.length === 2 && parts[1] === "health") {
-      return request.method === "GET" ? json({ ok: true, protocol: C.protocol }) : refuse(405, "method not allowed");
+      return request.method === "GET" ? noStore(json(healthBody())) : refuse(405, "method not allowed");
     }
+    if (parts[1] === "invites") return inviteRoute(request, env, parts);
     if (parts[1] === "rooms") return roomRoute(request, env, url, parts);
     const spec = match(request.method, parts, env.TEST_HOOKS === "1");
     if (spec === undefined) return refuse(404, "not found");

@@ -1,0 +1,131 @@
+/* "Leaving my desk": the status bar chip, the sheet, and the banner. Colour tokens only; the accent is small. */
+.cockpit .ck-desk-chip {
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cockpit .ck-desk-chip:hover {
+  color: var(--label);
+}
+.cockpit .ck-desk-chip:focus-visible,
+.cockpit .ck-desk-sheet button:focus-visible,
+.cockpit .ck-desk-banner button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cockpit .ck-desk-banner {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 24px));
+  padding: 8px 8px 8px 14px;
+  border-radius: 999px;
+  background: var(--bg-float, var(--bg-raised));
+  color: var(--label);
+  box-shadow: var(--float-shadow, none), 0 0 0 1px var(--sep), inset 3px 0 0 var(--accent);
+  font: 400 12px/1.3 var(--font-ui);
+}
+.cockpit .ck-desk-banner-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cockpit .ck-desk-banner-text b {
+  font-weight: 600;
+  font-size: 13px;
+}
+.cockpit .ck-desk-banner-text span {
+  color: var(--label-2);
+}
+.cockpit .ck-desk-back,
+.cockpit .ck-desk-sheet .ck-desk-go {
+  min-height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  font: 500 13px/1 var(--font-ui);
+  white-space: nowrap;
+}
+.cockpit .ck-desk-sheet {
+  position: fixed;
+  right: 12px;
+  bottom: calc(var(--ck-statusbar-h, 26px) + 8px);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(340px, calc(100vw - 24px));
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--bg-float, var(--bg-raised));
+  color: var(--label);
+  box-shadow: var(--float-shadow, none), 0 0 0 1px var(--sep);
+  font: 400 13px/1.4 var(--font-ui);
+}
+.cockpit .ck-desk-sheet p {
+  margin: 0;
+}
+.cockpit .ck-desk-title {
+  font: 600 14px/1.35 var(--font-ui);
+}
+.cockpit .ck-desk-note {
+  color: var(--label-2);
+}
+.cockpit .ck-desk-lengths {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.cockpit .ck-desk-lengths legend {
+  padding: 0;
+  margin-bottom: 4px;
+  color: var(--label-2);
+}
+.cockpit .ck-desk-lengths label,
+.cockpit .ck-desk-lock {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.cockpit .ck-desk-lock small {
+  display: block;
+  color: var(--label-3);
+}
+.cockpit .ck-desk-err {
+  color: var(--accent);
+}
+.cockpit .ck-desk-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.cockpit .ck-desk-actions button {
+  min-height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--fill-active);
+  color: var(--label);
+  font: 500 13px/1 var(--font-ui);
+}
+.cockpit .ck-desk-actions .ck-desk-go {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+.cockpit .ck-desk-actions button:disabled {
+  opacity: 0.5;
+}

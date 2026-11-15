@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { ShipApi } from '../../lib/ship-api';
+import { setHelpersInSidebar } from '../../lib/helpersInSidebar';
 import { Sidebar } from './Sidebar';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -18,6 +19,8 @@ let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
   localStorage.clear();
+  // The tree is off by default (the helpers bar holds helpers); these tests are about the tree, so they turn it on.
+  setHelpersInSidebar(true);
   // These tests are about the Needs you / Working / Idle grouping; the Projects view is the default.
   localStorage.setItem('pm.sidebar.groupBy', 'status');
   host = document.createElement('div');
@@ -25,6 +28,7 @@ beforeEach(() => {
   root = createRoot(host);
 });
 afterEach(() => {
+  setHelpersInSidebar(false);
   act(() => root.unmount());
   host.remove();
 });
@@ -65,6 +69,30 @@ async function render(c: CockpitApi) {
 }
 
 const titles = (el: ParentNode = host) => [...el.querySelectorAll(el === host ? '.ck-group .ck-row-title' : '.ck-row-title')].map((t) => t.textContent);
+
+describe('sidebar helpers: the default is a count, not a tree', () => {
+  it('lists no helper rows by default; the agent row shows how many helpers it has', async () => {
+    setHelpersInSidebar(false);
+    await render(api([pane('p', 'running', 'Refactor auth'), pane('h1', 'running', 'Check tests', 'p'), pane('h2', 'idle', 'Read docs', 'p')]));
+    expect(host.querySelector('.ck-helpers')).toBeNull();
+    expect(titles()).toEqual(['Refactor auth']);
+    expect(host.querySelector('[data-testid="row-helper-count"]')?.textContent).toBe('2');
+  });
+
+  it('a helper that needs you is still listed in Needs you with its parent named', async () => {
+    setHelpersInSidebar(false);
+    await render(api([pane('p', 'running', 'Refactor auth'), pane('h1', 'waiting_input', 'Check tests', 'p')]));
+    expect(host.textContent).toContain('Needs you');
+    expect(titles()).toContain('Check tests');
+  });
+
+  it('the setting brings the tree back', async () => {
+    setHelpersInSidebar(true);
+    await render(api([pane('p', 'running', 'Refactor auth'), pane('h1', 'running', 'Check tests', 'p')]));
+    expect(host.querySelector('.ck-helpers')).not.toBeNull();
+    expect(host.querySelector('[data-testid="row-helper-count"]')).toBeNull();
+  });
+});
 
 describe('sidebar helpers', () => {
   it('nests helpers under their parent with a count chip', async () => {

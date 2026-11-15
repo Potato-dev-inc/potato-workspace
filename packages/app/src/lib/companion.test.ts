@@ -81,6 +81,7 @@ describe('tauriCompanionTransport', () => {
     ['create', () => tauriCompanionTransport.create(draft), 'companion_create', { input: draft }],
     ['update', () => tauriCompanionTransport.update('a', { name: 'Bo' }), 'companion_update', { id: 'a', patch: { name: 'Bo' } }],
     ['archive', () => tauriCompanionTransport.archive('a'), 'companion_archive', { id: 'a' }],
+    ['setDefault', () => tauriCompanionTransport.setDefault('a'), 'companion_set_default', { id: 'a' }],
     ['delete', () => tauriCompanionTransport.delete('a'), 'companion_delete', { id: 'a' }],
     ['restart', () => tauriCompanionTransport.restart('a'), 'companion_restart', { id: 'a' }],
     [

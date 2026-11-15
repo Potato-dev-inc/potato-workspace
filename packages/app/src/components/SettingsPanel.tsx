@@ -745,7 +745,7 @@ export function SettingsPanel({
               )
             ) : (
               section && (
-                <SetupChecksProvider enabled={section.id === 'overview'} actions={(overviewSources ?? DEFAULT_OVERVIEW_SOURCES).actions} run={() => (overviewSources ?? DEFAULT_OVERVIEW_SOURCES).checks((overviewSources ?? DEFAULT_OVERVIEW_SOURCES).setupDeps, setupContext(settings, bridgeUrl))}>
+                <SetupChecksProvider enabled={section.id === 'overview'} actions={(overviewSources ?? DEFAULT_OVERVIEW_SOURCES).actions} run={(options) => (overviewSources ?? DEFAULT_OVERVIEW_SOURCES).checks((overviewSources ?? DEFAULT_OVERVIEW_SOURCES).setupDeps, setupContext(settings, bridgeUrl), options)}>
                 <ErrorBoundary where="Settings page" resetKeys={[section.id]}>
                   {section.id === 'overview' && (
                     <Overview settings={settings} bridgeUrl={bridgeUrl} openRow={openRow} openPage={goToPage} sources={overviewSources} />

@@ -81,6 +81,31 @@ fn resource_candidates(resource_dir: Option<&Path>, exe_dir: Option<&Path>, rel:
     candidates
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_BUNDLED: std::cell::RefCell<Option<(String, Vec<String>)>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Runs `f` as if this app's bundled MCP program were `command args` (this thread only), so a test needs no
+/// process-wide state.
+#[cfg(test)]
+pub fn with_test_bundled<R>(command: &str, args: &[&str], f: impl FnOnce() -> R) -> R {
+    TEST_BUNDLED.with(|slot| *slot.borrow_mut() = Some((command.to_string(), args.iter().map(|a| a.to_string()).collect())));
+    let out = f();
+    TEST_BUNDLED.with(|slot| *slot.borrow_mut() = None);
+    out
+}
+
+#[cfg(test)]
+fn test_bundled() -> Option<McpLaunchSpec> {
+    TEST_BUNDLED.with(|slot| slot.borrow().clone()).map(|(command, args)| McpLaunchSpec { command, args })
+}
+
+#[cfg(not(test))]
+fn test_bundled() -> Option<McpLaunchSpec> {
+    None
+}
+
 pub struct McpLaunchSpec {
     pub command: String,
     pub args: Vec<String>,
@@ -96,6 +121,9 @@ pub fn npm_mcp_launch_spec() -> McpLaunchSpec {
 /// The launch spec of a bundled program (the Rust MCP exe, else the Node bundle), or None when this install has
 /// neither. Unlike [`mcp_launch_spec`] it never falls back to the npm package, which is not published.
 pub fn bundled_launch_spec() -> Option<McpLaunchSpec> {
+    if let Some(spec) = test_bundled() {
+        return Some(spec);
+    }
     if let Some(binary) = bundled_mcp_binary() {
         return Some(McpLaunchSpec { command: crate::app_paths::path_for_host_config(binary), args: vec![] });
     }
@@ -107,6 +135,9 @@ pub fn bundled_launch_spec() -> Option<McpLaunchSpec> {
 
 /// Command + args written into Claude / Codex / OpenCode MCP config.
 pub fn mcp_launch_spec() -> McpLaunchSpec {
+    if let Some(spec) = test_bundled() {
+        return spec;
+    }
     if let Some(binary) = bundled_mcp_binary() {
         return McpLaunchSpec {
             command: crate::app_paths::path_for_host_config(binary),

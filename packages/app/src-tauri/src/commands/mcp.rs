@@ -45,3 +45,17 @@ pub async fn get_mcp_status(
         developer_use_rust_mcp(&state),
     )
 }
+
+/// Agents whose tool list is older (or newer) than this app's, for the "Tools are out of date" banner.
+#[tauri::command]
+pub async fn mcp_tools_drift() -> Result<Vec<crate::mcp_drift::ToolsDrift>, String> {
+    Ok(crate::mcp_drift::report())
+}
+
+/// "Reconnect": restart the chat's agent so it starts this app's own MCP program.
+#[tauri::command]
+pub async fn mcp_reconnect(pane_id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || crate::mcp_drift::reconnect(&pane_id))
+        .await
+        .map_err(|e| format!("ACP_START_FAILED: {e}"))?
+}

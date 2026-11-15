@@ -45,6 +45,8 @@ pub enum Outcome {
     SecretMismatch,
     /// 400: the Worker refuses this address. Trying again cannot help.
     AddressRefused,
+    /// 404: this address is not a Worker with the stable link (an older team relay, or something else). Trying again cannot help.
+    WorkerTooOld,
     /// Anything else (no network, Worker down, 429, 5xx): try again later.
     Retry(String),
 }
@@ -56,13 +58,14 @@ impl Outcome {
             Self::Linked => None,
             Self::SecretMismatch => Some("The secret does not match the one the Worker has. Make a new secret, or reset the Worker.".into()),
             Self::AddressRefused => Some("The Worker refused this tunnel address. Is it a stable-link Worker?".into()),
+            Self::WorkerTooOld => Some("Update your Worker: this address does not have the stable link yet. Deploy the latest Potato Worker (cd relay/worker && npm install && npx wrangler login && npm run deploy).".into()),
             Self::Retry(why) => Some(why.clone()),
         }
     }
 
     /// Whether another try can still help.
     pub fn is_final(&self) -> bool {
-        matches!(self, Self::Linked | Self::SecretMismatch | Self::AddressRefused)
+        matches!(self, Self::Linked | Self::SecretMismatch | Self::AddressRefused | Self::WorkerTooOld)
     }
 }
 
@@ -73,6 +76,7 @@ pub fn interpret_register(http_status: Option<u16>, transport_error: Option<&str
         (Some(200), None) => Outcome::Linked,
         (Some(401 | 403), None) => Outcome::SecretMismatch,
         (Some(400), None) => Outcome::AddressRefused,
+        (Some(404), None) => Outcome::WorkerTooOld,
         (Some(429), None) => Outcome::Retry("The Worker says too many tries. Waiting a little.".into()),
         (Some(code), None) => Outcome::Retry(format!("The Worker answered HTTP {code}.")),
         (None, None) => Outcome::Retry("The Worker did not answer.".into()),
@@ -223,7 +227,9 @@ mod tests {
         assert_eq!(interpret_register(Some(200), None), Outcome::Linked);
         assert_eq!(interpret_register(Some(403), None), Outcome::SecretMismatch);
         assert_eq!(interpret_register(Some(400), None), Outcome::AddressRefused);
-        for code in [429, 500, 503, 404] {
+        assert_eq!(interpret_register(Some(404), None), Outcome::WorkerTooOld);
+        assert!(Outcome::WorkerTooOld.is_final() && Outcome::WorkerTooOld.problem().unwrap().contains("Update your Worker"));
+        for code in [429, 500, 503] {
             assert!(matches!(interpret_register(Some(code), None), Outcome::Retry(_)), "{code}");
         }
         assert!(matches!(interpret_register(None, Some("dns")), Outcome::Retry(_)));

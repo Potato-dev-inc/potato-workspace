@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // What the conversation shows for a chat session: the agent's thoughts as a fold, an answered permission question as one
 // quiet line, and the quiet Copy / Retry row under a finished reply.
+import { setChatViewDefault } from './chatViewMode';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,7 @@ import { SessionChatView, type SessionChatViewProps } from './SessionChatView';
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  setChatViewDefault('normal'); // these tests were written for the Normal view; the default for new chats is Summary
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

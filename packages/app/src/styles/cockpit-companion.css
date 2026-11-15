@@ -578,3 +578,126 @@
   color: var(--label);
   text-decoration: underline;
 }
+
+/* ---------- more than one companion ---------- */
+/* Each accent word is a colour token. A row, the face tile and the page head read it through --ck-acc. */
+.cockpit [data-accent='potato'] { --ck-acc: var(--accent); }
+.cockpit [data-accent='sky'] { --ck-acc: var(--icon-blue); }
+.cockpit [data-accent='mint'] { --ck-acc: var(--live); }
+.cockpit [data-accent='rose'] { --ck-acc: var(--danger); }
+.cockpit [data-accent='sun'] { --ck-acc: var(--risk); }
+.cockpit .ck-companion-row[data-accent] .ck-companion-face {
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--ck-acc);
+}
+.cockpit .ck-companion-default {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--label-3);
+  align-self: center;
+}
+.cockpit .ck-companion-new {
+  display: block;
+  width: 100%;
+  margin: 2px 0 6px;
+  padding: 4px 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  color: var(--label-3);
+  cursor: pointer;
+}
+.cockpit .ck-companion-new:hover,
+.cockpit .ck-companion-new:focus-visible {
+  color: var(--label);
+}
+.cockpit .ck-companion-swatches {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cockpit .ck-companion-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--ck-acc);
+  cursor: pointer;
+  padding: 0;
+}
+.cockpit .ck-companion-swatch.is-picked {
+  border-color: var(--label);
+}
+.cockpit .ck-companion-head[data-accent] {
+  border-bottom-color: var(--ck-acc);
+}
+.cockpit .ck-companion-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cockpit .ck-companion-switch-btn {
+  border: 0;
+  background: none;
+  color: var(--label-3);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 11px;
+}
+.cockpit .ck-companion-switch-btn:hover,
+.cockpit .ck-companion-switch-btn:focus-visible {
+  color: var(--label);
+}
+.cockpit .ck-companion-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--fill-active);
+  color: var(--label-2);
+}
+
+/* Body card and journal card (Labs: companion vault). Thin meters, quiet colour. */
+.cockpit .ck-body-mood { margin: 0; font-size: 15px; font-weight: 600; }
+.cockpit .ck-body-mood[data-mood='genki'] .ck-body-mood-word,
+.cockpit .ck-body-mood[data-mood='tsundere'] .ck-body-mood-word { color: var(--accent); }
+.cockpit .ck-body-meters, .cockpit .ck-body-drives { display: flex; flex-direction: column; gap: 6px; }
+.cockpit .ck-body-sub { margin: 4px 0 0; font-size: 11.5px; font-weight: 500; color: var(--label-3); }
+.cockpit .ck-body-row { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 8px; font-size: 12px; color: var(--label-2); }
+.cockpit .ck-body-label { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cockpit .ck-body-meter { position: relative; height: 4px; border-radius: 999px; background: var(--fill-active); overflow: hidden; }
+.cockpit .ck-body-meter-fill { display: block; height: 100%; border-radius: 999px; background: var(--label-3); }
+.cockpit .ck-body-row[data-waiting] .ck-body-meter-fill { background: var(--accent); }
+.cockpit .ck-body-meter-mark { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--label-2); }
+.cockpit .ck-body-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.cockpit .ck-body-away { margin: 0; }
+.cockpit .ck-journal-block { display: flex; flex-direction: column; gap: 4px; }
+.cockpit .ck-journal-date { font-size: 11px; font-weight: 400; color: var(--label-3); }
+.cockpit .ck-journal-diary, .cockpit .ck-journal-people { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--label-2); white-space: pre-wrap; }
+.cockpit .ck-journal-diary.is-clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cockpit .ck-journal-day { display: flex; flex-direction: column; gap: 2px; }
+.cockpit .ck-journal-lines { margin: 0; padding-left: 16px; font-size: 12.5px; line-height: 1.45; color: var(--label-2); }
+.cockpit .ck-journal-lines.is-clamped li:nth-child(n + 3) { display: none; }
+.cockpit .ck-journal-toggle { align-self: flex-start; }
+
+/* Discord bot card (Labs). Quiet, one column, small accent on the state line. */
+.cockpit .ck-discord { gap: 10px; }
+.cockpit .ck-discord-state { margin: 0; font-size: 12.5px; color: var(--label-2); }
+.cockpit .ck-discord-state[data-state='online'] { color: var(--accent); }
+.cockpit .ck-discord-state[data-state='token_rejected'],
+.cockpit .ck-discord-state[data-state='intent_missing'] { color: var(--label); font-weight: 500; }
+.cockpit .ck-discord-block { display: flex; flex-direction: column; gap: 6px; }
+.cockpit .ck-discord-inline { display: flex; gap: 6px; }
+.cockpit .ck-discord-inline .ck-companion-input { flex: 1 1 auto; }
+.cockpit .ck-discord-allow { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-top: 8px; border-top: 1px solid var(--sep); }
+.cockpit .ck-discord-allow:first-child { border-top: 0; padding-top: 0; }
+.cockpit .ck-discord-ids { font-size: 11.5px; overflow-wrap: anywhere; }
+.cockpit .ck-discord-check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--label-2); }
+.cockpit .ck-discord-budget { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--label-2); }
+.cockpit .ck-discord-num { width: 56px; }
+.cockpit .ck-discord-msg { margin: 0; }
+.cockpit .ck-discord-msg[data-kind='error'] { color: var(--label); font-weight: 500; }

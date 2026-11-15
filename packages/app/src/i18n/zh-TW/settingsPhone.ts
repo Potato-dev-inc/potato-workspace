@@ -79,5 +79,10 @@ export const settingsPhone: Partial<Record<EnglishKey, string>> = {
   'stable.notYet': '請在步驟 3 貼上你的位址。',
   'stable.close': '關閉',
   'stable.useRelay': '使用 {url}（你的團隊中繼站）',
-  'stable.relayNote': '這個 Worker 必須同時包含固定連結的部分。我們會在 1.1.1 把兩個 Worker 合併成一個。',
+  'stable.relayNote': '同一個 Worker 可以同時負責團隊中繼站和手機固定連結。',
+  'worker.useLink': '使用 {url}（你的手機連結 Worker）',
+  'worker.linkNote': '同一個 Worker 可以同時負責手機連結和團隊中繼站。',
+  'worker.update': '請更新你的 Worker',
+  'worker.updateWhy': '{url} 是在最新版本之前部署的，所以還不能這樣做。請在 Potato Workspace 資料夾執行這一行指令：',
+  'worker.unreachable': '目前連不到 {url}。請檢查位址，或一分鐘後再試。',
 };

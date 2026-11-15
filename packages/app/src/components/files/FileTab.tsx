@@ -1,7 +1,7 @@
 // A file open beside the chat: colour for code, an Edit mode (Save with Ctrl+S, Revert, a notice when the file changed
 // on disk), Markdown as a page, pictures as pictures, and a clear message for files that are too big or not text. The File / Changes switch shows what the agent changed in the same
 // place. Lines picked in either view can be sent to the chat box with "Tell the agent".
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { filesApi, fileSize, type FileContent, type FilesApi, type FileStream } from '../../lib/files-api';
 import { pushComposerInsert } from '../../lib/composer-insert';
 import { requestChatTab } from '../../lib/chatTab';
@@ -9,9 +9,11 @@ import { errorSentence } from '../../lib/sayError';
 import { useT } from '../../i18n';
 import { ChatMarkdown } from '../chat/ChatMarkdown';
 import { SegTabs } from '../cockpit/SegTabs';
+import { PaneMoreMenu, type MoreAction } from '../cockpit/PaneMoreMenu';
+import { useHeadFold } from '../cockpit/usePaneHeadFold';
 import { extensionOf, isMarkdown } from './languages';
 import { opensInOwnApp, richKindOf, type RichKind } from './rich-kind';
-import type { CodeSelection } from './CodeEditor';
+import type { CodeGoTo, CodeSelection } from './CodeEditor';
 import { FileActions } from './FileActions';
 import { FileDiff } from './FileDiff';
 import { useOpenInEditor } from './OpenInEditor';
@@ -47,6 +49,7 @@ export function FileTab({
   refreshKey = '',
   api = filesApi,
   editor,
+  goTo,
 }: {
   paneId: string;
   path: string;
@@ -57,6 +60,8 @@ export function FileTab({
   api?: FilesApi;
   /** The editor calls (a test double can stand in). */
   editor?: EditorApi;
+  /** Show this line (a hit of "Search inside files"): a page view switches to the text so the line is there. */
+  goTo?: CodeGoTo;
 }) {
   const t = useT();
   const opener = useOpenInEditor(paneId, editor);
@@ -75,7 +80,13 @@ export function FileTab({
   );
   const edit = useFileEdit({ api, paneId, path, content, setContent, onNotice: setNotice });
   const unsaved = isDirty(useDraftKeys(), paneId, path);
+  useEffect(() => {
+    if (goTo && (isMarkdown(path) || rich === 'html')) setAsText(true);
+  }, [goTo, path, rich]);
   const canEdit = view === 'file' && !rich && content?.kind === 'text' && !error;
+  // A narrow header folds its right-side buttons (Open in …, Show text) into one "…" menu instead of cutting them off.
+  const headRef = useRef<HTMLElement>(null);
+  const fold = useHeadFold(headRef, `${view}|${edit.editing}|${rich}|${unsaved}|${path}|${content?.kind}`);
 
   useEffect(() => {
     let cancelled = false;
@@ -223,11 +234,24 @@ export function FileTab({
     }
     return (
       <ViewerBoundary resetKey={path} onOpen={openOwnApp}><Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
-        <CodeEditor path={path} text={text} onSelect={setSelection} />
+        <CodeEditor path={path} text={text} onSelect={setSelection} goTo={goTo} />
       </Suspense></ViewerBoundary>
     );
   };
 
+  const showTextToggle = view === 'file' && !edit.editing && ((isMarkdown(path) || rich === 'html') && content?.kind === 'text' ? true : rich === 'docx' && file?.kind === 'stream');
+  const moreActions: MoreAction[] = [];
+  if (rich) moreActions.push({ id: 'open-app', label: openLabel, onSelect: openApp });
+  if (!rich || rich === 'html' || extensionOf(path) === 'csv') {
+    moreActions.push({
+      id: 'open-editor',
+      label: opener.name ? t('editor.open', { name: opener.name }) : t('editor.openGeneric'),
+      title: opener.none ? t('editor.none') : undefined,
+      disabled: opener.none,
+      onSelect: () => openEditor(selection?.from),
+    });
+  }
+  if (showTextToggle) moreActions.push({ id: 'as-text', label: asText ? t('files.showPage') : t('files.showText'), onSelect: () => setAsText((v) => !v) });
   const name = path.slice(path.lastIndexOf('/') + 1);
   const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
   return (
@@ -247,7 +271,7 @@ export function FileTab({
         }
       }}
     >
-      <header className="ck-file-head">
+      <header className="ck-file-head" ref={headRef} data-fold={fold}>
         <span className="ck-file-name" title={path}>
           {name}
         </span>
@@ -276,7 +300,7 @@ export function FileTab({
             {edit.editing ? t('files.editDone') : t('files.edit')}
           </button>
         )}
-        {rich && (
+        {rich && fold < 1 && (
           <button
             type="button"
             className="ck-btn ck-btn--plain ck-btn--sm"
@@ -285,7 +309,7 @@ export function FileTab({
             {openLabel}
           </button>
         )}
-        {(!rich || rich === 'html' || extensionOf(path) === 'csv') && (
+        {(!rich || rich === 'html' || extensionOf(path) === 'csv') && fold < 1 && (
         <button
           type="button"
           className="ck-btn ck-btn--plain ck-btn--sm"
@@ -296,11 +320,12 @@ export function FileTab({
           {opener.name ? t('editor.open', { name: opener.name }) : t('editor.openGeneric')}
         </button>
         )}
-        {view === 'file' && !edit.editing && ((isMarkdown(path) || rich === 'html') && content?.kind === 'text' ? true : rich === 'docx' && file?.kind === 'stream') && (
+        {showTextToggle && fold < 1 && (
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-pressed={asText} onClick={() => setAsText((v) => !v)}>
             {asText ? t('files.showPage') : t('files.showText')}
           </button>
         )}
+        {fold >= 1 && moreActions.length > 0 && <PaneMoreMenu label={t('files.moreActions')} items={[]} actions={moreActions} value="" onPick={() => undefined} />}
         <SegTabs<View>
           small
           label={t('files.viewLabel')}

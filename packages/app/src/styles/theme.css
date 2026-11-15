@@ -50,6 +50,16 @@
   --pm-err: 0 0 0;
 }
 
+:root[data-theme='light'][data-tone='dim'] {
+  --pm-bg: 236 232 225;
+  --pm-panel: 226 221 213;
+  --pm-raised: 242 238 232;
+  --pm-border: 205 198 188;
+  --pm-accent: 143 68 6;
+  --pm-text: 36 33 29;
+  --pm-muted: 96 90 82;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -58,3 +68,21 @@ html, body, #root {
   color: rgb(var(--pm-text));
 }
 
+
+/* Native dropdown lists (<select>). The list is drawn by the system, so it needs its own colours: without them it opens
+   white with near-white text in dark mode. The surface that holds the select decides the scheme, then the options use
+   the theme tokens. One rule for the whole app (Settings, the cockpit, the phone). */
+.settings,
+.cockpit {
+  color-scheme: dark;
+}
+[data-theme='light'] .settings,
+.cockpit[data-theme='light'],
+[data-theme='light'] .cockpit {
+  color-scheme: light;
+}
+select option,
+select optgroup {
+  background-color: rgb(var(--pm-panel));
+  color: rgb(var(--pm-text));
+}

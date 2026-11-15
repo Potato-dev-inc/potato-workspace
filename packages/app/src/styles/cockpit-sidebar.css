@@ -389,7 +389,8 @@
   border: 1.5px solid var(--label-4);
 }
 /* With the agent's icon: the icon says who, a dot on its corner says what. Green breathing = working, orange = needs
-   you, red = broken, no dot = idle (the icon dims). */
+   you, red = broken, no dot = idle, a hollow ring = ended. The icon is NEVER dimmed: state is told by the dot and the
+   row's words (styles/chat-chrome.css.test.ts guards this). */
 .cockpit .ck-mark--icon {
   position: relative;
   overflow: visible;
@@ -398,13 +399,6 @@
 .cockpit .ck-mark--icon .ck-mark-agent {
   display: grid;
   place-items: center;
-  transition: opacity var(--dur-fast) var(--ease);
-}
-.cockpit .ck-mark--idle.ck-mark--icon .ck-mark-agent {
-  opacity: 0.55;
-}
-.cockpit .ck-mark--ended.ck-mark--icon .ck-mark-agent {
-  opacity: 0.35;
 }
 .cockpit .ck-mark--icon .ck-mark-shape {
   position: absolute;
@@ -430,6 +424,10 @@
 }
 .cockpit .ck-mark--error.ck-mark--icon .ck-mark-shape::after {
   content: none;
+}
+.cockpit .ck-mark--ended.ck-mark--icon .ck-mark-shape {
+  border: 1.5px solid var(--label-3);
+  background: var(--bg-side, var(--bg));
 }
 @keyframes ck-mark-breathe {
   50% {
@@ -632,4 +630,22 @@
 }
 .cockpit .ck-potato--quiet {
   opacity: 0.7;
+}
+/* How many helpers an agent has (the helpers bar above the chat lists them). */
+.cockpit .ck-row-helpers {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  margin-left: 0;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--label-3);
+  font-size: var(--fs-label);
+  line-height: 16px;
+  text-align: center;
+}
+.cockpit .ck-rowwrap:hover .ck-row-helpers,
+.cockpit .ck-rowwrap:focus-within .ck-row-helpers {
+  visibility: hidden;
 }

@@ -76,8 +76,11 @@ describe('session rail in the pane view', () => {
     await flush();
     expect(rail()).not.toBeNull();
     expect(rail()?.textContent).toContain('rail-branch');
-    expect(rail()?.querySelector('[data-testid="rail-helpers"]')?.textContent).toContain('Check tests');
-    await act(async () => rail()!.querySelector<HTMLButtonElement>('[data-testid="rail-helpers"] button')!.click());
+    const bg = () => rail()!.querySelector('[data-testid="rail-bg"]')!;
+    expect(bg().textContent).toContain('1 finished');
+    await act(async () => [...bg().querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === '1 finished')!.click());
+    expect(bg().textContent).toContain('Check tests');
+    await act(async () => [...bg().querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Check tests'))!.click());
     expect(c.select).toHaveBeenCalledWith('h');
   });
 
@@ -85,7 +88,7 @@ describe('session rail in the pane view', () => {
     const c = cockpit([mk('p', 'Refactor auth'), mk('h', 'Check tests', 'p')], 'h');
     await act(async () => root.render(<PaneView c={c} paneId="h" />));
     await flush();
-    expect(rail()?.querySelector('.ck-rail-parent')?.textContent).toBe('Helper of Refactor auth');
+    expect(rail()?.querySelector('.rp-helper-of')?.textContent).toBe('Helper of Refactor auth');
   });
 
   it('stays in other tabs', async () => {

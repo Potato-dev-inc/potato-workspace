@@ -153,6 +153,8 @@ describe('the file tab', () => {
     reveal: vi.fn(async () => undefined),
     diff: vi.fn(async () => ''),
     write: vi.fn(async (_p, path, text) => ({ path, size: text.length, version: 'v' })),
+    searchContents: vi.fn(async () => ({ hits: [], truncated: false, cancelled: false, filesScanned: 0 })),
+    cancelSearch: vi.fn(async () => undefined),
   });
 
   it('has an Open in editor button, and Ctrl+Enter does the same', async () => {

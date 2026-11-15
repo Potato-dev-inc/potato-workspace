@@ -126,6 +126,7 @@ mod tests {
             id: id.into(),
             name: "Bit".into(),
             avatar: "bit".into(),
+            look: None,
             persona: persona.into(),
             agent_type: "shell".into(),
             launch_args: vec![],

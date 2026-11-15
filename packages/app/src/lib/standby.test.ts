@@ -55,7 +55,8 @@ describe('preload settings helpers', () => {
     expect(preloadCount(on, 'kilo')).toBe(0);
     expect(DEFAULT_STANDBY_CONFIG.preload.providers).toEqual({});
     expect(withPreloadCount(on, 'claude', 2).preload.providers).toEqual({ claude: 2 });
-    expect(withPreloadCount(on, 'claude', 9).preload.providers).toEqual({ claude: 2 });
+    expect(withPreloadCount(on, 'claude', 9).preload.providers).toEqual({ claude: 9 });
+    expect(withPreloadCount(on, 'claude', 99).preload.providers).toEqual({ claude: 10 });
     expect(withPreloadCount(on, 'claude', 0).preload.providers).toEqual({});
   });
 

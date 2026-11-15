@@ -3,7 +3,9 @@
 // the project, a click opens the file in a tab, and a right-click (or the menu key) offers Copy path, Show in
 // Explorer and Mention in chat. The project folder is the pane's folder: the backend refuses anything outside it.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { filesApi, type FileMark, type FilesApi, type FolderListing } from '../../lib/files-api';
+import { filesApi, type ContentHit, type ContentSearch, type FileMark, type FilesApi, type FolderListing } from '../../lib/files-api';
+import { clearContentSearchRequest, usePendingContentSearch } from '../../lib/files-search-request';
+import { ContentResults } from './ContentResults';
 import { searchProjectFiles, type ProjectFileHit } from '../../lib/projectFiles';
 import { openFileTab } from '../../lib/file-tabs';
 import { pushComposerInsert } from '../../lib/composer-insert';
@@ -14,12 +16,19 @@ import { ruleError, tauriAgentRulesApi, type AgentRulesApi } from '../../lib/age
 import { projectOfCwd } from '../../lib/ship-model';
 import { FloatingMenu } from '../cockpit/FloatingMenu';
 import { EditorMenuItems } from './OpenInEditor';
-import { RailCard } from '../cockpit/rail/RailCard';
+import { RailSection } from '../cockpit/rail/RailSection';
+import { setRailSectionClosed } from '../cockpit/rail/railFold';
+import { FileGlyph } from '../cockpit/rail/FileGlyph';
 import { baseOf, fileMark, folderHasChanges, visibleRows, type Mark } from './tree-model';
 import '../../styles/files.css';
 
 const SEARCH_MS = 150;
 const SEARCH_LIMIT = 50;
+/** Searching inside files starts at this many characters (one letter would match nearly every line). */
+const CONTENT_MIN_CHARS = 2;
+const CONTENT_MS = 300;
+
+type SearchMode = 'names' | 'inside';
 
 export interface FilesCardProps {
   paneId: string;
@@ -56,6 +65,9 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
   const [marks, setMarks] = useState<readonly FileMark[]>([]);
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<ProjectFileHit[] | null>(null);
+  const [mode, setMode] = useState<SearchMode>('names');
+  const [found, setFound] = useState<ContentSearch | 'failed' | null>(null);
+  const filterRef = useRef<HTMLInputElement>(null);
   const [menu, setMenu] = useState<MenuAt | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const treeRef = useRef<HTMLUListElement>(null);
@@ -92,7 +104,7 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
   // The filter finds files anywhere in the project by name (the same search the @ picker uses).
   useEffect(() => {
     const q = query.trim();
-    if (!q) {
+    if (!q || mode !== 'names') {
       setHits(null);
       return;
     }
@@ -107,7 +119,44 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [query, paneId, search]);
+  }, [query, paneId, search, mode]);
+
+  // "Inside files": the words are looked for in the project's files, off the screen's thread (the backend stops an older
+  // search when a newer one starts, and this one when the card goes away).
+  const searchId = `files-${paneId}`;
+  useEffect(() => {
+    const q = query.trim();
+    setFound(null);
+    if (mode !== 'inside' || [...q].length < CONTENT_MIN_CHARS) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api.searchContents(paneId, q, searchId).then(
+        (res) => !cancelled && setFound(res),
+        () => !cancelled && setFound('failed'),
+      );
+    }, CONTENT_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      void api.cancelSearch(searchId).catch(() => undefined);
+    };
+  }, [api, paneId, query, mode, searchId]);
+
+  // The palette's "Search in files": switch to this box and put the cursor in it.
+  const asked = usePendingContentSearch();
+  useEffect(() => {
+    if (!asked || asked.paneId !== paneId) return;
+    setRailSectionClosed('files', false);
+    setMode('inside');
+    // The box may only be there after the section unfolds.
+    window.setTimeout(() => {
+      filterRef.current?.focus();
+      filterRef.current?.select();
+    }, 0);
+    clearContentSearchRequest(asked);
+  }, [asked, paneId]);
+
+  const openHit = (hit: ContentHit) => openFileTab(paneId, hit.path, hit.line);
 
   const toggle = (path: string) => {
     setOpen((cur) => {
@@ -198,22 +247,44 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
   const filtering = query.trim() !== '';
 
   return (
-    <RailCard title={t('files.title')} testId="rail-files">
+    <RailSection id="files" title={t('files.title')} summary={baseOf(cwd)} testId="rail-files">
       <input
+        ref={filterRef}
         type="search"
         className="ck-ftree-filter"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={t('files.filter')}
-        aria-label={t('files.filterLabel')}
+        placeholder={mode === 'inside' ? t('files.searchPlaceholder') : t('files.filter')}
+        aria-label={mode === 'inside' ? t('files.searchLabel') : t('files.filterLabel')}
         data-testid="files-filter"
       />
+      <div className="ck-fsearch-modes" role="group" aria-label={t('files.searchModeLabel')}>
+        {(['names', 'inside'] as const).map((m) => (
+          <button key={m} type="button" className="ck-fsearch-mode" aria-pressed={mode === m} data-testid={`files-mode-${m}`} onClick={() => setMode(m)}>
+            {m === 'names' ? t('files.searchNames') : t('files.searchInside')}
+          </button>
+        ))}
+      </div>
       {notice && (
         <p className="ck-rail-line" role="status">
           {notice}
         </p>
       )}
-      {filtering ? (
+      {filtering && mode === 'inside' ? (
+        [...query.trim()].length < CONTENT_MIN_CHARS ? null : found === null ? (
+          <p className="ck-rail-empty" role="status">
+            {t('files.searching')}
+          </p>
+        ) : found === 'failed' ? (
+          <p className="ck-rail-empty" role="alert">
+            {t('files.searchFailed')}
+          </p>
+        ) : found.hits.length === 0 ? (
+          <p className="ck-rail-empty">{t('files.searchNone')}</p>
+        ) : (
+          <ContentResults hits={found.hits} truncated={found.truncated} onOpen={openHit} />
+        )
+      ) : filtering ? (
         hits === null ? (
           <p className="ck-rail-empty">{t('files.loading')}</p>
         ) : hits.length === 0 ? (
@@ -231,6 +302,7 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
                     onClick={() => openFileTab(paneId, hit.path)}
                     onContextMenu={(e) => openMenu(e, hit.path, false)}
                   >
+                    <FileGlyph name={hit.name} />
                     <span className="ck-ftree-name">{hit.name}</span>
                     <span className="ck-ftree-dir">{hit.path.includes('/') ? hit.path.slice(0, hit.path.lastIndexOf('/')) : ''}</span>
                     {mark && (
@@ -279,6 +351,7 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
                   <span className="ck-ftree-twist" aria-hidden="true">
                     {entry.isDir ? (row.open ? '▾' : '▸') : ''}
                   </span>
+                  {!entry.isDir && <FileGlyph name={entry.name} />}
                   <span className="ck-ftree-name">{entry.name}</span>
                   {dirty && <span className="ck-ftree-dot" role="img" aria-label={t('files.hasChanges')} />}
                   {mark && (
@@ -367,6 +440,6 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
           )}
         </FloatingMenu>
       )}
-    </RailCard>
+    </RailSection>
   );
 }

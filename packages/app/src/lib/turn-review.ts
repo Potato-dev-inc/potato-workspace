@@ -16,6 +16,8 @@ export interface ReviewFile {
   added: number;
   deleted: number;
   binary: boolean;
+  /** Only the line endings changed (CR/LF): no numbers, left out of totals. Set by the backend when it knows. */
+  lineEndingsOnly?: boolean;
   /** The file's content id at the end of the turn; empty for a deleted file. */
   blob: string;
 }

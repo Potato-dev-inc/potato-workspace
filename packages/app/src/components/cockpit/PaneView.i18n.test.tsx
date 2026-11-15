@@ -81,13 +81,10 @@ Object.defineProperty(window, 'innerWidth', { value: 900, configurable: true });
 describe('pane header and tabs in Traditional Chinese', () => {
   it('shows the tabs, the view switch and the action buttons in Chinese', async () => {
     await show();
-    expect(host.querySelector('[data-testid="pane-tabs"]')?.getAttribute('aria-label')).toBe(t('pane.tabsLabel'));
     expect(header().querySelector('[role="tablist"]')?.getAttribute('aria-label')).toBe(t('pane.viewLabel'));
     expect(header().textContent).toContain(t('pane.tabTerminal'));
     expect(header().querySelector('[data-testid="pane-handoff"]')?.textContent).toBe(t('pane.handOff'));
     expect(header().querySelector('button[aria-haspopup="menu"]')?.getAttribute('aria-label')).toBe(t('pane.more'));
-    const dot = host.querySelector('[data-pane-tab="p3"] [data-testid="pane-tab-dot"]');
-    expect(dot?.getAttribute('aria-label')).toBe(t('pane.needsYou'));
   });
 
   it('shows the More menu in Chinese and opens the empty transcript state', async () => {
@@ -95,7 +92,7 @@ describe('pane header and tabs in Traditional Chinese', () => {
     await act(async () => header().querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click());
     // The agent's bell rows (通知：...) share the ⋯ menu; this checks the view rows only.
     const items = [...host.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent).filter((text) => !text?.startsWith('通知：'));
-    expect(items).toEqual([t('pane.moreTranscript'), t('pane.moreReceipt'), t('pane.moreHistory')]);
+    expect(items).toEqual([t('pane.moreTranscript'), t('pane.moreReceipt'), t('pane.moreHistory'), t('tabwin.openChat')]);
     await act(async () => (host.querySelectorAll<HTMLElement>('[role="menuitem"]')[0]).click());
     await act(async () => {
       await new Promise((r) => setImmediate(r));

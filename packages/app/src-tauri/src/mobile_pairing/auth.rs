@@ -17,6 +17,9 @@ pub fn is_public_bridge_path(segments: &[&str], method: &str) -> bool {
         || (segments == ["pair"] && method == "POST")
         // An Allow/Deny tap from a notification: authorised by its own one-shot token, not a bearer.
         || (segments == ["push", "act"] && method == "POST")
+        // A share link (`artifacts::share_page`): the secret in the path is the credential. Exactly `GET /share/{secret}`;
+        // it serves one version of one page, read-only, and nothing else is opened by this line.
+        || (segments.len() == 2 && segments[0] == "share" && method == "GET")
         || (segments.len() == 3
             && segments[0] == "pair"
             && segments[1] == "session"

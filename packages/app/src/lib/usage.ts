@@ -49,6 +49,10 @@ export interface UsageRow {
   observed_at_ms: number | null;
   limited_until_ms: number | null;
   page: string | null;
+  /** `lend`: a lend profile's own sign-in (named by the profile). `borrowed`: a sign-in lent to this PC. Absent: my own. */
+  link?: 'lend' | 'borrowed';
+  /** A lend profile signed in to the same account as the main sign-in. */
+  same_as_main?: boolean;
 }
 
 export interface UsageSnapshot {
@@ -276,6 +280,7 @@ export function forecastText(f: Forecast, now: number): string {
 
 /** Who the row is: "Codex CLI" or "Codex CLI (Work)". */
 export function rowName(row: UsageRow): string {
+  if (row.link && row.account_label) return `${row.label} · ${row.account_label}`;
   return row.account_label ? `${row.label} (${row.account_label})` : row.label;
 }
 

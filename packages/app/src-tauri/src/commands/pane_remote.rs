@@ -29,13 +29,13 @@ impl From<PaneRule> for PaneRemote {
 /// The rule for one agent pane (no rule stored: on, full control, as before).
 #[tauri::command]
 pub fn get_pane_remote(pane_id: String) -> PaneRemote {
-    pane_rules::rule(&pane_id).into()
+    pane_rules::stored(&pane_id).into()
 }
 
 /// Change the switch and/or the level of one agent pane. A field left out keeps its value.
 #[tauri::command]
 pub fn set_pane_remote(pane_id: String, remote: Option<bool>, level: Option<String>) -> Result<PaneRemote, String> {
-    let mut rule = pane_rules::rule(&pane_id);
+    let mut rule = pane_rules::stored(&pane_id);
     if let Some(remote) = remote {
         rule.remote = remote;
     }

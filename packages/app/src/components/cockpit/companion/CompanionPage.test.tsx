@@ -4,7 +4,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fakeCompanionTransport, type CompanionView, type FeedItem } from '../../../lib/companion';
+import { fakeCompanionTransport, type BodyView, type CompanionView, type FeedItem, type JournalView } from '../../../lib/companion';
 import { forceShowTerminals } from '../../../lib/showTerminals';
 import { CompanionPage, type CompanionPageProps } from './CompanionPage';
 
@@ -59,12 +59,14 @@ const view = (over: Partial<CompanionView> = {}): CompanionView => ({
 
 const button = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === label);
 
-async function render(companion: CompanionView, over: Partial<CompanionPageProps> = {}, feed: FeedItem[] = []) {
+async function render(companion: CompanionView, over: Partial<CompanionPageProps> = {}, feed: FeedItem[] = [], journal?: JournalView | null) {
   const transport = fakeCompanionTransport({
     companions: [companion],
     memory: { soul: 'Warm.', user: '', memory: '', pending: [] },
     feed,
   });
+  if (journal === null) delete (transport as { journal?: unknown }).journal;
+  else if (journal) transport.journal = vi.fn(async () => journal);
   const props: CompanionPageProps = {
     companion,
     transport,
@@ -81,6 +83,18 @@ async function render(companion: CompanionView, over: Partial<CompanionPageProps
 }
 
 describe('CompanionPage', () => {
+  it('lists the nudge kinds the person muted with Too much, and Turn back on unmutes them', async () => {
+    localStorage.clear();
+    localStorage.setItem('pm.companion.speak.memory', JSON.stringify({ muted: ['usage'] }));
+    await render(view());
+    const row = host.querySelector('[data-testid="speak-muted"]');
+    expect(row?.textContent).toContain("You said 'Too much' to: usage warnings");
+    await act(async () => button('Turn back on')!.click());
+    expect(host.querySelector('[data-testid="speak-muted"]')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('pm.companion.speak.memory')!).muted).toEqual([]);
+    localStorage.clear();
+  });
+
   it('shows the face, the name and the state line, and the chat for its own pane', async () => {
     await render(view());
     expect(host.querySelector('.ck-companion-name')?.textContent).toBe('Mochi');
@@ -208,5 +222,121 @@ describe('CompanionPage', () => {
     await act(async () => host.querySelector<HTMLButtonElement>('.ck-companion-sheet .ck-btn--primary')!.click());
     expect(transport.calls.some((c) => c.method === 'archive' && c.args[0] === 'mochi')).toBe(true);
     expect(props.onArchived).toHaveBeenCalledTimes(1);
+  });
+
+  describe('more than one companion', () => {
+    const bit = view({ id: 'bit', name: 'Bit', avatar: 'bit', paneId: 'companion-bit', isDefault: false });
+    const mochi = view({ isDefault: true });
+
+    async function renderMany(current: CompanionView) {
+      const transport = fakeCompanionTransport({ companions: [mochi, bit], memory: { soul: 'Warm.', user: '', memory: '', pending: [] } });
+      const props: CompanionPageProps = {
+        companion: current,
+        companions: [mochi, bit],
+        transport,
+        onShowTerminal: vi.fn(),
+        onOpenCard: vi.fn(),
+        onNotify: vi.fn(),
+        onChanged: vi.fn(),
+        onArchived: vi.fn(),
+        onSwitch: vi.fn(),
+      };
+      await act(async () => root.render(<CompanionPage {...props} />));
+      await act(async () => {});
+      return { transport, props };
+    }
+
+    it('shows no switcher for a single companion', async () => {
+      await render(view());
+      expect(host.querySelector('.ck-companion-switch')).toBeNull();
+    });
+
+    it('switches to another companion from the header', async () => {
+      const { props } = await renderMany(mochi);
+      expect(host.querySelector('.ck-companion-badge')?.textContent).toBe('Default');
+      act(() => button('Switch companion ▾')!.click());
+      const items = [...host.querySelectorAll<HTMLButtonElement>('.ck-companion-switch [role="menuitem"]')];
+      expect(items.map((i) => i.textContent)).toEqual(['Bit']);
+      act(() => items[0].click());
+      expect(props.onSwitch).toHaveBeenCalledWith('bit');
+    });
+
+    it('Make default is offered to a companion that is not the default, and not to the default', async () => {
+      const { transport, props } = await renderMany(bit);
+      act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
+      const item = [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((i) => i.textContent === 'Make default')!;
+      await act(async () => item.click());
+      expect(transport.calls.some((c) => c.method === 'setDefault' && c.args[0] === 'bit')).toBe(true);
+      expect(props.onChanged).toHaveBeenCalled();
+      expect(props.onNotify).toHaveBeenCalledWith('Bit is now the default.');
+      act(() => root.unmount());
+      root = createRoot(host);
+      await renderMany(mochi);
+      act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
+      expect([...host.querySelectorAll('[role="menuitem"]')].some((i) => i.textContent === 'Make default')).toBe(false);
+    });
+
+    it('wears its own colour in the header', async () => {
+      await renderMany({ ...mochi, accent: 'sky' });
+      expect(host.querySelector('.ck-companion-head')?.getAttribute('data-accent')).toBe('sky');
+    });
+  });
+
+  describe('body and journal (Labs: companion vault)', () => {
+    const body: BodyView = {
+      mood: 'genki',
+      intensity: 3,
+      energy: 80,
+      hunger: 20,
+      boredom: 40,
+      longing: 10,
+      battery: 90,
+      drives: [{ name: 'Say hello', value: 6, max: 10, threshold: 8, waiting: true }],
+      awayMinutes: 120,
+      sleeping: false,
+    };
+    const journal: JournalView = {
+      days: [
+        { date: '2026-11-14', lines: ['Older line'] },
+        { date: '2026-11-15', lines: ['Met Ren.', 'Wrote a note.'] },
+      ],
+      diary: { date: '2026-11-15', text: 'Today was a good day with Ren.' },
+      people: [{ name: 'Ren', closeness: 3 }],
+      personaFiles: [],
+    };
+
+    it('flag off (no body): no Body card and no Journal card', async () => {
+      await render(view(), {}, [], journal);
+      expect(host.textContent).not.toContain('How Mochi feels');
+      expect(host.textContent).not.toContain("Mochi's journal");
+    });
+
+    it('body present: both cards show the mood, a drive meter and the diary', async () => {
+      await render(view({ body }), {}, [], journal);
+      expect(host.textContent).toContain('How Mochi feels');
+      expect(host.textContent).toContain('Genki, a lot');
+      expect(host.querySelector('[role="meter"][aria-label="Say hello"]')).toBeTruthy();
+      expect(host.textContent).toContain('You were away about 2 hours.');
+      expect(host.textContent).toContain("Mochi's journal");
+      expect(host.textContent).toContain('Today was a good day with Ren.');
+      expect(host.textContent).toContain('Ren');
+      expect(button('Show more')).toBeTruthy();
+    });
+
+    it('a transport without journal: Body card shows, no crash, no Journal card', async () => {
+      await render(view({ body }), {}, [], null);
+      expect(host.textContent).toContain('How Mochi feels');
+      expect(host.textContent).not.toContain("Mochi's journal");
+    });
+
+    it('a journal that fails says "Nothing here yet."', async () => {
+      const { transport } = await render(view({ body }), {}, [], journal);
+      transport.journal = vi.fn(async () => {
+        throw new Error('no');
+      });
+      await act(async () => root.render(<CompanionPage companion={view({ body, state: 'working' })} transport={transport} onShowTerminal={vi.fn()} onOpenCard={vi.fn()} onNotify={vi.fn()} onChanged={vi.fn()} onArchived={vi.fn()} />));
+      await act(async () => {});
+      expect(host.textContent).toContain('Nothing here yet.');
+    });
   });
 });

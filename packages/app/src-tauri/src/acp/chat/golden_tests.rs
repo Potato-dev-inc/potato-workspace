@@ -217,6 +217,32 @@ fn a_replay_into_a_chat_that_already_has_items_is_dropped() {
     assert_eq!(strip(&before), strip(&after));
 }
 
+#[test]
+fn a_replay_that_comes_before_the_start_report_is_dropped_when_the_chat_already_shows_it() {
+    // The agent replays its history while it restores the session, BEFORE it reports the start (a crash, an idle
+    // sleep, an update). The chat already shows that history: nothing of it may appear a second time.
+    let mut run = Run::new();
+    run.started(StartKind::New);
+    run.turn(1, "hi");
+    run.updates(&[json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Hi! What can I help you with?"}})], false);
+    run.event(&SessionEvent::TurnEnded(summary(1, StopKind::EndTurn)));
+    let before = run.json();
+    run.updates(
+        &[
+            json!({"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "hi"}}),
+            json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Hi! What can I help you with?"}}),
+        ],
+        true,
+    );
+    run.started(StartKind::Loaded);
+    let strip = |v: &Value| -> Vec<Value> { v.as_array().unwrap().iter().filter(|i| i["kind"] != "session").cloned().collect() };
+    assert_eq!(strip(&before), strip(&run.json()), "the replayed copy was shown again");
+    // A second restart does the same.
+    run.updates(&[json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Hi! What can I help you with?"}})], true);
+    run.started(StartKind::Resumed);
+    assert_eq!(strip(&before), strip(&run.json()));
+}
+
 // ---- the turn ----------------------------------------------------------------------------------------------------
 
 #[test]

@@ -1,9 +1,12 @@
-// The Summary | Normal | Verbose switch in the chat header. Small on the desktop. Under 600 px wide (a phone) it is
-// one pill, "Normal ▾", that opens a small menu, so it sits on the same row as the model line (styles/cockpit-chat.css
-// and styles/phone-chat.css give the phone a 44px touch area).
+// The chat's detail level in the header: one small dropdown, "View: Summary ▾", that opens a menu of Summary | Normal |
+// Verbose. One pill at every width, so it takes little room and sits on the same row as the model line
+// (styles/cockpit-chat.css and styles/phone-chat.css give the phone a 44px touch area).
 import { useEffect, useRef, useState } from 'react';
 import { FloatingMenu } from '../cockpit/FloatingMenu';
-import { CHAT_VIEW_LABEL, CHAT_VIEW_MODES, type ChatViewMode } from './chatViewMode';
+import { useT } from '../../i18n';
+import { CHAT_VIEW_MODES, type ChatViewMode } from './chatViewMode';
+import { useDismissable } from '../../hooks/useDismissable';
+import { useRegisterAction } from '../../whatsnew/registry';
 
 /** Narrower than this: the header shows the one-pill menu. */
 export const COMPACT_VIEW_QUERY = '(max-width: 599px)';
@@ -21,48 +24,33 @@ export function useCompactViewMode(): boolean {
   return compact;
 }
 
-export function ViewModeToggle({ mode, onChange, compact: tight }: { mode: ChatViewMode; onChange: (mode: ChatViewMode) => void; /** The host is tight (a narrow pane header): show the one pill. */ compact?: boolean }) {
-  const compact = useCompactViewMode() || !!tight;
-  if (compact) return <ViewModeMenu mode={mode} onChange={onChange} floating={!!tight} />;
-  return (
-    <div role="group" aria-label="Chat view" className="ml-auto flex shrink-0 items-center gap-0.5 rounded-md bg-pm-raised p-0.5 ck-chat-modes">
-      {CHAT_VIEW_MODES.map((value) => (
-        <button
-          key={value}
-          type="button"
-          aria-pressed={mode === value}
-          onClick={() => onChange(value)}
-          className="rounded px-1.5 py-0.5 text-[11px] text-pm-muted ck-chat-mode"
-        >
-          {CHAT_VIEW_LABEL[value]}
-        </button>
-      ))}
-    </div>
-  );
+/** The names of the three modes, in the person's language. */
+export function useViewLabels(): Record<ChatViewMode, string> {
+  const t = useT();
+  return { summary: t('chatView.summary'), normal: t('chatView.normal'), verbose: t('chatView.verbose') };
+}
+
+export function ViewModeToggle({ mode, onChange, compact: tight }: { mode: ChatViewMode; onChange: (mode: ChatViewMode) => void; /** The host is tight (a narrow pane header): draw the menu in the top layer. */ compact?: boolean }) {
+  return <ViewModeMenu mode={mode} onChange={onChange} floating={!!tight} />;
 }
 
 /** The phone's compact switch: a pill with the current mode, and a small menu of the three modes under it. */
 export function ViewModeMenu({ mode, onChange, floating }: { mode: ChatViewMode; onChange: (mode: ChatViewMode) => void; /** Draw the menu in the top layer (a pane header would clip it). */ floating?: boolean }) {
+  const t = useT();
+  const labels = useViewLabels();
+  const menuLabel = t('chatView.menu');
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const pill = useRef<HTMLButtonElement>(null);
 
+  // What's new "Try it": open this menu. The pill that is on screen answers.
+  useRegisterAction('chat.viewMenu', () => {
+    setOpen(true);
+    pill.current?.focus();
+  });
+
   // A tap outside the pill and its menu, or Escape, closes the menu.
-  useEffect(() => {
-    if (!open || floating) return;
-    const onDown = (e: PointerEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, floating]);
+  useDismissable(open && !floating, { inside: [wrap], anchor: wrap, onDismiss: () => setOpen(false) });
 
   return (
     <div ref={wrap} className="relative ml-auto shrink-0 ck-chat-mode-wrap">
@@ -72,23 +60,23 @@ export function ViewModeMenu({ mode, onChange, floating }: { mode: ChatViewMode;
         className="ck-chat-mode-pill"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Chat view: ${CHAT_VIEW_LABEL[mode]}`}
+        aria-label={`${menuLabel}: ${labels[mode]}`}
         onClick={() => setOpen((v) => !v)}
       >
-        {CHAT_VIEW_LABEL[mode]}
+        {t('chatView.label', { mode: labels[mode] })}
         <span aria-hidden="true"> ▾</span>
       </button>
       {open && floating && (
-        <FloatingMenu anchorRef={pill} label="Chat view" onClose={(back) => { setOpen(false); if (back) pill.current?.focus(); }}>
+        <FloatingMenu anchorRef={pill} label={menuLabel} onClose={(back) => { setOpen(false); if (back) pill.current?.focus(); }}>
           {CHAT_VIEW_MODES.map((value) => (
             <button key={value} type="button" role="menuitemradio" aria-checked={mode === value} className="ck-menu-item" onClick={() => { onChange(value); setOpen(false); }}>
-              {CHAT_VIEW_LABEL[value]}
+              {labels[value]}
             </button>
           ))}
         </FloatingMenu>
       )}
       {open && !floating && (
-        <div role="menu" aria-label="Chat view" className="ck-chat-mode-menu">
+        <div role="menu" aria-label={menuLabel} className="ck-chat-mode-menu">
           {CHAT_VIEW_MODES.map((value) => (
             <button
               key={value}
@@ -101,7 +89,7 @@ export function ViewModeMenu({ mode, onChange, floating }: { mode: ChatViewMode;
                 setOpen(false);
               }}
             >
-              {CHAT_VIEW_LABEL[value]}
+              {labels[value]}
             </button>
           ))}
         </div>

@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 // Screen-level: the pane header is ONE row (name, view tabs, state and actions, a ⋯ More button), and the project's
-// open panes are tabs with the agent's icon, a live state dot on the tabs behind and a close button on the idle ones.
+// open panes are no longer tabs here (the helpers bar above the work area holds helpers).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { HandoffControl } from '../../hooks/useHandoff';
 import { PaneView } from './PaneView';
-import { tabDot } from './PaneTabs';
+import { tabDot } from './HelpersBar';
 
 const invoke = vi.fn(async (cmd: string) => (cmd === 'checkpoints_list' ? { state: 'ok', message: '', items: [] } : null) as unknown);
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...a: unknown[]) => (invoke as (...x: unknown[]) => unknown)(...(a as [string])) }));
@@ -120,58 +120,11 @@ describe('pane header: narrow', () => {
   });
 });
 
-describe('pane tabs', () => {
-  it('shows one tab per open agent of the project, each with its icon; the front tab is selected', async () => {
+describe('pane tabs moved to the helpers bar', () => {
+  it('the pane no longer draws a tab row: main agents live in the sidebar, helpers in the bar above the work area', async () => {
     await show(cockpit());
-    const tabs = [...host.querySelectorAll('[data-testid="pane-tabs"] [role="tab"]')];
-    expect(tabs).toHaveLength(4);
-    expect(tabs.map((t) => t.textContent)).toEqual(['fix login', 'tests', 'docs', 'review']);
-    for (const t of tabs) expect(t.querySelector('svg, .pm-agent-logo, [class*="agent-logo"]')).not.toBeNull();
-    expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false']);
-    expect(host.querySelector('.ck-ptab.is-active')!.getAttribute('data-pane-tab')).toBe('p1');
-  });
-
-  it('background tabs carry a state dot: working green, needs you orange; the front tab and idle ones have none', async () => {
-    await show(cockpit());
-    const dot = (id: string) => host.querySelector(`[data-pane-tab="${id}"] [data-testid="pane-tab-dot"]`);
-    expect(dot('p1')).toBeNull();
-    expect(dot('p2')!.className).toContain('ck-ptab-dot--working');
-    expect(dot('p2')!.getAttribute('aria-label')).toBe('Working');
-    expect(dot('p3')!.className).toContain('ck-ptab-dot--needs');
-    expect(dot('p4')).toBeNull();
-  });
-
-  it('close on an idle tab closes it at once (the undo bar follows); a click on a tab selects it', async () => {
-    const select = vi.fn();
-    const closePane = vi.fn();
-    await show(cockpit(select, closePane));
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-pane-tab="p4"] .ck-ptab-x')!.click());
-    expect(closePane).toHaveBeenCalledWith('p4');
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-pane-tab="p2"] [role="tab"]')!.click());
-    expect(select).toHaveBeenCalledWith('p2');
-  });
-
-  it('close on a working or waiting tab asks first, like the sidebar: it opens that pane and asks it to close', async () => {
-    const select = vi.fn();
-    const closePane = vi.fn();
-    const asked: unknown[] = [];
-    const listen = (e: Event) => asked.push((e as CustomEvent).detail);
-    window.addEventListener('pm:pane-action', listen);
-    try {
-      await show(cockpit(select, closePane));
-      for (const id of ['p2', 'p3']) {
-        await act(async () => host.querySelector<HTMLButtonElement>(`[data-pane-tab="${id}"] .ck-ptab-x`)!.click());
-      }
-    } finally {
-      window.removeEventListener('pm:pane-action', listen);
-    }
-    expect(closePane).not.toHaveBeenCalled();
-    expect(select).toHaveBeenCalledWith('p2');
-    expect(select).toHaveBeenCalledWith('p3');
-    expect(asked).toEqual([
-      { paneId: 'p2', action: 'close' },
-      { paneId: 'p3', action: 'close' },
-    ]);
+    expect(host.querySelector('[data-testid="pane-tabs"]')).toBeNull();
+    expect(host.querySelector('.ck-ptab')).toBeNull();
   });
 
   it('tabDot: needs you beats working, errors are red, idle has none', () => {

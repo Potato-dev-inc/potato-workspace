@@ -136,6 +136,8 @@ fn opencode_row_has_totals_and_is_ok() {
         may_fetch: false,
         force: false,
         oauth_state: &state,
+        lend: &super::LendView::default(),
+        identity: &|_, _, _| None,
     };
     let snap = super::build(&[agent], &inputs);
     assert_eq!(snap.rows.len(), 1);

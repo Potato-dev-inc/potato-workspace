@@ -151,7 +151,7 @@ async function render(snap: UsageSnapshot) {
   await act(async () => {});
 }
 
-const chipsIn = (el: ParentNode) => [...el.querySelectorAll<HTMLButtonElement>('.ck-sb-chips .ck-usage-chip')];
+const chipsIn = (el: ParentNode) => [...el.querySelectorAll<HTMLElement>('.ck-sb-chips .ck-usage-chip')];
 
 describe('the Used bar at the bottom of the cockpit', () => {
   it('is a child of the cockpit root, not in the sidebar, with one chip per sign-in', async () => {
@@ -188,9 +188,11 @@ describe('the Used bar at the bottom of the cockpit', () => {
   });
 
   it('places the popover above the strip, inside the window, at most 360px wide', () => {
-    expect(popoverPlace({ left: 12, top: 700 }, 1440, 900)).toEqual({ left: 12, bottom: 206, width: 360 });
+    expect(popoverPlace({ left: 12, top: 700 }, 1440, 900)).toEqual({ left: 8, bottom: 206, width: 360 });
     // Near the right edge it moves left; in a narrow window it narrows and never scrolls sideways.
-    expect(popoverPlace({ left: 1300, top: 700 }, 1440, 900).left).toBe(1440 - 360 - 8);
+    // Any anchor x gives the same place: the left end of the bar.
+    expect(popoverPlace({ left: 1300, top: 700 }, 1440, 900).left).toBe(8);
+    expect(popoverPlace({ left: 12, top: 700 }, 1440, 900).left).toBe(8);
     const narrow = popoverPlace({ left: 0, top: 500 }, 300, 600);
     expect(narrow.left + narrow.width).toBeLessThanOrEqual(300);
   });
@@ -230,8 +232,13 @@ describe('the Used bar at the bottom of the cockpit', () => {
     // The bar is the bottom 26px of the window.
     bar.getBoundingClientRect = () => ({ top: window.innerHeight - 26, left: 0, right: window.innerWidth, bottom: window.innerHeight, width: window.innerWidth, height: 26, x: 0, y: window.innerHeight - 26, toJSON: () => ({}) });
     const chips = chipsIn(host);
-    chips[2].focus();
-    expect(document.activeElement).toBe(chips[2]);
+    // The whole strip is ONE button: a chip is not a tab stop.
+    const strip = host.querySelector<HTMLButtonElement>('.ck-statusbar [data-testid="usage-strip"]')!;
+    expect(strip.tagName).toBe('BUTTON');
+    expect(chips.every((c) => c.tagName !== 'BUTTON' && !c.closest('button:not([data-testid="usage-strip"])'))).toBe(true);
+    expect(host.querySelectorAll('.ck-statusbar button:not(.ck-usage-refresh)')).toHaveLength(1);
+    strip.focus();
+    expect(document.activeElement).toBe(strip);
     await act(async () => chips[2].click());
     const pop = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Usage"]');
     expect(pop).not.toBeNull();
@@ -256,9 +263,40 @@ describe('the Used bar at the bottom of the cockpit', () => {
     const refresh = pop!.querySelector<HTMLButtonElement>('button[aria-label="Refresh usage"]')!;
     await act(async () => refresh.click());
     expect(invoke).toHaveBeenCalledWith('usage_snapshot', { refresh: true, loginReads: true });
-    // Escape closes it.
+    // Escape closes it and gives the focus back to the strip.
     await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
     expect(document.querySelector('[role="dialog"][aria-label="Usage"]')).toBeNull();
+    expect(document.activeElement).toBe(strip);
+  });
+
+  it('the card is anchored at the left end of the bar whichever chip is clicked, and the chip picks its row', async () => {
+    await render(SNAP);
+    const bar = host.querySelector<HTMLElement>('.ck-statusbar')!;
+    bar.getBoundingClientRect = () => ({ top: window.innerHeight - 26, left: 0, right: window.innerWidth, bottom: window.innerHeight, width: window.innerWidth, height: 26, x: 0, y: window.innerHeight - 26, toJSON: () => ({}) });
+    const chips = chipsIn(host);
+    // A chip far to the right: its own left edge must not move the card.
+    chips[3].getBoundingClientRect = () => ({ top: 0, left: 700, right: 760, bottom: 20, width: 60, height: 20, x: 700, y: 0, toJSON: () => ({}) });
+    const scrolled: string[] = [];
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
+      scrolled.push(this.dataset.row ?? '');
+    };
+    try {
+      await act(async () => chips[3].click());
+      const pop = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Usage"]')!;
+      expect(pop.style.left).toBe('8px');
+      expect(scrolled).toEqual([chips[3].dataset.row]);
+      expect(pop.querySelector('.ck-usage-pop-row.is-picked')?.getAttribute('data-row')).toBe(chips[3].dataset.row);
+      // Another chip while open: same card, now scrolled to that chip's row.
+      await act(async () => chips[0].click());
+      expect(document.querySelectorAll('[role="dialog"][aria-label="Usage"]')).toHaveLength(1);
+      expect(scrolled[scrolled.length - 1]).toBe(chips[0].dataset.row);
+      // Outside click closes it.
+      await act(async () => document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+      expect(document.querySelector('[role="dialog"][aria-label="Usage"]')).toBeNull();
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
   });
 
   it('is hidden, and asks nothing, while Settings turns the usage bar off', async () => {
@@ -366,7 +404,7 @@ describe('status bar groups and the right-hand counts (proposal 20)', () => {
     expect((codex.querySelector('.ck-usage-meter > span') as HTMLElement).style.width).toBe('87%');
     expect(codex.querySelector('.ck-usage-reset')?.textContent).toBe('10h');
     expect(expired.classList.contains('tone-danger')).toBe(true);
-    expect(expired.tagName).toBe('BUTTON');
+    expect(expired.closest('[data-testid="usage-strip"]')?.tagName).toBe('BUTTON');
   });
 
   it('shows "N working" and "N need you" on the right, and nothing when both are zero', async () => {
@@ -427,5 +465,55 @@ describe('the usage forecast in the Usage popover (proposal 27)', () => {
     await render({ refreshed_at_ms: now, rows: [row(50, now)] });
     await act(async () => chipsIn(host)[0].click());
     expect(document.querySelector('[data-testid="usage-forecast"]')).toBeNull();
+  });
+});
+
+describe('lend profiles and borrowed accounts in the bar', () => {
+  const main = { ...SNAP.rows[0], agent_id: 'claude', label: 'Claude', plan: null, account_id: null, account_label: null };
+  const shared = (over: Partial<(typeof SNAP.rows)[number]>) => ({ ...main, account_id: 'x', ...over });
+  const names = () => [...document.querySelectorAll('.ck-usage-pop-name')].map((n) => n.textContent);
+
+  it('a lender with two profiles on the main account sees ONE Claude chip and no internal label anywhere', async () => {
+    // The desktop already left the duplicates out (same signed-in account); the bar draws what it is given.
+    await render({ ...SNAP, rows: [main] });
+    expect(chipsIn(host)).toHaveLength(1);
+    expect(host.textContent).not.toContain('Lend Claude');
+    expect(host.textContent).not.toContain('Usage not shared');
+  });
+
+  it('a lend profile on another account is its own row named by the profile, with "lent" nowhere near an internal name', async () => {
+    const work = shared({ account_id: 'lend_a', account_label: 'Work account', link: 'lend' });
+    await render({ ...SNAP, rows: [main, work] });
+    const chips = chipsIn(host);
+    expect(chips).toHaveLength(2);
+    expect(chips[1].title).toContain('Claude · Work account');
+    await act(async () => chips[1].click());
+    expect(names()).toContain('Claude · Work account');
+    expect(document.body.textContent).not.toContain('Lend Claude');
+  });
+
+  it('a profile that shows usage on the main account is marked "Same account as Claude"', async () => {
+    const same = shared({ account_id: 'lend_a', account_label: 'Work account', link: 'lend', same_as_main: true });
+    await render({ ...SNAP, rows: [main, same] });
+    await act(async () => chipsIn(host)[0].click());
+    expect(document.querySelector('[data-testid="usage-same-account"]')!.textContent).toBe('Same account as Claude');
+  });
+
+  it("the borrower sees the lent account as its own row named by the lender's profile, read through the link", async () => {
+    const borrowed = shared({ account_id: 'lend:g1', account_label: "Ren's Work account (borrowed)", link: 'borrowed' });
+    await render({ ...SNAP, rows: [main, borrowed] });
+    const chips = chipsIn(host);
+    expect(chips).toHaveLength(2);
+    await act(async () => chips[1].click());
+    expect(names()).toEqual(['Claude', "Claude · Ren's Work account (borrowed)"]);
+    expect(document.body.textContent).not.toContain('Lend Claude');
+  });
+
+  it('borrowed accounts whose lender shares nothing are one "not shared" chip, not one per profile', async () => {
+    const none = shared({ account_id: 'lend:borrowed', account_label: 'Borrowed accounts', link: 'borrowed', state: 'unknown', windows: [], reason: 'The lender does not share usage numbers.' });
+    await render({ ...SNAP, rows: [main, none] });
+    const chips = chipsIn(host);
+    expect(chips).toHaveLength(2);
+    expect(chips.filter((c) => c.textContent?.includes('Usage not shared'))).toHaveLength(1);
   });
 });

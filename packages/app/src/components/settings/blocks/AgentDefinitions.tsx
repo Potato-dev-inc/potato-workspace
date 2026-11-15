@@ -37,6 +37,8 @@ import {
 } from '../../../lib/agentRegistry';
 import type { FinishResult, WizardApi } from '../../../lib/agentWizard';
 import { explainError } from '../../cockpit/error-sentences';
+import { useT } from '../../../i18n';
+import { useHiddenAgents } from '../../../lib/hiddenAgents';
 import { SettingBlock } from '../settings-ui';
 import { AgentWizard } from './AgentWizard';
 import { RunModeControl } from './AgentRunMode';
@@ -98,6 +100,10 @@ export function AgentDefinitions({
   const [extraPath, setExtraPath] = useState('');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [removing, setRemoving] = useState<DefinitionRow | null>(null);
+  const t = useT();
+  // Built-in agents the person turned off: out of the pickers and the warm list until "Show hidden" brings them back.
+  const { hidden, setAgentHidden } = useHiddenAgents();
+  const [showHidden, setShowHidden] = useState(false);
   const [removed, setRemoved] = useState<RemovedAgent[]>([]);
   const [removedTotal, setRemovedTotal] = useState(0);
   const [purging, setPurging] = useState<Purging | null>(null);
@@ -444,11 +450,24 @@ export function AgentDefinitions({
             className="mt-1 block w-full rounded-lg border border-pm-border bg-transparent px-2 py-1 text-xs"
           />
         </label>
+        {(listing?.definitions.filter((row) => isHiddenBundled(row, hidden)).length ?? 0) > 0 && (
+          <p className="mb-3 text-xs text-pm-muted" data-testid="hidden-bundled">
+            {t('definitions.hiddenCount', { count: listing?.definitions.filter((row) => isHiddenBundled(row, hidden)).length ?? 0 })}{' '}
+            <button type="button" className={BTN} aria-pressed={showHidden} onClick={() => setShowHidden((v) => !v)}>
+              {showHidden ? t('definitions.hideHidden') : t('definitions.showHidden')}
+            </button>
+          </p>
+        )}
         <ul className="space-y-3">
-          {listing?.definitions.map((row) => (
+          {listing?.definitions
+            .filter((row) => showHidden || !isHiddenBundled(row, hidden))
+            .map((row) => (
             <DefinitionItem
               key={row.file}
               row={row}
+              turnedOff={isHiddenBundled(row, hidden)}
+              onTurnOff={(r) => r.id && setAgentHidden(r.id, true)}
+              onTurnOn={(r) => r.id && setAgentHidden(r.id, false)}
               busy={busy}
               onReview={review}
               onRevoke={revoke}
@@ -724,7 +743,15 @@ function noFixturesMessage(check: FixtureCheck): string {
   return `${lead} ${how}${optional}`;
 }
 
+/** A built-in agent the person turned off (by its id). */
+export function isHiddenBundled(row: DefinitionRow, hidden: readonly string[]): boolean {
+  return row.source === 'bundled' && row.id != null && hidden.includes(row.id);
+}
+
 function DefinitionItem({
+  turnedOff = false,
+  onTurnOff,
+  onTurnOn,
   row,
   busy,
   onReview,
@@ -735,6 +762,9 @@ function DefinitionItem({
   check,
   onCreateFixtures,
 }: {
+  turnedOff?: boolean;
+  onTurnOff?: (row: DefinitionRow) => void;
+  onTurnOn?: (row: DefinitionRow) => void;
   row: DefinitionRow;
   busy: boolean;
   onReview: (row: DefinitionRow) => void;
@@ -746,6 +776,7 @@ function DefinitionItem({
   check: FixtureCheck | null;
   onCreateFixtures: (row: DefinitionRow) => void;
 }) {
+  const t = useT();
   return (
     <li data-testid="definition-row" className="rounded-lg border border-pm-border p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -785,6 +816,11 @@ function DefinitionItem({
           {row.state === 'active' && row.id && row.source !== 'bundled' && (
             <button type="button" className={BTN} disabled={busy} onClick={() => onRevoke(row)}>
               Revoke
+            </button>
+          )}
+          {row.source === 'bundled' && row.id && (
+            <button type="button" className={BTN} aria-label={t(turnedOff ? 'definitions.showAria' : 'definitions.hideAria', { name: rowName(row) })} onClick={() => (turnedOff ? onTurnOn : onTurnOff)?.(row)}>
+              {turnedOff ? t('definitions.showAgain') : t('definitions.hide')}
             </button>
           )}
           {onRemove && removability(row) === 'own' && (

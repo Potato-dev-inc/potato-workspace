@@ -185,11 +185,40 @@ pub fn app_service() -> Result<Arc<Lend>, String> {
     if let Some(public) = LAST_SETTINGS.lock().ok().and_then(|l| l.clone()) {
         svc.apply_settings(&public);
     }
+    svc.prune_past();
     svc.resume();
+    svc.sync_usage_view_now();
+    start_usage_sharing(&svc);
     Ok(svc)
 }
 
+/// Every two minutes: old past lends go from the saved state, and a lender whose profile shows usage sends the
+/// numbers to the borrower. Nothing is read or sent while no profile asks for it.
+fn start_usage_sharing(svc: &Arc<Lend>) {
+    let me = Arc::downgrade(svc);
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        loop {
+            let Some(svc) = me.upgrade() else { return };
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                svc.prune_past();
+                if svc.usage_view().profiles.iter().any(|p| p.show_usage) {
+                    let _ = crate::usage::snapshot(crate::usage::Refresh::IfStale, false);
+                    svc.share_usage(&crate::usage::lend_numbers);
+                }
+            })
+            .await;
+            tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+        }
+    });
+}
+
 impl Lend {
+    /// Gives the usage bar the lend side as it is now (at start, before anything changed).
+    pub fn sync_usage_view_now(&self) {
+        self.sync_usage_view_pub();
+    }
+
     pub fn apply_settings(&self, public: &Value) {
         self.net().apply_settings(public);
     }
@@ -229,6 +258,28 @@ pub fn note_pane(grant_id: &str, pane_id: &str) {
 /// The label of a borrowed sign-in ("Leo's PC (lent)").
 pub fn borrowed_label(grant_id: &str) -> Option<String> {
     SERVICE.get().and_then(|s| s.borrowed_label(grant_id))
+}
+
+/// The lend side of the usage bar (empty while the switch is off).
+pub fn usage_view() -> crate::usage::LendView {
+    if !enabled() {
+        return crate::usage::LendView::default();
+    }
+    SERVICE.get().map(|s| s.usage_view()).unwrap_or_default()
+}
+
+/// The lend profile name that uses the lend sign-in `account_id` (for Settings > Sign in: "Work account", never "Lend Claude 3").
+pub fn lend_profile_name(account_id: &str) -> Option<String> {
+    let view = SERVICE.get()?.usage_view();
+    view.profiles.iter().find(|p| p.account_id == account_id).map(|p| p.name.clone())
+}
+
+/// Who is signed in under `home` for `agent_id` (the signed-in identity from the lend spec; never shown, only compared).
+/// The main login keeps its identity file next to its folder when the folder itself has none.
+pub fn usage_identity(agent_id: &str, home: &std::path::Path, main: bool) -> Option<String> {
+    let svc = SERVICE.get()?;
+    let auth = svc.spec(agent_id)?.auth.account.as_ref()?;
+    signin::identity(&home.to_string_lossy(), auth).or_else(|| if main { home.parent().and_then(|p| signin::identity(&p.to_string_lossy(), auth)) } else { None })
 }
 
 /// Active borrowed grants, as extra sign-ins for the account pickers (empty while the switch is off).

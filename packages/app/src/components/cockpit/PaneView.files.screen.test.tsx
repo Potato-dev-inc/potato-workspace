@@ -99,8 +99,8 @@ describe('files in the pane view', () => {
     await act(async () => card!.querySelector<HTMLButtonElement>('[data-path="notes.txt"]')!.click());
     await flush();
     const tabs = host.querySelector('[data-testid="file-tabs"]')!;
-    expect(tabs.querySelector('[role="tab"]')?.textContent).toBe('notes.txt');
-    expect(tabs.querySelector('[role="tab"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(tabs.querySelector('.ck-ftab:not(.ck-ftab--agent) [role="tab"]')?.textContent).toBe('notes.txt');
+    expect(tabs.querySelector('.ck-ftab:not(.ck-ftab--agent) [role="tab"]')?.getAttribute('aria-selected')).toBe('true');
     expect(host.querySelector('[data-testid="file-tab"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="term"]')).toBeNull();
     expect(invoke).toHaveBeenCalledWith('files_read', { paneId: 'p', path: 'notes.txt' });
@@ -129,7 +129,46 @@ describe('files in the pane view', () => {
     await flush();
     expect(host.querySelector('[data-testid="term"]')).not.toBeNull();
     // The file stays open as a tab, just not in front.
-    expect(host.querySelector('[data-testid="file-tabs"] [role="tab"]')?.getAttribute('aria-selected')).toBe('false');
+    expect(host.querySelector('[data-testid="file-tabs"] .ck-ftab:not(.ck-ftab--agent) [role="tab"]')?.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('the first tab is the agent, pinned: icon and name, no close button; a click, Ctrl+1 and Esc go back to it', async () => {
+    await act(async () => root.render(<PaneView c={cockpit()} paneId="p" />));
+    await flush();
+    await act(async () => openFileTab('p', 'notes.txt'));
+    await flush();
+    const first = host.querySelector('[data-testid="file-tabs"] [role="tab"]')!;
+    expect(first.closest('.ck-ftab')?.getAttribute('data-testid')).toBe('file-tab-agent');
+    expect(first.textContent).toBe('Claude');
+    expect(first.querySelector('[data-mark]')).not.toBeNull();
+    expect(first.getAttribute('aria-selected')).toBe('false');
+    expect(first.closest('.ck-ftab')?.querySelector('.ck-ftab-x')).toBeNull();
+    // A click returns to the agent; the file stays open behind it.
+    await act(async () => (first as HTMLButtonElement).click());
+    await flush();
+    expect(host.querySelector('[data-testid="term"]')).not.toBeNull();
+    expect(first.getAttribute('aria-selected')).toBe('true');
+    // Ctrl+1 from a file.
+    const key = (init: KeyboardEventInit) => act(async () => host.querySelector('.ck-file, .ck-pane')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })));
+    await act(async () => host.querySelector<HTMLButtonElement>('.ck-ftab:not(.ck-ftab--agent) .ck-ftab-main')!.click());
+    await flush();
+    expect(host.querySelector('[data-testid="file-tab"]')).not.toBeNull();
+    await key({ key: '1', ctrlKey: true });
+    await flush();
+    expect(host.querySelector('[data-testid="term"]')).not.toBeNull();
+    // Esc from a file.
+    await act(async () => host.querySelector<HTMLButtonElement>('.ck-ftab:not(.ck-ftab--agent) .ck-ftab-main')!.click());
+    await flush();
+    await key({ key: 'Escape' });
+    await flush();
+    expect(host.querySelector('[data-testid="term"]')).not.toBeNull();
+    // Esc inside a text box (an editor) is left to the box.
+    await act(async () => host.querySelector<HTMLButtonElement>('.ck-ftab:not(.ck-ftab--agent) .ck-ftab-main')!.click());
+    await flush();
+    const box = document.createElement('textarea');
+    host.querySelector('.ck-file')!.appendChild(box);
+    await act(async () => box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    expect(host.querySelector('[data-testid="file-tab"]')).not.toBeNull();
   });
 
   it('a file can be edited from its tab: the dot shows on the tab until Save writes it', async () => {

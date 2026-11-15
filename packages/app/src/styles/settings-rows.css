@@ -167,17 +167,34 @@
 .settings .st-thumb-pic .box.front {
   fill: #5d5a56;
 }
-.settings .st-thumb-pic[data-tone='light'] .win {
+/* 'light', 'dim' and 'dark' show their own surfaces; 'auto' puts a light half and a dark half side by side (.st-half). */
+.settings .st-thumb-pic[data-tone='light'] .win,
+.settings .st-half[data-tone='light'] .win {
   fill: #ffffff;
 }
-.settings .st-thumb-pic[data-tone='light'] .side {
+.settings .st-thumb-pic[data-tone='light'] .side,
+.settings .st-half[data-tone='light'] .side {
   fill: #ececef;
 }
-.settings .st-thumb-pic[data-tone='light'] .line {
+.settings .st-thumb-pic[data-tone='light'] .line,
+.settings .st-half[data-tone='light'] .line {
   fill: #3a3a3c;
 }
-.settings .st-thumb-pic[data-tone='light'] .faint {
+.settings .st-thumb-pic[data-tone='light'] .faint,
+.settings .st-half[data-tone='light'] .faint {
   fill: #c9c9cd;
+}
+.settings .st-thumb-pic[data-tone='dim'] .win {
+  fill: #ece8e1;
+}
+.settings .st-thumb-pic[data-tone='dim'] .side {
+  fill: #e2ddd5;
+}
+.settings .st-thumb-pic[data-tone='dim'] .line {
+  fill: #24211d;
+}
+.settings .st-thumb-pic[data-tone='dim'] .faint {
+  fill: #bdb6aa;
 }
 
 /* ---------- previews under a row ---------- */
@@ -396,4 +413,56 @@
 }
 .settings .st-thumb-pic[data-tone='plain'] .box.front {
   fill: var(--label-3);
+}
+
+/* Check my setup: the "Checked 3 min ago" tail, and a row that is still being read (spinner glyph, quiet text). */
+.settings .st-setupcheck-left {
+  font-size: 12px;
+  color: var(--label-3);
+}
+.settings .st-setupcheck-when {
+  color: var(--label-3);
+}
+.settings .st-setupcheck-row[data-status='checking'] .st-label,
+.settings .st-setupcheck-row[data-busy='true'] .st-label {
+  color: var(--label-3);
+}
+.settings .st-setupcheck-glyph {
+  display: inline-grid;
+  place-items: center;
+}
+
+/* "Agents to keep warm": − [ 2 ] + and a short note when the number is high. */
+.settings .st-warm-stepper {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.settings .st-warm-stepper .st-warm-input {
+  width: 52px;
+  text-align: center;
+}
+.settings .st-warm-stepper .st-warm-btn {
+  min-width: 26px;
+  padding: 0;
+}
+.settings .st-warm-note {
+  flex-basis: 100%;
+  color: var(--label-3);
+}
+
+/* Recent approvals: folded until opened; repeats show a count; the buttons sit in one row. */
+.settings .st-audit-fold > summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+  color: var(--label-2);
+}
+.settings .st-audit-times {
+  color: var(--label-3);
+}
+.settings .st-audit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }

@@ -465,3 +465,67 @@ describe('Active lends', () => {
     expect(section('Active lends').textContent).not.toContain('sign-in expired\n');
   });
 });
+
+describe('Show usage in the usage bar (per lend profile)', () => {
+  it('is a checkbox on a sign-in profile, off by default, and saving it turns show_usage on; a key profile has none', async () => {
+    const { api } = await mount({ profiles: [MY_PROFILE, KEY_PROFILE] });
+    const rows = [...section('Lend profiles').querySelectorAll('li')];
+    const mine = rows.find((r) => r.textContent?.includes('My other PCs'))!;
+    const key = rows.find((r) => r.textContent?.includes('Work key'))!;
+    const box = mine.querySelector<HTMLInputElement>('.lend-showusage input')!;
+    expect(box.checked).toBe(false);
+    expect(mine.textContent).toContain('Show usage in the usage bar');
+    expect(key.querySelector('.lend-showusage')).toBeNull();
+    await click(box);
+    await settle(3);
+    const saved = api.backend.get().profiles.find((p) => p.id === MY_PROFILE.id)!;
+    expect(saved.show_usage).toBe(true);
+    expect(section('Lend profiles').querySelector<HTMLInputElement>('.lend-showusage input')!.checked).toBe(true);
+  });
+});
+
+describe('Past lends and borrows', () => {
+  const DAY = 24 * 3600 * 1000;
+  const ended = (n: number, over: Partial<typeof GRANT_IN> = {}) => ({
+    ...GRANT_IN,
+    id: `past-${n}`,
+    state: 'ended' as const,
+    end_reason: 'returned' as const,
+    peer_name: `Lender ${n}`,
+    ended_ms: Date.now() - n * 3600 * 1000,
+    ...over,
+  });
+
+  it('keeps only active borrows in the list; past ones are collapsed (last 5, newest first), a week old ones are gone', async () => {
+    const past = [1, 2, 3, 4, 5, 6, 7].map((n) => ended(n));
+    const old = ended(99, { ended_ms: Date.now() - 8 * DAY, ends_ms: Date.now() - 8 * DAY });
+    await mount({ grants: [GRANT_IN, ...past, old] });
+    const box = section('Active lends');
+    const list = box.querySelector<HTMLDetailsElement>('[data-testid="lend-past-in"]')!;
+    expect(list.open).toBe(false);
+    expect(list.querySelector('summary')!.textContent).toContain('Past borrows (7)');
+    const names = [...list.querySelectorAll('.lend-list > li')].map((li) => li.textContent);
+    expect(names).toHaveLength(5);
+    expect(names[0]).toContain('Lender 1');
+    expect(names[4]).toContain('Lender 5');
+    expect(box.textContent).not.toContain('Lender 99');
+    // The running borrow stays in the main list.
+    expect(box.querySelector('.lend-list > li')!.textContent).toContain('Borrowing Claude from Sam');
+  });
+
+  it('the X removes one row and Clear removes them all, on the desktop (not only hidden)', async () => {
+    const { api } = await mount({ grants: [ended(1), ended(2), ended(3, { direction: 'out' })] });
+    const inList = () => section('Active lends').querySelector<HTMLElement>('[data-testid="lend-past-in"]')!;
+    await click(inList().querySelector<HTMLButtonElement>('button[aria-label="Remove this row"]')!);
+    await settle(3);
+    expect(api.calls).toContain('dismissGrant("past-1")');
+    expect(api.backend.get().grants.map((g) => g.id)).not.toContain('past-1');
+    await click(buttonByText(inList(), 'Clear'));
+    await settle(3);
+    expect(api.calls).toContain('clearPast("in")');
+    expect(section('Active lends').querySelector('[data-testid="lend-past-in"]')).toBeNull();
+    // Past lends are their own list and stay until cleared.
+    expect(section('Active lends').querySelector('[data-testid="lend-past-out"]')!.querySelector('summary')!.textContent).toContain('Past lends (1)');
+    expect(api.backend.get().grants.map((g) => g.id)).toEqual(['past-3']);
+  });
+});

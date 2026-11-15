@@ -46,6 +46,9 @@ pub(super) fn codex_needs_refresh(content: &str, source: McpLaunchSource) -> boo
     if content.contains("//?/") || content.contains(r"\\?\") {
         return true;
     }
+    if super::stale::current_for(source).is_some_and(|current| super::stale::codex_block_is_stale(content, &current)) {
+        return true;
+    }
     if crate::mcp_runtime::using_bundled_mcp() && content.contains("@potato-workspace/mcp") {
         return true;
     }

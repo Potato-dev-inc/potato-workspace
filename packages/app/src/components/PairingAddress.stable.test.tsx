@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TunnelStatus } from '../lib/tauri-types';
 import { MobilePairingPanel } from './MobilePairingPanel';
+import { StableLinkSheet } from './StableLinkSheet';
 import { SettingsPanel, type SettingsApi } from './SettingsPanel';
 import type { TunnelApi } from './settings/TunnelSection';
 import { BASE_SETTINGS, click, settle, type as typeInto } from './settings/test-utils';
@@ -116,11 +117,11 @@ describe('Connect > Phone: keep one address', () => {
     const sheet = q('stable-sheet')!;
     expect(sheet.textContent).toContain('free Cloudflare Worker');
     const commands = [...sheet.querySelectorAll('.stable-cmd code')].map((c) => c.textContent);
-    expect(commands).toEqual(['cd relay/stable-link && npm install', 'npx wrangler login', 'npm run deploy']);
+    expect(commands).toEqual(['cd relay/worker && npm install', 'npx wrangler login', 'npm run deploy']);
     await click(sheet.querySelector('.stable-cmd button'));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('cd relay/stable-link && npm install');
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('cd relay/worker && npm install');
     await click(q('stable-guide'));
-    expect(mocks.opened[0]).toContain('relay/stable-link');
+    expect(mocks.opened[0]).toContain('relay/worker');
     expect(q('stable-status')!.textContent).toContain('Not linked yet');
   });
 
@@ -160,7 +161,7 @@ describe('Connect > Phone: keep one address', () => {
     await settle(3);
     const hint = q('stable-relay-suggestion')!;
     expect(hint.textContent).toContain('Use https://team-relay.me.workers.dev (your team relay)');
-    expect(hint.textContent).toContain('must also include the stable-link part');
+    expect(hint.textContent).toContain('One Worker does both jobs');
     const input = q('stable-sheet')!.querySelector<HTMLInputElement>('input[aria-label="Worker address"]')!;
     expect(input.value).toBe('');
     await click(hint.querySelector('button'));
@@ -215,5 +216,55 @@ describe('Settings screen (real catalog): Connect page', () => {
     expect(offer).not.toBeNull();
     await click(offer);
     expect(host.querySelector('[data-testid="stable-sheet"]')).not.toBeNull();
+  });
+});
+
+describe('one Worker: the team relay address is offered for the phone link only when it can do it', () => {
+  const sheet = async (health: { reachable: boolean; features: string[]; legacyLink?: boolean } | null) => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () =>
+      root.render(
+        <StableLinkSheet
+          api={fakeApi(quick)}
+          initial={quick}
+          onStatus={() => undefined}
+          onClose={() => undefined}
+          relaySuggestion={async () => 'https://team-relay.me.workers.dev'}
+          checkWorker={async () => (health ? { legacyLink: false, ...health } : null)}
+        />,
+      ),
+    );
+    await settle(4);
+  };
+  const find = (id: string) => host.querySelector(`[data-testid="${id}"]`);
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
+  it('a Worker that lists stable-link: "Use <address>" fills the field', async () => {
+    await sheet({ reachable: true, features: ['team', 'rooms', 'stable-link', 'invites'] });
+    const hint = find('stable-relay-suggestion')!;
+    expect(hint.textContent).toContain('Use https://team-relay.me.workers.dev (your team relay)');
+    await click(hint.querySelector('button'));
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Worker address"]')!.value).toBe('https://team-relay.me.workers.dev');
+  });
+
+  it('an older team relay: "Update your Worker" with the one command, and no Use button', async () => {
+    await sheet({ reachable: true, features: ['team'] });
+    expect(find('stable-relay-suggestion')).toBeNull();
+    const update = find('worker-update')!;
+    expect(update.textContent).toContain('Update your Worker');
+    expect(update.textContent).toContain('cd relay/worker && npm install && npx wrangler login && npm run deploy');
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Worker address"]')!.value).toBe('');
+  });
+
+  it('a relay that does not answer is not offered', async () => {
+    await sheet({ reachable: false, features: [] });
+    expect(find('stable-relay-suggestion')).toBeNull();
+    expect(find('worker-unreachable')).not.toBeNull();
   });
 });

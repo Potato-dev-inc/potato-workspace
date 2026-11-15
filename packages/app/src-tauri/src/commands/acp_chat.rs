@@ -157,6 +157,15 @@ pub async fn acp_chat_state(pane_id: String) -> Result<Value, String> {
     })
 }
 
+/// The message box got the focus: start the chat's adapter if it sleeps, so "/" has its commands. Starts nothing else.
+#[tauri::command]
+pub async fn acp_chat_warm(pane_id: String) -> Result<(), String> {
+    if let Some(session) = chat::get(&pane_id) {
+        session.warm();
+    }
+    Ok(())
+}
+
 /// Changes a setting the agent offers (model, mode, effort) in a chat session. Refused while a turn runs. Returns the
 /// new state.
 #[tauri::command]

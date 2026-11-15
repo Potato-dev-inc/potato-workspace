@@ -31,6 +31,9 @@ use super::session::AcpSession;
 use crate::standby::key::canonical_project;
 use crate::standby::config::{StandbyConfig, MAX_PRELOAD_TOTAL};
 
+mod helpers;
+pub use helpers::{HelperMeta, HelperState, HelperStatus, HelperWant};
+
 /// What a warm session is keyed by: everything fixed when its adapter starts.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WarmKey {
@@ -39,6 +42,9 @@ pub struct WarmKey {
     pub project: String,
     /// The account the adapter runs under; `None`: the agent's own login.
     pub account: Option<String>,
+    /// A standby helper's id (`standby::helpers`): the person's own named standby is its own slot, apart from the plain
+    /// warm session of the same agent and folder. `None` for the plain ones.
+    pub slot: Option<String>,
 }
 
 impl WarmKey {
@@ -47,7 +53,13 @@ impl WarmKey {
             agent: agent.to_ascii_lowercase(),
             project: canonical_project(folder),
             account: account.map(str::trim).filter(|a| !a.is_empty()).map(str::to_string),
+            slot: None,
         }
+    }
+
+    /// The key of a standby helper's slot.
+    pub fn for_helper(helper_id: &str, agent: &str, folder: &str, account: Option<&str>) -> Self {
+        Self { slot: Some(helper_id.to_string()), ..Self::new(agent, folder, account) }
     }
 }
 
@@ -71,6 +83,10 @@ pub struct Policy {
     pub idle_ms: i64,
     /// How long a used key stays wanted.
     pub recent_ms: i64,
+    /// The person's standby helpers (see `warm/helpers.rs`). They count against `cap` like any other warm session.
+    pub helpers: Vec<helpers::HelperWant>,
+    /// A standby helper unused this long is closed (0: the same as `idle_ms`).
+    pub helper_idle_ms: i64,
 }
 
 /// Why a warm start failed.
@@ -90,6 +106,15 @@ pub trait WarmHost: Send + Sync + 'static {
     fn alive(&self, item: &Self::Item) -> bool;
     /// Stops it for good.
     fn close(&self, item: Self::Item);
+    /// The chat id of a session (what a viewer calls its pane). `None`: the host has no such thing.
+    fn pane_of(&self, _item: &Self::Item) -> Option<String> {
+        None
+    }
+    /// Whether the chat `pane_id` has a turn running: `Some(true)` working, `Some(false)` waiting for a message, `None`
+    /// the chat is gone. A claimed standby helper is busy until this says its task is over.
+    fn working(&self, _pane_id: &str) -> Option<bool> {
+        None
+    }
 }
 
 const BACKOFF_FIRST_MS: i64 = 30_000;
@@ -118,6 +143,18 @@ struct Slot<T> {
     /// Closed for being unused: not started again until the key is used.
     cold: bool,
     last_use: Option<i64>,
+    /// The standby helper this slot belongs to (`key.slot`), as last asked for by the policy.
+    helper: Option<helpers::HelperMeta>,
+    /// A claimed helper's task, running: the slot is not refilled until it is over.
+    busy: Option<helpers::Busy>,
+    /// Why the last start failed (for the helper's status line).
+    last_error: Option<String>,
+}
+
+impl<T> Slot<T> {
+    fn new(folder: PathBuf) -> Self {
+        Slot { folder, state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None, helper: None, busy: None, last_error: None }
+    }
 }
 
 /// A key someone asked to warm for a short while (the phone opened its New chat screen): it starts whatever the standby
@@ -187,6 +224,7 @@ impl<H: WarmHost> Pool<H> {
     /// may be reused.
     fn effective(inner: &Inner<H::Item>, now: i64) -> BTreeSet<WarmKey> {
         let mut keys: BTreeSet<WarmKey> = inner.policy.wanted.iter().map(|w| w.key.clone()).collect();
+        keys.extend(inner.policy.helpers.iter().map(|w| w.key.clone()));
         keys.extend(inner.hints.iter().filter(|(_, hint)| hint.until > now).map(|(key, _)| key.clone()));
         for (key, slot) in &inner.slots {
             let used_lately = slot.last_use.is_some_and(|at| now - at < inner.policy.recent_ms);
@@ -213,17 +251,26 @@ impl<H: WarmHost> Pool<H> {
         // A key the policy wants gets a slot (with its folder) so the start below has somewhere to go.
         let wanted: Vec<WarmWant> = inner.policy.wanted.clone();
         for want in &wanted {
-            inner.slots.entry(want.key.clone()).or_insert_with(|| Slot { folder: want.folder.clone(), state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None });
+            inner.slots.entry(want.key.clone()).or_insert_with(|| Slot::new(want.folder.clone()));
         }
+        for want in inner.policy.helpers.clone() {
+            let slot = inner.slots.entry(want.key.clone()).or_insert_with(|| Slot::new(want.folder.clone()));
+            slot.folder = want.folder.clone();
+            slot.helper = Some(want.meta.clone());
+        }
+        // A claimed helper whose task is over goes back to standby (its slot is refilled below).
+        Self::release_finished(inner, &*self.host, now);
         inner.hints.retain(|_, hint| hint.until > now);
         let hinted: Vec<(WarmKey, PathBuf)> = inner.hints.iter().map(|(key, hint)| (key.clone(), hint.folder.clone())).collect();
         for (key, folder) in &hinted {
-            inner.slots.entry(key.clone()).or_insert_with(|| Slot { folder: folder.clone(), state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None });
+            inner.slots.entry(key.clone()).or_insert_with(|| Slot::new(folder.clone()));
         }
         let effective = Self::effective(inner, now);
-        let idle_ms = inner.policy.idle_ms;
+        let plain_idle_ms = inner.policy.idle_ms;
+        let helper_idle_ms = if inner.policy.helper_idle_ms > 0 { inner.policy.helper_idle_ms } else { plain_idle_ms };
         for (key, slot) in inner.slots.iter_mut() {
             let wanted_now = effective.contains(key);
+            let idle_ms = if key.slot.is_some() { helper_idle_ms } else { plain_idle_ms };
             if let State::Ready { item, since } = &slot.state {
                 let dead = !self.host.alive(item);
                 let idle = now - *since >= idle_ms;
@@ -242,7 +289,7 @@ impl<H: WarmHost> Pool<H> {
         }
         // A key nobody wants any more is forgotten (one still starting finishes, and `finish` closes what it made).
         inner.slots.retain(|key, slot| matches!(slot.state, State::Starting { .. }) || effective.contains(key));
-        let cap = inner.policy.cap.min(MAX_PRELOAD_TOTAL);
+        let cap = inner.policy.cap.min(MAX_PRELOAD_TOTAL + crate::standby::helpers::MAX_HELPERS);
         let mut taken = Self::taken(inner);
         let mut generation = inner.generation;
         for key in &effective {
@@ -252,7 +299,7 @@ impl<H: WarmHost> Pool<H> {
                 continue;
             }
             let Some(slot) = inner.slots.get_mut(key) else { continue };
-            if matches!(slot.state, State::Empty) && !slot.cold && now >= slot.backoff_until {
+            if matches!(slot.state, State::Empty) && !slot.cold && slot.busy.is_none() && now >= slot.backoff_until {
                 generation += 1;
                 slot.state = State::Starting { generation };
                 taken += 1;
@@ -279,11 +326,13 @@ impl<H: WarmHost> Pool<H> {
                 (Some(slot), Ok(item), false) => {
                     slot.fails = 0;
                     slot.backoff_until = 0;
+                    slot.last_error = None;
                     slot.state = State::Ready { item, since: now };
                 }
                 (Some(slot), Err(fail), _) => {
                     slot.fails += 1;
                     slot.backoff_until = now + backoff_ms(slot.fails, fail.auth);
+                    slot.last_error = Some(if fail.auth { "needs_sign_in".to_string() } else { "did_not_start".to_string() });
                     slot.state = State::Empty;
                     tracing::info!(agent = %key.agent, fails = slot.fails, auth = fail.auth, "acp: warm chat did not start: {}", fail.message);
                 }
@@ -315,7 +364,7 @@ impl<H: WarmHost> Pool<H> {
                 if !inner.policy.reusable_agents.contains(&key.agent) {
                     return None;
                 }
-                inner.slots.insert(key.clone(), Slot { folder: folder.to_path_buf(), state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None });
+                inner.slots.insert(key.clone(), Slot::new(folder.to_path_buf()));
             }
             let slot = inner.slots.get_mut(key)?;
             slot.last_use = Some(now);
@@ -525,6 +574,15 @@ impl WarmHost for LiveHost {
     fn close(&self, item: WarmChat) {
         item.session.close();
     }
+
+    fn pane_of(&self, item: &WarmChat) -> Option<String> {
+        Some(item.id.clone())
+    }
+
+    fn working(&self, pane_id: &str) -> Option<bool> {
+        let chat = super::chat::get(pane_id)?;
+        Some(chat.state().get("turnInFlight").and_then(|v| v.as_bool()).unwrap_or(false))
+    }
 }
 
 // ---- the app's pool ---------------------------------------------------------------------------------------------------
@@ -568,6 +626,18 @@ pub fn claim_waiting(cfg: &AgentConfig, folder: &Path, account: Option<&str>, wa
     Some(warm)
 }
 
+/// A standby helper that fits this start (agent, folder, account, and a model that agrees), taken for it. Waits for one that
+/// is still starting. The session is checked like `claim`'s: a changed agent definition makes it a miss.
+pub fn claim_helper(cfg: &AgentConfig, folder: &Path, account: Option<&str>, model: Option<&str>, wait: Duration) -> Option<(WarmChat, HelperMeta)> {
+    let pool = pool()?;
+    let (warm, meta) = pool.claim_helper_waiting(&cfg.id, folder, account, model, wait)?;
+    if warm.config != config_fingerprint(cfg) || warm.account.as_deref() != account.map(str::trim).filter(|a| !a.is_empty()) {
+        pool.host.close(warm);
+        return None;
+    }
+    Some((warm, meta))
+}
+
 /// How long a hint keeps a session for a chat that has not been started yet.
 const HINT_TTL_MS: i64 = 5 * 60_000;
 
@@ -605,7 +675,9 @@ pub fn init(registry: Arc<Mutex<crate::pty::PaneRegistry>>) {
             let policy = match crate::standby::config_snapshot() {
                 Some(config) if now - started >= STARTUP_GRACE_MS => {
                     let project = crate::standby::default_project(&registry);
-                    compute_policy(&config, Some(Path::new(&project)), &LiveProbe)
+                    let mut policy = compute_policy(&config, Some(Path::new(&project)), &LiveProbe);
+                    crate::standby::helpers::extend_policy(&mut policy, &crate::standby::helpers::file().snapshot(), &LiveProbe);
+                    policy
                 }
                 _ => Policy::default(),
             };

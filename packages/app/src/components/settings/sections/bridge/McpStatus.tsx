@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getMcpStatus, type EnsureMcpResult, type McpStatusReport } from '../../../../lib/mcp-config';
 import type { SettingsEnv } from '../../model';
 import { Btn, Note, SettingBlock } from '../../settings-ui';
+import { ToolsDriftList } from './ToolsDrift';
 import { MCP_CHANGED_EVENT, RESTART_NOTE, ResultLines, StatusLine, installPathOf, runtimeName } from './shared';
 
 
@@ -115,6 +116,7 @@ export function McpStatusBlock({ env }: { env: SettingsEnv }) {
           ))}
         </div>
       )}
+      <ToolsDriftList />
       {repairs && <ResultLines results={repairs} note={t('bridge.restartNote')} />}
       {error && <Note role="alert">{error}</Note>}
     </SettingBlock>

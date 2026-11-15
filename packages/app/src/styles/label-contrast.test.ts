@@ -133,6 +133,95 @@ describe.each(Object.keys(FILES))('%s signal tokens', (file) => {
   });
 });
 
+/** The new colours. --info, --pr and --lend can be text: 4.5:1 on every ground, dark and light. --ft-* are small glyphs
+ *  (the file-type icon): 3:1 in dark and light (non-text contrast). In the dimmed tone all of them are held to 4.5:1. */
+const TEXT_INK = ['--info', '--pr', '--lend'];
+const GLYPH_INK = ['--ft-code', '--ft-style', '--ft-data', '--ft-doc', '--ft-image', '--ft-web'];
+const NEW_INK = [...TEXT_INK, ...GLYPH_INK];
+describe.each(['cockpit.css', 'phone.css', 'settings.css'])('%s new colour tokens (dark and light)', (file) => {
+  for (const name of NEW_INK) {
+    const need = TEXT_INK.includes(name) ? 4.5 : 3;
+    it(`${name}: ${need}:1 on every ground`, () => {
+      for (const theme of [0, 1] as const) {
+        const c = hex(values(file, name)[theme]);
+        for (const bg of grounds(file, theme)) expect(contrast(c, bg), `${name}, theme ${theme}`).toBeGreaterThanOrEqual(need);
+      }
+    });
+  }
+  it('--add and --del are the live and danger colours; --ft-plain is label-3', () => {
+    const css = read(file);
+    expect(css).toMatch(/--add:\s*var\(--live\)/);
+    expect(css).toMatch(/--del:\s*var\(--danger\)/);
+    expect(css).toMatch(/--ft-plain:\s*var\(--label-3\)/);
+  });
+});
+
+/** "Light, dimmed" (data-theme='light' + data-tone='dim'): the third value of each token. Tokens the tone does not redefine keep the light value. */
+const dim = (file: string, token: string): string => {
+  const v = values(file, token);
+  return v[2] ?? v[1];
+};
+function dimGrounds(file: string): RGB[] {
+  const { ground, float } = FILES[file];
+  const solid = ground.map((name) => hex(dim(file, name)));
+  const f = rgba(dim(file, float));
+  return [...solid, blend(f.rgb, f.a, solid[0])];
+}
+
+describe.each(['cockpit.css', 'phone.css', 'settings.css'])('%s Light, dimmed tone', (file) => {
+  it('the dim surfaces are the design values and sit between white and the dark theme', () => {
+    const { ground } = FILES[file];
+    const want = ['#e2ddd5', '#ece8e1', '#f2eee8'];
+    ground.forEach((name, i) => expect(dim(file, name)).toBe(want[i]));
+    for (const name of ground) expect(luminance(hex(dim(file, name)))).toBeLessThan(luminance(hex(values(file, name)[1])) + 1e-9);
+  });
+
+  for (const token of ['--label-2', '--label-3']) {
+    it(`${token}: at least 4.5:1 on every dim ground`, () => {
+      const fg = hex(dim(file, '--label'));
+      const a = rgba(dim(file, token)).a;
+      const out = dimGrounds(file).map((bg) => contrast(blend(fg, a, bg), bg));
+      console.log(file, 'dim', token, JSON.stringify(out.map((r) => +r.toFixed(2))));
+      for (const r of out) expect(r).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+
+  it('--label itself is at least 4.5:1', () => {
+    for (const bg of dimGrounds(file)) expect(contrast(hex(dim(file, '--label')), bg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  for (const name of ['--accent', '--live', '--risk', '--danger']) {
+    it(`${name}: 4.5:1 on every dim ground and on its own soft tint`, () => {
+      const c = hex(dim(file, file === 'phone.css' && name === '--accent' ? '--accent-text' : name));
+      const soft = rgba(dim(file, `${name}-soft`));
+      const all = dimGrounds(file);
+      const out = all.map((bg) => contrast(c, bg));
+      console.log(file, 'dim', name, JSON.stringify(out.map((r) => +r.toFixed(2))));
+      for (const r of out) expect(r).toBeGreaterThanOrEqual(4.5);
+      for (const bg of all.slice(0, -1)) expect(contrast(c, blend(soft.rgb, soft.a, bg))).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+
+  it('the accent marker reaches 3:1 and --accent-fg 4.5:1 on the accent fill', () => {
+    for (const bg of dimGrounds(file)) expect(contrast(hex(dim(file, '--accent-line')), bg)).toBeGreaterThanOrEqual(3);
+    const fillName = file === 'phone.css' ? '--accent' : '--accent';
+    const fg = hex(dim(file, '--accent-fg'));
+    expect(contrast(fg, hex(dim(file, fillName)))).toBeGreaterThanOrEqual(4.5);
+    for (const name of ['--accent-hover', '--accent-press']) expect(contrast(fg, hex(dim(file, name)))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  for (const name of NEW_INK) {
+    it(`${name}: 4.5:1 on every dim ground`, () => {
+      const c = hex(dim(file, name));
+      for (const bg of dimGrounds(file)) expect(contrast(c, bg), name).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+
+  it('--icon-blue and --icon-claude reach 3:1 (glyphs)', () => {
+    for (const name of ['--icon-claude', '--icon-blue']) for (const bg of dimGrounds(file)) expect(contrast(hex(dim(file, name)), bg), name).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('the old values (control for the check itself)', () => {
   it('failed 4.5:1 for label-3 at the old alphas', () => {
     const black = hex('#0a0a0b');

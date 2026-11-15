@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // The Chat tab's rows: the activity line, the tool detail (diff, command, JSON), helper rows, the task card, notices,
 // the turn footer and the Summary | Normal | Verbose modes.
+import { setChatViewDefault } from './chatViewMode';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -13,6 +14,7 @@ let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  setChatViewDefault('normal'); // these tests were written for the Normal view; the default for new chats is Summary
   localStorage.clear();
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -24,6 +26,12 @@ afterEach(() => {
   host.remove();
   localStorage.clear();
 });
+
+/** The header's "View: … ▾" dropdown: open it, pick one mode. */
+function pickMode(label: string): void {
+  click(host.querySelector<HTMLButtonElement>('.ck-chat-mode-pill')!);
+  click([...host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((b) => b.textContent === label)!);
+}
 
 function render(items: ChatItem[], props: Partial<SessionChatViewProps> = {}) {
   const grouped = groupTurns(items);
@@ -240,9 +248,8 @@ describe('the task card, notices and modes', () => {
 
   it('Summary keeps the messages, the final answer and the activity lines; no notices, no talk', () => {
     render(PLAN, { paneId: 'pane-summary' });
-    const summary = [...host.querySelectorAll<HTMLButtonElement>('[role="group"] button')].find((b) => b.textContent === 'Summary')!;
-    click(summary);
-    expect(summary.getAttribute('aria-pressed')).toBe('true');
+    pickMode('Summary');
+    expect(host.querySelector('.ck-chat-mode-pill')?.textContent).toBe('View: Summary ▾');
     expect(text()).toContain('do it');
     expect(text()).toContain('Fixed.');
     expect(text()).not.toContain('Working on it.');
@@ -253,15 +260,27 @@ describe('the task card, notices and modes', () => {
   it('Verbose opens each line and its rows with their detail', () => {
     render(EDIT_TURN, { paneId: 'pane-verbose' });
     expect(host.querySelector('[data-testid="tool-diff"]')).toBeNull();
-    const verbose = [...host.querySelectorAll<HTMLButtonElement>('[role="group"] button')].find((b) => b.textContent === 'Verbose')!;
-    click(verbose);
+    pickMode('Verbose');
     expect(lines()[0]!.getAttribute('aria-expanded')).toBe('true');
     expect(host.querySelector('[data-testid="tool-diff"]')).not.toBeNull();
   });
 
+  it('a new chat starts in Summary; Settings can change the start; a chat keeps its own choice', () => {
+    setChatViewDefault('summary');
+    render(EDIT_TURN, { paneId: 'pane-new' });
+    expect(host.querySelector('[data-testid="session-chat"]')?.getAttribute('data-view')).toBe('summary');
+    expect(host.querySelector('.ck-chat-mode-pill')?.textContent).toBe('View: Summary ▾');
+    pickMode('Verbose');
+    setChatViewDefault('normal');
+    render(EDIT_TURN, { paneId: 'pane-newer' });
+    expect(host.querySelector('[data-testid="session-chat"]')?.getAttribute('data-view')).toBe('normal');
+    render(EDIT_TURN, { paneId: 'pane-new' });
+    expect(host.querySelector('[data-testid="session-chat"]')?.getAttribute('data-view')).toBe('verbose');
+  });
+
   it('remembers the mode per pane, and another pane keeps its own', () => {
     render(EDIT_TURN, { paneId: 'pane-a' });
-    click([...host.querySelectorAll<HTMLButtonElement>('[role="group"] button')].find((b) => b.textContent === 'Verbose')!);
+    pickMode('Verbose');
     expect(localStorage.getItem('pm.chatView.pane-a')).toBe('verbose');
     render(EDIT_TURN, { paneId: 'pane-b' });
     expect(host.querySelector('[data-testid="session-chat"]')?.getAttribute('data-view')).toBe('normal');

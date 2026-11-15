@@ -9,6 +9,8 @@ import { Chevron, CheckIcon, CrossIcon, KindIcon, PendingMark, SpinMark } from '
 import { kindOfCall } from './chatActivity';
 import { useStepFindsOpen } from './chatFind';
 import { ToolDetail } from './ToolDetail';
+import { QuestionCard } from './QuestionCard';
+import { questionsOfCall } from './questionCall';
 
 export const STATUS_LABEL: Record<ToolStep['status'], string> = {
   running: 'Running',
@@ -61,6 +63,9 @@ export function ToolRow({ step, fromScreen, defaultOpen = false, live = true }: 
   const open = toggled ?? (defaultOpen || foundHere);
   const { call, status } = step;
   const state = cardState(status, live);
+  // The agent asked the person something with options: a question card, not a tool card that says Failed.
+  const asked = fromScreen ? null : questionsOfCall(call);
+  if (asked) return <QuestionCard questions={asked} />;
   return (
     <div className={`ck-chat-row ck-agc-card${fromScreen ? '' : ` ck-agc-card--${state}`}`}>
       <button type="button" aria-expanded={open} onClick={() => setToggled(!open)} className="ck-chat-tool ck-agc-head">

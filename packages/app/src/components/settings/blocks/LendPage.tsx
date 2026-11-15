@@ -10,6 +10,8 @@ import {
   borrowedBillingNote,
   durationWords,
   endedWords,
+  pastGrants,
+  PAST_SHOWN,
   errText,
   grantLine,
   isActiveIn,
@@ -19,6 +21,7 @@ import {
   problemText,
   usageText,
   type LendApi,
+  type Grant,
   type LendProfile,
 } from '../../../lib/lend';
 import { blankDraft, clearDraft, draftFor, draftHasWork, getDraft, setDraft, STEPS, useLendDraft } from '../../../lib/lendDraft';
@@ -129,6 +132,17 @@ function Profiles({
     }
   };
 
+  const saveShowUsage = async (p: LendProfile, on: boolean) => {
+    setError(null);
+    try {
+      await api.profileSave({ ...p, show_usage: on });
+      lend.refresh();
+      onSaved?.();
+    } catch (err) {
+      setError(errText(err));
+    }
+  };
+
   const closeSheet = () => {
     const d = getDraft();
     // Changing a saved profile leaves nothing behind; a new one with nothing in it neither. Otherwise it waits as a draft.
@@ -207,6 +221,17 @@ function Profiles({
                 {p.approval === 'each' ? t('lend.asksFirst') : t('lend.noQuestions')}
                 {limitsText(p) ? ` · ${limitsText(p)}` : ''}
               </small>
+              {p.account.kind === 'account' && (
+                <label className="lend-showusage">
+                  <input
+                    type="checkbox"
+                    checked={p.show_usage === true}
+                    onChange={(e) => void saveShowUsage(p, e.target.checked)}
+                  />{' '}
+                  {t('lend.showUsage')}
+                  <small className="lend-muted"> {t('lend.showUsageHint')}</small>
+                </label>
+              )}
               {asking === p.id && (
                 <small className="lend-problem" role="alert">
                   {t('lend.delete.lent', { name: p.name, peer: lentNow(p)[0]?.peer_name ?? '' })}
@@ -295,7 +320,8 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
   const state = lend.state!;
   const [error, setError] = useState<string | null>(null);
   const live = state.grants.filter((g) => isActiveOut(g, lend.now) || isActiveIn(g, lend.now));
-  const ended = state.grants.filter((g) => g.state === 'ended').slice(-3);
+  const pastOut = pastGrants(state.grants, 'out', lend.now);
+  const pastIn = pastGrants(state.grants, 'in', lend.now);
   const act = async (id: string, out: boolean) => {
     setError(null);
     try {
@@ -334,22 +360,87 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
             )}
           </li>
         ))}
-        {ended.map((g) => (
-          <li key={g.id}>
-            <div className="lend-who">
-              <span className="lend-muted">
-                {g.direction === 'out' ? t('lend.lent') : t('lend.borrowed')} {agentLabel(state, g.agent_id)} · {g.peer_name}
-              </span>
-              <small>{endedWords(g)}</small>
-            </div>
-          </li>
-        ))}
       </ul>
+      <PastList direction="in" rows={pastIn} api={api} lend={lend} onError={setError} />
+      <PastList direction="out" rows={pastOut} api={api} lend={lend} onError={setError} />
       {error && (
         <p className="lend-error" role="alert">
           {error}
         </p>
       )}
     </section>
+  );
+}
+
+/** Past lends or past borrows: collapsed, the last five (newest first), an X on each row and "Clear". */
+function PastList({
+  direction,
+  rows,
+  api,
+  lend,
+  onError,
+}: {
+  direction: 'out' | 'in';
+  rows: Grant[];
+  api: LendApi;
+  lend: Lend;
+  onError: (message: string | null) => void;
+}) {
+  const t = useT();
+  const state = lend.state!;
+  const [all, setAll] = useState(false);
+  if (rows.length === 0) return null;
+  const shown = all ? rows : rows.slice(0, PAST_SHOWN);
+  const run = async (work: () => Promise<unknown>) => {
+    onError(null);
+    try {
+      await work();
+      lend.refresh();
+    } catch (err) {
+      onError(errText(err));
+    }
+  };
+  return (
+    <details className="lend-past" data-testid={`lend-past-${direction}`}>
+      <summary>
+        {direction === 'out' ? t('lend.past.lends', { n: rows.length }) : t('lend.past.borrows', { n: rows.length })}
+      </summary>
+      <ul className="lend-list">
+        {shown.map((g) => (
+          <li key={g.id}>
+            <div className="lend-who">
+              <span className="lend-muted">
+                {agentLabel(state, g.agent_id)} · {g.profile_name || g.peer_name}
+                {g.profile_name && g.peer_name ? ` · ${g.peer_name}` : ''}
+              </span>
+              <small>{endedWords(g)}</small>
+            </div>
+            {api.dismissGrant && (
+              <button
+                type="button"
+                className="lend-btn is-small is-plain"
+                aria-label={t('lend.past.dismiss')}
+                title={t('lend.past.dismiss')}
+                onClick={() => void run(() => api.dismissGrant!(g.id))}
+              >
+                ×
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div className="lend-past-foot">
+        {rows.length > PAST_SHOWN && !all && (
+          <button type="button" className="lend-btn is-small is-plain" onClick={() => setAll(true)}>
+            {t('lend.past.showAll', { n: rows.length })}
+          </button>
+        )}
+        {api.clearPast && (
+          <button type="button" className="lend-btn is-small is-plain" onClick={() => void run(() => api.clearPast!(direction))}>
+            {t('lend.past.clear')}
+          </button>
+        )}
+      </div>
+    </details>
   );
 }

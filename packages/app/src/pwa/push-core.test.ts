@@ -170,3 +170,12 @@ describe('payload options', () => {
     expect(openUrl({ paneId: null })).toBe('/');
   });
 });
+
+describe('yes/no questions', () => {
+  it('reads the yes_no flag and plans Yes / No buttons only for it', () => {
+    const p = parsePushPayload('{"title":"t","body":"b","tag":"x","act":{"url":"/bridge/push/act","token":"T","yes_no":true}}');
+    expect(p.act?.yes_no).toBe(true);
+    expect(planNotification(p).options.actions?.map((a) => a.title)).toEqual(['Yes', 'No']);
+    expect(parsePushPayload('{"act":{"url":"/a","token":"T","yes_no":"yes"}}').act?.yes_no).toBeUndefined();
+  });
+});

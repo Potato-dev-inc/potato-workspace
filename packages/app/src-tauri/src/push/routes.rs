@@ -115,8 +115,8 @@ fn presence(hub: &PushHub, device: &str, body: &[u8], now_ms: u64) -> Result<Rep
 #[derive(Debug, PartialEq, Eq)]
 pub struct Act {
     pub grant: Grant,
-    /// `allow_once` or `deny`: never a broad approval.
-    pub choice: &'static str,
+    /// `allow_once` or `deny` (never a broad approval); for a yes/no question, the id of the choice the person picked.
+    pub choice: String,
 }
 
 /// `POST /push/act` body `{token, choice: "allow"|"deny"}`. The caller then answers the prompt
@@ -131,11 +131,20 @@ pub fn redeem_act(hub: &PushHub, body: &[u8], now_ms: u64) -> Result<Act, Reply>
     let choice = match parsed.choice.as_str() {
         "allow" | "allow_once" => "allow_once",
         "deny" => "deny",
-        _ => return Err((400, json!({"error": "invalid_choice", "hint": "choice must be allow or deny"}))),
+        "yes" | "no" => parsed.choice.as_str(),
+        _ => return Err((400, json!({"error": "invalid_choice", "hint": "choice must be allow, deny, yes or no"}))),
     };
     let grant = hub
         .redeem_grant(&parsed.token, now_ms)
         .map_err(|why| (401, json!({"error": why})))?;
+    // Yes / No belong to a yes/no question's token, Allow / Deny to an approval's: never mixed.
+    let yes_no = grant.item.as_ref().and_then(|item| item.yes_no.as_ref());
+    let choice = match (choice, yes_no) {
+        ("yes", Some(pair)) => pair.yes.clone(),
+        ("no", Some(pair)) => pair.no.clone(),
+        (picked @ ("allow_once" | "deny"), None) => picked.to_string(),
+        _ => return Err((400, json!({"error": "invalid_choice"}))),
+    };
     Ok(Act { grant, choice })
 }
 
@@ -271,5 +280,49 @@ mod tests {
         let forged = redeem_act(&hub, json!({"token": URL_SAFE_NO_PAD.encode([7u8; 32]), "choice": "deny"}).to_string().as_bytes(), 2_000).unwrap_err();
         assert_eq!(forged.0, 401);
         assert_eq!(redeem_act(&hub, b"garbage", 1).unwrap_err().0, 400);
+    }
+
+    fn question_token(hub: &PushHub, device: &str) -> String {
+        let (sub, _, _) = test_subscription("https://fcm.googleapis.com/q");
+        hub.store().lock().upsert(device, sub).unwrap();
+        let candidate = Candidate {
+            kind: Kind::Question,
+            key: "q-1".into(),
+            pane_id: None,
+            agent_label: "Kilo".into(),
+            heading: None,
+            prompt: Some(PromptInfo { prompt_id: String::new(), text: "Deploy?".into(), actionable: false, risk: None }),
+            item: Some(crate::push::hub::ItemRef {
+                id: "item-q1".into(),
+                yes_no: Some(crate::push::hub::YesNo { yes: "c-yes".into(), no: "c-no".into() }),
+                ..Default::default()
+            }),
+            detail: None,
+        };
+        let (_, deliveries) = hub.plan(&candidate, 1_000);
+        let payload: Value = serde_json::from_slice(&deliveries[0].payload).unwrap();
+        payload["act"]["token"].as_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn a_yes_no_tap_answers_with_the_questions_own_choice_id() {
+        let hub = setup("routes-yesno");
+        let yes = redeem_act(&hub, json!({"token": question_token(&hub, "dev-a"), "choice": "yes"}).to_string().as_bytes(), 2_000).unwrap();
+        assert_eq!(yes.choice, "c-yes");
+        let hub = setup("routes-yesno-no");
+        let no = redeem_act(&hub, json!({"token": question_token(&hub, "dev-a"), "choice": "no"}).to_string().as_bytes(), 2_000).unwrap();
+        assert_eq!(no.choice, "c-no");
+    }
+
+    #[test]
+    fn yes_no_and_allow_deny_are_never_mixed() {
+        let hub = setup("routes-mix");
+        // Allow on a question's token is refused (the token is spent, so no answer is typed anywhere).
+        let wrong = redeem_act(&hub, json!({"token": question_token(&hub, "dev-a"), "choice": "allow"}).to_string().as_bytes(), 2_000).unwrap_err();
+        assert_eq!(wrong.0, 400);
+        let hub = setup("routes-mix-2");
+        let approval = token_for(&hub, "dev-a");
+        let wrong = redeem_act(&hub, json!({"token": approval, "choice": "yes"}).to_string().as_bytes(), 2_000).unwrap_err();
+        assert_eq!(wrong.0, 400, "a command approval is never answered with Yes");
     }
 }

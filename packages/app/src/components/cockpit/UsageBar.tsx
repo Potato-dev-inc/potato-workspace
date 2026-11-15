@@ -32,6 +32,8 @@ import type { ReactNode } from 'react';
 import '../../styles/chips.css';
 import '../../styles/usage-strip.css';
 import '../../styles/cockpit-statusbar.css';
+import { useDismissable } from '../../hooks/useDismissable';
+import { useRegisterAction } from '../../whatsnew/registry';
 
 function RefreshIcon() {
   return (
@@ -59,17 +61,11 @@ export function signInSuffix(row: UsageRow, agentHasSeveral: boolean): string | 
   return label.length > 12 ? `${label.slice(0, 11)}…` : label;
 }
 
-function Chip({
-  row,
-  now,
-  onOpen,
-  suffix,
-}: {
-  row: UsageRow;
-  now: number;
-  onOpen: (e: { currentTarget: HTMLElement }) => void;
-  suffix: string | null;
-}) {
+/** The key of one sign-in's row: its chip and its row in the card share it, so a chip can scroll the card to its row. */
+const rowKey = (r: UsageRow) => `${r.agent_id}:${r.account_id ?? ''}`;
+
+/** A chip is a picture inside the strip's one button, not a tab stop. A click on it still says which row it is. */
+function Chip({ row, now, suffix }: { row: UsageRow; now: number; suffix: string | null }) {
   const t = useT();
   const warn = warns(row);
   const g = groupParts(row, now);
@@ -77,14 +73,13 @@ function Chip({
   const sentence = groupSentence(row, now);
   const tip = (sentence ? `${sentence}\n${full.split('\n').slice(1).join('\n')}` : full).replace(t('state.usage.openPage'), t('status.clickForDetails'));
   return (
-    <button
-      type="button"
+    <span
       className={`ck-usage-chip is-${row.state}${warn ? ' is-warn' : ''} tone-${g.tone}`}
       title={tip}
-      aria-label={tip.replace(/\n/g, '. ')}
-      aria-haspopup="dialog"
-      onClick={onOpen}
       data-agent={row.agent_id}
+      data-row={rowKey(row)}
+      aria-hidden="true"
+      data-tip={tip.replace(/\n/g, '. ')}
     >
       <AgentMark row={row} />
       {suffix && (
@@ -113,21 +108,26 @@ function Chip({
           )}
         </>
       )}
-    </button>
+    </span>
   );
 }
 
-function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }) {
+function PopRow({ row, now, api, picked }: { row: UsageRow; now: number; api: UsageApi; picked?: boolean }) {
   const t = useT();
   const fc = forecastOf(row, now);
   return (
-    <li className={`ck-usage-pop-row is-${row.state}`} data-agent={row.agent_id}>
+    <li className={`ck-usage-pop-row is-${row.state}${picked ? ' is-picked' : ''}`} data-agent={row.agent_id} data-row={rowKey(row)}>
       <div className="ck-usage-pop-head">
         <AgentMark row={row} />
         <span className="ck-usage-pop-name">{rowName(row)}</span>
         {row.plan && <span className="ck-usage-pop-plan">{row.plan}</span>}
         <span className="ck-usage-pop-state">{warns(row) ? `⚠ ${chipText(row, now)}` : row.state === 'unknown' ? t('status.notShared') : ''}</span>
       </div>
+      {row.same_as_main && (
+        <p className="ck-usage-same" data-testid="usage-same-account">
+          {t('status.sameAccount', { name: row.label })}
+        </p>
+      )}
       {row.windows.map((w) => {
         const pct = Math.max(0, Math.min(100, Math.round(w.used_percent)));
         const reset = w.reset_since ? t('status.startedAgain') : w.resets_at_ms ? t('status.resetsIn', { time: formatLeftLong(w.resets_at_ms - now) }) : '';
@@ -193,9 +193,10 @@ function PopRow({ row, now, api }: { row: UsageRow; now: number; api: UsageApi }
 
 /** Where the popover goes: above the strip, 360px wide (less in a narrow window), never past an edge. */
 export function popoverPlace(anchor: { left: number; top: number }, winW: number, winH: number) {
+  // The card is always at the left end of the bar: the x of the anchor (a click) is ignored.
   const margin = 8;
   const width = Math.max(240, Math.min(360, winW - margin * 2));
-  const left = Math.max(margin, Math.min(anchor.left, winW - width - margin));
+  const left = margin;
   const bottom = Math.max(margin, winH - anchor.top + 6);
   return { left, bottom, width };
 }
@@ -226,7 +227,12 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing =
   const { on, loginReads } = useUsageBarOn();
   const { snap, busy, refresh } = useUsage(api, on === true, loginReads);
   const [now, setNow] = useState(() => Date.now());
-  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
+  const [open, setOpen] = useState(false);
+  /** The row the card scrolls to (a chip was clicked), or null. */
+  const [focusRow, setFocusRow] = useState<string | null>(null);
+  const strip = useRef<HTMLButtonElement>(null);
+  const viaKeyboard = useRef(false);
+  const [flash, setFlash] = useState<string | null>(null);
   const [place, setPlace] = useState<{ left: number; bottom: number; width: number } | null>(null);
   const [shown, setShown] = useState<number | null>(null);
   const bar = useRef<HTMLDivElement>(null);
@@ -234,7 +240,6 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing =
   const measureRow = useRef<HTMLDivElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const rows = Array.isArray(snap?.rows) ? snap.rows : [];
-  const open = anchor !== null;
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -263,42 +268,70 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing =
     return () => ro.disconnect();
   }, [rows.length, snap, now]);
 
+  // The card is always anchored at the left end of the status bar, wherever the click was.
   useLayoutEffect(() => {
-    if (!anchor) return;
+    if (!open) return;
     const measure = () => {
-      const top = bar.current?.getBoundingClientRect().top ?? window.innerHeight;
-      setPlace(popoverPlace({ left: anchor.left, top }, window.innerWidth, window.innerHeight));
+      const box = bar.current?.getBoundingClientRect();
+      setPlace(popoverPlace({ left: box?.left ?? 0, top: box?.top ?? window.innerHeight }, window.innerWidth, window.innerHeight));
     };
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, [anchor]);
+  }, [open]);
+
+  // A chip was clicked: the card scrolls to that sign-in's row.
+  useEffect(() => {
+    if (!open || !focusRow || !place) return;
+    const el = [...(pop.current?.querySelectorAll<HTMLElement>('[data-row]') ?? [])].find((n) => n.dataset.row === focusRow);
+    el?.scrollIntoView?.({ block: 'nearest' });
+    setFlash(focusRow);
+    const off = window.setTimeout(() => setFlash(null), 900);
+    return () => window.clearTimeout(off);
+  }, [open, focusRow, place]);
 
   useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (!bar.current?.contains(t) && !pop.current?.contains(t)) setAnchor(null);
-    };
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && setAnchor(null);
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('mousedown', away);
-      document.removeEventListener('keydown', key);
-    };
-  }, [open]);
+    if (open && place && viaKeyboard.current) {
+      viaKeyboard.current = false;
+      pop.current?.focus();
+    }
+  }, [open, place]);
+
+  useDismissable(open, {
+    inside: [bar, pop],
+    anchor: bar,
+    onDismiss: (why) => {
+      setOpen(false);
+      if (why === 'escape') strip.current?.focus();
+    },
+  });
 
   // A sign-in that ended is a problem to list (and it is fixed when the row is fine again). Only a real answer counts.
   useEffect(() => {
     if (snap && Array.isArray(snap.rows)) syncProblems('signin:', problemsFromUsage(snap.rows));
   }, [snap]);
 
+  // What's new "Try it": open the card, as a click on the strip does. Not shown at all: nothing to open.
+  const shownAtAll = on === true && rows.length > 0;
+  useRegisterAction('usage.open', () => {
+    if (!shownAtAll) return false;
+    setFocusRow(null);
+    setOpen(true);
+  });
+
   // Off, or no signed-in agent, or a malformed answer (an older desktop): no bar and no space.
   if (on !== true || rows.length === 0) return trailing ? <div className="ck-problems-float">{trailing}</div> : null;
-  const toggle = (e: { currentTarget: HTMLElement }) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setAnchor((a) => (a ? null : { left: r.left, top: r.top }));
+  // The strip is one button. A click on a chip says which row to show; a click anywhere else on it opens or closes the card.
+  const toggle = (e: { target: EventTarget; detail?: number }) => {
+    // Enter or Space (a click with no pointer): the focus goes into the card.
+    viaKeyboard.current = e.detail === 0 && !open;
+    const row = (e.target as HTMLElement | null)?.closest?.<HTMLElement>('[data-row]')?.dataset.row ?? null;
+    if (open && row && row !== focusRow) {
+      setFocusRow(row);
+      return;
+    }
+    setFocusRow(open ? null : row);
+    setOpen(!open);
   };
   const refreshBtn = (
     <button
@@ -314,30 +347,35 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing =
   );
   const count = shown ?? rows.length;
   const hidden = rows.length - count;
-  const key = (r: UsageRow) => `${r.agent_id}:${r.account_id ?? ''}`;
+  const key = rowKey;
   const perAgent = new Map<string, number>();
   for (const r of rows) perAgent.set(r.agent_id, (perAgent.get(r.agent_id) ?? 0) + 1);
   const suffixOf = (r: UsageRow) => signInSuffix(r, (perAgent.get(r.agent_id) ?? 0) > 1);
   return (
     <div className="ck-statusbar" ref={bar} role="group" aria-label={t('status.planUsage')}>
-      <span className="ck-usage-cap">{t('status.usage')}</span>
-      <div className="ck-sb-chips" ref={row}>
-        {rows.slice(0, count).map((r) => (
-          <Chip key={key(r)} row={r} now={now} onOpen={toggle} suffix={suffixOf(r)} />
-        ))}
-        {hidden > 0 && (
-          <button
-            type="button"
-            className="ck-sb-more"
-            aria-label={t('status.moreUsage', { n: hidden })}
-            title={rows.slice(count).map(rowName).join(', ')}
-            aria-haspopup="dialog"
-            onClick={toggle}
-          >
-            +{hidden}
-          </button>
-        )}
-      </div>
+      {/* One button, one tab stop: the label, every chip and "+N" are pictures inside it. */}
+      <button
+        ref={strip}
+        type="button"
+        className="ck-sb-usage"
+        data-testid="usage-strip"
+        aria-label={`${t('status.usage')}. ${rows.map((r) => tooltip(r, now).split('\n')[0]).join('. ')}.`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={toggle}
+      >
+        <span className="ck-usage-cap">{t('status.usage')}</span>
+        <span className="ck-sb-chips" ref={row}>
+          {rows.slice(0, count).map((r) => (
+            <Chip key={key(r)} row={r} now={now} suffix={suffixOf(r)} />
+          ))}
+          {hidden > 0 && (
+            <span className="ck-sb-more" data-row={rowKey(rows[count])} title={rows.slice(count).map(rowName).join(', ')}>
+              +{hidden}
+            </span>
+          )}
+        </span>
+      </button>
       <div className="ck-sb-counts">
         {working > 0 && (
           <span className="ck-sb-count is-working">
@@ -351,7 +389,7 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing =
       {/* The same chips, unseen, so their natural widths can be measured. */}
       <div className="ck-sb-measure" ref={measureRow} aria-hidden="true">
         {rows.map((r) => (
-          <Chip key={key(r)} row={r} now={now} onOpen={() => {}} suffix={suffixOf(r)} />
+          <Chip key={key(r)} row={r} now={now} suffix={suffixOf(r)} />
         ))}
       </div>
       {refreshBtn}
@@ -360,6 +398,7 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing =
           <div
             ref={pop}
             className="ck-usage-pop"
+            tabIndex={-1}
             role="dialog"
             aria-label={t('status.usage')}
             style={place ? { left: place.left, bottom: place.bottom, width: place.width } : { visibility: 'hidden' }}
@@ -370,7 +409,7 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing =
             </div>
             <ul className="ck-usage-pop-list">
               {tightestFirst(rows).map((r) => (
-                <PopRow key={key(r)} row={r} now={now} api={api} />
+                <PopRow key={key(r)} row={r} now={now} api={api} picked={flash === key(r)} />
               ))}
             </ul>
           </div>,

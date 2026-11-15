@@ -9,6 +9,8 @@ export interface Account {
   home: string;
   /** A lend sign-in (Lend through my PC): signed in once, used only for lending. Never offered as a login to start with. */
   lend_only?: boolean;
+  /** A lend sign-in: the name of the lend profile that uses it ("Work account"). Shown instead of the internal label. */
+  lend_profile?: string | null;
   /** A sign-in lent to this PC (`lend:<grant id>`), shown next to my own. Has no home folder. */
   borrowed?: boolean;
   /** Borrowed only: when the lend ends, in epoch milliseconds. */

@@ -218,3 +218,13 @@ export const PotatoMark = ({ size = 16, className, state }: { size?: number; cla
   ) : (
     <img src={potatoIcon} width={size} height={size} className={className} alt="" aria-hidden="true" data-mark="potato" draggable={false} />
   );
+
+/** Two heads: the Team page. */
+export const IconTeam = () => (
+  <Icon>
+    <circle cx="6" cy="5.5" r="2" />
+    <path d="M2.5 13c0-2 1.5-3.5 3.5-3.5S9.5 11 9.5 13" />
+    <circle cx="11.2" cy="6.2" r="1.5" />
+    <path d="M10.8 9.6c1.6 0 2.7 1.1 2.7 2.9" />
+  </Icon>
+);

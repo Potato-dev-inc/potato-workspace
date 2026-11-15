@@ -4,6 +4,8 @@ import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import type { ControlAsk, PaneRemote, PaneRemoteLevel } from './pane-remote';
+import { NOT_AWAY, type DeskAway, type DeskLength } from './desk-away-types';
+import type { AfterTask, NewStandby, StandbyHelpersView } from './standbyHelpers';
 import type {
   AgentContextProfile,
   AgentModelInspection,
@@ -30,6 +32,9 @@ import type {
   DiagnosticSaved,
   LastRun,
   PerfSummary,
+  ProjectBudgetLimits,
+  ProjectBudgetStatus,
+  RightSizeSuggestion,
   OpenCodeKeyStatus,
   RotateOpenCodeKeyResult,
   AppInstallInfo,
@@ -318,6 +323,13 @@ export const tauri = {
   answerControlAsk: (id: string, allow: boolean) => safeInvoke<void>('answer_control_ask', { id, allow }, undefined, true),
   /** A phone asks for control ("<phone> asks for control"). */
   onControlAsk: (cb: (ask: ControlAsk) => void) => safeListen<ControlAsk>('remote://control-ask', cb),
+  /** "Leaving my desk": is it on, until when. */
+  getDeskAway: () => safeInvoke<DeskAway>('get_desk_away', undefined, NOT_AWAY, true),
+  startDeskAway: (length: DeskLength, lockScreen: boolean) =>
+    safeInvoke<DeskAway>('start_desk_away', { length, lockScreen }, { ...NOT_AWAY, away: true, length, lock_screen: lockScreen }, true),
+  endDeskAway: () => safeInvoke<DeskAway>('end_desk_away', undefined, NOT_AWAY, true),
+  /** The switch changed (the phone flipped it, or its time ended). */
+  onDeskAway: (cb: (state: DeskAway) => void) => safeListen<DeskAway>('desk://away', cb),
   /** This launch's bridge key for the app's own HTTP calls (IPC only; null outside the app). */
   bridgeLocalSecret: () =>
     safeInvoke<string | null>('bridge_local_secret', undefined, null, true).catch(() => null),
@@ -343,11 +355,32 @@ export const tauri = {
   standbySetCurrentProject: (path: string) => safeInvoke<boolean>('standby_set_current_project', { path }, false, true),
   standbySetConfig: (config: StandbyConfig) =>
     safeInvoke<StandbyStatus | null>('standby_set_config', { config }, null, true),
+  standbyHelpersGet: () => safeInvoke<StandbyHelpersView | null>('standby_helpers_get', undefined, null, true),
+  standbyHelperAdd: (input: NewStandby) => safeInvoke<StandbyHelpersView | null>('standby_helper_add', { input }),
+  standbyHelperUpdate: (id: string, patch: { name?: string; model?: string | null; after_task?: AfterTask }) =>
+    safeInvoke<StandbyHelpersView | null>('standby_helper_update', {
+      id,
+      name: patch.name ?? null,
+      model: patch.model ?? null,
+      changeModel: 'model' in patch,
+      afterTask: patch.after_task ?? null,
+    }),
+  standbyHelperRemove: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_remove', { id }),
+  standbyHelperStart: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_start', { id }, null, true),
+  standbyHelpersSetLimits: (max: number, idleMinutes: number) =>
+    safeInvoke<StandbyHelpersView | null>('standby_helpers_set_limits', { max, idleMinutes }),
   diagnosticPreview: () => safeInvoke<DiagnosticPreview>('diagnostic_preview'),
   diagnosticShow: (path: string) => safeInvoke<string>('diagnostic_show', { path }),
   diagnosticSave: (path: string, exclude: string[]) =>
     safeInvoke<DiagnosticSaved>('diagnostic_save', { path, exclude }),
   perfSummary: () => safeInvoke<PerfSummary | null>('perf_summary', undefined, null, true),
+  projectBudgetLimits: (project: string) => safeInvoke<ProjectBudgetLimits | null>('project_budget_limits', { project }, null, true),
+  projectBudgetSet: (project: string, limits: ProjectBudgetLimits) => safeInvoke<ProjectBudgetLimits>('project_budget_set', { project, limits }),
+  projectBudgetStatus: (paneId: string) => safeInvoke<ProjectBudgetStatus | null>('project_budget_status', { paneId }, null, true),
+  projectBudgetRaise: (paneId: string) => safeInvoke<ProjectBudgetStatus | null>('project_budget_raise', { paneId }),
+  rightSizePending: (paneId: string) => safeInvoke<RightSizeSuggestion | null>('right_size_pending', { paneId }, null, true),
+  rightSizeSwitch: (paneId: string) => safeInvoke<{ model: string }>('right_size_switch', { paneId }),
+  rightSizeDismiss: (paneId: string) => safeInvoke<void>('right_size_dismiss', { paneId }, undefined, true),
   lastRunStatus: () => safeInvoke<LastRun | null>('last_run_status', undefined, null, true),
   logUiError: (message: string, source?: string, stack?: string) =>
     safeInvoke<boolean>('log_ui_error', { message, source, stack }, false, true),

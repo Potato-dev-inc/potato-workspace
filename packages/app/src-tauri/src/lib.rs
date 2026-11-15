@@ -38,6 +38,7 @@ mod ci_fix;
 mod events;
 mod mcp_hints;
 mod mcp_install;
+mod mcp_drift;
 mod mcp_runtime;
 mod pane_mcp;
 pub mod mcp_sessions;
@@ -52,6 +53,7 @@ mod one_brain;
 mod companion;
 mod crews;
 mod discord_alerts;
+mod discord_bot;
 mod opencode;
 pub mod operations;
 pub mod wait_reasons;
@@ -104,6 +106,7 @@ pub mod proc_job;
 pub mod proc_util;
 mod path_limit;
 mod project_path;
+mod project_budget;
 mod projections;
 mod pty;
 #[cfg(test)]
@@ -165,6 +168,7 @@ mod wsl;
 mod collision;
 mod notify_levels;
 mod artifacts;
+mod project_guide;
 mod files;
 // Open in my editor (desk review).
 mod editor;
@@ -357,6 +361,8 @@ pub fn run() {
             commands::lend_answer,
             commands::lend_revoke,
             commands::lend_return,
+            commands::lend_grant_dismiss,
+            commands::lend_past_clear,
             commands::lend_start_agent,
             commands::lend_export_pm,
             commands::lend_import_pm,
@@ -405,6 +411,8 @@ pub fn run() {
             team::commands::team_state,
             team::commands::team_config_get,
             team::commands::team_ping,
+            team::commands::team_presence_report,
+            team::commands::team_share_set,
             team::commands::team_default_name,
             team::commands::team_config_set,
             team::commands::team_send,
@@ -419,6 +427,9 @@ pub fn run() {
             team::commands::team_create,
             team::commands::team_invite,
             team::commands::team_join,
+            team::commands::team_invite_lookup,
+            team::commands::team_invite_accept,
+            team::commands::worker_check,
             team::commands::team_leave,
             team::commands::team_join_approve,
             team::commands::team_join_decline,
@@ -543,6 +554,8 @@ pub fn run() {
             commands::install_global_npm_mcp_configs,
             commands::uninstall_npm_mcp_configs,
             commands::uninstall_global_npm_mcp_configs,
+            commands::mcp_tools_drift,
+            commands::mcp_reconnect,
             commands::get_mcp_status,
             commands::toolbelt_list,
             commands::toolbelt_add,
@@ -612,6 +625,12 @@ pub fn run() {
             commands::standby_get_status,
             commands::standby_set_config,
             commands::standby_set_current_project,
+            commands::standby_helpers_get,
+            commands::standby_helper_add,
+            commands::standby_helper_update,
+            commands::standby_helper_remove,
+            commands::standby_helper_start,
+            commands::standby_helpers_set_limits,
             commands::get_ui_mode,
             commands::set_ui_mode,
             commands::plan_mode_switch,
@@ -682,6 +701,13 @@ pub fn run() {
             commands::new_pane,
             commands::pane_run_info,
             commands::budget_for_pane,
+            commands::project_budget_limits,
+            commands::project_budget_set,
+            commands::project_budget_status,
+            commands::project_budget_raise,
+            commands::right_size_pending,
+            commands::right_size_switch,
+            commands::right_size_dismiss,
             commands::budget_adjust,
             commands::pane_usage,
             commands::plans_report,
@@ -792,11 +818,17 @@ pub fn run() {
             commands::discord_alerts_clear,
             commands::discord_alerts_set_kinds,
             commands::discord_alerts_test,
+            commands::discord_bot_status,
+            commands::discord_bot_set_token,
+            commands::discord_bot_clear,
+            commands::discord_bot_save_settings,
+            commands::discord_bot_test,
             commands::acp_chat_start,
             commands::acp_chat_cancel,
             commands::acp_chat_take_back,
             commands::acp_chat_keep_waiting,
             commands::acp_chat_state,
+            commands::acp_chat_warm,
             commands::acp_chat_set_config,
             commands::acp_chat_set_agent_answering,
             commands::acp_chat_set_force_yes,
@@ -862,12 +894,14 @@ pub fn run() {
             commands::companion_create,
             commands::companion_update,
             commands::companion_archive,
+            commands::companion_set_default,
             commands::companion_delete,
             commands::companion_wake,
             commands::companion_sleep,
             commands::companion_restart,
             commands::companion_rehome,
             commands::companion_memory_get,
+            commands::companion_journal,
             commands::companion_memory_save,
             commands::companion_pending_decide,
             commands::companion_skill_approve,
@@ -891,6 +925,9 @@ pub fn run() {
             commands::agents_detect_installed,
             commands::orca_import_scan,
             commands::orca_import_add,
+            commands::get_desk_away,
+            commands::start_desk_away,
+            commands::end_desk_away,
             commands::get_pane_remote,
             commands::set_pane_remote,
             commands::notify_prefs_get,
@@ -900,9 +937,24 @@ pub fn run() {
             commands::notify_prefs_import,
             commands::path_kind::path_kinds,
             commands::files_list,
+            commands::files_search_contents,
+            commands::files_search_cancel,
             commands::artifacts_sync,
             commands::artifacts_read,
+            commands::guide_state,
+            commands::guide_estimate,
+            commands::guide_start,
+            commands::guide_stop,
+            commands::guide_read_page,
+            commands::guide_read_diagram,
+            commands::guide_delete,
             commands::artifacts_open_in_browser,
+            commands::artifacts_share_make,
+            commands::artifacts_share_list,
+            commands::artifacts_share_stop,
+            commands::artifacts_pop_out,
+            commands::tab_window_open,
+            commands::tab_window_put_back,
             commands::files_read,
             commands::files_marks,
             commands::files_reveal,
@@ -1009,6 +1061,7 @@ pub fn run() {
             }
 
             startup_trace::mark("mcp_resources");
+            mcp_install::refresh_on_start();
             app_paths::write_app_exe_file();
             let port_file = app_paths::bridge_port_file();
             let pairing_file = app_paths::pairing_file();

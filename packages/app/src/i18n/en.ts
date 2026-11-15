@@ -2,6 +2,7 @@
 // Plural messages are written as `<key>_one` and `<key>_other` and called as t('<key>', { count }).
 import { common } from './en/common';
 import { sidebar } from './en/sidebar';
+import { whatsnew } from './en/whatsnew';
 import { inbox } from './en/inbox';
 import { status } from './en/status';
 import { newAgent } from './en/newAgent';
@@ -16,6 +17,7 @@ import { state } from './en/state';
 import { overview } from './en/overview';
 import { team } from './en/team';
 import { companion } from './en/companion';
+import { companions } from './en/companions';
 import { settingsRows } from './en/settingsRows';
 import { settingsPreviews } from './en/settingsPreviews';
 import { settingsLane } from './en/settingsLane';
@@ -30,6 +32,7 @@ import { settingsKeys } from './en/settingsKeys';
 import { settingsPack } from './en/settingsPack';
 import { settingsAgentPage } from './en/settingsAgentPage';
 import { settingsPreload } from './en/settingsPreload';
+import { standbyHelpers } from './en/standbyHelpers';
 import { settingsAgents } from './en/settingsAgents';
 import { settingsTelegram } from './en/settingsTelegram';
 import { settingsLend } from './en/settingsLend';
@@ -39,13 +42,17 @@ import { settingsPhone } from './en/settingsPhone';
 import { notify } from './en/notify';
 import { board } from './en/board';
 import { routines } from './en/routines';
+import { teamPage } from './en/teamPage';
 import { phone } from './en/phone';
 import { phoneChat } from './en/phoneChat';
 import { noReply } from './en/noReply';
+import { desk } from './en/desk';
 import { sentFrom } from './en/sentFrom';
+import { projectBudget } from './en/projectBudget';
 import { dnd } from './en/dnd';
 import { files } from './en/files';
 import { artifacts } from './en/artifacts';
+import { guide } from './en/guide';
 import { pet } from './en/pet';
 import { phoneCompose } from './en/phoneCompose';
 import { phoneShell } from './en/phoneShell';
@@ -58,11 +65,13 @@ import { appUx } from './en/appUx';
 import { deskReview } from './en/deskReview';
 import { devices } from './en/devices';
 import { agentRules } from './en/agentRules';
+import { rail } from './en/rail';
 
 export const en = {
   ...common,
   ...sidebar,
   ...inbox,
+  ...whatsnew,
   ...status,
   ...newAgent,
   ...pane,
@@ -76,6 +85,7 @@ export const en = {
   ...overview,
   ...team,
   ...companion,
+  ...companions,
   ...settingsRows,
   ...settingsPreviews,
   ...settingsLane,
@@ -90,6 +100,7 @@ export const en = {
   ...settingsPack,
   ...settingsAgentPage,
   ...settingsPreload,
+  ...standbyHelpers,
   ...settingsAgents,
   ...settingsTelegram,
   ...settingsLend,
@@ -99,13 +110,17 @@ export const en = {
   ...notify,
   ...board,
   ...routines,
+  ...teamPage,
   ...phone,
   ...phoneChat,
   ...noReply,
+  ...desk,
   ...sentFrom,
+  ...projectBudget,
   ...dnd,
   ...files,
   ...artifacts,
+  ...guide,
   ...pet,
   ...phoneCompose,
   ...phoneShell,
@@ -118,6 +133,7 @@ export const en = {
   ...deskReview,
   ...devices,
   ...agentRules,
+  ...rail,
 } as const;
 
 export type MessageKey = Exclude<keyof typeof en, `${string}_one` | `${string}_other`> | PluralKey;

@@ -77,7 +77,8 @@ pub struct Artifact {
     pub created_at: String,
     pub updated_at: String,
     pub versions: Vec<Version>,
-    /// Reserved for a share link (not built yet). Always `None` today.
+    /// Share links (`share.rs`): `{"links": [{hash, version, createdAt, expiresAt}]}`. Only a hash of each link's secret
+    /// is kept, so the link itself is shown once, when it is made.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub share: Option<Value>,
 }

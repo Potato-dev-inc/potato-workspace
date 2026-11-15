@@ -10,9 +10,11 @@ export const SIDE_MAX = 420;
 /** Dragging the sidebar narrower than this snaps it to the thin icon strip. */
 export const SIDE_SNAP = 140;
 export const SIDE_STRIP = 52;
-export const RAIL_DEFAULT = 280;
+export const RAIL_DEFAULT = 300;
 export const RAIL_MIN = 240;
 export const RAIL_MAX = 520;
+/** Dragging the right panel narrower than this closes it (the remembered width stays the last good one). */
+export const RAIL_SNAP = 200;
 /** The right panel hides only when the chat beside it would get narrower than this. */
 export const CHAT_MIN = 480;
 /** One arrow-key press moves a panel edge this far. */

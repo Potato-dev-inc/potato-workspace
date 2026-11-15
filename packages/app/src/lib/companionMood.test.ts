@@ -30,6 +30,26 @@ describe('companionMood', () => {
     expect(mood({ state: 'stopped' }).face).toBe('sleep');
     expect(mood({ state: 'starting' }).face).toBe('wave-hello');
   });
+  it('body state picks the face and line when nothing urgent happens', () => {
+    expect(mood({ body: { mood: 'sleepy', intensity: 1 } })).toMatchObject({ face: 'sleepy', key: 'companion.mood.sleepy' });
+    expect(mood({ body: { mood: 'sleepy', intensity: 3 } }).face).toBe('sleep');
+    expect(mood({ body: { mood: 'sleepy', intensity: 1, sleeping: true } }).face).toBe('sleep');
+    expect(mood({ body: { mood: 'hungry', intensity: 2 } })).toMatchObject({ face: 'idle', key: 'companion.mood.hungry' });
+    expect(mood({ body: { mood: 'genki', intensity: 2 } })).toMatchObject({ face: 'idle', key: 'companion.mood.genki' });
+    expect(mood({ body: { mood: 'genki', intensity: 3 } }).face).toBe('celebrate');
+    expect(mood({ body: { mood: 'tsundere', intensity: 1 } })).toMatchObject({ face: 'idle', key: 'companion.mood.tsundere' });
+  });
+  it('body state never beats an urgent, working, starting or stopped state', () => {
+    const body = { mood: 'genki' as const, intensity: 3 };
+    expect(mood({ body, waiting: 1, waitingName: 'Codex' }).urgent).toBe(true);
+    expect(mood({ body, working: 1 }).face).toBe('working');
+    expect(mood({ body, state: 'starting' }).face).toBe('wave-hello');
+    expect(mood({ body, state: 'stopped' }).face).toBe('sleep');
+  });
+  it('no body (flag off) or null body behaves as before', () => {
+    expect(mood({ body: null, hour: 2 })).toEqual(mood({ hour: 2 }));
+    expect(mood({ body: undefined })).toEqual(mood({}));
+  });
   it('knows which hours are sleepy and which are asleep', () => {
     const hours = [6, 7, 20, 21, 23, 0, 4, 5];
     expect(hours.map((h) => [isSleepyHour(h), isAsleepHour(h)])).toEqual([

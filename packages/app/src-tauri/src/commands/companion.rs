@@ -2,7 +2,7 @@
 //! memory and its check-ins are never reachable through the bridge, the phone or MCP. The phone has the
 //! read, keep-or-drop, wake and sleep routes of `bridge/routes/companions.rs`, over the same service.
 //!
-//! Errors are one string, `CODE: plain sentence` (`COMPANION_LIMIT: You can have at most 3 ...`).
+//! Errors are one string, `CODE: plain sentence` (`COMPANION_LIMIT: You can have at most 8 ...`).
 //! The desktop views carry the home folder and the full check-in list; `companion://changed` sends them
 //! all whenever one changes.
 
@@ -11,7 +11,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::companion::manage::{Draft, MemoryView, Patch};
-use crate::companion::model::{CheckIn, CompanionError, CompanionResult, CompanionView, FeedItem, MemoryFile};
+use crate::companion::model::{CheckIn, CompanionError, CompanionResult, CompanionView, FeedItem, JournalView, MemoryFile};
 use crate::companion::skills::SkillFull;
 use crate::companion::{agents, files, live, Service};
 
@@ -67,6 +67,12 @@ pub async fn companion_create(input: Draft) -> Result<CompanionView, String> {
 #[tauri::command]
 pub async fn companion_update(id: String, patch: Patch) -> Result<CompanionView, String> {
     run(move |s| s.update(&id, patch)).await
+}
+
+/// Makes this companion the default one (the speak bubble, the pet and the phone's first tab use it).
+#[tauri::command]
+pub async fn companion_set_default(id: String) -> Result<CompanionView, String> {
+    run(move |s| s.set_default(&id)).await
 }
 
 #[tauri::command]
@@ -162,6 +168,13 @@ pub async fn companion_checkins_set(id: String, checkins: Vec<CheckIn>) -> Resul
 #[tauri::command]
 pub async fn companion_feed(id: String, since_ms: Option<i64>) -> Result<Vec<FeedItem>, String> {
     run(move |s| s.feed_list(&id, since_ms.unwrap_or(0))).await
+}
+
+/// The newest journal days, the newest diary and the people one companion knows (desktop only). Needs the Labs
+/// switch `companion_vault_enabled`; with it off the answer is `COMPANION_VAULT_OFF`.
+#[tauri::command]
+pub async fn companion_journal(id: String) -> Result<JournalView, String> {
+    run(move |s| s.journal(&id)).await
 }
 
 /// Opens the home folder in the system file manager.

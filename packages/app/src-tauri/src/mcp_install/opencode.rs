@@ -59,6 +59,9 @@ pub(super) fn opencode_mcp_needs_refresh_path(path: &Path, source: McpLaunchSour
             .pointer("/environment/POTATO_WORKSPACE_BRIDGE_PORT_FILE")
             .is_none();
     }
+    if super::stale::current_for(source).is_some_and(|current| super::stale::opencode_entry_is_stale(entry, &current)) {
+        return true;
+    }
     if entry
         .get("command")
         .and_then(Value::as_array)

@@ -35,10 +35,25 @@
 //! - `guard`: the hard rule, a companion never answers a helper's trust, permission or question card
 //! - `peer`: the same rule for a plain loopback request (a shell `curl`): who owns the TCP connection
 //!
+//! The vault side (piece P2 of the fishd port, Labs `companion_vault_enabled`, off by default):
+//!
+//! - `persona`: `SOUL.md` plus `persona/rules.md` and `persona/notes.md`, watched; a change re-briefs once
+//! - `vault`: the memory vault in the home folder: `journal`, `diary`, `people`, `checkpoint` (plain Markdown)
+//! - `body`: mood, self, drives, presence, pace and the tip, saved in the app data folder
+//! - `vault_tick`: the service's part: the persona watch, the chat copied into the journal, the body tick,
+//!   a drive wake as a check-in, and the diary asked once before the nap
+//!
+//! The social side (piece P3, used only by the Discord bot, Labs `discord_bot_enabled`, off by default):
+//!
+//! - `social`: the judgment gate (rules, the person's own model, a held-back hosted judge), the budget, the burst
+//! - `brain`: the small brain that answers on Discord from the person's own AI key, with no tools at all
+//!
 //! Only `live.rs` starts a thread or a process, and nothing here names an agent. A message to the agent
 //! goes through `pane_outbox` only: the companion never types into a pane or answers its dialogs.
 
 pub mod agents;
+pub mod body;
+pub mod brain;
 pub mod broad;
 pub mod brief;
 pub mod caller;
@@ -53,14 +68,18 @@ pub mod memory;
 pub mod model;
 pub mod moving;
 pub mod peer;
+pub mod persona;
 pub mod personas;
 pub mod recall;
 pub mod rehome;
 pub mod schedule;
 pub mod service;
 pub mod skills;
+pub mod social;
 pub mod store;
 pub mod today;
+pub mod vault;
+mod vault_tick;
 pub mod view;
 
 pub use service::Service;
@@ -71,6 +90,8 @@ mod foreman_tests;
 mod gate_tests;
 #[cfg(test)]
 mod move_tests;
+#[cfg(test)]
+mod multi_tests;
 #[cfg(test)]
 mod rehome_tests;
 #[cfg(test)]
@@ -83,3 +104,7 @@ pub mod test_host;
 mod today_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod vault_tests;
+#[cfg(test)]
+mod body_tests;

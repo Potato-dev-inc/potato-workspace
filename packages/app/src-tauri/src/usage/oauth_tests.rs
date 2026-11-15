@@ -187,6 +187,8 @@ fn run_inner(user: &Path, http: &dyn UsageHttp, state: &State, now: SystemTime, 
         may_fetch: true,
         force,
         oauth_state: state,
+        lend: &LendView::default(),
+        identity: &|_, _, _| None,
     };
     build(&[claude], &inputs)
 }

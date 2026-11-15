@@ -33,6 +33,7 @@ fn fixture() -> Fixture {
         id: "bit".into(),
         name: "Bit".into(),
         avatar: "bit".into(),
+        look: None,
         persona: "plain".into(),
         agent_type: "shell".into(),
         launch_args: vec![],

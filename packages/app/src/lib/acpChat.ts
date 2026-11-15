@@ -115,6 +115,8 @@ export interface AcpCommand {
   description: string;
   /** What to type after the name (shown as the box's hint once the command is picked), or null. */
   hint: string | null;
+  /** An app command: picking it puts this prompt in the box instead of the command name. */
+  fill?: string;
 }
 
 /** The lane an agent runs in. */
@@ -389,6 +391,8 @@ export interface TerminalConversation {
 
 export interface AcpChatApi {
   state: (paneId: string) => Promise<AcpChatState | null>;
+  /** The message box got the focus: start the chat's adapter if it sleeps, so its "/" commands are there. */
+  warm?: (paneId: string) => Promise<void>;
   cancel: (paneId: string) => Promise<boolean>;
   /** "Keep waiting" on a quiet agent: the quiet window starts again. */
   keepWaiting?: (paneId: string) => Promise<boolean>;
@@ -456,6 +460,9 @@ export const tauriAcpChatApi: AcpChatApi = {
   state: async (paneId) => {
     if (!isTauri()) return null;
     return (await invoke<AcpChatState | null>('acp_chat_state', { paneId })) ?? null;
+  },
+  warm: async (paneId) => {
+    if (isTauri()) await invoke<void>('acp_chat_warm', { paneId });
   },
   cancel: (paneId) => call<boolean>('acp_chat_cancel', { paneId }),
   keepWaiting: (paneId) => call<boolean>('acp_chat_keep_waiting', { paneId }),
@@ -634,6 +641,7 @@ export function filterCommands(commands: readonly AcpCommand[], text: string): A
 
 /** What picking a command puts in the box. */
 export function commandText(command: AcpCommand): string {
+  if (command.fill) return command.fill;
   return `/${bare(command.name)} `;
 }
 

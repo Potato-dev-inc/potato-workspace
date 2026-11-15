@@ -435,6 +435,29 @@ impl TeamTransport for RelayTransport {
         self.call("PUT", &self.team_path("/acl"), &body, false).map(|_| ())
     }
 
+    fn publish_invite_link(&self, request: &super::InviteLinkRequest) -> Result<Option<super::InviteLinkMade>, TransportError> {
+        // Ask what this relay can do first: an older deploy has no invite links ("Update your Worker").
+        let (_, health) = self.call("GET", &format!("{}/v1/health", self.prefix), b"", false)?;
+        let has_invites = serde_json::from_slice::<serde_json::Value>(&health)
+            .ok()
+            .and_then(|v| v.get("features").and_then(|f| f.as_array()).map(|a| a.iter().any(|x| x.as_str() == Some("invites"))))
+            .unwrap_or(false);
+        if !has_invites {
+            return Err(TransportError::new(super::UPDATE_WORKER));
+        }
+        let body = serde_json::to_vec(request).map_err(|e| TransportError(e.to_string()))?;
+        let (_, bytes) = self.call("POST", &self.team_path("/invite-links"), &body, true)?;
+        let answer: serde_json::Value =
+            serde_json::from_slice(&bytes).map_err(|_| TransportError::new("The relay sent an unreadable invite link."))?;
+        let code = answer.get("code").and_then(|c| c.as_str()).filter(|c| c.len() == 16 && c.bytes().all(|b| b.is_ascii_alphanumeric()));
+        let expires = answer.get("expires_at_ms").and_then(|v| v.as_u64());
+        match (code, expires) {
+            // The page is at the Worker's root (`/join/<code>`), whatever path the relay lives under.
+            (Some(code), Some(expires_at_ms)) => Ok(Some(super::InviteLinkMade { url: format!("{}/join/{}", self.origin, code), expires_at_ms })),
+            _ => Err(TransportError::new("The relay sent an unreadable invite link.")),
+        }
+    }
+
     fn status(&self) -> &'static str {
         match self.mode.load(Ordering::SeqCst) {
             MODE_LIVE => "live",

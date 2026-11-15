@@ -86,3 +86,21 @@ pub async fn files_write(
     let root = pane_root(&state, &pane_id);
     blocking(move || files::write_file(&root, &path, &text, base_version.as_deref(), overwrite.unwrap_or(false))).await
 }
+
+/// "Search inside files": the lines of the project's text files that have `query` (200 at most, off the UI thread).
+/// `search_id` names the search so a newer one (or `files_search_cancel`) stops it; `folder` narrows it to one folder.
+#[tauri::command]
+pub async fn files_search_contents(state: State<'_, AppState>, pane_id: String, query: String, search_id: String, folder: Option<String>) -> Result<files::ContentSearch, String> {
+    let root = pane_root(&state, &pane_id);
+    let flag = files::begin_search(&search_id);
+    let worker = flag.clone();
+    let found = blocking(move || files::search_contents(&root, folder.as_deref(), &query, &worker)).await;
+    files::end_search(&search_id, &flag);
+    found
+}
+
+/// Stops a "search inside files" that is still running (nothing happens when it already ended).
+#[tauri::command]
+pub fn files_search_cancel(search_id: String) {
+    files::cancel_search(&search_id);
+}

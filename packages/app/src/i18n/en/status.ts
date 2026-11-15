@@ -18,4 +18,5 @@ export const status = {
   'status.working': '{n} working',
   'status.needsYou_one': '{count} needs you',
   'status.needsYou_other': '{count} need you',
+  'status.sameAccount': 'Same account as {name}',
 } as const;

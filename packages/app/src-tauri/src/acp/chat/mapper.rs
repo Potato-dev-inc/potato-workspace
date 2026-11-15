@@ -312,7 +312,11 @@ pub struct Mapper {
     notice_n: u64,
     steer_n: u64,
     ignore_replay: bool,
+    /// This replay was already judged (kept or dropped); the next start report clears it.
+    replay_judged: bool,
     emitted: bool,
+    /// Something other than the session header was shown (a message, a tool card...).
+    content: bool,
     model: Option<String>,
     agent_version: Option<String>,
     agent_label: Option<String>,
@@ -323,6 +327,8 @@ pub struct Mapper {
     turn_offset: u64,
     /// Files this turn changed (edits, deletes, moves), for "Done · 3 files".
     turn_files: BTreeSet<String>,
+    /// Why the last turn ended (for the right-size line, `right_size.rs`).
+    last_reason: Option<EndReason>,
     /// The turn showed the person an answer or a tool call.
     turn_visible: bool,
     /// The quiet window, in minutes, for "No answer for 5 min".
@@ -371,13 +377,16 @@ impl Mapper {
             notice_n: 0,
             steer_n: 0,
             ignore_replay: false,
+            replay_judged: false,
             emitted: false,
+            content: false,
             model: None,
             agent_version: None,
             agent_label: None,
             last_ended: None,
             turn_offset: 0,
             turn_files: BTreeSet::new(),
+            last_reason: None,
             turn_visible: false,
             quiet_minutes: 5,
             own_cause: false,
@@ -422,6 +431,7 @@ impl Mapper {
             return;
         }
         self.emitted = true;
+        self.content = true;
         // The agent replays its history while it restores the session, before it reports the start.
         self.ignore_replay = true;
         let number = |s: &str| -> Option<u64> {
@@ -474,6 +484,9 @@ impl Mapper {
     fn note(&mut self, items: Vec<ChatItem>) -> Vec<ChatItem> {
         if !items.is_empty() {
             self.emitted = true;
+            if items.iter().any(|i| !matches!(i, ChatItem::Session { .. })) {
+                self.content = true;
+            }
         }
         items
     }
@@ -551,6 +564,11 @@ impl Mapper {
         self.note(vec![ChatItem::Notice { id: format!("perm:{ask_id}"), at: Some(at.to_string()), notice_kind: "permission".into(), text, url: None }])
     }
 
+    /// How many files the turn changed and why it ended, once it has.
+    pub fn last_turn_look(&self) -> (usize, Option<EndReason>) {
+        (self.turn_files.len(), self.last_reason)
+    }
+
     /// A line with a fixed id: said again, it replaces itself instead of piling up. For things a person did that
     /// the chat could not act on ("Already answered.", "Still working on the last message.").
     pub fn side_notice(&mut self, id: &str, text: &str, at: &str) -> Vec<ChatItem> {
@@ -574,6 +592,7 @@ impl Mapper {
             SessionEvent::Started { how, caps } => {
                 // A restored session replays its history: into an empty chat it is the chat, otherwise it is a copy.
                 self.ignore_replay = self.emitted;
+                self.replay_judged = false;
                 self.agent_version = caps.agent_version.clone();
                 self.agent_label = caps.agent_title.clone().or_else(|| caps.agent_name.clone());
                 let mut out = vec![self.session_item(at)];
@@ -613,8 +632,16 @@ impl Mapper {
     }
 
     fn update(&mut self, update: &SessionUpdate, replay: bool, at: &str, now: Instant) -> Vec<ChatItem> {
-        if replay && self.ignore_replay {
-            return Vec::new();
+        if replay {
+            // A replay comes before the start report. Judge it once, at its first update: the chat already shows
+            // something (the adapter came back mid-run), so it is the same conversation again and is dropped.
+            if !self.replay_judged {
+                self.replay_judged = true;
+                self.ignore_replay |= self.content;
+            }
+            if self.ignore_replay {
+                return Vec::new();
+            }
         }
         // In a replay, anything but the person's words ends the person's message.
         if replay && !matches!(update, SessionUpdate::UserMessageChunk(_)) {
@@ -919,6 +946,7 @@ impl Mapper {
             None => ending::ending_without_report(fallback.unwrap_or("The turn ended."), &facts),
         };
         let outcome = outcome_of(end.reason);
+        self.last_reason = Some(end.reason);
         // Tools the agent never finished: closed, so nothing looks like it still runs.
         let leftover: Vec<String> = self.tool_order.iter().filter(|id| self.tools.get(*id).is_some_and(|t| !t.resulted)).cloned().collect();
         for id in leftover {

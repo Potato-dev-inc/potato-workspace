@@ -4,6 +4,7 @@
 // the focus back, Tab or a press outside closes.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { useDismissable } from '../../hooks/useDismissable';
 
 /** Space kept between the menu and the window edge (px). */
 export const FLOAT_EDGE = 8;
@@ -80,25 +81,22 @@ export function FloatingMenu({
   };
   useLayoutEffect(measure, [align, prefer, children]);
 
+  // Outside press, focus leaving, the window losing focus and the page scrolling close it (Escape and Tab are below).
+  useDismissable(true, { inside: [menuRef, anchorRef], anchor: anchorRef, ignore: ['escape'], onDismiss: () => close.current(false) });
+
   useEffect(() => {
     menuRef.current?.querySelector<HTMLElement>(ITEMS)?.focus();
-    const onDown = (e: MouseEvent) => {
-      const at = e.target as Node;
-      if (!menuRef.current?.contains(at) && !anchorRef.current?.contains(at)) close.current(false);
-    };
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         close.current(true);
       } else if (e.key === 'Tab') close.current(false);
     };
-    window.addEventListener('mousedown', onDown);
     // A real key press bubbles through both; a script may dispatch on either one.
     document.addEventListener('keydown', onKey);
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', measure);
     return () => {
-      window.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', measure);

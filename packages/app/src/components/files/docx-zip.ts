@@ -177,6 +177,8 @@ export interface SlimDocx {
   slim: ArrayBuffer;
   /** The picture at `path` (from the real file), ready to use. */
   readMedia(path: string): Promise<ArrayBuffer>;
+  /** A small part of the file (`word/document.xml`) as text, or `null` when there is none. */
+  readPart(path: string): Promise<string | null>;
 }
 
 /** Pictures live here; everything else in a Word file is small. */
@@ -202,8 +204,21 @@ export async function openSlim(reader: RangeReader): Promise<SlimDocx> {
       files.push({ name: e.name, method: e.method, crc: e.crc, usize: e.usize, data: data.get(e.name)! });
     }
   }
+  const decoded = new Map<string, string>();
   return {
     slim: writeZip(files),
+    readPart: async (path) => {
+      const e = byName.get(path);
+      const raw = data.get(path);
+      if (!e || !raw || isMedia(path)) return null;
+      const hit = decoded.get(path);
+      if (hit !== undefined) return hit;
+      const bytes = e.method === 0 ? raw : e.method === 8 ? await inflate(raw) : null;
+      if (!bytes) return null;
+      const text = new TextDecoder().decode(bytes);
+      decoded.set(path, text);
+      return text;
+    },
     readMedia: async (path) => {
       const e = byName.get(path);
       if (!e) throw new Error('no such picture');

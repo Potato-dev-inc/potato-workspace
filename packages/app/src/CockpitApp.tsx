@@ -4,6 +4,7 @@ import { useFollowFocusedProject } from './hooks/useFollowFocusedProject';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AgentDoctor } from './components/cockpit/AgentDoctor';
 import { markSpawned } from './lib/agent-health';
+import { useThemeAttrs } from './lib/theme-tone';
 import { useCockpit } from './hooks/useCockpit';
 import { useAttention } from './hooks/useAttention';
 import { useComfortRoot } from './lib/comfort/root';
@@ -41,6 +42,8 @@ import { ProblemsChip } from './components/cockpit/problems/ProblemsChip';
 import { useNeedsProblemFeed } from './lib/problems-feed';
 import { SettingsView } from './components/cockpit/SettingsView';
 import { AppUpdateHost } from './components/updates/AppUpdateHost';
+import { FeatureGuide } from './components/whatsnew/FeatureGuide';
+import { OPEN_GUIDE_EVENT, OPEN_SHORTCUTS_EVENT, OPEN_VIEW_EVENT } from './whatsnew/store';
 import { PlansMonth } from './components/cockpit/PlansMonth';
 import { MorningPage } from './components/cockpit/night/MorningPage';
 import { RoutinesPage } from './components/cockpit/routines/RoutinesPage';
@@ -55,6 +58,7 @@ import { SpawnView } from './components/cockpit/SpawnView';
 import { ChatStartingView } from './components/cockpit/ChatStartingView';
 import { PanicSheet } from './components/cockpit/PanicSheet';
 import { ControlAskNotice } from './components/cockpit/ControlAskNotice';
+import { DeskAwayChip, DeskAwayHost } from './components/cockpit/DeskAway';
 import { IndividualSheet } from './components/cockpit/IndividualSheet';
 import { TellTeamToast } from './components/cockpit/team/TellTeam';
 import { SimpleCockpit } from './components/simple/SimpleCockpit';
@@ -65,7 +69,7 @@ import { projectOfCwd } from './lib/ship-model';
 import { useModeSwitch } from './lib/mode-switch/useModeSwitch';
 import { LoopGuardContext, tauriLoopApi, useLoopSignals, type StopReport } from './lib/loop-guard';
 import { homeView, isSplitShortcut, splitAfterSelect, splitFits, splitMoveKey, splitPartner, splitStillOn, SPLIT_DEFAULT_RATIO, viewAfterSelect, type MainView } from './components/cockpit/main-view';
-import { NO_BELOW, belowAfterSelect, canSplitDown, closeSlot, columnOf, downPartner, hasBelow, isDownSlot, moveSlot, sanitizeBelow, shownIds, splitColumnDown, type SplitBelow, type SplitColumn, type SplitSlot } from './components/cockpit/split-grid';
+import { NO_BELOW, belowAfterSelect, canSplitDown, closeSlot, columnOf, downPartner, hasLayout, isDownSlot, moveSlot, sanitizeBelow, shownIds, slotIds, splitColumnDown, type SplitBelow, type SplitColumn, type SplitSlot } from './components/cockpit/split-grid';
 import { digitForAction, isMacPlatform, isShortcutRecording, matchesAction } from './lib/shortcuts';
 import { useT } from './i18n';
 import { setFocusMode, toggleFocusMode, useFocusMode } from './lib/focus-mode';
@@ -74,8 +78,9 @@ import { ResizeHandle } from './components/cockpit/ResizeHandle';
 import { nextNeedingPane, paneAtNumber, recordPaneUse, stepPane } from './lib/pane-order';
 import { useKeybindingsSync, useKeybindingsVersion } from './hooks/useKeybindings';
 import { DragLayer } from './components/dnd/DragLayer';
-import { WorkAreaDropZones } from './components/dnd/WorkAreaDropZones';
-import { dropSplit, type DropSide } from './components/dnd/drop-split';
+import { WorkAreaDrop } from './components/dnd/WorkAreaDrop';
+import { layoutOfPlan, planDrop, slotOfPlan, type WorkDropColumn, type WorkDropZone } from './components/dnd/work-drop';
+import { HelpersBar } from './components/cockpit/HelpersBar';
 import { focusSideComposer, SplitView, useWindowWidth } from './components/cockpit/SplitView';
 import { useSessionMemory } from './components/cockpit/useSessionMemory';
 import { EndedAgentsLine } from './components/cockpit/EndedAgentsLine';
@@ -90,9 +95,10 @@ import { useCompanions } from './hooks/useCompanions';
 import { tauriCompanionTransport } from './lib/companion';
 
 import { cockpitApi } from './lib/cockpit-api';
+import { useTabWindowRestore } from './lib/tab-windows';
 
 import { CompanionPage } from './components/cockpit/companion/CompanionPage';
-import { COMPANION_PANE_PREFIX, isCompanionPaneId } from './components/cockpit/companion/model';
+import { COMPANION_PANE_PREFIX, defaultCompanion, isCompanionPaneId } from './components/cockpit/companion/model';
 import { CompanionSetupSheet } from './components/cockpit/companion/CompanionSetupSheet';
 import { NewAgentHost } from './components/cockpit/newagent/NewAgentHost';
 import { StartCrewSheet } from './components/cockpit/crews/StartCrewSheet';
@@ -118,7 +124,13 @@ import { SpacesPage } from './components/spaces/SpacesPage';
 import { AgentBoard } from './components/cockpit/board/AgentBoard';
 import { useSpacesEnabled } from './lib/spaces';
 import { useLend } from './components/lend/useLend';
+import { TeamHost } from './components/team-page/TeamHost';
+import { CockpitJoinLink } from './components/team-page/CockpitJoinLink';
+import { useTeamPresenceReport } from './components/team-page/useTeamPresenceReport';
+import { sidebarCount } from './components/team-page/team-page-model';
 import { useLendToasts } from './components/lend/Borrowed';
+import { useStandbyFeed } from './lib/standbyHelpers';
+import { StandbyNewDialog } from './components/cockpit/StandbyNewDialog';
 import './styles/night-morning.css';
 import './styles/cockpit-routines.css';
 import './styles/night-chip.css';
@@ -130,7 +142,9 @@ export type { MainView } from './components/cockpit/main-view';
 const inTerminal = (target: EventTarget | null): boolean => target instanceof Element && target.closest('.terminal-host, .pm-canvas-terminal') !== null;
 
 export default function CockpitApp() {
+  useStandbyFeed();
   const c = useCockpit();
+  useTabWindowRestore();
   // Comfort (Settings > Look and feel): text size, contrast, less motion, and spoken results.
   useComfortRoot();
   useSpeakFinished(useAttention());
@@ -207,7 +221,7 @@ export default function CockpitApp() {
   if (split !== null && !splitOn) setSplit(null);
   // The chats below only show while the split is on, and a chat that is gone (or shown twice) drops out of the grid.
   const belowNow = splitOn && split !== null && c.selectedId !== null ? sanitizeBelow(below, c.selectedId, split, (id) => c.registry.panes.has(id)) : NO_BELOW;
-  if (split === null && hasBelow(below)) setBelow(NO_BELOW);
+  if (split === null && hasLayout(below)) setBelow(NO_BELOW);
   // The Review Desk: `reviewFirst` opens it on its first row ("Review the riskiest item" in the palette).
   const [reviewFirst, setReviewFirst] = useState(false);
   const openReview = (first = false) => {
@@ -423,18 +437,58 @@ export default function CockpitApp() {
     window.addEventListener(GETTING_STARTED_EVENT, onAsk);
     return () => window.removeEventListener(GETTING_STARTED_EVENT, onAsk);
   });
-  // A chat dragged from the sidebar and dropped on the left or right half of the work area (components/dnd).
-  const dropChat = (id: string, to: DropSide) => {
+  // The chats on screen, and the one with the focus (a split's focused side): the helpers bar follows it.
+  const shownNow = splitOn && split !== null && c.selectedId !== null ? shownIds(c.selectedId, split, belowNow) : c.selectedId !== null ? [c.selectedId] : [];
+  const focusedPane = splitOn && split !== null && c.selectedId !== null ? (slotIds(c.selectedId, split, belowNow)[side] ?? c.selectedId) : c.selectedId;
+  // The chat that was in front before: it comes up beside a dragged chat that was the only one open.
+  const recentRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (c.selectedId) recentRef.current = [c.selectedId, ...recentRef.current.filter((x) => x !== c.selectedId)].slice(0, 20);
+  }, [c.selectedId]);
+  const partnerFor = (id: string): string | null => {
+    const ok = (p: string) => p !== id && c.registry.panes.has(p) && !isCompanionPaneId(p);
+    return recentRef.current.find(ok) ?? paneIds.find(ok) ?? null;
+  };
+  const titleOfPane = (id: string) => {
+    const p = c.registry.panes.get(id);
+    return p ? paneHeading(p.info, c.names.get(id) ?? p.info.agent_type).primary : id;
+  };
+  // A chat dropped on the work area (components/dnd/work-drop.ts says where it lands). Also the keyboard way: the
+  // row menu's "Open on the left" / "Open below".
+  const dropChat = (id: string, zone: WorkDropZone, column: WorkDropColumn = 'right') => {
     if (!splitFits(width)) {
       c.notify('The window is too narrow for two chats');
       return;
     }
-    const pick = dropSplit(c.selectedId, splitOn ? split : null, id, to);
-    if (!pick) return;
+    const plan = planDrop({ shown: shownNow, id, zone, column, remembered: ratio, partner: partnerFor(id) });
     setView('pane');
-    if (pick.selected !== c.selectedId) c.select(pick.selected);
-    setSplit(pick.split);
-    setSide(to);
+    const next = layoutOfPlan(plan);
+    if (next.split === null) {
+      nav.select(next.selected);
+      return;
+    }
+    if (next.selected !== c.selectedId) c.select(next.selected);
+    setSplit(next.split);
+    setBelow(next.below);
+    if (plan.ratio !== null) setRatio(plan.ratio);
+    setSide(slotOfPlan(plan, id));
+  };
+  // A click on a helper chip or the crumb opens that agent in the focused pane (a pane that is already open takes the focus).
+  const openInFocused = (id: string) => {
+    setView('pane');
+    if (!splitOn || split === null || c.selectedId === null) {
+      nav.select(id);
+      return;
+    }
+    const slots = slotIds(c.selectedId, split, belowNow);
+    const at = (Object.keys(slots) as SplitSlot[]).find((s) => slots[s] === id);
+    if (at) {
+      setSide(at);
+      return;
+    }
+    if (side === 'left') c.select(id);
+    else if (side === 'right') setSplit(id);
+    else setBelow((b) => (side === 'leftDown' ? { ...b, leftDown: id } : { ...b, rightDown: id }));
   };
   useEffect(() => {
     if (c.registry.paneList.length > 0) markSpawned();
@@ -465,6 +519,28 @@ export default function CockpitApp() {
   }, []);
 
   // `?` (not while typing in a box or a terminal) or Ctrl+/ (Cmd+/ on a Mac, or your own keys) opens the keyboard shortcuts sheet.
+  // What's new: Help, the palette and "Try it" ask for the Feature guide, the shortcuts sheet, or a main view.
+  useEffect(() => {
+    const guide = () => setView('guide');
+    const shortcuts = () => setShortcutsOpen(true);
+    const openView = (e: Event) => {
+      const v = (e as CustomEvent<{ view?: string }>).detail?.view;
+      if (v === 'inbox') {
+        nav.select(null);
+        setView('inbox');
+        setInboxVisit((n) => n + 1);
+      } else if (v === 'guide') setView('guide');
+    };
+    window.addEventListener(OPEN_GUIDE_EVENT, guide);
+    window.addEventListener(OPEN_SHORTCUTS_EVENT, shortcuts);
+    window.addEventListener(OPEN_VIEW_EVENT, openView);
+    return () => {
+      window.removeEventListener(OPEN_GUIDE_EVENT, guide);
+      window.removeEventListener(OPEN_SHORTCUTS_EVENT, shortcuts);
+      window.removeEventListener(OPEN_VIEW_EVENT, openView);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || e.defaultPrevented) return;
@@ -634,7 +710,7 @@ export default function CockpitApp() {
   const savedSplit = useRef(false);
   useEffect(() => {
     if (split !== null && c.selectedId !== null) {
-      writeSplitMemory(hasBelow(belowNow) ? { left: c.selectedId, right: split, ratio, below: belowNow } : { left: c.selectedId, right: split, ratio });
+      writeSplitMemory(hasLayout(belowNow) ? { left: c.selectedId, right: split, ratio, below: belowNow } : { left: c.selectedId, right: split, ratio });
       savedSplit.current = true;
     } else if (savedSplit.current) {
       clearSplitMemory();
@@ -644,7 +720,7 @@ export default function CockpitApp() {
 
   // "Continue where you left off" (yesterday-memory.ts): this run's open chats are saved for the next start.
   const openPanes = useMemo(() => c.registry.paneList.map((p) => p.info), [c.registry.paneList]);
-  const liveSplit = useMemo<SplitMemory | null>(() => (split !== null && c.selectedId !== null ? (hasBelow(belowNow) ? { left: c.selectedId, right: split, ratio, below: belowNow } : { left: c.selectedId, right: split, ratio }) : null), [split, ratio, c.selectedId, belowNow]);
+  const liveSplit = useMemo<SplitMemory | null>(() => (split !== null && c.selectedId !== null ? (hasLayout(belowNow) ? { left: c.selectedId, right: split, ratio, below: belowNow } : { left: c.selectedId, right: split, ratio }) : null), [split, ratio, c.selectedId, belowNow]);
   useYesterdaySnapshot({ ready: c.registry.initialReady, panes: openPanes, split: liveSplit });
   // Chats reopened from that card: the split they had comes back once both of its panes are on the list.
   const [pendingSplit, setPendingSplit] = useState<SplitMemory | null>(null);
@@ -674,6 +750,16 @@ export default function CockpitApp() {
   const lend = useLend();
   const lendRequests = useMemo(() => (lend.state?.requests_in ?? []).filter((r) => r.state === 'open'), [lend.state]);
   useLendToasts(lend, c.notify);
+  // The Team page: what I am doing is told to the team backend (only while Team is on), and the sidebar row counts what waits for me.
+  const selectedProject = projectOfCwd(c.selectedId ? c.registry.panes.get(c.selectedId)?.info.cwd : null);
+  useTeamPresenceReport(!!team.state?.active, {
+    projectName: selectedProject?.name ?? null,
+    projectPath: selectedProject?.path ?? null,
+    title: c.selectedId ? (c.names.get(c.selectedId) ?? null) : null,
+    running: c.registry.paneList.filter((p) => p.status === 'running').length,
+    waiting: c.registry.paneList.filter((p) => p.status === 'waiting_input').length,
+  });
+  const teamWaiting = useMemo(() => sidebarCount(null, lend.state) + (team.state?.cards.filter((x) => x.state === 'new' && (x.event.kind === 'please_review' || x.event.kind === 'review_requested')).length ?? 0), [lend.state, team.state]);
   const assistPanes = useMemo(() => c.registry.paneList.map((p) => ({ id: p.info.id, status: p.status })), [c.registry.paneList]);
   const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined, teamRed, lendRequests);
   useNeedsProblemFeed(needsYou, {
@@ -722,12 +808,13 @@ export default function CockpitApp() {
   });
   // Simple mode (Settings > General) swaps the whole face; off by default, so this line does nothing then.
   const simple = useSimpleMode();
+  const themeProps = useThemeAttrs(c.theme);
   // While the welcome is open the normal face stays, so its sign-in and install windows are visible.
   if (simple && c.mode !== 'individual' && !welcome.open) {
     return (
       <>
         {/* No face hides the LIVE bar: in Simple mode it sits over the top edge. */}
-        <div className="cockpit ck-live-top" data-theme={c.theme}>
+        <div className="cockpit ck-live-top" {...themeProps}>
           <LiveBar />
         </div>
         <SimpleCockpit c={c} loop={loop} needsYou={needsYou} lastTurn={away.lastTurn} />
@@ -742,7 +829,7 @@ export default function CockpitApp() {
     <LiveStatusContext.Provider value={live.status}>
     <div
       className="cockpit"
-      data-theme={c.theme}
+      {...themeProps}
       data-side-strip={layout.strip ? '' : undefined}
       data-focus-mode={focusMode ? '' : undefined}
       style={{ ['--ck-side-w' as string]: `${layout.sidePx}px` } as CSSProperties}
@@ -775,6 +862,8 @@ export default function CockpitApp() {
         onOpenPlans={() => setView('plans')}
         onOpenMorning={() => setView('morning')}
         onOpenRoutines={() => setView('routines')}
+        team={{ open: view === 'team', waiting: teamWaiting }}
+        onOpenTeam={() => setView('team')}
         onOpenScores={() => setView('scores')}
         onOpenReview={() => openReview()}
         onOpenStore={openStore}
@@ -805,6 +894,7 @@ export default function CockpitApp() {
         spacesOpen={view === 'spaces' && spacesOn}
         onOpenSpaces={() => setView('spaces')}
         onOpenToSide={openToSide}
+        onOpenPlaced={(id, where) => dropChat(id, where)}
         onPaneAction={(id, action) => {
           // The actions run in a pane's own view: a split view gives way to it.
           setSplit(null);
@@ -814,8 +904,9 @@ export default function CockpitApp() {
       />
       <main className="ck-main">
         <ConnectedBanner view={deviceGroups.view} onDone={deviceGroups.refresh} />
-        <WorkAreaDropZones onDropChat={dropChat} />
         <EndedAgentsLine ended={session.ended} onReopen={session.reopen} onDismiss={session.dismiss} />
+        <StandbyNewDialog />
+        {view === 'pane' && focusedPane && c.mode !== 'individual' && <HelpersBar c={nav} focusedId={focusedPane} shown={shownNow} onOpen={openInFocused} onOpenBeside={openToSide} />}
         {c.mode === 'individual' ? (
           <div className="ck-spawn ck-spawn--plain">
             <h1 className="ck-title">Individual mode</h1>
@@ -844,6 +935,12 @@ export default function CockpitApp() {
           <PlansMonth onClose={closeOverlay} />
         ) : view === 'morning' ? (
           <MorningPage onClose={closeOverlay} onOpenPane={(id) => nav.select(id)} />
+        ) : view === 'guide' ? (
+          <div className="wn-page">
+            <FeatureGuide notify={c.notify} />
+          </div>
+        ) : view === 'team' ? (
+          <TeamHost team={team} lend={lend} paneNames={c.names} />
         ) : view === 'routines' ? (
           <RoutinesPage onClose={closeOverlay} defaultProject={c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : undefined} />
         ) : view === 'scores' ? (
@@ -894,6 +991,8 @@ export default function CockpitApp() {
             onOpenCard={() => nav.select(null)}
             onNotify={c.notify}
             onChanged={companions.refresh}
+            companions={companions.companions}
+            onSwitch={openCompanion}
             onArchived={() => {
               setCompanionId(null);
               nav.select(null);
@@ -922,6 +1021,7 @@ export default function CockpitApp() {
           <Inbox
             c={nav}
             visit={inboxVisit}
+            onOpenMorning={() => setView('morning')}
             onOpenDoctor={() => setView('doctor')}
             onSetUp={welcomeSetUp}
             onStartAgent={() => {
@@ -936,6 +1036,7 @@ export default function CockpitApp() {
             }}
           />
         )}
+        <WorkAreaDrop shown={shownNow} remembered={ratio} partnerOf={partnerFor} nameOf={titleOfPane} onDrop={dropChat} />
         <LiveBar />
         {away.digest && c.mode !== 'individual' && (
           <AwayDigest
@@ -971,6 +1072,7 @@ export default function CockpitApp() {
           onOpenPlans={() => setView('plans')}
           onOpenMorning={() => setView('morning')}
           onOpenScores={() => setView('scores')}
+          onOpenTeam={() => setView('team')}
           onOpenReview={() => openReview()}
           onReviewRiskiest={() => openReview(true)}
           onOpenStore={openStore}
@@ -1012,9 +1114,11 @@ export default function CockpitApp() {
       {setupOpen && (
         <CompanionSetupSheet
           transport={tauriCompanionTransport}
+          companions={companions.companions ?? []}
           onClose={() => setSetupOpen(false)}
-          onCreated={(created) => {
+          onCreated={(created, note) => {
             setSetupOpen(false);
+            if (note) c.notify(note);
             companions.refresh();
             openCompanion(created.id);
           }}
@@ -1042,15 +1146,17 @@ export default function CockpitApp() {
       <AddAgentActionHost c={nav} />
       {c.modeExplainer?.open && <IndividualSheet onSwitch={(d) => void c.modeExplainer.confirm(d)} onCancel={c.modeExplainer.cancel} />}
       {stopReport && <PanicSheet report={stopReport} names={c.names} onClose={() => setStopReport(null)} />}
-      <AppUpdateHost />
+      <AppUpdateHost suppressed={welcomeShown} notify={c.notify} />
+      <CockpitJoinLink onJoined={team.refresh} />
       <StartupCheckLine
         bridgeUp={() => c.bridgeLine === ''}
         actions={{ signIn: (agentId) => void nav.newAgent(agentId, undefined, false, undefined, undefined, 'terminal') }}
       />
       <ControlAskNotice names={c.names} />
+      <DeskAwayHost />
       {/* The "Used" bar along the bottom edge; the root leaves room for it only while it shows. */}
       <CompanionAssist
-        companion={companions.companions?.[0] ?? null}
+        companion={defaultCompanion(companions.companions)}
         needsYou={needsYou}
         panes={assistPanes}
         nameOf={(id) => {
@@ -1073,13 +1179,16 @@ export default function CockpitApp() {
         working={c.registry.paneList.filter((p) => p.status === 'running' && !needsYou.some((n) => n.paneId === p.info.id)).length}
         needsYou={needsYou.length}
         trailing={
-          <ProblemsChip
-            actions={{
-              openChat: (id) => nav.select(id),
-              signIn: (agentId) => void nav.newAgent(agentId, undefined, false, undefined, undefined, 'terminal'),
-              tryAgain: (agentId) => void nav.newAgent(agentId),
-            }}
-          />
+          <>
+            <DeskAwayChip />
+            <ProblemsChip
+              actions={{
+                openChat: (id) => nav.select(id),
+                signIn: (agentId) => void nav.newAgent(agentId, undefined, false, undefined, undefined, 'terminal'),
+                tryAgain: (agentId) => void nav.newAgent(agentId),
+              }}
+            />
+          </>
         }
       />
       <UndoBar />

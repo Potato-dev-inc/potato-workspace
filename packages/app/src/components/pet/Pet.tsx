@@ -26,6 +26,8 @@ export interface PetProps {
   onExpandedChange?: (expanded: boolean) => void;
   /** Any touch by the person (wakes it up). */
   onTouch?: () => void;
+  /** The default companion this pet stands for: its name is on the pet (hover and screen reader). */
+  companionName?: string;
 }
 
 /** The pet: the Potato, its speech bubble and its right-click menu. Presentational: all rules are in petModel. */
@@ -54,7 +56,13 @@ export function Pet(props: PetProps) {
     else setMenuOpen(true);
   };
 
-  const label = view.quiet ? t('pet.aria.quiet') : view.needsCount > 0 ? t('pet.aria.needs', { count: view.needsCount }) : t('pet.aria.resting');
+  const label = view.quiet
+    ? t('pet.aria.quiet')
+    : view.needsCount > 0
+      ? t('pet.aria.needs', { count: view.needsCount })
+      : props.companionName
+        ? t('pet.companion.resting', { name: props.companionName })
+        : t('pet.aria.resting');
 
   return (
     <div className="pet-root" data-sprite={view.sprite} data-expanded={expanded ? 'true' : 'false'}>
@@ -100,6 +108,7 @@ export function Pet(props: PetProps) {
         role="button"
         tabIndex={0}
         aria-label={label}
+        title={props.companionName}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onPointerDown={(event) => {

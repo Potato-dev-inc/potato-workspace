@@ -9,6 +9,7 @@ import { blockNetwork } from './block-network';
 import { installTauriMock } from './mock-tauri';
 import { scenarios } from './scenarios';
 import { setLanguagePref } from '../i18n';
+import { applyTheme } from '../lib/settings';
 import type { HarnessDom, HarnessScenario } from './types';
 
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
@@ -63,7 +64,7 @@ export async function bootHarness(name: string): Promise<() => JSX.Element> {
   // The screen scan (scripts/roam.mjs) renders every scenario in both themes with `&theme=light|dark`.
   const themeOverride = new URLSearchParams(window.location.search).get('theme');
   const scenario: HarnessScenario | undefined =
-    found && (themeOverride === 'light' || themeOverride === 'dark') ? { ...found, theme: themeOverride } : found;
+    found && (themeOverride === 'light' || themeOverride === 'dark' || themeOverride === 'dim') ? { ...found, theme: themeOverride } : found;
   if (!scenario) return () => <UnknownScenario name={name} />;
 
   // `&lang=zh-TW` shows the screen in Traditional Chinese (evidence shots for the translation).
@@ -112,7 +113,7 @@ export async function bootHarness(name: string): Promise<() => JSX.Element> {
     if (scenario.select) q.set('select', scenario.select);
   }
   window.history.replaceState(null, '', `${window.location.pathname}?${q.toString()}`);
-  document.documentElement.dataset.theme = scenario.theme ?? 'dark';
+  applyTheme(scenario.theme ?? 'dark');
 
   // Screenshots that are not taken under virtual time (narrow phone viewports) wait for this flag.
   (window as unknown as { __harnessReady?: boolean }).__harnessReady = false;

@@ -15,7 +15,7 @@ export const MOVED_FILES: readonly string[] = [
   `${C}CanaryNotices.tsx`,
   // new agent page, pane header and tabs
   `${C}newagent/NewAgentPage.tsx`, `${C}newagent/HomeCards.tsx`, `${C}newagent/Starters.tsx`, `${C}newagent/HiddenAgentsEditor.tsx`,
-  `${C}NewAgentMenu.tsx`, `${C}PaneView.tsx`, `${C}PaneTabs.tsx`, `${C}PaneMoreMenu.tsx`, `${C}RenameTitle.tsx`,
+  `${C}NewAgentMenu.tsx`, `${C}PaneView.tsx`, `${C}HelpersBar.tsx`, `${C}PaneMoreMenu.tsx`, `${C}RenameTitle.tsx`,
   // Add an agent box, first run
   'components/settings/blocks/AddAgent.tsx', 'components/settings/blocks/AddAgentAdvanced.tsx', 'components/settings/blocks/AddAgentFound.tsx',
   'components/settings/blocks/AddAgentParts.tsx', `${C}AddAgentActionHost.tsx`,
@@ -27,7 +27,7 @@ export const MOVED_FILES: readonly string[] = [
   'components/settings/blocks/StartAtSignInSettings.tsx', 'components/settings/previews/Thumbs.tsx', 'components/settings/previews/Previews.tsx',
   'components/settings/sections/LanguageRow.tsx',
   // round 2: the pieces those screens still showed in English
-  `${C}DotSpinner.tsx`, `${C}RestoreSheet.tsx`, `${C}rail/JobsChip.tsx`, `${C}rail/BackgroundJobs.tsx`, `${C}rail/BackgroundCard.tsx`,
+  `${C}DotSpinner.tsx`, `${C}RestoreSheet.tsx`, `${C}rail/JobsChip.tsx`, `${C}rail/BackgroundJobs.tsx`, `${C}rail/jobActions.ts`, `${C}rail/RailSection.tsx`, `${C}rail/RailTop.tsx`, `${C}rail/EnvironmentSection.tsx`, `${C}rail/ContextSection.tsx`, `${C}rail/PlanSection.tsx`, `${C}rail/ConnectorsSection.tsx`, `${C}rail/OutputsSection.tsx`, `${C}rail/ChangesSection.tsx`, `${C}rail/BackgroundSection.tsx`,
   `${C}night/NightChip.tsx`, 'components/chat/HandedToTerminal.tsx', 'components/common/ModelPicker.tsx', 'components/history/BringChatsLink.tsx',
   'components/settings/SetupCheckPage.tsx', 'components/settings/sections/UpdateRow.tsx', 'components/settings/blocks/WhatsNew.tsx',
   'components/updates/UpdateNotice.tsx',

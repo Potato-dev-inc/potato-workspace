@@ -12,6 +12,8 @@ import './styles/index.css';
 // The other windows and modes load their own code only when they open, so the first screen stays small.
 const AskBarApp = lazy(() => import('./components/askbar/AskBarApp'));
 const PointBoxApp = lazy(() => import('./components/point/PointBoxApp'));
+const ArtifactWindowApp = lazy(() => import('./components/artifacts/ArtifactWindowApp'));
+const TabWindowApp = lazy(() => import('./TabWindowApp'));
 const PetApp = lazy(() => import('./components/pet/PetApp'));
 const MiniBarApp = lazy(() => import('./components/minibar/MiniBarApp'));
 const SwitchOverlayApp = lazy(() => import('./components/switchoverlay/SwitchOverlayApp'));
@@ -56,6 +58,8 @@ async function resolveRoot(): Promise<RootComponent> {
   if (params.get('cockpit') === '1') return CockpitApp;
   if (params.get('askbar') === '1') return AskBarApp;
   if (params.get('pointbox') === '1') return PointBoxApp;
+  if (params.get('artifactwin') === '1') return ArtifactWindowApp;
+  if (params.get('tabwin') === '1') return TabWindowApp;
   if (params.get('minibar') === '1') return MiniBarApp;
   if (params.get('pet') === '1') return PetApp;
   if (params.get('switchoverlay') === '1') return SwitchOverlayApp;

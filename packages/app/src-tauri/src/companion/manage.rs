@@ -9,7 +9,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use super::model::{
     char_len, new_hex_id, unique_slug, valid_name, validate_profile, CheckIn, CompanionError, CompanionProfile,
-    CompanionResult, CompanionView, FeedItem, FeedKind, HhMm, MemoryFile, PendingItem, PendingKind, MAX_COMPANIONS,
+    CompanionResult, CompanionView, FeedItem, FeedKind, HhMm, Look, MemoryFile, PendingItem, PendingKind,
+    MAX_AWAKE_COMPANIONS, MAX_COMPANIONS,
 };
 use super::service::{pane_id_of, Inner, OutKind, Outgoing, Service, Slot};
 use super::store::{self, Runtime};
@@ -31,6 +32,9 @@ where
 pub struct Draft {
     pub name: String,
     pub avatar: String,
+    /// Its accent colour (`ACCENT_IDS`). Missing = no own colour.
+    #[serde(default)]
+    pub accent: Option<String>,
     pub persona: String,
     pub agent_type: String,
     #[serde(default)]
@@ -61,6 +65,7 @@ pub struct Draft {
 pub struct Patch {
     pub name: Option<String>,
     pub avatar: Option<String>,
+    pub accent: Option<String>,
     pub persona: Option<String>,
     /// Another agent than the current one is a move (`moving.rs`): it waits until the companion is free.
     pub agent_type: Option<String>,
@@ -146,6 +151,7 @@ impl Service {
         let profile = CompanionProfile {
             id: id.clone(),
             name: draft.name,
+            look: draft.accent.map(|accent| Look { avatar: draft.avatar.clone(), accent }),
             avatar: draft.avatar,
             persona: draft.persona,
             agent_type: draft.agent_type,
@@ -170,13 +176,19 @@ impl Service {
         self.check_agent(&profile)?;
         files::ensure_home(&self.root, &profile)?;
 
+        // Three may be awake: a fourth is made asleep (its folder and memory are all there; wake it when one rests).
+        let full = inner.awake_count(None) >= MAX_AWAKE_COMPANIONS;
+        let runtime = Runtime { sleeping: full && profile.auto_start, ..Runtime::default() };
         inner.profiles.push(profile.clone());
         if let Err(e) = store::save(&self.root, &inner.profiles) {
             inner.profiles.pop();
             return Err(e);
         }
+        if runtime.sleeping {
+            self.save_runtime(&id, &runtime);
+        }
         let label = self.host.agent_label(&profile.agent_type);
-        inner.slots.insert(id.clone(), Slot::new(&profile, Runtime::default(), label));
+        inner.slots.insert(id.clone(), Slot::new(&profile, runtime, label));
         let index = inner.profiles.len() - 1;
         self.tick_one(&mut inner, index, now);
         Ok(self.finish(&mut inner, &id, now))
@@ -195,6 +207,12 @@ impl Service {
         }
         if let Some(avatar) = patch.avatar {
             next.avatar = avatar;
+        }
+        if let Some(accent) = patch.accent {
+            next.look = Some(Look { avatar: next.avatar.clone(), accent });
+        }
+        if let Some(look) = next.look.as_mut() {
+            look.avatar = next.avatar.clone();
         }
         if let Some(persona) = patch.persona {
             next.persona = persona;
@@ -317,6 +335,7 @@ impl Service {
         self.feed(&profile, FeedKind::Slept, now, "Archived. Its folder was kept.");
         inner.profiles[index].archived = true;
         store::save(&self.root, &inner.profiles)?;
+        inner.default_id = inner.default_id();
         self.publish_if_changed(&mut inner, now);
         Ok(())
     }
@@ -341,6 +360,7 @@ impl Service {
         inner.profiles.remove(index);
         inner.slots.remove(id);
         store::save(&self.root, &inner.profiles)?;
+        inner.default_id = inner.default_id();
         self.publish_if_changed(&mut inner, now);
         Ok(())
     }
@@ -351,6 +371,7 @@ impl Service {
         let now = self.host.now_ms();
         let mut inner = self.inner.lock();
         let index = index_of(&inner, id)?;
+        self.check_room_to_wake(&inner, id)?;
         if let Some(slot) = inner.slots.get_mut(id) {
             slot.runtime.sleeping = false;
             slot.keeper.wake();
@@ -358,6 +379,28 @@ impl Service {
         }
         self.host.clear_stopped(id);
         self.tick_one(&mut inner, index, now);
+        Ok(self.finish(&mut inner, id, now))
+    }
+
+    /// A sleeping companion may wake only while fewer than `MAX_AWAKE_COMPANIONS` others are awake.
+    fn check_room_to_wake(&self, inner: &Inner, id: &str) -> CompanionResult<()> {
+        let sleeping = inner.slots.get(id).is_some_and(|slot| !slot.keeper.want());
+        if sleeping && inner.awake_count(Some(id)) >= MAX_AWAKE_COMPANIONS {
+            return Err(CompanionError::new(
+                "COMPANION_AWAKE_LIMIT",
+                format!("{MAX_AWAKE_COMPANIONS} companions can be awake at once. Put one to sleep first."),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Makes this companion the default: the one the speak bubble, the pet and the phone's first tab use.
+    pub fn set_default(&self, id: &str) -> CompanionResult<CompanionView> {
+        let now = self.host.now_ms();
+        let mut inner = self.inner.lock();
+        index_of(&inner, id)?;
+        store::save_with_default(&self.root, &inner.profiles, Some(id))?;
+        inner.default_id = Some(id.to_string());
         Ok(self.finish(&mut inner, id, now))
     }
 
@@ -384,6 +427,7 @@ impl Service {
         let now = self.host.now_ms();
         let mut inner = self.inner.lock();
         let index = index_of(&inner, id)?;
+        self.check_room_to_wake(&inner, id)?;
         self.restart_locked(&mut inner, index, now);
         Ok(self.finish(&mut inner, id, now))
     }
@@ -468,6 +512,10 @@ impl Service {
             memory::outside_changes(&self.root, &profile.id, home)?.into_iter().map(|file| OutsideChange { file }).collect()
         };
         let mut pending = memory::read_pending(home)?;
+        // A `- person:` line is a vault feature: with the switch off it is not listed.
+        if !self.host.vault_on() {
+            pending.retain(|i| i.kind != super::model::PendingKind::Person);
+        }
         if phone {
             for item in &mut pending {
                 item.target_line = item.target_line.take().map(|line| crate::redact::text(&line).into_inner());

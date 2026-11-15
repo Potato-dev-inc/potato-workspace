@@ -427,10 +427,13 @@ describe('TeamSection notices', () => {
 });
 
 describe('TeamSection', () => {
-  it('renders nothing while Team is off', async () => {
+  it('shows one "No team yet" line while Team is off, and no Request usage', async () => {
     act(() => root.render(<TeamSection api={fakeApi({ state: async () => teamState({ enabled: false }) })} now={Date.now()} />));
     await flush();
-    expect(host.textContent).toBe('');
+    expect(host.textContent).toContain('No team yet.');
+    expect(host.textContent).toContain('Set up a team');
+    expect(host.querySelector('[data-team-activity]')).toBeNull();
+    expect(host.textContent).not.toContain('Request usage');
   });
 
   it('lists unsent drafts, updates and teammate cards', async () => {
@@ -439,7 +442,11 @@ describe('TeamSection', () => {
     await flush();
     expect(host.querySelector('[aria-label="Unsent"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Updates for your branches"]')).not.toBeNull();
-    expect(host.querySelectorAll('[data-team-card]').length).toBe(2);
+    expect(host.querySelectorAll('[data-team-activity]').length).toBe(2);
+    // A row opens its full card in place (View), so Pull now and the rest stay one click away.
+    expect(host.querySelectorAll('[data-team-card]').length).toBe(0);
+    act(() => host.querySelector<HTMLButtonElement>('[data-team-activity] .ib-row-go')!.click());
+    expect(host.querySelectorAll('[data-team-card]').length).toBe(1);
     expect(vi.isMockFunction(api.send)).toBe(false);
   });
 });
@@ -541,7 +548,7 @@ describe('War Room', () => {
     act(() => root.render(<TeamSection api={api} now={MAIN_PUSH.atMs + 60_000} />));
     await flush();
     expect(host.querySelector('[data-team-red]')).toBeNull();
-    expect(host.querySelectorAll('[data-team-card]').length).toBe(1);
+    expect(host.querySelectorAll('[data-team-activity]').length).toBe(1);
   });
 
   it('counts an unclaimed red main toward the badge, and a claimed one not', () => {

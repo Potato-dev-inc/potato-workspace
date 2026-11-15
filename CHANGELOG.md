@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.1.1
+
+- New look for the chat's right panel: calm sections (Environment, Context, Connectors, Outputs, Changes, Background tasks, Files) with more colour, and "Done means" folded into Changes. The old result strip is gone.
+- New theme: "Light, dimmed" (Settings > Appearance), easier on the eyes than plain light.
+- The top bar now shows helpers only and stays in split view. Drag a chat to the left, right, middle (50/50) or bottom to split, with a live preview.
+- New: standby helpers. Make a helper ahead of time ("Reviewer · Codex"); it waits ready without using tokens and the next matching task starts on it at once.
+- Artifacts open beside the chat, with Point (click part of the page to ask for a change) and Share (a read-only link that expires).
+- Word files look like Word: white pages, real table borders, headers and footers, fonts. Excel keeps its cell colours, borders and widths.
+- New Team page: people, usage, tasks and feed in one place. "Here / away" is shared; project and chat names only if you turn them on.
+- One Cloudflare Worker for the team relay and the stable phone link, and team invite links that work once and expire after 24 hours.
+- Several companions (up to 8), each with its own name, colour and memory; one is the default.
+- Labs: companions can keep a journal and a diary and show their mood, and a companion can run as your own Discord bot (your bot token stays in Windows' credential store; it only answers in channels you allow and has no tools).
+- Project guide (Labs): a browsable guide to a project, made only when you ask, and readable by agents.
+- Leaving my desk: one switch hands control to your phone until you're back; plain yes/no questions can be answered from the phone notification.
+- Search inside files, open a chat or file in its own window, a budget per project, a hint when a cheaper model would do, and a speed report in Settings.
+- What's new: a short animated tour after an update, and a Feature guide (Help menu).
+- The Inbox is compact: "Nothing needs you", Done today and team activity.
+- Usage: one row per real account; lend profiles are named by their profile name, with a "Show usage" tick; past lends and borrows can be cleared.
+- Settings: setup checks show the last result at once, dropdowns are readable in dark mode, keep-warm takes any number up to 10, approvals can be cleared, built-in agents can be hidden, and menus close when you click away.
+- Chat: "/" commands show at once, a "View: Summary" menu (Summary is the default), a pinned tab back to the chat in the file tabs, and "Done means" can be hidden.
+- Fixed: the same answer sometimes showed twice.
+- Fixed: a line-ending-only change no longer reads as thousands of changed lines.
+- Fixed: "Tools are out of date" now shows with Reconnect when an agent's tools are older than the app, and old tool settings are refreshed on start.
+- Fixed: the limit nudge repeated; it now says it once per level.
+- OpenCode's multiple-choice questions show as a question card.
+
 ## 1.1.0
 
 This is the first public release since 1.0.15. It includes everything from the 1.0.16 to 1.0.29 betas, plus:

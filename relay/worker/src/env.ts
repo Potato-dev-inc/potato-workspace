@@ -1,5 +1,7 @@
 import type { IpGate } from "./gate";
 import type { Room, RoomIndex } from "./room";
+import type { InviteBox } from "./invites";
+import type { StableLink } from "./stable";
 import type { Team } from "./team";
 
 /** Bindings and optional settings (all the numbers are strings in wrangler vars). */
@@ -9,6 +11,18 @@ export interface Env {
   /** Live Rooms: one object per room, and one for the relay's open rooms. */
   ROOM: DurableObjectNamespace<Room>;
   ROOM_INDEX: DurableObjectNamespace<RoomIndex>;
+  /** The stable phone link (one object: one Worker serves one PC). */
+  LINK: DurableObjectNamespace<StableLink>;
+  /** Invite links: one object per one-time code. */
+  INVITES: DurableObjectNamespace<InviteBox>;
+  /** Stable link. Optional. SHA-256 (hex) of the secret: when set, only that secret may register. */
+  SETUP_SECRET_SHA256?: string;
+  /** Stable link. Optional. Register/reset attempts per address per hour. Default 30. */
+  RATE_LIMIT_PER_HOUR?: string;
+  /** TEST ONLY. Replaces the trycloudflare rule. Never set on a real deployment (see wrangler.toml). */
+  ALLOWED_ORIGIN_RE?: string;
+  /** Optional. Where the join page sends someone who has no app yet. */
+  DOWNLOAD_URL?: string;
   /** Optional limits; the defaults match relay/server. */
   LIMIT_DEVICE_PER_MINUTE?: string;
   LIMIT_DEVICE_PER_DAY?: string;

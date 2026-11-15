@@ -26,7 +26,7 @@ import '../../styles/cockpit-helpers.css';
 import '../../styles/cockpit-sidebar.css';
 import { DotSpinner } from './DotSpinner';
 import { useT } from '../../i18n';
-import { PotatoMark, IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort } from './Icons';
+import { PotatoMark, IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort, IconTeam } from './Icons';
 import { RowMark } from './RowMark';
 import { PlanLine } from '../common/PlanLine';
 import { ProjectHeader, ProjectMeta, type ProjectSignal } from './ProjectHeader';
@@ -44,14 +44,15 @@ import { bindingLabel, isMacPlatform } from '../../lib/shortcuts';
 import { groupByProject, useFoldedProjects, useGroupBy, useSidebarProjects } from '../../lib/sidebarProjects';
 import { formatElapsed, spinnerStatus } from './model';
 import { splitPinned, usePinnedPanes } from '../../lib/pinnedPanes';
+import { useHelpersInSidebar } from '../../lib/helpersInSidebar';
 import { descendants, groupHelperTree, helperChipText, readFoldedParents, writeFoldedParents, type HelperNode } from '../../lib/pane-helpers';
 import { multiLoginAgents, paneHeading, paneSubline } from './titles';
 import { LastTurnContext } from './away-context';
 import { projectWithCopy } from './shell-labels';
 import type { CompanionView } from '../../lib/companion';
-import { CompanionRow, MakeCompanionRow } from './companion/CompanionRow';
+import { CompanionRow, MakeCompanionRow, NewCompanionRow } from './companion/CompanionRow';
 import { companionMood, useJustFinished, useLocalHour } from '../../lib/companionMood';
-import { isCompanionPaneId } from './companion/model';
+import { isCompanionPaneId, MAX_COMPANIONS } from './companion/model';
 import { useReviewCount } from './review/useReviewCount';
 import { ClosedChatsSheet } from './ClosedChatsSheet';
 import { PeekCard } from './PeekCard';
@@ -70,6 +71,7 @@ import { BringChatsLink } from '../history/BringChatsLink';
 import { DeviceGroups } from '../devices/DeviceGroups';
 import { NewAgentWhere, type WhereProps } from '../devices/NewAgentWhere';
 import type { DeviceGroup, RemoteRow } from '../devices/useDeviceGroups';
+import { useDismissable } from '../../hooks/useDismissable';
 
 export function Sidebar({
   c,
@@ -92,7 +94,10 @@ export function Sidebar({
   spaces,
   spacesOpen = false,
   onOpenSpaces,
+  team,
+  onOpenTeam,
   onOpenToSide,
+  onOpenPlaced,
   onPaneAction,
   ship = shipApi,
   acp = tauriAcpChatApi,
@@ -120,6 +125,8 @@ export function Sidebar({
   onOpenStore?: () => void;
   /** The pane row menu's "Open to the side" (split view). Absent: the menu has no such item. */
   onOpenToSide?: (paneId: string) => void;
+  /** Row menu: open a chat on the left or below the one in front (the keyboard way to a drag onto the work area). */
+  onOpenPlaced?: (paneId: string, where: 'left' | 'down') => void;
   /** Runs a pane action of the row menu (rename, reflow, copy, details, close). Absent: select the pane, then ask its view. */
   onPaneAction?: (paneId: string, action: PaneAction) => void;
   /** The companions, above Inbox. Absent or null: no companion rows (no backend, or not read yet). */
@@ -140,6 +147,9 @@ export function Sidebar({
   spacesOpen?: boolean;
   /** Opens the Spaces page. Absent: no Spaces row. */
   onOpenSpaces?: () => void;
+  /** The Team page: its row (always shown) is the active one while `open`; `waiting` is the number on its badge. Absent: no Team row. */
+  team?: { open: boolean; waiting: number };
+  onOpenTeam?: () => void;
   ship?: ShipApi;
   /** Chat sessions (ACP): which agents can run as a chat, and starting one. Replaceable in tests. */
   acp?: AcpChatApi;
@@ -168,6 +178,7 @@ export function Sidebar({
   // The same list the Inbox badge and the Doto counter use, so the three numbers always agree.
   const needs = useNeedsYou(c);
   const questionPanes = needsYouPaneIds(needs);
+  const [showHelperTree] = useHelpersInSidebar();
   const grouped = groupHelperTree(panes, questionPanes);
   // Pinned chats sit in their own group at the top, newest pin first, whatever they are doing.
   const { pins, setPinned, place: placePin } = usePinnedPanes();
@@ -324,23 +335,11 @@ export function Sidebar({
     return () => window.removeEventListener('pm:open-new-menu', open);
   }, []);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const away = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
-    window.addEventListener('mousedown', away);
-    window.addEventListener('keydown', esc);
-    return () => {
-      window.removeEventListener('mousedown', away);
-      window.removeEventListener('keydown', esc);
-    };
-  }, [menuOpen]);
+  useDismissable(menuOpen, { inside: [menuRef], anchor: menuRef, onDismiss: () => setMenuOpen(false) });
 
   type Pane = (typeof list)[number];
   const paneTitle = (p: Pane) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary;
-  const row = (p: Pane, awayFrom?: Pane) => {
+  const row = (p: Pane, awayFrom?: Pane, helperCount = 0) => {
     const id = p.info.id;
     const since = c.statusSince.get(id);
     const active = c.selectedId === id && !c.spawn && !openCompanionId;
@@ -400,6 +399,11 @@ export function Sidebar({
               <IconPin />
             </span>
           )}
+          {helperCount > 0 && (
+            <span className="ck-row-helpers" data-testid="row-helper-count" title={t('sidebar.helperCount', { count: helperCount })} role="img" aria-label={t('sidebar.helperCount', { count: helperCount })}>
+              {helperCount}
+            </span>
+          )}
           {/* The right side says one thing: the chip when it needs you or is broken, the time while it works, else nothing. */}
           {pill ? (
             <span className="ck-row-pill">{t('sidebar.needsYou')}</span>
@@ -444,6 +448,8 @@ export function Sidebar({
   const node = (n: HelperNode<Pane>): JSX.Element => {
     const id = n.pane.info.id;
     if (n.helpers.length === 0) return row(n.pane, n.awayFrom);
+    // The helpers bar above the chat is where helpers live: the row only counts them (unless the person wants the tree).
+    if (!showHelperTree) return row(n.pane, n.awayFrom, descendants(n).length);
     const open = !folded.has(id);
     return (
       <div key={id} className="ck-node">
@@ -800,14 +806,19 @@ export function Sidebar({
                 notes: companion.pendingMemory,
                 justFinished,
                 hour,
+                body: companion.body,
               })}
               active={openCompanionId === companion.id}
               onOpen={() => onOpenCompanion?.(companion.id)}
+              showDefault={companions.length > 1}
             />
           ))}
+        {companions && companions.length > 0 && companions.length < MAX_COMPANIONS && onNewCompanion && (
+          <NewCompanionRow onNew={onNewCompanion} />
+        )}
         <button
           type="button"
-          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !spacesOpen ? ' is-active' : ''}`}
+          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !spacesOpen && !team?.open ? ' is-active' : ''}`}
           onClick={() => {
             c.select(null);
             onOpenInbox?.();
@@ -821,7 +832,22 @@ export function Sidebar({
           </span>
           {waiting > 0 && <span className="ck-count">{waiting}</span>}
         </button>
-        {devices && devices.groups.length > 0 && (
+        {team && onOpenTeam && (
+          <button type="button" data-testid="side-team" className={`ck-row ck-row--flat${team.open ? ' is-active' : ''}`} onClick={onOpenTeam}>
+            <span className="ck-row-glyph ck-row-glyph--icon">
+              <IconTeam />
+            </span>
+            <span className="ck-row-main">
+              <span className="ck-row-title">{t('teamHub.side')}</span>
+            </span>
+            {team.waiting > 0 && (
+              <span className="ck-count" data-testid="side-team-count">
+                {team.waiting}
+              </span>
+            )}
+          </button>
+        )}
+        {devices &&devices.groups.length > 0 && (
           <div className="dev-group-head dev-group-head--this" data-testid="this-pc-head">
             <span>{t('devices.thisPc')}</span>
           </div>
@@ -894,6 +920,8 @@ export function Sidebar({
           x={rowMenu.x}
           y={rowMenu.y}
           onSide={onOpenToSide ? () => onOpenToSide(rowMenu.id) : undefined}
+          onLeft={onOpenToSide && onOpenPlaced ? () => onOpenPlaced(rowMenu.id, 'left') : undefined}
+          onBelow={onOpenToSide && onOpenPlaced ? () => onOpenPlaced(rowMenu.id, 'down') : undefined}
           pinned={pinSet.has(rowMenu.id)}
           onPin={() => setPinned(rowMenu.id, !pinSet.has(rowMenu.id))}
           onHandoff={hand.allowed(rowMenu.id) && !handoffBusy ? () => hand.start(rowMenu.id) : undefined}

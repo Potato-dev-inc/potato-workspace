@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { ChatComposer } from '../chat/ChatComposer';
-import { ChangesCard } from '../cockpit/rail/ChangesCard';
+import { ChangesSection } from '../cockpit/rail/ChangesSection';
 import { DragLayer } from './DragLayer';
 import { cancelDrag } from './dragStore';
 import { setFileDropSource, type WindowDropEvent } from '../../lib/fileDrop';
@@ -52,7 +52,7 @@ beforeEach(async () => {
   await act(async () =>
     root.render(
       <>
-        <ChangesCard paneId="p1" status="idle" outputs={[{ path: 'C:/proj/src/a.ts', tool: 'Edit', wrote: true }]} cwd="C:/proj" onOpenChanges={() => {}} />
+        <ChangesSection paneId="p1" status="idle" canCreatePr={false} showDone={false} outputs={[{ path: 'C:/proj/src/a.ts', tool: 'Edit', wrote: true }]} cwd="C:/proj" onOpenChanges={() => {}} />
         <ChatComposer onSend={vi.fn(async () => null)} blockedReason={null} draftKey="pane-1" attachFiles={async () => []} />
         <DragLayer />
       </>,
@@ -71,7 +71,7 @@ afterEach(async () => {
 
 describe('drop a changed file on the chat box', () => {
   it('dragging a file from the Changes card onto the box makes a chip', async () => {
-    const item = host.querySelector<HTMLElement>('.ck-rail-item')!;
+    const item = host.querySelector<HTMLElement>('.rp-row.rp-btn')!;
     await fire(item, 'pointerdown', 20, 20);
     await fire(window, 'pointermove', 100, 200);
     await fire(window, 'pointermove', 100, 350);
@@ -83,7 +83,7 @@ describe('drop a changed file on the chat box', () => {
   });
 
   it('letting go away from the box adds nothing', async () => {
-    const item = host.querySelector<HTMLElement>('.ck-rail-item')!;
+    const item = host.querySelector<HTMLElement>('.rp-row.rp-btn')!;
     await fire(item, 'pointerdown', 20, 20);
     await fire(window, 'pointermove', 100, 100);
     await fire(window, 'pointerup', 100, 100);
@@ -93,8 +93,8 @@ describe('drop a changed file on the chat box', () => {
 
   it('a click on the card item still opens Changes and does not drag', async () => {
     const open = vi.fn();
-    await act(async () => root.render(<ChangesCard paneId="p1" status="idle" outputs={[{ path: 'C:/proj/src/a.ts', tool: 'Edit', wrote: true }]} cwd="C:/proj" onOpenChanges={open} />));
-    const item = host.querySelector<HTMLElement>('.ck-rail-item')!;
+    await act(async () => root.render(<ChangesSection paneId="p1" status="idle" canCreatePr={false} showDone={false} outputs={[{ path: 'C:/proj/src/a.ts', tool: 'Edit', wrote: true }]} cwd="C:/proj" onOpenChanges={open} />));
+    const item = host.querySelector<HTMLElement>('.rp-row.rp-btn')!;
     await fire(item, 'pointerdown', 20, 20);
     await fire(window, 'pointermove', 22, 21);
     await fire(window, 'pointerup', 22, 21);
@@ -103,7 +103,7 @@ describe('drop a changed file on the chat box', () => {
   });
 
   it('Esc cancels the drag: no chip', async () => {
-    const item = host.querySelector<HTMLElement>('.ck-rail-item')!;
+    const item = host.querySelector<HTMLElement>('.rp-row.rp-btn')!;
     await fire(item, 'pointerdown', 20, 20);
     await fire(window, 'pointermove', 100, 350);
     await act(async () => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));

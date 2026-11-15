@@ -40,7 +40,7 @@ export const settingsConnect: Partial<Record<EnglishKey, string>> = {
   'tunnel.mode.stable': '固定連結（我自己的 Cloudflare 中繼站）',
   'tunnel.workerAddress': '中繼站位址',
   'tunnel.workerAria': '中繼站位址',
-  'tunnel.stableHelp': '在自動位址前面放一個免費的 Cloudflare 中繼站，手機就能一直使用同一個不會改變的連結。只需設定一次，請見 relay/stable-link/README.md。手機要從新的位址重新配對一次。',
+  'tunnel.stableHelp': '在自動位址前面放一個免費的 Cloudflare 中繼站，手機就能一直使用同一個不會改變的連結。只需設定一次，請見 relay/worker/README.md。手機要從新的位址重新配對一次。',
   'tunnel.problem.worker': '請輸入中繼站位址，例如 https://potato-stable-link.you.workers.dev。',
   'tunnel.problem.secret': '密碼至少需要 16 個字元。',
   'tunnel.secret': '密碼',

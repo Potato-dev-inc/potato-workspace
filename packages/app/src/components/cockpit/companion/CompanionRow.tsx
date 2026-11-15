@@ -7,8 +7,22 @@ import { dragSourceProps } from '../../dnd/dragSourceProps';
 import { PotatoFace } from '../PotatoFace';
 import '../../../styles/cockpit-companion.css';
 
-export function CompanionRow({ companion, mood, active, onOpen }: { companion: CompanionView; mood: Mood; active: boolean; onOpen: () => void }) {
+export function CompanionRow({
+  companion,
+  mood,
+  active,
+  onOpen,
+  showDefault = false,
+}: {
+  companion: CompanionView;
+  mood: Mood;
+  active: boolean;
+  onOpen: () => void;
+  /** Mark the default companion (only worth showing when there is more than one). */
+  showDefault?: boolean;
+}) {
   const t = useT();
+  const isDefault = showDefault && companion.isDefault === true;
   return (
     <button
       type="button"
@@ -16,6 +30,8 @@ export function CompanionRow({ companion, mood, active, onOpen }: { companion: C
       onClick={onOpen}
       aria-current={active ? 'true' : undefined}
       data-mood={mood.face}
+      data-accent={companion.accent ?? undefined}
+      data-default={isDefault ? 'true' : undefined}
     >
       <span className="ck-row-glyph ck-companion-face" data-potato-drag="" {...dragSourceProps({ kind: 'potato', id: companion.id, label: companion.name })}>
         <PotatoFace state={mood.face} size={28} />
@@ -26,6 +42,17 @@ export function CompanionRow({ companion, mood, active, onOpen }: { companion: C
           {t(mood.key, mood.vars)}
         </span>
       </span>
+      {isDefault && <span className="ck-companion-default" role="img" aria-label={t('companions.default')} title={t('companions.defaultTitle', { name: companion.name })} />}
+    </button>
+  );
+}
+
+/** A small "+ New companion" row under the companion rows (the sidebar hides it at the limit). */
+export function NewCompanionRow({ onNew }: { onNew: () => void }) {
+  const t = useT();
+  return (
+    <button type="button" className="ck-companion-new" onClick={onNew}>
+      <span aria-hidden="true">+</span> {t('companions.new')}
     </button>
   );
 }

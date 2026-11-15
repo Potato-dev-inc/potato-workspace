@@ -2,14 +2,15 @@
 // The agent step reads `companion_agents`; an agent that cannot take messages is shown with its reason and cannot be
 // picked. One scroll, one button: "Wake up {name}".
 import { useEffect, useState } from 'react';
-import type { AvatarId, CompanionAgentOption, CompanionPersona, CompanionTransport, CompanionView } from '../../../lib/companion';
+import type { AccentId, AvatarId, CompanionAgentOption, CompanionPersona, CompanionTransport, CompanionView } from '../../../lib/companion';
+import { useT } from '../../../i18n';
 import { shipApi, type ShipApi } from '../../../lib/ship-api';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
 import { chatAllowedFor } from '../../../lib/mobile-pane-view';
 import { Avatar } from '../../companion/Avatar';
 import { AVATARS } from '../../companion/avatars';
 import { Sheet } from '../Sheet';
-import { PERSONA_OPTIONS, isValidName, ownFolderIn, plainError } from './model';
+import { ACCENTS, MAX_AWAKE_COMPANIONS, PERSONA_OPTIONS, isValidName, ownFolderIn, plainError } from './model';
 import '../../../styles/cockpit-companion.css';
 
 const FACES = Object.keys(AVATARS) as AvatarId[];
@@ -22,14 +23,22 @@ const DEFAULT_NAP = { h: 4, m: 0 };
 export function CompanionSetupSheet({
   transport,
   ship = shipApi,
+  companions = [],
   onClose,
   onCreated,
 }: {
   transport: CompanionTransport;
+  /** The companions that already exist: "Start from" can copy how one of them talks. */
+  companions?: CompanionView[];
   ship?: Pick<ShipApi, 'pickFolder'>;
   onClose: () => void;
-  onCreated: (view: CompanionView) => void;
+  /** `note`: a short sentence when the new companion was made but one part did not work. */
+  onCreated: (view: CompanionView, note?: string) => void;
 }) {
+  const t = useT();
+  const [accent, setAccent] = useState<AccentId>('potato');
+  // Copy how this companion talks (its "Who it is" text, never its notes). Null: start empty.
+  const [copyFrom, setCopyFrom] = useState<string | null>(null);
   const [agents, setAgents] = useState<CompanionAgentOption[] | null>(null);
   const [agentType, setAgentType] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<AvatarId>('mochi');
@@ -92,6 +101,7 @@ export function CompanionSetupSheet({
       const view = await transport.create({
         name: name.trim(),
         avatar,
+        accent,
         persona,
         agentType,
         folder,
@@ -100,7 +110,17 @@ export function CompanionSetupSheet({
         napAt: DEFAULT_NAP,
         checkins: [],
       });
-      onCreated(view);
+      const source = companions.find((c) => c.id === copyFrom);
+      let note: string | undefined;
+      if (source) {
+        try {
+          const soul = await transport.memory(source.id);
+          await transport.saveMemory(view.id, 'soul', soul.soul);
+        } catch {
+          note = t('companions.setup.copyFailed', { name: source.name });
+        }
+      }
+      onCreated(view, note);
     } catch (err) {
       setError(err instanceof Error ? plainError(err.message) : 'Could not make the companion.');
     } finally {
@@ -112,7 +132,7 @@ export function CompanionSetupSheet({
   return (
     <Sheet onClose={busy ? undefined : onClose} labelledBy="ck-companion-setup-title" className="ck-companion-sheet ck-companion-setup">
       <h2 className="ck-section" id="ck-companion-setup-title">
-        Make your companion
+        {companions.length > 0 ? t('companions.setup.another') : 'Make your companion'}
       </h2>
       <p className="ck-sub">Your own helper that is always on. It runs on your agent and your plan.</p>
 
@@ -131,6 +151,25 @@ export function CompanionSetupSheet({
             >
               <Avatar id={id} size={FACE_PX} state="idle" name={AVATARS[id].name} />
             </button>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="ck-companion-step">
+        <legend className="ck-caption">{t('companions.setup.colour')}</legend>
+        <div className="ck-companion-swatches" role="radiogroup" aria-label={t('companions.setup.colour')}>
+          {ACCENTS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={accent === id}
+              data-accent={id}
+              className={`ck-companion-swatch${accent === id ? ' is-picked' : ''}`}
+              onClick={() => setAccent(id)}
+              title={t(`companions.accent.${id}`)}
+              aria-label={t(`companions.accent.${id}`)}
+            />
           ))}
         </div>
       </fieldset>
@@ -187,6 +226,30 @@ export function CompanionSetupSheet({
           ))}
         </div>
       </fieldset>
+
+      {companions.length > 0 && (
+        <fieldset className="ck-companion-step">
+          <legend className="ck-caption">{t('companions.setup.startFrom')}</legend>
+          <div className="ck-companion-chips">
+            <button type="button" aria-pressed={copyFrom === null} className={`ck-companion-chip${copyFrom === null ? ' is-picked' : ''}`} onClick={() => setCopyFrom(null)}>
+              {t('companions.setup.startEmpty')}
+            </button>
+            {companions.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={copyFrom === c.id}
+                className={`ck-companion-chip${copyFrom === c.id ? ' is-picked' : ''}`}
+                onClick={() => setCopyFrom(c.id)}
+              >
+                {t('companions.setup.startCopy', { name: c.name })}
+              </button>
+            ))}
+          </div>
+          {copyFrom && <p className="ck-sub ck-companion-hint">{t('companions.setup.startCopyHint', { name: companions.find((c) => c.id === copyFrom)?.name ?? '' })}</p>}
+          {companions.length >= MAX_AWAKE_COMPANIONS && <p className="ck-sub ck-companion-hint">{t('companions.awakeNote')}</p>}
+        </fieldset>
+      )}
 
       <fieldset className="ck-companion-step">
         <legend className="ck-caption">5. Where does it live?</legend>

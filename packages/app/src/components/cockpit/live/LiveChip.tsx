@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { liveRoomApi, type LiveRoomApi, type LiveStatus } from '../../../lib/live-room';
 import { errorText, useLiveRoom, type LiveSubscribe } from './useLiveRoom';
 import '../../../styles/cockpit-live.css';
+import { useDismissable } from '../../../hooks/useDismissable';
 
 export function LiveChip({
   paneId,
@@ -26,19 +27,7 @@ export function LiveChip({
   const [error, setError] = useState<string | null>(null);
   const wrap = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  useDismissable(open, { inside: [wrap], anchor: wrap, onDismiss: () => setOpen(false) });
 
   if (!status?.live || !status.paneIds.includes(paneId)) return null;
 

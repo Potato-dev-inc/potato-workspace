@@ -6,7 +6,7 @@ import { bridgeProxyConfig } from './vite-bridge-proxy';
 import { devInfoPlugin } from './vite-dev-info';
 
 /** Chunks the service worker never precaches (see `injectManifest.globIgnores`). */
-const LAZY_VIEWER_IGNORES = ['**/DocxView-*.js', '**/SheetView-*.js', '**/PdfView-*.js', '**/HtmlView-*.js', '**/SandboxFrame-*.js', '**/CodeEdit-*.js', '**/office.worker-*.js', '**/docx-engine-*.js'];
+const LAZY_VIEWER_IGNORES = ['**/DocxView-*.js', '**/SheetView-*.js', '**/PdfView-*.js', '**/HtmlView-*.js', '**/SandboxFrame-*.js', '**/CodeEdit-*.js', '**/office.worker-*.js', '**/docx-engine-*.js', '**/office-client-*.js'];
 
 export default defineConfig({
   plugins: [

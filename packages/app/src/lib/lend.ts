@@ -35,6 +35,8 @@ export interface LendProfile {
   max_tokens?: number | null;
   /** Read only: a pasted API key is kept for this profile. The key itself never comes back. */
   has_key?: boolean;
+  /** "Show usage in the usage bar": this profile's sign-in is a row in the bar, and the borrower sees its numbers. Off by default. */
+  show_usage?: boolean;
 }
 
 export type GrantEnd = 'expired' | 'revoked' | 'returned';
@@ -66,6 +68,8 @@ export interface Grant {
   problem_kind?: ProblemKind | null;
   /** The lender's name for the profile this lend comes from, as the lender sent it. Absent: an older lender build. */
   profile_name?: string;
+  /** When it ended, in epoch milliseconds. Absent while it runs and for a lend saved by an older build (then `ends_ms`). */
+  ended_ms?: number | null;
   /** Lender only: which of my profiles this lend comes from (so deleting the profile can say it is lent). */
   profile_id?: string;
 }
@@ -162,6 +166,10 @@ export interface LendApi {
   answer: (requestId: string, accept: boolean, profileId: string | null, secs: number | null) => Promise<Grant | null>;
   revoke: (grantId: string) => Promise<void>;
   giveBack: (grantId: string) => Promise<void>;
+  /** The X on a past lend or borrow: forgets that ended row. Absent from an older backend. */
+  dismissGrant?: (grantId: string) => Promise<boolean>;
+  /** "Clear" on past lends (`out`) or past borrows (`in`): forgets every ended row of that side. Absent from an older backend. */
+  clearPast?: (direction: 'out' | 'in') => Promise<number>;
   /** Test link: opens the real link handshake to the other PC and reports. Absent from an older backend. */
   testLink?: (grantId: string) => Promise<LinkTest>;
   startAgent: (grantId: string, projectPath: string) => Promise<{ pane_id: string }>;
@@ -198,6 +206,8 @@ export const lendApi: LendApi = {
   answer: (requestId, accept, profileId, secs) => call('lend_answer', { request_id: requestId, accept, profile_id: profileId, secs }),
   revoke: (grantId) => call('lend_revoke', { grant_id: grantId }),
   giveBack: (grantId) => call('lend_return', { grant_id: grantId }),
+  dismissGrant: (grantId) => call('lend_grant_dismiss', { grant_id: grantId }),
+  clearPast: (direction) => call('lend_past_clear', { direction }),
   testLink: (grantId) => call('lend_test_link', { grant_id: grantId }),
   startAgent: (grantId, projectPath) => call('lend_start_agent', { grant_id: grantId, project_path: projectPath }),
   accountAdd: (agentId, label, reuse) => call('lend_account_add', { agent_id: agentId, label, reuse: reuse ?? null }),
@@ -422,6 +432,19 @@ export function chipText(g: Grant, agent: string, now: number): string {
 }
 
 /** Why a grant ended, in a plain sentence. */
+/** Ended rows are kept this long (a week) and then dropped. The desktop drops them from its saved state too. */
+export const PAST_KEEP_MS = 7 * 24 * 3600 * 1000;
+/** How many past lends or borrows show before "Show all". */
+export const PAST_SHOWN = 5;
+
+/** The ended rows of one side, newest first, without anything older than a week. */
+export function pastGrants(grants: Grant[], direction: 'out' | 'in', now: number): Grant[] {
+  const endedAt = (g: Grant) => g.ended_ms ?? g.ends_ms;
+  return grants
+    .filter((g) => g.state === 'ended' && g.direction === direction && now - endedAt(g) < PAST_KEEP_MS)
+    .sort((a, b) => endedAt(b) - endedAt(a));
+}
+
 export function endedWords(g: Grant): string {
   if (g.end_reason === 'revoked') return t('lend.end.revoked');
   if (g.end_reason === 'returned') return t('lend.end.returned');

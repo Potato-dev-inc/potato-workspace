@@ -94,7 +94,9 @@ export function filesMock(cmd: string, args: Record<string, unknown>): { handled
       const name = path.slice(path.lastIndexOf('/') + 1);
       const big = (globalThis as { __pmBigFile?: { url: string; size: number; tooLarge?: boolean } }).__pmBigFile;
       if (big && path.startsWith('big')) return { handled: true, value: { path, name, size: big.size, kind: big.tooLarge ? 'too_large' : 'stream', limit: 500 * 1024 * 1024, url: big.url } };
-      const base64 = path.endsWith('.docx') ? DOCX_SAMPLE : path.endsWith('.xlsx') ? XLSX_TWO_SHEETS : path.endsWith('.csv') ? CSV_SAMPLE : PDF_SAMPLE;
+      // A scenario can set `__pmFileBase64` ({ path: base64 }) to open its own Word or Excel file.
+      const custom = (globalThis as { __pmFileBase64?: Record<string, string> }).__pmFileBase64?.[path];
+      const base64 = custom ?? (path.endsWith('.docx') ? DOCX_SAMPLE : path.endsWith('.xlsx') ? XLSX_TWO_SHEETS : path.endsWith('.csv') ? CSV_SAMPLE : PDF_SAMPLE);
       const url = URL.createObjectURL(new Blob([bytesOf(base64) as BlobPart]));
       return { handled: true, value: { path, name, size: base64.length, kind: 'stream', limit: 500 * 1024 * 1024, url } };
     }
@@ -102,6 +104,17 @@ export function filesMock(cmd: string, args: Record<string, unknown>): { handled
       // A scenario sets `__pmDiskChanged` to show the "changed on disk" bar.
       if ((globalThis as { __pmDiskChanged?: boolean }).__pmDiskChanged && args.overwrite !== true) throw new Error('FILES_CONFLICT: The file changed on disk since you opened it.');
       return { handled: true, value: { path, size: String(args.text ?? '').length, version: 'v2' } };
+    }
+    case 'files_search_cancel':
+      return { handled: true, value: null };
+    case 'files_search_contents': {
+      const q = String(args.query ?? '').toLowerCase();
+      const lines = AUTH.split('\n');
+      const hits = lines.flatMap((text, i) => {
+        const at = q ? text.toLowerCase().indexOf(q) : -1;
+        return at < 0 ? [] : [{ path: 'src/auth.ts', name: 'auth.ts', line: i + 1, text: text.trim(), start: at - (text.length - text.trimStart().length), end: at - (text.length - text.trimStart().length) + q.length }];
+      });
+      return { handled: true, value: { hits, truncated: false, cancelled: false, filesScanned: 12 } };
     }
     case 'files_open_default':
     case 'files_reveal':

@@ -179,6 +179,10 @@ pub struct LendProfile {
     /// ignored on save.
     #[serde(default)]
     pub has_key: bool,
+    /// "Show usage in the usage bar": this profile's own sign-in is a row in the lender's usage bar and its numbers are
+    /// shared with a borrower. Off unless turned on.
+    #[serde(default)]
+    pub show_usage: bool,
 }
 
 fn default_keep_awake() -> bool {
@@ -239,6 +243,9 @@ pub struct Grant {
     /// older lender). Lender: the profile's own name.
     #[serde(default)]
     pub profile_name: String,
+    /// When it ended (any reason). None while it runs, and for a grant saved by an older build (then `ends_ms` is used).
+    #[serde(default)]
+    pub ended_ms: Option<u64>,
     /// Lender only: which of my profiles this lend comes from (so the screen can say a profile is lent right now).
     #[serde(default)]
     pub profile_id: String,
@@ -537,6 +544,8 @@ struct Inner {
     out: HashMap<String, LenderLive>,
     inn: HashMap<String, BorrowerLive>,
     in_grants: HashMap<String, Arc<InGrant>>,
+    /// Borrower: the numbers each lender shared for a grant. In memory only.
+    shared: HashMap<String, crate::usage::Shared>,
 }
 
 pub struct Lend {
@@ -573,7 +582,7 @@ impl Lend {
             .unwrap_or_default();
         let svc = Arc::new_cyclic(|me| Self {
             deps,
-            inner: Mutex::new(Inner { saved, out: HashMap::new(), inn: HashMap::new(), in_grants: HashMap::new() }),
+            inner: Mutex::new(Inner { saved, out: HashMap::new(), inn: HashMap::new(), in_grants: HashMap::new(), shared: HashMap::new() }),
             awake_on: Mutex::new(false),
             offers_wait: Mutex::new(HashMap::new()),
             me: me.clone(),
@@ -604,7 +613,145 @@ impl Lend {
 
     fn changed(&self) {
         self.sync_awake();
+        self.sync_usage_view();
         (self.deps.changed)()
+    }
+
+    /// What the usage bar needs of the lend side: the profiles' sign-ins (and whether each is shown) and the grants
+    /// lent to this PC, named by the lender's profile name.
+    pub fn usage_view(&self) -> crate::usage::LendView {
+        let now = self.now();
+        let inner = lock(&self.inner);
+        let profiles = inner
+            .saved
+            .profiles
+            .iter()
+            .filter_map(|p| match &p.account {
+                LendAccount::Account { id } => Some(crate::usage::LendProfileView { account_id: id.clone(), name: p.name.clone(), show_usage: p.show_usage }),
+                LendAccount::Main => None,
+            })
+            .collect();
+        let borrowed = inner
+            .saved
+            .grants
+            .iter()
+            .filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active && g.view.ends_ms > now)
+            .map(|g| crate::usage::BorrowedView {
+                grant_id: g.view.id.clone(),
+                agent_id: g.view.agent_id.clone(),
+                name: borrowed_name(&g.view.peer_name, &g.view.peer_device_name, &g.view.profile_name, !g.view.for_other_person),
+                shared: inner.shared.get(&g.view.id).cloned(),
+            })
+            .collect();
+        crate::usage::LendView { profiles, borrowed }
+    }
+
+    pub fn sync_usage_view_pub(&self) {
+        self.sync_usage_view();
+    }
+
+    /// Tells the usage bar when the lend side changed (a profile saved, a grant started or ended, numbers arrived).
+    fn sync_usage_view(&self) {
+        let view = self.usage_view();
+        if crate::usage::set_lend_view(view) {
+            crate::usage::invalidate();
+        }
+    }
+
+    /// Past lends and borrows older than this are dropped from the saved state (not only hidden).
+    pub const PAST_KEEP_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+    /// Drops ended grants older than a week. Returns whether anything went.
+    pub fn prune_past(&self) -> bool {
+        let now = self.now();
+        let mut inner = lock(&self.inner);
+        let before = inner.saved.grants.len();
+        inner.saved.grants.retain(|g| {
+            g.view.state != GrantState::Ended || now.saturating_sub(g.view.ended_ms.unwrap_or(g.view.ends_ms)) < Self::PAST_KEEP_MS
+        });
+        let gone = inner.saved.grants.len() != before;
+        if gone {
+            self.save(&inner);
+        }
+        gone
+    }
+
+    /// Tests: makes every ended row look as if it ended `ms` earlier.
+    #[cfg(test)]
+    pub fn age_ended_for_test(&self, ms: u64) {
+        let mut inner = lock(&self.inner);
+        for g in inner.saved.grants.iter_mut().filter(|g| g.view.state == GrantState::Ended) {
+            g.view.ended_ms = Some(g.view.ended_ms.unwrap_or(g.view.ends_ms).saturating_sub(ms));
+            g.view.ends_ms = g.view.ends_ms.saturating_sub(ms);
+        }
+    }
+
+    /// Removes one ended row (the X on a past lend or borrow). A lend that still runs is never removed here.
+    pub fn dismiss_grant(&self, grant_id: &str) -> bool {
+        let mut inner = lock(&self.inner);
+        let before = inner.saved.grants.len();
+        inner.saved.grants.retain(|g| !(g.view.id == grant_id && g.view.state == GrantState::Ended));
+        let gone = inner.saved.grants.len() != before;
+        if gone {
+            self.save(&inner);
+        }
+        drop(inner);
+        if gone {
+            self.changed();
+        }
+        gone
+    }
+
+    /// "Clear" on the past lends (`Out`) or past borrows (`In`). Returns how many went.
+    pub fn clear_past(&self, direction: Direction) -> usize {
+        let mut inner = lock(&self.inner);
+        let before = inner.saved.grants.len();
+        inner.saved.grants.retain(|g| !(g.view.direction == direction && g.view.state == GrantState::Ended));
+        let n = before - inner.saved.grants.len();
+        if n > 0 {
+            self.save(&inner);
+        }
+        drop(inner);
+        if n > 0 {
+            self.changed();
+        }
+        n
+    }
+
+    /// Lender: send the borrower of each running lend the limit numbers of the account behind it, when the profile says so.
+    /// `numbers(account id)` gives the plan name and windows the usage bar read for that sign-in.
+    pub fn share_usage(&self, numbers: &dyn Fn(&str) -> Option<(Option<String>, Vec<crate::usage::readers::Window>)>) {
+        let Ok(session) = self.deps.team.session() else { return };
+        let sends: Vec<(String, String, Option<String>, Vec<wire::WireWindow>)> = {
+            let inner = lock(&self.inner);
+            inner
+                .saved
+                .grants
+                .iter()
+                .filter(|g| g.view.direction == Direction::Out && g.view.state == GrantState::Active)
+                .filter_map(|g| {
+                    let p = inner.saved.profiles.iter().find(|p| Some(&p.id) == g.profile_id.as_ref())?;
+                    let LendAccount::Account { id } = &p.account else { return None };
+                    if !p.show_usage {
+                        return None;
+                    }
+                    let (plan, windows) = numbers(id)?;
+                    let windows = windows
+                        .iter()
+                        .filter(|w| !w.reset_since)
+                        .take(wire::MAX_WIRE_WINDOWS)
+                        .map(|w| wire::WireWindow { name: clean_profile_name(&w.name), used_percent: w.used_percent.clamp(0.0, 1000.0).round() as u32, minutes: w.minutes, resets_at_ms: w.resets_at_ms })
+                        .collect::<Vec<_>>();
+                    (!windows.is_empty()).then(|| (g.view.id.clone(), g.borrower_device.clone(), plan, windows))
+                })
+                .collect()
+        };
+        for (grant_id, device, plan, windows) in sends {
+            let body = Body::Usage { grant_id, plan, windows };
+            if let Ok((payload, _)) = wire::seal(&session, &device, body, self.now()) {
+                let _ = self.deps.team.send(&payload);
+            }
+        }
     }
 
     /// Hold the computer awake while at least one outgoing grant is active and its profile asks for it; let go
@@ -633,7 +780,7 @@ impl Lend {
         }
     }
 
-    fn spec(&self, agent_id: &str) -> Option<&ProxySpec> {
+    pub fn spec(&self, agent_id: &str) -> Option<&ProxySpec> {
         self.deps.specs.iter().find(|s| s.agent_id.eq_ignore_ascii_case(agent_id))
     }
 
@@ -1089,6 +1236,7 @@ impl Lend {
             problem: None,
             problem_kind: None,
             profile_name: profile.name.clone(),
+            ended_ms: None,
             profile_id: profile.id.clone(),
         };
         let body = Body::Grant {
@@ -1212,6 +1360,7 @@ impl Lend {
             let usage = live.gate.usage();
             if let Some(g) = inner.saved.grants.iter_mut().find(|g| g.view.id == grant_id) {
                 g.view.state = GrantState::Ended;
+                g.view.ended_ms = Some(self.now());
                 g.view.problem = None;
                 g.view.end_reason = Some(end_of(reason));
                 (g.view.requests, g.view.input_tokens, g.view.output_tokens) = (usage.requests, usage.input_tokens, usage.output_tokens);
@@ -1281,6 +1430,7 @@ impl Lend {
                 return;
             }
             g.view.state = GrantState::Ended;
+            g.view.ended_ms = Some(now);
             g.view.problem = None;
             // The lender said it is over without saying why: near the end (clocks differ a little) it is the time.
             g.view.end_reason = Some(why.unwrap_or(if now + 5_000 >= g.view.ends_ms { GrantEnd::Expired } else { GrantEnd::Revoked }));
@@ -1600,6 +1750,7 @@ impl Lend {
                             problem: None,
                             problem_kind: None,
                             profile_name: clean_profile_name(&profile_name),
+                            ended_ms: None,
                             profile_id: String::new(),
                         },
                         lender_device: item.from_device.clone(),
@@ -1644,6 +1795,29 @@ impl Lend {
                     return Err(WireReject::Impersonation);
                 }
                 self.finish_out(&grant_id, EndReason::Returned);
+            }
+            Body::Usage { grant_id, plan, windows } => {
+                let rec = self.grant_rec(&grant_id).filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active).ok_or(WireReject::BadItem)?;
+                if !wire::rules::revoke_allowed(&rec.lender_device, &item.from_device) {
+                    return Err(WireReject::Impersonation);
+                }
+                // Words and numbers from another PC: cut and cleaned, at most 8 windows, a percent is a plain number.
+                let windows = windows
+                    .into_iter()
+                    .take(wire::MAX_WIRE_WINDOWS)
+                    .map(|w| crate::usage::readers::Window {
+                        name: clean_profile_name(&w.name).chars().take(24).collect(),
+                        used_percent: f64::from(w.used_percent.min(1000)),
+                        minutes: w.minutes,
+                        resets_at_ms: w.resets_at_ms,
+                        reset_since: false,
+                    })
+                    .filter(|w| !w.name.is_empty())
+                    .collect();
+                let plan = plan.map(|p| clean_profile_name(&p).chars().take(24).collect::<String>()).filter(|p| !p.is_empty());
+                lock(&self.inner).shared.insert(grant_id, crate::usage::Shared { plan, windows, at_ms: now });
+                self.sync_usage_view();
+                return Ok(());
             }
             Body::OffersAsk { nonce } => {
                 // Only what THIS asker may use. Nothing changes here, so the screens need no refresh.

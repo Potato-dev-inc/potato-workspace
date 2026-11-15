@@ -3,11 +3,12 @@
 // each one becomes a small placeholder `<img id="pmimg-N">` and its bytes are read from the zip only when the screen
 // asks for number N (when it scrolls near). A 60 MB report full of photos shows its text at once.
 import mammoth from 'mammoth/mammoth.browser';
-import { openSlim, type RangeReader } from './docx-zip';
+import { renderWord, IMAGE_ID_PREFIX as PREFIX, PLACEHOLDER as PLACE } from './docx-render';
+import { bytesReader, openSlim, type RangeReader, type SlimDocx } from './docx-zip';
 
 /** A 1x1 transparent picture: what a photo shows before it is loaded. */
-export const PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
-export const IMAGE_ID_PREFIX = 'pmimg-';
+export const PLACEHOLDER = PLACE;
+export const IMAGE_ID_PREFIX = PREFIX;
 /** Pictures wider than this are drawn smaller for the page (a photo of 4000 px does not need to be decoded whole on screen). */
 export const PREVIEW_WIDTH = 1000;
 /** Pictures under this size are shown as they are. */
@@ -17,6 +18,8 @@ type Reader = () => Promise<{ type: string; buffer: ArrayBuffer }>;
 
 export interface Converted {
   html: string;
+  /** True when the page was drawn by `docx-render.ts` (pages, fonts, table borders); false for the plain mammoth fallback. */
+  styled: boolean;
   /** The readers of the pictures, by number. */
   readers: Reader[];
   buffer: ArrayBuffer;
@@ -44,7 +47,17 @@ export async function convertDocx(buffer: ArrayBuffer, media?: (path: string) =>
     return Promise.resolve({ src: PLACEHOLDER, id: `${IMAGE_ID_PREFIX}${i}` } as { src: string });
   });
   const out = await mammoth.convertToHtml({ arrayBuffer: buffer }, { convertImage });
-  return { html: out.value, readers, buffer };
+  return { html: out.value, styled: false, readers, buffer };
+}
+
+/** The slim zip drawn as pages; when that fails (an odd file), mammoth's plainer page from the same zip. */
+async function convertSlim(slim: SlimDocx): Promise<Converted> {
+  try {
+    const out = await renderWord({ part: slim.readPart, media: slim.readMedia });
+    return { html: out.html, styled: true, readers: out.readers, buffer: slim.slim };
+  } catch {
+    return convertDocx(slim.slim, slim.readMedia);
+  }
 }
 
 /**
@@ -54,13 +67,17 @@ export async function convertDocx(buffer: ArrayBuffer, media?: (path: string) =>
 export async function convertFrom(reader: RangeReader | null, whole: () => Promise<ArrayBuffer>): Promise<Converted> {
   if (reader) {
     try {
-      const slim = await openSlim(reader);
-      return await convertDocx(slim.slim, slim.readMedia);
+      return await convertSlim(await openSlim(reader));
     } catch {
       /* not readable by ranges: read the whole file below */
     }
   }
-  return convertDocx(await whole());
+  const buffer = await whole();
+  try {
+    return await convertSlim(await openSlim(bytesReader(new Uint8Array(buffer))));
+  } catch {
+    return convertDocx(buffer);
+  }
 }
 
 export async function rawText(buffer: ArrayBuffer): Promise<string> {

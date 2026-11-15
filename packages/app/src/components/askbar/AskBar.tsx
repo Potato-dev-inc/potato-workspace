@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKe
 import { tauriAskbarApi, clipboardChipLabel, type AskbarAgent, type AskbarApi, type AskbarClipboard, type AskResult } from '../../lib/askbar';
 import { splitBlocks } from '../../lib/askbar-text';
 import { DotSpinner } from '../cockpit/DotSpinner';
+import { useDismissable } from '../../hooks/useDismissable';
 
 /** `code` between backticks shows as code, without the backticks. */
 function inlineCode(text: string): ReactNode[] {
@@ -170,14 +171,8 @@ export function AskBar({ api = tauriAskbarApi }: { api?: AskbarApi }): JSX.Eleme
   }, [api, menuOpen]);
 
   // Click outside the agent menu closes it.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (!agentWrapRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [menuOpen]);
+  // (Escape is handled above: it closes the menu first, then hides the bar.)
+  useDismissable(menuOpen, { inside: [agentWrapRef], anchor: agentWrapRef, ignore: ['escape'], onDismiss: () => setMenuOpen(false) });
 
   // "Copied" reverts after 1.5s.
   useEffect(() => {

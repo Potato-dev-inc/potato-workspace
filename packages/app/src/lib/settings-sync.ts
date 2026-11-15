@@ -4,6 +4,7 @@
 //   - `settings://show`     the window was brought back (Rust emits it with the tab to open)
 //   - window focus / the page becoming visible again
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { isThemeChoice, type ThemeChoice } from './theme-tone';
 
 export type SettingsRefreshReason = 'changed' | 'show' | 'focus';
 
@@ -50,13 +51,13 @@ export function subscribeSettingsRefresh(onRefresh: (info: SettingsRefreshInfo) 
 }
 
 /** Follow theme changes saved from any window (Settings, the cockpit toggle). Returns the unsubscribe function. */
-export function subscribeSettingsTheme(onTheme: (theme: 'dark' | 'light') => void): () => void {
+export function subscribeSettingsTheme(onTheme: (theme: ThemeChoice) => void): () => void {
   if (!inTauri()) return () => undefined;
   let disposed = false;
   let unlisten: UnlistenFn | undefined;
   void listen<{ theme?: unknown } | null>('settings://changed', (event) => {
     const theme = event.payload?.theme;
-    if (theme === 'dark' || theme === 'light') onTheme(theme);
+    if (isThemeChoice(theme)) onTheme(theme);
   })
     .then((un) => (disposed ? un() : (unlisten = un)))
     .catch(() => undefined);

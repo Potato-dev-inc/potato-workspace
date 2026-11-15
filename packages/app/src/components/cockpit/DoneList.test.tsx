@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetComposerInserts, takeComposerInserts } from '../../lib/composer-insert';
+import { setDoneCardOn } from '../../lib/done-card';
 import type { ChatTurn, ToolStep } from '../../lib/sessionChatModel';
 import { DoneListFor, worthChecking } from './DoneList';
 
@@ -62,10 +63,49 @@ describe('Done list', () => {
     expect(takeComposerInserts('p1')).toBe('The check "Tests pass" did not pass (2 failed). Please fix it and run it again.');
   });
 
-  it('a line nothing checked says "Not checked"', async () => {
+  it('a line nothing checked says "Not checked" once opened; until then it is one small line', async () => {
     await show(turn(step('1', 'echo hi', 'ok'), step('2', 'git status', 'ok')));
+    expect(rows()).toHaveLength(0);
+    expect(host.querySelector('.ck-done-summary')?.textContent).toBe('Done means: 2 checks · not checked');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="done-toggle"]')!.click());
     expect(rows().map((r) => r.dataset.state)).toEqual(['unchecked', 'unchecked']);
     expect(rows()[0].textContent).toContain('Not checked');
+    // Fold it again.
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="done-toggle"]')!.click());
+    expect(rows()).toHaveLength(0);
+  });
+
+  it('opens by itself once a check has a result, and the line says how it went', async () => {
+    await show(turn(step('1', 'npm run build', 'ok'), step('2', 'npm test', 'error', '2 failed')));
+    expect(rows()).toHaveLength(2);
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="done-toggle"]')!.click());
+    expect(host.querySelector('.ck-done-summary')?.textContent).toBe('Done means: 2 checks · 1 failed');
+  });
+
+  it('the X hides it for this chat only', async () => {
+    await show(turn(step('1', 'npm test', 'ok')));
+    await act(async () => host.querySelector<HTMLButtonElement>('.ck-done-x')!.click());
+    expect(host.querySelector('[data-testid="done-list"]')).toBeNull();
+    await act(async () => root.render(<DoneListFor paneId="p2" cwd="C:/work/shop" turn={turn(step('1', 'npm test', 'ok'))} />));
+    expect(host.querySelector('[data-testid="done-list"]')).not.toBeNull();
+  });
+
+  it('"Don\'t show for this project" hides it in every chat of that project', async () => {
+    await show(turn(step('1', 'npm test', 'ok')));
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="done-hide-project"]')!.click());
+    expect(host.querySelector('[data-testid="done-list"]')).toBeNull();
+    await act(async () => root.render(<DoneListFor paneId="p9" cwd="C:/work/shop" turn={turn(step('1', 'npm test', 'ok'))} />));
+    expect(host.querySelector('[data-testid="done-list"]')).toBeNull();
+    await act(async () => root.render(<DoneListFor paneId="p9" cwd="C:/work/other" turn={turn(step('1', 'npm test', 'ok'))} />));
+    expect(host.querySelector('[data-testid="done-list"]')).not.toBeNull();
+  });
+
+  it('the global switch in Settings turns it off for everyone', async () => {
+    setDoneCardOn(false);
+    await show(turn(step('1', 'npm test', 'ok')));
+    expect(host.querySelector('[data-testid="done-list"]')).toBeNull();
+    await act(async () => setDoneCardOn(true));
+    expect(host.querySelector('[data-testid="done-list"]')).not.toBeNull();
   });
 
   it('shows nothing for a turn that only talked, and nothing before there is a turn', async () => {

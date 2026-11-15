@@ -41,12 +41,68 @@ async function step(id: string, run: () => Promise<CheckRow[]> | CheckRow[]): Pr
   }
 }
 
-export async function runAllChecks(deps: SetupCheckDeps, ctx: SetupCheckContext): Promise<CheckRow[]> {
-  const rows: CheckRow[] = [];
-  rows.push(...(await step('bridge', () => checkBridge(ctx))));
-  rows.push(...(await step('agents', async () => checkAgents(await deps.agentHealth(), deps.tests?.() ?? {}))));
-  if (ctx.labs.acp_chat_enabled === true) {
-    rows.push(...(await step('addons', async () => checkAddons(await deps.addons()))));
+/** The checks, one group each. Groups run side by side and report one by one, so fast ones show first. */
+export type CheckGroupId = 'bridge' | 'agents' | 'addons';
+
+export interface GroupResult {
+  id: CheckGroupId;
+  rows: CheckRow[];
+  /** How long the group took, in milliseconds (the page logs it, so a slow check is easy to find). */
+  ms: number;
+  timedOut: boolean;
+}
+
+export interface RunOptions {
+  /** Called first, with the checks that are about to run, in list order. */
+  onStart?: (ids: CheckGroupId[]) => void;
+  /** Called once per group, the moment it is done. */
+  onGroup?: (group: GroupResult) => void;
+  /** A group that has not answered by then says so instead of hanging. */
+  timeoutMs?: number;
+}
+
+/** Longest a single check may take before its row says it did not answer. */
+export const CHECK_TIMEOUT_MS = 8000;
+
+/** The groups that run for this context, in the order their rows are listed. */
+export function groupsFor(ctx: SetupCheckContext): CheckGroupId[] {
+  return ctx.labs.acp_chat_enabled === true ? ['bridge', 'agents', 'addons'] : ['bridge', 'agents'];
+}
+
+/** The row for a check that did not answer in time: says why, and what to do. */
+export function timedOutRow(id: CheckGroupId): CheckRow {
+  return { id: `${id}-slow`, status: 'warn', sentence: t('overview.check.tooSlow', { name: t(`overview.check.group.${id}`) }), fix: null };
+}
+
+async function runGroup(id: CheckGroupId, work: () => Promise<CheckRow[]> | CheckRow[], timeoutMs: number): Promise<GroupResult> {
+  const started = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<'late'>((resolve) => {
+    timer = setTimeout(() => resolve('late'), timeoutMs);
+  });
+  try {
+    const out = await Promise.race([step(id, work), late]);
+    return out === 'late' ? { id, rows: [timedOutRow(id)], ms: Date.now() - started, timedOut: true } : { id, rows: out, ms: Date.now() - started, timedOut: false };
+  } finally {
+    clearTimeout(timer);
   }
-  return rows;
+}
+
+export async function runAllChecks(deps: SetupCheckDeps, ctx: SetupCheckContext, options: RunOptions = {}): Promise<CheckRow[]> {
+  const timeoutMs = options.timeoutMs ?? CHECK_TIMEOUT_MS;
+  const work: Record<CheckGroupId, () => Promise<CheckRow[]> | CheckRow[]> = {
+    bridge: () => checkBridge(ctx),
+    agents: async () => checkAgents(await deps.agentHealth(), deps.tests?.() ?? {}),
+    addons: async () => checkAddons(await deps.addons()),
+  };
+  const ids = groupsFor(ctx);
+  options.onStart?.(ids);
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      const group = await runGroup(id, work[id], timeoutMs);
+      options.onGroup?.(group);
+      return group;
+    }),
+  );
+  return results.flatMap((g) => g.rows);
 }

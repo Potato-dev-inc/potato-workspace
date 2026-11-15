@@ -95,6 +95,7 @@ fn profile(w: &World2, agent: &str, name: &str) -> String {
             max_tokens: None,
             keep_awake: true,
             has_key: false,
+            show_usage: false,
         })
         .unwrap();
     w.maya.lend.key_set(&p.id, LENDER_KEY).unwrap();
@@ -342,6 +343,7 @@ async fn codex_signed_in_with_chatgpt_cannot_be_offered_and_the_screen_data_says
             max_tokens: None,
             keep_awake: true,
             has_key: false,
+            show_usage: false,
         })
         .unwrap_err();
     assert!(refused.contains("ChatGPT is not supported yet"), "{refused}");

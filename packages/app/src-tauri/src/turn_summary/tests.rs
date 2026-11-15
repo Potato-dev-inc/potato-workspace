@@ -95,6 +95,7 @@ fn synthetic_diff() -> Vec<FileChange> {
         status: "M".into(),
         added,
         deleted,
+        line_endings_only: false,
         binary: false,
     };
     vec![change("src/a.ts", 40, 5), change("src/b.ts", 30, 4), change("README.md", 10, 3), change("package.json", 6, 0)]
@@ -744,6 +745,7 @@ fn flickers_are_not_turns_and_do_not_replace_the_last_turn() {
         added: 1,
         deleted: 1,
         binary: false,
+        line_endings_only: false,
     }]));
     let edit = finish_idle(&tracker, &env, 37_757, 203_604);
     assert_eq!(edit.turn, 3);

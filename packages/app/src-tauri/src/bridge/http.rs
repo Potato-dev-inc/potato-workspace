@@ -398,6 +398,12 @@ pub(super) fn handle_connection(
         return Ok(());
     }
 
+    // A share link: `GET /share/{secret}` is a page, not JSON, and is public (the secret is the credential). It reads one
+    // version of one artifact and touches nothing else; every other path goes on to the usual rules below.
+    if let Some(page) = crate::artifacts::respond_to_share(&crate::artifacts::share_index_file(), method, &segments, crate::artifacts::now_ms()) {
+        return write_share_page(stream.stream, &page);
+    }
+
     let bridge_tool = bridge_tool_name(method, &segments);
     if let Some(tool) = &bridge_tool {
         crate::event_log::append_bridge_event(SystemEvent::McpToolCalled { tool: tool.clone() });
@@ -561,6 +567,32 @@ fn write_json_with(
         .map_err(|err| format!("write response: {err}"))
 }
 
+/// The bytes of a share page reply (`artifacts::SharePage`): its own headers, no CORS (the page is opened, never fetched).
+pub(super) fn share_page_bytes(page: &crate::artifacts::SharePage) -> Vec<u8> {
+    let reason = match page.status {
+        200 => "OK",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        410 => "Gone",
+        _ => "OK",
+    };
+    let mut head = format!("HTTP/1.1 {} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n", page.status, page.body.len());
+    for (name, value) in &page.headers {
+        // Values are built here from fixed text; a line break could never get in, but fail closed anyway.
+        if !value.contains(['\r', '\n']) {
+            head.push_str(&format!("{name}: {value}\r\n"));
+        }
+    }
+    head.push_str("\r\n");
+    let mut out = head.into_bytes();
+    out.extend_from_slice(&page.body);
+    out
+}
+
+fn write_share_page(stream: &mut TcpStream, page: &crate::artifacts::SharePage) -> Result<(), String> {
+    stream.write_all(&share_page_bytes(page)).map_err(|err| format!("write share page: {err}"))
+}
+
 pub(super) fn request_session(headers: &str) -> Option<&str> {
     let session = headers.lines().find_map(|line| {
         let (key, value) = line.split_once(':')?;
@@ -592,6 +624,14 @@ pub(super) fn request_session(headers: &str) -> Option<&str> {
     });
     if let Some(pane) = pane {
         crate::mcp_sessions::note_session_pane(session, pane);
+    }
+    // The tool catalog the MCP program was started with, only ever shown ("Tools are out of date").
+    let catalog = headers.lines().find_map(|line| {
+        let (key, value) = line.split_once(':')?;
+        key.eq_ignore_ascii_case("x-potato-workspace-catalog").then(|| value.trim())
+    });
+    if let Some(catalog) = catalog {
+        crate::mcp_sessions::note_session_catalog(session, catalog);
     }
     Some(session)
 }
@@ -739,5 +779,87 @@ mod body_limit_tests {
         assert!(ConnectionSlot::take_from(&LOCAL, 1).is_none(), "second is refused at the limit");
         drop(a);
         assert!(ConnectionSlot::take_from(&LOCAL, 1).is_some());
+    }
+}
+
+#[cfg(test)]
+mod share_wire_tests {
+    use super::*;
+
+    /// A loopback listener that runs the same head, gate and share-page steps as `handle_connection`, with its own index file.
+    fn spawn_share_listener(index: std::path::PathBuf, now_ms: u64) -> std::net::SocketAddr {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind test bridge");
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                let index = index.clone();
+                std::thread::spawn(move || {
+                    let mut stream = stream;
+                    let Ok(Some(head)) = read_head(&mut stream) else { return };
+                    let gated = gate(&head.req);
+                    let reply = match gated {
+                        Err((status, value)) => {
+                            let mut c = CorsStream { stream: &mut stream, cors: "" };
+                            let _ = write_json_cors(&mut c, status, &value);
+                            return;
+                        }
+                        Ok(_) => {
+                            let (path, _) = split_target(&head.req.target);
+                            let raw: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
+                            let segments = mobile_pairing::normalize_bridge_segments(&raw).to_vec();
+                            crate::artifacts::respond_to_share(&index, &head.req.method, &segments, now_ms)
+                        }
+                    };
+                    match reply {
+                        Some(page) => {
+                            let _ = write_share_page(&mut stream, &page);
+                        }
+                        None => {
+                            let mut c = CorsStream { stream: &mut stream, cors: "" };
+                            let _ = write_json_cors(&mut c, 200, &json!({ "reached_a_json_route": true }));
+                        }
+                    }
+                });
+            }
+        });
+        addr
+    }
+
+    fn send(addr: std::net::SocketAddr, raw: &str) -> String {
+        let mut s = TcpStream::connect(addr).unwrap();
+        s.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        s.write_all(raw.as_bytes()).unwrap();
+        let mut out = String::new();
+        let _ = s.read_to_string(&mut out);
+        out
+    }
+
+    #[test]
+    fn a_remote_caller_reads_a_shared_page_with_no_token_and_nothing_else() {
+        use crate::artifacts::{add_version_for_tests, create_link, ArtifactKind};
+        let dir = std::env::temp_dir().join(format!("pm-share-wire-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let index = dir.join("shares.json");
+        add_version_for_tests(&dir, "report", "Report", ArtifactKind::Html, "<h1>hello from a share</h1>");
+        add_version_for_tests(&dir, "other", "Other", ArtifactKind::Html, "<h1>not shared</h1>");
+        let now = 1_800_000_000_000;
+        let link = create_link(&index, &dir, "report", None, None, now).unwrap();
+        let addr = spawn_share_listener(index, now + 10);
+        // Through the tunnel: the proxy's marker and a foreign Host, no pairing token.
+        let remote = |target: &str, method: &str| format!("{method} {target} HTTP/1.1\r\nHost: abc.trycloudflare.com\r\nX-Potato-Workspace-Proxied: 1\r\nConnection: close\r\n\r\n");
+        let ok = send(addr, &remote(&format!("/bridge/share/{}", link.token), "GET"));
+        assert!(ok.starts_with("HTTP/1.1 200"), "{ok}");
+        assert!(ok.contains("hello from a share") && !ok.contains("not shared"));
+        assert!(ok.to_ascii_lowercase().contains("content-security-policy: sandbox allow-scripts"), "{ok}");
+        assert!(ok.contains("Content-Length: 27\r\n"), "{ok}");
+        // Every other route still wants the token.
+        for (target, method) in [("/bridge/panes/1/artifacts/other", "GET"), ("/bridge/panes", "GET"), ("/bridge/artifacts/show", "POST"), (&format!("/bridge/share/{}", link.token), "POST"), (&format!("/bridge/share/{}/other", link.token), "GET")] {
+            let refused = send(addr, &remote(target, method));
+            assert!(refused.starts_with("HTTP/1.1 401"), "{method} {target}: {refused}");
+        }
+        // An unknown secret is a plain 404 page.
+        let none = send(addr, &remote(&format!("/bridge/share/{}", "z".repeat(32)), "GET"));
+        assert!(none.starts_with("HTTP/1.1 404"), "{none}");
     }
 }

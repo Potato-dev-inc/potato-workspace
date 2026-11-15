@@ -59,6 +59,28 @@ pub struct Inbound {
     pub reset: bool,
 }
 
+
+/// The error text of [`TeamTransport::publish_invite_link`] when the relay is an older deploy.
+pub const UPDATE_WORKER: &str = "update-worker";
+
+/// What an invite link keeps on the Worker.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InviteLinkRequest {
+    /// Opaque to the Worker: the invite link and its code, as JSON text.
+    pub payload: String,
+    pub team_name: String,
+    pub inviter: String,
+    /// How long it should live; the Worker caps it at 24 hours.
+    pub ttl_ms: u64,
+}
+
+/// A link the Worker made: where the page is, and when it stops working.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InviteLinkMade {
+    pub url: String,
+    pub expires_at_ms: u64,
+}
+
 pub trait TeamTransport: Send + Sync {
     /// Short name for logs and Settings: `folder` or `relay`.
     fn kind(&self) -> &'static str;
@@ -82,6 +104,12 @@ pub trait TeamTransport: Send + Sync {
     /// Relay only: which devices may use the mailbox.
     fn set_acl(&self, _acl: &SignedAcl) -> Result<(), TransportError> {
         Ok(())
+    }
+    /// Relay only: leave an invite on the Potato Worker and get a one-time link for it (`/join/<code>`).
+    /// `Ok(None)` when this transport has no such thing (a shared folder). An error with
+    /// [`UPDATE_WORKER`] means the relay is an older deploy that cannot do it.
+    fn publish_invite_link(&self, _request: &InviteLinkRequest) -> Result<Option<InviteLinkMade>, TransportError> {
+        Ok(None)
     }
     /// How messages arrive right now, for Settings ("live", "polling", "connecting" before the first connect or poll finishes, "denied" when the
     /// relay turned this device away, "offline" when it cannot be reached).

@@ -188,7 +188,7 @@ fn coalesced_two() {
 }
 
 fn item(id: &str) -> Option<super::hub::ItemRef> {
-    Some(super::hub::ItemRef { id: id.into(), occurrence: 7, fingerprint: "f3c1f3c1f3c1f3c1".into() })
+    Some(super::hub::ItemRef { id: id.into(), occurrence: 7, fingerprint: "f3c1f3c1f3c1f3c1".into(), ..Default::default() })
 }
 
 fn info(text: &str) -> Option<PromptInfo> {

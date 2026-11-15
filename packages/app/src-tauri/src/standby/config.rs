@@ -22,11 +22,11 @@ pub struct BackendToggle {
 }
 
 /// Most warm workers one provider may keep.
-pub const MAX_WARM_PER_PROVIDER: u8 = 2;
+pub const MAX_WARM_PER_PROVIDER: u8 = 10;
 /// Most warm workers across every provider.
-pub const MAX_PRELOAD_TOTAL: usize = 8;
+pub const MAX_PRELOAD_TOTAL: usize = 10;
 
-/// Settings > Preload: keep `providers[agent]` (0-2) warm visible workers for each provider, in the
+/// Settings > Preload: keep `providers[agent]` (0-10) warm visible workers for each provider, in the
 /// default project folder, so opening a pane for that provider is instant.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -94,11 +94,11 @@ impl StandbyConfig {
     /// Pull every field into its supported range (a hand-edited file or an old UI must not be
     /// able to start 50 CLIs) and drop toggles a backend cannot honour.
     pub fn clamped(mut self) -> Self {
-        self.max_total = self.max_total.min(8);
+        self.max_total = self.max_total.min(MAX_PRELOAD_TOTAL);
         self.recent_projects = self.recent_projects.clamp(1, 5);
         self.recent_hours = self.recent_hours.clamp(1, 24 * 14);
         self.idle_timeout_secs = self.idle_timeout_secs.clamp(5, 24 * 3600);
-        // Visible standbys belong to Preload; only its supported providers survive, counts 0-2, total capped.
+        // Visible standbys belong to Preload; only its supported providers survive, counts 0-10, total capped.
         let mut budget = MAX_PRELOAD_TOTAL;
         let providers = std::mem::take(&mut self.preload.providers);
         for (agent, count) in providers {
@@ -327,7 +327,7 @@ mod tests {
 
     #[test]
     fn clamping_bounds_counts_and_drops_unsupported_providers() {
-        let config = preload(&[("claude", 9), ("nonsense", 1), ("opencode_native", 1), ("cursor_agent", 0)]);
+        let config = preload(&[("claude", 99), ("nonsense", 1), ("opencode_native", 1), ("cursor_agent", 0)]);
         assert_eq!(config.preload.providers.get("claude"), Some(&MAX_WARM_PER_PROVIDER));
         assert!(!config.preload.providers.contains_key("nonsense"));
         assert!(!config.preload.providers.contains_key("opencode_native"), "no standby support");
@@ -338,7 +338,7 @@ mod tests {
         config.recent_projects = 0;
         config.idle_timeout_secs = 0;
         let config = config.clamped();
-        assert_eq!(config.max_total, 8);
+        assert_eq!(config.max_total, MAX_PRELOAD_TOTAL);
         assert_eq!(config.recent_projects, 1);
         assert_eq!(config.idle_timeout_secs, 5);
         assert!(!config.backends.contains_key("nonsense"));

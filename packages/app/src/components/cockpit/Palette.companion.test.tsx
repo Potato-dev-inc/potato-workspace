@@ -81,24 +81,36 @@ describe('palette: companions', () => {
     expect(onNewCompanion).toHaveBeenCalledTimes(1);
   });
 
-  it('offers "Open {name}" for each companion, and opens it', async () => {
+  it('offers "Go to companion: {name}" for each companion, and opens it', async () => {
     const onOpenCompanion = vi.fn();
     await open({ companions: [companion], onOpenCompanion });
-    const row = rowFor('Open Mochi');
+    const row = rowFor('Go to companion: Mochi');
     expect(row).toBeTruthy();
     act(() => row!.click());
     expect(onOpenCompanion).toHaveBeenCalledWith('mochi');
   });
 
-  it("lists the companion's pane once, as Open {name}, not as a second pane", async () => {
+  it("lists the companion's pane once, as Go to companion: {name}, not as a second pane", async () => {
     await open({ companions: [companion], onOpenCompanion: vi.fn() });
     const titles = rows().map((r) => r.querySelector('.ck-palette-title')?.textContent);
     expect(titles.filter((t) => t === 'Mochi')).toHaveLength(0);
-    expect(titles.filter((t) => t === 'Open Mochi')).toHaveLength(1);
+    expect(titles.filter((t) => t === 'Go to companion: Mochi')).toHaveLength(1);
   });
 
   it('with no companion backend, shows neither entry', async () => {
     await open({ companions: null });
-    expect(rowFor('Open Mochi')).toBeUndefined();
+    expect(rowFor('Go to companion: Mochi')).toBeUndefined();
+  });
+});
+
+describe('palette: more than one companion', () => {
+  it('has one "Go to companion" row for each of them', async () => {
+    const onOpenCompanion = vi.fn();
+    await open({ companions: [companion, { ...companion, id: 'bit', name: 'Bit', avatar: 'bit' }], onOpenCompanion });
+    expect(rowFor('Go to companion: Mochi')).toBeTruthy();
+    const bit = rowFor('Go to companion: Bit');
+    expect(bit).toBeTruthy();
+    act(() => bit!.click());
+    expect(onOpenCompanion).toHaveBeenCalledWith('bit');
   });
 });

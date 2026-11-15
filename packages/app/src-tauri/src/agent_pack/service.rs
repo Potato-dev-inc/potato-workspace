@@ -67,6 +67,19 @@ pub fn call(env: &Env, action: &str) -> Result<Value, String> {
     }
 }
 
+/// `plan::refresh_stale` for the given env (custom hosts the person saved are included).
+pub fn refresh_stale(env: &Env) -> Result<Vec<String>, String> {
+    let hosts = custom::load(&env.options.state_dir);
+    let mut agents = env.agents.clone();
+    custom::merge(&mut agents, &hosts);
+    plan::refresh_stale(&agents, &env.options)
+}
+
+/// App start: put right the MCP entries this app wrote earlier that start an older program. Never fails the start.
+pub fn refresh_stale_live() -> Vec<String> {
+    Env::live().and_then(|env| refresh_stale(&env)).unwrap_or_default()
+}
+
 pub fn call_live(action: &str) -> Result<Value, String> {
     call(&Env::live()?, action)
 }

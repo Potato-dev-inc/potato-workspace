@@ -179,6 +179,20 @@ impl oauth::UsageHttp for NoHttp {
 }
 
 fn run_build(agents: &[AgentUsage], accounts: &[Account], limits: &[Entry], probe: &dyn Probe, home: &Path, now: SystemTime) -> UsageSnapshot {
+    run_build_lend(agents, accounts, limits, probe, home, now, &LendView::default(), &|_, _, _| None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_build_lend(
+    agents: &[AgentUsage],
+    accounts: &[Account],
+    limits: &[Entry],
+    probe: &dyn Probe,
+    home: &Path,
+    now: SystemTime,
+    lend: &LendView,
+    identity: &dyn Fn(&str, &Path, bool) -> Option<String>,
+) -> UsageSnapshot {
     let env = |_: &str| None;
     let state = Mutex::new(Default::default());
     let inputs = Inputs {
@@ -193,6 +207,8 @@ fn run_build(agents: &[AgentUsage], accounts: &[Account], limits: &[Entry], prob
         may_fetch: false,
         force: false,
         oauth_state: &state,
+        lend,
+        identity,
     };
     build(agents, &inputs)
 }
@@ -331,5 +347,123 @@ fn the_snapshot_serialises_the_fields_the_strip_reads() {
         assert!(window.get(key).is_some(), "window has {key}");
     }
     assert!(json["refreshed_at_ms"].as_u64().unwrap() > 0);
+    let _ = std::fs::remove_dir_all(user);
+}
+
+// ---- lend profiles and borrowed accounts in the usage bar (1.1.1)
+
+/// A lend sign-in folder (signed in, with numbers) under `user`.
+fn lend_account(user: &Path, id: &str, internal_label: &str) -> Account {
+    let home = user.join(id);
+    let day = home.join("sessions").join("2026").join("01").join("02");
+    std::fs::create_dir_all(&day).unwrap();
+    std::fs::write(home.join("auth.json"), "{}").unwrap();
+    std::fs::write(day.join("rollout-2026-01-02T03-00-00-synthetic.jsonl"), ROLLOUT).unwrap();
+    Account { id: id.into(), agent_id: "codex".into(), label: internal_label.into(), home: home.to_string_lossy().into_owned(), lend_only: true }
+}
+
+fn profile(account: &str, name: &str, show: bool) -> LendProfileView {
+    LendProfileView { account_id: account.into(), name: name.into(), show_usage: show }
+}
+
+/// Who is signed in, by folder name: the main login (`.codex`) and the lend folders.
+fn who(table: &'static [(&'static str, &'static str)]) -> impl Fn(&str, &Path, bool) -> Option<String> {
+    move |_, home, _| {
+        let name = home.file_name()?.to_string_lossy().into_owned();
+        table.iter().find(|(k, _)| *k == name).map(|(_, v)| v.to_string())
+    }
+}
+
+fn build_lend(accounts: &[Account], lend: &LendView, identity: &dyn Fn(&str, &Path, bool) -> Option<String>, user: &Path) -> UsageSnapshot {
+    let codex = agent("codex", "Codex", CODEX_TOML, Some(scheme("CODEX_HOME", "auth.json")));
+    run_build_lend(&[codex], accounts, &[], &probe(None), user, early(), lend, identity)
+}
+
+fn main_codex(user: &Path) {
+    let main = user.join(".codex");
+    let day = main.join("sessions").join("2026").join("01").join("02");
+    std::fs::create_dir_all(&day).unwrap();
+    std::fs::write(main.join("auth.json"), "{}").unwrap();
+    std::fs::write(day.join("rollout-2026-01-02T03-00-00-synthetic.jsonl"), ROLLOUT).unwrap();
+}
+
+const SAME: &[(&str, &str)] = &[(".codex", "ren@example.com"), ("lend_a", "ren@example.com"), ("lend_b", "ren@example.com")];
+const DIFFERENT: &[(&str, &str)] = &[(".codex", "ren@example.com"), ("lend_a", "work@example.com")];
+
+#[test]
+fn two_lend_profiles_on_the_main_account_are_not_extra_rows_or_chips() {
+    let user = temp("lend-same");
+    main_codex(&user);
+    let accounts = [lend_account(&user, "lend_a", "Lend Codex"), lend_account(&user, "lend_b", "Lend Codex 3")];
+    // Both are signed in to the SAME account as the main sign-in; their profiles keep "Show usage" off (the default).
+    let lend = LendView { profiles: vec![profile("lend_a", "Work account", false), profile("lend_b", "Team", false)], borrowed: vec![] };
+    let snap = build_lend(&accounts, &lend, &who(SAME), &user);
+    assert_eq!(snap.rows.len(), 1, "{:?}", snap.rows.iter().map(|r| &r.account_label).collect::<Vec<_>>());
+    assert_eq!(snap.rows[0].account_id, None);
+    let json = serde_json::to_string(&snap).unwrap();
+    assert!(!json.contains("Lend Codex"), "an internal label never reaches the bar: {json}");
+    let _ = std::fs::remove_dir_all(user);
+}
+
+#[test]
+fn profiles_that_show_usage_on_one_account_are_one_row_marked_as_the_main_account_and_named_by_the_profile() {
+    let user = temp("lend-on");
+    main_codex(&user);
+    let accounts = [lend_account(&user, "lend_a", "Lend Codex"), lend_account(&user, "lend_b", "Lend Codex 3")];
+    let lend = LendView { profiles: vec![profile("lend_a", "Work account", true), profile("lend_b", "Team", true)], borrowed: vec![] };
+    let snap = build_lend(&accounts, &lend, &who(SAME), &user);
+    assert_eq!(snap.rows.len(), 2, "main plus one lend row");
+    let lend_row = &snap.rows[1];
+    assert_eq!(lend_row.account_label.as_deref(), Some("Work account"));
+    assert_eq!(lend_row.link, Some("lend"));
+    assert!(lend_row.same_as_main);
+    let _ = std::fs::remove_dir_all(user);
+}
+
+#[test]
+fn a_lend_profile_on_a_different_account_is_its_own_row_named_by_the_profile() {
+    let user = temp("lend-diff");
+    main_codex(&user);
+    let accounts = [lend_account(&user, "lend_a", "Lend Codex 2")];
+    let lend = LendView { profiles: vec![profile("lend_a", "Work account", true)], borrowed: vec![] };
+    let snap = build_lend(&accounts, &lend, &who(DIFFERENT), &user);
+    assert_eq!(snap.rows.len(), 2);
+    assert_eq!(snap.rows[1].account_label.as_deref(), Some("Work account"));
+    assert!(!snap.rows[1].same_as_main);
+    // The same profile with its toggle off is not a row at all.
+    let off = LendView { profiles: vec![profile("lend_a", "Work account", false)], borrowed: vec![] };
+    assert_eq!(build_lend(&accounts, &off, &who(DIFFERENT), &user).rows.len(), 1);
+    let _ = std::fs::remove_dir_all(user);
+}
+
+fn borrowed(id: &str, name: &str, shared: bool) -> BorrowedView {
+    let w = readers::Window { name: "5-hour".into(), used_percent: 40.0, minutes: Some(300), resets_at_ms: Some(now_ms(early()) + 3_600_000), reset_since: false };
+    BorrowedView { grant_id: id.into(), agent_id: "codex".into(), name: name.into(), shared: shared.then(|| Shared { plan: None, windows: vec![w], at_ms: now_ms(early()) }) }
+}
+
+#[test]
+fn a_borrowed_account_with_shared_numbers_is_its_own_row_named_by_the_lenders_profile() {
+    let user = temp("lend-borrowed");
+    main_codex(&user);
+    let lend = LendView { profiles: vec![], borrowed: vec![borrowed("g1", "Ren's Work account (borrowed)", true)] };
+    let snap = build_lend(&[], &lend, &|_, _, _| None, &user);
+    assert_eq!(snap.rows.len(), 2);
+    let row = &snap.rows[1];
+    assert_eq!(row.link, Some("borrowed"));
+    assert_eq!(row.account_label.as_deref(), Some("Ren's Work account (borrowed)"));
+    assert_eq!(row.state, "ok");
+    assert_eq!(row.windows[0].used_percent, 40.0);
+    let _ = std::fs::remove_dir_all(user);
+}
+
+#[test]
+fn borrowed_accounts_whose_lender_shares_nothing_say_so_once() {
+    let user = temp("lend-unshared");
+    main_codex(&user);
+    let lend = LendView { profiles: vec![], borrowed: vec![borrowed("g1", "A (borrowed)", false), borrowed("g2", "B (borrowed)", false)] };
+    let snap = build_lend(&[], &lend, &|_, _, _| None, &user);
+    assert_eq!(snap.rows.len(), 2, "main and ONE not-shared row, not one per grant");
+    assert_eq!(snap.rows[1].state, "unknown");
+    assert!(snap.rows[1].reason.as_deref().unwrap_or("").contains("does not share"));
     let _ = std::fs::remove_dir_all(user);
 }

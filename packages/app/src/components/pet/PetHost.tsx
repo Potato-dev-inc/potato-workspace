@@ -25,6 +25,8 @@ export interface PetHostProps {
   lessMotion: boolean;
   api: PetApi;
   env: PetEnv;
+  /** The default companion's name: shown on the pet (hover and screen reader). Missing: just the Potato. */
+  companionName?: string;
   /** A hook for tests and the headless pictures. */
   onModel?: (model: ReturnType<typeof usePetController>['model']) => void;
 }
@@ -95,8 +97,9 @@ export function PetHost(props: PetHostProps) {
         onOff={() => api.patch({ desktop_pet_enabled: false })}
         onExpandedChange={onExpandedChange}
         onTouch={() => dispatch({ type: 'touch' })}
+        companionName={props.companionName}
       />
     ),
-    [view, size, props.quietChoice, openAgent, dispatch, onDragStart, api, onExpandedChange],
+    [view, size, props.companionName, props.quietChoice, openAgent, dispatch, onDragStart, api, onExpandedChange],
   );
 }

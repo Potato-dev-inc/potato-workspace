@@ -251,7 +251,11 @@ pub fn pane_previews() -> Value {
 /// Agent doctor quick check: installed? version? for every CLI agent (no tokens spent).
 #[tauri::command(async)]
 pub fn agents_health() -> Value {
-    serde_json::json!({ "agents": crate::agent_health::check_all() })
+    let began = std::time::Instant::now();
+    let agents = crate::agent_health::check_all();
+    // Only a number and a count: the Speed report reads it back from the log.
+    tracing::info!("startup_setup_check ms={} agents={}", began.elapsed().as_millis(), agents.len());
+    serde_json::json!({ "agents": agents })
 }
 
 /// Agent doctor deep check for one agent: a bounded read-only "Reply with exactly OK".

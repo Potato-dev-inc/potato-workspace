@@ -9,6 +9,7 @@ import { usePanePreviews, type PreviewMap } from '../lib/pane-preview';
 import { cockpitApi, type PanePrompt, type SpawnStageEvent, type UiMode } from '../lib/cockpit-api';
 import { applyTheme, loadSettings, patchSettings, type AppTheme } from '../lib/settings';
 import { subscribeSettingsTheme } from '../lib/settings-sync';
+import { toggledTheme } from '../lib/theme-tone';
 import { tauri } from '../lib/tauri';
 import { useBridge, type BridgeApi } from './useBridge';
 import { useQuestions, type QuestionsApi } from './useQuestions';
@@ -451,7 +452,7 @@ export function useCockpit(): CockpitApi {
   }, [notify]);
 
   const toggleTheme = useCallback(async () => {
-    const next: AppTheme = theme === 'dark' ? 'light' : 'dark';
+    const next: AppTheme = toggledTheme(theme);
     setTheme(next);
     applyTheme(next);
     try {

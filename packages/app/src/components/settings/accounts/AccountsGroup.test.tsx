@@ -173,4 +173,22 @@ describe('AccountsGroup', () => {
     await render(api);
     expect(host.innerHTML).toBe('');
   });
+  it('lend sign-ins are grouped under "Used for lending" by their profile name, never "Lend Claude 3", and are not helper choices', async () => {
+    const own: Account = { id: 'own1', agent_id: 'claude', label: 'Personal', home: 'C:/a' };
+    const l1: Account = { id: 'l1', agent_id: 'claude', label: 'Lend Claude', home: 'C:/l1', lend_only: true, lend_profile: 'Work account' };
+    const l3: Account = { id: 'l3', agent_id: 'claude', label: 'Lend Claude 3', home: 'C:/l3', lend_only: true, lend_profile: 'Team account' };
+    await render(fakeApi([own, l1, l3]));
+    const claude = host.querySelector<HTMLElement>('[data-testid="accounts-claude"]')!;
+    const lending = claude.querySelector<HTMLElement>('[data-testid="lending-claude"]')!;
+    expect(lending.textContent).toContain('Used for lending');
+    expect(lending.textContent).toContain('Work account');
+    expect(lending.textContent).toContain('Team account');
+    expect(claude.textContent).not.toContain('Lend Claude');
+    // The editable list holds my own sign-in only, and the helper picker offers only it.
+    expect([...claude.querySelectorAll('input[aria-label^="Name of"], input[defaultvalue]')].length).toBeLessThanOrEqual(1);
+    const options = [...claude.querySelectorAll('select option')].map((o) => o.textContent);
+    expect(options).toContain('Personal');
+    expect(options.join('|')).not.toContain('Lend');
+    expect(button(lending, 'Open Lend')).toBeTruthy();
+  });
 });

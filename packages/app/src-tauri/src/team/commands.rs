@@ -31,6 +31,18 @@ pub async fn team_ping() -> Result<Vec<crate::capacity_proxy::ping::DevicePing>,
     crate::capacity_proxy::ping_team().await
 }
 
+/// The cockpit's facts about me for the Team page's presence (every 30 s). Rust applies what I chose to share.
+#[tauri::command]
+pub async fn team_presence_report(report: super::presence::Report) -> Result<Value, String> {
+    blocking(move || service::presence_report(report)).await
+}
+
+/// "Share what I am doing": the level and the projects kept private.
+#[tauri::command]
+pub async fn team_share_set(level: super::presence::ShareLevel, exclude: Vec<String>) -> Result<Value, String> {
+    blocking(move || service::share_set(level, exclude)).await
+}
+
 #[tauri::command]
 pub async fn team_config_get() -> Result<Value, String> {
     blocking(service::config_get).await
@@ -164,6 +176,46 @@ pub async fn team_relay_deploy(app: tauri::AppHandle, token: String, account_id:
         deploy(auth, account_id, &bundle, |step| {
             let _ = app.emit("team://relay-deploy", serde_json::json!({ "step": step }));
         })
+    })
+    .await
+}
+
+/// **Join popup, step 1.** What an invite link says (team, who invited), without using it up. The link is
+/// untrusted text: only a code and a host are taken from it.
+#[tauri::command]
+pub async fn team_invite_lookup(link: String) -> Result<Value, String> {
+    blocking(move || {
+        let target = super::invite_web::parse_target(&link)?;
+        super::invite_web::peek(&target.base_url(), &target)
+    })
+    .await
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcceptInput {
+    pub link: String,
+    pub name: String,
+    #[serde(default)]
+    pub github: Option<String>,
+}
+
+/// **Join popup, step 2.** Use the invite up (the Worker burns it) and ask the team owner to let this
+/// computer in. The owner still says yes.
+#[tauri::command]
+pub async fn team_invite_accept(input: AcceptInput) -> Result<Value, String> {
+    blocking(move || service::join_by_link(&input.link, input.name, input.github)).await
+}
+
+/// What a Worker address can do (`features`), for "Use this address" and "Update your Worker". Sends nothing secret.
+#[tauri::command]
+pub async fn worker_check(address: String) -> Result<Value, String> {
+    blocking(move || {
+        let normal = super::transport::relay::normalize_relay_url(&address)?;
+        // The Worker's own routes are at the root of its address, whatever path a relay address carries.
+        let after = normal.split_once("://").map(|(s, r)| (s, r)).ok_or("That address has no https://.")?;
+        let origin = format!("{}://{}", after.0, after.1.split('/').next().unwrap_or(""));
+        Ok(super::invite_web::worker_health(&origin))
     })
     .await
 }

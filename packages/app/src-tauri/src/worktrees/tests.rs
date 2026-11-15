@@ -902,3 +902,18 @@ mod discard_tests {
         let _ = std::fs::remove_dir_all(outside);
     }
 }
+
+#[test]
+fn a_line_ending_only_rewrite_is_listed_but_counts_no_lines() {
+    let repo = repo();
+    let wt = create(&repo.path(), "eol").unwrap();
+    let work = PathBuf::from(&wt.path);
+    std::fs::write(work.join("a.txt"), "alpha\r\n").unwrap(); // was "alpha\n"
+    std::fs::write(work.join("new.txt"), "fresh\n").unwrap();
+    let view = diff(&wt, None).unwrap();
+    let by_path: std::collections::HashMap<_, _> = view.changes.files.iter().map(|f| (f.path.as_str(), f)).collect();
+    assert_eq!(view.changes.files_changed, 2, "{:?}", view.changes);
+    assert_eq!((by_path["a.txt"].additions, by_path["a.txt"].deletions), (0, 0));
+    assert_eq!(view.changes.additions, 1);
+    assert_eq!(view.changes.deletions, 0);
+}

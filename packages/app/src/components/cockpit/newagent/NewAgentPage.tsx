@@ -8,6 +8,7 @@ import type { AgentDescriptor } from '../../../lib/agentRegistry';
 import type { RecentProject } from '../../../lib/ship-api';
 import { addonFor, needsInstall, tauriAcpAddonApi, type AcpAddonApi } from '../../../lib/acpAddon';
 import { useAcpAddons } from '../../../hooks/useAcpAddons';
+import { useDismissable } from '../../../hooks/useDismissable';
 import { AddonPrompt } from '../../acp/AddonPrompt';
 import { SignInCard } from '../../acp/SignInCard';
 import { lastRealFolder, projectOfCwd, readStoredCopyPreference, supportsCopies, supportsChatCopy, isPlainCopyFolder, writeCopyPreference, copyDefault } from '../../../lib/ship-model';
@@ -226,26 +227,15 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
     return () => window.clearInterval(timer);
   }, [prompt]);
 
-  // Outside click and Escape close the open menu.
+  // One shared closing rule (outside press, Escape, focus leaving, page scroll) closes the open menu.
   const menuRoot = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menu) return undefined;
-    const away = (e: MouseEvent) => {
-      if (!menuRoot.current?.contains(e.target as Node)) setMenu(null);
-    };
-    const esc = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setMenu(null);
-        area.current?.focus();
-      }
-    };
-    window.addEventListener('mousedown', away);
-    window.addEventListener('keydown', esc);
-    return () => {
-      window.removeEventListener('mousedown', away);
-      window.removeEventListener('keydown', esc);
-    };
-  }, [menu]);
+  useDismissable(menu !== null, {
+    inside: [menuRoot],
+    onDismiss: (why) => {
+      setMenu(null);
+      if (why === 'escape') area.current?.focus();
+    },
+  });
 
   // The sidebar's "+" on a project opens the page with that project: take it again when it changes.
   useEffect(() => {

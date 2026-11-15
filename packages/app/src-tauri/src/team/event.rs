@@ -233,12 +233,30 @@ pub struct Subject {
     pub sentence: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence: Option<String>,
+    /// A presence event: what the person chose to share (project name, chat title, agent counts).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub working: Option<Working>,
     /// A push to the default branch: how many commits it brought.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commits: Option<u32>,
     /// A push to the default branch: the subject line of its first (oldest) new commit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub first_commit: Option<String>,
+}
+
+/// What a person shares about their work in a presence event. Every field is the person's own choice
+/// (`team/presence.rs`); a teammate's copy is plain text, cleaned and cut on arrival.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Working {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub running: u32,
+    #[serde(default)]
+    pub waiting: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -465,6 +483,9 @@ pub fn validate_inbound(mut event: TeamEvent, now_ms: u64) -> Result<TeamEvent, 
     if event.kind == TeamEventKind::PleaseReview && subject.pr.is_none() && subject.branch.is_none() {
         return Err(Rejected("a review request names a pull request or a branch"));
     }
+    if event.kind == TeamEventKind::Presence && event.subject.presence.as_deref().and_then(super::presence::State::parse).is_none() {
+        return Err(Rejected("presence names a known state"));
+    }
     if event.kind == TeamEventKind::Note && event.note.as_deref().map_or(true, |n| clean_text(n, MAX_NOTE_CHARS).is_empty()) {
         return Err(Rejected("a note has text"));
     }
@@ -482,6 +503,12 @@ pub fn validate_inbound(mut event: TeamEvent, now_ms: u64) -> Result<TeamEvent, 
     if let Some(pr) = &mut event.subject.pr {
         pr.title = clean_text(&pr.title, 200);
         pr.state = clean_text(&pr.state, 20);
+    }
+    if let Some(working) = &mut event.subject.working {
+        working.project = working.project.as_deref().map(|p| clean_text(p, super::presence::MAX_WORDS)).filter(|p| !p.is_empty());
+        working.title = working.title.as_deref().map(|p| clean_text(p, super::presence::MAX_WORDS)).filter(|p| !p.is_empty());
+        working.running = working.running.min(99);
+        working.waiting = working.waiting.min(99);
     }
     event.subject.sentence = event.subject.sentence.as_deref().map(|s| clean_text(s, 280));
     event.subject.first_commit = event.subject.first_commit.as_deref().map(|s| clean_text(s, 120)).filter(|s| !s.is_empty());

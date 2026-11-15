@@ -10,7 +10,7 @@ import { tauriHelperAgentsApi, type HelperVisibility } from '../../lib/agentRunM
 import { agentPackApi } from '../../lib/agent-pack';
 import { checkFailureOf, tauriUpdateTransport, type CheckFailure, type UpdateOffer } from '../../lib/app-update';
 import { DEV_LABS_KEYS } from '../../lib/dev-labs';
-import { runAllChecks, tauriSetupDeps, type CheckRow, type SetupCheckContext, type SetupCheckDeps } from '../../lib/setup-checks';
+import { runAllChecks, tauriSetupDeps, type RunOptions, type CheckRow, type SetupCheckContext, type SetupCheckDeps } from '../../lib/setup-checks';
 import { SetupChecksProvider, useSharedSetupChecks, type SetupChecksState } from './setup-source';
 import { tauri } from '../../lib/tauri';
 import { errorSentence } from '../../lib/sayError';
@@ -33,7 +33,7 @@ import {
 
 /** Where each Overview card gets its facts. The app uses the defaults; tests pass fakes. */
 export interface OverviewSources {
-  checks: (deps: SetupCheckDeps, ctx: SetupCheckContext) => Promise<CheckRow[]>;
+  checks: (deps: SetupCheckDeps, ctx: SetupCheckContext, options?: RunOptions) => Promise<CheckRow[]>;
   setupDeps: SetupCheckDeps;
   accounts: () => Promise<AccountsOverview>;
   phones: () => Promise<number>;
@@ -44,7 +44,7 @@ export interface OverviewSources {
 }
 
 export const DEFAULT_OVERVIEW_SOURCES: OverviewSources = {
-  checks: (deps, ctx) => runAllChecks(deps, ctx),
+  checks: (deps, ctx, options) => runAllChecks(deps, ctx, options),
   setupDeps: tauriSetupDeps,
   accounts: () => tauriAccountsApi.list(),
   phones: async () => (await tauri.listPairedMobileDevices()).filter((d) => !d.expired).length,
@@ -116,7 +116,7 @@ export function Overview(props: OverviewProps) {
   // cards bring their own.
   if (shared) return <OverviewCards {...props} />;
   return (
-    <SetupChecksProvider run={() => sources.checks(sources.setupDeps, setupContext(settings, bridgeUrl))} actions={sources.actions}>
+    <SetupChecksProvider run={(options) => sources.checks(sources.setupDeps, setupContext(settings, bridgeUrl), options)} actions={sources.actions}>
       <OverviewCards {...props} />
     </SetupChecksProvider>
   );

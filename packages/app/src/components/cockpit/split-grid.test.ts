@@ -6,6 +6,8 @@ import {
   clampRows,
   closeSlot,
   downPartner,
+  hasLayout,
+  isWide,
   moveSlot,
   nudgeRows,
   parseBelow,
@@ -113,5 +115,54 @@ describe('row sizes', () => {
     expect(rowsFromTopPx(10, 800)).toBeCloseTo(0.2);
     expect(nudgeRows(0.5, 80, 800)).toBeCloseTo(0.6);
     expect(nudgeRows(0.5, -80, 800)).toBeCloseTo(0.4);
+  });
+});
+
+describe('stacked and wide layouts', () => {
+  const stacked = { ...NO_BELOW, stacked: true };
+  const wide = { ...NO_BELOW, leftDown: 'c', wide: true };
+
+  it('stacked counts as a layout, is saved and read back, and wide needs exactly the one chat below on the left', () => {
+    expect(hasLayout(stacked)).toBe(true);
+    expect(hasLayout(NO_BELOW)).toBe(false);
+    expect(parseBelow(JSON.parse(JSON.stringify(stacked)))).toEqual({ ...NO_BELOW, stacked: true });
+    expect(parseBelow(JSON.parse(JSON.stringify(wide)))).toMatchObject({ leftDown: 'c', wide: true });
+    expect(parseBelow({ leftDown: 'c', rightDown: 'd', wide: true }).wide).toBeUndefined();
+    expect(isWide({ ...wide, rightDown: 'd' })).toBe(false);
+    expect(isWide(wide)).toBe(true);
+  });
+
+  it('sanitize keeps stacked and wide, and drops wide when its chat is gone', () => {
+    expect(sanitizeBelow(stacked, 'a', 'b', () => true)).toBe(stacked);
+    expect(sanitizeBelow(wide, 'a', 'b', () => true)).toBe(wide);
+    expect(sanitizeBelow(wide, 'a', 'b', (id) => id !== 'c').wide).toBeUndefined();
+  });
+
+  it('stacked: focus moves between the two with Up and Down only; no split down', () => {
+    expect(moveSlot('left', 'down', stacked)).toBe('right');
+    expect(moveSlot('right', 'up', stacked)).toBe('left');
+    expect(moveSlot('left', 'right', stacked)).toBeNull();
+    expect(canSplitDown(stacked, 'left', 2)).toBe(false);
+  });
+
+  it('wide: down from either top chat reaches the wide one, which only goes up', () => {
+    expect(moveSlot('left', 'down', wide)).toBe('leftDown');
+    expect(moveSlot('right', 'down', wide)).toBe('leftDown');
+    expect(moveSlot('leftDown', 'up', wide)).toBe('left');
+    expect(moveSlot('leftDown', 'right', wide)).toBeNull();
+  });
+
+  it('a chat below the right column turns the wide layout into a 2 x 2', () => {
+    const grid = splitColumnDown(wide, 'right', 'd');
+    expect(grid).toMatchObject({ leftDown: 'c', rightDown: 'd', wide: false });
+    expect(isWide(grid)).toBe(false);
+  });
+
+  it('closing a chat of a stacked or wide layout ends the stack / the wide row', () => {
+    const closed = closeSlot({ left: 'a', right: 'b', below: stacked }, 'right');
+    expect(closed.right).toBeNull();
+    const w = closeSlot({ left: 'a', right: 'b', below: wide }, 'leftDown');
+    expect(w).toMatchObject({ left: 'a', right: 'b' });
+    expect(w.below.wide).toBeUndefined();
   });
 });

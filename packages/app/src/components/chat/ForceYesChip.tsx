@@ -6,6 +6,7 @@ import { useT } from '../../i18n';
 import { ruleError, tauriAgentRulesApi, type AgentRulesApi } from '../../lib/agentRules';
 import { tauriAcpChatApi, type AcpChatApi, type AcpChatState } from '../../lib/acpChat';
 import '../../styles/cockpit-acp.css';
+import { useDismissable } from '../../hooks/useDismissable';
 
 interface Props {
   paneId: string;
@@ -42,19 +43,7 @@ export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauri
   const confirmed = isAcp ? (state?.forceYes ?? false) : terminalOn;
   useEffect(() => setPending(null), [confirmed, paneId]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const away = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', away);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [open]);
+  useDismissable(open, { inside: [wrap], anchor: wrap, onDismiss: () => setOpen(false) });
 
   // A chat that has not reported yet, or one that is closed, has nothing to switch; a terminal pane waits for its answer.
   if (isAcp ? !state || state.closed || !chatApi.setForceYes : confirmed === null) return null;

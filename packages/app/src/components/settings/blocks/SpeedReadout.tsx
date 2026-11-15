@@ -1,25 +1,16 @@
-// Settings > General: "Speed on this PC". Typical and latest times for starting the app and a chat,
-// worked out on this PC from the app's own log. Nothing is sent anywhere.
+// Settings > General: "Speed on this PC". The times the app already measured (opening the app step by step, starting a
+// chat, the first sign of an answer, how often a ready-made session was used, checking the setup) in a small table,
+// with a marker on the slow ones and "Copy for support". Worked out on this PC from the app's own log. Nothing is sent.
 import { useEffect, useState } from 'react';
-import { t, useT } from '../../../i18n';
-import { tauri, type PerfStat, type PerfSummary } from '../../../lib/tauri';
-import { SettingBlock } from '../settings-ui';
-
-function seconds(ms: number): string {
-  return ms < 950 ? t('speed.ms', { n: Math.round(ms / 10) * 10 }) : t('speed.s', { n: (ms / 1000).toFixed(1) });
-}
-
-function describe(stat: PerfStat): string | null {
-  if (stat.count === 0 || stat.medianMs === null) return null;
-  const last = stat.lastMs === null ? '' : t('speed.last', { time: seconds(stat.lastMs) });
-  return t('speed.usually', { time: seconds(stat.medianMs), last, count: stat.count });
-}
-
-const LINES: { key: keyof PerfSummary }[] = [{ key: 'appStart' }, { key: 'chatWarm' }, { key: 'chatCold' }, { key: 'handshake' }];
+import { useT } from '../../../i18n';
+import { tauri, type PerfSummary } from '../../../lib/tauri';
+import { Btn, SettingBlock } from '../settings-ui';
+import { speedRows, speedText } from './speedReport';
 
 export function SpeedReadout() {
   const t = useT();
   const [summary, setSummary] = useState<PerfSummary | null | undefined>(undefined);
+  const [copied, setCopied] = useState<'done' | 'failed' | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -33,25 +24,61 @@ export function SpeedReadout() {
   }, []);
 
   if (summary === undefined) return null;
-  const rows = summary ? LINES.map((l) => ({ ...l, label: t(`speed.line.${l.key}`), text: describe(summary[l.key]) })).filter((r) => r.text) : [];
+  const rows = summary ? speedRows(summary) : [];
+
+  const copy = () => {
+    setCopied(null);
+    navigator.clipboard.writeText(speedText(rows)).then(
+      () => setCopied('done'),
+      () => setCopied('failed'),
+    );
+  };
+
   return (
-    <SettingBlock
-      label={t('speed.title')}
-      description={t('speed.help')}
-    >
+    <SettingBlock label={t('speed.title')} description={t('speed.help')}>
       {rows.length === 0 ? (
         <p className="st-note">{t('speed.none')}</p>
       ) : (
-        <ul className="st-diag-list" aria-label={t('speed.title')}>
-          {rows.map((r) => (
-            <li key={r.key} className="st-diag-item">
-              <span className="st-diag-main">
-                <span className="st-diag-name">{r.label}</span>
-                <span className="st-diag-size">{r.text}</span>
+        <>
+          <table className="st-speed-table" aria-label={t('speed.table')}>
+            <thead>
+              <tr>
+                <th scope="col">{t('speed.col.what')}</th>
+                <th scope="col">{t('speed.col.usual')}</th>
+                <th scope="col">{t('speed.col.last')}</th>
+                <th scope="col">{t('speed.col.times')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} data-speed-row={r.id} data-slow={r.slow ? 'true' : undefined}>
+                  <th scope="row">{r.label}</th>
+                  <td>
+                    {r.usual}
+                    {r.slow && (
+                      <span className="st-speed-slow" data-testid="speed-slow">
+                        {' '}
+                        {r.mark}
+                      </span>
+                    )}
+                  </td>
+                  <td>{r.last}</td>
+                  <td>{r.times}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="st-speed-actions">
+            <Btn small onClick={copy}>
+              {t('speed.copy')}
+            </Btn>
+            {copied && (
+              <span role="status" className="st-note">
+                {copied === 'done' ? t('speed.copied') : t('speed.copyFailed')}
               </span>
-            </li>
-          ))}
-        </ul>
+            )}
+          </div>
+        </>
       )}
     </SettingBlock>
   );

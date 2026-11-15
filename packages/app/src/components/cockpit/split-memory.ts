@@ -1,7 +1,7 @@
 // The split view remembered between starts: the two panes and the divider's ratio, kept in localStorage.
 // Every storage call is wrapped in try/catch: a blocked or full storage just means no memory.
 import { splitFits } from './main-view';
-import { hasBelow, parseBelow, sanitizeBelow, type SplitBelow } from './split-grid';
+import { hasLayout, parseBelow, sanitizeBelow, type SplitBelow } from './split-grid';
 
 export const SPLIT_MEMORY_KEY = 'pm.cockpit.split';
 
@@ -24,7 +24,7 @@ export function parseSplitMemory(raw: string | null): SplitMemory | null {
     if (!v || typeof v.left !== 'string' || typeof v.right !== 'string' || !v.left || !v.right) return null;
     const ratio = typeof v.ratio === 'number' && Number.isFinite(v.ratio) && v.ratio > 0 && v.ratio < 1 ? v.ratio : 0.5;
     const below = parseBelow(v.below);
-    return hasBelow(below) ? { left: v.left, right: v.right, ratio, below } : { left: v.left, right: v.right, ratio };
+    return hasLayout(below) ? { left: v.left, right: v.right, ratio, below } : { left: v.left, right: v.right, ratio };
   } catch {
     return null;
   }
@@ -65,5 +65,5 @@ export function restorableSplit(saved: SplitMemory | null, opts: { width: number
   if (!saved.below) return saved;
   // A chat below that is gone (or shown twice) just drops out; the rest of the layout comes back.
   const below = sanitizeBelow(saved.below, saved.left, saved.right, opts.hasPane);
-  return hasBelow(below) ? { ...saved, below } : { left: saved.left, right: saved.right, ratio: saved.ratio };
+  return hasLayout(below) ? { ...saved, below } : { left: saved.left, right: saved.right, ratio: saved.ratio };
 }

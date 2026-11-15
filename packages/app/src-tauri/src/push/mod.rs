@@ -234,6 +234,7 @@ fn item_ref(item: &crate::attention::model::Item) -> hub::ItemRef {
         id: item.id.clone(),
         occurrence: item.prompt.as_ref().map(|p| p.occurrence).unwrap_or(0),
         fingerprint: item.prompt.as_ref().map(|p| p.fingerprint.clone()).unwrap_or_default(),
+        yes_no: None,
     }
 }
 
@@ -248,7 +249,25 @@ fn item_ref_for_question(question: &crate::questions::Question, kind: Kind) -> O
     };
     let key = format!("{prefix}:{}", question.id);
     let snapshot = crate::attention::snapshot_now();
-    snapshot.items.iter().find(|i| i.state == State::Open && i.key == key).map(item_ref)
+    let mut item = snapshot.items.iter().find(|i| i.state == State::Open && i.key == key).map(item_ref)?;
+    item.yes_no = yes_no_of(question, kind);
+    Some(item)
+}
+
+/// A plain agent question with exactly two choices, "Yes" and "No", gets Yes / No buttons on the
+/// notification. Cards Potato Workspace raised itself (consent, budget, usage limit, issue, CI) never do:
+/// they are decided in the app.
+pub(crate) fn yes_no_of(question: &crate::questions::Question, kind: Kind) -> Option<hub::YesNo> {
+    if kind != Kind::Question || question.consent.is_some() || question.limit.is_some() || question.kind.is_some() {
+        return None;
+    }
+    let [a, b] = question.choices.as_slice() else { return None };
+    let word = |c: &crate::questions::Choice| c.label.trim().trim_end_matches(['?', '.', '!']).to_ascii_lowercase();
+    match (word(a).as_str(), word(b).as_str()) {
+        ("yes", "no") => Some(hub::YesNo { yes: a.id.clone(), no: b.id.clone() }),
+        ("no", "yes") => Some(hub::YesNo { yes: b.id.clone(), no: a.id.clone() }),
+        _ => None,
+    }
 }
 
 /// Hook for `push_operation_sse`: a run reached a terminal state.
@@ -750,5 +769,51 @@ mod tests {
         use base64::Engine;
         let key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
         base64::engine::general_purpose::STANDARD.encode(key.verifying_key().as_bytes())
+    }
+}
+
+#[cfg(test)]
+mod yes_no_tests {
+    use super::*;
+
+    fn question(choices: serde_json::Value, extra: serde_json::Value) -> crate::questions::Question {
+        let mut value = serde_json::json!({
+            "id": "q1",
+            "question": "Deploy now?",
+            "choices": choices,
+            "allow_free_text": false,
+            "urgency": "normal",
+            "created_at_ms": 0,
+            "expires_at_ms": 900_000,
+            "state": "pending",
+        });
+        if let (Some(base), Some(more)) = (value.as_object_mut(), extra.as_object()) {
+            base.extend(more.clone());
+        }
+        serde_json::from_value(value).expect("question fixture")
+    }
+
+    #[test]
+    fn a_plain_yes_no_question_is_found_in_either_order_and_with_any_case() {
+        let q = question(serde_json::json!([{"id": "a", "label": "Yes"}, {"id": "b", "label": "No"}]), serde_json::json!({}));
+        assert_eq!(yes_no_of(&q, Kind::Question), Some(hub::YesNo { yes: "a".into(), no: "b".into() }));
+        let q = question(serde_json::json!([{"id": "n", "label": "no."}, {"id": "y", "label": " YES? "}]), serde_json::json!({}));
+        assert_eq!(yes_no_of(&q, Kind::Question), Some(hub::YesNo { yes: "y".into(), no: "n".into() }));
+    }
+
+    #[test]
+    fn anything_else_has_no_buttons() {
+        let menu = question(serde_json::json!([{"id": "a", "label": "main"}, {"id": "b", "label": "dev"}]), serde_json::json!({}));
+        assert_eq!(yes_no_of(&menu, Kind::Question), None, "two options that are not yes and no");
+        let three = question(serde_json::json!([{"id": "a", "label": "Yes"}, {"id": "b", "label": "No"}, {"id": "c", "label": "Later"}]), serde_json::json!({}));
+        assert_eq!(yes_no_of(&three, Kind::Question), None);
+        let two_yes = question(serde_json::json!([{"id": "a", "label": "Yes"}, {"id": "b", "label": "Yes"}]), serde_json::json!({}));
+        assert_eq!(yes_no_of(&two_yes, Kind::Question), None);
+        // A card the app itself raised (a budget pause, an issue or a CI card) is decided in the app.
+        let card = question(serde_json::json!([{"id": "a", "label": "Yes"}, {"id": "b", "label": "No"}]), serde_json::json!({"kind": "budget"}));
+        assert_eq!(yes_no_of(&card, Kind::Question), None);
+        let yes_no = question(serde_json::json!([{"id": "a", "label": "Yes"}, {"id": "b", "label": "No"}]), serde_json::json!({}));
+        assert_eq!(yes_no_of(&yes_no, Kind::Consent), None, "a consent card never");
+        assert_eq!(yes_no_of(&yes_no, Kind::Budget), None);
     }
 }

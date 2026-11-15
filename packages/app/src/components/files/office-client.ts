@@ -7,7 +7,7 @@ import { readSheets, type Sheet } from './sheet-read';
 
 export interface DocxSession {
   /** The page as HTML (pictures are placeholders) and how many pictures there are. */
-  opened: Promise<{ html: string; pictures: number; openMs?: number }>;
+  opened: Promise<{ html: string; styled: boolean; pictures: number; openMs?: number }>;
   /** The plain text of the document. */
   text(): Promise<string>;
   /** Picture number `index`, shown-size; `null` when the web view cannot draw it. */
@@ -61,7 +61,7 @@ async function bufferOf(source: FileSource): Promise<ArrayBuffer> {
 export function openDocx(source: FileSource): DocxSession {
   if (canUseWorker(source)) {
     const w = startWorker();
-    const opened = w.call({ type: 'docx', url: source.url }).then((r) => ({ html: r.html as string, pictures: r.pictures as number, openMs: r.openMs as number }));
+    const opened = w.call({ type: 'docx', url: source.url }).then((r) => ({ html: r.html as string, styled: r.styled as boolean, pictures: r.pictures as number, openMs: r.openMs as number }));
     opened.catch(() => undefined);
     return {
       opened,
@@ -74,7 +74,7 @@ export function openDocx(source: FileSource): DocxSession {
   const opened = convertFrom('bytes' in source ? bytesReader(source.bytes) : null, () => bufferOf(source))
     .then((c) => {
       done = c;
-      return { html: c.html, pictures: c.readers.length };
+      return { html: c.html, styled: c.styled, pictures: c.readers.length };
     });
   opened.catch(() => undefined);
   return {

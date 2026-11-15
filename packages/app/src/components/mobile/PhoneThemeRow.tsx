@@ -4,7 +4,7 @@ import { useT } from '../../i18n';
 import { PHONE_THEME_EVENT, parsePhoneTheme, readPhoneTheme, setPhoneTheme, type PhoneTheme } from '../../lib/phone-theme';
 import '../../styles/phone-link.css';
 
-const THEMES: readonly PhoneTheme[] = ['auto', 'light', 'dark'];
+const THEMES: readonly PhoneTheme[] = ['auto', 'light', 'dim', 'dark'];
 
 export function PhoneThemeRow() {
   const t = useT();
@@ -14,7 +14,7 @@ export function PhoneThemeRow() {
     window.addEventListener(PHONE_THEME_EVENT, on);
     return () => window.removeEventListener(PHONE_THEME_EVENT, on);
   }, []);
-  const label = (v: PhoneTheme) => (v === 'light' ? t('phone.theme.light') : v === 'dark' ? t('phone.theme.dark') : t('phone.theme.auto'));
+  const label = (v: PhoneTheme) => (v === 'light' ? t('phone.theme.light') : v === 'dim' ? t('phone.theme.dim') : v === 'dark' ? t('phone.theme.dark') : t('phone.theme.auto'));
   return (
     <div className="ph-group" data-testid="phone-theme">
       <div className="ph-row ph-textsize">

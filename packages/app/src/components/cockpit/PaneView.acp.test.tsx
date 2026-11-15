@@ -108,7 +108,7 @@ describe('pane view of a chat session over ACP', () => {
     expect(await words('idle')).toBe('Done');
   });
 
-  it('shows the result of the run (files changed and the summary) under the conversation', async () => {
+  it('has no result strip under the conversation (Changes in the right panel carries it)', async () => {
     invoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'checkpoints_list') return { state: 'ok', message: '', items: [] };
       if (cmd === 'pane_run_info') return { handle: 'h1', status: 'completed', receipt: { structured_result: { summary: 'Added notes.txt', files_changed: ['notes.txt'], checks_run: ['cargo test'], open_questions: [] } } };
@@ -117,12 +117,9 @@ describe('pane view of a chat session over ACP', () => {
     });
     await act(async () => root.render(<PaneView c={cockpit('acp')} paneId="p1" />));
     await flush();
-    const strip = host.querySelector('[data-testid="acp-result"]');
-    expect(strip?.textContent).toContain('Added notes.txt');
-    expect(strip?.textContent).toContain('2 files +14 −3');
-    expect(strip?.textContent).toContain('1 check');
-    // "Then…" is on the result card, so a chain can be added from the screen the person looks at.
-    expect([...strip!.querySelectorAll('button')].map((b) => b.textContent?.trim())).toContain('Then…');
+    // The strip is gone: the numbers live in the right panel's Changes section.
+    expect(host.querySelector('[data-testid="acp-result"]')).toBeNull();
+    expect(host.querySelector('[data-testid="rail-chg"]')).not.toBeNull();
   });
 
   it('a terminal pane has no badge and keeps its terminal', async () => {

@@ -44,6 +44,7 @@ pub(crate) use start::start_failure_sentence;
 pub mod read_only;
 mod rules;
 pub mod receipt;
+pub mod right_size;
 pub mod surface;
 
 #[cfg(test)]
@@ -58,6 +59,8 @@ mod auto_lane_tests;
 mod decide_tests;
 #[cfg(test)]
 mod rules_tests;
+#[cfg(test)]
+mod project_budget_tests;
 
 use crate::attach::ChatAttachment;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -236,6 +239,8 @@ pub struct AcpChat {
     from_by_id: Mutex<HashMap<String, String>>,
     /// Who is driving: this PC, or another device that sends or types here (`drive.rs`).
     drive: Mutex<drive::Drive>,
+    /// The latest turn's length and the right-size suggestion that waits (`right_size.rs`).
+    right_size: right_size::Slot,
 }
 
 pub const TOOK_BACK_SENTENCE: &str = "This PC took this chat back. Tap Take over to send.";
@@ -420,6 +425,7 @@ impl AcpChat {
             next_from: Mutex::new(None),
             from_by_id: Mutex::new(HashMap::new()),
             drive: Mutex::new(drive::Drive::default()),
+            right_size: right_size::Slot::default(),
         });
         chat.restore_from_journal();
         chat
@@ -690,6 +696,8 @@ impl AcpChat {
             SessionEvent::TurnStarted { turn } => {
                 self.interrupted.store(false, Ordering::SeqCst);
                 let (text, attachments) = self.pending_user.lock().take().unwrap_or_default();
+                crate::project_budget::note_turn_started(&self.project());
+                self.right_size.started(text.chars().count());
                 let mut mapper = self.mapper.lock();
                 let items = mapper.turn_started_with(*turn, Some(text.as_str()), &attachments, now, &at);
                 self.push(items);
@@ -710,11 +718,64 @@ impl AcpChat {
                 self.push(items);
             }
             other => {
+                if matches!(other, SessionEvent::Update { replay: false, .. } | SessionEvent::UpdateUnparsed { replay: false, .. }) {
+                    if let Some(ms) = self.right_size.first_reply() {
+                        tracing::info!("startup_first_reply ms={ms} pane={}", self.pane_id);
+                    }
+                }
                 let mut mapper = self.mapper.lock();
                 let items = mapper.on_event(other, now, &at);
+                // Before the items go out, so a screen that reads the project budget when the turn ends sees it counted.
+                let look = matches!(other, SessionEvent::TurnEnded(_)).then(|| mapper.last_turn_look());
+                drop(mapper);
+                if let Some(look) = look {
+                    self.after_turn(look);
+                }
                 self.push(items);
             }
         }
+    }
+
+    /// A turn ended: its minutes count against the project's day, and a model that did not fit the task may be named.
+    fn after_turn(&self, (files, reason): (usize, Option<ending::EndReason>)) {
+        let (ms, prompt_chars) = self.right_size.ended();
+        crate::project_budget::note_turn_ended(&self.project(), ms);
+        let on = default_model::settings().get(right_size::SETTING).and_then(Value::as_bool).unwrap_or(true);
+        let Some(reason) = reason.filter(|_| on) else { return };
+        let choices = choice::model_choices(self);
+        let Some(current) = choice::in_use(self).0 else { return };
+        let name = choices.iter().find(|(value, _)| *value == current).map(|(_, name)| name.clone()).unwrap_or_else(|| current.clone());
+        let facts = right_size::Facts { prompt_chars, files, duration_ms: ms, reason };
+        if let Some(suggestion) = right_size::suggest(&facts, (&current, &name), &choices) {
+            self.right_size.offer(suggestion, &crate::project_budget::today());
+        }
+    }
+
+    /// The sentence for a project that has used up its day, or `None` while it may start turns.
+    fn project_budget_block(&self) -> Option<String> {
+        let status = crate::project_budget::status(&self.project(), crate::project_budget::plan_percent_of(&self.agent_id));
+        crate::project_budget::sentence(&status)
+    }
+
+    /// Where the project stands today, for the banner (`None` when it has no limits).
+    pub fn project_budget_status(&self) -> Option<crate::project_budget::Status> {
+        let status = crate::project_budget::status(&self.project(), crate::project_budget::plan_percent_of(&self.agent_id));
+        status.limits.any().then_some(status)
+    }
+
+    /// "Raise" on the project budget banner.
+    pub fn project_budget_raise(&self) -> Option<crate::project_budget::Status> {
+        crate::project_budget::raise(&self.project(), crate::project_budget::plan_percent_of(&self.agent_id));
+        self.project_budget_status()
+    }
+
+    /// The waiting right-size line, if there is one.
+    pub fn right_size_pending(&self) -> Option<right_size::Suggestion> {
+        self.right_size.pending()
+    }
+
+    pub fn right_size_dismiss(&self) {
+        self.right_size.dismiss();
     }
 
     fn apply_status(&self, snapshot: &Snapshot) {
@@ -992,6 +1053,11 @@ impl AcpChat {
         if self.is_closed() {
             return Err(SendError::Gone);
         }
+        // The project used up what it may use today: this turn does not start (a running one is never touched).
+        if let Some(sentence) = self.project_budget_block() {
+            self.side_line("project-budget", &sentence);
+            return Err(SendError::Refused(sentence));
+        }
         let Some(_gate) = self.send_gate.try_lock() else { return Err(SendError::Busy) };
         self.begin_read_only_look();
         *self.pending_user.lock() = Some((text.to_string(), attachments.to_vec()));
@@ -1188,6 +1254,25 @@ impl AcpChat {
         if self.session.snapshot().phase != Phase::Dormant {
             return;
         }
+        if !conversations.record(&self.pane_id).is_some_and(|r| r.session_id.is_some()) {
+            return;
+        }
+        if self.waking.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let session = self.session.clone();
+        std::thread::spawn(move || {
+            let _ = session.ensure_running();
+        });
+    }
+
+    /// The person is about to type in a chat whose adapter is not running (it came back after a restart): start it in
+    /// the background so its slash commands are there by the time they type "/". No message is sent. Once per chat.
+    pub fn warm(&self) {
+        if self.is_closed() || self.session.held_by().is_some() || self.session.snapshot().phase != Phase::Dormant {
+            return;
+        }
+        let Some(conversations) = &self.conversations else { return };
         if !conversations.record(&self.pane_id).is_some_and(|r| r.session_id.is_some()) {
             return;
         }

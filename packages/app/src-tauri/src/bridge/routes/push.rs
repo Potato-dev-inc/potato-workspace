@@ -40,7 +40,9 @@ fn act(cx: &Ctx, hub: &crate::push::hub::PushHub, now: u64) -> RouteResult {
     if !device_may_answer(&act.grant.device_id) {
         return Err((403, json!({"error": "not_allowed", "code": "DEVICE_NOT_ALLOWED", "needs": "answer"})));
     }
-    if let Some(item) = act.grant.item.as_ref().filter(|item| !item.fingerprint.is_empty()) {
+    // A yes/no question has no pane and no prompt on a screen: its token answers the card itself (the choice is the question's own choice id).
+    let card = act.grant.item.as_ref().filter(|item| !item.fingerprint.is_empty() || item.yes_no.is_some());
+    if let Some(item) = card {
         let caller = crate::attention::answer::Caller {
             device_name: crate::attention::caps::device_name(&act.grant.device_id).unwrap_or_else(|| "A phone".to_string()),
             caps: crate::attention::caps::for_device(&act.grant.device_id),
@@ -48,9 +50,9 @@ fn act(cx: &Ctx, hub: &crate::push::hub::PushHub, now: u64) -> RouteResult {
             via: crate::attention::answer::Via::LockScreen,
         };
         let request = crate::attention::answer::Request {
-            choice: Some(act.choice.to_string()),
+            choice: Some(act.choice.clone()),
             text: None,
-            prompt_id: Some(act.grant.prompt_id.clone()),
+            prompt_id: Some(act.grant.prompt_id.clone()).filter(|id| !id.is_empty()),
             occurrence: Some(item.occurrence),
             fingerprint: Some(item.fingerprint.clone()),
             answer_key: Some(format!("lock-{}", item.id)),
@@ -64,7 +66,7 @@ fn act(cx: &Ctx, hub: &crate::push::hub::PushHub, now: u64) -> RouteResult {
         cx.app,
         &act.grant.pane_id,
         &act.grant.prompt_id,
-        act.choice,
+        &act.choice,
         false,
     )
     .map_err(operation_http_error)?;

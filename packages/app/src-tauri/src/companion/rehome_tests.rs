@@ -29,6 +29,7 @@ fn profile(folder: &Path) -> CompanionProfile {
         id: "mochi".into(),
         name: "Mochi".into(),
         avatar: "mochi".into(),
+        look: None,
         persona: "calm".into(),
         agent_type: "claude".into(),
         launch_args: vec![],

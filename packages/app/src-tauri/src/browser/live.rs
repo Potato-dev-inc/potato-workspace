@@ -64,6 +64,10 @@ pub fn actor_for(session: &str) -> Actor {
 /// The tool entry: `browser_open`, `browser_read`, `browser_click`, `browser_type`, `browser_console`.
 /// Call from a worker thread (it waits for the page).
 pub fn run_tool(app: &AppHandle, actor: &Actor, tool: &str, args: &Value) -> Result<Value, ToolError> {
+    // "Leaving my desk" with the screen lock on: agents do not use this PC's pages until the person is back.
+    if crate::mobile_pairing::desk_away::screen_locked() {
+        return Err(ToolError::new("SCREEN_LOCKED", "Screen control is locked while the person is away. It opens again when they press I'm back."));
+    }
     if tool == "browser_open" {
         return open(app, actor, args);
     }

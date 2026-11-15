@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { PaneAction } from '../../lib/pane-actions';
 import { IconClose, IconInfo, IconPin, IconReflow, IconRename, IconStop } from './Icons';
 import { useT } from '../../i18n';
+import { useDismissable } from '../../hooks/useDismissable';
 
 /**
  * The one menu of a pane: opened by a right-click (or the context-menu key, Shift+F10) on its row in the
@@ -17,6 +18,8 @@ export function PaneContextMenu({
   x,
   y,
   onSide,
+  onLeft,
+  onBelow,
   pinned,
   onPin,
   onHandoff,
@@ -29,6 +32,9 @@ export function PaneContextMenu({
   y: number;
   /** "Open to the side" (split view). Absent: no such item. */
   onSide?: () => void;
+  /** "Open on the left" and "Open below": the keyboard way to what a drag onto the work area does. */
+  onLeft?: () => void;
+  onBelow?: () => void;
   /** The pane is pinned: the item says Unpin. */
   pinned?: boolean;
   /** Pins or unpins the pane. Absent: no such item. */
@@ -61,18 +67,8 @@ export function PaneContextMenu({
     el.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   }, [x, y]);
 
-  useEffect(() => {
-    const away = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose(false);
-    };
-    const blur = () => onClose(false);
-    window.addEventListener('mousedown', away);
-    window.addEventListener('blur', blur);
-    return () => {
-      window.removeEventListener('mousedown', away);
-      window.removeEventListener('blur', blur);
-    };
-  }, [onClose]);
+  // Escape is handled in onKeyDown below (it refocuses).
+  useDismissable(true, { inside: [ref], anchor: ref, ignore: ['escape'], onDismiss: () => onClose(false) });
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
@@ -128,6 +124,8 @@ export function PaneContextMenu({
       {onSide && (
         <>
           {item(t('sidebar.openToSide'), null, onSide)}
+          {onLeft && item(t('dnd.openLeft'), null, onLeft)}
+          {onBelow && item(t('dnd.openBelow'), null, onBelow)}
           <div className="ck-menu-sep" role="separator" />
         </>
       )}

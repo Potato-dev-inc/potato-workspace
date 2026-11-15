@@ -5,6 +5,8 @@ import {
   clockValue,
   companionSlug,
   countChars,
+  defaultCompanion,
+  defaultFirst,
   formatCount,
   homeProblemTitle,
   isBroadFolderError,
@@ -144,5 +146,19 @@ describe('a home folder that is too broad', () => {
     expect(ownFolderIn('D:/notes', 'Pipi')).toBe('D:/notes/pipi');
     expect(ownFolderIn('D:/notes/', 'Pipi')).toBe('D:/notes/pipi');
     expect(ownFolderIn(String.fromCharCode(68, 58, 92, 110), 'Pipi')).toBe(String.fromCharCode(68, 58, 92, 110, 92) + 'pipi');
+  });
+});
+
+describe('the default companion', () => {
+  const list = [{ id: 'a', isDefault: false }, { id: 'b', isDefault: true }, { id: 'c', isDefault: undefined }];
+  it('is the marked one, else the first, else none', () => {
+    expect(defaultCompanion(list)?.id).toBe('b');
+    expect(defaultCompanion([{ id: 'a', isDefault: false }, { id: 'b', isDefault: false }])?.id).toBe('a');
+    expect(defaultCompanion([])).toBeNull();
+    expect(defaultCompanion(null)).toBeNull();
+  });
+  it('goes first in the phone order and the others keep theirs', () => {
+    expect(defaultFirst(list).map((c) => c.id)).toEqual(['b', 'a', 'c']);
+    expect(defaultFirst([]).length).toBe(0);
   });
 });

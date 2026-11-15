@@ -23,7 +23,7 @@ use parking_lot::Mutex;
 use super::host::{Host, SpawnSpec};
 use super::keeper::{self, Action, DeriveInput, Keeper, NapInput, Pane, Status};
 use super::model::{
-    CompanionProfile, CompanionState, CompanionView, FeedItem, FeedKind, NeedsRef, NextCheckIn,
+    CompanionProfile, CompanionState, CompanionView, FeedItem, FeedKind, NeedsRef, NextCheckIn, MAX_AWAKE_COMPANIONS,
 };
 use super::store::{self, Runtime};
 use super::{agents, brief, files, memory, schedule, today, view};
@@ -118,12 +118,28 @@ pub(super) struct Slot {
     /// Whether the home folder is too broad (`broad::problem_of`), for the folder it was looked at for.
     /// Looked at again only when the folder changes: the search reads the disk.
     pub home_problem: Option<(String, Option<super::broad::HomeProblem>)>,
+    /// The vault (journal, persona watch, body state); `None` while the Labs switch `companion_vault_enabled` is off.
+    pub vault: Option<super::vault_tick::VaultSlot>,
 }
 
 pub(super) struct Inner {
     pub profiles: Vec<CompanionProfile>,
     pub slots: HashMap<String, Slot>,
     pub last_views: Vec<CompanionView>,
+    /// The default companion's id as saved (resolved when read: `default_id`).
+    pub default_id: Option<String>,
+}
+
+impl Inner {
+    /// The default companion: the saved one while it is there and not archived, else the first that is not archived.
+    pub(super) fn default_id(&self) -> Option<String> {
+        store::resolve_default(&self.profiles, self.default_id.as_deref())
+    }
+
+    /// Companions (other than `except`) that want to be awake.
+    pub(super) fn awake_count(&self, except: Option<&str>) -> usize {
+        self.slots.iter().filter(|(id, slot)| slot.keeper.want() && Some(id.as_str()) != except).count()
+    }
 }
 
 pub struct Service {
@@ -156,6 +172,7 @@ impl Slot {
             notice_open: false,
             notice_pressed_ms: None,
             home_problem: None,
+            vault: None,
         }
     }
 }
@@ -164,11 +181,11 @@ impl Service {
     /// Loads the saved companions from `root` (the app data folder). A damaged `companions.json` starts
     /// with none and is left untouched on disk.
     pub fn new(host: Arc<dyn Host>, root: PathBuf) -> Self {
-        let profiles = match store::load(&root) {
-            Ok(list) => list,
+        let (profiles, default_id) = match store::load_all(&root) {
+            Ok(loaded) => loaded,
             Err(e) => {
                 tracing::warn!(error = %e, "companions.json could not be read; starting with none");
-                Vec::new()
+                (Vec::new(), None)
             }
         };
         let mut slots = HashMap::new();
@@ -177,13 +194,14 @@ impl Service {
             let label = host.agent_label(&profile.agent_type);
             slots.insert(profile.id.clone(), Slot::new(profile, runtime, label));
         }
-        Service { host, root, inner: Mutex::new(Inner { profiles, slots, last_views: Vec::new() }) }
+        Service { host, root, inner: Mutex::new(Inner { profiles, slots, last_views: Vec::new(), default_id }) }
     }
 
     /// One pass over every companion. Cheap when nothing changes; call it about once a second.
     pub fn tick(&self) {
         let mut inner = self.inner.lock();
         let now = self.host.now_ms();
+        self.enforce_awake_cap(&mut inner, now);
         for i in 0..inner.profiles.len() {
             if !inner.profiles[i].archived {
                 self.tick_one(&mut inner, i, now);
@@ -194,8 +212,36 @@ impl Service {
         self.publish_if_changed(&mut inner, now);
     }
 
+    /// At most `MAX_AWAKE_COMPANIONS` companions are awake. The default one keeps its place first, then the
+    /// saved order; the ones beyond the limit go to sleep (their folders and memory are untouched).
+    fn enforce_awake_cap(&self, inner: &mut Inner, now: i64) {
+        if inner.awake_count(None) <= MAX_AWAKE_COMPANIONS {
+            return;
+        }
+        let default = inner.default_id();
+        let mut order: Vec<CompanionProfile> = inner.profiles.iter().filter(|p| !p.archived).cloned().collect();
+        order.sort_by_key(|p| Some(&p.id) != default.as_ref());
+        let mut awake = 0;
+        for profile in order {
+            let Some(slot) = inner.slots.get_mut(&profile.id) else { continue };
+            if !slot.keeper.want() {
+                continue;
+            }
+            awake += 1;
+            if awake <= MAX_AWAKE_COMPANIONS {
+                continue;
+            }
+            slot.runtime.sleeping = true;
+            slot.keeper.sleep();
+            slot.outgoing.clear();
+            self.save_runtime(&profile.id, &slot.runtime);
+            self.feed(&profile, FeedKind::Slept, now, "Went to sleep: only 3 companions can be awake at once.");
+        }
+    }
+
     pub(super) fn tick_one(&self, inner: &mut Inner, i: usize, now: i64) {
         let profile = inner.profiles[i].clone();
+        let room_to_wake = inner.awake_count(Some(&profile.id)) < MAX_AWAKE_COMPANIONS;
         let pane_id = pane_id_of(&profile.id);
         let offset = self.host.offset_secs();
         let Some(slot) = inner.slots.get_mut(&profile.id) else { return };
@@ -209,7 +255,7 @@ impl Service {
         // 1. check-ins
         runtime_dirty |= schedule::ensure_anchors(&mut slot.runtime.last_runs, &profile.checkins, now);
         for due in schedule::due(now, offset, &profile.checkins, &slot.runtime.last_runs) {
-            self.handle_due(&profile, slot, &pane_id, &due, now, offset);
+            self.handle_due(&profile, slot, &pane_id, &due, now, offset, room_to_wake);
             runtime_dirty = true;
             if profile.checkins.iter().any(|c| c.id == due.id && matches!(c.when, super::model::When::Once { .. })) {
                 finished_once.push(due.id.clone());
@@ -232,6 +278,7 @@ impl Service {
         // 4. messages, 5. the rest
         self.flush_outgoing(&profile, slot, &pane_id, now);
         runtime_dirty |= self.maybe_nap(&profile, slot, &pane_id, now, offset);
+        runtime_dirty |= self.update_vault(&profile, slot, now, offset);
         self.read_reply(&profile, slot, &pane_id, now);
         self.refresh_pending(&profile, slot, now);
         self.update_today(&profile, slot, now, offset);
@@ -252,7 +299,8 @@ impl Service {
 
     // ---- 1. check-ins -------------------------------------------------------------------------
 
-    fn handle_due(&self, profile: &CompanionProfile, slot: &mut Slot, pane_id: &str, due: &schedule::Due, now: i64, offset: i32) {
+    #[allow(clippy::too_many_arguments)]
+    fn handle_due(&self, profile: &CompanionProfile, slot: &mut Slot, pane_id: &str, due: &schedule::Due, now: i64, offset: i32, room_to_wake: bool) {
         slot.runtime.last_runs.insert(due.id.clone(), now);
         let label = &due.label;
         if due.call == schedule::Call::Missed {
@@ -275,6 +323,10 @@ impl Service {
             self.feed(profile, FeedKind::Missed, now, &format!("Skipped \"{label}\": the last check-in is still waiting."));
             return;
         }
+        if !slot.keeper.want() && !room_to_wake {
+            self.feed(profile, FeedKind::Missed, now, &format!("Skipped \"{label}\": {MAX_AWAKE_COMPANIONS} companions are already awake."));
+            return;
+        }
         schedule::note_send(&mut slot.runtime.sent_today, &today);
         if !slot.keeper.want() {
             slot.runtime.sleeping = false;
@@ -283,7 +335,7 @@ impl Service {
         }
         slot.outgoing.push(Outgoing {
             kind: OutKind::Checkin(label.clone()),
-            text: format!("{CHECKIN_PREFIX} {label}] {}", due.text),
+            text: format!("{CHECKIN_PREFIX} {label}] {}{}", due.text, self.vault_tip(slot, now, offset)),
             queued_ms: now,
         });
     }
@@ -348,7 +400,8 @@ impl Service {
         agents::check_launch_args(&profile.launch_args).map_err(|e| e.to_string())?;
         self.host.agent_ok(&profile.agent_type, &profile.folder)?;
         files::ensure_home(&self.root, profile).map_err(|e| e.to_string())?;
-        let instruction_files = self.write_brief(profile)?;
+        let instruction_files = self.write_brief_for(profile, Some(&*slot))?;
+        self.vault_accept_persona(profile, slot);
         self.host.spawn(&SpawnSpec {
             pane_id: pane_id.to_string(),
             agent_type: profile.agent_type.clone(),
@@ -370,13 +423,19 @@ impl Service {
     /// Writes the brief into the agent's instruction file (the `today.md` rule only when it is on, the `companion_recall` rule only while the search index is on).
     /// Returns the agent's instruction files.
     pub(super) fn write_brief(&self, profile: &CompanionProfile) -> Result<Vec<crate::tui::InstructionFile>, String> {
+        self.write_brief_for(profile, None)
+    }
+
+    /// `write_brief`, with the slot of the companion when a start is writing it (the vault tip comes from there).
+    fn write_brief_for(&self, profile: &CompanionProfile, slot: Option<&Slot>) -> Result<Vec<crate::tui::InstructionFile>, String> {
         let home = Path::new(&profile.folder);
         let texts = memory::snapshot(&self.root, &profile.id, home).map_err(|e| e.to_string())?;
         let instruction_files = self.host.instruction_files(&profile.agent_type);
-        let rules = brief::Rules { share_today: profile.share_today, recall: self.host.recall_on() };
+        let vault = self.vault_brief(profile, slot, self.host.now_ms(), self.host.offset_secs());
+        let rules = brief::Rules { share_today: profile.share_today, recall: self.host.recall_on() || vault.on };
         // Titles and paths of the approved skills only, never the bodies. A skills folder that cannot be read just lists none.
         let skills = super::skills::brief_lines(&self.root, &profile.id, home).unwrap_or_default();
-        let text = brief::compose_full(&profile.name, &texts, rules, &skills);
+        let text = brief::compose_vault(&profile.name, &texts, rules, &skills, &vault);
         // Agents below the home read this file too; the first line tells them it is not for them.
         let text = brief::guarded(&profile.name, &profile.folder, &text);
         brief::write(home, &text, &instruction_files).map_err(|e| e.to_string())?;
@@ -493,6 +552,10 @@ impl Service {
         if !due {
             return false;
         }
+        // With the vault on, the nap waits once for the day's diary (at most ten minutes).
+        if let Some(dirty) = self.diary_gate(profile, slot, now, offset) {
+            return dirty;
+        }
         slot.keeper.note_own_kill();
         self.host.kill(pane_id);
         self.host.release_reader(pane_id, &profile.id);
@@ -538,6 +601,9 @@ impl Service {
         slot.pending_checked_ms = now;
         let home = Path::new(&profile.folder);
         let Ok(mut items) = memory::read_pending(home) else { return };
+        if !self.host.vault_on() {
+            items.retain(|i| i.kind != super::model::PendingKind::Person);
+        }
         if !profile.memory_review && slot.state == CompanionState::Idle {
             for id in memory::auto_keep_ids(&items) {
                 if memory::decide(&self.root, &profile.id, home, &id, memory::Decision::Keep).is_err() {
@@ -545,6 +611,9 @@ impl Service {
                 }
             }
             items = memory::read_pending(home).unwrap_or(items);
+            if !self.host.vault_on() {
+                items.retain(|i| i.kind != super::model::PendingKind::Person);
+            }
         }
         let count = items.len() as u32;
         if slot.pending_seen && count > slot.pending {
@@ -605,8 +674,10 @@ impl Service {
         let profile = &inner.profiles[i];
         let offset = self.host.offset_secs();
         let previous_label = profile.previous_agent.as_ref().map(|p| self.host.agent_label(&p.agent_type));
+        let is_default = inner.default_id().as_deref() == Some(profile.id.as_str());
         let live = match inner.slots.get(&profile.id) {
             Some(slot) => view::Live {
+                is_default,
                 state: slot.state,
                 state_line: slot.line.clone(),
                 pane_id: slot.pane_there.then(|| pane_id_of(&profile.id)),
@@ -622,8 +693,10 @@ impl Service {
                     until_ms: m.until_ms,
                 }),
                 home_problem: slot.home_problem.as_ref().and_then(|(_, problem)| problem.clone()),
+                body: slot.vault.as_ref().map(|v| v.body.view(slot.runtime.sleeping)),
             },
             None => view::Live {
+                is_default,
                 state: CompanionState::Sleeping,
                 state_line: keeper::SLEEPING_LINE.to_string(),
                 pane_id: None,
@@ -635,6 +708,7 @@ impl Service {
                 previous_agent_label: previous_label,
                 queued_move: None,
                 home_problem: None,
+                body: None,
             },
         };
         view::build(profile, &live)

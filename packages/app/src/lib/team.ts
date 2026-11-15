@@ -132,6 +132,39 @@ export type TeamTransport = 'folder' | 'relay';
  */
 export type TeamLink = 'live' | 'polling' | 'connecting' | 'denied' | 'offline';
 
+/** How much of what I am doing teammates see. Default `here`: the project name and the chat title are shared only when the person turns them on. */
+export type ShareLevel = 'nothing' | 'here' | 'project' | 'title';
+
+export interface ShareView {
+  level: ShareLevel;
+  /** Project folders that never share their name or titles (the level drops to `here` for them). */
+  exclude: string[];
+}
+
+export const DEFAULT_SHARE: ShareView = { level: 'here', exclude: [] };
+
+/** One teammate's presence as this app knows it. A member who is absent is "not here". project/title are null unless that person shares them. */
+export interface PresenceView {
+  member: string;
+  state: 'here' | 'away' | 'gone';
+  atMs: number;
+  sinceMs: number;
+  project: string | null;
+  title: string | null;
+  running: number;
+  waiting: number;
+}
+
+/** What the cockpit knows about me right now. The Rust side applies the share level and cleans the words before anything is sent. */
+export interface PresenceReport {
+  away: boolean;
+  projectName: string | null;
+  projectPath: string | null;
+  title: string | null;
+  running: number;
+  waiting: number;
+}
+
 export interface TeamState {
   enabled: boolean;
   active: boolean;
@@ -146,6 +179,10 @@ export interface TeamState {
   drafts: TeamDraft[];
   cards: TeamCard[];
   jobs: TeamJob[];
+  /** Absent from an older backend: nobody is known to be here. */
+  presence?: PresenceView[];
+  /** Absent from an older backend: the default level. */
+  share?: ShareView;
 }
 
 export type TeamRole = 'watch' | 'approve' | 'admin';
@@ -220,10 +257,30 @@ export interface TeamJoinInput {
   github?: string | null;
 }
 
+/** What an invite link says before the person says yes (asked of the Worker; never uses the invite up). */
+export interface InviteLookup {
+  host: string;
+  teamName: string;
+  inviter: string;
+  expiresAtMs: number;
+}
+
+/** What an invite link says before the person says yes (asked of the Worker; never uses the invite up). */
+export interface InviteLookup {
+  host: string;
+  teamName: string;
+  inviter: string;
+  expiresAtMs: number;
+}
+
 export interface InviteView {
   link: string;
   code: string;
   expiresAtMs: number;
+  /** The one-time link on the Potato Worker (works once, 24 hours), when the relay can make one. */
+  joinUrl?: string;
+  /** Why there is no one-time link: "update-worker" (an older deploy) or a short sentence. */
+  joinUrlNote?: string;
 }
 
 /** "Create team relay": the deploy steps, in order, as `team://relay-deploy` names them when each starts. */
@@ -283,6 +340,10 @@ export interface TeamApi {
   create: (input: TeamCreateInput) => Promise<TeamConfigView>;
   invite: () => Promise<InviteView>;
   join: (input: TeamJoinInput) => Promise<TeamConfigView>;
+  /** What an invite link (https://<worker>/join/<code>) says, for the "Join?" popup. Absent from an older backend. */
+  inviteLookup?: (link: string) => Promise<InviteLookup>;
+  /** Joins through an invite link: the Worker burns it, the team owner still has to say yes. */
+  inviteAccept?: (input: { link: string; name: string; github?: string | null }) => Promise<TeamConfigView>;
   leave: () => Promise<TeamConfigView>;
   approveJoin: (joinId: string) => Promise<TeamConfigView>;
   declineJoin: (joinId: string) => Promise<TeamConfigView>;
@@ -290,6 +351,10 @@ export interface TeamApi {
   /** Admin: the member's claimed GitHub login is theirs (GitHub facts about it then show as theirs). */
   confirmGithub: (memberId: string) => Promise<TeamConfigView>;
   clearGaps: () => Promise<void>;
+  /** Tells the backend what I am doing (every 30 s and when it changes). Absent from an older backend. */
+  presenceReport?: (report: PresenceReport) => Promise<void>;
+  /** "Share what I am doing": the level and the projects that share nothing but "here". Absent from an older backend. */
+  shareSet?: (level: ShareLevel, exclude: string[]) => Promise<ShareView>;
   /** Times every other computer of the team (relay teams only). Absent from an older backend. */
   ping?: () => Promise<DevicePing[]>;
   mergePlan: (cardId: string) => Promise<MergePlan>;
@@ -330,12 +395,16 @@ export const teamApi: TeamApi = {
   create: (input) => call('team_create', { input }),
   invite: () => call('team_invite'),
   join: (input) => call('team_join', { input }),
+  inviteLookup: (link) => call('team_invite_lookup', { link }),
+  inviteAccept: (input) => call('team_invite_accept', { input }),
   leave: () => call('team_leave'),
   approveJoin: (joinId) => call('team_join_approve', { joinId }),
   declineJoin: (joinId) => call('team_join_decline', { joinId }),
   removeMember: (memberId) => call('team_member_remove', { memberId }),
   confirmGithub: (memberId) => call('team_member_confirm_github', { memberId }),
   clearGaps: () => call('team_gaps_clear'),
+  presenceReport: (report) => call('team_presence_report', { report }),
+  shareSet: (level, exclude) => call('team_share_set', { level, exclude }),
   ping: () => call('team_ping'),
   mergePlan: (cardId) => call('team_merge_plan', { cardId }),
   mergeWhenGreen: (cardId, headSha) => call('team_merge_when_green', { cardId, headSha }),

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { useAttention } from '../../hooks/useAttention';
 import { useAgentRegistry } from '../../lib/agentRegistry';
+import { useCompanions } from '../../hooks/useCompanions';
+import { defaultCompanion } from '../cockpit/companion/model';
 import { reducedMotion } from '../../lib/comfort/model';
 import { useComfort } from '../../lib/comfort/store';
 import { loadNotifyPrefs, readQuiet } from '../../lib/notify-store';
@@ -40,6 +42,9 @@ export default function PetApp() {
   const [prefs] = useComfort();
   const listing = useAgentRegistry();
   const snapshot = useAttention();
+  // The pet stands for the default companion: when the person changes the default, the list event brings the new name.
+  const companions = useCompanions();
+  const defaultName = defaultCompanion(companions.companions)?.name;
 
   // Settings: read once, then again whenever any window saves.
   useEffect(() => {
@@ -119,6 +124,7 @@ export default function PetApp() {
       lessMotion={reducedMotion(prefs, systemReduce)}
       api={tauriPetApi}
       env={env}
+      companionName={defaultName}
     />
   );
 }

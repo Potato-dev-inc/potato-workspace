@@ -290,6 +290,40 @@ export interface PerfSummary {
   chatWarm: PerfStat;
   chatCold: PerfStat;
   handshake: PerfStat;
+  /** From sending a message to the first sign of an answer. */
+  firstReply: PerfStat;
+  /** One run of "Check my setup". */
+  setupCheck: PerfStat;
+  /** Chat starts that used a session kept ready ahead of time, and those that did not. */
+  warmHits: number;
+  warmMisses: number;
+  /** The steps of the last app start, in order. */
+  startupSteps: { name: string; stepMs: number }[];
+  startupTotalMs: number | null;
+}
+
+/** What a project may use in a day (null = no limit). */
+export interface ProjectBudgetLimits {
+  turnsPerDay: number | null;
+  minutesPerDay: number | null;
+  planPercent: number | null;
+}
+
+/** Where a chat's project stands today; null from the command when the project has no limits. */
+export interface ProjectBudgetStatus {
+  limits: ProjectBudgetLimits;
+  usedTurns: number;
+  usedMinutes: number;
+  planPercent: number | null;
+  reached: 'turns' | 'minutes' | 'plan' | null;
+}
+
+/** The quiet "try a different model" line after a turn. */
+export interface RightSizeSuggestion {
+  kind: 'smaller' | 'stronger';
+  fromName: string;
+  toValue: string;
+  toName: string;
 }
 
 export interface LastRun {

@@ -18,6 +18,7 @@ import { blockOf, type AcpAddonApi } from '../../lib/acpAddon';
 import type { StartMode } from '../../lib/newAgentStart';
 import { NoChatPrompt, type AddChatKind, type NoChatAgent } from './NoChatPrompt';
 import { HiddenAgentsEditor } from './newagent/HiddenAgentsEditor';
+import { openNewStandby } from '../../lib/standbyHelpers';
 import { useHiddenAgents, visibleAgentEntries } from '../../lib/hiddenAgents';
 
 /** Where a click on an agent goes: a terminal, a chat, a chat in a terminal, or the "no chat yet" prompt. */
@@ -683,6 +684,18 @@ export function NewAgentMenu({
             ))}
         </>
       )}
+      <button
+        type="button"
+        role="menuitem"
+        className="ck-menu-item"
+        data-testid="new-standby-item"
+        onClick={() => {
+          onClose();
+          openNewStandby(project?.path);
+        }}
+      >
+        <span>{t('standby.menuNew')}</span>
+      </button>
       {onIsolated && (
         <>
           <div className="ck-menu-toggle" title={t('newAgent.copyTip')}>

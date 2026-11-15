@@ -3,6 +3,7 @@
 // closes and gives the focus back. Generic: they know nothing about which setting they show.
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import '../../styles/chat-input-card.css';
+import { useDismissable } from '../../hooks/useDismissable';
 
 export interface ChipChoice {
   value: string;
@@ -75,15 +76,8 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
   useEffect(() => {
     if (open) list.current?.focus();
   }, [open]);
-  // A click outside closes it (the focus stays where the person clicked).
-  useEffect(() => {
-    if (!open) return;
-    const away = (event: PointerEvent) => {
-      if (root.current && !root.current.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', away);
-    return () => document.removeEventListener('pointerdown', away);
-  }, [open]);
+  // A click outside closes it (the focus stays where the person clicked). Escape is handled in onListKey (it keeps the composer's Esc away).
+  useDismissable(open, { inside: [root], anchor: root, ignore: ['escape'], onDismiss: () => setOpen(false) });
   // The pill goes off while the agent works: a list that is open closes.
   useEffect(() => {
     if (disabled) setOpen(false);

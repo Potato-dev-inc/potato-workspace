@@ -72,6 +72,7 @@ function TurnBlock({ turn, fromScreen, markdown, onPress, price, onOpenArtifact,
       )}
       {foldTurnSteps(turn.steps).map((piece) => {
         if (piece.kind === 'fold') return <FoldedSteps key={`fold:${piece.id}`} steps={piece.steps} live={live} fromScreen={fromScreen} />;
+        if (piece.kind === 'ask') return <ToolRow key={piece.step.id} step={piece.step} fromScreen={fromScreen} live={live} />;
         if (piece.kind === 'failed') {
           return (
             <div key={piece.step.id} className="ph-failed" data-testid="phone-failed-step">

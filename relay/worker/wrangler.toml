@@ -38,6 +38,22 @@ class_name = "RoomIndex"
 tag = "v2"
 new_sqlite_classes = ["Room", "RoomIndex"]
 
+
+# The stable phone link (one object: one Worker serves one PC; a SQLite-backed object, not KV, because a new
+# address must take effect at once) and invite links (one object per one-time code). Separate from the team
+# objects above: they share nothing.
+[[durable_objects.bindings]]
+name = "LINK"
+class_name = "StableLink"
+
+[[durable_objects.bindings]]
+name = "INVITES"
+class_name = "InviteBox"
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["StableLink", "InviteBox"]
+
 # The viewer page (relay/viewer/dist) is served as text from the Worker's own bundle, with the
 # same policy as relay/server (see index.ts). Only these three names: the Worker's code is JavaScript too.
 [[rules]]
@@ -68,6 +84,17 @@ globs = ["**/viewer.html", "**/viewer.js", "**/viewer.css"]
 # LIMIT_ROOM_VIEWS_PER_MINUTE = "120"
 # LIMIT_ROOM_MAX_OPEN = "100"
 # Never set TEST_HOOKS on a real deployment: it opens /v1/_test (read and wipe a team's data).
+
+# Stable phone link and invite links (optional; add them to the [vars] table above if you use it):
+# SAFER LINK SETUP: SETUP_SECRET_SHA256 = the SHA-256 of your link secret, as 64 lowercase hex characters. When
+# it is set, only a PC that knows that secret can link, and nobody can claim the link first. Without it, the
+# first PC that registers wins ("trust on first use"): deploy, then link right away. Get it with:
+#   node -e "console.log(require('crypto').createHash('sha256').update(process.argv[1]).digest('hex'))" YOUR_SECRET
+# RATE_LIMIT_PER_HOUR = "30"        (link register and reset attempts per address per hour)
+# DOWNLOAD_URL = "https://..."      (where the invite page sends someone who has no app yet)
+# NEVER set ALLOWED_ORIGIN_RE on a real deployment. It replaces the rule that only
+# https://<name>.trycloudflare.com may be linked, and would turn the Worker into an open proxy.
+# Only the local test runner sets it. Never set TEST_HOOKS either.
 
 [observability]
 enabled = true

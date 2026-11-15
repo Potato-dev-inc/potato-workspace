@@ -1061,7 +1061,7 @@
   height: min(60vh, 560px);
   border: 1px solid var(--sep);
   border-radius: 8px;
-  background: #fff;
+  background: var(--paper, white);
 }
 .cockpit .ck-chat-export-switch {
   margin: 10px 0;

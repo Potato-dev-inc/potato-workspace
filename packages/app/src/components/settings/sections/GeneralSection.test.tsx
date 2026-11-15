@@ -19,6 +19,8 @@ vi.mock('../../../lib/tauri', () => ({
   tauri: {
     lastRunStatus: vi.fn(async () => null),
     perfSummary: vi.fn(async () => null),
+    projectBudgetLimits: vi.fn(async () => null),
+    projectBudgetSet: vi.fn(async (_project: string, limits: unknown) => limits),
     getAppInstallInfo: vi.fn(async () => mocks.install),
     getCoordinationStorageInfo: vi.fn(async () => mocks.storage),
     launchUninstall: vi.fn(async () => undefined),

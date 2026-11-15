@@ -138,7 +138,7 @@
   width: 100%;
   height: 100%;
   border: 0;
-  background: white;
+  background: var(--paper, white);
 }
 .ph .ph-art-body .ck-sandbox-fit {
   flex: 1;
@@ -146,4 +146,132 @@
   width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+/* The page beside the chat: a column between the chat and the right panel. The chat is never moved by it. */
+.cockpit .ck-pane-row {
+  position: relative;
+}
+.cockpit .ck-artside {
+  flex: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--sep);
+  background: var(--bg);
+}
+.cockpit .ck-artside > .ck-art {
+  flex: 1;
+  min-height: 0;
+}
+/* Full width: it lies over the chat and the right panel, which stay where they are underneath (and mounted). */
+.cockpit .ck-artside--full {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  width: auto;
+  border-left: 0;
+}
+.cockpit .ck-resize--artside {
+  margin-left: -5px;
+  margin-right: -4px;
+}
+.cockpit[data-focus-mode] .ck-resize--artside {
+  display: none;
+}
+.cockpit .ck-art-head .ck-btn.is-on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.cockpit .ck-art-hint {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--sep);
+}
+.cockpit .ck-art-point,
+.cockpit .ck-art-share {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--sep);
+  background: var(--fill);
+}
+.cockpit .ck-art-point-what,
+.cockpit .ck-art-share-body {
+  margin: 0;
+  font-size: 12px;
+  color: var(--label-2);
+  overflow-wrap: anywhere;
+}
+.cockpit .ck-art-point-input,
+.cockpit .ck-art-share-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--label);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.cockpit .ck-art-share-input {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+.cockpit .ck-art-point-row,
+.cockpit .ck-art-share-row,
+.cockpit .ck-art-share-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cockpit .ck-art-share-link {
+  align-items: stretch;
+}
+.cockpit .ck-art-share-link .ck-art-share-input {
+  flex: 1 1 220px;
+  width: auto;
+}
+.cockpit .ck-art-share-for {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.cockpit .ck-art-share-meta {
+  margin: 0;
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.cockpit .ck-art-share-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+.cockpit .ck-art-picking {
+  cursor: crosshair;
+}
+.cockpit .ck-art-picking * {
+  cursor: crosshair;
+}
+
+/* An artifact's own window: the page fills it. */
+.cockpit.ck-artwin {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cockpit.ck-artwin > .ck-art {
+  flex: 1;
+  min-height: 0;
 }

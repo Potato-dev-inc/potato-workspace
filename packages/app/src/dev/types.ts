@@ -53,6 +53,8 @@ export interface HarnessScenario {
     search?: string;
     /** Phone part 2: the agents that have their own remote rule on the PC (`GET /pane-rules`). */
     rules?: Record<string, { remote: boolean; level: 'watch' | 'answer' | 'full' }>;
+    /** Leaving my desk: what `GET /desk-away` answers (absent: an older PC, 404). */
+    desk?: import('../lib/desk-away-types').DeskAway;
     /** Phone part 2: open as a phone that was just paired (the three setup steps show). */
     setup?: boolean;
     /** Phone chats (phone-acp): what the mocked PC answers for a chat session over ACP, the new-chat choices and the closed chats. */
@@ -73,7 +75,7 @@ export interface HarnessScenario {
   /** Phone route: override the panes the mocked bridge lists. */
   phonePanes?: PaneInfo[];
   /** App theme the mocked settings store reports (default dark). */
-  theme?: 'dark' | 'light';
+  theme?: 'dark' | 'light' | 'dim';
   /** Cockpit: start as a brand-new install (no agent was ever opened here). Default: an install that has been used.
    *  A `firstRun` scenario is a brand-new install too. */
   newInstall?: boolean;
@@ -99,6 +101,12 @@ export interface HarnessScenario {
   awayDigest?: boolean;
   /** Cockpit: show one companion ("Mochi") in this state in the sidebar. Absent: no companion yet. */
   companion?: import('../lib/companion').CompanionState;
+  /** With `companion`: also show Bit (sky) and Nib (mint, asleep) next to Mochi, the default. */
+  moreCompanions?: boolean;
+  /** With `companion`: Mochi has a body state (Labs: companion vault), and `companion_journal` answers. */
+  companionBody?: boolean;
+  /** With `companion`: the Discord bot card (Labs) is on, with a saved token (ends in ab12) and one allowed server. */
+  companionDiscord?: boolean;
   /** Run info the mocked `pane_run_info` returns per pane id (default: only the example Claude pane has one). */
   runs?: Record<string, import('../lib/cockpit-api').PaneRunInfo>;
   /** Cockpit History: make `checkpoints_list` answer with this state instead of the example list. */
@@ -115,6 +123,8 @@ export interface HarnessScenario {
   authority?: { ask_before_agent_control: boolean; agents_may_merge: boolean };
   /** Settings > Security: lines of the audit log the mocked backend returns (newest first). */
   audit?: { seq: number; ts_ms: number; kind: string; who: string; summary: string }[];
+  /** Turn summaries the mocked `turn_summaries` returns per pane id (Inbox > Done today). Absent: the example ones. */
+  turnSummaries?: Record<string, import('../lib/cockpit-api').TurnSummary[]>;
   /** Team (Inbox > Team, the toast, Settings > Labs): what the mocked `team_state` returns. */
   team?: import('../lib/team').TeamState;
   /** Simple mode: turns the switch on and gives the panes, pages and answers it shows (see simple-fixtures.ts). */
@@ -127,6 +137,8 @@ export interface HarnessScenario {
   ship?: import('./ship-fixtures').ShipScenario;
   /** Missions (Preview): the Labs switch and what the mocked `mission_*` commands answer. */
   missions?: import('./mission-fixtures').MissionScenario;
+  /** Project budget, right-size line and Speed report: what the mocked commands answer (see project-budget-fixtures.ts). */
+  projectBudget?: import('./project-budget-fixtures').ProjectBudgetScenario;
   /** Keep going: the picker rows, the hand-over lines per pane and the brief the mocked `keep_going_*` commands answer. */
   keepGoing?: import('./keep-going-fixtures').KeepGoingScenario;
   /** Branch from here: what the mocked `branch_lineage` and `branch_brief` commands answer (see branch-fixtures.ts). */
@@ -141,6 +153,8 @@ export interface HarnessScenario {
   usage?: import('../lib/usage').UsageSnapshot;
   /** Package check: the packages the mocked approval carries and what the mocked `package_check_*` commands answer. */
   packageCheck?: import('./package-check-fixtures').PackageCheckScenario;
+  /** Leaving my desk: the state the mocked `get_desk_away` starts with (absent: one phone paired, the switch off). */
+  desk?: import('../lib/desk-away-types').DeskAway;
   /** Review Desk: what the mocked `review_desk_*` commands answer (see review-desk-fixtures.ts). */
   reviewDesk?: import('./review-desk-fixtures').ReviewDeskScenario;
   /** Closed chats: the chats the mocked `acp_closed_list` starts with (see closed-chats-fixtures.ts). Absent = none, so the sidebar has no Closed chats row. */
@@ -161,6 +175,8 @@ export interface HarnessScenario {
   devices?: import('./devices-fixtures').DevicesScenario;
   /** Settings > Labs > Team: overrides on top of the example config (on a team as admin) the mocked `team_config_get` returns. */
   teamConfig?: Partial<import('../lib/team').TeamConfigView>;
+  /** Potato Worker: what the mocked invite and worker commands answer (one-time invite link, what the Worker lists). */
+  worker?: { inviteLink?: boolean; features?: string[]; inviteNote?: string };
   /** Set up agents > Install: what the mocked `agents_install_*` commands answer. */
   doctorInstall?: {
     /** The plan for the missing agent: winget (one step), prereq (Node.js first), script (vendor script), blocked (no winget). */

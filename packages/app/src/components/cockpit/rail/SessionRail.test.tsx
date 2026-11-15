@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
+// Screen-level: the right panel as one flat column of sections, rendered through the real SessionRail.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useEnglish } from '../../../i18n/test-utils';
 import { SessionRail } from './SessionRail';
+import { resetRailFoldForTests } from './railFold';
 
 const chat = vi.hoisted(() => ({ current: {} as Record<string, unknown>, calls: [] as Array<[string, boolean]> }));
 vi.mock('../../../hooks/useSessionChat', () => ({
@@ -12,13 +15,22 @@ vi.mock('../../../hooks/useSessionChat', () => ({
   },
 }));
 vi.mock('./usePaneBranch', () => ({ usePaneBranch: () => 'feat/rail' }));
+const jobs = vi.hoisted(() => ({ list: [] as unknown[] }));
+vi.mock('../../../lib/pane-jobs', async (orig) => ({
+  ...(await orig<typeof import('../../../lib/pane-jobs')>()),
+  usePaneJobs: () => ({ p1: jobs.list }),
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  useEnglish();
+  window.localStorage.clear();
+  resetRailFoldForTests();
   chat.calls = [];
+  jobs.list = [];
   chat.current = {
     model: 'model-x',
     cliVersion: '1.2.3',
@@ -27,9 +39,14 @@ beforeEach(() => {
       { text: 'Step one', status: 'completed' },
       { text: 'Step two', status: 'pending' },
     ],
-    outputs: [{ path: '/work/shop/notes.txt', tool: 'Write', wrote: true }],
+    outputs: [
+      { path: '/work/shop/notes.md', tool: 'Write', wrote: true },
+      { path: '/work/shop/src/app.ts', tool: 'Edit', wrote: true },
+    ],
+    turns: [{ steps: [{ kind: 'tool', call: { name: 'mcp__github__list_prs' } }] }],
   };
   host = document.createElement('div');
+  host.className = 'cockpit';
   document.body.appendChild(host);
   root = createRoot(host);
 });
@@ -42,65 +59,172 @@ const props = {
   paneId: 'p1',
   status: 'idle',
   cwd: '/work/shop',
-  agentName: 'Claude',
+  agentType: 'claude',
+  agentName: 'Claude 1',
   accountLabel: null,
   readsChat: true,
   helperOf: null,
   helpers: [],
   onOpenPane: () => {},
 };
+const mount = async (extra: Record<string, unknown> = {}) => {
+  await act(async () => root.render(<SessionRail {...props} {...extra} />));
+  await act(async () => {});
+};
+const labels = () => [...host.querySelectorAll('.rp-sec-h button > span:first-child')].map((s) => s.textContent);
 
-describe('SessionRail', () => {
-  it('shows every card from the pane chat data', () => {
-    act(() => root.render(<SessionRail {...props} helpers={[{ id: 'h', title: 'Check tests', agent: 'Codex', status: 'running' }]} />));
+describe('SessionRail sections', () => {
+  it('shows the sections in order, from the pane chat data', async () => {
+    await mount();
+    expect(labels()).toEqual(['Environment', 'Context', 'Plan', 'Connectors', 'Outputs', 'Changes', 'Background tasks', 'Files']);
     const text = host.textContent ?? '';
-    expect(text).toContain('model-x');
     expect(text).toContain('feat/rail');
-    expect(text).toContain('96k of 200k tokens (48%)');
+    expect(text).toContain('48% used');
+    expect(text).toContain('96k of 200k');
     expect(text).toContain('1 of 2 done');
-    expect(text).toContain('notes.txt');
-    expect(text).toContain('Check tests');
+    expect(text).toContain('notes.md');
     expect(chat.calls[0]).toEqual(['p1', true]);
   });
-  it('hides the cards that have nothing, Context included', () => {
-    chat.current = { model: null, cliVersion: null, usage: null, plan: [], outputs: [] };
-    act(() => root.render(<SessionRail {...props} />));
-    const text = host.textContent ?? '';
-    expect(text).not.toContain("This agent doesn't share this");
-    expect(host.querySelector('[data-testid="rail-context"]')).toBeNull();
-    expect(text).not.toContain('Tasks');
-    expect(text).not.toContain('Changes');
-    expect(text).not.toContain('Helpers');
+
+  it('puts no result strip, cards or boxes in the panel, and the agent is the top line', async () => {
+    await mount();
+    expect(host.querySelector('.ck-rail-card')).toBeNull();
+    expect(host.querySelector('[data-testid="acp-result"]')).toBeNull();
+    expect(host.querySelector('[data-testid="rail-top"]')!.textContent).toContain('Claude 1');
+    expect(host.querySelector('[data-testid="rail-pill"]')!.textContent).toBe('Done');
   });
-  it('does not read a chat for a plain shell', () => {
-    act(() => root.render(<SessionRail {...props} readsChat={false} />));
+
+  it('shows every empty line for a new chat, so the panel does not jump when work starts', async () => {
+    chat.current = { model: null, cliVersion: null, usage: null, plan: [], outputs: [], turns: [] };
+    await mount();
+    const text = host.textContent ?? '';
+    expect(host.querySelector('[data-testid="rail-pill"]')!.textContent).toBe('Ready');
+    for (const line of ['Nothing made yet', 'No changes yet', 'Nothing running', 'No connectors', '0% used']) expect(text).toContain(line);
+    expect(labels()).not.toContain('Plan');
+  });
+
+  it('says so when the agent does not share its window', async () => {
+    chat.current = { ...chat.current, usage: null };
+    await mount();
+    expect(host.textContent).toContain('Not shared by this agent');
+  });
+
+  it('Outputs lists made things (not code), with their kind', async () => {
+    await mount();
+    const out = host.querySelector('[data-testid="rail-out"]')!;
+    expect(out.textContent).toContain('notes.md');
+    expect(out.textContent).toContain('Note');
+    expect(out.textContent).not.toContain('app.ts');
+  });
+
+  it('Connectors lists the tool servers the chat used', async () => {
+    await mount();
+    const con = host.querySelector('[data-testid="rail-con"]')!;
+    expect(con.textContent).toContain('1 connected');
+    expect(con.textContent).toContain('All working');
+    act(() => con.querySelector<HTMLButtonElement>('button.rp-btn')!.click());
+    expect(con.textContent).toContain('Github');
+  });
+
+  it('does not read a chat for a plain shell', async () => {
+    await mount({ readsChat: false });
     expect(chat.calls[0]).toEqual(['p1', false]);
   });
-  it('names the parent of a helper and opens it', () => {
+
+  it('names the parent of a helper and opens it', async () => {
     const open = vi.fn();
-    act(() => root.render(<SessionRail {...props} helperOf={{ parentId: 'parent', text: 'Helper of Refactor' }} onOpenPane={open} />));
-    const link = host.querySelector<HTMLButtonElement>('.ck-rail-parent')!;
+    await mount({ helperOf: { parentId: 'parent', text: 'Helper of Refactor' }, onOpenPane: open });
+    const link = host.querySelector<HTMLButtonElement>('.rp-helper-of')!;
     expect(link.textContent).toBe('Helper of Refactor');
     act(() => link.click());
     expect(open).toHaveBeenCalledWith('parent');
   });
-  it('opens the Changes tab from a file only when the pane has one', () => {
-    act(() => root.render(<SessionRail {...props} />));
-    expect(host.querySelector('[data-testid="rail-changes"] button')).toBeNull();
+
+  it('opens the Changes tab from the Review button only when the pane has one', async () => {
+    await mount();
+    expect(host.querySelector('.rp-btn-pri')).toBeNull();
     const open = vi.fn();
-    act(() => root.render(<SessionRail {...props} onOpenChanges={open} />));
-    act(() => host.querySelector<HTMLButtonElement>('[data-testid="rail-changes"] button')!.click());
+    await mount({ onOpenChanges: open });
+    act(() => host.querySelector<HTMLButtonElement>('.rp-btn-pri')!.click());
     expect(open).toHaveBeenCalled();
   });
 });
 
-describe('SessionRail remote control', () => {
-  it('has the Remote control card for the pane, with Pair a phone when none is paired', async () => {
-    await act(async () => root.render(<SessionRail {...props} />));
+describe('the Needs you row', () => {
+  it('appears only when the agent waits, and click answers', async () => {
+    await mount();
+    expect(host.querySelector('[data-testid="rail-needs-you"]')).toBeNull();
+    const answer = vi.fn();
+    await mount({ status: 'waiting_input', ask: 'Allow npm install?', onAnswer: answer });
+    const row = host.querySelector<HTMLButtonElement>('[data-testid="rail-needs-you"]')!;
+    expect(row.textContent).toContain('Allow npm install?');
+    expect(host.querySelector('[data-testid="rail-pill"]')!.textContent).toBe('Needs you');
+    act(() => row.click());
+    expect(answer).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('folding sections', () => {
+  it('a folded section shows its one-line summary, and stays folded after a reload', async () => {
+    await mount();
+    const head = (id: string) => host.querySelector<HTMLButtonElement>(`[data-sec="${id}"] .rp-sec-h button`)!;
+    act(() => head('ctx').click());
+    expect(host.querySelector('[data-sec="ctx"] .rp-rows')).toBeNull();
+    expect(host.querySelector('[data-sec="ctx"] .rp-sum')!.textContent).toBe('48%');
+    expect(window.localStorage.getItem('pm.rail.closed')).toBe('ctx');
+    // A new session of the app reads the list again.
+    act(() => root.unmount());
+    resetRailFoldForTests();
+    root = createRoot(host);
+    await mount();
+    expect(host.querySelector('[data-sec="ctx"] .rp-rows')).toBeNull();
+    expect(head('ctx').getAttribute('aria-expanded')).toBe('false');
+  });
+});
+
+describe('Background tasks', () => {
+  it('lists helpers with a stop square, and "Needs you" for a waiting helper', async () => {
+    const stop = vi.fn(async () => {});
+    await mount({
+      helpers: [
+        { id: 'h1', title: 'Reviewer', agent: 'Codex', agentType: 'codex', status: 'running' },
+        { id: 'h2', title: 'Tests', agent: 'Claude', agentType: 'claude', status: 'waiting_input' },
+        { id: 'h3', title: 'Docs', agent: 'Gemini', agentType: 'gemini', status: 'idle' },
+      ],
+      onStopHelper: stop,
+    });
+    const bg = host.querySelector('[data-testid="rail-bg"]')!;
+    expect(bg.textContent).toContain('Reviewer');
+    expect(bg.textContent).toContain('Needs you');
+    expect(bg.textContent).toContain('1 finished');
+    expect(host.querySelector('[data-sec="bg"] .rp-sum')).toBeNull();
+    await act(async () => bg.querySelector<HTMLButtonElement>('[aria-label="Stop Reviewer"]')!.click());
+    await act(async () => [...bg.querySelectorAll('button')].find((b) => b.textContent === 'Yes')!.click());
+    expect(stop).toHaveBeenCalledWith('h1');
+  });
+});
+
+describe('Environment', () => {
+  it('shows where the chat runs, the folder, the branch and the copy state', async () => {
+    await mount({ copy: { kind: 'git' } });
+    const env = host.querySelector('[data-testid="rail-env"]')!;
+    expect(env.textContent).toContain('This computer');
+    expect(env.textContent).toContain('shop');
+    expect(env.textContent).toContain('feat/rail');
+    expect(env.textContent).toContain('On · copy');
+  });
+});
+
+describe('Remote control: how far a phone can go', () => {
+  it('shows Watch, Answer and Full under the switch when a phone is paired and remote is on, and sets the level', async () => {
+    const set = vi.fn(async (_id: string, change: { level?: string }) => ({ remote: true, level: change.level ?? 'full' }) as never);
+    const api = { get: async () => ({ remote: true, level: 'full' }) as never, set, phones: async () => [{ id: 'd1', name: 'Phone', expired: false, caps: [] }] as never };
+    const { EnvironmentSection } = await import('./EnvironmentSection');
+    await act(async () => root.render(<EnvironmentSection paneId="p1" cwd="/work/shop" runsOn={null} branch={null} copy={null} api={api} />));
     await act(async () => {});
-    const card = host.querySelector('[data-testid="rail-remote"]');
-    expect(card).not.toBeNull();
-    expect(card?.textContent).toContain('Remote control');
-    expect(card?.textContent).toContain('Pair a phone');
+    const group = host.querySelector('[data-testid="rail-remote-level"]')!;
+    expect([...group.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Watch', 'Answer', 'Full']);
+    await act(async () => [...group.querySelectorAll('button')].find((b) => b.textContent === 'Watch')!.click());
+    expect(set).toHaveBeenCalledWith('p1', { level: 'watch' });
   });
 });

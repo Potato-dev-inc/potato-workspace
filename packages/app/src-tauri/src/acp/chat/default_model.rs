@@ -23,7 +23,7 @@ pub fn note_settings(public: &Value) {
     *SETTINGS.lock() = Some(public.clone());
 }
 
-fn settings() -> Value {
+pub(crate) fn settings() -> Value {
     SETTINGS.lock().clone().unwrap_or(Value::Null)
 }
 

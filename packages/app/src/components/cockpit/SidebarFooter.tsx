@@ -7,9 +7,11 @@ import { FloatingMenu } from './FloatingMenu';
 import { IconChart, IconCheck, IconClock, IconGlobe, IconMoon, IconMore, IconNote, IconSun, IconTerminal } from './Icons';
 import { JobsChip } from './rail/JobsChip';
 import { NightChip } from './night/NightChip';
+import { HelpMenu } from '../whatsnew/HelpMenu';
 import '../../styles/individual-mode.css';
 import '../../styles/sidebar-footer.css';
 import { useT } from '../../i18n';
+import { isDarkTheme, type ThemeChoice } from '../../lib/theme-tone';
 
 type Mode = 'orchestration' | 'individual';
 
@@ -35,7 +37,7 @@ export interface SidebarFooterProps {
   onOpenPane: (id: string) => void;
   mode: Mode;
   onMode: (mode: Mode) => void;
-  theme: 'dark' | 'light';
+  theme: ThemeChoice;
   onToggleTheme: () => void;
   onOpenSettings: (tab?: string) => void;
   bridgeLine?: string | null;
@@ -80,6 +82,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
         {p.onOpenMorning && <NightChip onOpenMorning={p.onOpenMorning} />}
       </div>
       <div className="ck-foot-icons">
+        <HelpMenu />
         <button type="button" className="ck-icon-btn" aria-label={t('sidebar.settings')} title={t('sidebar.settings')} onClick={() => p.onOpenSettings()}>
           <GearIcon />
           <Label>{t('sidebar.settings')}</Label>
@@ -156,8 +159,8 @@ export function SidebarFooter(p: SidebarFooterProps) {
                 </button>
               )}
               <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onToggleTheme)}>
-                <span className="ck-menu-ic">{p.theme === 'dark' ? <IconSun /> : <IconMoon />}</span>
-                {p.theme === 'dark' ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}
+                <span className="ck-menu-ic">{isDarkTheme(p.theme) ? <IconSun /> : <IconMoon />}</span>
+                {isDarkTheme(p.theme) ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}
               </button>
               <div className="ck-menu-sep" role="separator" />
               <div className="ck-menu-cap">{t('sidebar.mode')}</div>

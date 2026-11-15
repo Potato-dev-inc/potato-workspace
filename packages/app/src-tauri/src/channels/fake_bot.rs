@@ -166,7 +166,12 @@ impl Rig {
 
 /// Waits (up to 3 s) for `cond`; the poller and send threads are real.
 pub fn wait_for(what: &str, cond: impl Fn() -> bool) {
-    let until = Instant::now() + Duration::from_secs(3);
+    wait_for_secs(what, 3, cond);
+}
+
+/// Polls `cond` every 2 ms until it holds, for at most `secs` seconds (shared by the fake chat-app tests).
+pub fn wait_for_secs(what: &str, secs: u64, mut cond: impl FnMut() -> bool) {
+    let until = Instant::now() + Duration::from_secs(secs);
     while Instant::now() < until {
         if cond() {
             return;

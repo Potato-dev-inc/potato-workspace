@@ -359,7 +359,7 @@ export class LendBackend {
   private end(grantId: string, why: 'revoked' | 'returned') {
     this.state = {
       ...this.state,
-      grants: this.state.grants.map((g) => (g.id === grantId ? { ...g, state: 'ended', end_reason: why, pane_ids: [] } : g)),
+      grants: this.state.grants.map((g) => (g.id === grantId ? { ...g, state: 'ended', end_reason: why, ended_ms: Date.now(), pane_ids: [] } : g)),
     };
     this.changed();
   }
@@ -372,6 +372,22 @@ export class LendBackend {
   giveBack(grantId: string): void {
     this.rec('giveBack', grantId);
     this.end(grantId, 'returned');
+  }
+
+  dismissGrant(grantId: string): boolean {
+    this.rec('dismissGrant', grantId);
+    const had = this.state.grants.some((g) => g.id === grantId && g.state === 'ended');
+    this.state = { ...this.state, grants: this.state.grants.filter((g) => !(g.id === grantId && g.state === 'ended')) };
+    this.changed();
+    return had;
+  }
+
+  clearPast(direction: 'out' | 'in'): number {
+    this.rec('clearPast', direction);
+    const before = this.state.grants.length;
+    this.state = { ...this.state, grants: this.state.grants.filter((g) => !(g.direction === direction && g.state === 'ended')) };
+    this.changed();
+    return before - this.state.grants.length;
   }
 
   startAgent(grantId: string, projectPath: string): { pane_id: string } {
@@ -445,6 +461,8 @@ export function createFakeLendApi(seed: LendScenario = {}): LendApi & { backend:
     answer: async (...a) => b.answer(...a),
     revoke: async (id) => b.revoke(id),
     giveBack: async (id) => b.giveBack(id),
+    dismissGrant: async (id) => b.dismissGrant(id),
+    clearPast: async (d) => b.clearPast(d),
     startAgent: async (...a) => b.startAgent(...a),
     accountAdd: async (...a) => b.accountAdd(...a),
     signInStart: async (id) => b.signInStart(id),
@@ -479,6 +497,10 @@ export function createLendMock(s: LendScenario | undefined): (cmd: string, args:
         return v(b.revoke(String(a.grant_id)));
       case 'lend_return':
         return v(b.giveBack(String(a.grant_id)));
+      case 'lend_grant_dismiss':
+        return v(b.dismissGrant(String(a.grant_id)));
+      case 'lend_past_clear':
+        return v(b.clearPast(a.direction === 'in' ? 'in' : 'out'));
       case 'lend_start_agent':
         return v(b.startAgent(String(a.grant_id), String(a.project_path)));
       case 'lend_account_add':

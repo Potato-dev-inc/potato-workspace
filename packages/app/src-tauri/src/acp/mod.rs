@@ -119,6 +119,8 @@ mod speedup_tests;
 mod model_probe_tests;
 #[cfg(test)]
 mod warm_tests;
+#[cfg(test)]
+mod warm_helper_tests;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

@@ -18,7 +18,7 @@ export function testSections(): SectionDef[] {
         level: 'basic',
         group: 'Appearance',
         keys: ['theme'],
-        valueText: (s) => `Theme: ${s.theme === 'light' ? 'Light' : 'Dark'}`,
+        valueText: (s) => `Theme: ${s.theme === 'light' || s.theme === 'dim' ? 'Light' : 'Dark'}`,
         render: (env: SettingsEnv) => (
           <SettingToggle label="Light theme" description="Dark or light." checked={env.settings.theme === 'light'} onChange={(on) => void env.patch({ theme: on ? 'light' : 'dark' })} />
         ),

@@ -43,10 +43,10 @@ const mount = () =>
   );
 
 describe('SidebarFooter', () => {
-  it('is one row: Settings, Review, and a More menu', () => {
+  it('is one row: Help, Settings, Review, and a More menu', () => {
     mount();
     const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ck-foot-icons > button, .ck-foot-icons .ck-menu-wrap > button')];
-    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Settings', 'Review', 'More']);
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Help', 'Settings', 'Review', 'More']);
     expect(host.querySelectorAll('.ck-foot-icons').length).toBe(1);
   });
 
@@ -72,7 +72,7 @@ describe('SidebarFooter', () => {
   it('in a narrow window (icons only) every footer button still has a name and a tooltip', () => {
     mount();
     const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ck-foot-icons button')];
-    expect(buttons.length).toBe(3);
+    expect(buttons.length).toBe(4);
     for (const b of buttons) {
       expect(b.getAttribute('aria-label') ?? '').not.toBe('');
       expect(b.getAttribute('title') ?? '').not.toBe('');

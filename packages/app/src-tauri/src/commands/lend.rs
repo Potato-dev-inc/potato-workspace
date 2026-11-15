@@ -149,6 +149,23 @@ pub async fn lend_return(webview: tauri::Webview, grant_id: String) -> Result<()
     tauri::async_runtime::spawn_blocking(move || svc.give_back(&grant_id)).await.map_err(|e| e.to_string())?
 }
 
+/// The X on a past lend or borrow: forgets that ended row (a lend that still runs is never removed here).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_grant_dismiss(webview: tauri::Webview, grant_id: String) -> Result<bool, String> {
+    Ok(on(&webview)?.dismiss_grant(&grant_id))
+}
+
+/// "Clear" on the past lends (`out`) or past borrows (`in`): forgets every ended row of that side. Returns how many.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_past_clear(webview: tauri::Webview, direction: String) -> Result<usize, String> {
+    let dir = match direction.as_str() {
+        "out" => lend::service::Direction::Out,
+        "in" => lend::service::Direction::In,
+        _ => return Err("Pick lends or borrows.".into()),
+    };
+    Ok(on(&webview)?.clear_past(dir))
+}
+
 /// Starts the grant's agent in `project_path` on the borrowed sign-in `lend:<grant id>`: the same path every
 /// account takes (`accounts::Store::launch_env`).
 #[tauri::command(rename_all = "snake_case")]

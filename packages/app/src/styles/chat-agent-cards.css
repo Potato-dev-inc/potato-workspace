@@ -623,3 +623,16 @@
     font-size: 12.5px;
   }
 }
+
+/* A multiple-choice question from the agent (a `question` tool call): options as buttons, the choice goes back as a message. */
+.ck-qcard-card { text-align: left; align-items: stretch; display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; }
+.ck-qcard { display: flex; flex-direction: column; gap: 6px; }
+.ck-qcard-q { margin: 0; font-size: 13px; color: var(--label); }
+.ck-qcard-options { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cockpit .ck-btn.ck-qcard-opt { height: auto; line-height: 1.35; text-align: left; align-items: flex-start; justify-content: flex-start; width: 100%; border: 1px solid var(--sep); background: var(--fill); justify-content: flex-start; padding: 6px 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; min-height: 36px; }
+.cockpit .ck-qcard-opt.is-picked { border-color: var(--label-2); }
+.ck-qcard-opt-label { font-weight: 600; }
+.ck-qcard-opt-desc { font-size: 12px; color: var(--label-2); }
+.ck-qcard-done { margin: 0; font-size: 12px; color: var(--label-2); }
+.ck-qcard-error { margin: 0; font-size: 12px; color: var(--label); }
+.ck-qcard-send { align-self: flex-start; }

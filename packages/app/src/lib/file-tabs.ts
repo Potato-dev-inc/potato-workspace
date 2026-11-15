@@ -9,9 +9,11 @@ export interface PaneFiles {
   files: readonly string[];
   /** The file to bring to the front, until the pane view has done it. */
   focus: { path: string; nonce: number } | null;
+  /** A line to show in a file ("Search inside files" opens a file at the match). Kept until the file closes. */
+  lines: Readonly<Record<string, { line: number; nonce: number }>>;
 }
 
-const EMPTY: PaneFiles = { files: [], focus: null };
+const EMPTY: PaneFiles = { files: [], focus: null, lines: {} };
 const byPane = new Map<string, PaneFiles>();
 const listeners = new Set<() => void>();
 let nonce = 0;
@@ -35,10 +37,12 @@ export function pathOfTab(tab: string): string | null {
   return tab.startsWith('file:') ? tab.slice(5) : null;
 }
 
-/** Opens a file in a tab of this pane (or brings its tab to the front). */
-export function openFileTab(paneId: string, path: string): void {
+/** Opens a file in a tab of this pane (or brings its tab to the front), at `line` (1-based) when one is given. */
+export function openFileTab(paneId: string, path: string, line?: number): void {
   const cur = byPane.get(paneId) ?? EMPTY;
-  put(paneId, { files: cur.files.includes(path) ? cur.files : [...cur.files, path], focus: { path, nonce: ++nonce } });
+  const n = ++nonce;
+  const lines = line && line > 0 ? { ...cur.lines, [path]: { line, nonce: n } } : cur.lines;
+  put(paneId, { files: cur.files.includes(path) ? cur.files : [...cur.files, path], focus: { path, nonce: n }, lines });
 }
 
 /** Closes a file tab. */
@@ -46,14 +50,15 @@ export function closeFileTab(paneId: string, path: string): void {
   clearDraft(paneId, path);
   const cur = byPane.get(paneId);
   if (!cur) return;
-  put(paneId, { files: cur.files.filter((p) => p !== path), focus: cur.focus?.path === path ? null : cur.focus });
+  const { [path]: _gone, ...lines } = cur.lines;
+  put(paneId, { files: cur.files.filter((p) => p !== path), focus: cur.focus?.path === path ? null : cur.focus, lines });
 }
 
 /** The pane view switched to the file: stop offering it. */
 export function clearFileFocus(paneId: string, nonceSeen: number): void {
   const cur = byPane.get(paneId);
   if (!cur?.focus || cur.focus.nonce !== nonceSeen) return;
-  put(paneId, { files: cur.files, focus: null });
+  put(paneId, { files: cur.files, focus: null, lines: cur.lines });
 }
 
 export function usePaneFiles(paneId: string): PaneFiles {

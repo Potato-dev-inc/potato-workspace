@@ -130,7 +130,7 @@ fn a_card_that_is_already_open_stays_the_persons_when_force_yes_is_turned_on() {
     rig.chat.send("permwith read path:src/main.rs").unwrap();
     assert!(rig.asked());
     rig.chat.set_force_yes(true);
-    std::thread::sleep(std::time::Duration::from_millis(300));
+    // `set_force_yes` is synchronous and never touches a card that is already open, so the state can be read at once.
     assert!(rig.chat.state()["permissions"][0]["questionId"].is_string(), "the open card is still there");
     assert!(!rig.said("Auto-allowed"), "{:?}", rig.texts());
 }

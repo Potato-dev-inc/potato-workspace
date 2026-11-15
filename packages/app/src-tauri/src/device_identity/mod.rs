@@ -71,6 +71,7 @@ pub struct Registry {
 }
 
 impl Registry {
+    #[cfg(test)]
     pub fn in_memory() -> Self {
         Self { path: None, records: Mutex::new(BTreeMap::new()) }
     }
@@ -136,7 +137,8 @@ impl Registry {
         true
     }
 
-    /// Reserved for a sign-in that does not exist yet.
+    /// Reserved for a sign-in that does not exist yet (tests only until then).
+    #[cfg(test)]
     pub fn set_account(&self, id: &str, account: Option<&str>) -> bool {
         let mut records = self.lock();
         let Some(r) = records.get_mut(id) else { return false };

@@ -100,16 +100,57 @@ export function AgentsMayMergeToggle({
   );
 }
 
-/** The newest lines of the audit log, with a check that the log has not been edited. */
+const CLEARED_KEY = 'pm.audit.clearedSeq.v1';
+/** How many lines the list shows before "Show all". */
+export const AUDIT_SHOWN = 10;
+
+function loadCleared(): number {
+  try {
+    const n = Number(window.localStorage.getItem(CLEARED_KEY));
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveCleared(seq: number | null): void {
+  try {
+    if (seq === null) window.localStorage.removeItem(CLEARED_KEY);
+    else window.localStorage.setItem(CLEARED_KEY, String(seq));
+  } catch {
+    /* storage blocked: the list just comes back next time */
+  }
+}
+
+export interface AuditGroup {
+  /** The newest line of the run. */
+  entry: AuditEntry;
+  count: number;
+}
+
+/** Lines that say the same thing, one after another (newest first), become one line with a count. */
+export function groupRepeats(entries: AuditEntry[]): AuditGroup[] {
+  const out: AuditGroup[] = [];
+  for (const entry of entries) {
+    const last = out[out.length - 1];
+    if (last && last.entry.summary === entry.summary && last.entry.who === entry.who && last.entry.kind === entry.kind) last.count += 1;
+    else out.push({ entry, count: 1 });
+  }
+  return out;
+}
+
+/** The newest lines of the audit log, with a check that the log has not been edited. Folded until opened. */
 export function RecentApprovals({ api = agentAuthorityApi, now }: { api?: AgentAuthorityApi; now?: number }) {
   const t = useT();
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [check, setCheck] = useState<AuditVerify | null>(null);
   const [failed, setFailed] = useState(false);
+  const [cleared, setCleared] = useState(loadCleared);
+  const [showAll, setShowAll] = useState(false);
   const load = useCallback(async () => {
     try {
       setFailed(false);
-      const [list, verified] = await Promise.all([api.auditRecent(20), api.auditVerify()]);
+      const [list, verified] = await Promise.all([api.auditRecent(200), api.auditVerify()]);
       setEntries(list);
       setCheck(verified);
     } catch {
@@ -120,24 +161,50 @@ export function RecentApprovals({ api = agentAuthorityApi, now }: { api?: AgentA
     void load();
   }, [load]);
 
+  const visible = (entries ?? []).filter((e) => e.seq > cleared);
+  const hidden = (entries?.length ?? 0) - visible.length;
+  const groups = groupRepeats(visible);
+  const shown = showAll ? groups : groups.slice(0, AUDIT_SHOWN);
+  const clear = () => {
+    const newest = Math.max(cleared, ...(entries ?? []).map((e) => e.seq));
+    saveCleared(newest);
+    setCleared(newest);
+    setShowAll(false);
+  };
+  const bringBack = () => {
+    saveCleared(null);
+    setCleared(0);
+  };
+
   return (
     <SettingBlock
       label={t('settings.row.security-recent-approvals.label')}
       description={t('security.recentHelp')}
     >
       {failed && <Note role="alert">{t('security.unreadable')}</Note>}
-      {entries && entries.length === 0 && <Note>{t('security.nothing')}</Note>}
-      {entries && entries.length > 0 && (
-        <ul className="st-audit" aria-label={t('settings.row.security-recent-approvals.label')}>
-          {entries.map((e) => (
-            <li key={e.seq} className="st-audit-row" data-kind={e.kind}>
-              <span className="st-audit-when">{whenText(e.ts_ms, now)}</span>
-              <span className="st-audit-what">{e.summary}</span>
-              <span className="st-audit-who">{whoText(e.who)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <details className="st-audit-fold" data-testid="audit-fold">
+        <summary>{t('security.openList', { count: visible.length })}</summary>
+        {entries && visible.length === 0 && <Note>{t('security.nothing')}</Note>}
+        {shown.length > 0 && (
+          <ul className="st-audit" aria-label={t('settings.row.security-recent-approvals.label')}>
+            {shown.map(({ entry: e, count }) => (
+              <li key={e.seq} className="st-audit-row" data-kind={e.kind}>
+                <span className="st-audit-when">{whenText(e.ts_ms, now)}</span>
+                <span className="st-audit-what">
+                  {e.summary}
+                  {count > 1 && <span className="st-audit-times"> ×{count}</span>}
+                </span>
+                <span className="st-audit-who">{whoText(e.who)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {groups.length > AUDIT_SHOWN && (
+          <Btn small onClick={() => setShowAll((v) => !v)}>
+            {showAll ? t('security.showFewer') : t('security.showAll', { count: groups.length })}
+          </Btn>
+        )}
+      </details>
       {check && (
         <p className="st-audit-check" role={check.ok ? undefined : 'alert'}>
           {check.ok
@@ -145,7 +212,12 @@ export function RecentApprovals({ api = agentAuthorityApi, now }: { api?: AgentA
             : t('security.logChanged', { reason: check.broken?.reason ?? t('security.lineMismatch') })}
         </p>
       )}
-      <Btn onClick={() => void load()}>{t('security.refresh')}</Btn>
+      {hidden > 0 && <p className="st-audit-check">{t('security.clearedNote')}</p>}
+      <div className="st-audit-actions">
+        <Btn onClick={() => void load()}>{t('security.refresh')}</Btn>
+        {visible.length > 0 && <Btn onClick={clear}>{t('security.clear')}</Btn>}
+        {hidden > 0 && <Btn onClick={bringBack}>{t('security.showCleared')}</Btn>}
+      </div>
     </SettingBlock>
   );
 }

@@ -171,13 +171,63 @@ describe('PreloadSettings', () => {
   it('a ticked provider can keep two warm and the idle timeout is edited in minutes', async () => {
     const api = mockApi({ ...DEFAULT_STANDBY_CONFIG, preload: { enabled: true, providers: { claude: 1 } } });
     await render(api);
-    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Warm Claude count"]');
-    expect(select?.value).toBe('1');
-    expect(select?.disabled).toBe(false);
-    expect(Array.from(select?.options ?? []).map((o) => o.value)).toEqual(['1', '2']);
-    expect(host.querySelector<HTMLSelectElement>('select[aria-label="Warm Cursor Agent CLI count"]')?.disabled).toBe(true);
+    const field = host.querySelector<HTMLInputElement>('input[aria-label="Warm Claude count"]');
+    expect(field?.value).toBe('1');
+    expect(field?.disabled).toBe(false);
+    expect(host.querySelector('select[aria-label="Warm Claude count"]')).toBeNull();
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Warm Cursor Agent CLI count"]')?.disabled).toBe(true);
     const idle = host.querySelector<HTMLInputElement>('input[aria-label="Preload idle timeout (minutes)"]');
     expect(idle?.value).toBe('20');
+  });
+
+  const press = async (label: string) => {
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)?.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  };
+  const type = async (label: string, value: string) => {
+    const input = host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`) as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      input.blur();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  };
+
+  it('the warm count has - and + steppers from 1 to 10, saves each step, and stops at the ends', async () => {
+    const api = mockApi({ ...DEFAULT_STANDBY_CONFIG, preload: { enabled: true, providers: { claude: 1 } } });
+    await render(api);
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Fewer warm Claude"]')?.disabled).toBe(true);
+    await press('More warm Claude');
+    expect(api.setConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: expect.objectContaining({ providers: { claude: 2 } }) }));
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Warm Claude count"]')?.value).toBe('2');
+    await press('Fewer warm Claude');
+    expect(api.setConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: expect.objectContaining({ providers: { claude: 1 } }) }));
+  });
+
+  it('typing a number past the range is put back with a plain hint; above 4 it warns about memory', async () => {
+    const api = mockApi({ ...DEFAULT_STANDBY_CONFIG, preload: { enabled: true, providers: { claude: 1 } } });
+    await render(api);
+    expect(host.textContent).not.toContain('Each warm agent uses memory.');
+    await type('Warm Claude count', '99');
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Warm Claude count"]')?.value).toBe('10');
+    expect(api.setConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: expect.objectContaining({ providers: { claude: 10 } }) }));
+    expect(host.textContent).toContain('Use a number from 1 to 10.');
+    expect(host.textContent).toContain('Each warm agent uses memory.');
+    await type('Warm Claude count', '3');
+    expect(host.textContent).not.toContain('Each warm agent uses memory.');
+    await type('Warm Claude count', '0');
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Warm Claude count"]')?.value).toBe('1');
   });
 
   it('shows the experimental tag and says why a non-terminal agent has no warm mode', async () => {

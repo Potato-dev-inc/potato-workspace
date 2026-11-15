@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { DEFAULT_LIMITS, type Env, type Limits, limitsFrom } from "./env";
 import { empty, json, jsonText, queryU64, Refusal, refuse } from "./http";
+import { codeKey, label, MAX_PAYLOAD_BYTES, MAX_TTL_MS, MIN_TTL_MS, newCode } from "./invites";
 import { batch, C, checkAcl, checkBlob, checkEnvelope, checkJoin, checkRegistration, resync } from "./proto";
 
 /**
@@ -303,6 +304,8 @@ export class Team extends DurableObject<Env> {
         return this.getEnvelopes(request, url);
       case "ws":
         return this.openSocket(request, url);
+      case "invite-put":
+        return this.putInviteLink(request, new Uint8Array(await request.arrayBuffer()));
       case "join-post":
         return this.postJoin(request, new Uint8Array(await request.arrayBuffer()));
       case "join-get":
@@ -615,6 +618,46 @@ export class Team extends DurableObject<Env> {
   }
 
   // ----------------------------------------------------------------------------------------- joins
+
+  // ------------------------------------------------------------------------------------ invite links
+
+  /**
+   * A device on the team leaves an invite here for the joiner to pick up with one link
+   * (`https://<worker>/join/<code>`, see invites.ts). The code is made here, not by the client.
+   */
+  private async putInviteLink(request: Request, body: Uint8Array): Promise<Response> {
+    const { device } = this.authorize(request);
+    const meta = this.requireTeam();
+    if (!this.hit(`dev-invite:${device}`, 3_600_000, 20)) return refuse(429, "slow down");
+    let input: { payload?: unknown; team_name?: unknown; inviter?: unknown; ttl_ms?: unknown };
+    try {
+      input = JSON.parse(new TextDecoder().decode(body));
+    } catch {
+      return refuse(400, "bad invite");
+    }
+    const payload = input.payload;
+    if (typeof payload !== "string" || payload.length === 0 || encoder.encode(payload).byteLength > MAX_PAYLOAD_BYTES) {
+      return refuse(400, "bad invite");
+    }
+    const asked = typeof input.ttl_ms === "number" && Number.isFinite(input.ttl_ms) ? input.ttl_ms : MAX_TTL_MS;
+    // Only the test hooks may go below a minute (so the tests can see an invite run out).
+    const floor = this.env.TEST_HOOKS === "1" ? 1 : MIN_TTL_MS;
+    const ttl = Math.min(MAX_TTL_MS, Math.max(floor, Math.floor(asked)));
+    const expires = Date.now() + ttl;
+    for (let tries = 0; tries < 3; tries += 1) {
+      const code = newCode();
+      const box = this.env.INVITES.get(this.env.INVITES.idFromName(await codeKey(code)));
+      const stored = await box.put({
+        team: meta.team,
+        team_name: label(input.team_name),
+        inviter: label(input.inviter),
+        payload,
+        expires_at_ms: expires,
+      });
+      if (stored) return json({ code, expires_at_ms: expires }, 201);
+    }
+    return refuse(503, "try again");
+  }
 
   private postJoin(request: Request, body: Uint8Array): Response {
     const meta = this.requireTeam();

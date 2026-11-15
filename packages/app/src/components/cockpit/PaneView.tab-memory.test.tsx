@@ -126,7 +126,7 @@ describe('the More menu', () => {
     expect(moreButton().getAttribute('aria-expanded')).toBe('false');
     await act(async () => moreButton().click());
     expect(moreButton().getAttribute('aria-expanded')).toBe('true');
-    expect(menuItems().map((m) => m.textContent)).toEqual(['Transcript', 'Receipt', 'History']);
+    expect(menuItems().map((m) => m.textContent)).toEqual(['Transcript', 'Receipt', 'History', 'Open chat in a new window']);
   });
 
   it('picking an item opens that view, and the button shows its name', async () => {

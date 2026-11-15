@@ -3,15 +3,16 @@
 import type { ToolCallItem, ToolStep, TurnStep } from '../../lib/sessionChatModel';
 import { classifyTool, type ToolKind } from '../../lib/chatToolKinds';
 import { formatDuration, plural } from './chatFormat';
+import { questionsOfCall } from './questionCall';
 
 /** A run of tool rows (one activity line), or one other step (text, a notice, a helper row). */
 export type Segment = { kind: 'activity'; id: string; steps: ToolStep[] } | { kind: 'step'; step: TurnStep };
 
-/** A helper row is never folded into a line: it is a row of its own. */
+/** A helper row, or a question the agent asks the person, is never folded into a line: it is a row of its own. */
 export function segmentSteps(steps: readonly TurnStep[]): Segment[] {
   const out: Segment[] = [];
   for (const step of steps) {
-    if (step.kind === 'tool' && !step.call.helper) {
+    if (step.kind === 'tool' && !step.call.helper && !questionsOfCall(step.call)) {
       const last = out[out.length - 1];
       if (last?.kind === 'activity') last.steps.push(step);
       else out.push({ kind: 'activity', id: step.id, steps: [step] });

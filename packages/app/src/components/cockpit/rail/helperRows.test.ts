@@ -7,8 +7,8 @@ describe('helperRows', () => {
   it('lists only the direct helpers of the pane, with a title and agent', () => {
     const list = [pane('p'), pane('a', 'p', 'Check tests', 'running'), pane('b', 'p'), pane('c', 'a'), pane('other')];
     expect(helperRows(list, 'p', () => 'Codex')).toEqual([
-      { id: 'a', title: 'Check tests', agent: 'Codex', status: 'running' },
-      { id: 'b', title: 'Codex', agent: null, status: 'idle' },
+      { id: 'a', title: 'Check tests', agent: 'Codex', agentType: null, status: 'running' },
+      { id: 'b', title: 'Codex', agent: null, agentType: null, status: 'idle' },
     ]);
   });
   it('is empty for a pane without helpers', () => {

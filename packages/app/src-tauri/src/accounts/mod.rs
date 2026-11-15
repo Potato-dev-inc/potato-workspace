@@ -461,6 +461,13 @@ pub fn overview_default() -> serde_json::Value {
     // more sign-in each: `{id: "lend:<grant>", agent_id, label: "<Peer>'s PC (lent)", ends_ms, grant_id}`. Empty
     // while the Labs switch is off.
     out["borrowed"] = serde_json::Value::Array(crate::capacity_proxy::borrowed_rows());
+    // A lend sign-in is shown by its lend profile's name ("Work account"), never by the internal label ("Lend Claude 3").
+    if let Some(list) = out["accounts"].as_array_mut() {
+        for a in list.iter_mut().filter(|a| a["lend_only"].as_bool() == Some(true)) {
+            let name = a["id"].as_str().and_then(crate::capacity_proxy::lend_profile_name);
+            a["lend_profile"] = name.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null);
+        }
+    }
     out
 }
 

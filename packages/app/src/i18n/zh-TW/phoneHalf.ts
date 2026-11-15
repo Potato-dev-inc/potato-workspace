@@ -5,6 +5,7 @@ export const phoneHalf: Partial<Record<EnglishKey, string>> = {
   'phone.theme.title': '外觀',
   'phone.theme.auto': '自動',
   'phone.theme.light': '淺色',
+  'phone.theme.dim': '柔和',
   'phone.theme.dark': '深色',
   'phone.rule.noControl': '這支手機不能停止或關閉代理。由你的電腦決定。',
   'phone.rule.noAnswer': '這支手機不能回答問題。由你的電腦決定。',

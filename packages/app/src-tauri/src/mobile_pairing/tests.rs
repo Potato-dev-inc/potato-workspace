@@ -215,3 +215,35 @@ fn dev_origins_come_from_the_tauri_config_devurl() {
     assert!(!is_app_origin("http://localhost:5173"));
     assert!(!is_app_origin("http://foo.localhost"));
 }
+
+#[test]
+fn a_share_link_opens_exactly_one_read_route_and_nothing_else() {
+    let secret = "A".repeat(32);
+    // The one public line: GET /share/{secret}, with or without the /bridge prefix.
+    assert!(is_public_bridge_path(&["share", &secret], "GET"));
+    assert!(is_public_bridge_path(&["bridge", "share", &secret], "GET"));
+    // Nothing else about it is public: other methods, a longer or shorter path.
+    for method in ["POST", "PUT", "PATCH", "DELETE"] {
+        assert!(!is_public_bridge_path(&["share", &secret], method), "{method}");
+    }
+    assert!(!is_public_bridge_path(&["share"], "GET"));
+    assert!(!is_public_bridge_path(&["share", &secret, "more"], "GET"));
+    // A remote caller (through the tunnel) with no token is still refused everywhere else, including the share-management
+    // routes and every artifact route.
+    let proxied = "X-Potato-Workspace-Proxied: 1\r\n";
+    for (method, path) in [
+        ("GET", vec!["share", &secret, "more"]),
+        ("POST", vec!["share", &secret]),
+        ("GET", vec!["panes", "1", "artifacts"]),
+        ("GET", vec!["panes", "1", "artifacts", "report"]),
+        ("POST", vec!["panes", "1", "artifacts", "report", "share"]),
+        ("DELETE", vec!["panes", "1", "artifacts", "report", "share"]),
+        ("POST", vec!["artifacts", "show"]),
+        ("GET", vec!["panes"]),
+    ] {
+        let err = authorize_bridge_request(proxied, true, &path, method).expect_err("must need a token");
+        assert_eq!(err.0, 401, "{method} {path:?}");
+    }
+    // The public route needs no token even through the tunnel.
+    assert!(authorize_bridge_request(proxied, true, &["share", &secret], "GET").is_ok());
+}

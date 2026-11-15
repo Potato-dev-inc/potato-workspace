@@ -83,6 +83,10 @@ const ADVANCED: &[&str] = &[
     "browser_click",
     "browser_type",
     "browser_console",
+    // The project guide (Labs): callable by name, not listed by default.
+    "read_guide_structure",
+    "read_guide_page",
+    "ask_guide",
     // Companions only: listed by the shim for an agent started in a companion pane, callable by name elsewhere (and refused there).
     "companion_recall",
     // A page the agent made, as a card in its chat: callable by name, listed for an agent started in a Potato pane.

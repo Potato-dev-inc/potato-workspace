@@ -32,7 +32,9 @@ const poll = async (api, team, after = 0) => (await api.call("GET", `/v1/teams/$
 test("the front door: health, routes and methods", async () => {
   const api = client(HOOKS);
   const health = await api.call("GET", "/v1/health");
-  assert.deepEqual(health.json, { ok: true, protocol: "pm-relay/1" });
+  assert.equal(health.json.ok, true);
+  assert.equal(health.json.protocol, "pm-relay/1");
+  assert.ok(health.json.features.includes("team"));
   assert.equal((await api.call("GET", "/")).status, 200);
   assert.equal((await api.call("GET", "/v1/nothing")).status, 404);
   assert.equal((await api.call("GET", "/v1/teams")).status, 405, "registering is a POST");
@@ -223,7 +225,7 @@ test("the storage counters follow the mailbox through posts, expiry and drops", 
 
 test("the relay can live under a path prefix: the app signs the path it used", async () => {
   const prefixed = client(`${HOOKS}/pm`);
-  assert.deepEqual((await prefixed.call("GET", "/v1/health")).json, { ok: true, protocol: "pm-relay/1" });
+  assert.equal((await prefixed.call("GET", "/v1/health")).json.protocol, "pm-relay/1");
   const reg = registration(root, device, randomBytes(8));
   assert.equal((await prefixed.call("POST", "/v1/teams", { body: reg })).status, 201);
   assert.equal((await prefixed.call("POST", `/v1/teams/${reg.team}/envelopes`, { body: envelope(reg.team, device, 1), device })).status, 200);

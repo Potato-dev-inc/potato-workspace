@@ -51,6 +51,14 @@ export function artifactsMock(cmd: string, args: Record<string, unknown>): { han
     }
     case 'artifacts_open_in_browser':
       return { handled: true, value: null };
+    case 'artifacts_share_make':
+      return { handled: true, value: { link: 'https://potato-stable-link.example.workers.dev/bridge/share/q3Zk8mWc1Yt0vRnB5xJdLg7aPe2uHsFo', version: 2, expiresAt: Date.parse('2026-11-16T09:20:00.000Z') } };
+    case 'artifacts_share_list':
+      return { handled: true, value: [] };
+    case 'artifacts_share_stop':
+      return { handled: true, value: 1 };
+    case 'artifacts_pop_out':
+      return { handled: true, value: null };
     default:
       return { handled: false };
   }

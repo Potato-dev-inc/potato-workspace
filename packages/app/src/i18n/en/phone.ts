@@ -195,6 +195,8 @@ export const phone = {
   'phone.menu.stopAll': 'Stop all agents',
   'phone.menu.closeOne': 'Close {name}',
   'phone.menu.usage': 'Usage',
+  'phone.menu.about': 'About',
+  'phone.menu.whatsNew': "What's new",
   'phone.menu.plans': 'Your plans',
   'phone.menu.classic': 'Classic mobile view (orchestrator)',
   'phone.menu.stopAllAsk': 'Stop all agents?',

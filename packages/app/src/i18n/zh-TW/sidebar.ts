@@ -85,4 +85,5 @@ export const sidebar: Partial<Record<EnglishKey, string>> = {
   'sidebar.dragLive': '正在拖曳「{name}」。放到左側或右側，按 Esc 取消。',
   'sidebar.dropLeft': '在左側開啟',
   'sidebar.dropRight': '在右側開啟',
+  'sidebar.helperCount': '{count} 個幫手',
 };

@@ -75,3 +75,58 @@
   display: flex;
   gap: 6px;
 }
+
+/* Folded to one line by default: "Done means: 2 checks · not checked". */
+.cockpit .ck-done.is-folded {
+  padding: 2px 8px;
+  border-color: transparent;
+}
+.cockpit .ck-done-head {
+  justify-content: flex-start;
+}
+.cockpit .ck-done-line-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  min-width: 0;
+  padding: 0 4px;
+  border-radius: 6px;
+  color: var(--label-2);
+  font-size: 12px;
+  text-align: left;
+}
+.cockpit .ck-done-line-btn:hover {
+  color: var(--label);
+  background: var(--fill-hover);
+}
+.cockpit .ck-done-line-btn:focus-visible,
+.cockpit .ck-done-x:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-done-chev {
+  flex: none;
+  width: 10px;
+  color: var(--label-3);
+  font-size: 10px;
+}
+.cockpit .ck-done-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-done-x {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--label-3);
+}
+.cockpit .ck-done-x:hover {
+  background: var(--fill-active);
+  color: var(--label);
+}

@@ -63,7 +63,15 @@ pub(crate) fn session_headers(id: &str) -> String {
     if let Some(pane) = pane_header(std::env::var(mcp_sessions::PANE_ID_ENV).ok()) {
         headers.push_str(&format!("X-Potato-Workspace-Pane: {pane}\r\n"));
     }
+    headers.push_str(&format!("X-Potato-Workspace-Catalog: {}\r\n", own_catalog_label()));
     headers
+}
+
+/// This MCP program's tool catalog (`tool_registry::catalog_hash`), worked out once. Sent so the app can tell an agent
+/// that runs an older tool list from the app's own.
+fn own_catalog_label() -> &'static str {
+    static LABEL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    LABEL.get_or_init(tool_registry::catalog_hash)
 }
 
 /// The pane Potato Workspace launched this agent in (`POTATO_WORKSPACE_PANE_ID`), cut down to plain
