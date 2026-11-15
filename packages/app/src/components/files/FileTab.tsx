@@ -12,6 +12,7 @@ import { SegTabs } from '../cockpit/SegTabs';
 import { PaneMoreMenu, type MoreAction } from '../cockpit/PaneMoreMenu';
 import { useHeadFold } from '../cockpit/usePaneHeadFold';
 import { extensionOf, isMarkdown } from './languages';
+import { stripHtmlComments } from '../../lib/markdownComments';
 import { opensInOwnApp, richKindOf, type RichKind } from './rich-kind';
 import type { CodeGoTo, CodeSelection } from './CodeEditor';
 import { FileActions } from './FileActions';
@@ -228,7 +229,7 @@ export function FileTab({
     if (isMarkdown(path) && !asText) {
       return (
         <div className="ck-file-page" data-testid="file-markdown">
-          <ChatMarkdown text={text} />
+          <ChatMarkdown text={stripHtmlComments(text)} />
         </div>
       );
     }

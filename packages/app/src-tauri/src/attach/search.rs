@@ -43,6 +43,7 @@ fn git_listing(cwd: &str) -> Option<Vec<String>> {
     }
     let text = String::from_utf8_lossy(&output.stdout);
     let mut files: Vec<String> = text.split('\0').filter(|p| !p.is_empty()).map(str::to_string).collect();
+    files.retain(|p| !crate::files::is_office_lock(p));
     files.sort();
     files.dedup();
     Some(files)
@@ -65,6 +66,9 @@ fn walk(root: &Path) -> Vec<String> {
                 if files.len() >= MAX_WALK_ENTRIES {
                     files.sort();
                     return files;
+                }
+                if crate::files::is_office_lock(&name) {
+                    continue;
                 }
                 files.push(format!("{prefix}{name}"));
             }

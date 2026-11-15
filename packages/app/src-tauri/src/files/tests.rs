@@ -277,3 +277,21 @@ fn equal_bytes_have_equal_versions_and_any_change_changes_it() {
     assert_ne!(write::version_of(b"abc"), write::version_of(b"abd"));
     assert_ne!(write::version_of(b""), write::version_of(b"a"));
 }
+
+#[test]
+fn office_lock_files_are_not_listed_and_never_opened() {
+    let dir = scratch("office-lock");
+    for f in ["~$report.docx", "~$sheet.xlsx", ".~lock.notes.odt#", "report.docx", "~tilde.txt"] {
+        fs::write(dir.join(f), "x").unwrap();
+    }
+    let names: Vec<String> = list_dir(s(&dir), "", false).unwrap().entries.into_iter().map(|e| e.name).collect();
+    assert_eq!(names, vec!["report.docx", "~tilde.txt"], "the tree lists real files only");
+    for f in ["~$report.docx", "~$sheet.xlsx", ".~lock.notes.odt#"] {
+        assert!(read_file(s(&dir), f).unwrap_err().starts_with("FILES_NOT_OPENABLE"), "{f} read_file");
+        assert!(read_bytes(s(&dir), f).unwrap_err().starts_with("FILES_NOT_OPENABLE"), "{f} read_bytes");
+        assert!(stream::open_info(s(&dir), f).unwrap_err().starts_with("FILES_NOT_OPENABLE"), "{f} open_info");
+        assert_eq!(stream::serve(s(&dir), f, None, None).status, 403, "{f} serve");
+    }
+    assert!(is_office_lock("sub/~$a.docx") && is_office_lock(r"sub\.~lock.a.odt#"));
+    assert!(!is_office_lock("a.docx") && !is_office_lock(".~lock.a.odt") && !is_office_lock("x~$.docx"));
+}

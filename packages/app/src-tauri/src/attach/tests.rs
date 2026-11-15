@@ -393,3 +393,21 @@ fn an_empty_or_broken_block_gives_no_paths_and_no_panic() {
     cut.truncate(cut.len() - 2);
     assert_eq!(clipboard::parse_drop_files(&cut), vec![r"C:\a.txt"]);
 }
+
+#[test]
+fn office_lock_files_are_not_offered_by_the_at_picker_or_file_search() {
+    // A plain folder (walk) and a git folder (ls-files) are both covered.
+    for use_git in [false, true] {
+        let dir = scratch(if use_git { "lock-git" } else { "lock-walk" });
+        for f in ["~$plan.docx", "~$plan.xlsx", ".~lock.plan.odt#", "plan.docx"] {
+            fs::write(dir.join(f), "x").unwrap();
+        }
+        if use_git {
+            git(&dir, &["init", "-q"]);
+        }
+        let names: Vec<String> = search::search(cwd(&dir), "plan", None).into_iter().map(|f| f.name).collect();
+        assert_eq!(names, vec!["plan.docx"], "git={use_git}");
+        let all: Vec<String> = search::search(cwd(&dir), "", None).into_iter().map(|f| f.name).collect();
+        assert_eq!(all, vec!["plan.docx"], "git={use_git} empty query");
+    }
+}
