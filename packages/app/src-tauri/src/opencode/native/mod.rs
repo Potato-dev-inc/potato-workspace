@@ -355,3 +355,5 @@ pub fn restart_all_native_panes(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod no_wildcard_bind_tests;

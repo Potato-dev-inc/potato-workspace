@@ -24,7 +24,7 @@ impl SessionFormat for Lines {
         let (kind, text) = line.split_once(':').unwrap_or(("", ""));
         let text = text.to_string();
         match kind {
-            "u" => vec![ChatItem::User { id, at: None, text, attachments: Vec::new() }],
+            "u" => vec![ChatItem::User { id, at: None, text, attachments: Vec::new(), from: None }],
             "a" => vec![ChatItem::Assistant { id, at: None, text, model: None, final_answer: false }],
             "t" => vec![ChatItem::ToolCall { id, at: None, call_id: format!("c{offset}"), name: "shell".into(), summary: text, detail: Default::default() }],
             "o" => vec![ChatItem::ToolResult { id, at: None, call_id: "c0".into(), ok: true, output: text }],
@@ -283,6 +283,6 @@ fn lean_drops_a_tool_calls_input_and_keeps_its_files() {
     assert!(value.get("input").is_none());
     assert_eq!(value["paths"], serde_json::json!(["a.rs"]));
     assert_eq!(value["writes"], true);
-    let user = ChatItem::User { id: "1:0".into(), at: None, text: "hi".into(), attachments: Vec::new() };
+    let user = ChatItem::User { id: "1:0".into(), at: None, text: "hi".into(), attachments: Vec::new(), from: None };
     assert_eq!(lean(user.clone()), user);
 }

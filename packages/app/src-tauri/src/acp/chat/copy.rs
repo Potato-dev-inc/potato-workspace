@@ -74,6 +74,10 @@ fn refusal(error: crate::operations::OperationError) -> String {
 /// "Keep the changes": brings the copy's work into the project and removes the copy (and the chat that sat in it).
 /// `{kept: bool, files}`; `kept: false` means there was nothing to keep.
 pub fn keep(link: &CopyLink, pane_id: &str, registry: &Registry) -> Result<Value, String> {
+    // Fences first: a copy that changed a fenced file is not kept (nothing moves; the copy stays).
+    if let Some(refusal) = fenced_refusal(link) {
+        return Err(refusal);
+    }
     let store = &store_of(link);
     if link.kind == PLAIN {
         let changed = trial::keep(store, &link.handle).map_err(|e| format!("COPY_KEEP_FAILED: {}", e.0))?;
@@ -82,6 +86,40 @@ pub fn keep(link: &CopyLink, pane_id: &str, registry: &Registry) -> Result<Value
     }
     let outcome = crate::worktrees::service::merge(Some(&link.origin), &link.handle, registry).map_err(refusal)?;
     Ok(json!({ "kept": outcome.merged, "files": outcome.files.len() }))
+}
+
+/// The files the copy changed, as paths below the project, or `None` when the copy cannot say.
+fn changed_files(link: &CopyLink) -> Option<Vec<String>> {
+    if link.kind == PLAIN {
+        let changed = trial::changes(&store_of(link), &link.handle)?;
+        return Some(changed.added.into_iter().chain(changed.modified).chain(changed.deleted).collect());
+    }
+    let worktree = crate::worktrees::find_by_handle(&link.origin, &link.handle).filter(|w| w.closed.is_none())?;
+    let changes = crate::worktrees::changes(&worktree).ok()?;
+    Some(changes.files.into_iter().map(|f| f.path).collect())
+}
+
+/// The sentence that refuses "Keep" because the copy changed files a fence covers (`agent_rules`), or `None`.
+pub fn fenced_refusal(link: &CopyLink) -> Option<String> {
+    let fences = crate::agent_rules::store().fences(&link.origin);
+    if fences.is_empty() {
+        return None;
+    }
+    let files = changed_files(link)?;
+    let root = [PathBuf::from(&link.origin)];
+    let hit: Vec<&String> = files.iter().filter(|f| crate::agent_rules::fence::covering(&fences, &root, f).is_some()).collect();
+    if hit.is_empty() {
+        return None;
+    }
+    crate::audit::record(
+        crate::audit::Kind::AgentRules,
+        crate::audit::Who::Desktop,
+        "A fence stopped a copy from being kept",
+        json!({ "event": "keep_refused", "files": hit.len() }),
+    );
+    let names: Vec<&str> = hit.iter().take(3).map(|f| f.as_str()).collect();
+    let more = if hit.len() > 3 { format!(" and {} more", hit.len() - 3) } else { String::new() };
+    Some(format!("FENCED: Nothing was kept. The copy changed fenced files: {}{more}. Throw the copy away, or take the fence off in Settings first.", names.join(", ")))
 }
 
 /// "Throw away the copy": removes it and the chat that sat in it. The project is not touched.

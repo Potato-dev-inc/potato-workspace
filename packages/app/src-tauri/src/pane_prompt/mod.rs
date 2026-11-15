@@ -10,6 +10,7 @@ use std::sync::Arc;
 use tauri::AppHandle;
 
 pub mod answers;
+pub mod force_yes;
 mod generic_menu;
 pub(crate) mod summary;
 

@@ -151,6 +151,7 @@ export const state = {
   'state.model.search': 'Search models',
   'state.model.loading': 'Loading models… you can type a model id.',
   'state.model.failed': 'Could not load the list. Type a model id.',
+  'state.model.liveFailed': "Couldn't read this agent's models. Default works; you can type a model id.",
   'state.model.noList': 'No list for this agent. Type a model id.',
   'state.model.use': 'Use “{q}”',
   // handoff, bring chats

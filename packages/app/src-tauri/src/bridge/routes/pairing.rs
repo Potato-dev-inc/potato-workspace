@@ -13,6 +13,8 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
         ("GET", ["pair", "session", code]) => Some(session(code)),
         ("POST", ["pair", "invite"]) => Some(invite(cx)),
         ("GET", ["pair", "me"]) => Some(me(cx)),
+        ("POST", ["pair", "me"]) => Some(tell_name(cx)),
+        ("GET", ["devices", "names"]) => Some(names(cx)),
         _ => None,
     }
 }
@@ -39,6 +41,35 @@ fn me(cx: &Ctx) -> RouteResult {
         }
         _ => Ok((200, json!({ "local": true, "caps": mobile_pairing::Caps::all() }))),
     }
+}
+
+/// `POST /pair/me {name}`: the calling phone tells the PC its own name again (its model, read from the browser). Only the
+/// device's own name changes (the person's rename still wins), and only for the token that called.
+fn tell_name(cx: &Ctx) -> RouteResult {
+    let caller = mobile_pairing::authorize_caller(cx.headers, cx.peer_loopback, cx.segments, cx.method)?;
+    let mobile_pairing::Caller::Device { device_id, .. } = caller else {
+        return Err((400, json!({ "error": "Only a paired phone can name itself.", "code": "NOT_A_DEVICE" })));
+    };
+    let name = cx.request_body.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    if crate::device_identity::clean_name(name).is_empty() {
+        return Err((400, json!({ "error": "name is required", "code": "INVALID_ARGUMENT" })));
+    }
+    crate::device_identity::global().observe(&device_id, crate::device_identity::DeviceKind::Phone, name);
+    Ok((200, json!({ "device_id": device_id, "name": crate::device_identity::name_or(&device_id, name) })))
+}
+
+/// `GET /devices/names`: every device's name by id, so a chat can say "from <name>" for every message. Names only.
+fn names(cx: &Ctx) -> RouteResult {
+    mobile_pairing::authorize_caller(cx.headers, cx.peer_loopback, cx.segments, cx.method)?;
+    if let Some(store) = mobile_pairing::pairing_store() {
+        let registry = crate::device_identity::global();
+        for d in store.lock().list_devices() {
+            if registry.get(&d.id).is_none() {
+                registry.observe(&d.id, crate::device_identity::DeviceKind::Phone, &d.name);
+            }
+        }
+    }
+    Ok((200, json!({ "names": crate::device_identity::global().names(), "local": crate::device_identity::LOCAL_ID })))
 }
 
 fn pair(cx: &Ctx) -> RouteResult {

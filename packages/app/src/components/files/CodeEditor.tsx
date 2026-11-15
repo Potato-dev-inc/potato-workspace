@@ -3,8 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { tags as tg } from '@lezer/highlight';
+import { syntaxHighlighting } from '@codemirror/language';
+import { highlight, theme } from './editor-style';
 import { languageFor } from './languages';
 
 /** Lines the person has selected: 1-based, with the text. */
@@ -13,27 +13,6 @@ export interface CodeSelection {
   to: number;
   text: string;
 }
-
-const highlight = HighlightStyle.define([
-  { tag: [tg.keyword, tg.controlKeyword, tg.moduleKeyword, tg.definitionKeyword], color: 'var(--accent)' },
-  { tag: [tg.string, tg.regexp, tg.special(tg.string)], color: 'var(--label-2)' },
-  { tag: [tg.number, tg.bool, tg.null, tg.atom], color: 'var(--accent)' },
-  { tag: [tg.comment, tg.lineComment, tg.blockComment], color: 'var(--label-3)', fontStyle: 'italic' },
-  { tag: [tg.typeName, tg.className, tg.namespace], color: 'var(--label)', fontWeight: '600' },
-  { tag: [tg.function(tg.variableName), tg.function(tg.propertyName)], color: 'var(--label)', fontWeight: '600' },
-  { tag: [tg.heading, tg.strong], color: 'var(--label)', fontWeight: '600' },
-  { tag: [tg.link, tg.url], color: 'var(--label-2)', textDecoration: 'underline' },
-]);
-
-const theme = EditorView.theme({
-  '&': { color: 'var(--label)', backgroundColor: 'transparent', fontSize: '12px', height: '100%' },
-  '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.6', overflow: 'auto' },
-  '.cm-content': { caretColor: 'var(--label)' },
-  '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--label-3)', border: 'none' },
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, .cm-content ::selection': { backgroundColor: 'var(--fill-active)' },
-  '.cm-line': { padding: '0 12px 0 4px' },
-});
 
 export function CodeEditor({ path, text, onSelect }: { path: string; text: string; onSelect?: (selection: CodeSelection | null) => void }) {
   const host = useRef<HTMLDivElement>(null);

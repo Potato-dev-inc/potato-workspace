@@ -6,7 +6,7 @@ import { bridgeProxyConfig } from './vite-bridge-proxy';
 import { devInfoPlugin } from './vite-dev-info';
 
 /** Chunks the service worker never precaches (see `injectManifest.globIgnores`). */
-const LAZY_VIEWER_IGNORES = ['**/DocxView-*.js', '**/SheetView-*.js', '**/PdfView-*.js', '**/HtmlView-*.js', '**/SandboxFrame-*.js'];
+const LAZY_VIEWER_IGNORES = ['**/DocxView-*.js', '**/SheetView-*.js', '**/PdfView-*.js', '**/HtmlView-*.js', '**/SandboxFrame-*.js', '**/CodeEdit-*.js', '**/office.worker-*.js', '**/docx-engine-*.js'];
 
 export default defineConfig({
   plugins: [
@@ -23,7 +23,7 @@ export default defineConfig({
       injectManifest: {
         // Same precache set as the old generateSW config.
         globPatterns: ['**/*.{js,css,html,woff2}'],
-        // The file viewers (Word, Excel, PDF, web page; they carry mammoth, SheetJS and DOMPurify) are desktop-only and
+        // The file viewers (Word, Excel, PDF, web page, the code editor; they carry mammoth, SheetJS and DOMPurify) are desktop-only and
         // big: the phone app must not download them on install. They load on demand when a file of that kind opens.
         globIgnores: LAZY_VIEWER_IGNORES,
         // The main bundle grew past the 2 MiB default; without this the build fails instead of precaching it.

@@ -16,11 +16,13 @@ mod caps;
 pub mod control_ask;
 pub mod events;
 pub mod mint;
+pub mod link_grants;
 pub mod local_secret;
 pub mod pane_rules;
 
 pub use auth::*;
 pub use caps::*;
+pub use link_grants::{authorize_link, link_caps, link_device_id, set_link_caps};
 
 use events::SecurityEvent;
 
@@ -273,7 +275,8 @@ impl MobilePairingStore {
             .iter()
             .map(|d| PairedDeviceInfo {
                 id: d.id.clone(),
-                name: d.name.clone(),
+                // The person's own name (Settings > Devices) wins; the name the phone gave is the record's own.
+                name: crate::device_identity::name_or(&d.id, &d.name),
                 public_key: d.public_key_b64.clone(),
                 paired_at: d.paired_at,
                 caps: d.caps,
@@ -307,6 +310,7 @@ impl MobilePairingStore {
             return Ok(false);
         }
         self.persist()?;
+        crate::device_identity::global().forget(device_id);
         DEVICE_VIEW.write().remove(device_id);
         crate::push::on_device_revoked(device_id);
         events::emit(SecurityEvent::DeviceRevoked { device_id: device_id.to_string() });
@@ -455,6 +459,7 @@ impl MobilePairingStore {
         });
         self.pending = None;
         self.persist()?;
+        crate::device_identity::global().observe(&device_id, crate::device_identity::DeviceKind::Phone, &req.device_name);
         DEVICE_VIEW.write().insert(device_id.clone(), (caps, Some(now + DEVICE_IDLE_EXPIRY_SECS)));
         events::emit(SecurityEvent::DevicePaired { device_id: device_id.clone(), caps: caps.list() });
 

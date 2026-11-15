@@ -128,10 +128,37 @@ describe('Files card', () => {
       });
     };
 
-    it('offers Copy path, Show in Explorer, Open in editor and Mention in chat', async () => {
+    it('offers Copy path, Show in Explorer, Open in editor, Fence this file and Mention in chat', async () => {
       await show();
       await rightClick('README.md');
-      expect(menu().map((b) => b.textContent)).toEqual(['Open', 'Copy path', 'Show in Explorer', 'Open in editor', 'Mention in chat']);
+      expect(menu().map((b) => b.textContent)).toEqual(['Open', 'Copy path', 'Show in Explorer', 'Open in editor', 'Fence this file', 'Mention in chat']);
+    });
+
+    it('offers "Fence this folder" on a folder, and the click fences it inside the pane project', async () => {
+      const fenceAdd = vi.fn(async () => ['docs']);
+      const { api } = await show();
+      await act(async () =>
+        root.render(<FilesCard paneId="p1" cwd={'C:\\work\\shop'} api={api} rules={{ fenceAdd }} search={vi.fn(async () => [] as never[])} />),
+      );
+      await flush();
+      await rightClick('docs');
+      expect(menu().map((b) => b.textContent)).toContain('Fence this folder');
+      await act(async () => pick('Fence this folder').click());
+      await flush();
+      expect(fenceAdd).toHaveBeenCalledWith('C:\\work\\shop', 'C:\\work\\shop\\docs');
+      expect(host.textContent).toContain('Fenced. Agents will not touch docs.');
+    });
+
+    it('says why when the fence could not be saved', async () => {
+      const { api } = await show();
+      await act(async () =>
+        root.render(<FilesCard paneId="p1" cwd={'C:\\work\\shop'} api={api} rules={{ fenceAdd: vi.fn(async () => Promise.reject('INVALID_ARGUMENT: that path is not inside this project')) }} search={vi.fn(async () => [] as never[])} />),
+      );
+      await flush();
+      await rightClick('docs');
+      await act(async () => pick('Fence this folder').click());
+      await flush();
+      expect(host.textContent).toContain('Could not fence docs: that path is not inside this project');
     });
 
     it('Copy path copies the full path', async () => {
@@ -162,7 +189,7 @@ describe('Files card', () => {
       await act(async () => {
         row('README.md').dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }));
       });
-      expect(menu().length).toBe(5);
+      expect(menu().length).toBe(6);
     });
   });
 

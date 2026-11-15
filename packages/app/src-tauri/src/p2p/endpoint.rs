@@ -164,6 +164,8 @@ pub const CLOSE_UNKNOWN_ALPN: u32 = 1;
 pub const CLOSE_NOT_ALLOWED: u32 = 2;
 pub const CLOSE_RELAY: u32 = 3;
 pub const CLOSE_OFF: u32 = 4;
+/// The app on the other side is closing and said so (not a refusal, not a vanishing).
+pub const CLOSE_GOODBYE: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefusalKind {

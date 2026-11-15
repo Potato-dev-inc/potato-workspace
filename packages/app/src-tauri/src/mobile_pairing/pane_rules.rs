@@ -101,6 +101,7 @@ impl PaneRules {
     }
 
     /// `true` when `cap` is refused for this pane (no rule: never refused).
+    #[cfg(test)]
     pub fn refuses(&self, pane_id: &str, cap: Cap) -> bool {
         self.rules.get(pane_id).is_some_and(|rule| !rule.allows(cap))
     }

@@ -180,11 +180,22 @@ opencode server listening on http://127.0.0.1:4096
     }
 
     #[test]
-    fn a_port_taken_on_any_interface_is_not_picked() {
-        let held = std::net::TcpListener::bind(("0.0.0.0", 0)).unwrap();
+    fn a_port_taken_on_the_loopback_address_is_not_picked() {
+        // Loopback only: a listener on all interfaces would make Windows ask about the firewall. A server on all
+        // interfaces answers a loopback connect, which is checked on its own in the next test.
+        let held = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let port = held.local_addr().unwrap().port();
         let picked = super::super::process::pick_free_port(port, port);
         assert!(picked.is_err(), "{picked:?}");
+    }
+
+    #[test]
+    fn a_server_that_answers_on_loopback_is_seen_without_binding_anywhere_else() {
+        let held = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = held.local_addr().unwrap().port();
+        assert!(super::super::process::loopback_answers(port));
+        drop(held);
+        assert!(!super::super::process::loopback_answers(port));
     }
 
     #[test]

@@ -30,7 +30,8 @@ export interface PlanItem {
 
 /** One parsed line of the session file. Mirrors `ChatItem` in src-tauri/src/session_chat (camelCase). */
 export type ChatItem =
-  | { kind: 'user'; id: string; at: string | null; text: string; attachments?: ChatAttachment[] }
+  /** `from`: the device that sent it (a device identity id); absent: this PC. */
+  | { kind: 'user'; id: string; at: string | null; text: string; attachments?: ChatAttachment[]; from?: string }
   | { kind: 'assistant'; id: string; at: string | null; text: string; model: string | null; finalAnswer: boolean }
   | {
       kind: 'toolCall';

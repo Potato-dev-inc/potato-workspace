@@ -6,6 +6,7 @@ import { LS_BRIDGE_URL } from '../lib/bridge-url';
 import { PANE_CODEX } from './fixtures';
 import { PHONE_ASKING_REPLY, PHONE_CHAT_REPLY, PHONE_QUEUED_MESSAGES, phoneLiveReply, phonePlanReply } from './phone-chat-fixtures';
 import { phoneRichReply } from './phone-chat-rich-fixture';
+import { phoneCompanionChat, phoneCompanionFeed, phoneCompanionView, phoneRenderArtifact, phoneRenderReply } from './phone-render-fixture';
 import { PHONE_TEAM_JOB, PHONE_TEAM_OFF, phoneTeamReply } from './phone-team-fixtures';
 import type { HarnessScenario } from './types';
 
@@ -86,11 +87,32 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
   if (route === '/questions') return json({ questions: phone.questions === false ? [] : (phone.questionList ?? [PHONE_QUESTION]) });
   if (route === '/digest') return json(phone.digest === false ? { ...PHONE_DIGEST, empty: true } : PHONE_DIGEST);
   if (route === '/agents/types') return json(PHONE_AGENT_TYPES);
+  if (phone.companion) {
+    if (route === '/companions') return json({ companions: [phoneCompanionView()] });
+    if (/^[/]companions[/][^/]+[/]feed$/.test(route)) return json({ items: phoneCompanionFeed() });
+    if (/^[/]companions[/][^/]+[/]memory$/.test(route)) return json({ soul: '', user: '', memory: '', caps: { soul: 1, user: 1, memory: 1 }, pending: [], outsideChanges: [], skills: [] });
+    if (/^[/]panes[/]companion-[^/]+[/]chat$/.test(route)) return json(phoneCompanionChat());
+  }
+  if (route === '/phone/new-chat/models' && method === 'GET') {
+    return json({ terminal: true, default_model: 'sonnet', models: ['sonnet', 'opus', 'haiku'], live: { id: 'model', options: [{ value: 'opus', name: 'Opus 4.7', description: 'Slowest and most careful.' }, { value: 'sonnet', name: 'Sonnet 5.5', description: 'Fast and good for most work.' }, { value: 'haiku', name: 'Haiku', description: 'Quick for small jobs.' }] }, live_failed: false });
+  }
+  if (phone.sentFrom && route === '/devices/names' && method === 'GET') return json({ local: 'local', names: { local: { name: "Ren's PC", kind: 'this_pc' }, 'phone-me': { name: 'OPPO Reno13', kind: 'phone' }, 'link:mac': { name: "Ren's Mac", kind: 'pc' } } });
   const chatRoute = /^\/panes\/([^/]+)\/chat$/.exec(route);
+  if (chatRoute && method === 'GET' && phone.sentFrom) {
+    const turn = (n: number, text: string, answer: string, from?: string) => [
+      { kind: 'user', id: `u${n}`, at: null, text, ...(from ? { from } : {}) },
+      { kind: 'assistant', id: `a${n}`, at: null, text: answer, model: null, finalAnswer: true },
+      { kind: 'turnEnd', id: `end:${n}`, at: null, outcome: 'completed', durationMs: 4000 },
+    ];
+    const items = [...turn(1, 'Add a retry to the invoice job.', 'Done. It retries three times.'), ...turn(2, 'Also log each retry.', 'Added a log line for every retry.', 'phone-me'), ...turn(3, 'Run the tests.', 'All 42 tests pass.', 'link:mac')];
+    return json({ available: true, reason: null, source: 'acp', waitingFor: null, rev: 1, reset: false, items: path.includes('since=') ? [] : items });
+  }
   if (chatRoute && method === 'GET') {
-    const served = phone.chat === 'rich' ? phoneRichReply(Date.now()) : phone.chat === 'plan' ? phonePlanReply(Date.now()) : phone.chat === 'live' ? phoneLiveReply(Date.now()) : phone.chat === 'asking' ? PHONE_ASKING_REPLY : PHONE_CHAT_REPLY;
+    const served = phone.chat === 'render' ? phoneRenderReply(Date.now()) : phone.chat === 'rich' ? phoneRichReply(Date.now()) : phone.chat === 'plan' ? phonePlanReply(Date.now()) : phone.chat === 'live' ? phoneLiveReply(Date.now()) : phone.chat === 'asking' ? PHONE_ASKING_REPLY : PHONE_CHAT_REPLY;
     return json(path.includes('since=') ? { ...served, items: [] } : served);
   }
+  const artRoute = /^[/]panes[/][^/]+[/]artifacts[/]([^/?]+)$/.exec(route);
+  if (artRoute && method === 'GET') return json(phoneRenderArtifact(artRoute[1]));
   // Phone compose: what the last turn did (P10) and a file sent from the phone (P14).
   if (/^\/panes\/[^/]+\/result$/.test(route) && method === 'GET') {
     const withPatch = path.includes('patch=1');
@@ -126,6 +148,8 @@ function answer(method: string, path: string, scenario: HarnessScenario): Respon
     return json({
       lane: 'acp', agent: 'codex', label: 'Codex', phase: busy ? 'working' : 'idle', status: busy ? 'running' : 'idle', turnInFlight: busy,
       stopping: false, canSteer: false, turn: 1, title: null, usage: null, permissions: [], closed: false, configOptions: phone.acp.configOptions ?? [],
+      ...(phone.sentFrom === 'typing' ? { drive: { driver: { id: 'link:mac', name: "Ren's Mac", typing: true, typing_ms: 600_000 } } } : {}),
+      ...(phone.sentFrom === 'tookBack' ? { drive: { driver: null, took_back: { by: 'local', by_name: "Ren's PC", from: 'phone-me' } } } : {}),
     });
   }
   if (route === '/phone/new-chat' && method === 'GET' && phone.acp?.newChat) return json(phone.acp.newChat);

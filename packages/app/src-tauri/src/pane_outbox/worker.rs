@@ -303,6 +303,7 @@ fn settle_waiting(inner: &Inner, pane_id: &str, change: impl Fn(&mut Entry, bool
 /// Types the first waiting message. Marks it `sending` first (so a cancel that comes now is refused), and
 /// settles it from what the attempt found.
 fn deliver(inner: &Inner, pane_id: &str, id: &str, text: &str, attachments: &[ChatAttachment]) {
+    let from: Option<String>;
     {
         let mut panes = inner.panes.lock();
         let Some(queue) = panes.get_mut(pane_id) else { return };
@@ -313,11 +314,13 @@ fn deliver(inner: &Inner, pane_id: &str, id: &str, text: &str, attachments: &[Ch
         }
         entry.message.state = State::Sending;
         entry.message.waiting_for = None;
+        from = entry.message.from.clone();
         let list = snapshot(queue);
         drop(panes);
         inner.host.publish(pane_id, &list);
     }
     let baseline = inner.host.pulse(pane_id).map(|pulse| pulse.replies);
+    inner.host.note_sender(pane_id, from.as_deref());
     let attempt = inner.host.type_message_with(pane_id, text, attachments);
     let mut panes = inner.panes.lock();
     let Some(queue) = panes.get_mut(pane_id) else { return };

@@ -216,11 +216,6 @@ pub(super) struct RigOptions {
     pub(super) max_body: usize,
 }
 
-impl RigOptions {
-    pub(super) fn standard() -> Self {
-        Self::default()
-    }
-}
 
 impl Default for RigOptions {
     fn default() -> Self {

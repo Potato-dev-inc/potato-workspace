@@ -4,6 +4,7 @@ mod accounts;
 mod acp;
 mod actors;
 mod agent_authority;
+mod agent_rules;
 mod agent_run_mode;
 mod audit;
 mod ambient;
@@ -32,6 +33,7 @@ mod event_log;
 mod git_exclude;
 mod handoff;
 mod issue_intake;
+mod routines;
 mod ci_fix;
 mod events;
 mod mcp_hints;
@@ -61,6 +63,8 @@ mod pane_activity;
 mod pane_jobs;
 mod pane_preview;
 mod point;
+// The agent browser (Labs `agent_browser_enabled`): agents read and click pages on this computer.
+pub mod browser;
 mod loop_guard;
 mod panic;
 mod askbar;
@@ -138,6 +142,9 @@ mod team;
 mod keys;
 #[allow(dead_code)]
 mod p2p;
+// Devices: pair another PC and run agents on it (Labs `devices_enabled`).
+mod device_identity;
+mod device_link;
 mod terminal_chat;
 pub mod tool_registry;
 mod toolbelt;
@@ -242,6 +249,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::new())
+        .register_asynchronous_uri_scheme_protocol("pmfile", commands::files_stream_protocol)
         .manage(commands::SessionChatState::default())
         .manage(live_room::service::LiveRoomState::default())
         .manage(commands::ChatImportState::default())
@@ -272,6 +280,13 @@ pub fn run() {
             spaces::commands::space_file_save,
             spaces::commands::space_presence,
             spaces::commands::space_show_online,
+            commands::chat_signin_start,
+            commands::chat_signin_status,
+            commands::chat_signin_stop,
+            commands::chat_earlier,
+            commands::chat_picture,
+            commands::chat_draft_get,
+            commands::chat_draft_set,
             commands::session_chat_open,
             commands::session_chat_close,
             commands::chat_search,
@@ -308,6 +323,26 @@ pub fn run() {
             commands::model_bridge_preview,
             commands::model_bridge_apply,
             commands::model_bridge_undo,
+            commands::devices_state,
+            commands::devices_show_code,
+            commands::devices_cancel_code,
+            commands::devices_join,
+            commands::devices_pair_answer,
+            commands::devices_rename,
+            commands::devices_set_permission,
+            commands::devices_remove,
+            commands::devices_set_route,
+            commands::devices_make_link,
+            commands::devices_join_link,
+            commands::devices_activity,
+            commands::devices_set_web,
+            commands::devices_set_device_route,
+            commands::devices_disconnect,
+            commands::devices_screen_start,
+            commands::devices_screen_stop,
+            commands::devices_request,
+            commands::devices_subscribe,
+            commands::devices_unsubscribe,
             commands::lend_state,
             commands::lend_test_link,
             commands::lend_profile_save,
@@ -529,6 +564,8 @@ pub fn run() {
             commands::create_mobile_pairing_session,
             commands::list_paired_mobile_devices,
             commands::revoke_paired_mobile_device,
+            commands::rename_paired_mobile_device,
+            commands::device_names,
             commands::set_paired_mobile_device_caps,
             commands::bridge_local_secret,
             commands::bridge_local_secret_status,
@@ -668,6 +705,14 @@ pub fn run() {
             commands::night_settings_get,
             commands::night_settings_set,
             commands::night_get,
+            commands::routines_view,
+            commands::routines_agents,
+            commands::routines_create,
+            commands::routines_set_enabled,
+            commands::routines_delete,
+            commands::routines_run_now,
+            commands::routines_stop_run,
+            commands::routines_set_limit,
             commands::issue_intake_view,
             commands::issue_intake_save,
             commands::issue_intake_check_folder,
@@ -749,10 +794,22 @@ pub fn run() {
             commands::discord_alerts_test,
             commands::acp_chat_start,
             commands::acp_chat_cancel,
+            commands::acp_chat_take_back,
             commands::acp_chat_keep_waiting,
             commands::acp_chat_state,
             commands::acp_chat_set_config,
             commands::acp_chat_set_agent_answering,
+            commands::acp_chat_set_force_yes,
+            commands::agent_rules_overview,
+            commands::agent_rules_effective,
+            commands::agent_rules_set_force_yes_agent,
+            commands::agent_rules_fences,
+            commands::agent_rules_fence_add,
+            commands::agent_rules_fence_remove,
+            commands::agent_rules_pin_get,
+            commands::agent_rules_pin_set,
+            commands::pane_set_force_yes,
+            commands::pane_force_yes,
             commands::acp_chat_set_auto_allow,
             commands::acp_conversation_of_terminal,
             commands::acp_chat_retry_sign_in,
@@ -851,6 +908,8 @@ pub fn run() {
             commands::files_reveal,
             commands::files_diff,
             commands::files_read_bytes,
+            commands::files_open_bytes,
+            commands::files_write,
             commands::files_open_default,
             commands::list_control_asks,
             commands::answer_control_ask,
@@ -925,6 +984,7 @@ pub fn run() {
             if mcp_runtime::bundled_mcp_binary().is_none() {
                 // A dev build has no installed resource folder: look where the binary is built or
                 // staged (the package's dist, the staged `resources/bin`, next to the running exe).
+                // An installed copy ships the one next to the app only, and is found by the last of these.
                 if let Some(dev) = mcp_runtime::dev_mcp_binary(Path::new(env!("CARGO_MANIFEST_DIR")), exe_dir.as_deref()) {
                     mcp_runtime::set_bundled_mcp_binary(dev);
                 }
@@ -1090,8 +1150,10 @@ pub fn run() {
             team::init(app.handle().clone(), registry_for_panes.clone());
             // Share an agent keeps only the handle here; nothing is built until its Labs switch is on.
             capacity_proxy::init(app.handle().clone());
+            device_link::app::init(app.handle().clone());
             issue_intake::live::start(registry_for_panes.clone(), app.handle().clone());
             ci_fix::live::start(registry_for_panes.clone(), app.handle().clone());
+            routines::live::start(registry_for_panes.clone(), app.handle().clone());
             companion::live::start(app.handle().clone(), registry_for_panes.clone());
             // A room a crash left on the relay is ended now (its own thread: it may wait for the network).
             live_room::service::cleanup_at_boot(app_paths::app_data_dir());
@@ -1143,6 +1205,7 @@ pub fn run() {
                 if let Some(room) = app_handle.try_state::<live_room::service::LiveRoomState>() {
                     room.stop_all(live_room::publisher::StopReason::AppQuit);
                 }
+                device_link::app::shutdown();
                 standby::shutdown();
                 // A lend sign-in's hidden pane (the sign-in step of a lend profile) ends with the app.
                 capacity_proxy::signin_pane::app_panes().stop_all();

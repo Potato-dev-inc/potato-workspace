@@ -16,11 +16,20 @@ pub const FILES: &str = "files";
 pub const SPACES: &str = "spaces";
 /// Share an agent: a borrowing PC's model calls, carried to the lending PC ("Lend through my PC").
 pub const AGENTS_LEND: &str = "agents/lend";
+/// Devices: a paired Workspace runs agents and terminals on this PC (`pm/agents/1`). Its level is a second entry.
+pub const AGENTS_REMOTE: &str = "agents/remote";
+/// Marks the level of `agents/remote` as "Full control". Absent = "Watch and answer". Only ever set together with `agents/remote`.
+pub const AGENTS_REMOTE_FULL: &str = "agents/remote/full";
 /// Pairing is not a permission anyone is given: it is open to strangers only while the person shows a code.
 pub const PAIR: &str = "pair";
+/// Far-away pairing with a pairing link: open to strangers only while a link is shown, and a relay may carry it.
+pub const PAIR_LINK: &str = "pair/link";
+/// This PC lets that device also reach it through its own web address (stable link / tunnel), with a device token.
+/// Only ever set together with `agents/remote`.
+pub const AGENTS_REMOTE_WEB: &str = "agents/remote/web";
 
 /// What the person may turn on per computer, in the order the page shows them. Everything starts off.
-pub const PERMISSIONABLE: [&str; 3] = [DESK_INPUT, DESK_CLIPBOARD, FILES];
+pub const PERMISSIONABLE: [&str; 6] = [DESK_INPUT, DESK_CLIPBOARD, FILES, AGENTS_REMOTE, AGENTS_REMOTE_FULL, AGENTS_REMOTE_WEB];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelayPolicy {

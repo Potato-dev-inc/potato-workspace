@@ -15,6 +15,7 @@ import { modelsRows } from './sections/ModelsSection';
 import { phoneRows } from './sections/PhoneSection';
 import { teamRows } from './sections/TeamSection';
 import { lendRows } from './sections/LendSection';
+import { devicesRows } from './sections/DevicesSection';
 import { shortcutsRows } from './sections/ShortcutsSection';
 
 /** The sections as their files define them, with each row's level (levels.ts). */
@@ -27,6 +28,7 @@ const RAW_SECTIONS: BaseSectionDef[] = [
   { id: 'phone', title: 'Phone', blurb: 'Pair a phone to watch and steer your agents.', rows: phoneRows },
   { id: 'team', title: 'Team', blurb: 'Work with teammates: see when their agents push, and tell them about yours.', rows: teamRows },
   { id: 'lend', title: 'Lend', blurb: 'Lend an agent sign-in to another PC, or borrow one. Early feature.', rows: lendRows },
+  { id: 'devices', title: 'Devices', blurb: 'Pair another PC and run a chat or a terminal on it. Early feature.', rows: devicesRows },
   { id: 'shortcuts', title: 'Shortcuts', blurb: 'Change the keys, or turn a shortcut off. Terminals keep their own keys.', rows: shortcutsRows },
 ];
 

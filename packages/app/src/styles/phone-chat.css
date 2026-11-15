@@ -851,3 +851,22 @@
   transition: none;
   animation: none;
 }
+
+/* "from Ren's PC" under a message, and the "took this back" / "is typing" line. */
+.ph .ph-from {
+  align-self: flex-end;
+  padding-right: 4px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  opacity: 0.85;
+}
+.ph .ph-drive-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 12px;
+  font-size: var(--fs-sm);
+  opacity: 0.9;
+}

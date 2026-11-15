@@ -202,7 +202,7 @@ fn every_answer_path_is_known_and_presses_its_key_through_answer_once() {
     presses.sort();
     assert_eq!(
         presses,
-        ["agent_runs/headless/pane_turn.rs", "agent_runs/routes/answer.rs", "pane_prompt/mod.rs"],
+        ["agent_runs/headless/pane_turn.rs", "agent_runs/routes/answer.rs", "pane_prompt/force_yes.rs", "pane_prompt/mod.rs"],
         "a new place presses an answer key: route it through pane_prompt::answers::answer_once and add it here"
     );
     // The Agent Wizard's own answerer (SPEC 11.16) has a write origin of its own, so it can never be mistaken for

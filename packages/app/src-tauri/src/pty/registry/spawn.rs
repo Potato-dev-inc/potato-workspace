@@ -413,6 +413,7 @@ pub fn spawn_pane(
         let gate_up = gate_up.clone();
         let exited = exited.clone();
         let folder = cwd.clone();
+        let rules_registry = Arc::clone(registry);
         thread::Builder::new()
             .name(format!("pty-reader-{pane_id}"))
             .spawn(move || {
@@ -562,6 +563,15 @@ pub fn spawn_pane(
                                     crate::attention::on_prompt(&pane_id, waiting, prompt.as_ref());
                                     // A new occurrence: an answer to it is not a repeat of the last one.
                                     crate::pane_prompt::answers::note_prompt_event(&pane_id);
+                                }
+                                // Force yes (`agent_rules`): a person's switch for this pane or its agent may answer a low-risk
+                                // approval. It runs a moment later, on its own thread, once the menu is fully drawn.
+                                if prompt.is_some() && !prompt_track.last_was_refresh() && crate::agent_rules::terminal::maybe_enabled(&pane_id, &agent_type) {
+                                    let (registry, app, pane_id) = (Arc::clone(&rules_registry), app.clone(), pane_id.clone());
+                                    thread::spawn(move || {
+                                        thread::sleep(Duration::from_millis(400));
+                                        crate::pane_prompt::force_yes::try_answer(&registry, &app, &pane_id);
+                                    });
                                 }
                                 let _ = app.emit(
                                     "pty://prompt",

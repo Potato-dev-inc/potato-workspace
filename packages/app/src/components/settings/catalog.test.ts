@@ -7,9 +7,9 @@ const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row:
 
 /** Every row id that existed before the move (115 of them, plus Add an agent and Your agents). */
 const PINNED_IDS = [
-  'accounts', 'acp-chat-labs', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
+  'accounts', 'acp-chat-labs', 'agent-browser-labs', 'agent-rules', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
   'bridge-endpoint', 'bring-chats-agents', 'bring-old-chats', 'budget-minutes', 'budget-turns', 'chat-addons', 'chat-search-index',
-  'checkpoints', 'checkpoints-keep', 'close-helpers-with-agent', 'collision', 'confirm-close', 'definitions', 'desktop-potato-labs', 'diagnostic-file',
+  'checkpoints', 'checkpoints-keep', 'close-helpers-with-agent', 'collision', 'confirm-close', 'definitions', 'desktop-potato-labs', 'devices-labs', 'devices-page', 'diagnostic-file',
   'discord-alerts', 'early-versions', 'handoff-mode', 'helper-agents', 'helper-default-models', 'helper-tools', 'hidden-agents',
   'individual-window-layout', 'keep-awake', 'language', 'keep-going', 'keep-helpers-open', 'key-anthropic', 'key-openai', 'key-openrouter',
   'lend-labs', 'lend-page', 'librarian-indexer', 'linux', 'live-room', 'live-updates', 'loop-guard', 'mcp-install', 'mcp-status',
@@ -37,7 +37,7 @@ const PLACEMENT: [string, string, string[]][] = [
   ['agents', 'Moving work', ['handoff-mode', 'keep-going']],
   ['agents', 'All agents', ['show-terminals', 'message-rail', 'preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions']],
   ['agents', 'Your chats', ['bring-chats-agents']],
-  ['agents', 'Rules for all agents', ['loop-guard', 'package-check', 'security-ask-before-control', 'security-agents-merge', 'security-recent-approvals', 'collision']],
+  ['agents', 'Rules for all agents', ['loop-guard', 'package-check', 'security-ask-before-control', 'security-agents-merge', 'agent-rules', 'security-recent-approvals', 'collision']],
   ['agents', 'Limits', ['budget-turns', 'budget-minutes']],
   ['agents', 'Undo and memory', ['checkpoints', 'checkpoints-keep', 'shared-memory']],
   ['agents', 'Your own agents', ['definitions']],
@@ -52,6 +52,7 @@ const PLACEMENT: [string, string, string[]][] = [
   ['connect', 'Phone', ['pairing', 'paired-devices', 'phone-notifications']],
   ['connect', 'Team', ['team-page']],
   ['connect', 'Lend', ['lend-page']],
+  ['connect', 'Devices', ['devices-page']],
   ['connect', 'Discord', ['discord-alerts']],
   ['connect', 'Share a chat', ['live-room']],
   ['connect', 'On the phone', ['mobile-input-delay', 'mobile-keyboard-resizes', 'mobile-input-visible']],
@@ -63,7 +64,7 @@ const PLACEMENT: [string, string, string[]][] = [
   [
     'advanced',
     'Early features (Labs)',
-    ['labs-index', 'simple-mode', 'ask-bar', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'desktop-potato-labs', 'telegram'],
+    ['labs-index', 'simple-mode', 'ask-bar', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'devices-labs', 'desktop-potato-labs', 'agent-browser-labs', 'telegram'],
   ],
   ['advanced', 'App and files', ['storage', 'settings-file', 'diagnostic-file', 'chat-search-index', 'early-versions', 'settings-recovery', 'bring-old-chats']],
   ['advanced', 'Developer', ['show-developer-settings']],

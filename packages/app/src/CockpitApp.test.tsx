@@ -13,6 +13,8 @@ import { tauriClosedChatsApi } from './lib/closedChats';
 import { requestGettingStarted } from './lib/getting-started';
 import { resetUndoBar, showUndo } from './lib/undo-bar';
 import { reportProblem, resetProblems } from './lib/problems';
+import { devicesApi } from './lib/devices';
+import { MAC_MINI, NODE_MAC } from './dev/devices-fixtures';
 
 // Mutable per-test input for the digest (away) path.
 const away = vi.hoisted(() => ({ digest: null as null | object }));
@@ -46,6 +48,12 @@ const store = vi.hoisted(() => ({ runCheck: undefined as unknown }));
 const rust = vi.hoisted(() => ({
   openSettings: null as null | ((e: { tab?: string | null }) => void),
   openView: null as null | ((e: { view: string; bot?: string | null }) => void),
+}));
+
+// The devices state the (mocked) group hook reports: null is the Labs switch off.
+const dev = vi.hoisted(() => ({ view: null as null | { enabled: boolean; devices: unknown[] } }));
+vi.mock('./components/devices/useDeviceGroups', () => ({
+  useDeviceGroups: () => ({ view: dev.view, enabled: dev.view?.enabled === true, groups: [], refresh: () => {} }),
 }));
 
 vi.mock('./hooks/useCockpit', async () => {
@@ -186,13 +194,14 @@ vi.mock('./components/cockpit/Sidebar', async () => {
     onOpenScores: () => void;
     onOpenReview?: () => void;
     onOpenMorning?: () => void;
+    onOpenRoutines?: () => void;
     onOpenStore?: () => void;
     onOpenToSide?: (id: string) => void;
     onOpenNewAgent?: () => void;
     newAgentOpen?: boolean;
   };
   return {
-    Sidebar: ({ c, onOpenDoctor, onOpenMemory, onOpenScores, onOpenReview, onOpenMorning, onOpenStore, onOpenToSide, onOpenNewAgent, newAgentOpen }: Props) =>
+    Sidebar: ({ c, onOpenDoctor, onOpenMemory, onOpenScores, onOpenReview, onOpenMorning, onOpenRoutines, onOpenStore, onOpenToSide, onOpenNewAgent, newAgentOpen }: Props) =>
       h(
         'div',
         null,
@@ -203,6 +212,7 @@ vi.mock('./components/cockpit/Sidebar', async () => {
         h('button', { type: 'button', onClick: onOpenScores }, 'Scores'),
         h('button', { type: 'button', onClick: onOpenReview }, 'Review'),
         h('button', { type: 'button', onClick: onOpenMorning }, 'Night Shift chip'),
+        h('button', { type: 'button', onClick: onOpenRoutines }, 'Routines row'),
         // The "More agents…" row of the "+" menu (its own wiring is tested in NewAgentMenu.test.tsx).
         h('button', { type: 'button', onClick: onOpenStore }, 'More agents…'),
         h('button', { type: 'button', onClick: () => void c.openSettings() }, 'Settings'),
@@ -228,6 +238,10 @@ vi.mock('./components/cockpit/AgentDoctor', async () => {
 vi.mock('./components/cockpit/ProjectMemory', async () => {
   const { createElement: h } = await import('react');
   return { ProjectMemory: () => h('div', null, 'MEMORY VIEW') };
+});
+vi.mock('./components/cockpit/routines/RoutinesPage', async () => {
+  const { createElement: h } = await import('react');
+  return { RoutinesPage: ({ onClose }: { onClose: () => void }) => h('div', null, 'ROUTINES VIEW', h('button', { type: 'button', onClick: onClose }, 'Close routines')) };
 });
 vi.mock('./components/cockpit/night/MorningPage', async () => {
   const { createElement: h } = await import('react');
@@ -389,6 +403,7 @@ let host: HTMLDivElement;
 let root: Root;
 beforeEach(async () => {
   away.digest = null;
+  dev.view = null;
   ui.spawn = null;
   chatStart.starting = null;
   cockpit.mode = 'orchestration';
@@ -544,6 +559,13 @@ describe('CockpitApp main view precedence', () => {
     clickButton('Night Shift chip');
     clickButton('Open task pane');
     expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('Routines: the sidebar row opens the page over the pane and Close returns to it', () => {
+    clickButton('Routines row');
+    expect(mainText()).toContain('ROUTINES VIEW');
+    clickButton('Close routines');
+    expect(mainText()).toBe('PANE VIEW p1');
   });
 
   it('Morning: the last click wins over Project memory', () => {
@@ -1353,5 +1375,30 @@ describe('CockpitApp split grid wiring', () => {
     const plain = JSON.parse(localStorage.getItem('pm.cockpit.split') ?? 'null');
     expect(plain).toMatchObject({ left: 'p1', right: 'p2' });
     expect(plain.below).toBeUndefined();
+  });
+});
+
+describe('CockpitApp: devices connected to this PC', () => {
+  const show = async (devices: unknown[], enabled = true) => {
+    dev.view = { enabled, devices };
+    await act(async () => root.render(createElement(CockpitApp)));
+  };
+
+  it('shows who is connected above the work area, and Disconnect asks the backend to close it', async () => {
+    const disconnect = vi.spyOn(devicesApi, 'disconnect').mockResolvedValue({} as never);
+    await show([{ ...MAC_MINI, lets_run: true, level: 'watch', connected: true }]);
+    const banner = host.querySelector('main [data-testid="connected-banner"]');
+    expect(banner).not.toBeNull();
+    expect(banner!.textContent).toContain('Mac mini is connected · Watch and answer');
+    await act(async () => host.querySelector<HTMLButtonElement>(`[data-testid="disconnect-${NODE_MAC}"]`)!.click());
+    expect(disconnect).toHaveBeenCalledWith(NODE_MAC);
+    disconnect.mockRestore();
+  });
+
+  it('shows nothing while nobody is connected or the Labs switch is off', async () => {
+    await show([{ ...MAC_MINI, lets_run: true, connected: false }]);
+    expect(host.querySelector('[data-testid="connected-banner"]')).toBeNull();
+    await show([{ ...MAC_MINI, lets_run: true, connected: true }], false);
+    expect(host.querySelector('[data-testid="connected-banner"]')).toBeNull();
   });
 });

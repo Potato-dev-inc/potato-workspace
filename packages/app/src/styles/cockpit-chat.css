@@ -1122,3 +1122,12 @@
   font-weight: 600;
   pointer-events: none;
 }
+
+/* "from OPPO Reno13": which device sent the message. Quiet, under the bubble, never in the way. */
+.cockpit .ck-chat-from {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--label-3, var(--label-2));
+  opacity: 0.8;
+  padding-right: 4px;
+}

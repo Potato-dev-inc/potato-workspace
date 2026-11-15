@@ -57,6 +57,8 @@ use super::P2p;
 use crate::keys::KeyStore;
 
 pub const CODE_TTL_MS: u64 = 120_000;
+/// A pairing link lives longer than a code read aloud: it is sent to the other device first.
+pub const LINK_TTL_MS: u64 = 600_000;
 pub const LOCKOUT_MS: u64 = 600_000;
 pub const MAX_STRIKES: u32 = 3;
 const CODE_LEN: usize = 8;
@@ -67,6 +69,7 @@ const STEP_TIMEOUT: Duration = Duration::from_secs(20);
 const CONFIRM_TIMEOUT: Duration = Duration::from_secs(120);
 const FRAME_MAX: usize = 4096;
 const TICKET_PREFIX: &str = "pm1:";
+const LINK_PREFIX: &str = "pm2:";
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -115,6 +118,8 @@ pub enum PairError {
     BadCode,
     #[error("Check the address from the other computer.")]
     BadTicket,
+    #[error("That is not a pairing link. Paste the whole link.")]
+    BadLink,
     #[error("That computer is not nearby any more.")]
     NotNearby,
     #[error("Could not reach that computer. Keep PM open on both and stay on the same network.")]
@@ -210,6 +215,30 @@ pub fn parse_ticket(raw: &str) -> Option<PeerAddr> {
     Some(PeerAddr { id, direct, relay: None })
 }
 
+/// A pairing link (far away): the device id, where to reach it (addresses and relay) and the one-time code, in one
+/// piece of text to paste. It gives no rights by itself: both people still confirm, on their own screen.
+pub fn make_link(node: &NodeId, code: &str, addrs: &[SocketAddr], relay: Option<&str>) -> String {
+    use base64::Engine as _;
+    let body = json!({ "n": node.to_hex(), "c": code, "a": addrs.iter().map(|a| a.to_string()).collect::<Vec<_>>(), "r": relay });
+    format!("{LINK_PREFIX}{}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(body.to_string()))
+}
+
+/// The device to dial and the code, from a pairing link. `None` when the text is not one.
+pub fn parse_link(raw: &str) -> Option<(PeerAddr, String)> {
+    use base64::Engine as _;
+    let rest: String = raw.trim().strip_prefix(LINK_PREFIX)?.chars().filter(|c| !c.is_whitespace()).collect();
+    if rest.len() > 4096 {
+        return None;
+    }
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(rest).ok()?;
+    let v: Value = serde_json::from_slice(&bytes).ok()?;
+    let id = NodeId(unhex::<32>(v.get("n")?.as_str()?)?);
+    let code = normalize_code(v.get("c")?.as_str()?)?;
+    let direct: Vec<SocketAddr> = v.get("a").and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().and_then(|t| SocketAddr::from_str(t).ok())).take(HELLO_ADDRS_MAX).collect()).unwrap_or_default();
+    let relay = v.get("r").and_then(Value::as_str).filter(|r| !r.is_empty() && r.len() <= 256).map(str::to_string);
+    Some((PeerAddr { id, direct, relay }, code))
+}
+
 fn mac(key: &[u8; 32], parts: &[&[u8]]) -> [u8; 32] {
     let mut m = <HmacSha256 as Mac>::new_from_slice(key).expect("hmac takes any key length");
     for p in parts {
@@ -235,7 +264,13 @@ struct Hello {
     nonce: [u8; 16],
     binding: NodeBinding,
     name: String,
+    /// Where this computer can be reached on its network, and its relay: so the other one can dial it again later.
+    /// Not part of the transcript and not trusted until both people said yes.
+    addrs: Vec<SocketAddr>,
+    relay: Option<String>,
 }
+
+const HELLO_ADDRS_MAX: usize = 8;
 
 fn binding_bytes(b: &NodeBinding) -> Vec<u8> {
     let mut v = Vec::with_capacity(136);
@@ -260,6 +295,8 @@ fn hello_json(kind: &str, h: &Hello) -> Value {
         "t": kind,
         "nonce": hex(&h.nonce),
         "name": h.name,
+        "addrs": h.addrs.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+        "relay": h.relay,
         "binding": {
             "node": h.binding.node_id.to_hex(),
             "device": hex(&h.binding.device_pub),
@@ -280,7 +317,13 @@ fn parse_hello(v: &Value, kind: &str) -> Option<Hello> {
         issued_at: b.get("issued")?.as_u64()?,
         signature: unhex::<64>(b.get("sig")?.as_str()?)?,
     };
-    Some(Hello { nonce: unhex::<16>(v.get("nonce")?.as_str()?)?, binding, name: clean_name(v.get("name")?.as_str()?) })
+    let addrs = v
+        .get("addrs")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(|x| x.as_str().and_then(|t| SocketAddr::from_str(t).ok())).take(HELLO_ADDRS_MAX).collect())
+        .unwrap_or_default();
+    let relay = v.get("relay").and_then(Value::as_str).filter(|r| r.len() <= 256).map(str::to_string);
+    Some(Hello { nonce: unhex::<16>(v.get("nonce")?.as_str()?)?, binding, name: clean_name(v.get("name")?.as_str()?), addrs, relay })
 }
 
 // ----- frames -----
@@ -328,6 +371,8 @@ struct HostCode {
     code: String,
     expires_at: u64,
     node: NodeId,
+    /// A pairing link (far away) rather than a code read off the screen.
+    link: Option<String>,
 }
 
 struct PendingAsk {
@@ -375,12 +420,13 @@ impl Drop for BusyGuard {
     }
 }
 
-struct HostHandler(Arc<PairManager>);
+/// `true`: the pairing link protocol (far away, a relay may carry it); `false`: a code read off the screen (direct only).
+struct HostHandler(Arc<PairManager>, bool);
 
 #[async_trait]
 impl CapabilityHandler for HostHandler {
     async fn serve(&self, peer: NodeId, link: Arc<dyn Link>) {
-        let _ = self.0.clone().serve_host(peer, &link).await;
+        let _ = self.0.clone().serve_host(peer, &link, self.1).await;
         // Let the last frame arrive before the link goes away.
         tokio::time::sleep(Duration::from_millis(20)).await;
         link.close(0, "done");
@@ -407,7 +453,8 @@ impl PairManager {
             state: Mutex::new(State::default()),
             notifier: Mutex::new(None),
         });
-        m.p2p.registry().register(Capability::new(capability::PAIR, alpn::PAIR, RelayPolicy::Never, Arc::new(HostHandler(m.clone()))))?;
+        m.p2p.registry().register(Capability::new(capability::PAIR, alpn::PAIR, RelayPolicy::Never, Arc::new(HostHandler(m.clone(), false))))?;
+        m.p2p.registry().register(Capability::new(capability::PAIR_LINK, alpn::PAIR_LINK, RelayPolicy::Allowed, Arc::new(HostHandler(m.clone(), true))))?;
         Ok(m)
     }
 
@@ -477,15 +524,17 @@ impl PairManager {
     pub fn view(&self) -> Value {
         let now = self.clock.now_ms();
         let (host, pending, joining, message, lock) = self.with(|s| {
-            let host = s.host.as_ref().filter(|h| h.expires_at > now).map(|h| (h.code.clone(), h.expires_at, h.node));
+            let host = s.host.as_ref().filter(|h| h.expires_at > now).map(|h| (h.code.clone(), h.expires_at, h.node, h.link.clone()));
             let pending = s.pending.as_ref().map(|p| {
                 json!({ "id": p.id, "role": if p.role == Role::Host { "host" } else { "joiner" }, "name": p.name, "code": display_code(&p.code), "expires_at": p.expires_at })
             });
             let lock = (s.limiter.locked_until > now).then_some(s.limiter.locked_until);
             (host, pending, s.joining.clone(), s.message.clone(), lock)
         });
-        let hosting = host.map(|(code, expires_at, node)| {
-            json!({ "code": display_code(&code), "ticket": make_ticket(&node, &self.p2p.local_addrs()), "expires_at": expires_at })
+        let hosting = host.map(|(code, expires_at, node, link)| match link {
+            // A pairing link carries the code inside it: the page shows the link, not a code to read out.
+            Some(link) => json!({ "kind": "link", "code": "", "ticket": "", "link": link, "expires_at": expires_at }),
+            None => json!({ "kind": "code", "code": display_code(&code), "ticket": make_ticket(&node, &self.p2p.local_addrs()), "link": Value::Null, "expires_at": expires_at }),
         });
         json!({
             "hosting": hosting,
@@ -542,26 +591,51 @@ impl PairManager {
         let code = new_code();
         let node = transport.id();
         self.with(|s| {
-            s.host = Some(HostCode { code, expires_at: now + CODE_TTL_MS, node });
+            s.host = Some(HostCode { code, expires_at: now + CODE_TTL_MS, node, link: None });
             s.message = None;
         });
+        self.trust.set_link_pairing_open(false);
         self.trust.set_pairing_open(true);
         self.discovery.announce(Announcement { node, name: self.name.clone(), addrs: self.p2p.local_addrs() });
         self.changed();
         Ok(self.view())
     }
 
-    /// Withdraws the code and closes pairing.
+    /// Makes a pairing link for a device that is far away: single use, 10 minutes, and the other device may reach this
+    /// one through a relay. It is not announced on the network. Both people still confirm on their own screen.
+    pub async fn start_hosting_link(self: &Arc<Self>) -> Result<Value, PairError> {
+        if let Some(until) = self.locked_until() {
+            return Err(PairError::Locked(until));
+        }
+        let transport = self.p2p.want(capability::PAIR_LINK).await?;
+        // The relay is only known a moment after the endpoint started; a link without it cannot cross the internet.
+        let relay = self.p2p.home_relay_within(Duration::from_secs(4)).await;
+        let now = self.clock.now_ms();
+        let code = new_code();
+        let node = transport.id();
+        let link = make_link(&node, &code, &self.p2p.local_addrs(), relay.as_deref());
+        self.with(|s| {
+            s.host = Some(HostCode { code, expires_at: now + LINK_TTL_MS, node, link: Some(link) });
+            s.message = None;
+        });
+        self.trust.set_pairing_open(false);
+        self.trust.set_link_pairing_open(true);
+        self.changed();
+        Ok(self.view())
+    }
+
+    /// Withdraws the code (or link) and closes pairing.
     pub fn cancel_hosting(&self) {
         let node = self.with(|s| s.host.take().map(|h| h.node));
         self.trust.set_pairing_open(false);
+        self.trust.set_link_pairing_open(false);
         if let Some(n) = node {
             self.discovery.withdraw(&n);
         }
         self.changed();
     }
 
-    async fn serve_host(self: Arc<Self>, peer: NodeId, link: &Arc<dyn Link>) -> Result<(), PairError> {
+    async fn serve_host(self: Arc<Self>, peer: NodeId, link: &Arc<dyn Link>, via_link: bool) -> Result<(), PairError> {
         let mut stream = link.accept_bi().await.map_err(|_| PairError::Dropped)?;
         let refuse = |why: &'static str| json!({ "t": "refused", "why": why });
 
@@ -570,7 +644,8 @@ impl PairManager {
             return send_frame(&mut stream, &refuse("locked")).await;
         }
         let now = self.clock.now_ms();
-        let open = self.with(|s| s.host.as_ref().map(|h| h.expires_at > now).unwrap_or(false));
+        // A code shown on the screen is answered only on the direct protocol, a pairing link only on the link protocol.
+        let open = self.with(|s| s.host.as_ref().map(|h| h.expires_at > now && h.link.is_some() == via_link).unwrap_or(false));
         if !open {
             self.cancel_hosting();
             return send_frame(&mut stream, &refuse("expired")).await;
@@ -599,7 +674,7 @@ impl PairManager {
         let identity = self.identity()?;
         let mut nonce = [0u8; 16];
         rand::thread_rng().fill(&mut nonce);
-        let me = Hello { nonce, binding: identity.binding(), name: self.name.clone() };
+        let me = Hello { nonce, binding: identity.binding(), name: self.name.clone(), addrs: self.p2p.local_addrs(), relay: self.p2p.home_relay() };
         send_frame(&mut stream, &hello_json("challenge", &me)).await?;
         let transcript = transcript(&joiner, &me);
 
@@ -634,7 +709,7 @@ impl PairManager {
 
     /// Enters a code for a computer given by its ticket (hex of the id is looked up in the nearby list).
     pub async fn join(self: &Arc<Self>, target: &str, code: &str) -> Result<String, PairError> {
-        if !self.p2p.labs() {
+        if !self.p2p.labs_for(capability::PAIR) {
             return Err(PairError::Off);
         }
         if let Some(until) = self.locked_until() {
@@ -647,6 +722,23 @@ impl PairManager {
         } else {
             parse_ticket(target).ok_or(PairError::BadTicket)?
         };
+        self.join_peer(peer, code, false).await
+    }
+
+    /// Joins with a pairing link (far away): the link names the device, so there is no "nearby" announcement to trust, and
+    /// a relay may carry the exchange.
+    pub async fn join_link(self: &Arc<Self>, text: &str) -> Result<String, PairError> {
+        if !self.p2p.labs_for(capability::PAIR_LINK) {
+            return Err(PairError::Off);
+        }
+        if let Some(until) = self.locked_until() {
+            return Err(PairError::Locked(until));
+        }
+        let (peer, code) = parse_link(text).ok_or(PairError::BadLink)?;
+        self.join_peer(peer, code, true).await
+    }
+
+    async fn join_peer(self: &Arc<Self>, peer: PeerAddr, code: String, via_link: bool) -> Result<String, PairError> {
         let claimed = self.with(|s| {
             if s.busy {
                 false
@@ -662,7 +754,7 @@ impl PairManager {
         }
         let _busy = BusyGuard(self.clone());
         self.changed();
-        let result = self.run_join(&peer, &code).await;
+        let result = self.run_join(&peer, &code, via_link).await;
         if result.is_ok() {
             self.p2p.addrs().remember(peer.id, &peer.direct);
         }
@@ -674,8 +766,8 @@ impl PairManager {
         result
     }
 
-    async fn run_join(self: &Arc<Self>, peer: &PeerAddr, code: &str) -> Result<String, PairError> {
-        let link = self.p2p.dial(peer, capability::PAIR).await?;
+    async fn run_join(self: &Arc<Self>, peer: &PeerAddr, code: &str, via_link: bool) -> Result<String, PairError> {
+        let link = self.p2p.dial(peer, if via_link { capability::PAIR_LINK } else { capability::PAIR }).await?;
         let result = self.run_join_on(&link, peer, code).await;
         tokio::time::sleep(Duration::from_millis(20)).await;
         link.close(0, "done");
@@ -690,7 +782,7 @@ impl PairManager {
         let mut stream = link.open_bi().await.map_err(|_| PairError::Unreachable)?;
         let mut nonce = [0u8; 16];
         rand::thread_rng().fill(&mut nonce);
-        let me = Hello { nonce, binding: identity.binding(), name: self.name.clone() };
+        let me = Hello { nonce, binding: identity.binding(), name: self.name.clone(), addrs: self.p2p.local_addrs(), relay: self.p2p.home_relay() };
         send_frame(&mut stream, &hello_json("hello", &me)).await?;
 
         let reply = recv_frame(&mut stream, STEP_TIMEOUT).await?;
@@ -767,6 +859,11 @@ impl PairManager {
             .add(other.binding.node_id, other.binding.device_pub, &other.name, now_secs)
             .map_err(|e| PairError::Save(e.to_string()))?;
         self.with(|s| s.limiter = Limiter::default());
+        // Both said yes: remember where the other one can be reached, so this computer can dial it later.
+        self.p2p.addrs().remember(other.binding.node_id, &other.addrs);
+        if let Some(relay) = other.relay.as_deref() {
+            self.p2p.addrs().remember_relay(other.binding.node_id, relay);
+        }
         Ok(())
     }
 
@@ -815,6 +912,13 @@ impl PairManager {
     /// Removes a paired computer. The person confirms in the UI first.
     pub fn remove(&self, node: &NodeId) -> Result<(), PairError> {
         self.trust.remove(node).map_err(|e| PairError::Save(e.to_string()))?;
+        self.changed();
+        Ok(())
+    }
+
+    /// The person's own label for a paired computer.
+    pub fn rename(&self, node: &NodeId, name: &str) -> Result<(), PairError> {
+        self.trust.rename(node, name).map_err(|e| PairError::Save(e.to_string()))?;
         self.changed();
         Ok(())
     }

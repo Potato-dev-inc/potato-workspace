@@ -40,11 +40,11 @@ export function ThinkingBlock({ text, durationMs, streaming, folded = false }: {
           setOpen(!open);
         }}
       >
-        <svg className="ck-think-i" viewBox="0 0 16 16" aria-hidden="true">
+        <svg className="ck-think-i" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
           <path d="M8 2.5v3M8 10.5v3M2.5 8h3M10.5 8h3M4.2 4.2l2 2M9.8 9.8l2 2M11.8 4.2l-2 2M6.2 9.8l-2 2" />
         </svg>
         <span className={streaming ? 'ck-shim' : undefined}>{label(streaming, durationMs)}</span>
-        <svg className="ck-think-cv" viewBox="0 0 16 16" aria-hidden="true">
+        <svg className="ck-think-cv" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
           <path d="M4 6l4 4 4-4" />
         </svg>
       </button>

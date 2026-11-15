@@ -68,9 +68,14 @@ pub const SPACES_LABS_KEY: &str = "spaces_enabled";
 /// Share an agent ("Lend through my PC") has its own Labs switch too.
 pub const LEND_LABS_KEY: &str = "lend_enabled";
 
+/// Devices (another paired Workspace runs agents here) has its own Labs switch too.
+pub const DEVICES_LABS_KEY: &str = "devices_enabled";
+
 pub fn labs_key_for(capability: &str) -> &'static str {
     if capability == capability::SPACES {
         SPACES_LABS_KEY
+    } else if capability == capability::AGENTS_REMOTE {
+        DEVICES_LABS_KEY
     } else if capability == capability::AGENTS_LEND {
         LEND_LABS_KEY
     } else {
@@ -88,18 +93,24 @@ struct LabsGated {
     desk: Arc<AtomicBool>,
     spaces: Arc<AtomicBool>,
     lend: Arc<AtomicBool>,
+    devices: Arc<AtomicBool>,
 }
 
 impl Permissions for LabsGated {
     fn allowed(&self, peer: &NodeId, capability: &str) -> bool {
         let on = if capability == capability::SPACES {
-            &self.spaces
+            self.spaces.load(Ordering::SeqCst)
         } else if capability == capability::AGENTS_LEND {
-            &self.lend
+            self.lend.load(Ordering::SeqCst)
+        } else if capability == capability::AGENTS_REMOTE {
+            self.devices.load(Ordering::SeqCst)
+        } else if capability == capability::PAIR || capability == capability::PAIR_LINK {
+            // Pairing serves My computers and Devices: either switch may open it.
+            self.desk.load(Ordering::SeqCst) || self.devices.load(Ordering::SeqCst)
         } else {
-            &self.desk
+            self.desk.load(Ordering::SeqCst)
         };
-        on.load(Ordering::SeqCst) && self.inner.allowed(peer, capability)
+        on && self.inner.allowed(peer, capability)
     }
 
     fn set(&self, peer: &NodeId, capability: &str, on: bool) {
@@ -111,6 +122,7 @@ impl Permissions for LabsGated {
 #[derive(Default)]
 pub struct AddrBook {
     map: Mutex<std::collections::HashMap<NodeId, Vec<std::net::SocketAddr>>>,
+    relays: Mutex<std::collections::HashMap<NodeId, String>>,
 }
 
 impl AddrBook {
@@ -121,9 +133,28 @@ impl AddrBook {
         self.map.lock().unwrap_or_else(|p| p.into_inner()).insert(node, addrs.to_vec());
     }
 
+    /// The relay a computer said it is reachable through (used only when this endpoint's bind allows relays).
+    pub fn remember_relay(&self, node: NodeId, url: &str) {
+        let url = url.trim();
+        if url.is_empty() {
+            return;
+        }
+        self.relays.lock().unwrap_or_else(|p| p.into_inner()).insert(node, url.to_string());
+    }
+
     pub fn peer(&self, node: NodeId) -> PeerAddr {
         let direct = self.map.lock().unwrap_or_else(|p| p.into_inner()).get(&node).cloned().unwrap_or_default();
-        PeerAddr { id: node, direct, relay: None }
+        let relay = self.relays.lock().unwrap_or_else(|p| p.into_inner()).get(&node).cloned();
+        PeerAddr { id: node, direct, relay }
+    }
+
+    /// Everything known, for a caller that keeps it across restarts (this module writes no file).
+    pub fn snapshot(&self) -> Vec<(NodeId, Vec<std::net::SocketAddr>, Option<String>)> {
+        let map = self.map.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let relays = self.relays.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let mut nodes: std::collections::BTreeSet<NodeId> = map.keys().copied().collect();
+        nodes.extend(relays.keys().copied());
+        nodes.into_iter().map(|n| (n, map.get(&n).cloned().unwrap_or_default(), relays.get(&n).cloned())).collect()
     }
 }
 
@@ -137,6 +168,9 @@ pub struct P2p {
     labs: Arc<AtomicBool>,
     spaces_labs: Arc<AtomicBool>,
     lend_labs: Arc<AtomicBool>,
+    devices_labs: Arc<AtomicBool>,
+    /// No outside relay is ever used (the founder's "My own route only"): the endpoint binds without relays.
+    no_relay: AtomicBool,
     /// True while either switch is on: the accept loop refuses everything otherwise.
     any_labs: Arc<AtomicBool>,
     keys: KeyStore,
@@ -159,6 +193,8 @@ impl P2p {
             labs: Arc::new(AtomicBool::new(false)),
             spaces_labs: Arc::new(AtomicBool::new(false)),
             lend_labs: Arc::new(AtomicBool::new(false)),
+            devices_labs: Arc::new(AtomicBool::new(false)),
+            no_relay: AtomicBool::new(false),
             any_labs: Arc::new(AtomicBool::new(false)),
             keys,
             factory,
@@ -201,6 +237,10 @@ impl P2p {
             self.spaces_labs.load(Ordering::SeqCst)
         } else if capability == capability::AGENTS_LEND {
             self.lend_labs.load(Ordering::SeqCst)
+        } else if capability == capability::AGENTS_REMOTE {
+            self.devices_labs.load(Ordering::SeqCst)
+        } else if capability == capability::PAIR || capability == capability::PAIR_LINK {
+            self.labs() || self.devices_labs.load(Ordering::SeqCst)
         } else {
             self.labs()
         }
@@ -214,11 +254,13 @@ impl P2p {
         let desk = labs_on(public);
         let spaces = labs_on_for(public, capability::SPACES);
         let lend = labs_on_for(public, capability::AGENTS_LEND);
+        let devices = labs_on_for(public, capability::AGENTS_REMOTE);
         self.labs.store(desk, Ordering::SeqCst);
         self.spaces_labs.store(spaces, Ordering::SeqCst);
         self.lend_labs.store(lend, Ordering::SeqCst);
-        self.any_labs.store(desk || spaces || lend, Ordering::SeqCst);
-        if !desk && !spaces && !lend {
+        self.devices_labs.store(devices, Ordering::SeqCst);
+        self.any_labs.store(desk || spaces || lend || devices, Ordering::SeqCst);
+        if !desk && !spaces && !lend && !devices {
             self.stop();
             return;
         }
@@ -231,6 +273,20 @@ impl P2p {
         if none_left {
             self.stop();
         }
+    }
+
+    /// "My own route only": no outside relay is used from now on. Rebinds a running endpoint (open links end).
+    /// The relay hint of every dial is dropped by the caller; this makes the endpoint itself refuse relays.
+    pub async fn set_relays_allowed(&self, on: bool) {
+        let _guard = self.start_lock.lock().await;
+        self.no_relay.store(!on, Ordering::SeqCst);
+        if self.is_running() {
+            let _ = self.reconcile().await;
+        }
+    }
+
+    pub fn relays_allowed(&self) -> bool {
+        !self.no_relay.load(Ordering::SeqCst)
     }
 
     pub fn is_running(&self) -> bool {
@@ -316,7 +372,7 @@ impl P2p {
         }
         Some(BindSpec {
             alpns: caps.iter().map(|c| c.alpn.clone()).collect(),
-            relays: caps.iter().any(|c| c.relay_allowed()),
+            relays: !self.no_relay.load(Ordering::SeqCst) && caps.iter().any(|c| c.relay_allowed()),
             loopback_only: self.loopback_only,
         })
     }
@@ -356,6 +412,7 @@ impl P2p {
                         desk: self.labs.clone(),
                         spaces: self.spaces_labs.clone(),
                         lend: self.lend_labs.clone(),
+                        devices: self.devices_labs.clone(),
                     }),
                     self.refusals.clone(),
                     self.any_labs.clone(),

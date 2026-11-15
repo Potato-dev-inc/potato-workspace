@@ -144,6 +144,9 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // The bridge banner, the pane list, public settings and agent names: already in the first
         // frames of every event stream.
         ("GET", [] | ["panes"] | ["settings"] | ["agents", "types"] | ["pair", "me"]) => Need::Device,
+        // A device tells the PC its own name again (a phone's model), and reads the names of the devices ("from <name>"
+        // under a message). It can only name itself: the route takes the id from the token. Listed exactly.
+        ("POST", ["pair", "me"]) | ("GET", ["devices", "names"]) => Need::Device,
         // The event streams themselves; terminal bytes inside them are filtered by `watch`.
         ("GET", ["events"] | ["events", "ws"] | ["events", "poll"]) => Need::Device,
         // This device's own notification subscription and presence (`/push/act` is public and
@@ -162,6 +165,11 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
 
         // A pane's chat (what the agent said and did) is pane text like a screen: it needs `watch`.
         ("GET", ["panes", _, "chat"]) => Need::Cap(Watch),
+        // Show earlier messages, a picture the agent named and the half-written message (`bridge/routes/chat_more.rs`): reading
+        // them is `watch`, writing the draft is typing. Written out so they stay in the list; each names its agent in the path, so
+        // that agent's own remote rule applies too.
+        ("GET", ["panes", _, "chat", "earlier"] | ["panes", _, "picture"] | ["panes", _, "draft"]) => Need::Cap(Watch),
+        ("POST", ["panes", _, "draft"]) => Need::Cap(Type),
         // The search across every chat (`bridge/routes/chats.rs`): it reads what was said, like a pane's chat.
         ("GET", ["chats", "search"]) => Need::Cap(Watch),
 
@@ -184,11 +192,15 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // Stopping the turn of a chat session over ACP is the Stop key of its pane: typing. Starting one is `control`
         // (the default of a POST); its state is a read (`watch`, the default of a GET).
         ("POST", ["acp", "sessions", _, "cancel"]) => Need::Cap(Type),
+        // "Phone is typing" and "Take over": the message box's own signals, so they need what the message box needs.
+        ("POST", ["acp", "sessions", _, "typing" | "claim"]) => Need::Cap(Type),
         // Phone chats (`bridge/routes/phone_chat.rs`): the new-chat choices and the closed list are reads (`watch`); starting a
         // chat, changing the agent's model, mode or effort, and bringing a closed chat back act (`control`). Written out so
         // they stay in the list; the ones about one agent also meet that agent's remote rule (`pane_of_route`).
         ("GET", ["phone", "new-chat"]) | ("GET", ["acp", "closed"]) => Need::Cap(Watch),
-        ("POST", ["phone", "chats"]) | ("POST", ["acp", "sessions", _, "config"]) | ("POST", ["acp", "closed", _, "reopen"]) => {
+        // The agent's model list may start its program to read it, so it acts (`control`), like warming.
+        ("GET", ["phone", "new-chat", "models"]) => Need::Cap(Control),
+        ("POST", ["phone", "chats"]) | ("POST", ["phone", "warm"]) | ("POST", ["acp", "sessions", _, "config"]) | ("POST", ["acp", "closed", _, "reopen"]) => {
             Need::Cap(Control)
         }
         // The Chat tab's message box (`pane_outbox`): writing or cancelling a message is typing; the list

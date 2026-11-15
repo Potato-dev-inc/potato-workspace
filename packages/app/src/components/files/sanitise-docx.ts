@@ -8,7 +8,15 @@ const ATTRS = ['href', 'src', 'alt', 'title', 'colspan', 'rowspan', 'id'];
 const LINK = /^(?:https?:|mailto:|#)/i;
 const PICTURE = /^data:image\/(?:png|jpe?g|gif|bmp|webp);base64,/i;
 
+/** Past this many top-level blocks (paragraphs, tables, lists) only the first part of a document is shown. */
+export const DOCX_BLOCK_CAP = 2500;
+
 export function sanitiseDocxHtml(html: string): string {
+  return sanitiseDocxPage(html, Infinity).html;
+}
+
+/** The same, cut after `maxBlocks` top-level blocks. `truncated` is true when something was cut. */
+export function sanitiseDocxPage(html: string, maxBlocks: number): { html: string; truncated: boolean } {
   const body = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: TAGS,
     ALLOWED_ATTR: ATTRS,
@@ -24,5 +32,8 @@ export function sanitiseDocxHtml(html: string): string {
   for (const img of Array.from(body.querySelectorAll('img'))) {
     if (!PICTURE.test(img.getAttribute('src') ?? '')) img.remove();
   }
-  return body.innerHTML;
+  const blocks = Array.from(body.children);
+  const truncated = blocks.length > maxBlocks;
+  if (truncated) for (const extra of blocks.slice(maxBlocks)) extra.remove();
+  return { html: body.innerHTML, truncated };
 }

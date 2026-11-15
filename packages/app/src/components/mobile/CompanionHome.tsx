@@ -44,6 +44,7 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
   const [memory, setMemory] = useState<MemoryView | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // The feed and the notes are read on open and on each state change (and when the note count changes).
   useEffect(() => {
@@ -92,6 +93,7 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
   const toggleAgent = (next: 'wake' | 'sleep') => {
     setBusy(next);
     setError(null);
+    setMenuOpen(false);
     const job = next === 'wake' ? transport.wake(id) : transport.sleep(id);
     job
       .then(onChanged)
@@ -126,7 +128,7 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
     chat = <p className="ph-comp-note">Chat can&apos;t send messages to this agent yet.</p>;
   } else {
     chat = (
-      <PhoneChatView key={paneId} bridge={bridge} paneId={paneId} canWatch={abilities.canWatch} canType={abilities.canType} />
+      <PhoneChatView key={paneId} bridge={bridge} paneId={paneId} canWatch={abilities.canWatch} canType={abilities.canType} companion />
     );
   }
 
@@ -134,6 +136,24 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
     <div className="ph-comp">
       <div className="ph-comp-top">
         <header className="ph-comp-head">
+          {abilities.canControl && !asleep && (
+            <div className="ph-home-menu">
+              <button type="button" className="ph-home-menu-btn" aria-label="More" aria-haspopup="menu" aria-expanded={menuOpen} data-testid="companion-menu" onClick={() => setMenuOpen((open) => !open)}>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                  <circle cx="5" cy="12" r="1.8" />
+                  <circle cx="12" cy="12" r="1.8" />
+                  <circle cx="19" cy="12" r="1.8" />
+                </svg>
+              </button>
+              {menuOpen && (
+                <div className="ph-home-menu-list" role="menu">
+                  <button type="button" role="menuitem" disabled={busy !== null} onClick={() => toggleAgent('sleep')}>
+                    Sleep
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <Avatar id={companion.avatar} size={HOME_FACE_PX} state={state} name={name} />
           <h1 className="ph-comp-name">{name}</h1>
           <p className="ph-comp-state">{companion.stateLine}</p>
@@ -141,6 +161,7 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
             On {companion.agentLabel}
             {companion.untilMs ? ` until ${clockLabel(companion.untilMs)}` : ''}
           </p>
+          {nextCheckin && <p className="ph-comp-agent ph-comp-next">{`Next: ${nextCheckin.label} · ${clockLabel(nextCheckin.atMs)}`}</p>}
           {needs && (
             <button type="button" className="ph-btn ph-btn--primary ph-comp-wide" onClick={() => onOpenCard(needs.itemId)}>
               Open card
@@ -163,16 +184,6 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
         )}
       </div>
       <div className="ph-comp-chat">{chat}</div>
-      <footer className="ph-comp-foot">
-        {abilities.canControl && !asleep && (
-          <button type="button" className="ph-comp-chip" disabled={busy !== null} onClick={() => toggleAgent('sleep')}>
-            Sleep
-          </button>
-        )}
-        {nextCheckin && (
-          <span className="ph-comp-next">{`Next: ${nextCheckin.label} · ${clockLabel(nextCheckin.atMs)}`}</span>
-        )}
-      </footer>
     </div>
   );
 }

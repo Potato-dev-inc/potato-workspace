@@ -2,8 +2,13 @@
 // Sign in again opens the agent's own sign-in (as before; this card never sees a credential). While the person signs in the
 // card tries the kept message again every few seconds, and the first time it goes through it is sent exactly once.
 // Use <other agent> for this puts the kept words into a new chat with that agent, for the person to read and send.
-import { useEffect, useRef, useState } from 'react';
+//
+// Without a terminal: when the chat can run the sign-in itself (`signIn`), the card is two steps, "1. Your browser opens. 2. Come
+// back here.", and the agent's own sign-in runs in a hidden pane. Its terminal is folded under "Details" and opens by itself the
+// moment the sign-in asks a question. The card closes the sign-in when the message goes through, and never sees a credential.
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
+import type { ChatSignIn } from '../../lib/chatMore';
 import { errorSentence } from '../../lib/sayError';
 import '../../styles/cockpit-acp.css';
 
@@ -22,22 +27,39 @@ export interface SignInFixCardProps {
   onRetry: () => Promise<unknown> | void;
   /** Starts a chat with the other agent and puts the kept words in its message box. */
   onUseOther: (id: string, kept: string) => Promise<unknown> | void;
+  /** The sign-in without a terminal. Absent: "Sign in again" calls `onOpen`, which opens the agent's terminal as a pane. */
+  signIn?: ChatSignIn;
+  /** Draws the terminal of the hidden sign-in pane under Details. Defaults to the lend sheet's small terminal. */
+  renderTerminal?: (paneId: string) => ReactNode;
+  /** How often the sign-in is looked at (is it asking something?). */
+  lookMs?: number;
   /** How often the kept message is tried while waiting for the sign-in. */
   pollMs?: number;
   /** After this long the card stops trying by itself and offers a button. */
   giveUpMs?: number;
 }
 
+// The terminal (xterm) is loaded only when Details is opened.
+const SignInTerminal = lazy(() => import('../lend/SignInTerminal').then((m) => ({ default: m.SignInTerminal })));
+
 export const SIGNIN_POLL_MS = 6000;
+export const SIGNIN_LOOK_MS = 1500;
 export const SIGNIN_GIVE_UP_MS = 3 * 60_000;
 
 type Step = 'ask' | 'waiting' | 'gaveUp' | 'sent';
 
 const shorten = (text: string, max = 60): string => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
-export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUseOther, pollMs = SIGNIN_POLL_MS, giveUpMs = SIGNIN_GIVE_UP_MS }: SignInFixCardProps) {
+export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUseOther, signIn, renderTerminal, lookMs = SIGNIN_LOOK_MS, pollMs = SIGNIN_POLL_MS, giveUpMs = SIGNIN_GIVE_UP_MS }: SignInFixCardProps) {
   const t = useT();
   const [step, setStep] = useState<Step>('ask');
+  /** The hidden sign-in pane (without a terminal), its terminal under Details, and what the sign-in is doing. */
+  const [hiddenPane, setHiddenPane] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [closedEarly, setClosedEarly] = useState(false);
+  const signInRef = useRef(signIn);
+  signInRef.current = signIn;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const sentOnce = useRef(false);
@@ -53,6 +75,9 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
       await retryRef.current();
       sentOnce.current = true;
       setStep('sent');
+      // The message went through: the sign-in worked, and its hidden pane is not needed any more.
+      void signInRef.current?.stop().catch(() => undefined);
+      setHiddenPane(null);
       return true;
     } catch {
       return false;
@@ -73,11 +98,56 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, pollMs, giveUpMs]);
 
+  // Without a terminal: look at the hidden sign-in. A question on its screen opens Details by itself, once; a pane that ended
+  // before the message went through says so.
+  useEffect(() => {
+    if (!signIn || !hiddenPane || step !== 'waiting') return;
+    let live = true;
+    let askedBefore = false;
+    const look = () =>
+      signIn.status().then(
+        (now) => {
+          if (!live) return;
+          if (!now.alive) {
+            setClosedEarly(true);
+            setHiddenPane(null);
+            return;
+          }
+          setAsking(now.asking);
+          if (now.asking && !askedBefore) {
+            askedBefore = true;
+            setDetailsOpen(true);
+          }
+        },
+        () => undefined,
+      );
+    const timer = window.setInterval(() => void look(), lookMs);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [signIn, hiddenPane, step, lookMs]);
+
+  // The card goes away (the chat closed, the message went): the hidden pane goes with it.
+  useEffect(
+    () => () => {
+      void signInRef.current?.stop().catch(() => undefined);
+    },
+    [],
+  );
+
   const signInAgain = async () => {
     setBusy(true);
     setError(null);
+    setClosedEarly(false);
     try {
-      await onOpen();
+      if (signIn) {
+        setHiddenPane(await signIn.start());
+        setDetailsOpen(false);
+        setAsking(false);
+      } else {
+        await onOpen();
+      }
       setStep('waiting');
     } catch (e) {
       setError(errorSentence(e));
@@ -110,10 +180,32 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
           {step === 'sent' ? t('flow.signin.sent') : t('flow.signin.kept')}
           {kept && step !== 'sent' && <> “{shorten(kept)}”</>}
         </p>
-        {step === 'waiting' && (
+        {signIn && step === 'ask' && (
+          <ol className="ck-acp-card-steps" data-testid="signin-steps">
+            <li>{t('chat.signin.step1')}</li>
+            <li>{t('chat.signin.step2')}</li>
+          </ol>
+        )}
+        {step === 'waiting' && signIn && (
+          <p className="ck-acp-card-line" role="status" data-testid="signin-working">
+            {closedEarly ? t('chat.signin.closed') : asking ? t('chat.signin.asking') : t('chat.signin.working')}
+          </p>
+        )}
+        {step === 'waiting' && !signIn && (
           <p className="ck-acp-card-line" role="status">
             {t('flow.signin.waiting')} {hint}
           </p>
+        )}
+        {signIn && hiddenPane && step === 'waiting' && (
+          <details
+            className="ck-acp-card-details"
+            data-testid="signin-details"
+            open={detailsOpen}
+            onToggle={(event) => setDetailsOpen((event.currentTarget as HTMLDetailsElement).open)}
+          >
+            <summary>{t('chat.signin.details')}</summary>
+            {detailsOpen && (renderTerminal ? renderTerminal(hiddenPane) : <Suspense fallback={null}><SignInTerminal paneId={hiddenPane} label={t('chat.signin.details')} /></Suspense>)}
+          </details>
         )}
         {step === 'gaveUp' && <p className="ck-acp-card-line">{t('flow.signin.gaveUp')}</p>}
         {error && (
@@ -130,7 +222,7 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
             </button>
           ) : (
             <button type="button" className="ck-btn" disabled={busy} onClick={() => void signInAgain()}>
-              {step === 'waiting' ? t('flow.signin.openAgain') : t('flow.signin.again')}
+              {signIn ? (busy ? t('chat.signin.starting') : step === 'waiting' && !closedEarly ? t('flow.signin.openAgain') : t('chat.signin.start')) : step === 'waiting' ? t('flow.signin.openAgain') : t('flow.signin.again')}
             </button>
           )}
           {other && (

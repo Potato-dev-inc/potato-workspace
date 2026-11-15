@@ -39,8 +39,21 @@ function bridgeErrorText(status: number, body: string): string {
   return body;
 }
 
-export function makeBridgeClient(baseUrl: string): BridgeClient {
+/**
+ * Another way to carry a bridge call than `fetch`: the PC link to a paired device (`lib/runtime/remote.ts`). It answers
+ * the status and the body text of the far bridge's reply, the same as an HTTP response would.
+ */
+export type BridgeTransport = (method: string, path: string, body?: unknown) => Promise<{ status: number; text: string }>;
+
+export function makeBridgeClient(baseUrl: string, transport?: BridgeTransport): BridgeClient {
   async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    if (transport) {
+      const res = await transport(method, path, body || undefined);
+      if (res.status < 200 || res.status >= 300) {
+        throw new Error(`bridge ${method} ${path} -> ${res.status}: ${bridgeErrorText(res.status, res.text)}`);
+      }
+      return (res.text ? JSON.parse(res.text) : {}) as T;
+    }
     const headers = mergeBridgeHeaders({ ...ngrokRequestHeaders(baseUrl), ...localSecretHeaders(baseUrl) });
     if (body) headers['Content-Type'] = 'application/json';
     const res = await fetch(`${baseUrl}${path}`, {
@@ -216,10 +229,21 @@ export function makeBridgeClient(baseUrl: string): BridgeClient {
     pairMe: () => call('GET', '/pair/me'),
     paneChat: (paneId, since) =>
       call('GET', `/panes/${encodeURIComponent(paneId)}/chat${since === undefined ? '' : `?since=${since}`}`),
+    paneChatEarlier: (paneId, before, limit) =>
+      call('GET', `/panes/${encodeURIComponent(paneId)}/chat/earlier?before=${encodeURIComponent(before)}${limit === undefined ? '' : `&limit=${limit}`}`),
+    panePicture: (paneId, path) => call('GET', `/panes/${encodeURIComponent(paneId)}/picture?path=${encodeURIComponent(path)}`),
+    paneDraft: (paneId) => call('GET', `/panes/${encodeURIComponent(paneId)}/draft`),
+    setPaneDraft: (paneId, text) => call('POST', `/panes/${encodeURIComponent(paneId)}/draft`, { text }),
     acpSession: (paneId) => call('GET', `/acp/sessions/${encodeURIComponent(paneId)}`),
+    acpTyping: (paneId) => call('POST', `/acp/sessions/${encodeURIComponent(paneId)}/typing`, {}),
+    acpClaim: (paneId) => call('POST', `/acp/sessions/${encodeURIComponent(paneId)}/claim`, {}),
+    deviceNames: async () => (await call<{ names?: Record<string, { name: string; kind: string }> }>('GET', '/devices/names')).names ?? {},
+    tellName: (name) => call('POST', '/pair/me', { name }),
     acpCancel: (paneId) => call('POST', `/acp/sessions/${encodeURIComponent(paneId)}/cancel`, {}),
     phoneNewChat: () => call('GET', '/phone/new-chat'),
+    phoneModelOptions: (agent) => call('GET', `/phone/new-chat/models?agent=${encodeURIComponent(agent)}`),
     phoneStartChat: (args) => call('POST', '/phone/chats', args),
+    phoneWarm: (args) => call('POST', '/phone/warm', args),
     acpSetConfig: (paneId, optionId, value, hold) =>
       call('POST', `/acp/sessions/${encodeURIComponent(paneId)}/config`, { option_id: optionId, value, ...(hold ? { hold: true } : {}) }),
     acpClosed: async () => (await call<{ chats?: PhoneClosedChat[] }>('GET', '/acp/closed')).chats ?? [],

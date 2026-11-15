@@ -222,21 +222,20 @@ describe('PwaApp with a chat session over ACP', () => {
     expect(h.answerQuestion).toHaveBeenCalledWith('q1', { choice_id: 'allow_always' });
   });
 
-  it('shows a Stop button while a turn runs, stops through the PC, and reads Stopping… at once', async () => {
+  it('shows a working line while a turn runs with no second Stop button (the box has the only one)', async () => {
     h.acpSession.mockResolvedValue(state({ phase: 'working', status: 'running', turnInFlight: true }));
     await open('c1');
     await flush();
     expect(host.querySelector('[data-testid="acp-phone-strip"]')?.textContent).toContain('Working…');
-    await act(async () => buttonNamed('Stop')!.click());
-    expect(h.acpCancel).toHaveBeenCalledWith('c1');
-    expect(host.querySelector('[data-testid="acp-phone-strip"]')?.textContent).toContain('Stopping…');
+    expect(host.querySelector('[data-testid="acp-phone-strip"] button')).toBeNull();
+    expect(buttonNamed('Stop')).toBeUndefined();
     // The turn ends: the line goes away.
     h.acpSession.mockResolvedValue(state());
     await flush(2500);
     expect(host.querySelector('[data-testid="acp-phone-strip"]')).toBeNull();
   });
 
-  it('has no Stop button without the type ability, and nothing at all once the agent is idle', async () => {
+  it('shows nothing at all once the agent is idle', async () => {
     h.caps = ['watch', 'answer'];
     h.acpSession.mockResolvedValue(state({ phase: 'working', status: 'running', turnInFlight: true }));
     await open('c1');

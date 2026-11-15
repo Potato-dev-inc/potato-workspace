@@ -112,4 +112,6 @@ export const MOVED_FILES: readonly string[] = [
   'components/cockpit/problems/ProblemsChip.tsx', 'components/cockpit/StartupCheckLine.tsx',
   // Point and Fix
   'components/point/PointBox.tsx', 'components/point/PointBoxApp.tsx', 'components/point/RecheckStrip.tsx',
+  // routines and chains
+  `${C}routines/RoutinesPage.tsx`, `${C}routines/RoutineForm.tsx`, `${C}routines/WorkflowRow.tsx`, `${C}routines/LimitRow.tsx`, `${C}routines/ThenSheet.tsx`,
 ];

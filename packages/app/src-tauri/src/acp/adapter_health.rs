@@ -196,6 +196,17 @@ fn canary_version(agent: &str) -> Option<String> {
     crate::canary::version_of(agent)
 }
 
+/// The version of the agent's chat adapter as far as it is known without starting a chat: the canary's reading, else the
+/// installed program's own `--version` (one short run). `None`: not known.
+pub fn adapter_version(agent: &str) -> Option<String> {
+    let current = canary_version(agent);
+    if current.is_some() {
+        return current;
+    }
+    let (_, item) = adapter_of(&OverlayStore::in_app_data(), agent)?;
+    super::adapter_overlay::installed_version(&item.program)
+}
+
 /// Called by the canary when `agent`'s version changed to `version`. The canary runs it on a background thread.
 pub fn on_version_changed(agent: &str, version: &str) {
     let Some((entry, item)) = adapter_of(&OverlayStore::in_app_data(), agent) else { return };

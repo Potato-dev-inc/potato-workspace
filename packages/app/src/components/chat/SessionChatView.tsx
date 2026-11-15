@@ -3,6 +3,8 @@
 // when the agent has a plan, a thin line marks a notice, and a turn ends with how long it worked. The view mode
 // (Summary, Normal, Verbose) is in the header. The agent's text is Markdown when it comes from the session file;
 // text read off the terminal is shown as it is.
+import { loadDesktopDeviceNames } from '../../lib/deviceNames.desktop';
+import { sentFromLines, useDeviceNames } from '../../lib/deviceNames';
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { clearChatJump, turnWithItem, type ChatJump } from '../../lib/chatJump';
@@ -15,6 +17,11 @@ import { segmentSteps } from './chatActivity';
 import { formatDuration } from './chatFormat';
 import { useChatViewMode, type ChatViewMode } from './chatViewMode';
 import { ChatMarkdown } from './ChatMarkdown';
+import { PictureSourceContext } from './ChatPicture';
+import { EarlierRow } from './EarlierRow';
+import { useKeepPlace } from '../../hooks/useKeepPlace';
+import { desktopPictureSource } from '../../lib/chatMore';
+import type { EarlierState } from '../../hooks/useEarlier';
 import { HelperRow } from './HelperRow';
 import { PaneHelperRows } from './PaneHelperRows';
 import { placeHelpers, type ChatHelper } from '../../lib/chat-helpers';
@@ -98,6 +105,8 @@ export interface SessionChatViewProps {
   onOpenPane?: (paneId: string) => void;
   /** What the buttons on the newest turn's ending line do (Retry, Sign in, Keep going). Without it the line has no buttons. */
   endings?: EndingActions;
+  /** "Show earlier messages": a row at the top while the chat has older messages that are not held. The view keeps its place when they arrive. */
+  earlier?: EarlierState;
 }
 
 /** The `Branch` button on a finished turn's end line. `always`: shown without hover (the newest finished turn). */
@@ -169,7 +178,7 @@ function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: Tu
 export const turnRenders = { count: 0 };
 
 /** Everything here is stable for a turn that did not change (see `groupTurns` and `useStable`), so `memo` can skip it. */
-const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canBranch, branchAlways, onBranch, helpers, onOpenPane, endings, price, paneId }: { paneId?: string; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; canBranch: boolean; branchAlways: boolean; onBranch?: (userItemId: string) => void; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
+const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canBranch, branchAlways, onBranch, helpers, onOpenPane, endings, price, paneId, sentFrom }: { sentFrom?: string; paneId?: string; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; canBranch: boolean; branchAlways: boolean; onBranch?: (userItemId: string) => void; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
   turnRenders.count += 1;
   const branch = useMemo<TurnBranch | undefined>(
     () => (canBranch && onBranch && isBranchable(turn) ? { onBranch: () => onBranch(turn.user.id), always: branchAlways } : undefined),
@@ -191,6 +200,11 @@ const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canB
             <div className="max-w-[85%] whitespace-pre-wrap break-words rounded bg-pm-raised px-2 py-1 text-pm-text ck-chat-bubble">
               {turn.user.text}
             </div>
+          )}
+          {sentFrom && (
+            <span className="ck-chat-from" data-testid="sent-from">
+              {sentFrom}
+            </span>
           )}
         </div>
       )}
@@ -239,8 +253,11 @@ function useStable<T>(next: Map<string, T>): Map<string, T> {
   return out;
 }
 
-export function SessionChatView({ state, reason, waitingFor, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings }: SessionChatViewProps) {
+export function SessionChatView({ state, reason, waitingFor, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings, earlier }: SessionChatViewProps) {
   const fromScreen = source === 'screen';
+  // "from OPPO Reno13" under a message that another device sent (names come from the PC's one device record).
+  const deviceNames = useDeviceNames(loadDesktopDeviceNames);
+  const sentFrom = useMemo(() => sentFromLines(turns, deviceNames), [turns, deviceNames]);
   // Markdown only for what the agent itself wrote (its session file or its API); an unknown source keeps the text as it is.
   const markdown = source === 'file' || source === 'api' || source === 'acp';
   const [mode, setMode] = useChatViewMode(paneId);
@@ -280,6 +297,12 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
 
   // "New since you looked": the line above what is new, and the button at the bottom (useSinceLine).
   const sinceLine = useSinceLine({ chatId: paneId, turns, ready: state === 'ready', scrollRef, atBottom });
+
+  // Pictures the agent names are asked of the PC for this pane (it only reads files inside the chat's folder).
+  const pictures = useMemo(() => (paneId && !readOnly ? desktopPictureSource(paneId) : null), [paneId, readOnly]);
+
+  // "Show earlier": older messages go in front, and the reader keeps the same message under the same place.
+  const noteWhere = useKeepPlace(scrollRef, atBottom, earlier?.version ?? 0);
 
   // Follow new items only while the person is already at the bottom.
   useLayoutEffect(() => {
@@ -330,6 +353,7 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
 
   return (
     <ChatFindContext.Provider value={find.open ? find.query : ''}>
+    <PictureSourceContext.Provider value={pictures}>
     <div ref={rootRef} tabIndex={-1} onKeyDownCapture={onKeyDownCapture} className="relative flex h-full min-h-0 flex-col bg-pm-bg text-xs text-pm-text outline-none ck-chat" data-testid="session-chat" data-view={mode}>
       {find.open && <ChatFindBar find={find} belowHead={!headerSlot} />}
       {headerSlot ? (
@@ -371,6 +395,7 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
             <p className="ck-sub text-pm-muted">{reason ?? 'Chat is not available for this pane.'}</p>
           </div>
         )}
+        {state !== 'unavailable' && earlier && <EarlierRow earlier={earlier} onPress={noteWhere} />}
         {state !== 'unavailable' && turns.length === 0 && emptyNote}
         {state !== 'unavailable' && turns.length === 0 && (
           <div className="ck-chat-waiting">
@@ -388,6 +413,7 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
               {sinceLine.show && sinceLine.report?.firstTurnId === turn.id && <SinceLine report={sinceLine.report} />}
             <TurnView
               paneId={paneId ?? undefined}
+              sentFrom={sentFrom.get(turn.id)}
               price={prices.get(turn.id)}
               turn={turn}
               fromScreen={fromScreen}
@@ -413,6 +439,7 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
       {state !== 'unavailable' && composer}
       {overlay}
     </div>
+    </PictureSourceContext.Provider>
     </ChatFindContext.Provider>
   );
 }

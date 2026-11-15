@@ -20,7 +20,7 @@ fn ms(sec: u64) -> u64 {
 }
 
 fn user(id: &str, sec: Option<u64>, text: &str) -> ChatItem {
-    ChatItem::User { id: id.into(), at: sec.map(at), text: text.into(), attachments: Vec::new() }
+    ChatItem::User { id: id.into(), at: sec.map(at), text: text.into(), attachments: Vec::new(), from: None }
 }
 
 fn reply(id: &str, sec: Option<u64>) -> ChatItem {

@@ -144,6 +144,11 @@ impl Outbox {
 
     /// `send` with files and pictures. The text may be empty when there are files; the length limit is for the text.
     pub fn send_with(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
+        self.send_from(pane_id, text, attachments, None)
+    }
+
+    /// `send_with` for a message that came from another device (`from`: its identity id; `None`: this PC).
+    pub fn send_from(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment], from: Option<&str>) -> Result<OutboxMessage, String> {
         let text = text.trim();
         if text.is_empty() && attachments.is_empty() {
             return Err(EMPTY.into());
@@ -163,13 +168,17 @@ impl Outbox {
         if self.inner.host.run_controls(pane_id) {
             return Err(RUN_CONTROLS.into());
         }
+        if let Some(sentence) = self.inner.host.refuse_sender(pane_id, from) {
+            return Err(sentence);
+        }
         // A chat session that takes text while it works (steering) gets the message now, unless messages already
         // wait for their turn: those go first.
         let nothing_waiting = self.inner.panes.lock().get(pane_id).map_or(true, |queue| !queue.entries.iter().any(|e| e.message.state.active()));
         if nothing_waiting {
+            self.inner.host.note_sender(pane_id, from);
             if let Some(steered) = self.inner.host.steer_with(pane_id, text, attachments) {
                 steered?;
-                return Ok(self.record_sent(pane_id, text, attachments));
+                return Ok(self.record_sent(pane_id, text, attachments, from));
             }
         }
         let (message, list, start_worker) = {
@@ -189,6 +198,7 @@ impl Outbox {
                 error: None,
                 no_answer: false,
                 attachments: attachments.to_vec(),
+                from: from.map(str::to_string),
             };
             queue.entries.push(Entry { message: message.clone(), created: Instant::now(), finished: None, held: None, watch: None });
             let start_worker = !queue.worker;
@@ -203,13 +213,13 @@ impl Outbox {
     }
 
     /// A message that was handed to the agent at once (steering): listed as sent, like any message that finished.
-    fn record_sent(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> OutboxMessage {
+    fn record_sent(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment], from: Option<&str>) -> OutboxMessage {
         let (message, list) = {
             let mut panes = self.inner.panes.lock();
             let queue = panes.entry(pane_id.to_string()).or_default();
             worker::prune(queue, &self.inner.timing);
             let id = format!("m{}-{:x}", self.inner.next_id.fetch_add(1, Ordering::SeqCst), now_ms());
-            let message = OutboxMessage { id, text: text.to_string(), created_at: now_ms(), state: State::Sent, waiting_for: None, error: None, no_answer: false, attachments: attachments.to_vec() };
+            let message = OutboxMessage { id, text: text.to_string(), created_at: now_ms(), state: State::Sent, waiting_for: None, error: None, no_answer: false, attachments: attachments.to_vec(), from: from.map(str::to_string) };
             let mut entry = Entry { message: message.clone(), created: Instant::now(), finished: None, held: None, watch: None };
             entry.finish(State::Sent, None);
             queue.entries.push(entry);

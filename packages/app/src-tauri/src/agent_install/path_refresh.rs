@@ -177,8 +177,6 @@ mod tests {
         assert!(refresh_due(Some(t0), t0 + std::time::Duration::from_secs(20), every));
     }
 
-    use super::*;
-
     const REG_OUT: &str = "\r\nHKEY_CURRENT_USER\\Environment\r\n    Path    REG_EXPAND_SZ    C:\\Users\\a\\.local\\bin;%USERPROFILE%\\AppData\\Local\\Microsoft\\WinGet\\Links\r\n\r\n";
 
     #[test]

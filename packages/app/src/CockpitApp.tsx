@@ -25,6 +25,11 @@ import { WhatBrokeItSheet } from './components/cockpit/WhatBrokeItSheet';
 import { panesSharingFolder } from './components/cockpit/history-model';
 import { ProjectMemory } from './components/cockpit/ProjectMemory';
 import { Sidebar } from './components/cockpit/Sidebar';
+import type { WhereProps } from './components/devices/NewAgentWhere';
+import { remoteId, type Device } from './lib/devices';
+import { ConnectedBanner } from './components/devices/ConnectedBanner';
+import { RemotePaneView } from './components/devices/RemotePaneView';
+import { useDeviceGroups, type RemoteRow } from './components/devices/useDeviceGroups';
 import { CompanionAssist } from './components/cockpit/companion/CompanionAssist';
 import { paneHeading } from './components/cockpit/titles';
 import { activityText } from './lib/pane-activity';
@@ -38,6 +43,8 @@ import { SettingsView } from './components/cockpit/SettingsView';
 import { AppUpdateHost } from './components/updates/AppUpdateHost';
 import { PlansMonth } from './components/cockpit/PlansMonth';
 import { MorningPage } from './components/cockpit/night/MorningPage';
+import { RoutinesPage } from './components/cockpit/routines/RoutinesPage';
+import { useRoutineNotices } from './lib/routines';
 import { AgentScores } from './components/cockpit/AgentScores';
 import { ReviewDesk } from './components/cockpit/review/ReviewDesk';
 import { ReviewDetail } from './components/cockpit/review/ReviewDetail';
@@ -113,6 +120,7 @@ import { useSpacesEnabled } from './lib/spaces';
 import { useLend } from './components/lend/useLend';
 import { useLendToasts } from './components/lend/Borrowed';
 import './styles/night-morning.css';
+import './styles/cockpit-routines.css';
 import './styles/night-chip.css';
 import './styles/cockpit-board.css';
 
@@ -132,6 +140,20 @@ export default function CockpitApp() {
   // Warm agents (Settings > Preload) follow the folder of the focused pane, a moment after it is focused.
   useFollowFocusedProject(c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : null);
   const spacesOn = useSpacesEnabled();
+  // Devices (Labs): the other PCs' groups in the sidebar, and the chat or terminal of one of them in the main area.
+  const deviceGroups = useDeviceGroups();
+  const [remoteRow, setRemoteRow] = useState<RemoteRow | null>(null);
+  const where: WhereProps | undefined = deviceGroups.enabled
+    ? {
+        view: deviceGroups.view,
+        onAddDevice: () => void c.openSettings('devices'),
+        onStarted: (device: Device, paneId: string, chat: boolean) => {
+          deviceGroups.refresh();
+          setRemoteRow({ key: remoteId(device.node, paneId), node: device.node, paneId, title: '', agent: '', status: 'idle', cwd: '', chat });
+          setView('device');
+        },
+      }
+    : undefined;
   const [paletteOpen, setPaletteOpen] = useState(false);
   // Ctrl+Shift+F opens the palette in "Search all chats"; Ctrl+K in its commands.
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands');
@@ -170,6 +192,8 @@ export default function CockpitApp() {
   const focusMode = useFocusMode();
   const layout = useLayout();
   const paneIds = c.registry.paneList.map((p) => p.info.id);
+  // A routine or chain says something (a "tell me" step, a failure, a pause): show it as a notice.
+  useRoutineNotices(c.notify);
   // The animated Orchestration <-> Individual switch: Rust asks for the proxies, this window fades around the overlay.
   useModeSwitch({
     activeId: c.selectedId,
@@ -750,6 +774,7 @@ export default function CockpitApp() {
         onOpenMemory={() => setView('memory')}
         onOpenPlans={() => setView('plans')}
         onOpenMorning={() => setView('morning')}
+        onOpenRoutines={() => setView('routines')}
         onOpenScores={() => setView('scores')}
         onOpenReview={() => openReview()}
         onOpenStore={openStore}
@@ -763,6 +788,20 @@ export default function CockpitApp() {
         }}
         newAgentOpen={view === 'newagent'}
         spaces={{ enabled: spacesOn }}
+        devices={
+          deviceGroups.enabled
+            ? {
+                groups: deviceGroups.groups,
+                where,
+                selectedKey: view === 'device' ? (remoteRow?.key ?? null) : null,
+                onRetry: deviceGroups.refresh,
+                onOpen: (row) => {
+                  setRemoteRow(row);
+                  setView('device');
+                },
+              }
+            : undefined
+        }
         spacesOpen={view === 'spaces' && spacesOn}
         onOpenSpaces={() => setView('spaces')}
         onOpenToSide={openToSide}
@@ -774,6 +813,7 @@ export default function CockpitApp() {
         }}
       />
       <main className="ck-main">
+        <ConnectedBanner view={deviceGroups.view} onDone={deviceGroups.refresh} />
         <WorkAreaDropZones onDropChat={dropChat} />
         <EndedAgentsLine ended={session.ended} onReopen={session.reopen} onDismiss={session.dismiss} />
         {c.mode === 'individual' ? (
@@ -804,6 +844,8 @@ export default function CockpitApp() {
           <PlansMonth onClose={closeOverlay} />
         ) : view === 'morning' ? (
           <MorningPage onClose={closeOverlay} onOpenPane={(id) => nav.select(id)} />
+        ) : view === 'routines' ? (
+          <RoutinesPage onClose={closeOverlay} defaultProject={c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : undefined} />
         ) : view === 'scores' ? (
           <AgentScores
             // Same project rule as Project memory: a pane in a separate copy belongs to the project the copy came from.
@@ -831,9 +873,13 @@ export default function CockpitApp() {
         ) : view === 'board' ? (
           <AgentBoard c={nav} needsYou={needsYou} onClose={closeOverlay} />
         ) : view === 'newagent' ? (
-          <NewAgentHost c={nav} project={newAgentProject} onSetUp={() => setView('doctor')} onReopenedRun={onReopenedRun} />
+          <NewAgentHost c={nav} where={where} project={newAgentProject} onSetUp={() => setView('doctor')} onReopenedRun={onReopenedRun} />
         ) : view === 'spaces' && spacesOn ? (
           <SpacesPage />
+        ) : view === 'device' && remoteRow && deviceGroups.enabled && deviceGroups.view?.devices.find((d) => d.node === remoteRow.node) ? (
+          <ErrorBoundary where="Device pane" resetKeys={[remoteRow.key]}>
+            <RemotePaneView key={remoteRow.key} device={deviceGroups.view!.devices.find((d) => d.node === remoteRow.node)!} row={remoteRow} onRetry={deviceGroups.refresh} />
+          </ErrorBoundary>
         ) : c.chatStarting ? (
           // Before the pane views, so the skeleton shows over the inbox or the pane that was open.
           <ChatStartingView start={c.chatStarting} />

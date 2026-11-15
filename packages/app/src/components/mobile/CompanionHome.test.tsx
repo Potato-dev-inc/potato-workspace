@@ -17,6 +17,7 @@ vi.mock('./PhoneChatView', async () => {
         'data-pane': props.paneId,
         'data-can-type': String(props.canType),
         'data-can-watch': String(props.canWatch),
+        'data-companion': String((props as { companion?: boolean }).companion === true),
       }),
   };
 });
@@ -138,6 +139,18 @@ describe('CompanionHome', () => {
     expect(onChanged).toHaveBeenCalledOnce();
   });
 
+  it('tells the chat it is a companion (no model pill, no read-from-screen line)', async () => {
+    await mount();
+    expect(host.querySelector('[data-testid="chat"]')?.getAttribute('data-companion')).toBe('true');
+  });
+
+  it('puts Sleep in the header menu, never floating over the chat', async () => {
+    await mount();
+    expect(buttonByText('Sleep')).toBeUndefined();
+    await act(async () => (host.querySelector('[data-testid="companion-menu"]') as HTMLElement).click());
+    expect(host.querySelector('.ph-comp-head [role="menu"]')?.textContent).toContain('Sleep');
+  });
+
   it('hides Sleep and Wake up without the control cap', async () => {
     await mount({ abilities: { canControl: false }, companion: { state: 'sleeping' } });
     expect(buttonByText('Wake up Mochi')).toBeUndefined();
@@ -146,16 +159,18 @@ describe('CompanionHome', () => {
 
   it('Sleep sends sleep and passes the new view up', async () => {
     const { transport, onChanged } = await mount();
+    await act(async () => (host.querySelector('[data-testid="companion-menu"]') as HTMLElement).click());
     await act(async () => buttonByText('Sleep')!.click());
     expect(transport.calls.map((c) => c.method)).toContain('sleep');
     expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ id: 'mochi', state: 'sleeping' }));
   });
 
-  it('shows the next check-in in the footer with its clock', async () => {
+  it('shows the next check-in in the header with its clock', async () => {
     const eight = new Date();
     eight.setHours(8, 0, 0, 0);
     await mount({ companion: { nextCheckin: { id: 'c1', label: 'Morning brief', atMs: eight.getTime() } } });
-    expect(host.querySelector('.ph-comp-foot')?.textContent).toContain('Next: Morning brief · 8:00');
+    expect(host.querySelector('.ph-comp-head')?.textContent).toContain('Next: Morning brief · 8:00');
+    expect(host.querySelector('.ph-comp-foot')).toBeNull();
   });
 
   it('feed shows only the items newer than the stored mark, and stores the newest one', async () => {

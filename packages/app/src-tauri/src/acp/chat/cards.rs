@@ -182,7 +182,7 @@ mod tests {
     }
 
     fn wait(options: Vec<OptionBrief>) -> PermissionWait {
-        PermissionWait { ask_id: 1, tool_call_id: Some("t1".into()), title: Some("Write notes.txt".into()), tool_kind: Some("edit".into()), options, since_ms: 0 }
+        PermissionWait { ask_id: 1, tool_call_id: Some("t1".into()), title: Some("Write notes.txt".into()), tool_kind: Some("edit".into()), options, since_ms: 0, command: None, paths: Vec::new() }
     }
 
     #[test]

@@ -29,7 +29,10 @@ pub mod cards;
 mod choice;
 pub mod decide;
 pub mod default_model;
+pub mod drive;
+pub mod earlier;
 pub mod ending;
+pub mod images;
 pub mod lanes;
 pub mod mapper;
 mod start;
@@ -39,6 +42,7 @@ pub mod trial;
 mod copy_tests;
 pub(crate) use start::start_failure_sentence;
 pub mod read_only;
+mod rules;
 pub mod receipt;
 pub mod surface;
 
@@ -52,6 +56,8 @@ mod workspace_tests;
 mod auto_lane_tests;
 #[cfg(test)]
 mod decide_tests;
+#[cfg(test)]
+mod rules_tests;
 
 use crate::attach::ChatAttachment;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -202,6 +208,8 @@ pub struct AcpChat {
     /// The person let agents (the one that started this chat through the MCP tools, or any other) answer this
     /// chat's permission questions. Off by default and off again after a restart: only the person turns it on.
     agent_answering: AtomicBool,
+    /// Force yes, the rules told to the agent, and the lines for asks a rule answered (`rules.rs`).
+    rules: rules::ChatRules,
     /// A restored chat is being brought back by a viewer that asked to read it (so it starts once).
     waking: AtomicBool,
     /// The MCP session of the agent that started this chat through the agent tools, if an agent did. Such an agent
@@ -221,7 +229,16 @@ pub struct AcpChat {
     choice_warnings: Mutex<Vec<String>>,
     /// The last permission prompt this chat had, and why it ended (reported by the tools).
     last_prompt_end: Mutex<Option<EndedPrompt>>,
+    /// The device that sent the message about to go in (`None`: this PC), put on the person's message when it shows.
+    next_from: Mutex<Option<String>>,
+    /// The sender of each message that came from another device, by item id, so a message stays marked when it is
+    /// shown again.
+    from_by_id: Mutex<HashMap<String, String>>,
+    /// Who is driving: this PC, or another device that sends or types here (`drive.rs`).
+    drive: Mutex<drive::Drive>,
 }
+
+pub const TOOK_BACK_SENTENCE: &str = "This PC took this chat back. Tap Take over to send.";
 
 /// A permission prompt that is no longer open.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -390,6 +407,7 @@ impl AcpChat {
             card_timeout_s: AtomicU64::new(cards::CARD_TIMEOUT_S),
             conversations,
             agent_answering: AtomicBool::new(false),
+            rules: rules::ChatRules::default(),
             waking: AtomicBool::new(false),
             started_by: Mutex::new(None),
             lane_note: Mutex::new(None),
@@ -399,6 +417,9 @@ impl AcpChat {
             interrupted: AtomicBool::new(false),
             choice_warnings: Mutex::new(Vec::new()),
             last_prompt_end: Mutex::new(None),
+            next_from: Mutex::new(None),
+            from_by_id: Mutex::new(HashMap::new()),
+            drive: Mutex::new(drive::Drive::default()),
         });
         chat.restore_from_journal();
         chat
@@ -536,7 +557,8 @@ impl AcpChat {
     }
 
     fn push(&self, items: Vec<crate::session_chat::ChatItem>) {
-        for item in items {
+        for mut item in items {
+            self.stamp_sender(&mut item);
             if let Some(journal) = &self.journal {
                 journal.append(&item);
             }
@@ -545,6 +567,61 @@ impl AcpChat {
         if let Some(handles) = self.handles.lock().as_ref() {
             *handles.last_output.lock() = Instant::now();
         }
+    }
+
+    /// Puts the sender on the person's message the first time it shows. A replayed message (`hu...`) is not a new one.
+    fn stamp_sender(&self, item: &mut crate::session_chat::ChatItem) {
+        let crate::session_chat::ChatItem::User { id, from, .. } = item else { return };
+        if from.is_some() {
+            return;
+        }
+        // Looked up first and the lock let go: the branch below takes the same lock.
+        let known = self.from_by_id.lock().get(id.as_str()).cloned();
+        if let Some(known) = known {
+            *from = Some(known);
+        } else if id.starts_with('u') {
+            if let Some(sender) = self.next_from.lock().take() {
+                self.from_by_id.lock().insert(id.clone(), sender.clone());
+                *from = Some(sender);
+            }
+        }
+    }
+
+    /// Who sends the message that goes in next (`None`: this PC). Call it right before the send; it also moves the
+    /// driver (a device that sends drives; this PC sending means this PC drives).
+    pub fn note_sender(&self, from: Option<&str>) {
+        *self.next_from.lock() = from.map(str::to_string);
+        self.drive.lock().sent(from, Instant::now());
+        self.host.state_changed(&self.pane_id, &self.state());
+    }
+
+    /// The message is refused when this PC took the chat back and the sender has not taken it over.
+    pub fn refuses_sender(&self, from: Option<&str>) -> Option<&'static str> {
+        self.drive.lock().refuses(from, Instant::now()).then_some(TOOK_BACK_SENTENCE)
+    }
+
+    /// A device says it is typing here. `Err`: this PC took the chat back.
+    pub fn device_typing(&self, from: &str) -> Result<(), &'static str> {
+        if !self.drive.lock().typing(from, Instant::now()) {
+            return Err(TOOK_BACK_SENTENCE);
+        }
+        self.host.state_changed(&self.pane_id, &self.state());
+        Ok(())
+    }
+
+    /// "Take back" on this PC. The device that drove, or `None` when nobody else was driving.
+    pub fn take_back(&self) -> Option<String> {
+        let taken = self.drive.lock().take_back(Instant::now());
+        if taken.is_some() {
+            self.host.state_changed(&self.pane_id, &self.state());
+        }
+        taken
+    }
+
+    /// "Take over" from a device that was locked out.
+    pub fn device_claims(&self, from: &str) {
+        self.drive.lock().claim(from, Instant::now());
+        self.host.state_changed(&self.pane_id, &self.state());
     }
 
     /// Fills the chat from its journal (an earlier run of the app). A turn the journal shows as started and never ended
@@ -670,6 +747,8 @@ impl AcpChat {
         let mut automatic: Vec<(u64, String)> = Vec::new();
         // Asks no card could be made for: answered "no" after the lock is let go.
         let mut unshowable: Vec<u64> = Vec::new();
+        // Asks a fence or Force yes answered (`rules.rs`): sent after the lock is let go.
+        let mut ruled: Vec<rules::Ruled> = Vec::new();
         {
             let mut cards = self.cards.lock();
             for wait in &waits {
@@ -691,6 +770,13 @@ impl AcpChat {
                     (title, wait.tool_kind.clone().or_else(|| brief.as_ref().map(|b| b.0.clone())), brief.map(|b| b.1).unwrap_or_default())
                 };
                 if !cards.contains_key(&wait.ask_id) {
+                    if let Some(decision) = self.rule_for(wait, kind.as_deref(), title.as_deref(), &paths) {
+                        let fresh = !matches!(decision, rules::Ruled::Already);
+                        if fresh {
+                            ruled.push(decision);
+                        }
+                        continue;
+                    }
                     let rule = kind.as_deref().is_some_and(|k| cards::auto_allowable(k) && self.auto_allow.lock().contains(k));
                     if let (true, Some(option)) = (rule, cards::allow_option(&wait.options)) {
                         let first = self.auto_asks.lock().insert(wait.ask_id, title.clone()).is_none();
@@ -737,6 +823,9 @@ impl AcpChat {
                 let items = mapper.permission_refused("the app could not show the question, so the agent was told no", &at);
                 self.push(items);
             }
+        }
+        for decision in ruled {
+            self.send_ruled(decision);
         }
         for (ask_id, option_id) in automatic {
             if self.session.answer_permission(ask_id, &option_id, AnswerSource::Person).is_err() {
@@ -832,6 +921,8 @@ impl AcpChat {
                 _ => "The agent stopped asking.".to_string(),
             },
         };
+        // An ask a fence or Force yes answered says so in its own words.
+        let text = self.take_rule_line(ask_id).unwrap_or(text);
         let prompt_id = card.as_ref().map(|c| c.question_id.clone()).unwrap_or_else(|| ask_id.to_string());
         *self.last_prompt_end.lock() = Some(EndedPrompt { prompt_id, ask_id, reason: reason.as_str(), at_ms: questions::now_ms() });
         {
@@ -904,13 +995,15 @@ impl AcpChat {
         let Some(_gate) = self.send_gate.try_lock() else { return Err(SendError::Busy) };
         self.begin_read_only_look();
         *self.pending_user.lock() = Some((text.to_string(), attachments.to_vec()));
-        match self.session.prompt_message(text, attachments) {
+        let wire = self.wire_text(text);
+        match self.session.prompt_message(&wire, attachments) {
             Ok(_) => {
                 self.sign_in_held.lock().take();
                 Ok(Sent::Started)
             }
             Err(error) => {
                 self.pending_user.lock().take();
+                self.rules_not_told();
                 if needs_sign_in(&error) {
                     // The sign-in card shows; the text waits for "I'm signed in — try again".
                     *self.sign_in_held.lock() = Some((text.to_string(), attachments.to_vec()));
@@ -1254,6 +1347,8 @@ impl AcpChat {
             "conversation": self.conversations.as_ref().map(|_| self.pane_id.clone()),
             "inTerminal": in_terminal,
             "agentAnswering": self.agent_answering(),
+            "forceYes": self.force_yes(),
+            "fences": self.fences().len(),
             "autoAllow": self.auto_allowed_kinds(),
             "interruptedTurn": self.interrupted.load(Ordering::SeqCst),
             "signIn": { "needed": self.sign_in_needed(), "hint": self.session.config().addon.signin_hint, "text": self.sign_in_text() },
@@ -1261,6 +1356,11 @@ impl AcpChat {
         // Only a chat that works on a copy says so (the keep / throw-away buttons are drawn from it).
         if let Some(copy) = copy {
             state["copy"] = json!({ "kind": copy.kind });
+        }
+        // Only a chat that another device drives (or that this PC took back) says so.
+        let drive = self.drive.lock().view(Instant::now(), &|id| if id == crate::device_identity::LOCAL_ID { crate::device_identity::local_name() } else { crate::device_identity::name_or(id, "Another device") });
+        if !drive.is_null() {
+            state["drive"] = drive;
         }
         state
     }

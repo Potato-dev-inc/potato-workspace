@@ -11,7 +11,7 @@ import { stateWord } from '../../lib/companion';
 import { PhoneAgentTile } from './PhoneAgentTile';
 import { PhoneQuiet } from './PhoneQuiet';
 import { Avatar } from '../companion/Avatar';
-import { groupByProject, needsPaneIds, rowState, type RowState } from './phoneNav';
+import { groupByProject, needsPaneIds, nestHelpers, rowState, type RowState } from './phoneNav';
 import type { RuleLimit } from '../../lib/pane-rule-view';
 import type { PhoneClosedChat } from '../../lib/bridge-types';
 import { useProgressNote } from '../../lib/phone-progress';
@@ -74,6 +74,7 @@ function Row({
   lock,
   now,
   asking,
+  helper = false,
 }: {
   pane: PaneInfo;
   title: string;
@@ -88,6 +89,8 @@ function Row({
   now: number;
   /** The chat waits on a question, not an approval. */
   asking: boolean;
+  /** Another agent started this chat: it sits one step in under its parent, with a thin guide line. */
+  helper?: boolean;
 }) {
   const t = useT();
   const age = ageWords(t, pane.last_output_at, now);
@@ -100,7 +103,7 @@ function Row({
   const held = useRef(false);
   const endPress = () => window.clearTimeout(press.current);
   return (
-    <li>
+    <li className={helper ? 'ph-dhelper' : undefined} data-testid={helper ? 'drawer-helper' : undefined}>
       <button
         type="button"
         className="ph-drow"
@@ -137,7 +140,7 @@ function Row({
         <span className="ph-drow-text">
           <span className="ph-drow-title">{title}</span>
           <span className="ph-drow-state" data-kind={status.kind}>
-            {agentName} · {status.text}
+            {helper ? `${t('phone.drawer.helper')} · ` : ''}{agentName} · {status.text}
           </span>
         </span>
         {age && state !== 'working' && <span className="ph-drow-time">{age}</span>}
@@ -251,9 +254,10 @@ export function PhoneDrawer({
   const needs = needsPaneIds(panes, attention);
   const waiting = panes.filter((pane) => needs.has(pane.id));
   const groups = groupByProject(panes, needs);
-  const rowFor = (pane: PaneInfo) => (
+  const rowFor = (pane: PaneInfo, helper = false) => (
     <Row
       key={pane.id}
+      helper={helper}
       pane={pane}
       title={labels.get(pane.id) ?? pane.agent_type}
       state={rowState(pane, needs, attention)}
@@ -313,7 +317,7 @@ export function PhoneDrawer({
             <section aria-label={t('phone.needsYou')}>
               <h2 className="ph-dsec ph-dsec--needs">{t('phone.needsYou')}</h2>
               <ul className="ph-dlist" data-testid="drawer-needs">
-                {waiting.map(rowFor)}
+                {waiting.map((pane) => rowFor(pane))}
               </ul>
             </section>
           )}
@@ -321,7 +325,7 @@ export function PhoneDrawer({
             <section key={group.project} aria-label={group.project}>
               <h2 className="ph-dsec">{group.project}</h2>
               <ul className="ph-dlist" data-testid="drawer-project">
-                {group.panes.map(rowFor)}
+                {nestHelpers(group.panes).map((row) => rowFor(row.pane, row.depth > 0))}
               </ul>
             </section>
           ))}

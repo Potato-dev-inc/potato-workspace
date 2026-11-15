@@ -186,3 +186,46 @@ fn a_warm_session_whose_agent_definition_changed_is_not_used() {
     rig.cfg.args.push("--different".into());
     assert!(warm::claim(&rig.cfg, &rig.dir, None).is_none());
 }
+
+/// What the phone does: the New chat screen asks for a warm session (`POST /phone/warm`), the person types for a while, then
+/// Send starts the chat. Standby ("Keep agents ready") is off here: nothing is wanted and the cap is zero. No desktop window or
+/// surface exists (the chat's host is `QuietHost`): the chat starts and answers on its own.
+#[test]
+fn a_phone_that_opened_new_chat_starts_fast_with_standby_off_and_no_desktop() {
+    let _slot = WARM_SLOT.lock();
+    let mut rig = Rig::new("init_delay_ms=1200;new_delay_ms=1200");
+
+    // Before: Send on a cold PC pays the whole adapter startup.
+    let (cold, cold_ready, cold_answer) = rig.start_and_say();
+    assert!(!cold.warm_claimed());
+
+    let host = Arc::new(LiveHost { conversations: rig.conversations.clone() });
+    let pool = Pool::new(host);
+    pool.set_policy(Policy { cap: 0, idle_ms: 20 * 60_000, recent_ms: 3_600_000, ..Policy::default() });
+    let _installed = Installed(pool.clone());
+    warm::install(Some(pool.clone()));
+
+    // After, the person reads and types for 3 s before pressing Send: the session is ready, the start is instant.
+    let key = WarmKey::new("fake", &rig.dir.to_string_lossy(), None);
+    pool.hint(&key, &rig.dir, crate::event_log::now_ms(), 300_000);
+    pool.tick(crate::event_log::now_ms());
+    std::thread::sleep(Duration::from_millis(3000));
+    let (typed, typed_ready, typed_answer) = rig.start_and_say();
+    assert!(typed.warm_claimed(), "the start used the session the phone asked for");
+
+    // After, Send pressed at once (0.3 s): the start waits for the session that is part of the way instead of starting another.
+    pool.hint(&key, &rig.dir, crate::event_log::now_ms(), 300_000);
+    pool.tick(crate::event_log::now_ms());
+    std::thread::sleep(Duration::from_millis(300));
+    let (quick, quick_ready, quick_answer) = rig.start_and_say();
+    assert!(quick.warm_claimed(), "a start does not begin a second adapter while the warm one is starting");
+
+    println!("TIMING phone start-to-first-reply, fake agent (1.2 s initialize + 1.2 s session/new), no desktop window:");
+    println!("TIMING before (cold):               ready {cold_ready:?}, first reply {cold_answer:?}");
+    println!("TIMING after (3 s typing, warmed):  ready {typed_ready:?}, first reply {typed_answer:?}");
+    println!("TIMING after (Send at 0.3 s):       ready {quick_ready:?}, first reply {quick_answer:?}");
+    assert!(cold_ready > Duration::from_millis(2000), "{cold_ready:?}");
+    assert!(typed_ready < Duration::from_millis(200), "{typed_ready:?}");
+    assert!(typed_answer + Duration::from_millis(1500) < cold_answer, "{typed_answer:?} vs {cold_answer:?}");
+    assert!(quick_answer + Duration::from_millis(150) < cold_answer, "{quick_answer:?} vs {cold_answer:?}");
+}

@@ -2,6 +2,7 @@
 // closing the app forgets them, and the phone never sees them). One "open this" request waits at a time per pane;
 // the pane view clears it once it has switched to the tab.
 import { useSyncExternalStore } from 'react';
+import { clearDraft } from './file-drafts';
 
 export interface PaneFiles {
   /** Paths relative to the project folder, in the order they were opened. */
@@ -42,6 +43,7 @@ export function openFileTab(paneId: string, path: string): void {
 
 /** Closes a file tab. */
 export function closeFileTab(paneId: string, path: string): void {
+  clearDraft(paneId, path);
   const cur = byPane.get(paneId);
   if (!cur) return;
   put(paneId, { files: cur.files.filter((p) => p !== path), focus: cur.focus?.path === path ? null : cur.focus });

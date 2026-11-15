@@ -11,6 +11,9 @@ export default defineConfig({
     // jsdom setup by about two thirds in the sister project. `npm run test:safe` falls back to forks.
     pool: 'vmThreads',
     css: false,
+    // The editor imports several CodeMirror packages at once; run them through vite-node, because native ESM linking in the
+    // vm pool fails at random ("request for '@lezer/common' is not in cache") when they load in parallel.
+    server: { deps: { inline: [/@codemirror\//, /@lezer\//] } },
     // "Show terminals" is off by default in the app; the older tests are about terminals, so they start with it on (a test of the
     // hidden state calls forceShowTerminals(false) itself).
     setupFiles: ['src/test-setup.ts'],

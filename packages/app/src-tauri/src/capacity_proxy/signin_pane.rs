@@ -125,30 +125,53 @@ impl SigninPanes {
     /// Starts the hidden sign-in pane of `acc` in `cwd`, or returns the one that already runs. The pane id is hidden before
     /// the spawn. Nothing is presented and nothing is selected.
     pub fn start(self: &Arc<Self>, ports: Arc<dyn Ports>, acc: &Account, cwd: PathBuf) -> Result<String, String> {
+        let args = |pane_id: String| SpawnPaneArgs {
+            agent_type: acc.agent_id.clone(),
+            cwd: Some(cwd.to_string_lossy().into_owned()),
+            cols: None,
+            rows: None,
+            extra_args: None,
+            pane_id: Some(pane_id),
+            read_only: false,
+            account: Some(acc.id.clone()),
+            guard_env: None,
+        };
+        self.start_keyed(ports, &acc.id, &cwd, args)
+    }
+
+    /// The same hidden pane for the agent's own sign-in, started from a chat that needs it ("Sign in without a terminal"):
+    /// the agent runs in `cwd` (the chat's folder) with the login it normally uses, kept under `key` (one per agent). The
+    /// person never sees it as a pane; the chat's card shows its terminal under "Details".
+    pub fn start_for_agent(self: &Arc<Self>, ports: Arc<dyn Ports>, key: &str, agent_id: &str, cwd: PathBuf) -> Result<String, String> {
+        let args = |pane_id: String| SpawnPaneArgs {
+            agent_type: agent_id.to_string(),
+            cwd: Some(cwd.to_string_lossy().into_owned()),
+            cols: None,
+            rows: None,
+            extra_args: None,
+            pane_id: Some(pane_id),
+            read_only: false,
+            account: None,
+            guard_env: None,
+        };
+        self.start_keyed(ports, key, &cwd, args)
+    }
+
+    fn start_keyed(self: &Arc<Self>, ports: Arc<dyn Ports>, key: &str, cwd: &std::path::Path, args: impl Fn(String) -> SpawnPaneArgs) -> Result<String, String> {
         {
             let map = lock(&self.map);
-            if let Some(e) = map.get(&acc.id) {
+            if let Some(e) = map.get(key) {
                 if e.ports.alive(&e.pane_id) {
                     return Ok(e.pane_id.clone());
                 }
             }
         }
         // A pane that died (or was never really there) is dropped; a fresh one takes its place.
-        self.stop(&acc.id);
-        let _ = std::fs::create_dir_all(&cwd);
+        self.stop(key);
+        let _ = std::fs::create_dir_all(cwd);
         let pane_id = uuid::Uuid::new_v4().to_string();
         crate::pty::hidden::hide(&pane_id);
-        let spawned = ports.spawn(SpawnPaneArgs {
-            agent_type: acc.agent_id.clone(),
-            cwd: Some(cwd.to_string_lossy().into_owned()),
-            cols: None,
-            rows: None,
-            extra_args: None,
-            pane_id: Some(pane_id.clone()),
-            read_only: false,
-            account: Some(acc.id.clone()),
-            guard_env: None,
-        });
+        let spawned = ports.spawn(args(pane_id.clone()));
         let pane_id = match spawned {
             Ok(id) => id,
             Err(e) => {
@@ -161,15 +184,21 @@ impl SigninPanes {
             *n += 1;
             *n
         };
-        lock(&self.map).insert(acc.id.clone(), Entry { pane_id: pane_id.clone(), ports, generation });
-        let (me, account) = (Arc::downgrade(self), acc.id.clone());
+        lock(&self.map).insert(key.to_string(), Entry { pane_id: pane_id.clone(), ports, generation });
+        let (me, key) = (Arc::downgrade(self), key.to_string());
         let _ = std::thread::Builder::new().name("lend-signin-timeout".into()).spawn(move || {
             std::thread::sleep(TIMEOUT);
             if let Some(panes) = me.upgrade() {
-                panes.stop_generation(&account, generation);
+                panes.stop_generation(&key, generation);
             }
         });
         Ok(pane_id)
+    }
+
+    /// The hidden pane under `key`, when it still runs.
+    pub fn pane_alive(&self, key: &str) -> Option<String> {
+        let map = lock(&self.map);
+        map.get(key).filter(|e| e.ports.alive(&e.pane_id)).map(|e| e.pane_id.clone())
     }
 
     fn stop_generation(&self, account_id: &str, generation: u64) {

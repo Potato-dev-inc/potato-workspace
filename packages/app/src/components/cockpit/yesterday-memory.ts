@@ -118,3 +118,39 @@ export function dayWordOf(savedAt: number, now: number): 'today' | 'yesterday' |
   yesterday.setDate(yesterday.getDate() - 1);
   return sameDay(saved, yesterday) ? 'yesterday' : null;
 }
+
+export const DISMISSED_KEY = 'pm.cockpit.yesterday.dismissed';
+const DISMISSED_MAX = 200;
+
+/** Chat ids the person hid, reopened or gave up on. They are never offered again, across restarts. */
+export function readDismissed(): Set<string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? '[]') as unknown;
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function dismissChats(ids: readonly string[]): void {
+  if (ids.length === 0) return;
+  try {
+    const all = [...readDismissed(), ...ids];
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify([...new Set(all)].slice(-DISMISSED_MAX)));
+  } catch {
+    // Storage is blocked or full: the card may come back next time.
+  }
+}
+
+const GREETING = /^(hi+|hey+|hello+|hola|yo|sup|test(ing)?|ping|ok(ay)?|thanks?|thx|你好|嗨|哈囉|測試)[\s!.?,~]*$/i;
+
+/** A chat with no real work: no title, or only a greeting / test word. Offered last; a greeting is not offered at all. */
+export function isGreetingTitle(title: string | null): boolean {
+  return !!title && GREETING.test(title.trim());
+}
+
+/** Offered chats: dismissed and greeting-only ones dropped, untitled ones last (order otherwise kept). */
+export function worthOffering(chats: readonly YesterdayChat[], dismissed: ReadonlySet<string>, titleOf: (c: YesterdayChat) => string | null): YesterdayChat[] {
+  const keep = chats.filter((c) => !dismissed.has(c.id) && !isGreetingTitle(titleOf(c)));
+  return [...keep.filter((c) => !!titleOf(c)), ...keep.filter((c) => !titleOf(c))];
+}

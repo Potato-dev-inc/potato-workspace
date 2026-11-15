@@ -21,6 +21,11 @@
 
 mod hook_emitter;
 
+// The agent browser proof (N5-23): a real hidden WebView2 page. `#[ignore]`: run by hand.
+#[cfg(feature = "dev-fake-tui")]
+#[path = "browser_live_e2e.rs"]
+mod browser_live;
+
 #[cfg(feature = "dev-fake-tui")]
 #[path = "fake_tui_e2e.rs"]
 mod fake_tui;

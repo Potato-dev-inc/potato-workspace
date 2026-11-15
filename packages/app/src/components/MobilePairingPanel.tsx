@@ -22,9 +22,10 @@ import {
   isLoopbackOrigin,
 } from '../lib/public-bridge-url';
 import { watchTunnelDevInfo } from '../lib/load-tunnel-dev-info';
-import { originNotice } from '../lib/origin-notice';
 import { NumberControl, TextControl } from './settings/controls';
 import { Btn, Note } from './settings/settings-ui';
+import { PairingAddress, defaultTunnelApi } from './PairingAddress';
+import { TunnelSection, type TunnelApi } from './settings/TunnelSection';
 
 /** Fired on window when paired devices change (a phone paired, Revoke, Revoke all, abilities). */
 export const DEVICES_CHANGED_EVENT = 'pm-devices-changed';
@@ -52,6 +53,8 @@ interface Props {
   onDevServerPortChange: (port: number) => void;
   /** The first-run welcome: no address or port fields, only the choice, the code and the QR. */
   compact?: boolean;
+  /** Tests give their own tunnel api. */
+  tunnelApi?: TunnelApi;
 }
 
 /** A typed address becomes its origin when it is saved ("pm.example.com" -> "https://pm.example.com"). */
@@ -66,6 +69,7 @@ export function MobilePairingPanel({
   onPublicPwaUrlChange,
   onDevServerPortChange,
   compact = false,
+  tunnelApi = defaultTunnelApi,
 }: Props) {
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -186,31 +190,7 @@ export function MobilePairingPanel({
           <p className="st-note">{t('phone.choice.note')}</p>
         </fieldset>
 
-        {(() => {
-          const notice = originNotice(pwaOrigin);
-          if (!notice) return null;
-          return (
-            <p className="text-xs" data-testid="pairing-origin">
-              <span className="text-pm-muted">{t('phone.connectTo')} </span>
-              <strong className="font-mono break-all">{notice.host}</strong>{' '}
-              <button
-                type="button"
-                className="st-linkbtn"
-                data-testid="pairing-origin-copy"
-                onClick={() => {
-                  try {
-                    void navigator.clipboard?.writeText(notice.host);
-                  } catch {
-                    /* no clipboard here */
-                  }
-                }}
-              >
-                {t('settings.copy')}
-              </button>
-              {notice.warning && <span className="block mt-1 text-pm-muted">{notice.warning}</span>}
-            </p>
-          );
-        })()}
+        <PairingAddress pwaOrigin={pwaOrigin} api={tunnelApi} offer={!compact} />
         <div className="flex flex-col sm:flex-row gap-4 items-start">
           <div className="rounded-lg border border-pm-border bg-pm-bg p-2 shrink-0" hidden={!session}>
             <canvas ref={canvasRef} className="block" aria-label={t('phone.qrLabel')} />
@@ -255,6 +235,9 @@ export function MobilePairingPanel({
         {!compact && (
         <details className="st-fold" data-testid="pairing-address">
           <summary>{t('phone.address.summary')}</summary>
+        <div className="mb-3" data-testid="pairing-tunnel-modes">
+          <TunnelSection api={tunnelApi} />
+        </div>
         <div>
           <label htmlFor="pairing-public-url" className="block text-[11px] text-pm-muted mb-1">
             {t('phone.address.label')}

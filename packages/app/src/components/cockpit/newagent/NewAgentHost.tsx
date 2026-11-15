@@ -8,6 +8,7 @@ import { tauriClosedChatsApi } from '../../../lib/closedChats';
 import { isCompanionPaneId } from '../companion/model';
 import type { SplitMemory } from '../split-memory';
 import { previousRun } from '../yesterday-memory';
+import { NewAgentWhere, type WhereProps } from '../../devices/NewAgentWhere';
 import { NewAgentPage, type PaneBrief } from './NewAgentPage';
 import { realStartDeps, runStart } from './start';
 
@@ -16,12 +17,15 @@ export function NewAgentHost({
   project = null,
   onSetUp,
   onReopenedRun,
+  where,
 }: {
   c: CockpitApi;
   project?: { path: string; name: string } | null;
   onSetUp?: () => void;
   /** Chats from the last run came back: their pane ids, and the split they had (or null). */
   onReopenedRun?: (paneIds: string[], split: SplitMemory | null) => void;
+  /** Devices (Labs): the Where pill. Absent: the page is as it was. */
+  where?: WhereProps;
 }) {
   const listing = useAgentRegistry();
   const needsItems = useNeedsYou(c);
@@ -43,6 +47,7 @@ export function NewAgentHost({
   const openIds = useMemo(() => c.registry.paneList.map((p) => p.info.id), [c.registry.paneList]);
 
   return (
+    <NewAgentWhere where={where}>
     <NewAgentPage
       agents={listing.agents}
       panes={briefs}
@@ -62,5 +67,6 @@ export function NewAgentHost({
       onSignIn={(agentId, folder) => c.newAgent(agentId, undefined, false, folder, undefined, 'terminal')}
       onStart={(request) => runStart(request, realStartDeps({ newAgent: c.newAgent, select: c.select, notify: c.notify }))}
     />
+    </NewAgentWhere>
   );
 }

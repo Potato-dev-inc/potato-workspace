@@ -45,6 +45,7 @@ pub fn get(pane_id: &str) -> Option<PaneOrigin> {
     store().lock().ok()?.get(pane_id).cloned()
 }
 
+#[cfg(test)]
 pub fn forget(pane_id: &str) {
     if let Ok(mut all) = store().lock() {
         all.remove(pane_id);

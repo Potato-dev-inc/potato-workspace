@@ -5,6 +5,11 @@ import { Fragment, useLayoutEffect, useMemo, useRef, type ReactNode } from 'reac
 import { useT } from '../../i18n';
 import type { ChatSource, ChatTurn, SessionChatState, TurnStep } from '../../lib/sessionChatModel';
 import { ChatMarkdown } from '../chat/ChatMarkdown';
+import { PictureSourceContext } from '../chat/ChatPicture';
+import { EarlierRow } from '../chat/EarlierRow';
+import { useKeepPlace } from '../../hooks/useKeepPlace';
+import type { EarlierState } from '../../hooks/useEarlier';
+import type { PictureSource } from '../../lib/chatMore';
 import { AttachmentChips } from '../chat/AttachmentChips';
 import { HelperRow } from '../chat/HelperRow';
 import { NoticeLine } from '../chat/NoticeLine';
@@ -42,7 +47,7 @@ function TextPiece({ step, markdown }: { step: Extract<TurnStep, { kind: 'text' 
   );
 }
 
-function TurnBlock({ turn, fromScreen, markdown, onPress, price, onOpenArtifact }: { onOpenArtifact?: (ref: ArtifactRef, title: string) => void; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; onPress?: (message: PressedMessage) => void }) {
+function TurnBlock({ turn, fromScreen, markdown, onPress, price, onOpenArtifact, sentFrom }: { sentFrom?: string; onOpenArtifact?: (ref: ArtifactRef, title: string) => void; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; onPress?: (message: PressedMessage) => void }) {
   const t = useT();
   const live = turn.end === null;
   const lastStepId = turn.steps[turn.steps.length - 1]?.id;
@@ -57,6 +62,11 @@ function TurnBlock({ turn, fromScreen, markdown, onPress, price, onOpenArtifact 
             <Pressable className="ph-you-bubble" message={{ text: turn.user.text, mine: true }} onPress={onPress}>
               {turn.user.text}
             </Pressable>
+          )}
+          {sentFrom && (
+            <span className="ph-from" data-testid="phone-sent-from">
+              {sentFrom}
+            </span>
           )}
         </div>
       )}
@@ -108,7 +118,15 @@ export function PhoneConversation({
   onPressMessage,
   chatId,
   onOpenArtifact,
+  sentFrom,
+  earlier,
+  pictures = null,
+  hideScreenNote = false,
 }: {
+  /** "Show earlier messages": a row at the top while the chat has older messages that are not held. */
+  earlier?: EarlierState;
+  /** Where the pictures the agent names come from (the PC checks every path). Absent: only the words are shown. */
+  pictures?: PictureSource | null;
   /** The chat's id (its pane): the moment it was last read is kept under it, for the "New since you looked" line. */
   chatId?: string | null;
   state: SessionChatState;
@@ -132,8 +150,12 @@ export function PhoneConversation({
   staleAt?: number | null;
   /** A long press on a message (yours or the agent's). Absent: messages are plain. */
   onPressMessage?: (message: PressedMessage) => void;
+  /** "from OPPO Reno13" under a message another device sent, by turn id (`sentFromLines`). */
+  sentFrom?: ReadonlyMap<string, string>;
   /** A tap on a page card (a page the agent made). Absent: the card is a plain line. */
   onOpenArtifact?: (ref: ArtifactRef, title: string) => void;
+  /** Leave out the "read from the screen" line (a companion's chat has no use for it). */
+  hideScreenNote?: boolean;
 }) {
   const t = useT();
   const fromScreen = source === 'screen';
@@ -147,6 +169,8 @@ export function PhoneConversation({
   const prices = useMemo(() => turnPrices(turns), [turns]);
   const railEntries = useMemo(() => buildRailEntries(turns, 'normal'), [turns]);
   const sinceLine = useSinceLine({ chatId, turns, ready: state === 'ready', scrollRef, atBottom });
+
+  const noteWhere = useKeepPlace(scrollRef, atBottom, earlier?.version ?? 0);
 
   // Follow new items only while the reader is at the bottom.
   useLayoutEffect(() => {
@@ -164,8 +188,9 @@ export function PhoneConversation({
   }, []);
 
   return (
+    <PictureSourceContext.Provider value={pictures}>
     <div ref={rootRef} className="ph-conv" data-testid="phone-conversation" data-stale={staleAt !== null ? 'true' : undefined}>
-      {fromScreen && state !== 'unavailable' && <p className="ph-conv-note">{t('phone.conv.screenNote')}</p>}
+      {fromScreen && !hideScreenNote && state !== 'unavailable' && <p className="ph-conv-note">{t('phone.conv.screenNote')}</p>}
       {staleAt !== null && (
         <p className="ph-asof" data-testid="phone-asof">
           {t('phone.link.asOf', { time: clockOf(staleAt) })}
@@ -190,6 +215,7 @@ export function PhoneConversation({
             <p>{reason ?? t('phone.conv.unavailableBody')}</p>
           </div>
         )}
+        {state !== 'unavailable' && earlier && <EarlierRow earlier={earlier} onPress={noteWhere} />}
         {state !== 'unavailable' && turns.length === 0 && (
           <div className="ph-conv-empty">
             <PhoneQuiet kind="loading" compact text={fromScreen ? t('phone.conv.waitingScreen') : t('phone.conv.waiting')} />
@@ -199,7 +225,7 @@ export function PhoneConversation({
         {state !== 'unavailable' && turns.map((turn) => (
             <Fragment key={turn.id}>
               {sinceLine.show && sinceLine.report?.firstTurnId === turn.id && <SinceLine report={sinceLine.report} />}
-              <TurnBlock turn={turn} fromScreen={fromScreen} markdown={markdown} onPress={onPressMessage} price={prices.get(turn.id)} onOpenArtifact={onOpenArtifact} />
+              <TurnBlock turn={turn} fromScreen={fromScreen} markdown={markdown} onPress={onPressMessage} price={prices.get(turn.id)} onOpenArtifact={onOpenArtifact} sentFrom={sentFrom?.get(turn.id)} />
             </Fragment>
           ))}
         {state !== 'unavailable' && after}
@@ -212,5 +238,6 @@ export function PhoneConversation({
       {above}
       {state !== 'unavailable' && composer}
     </div>
+    </PictureSourceContext.Provider>
   );
 }

@@ -2,7 +2,7 @@
 // app shows HTML it did not write (an .html file, later an Artifact). The frame has an opaque origin (never
 // `allow-same-origin`), cannot navigate the app, open windows, submit forms or reach the network (the policy inside
 // the page allows only pictures and styles that are written into it).
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 /** The only addresses a page may load a script, style or font from (and only with `cdn`). Fixed, short, no wildcards. */
 export const CDN_HOSTS = ['https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com'] as const;
@@ -44,6 +44,13 @@ export function sandboxDocument(html: string, options: SandboxOptions = {}): str
   return meta + html;
 }
 
+/** Put in a page on the phone: it tells the app how wide the page wants to be (a number, nothing else). */
+export const FIT_MESSAGE = 'potato-fit-width';
+const FIT_SCRIPT = `<script>(function(){function r(){try{parent.postMessage({t:'${FIT_MESSAGE}',w:Math.ceil(Math.max(document.documentElement.scrollWidth,document.body?document.body.scrollWidth:0))},'*')}catch(e){}}addEventListener('load',function(){r();setTimeout(r,400)});})()</script>`;
+
+/** The smallest a wide page is shrunk to; a wider page scrolls sideways after that. */
+export const MIN_FIT_SCALE = 0.35;
+
 export function SandboxFrame({
   html,
   src,
@@ -51,6 +58,7 @@ export function SandboxFrame({
   allowScripts = false,
   cdn = false,
   className = 'ck-sandbox',
+  fit = false,
 }: {
   /** The page as text (shown with the policy added). */
   html?: string;
@@ -61,10 +69,39 @@ export function SandboxFrame({
   /** Allow the short CDN list (`CDN_HOSTS`) for scripts, styles and fonts. */
   cdn?: boolean;
   className?: string;
+  /** Phone: fill the width, and shrink a page that wants to be wider than the screen so nothing is cut off or left blank. */
+  fit?: boolean;
 }) {
-  const doc = useMemo(() => (html === undefined ? undefined : sandboxDocument(html, { allowScripts, cdn })), [html, allowScripts, cdn]);
-  return (
+  const fitting = fit && allowScripts && html !== undefined;
+  const doc = useMemo(() => (html === undefined ? undefined : sandboxDocument(fitting ? html + FIT_SCRIPT : html, { allowScripts, cdn })), [html, allowScripts, cdn, fitting]);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [wanted, setWanted] = useState(0);
+  const [room, setRoom] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    if (!fitting) return;
+    const onMessage = (event: MessageEvent) => {
+      const d = event.data as { t?: unknown; w?: unknown } | null;
+      if (event.source !== frame.current?.contentWindow || d?.t !== FIT_MESSAGE || typeof d.w !== 'number' || !Number.isFinite(d.w)) return;
+      setWanted(Math.min(Math.max(0, d.w), 20000));
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [fitting]);
+  useEffect(() => {
+    const el = box.current;
+    if (!fitting || !el) return;
+    const read = () => setRoom({ w: el.clientWidth, h: el.clientHeight });
+    read();
+    if (typeof ResizeObserver === 'undefined') return;
+    const watch = new ResizeObserver(read);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [fitting]);
+  const scale = fitting && room.w > 0 && wanted > room.w + 1 ? Math.max(MIN_FIT_SCALE, room.w / wanted) : 1;
+  const frameEl = (
     <iframe
+      ref={frame}
       className={className}
       title={title}
       data-testid="sandbox-frame"
@@ -72,6 +109,13 @@ export function SandboxFrame({
       referrerPolicy="no-referrer"
       srcDoc={doc}
       src={doc === undefined ? src : undefined}
+      style={scale < 1 ? { width: room.w / scale, height: room.h / scale, transform: `scale(${scale})`, transformOrigin: '0 0' } : fitting ? { width: '100%' } : undefined}
     />
+  );
+  if (!fitting) return frameEl;
+  return (
+    <div ref={box} className="ck-sandbox-fit" data-testid="sandbox-fit" data-scale={scale.toFixed(3)}>
+      {frameEl}
+    </div>
   );
 }

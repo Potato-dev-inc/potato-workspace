@@ -999,3 +999,13 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* A chat another agent started: one step in under its parent, with a thin guide line down the left (same tree as the PC). */
+.ph .ph-dhelper {
+  margin-left: 22px;
+  border-left: 1px solid var(--line, var(--sep));
+  padding-left: 4px;
+}
+.ph .ph-dhelper .ph-drow {
+  min-height: 46px;
+}

@@ -189,7 +189,8 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
           ))}
           {state.status === 'loading' && <p className="mp-note">{t('state.model.loading')}</p>}
           {state.status === 'failed' && <p className="mp-note">{t('state.model.failed')}</p>}
-          {state.status === 'ready' && models.length === 0 && <p className="mp-note">{t('state.model.noList')}</p>}
+          {state.status === 'ready' && options?.liveFailed && <p className="mp-note">{t('state.model.liveFailed')}</p>}
+          {state.status === 'ready' && !options?.liveFailed && models.length === 0 && <p className="mp-note">{t('state.model.noList')}</p>}
           {shown.map((m) => (
             <button key={m} type="button" role="option" aria-selected={value === m} className="mp-item" onClick={() => choose(m)}>
               <span className="mp-item-id">{modelName(m)}</span>

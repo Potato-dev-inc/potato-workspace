@@ -48,7 +48,7 @@ fn assert_no_secret(json: &str) {
 }
 
 fn user(text: &str) -> ChatItem {
-    ChatItem::User { id: "u".into(), at: None, text: text.into(), attachments: Vec::new() }
+    ChatItem::User { id: "u".into(), at: None, text: text.into(), attachments: Vec::new(), from: None }
 }
 
 fn assistant(text: &str) -> ChatItem {

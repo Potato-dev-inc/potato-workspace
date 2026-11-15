@@ -67,6 +67,23 @@ pub(super) fn route(
     peer: Option<crate::companion::peer::Peer>,
 ) -> RouteResult {
     mobile_pairing::authorize_bridge_request(headers, peer_loopback, segments, method)?;
+    route_authorized(method, segments, query, body, registry, app, headers, peer_loopback, peer)
+}
+
+/// Everything after authorization. Only `route` (a request the HTTP gate let in) and `link::call` (a request that
+/// arrived over the PC link and passed `mobile_pairing::authorize_link`) enter here.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn route_authorized(
+    method: &str,
+    segments: &[&str],
+    query: &str,
+    body: &[u8],
+    registry: &Arc<Mutex<PaneRegistry>>,
+    app: &AppHandle,
+    headers: &str,
+    peer_loopback: bool,
+    peer: Option<crate::companion::peer::Peer>,
+) -> RouteResult {
     // Hook Lane: append-only, local-only, its own token (agent_hooks::route); before body parsing.
     if crate::agent_hooks::route::is_hook_ingest(method, segments) {
         let (status, value) = crate::agent_hooks::route::handle(headers, body, peer_loopback);

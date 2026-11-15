@@ -3,6 +3,11 @@
 //! - `GET /phone/new-chat`: what the new-chat screen offers: the agents that can run (each with `chat` and `terminal`,
 //!   so the screen shows a Chat / Terminal choice only when both are true) and the PC's recent projects. A project has an
 //!   opaque `id` and its folder name, never the path. Needs `watch` (the default of a GET).
+//! - `POST /phone/warm {agent, project}`: the New chat screen has an agent and a project picked; the PC starts that chat
+//!   program ahead of Send (`acp::warm::hint`). Needs `control`.
+//! - `GET /phone/new-chat/models?agent=<id>`: the models one agent offers, the same answer as the desktop's
+//!   `agent_model_options` (the first call may probe the agent's CLI for a few seconds). An unknown agent is a 404. Needs
+//!   `control` (it can start the agent's program), set in `mobile_pairing/caps.rs`.
 //! - `POST /phone/chats {agent, project, lane}`: starts the chat on the PC. `project` is an `id` from the list above, so a
 //!   phone can only start work in a folder the PC already knows. `lane` is `chat` or `terminal`. Needs `control` (the
 //!   default of a POST). The first message is sent by the phone afterwards through the pane's message route, which checks
@@ -27,7 +32,9 @@ use crate::commands::acp_chat::live_deps;
 pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
     match (cx.method, cx.segments) {
         ("GET", ["phone", "new-chat"]) => Some(new_chat_options(cx)),
+        ("GET", ["phone", "new-chat", "models"]) => Some(model_options(cx)),
         ("POST", ["phone", "chats"]) => Some(start_chat(cx)),
+        ("POST", ["phone", "warm"]) => Some(warm_chat(cx)),
         ("POST", ["acp", "sessions", pane_id, "config"]) => Some(set_config(cx, pane_id)),
         ("GET", ["acp", "closed"]) => Some(closed_list()),
         ("POST", ["acp", "closed", id, "reopen"]) => Some(reopen(cx, id)),
@@ -152,6 +159,33 @@ pub(crate) fn parse_lane(word: &str) -> Option<bool> {
         "terminal" => Some(false),
         _ => None,
     }
+}
+
+/// `POST /phone/warm {agent, project}`: the person is on the New chat screen with this agent and project picked. The PC
+/// starts that agent's chat program now, so Send finds it ready (a cold start takes from half a second to ten). Nothing is
+/// shown on the PC; a session nobody uses is closed after five minutes. `warming` is false when the agent would not run
+/// as a chat (the start itself then says why).
+fn warm_chat(cx: &Ctx) -> RouteResult {
+    let text = |key: &str| cx.request_body.get(key).and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty());
+    let agent = text("agent").ok_or_else(|| bad("INVALID_ARGUMENT", "agent is required"))?;
+    let project = text("project").ok_or_else(|| bad("INVALID_ARGUMENT", "project is required"))?;
+    let Some(folder) = resolve_project(&known_projects(cx), project) else {
+        return Err((404, json!({ "code": "UNKNOWN_PROJECT", "error": "The PC does not know that project. Open it on the PC first." })));
+    };
+    let warming = crate::acp::warm::hint(agent, std::path::Path::new(&folder), None);
+    Ok((200, json!({ "warming": warming })))
+}
+
+fn model_options(cx: &Ctx) -> RouteResult {
+    let agent = crate::bridge::http::query_param(cx.query, "agent").unwrap_or_default();
+    models_reply(&agent, crate::commands::model_options_blocking)
+}
+
+/// The reply for one agent id; `compute` is the (possibly slow) lookup, so a test can pass a fake. Route handlers run
+/// off the async runtime already, so it is called inline.
+fn models_reply(agent: &str, compute: impl FnOnce(&str) -> crate::commands::AgentModelOptions) -> RouteResult {
+    let agent = crate::commands::context_agent_id(agent).map_err(|_| (404, json!({ "code": "UNKNOWN_AGENT", "error": "The PC does not know that agent." })))?;
+    Ok((200, serde_json::to_value(compute(&agent)).unwrap_or(Value::Null)))
 }
 
 fn start_chat(cx: &Ctx) -> RouteResult {

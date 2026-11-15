@@ -112,13 +112,13 @@ pub struct AgentModelOptions {
     /// The agent's own model setting as it last sent it (ACP `configOptions` entry, category `model`), from the newest
     /// saved chat that has one. The same list the chat's model picker shows. `None`: this agent never reported one.
     pub live: Option<serde_json::Value>,
+    /// This agent's list could not be read (the probe failed): the page says so quietly and offers Default and a typed id.
+    pub live_failed: bool,
 }
 
 /// The newest model setting (a `select` with at least two plain choices) among `records` (given newest first).
 pub(crate) fn live_model_option(records: &[crate::acp::record::ConversationRecord]) -> Option<serde_json::Value> {
-    records.iter().flat_map(|r| r.config_options.iter()).find(|o| {
-        o["category"] == "model" && o["type"] == "select" && o["options"].as_array().is_some_and(|l| l.len() >= 2 && l.iter().all(|c| c["value"].is_string() && c["name"].is_string()))
-    }).cloned()
+    records.iter().find_map(|r| crate::acp::model_probe::model_option(&r.config_options))
 }
 
 pub(crate) fn model_options_for(agent_type: &str) -> AgentModelOptions {
@@ -128,20 +128,45 @@ pub(crate) fn model_options_for(agent_type: &str) -> AgentModelOptions {
         default_model: if profile.probes_default_model() { profile.default_model() } else { None },
         models: profile.model_choices(),
         live: live_model_option(&crate::acp::conversations::global().records_of_agent(agent_type)),
+        live_failed: false,
     }
+}
+
+/// `model_options_for`, with the agent's own list read first time too: from the cache for the adapter version that runs now,
+/// else from an old chat, else by one short probe session (no prompt). A probe that fails leaves `live` empty and says so.
+pub(crate) fn model_options_probed(agent_type: &str, cache: &crate::acp::model_probe::ModelCache, probe: &dyn crate::acp::model_probe::Probe) -> AgentModelOptions {
+    use crate::acp::model_probe::Outcome;
+    let mut options = model_options_for(agent_type);
+    match cache.resolve(probe, agent_type, options.live.take()) {
+        Outcome::Found(option) => options.live = Some(option),
+        Outcome::NoList => {}
+        Outcome::Failed(_) => options.live_failed = true,
+    }
+    options
 }
 
 /// Models for the picker. Probing the CLI can take seconds, so it runs off the UI thread.
 #[tauri::command]
 pub async fn agent_model_options(agent_id: String) -> Result<AgentModelOptions, String> {
     let agent = context_agent_id(&agent_id)?;
-    tauri::async_runtime::spawn_blocking(move || model_options_for(&agent))
+    tauri::async_runtime::spawn_blocking(move || model_options_blocking(&agent))
         .await
         .map_err(|err| format!("model list failed: {err}"))
 }
 
+/// The picker's answer for a registered agent; may probe the CLI for seconds, so call it off the async runtime.
+/// Shared by the desktop command and the phone's `GET /phone/new-chat/models`.
+pub(crate) fn model_options_blocking(agent: &str) -> AgentModelOptions {
+    let wants_chat = crate::acp::chat_enabled() && crate::acp::config::find_builtin(agent).is_some_and(|cfg| !cfg.disabled);
+    if wants_chat {
+        model_options_probed(agent, crate::acp::model_probe::global(), &crate::acp::model_probe::LiveProbe)
+    } else {
+        model_options_for(agent)
+    }
+}
+
 /// Registry gate: an id nobody registered is an error, a registered one is used as given.
-fn context_agent_id(agent_id: &str) -> Result<String, String> {
+pub(crate) fn context_agent_id(agent_id: &str) -> Result<String, String> {
     let id = agent_id.trim();
     if id.is_empty() || !crate::tui::is_registered(id) {
         return Err(format!("UNKNOWN_AGENT_TYPE: {agent_id:?} is not an agent."));

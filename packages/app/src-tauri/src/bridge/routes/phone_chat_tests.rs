@@ -34,6 +34,7 @@ fn status(headers: &str, method: &str, segments: &[&str]) -> u16 {
 fn the_phone_chat_routes_need_the_rights_they_say() {
     assert_eq!(route_need("GET", &["phone", "new-chat"]), Need::Cap(Cap::Watch));
     assert_eq!(route_need("GET", &["acp", "closed"]), Need::Cap(Cap::Watch));
+    assert_eq!(route_need("GET", &["phone", "new-chat", "models"]), Need::Cap(Cap::Control));
     assert_eq!(route_need("POST", &["phone", "chats"]), Need::Cap(Cap::Control));
     assert_eq!(route_need("POST", &["acp", "sessions", "p1", "config"]), Need::Cap(Cap::Control));
     assert_eq!(route_need("POST", &["acp", "closed", "c1", "reopen"]), Need::Cap(Cap::Control));
@@ -191,4 +192,24 @@ fn the_terminal_lane_is_refused_while_terminals_are_off() {
     // The route refuses `lane: terminal` with TERMINALS_OFF exactly when `show_terminals::allowed` says no.
     assert!(!crate::show_terminals::allowed(false, true));
     assert!(crate::show_terminals::allowed(true, true));
+}
+
+#[test]
+fn the_model_list_needs_control_not_just_watch() {
+    let segments = ["phone", "new-chat", "models"];
+    assert_eq!(status(&phone(Caps::none().with(Cap::Watch, true)), "GET", &segments), 403);
+    assert_eq!(status(&phone(Caps::watch_and_answer()), "GET", &segments), 403);
+    assert_eq!(status(&phone(Caps::all()), "GET", &segments), 200);
+}
+
+#[test]
+fn the_model_list_is_the_desktop_answer_for_a_known_agent_and_a_404_for_an_unknown_one() {
+    let (code, body) = super::models_reply("claude", crate::commands::model_options_for).expect("known agent");
+    assert_eq!(code, 200);
+    assert!(body["models"].as_array().unwrap().iter().any(|m| m == "sonnet"));
+    assert_eq!(body["live_failed"], json!(false));
+    let (code, body) = super::models_reply("no-such-agent", |_| panic!("must not look up an unknown agent")).unwrap_err();
+    assert_eq!(code, 404);
+    assert_eq!(body["code"], json!("UNKNOWN_AGENT"));
+    assert_eq!(super::models_reply("", |_| panic!("no")).unwrap_err().0, 404);
 }

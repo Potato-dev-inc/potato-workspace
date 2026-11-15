@@ -7,6 +7,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
 import { clearDraft, DRAFT_SAVE_MS, readDraftState, writeDraft, type ComposerDraft } from '../../lib/composerDraft';
+import { useRemoteDraft } from '../../hooks/useRemoteDraft';
+import type { RemoteDraft } from '../../lib/chatMore';
 import { insertAtCursor } from '../../lib/voice';
 import { pickFolder, pickImages, prepareAttachments, savePastedImage, type ChatAttachment } from '../../lib/attachFiles';
 import { fileClipboard } from '../../lib/pasteFiles';
@@ -48,6 +50,8 @@ export interface ChatComposerProps {
   draftKey?: string;
   /** A Point and Fix message to put in the box. An empty box gets it; a typed text gets it after a blank line. */
   draft?: ComposerDraft | null;
+  /** The PC's copy of this chat's half-written message (words only): an empty box takes it, typing is written to it. */
+  remoteDraft?: RemoteDraft | null;
   /** The slash commands the agent offers (a chat session over ACP). With some, typing "/" opens a menu above the box. */
   slashCommands?: readonly AcpCommand[];
   /** Controls drawn inside the box under the text (the agent's settings), left of the send button. */
@@ -94,10 +98,11 @@ export function ChatComposer(props: ChatComposerProps) {
   return <ChatComposerBox key={props.draftKey ?? ''} {...props} />;
 }
 
-function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, slashCommands, toolbar, running = false, onStop, status, attachFiles, contextUsage, footnote, history }: ChatComposerProps) {
+function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, remoteDraft, slashCommands, toolbar, running = false, onStop, status, attachFiles, contextUsage, footnote, history }: ChatComposerProps) {
   const stoppable = running && !!onStop;
   const [restored] = useState(() => (draftKey ? readDraftState(draftKey) : { text: '', attachments: [] as ChatAttachment[] }));
   const [text, setText] = useState(restored.text);
+  useRemoteDraft(remoteDraft, text, setText);
   /** Files attached to the message, as chips inside the box. */
   const [attachments, setAttachments] = useState<ChatAttachment[]>(restored.attachments);
   /** Files being prepared (copied, or a pasted image being saved): each one shows a spinner chip. */

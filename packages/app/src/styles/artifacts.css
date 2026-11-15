@@ -128,6 +128,22 @@
   min-height: 0;
   overflow: auto;
 }
+.ph .ph-art-body {
+  display: flex;
+  flex-direction: column;
+}
+/* The phone has no .cockpit parent, so the frame needs its own size: the whole width, never the 300 px an iframe starts with. */
 .ph .ph-art-body .ck-sandbox {
+  display: block;
+  width: 100%;
   height: 100%;
+  border: 0;
+  background: white;
+}
+.ph .ph-art-body .ck-sandbox-fit {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }

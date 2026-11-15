@@ -26,15 +26,22 @@ pub(super) fn kill_serve_child(child: &mut std::process::Child) {
 
 pub(super) fn pick_free_port(lo: u16, hi: u16) -> Result<u16, String> {
     for port in lo..=hi {
-        // Both the loopback and the all-interfaces address must be free: a server listening on
-        // either one can answer requests meant for ours (a 405 from someone else's server).
-        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
-            && std::net::TcpListener::bind(("0.0.0.0", port)).is_ok()
-        {
+        // A server that could answer requests meant for ours (a 405 from someone else's server) listens either on
+        // the loopback address or on all interfaces. The first shows up as a failed loopback bind; the second
+        // answers a loopback connect. Nothing here listens on a non-loopback address, so Windows never shows the
+        // "allow this app through the firewall" window for the app or its test programs.
+        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() && !loopback_answers(port) {
             return Ok(port);
         }
     }
     Err(format!("no free TCP port in {lo}-{hi} for opencode serve"))
+}
+
+/// Whether something already accepts connections on this port through the loopback address (this is how a
+/// server bound to all interfaces gives itself away without us binding there).
+pub(super) fn loopback_answers(port: u16) -> bool {
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(200)).is_ok()
 }
 
 pub(super) fn build_attach_command(

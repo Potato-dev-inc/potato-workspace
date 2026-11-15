@@ -33,7 +33,8 @@ fn mcp_binary_name() -> &'static str {
 
 /// Where a dev build (no installed resource folder) may find the Rust MCP binary, best first: the
 /// package's `dist` (where it is built), the staged `src-tauri/resources/bin`, `<exe dir>/bin` (what
-/// Tauri's resource folder is in a dev run, e.g. `target/debug/bin`).
+/// Tauri's resource folder is in a dev run, e.g. `target/debug/bin`), and last the copy right next to the
+/// running exe. An installed copy ships that one only (the MSI no longer carries `resources/bin/<mcp exe>`).
 pub fn dev_mcp_binary_candidates(manifest_dir: &Path, exe_dir: Option<&Path>) -> Vec<PathBuf> {
     let name = mcp_binary_name();
     let mut list = vec![
@@ -42,6 +43,7 @@ pub fn dev_mcp_binary_candidates(manifest_dir: &Path, exe_dir: Option<&Path>) ->
     ];
     if let Some(dir) = exe_dir {
         list.push(dir.join("bin").join(name));
+        list.push(dir.join(name));
     }
     list
 }
@@ -201,6 +203,19 @@ mod dev_fallback_tests {
         let only_exe = root.join("elsewhere");
         assert_eq!(dev_mcp_binary(&only_exe, Some(&exe_dir)), Some(exe_dir.join("bin").join(mcp_binary_name())));
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_install_with_only_the_copy_next_to_the_app_finds_the_mcp_binary() {
+        let install = std::env::temp_dir().join(format!("pm-mcp-one-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(install.join("resources/bin")).unwrap();
+        std::fs::write(install.join("resources/bin/cloudflared.exe"), "x").unwrap();
+        let elsewhere = install.join("no-source-tree");
+        assert_eq!(dev_mcp_binary(&elsewhere, Some(&install)), None, "no copy at all yet");
+        std::fs::write(install.join(mcp_binary_name()), "x").unwrap();
+        assert_eq!(installed_resource(Some(&install), Some(&install), &format!("bin/{}", mcp_binary_name())), None);
+        assert_eq!(dev_mcp_binary(&elsewhere, Some(&install)), Some(install.join(mcp_binary_name())));
+        std::fs::remove_dir_all(&install).ok();
     }
 }
 

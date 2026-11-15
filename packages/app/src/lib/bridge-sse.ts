@@ -24,7 +24,7 @@ export function streamOffset(value: unknown): { offset?: number } {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? { offset: value } : {};
 }
 
-function dispatchBridgeEvent(eventName: string, data: string, onEvent: (e: BridgeEvent) => void): void {
+export function dispatchBridgeEvent(eventName: string, data: string, onEvent: (e: BridgeEvent) => void): void {
   const parsed = JSON.parse(data) as unknown;
   if (eventName === 'panes') {
     onEvent({ type: 'panes', panes: parsed as PaneInfo[] });

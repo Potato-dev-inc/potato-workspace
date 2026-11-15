@@ -931,6 +931,7 @@ impl Lend {
 
     // ------------------------------------------------------------------------------------------------- asking
 
+    #[cfg(test)]
     pub fn request(&self, member_id: &str, device_id: Option<&str>, agent_id: &str, secs: u64, reason: &str) -> Result<LendRequest, String> {
         self.request_with_profile(member_id, device_id, agent_id, secs, reason, None, None)
     }

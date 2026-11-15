@@ -14,6 +14,10 @@ const BY_EXTENSION: Record<string, RichKind> = {
   htm: 'html',
 };
 
+/** Kinds the system can open in their own program from here (the same list as `files::open_default` on the Rust side). */
+const OWN_APP = new Set(['docx', 'doc', 'dotx', 'xlsx', 'xls', 'xlsm', 'csv', 'pptx', 'ppt', 'pdf', 'html', 'htm', 'txt', 'md', 'rtf', 'odt', 'ods']);
+export const opensInOwnApp = (path: string): boolean => OWN_APP.has(extensionOf(path));
+
 /** The viewer a path gets, or null for the ordinary text / picture path. */
 export function richKindOf(path: string): RichKind | null {
   return BY_EXTENSION[extensionOf(path)] ?? null;

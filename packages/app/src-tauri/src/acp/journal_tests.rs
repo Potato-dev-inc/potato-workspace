@@ -8,7 +8,7 @@ fn dir() -> PathBuf {
 }
 
 fn user(n: u64, text: &str) -> ChatItem {
-    ChatItem::User { id: format!("u{n}"), at: None, text: text.into(), attachments: Vec::new() }
+    ChatItem::User { id: format!("u{n}"), at: None, text: text.into(), attachments: Vec::new(), from: None }
 }
 
 fn assistant(id: &str, text: &str) -> ChatItem {
@@ -165,7 +165,7 @@ fn attachments_survive_a_restart_and_an_old_record_still_loads() {
     let path = d.join("c.jsonl");
     let journal = Journal::at(&path);
     let file = ChatAttachment { name: "a.png".into(), path: "C:/p/a.png".into(), kind: AttachKind::Image, size: 3, mime: Some("image/png".into()) };
-    journal.append(&ChatItem::User { id: "u1".into(), at: None, text: String::new(), attachments: vec![file.clone()] });
+    journal.append(&ChatItem::User { id: "u1".into(), at: None, text: String::new(), attachments: vec![file.clone()], from: None });
     journal.flush();
     // A record written before attachments existed has no such field.
     let mut old = std::fs::read_to_string(&path).unwrap();

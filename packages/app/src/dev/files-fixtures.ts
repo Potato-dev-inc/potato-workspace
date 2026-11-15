@@ -2,6 +2,7 @@
 // The shapes are `lib/files-api.ts` (the Rust views in src-tauri/src/files).
 
 import { CSV_SAMPLE, DOCX_SAMPLE, PDF_SAMPLE, XLSX_TWO_SHEETS } from '../components/files/office-fixtures';
+import { bytesOf } from '../lib/files-api';
 
 const dir = (path: string) => ({ name: path.slice(path.lastIndexOf('/') + 1), path, isDir: true, size: 0 });
 const file = (path: string, size = 900) => ({ name: path.slice(path.lastIndexOf('/') + 1), path, isDir: false, size });
@@ -87,6 +88,21 @@ export function filesMock(cmd: string, args: Record<string, unknown>): { handled
       const base64 = path.endsWith('.docx') ? DOCX_SAMPLE : path.endsWith('.xlsx') ? XLSX_TWO_SHEETS : path.endsWith('.csv') ? CSV_SAMPLE : PDF_SAMPLE;
       return { handled: true, value: { path, name, size: base64.length, kind: 'bytes', base64 } };
     }
+    case 'files_open_bytes': {
+      // A scenario sets `__pmBigFile` ({ url, size }) to open a big file streamed from a test server; the other files are
+      // the small samples, served from a blob address (a worker can fetch it, like the app's own stream address).
+      const name = path.slice(path.lastIndexOf('/') + 1);
+      const big = (globalThis as { __pmBigFile?: { url: string; size: number; tooLarge?: boolean } }).__pmBigFile;
+      if (big && path.startsWith('big')) return { handled: true, value: { path, name, size: big.size, kind: big.tooLarge ? 'too_large' : 'stream', limit: 500 * 1024 * 1024, url: big.url } };
+      const base64 = path.endsWith('.docx') ? DOCX_SAMPLE : path.endsWith('.xlsx') ? XLSX_TWO_SHEETS : path.endsWith('.csv') ? CSV_SAMPLE : PDF_SAMPLE;
+      const url = URL.createObjectURL(new Blob([bytesOf(base64) as BlobPart]));
+      return { handled: true, value: { path, name, size: base64.length, kind: 'stream', limit: 500 * 1024 * 1024, url } };
+    }
+    case 'files_write': {
+      // A scenario sets `__pmDiskChanged` to show the "changed on disk" bar.
+      if ((globalThis as { __pmDiskChanged?: boolean }).__pmDiskChanged && args.overwrite !== true) throw new Error('FILES_CONFLICT: The file changed on disk since you opened it.');
+      return { handled: true, value: { path, size: String(args.text ?? '').length, version: 'v2' } };
+    }
     case 'files_open_default':
     case 'files_reveal':
       return { handled: true, value: null };
@@ -94,7 +110,7 @@ export function filesMock(cmd: string, args: Record<string, unknown>): { handled
       const name = path.slice(path.lastIndexOf('/') + 1);
       if (path.endsWith('.png')) return { handled: true, value: { path, name, size: 5200, kind: 'image', text: null, dataUrl: PNG } };
       const text = path === 'README.md' || path.endsWith('.md') ? README : AUTH;
-      return { handled: true, value: { path, name, size: text.length, kind: 'text', text, dataUrl: null } };
+      return { handled: true, value: { path, name, size: text.length, kind: 'text', text, dataUrl: null, version: 'v1' } };
     }
     default:
       return { handled: false };

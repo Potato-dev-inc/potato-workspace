@@ -67,6 +67,9 @@ import { TonightHost } from './night/TonightHost';
 import { onOpenTonight } from '../../lib/night-host';
 import { useNightEnabled } from '../../lib/night';
 import { BringChatsLink } from '../history/BringChatsLink';
+import { DeviceGroups } from '../devices/DeviceGroups';
+import { NewAgentWhere, type WhereProps } from '../devices/NewAgentWhere';
+import type { DeviceGroup, RemoteRow } from '../devices/useDeviceGroups';
 
 export function Sidebar({
   c,
@@ -77,6 +80,7 @@ export function Sidebar({
   onOpenScores,
   onOpenReview,
   onOpenMorning,
+  onOpenRoutines,
   onOpenStore,
   companions,
   openCompanionId = null,
@@ -97,6 +101,7 @@ export function Sidebar({
   closedChatsApi = tauriClosedChatsApi,
   handoffDeps,
   handoff,
+  devices,
 }: {
   c: CockpitApi;
   onOpenPalette: () => void;
@@ -109,6 +114,8 @@ export function Sidebar({
   onOpenReview?: () => void;
   /** Night Shift: opens the Morning page. Absent: no Night Shift chip. */
   onOpenMorning?: () => void;
+  /** Routines and Chains: opens the Routines page. Absent: no menu row. */
+  onOpenRoutines?: () => void;
   /** The "More agents…" row of the New agent menu opens the Agent Store. Absent: no row. */
   onOpenStore?: () => void;
   /** The pane row menu's "Open to the side" (split view). Absent: the menu has no such item. */
@@ -146,6 +153,8 @@ export function Sidebar({
   handoffDeps?: HandoffDeps;
   /** The cockpit's shared handoff (also used by the pane's "Hand off" button). Absent: the sidebar keeps its own. */
   handoff?: HandoffControl;
+  /** Devices (Labs): the groups of other PCs under this PC's rows, and what choosing one of their rows does. Absent or no groups: nothing changes. */
+  devices?: { groups: DeviceGroup[]; selectedKey: string | null; onOpen: (row: RemoteRow) => void; onRetry?: () => void; where?: WhereProps };
 }) {
   const t = useT();
   const list = c.registry.paneList;
@@ -687,6 +696,13 @@ export function Sidebar({
           </button>
           {menuOpen && (
             <div className="ck-menu ck-menu--left ck-menu--wide" role="menu">
+              <NewAgentWhere
+                where={
+                  devices?.where
+                    ? { ...devices.where, onAddDevice: () => (setMenuOpen(false), devices.where!.onAddDevice()), onStarted: (d, id, chat) => (setMenuOpen(false), devices.where!.onStarted(d, id, chat)) }
+                    : undefined
+                }
+              >
               <NewAgentMenu
                 entries={c.launchEntries}
                 readyAgents={c.readyAgents}
@@ -753,6 +769,7 @@ export function Sidebar({
                     : undefined
                 }
               />
+              </NewAgentWhere>
             </div>
           )}
         </div>
@@ -804,6 +821,11 @@ export function Sidebar({
           </span>
           {waiting > 0 && <span className="ck-count">{waiting}</span>}
         </button>
+        {devices && devices.groups.length > 0 && (
+          <div className="dev-group-head dev-group-head--this" data-testid="this-pc-head">
+            <span>{t('devices.thisPc')}</span>
+          </div>
+        )}
         <PinnedGroup
           ids={pinnedNodes.map((n) => n.pane.info.id)}
           canPin={(id) => roots.some((n) => n.pane.info.id === id)}
@@ -843,6 +865,7 @@ export function Sidebar({
             <span className="ck-side-count">{closedChats.length}</span>
           </button>
         )}
+        {devices && devices.groups.length > 0 && <DeviceGroups groups={devices.groups} selectedKey={devices.selectedKey} onOpen={devices.onOpen} onRetry={devices.onRetry} />}
       </nav>
 
       {hand.status && (
@@ -897,6 +920,7 @@ export function Sidebar({
         onOpenReview={onOpenReview}
         reviewCount={reviewCount}
         onOpenMorning={onOpenMorning}
+        onOpenRoutines={onOpenRoutines}
         spacesEnabled={spaces?.enabled}
         spacesOpen={spacesOpen}
         onOpenSpaces={onOpenSpaces}

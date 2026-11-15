@@ -18,7 +18,7 @@ fn meta() -> Meta {
 }
 
 fn user(n: usize, text: &str) -> ChatItem {
-    ChatItem::User { id: format!("u{n}"), at: None, text: text.into(), attachments: Vec::new() }
+    ChatItem::User { id: format!("u{n}"), at: None, text: text.into(), attachments: Vec::new(), from: None }
 }
 
 fn agent(n: usize, text: &str) -> ChatItem {

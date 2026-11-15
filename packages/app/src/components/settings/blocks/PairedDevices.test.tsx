@@ -8,7 +8,8 @@ import type { PairedDeviceInfo } from '@potato-workspace/shared';
 import { PairedDevices } from './PairedDevices';
 import { DEVICES_CHANGED_EVENT } from '../../MobilePairingPanel';
 import { tauri } from '../../../lib/tauri';
-import { buttonByText, click, hasText, settle } from '../test-utils';
+import { buttonByText, click, hasText, settle, type as typeInto } from '../test-utils';
+import { DEVICE_NAMES_CHANGED } from '../../../lib/deviceNames';
 
 const DAY = 24 * 60 * 60;
 const mocks = vi.hoisted(() => ({ devices: [] as unknown[] }));
@@ -18,6 +19,7 @@ vi.mock('../../../lib/tauri', () => ({
     listPairedMobileDevices: vi.fn(async () => mocks.devices),
     revokePairedMobileDevice: vi.fn(async () => true),
     setPairedMobileDeviceCaps: vi.fn(async () => true),
+    renamePairedMobileDevice: vi.fn(async () => true),
   },
 }));
 
@@ -56,6 +58,34 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+});
+
+describe('PairedDevices: rename', () => {
+  it('Rename saves the new name for that phone and tells open chats to read the names again', async () => {
+    mocks.devices = [device({ name: 'OPPO CPH2689' })];
+    await mount();
+    const changed = vi.fn();
+    window.addEventListener(DEVICE_NAMES_CHANGED, changed);
+    await click(buttonByText(host, 'Rename'));
+    const input = host.querySelector<HTMLInputElement>('[data-testid="phone-rename-input"]');
+    expect(input?.value).toBe('OPPO CPH2689');
+    await typeInto(input!, "Mum's phone");
+    await click(buttonByText(host, 'Save'));
+    await settle();
+    window.removeEventListener(DEVICE_NAMES_CHANGED, changed);
+    expect(tauri.renamePairedMobileDevice).toHaveBeenCalledExactlyOnceWith('00000000-0000-4000-8000-000000000001', "Mum's phone");
+    expect(changed).toHaveBeenCalled();
+  });
+
+  it('Save stays off until the name is a new one, and Cancel leaves the name alone', async () => {
+    mocks.devices = [device({})];
+    await mount();
+    await click(buttonByText(host, 'Rename'));
+    expect(buttonByText(host, 'Save')?.hasAttribute('disabled')).toBe(true);
+    await click(buttonByText(host, 'Cancel'));
+    expect(tauri.renamePairedMobileDevice).not.toHaveBeenCalled();
+    expect(hasText(host, 'Pixel 8')).toBe(true);
+  });
 });
 
 describe('PairedDevices', () => {

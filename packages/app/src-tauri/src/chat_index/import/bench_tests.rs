@@ -30,7 +30,7 @@ impl SessionFormat for BenchFormat {
         let text = value.pointer("/message/content").and_then(|text| text.as_str()).unwrap_or_default().to_string();
         let id = format!("{offset}:0");
         match value.get("type").and_then(|kind| kind.as_str()) {
-            Some("user") if !text.is_empty() => vec![ChatItem::User { id, at: None, text, attachments: Vec::new() }],
+            Some("user") if !text.is_empty() => vec![ChatItem::User { id, at: None, text, attachments: Vec::new(), from: None }],
             Some("assistant") if !text.is_empty() => {
                 vec![ChatItem::Assistant { id, at: None, text, model: None, final_answer: false }]
             }

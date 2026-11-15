@@ -56,7 +56,7 @@ export function PhoneArtifactScreen({ bridge, paneId, id, version, title, onClos
   ) : page.tooLarge || page.content === undefined ? (
     <p className="ph-conv-sub">{t('artifacts.phoneTooLarge')}</p>
   ) : (
-    <ArtifactBody key={`${page.id}:${page.version}`} kind={page.kind} content={page.content} title={shown} className="ck-sandbox" />
+    <ArtifactBody key={`${page.id}:${page.version}`} kind={page.kind} content={page.content} title={shown} className="ck-sandbox" fit />
   );
   return createPortal(
     <div className="ph-art" role="dialog" aria-modal="true" aria-label={t('artifacts.tabLabel', { title: shown })} data-testid="phone-artifact">

@@ -205,8 +205,10 @@ impl Link for IrohLink {
     }
 
     async fn closed(&self) -> u32 {
-        // The code is only informational here; iroh reports it inside the error.
-        let _ = self.conn.closed().await;
-        0
+        // The other side's close code, when it closed on purpose (a refusal names itself that way); 0 otherwise.
+        match self.conn.closed().await {
+            iroh::endpoint::ConnectionError::ApplicationClosed(close) => u32::try_from(close.error_code.into_inner()).unwrap_or(0),
+            _ => 0,
+        }
     }
 }

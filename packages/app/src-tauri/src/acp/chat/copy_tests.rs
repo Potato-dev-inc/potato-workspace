@@ -247,3 +247,50 @@ fn the_start_sweep_removes_copies_of_closed_chats_that_changed_nothing() {
     assert_eq!(copy::sweep_closed(&rig.conversations), 1);
     assert!(!trial::exists(&rig.store, &link.handle));
 }
+
+// ---- fences: "Keep" refuses a copy that changed a fenced file --------------------------------------------------
+
+fn keep_refuses_fenced_changes(with_git: bool) {
+    let rig = Rig::new(with_git);
+    let project = rig.project.to_string_lossy().into_owned();
+    crate::agent_rules::store().add_fence(&project, "fenced.txt").unwrap();
+    let chat = rig.start(true).expect("starts on a copy");
+    let id = chat.pane_id().to_string();
+    let link = rig.conversations.copy_of(&id).unwrap();
+    let folder = rig.folder_of(&chat);
+    // The first message carries the fence rules in front of it, so the agent is told first and asked after.
+    rig.say(&chat, "hello");
+    rig.say(&chat, "autowrite fenced.txt");
+    assert!(folder.join("fenced.txt").is_file());
+
+    let refused = copy::keep(&link, &id, &rig.deps.registry).expect_err("a fenced file blocks Keep");
+    assert!(refused.starts_with("FENCED:") && refused.contains("fenced.txt"), "{refused}");
+    assert!(rig.read("fenced.txt").is_none(), "nothing moved into the project");
+    assert!(folder.exists(), "the copy is still there");
+
+    // Taking the fence off lets Keep through.
+    crate::agent_rules::store().remove_fence(&project, "fenced.txt").unwrap();
+    let kept = copy::keep(&link, &id, &rig.deps.registry).expect("keep after the fence is gone");
+    assert_eq!(kept["kept"], true);
+    assert_eq!(rig.read("fenced.txt").as_deref(), Some("fake"));
+}
+
+#[test]
+fn keep_refuses_a_git_copy_that_changed_a_fenced_file() {
+    keep_refuses_fenced_changes(true);
+}
+
+#[test]
+fn keep_refuses_a_plain_copy_that_changed_a_fenced_file() {
+    keep_refuses_fenced_changes(false);
+}
+
+#[test]
+fn a_chat_on_a_copy_uses_the_fences_of_its_project() {
+    let rig = Rig::new(true);
+    let project = rig.project.to_string_lossy().into_owned();
+    crate::agent_rules::store().add_fence(&project, "secrets").unwrap();
+    let chat = rig.start(true).expect("starts on a copy");
+    assert_eq!(chat.project(), project, "the project, not the copy's folder");
+    assert_eq!(chat.fences(), ["secrets"]);
+}

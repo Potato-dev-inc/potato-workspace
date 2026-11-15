@@ -15,6 +15,8 @@ export interface ModelOptions {
   live?: LiveModel[] | null;
   /** The agent definition's own preset names (what a terminal launch flag knows); `models` is the live ids when there are any. */
   presetModels?: string[];
+  /** The agent's own list could not be read just now (the probe failed): the picker says so quietly and keeps Default and a typed id. */
+  liveFailed?: boolean;
 }
 
 /** One model the agent itself offers: `value` is what a chat is told, exactly as the chat picker sends it. */
@@ -35,6 +37,7 @@ interface Wire {
   default_model?: unknown;
   models?: unknown;
   live?: unknown;
+  live_failed?: unknown;
 }
 
 /** The agent's `configOptions` model entry as a list; anything that is not a plain list of named choices is "never reported". */
@@ -56,7 +59,7 @@ export function optionsFromWire(wire: Wire | null | undefined): ModelOptions {
   const def = typeof wire?.default_model === 'string' && wire.default_model.trim() ? wire.default_model.trim() : null;
   const live = liveFromWire(wire?.live);
   // With a live list the ids to remember and check against are the agent's own.
-  return { terminal: wire?.terminal === true, defaultModel: def, models: live ? live.map((m) => m.value) : models, live, presetModels: models };
+  return { terminal: wire?.terminal === true, defaultModel: def, models: live ? live.map((m) => m.value) : models, live, presetModels: models, ...(wire?.live_failed === true && !live ? { liveFailed: true } : {}) };
 }
 
 /** A list without the agent's own models: what a terminal pane takes (the launch flag knows the preset names). */
@@ -88,6 +91,11 @@ function writeCachedOptions(agentId: string, options: ModelOptions): void {
 const cache = new Map<string, { at: number; hit: Promise<ModelOptions> }>();
 /** A fresh look is taken after this long: a chat may have reported a newer list meanwhile. */
 const FRESH_MS = 30_000;
+
+/** Forgets what was asked in the last seconds (tests; and a way to force a fresh look). */
+export function clearModelOptionsCache(): void {
+  cache.clear();
+}
 
 export const tauriModelOptionsApi: ModelOptionsApi = {
   get: (agentId) => {

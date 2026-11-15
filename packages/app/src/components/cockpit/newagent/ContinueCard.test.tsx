@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClosedChat, ClosedChatsApi } from '../../../lib/closedChats';
 import type { SplitMemory } from '../split-memory';
 import type { YesterdaySnapshot } from '../yesterday-memory';
+import { DISMISSED_KEY } from '../yesterday-memory';
 import { ContinueCard, freshBrief, type ContinueYesterdayProps } from './ContinueCard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -40,6 +41,7 @@ describe('ContinueCard', () => {
   let root: Root;
 
   beforeEach(() => {
+    localStorage.clear();
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -129,10 +131,35 @@ describe('ContinueCard', () => {
     expect(host.querySelector('[data-testid="continue-failed-row"]')).toBeNull();
   });
 
-  it('hides for the rest of the session on Hide', async () => {
+  it('keeps Hide across a remount (a restart)', async () => {
     const { api } = fakeApi();
     await render({ api });
     await click(button('Hide'));
     expect(host.querySelector('[data-testid="continue-card"]')).toBeNull();
+    expect(localStorage.getItem(DISMISSED_KEY)).toContain('"a"');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render({ api });
+    expect(host.querySelector('[data-testid="continue-card"]')).toBeNull();
+  });
+
+  it('does not offer chats that were reopened before', async () => {
+    const { api } = fakeApi();
+    await render({ api });
+    await click(button('Reopen all 2'));
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render({ api });
+    expect(host.querySelector('[data-testid="continue-card"]')).toBeNull();
+  });
+
+  it('drops greeting-only chats and puts untitled ones last, with a fallback name', async () => {
+    const { api } = fakeApi({ closed: [closed('a', 'hi', '/work/alpha'), { ...closed('b', '', '/work/beta'), title: null }, closed('c', 'Fix login', '/work/gamma')] });
+    await render({ api, previous: { ...previous, chats: [...previous.chats, { id: 'c', agent: 'codex', cwd: '/work/gamma', title: null }], split: null } });
+    const names = [...host.querySelectorAll('.ck-na-continue-name')].map((n) => n.textContent);
+    expect(names).toEqual(['Fix login', 'Untitled chat']);
+    const first = host.querySelector('.ck-na-continue-pick')!;
+    expect(first.querySelector('input')).not.toBeNull();
+    expect(first.querySelector('.ck-na-continue-project')?.textContent).toBe('gamma');
   });
 });

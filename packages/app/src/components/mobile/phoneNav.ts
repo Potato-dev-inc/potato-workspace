@@ -79,3 +79,43 @@ export function waitingTotal(panes: readonly PaneInfo[], attention: AttentionSna
   if (attention) return attention.counts.blocking;
   return needsPaneIds(panes.filter((pane) => !isCompanionPane(pane.id)), null).size;
 }
+
+/** One drawer row: the chat and how far in it sits (0 = the person's own chat, 1 = a helper another agent started under it). */
+export interface DrawerRow {
+  pane: PaneInfo;
+  depth: number;
+}
+
+/**
+ * The same tree the desktop sidebar shows (`parent_pane_id`): a helper sits right under the chat that started it, one level in.
+ * A helper whose parent is not in this list stays on its own. Deeper helpers show at the same single level (a phone is narrow).
+ */
+export function nestHelpers(panes: readonly PaneInfo[]): DrawerRow[] {
+  const byId = new Map(panes.map((p) => [p.id, p] as const));
+  const parentOf = (pane: PaneInfo): string | null => {
+    const parent = pane.parent_pane_id;
+    if (!parent || parent === pane.id || !byId.has(parent)) return null;
+    // A loop (a under b under a) keeps both on their own.
+    for (let at: string | null | undefined = parent, hops = 0; at; at = byId.get(at)?.parent_pane_id, hops++) {
+      if (at === pane.id || hops > panes.length) return null;
+    }
+    return parent;
+  };
+  const kids = new Map<string, PaneInfo[]>();
+  const roots: PaneInfo[] = [];
+  for (const pane of panes) {
+    const parent = parentOf(pane);
+    if (parent) kids.set(parent, [...(kids.get(parent) ?? []), pane]);
+    else roots.push(pane);
+  }
+  const rows: DrawerRow[] = [];
+  const add = (pane: PaneInfo, depth: number, seen: Set<string>) => {
+    if (seen.has(pane.id)) return;
+    seen.add(pane.id);
+    rows.push({ pane, depth });
+    for (const child of kids.get(pane.id) ?? []) add(child, 1, seen);
+  };
+  const seen = new Set<string>();
+  for (const root of roots) add(root, 0, seen);
+  return rows;
+}

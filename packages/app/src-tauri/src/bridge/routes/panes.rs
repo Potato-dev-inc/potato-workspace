@@ -377,8 +377,11 @@ fn message_send(cx: &Ctx, pane_id: &str) -> RouteResult {
         return Err((400, json!({ "error": error, "code": "ATTACHMENT_REFUSED" })));
     }
     let message = crate::pane_outbox::global(cx.registry, cx.app)
-        .send_with(pane_id, &req.text, &req.attachments)
-        .map_err(|error| (400, json!({ "error": error, "code": "MESSAGE_REFUSED" })))?;
+        .send_from(pane_id, &req.text, &req.attachments, super::sender::sender_of(cx).as_deref())
+        .map_err(|error| {
+            let code = if error == crate::acp::chat::TOOK_BACK_SENTENCE { crate::acp::chat::drive::TOOK_BACK_CODE } else { "MESSAGE_REFUSED" };
+            (if code == "MESSAGE_REFUSED" { 400 } else { 409 }, json!({ "error": error, "code": code }))
+        })?;
     Ok((200, json!({ "message": crate::pane_outbox::redacted(&message) })))
 }
 

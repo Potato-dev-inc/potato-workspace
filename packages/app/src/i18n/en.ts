@@ -38,9 +38,11 @@ import { settingsConnect } from './en/settingsConnect';
 import { settingsPhone } from './en/settingsPhone';
 import { notify } from './en/notify';
 import { board } from './en/board';
+import { routines } from './en/routines';
 import { phone } from './en/phone';
 import { phoneChat } from './en/phoneChat';
 import { noReply } from './en/noReply';
+import { sentFrom } from './en/sentFrom';
 import { dnd } from './en/dnd';
 import { files } from './en/files';
 import { artifacts } from './en/artifacts';
@@ -49,10 +51,13 @@ import { phoneCompose } from './en/phoneCompose';
 import { phoneShell } from './en/phoneShell';
 import { phoneHalf } from './en/phoneHalf';
 import { chatUx } from './en/chatUx';
+import { chatMore } from './en/chatMore';
 import { point } from './en/point';
 import { flow } from './en/flow';
 import { appUx } from './en/appUx';
 import { deskReview } from './en/deskReview';
+import { devices } from './en/devices';
+import { agentRules } from './en/agentRules';
 
 export const en = {
   ...common,
@@ -93,9 +98,11 @@ export const en = {
   ...settingsPhone,
   ...notify,
   ...board,
+  ...routines,
   ...phone,
   ...phoneChat,
   ...noReply,
+  ...sentFrom,
   ...dnd,
   ...files,
   ...artifacts,
@@ -104,10 +111,13 @@ export const en = {
   ...phoneShell,
   ...phoneHalf,
   ...chatUx,
+  ...chatMore,
   ...flow,
   ...point,
   ...appUx,
   ...deskReview,
+  ...devices,
+  ...agentRules,
 } as const;
 
 export type MessageKey = Exclude<keyof typeof en, `${string}_one` | `${string}_other`> | PluralKey;

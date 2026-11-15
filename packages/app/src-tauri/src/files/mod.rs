@@ -1,6 +1,6 @@
 //! The project folder as a person sees it: a lazy folder listing, a read-only file reader and the "changed / new"
 //! marks. Every path is checked against the project root first: `..`, an absolute path elsewhere, and a link
-//! (symlink or junction) that leads out of the root are refused. Nothing here writes.
+//! (symlink or junction) that leads out of the root are refused. Only `write` (the editor's save) changes a file.
 
 use base64::Engine;
 use serde::Serialize;
@@ -45,6 +45,8 @@ pub struct FileContent {
     pub kind: String,
     pub text: Option<String>,
     pub data_url: Option<String>,
+    /// What the file held when it was read (see `write::version_of`); the editor sends it back on save.
+    pub version: String,
 }
 
 /// A file's raw bytes for a viewer that needs them (Word, Excel, PDF), as base64.
@@ -195,7 +197,7 @@ pub fn read_file(root: &str, rel: &str) -> Result<FileContent, String> {
         return Err("FILES_NOT_FILE: That is not a file.".to_string());
     }
     let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let mut out = FileContent { path: rel_of(&canon_root, &file), name, size: meta.len(), kind: "text".into(), text: None, data_url: None };
+    let mut out = FileContent { path: rel_of(&canon_root, &file), name, size: meta.len(), kind: "text".into(), text: None, data_url: None, version: String::new() };
     if meta.len() > MAX_READ_BYTES {
         out.kind = "too_large".into();
         return Ok(out);
@@ -211,6 +213,7 @@ pub fn read_file(root: &str, rel: &str) -> Result<FileContent, String> {
         out.kind = "binary".into();
         return Ok(out);
     }
+    out.version = write::version_of(&bytes);
     out.text = Some(String::from_utf8_lossy(&bytes).into_owned());
     Ok(out)
 }
@@ -355,6 +358,13 @@ pub fn reveal(root: &str, rel: &str) -> Result<(), String> {
         crate::proc_util::hidden_command(program).arg(target).spawn().map(|_| ()).map_err(|e| format!("FILES_IO: Could not open the file manager: {e}."))
     }
 }
+
+mod stream;
+mod write;
+pub use stream::{open_info, preflight, serve, split_request_path, FileStreamInfo, StreamReply};
+pub use write::{write_file, FileSaved};
+#[cfg(test)]
+pub use write::MAX_WRITE_BYTES;
 
 #[cfg(test)]
 mod tests;

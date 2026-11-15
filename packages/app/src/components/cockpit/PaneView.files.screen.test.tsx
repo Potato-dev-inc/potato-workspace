@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { PaneView, forgetRememberedTabs } from './PaneView';
 import { resetFileTabs, openFileTab } from '../../lib/file-tabs';
+import { resetFileDrafts } from '../../lib/file-drafts';
+import { EditorView } from '@codemirror/view';
 import { useEnglish } from '../../i18n/test-utils';
 
 const invoke = vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
@@ -16,6 +18,8 @@ const invoke = vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
       : { truncated: false, entries: [] };
   }
   if (cmd === 'files_marks') return [{ path: 'notes.txt', mark: 'M' }];
+  if (cmd === 'files_read' && args?.path === 'code.ts') return { path: 'code.ts', name: 'code.ts', size: 12, kind: 'text', text: 'let a = 1;', dataUrl: null, version: 'v1' };
+  if (cmd === 'files_write') return { path: args?.path, size: String(args?.text).length, version: 'v2' };
   if (cmd === 'files_read') return { path: args?.path, name: String(args?.path), size: 5, kind: 'binary', text: null, dataUrl: null };
   if (cmd === 'session_chat_open') return { available: false, reason: 'No chat in this test', items: [] };
   if (cmd === 'checkpoints_list') return { state: 'ok', message: '', items: [] };
@@ -33,6 +37,8 @@ vi.mock('../files/CodeEditor', () => ({ CodeEditor: ({ text }: { text: string })
   disconnect() {}
 };
 Element.prototype.scrollIntoView = () => {};
+Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
 
 const mk = (id: string) => ({
   status: 'idle',
@@ -63,6 +69,7 @@ beforeEach(() => {
   window.localStorage.clear();
   forgetRememberedTabs();
   resetFileTabs();
+  resetFileDrafts();
   Object.defineProperty(window, 'innerWidth', { value: 1400, configurable: true });
   (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {};
   host = document.createElement('div');
@@ -123,5 +130,25 @@ describe('files in the pane view', () => {
     expect(host.querySelector('[data-testid="term"]')).not.toBeNull();
     // The file stays open as a tab, just not in front.
     expect(host.querySelector('[data-testid="file-tabs"] [role="tab"]')?.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('a file can be edited from its tab: the dot shows on the tab until Save writes it', async () => {
+    await act(async () => root.render(<PaneView c={cockpit()} paneId="p" />));
+    await flush();
+    await act(async () => openFileTab('p', 'code.ts'));
+    await flush();
+    const label = (text: string) => [...host.querySelectorAll<HTMLButtonElement>('.ck-file-head button')].find((b) => b.textContent === text)!;
+    await act(async () => label('Edit').click());
+    for (let i = 0; i < 100 && !host.querySelector('.cm-editor'); i++) await act(async () => void (await new Promise((r) => setTimeout(r, 20))));
+    await flush();
+    expect(host.querySelector('[data-testid="file-tabs"] .ck-ftab-dot')).toBeNull();
+    const view = EditorView.findFromDOM(host.querySelector('.cm-editor') as HTMLElement)!;
+    await act(async () => view.dispatch({ changes: { from: view.state.doc.length, insert: ' // edited' } }));
+    await flush();
+    expect(host.querySelector('[data-testid="file-tabs"] .ck-ftab-dot')).not.toBeNull();
+    await act(async () => label('Save').click());
+    await flush();
+    expect(invoke).toHaveBeenCalledWith('files_write', { paneId: 'p', path: 'code.ts', text: 'let a = 1; // edited', baseVersion: 'v1', overwrite: false });
+    expect(host.querySelector('[data-testid="file-tabs"] .ck-ftab-dot')).toBeNull();
   });
 });

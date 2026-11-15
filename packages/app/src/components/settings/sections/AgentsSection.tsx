@@ -7,6 +7,7 @@ import { AccountsGroup } from '../accounts/AccountsGroup';
 import { AgentsView } from '../agents/AgentsView';
 import { AddAgent } from '../blocks/AddAgent';
 import { AgentDefinitions } from '../blocks/AgentDefinitions';
+import { AgentRulesPanel } from '../blocks/AgentRulesPanel';
 import { AGENT_MODELS_HINT, AGENT_MODELS_LABEL, AgentDefaultModels } from '../blocks/AgentDefaultModels';
 import { AgentLaneRows } from '../blocks/AgentLaneRows';
 import { AgentVersions } from '../blocks/AgentVersions';
@@ -174,6 +175,14 @@ export const agentsRows: RowDef[] = [
     keywords: 'default model models agent agents start starting choose pick which gpt sonnet opus haiku opencode terminal chat',
     group: 'Models',
     render: (env) => <AgentDefaultModels saved={env.settings.agent_default_models} onChange={(next) => void env.patch({ agent_default_models: next })} />,
+  },
+  {
+    id: 'agent-rules',
+    label: 'Rules for agents',
+    hint: 'Force yes, fences and starting settings for new agents.',
+    keywords: 'force yes auto answer allow permission fence fences protect do not touch folder file pins pinned starting settings notes new agent claude codex opencode cursor',
+    group: 'Rules for all agents',
+    render: () => <AgentRulesPanel />,
   },
   {
     id: 'helper-tools',

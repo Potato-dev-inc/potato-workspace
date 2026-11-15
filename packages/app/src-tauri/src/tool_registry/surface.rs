@@ -77,6 +77,12 @@ const ADVANCED: &[&str] = &[
     "team_events",
     "team_wait",
     "team_notify",
+    // The agent browser (Labs): callable by name, not listed by default.
+    "browser_open",
+    "browser_read",
+    "browser_click",
+    "browser_type",
+    "browser_console",
     // Companions only: listed by the shim for an agent started in a companion pane, callable by name elsewhere (and refused there).
     "companion_recall",
     // A page the agent made, as a card in its chat: callable by name, listed for an agent started in a Potato pane.

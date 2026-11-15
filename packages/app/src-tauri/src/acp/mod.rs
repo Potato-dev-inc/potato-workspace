@@ -60,6 +60,7 @@
 #![allow(dead_code)]
 
 pub mod account;
+mod ask_facts;
 mod auto_approve;
 pub mod adapter_catalog;
 pub mod adapter_health;
@@ -82,11 +83,13 @@ pub mod job;
 pub mod journal;
 pub mod lane;
 pub mod overlay;
+pub mod model_probe;
 pub mod pin;
 pub mod record;
 pub mod registry;
 pub mod ring;
 pub mod session;
+pub mod signin_ask;
 pub mod state;
 pub mod supervisor;
 pub mod timers;
@@ -112,6 +115,8 @@ mod hardening_tests;
 mod tests;
 #[cfg(test)]
 mod speedup_tests;
+#[cfg(test)]
+mod model_probe_tests;
 #[cfg(test)]
 mod warm_tests;
 

@@ -38,11 +38,13 @@ describe('CodeEditor', () => {
 
   it('colours code once the language has loaded', async () => {
     await act(async () => root.render(<CodeEditor path="a.ts" text={'const a = 1;'} />));
+    // The language pack is a dynamic import; on a cold transform cache it can take seconds, so wait for the colour itself.
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      const until = Date.now() + 15000;
+      while (host.querySelectorAll('.cm-line span').length === 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 25));
     });
     expect(host.querySelectorAll('.cm-line span').length).toBeGreaterThan(0);
-  });
+  }, 20000);
 });
 
 describe('languages', () => {

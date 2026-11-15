@@ -66,7 +66,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Your chats', rows: ['bring-chats-agents'] },
     {
       group: 'Rules for all agents',
-      rows: ['security-ask-before-control', 'security-agents-merge', 'loop-guard', 'package-check', 'collision', 'security-recent-approvals'],
+      rows: ['security-ask-before-control', 'security-agents-merge', 'agent-rules', 'loop-guard', 'package-check', 'collision', 'security-recent-approvals'],
     },
     { group: 'Limits', rows: ['budget-turns', 'budget-minutes'] },
     { group: 'Undo and memory', rows: ['checkpoints', 'checkpoints-keep', 'shared-memory'] },
@@ -88,6 +88,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Phone', rows: ['pairing', 'paired-devices', { row: 'phone-notifications', label: 'Phone alerts' }] },
     { group: 'Team', rows: ['team-page'] },
     { group: 'Lend', rows: ['lend-page'] },
+    { group: 'Devices', rows: ['devices-page'] },
     { group: 'Discord', rows: ['discord-alerts'] },
     { group: 'Share a chat', rows: ['live-room'] },
     { group: 'On the phone', rows: ['mobile-input-delay', 'mobile-keyboard-resizes', 'mobile-input-visible'] },

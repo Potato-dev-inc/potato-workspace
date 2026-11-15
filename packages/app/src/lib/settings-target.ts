@@ -29,6 +29,7 @@ const ROW_ALIASES: Record<string, string> = {
   mobile: 'pairing',
   team: 'team-page',
   lend: 'lend-page',
+  devices: 'devices-page',
 };
 
 /** The page and row a name stands for; null when it names nothing. */

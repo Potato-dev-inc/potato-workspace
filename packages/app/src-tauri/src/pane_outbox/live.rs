@@ -134,6 +134,16 @@ impl Host for LiveHost {
         self.type_message(pane_id, &text_with_paths(text, attachments))
     }
 
+    fn note_sender(&self, pane_id: &str, from: Option<&str>) {
+        if let Some(chat) = crate::acp::chat::get(pane_id) {
+            chat.note_sender(from);
+        }
+    }
+
+    fn refuse_sender(&self, pane_id: &str, from: Option<&str>) -> Option<String> {
+        crate::acp::chat::get(pane_id)?.refuses_sender(from).map(str::to_string)
+    }
+
     fn steer(&self, pane_id: &str, text: &str) -> Option<Result<(), String>> {
         crate::acp::chat::get(pane_id)?.steer(text)
     }

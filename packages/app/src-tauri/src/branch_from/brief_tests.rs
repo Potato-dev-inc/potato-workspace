@@ -128,7 +128,7 @@ fn user(id: &str, at: &str, text: &str) -> ChatItem {
     ChatItem::User {
         id: id.into(),
         at: Some(at.into()),
-        text: text.into(), attachments: Vec::new()
+        text: text.into(), attachments: Vec::new(), from: None
     }
 }
 

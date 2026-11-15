@@ -6,7 +6,7 @@ import { framePage, type ArtifactKind } from '../../lib/artifacts';
 import { ChatMarkdown } from '../chat/ChatMarkdown';
 import { SandboxFrame } from '../files/SandboxFrame';
 
-export function ArtifactBody({ kind, content, title, className }: { kind: ArtifactKind; content: string; title: string; className?: string }) {
+export function ArtifactBody({ kind, content, title, className, fit }: { kind: ArtifactKind; content: string; title: string; className?: string; fit?: boolean }) {
   const t = useT();
   const page = useMemo(() => (kind === 'markdown' ? null : framePage(kind, content)), [kind, content]);
   if (page === null) {
@@ -16,5 +16,5 @@ export function ArtifactBody({ kind, content, title, className }: { kind: Artifa
       </div>
     );
   }
-  return <SandboxFrame html={page.html} allowScripts={page.allowScripts} cdn={page.cdn} title={t('artifacts.frameLabel', { title })} className={className ?? 'ck-sandbox ck-sandbox--fill'} />;
+  return <SandboxFrame html={page.html} allowScripts={page.allowScripts} cdn={page.cdn} title={t('artifacts.frameLabel', { title })} className={className ?? 'ck-sandbox ck-sandbox--fill'} fit={fit} />;
 }

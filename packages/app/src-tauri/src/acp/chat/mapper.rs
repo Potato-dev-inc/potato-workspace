@@ -338,6 +338,8 @@ pub struct Mapper {
     hidden_tools: BTreeSet<String>,
     /// The plain sentence an adapter exit gives to the turn it cut short (`exited` sets it for `finish_turn`).
     plain_end: Option<String>,
+    /// Where a picture the agent sends inline is saved (the chat folder's attachments folder), `None`: it stays "[image]".
+    image_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for Mapper {
@@ -347,6 +349,11 @@ impl Default for Mapper {
 }
 
 impl Mapper {
+    /// A picture the agent sends inline is saved under this chat folder (`images::folder_for`) and shown from there.
+    pub fn set_image_folder(&mut self, folder: &std::path::Path) {
+        self.image_dir = Some(super::images::folder_for(folder));
+    }
+
     pub fn new() -> Self {
         Mapper {
             turn: None,
@@ -379,6 +386,7 @@ impl Mapper {
             turn_cards: 0,
             hidden_tools: BTreeSet::new(),
             plain_end: None,
+            image_dir: None,
         }
     }
 
@@ -514,7 +522,7 @@ impl Mapper {
         self.hidden_tools.clear();
         let text = user_text.unwrap_or_default();
         if !text.is_empty() || !attachments.is_empty() {
-            out.push(ChatItem::User { id: format!("u{turn}"), at: Some(at.to_string()), text: text.to_string(), attachments: attachments.to_vec() });
+            out.push(ChatItem::User { id: format!("u{turn}"), at: Some(at.to_string()), text: text.to_string(), attachments: attachments.to_vec(), from: None });
         }
         self.note(out)
     }
@@ -531,7 +539,7 @@ impl Mapper {
         // What the agent says next is a new message after the person's.
         self.assistant = None;
         self.thinking = None;
-        self.note(vec![ChatItem::User { id: format!("u{turn}.s{}", self.steer_n), at: Some(at.to_string()), text: text.to_string(), attachments: attachments.to_vec() }])
+        self.note(vec![ChatItem::User { id: format!("u{turn}.s{}", self.steer_n), at: Some(at.to_string()), text: text.to_string(), attachments: attachments.to_vec(), from: None }])
     }
 
     // ---- permission asks -----------------------------------------------------------------------------------
@@ -696,7 +704,7 @@ impl Mapper {
         let Some(seg) = self.user.as_mut() else { return Vec::new() };
         push_text(seg, &words);
         self.user_attachments.extend(attachment);
-        vec![ChatItem::User { id: seg.id.clone(), at: Some(at.to_string()), text: seg.text.clone(), attachments: self.user_attachments.clone() }]
+        vec![ChatItem::User { id: seg.id.clone(), at: Some(at.to_string()), text: seg.text.clone(), attachments: self.user_attachments.clone(), from: None }]
     }
 
     fn thought_chunk(&mut self, chunk: &ContentChunk, replay: bool, at: &str, now: Instant) -> Vec<ChatItem> {
@@ -724,7 +732,13 @@ impl Mapper {
     }
 
     fn agent_chunk(&mut self, chunk: &ContentChunk, replay: bool, at: &str) -> Vec<ChatItem> {
-        let Some(words) = chunk_words(chunk) else { return Vec::new() };
+        let picture = super::images::markdown_for(&chunk.content, self.image_dir.as_deref());
+        let Some(words) = (match &picture {
+            Some(line) => Some(line.clone()),
+            None => chunk_words(chunk),
+        }) else {
+            return Vec::new();
+        };
         if words.is_empty() {
             return Vec::new();
         }
@@ -747,7 +761,19 @@ impl Mapper {
         if seg.message_id.is_none() {
             seg.message_id = chunk.message_id.clone();
         }
-        push_text(seg, &words);
+        if picture.is_some() {
+            // A picture is a paragraph of its own: apart from the words before and after it.
+            let apart = if seg.text.is_empty() || seg.text.ends_with("\n\n") {
+                ""
+            } else if seg.text.ends_with('\n') {
+                "\n"
+            } else {
+                "\n\n"
+            };
+            push_text(seg, &format!("{apart}{words}\n\n"));
+        } else {
+            push_text(seg, &words);
+        }
         // Control tokens a model leaked are not part of the answer.
         let shown = ending::strip_leaked_markup(&seg.text);
         if shown.trim().is_empty() {

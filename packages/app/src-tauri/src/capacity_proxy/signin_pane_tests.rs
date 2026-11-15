@@ -220,3 +220,23 @@ fn remove_if_empty_removes_only_a_folder_with_no_sign_in() {
     assert!(PathBuf::from(&signed.home).join(".credentials.json").is_file());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn an_agents_own_sign_in_runs_hidden_with_its_normal_login_and_is_stopped_on_request() {
+    let root = std::env::temp_dir().join(format!("pm-signinpane-agent-{}", std::process::id()));
+    let (panes, fake) = (SigninPanes::new(), Arc::new(Fake::default()));
+    let id = panes.start_for_agent(fake.clone(), "chat-signin:claude", "claude", root.clone()).unwrap();
+    assert!(crate::pty::hidden::is_hidden(&id), "no pane list may show it");
+    assert_eq!(*fake.hidden_at_spawn.lock().unwrap(), vec![true], "hidden BEFORE the spawn");
+    let args = fake.spawned.lock().unwrap()[0].clone();
+    assert_eq!((args.agent_type.as_str(), args.account.as_deref()), ("claude", None), "the login the agent normally uses");
+    assert_eq!(args.cwd.as_deref(), Some(root.to_string_lossy().as_ref()));
+    // The same agent again: the same pane, one spawn.
+    assert_eq!(panes.start_for_agent(fake.clone(), "chat-signin:claude", "claude", root.clone()).unwrap(), id);
+    assert_eq!(fake.count.load(Ordering::SeqCst), 1);
+    assert_eq!(panes.pane_alive("chat-signin:claude").as_deref(), Some(id.as_str()));
+    panes.stop("chat-signin:claude");
+    assert_eq!(panes.pane_alive("chat-signin:claude"), None);
+    assert!(fake.killed.lock().unwrap().contains(&id));
+    let _ = std::fs::remove_dir_all(&root);
+}

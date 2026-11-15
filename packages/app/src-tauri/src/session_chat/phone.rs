@@ -46,7 +46,7 @@ fn unavailable(reason: &str) -> Reply {
 
 /// The phone does not draw diffs, so a tool call's input (up to 8000 characters each) stays on the desktop.
 /// The touched files and flags stay.
-fn lean(mut item: ChatItem) -> ChatItem {
+pub(crate) fn lean(mut item: ChatItem) -> ChatItem {
     if let ChatItem::ToolCall { detail, .. } = &mut item {
         detail.input = None;
     }

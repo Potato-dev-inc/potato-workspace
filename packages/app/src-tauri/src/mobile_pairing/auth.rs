@@ -323,7 +323,7 @@ pub fn authorize_caller(
 
 /// A refusal when the route is about one agent pane whose remote rule does not allow what the route needs.
 /// A route that needs only "a paired device" (the lists and streams) names no agent content and passes.
-fn pane_rule_refusal(segments: &[&str], need: Need) -> Option<(u16, serde_json::Value)> {
+pub(super) fn pane_rule_refusal(segments: &[&str], need: Need) -> Option<(u16, serde_json::Value)> {
     let pane_id = pane_rules::pane_of_route(segments)?;
     let refused = match need {
         Need::Device => false,
@@ -350,7 +350,7 @@ pub fn pane_rule_error(pane_id: &str) -> (u16, serde_json::Value) {
     )
 }
 
-fn need_name(need: Need) -> String {
+pub(super) fn need_name(need: Need) -> String {
     match need {
         Need::Device => "device".into(),
         Need::Cap(cap) => cap.as_str().into(),

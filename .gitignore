@@ -79,3 +79,8 @@ packages/e2e/.build/
 packages/app/src-tauri/resources/node/
 packages/app/src-tauri/resources/git/
 packages/app/src-tauri/resources/legal/LICENSES/
+
+# relay test databases (never commit)
+relay/*.sqlite
+relay/*.sqlite-shm
+relay/*.sqlite-wal

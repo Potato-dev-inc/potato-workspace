@@ -10,6 +10,7 @@ mod runtime;
 
 use serde_json::Value;
 
+#[cfg(test)]
 pub use place::{anchored_resize, clamp, default_position, monitor_key, Rect, Saved};
 pub use runtime::{apply_settings, fullscreen_busy, init, move_by, set_expanded};
 

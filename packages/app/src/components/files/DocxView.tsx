@@ -1,43 +1,155 @@
-// A Word file as a page. mammoth (the browser build) turns the document into HTML, the sanitiser keeps only page
-// markup, and "Show text" swaps to the plain text. This file is its own chunk: it loads when a .docx is first opened.
-import { useEffect, useState } from 'react';
-import mammoth from 'mammoth/mammoth.browser';
+// A Word file as a page. mammoth (the browser build) runs in a worker (see `office-client.ts`) and turns the document
+// into HTML with the pictures left out as placeholders; the text shows at once and each picture loads when it scrolls
+// near, drawn at a smaller size. The sanitiser keeps only page markup, and "Show text" swaps to the plain text.
+// A document with more than DOCX_BLOCK_CAP blocks shows its first part, and one that takes too long shows a way out
+// ("Open in Word") instead of an error. This file is its own chunk: it loads when a .docx is first opened.
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
-import { sanitiseDocxHtml } from './sanitise-docx';
+import type { FileSource } from '../../lib/files-api';
+import { IMAGE_ID_PREFIX } from './docx-engine';
+import { openDocx, type DocxSession } from './office-client';
+import { DOCX_BLOCK_CAP, sanitiseDocxPage } from './sanitise-docx';
 
-type Loaded = { html: string; text: string };
+/** After this long without a page the file counts as too heavy to show here. */
+export const DOCX_HEAVY_MS = 120_000;
 
-export function DocxView({ bytes, asText }: { bytes: Uint8Array; asText: boolean }) {
+type Phase = { state: 'loading' } | { state: 'failed' } | { state: 'heavy' } | { state: 'ready'; html: string; truncated: boolean; timing: string };
+
+export function DocxView({ source, asText, actions }: { source: FileSource; asText: boolean; actions: ReactNode }) {
   const t = useT();
-  const [doc, setDoc] = useState<Loaded | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [phase, setPhase] = useState<Phase>({ state: 'loading' });
+  const [text, setText] = useState<string | null>(null);
+  const session = useRef<DocxSession | null>(null);
+  const page = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setDoc(null);
-    setFailed(false);
-    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-    Promise.all([mammoth.convertToHtml({ arrayBuffer: buffer }), mammoth.extractRawText({ arrayBuffer: buffer })]).then(
-      ([html, raw]) => !cancelled && setDoc({ html: sanitiseDocxHtml(html.value), text: raw.value }),
-      () => !cancelled && setFailed(true),
+    setPhase({ state: 'loading' });
+    setText(null);
+    const opened = openDocx(source);
+    session.current = opened;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      cancelled = true;
+      opened.close();
+      setPhase({ state: 'heavy' });
+    }, DOCX_HEAVY_MS);
+    opened.opened.then(
+      ({ html, openMs }) => {
+        if (cancelled) return;
+        clearTimeout(timer);
+        setPhase({ state: 'ready', ...sanitiseDocxPage(html, DOCX_BLOCK_CAP), timing: openMs === undefined ? '' : `${openMs} ms in the worker` });
+      },
+      () => {
+        if (cancelled) return;
+        clearTimeout(timer);
+        setPhase({ state: 'failed' });
+      },
     );
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      opened.close();
+      session.current = null;
     };
-  }, [bytes]);
+  }, [source]);
 
-  if (failed) return <p className="ck-file-note" role="alert">{t('files.docxFailed')}</p>;
-  if (!doc) return <p className="ck-file-note">{t('files.loading')}</p>;
-  if (asText) return <pre className="ck-file-plain" data-testid="file-docx-text">{doc.text}</pre>;
+  const ready = phase.state === 'ready';
+  useEffect(() => {
+    if (!asText || !ready || text !== null) return;
+    let cancelled = false;
+    session.current?.text().then((v) => !cancelled && setText(v), () => !cancelled && setText(''));
+    return () => {
+      cancelled = true;
+    };
+  }, [asText, ready, text]);
+
+  // Pictures: each loads when it is near the screen (all at once where the page cannot tell, as in tests).
+  const html = phase.state === 'ready' ? phase.html : '';
+  useEffect(() => {
+    const root = page.current;
+    const open = session.current;
+    if (!root || !open || asText || !html) return;
+    const urls: string[] = [];
+    let alive = true;
+    const load = (img: HTMLImageElement) => {
+      const index = Number(img.id.slice(IMAGE_ID_PREFIX.length));
+      open.picture(index).then(
+        (blob) => {
+          if (!alive) return;
+          if (!blob || typeof URL.createObjectURL !== 'function') return void img.classList.add('is-missing');
+          const url = URL.createObjectURL(blob);
+          urls.push(url);
+          img.src = url;
+          img.classList.add('is-loaded');
+        },
+        () => alive && img.classList.add('is-missing'),
+      );
+    };
+    const pictures = Array.from(root.querySelectorAll<HTMLImageElement>(`img[id^="${IMAGE_ID_PREFIX}"]`));
+    let watcher: IntersectionObserver | null = null;
+    if (typeof IntersectionObserver === 'function') {
+      watcher = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            watcher?.unobserve(entry.target);
+            load(entry.target as HTMLImageElement);
+          }
+        },
+        { rootMargin: '900px 0px' },
+      );
+      for (const img of pictures) watcher.observe(img);
+    } else {
+      for (const img of pictures) load(img);
+    }
+    return () => {
+      alive = false;
+      watcher?.disconnect();
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
+  }, [html, asText]);
+
+  if (phase.state === 'failed') {
+    return (
+      <>
+        <p className="ck-file-note" role="alert">{t('files.docxFailed')}</p>
+        {actions}
+      </>
+    );
+  }
+  if (phase.state === 'heavy') {
+    return (
+      <>
+        <p className="ck-file-note" role="alert" data-testid="file-docx-heavy">{t('files.docxHeavy')}</p>
+        {actions}
+      </>
+    );
+  }
+  if (phase.state === 'loading') return <p className="ck-file-note">{t('files.loading')}</p>;
+  if (asText) {
+    if (text === null) return <p className="ck-file-note">{t('files.loading')}</p>;
+    return <pre className="ck-file-plain" data-testid="file-docx-text">{text}</pre>;
+  }
   return (
-    <div
-      className="ck-file-page ck-docx"
-      data-testid="file-docx"
-      // The HTML went through the sanitiser above; a click on a link in it never navigates the app.
-      onClick={(e) => {
-        if ((e.target as HTMLElement).closest('a')) e.preventDefault();
-      }}
-      dangerouslySetInnerHTML={{ __html: doc.html }}
-    />
+    <>
+      {phase.truncated && (
+        <div className="ck-file-actions--top" data-testid="file-docx-truncated">
+          <span className="ck-file-note" style={{ padding: 0 }}>{t('files.docxCut')}</span>
+          {actions}
+        </div>
+      )}
+      <div
+        ref={page}
+        className="ck-file-page ck-docx"
+        data-testid="file-docx"
+        data-open-timing={phase.timing}
+        // The HTML went through the sanitiser above; a click on a link in it never navigates the app.
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest('a')) e.preventDefault();
+        }}
+        dangerouslySetInnerHTML={{ __html: phase.html }}
+      />
+    </>
   );
 }

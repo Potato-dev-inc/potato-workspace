@@ -75,8 +75,11 @@ export const SettingsSchema = z.object({
   spaces_enabled: z.boolean().optional(),
   /** Share an agent (Settings > General > Labs): lend an agent sign-in to another PC, or borrow one. Off unless chosen. Rust: lend. */
   lend_enabled: z.boolean().optional(),
+  /** Devices (Settings > General > Labs): pair two Workspaces and run a chat or terminal on the other one. Off unless chosen. Rust: device_link. */
+  devices_enabled: z.boolean().optional(),
   /** Desktop Potato (Settings > General > Labs): a small pet window on the desktop. Off unless chosen. Rust: pet. */
   desktop_pet_enabled: z.boolean().optional(),
+  agent_browser_enabled: z.boolean().optional(),
   /** Desktop Potato: size 'small' | 'medium' | 'large', hidden-until (epoch ms), quiet. Rust: pet. */
   desktop_pet_size: z.enum(['small', 'medium', 'large']).optional(),
   desktop_pet_quiet: z.boolean().optional(),

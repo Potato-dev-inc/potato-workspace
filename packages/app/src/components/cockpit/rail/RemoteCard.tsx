@@ -7,6 +7,7 @@ import { useT } from '../../../i18n';
 import { openSettingsAt } from '../../../lib/openSettingsAt';
 import { effectiveLevel, PANE_REMOTE_LEVELS, type PaneRemote, type PaneRemoteLevel } from '../../../lib/pane-remote';
 import { tauri } from '../../../lib/tauri';
+import { useDevicesEnabled } from '../../../lib/devices';
 import { RailCard } from './RailCard';
 
 export interface RemoteApi {
@@ -30,6 +31,8 @@ export function RemoteCard({ paneId, api = tauriRemoteApi, onPair }: { paneId: s
   const [rule, setRule] = useState<PaneRemote | null>(null);
   const [phones, setPhones] = useState<PairedDeviceInfo[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // With Labs Devices on, a computer is paired in Settings > Devices; otherwise it uses the phone's steps, as before.
+  const devicesOn = useDevicesEnabled();
 
   useEffect(() => {
     let live = true;
@@ -58,6 +61,7 @@ export function RemoteCard({ paneId, api = tauriRemoteApi, onPair }: { paneId: s
 
   if (!rule || !phones) return null;
   const pair = onPair ?? (() => openSettingsAt('phone'));
+  const connectPc = onPair ?? (() => openSettingsAt(devicesOn ? 'devices' : 'phone'));
   return (
     <RailCard title={t('pane.remoteTitle')} testId="rail-remote">
       {phones.length === 0 ? (
@@ -67,7 +71,7 @@ export function RemoteCard({ paneId, api = tauriRemoteApi, onPair }: { paneId: s
             {t('pane.remotePair')}
           </button>
           {/* A computer pairs the same way for now (the pairing flow is not split by device kind yet). */}
-          <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ck-rail-action" onClick={pair} title={t('pane.remoteConnectPcTip')}>
+          <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ck-rail-action" onClick={connectPc} title={devicesOn ? t('devices.pane.connectTip') : t('pane.remoteConnectPcTip')}>
             {t('pane.remoteConnectPc')}
           </button>
         </>

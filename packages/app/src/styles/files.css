@@ -421,3 +421,74 @@
   height: 100%;
   min-height: 420px;
 }
+
+/* The editor, its unsaved dot, and the "changed on disk" bar. */
+.cockpit .ck-fcode--edit .cm-editor {
+  height: 100%;
+}
+.cockpit .ck-file-dot,
+.cockpit .ck-ftab-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.cockpit .ck-ftab-dot {
+  display: inline-block;
+  margin-right: 6px;
+}
+.cockpit .ck-fconflict {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 8px 14px;
+  background: var(--risk-soft);
+  border-bottom: 1px solid var(--sep);
+  font-size: 12px;
+  color: var(--label);
+}
+.cockpit .ck-fconflict-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--label-2);
+}
+.cockpit .ck-fconflict-text strong {
+  color: var(--label);
+  font-weight: var(--fw-medium);
+}
+
+/* A Word picture before it is loaded (the page loads them as they come near), and the buttons under a "too big" note. */
+.cockpit .ck-docx img[id^='pmimg-'] {
+  min-width: 120px;
+  min-height: 90px;
+  background: var(--fill, rgba(127, 127, 127, 0.12));
+  border-radius: 4px;
+}
+.cockpit .ck-docx img[id^='pmimg-'].is-loaded {
+  min-width: 0;
+  min-height: 0;
+  background: none;
+}
+.cockpit .ck-docx img[id^='pmimg-'].is-missing {
+  display: none;
+}
+.cockpit .ck-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+.cockpit .ck-file-actions--top .ck-file-actions {
+  padding: 0;
+}
+.cockpit .ck-file-actions--top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 20px;
+  align-items: center;
+  border-bottom: 1px solid var(--line, rgba(127, 127, 127, 0.2));
+}

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.0
+
+This is the first public release since 1.0.15. It includes everything from the 1.0.16 to 1.0.29 betas, plus:
+
+- New: connect your own computers. Add another PC in Settings > Devices and start agents on it from this one ("Where" in New agent). Each PC shows clear states (online, asleep, signed out there, needs a person there), keeps a log of what the other did, and shows "X is connected" with Disconnect. Pair far away with a one-time link. Sign-ins never leave the PC they belong to.
+- New: Force yes, Fences and Pins. Force yes answers only low-risk asks for you ("allow once", never "always", never deletes or anything that looks like a password) and logs each one. Fences keep agents out of folders and files you choose. Pins set the model, mode and notes new agents start with, globally or per project.
+- New: Routines and Chains. Run work on a schedule, or add "Then…" on a result card to start the next step when one finishes, with a queue that runs at most a few at once.
+- New: the agent browser (Labs). Agents can open, read and click pages of the app you are building, with a bar on the page so you see what they do.
+- New: edit files in the file tab, with code colours, Ctrl+S, Revert and a warning when the file changed on disk.
+- New: pictures in chats, "Show earlier" for long chats, drafts that follow you between PC and phone, and agent sign-in without a terminal.
+- New: messages say which device sent them, and you can rename your devices.
+- Big Word, Excel and PDF files (up to 500 MB) now open beside the chat; a 60 MB Word file shows its text in about a second.
+- Stable phone link is easy to find: "Keep one address" in Connect > Phone, with a step-by-step sheet.
+- Phone: new chats start much faster (the agent wakes while you type), a model picker on New chat, helpers nest under their agent in the drawer, the companion screen no longer overlaps, artifacts fill the screen, one stop button.
+- Fixed: opening a PDF could crash the file tab.
+- Fixed: chat agents now show their models the first time you open New agent.
+- Fixed: the "Continue where you left off" card kept coming back after Hide.
+- Fixed: Windows firewall pop-ups during app tests.
+- Smaller download: unused bundled Git files removed, one MCP program in the installer.
+
 ## 1.0.29
 
 This is a beta.

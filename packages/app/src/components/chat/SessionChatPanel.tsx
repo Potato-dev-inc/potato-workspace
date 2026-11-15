@@ -11,6 +11,7 @@ import { useComposerDraft } from '../../lib/composerDraft';
 import { pickFiles } from '../../lib/attachFiles';
 import { usePendingBubbles } from '../../hooks/usePendingBubbles';
 import { useSessionChat } from '../../hooks/useSessionChat';
+import { desktopDraft } from '../../lib/chatMore';
 import { BranchSheet } from '../cockpit/BranchSheet';
 import { BranchBanner } from './BranchBanner';
 import { ChatComposer } from './ChatComposer';
@@ -106,6 +107,8 @@ export interface ScreenAsk {
 
 export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, screenAsk, helpers, slashCommands, composerTop, headerSlot }: { paneId: string; /** A place in the pane's header for the view switch and the chat buttons (the chat then draws no header row). */ headerSlot?: { el: HTMLElement; compact: boolean }; dock?: ReactNode; reply?: ChatReply; emptyNote?: ReactNode; onOpenPane?: (paneId: string) => void; screenAsk?: ScreenAsk; /** The helpers this pane started through Potato Workspace (rows in the turn they began in). */ helpers?: readonly ChatHelper[]; /** A chat session over ACP: the agent's slash commands for the message box (typing "/" opens a menu). */ slashCommands?: readonly AcpCommand[]; /** Drawn right above the message box (a chat session's settings chips). */ composerTop?: ReactNode }) {
   const chat = useSessionChat(paneId, true);
+  // The half-written message follows the person between the phone and this PC (kept by the PC, words only).
+  const remoteDraft = useMemo(() => desktopDraft(paneId), [paneId]);
   const outbox = usePaneOutbox(tauriOutboxTransport, paneId, !!reply);
   const userTexts = useMemo(() => chat.turns.flatMap((turn) => (turn.user ? [turn.user.text] : [])), [chat.turns]);
   const { bubbles, hide } = usePendingBubbles(outbox.messages, userTexts);
@@ -148,6 +151,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
         helpers={helpers}
         onOpenPane={onOpenPane}
         endings={endings}
+        earlier={chat.earlier}
         remember
         emptyNote={emptyNote}
         headerExtra={chat.state === 'unavailable' ? undefined : side.button}
@@ -181,7 +185,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
         }
         pending={reply ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHold={outbox.hold} onEdit={outbox.edit} onHide={hide} onSendNow={reply.onInterrupt} onRetry={outbox.send} onStartFresh={reply.onInterrupt} /> : undefined}
         composer={reply ? (
-          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} status={reply.status} attachFiles={pickFiles} contextUsage={contextReading} history={userTexts} footnote={branch ? <>Work lands on <span className="ck-chat-where-branch">{branch}</span></> : undefined} />
+          <ChatComposer onSend={outbox.send} blockedReason={reply.blockedReason} draftKey={paneId} remoteDraft={remoteDraft} draft={draft} slashCommands={slashCommands} toolbar={composerTop} running={reply.running} onStop={reply.onStop} status={reply.status} attachFiles={pickFiles} contextUsage={contextReading} history={userTexts} footnote={branch ? <>Work lands on <span className="ck-chat-where-branch">{branch}</span></> : undefined} />
         ) : undefined}
       />
       {branchFor !== null && (

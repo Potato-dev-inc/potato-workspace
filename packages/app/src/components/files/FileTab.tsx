@@ -1,8 +1,8 @@
-// A file open beside the chat: read-only, with colour for code, Markdown as a page, pictures as pictures, and a clear
-// message for files that are too big or not text. The File / Changes switch shows what the agent changed in the same
+// A file open beside the chat: colour for code, an Edit mode (Save with Ctrl+S, Revert, a notice when the file changed
+// on disk), Markdown as a page, pictures as pictures, and a clear message for files that are too big or not text. The File / Changes switch shows what the agent changed in the same
 // place. Lines picked in either view can be sent to the chat box with "Tell the agent".
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { bytesOf, filesApi, fileSize, type FileBytes, type FileContent, type FilesApi } from '../../lib/files-api';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { filesApi, fileSize, type FileContent, type FilesApi, type FileStream } from '../../lib/files-api';
 import { pushComposerInsert } from '../../lib/composer-insert';
 import { requestChatTab } from '../../lib/chatTab';
 import { errorSentence } from '../../lib/sayError';
@@ -10,29 +10,35 @@ import { useT } from '../../i18n';
 import { ChatMarkdown } from '../chat/ChatMarkdown';
 import { SegTabs } from '../cockpit/SegTabs';
 import { extensionOf, isMarkdown } from './languages';
-import { richKindOf, type RichKind } from './rich-kind';
+import { opensInOwnApp, richKindOf, type RichKind } from './rich-kind';
 import type { CodeSelection } from './CodeEditor';
+import { FileActions } from './FileActions';
 import { FileDiff } from './FileDiff';
 import { useOpenInEditor } from './OpenInEditor';
 import type { EditorApi } from '../../lib/my-editor';
+import { ConflictBar } from './ConflictBar';
 import { TellBar } from './TellBar';
+import { useFileEdit } from './useFileEdit';
+import { isDirty, useDraftKeys } from '../../lib/file-drafts';
 import { tellText } from './tell-text';
+import { lazyViewer, ViewerBoundary } from './lazy-viewer';
 import '../../styles/files.css';
 
-// The editor is its own chunk: it loads when the first code file opens.
-const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })));
+// The code view and the code editor are their own chunks: the view loads when the first code file opens, the editor
+// when a person starts editing.
+const CodeEditor = lazyViewer(() => import('./CodeEditor').then((m) => m.CodeEditor));
+const CodeEdit = lazyViewer(() => import('./CodeEdit').then((m) => m.CodeEdit));
 
 // Each viewer is its own chunk: it loads when the first file of its kind opens, never with the app.
-const DocxView = lazy(() => import('./DocxView').then((m) => ({ default: m.DocxView })));
-const SheetView = lazy(() => import('./SheetView').then((m) => ({ default: m.SheetView })));
-const PdfView = lazy(() => import('./PdfView').then((m) => ({ default: m.PdfView })));
-const HtmlView = lazy(() => import('./HtmlView').then((m) => ({ default: m.HtmlView })));
+const DocxView = lazyViewer(() => import('./DocxView').then((m) => m.DocxView));
+const SheetView = lazyViewer(() => import('./SheetView').then((m) => m.SheetView));
+const PdfView = lazyViewer(() => import('./PdfView').then((m) => m.PdfView));
+const HtmlView = lazyViewer(() => import('./HtmlView').then((m) => m.HtmlView));
 
 type View = 'file' | 'changes';
 
 /** The viewers that need the file's raw bytes (the rest read text or a picture). */
 const needsBytes = (kind: RichKind | null) => kind === 'docx' || kind === 'pdf' || kind === 'sheet';
-const BYTES_LIMIT = '15 MB';
 
 export function FileTab({
   paneId,
@@ -57,18 +63,25 @@ export function FileTab({
   const [view, setView] = useState<View>('file');
   const rich = richKindOf(path);
   const [content, setContent] = useState<FileContent | null>(null);
-  const [file, setFile] = useState<FileBytes | null>(null);
+  const [file, setFile] = useState<FileStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [patch, setPatch] = useState<string | null>(null);
   const [asText, setAsText] = useState(false);
   const [selection, setSelection] = useState<CodeSelection | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const openOwnApp = useCallback(
+    () => void api.openDefault(paneId, path).then(() => setNotice(null), (err: unknown) => setNotice(errorSentence(err))),
+    [api, paneId, path],
+  );
+  const edit = useFileEdit({ api, paneId, path, content, setContent, onNotice: setNotice });
+  const unsaved = isDirty(useDraftKeys(), paneId, path);
+  const canEdit = view === 'file' && !rich && content?.kind === 'text' && !error;
 
   useEffect(() => {
     let cancelled = false;
     setFile(null);
     if (needsBytes(richKindOf(path))) {
-      api.readBytes(paneId, path).then(
+      api.openBytes(paneId, path).then(
         (b) => {
           if (cancelled) return;
           setFile(b);
@@ -91,7 +104,15 @@ export function FileTab({
     };
   }, [api, paneId, path, refreshKey]);
 
-  const bytes = useMemo(() => (file?.kind === 'bytes' && file.base64 != null ? bytesOf(file.base64) : null), [file]);
+  // The way out of a file that cannot be shown: its own program, or the folder.
+  const openApp = useCallback(() => {
+    void api.openDefault(paneId, path).then(() => setNotice(null), (err: unknown) => setNotice(errorSentence(err)));
+  }, [api, paneId, path]);
+  const reveal = useCallback(() => {
+    void api.reveal(paneId, path).then(() => setNotice(null), (err: unknown) => setNotice(errorSentence(err)));
+  }, [api, paneId, path]);
+  const openLabel = rich === 'docx' ? t('files.openWord') : rich === 'sheet' ? t('files.openExcel') : t('files.openDefault');
+  const actions = <FileActions openLabel={openLabel} onOpen={rich ? openApp : undefined} onReveal={reveal} />;
 
   useEffect(() => {
     if (view !== 'changes') return;
@@ -140,28 +161,34 @@ export function FileTab({
     }
     if (needsBytes(rich)) {
       if (!file) return <p className="ck-file-note">{t('files.loading')}</p>;
-      if (file.kind === 'too_large' || !bytes) {
+      if (file.kind === 'too_large' || !file.source) {
         return (
-          <p className="ck-file-note" data-testid="file-too-large">
-            {t('files.tooLarge', { size: fileSize(file.size), limit: BYTES_LIMIT })}
-          </p>
+          <>
+            <p className="ck-file-note" data-testid="file-too-large">
+              {t('files.tooLarge', { size: fileSize(file.size), limit: `${Math.round(file.limit / (1024 * 1024))} MB` })}
+            </p>
+            {actions}
+          </>
         );
       }
       const name = file.name;
       return (
-        <Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
-          {rich === 'docx' && <DocxView bytes={bytes} asText={asText} />}
-          {rich === 'pdf' && <PdfView bytes={bytes} name={name} />}
-          {rich === 'sheet' && <SheetView bytes={bytes} csv={extensionOf(path) === 'csv'} />}
-        </Suspense>
+        <ViewerBoundary resetKey={path} onOpen={openOwnApp}><Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
+          {rich === 'docx' && <DocxView source={file.source} asText={asText} actions={actions} />}
+          {rich === 'pdf' && <PdfView source={file.source} name={name} actions={actions} />}
+          {rich === 'sheet' && <SheetView source={file.source} csv={extensionOf(path) === 'csv'} actions={actions} />}
+        </Suspense></ViewerBoundary>
       );
     }
     if (!content) return <p className="ck-file-note">{t('files.loading')}</p>;
     if (content.kind === 'too_large') {
       return (
-        <p className="ck-file-note" data-testid="file-too-large">
-          {t('files.tooLarge', { size: fileSize(content.size), limit: '2 MB' })}
-        </p>
+        <>
+          <p className="ck-file-note" data-testid="file-too-large">
+            {t('files.tooLarge', { size: fileSize(content.size), limit: '2 MB' })}
+          </p>
+          <FileActions onOpen={opensInOwnApp(path) ? openApp : undefined} onReveal={reveal} />
+        </>
       );
     }
     if (content.kind === 'binary') return <p className="ck-file-note">{t('files.binary')}</p>;
@@ -173,11 +200,18 @@ export function FileTab({
       );
     }
     const text = content.text ?? '';
+    if (edit.editing && !rich) {
+      return (
+        <ViewerBoundary resetKey={path} onOpen={openOwnApp}><Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
+          <CodeEdit path={path} initial={edit.initial} revision={edit.revision} onChange={edit.onChange} onSave={edit.save} onSelect={setSelection} />
+        </Suspense></ViewerBoundary>
+      );
+    }
     if (rich === 'html' && !asText) {
       return (
-        <Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
+        <ViewerBoundary resetKey={path} onOpen={openOwnApp}><Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
           <HtmlView html={text} name={content.name} />
-        </Suspense>
+        </Suspense></ViewerBoundary>
       );
     }
     if (isMarkdown(path) && !asText) {
@@ -188,9 +222,9 @@ export function FileTab({
       );
     }
     return (
-      <Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
+      <ViewerBoundary resetKey={path} onOpen={openOwnApp}><Suspense fallback={<p className="ck-file-note">{t('files.loading')}</p>}>
         <CodeEditor path={path} text={text} onSelect={setSelection} />
-      </Suspense>
+      </Suspense></ViewerBoundary>
     );
   };
 
@@ -202,6 +236,11 @@ export function FileTab({
       aria-label={t('files.fileLabel', { name })}
       data-testid="file-tab"
       onKeyDown={(e) => {
+        if ((e.key === 's' || e.key === 'S') && (e.ctrlKey || e.metaKey) && !e.defaultPrevented && edit.editing) {
+          e.preventDefault();
+          edit.save();
+          return;
+        }
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.defaultPrevented && view === 'file') {
           e.preventDefault();
           openEditor(selection?.from);
@@ -212,15 +251,38 @@ export function FileTab({
         <span className="ck-file-name" title={path}>
           {name}
         </span>
+        {unsaved && <span className="ck-file-dot" role="img" aria-label={t('files.unsaved')} title={t('files.unsaved')} />}
         {folder && <span className="ck-file-folder">{folder}</span>}
         <span className="ck-head-gap" aria-hidden="true" />
+        {canEdit && edit.editing && (
+          <>
+            <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" disabled={!edit.dirty && !edit.conflict} onClick={edit.revert}>
+              {t('files.revert')}
+            </button>
+            <button type="button" className="ck-btn ck-btn--primary ck-btn--sm" disabled={!edit.dirty || edit.saving} onClick={edit.save}>
+              {t('files.save')}
+            </button>
+          </>
+        )}
+        {canEdit && (
+          <button
+            type="button"
+            className="ck-btn ck-btn--plain ck-btn--sm"
+            aria-pressed={edit.editing}
+            disabled={edit.editing && edit.dirty}
+            title={edit.editing && edit.dirty ? t('files.doneBlocked') : undefined}
+            onClick={edit.editing ? edit.stop : edit.start}
+          >
+            {edit.editing ? t('files.editDone') : t('files.edit')}
+          </button>
+        )}
         {rich && (
           <button
             type="button"
             className="ck-btn ck-btn--plain ck-btn--sm"
-            onClick={() => void api.openDefault(paneId, path).then(() => setNotice(null), (err: unknown) => setNotice(errorSentence(err)))}
+            onClick={openApp}
           >
-            {rich === 'docx' ? t('files.openWord') : rich === 'sheet' ? t('files.openExcel') : t('files.openDefault')}
+            {openLabel}
           </button>
         )}
         {(!rich || rich === 'html' || extensionOf(path) === 'csv') && (
@@ -234,7 +296,7 @@ export function FileTab({
           {opener.name ? t('editor.open', { name: opener.name }) : t('editor.openGeneric')}
         </button>
         )}
-        {view === 'file' && ((isMarkdown(path) || rich === 'html') && content?.kind === 'text' ? true : rich === 'docx' && !!bytes) && (
+        {view === 'file' && !edit.editing && ((isMarkdown(path) || rich === 'html') && content?.kind === 'text' ? true : rich === 'docx' && file?.kind === 'stream') && (
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-pressed={asText} onClick={() => setAsText((v) => !v)}>
             {asText ? t('files.showPage') : t('files.showText')}
           </button>
@@ -254,6 +316,7 @@ export function FileTab({
           ]}
         />
       </header>
+      {edit.editing && edit.conflict && view === 'file' && <ConflictBar onReload={edit.reload} onKeepMine={edit.keepMine} busy={edit.saving} />}
       <div className="ck-file-body">{body()}</div>
       {view === 'file' && canTell && selection && (
         <TellBar

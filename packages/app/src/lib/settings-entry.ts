@@ -16,6 +16,7 @@ export const LEGACY_TABS: Record<string, SettingsPageId> = {
   phone: 'connect',
   team: 'connect',
   lend: 'connect',
+  devices: 'connect',
   later: 'overview',
   appearance: 'look',
   storage: 'advanced',

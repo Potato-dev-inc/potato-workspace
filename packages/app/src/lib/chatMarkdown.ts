@@ -11,7 +11,9 @@ export type Inline =
   | { kind: 'code'; text: string }
   | { kind: 'strong'; children: Inline[] }
   | { kind: 'em'; children: Inline[] }
-  | { kind: 'link'; url: string; children: Inline[] };
+  | { kind: 'link'; url: string; children: Inline[] }
+  /** `![alt](path)`: a picture the agent names. Only a path on this PC is ever read (the view asks the PC, which checks it). */
+  | { kind: 'image'; alt: string; path: string };
 
 export interface ListItem {
   /** A task-list item (`[x] ` or `[ ] ` at the start): done or not. Absent for a plain item. */
@@ -393,7 +395,7 @@ export function parseInline(src: string, depth = 0): Inline[] {
       continue;
     }
     if (depth < MAX_INLINE_DEPTH) {
-      const hit = c === '[' ? parseLink(src, i, depth) : c === '*' || c === '_' ? parseEmphasis(src, i, depth) : null;
+      const hit = c === '!' ? parseImage(src, i) : c === '[' ? parseLink(src, i, depth) : c === '*' || c === '_' ? parseEmphasis(src, i, depth) : null;
       if (hit) {
         flush();
         out.push(hit.node);
@@ -440,4 +442,27 @@ function parseLink(src: string, i: number, depth: number): Hit | null {
     node: { kind: 'link', url, children: parseInline(src.slice(i + 1, close), depth + 1) },
     end: paren + 1,
   };
+}
+
+/** `![alt](path)` or `![alt](<path with spaces>)`. A web address is parsed too; the view never loads one. */
+function parseImage(src: string, i: number): Hit | null {
+  if (src[i + 1] !== '[') return null;
+  const close = indexIn(src, ']', i + 2, LINK_TEXT_SPAN);
+  if (close < 0 || src[close + 1] !== '(') return null;
+  let path: string;
+  let end: number;
+  if (src[close + 2] === '<') {
+    const gt = indexIn(src, '>', close + 3, LINK_URL_SPAN);
+    if (gt < 0 || src[gt + 1] !== ')') return null;
+    path = src.slice(close + 3, gt);
+    end = gt + 2;
+  } else {
+    const paren = indexIn(src, ')', close + 2, LINK_URL_SPAN);
+    if (paren < 0) return null;
+    path = src.slice(close + 2, paren).trim().split(/\s+/)[0] ?? '';
+    end = paren + 1;
+  }
+  path = path.trim();
+  if (!path) return null;
+  return { node: { kind: 'image', alt: src.slice(i + 2, close), path }, end };
 }

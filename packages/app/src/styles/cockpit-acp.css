@@ -349,3 +349,147 @@
 .cockpit.ck-single {
   grid-template-columns: minmax(0, 1fr);
 }
+
+/* "OPPO Reno13 is typing…" with Take back. */
+.cockpit .ck-acp-strip[data-drive] .ck-acp-strip-text {
+  color: var(--label);
+}
+
+/* The sign-in card without a terminal: two steps, and the sign-in's terminal folded under Details. */
+.cockpit .ck-acp-card-steps {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  color: var(--label-2);
+}
+.cockpit .ck-acp-card-body:has(.ck-acp-card-details) {
+  flex: 1 1 auto;
+}
+.cockpit .ck-acp-card-details {
+  margin-top: 4px;
+}
+.cockpit .ck-acp-card-details > summary {
+  cursor: pointer;
+  color: var(--label-2);
+}
+.cockpit .ck-acp-card-details .lend-term {
+  height: 200px;
+  min-width: 320px;
+  margin-top: 6px;
+}
+/* Force yes: a chip in the pane header. Off it is a quiet word; on it takes the risk tone (see chips.css). The warning is
+   a small solid card under the chip, in the same place the lend chip opens its own. */
+.cockpit .fy-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cockpit .fy-chip {
+  cursor: pointer;
+}
+.cockpit .fy-chip:not(.is-risk) {
+  color: var(--label-3);
+}
+.cockpit .fy-chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.cockpit .fy-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 300px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-float, var(--bg));
+  border: 1px solid var(--sep);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--label-2);
+}
+.cockpit .fy-pop p {
+  margin: 0;
+}
+.cockpit .fy-pop-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label);
+}
+.cockpit .fy-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.cockpit .fy-error {
+  font-size: 11px;
+  color: var(--danger);
+}
+
+/* Settings > Agents > Rules for agents. */
+.cockpit .fy-rules,
+.st-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.st-rules-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.st-rules-block h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.st-rules-block p,
+.st-rules-block small {
+  margin: 0;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.st-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.st-rules-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+.st-rules-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.st-rules-row input[type='text'],
+.st-rules-block textarea,
+.st-rules-block select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+}
+.st-rules-block textarea {
+  min-height: 56px;
+  resize: vertical;
+}
+.fy-pinned {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--label-3);
+}

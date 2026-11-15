@@ -2,11 +2,11 @@
 // decision card, with the agent's real options), and the strips that carry a real action (stopped, interrupted,
 // quiet). The plain "Working…" and its Stop live in the message box (ChatComposer). While a question is open it also holds the
 // small switch that lets an agent answer these questions (off by default).
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAcpStop, type AcpStop } from '../../hooks/useAcpStop';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { useAcpChatState } from '../../hooks/useAcpChatState';
-import { errorSentence, interruptedStrip, permissionCards, quietStrip, runStrip, stoppedStrip, tauriAcpChatApi, type AcpChatApi } from '../../lib/acpChat';
+import { driveStrip, errorSentence, interruptedStrip, permissionCards, quietStrip, runStrip, stoppedStrip, tauriAcpChatApi, type AcpChatApi } from '../../lib/acpChat';
 import { kindWords, permissionOf } from '../../lib/decisionCard';
 import { DecisionCard, type DecisionAnswer } from './DecisionCard';
 import { AgentAnsweringSwitch } from './AgentAnsweringSwitch';
@@ -23,6 +23,8 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
   // The person pressed Stop: the box reads "Stopping…" at once, before the backend's state event comes back.
   const own = useAcpStop(paneId, running, api);
   const { asked, stop } = stopper ?? own;
+  // The sign-in without a terminal (a hidden pane); an api that has none keeps the card's older "open the terminal" route.
+  const signInDriver = useMemo(() => api.signIn?.(paneId), [api, paneId]);
 
   // The adapter stopped by itself: one line with the reason and one button. Restart is the person's call.
   const [restarting, setRestarting] = useState(false);
@@ -64,6 +66,28 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
       .finally(() => setContinuing(false));
   };
 
+  // Another device (a phone, another PC) sends or types here: say so, with "Take back" (this PC drives again).
+  const stateAt = useMemo(() => Date.now(), [state]);
+  const [now, setNow] = useState(() => Date.now());
+  const drive = driveStrip(state, now, stateAt);
+  const typingUntil = drive?.until ?? null;
+  useEffect(() => {
+    if (typingUntil === null) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, typingUntil - Date.now()) + 50);
+    return () => window.clearTimeout(timer);
+  }, [typingUntil]);
+  const [takingBack, setTakingBack] = useState(false);
+  const [takeBackError, setTakeBackError] = useState<string | null>(null);
+  const takeBack = () => {
+    if (!api.takeBack || takingBack) return;
+    setTakingBack(true);
+    setTakeBackError(null);
+    api
+      .takeBack(paneId)
+      .catch(() => setTakeBackError(t('drive.takeBackFailed')))
+      .finally(() => setTakingBack(false));
+  };
+
   const cards = permissionCards(c.asked.questions, paneId);
   const autoAllow = state && !state.closed ? (state.autoAllow ?? []) : [];
   // "Don't ask again" first tells the chat to remember the kind, then answers; a refusal still lets the answer go.
@@ -96,12 +120,24 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
   // The first other agent that can open a visible chat or terminal; none: the card offers only "Sign in again".
   const otherAgent = signIn ? (c.launchEntries ?? []).find((e) => e.type !== signIn.agent && !e.disabled && !e.shell) : undefined;
   const waking = !quiet && strip?.waking ? strip : null;
-  if (cards.length === 0 && !waking && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0 && !orphan) return null;
+  if (cards.length === 0 && !waking && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0 && !orphan && !drive) return null;
   const keepWaiting = () => {
     api.keepWaiting?.(paneId).catch(() => undefined);
   };
   return (
     <div className="ck-dock ck-acp-dock" data-testid="acp-dock">
+      {drive && (
+        <div className="ck-acp-strip" data-testid="acp-drive" data-drive={drive.typing ? 'typing' : 'driving'}>
+          <span className="ck-acp-strip-text" role="status">
+            {takeBackError ?? drive.text}
+          </span>
+          {api.takeBack && (
+            <button type="button" className="ck-btn ck-btn--secondary ck-acp-stop" onClick={takeBack} disabled={takingBack}>
+              {takingBack ? t('drive.takingBack') : t('drive.takeBack')}
+            </button>
+          )}
+        </div>
+      )}
       {cards.slice(0, 1).map((q) => {
         const permission = permissionOf(q, state?.permissions);
         return (
@@ -126,6 +162,8 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
           other={otherAgent ? { id: otherAgent.type, label: otherAgent.label } : null}
           // The agent's own terminal, in a normal pane (the same sign-in the terminal uses).
           onOpen={() => c.newAgent(signIn.agent, undefined, false, c.registry.panes.get(paneId)?.info.cwd, undefined, 'terminal')}
+          // Without a terminal: the same sign-in in a hidden pane, folded under Details (the older route above stays for an api with none).
+          signIn={signInDriver}
           onRetry={() => api.retrySignIn?.(paneId)}
           onUseOther={async (id, kept) => {
             const opened = await c.newAgent(id, undefined, false, c.registry.panes.get(paneId)?.info.cwd);

@@ -54,9 +54,11 @@ import { settingsConnect } from './zh-TW/settingsConnect';
 import { settingsPhone } from './zh-TW/settingsPhone';
 import { notify } from './zh-TW/notify';
 import { board } from './zh-TW/board';
+import { routines } from './zh-TW/routines';
 import { phone } from './zh-TW/phone';
 import { phoneChat } from './zh-TW/phoneChat';
 import { noReply } from './zh-TW/noReply';
+import { sentFrom } from './zh-TW/sentFrom';
 import { dnd } from './zh-TW/dnd';
 import { files } from './zh-TW/files';
 import { artifacts } from './zh-TW/artifacts';
@@ -65,10 +67,13 @@ import { phoneCompose } from './zh-TW/phoneCompose';
 import { phoneShell } from './zh-TW/phoneShell';
 import { phoneHalf } from './zh-TW/phoneHalf';
 import { chatUx } from './zh-TW/chatUx';
+import { chatMore } from './zh-TW/chatMore';
 import { point } from './zh-TW/point';
 import { flow } from './zh-TW/flow';
 import { appUx } from './zh-TW/appUx';
 import { deskReview } from './zh-TW/deskReview';
+import { devices } from './zh-TW/devices';
+import { agentRules } from './zh-TW/agentRules';
 
 export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...common,
@@ -109,9 +114,11 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...settingsPhone,
   ...notify,
   ...board,
+  ...routines,
   ...phone,
   ...phoneChat,
   ...noReply,
+  ...sentFrom,
   ...dnd,
   ...files,
   ...artifacts,
@@ -120,8 +127,11 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...phoneShell,
   ...phoneHalf,
   ...chatUx,
+  ...chatMore,
   ...flow,
   ...point,
   ...appUx,
   ...deskReview,
+  ...devices,
+  ...agentRules,
 };

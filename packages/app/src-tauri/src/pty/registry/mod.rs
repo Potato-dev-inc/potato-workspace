@@ -215,6 +215,7 @@ impl PaneRegistry {
         super::launch_session::forget(id);
         super::stream_pos::forget(id);
         pane_io::forget_resize_gate(id);
+        crate::agent_rules::terminal::forget(id);
         crate::flight::closed(id);
         self.panes.remove(id)
     }

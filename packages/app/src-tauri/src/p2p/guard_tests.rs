@@ -102,7 +102,7 @@ fn only_known_files_use_the_p2p_module() {
     // Spaces: only these may name p2p (spaces/guard_tests.rs checks the rest). local_net_tests.rs is the ignored
     // real-network proof and is not shipped.
     let allowed = [
-        "lib.rs", "pairing_commands.rs", "desk_soak.rs", "spaces/net.rs", "spaces/net_tests.rs", "spaces/local_net_tests.rs",
+        "lib.rs", "pairing_commands.rs", "commands/devices.rs", "settings_store.rs", "desk_soak.rs", "spaces/net.rs", "spaces/net_tests.rs", "spaces/local_net_tests.rs",
         "spaces/spike.rs",
     ];
     let pattern = Regex::new(r"\bp2p::|crate::p2p\b|\bmod p2p\b").unwrap();
@@ -110,7 +110,7 @@ fn only_known_files_use_the_p2p_module() {
         let rel = file.strip_prefix(tauri_src()).unwrap().to_string_lossy().replace('\\', "/");
         // The desk link (My computers, DL-7 and DL-9) is the first capability built on the link layer.
         // Share an agent (Lend through my PC) is the `agents/lend` capability: its own folder.
-        if rel.starts_with("p2p/") || rel.starts_with("desk/link/") || rel.starts_with("capacity_proxy/") || allowed.contains(&rel.as_str()) {
+        if rel.starts_with("p2p/") || rel.starts_with("desk/link/") || rel.starts_with("capacity_proxy/") || rel.starts_with("device_link/") || allowed.contains(&rel.as_str()) {
             continue;
         }
         let text = code_only(&read(&file));

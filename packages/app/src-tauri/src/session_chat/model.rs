@@ -20,6 +20,9 @@ pub enum ChatItem {
         /// Files, images and pasted pictures sent with the message (old records have none).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attachments: Vec<ChatAttachment>,
+        /// The device that sent it (a device identity id, `device_identity`). `None`: this PC. Old records have none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<String>,
     },
     /// Agent text. `final_answer` is true for the last message of a turn when the format says so.
     Assistant {
@@ -255,7 +258,7 @@ mod tests {
 
     #[test]
     fn id_returns_the_id_of_every_variant() {
-        let user = ChatItem::User { id: "5:1".into(), at: None, text: "hi".into(), attachments: Vec::new() };
+        let user = ChatItem::User { id: "5:1".into(), at: None, text: "hi".into(), attachments: Vec::new(), from: None };
         assert_eq!(user.id(), "5:1");
         let session = ChatItem::Session { id: "0:0".into(), at: None, model: None, cli_version: None };
         assert_eq!(session.id(), "0:0");

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import * as XLSX from 'xlsx';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileTab } from './FileTab';
-import { fakeApi } from './fakes';
+import { fakeApi, stubInflate } from './fakes';
 import { SandboxFrame, sandboxAttribute, sandboxDocument, sandboxPolicy } from './SandboxFrame';
 import { sanitiseDocxHtml } from './sanitise-docx';
 import { SHEET_ROW_CAP } from './SheetView';
@@ -52,13 +52,18 @@ describe('the Word viewer', () => {
   const api = () => fakeApi({}, {}, { 'plan.docx': bytesFile('plan.docx', DOCX_SAMPLE) });
 
   it('shows headings, a list, a table and a picture', async () => {
+    Object.assign(URL, { createObjectURL: () => 'blob:fake-picture', revokeObjectURL: vi.fn() });
+    // The web view inflates a picture with DecompressionStream; jsdom has none, node has the same one.
+    stubInflate();
     const page = await open('plan.docx', api(), '[data-testid="file-docx"]');
     expect(page).not.toBeNull();
     expect(page!.querySelector('h1')?.textContent).toBe('Quarterly plan');
     expect(page!.querySelector('h2')?.textContent).toBe('Goals');
     expect([...page!.querySelectorAll('li')].map((l) => l.textContent)).toEqual(['Ship the new sign-in', 'Fix the invoice emails']);
     expect([...page!.querySelectorAll('th, td')].map((c) => c.textContent)).toEqual(['Month', 'Owner', 'June', 'Mei', 'July', 'Sam']);
-    expect(page!.querySelector('img')?.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+    // The picture is a placeholder first and loads from the document after (it is an object address, not a data one).
+    const img = page!.querySelector('img')!;
+    await vi.waitFor(() => expect(img.getAttribute('src')).toBe('blob:fake-picture'));
   });
 
   it('keeps a web link and strips a javascript: link from the document', async () => {
@@ -74,8 +79,7 @@ describe('the Word viewer', () => {
     await act(async () => button('Open in Word')!.click());
     expect(a.openDefault).toHaveBeenCalledWith('p1', 'plan.docx');
     await act(async () => button('Show as text')!.click());
-    await settle();
-    expect(host.querySelector('[data-testid="file-docx-text"]')?.textContent).toContain('Quarterly plan');
+    await vi.waitFor(() => expect(host.querySelector('[data-testid="file-docx-text"]')?.textContent).toContain('Quarterly plan'));
     expect(host.querySelector('[data-testid="file-docx"]')).toBeNull();
     // Word files are never read as text: only the byte read is used.
     expect(a.read).not.toHaveBeenCalled();
@@ -84,7 +88,7 @@ describe('the Word viewer', () => {
   it('says so when the file is too big', async () => {
     const a = fakeApi({}, {}, { 'big.docx': { path: 'big.docx', name: 'big.docx', size: 20 * 1024 * 1024, kind: 'too_large', base64: null } });
     const note = await open('big.docx', a, '[data-testid="file-too-large"]');
-    expect(note?.textContent).toContain('15 MB');
+    expect(note?.textContent).toContain('The limit is 500 MB');
   });
 });
 
@@ -218,7 +222,7 @@ describe('lazy chunks', () => {
     readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
 
   it('only the viewers themselves import the heavy libraries', () => {
-    const allowed = new Set(['DocxView.tsx', 'sanitise-docx.ts', 'SheetView.tsx', 'rich-viewers.test.tsx']);
+    const allowed = new Set(['DocxView.tsx', 'docx-engine.ts', 'sanitise-docx.ts', 'SheetView.tsx', 'sheet-read.ts', 'rich-viewers.test.tsx']);
     const heavy = /from ['"](mammoth[^'"]*|xlsx|dompurify)['"]/;
     const offenders = walk(src)
       .filter((f) => /\.(ts|tsx)$/.test(f) && !f.endsWith('.d.ts'))

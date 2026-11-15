@@ -441,6 +441,8 @@
 
   function buildUi() {
     host = doc.createElement('div');
+    // Not part of the page for anyone reading it as a list (the agent browser must not offer the Point pill as a button).
+    host.setAttribute('aria-hidden', 'true');
     host.style.cssText = 'all: initial; position: fixed; right: 12px; bottom: 12px; z-index: 2147483647;';
     const root = attachShadow.call(host, { mode: 'closed' });
 

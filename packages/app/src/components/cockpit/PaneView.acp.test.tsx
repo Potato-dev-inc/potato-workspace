@@ -121,6 +121,8 @@ describe('pane view of a chat session over ACP', () => {
     expect(strip?.textContent).toContain('Added notes.txt');
     expect(strip?.textContent).toContain('2 files +14 −3');
     expect(strip?.textContent).toContain('1 check');
+    // "Then…" is on the result card, so a chain can be added from the screen the person looks at.
+    expect([...strip!.querySelectorAll('button')].map((b) => b.textContent?.trim())).toContain('Then…');
   });
 
   it('a terminal pane has no badge and keeps its terminal', async () => {

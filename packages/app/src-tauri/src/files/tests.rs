@@ -176,3 +176,104 @@ fn only_document_kinds_are_opened_in_the_default_program() {
     assert!(open_default(s(&dir), "run.bat").unwrap_err().starts_with("FILES_NOT_OPENABLE"));
     assert!(open_default(s(&dir), "../run.docx").unwrap_err().starts_with("FILES_OUTSIDE"));
 }
+
+fn opened(dir: &Path, rel: &str) -> String {
+    read_file(s(dir), rel).unwrap().version
+}
+
+#[test]
+fn a_save_writes_the_text_and_returns_the_new_version() {
+    let dir = scratch("save-ok");
+    fs::write(dir.join("a.rs"), "fn main() {}\n").unwrap();
+    let v = opened(&dir, "a.rs");
+    let saved = write_file(s(&dir), "a.rs", "fn main() { 1 }\n", Some(&v), false).unwrap();
+    assert_eq!(fs::read_to_string(dir.join("a.rs")).unwrap(), "fn main() { 1 }\n");
+    assert_eq!(saved.path, "a.rs");
+    assert_eq!(saved.version, opened(&dir, "a.rs"));
+    // The new version is a valid starting point for the next save.
+    write_file(s(&dir), "a.rs", "x\n", Some(&saved.version), false).unwrap();
+}
+
+#[test]
+fn a_save_over_a_changed_file_is_a_conflict_unless_overwrite_is_asked_for() {
+    let dir = scratch("save-conflict");
+    fs::write(dir.join("a.txt"), "mine").unwrap();
+    let v = opened(&dir, "a.txt");
+    fs::write(dir.join("a.txt"), "the agent was here").unwrap();
+    let err = write_file(s(&dir), "a.txt", "mine, edited", Some(&v), false).unwrap_err();
+    assert!(err.starts_with("FILES_CONFLICT"), "{err}");
+    assert_eq!(fs::read_to_string(dir.join("a.txt")).unwrap(), "the agent was here", "nothing was written");
+    let err = write_file(s(&dir), "a.txt", "mine, edited", None, false).unwrap_err();
+    assert!(err.starts_with("FILES_CONFLICT"), "no version is no proof: {err}");
+    write_file(s(&dir), "a.txt", "mine, edited", Some(&v), true).unwrap();
+    assert_eq!(fs::read_to_string(dir.join("a.txt")).unwrap(), "mine, edited");
+}
+
+#[test]
+fn a_save_refuses_dot_dot_and_a_path_outside_the_project() {
+    let dir = scratch("save-out");
+    let other = scratch("save-out-other");
+    fs::write(other.join("x.txt"), "x").unwrap();
+    let err = write_file(s(&dir), "../x.txt", "bad", None, true).unwrap_err();
+    assert!(err.starts_with("FILES_OUTSIDE"), "{err}");
+    let err = write_file(s(&dir), s(&other.join("x.txt")), "bad", None, true).unwrap_err();
+    assert!(err.starts_with("FILES_OUTSIDE"), "{err}");
+    assert_eq!(fs::read_to_string(other.join("x.txt")).unwrap(), "x");
+}
+
+#[test]
+fn a_save_through_a_link_that_leads_out_is_refused() {
+    let dir = scratch("save-link");
+    let other = scratch("save-link-other");
+    fs::write(other.join("secret.txt"), "s").unwrap();
+    #[cfg(windows)]
+    let made = std::os::windows::fs::symlink_dir(&other, dir.join("out")).is_ok()
+        || crate::proc_util::hidden_command("cmd").args(["/C", "mklink", "/J"]).arg(dir.join("out")).arg(&other).output().map(|o| o.status.success()).unwrap_or(false);
+    #[cfg(unix)]
+    let made = std::os::unix::fs::symlink(&other, dir.join("out")).is_ok();
+    assert!(made, "this machine cannot make a link, so the test proves nothing");
+    let err = write_file(s(&dir), "out/secret.txt", "bad", None, true).unwrap_err();
+    assert!(err.starts_with("FILES_OUTSIDE"), "{err}");
+    assert_eq!(fs::read_to_string(other.join("secret.txt")).unwrap(), "s");
+}
+
+#[test]
+fn a_save_never_makes_a_new_file() {
+    let dir = scratch("save-new");
+    let err = write_file(s(&dir), "new.txt", "x", None, true).unwrap_err();
+    assert!(err.starts_with("FILES_NOT_FOUND"), "{err}");
+    assert!(!dir.join("new.txt").exists());
+}
+
+#[test]
+fn a_save_over_two_megabytes_is_refused() {
+    let dir = scratch("save-big");
+    fs::write(dir.join("a.txt"), "x").unwrap();
+    let big = "a".repeat((MAX_WRITE_BYTES + 1) as usize);
+    let err = write_file(s(&dir), "a.txt", &big, None, true).unwrap_err();
+    assert!(err.starts_with("FILES_TOO_LARGE"), "{err}");
+    assert_eq!(fs::read_to_string(dir.join("a.txt")).unwrap(), "x");
+}
+
+#[test]
+fn documents_pictures_binaries_and_git_files_are_not_saved() {
+    let dir = scratch("save-kinds");
+    fs::write(dir.join("a.docx"), "PK").unwrap();
+    fs::write(dir.join("a.png"), "png").unwrap();
+    fs::write(dir.join("a.bin"), [1u8, 0, 2]).unwrap();
+    fs::write(dir.join("latin.txt"), [0x63u8, 0x61, 0x66, 0xe9]).unwrap();
+    fs::create_dir_all(dir.join(".git")).unwrap();
+    fs::write(dir.join(".git").join("config"), "c").unwrap();
+    for (name, code) in [("a.docx", "FILES_READ_ONLY"), ("a.png", "FILES_READ_ONLY"), ("a.bin", "FILES_NOT_TEXT"), ("latin.txt", "FILES_NOT_TEXT"), (".git/config", "FILES_PROTECTED")] {
+        let err = write_file(s(&dir), name, "bad", None, true).unwrap_err();
+        assert!(err.starts_with(code), "{name}: {err}");
+    }
+    assert_eq!(fs::read_to_string(dir.join(".git").join("config")).unwrap(), "c");
+}
+
+#[test]
+fn equal_bytes_have_equal_versions_and_any_change_changes_it() {
+    assert_eq!(write::version_of(b"abc"), write::version_of(b"abc"));
+    assert_ne!(write::version_of(b"abc"), write::version_of(b"abd"));
+    assert_ne!(write::version_of(b""), write::version_of(b"a"));
+}

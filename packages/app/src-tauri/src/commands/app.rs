@@ -83,6 +83,39 @@ pub async fn list_paired_mobile_devices(
     Ok(devices)
 }
 
+/// Settings > Devices: the person's own name for a paired phone. It shows everywhere (the list, "from <name>" under a
+/// message, the "is typing" chip). Empty text goes back to the name the phone gave.
+#[tauri::command]
+pub async fn rename_paired_mobile_device(device_id: String, name: String) -> Result<bool, String> {
+    let store = crate::mobile_pairing::pairing_store().ok_or_else(|| "pairing store not initialized".to_string())?;
+    let listed = store.lock().list_devices().into_iter().find(|d| d.id == device_id);
+    let Some(device) = listed else { return Ok(false) };
+    let registry = crate::device_identity::global();
+    // A phone paired before names were kept has no record yet: its list name is the phone's own.
+    if registry.get(&device_id).is_none() {
+        registry.observe(&device_id, crate::device_identity::DeviceKind::Phone, &device.name);
+    }
+    Ok(registry.rename(&device_id, &name))
+}
+
+/// Every device's name by id (this PC, paired phones, paired PCs), for the "from <name>" line under a message.
+#[tauri::command]
+pub fn device_names() -> serde_json::Value {
+    sync_names();
+    crate::device_identity::global().names()
+}
+
+/// Phones paired before names were kept get a record on first read, so the list and the chat agree.
+fn sync_names() {
+    let Some(store) = crate::mobile_pairing::pairing_store() else { return };
+    let registry = crate::device_identity::global();
+    for d in store.lock().list_devices() {
+        if registry.get(&d.id).is_none() {
+            registry.observe(&d.id, crate::device_identity::DeviceKind::Phone, &d.name);
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn revoke_paired_mobile_device(device_id: String) -> Result<bool, String> {
     let store = crate::mobile_pairing::pairing_store()

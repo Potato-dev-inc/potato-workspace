@@ -1213,6 +1213,11 @@ impl AcpSession {
         self.with_core(|core, _| core.auto_approved.clone())
     }
 
+    /// The folder the agent works in.
+    pub fn cwd(&self) -> &std::path::Path {
+        &self.cwd
+    }
+
     pub fn is_read_only(&self) -> bool {
         self.with_core(|core, _| core.read_only)
     }

@@ -117,6 +117,14 @@ pub async fn acp_chat_cancel(pane_id: String) -> Result<bool, String> {
 }
 
 /// "Keep waiting": the agent was quiet, the person chose to wait; the quiet window starts again. True when a turn was running.
+/// "Take back": this PC drives the chat again. The device that was driving sees "<this PC> took this back" and has to take
+/// over on purpose to send. Returns the id of the device that was driving, or null when nobody else was.
+#[tauri::command]
+pub async fn acp_chat_take_back(pane_id: String) -> Result<Option<String>, String> {
+    let chat = crate::acp::chat::get(&pane_id).ok_or_else(|| "This chat is not open any more.".to_string())?;
+    Ok(chat.take_back())
+}
+
 #[tauri::command]
 pub async fn acp_chat_keep_waiting(pane_id: String) -> Result<bool, String> {
     let session = chat::get(&pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
@@ -175,6 +183,15 @@ pub async fn acp_chat_set_config(pane_id: String, option_id: String, value: Stri
 pub async fn acp_chat_set_agent_answering(pane_id: String, allowed: bool) -> Result<Value, String> {
     let session = chat::get(&pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
     session.set_agent_answering(allowed);
+    Ok(session.state())
+}
+
+/// The person's Force yes switch for this chat (default off, or what the agent and project start with). A fence still
+/// holds, and a question the risk rules do not call low risk still comes to the person. Only this window reaches it.
+#[tauri::command]
+pub async fn acp_chat_set_force_yes(pane_id: String, on: bool) -> Result<Value, String> {
+    let session = chat::get(&pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
+    session.set_force_yes(on);
     Ok(session.state())
 }
 

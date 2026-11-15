@@ -1,4 +1,5 @@
 // Connection setup screen of the mobile PWA: pair via invite code / legacy QR JSON, or enter a bridge URL by hand.
+import { friendlyPhoneName, readPhoneName } from '../../lib/phoneName';
 import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { LS_BRIDGE_URL, resolveBridgeBaseUrl, shouldUseSameOriginBridgeProxy } from '../../lib/bridge-url';
@@ -27,14 +28,19 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
   const [devInfo, setDevInfo] = useState<DevInfo | null>(null);
   const [qrJson, setQrJson] = useState('');
   const [manualCode, setManualCode] = useState('');
-  const [deviceName, setDeviceName] = useState(() => {
-    const ua = navigator.userAgent;
-    if (/iPhone/i.test(ua)) return 'iPhone';
-    if (/iPad/i.test(ua)) return 'iPad';
-    if (/Android/i.test(ua)) return 'Android';
-    return 'Mobile device';
-  });
+  const [deviceName, setDeviceName] = useState(() => friendlyPhoneName(navigator.userAgent));
+
   const existingCreds = loadMobilePairingCredentials();
+
+  // Client Hints know the model better than the user agent does: improve the name unless the person already typed their own.
+  useEffect(() => {
+    let live = true;
+    const first = friendlyPhoneName(navigator.userAgent);
+    void readPhoneName().then((better) => live && setDeviceName((now) => (now === first ? better : now)));
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     fetch('/__puppet_master_dev__.json', { cache: 'no-store' })

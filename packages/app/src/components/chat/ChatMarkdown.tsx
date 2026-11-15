@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { parseChatMarkdown, type Align, type Block, type Inline, type ListBlock, type ListItem } from '../../lib/chatMarkdown';
 import { FoldButton, useFold } from './chatFold';
+import { ChatPicture } from './ChatPicture';
 import '../../styles/chat-copy.css';
 import '../../styles/chat-agent-cards.css';
 
@@ -243,5 +244,7 @@ function renderInline(node: Inline, key: number): ReactNode {
           {renderInlines(node.children)}
         </LinkNode>
       );
+    case 'image':
+      return <ChatPicture key={key} alt={node.alt} path={node.path} />;
   }
 }

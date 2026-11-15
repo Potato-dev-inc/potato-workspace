@@ -64,6 +64,9 @@ impl State {
 pub struct OutboxMessage {
     pub id: String,
     pub text: String,
+    /// The device that sent it (`device_identity` id). `None`: this PC.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
     /// Milliseconds since the Unix epoch.
     pub created_at: u64,
     pub state: State,

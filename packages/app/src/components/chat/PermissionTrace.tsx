@@ -6,7 +6,7 @@ import '../../styles/chat-decision-card.css';
 function Icon({ tone }: { tone: 'allow' | 'deny' | 'wait' | 'note' }) {
   const path = tone === 'allow' ? 'M3.5 8.5l3 3 6-7' : tone === 'deny' ? 'M4 4l8 8M12 4l-8 8' : tone === 'wait' ? 'M8 4.5V8l2.5 1.5' : 'M4 8h8';
   return (
-    <svg className="ck-trace-i" viewBox="0 0 16 16" aria-hidden="true">
+    <svg className="ck-trace-i" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={path} />
     </svg>
   );

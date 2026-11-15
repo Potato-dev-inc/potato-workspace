@@ -6,6 +6,8 @@ import { useT, type MessageKey } from '../../i18n';
 import { ERROR_NOTES, LISTENING_NOTE, useVoiceInput } from '../../hooks/useVoiceInput';
 import { clearDraft, DRAFT_SAVE_MS, readDraft, writeDraft } from '../../lib/composerDraft';
 import { MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
+import { useRemoteDraft } from '../../hooks/useRemoteDraft';
+import type { RemoteDraft } from '../../lib/chatMore';
 import { insertAtCursor, KEYBOARD_MIC_HINT } from '../../lib/voice';
 import type { ChatAttachment } from '../../lib/attachFiles';
 import { MAX_SAVED_PROMPTS, readSavedPrompts, slashFilter, withPrompt, writeSavedPrompts, type QuickKind } from '../../lib/phone-quick';
@@ -13,6 +15,9 @@ import { AttachChips, PlusMenu, readClipboard, useAttachments, type UploadFn } f
 import { QuickReplies, SavedPrompts, starterPrompts } from './PhoneQuick';
 import { PhoneVoiceBar } from './PhoneVoiceBar';
 import '../../styles/phone-shell.css';
+
+/** How often the PC is told the phone is typing. */
+export const TYPING_EVERY_MS = 3000;
 
 /** The box grows with the text up to this many lines, then scrolls. */
 const MAX_LINES = 6;
@@ -40,7 +45,13 @@ export function PhoneComposer({
   fill = null,
   asking = false,
   offline = false,
+  onTyping,
+  remoteDraft = null,
 }: {
+  /** Called while the person types (at most every 3 seconds), so the PC can show "<this phone> is typing…". */
+  onTyping?: () => void;
+  /** The PC's copy of this chat's half-written message (words only): an empty box takes it, typing is written to it. */
+  remoteDraft?: RemoteDraft | null;
   /** The agent asked a question and waits: the box says "Type an answer". */
   asking?: boolean;
   /** The PC cannot be reached: messages wait on the phone, and the box says so. */
@@ -68,6 +79,7 @@ export function PhoneComposer({
 }) {
   const t = useT();
   const [text, setText] = useState(() => readDraft(draftKey));
+  useRemoteDraft(remoteDraft, text, setText);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [plus, setPlus] = useState(false);
@@ -82,6 +94,15 @@ export function PhoneComposer({
   const field = useRef<HTMLTextAreaElement>(null);
   const caretAfter = useRef<number | null>(null);
   const blocked = blockedReason !== null;
+  // "Phone is typing": a signal while text is being written, not more often than every 3 seconds.
+  const lastTyping = useRef(0);
+  useEffect(() => {
+    if (!onTyping || text.trim() === '') return;
+    const now = Date.now();
+    if (now - lastTyping.current < TYPING_EVERY_MS) return;
+    lastTyping.current = now;
+    onTyping();
+  }, [text, onTyping]);
   const count = [...text].length;
   const tooLong = count > MAX_MESSAGE_CHARS;
   const empty = text.trim() === '' && attach.ready.length === 0;

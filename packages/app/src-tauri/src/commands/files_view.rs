@@ -6,7 +6,7 @@ use crate::files::{self, FileBytes, FileContent, FileMark, FolderListing};
 use tauri::State;
 
 /// The project folder of a pane; without a pane (an older window) the default project folder.
-fn pane_root(state: &AppState, pane_id: &str) -> String {
+pub(crate) fn pane_root(state: &AppState, pane_id: &str) -> String {
     let registry = state.registry.lock();
     registry.get(pane_id).map(|pane| pane.info.cwd.clone()).unwrap_or_else(|| registry.project_path.clone())
 }
@@ -29,11 +29,19 @@ pub async fn files_read(state: State<'_, AppState>, pane_id: String, path: Strin
     blocking(move || files::read_file(&root, &path)).await
 }
 
-/// One file of the project as raw bytes for the Word, Excel and PDF viewers (15 MB at most).
+/// One file of the project as raw bytes for the Word, Excel and PDF viewers (15 MB at most; bigger files stream, see `files_open_bytes`).
 #[tauri::command]
 pub async fn files_read_bytes(state: State<'_, AppState>, pane_id: String, path: String) -> Result<FileBytes, String> {
     let root = pane_root(&state, &pane_id);
     blocking(move || files::read_bytes(&root, &path)).await
+}
+
+/// What a Word, Excel or PDF file is, before its bytes stream to the viewer through the `pmfile` protocol (see
+/// `files_stream.rs`): its size, and `too_large` when it is over 500 MB.
+#[tauri::command]
+pub async fn files_open_bytes(state: State<'_, AppState>, pane_id: String, path: String) -> Result<files::FileStreamInfo, String> {
+    let root = pane_root(&state, &pane_id);
+    blocking(move || files::open_info(&root, &path)).await
 }
 
 /// Opens a document of the project in the program the system chose for it (Word, Excel, a PDF reader).
@@ -62,4 +70,19 @@ pub async fn files_reveal(state: State<'_, AppState>, pane_id: String, path: Str
 pub async fn files_diff(state: State<'_, AppState>, pane_id: String, path: String) -> Result<String, String> {
     let root = pane_root(&state, &pane_id);
     blocking(move || files::diff(&root, &path)).await
+}
+
+/// Saves the editor's text over a file of the project. `base_version` is the version the editor opened; when the file
+/// changed on disk since, the error starts with `FILES_CONFLICT` unless `overwrite` is true.
+#[tauri::command]
+pub async fn files_write(
+    state: State<'_, AppState>,
+    pane_id: String,
+    path: String,
+    text: String,
+    base_version: Option<String>,
+    overwrite: Option<bool>,
+) -> Result<files::FileSaved, String> {
+    let root = pane_root(&state, &pane_id);
+    blocking(move || files::write_file(&root, &path, &text, base_version.as_deref(), overwrite.unwrap_or(false))).await
 }

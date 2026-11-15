@@ -31,6 +31,7 @@ import {
 } from './fixtures';
 import { TEAM_DIFF, teamConfig } from './team-fixtures';
 import { borrowedOf, createLendMock } from './lend-fixtures';
+import { createDevicesMock } from './devices-fixtures';
 import { shipMock } from './ship-fixtures';
 import { sidebarBranch, sidebarWorktree } from './fixtures-sidebar';
 import { simpleMock } from './simple-fixtures';
@@ -40,6 +41,7 @@ import { keepGoingMock } from './keep-going-fixtures';
 import { branchMock } from './branch-fixtures';
 import { FAKE_UNINSTALL_PLAN, runFakeUninstall } from './uninstall-fixtures';
 import { nightMock } from './night-fixtures';
+import { routinesMock } from './routines-fixtures';
 import { packageCheckMock } from './package-check-fixtures';
 import { reviewDeskMock } from './review-desk-fixtures';
 import { wslMock } from './wsl-fixtures';
@@ -66,13 +68,14 @@ const NOTIFY_PREFS = { bells: {} as Record<string, string>, quiet: { enabled: fa
 
 export function installTauriMock(scenario: HarnessScenario): void {
   const lendMock = createLendMock(scenario.lend);
+  const devicesMock = createDevicesMock(scenario.devices);
   const closedState: { chats: ClosedChat[] | null } = { chats: null };
   const bringState = newBringChatsState();
   const panes = scenario.panes ?? EXAMPLE_PANES;
   // In-memory plugin-store (one store, rid 1), keyed as the app writes it.
   // The two agent-authority switches, at the shipped defaults unless the scenario says otherwise.
   let authority = scenario.authority ?? { ask_before_agent_control: true, agents_may_merge: false };
-  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}), show_terminals: !scenario.chatFirst }]]);
+  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}), ...(scenario.devices && scenario.devices.enabled !== false ? { devices_enabled: true } : {}), show_terminals: !scenario.chatFirst }]]);
   // Settings > Phone > Devices: one phone with full control in daily use, one watch-and-answer.
   const now = Math.floor(Date.now() / 1000);
   const day = 24 * 60 * 60;
@@ -111,12 +114,16 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (collision.handled) return collision.value;
       const night = nightMock(scenario.night, cmd, a);
       if (night.handled) return night.value;
+      const routines = routinesMock(scenario.routines, cmd);
+      if (routines.handled) return routines.value;
       const packageCheck = packageCheckMock(scenario.packageCheck, cmd, a);
       if (packageCheck.handled) return packageCheck.value;
       const reviewDesk = reviewDeskMock(scenario.reviewDesk, cmd, a);
       if (reviewDesk.handled) return reviewDesk.value;
       const lend = lendMock(cmd, a);
       if (lend.handled) return lend.value;
+      const devices = devicesMock(cmd, a);
+      if (devices.handled) return devices.value;
       const closed = closedChatsMock(scenario.closedChats, closedState, cmd, a);
       if (closed.handled) return closed.value;
       const bringChats = bringChatsMock(scenario.bringChats, bringState, cmd, a);
@@ -369,6 +376,9 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { available: false, reason: 'No session file in the preview.', items: [], source: null, waitingFor: null };
         case 'session_chat_close':
           return null;
+        // A picture the agent named (chat-more-preview): a small bar chart drawn as a data URL.
+        case 'chat_picture':
+          return { name: 'sales.png', mime: 'image/svg+xml', size: 900, dataUrl: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="420" height="220" viewBox="0 0 420 220"><rect width="420" height="220" fill="#f4f1ea"/><g fill="#d9772a"><rect x="40" y="110" width="50" height="90"/><rect x="120" y="80" width="50" height="120"/><rect x="200" y="30" width="50" height="170"/><rect x="280" y="90" width="50" height="110"/></g><g fill="#444" font-family="sans-serif" font-size="12"><text x="52" y="214">W1</text><text x="132" y="214">W2</text><text x="212" y="214">W3</text><text x="292" y="214">W4</text></g></svg>') };
         case 'acp_conversation_of_terminal':
           return null;
         // The model pickers: Claude starts a pane on a model; every other agent lists none in the preview.
@@ -429,6 +439,15 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { accepted: true, question: (scenario.questions ?? []).find((q) => q.id === a.id) };
         case 'get_tunnel_status':
         case 'set_tunnel_config': {
+          if (scenario.tunnel === 'quick') {
+            return {
+              mode: 'quick',
+              public_url: 'https://quiet-lake-1234.trycloudflare.com',
+              state: 'running',
+              error: null,
+              config: { mode: 'quick', hostname: null, url: null, has_token: false },
+            };
+          }
           if (scenario.tunnel) {
             const failed = scenario.tunnel === 'stable-failed';
             const worker = 'https://potato-stable-link.example.workers.dev';
@@ -482,13 +501,21 @@ export function installTauriMock(scenario: HarnessScenario): void {
           if (device) device.caps = (a.caps as string[]) ?? [];
           return Boolean(device);
         }
+        case 'rename_paired_mobile_device': {
+          const device = pairedDevices.find((d) => d.id === a.deviceId);
+          if (device && String(a.name ?? '').trim()) device.name = String(a.name).trim();
+          return Boolean(device);
+        }
         case 'revoke_paired_mobile_device': {
           const before = pairedDevices.length;
           pairedDevices = pairedDevices.filter((d) => d.id !== a.deviceId);
           return pairedDevices.length !== before;
         }
         case 'get_mobile_tunnel_info':
-          return { localUrl: 'http://127.0.0.1:1420', pwaUrl: 'http://127.0.0.1:1420', tunnelUrl: 'https://pm.example.com', bridgeProxyUrl: 'https://pm.example.com/bridge', updatedAt: 0 };
+        {
+          const shown = scenario.tunnel === 'quick' ? 'https://quiet-lake-1234.trycloudflare.com' : scenario.tunnel ? 'https://potato-stable-link.example.workers.dev' : 'https://pm.example.com';
+          return { localUrl: 'http://127.0.0.1:1420', pwaUrl: 'http://127.0.0.1:1420', tunnelUrl: shown, bridgeProxyUrl: `${shown}/bridge`, updatedAt: 0 };
+        }
         case 'pane_set_title':
           return String(a.title ?? '') || null;
         case 'agent_pack_preview':

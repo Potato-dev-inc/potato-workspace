@@ -20,6 +20,7 @@ mod http;
 pub(crate) use http::{spawn_device_gate_listener, spawn_gate_listener};
 #[cfg(feature = "dev-fake-tui")]
 pub(crate) use routes::team_mcp::{handle_request as team_agent_request, LiveTeam};
+mod link;
 mod locks;
 mod observe;
 pub(crate) mod pane_util;
@@ -72,6 +73,9 @@ use crate::mobile_pairing;
 use crate::pty::PaneRegistry;
 pub(crate) use observe::{checkpoint_pane_facts, pane_facts, pane_has_open_run,checkpoint_public_settings, live_app, live_registry};
 pub(crate) use approvals::declined_error as startup_decline_error;
+#[cfg(test)]
+pub(crate) use link::with_node_for_test as link_with_node_for_test;
+pub(crate) use link::{call as link_call, current_node as link_current_node, poll_events as link_poll_events};
 pub(crate) use sse::push_operation_sse;
 use state::{BRIDGE_APP, BRIDGE_REGISTRY};
 

@@ -127,6 +127,7 @@ export const settingsRows = {
   "settings.row.spaces-labs.hint": "Chat with friends in small groups, PC to PC. No server keeps messages.",
   "settings.row.lend-labs.hint": "Lend a sign-in to another PC, or borrow one. Adds a card to Connect.",
   "settings.row.desktop-potato-labs.hint": "A small Potato on your desktop. It sleeps, and waves when an agent needs you.",
+  "settings.row.agent-browser-labs.hint": "Agents open and click pages of your app on this PC. You can take over.",
   "settings.row.telegram.hint": "Answer your agents by Telegram text. Read the warning first.",
   "settings.row.storage.hint": "Tasks, file locks and what happened in each pane are kept per project.",
   "settings.row.settings-file.hint": "Where your settings are saved. Export a copy with keys removed.",

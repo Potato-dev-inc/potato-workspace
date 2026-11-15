@@ -49,6 +49,8 @@ import { readPickedModel, tauriAgentDefaultsApi, presetOnly, tauriModelOptionsAp
 import { isStartBlock } from './start';
 import '../../../styles/cockpit-newagent.css';
 import { Starters } from './Starters';
+import { PinnedLine, usePinnedRules } from './PinnedLine';
+import { tauriAgentRulesApi, type AgentRulesApi } from '../../../lib/agentRules';
 
 const REMEMBER_KEY = 'pm.newagent.agent';
 const REMEMBER_RUN_KEY = 'pm.newagent.runAs';
@@ -138,6 +140,8 @@ export interface NewAgentPageProps {
   modelApi?: ModelOptionsApi;
   /** The Default model saved per agent in Settings; the picker starts on it when there is no last pick. */
   defaultsApi?: AgentDefaultsApi;
+  /** The pins (Settings > Agents > Rules for agents): shown under the box, and a pinned model starts the agent. */
+  rulesApi?: Pick<AgentRulesApi, 'effective'>;
   /** Opens the agent's own terminal pane in `folder`, where the person signs in. Absent: the card only explains. */
   onSignIn?: (agentId: string, folder?: string) => Promise<unknown> | void;
   /** Hand the request to whoever starts agents. May resolve later; the page is busy until then. */
@@ -151,7 +155,7 @@ export interface NewAgentPageProps {
 
 type Menu = 'plus' | 'folder' | 'agent' | null;
 
-export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, onSignIn, onStart, onOpenPane, onSetUp, continueYesterday }: NewAgentPageProps) {
+export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, rulesApi = tauriAgentRulesApi, onSignIn, onStart, onOpenPane, onSetUp, continueYesterday }: NewAgentPageProps) {
   const t = useT();
   const [prompt, setPrompt] = useState('');
   const [exampleIdx, setExampleIdx] = useState(0);
@@ -307,7 +311,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const modelList: typeof liveList = runAs === 'terminal' && liveList.status === 'ready' ? { status: 'ready', options: presetOnly(liveList.options) } : liveList;
   const modelSlot = choice ? `${choice.agentId}|${choice.accountId ?? ''}` : '';
   const [modelPick, setModelPick] = useState<{ slot: string; value: string } | null>(null);
-  const storedModel = choice ? readPickedModel(choice.agentId, choice.accountId) : '';
+  // What was pinned for this agent in this project: a pinned model starts it unless the person picks another here.
+  const pins = usePinnedRules(choice?.agentId ?? null, folder?.path ?? null, rulesApi);
+  const storedModel = pins?.model || (choice ? readPickedModel(choice.agentId, choice.accountId) : '');
   const agentDefaults = useAgentDefaults(defaultsApi);
   const model = modelPick?.slot === modelSlot ? modelPick.value : startingModel(storedModel, choice ? (agentDefaults[choice.agentId.toLowerCase()] ?? '') : '', modelList.status === 'ready' ? modelList.options : null);
   // A chat sets its model once it starts, so it always can. A terminal pane needs the agent's own launch flag.
@@ -633,6 +639,8 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               </button>
             </div>
           </div>
+
+          <PinnedLine pins={pins} />
 
           {signInCard && choice ? (
             <div className="ck-na-card">

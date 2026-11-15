@@ -1,0 +1,106 @@
+// Settings > Devices: the paired devices, Add a device, Show a code, the route setting. Everything draws nothing
+// while the Labs switch is off. The words are plain: "device" and "Where", never "runtime".
+import { useState } from 'react';
+import { useT } from '../../i18n';
+import { chipText, devicesApi, stateSentence, stateWord, type DevicesApi } from '../../lib/devices';
+import { AddDeviceSheet } from './AddDeviceSheet';
+import { DevicePage } from './DevicePage';
+import { PairedDevices } from '../settings/blocks/PairedDevices';
+import { PairConfirm } from './PairConfirm';
+import { RouteSetting } from './RouteSetting';
+import { ShowCodeSheet } from './ShowCodeSheet';
+import { useDevices } from './useDevices';
+import '../../styles/devices.css';
+
+export function DevicesPage({ api = devicesApi, onSaved, onOpenPhone }: { api?: DevicesApi; onSaved?: () => void; /** "Pair a phone": opens the phone pairing row in Settings. */ onOpenPhone?: () => void }) {
+  const t = useT();
+  const { view, enabled, refresh } = useDevices(api);
+  const [sheet, setSheet] = useState<'add' | 'show' | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  if (!enabled || !view) return null;
+  const device = selected ? view.devices.find((d) => d.node === selected) : undefined;
+  const saved = (v: unknown) => {
+    onSaved?.();
+    refresh();
+    return v;
+  };
+  const deviceApi: DevicesApi = {
+    ...api,
+    setPermission: (...args) => api.setPermission(...args).then(saved) as ReturnType<DevicesApi['setPermission']>,
+    rename: (...args) => api.rename(...args).then(saved) as ReturnType<DevicesApi['rename']>,
+    remove: (node) => api.remove(node).then(saved) as ReturnType<DevicesApi['remove']>,
+    setWeb: (...args) => api.setWeb(...args).then(saved) as ReturnType<DevicesApi['setWeb']>,
+    setDeviceRoute: (...args) => api.setDeviceRoute(...args).then(saved) as ReturnType<DevicesApi['setDeviceRoute']>,
+  };
+  return (
+    <section className="dev-page" data-testid="devices-page" aria-label={t('devices.title')}>
+      {view.pending && <PairConfirm pending={view.pending} api={api} />}
+      {device ? (
+        <DevicePage device={device} api={deviceApi} onBack={() => setSelected(null)} onRetry={refresh} />
+      ) : (
+        <>
+          <p className="dev-note">{t('devices.blurb')}</p>
+          {view.tampered && (
+            <p className="dev-error" role="alert">
+              {t('devices.tampered')}
+            </p>
+          )}
+          {view.message && (
+            <p className="dev-note" data-testid="devices-message">
+              {view.message}
+            </p>
+          )}
+          <div className="dev-row">
+            <button type="button" className="dev-btn is-primary" onClick={() => setSheet('add')} data-testid="add-device">
+              {t('devices.add')}
+            </button>
+            <button type="button" className="dev-btn" onClick={() => setSheet('show')} data-testid="show-code">
+              {t('devices.showCode')}
+            </button>
+          </div>
+          <h4>{t('devices.list')}</h4>
+          {view.devices.length === 0 ? (
+            <p className="dev-note" data-testid="devices-empty">
+              {t('devices.empty')}
+            </p>
+          ) : (
+            <ul className="dev-list">
+              {view.devices.map((d) => {
+                const word = stateWord(d);
+                const chip = chipText(d);
+                return (
+                  <li key={d.node}>
+                    <button type="button" className="dev-item" onClick={() => setSelected(d.node)} data-testid={`device-${d.node}`}>
+                      <span className={`dev-dot${d.state === 'online' ? ' is-up' : ''}`} aria-hidden="true" />
+                      <span className="dev-grow">
+                        <b>{d.name}</b>
+                        <small>{stateSentence(d)}</small>
+                      </span>
+                      {chip && <span className="dev-chip">{chip}</span>}
+                      {word && <span className="dev-word">{word}</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <RouteSetting value={view.route_pref} ownReady={view.own_route_ready} onChange={(pref) => void api.setRoute(pref).then(saved)} />
+          <h4>{t('devices.phones')}</h4>
+          <p className="dev-note">{t('devices.phonesBlurb')}</p>
+          <div data-testid="phones-section">
+            <PairedDevices />
+          </div>
+          {onOpenPhone && (
+            <div className="dev-row">
+              <button type="button" className="dev-btn" onClick={onOpenPhone} data-testid="pair-phone">
+                {t('devices.pairPhone')}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+      {sheet === 'add' && <AddDeviceSheet view={view} api={api} onClose={() => setSheet(null)} onPaired={refresh} />}
+      {sheet === 'show' && <ShowCodeSheet view={view} api={api} onClose={() => setSheet(null)} />}
+    </section>
+  );
+}

@@ -229,7 +229,7 @@
 }
 
 /* ---- the line an answered question leaves ---- */
-.cockpit .ck-trace {
+:is(.cockpit, .ph) .ck-trace {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -238,10 +238,10 @@
   color: var(--label-2);
   font-size: 12px;
 }
-.cockpit .ck-trace + .ck-trace {
+:is(.cockpit, .ph) .ck-trace + .ck-trace {
   margin-top: -6px;
 }
-.cockpit .ck-trace-i {
+:is(.cockpit, .ph) .ck-trace-i {
   flex: none;
   width: 14px;
   height: 14px;
@@ -252,23 +252,23 @@
   stroke-linejoin: round;
   color: var(--label-3);
 }
-.cockpit .ck-trace[data-tone="deny"] .ck-trace-i {
+:is(.cockpit, .ph) .ck-trace[data-tone="deny"] .ck-trace-i {
   color: var(--label);
 }
-.cockpit .ck-trace[data-tone="wait"] {
+:is(.cockpit, .ph) .ck-trace[data-tone="wait"] {
   color: var(--label-3);
 }
-.cockpit .ck-trace-tx {
+:is(.cockpit, .ph) .ck-trace-tx {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cockpit .ck-trace-tx b {
+:is(.cockpit, .ph) .ck-trace-tx b {
   font-weight: 550;
   color: var(--label);
 }
-.cockpit .ck-trace[data-tone="wait"] .ck-trace-tx b {
+:is(.cockpit, .ph) .ck-trace[data-tone="wait"] .ck-trace-tx b {
   font-weight: 450;
   color: var(--label-2);
 }

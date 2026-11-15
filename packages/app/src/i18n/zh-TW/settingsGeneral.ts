@@ -40,6 +40,8 @@ export const settingsGeneral: Partial<Record<EnglishKey, string>> = {
   'labs.lend-labs.about': '把登入借給另一台電腦，或向別人借用。',
   'labs.desktop-potato-labs.name': '桌面小馬鈴薯',
   'labs.desktop-potato-labs.about': '桌面上的小馬鈴薯，AI 助理需要你時會揮手。',
+  'labs.agent-browser-labs.name': 'AI 助理瀏覽器',
+  'labs.agent-browser-labs.about': '讓 AI 助理開啟並點擊它們正在做的應用程式頁面。',
   'labs.live-updates.name': '即時更新',
   'labs.live-updates.about': 'Claude 和 Codex 會在開始、提問和完成時告訴 App。',
   'labs.opencode-automation.name': '金鑰切換',

@@ -338,15 +338,16 @@ describe('a chat over ACP on the phone', () => {
     expect(h.answerQuestion).toHaveBeenCalledWith('q1', { choice_id: 'allow_once' });
   });
 
-  it('a message sent while the agent works goes through the message route, and Stop cancels the turn', async () => {
+  it('a message sent while the agent works goes through the message route, with no second Stop button', async () => {
     h.acpSession.mockResolvedValue(state({ phase: 'working', status: 'running', turnInFlight: true }));
     await open('c1');
     await flush();
     await setValue(host.querySelector('[data-testid="phone-composer"] textarea') as HTMLTextAreaElement, 'and add tests');
     await click(host.querySelector('[data-testid="phone-composer"] button[type="submit"]'));
     expect(h.sendPaneMessage).toHaveBeenCalledWith('c1', 'and add tests');
-    await click(buttonNamed('Stop'));
-    expect(h.acpCancel).toHaveBeenCalledWith('c1');
+    expect(host.querySelectorAll('[data-testid="acp-phone-strip"] button')).toHaveLength(0);
+    // Stop is the box's own round button (PhoneComposer.test.tsx); the line above the box never grows a second one.
+    expect(buttonNamed('Stop')).toBeUndefined();
   });
 });
 

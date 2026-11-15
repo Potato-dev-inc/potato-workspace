@@ -333,3 +333,42 @@
   white-space: nowrap;
   font-size: 12px;
 }
+
+/* Keep one address: a small guided sheet. The one orange is a thin accent on the chip and the link button. */
+.settings .stable-keep { color: var(--accent); }
+.settings .stable-chip {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 16px;
+}
+.stable-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.stable-sheet {
+  width: 100%;
+  max-width: 520px;
+  max-height: 88vh;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid rgb(var(--pm-border));
+  border-radius: 12px;
+  background: rgb(var(--pm-panel));
+  color: inherit;
+  font-size: 12px;
+}
+.stable-steps { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 12px; }
+.stable-steps p { margin: 2px 0 6px; opacity: 0.75; }
+.stable-cmd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; padding: 4px 8px; border: 1px solid rgb(var(--pm-border)); border-radius: 8px; }
+.stable-status { margin: 0 0 12px; font-size: 12px; }
+.stable-status[data-linked='true'] { border-left: 2px solid var(--accent); padding-left: 8px; }

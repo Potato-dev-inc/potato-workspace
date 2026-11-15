@@ -107,6 +107,12 @@ pub struct PermissionWait {
     pub options: Vec<OptionBrief>,
     /// Unix milliseconds.
     pub since_ms: u64,
+    /// The command the tool call would run and the files it names (`ask_facts`), for the rules in `agent_rules`. Never
+    /// serialised: the question card does not show them and nothing saves them.
+    #[serde(skip)]
+    pub command: Option<String>,
+    #[serde(skip)]
+    pub paths: Vec<String>,
 }
 
 /// A background task the agent reports (`async_task_*`): it can outlive the turn that started it.
@@ -614,6 +620,8 @@ impl SessionState {
                 .map(|o| OptionBrief { id: o.option_id.clone(), name: cut(&o.name, MAX_TEXT_CHARS), kind: o.kind.clone() })
                 .collect(),
             since_ms: now_ms,
+            command: super::ask_facts::command_of(call),
+            paths: super::ask_facts::paths_of(call),
         };
         let w = &mut self.working;
         if w.permission_waits.len() >= MAX_PERMISSION_WAITS {

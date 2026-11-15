@@ -52,6 +52,7 @@ import { DockedCard } from './components/mobile/DockedCard';
 import { helpersAskingFor } from './lib/helper-questions';
 import { CardSheet } from './components/mobile/CardSheet';
 import { usePushIntents } from './hooks/usePushIntents';
+import { usePhoneName } from './hooks/usePhoneName';
 import { usePhoneAbilities } from './hooks/usePhoneAbilities';
 import { inputRefusalNote } from './lib/input-refusal';
 import { InputRefusedNote } from './components/mobile/InputRefusedNote';
@@ -444,6 +445,7 @@ export default function PwaApp() {
   }, [panes, panesLoaded]);
 
   const abilities = usePhoneAbilities(bridge, resyncKey);
+  usePhoneName(bridge);
   /** Read the PC's list now (an answer came back stale), instead of waiting for the next poll. */
   const refreshAttentionNow = useCallback(() => {
     void bridge?.attention?.().then((s) => setAttention((cur) => newerSnapshot(cur, s))).catch(() => {});

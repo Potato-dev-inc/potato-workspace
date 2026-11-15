@@ -644,6 +644,22 @@ export const generalRows: RowDef[] = [
     ),
   },
   {
+    id: 'devices-labs',
+    label: 'Devices',
+    hint: 'Pair another PC and run a chat or a terminal on it. Adds a Devices page to Connect.',
+    keywords: 'devices pair computer pc second runtime remote run chat terminal sidebar labs early',
+    group: 'Labs',
+    labs: { name: 'Devices', about: 'Pair another PC and run a chat or a terminal on it.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.devices-labs.label')}
+        description={t('settings.row.devices-labs.hint')}
+        checked={env.settings.devices_enabled ?? false}
+        onChange={(value) => void env.patch({ devices_enabled: value })}
+      />
+    ),
+  },
+  {
     id: 'desktop-potato-labs',
     label: 'Desktop Potato',
     hint: 'A small Potato on your desktop. It sleeps, and waves when an agent needs you.',
@@ -656,6 +672,22 @@ export const generalRows: RowDef[] = [
         description={t('settings.row.desktop-potato-labs.hint')}
         checked={env.settings.desktop_pet_enabled ?? false}
         onChange={(value) => void env.patch({ desktop_pet_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'agent-browser-labs',
+    label: 'Agent browser',
+    hint: 'Agents open and click pages of your app on this PC. You can take over.',
+    keywords: 'agent browser web page click open localhost preview test app labs early point fix',
+    group: 'Labs',
+    labs: { name: 'Agent browser', about: 'Let agents open and click the pages of the app they build.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.agent-browser-labs.label')}
+        description={t('settings.row.agent-browser-labs.hint')}
+        checked={env.settings.agent_browser_enabled ?? false}
+        onChange={(value) => void env.patch({ agent_browser_enabled: value })}
       />
     ),
   },

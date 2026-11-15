@@ -690,6 +690,14 @@ impl Host for ChatOutboxHost {
     fn steer(&self, pane_id: &str, text: &str) -> Option<Result<(), String>> {
         get(pane_id)?.steer(text)
     }
+    fn note_sender(&self, pane_id: &str, from: Option<&str>) {
+        if let Some(chat) = get(pane_id) {
+            chat.note_sender(from);
+        }
+    }
+    fn refuse_sender(&self, pane_id: &str, from: Option<&str>) -> Option<String> {
+        get(pane_id)?.refuses_sender(from).map(str::to_string)
+    }
 }
 
 fn outbox() -> Outbox {
@@ -1420,4 +1428,72 @@ fn an_agent_that_never_answers_leaves_the_message_marked_no_answer_yet() {
     assert!(outbox.send(&id, "quiet").is_ok());
     // The marked message belongs to the outbox, not to the agent: Stop ends the stuck turn when it can.
     let _ = rig.chat.cancel();
+}
+
+// ---- who sent it, who drives ----------------------------------------------------------------------------------
+
+fn users_from(rig: &Rig) -> Vec<(String, Option<String>)> {
+    rig.items().iter().filter(|i| i["kind"] == "user").map(|i| (i["text"].as_str().unwrap().to_string(), i["from"].as_str().map(str::to_string))).collect()
+}
+
+#[test]
+fn a_message_remembers_the_device_that_sent_it_and_one_from_this_pc_has_no_mark() {
+    let rig = Rig::new("");
+    let outbox = outbox();
+    let from_phone = outbox.send_from(&rig.id(), "stream 1", &[], Some("phone-1")).unwrap();
+    assert_eq!(from_phone.from.as_deref(), Some("phone-1"));
+    assert!(wait_until(30, || rig.items().iter().any(|i| i["kind"] == "turnEnd")), "{:#?}", rig.kinds());
+    let local = outbox.send(&rig.id(), "stream 1").unwrap();
+    assert!(local.from.is_none());
+    assert!(wait_until(30, || rig.items().iter().filter(|i| i["kind"] == "turnEnd").count() == 2), "{:#?}", rig.kinds());
+    assert_eq!(users_from(&rig), [("stream 1".to_string(), Some("phone-1".to_string())), ("stream 1".to_string(), None)]);
+    // Shown again (a reader that asks late) it keeps its mark.
+    assert_eq!(rig.chat.items().iter().filter(|i| matches!(i, ChatItem::User { from: Some(_), .. })).count(), 1);
+}
+
+#[test]
+fn a_phone_that_types_or_sends_is_the_driver_and_take_back_tells_it() {
+    let rig = Rig::new("");
+    assert!(rig.chat.state().get("drive").is_none(), "nobody else drives a quiet chat");
+    rig.chat.device_typing("phone-1").unwrap();
+    let state = rig.chat.state();
+    assert_eq!(state["drive"]["driver"]["id"], "phone-1");
+    assert_eq!(state["drive"]["driver"]["typing"], true);
+    // This PC takes it back: the phone is told, and its messages are refused until it takes over.
+    assert_eq!(rig.chat.take_back().as_deref(), Some("phone-1"));
+    let state = rig.chat.state();
+    assert!(state["drive"]["driver"].is_null());
+    assert_eq!(state["drive"]["took_back"]["by"], "local");
+    assert!(rig.chat.refuses_sender(Some("phone-1")).is_some());
+    assert!(rig.chat.refuses_sender(None).is_none());
+    assert!(rig.chat.device_typing("phone-1").is_err());
+    let outbox = outbox();
+    let refused = outbox.send_from(&rig.id(), "stream 1", &[], Some("phone-1")).unwrap_err();
+    assert_eq!(refused, super::TOOK_BACK_SENTENCE);
+    // This PC may still send, and the phone takes over on purpose.
+    rig.say("stream 1");
+    rig.chat.device_claims("phone-1");
+    assert!(rig.chat.refuses_sender(Some("phone-1")).is_none());
+    assert_eq!(rig.chat.state()["drive"]["driver"]["id"], "phone-1");
+    // This PC sending ends "driver": it drives again.
+    rig.chat.note_sender(None);
+    rig.say("stream 1");
+    assert!(rig.chat.state().get("drive").is_none());
+}
+
+#[test]
+fn the_bridge_routes_for_typing_and_taking_over_name_the_device_and_the_app_changes_nothing() {
+    use crate::acp::chat::api;
+    let rig = Rig::new("");
+    assert_eq!(api::typing(&rig.id(), Some("phone-1")).unwrap().0, 200);
+    assert_eq!(rig.chat.state()["drive"]["driver"]["id"], "phone-1");
+    // The app itself calling the route is not a device: nothing changes.
+    let (code, body) = api::typing(&rig.id(), None).unwrap();
+    assert_eq!((code, body["ignored"].as_bool()), (200, Some(true)));
+    assert_eq!(api::typing("nope", Some("phone-1")).unwrap_err().0, 404);
+    rig.chat.take_back();
+    let (code, body) = api::typing(&rig.id(), Some("phone-1")).unwrap_err();
+    assert_eq!((code, body["code"].as_str()), (409, Some("TOOK_BACK")));
+    assert_eq!(api::claim(&rig.id(), Some("phone-1")).unwrap().0, 200);
+    assert_eq!(api::typing(&rig.id(), Some("phone-1")).unwrap().0, 200);
 }

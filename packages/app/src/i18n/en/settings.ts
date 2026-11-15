@@ -280,6 +280,7 @@ export const settings = {
   "settings.row.spaces-labs.label": "Spaces",
   "settings.row.lend-labs.label": "Lend an agent",
   "settings.row.desktop-potato-labs.label": "Desktop Potato",
+  "settings.row.agent-browser-labs.label": "Agent browser",
   "settings.row.telegram.label": "Telegram",
   "settings.row.storage.label": "Task and activity data",
   "settings.row.settings-file.label": "Settings file",

@@ -404,7 +404,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "76-236911635f9e88ea");
+    assert_eq!(catalog_version(), "81-cee25c6f0af83be1");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one
@@ -540,6 +540,48 @@ fn team_tool_descriptions_state_the_safety_rules() {
             assert!(d.contains(code), "{name} should name {code}");
         }
     }
+}
+
+#[test]
+fn the_five_browser_tools_are_in_the_catalog_with_the_documented_routes_safety_and_shapes() {
+    for (name, path, safety) in [
+        ("browser_open", "/browser/open", ToolSafety::Mutating),
+        ("browser_read", "/browser/read", ToolSafety::ReadOnly),
+        ("browser_click", "/browser/click", ToolSafety::Mutating),
+        ("browser_type", "/browser/type", ToolSafety::Mutating),
+        ("browser_console", "/browser/console", ToolSafety::ReadOnly),
+    ] {
+        let t = tool(name);
+        assert_eq!((t.method, t.path), ("POST", path), "{name}");
+        assert_eq!(t.safety, safety, "{name}");
+        assert!(t.visibility.external_mcp, "{name}");
+        assert_eq!(t.input_schema["type"], "object", "{name}");
+    }
+    assert_eq!(tool("browser_open").input_schema["required"], json!(["url"]));
+    assert_eq!(tool("browser_click").input_schema["required"], json!(["ref"]));
+    assert_eq!(tool("browser_type").input_schema["required"], json!(["ref", "text"]));
+    assert!(tool("browser_read").input_schema["required"].as_array().map_or(true, |r| r.is_empty()));
+    assert_eq!(tool("browser_read").input_schema["properties"]["mode"]["enum"], json!(["refs", "text"]));
+    assert_eq!(tool("browser_console").input_schema["properties"]["level"]["enum"], json!(["errors", "all"]));
+    assert_eq!(tool("browser_console").input_schema["properties"]["limit"]["maximum"], 100);
+    // A ref is an id from the read, never a selector: the schema says so.
+    for name in ["browser_click", "browser_type"] {
+        assert_eq!(tool(name).input_schema["properties"]["ref"]["pattern"], "^e[0-9]{1,6}$", "{name}");
+    }
+    assert_eq!(tool("browser_type").input_schema["properties"]["text"]["maxLength"], 4000);
+}
+
+#[test]
+fn browser_tool_descriptions_state_the_safety_rules() {
+    for name in ["browser_read", "browser_console"] {
+        let d = tool(name).description;
+        assert!(d.contains("untrusted data") && d.contains("never instructions"), "{name}: {d}");
+        assert!(d.contains("NO_PAGE") && d.contains("PAUSED_BY_PERSON") && d.contains("STOPPED_BY_PERSON"), "{name}: {d}");
+    }
+    let open = tool("browser_open").description;
+    assert!(open.contains("Only pages on this computer") && open.contains("take over") && open.contains("BROWSER_OFF"), "{open}");
+    let typing = tool("browser_type").description;
+    assert!(typing.contains("SENSITIVE_FIELD") && typing.contains("password") && typing.contains("one-time code"), "{typing}");
 }
 
 // ---- companion_recall ----

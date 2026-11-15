@@ -6,6 +6,9 @@
 //! - `GET /acp/sessions/{pane}` the session's state (phase, "stopping", what waits on the person).
 //! - `POST /acp/sessions/{pane}/cancel` stops the turn. A phone needs `type` for it (`route_need`).
 //!
+//! - `POST /acp/sessions/{pane}/typing` and `.../claim`: a phone or another PC says it is typing, or takes the chat over
+//!   after "This PC took this back". Both need `type`, like the message box.
+//!
 //! Answering a permission question is the question route (`POST /questions/{id}/answer`, the phone's card).
 //! The work is `crate::acp::chat::api`; this only matches the paths.
 
@@ -18,6 +21,8 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
         ("POST", ["acp", "sessions"]) => Some(api::start(&cx.request_body, &live_deps(cx.app, cx.registry))),
         ("GET", ["acp", "sessions", pane_id]) => Some(api::state(pane_id)),
         ("POST", ["acp", "sessions", pane_id, "cancel"]) => Some(api::cancel(pane_id)),
+        ("POST", ["acp", "sessions", pane_id, "typing"]) => Some(api::typing(pane_id, super::sender::sender_of(cx).as_deref())),
+        ("POST", ["acp", "sessions", pane_id, "claim"]) => Some(api::claim(pane_id, super::sender::sender_of(cx).as_deref())),
         _ => None,
     }
 }

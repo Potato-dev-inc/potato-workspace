@@ -107,6 +107,13 @@ pub trait Host: Send + Sync + 'static {
     fn steer(&self, _pane_id: &str, _text: &str) -> Option<Result<(), String>> {
         None
     }
+    /// Who sends the message that goes in next (`None`: this PC), told right before it is handed over. A chat shows
+    /// it under the message ("from OPPO Reno13"). A terminal has nowhere to show it.
+    fn note_sender(&self, _pane_id: &str, _from: Option<&str>) {}
+    /// A sentence when this sender may not send to the pane now (this PC took the chat back). `None`: go ahead.
+    fn refuse_sender(&self, _pane_id: &str, _from: Option<&str>) -> Option<String> {
+        None
+    }
     /// `steer` with files and pictures.
     fn steer_with(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Option<Result<(), String>> {
         self.steer(pane_id, &text_with_paths(text, attachments))

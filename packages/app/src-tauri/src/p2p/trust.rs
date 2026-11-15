@@ -93,6 +93,15 @@ impl TrustStorage for MemoryTrustStorage {
     }
 }
 
+/// How much a paired computer may do when it runs agents here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteLevel {
+    /// Watch and answer.
+    Watch,
+    /// Full control.
+    Full,
+}
+
 /// One paired computer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TrustedDevice {
@@ -205,6 +214,7 @@ pub struct TrustList {
     entries: Mutex<Vec<TrustedDevice>>,
     tampered: AtomicBool,
     pairing_open: AtomicBool,
+    link_open: AtomicBool,
 }
 
 impl TrustList {
@@ -225,6 +235,7 @@ impl TrustList {
             entries: Mutex::new(entries),
             tampered: AtomicBool::new(tampered),
             pairing_open: AtomicBool::new(false),
+            link_open: AtomicBool::new(false),
         })
     }
 
@@ -266,6 +277,15 @@ impl TrustList {
         self.pairing_open.load(Ordering::SeqCst)
     }
 
+    /// The same, for a pairing link (far away): the link protocol is open to strangers only while a link is shown.
+    pub fn set_link_pairing_open(&self, open: bool) {
+        self.link_open.store(open, Ordering::SeqCst);
+    }
+
+    pub fn link_pairing_open(&self) -> bool {
+        self.link_open.load(Ordering::SeqCst)
+    }
+
     /// Adds (or refreshes the name of) a computer both people confirmed. A new entry has nothing turned on. The
     /// same node with another device key is refused: that is not the computer that was paired.
     pub fn add(&self, node: NodeId, device_pub: [u8; 32], name: &str, now_secs: u64) -> Result<(), TrustError> {
@@ -300,11 +320,42 @@ impl TrustList {
         }
         self.change(|entries| {
             let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            // "Full control" is a level of running agents here: it cannot exist without the switch it belongs to.
+            if on && (capability == capability::AGENTS_REMOTE_FULL || capability == capability::AGENTS_REMOTE_WEB) && !e.allowed.contains(capability::AGENTS_REMOTE) {
+                return Err(TrustError::NotPermissionable);
+            }
             if on {
                 e.allowed.insert(capability.to_string());
             } else {
                 e.allowed.remove(capability);
+                if capability == capability::AGENTS_REMOTE {
+                    e.allowed.remove(capability::AGENTS_REMOTE_FULL);
+                    e.allowed.remove(capability::AGENTS_REMOTE_WEB);
+                }
             }
+            Ok(())
+        })
+    }
+
+    /// What this computer lets `node` do when it runs agents here: `None` while the switch is off.
+    pub fn remote_level(&self, node: &NodeId) -> Option<RemoteLevel> {
+        let e = self.get(node)?;
+        if !e.allowed.contains(capability::AGENTS_REMOTE) {
+            return None;
+        }
+        Some(if e.allowed.contains(capability::AGENTS_REMOTE_FULL) { RemoteLevel::Full } else { RemoteLevel::Watch })
+    }
+
+    /// Whether this computer lets `node` also reach it through its web address (only with the run switch on).
+    pub fn web_allowed(&self, node: &NodeId) -> bool {
+        self.get(node).is_some_and(|e| e.allowed.contains(capability::AGENTS_REMOTE) && e.allowed.contains(capability::AGENTS_REMOTE_WEB))
+    }
+
+    /// Renames a paired computer (the person's own label for it).
+    pub fn rename(&self, node: &NodeId, name: &str) -> Result<(), TrustError> {
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            e.name = clean_name(name);
             Ok(())
         })
     }
@@ -327,6 +378,9 @@ impl Permissions for TrustList {
     fn allowed(&self, peer: &NodeId, capability: &str) -> bool {
         if capability == capability::PAIR {
             return self.pairing_open();
+        }
+        if capability == capability::PAIR_LINK {
+            return self.link_pairing_open();
         }
         self.entries.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|e| e.node == *peer && e.allowed.contains(capability))
     }

@@ -17,7 +17,9 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "model_bridge_enabled",
     "spaces_enabled",
     "lend_enabled",
+    "devices_enabled",
     "desktop_pet_enabled",
+    "agent_browser_enabled",
 ];
 
 /// Tests turn the override on through this; it is off in every test unless a test sets it.
@@ -85,7 +87,9 @@ const PATCHABLE_KEYS: &[&str] = &[
     "handoff_mode",
     "handoff_fixed_notes",
     "lend_enabled",
+    "devices_enabled",
     "desktop_pet_enabled",
+    "agent_browser_enabled",
     "desktop_pet_size",
     "desktop_pet_quiet",
     "desktop_pet_hidden_until_ms",
@@ -137,8 +141,11 @@ pub fn default_public_settings() -> Value {
         "handoff_fixed_notes": "",
         // Share an agent (Labs): lend an agent sign-in to another PC through this one. Off until chosen. Rust: capacity_proxy.
         "lend_enabled": false,
+        "devices_enabled": false,
         // Desktop Potato (Labs): a small pet window on the desktop. Off until chosen. Rust: pet.
         "desktop_pet_enabled": false,
+        // Agent browser (Labs): agents open, read and click pages on this computer, in the Point and Fix preview window. Off until chosen. Rust: browser.
+        "agent_browser_enabled": false,
         "desktop_pet_size": "medium",
         "desktop_pet_quiet": false,
         "desktop_pet_hidden_until_ms": 0,
@@ -204,6 +211,7 @@ fn apply_public_settings(effective: &Value) {
     crate::model_bridge::apply_settings(effective);
     crate::spaces::runtime::apply_settings(effective);
     crate::capacity_proxy::apply_settings(effective);
+    crate::device_link::app::apply_settings(effective);
     crate::keep_awake::apply_settings(effective);
     crate::pet::apply_settings(effective);
 }
@@ -423,6 +431,15 @@ mod spaces_labs_tests {
         assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "desktop_pet_enabled").count(), 1);
         assert!(PATCHABLE_KEYS.contains(&"desktop_pet_enabled"));
         assert_eq!(default_public_settings()["desktop_pet_enabled"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn agent_browser_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "agent_browser_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"agent_browser_enabled"));
+        assert_eq!(default_public_settings()["agent_browser_enabled"], serde_json::json!(false));
+        // The route reads the same key the Labs switch writes.
+        assert_eq!(crate::browser::live::LABS_KEY, "agent_browser_enabled");
     }
 
     #[test]

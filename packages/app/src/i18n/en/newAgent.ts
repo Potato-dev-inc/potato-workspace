@@ -148,6 +148,7 @@ export const newAgent = {
   "newAgent.continueFailed": "{name} can't be reopened.",
   "newAgent.continueFresh": "Start fresh with a short brief",
   "newAgent.continueHide": "Hide",
+  "newAgent.continueUntitled": "Untitled chat",
   "newAgent.freshBrief": "Carry on from the earlier chat \"{title}\" in {folder}. First say where it stopped and what is left, then go on.",
   "chatFirst.need_one": "{count} agent needs a terminal",
   "chatFirst.need_other": "{count} agents need terminals",

@@ -302,6 +302,9 @@ export const tauri = {
     safeInvoke<PairedDeviceInfo[]>('list_paired_mobile_devices', undefined, [], true),
   revokePairedMobileDevice: (deviceId: string) =>
     safeInvoke<boolean>('revoke_paired_mobile_device', { deviceId }, false, true),
+  /** The person's own name for a paired phone (shows under its messages too). Empty text goes back to the phone's own name. */
+  renamePairedMobileDevice: (deviceId: string, name: string) =>
+    safeInvoke<boolean>('rename_paired_mobile_device', { deviceId, name }, false, true),
   setPairedMobileDeviceCaps: (deviceId: string, caps: readonly DeviceCap[]) =>
     safeInvoke<boolean>('set_paired_mobile_device_caps', { deviceId, caps: [...caps] }, false, true),
   /** An agent's Remote control rule (the bridge enforces it for paired phones). */

@@ -71,6 +71,11 @@ pub fn tool_visible_in_mode(name: &str, mode: McpMode) -> bool {
         "team_wait",
         "team_notify",
         "companion_recall",
+        "browser_open",
+        "browser_read",
+        "browser_click",
+        "browser_type",
+        "browser_console",
         "show_artifact",
     ];
     const SHELL_TOOLS: &[&str] = &[

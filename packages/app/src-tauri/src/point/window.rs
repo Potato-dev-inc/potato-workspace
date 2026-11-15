@@ -65,6 +65,8 @@ struct Preview {
     origin: PreviewOrigin,
     /// The name of the picker's hidden property in the page.
     key: String,
+    /// The name of the agent bar's hidden property in the page (the agent browser, `crate::browser`).
+    bar_key: String,
     /// The pane that runs the dev server (the "opener") and its folder.
     opener: String,
     cwd: String,
@@ -204,34 +206,68 @@ fn now_ms() -> u64 {
 
 // ---------------------------------------------------------------- opening
 
+/// How a window comes up: `Focus` is Point and Fix (beside the cockpit, in front). `Beside` is the agent browser (beside
+/// the cockpit, but it does not take the focus from what the person is typing). `Hidden` is never shown at all
+/// (end-to-end runs and lab proofs: nothing appears on any screen).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Show {
+    Focus,
+    Beside,
+    Hidden,
+}
+
 /// Opens the app at `port` of pane `pane_id` in a preview window (or focuses the one for the same
 /// origin). The address comes only from what the pane printed or from its background jobs, and only
 /// loopback addresses on ports that are not Potato Workspace's own are allowed (S1, S4).
 pub fn open(app: &AppHandle, pane_id: &str, port: u16, armed: bool) -> Result<PreviewInfo, String> {
     let pane = pane_infos(app).into_iter().find(|p| p.id == pane_id).ok_or("That pane is not open any more.")?;
     let (url, origin) = resolve(app, &pane, port)?;
-    let title = preview_title(&origin);
-
     // The same origin opens once: focus it (and go to the address if the page left the origin).
-    let existing = PREVIEWS.lock().iter().find(|p| p.origin == origin && !p.gone.load(Ordering::Relaxed)).cloned();
-    if let Some(rec) = existing {
-        if let Some(window) = app.get_webview_window(&rec.id) {
-            if !window.url().map(|u| origin.matches(u.as_str())).unwrap_or(false) {
-                if let Ok(target) = tauri::Url::parse(&url) {
-                    let _ = window.navigate(target);
-                }
-            }
-            focus(&window);
-            if armed {
-                arm(&rec, &window);
-            }
-            return Ok(PreviewInfo { preview_id: rec.id, url, title });
+    if let Some(info) = reuse(app, &origin, &url, armed, Show::Focus, false) {
+        return Ok(info);
+    }
+    create(app, url, origin, pane.id.clone(), pane.cwd.clone(), armed, Show::Focus)
+}
+
+/// The agent browser's window: the preview window of `origin` if there is one (it goes to `url`), else a new one with
+/// no dev server pane behind it. The caller has checked `url` with `browser::guard::check_url`.
+pub fn open_for_browser(app: &AppHandle, url: &str, origin: PreviewOrigin, show: Show) -> Result<PreviewInfo, String> {
+    if let Some(info) = reuse(app, &origin, url, false, show, true) {
+        return Ok(info);
+    }
+    // The page is loaded by the caller (DevTools `Page.navigate`), so the window starts empty.
+    create(app, "about:blank".to_string(), origin, String::new(), String::new(), false, show)
+}
+
+/// The open window of `origin`, brought forward as `show` says. `go` leaves the navigation to the caller.
+fn reuse(app: &AppHandle, origin: &PreviewOrigin, url: &str, armed: bool, show: Show, go: bool) -> Option<PreviewInfo> {
+    let rec = PREVIEWS.lock().iter().find(|p| p.origin == *origin && !p.gone.load(Ordering::Relaxed)).cloned()?;
+    let window = app.get_webview_window(&rec.id)?;
+    // `go`: the agent browser goes there itself (through DevTools, so it knows when the page has loaded).
+    if !go && !window.url().map(|u| origin.matches(u.as_str())).unwrap_or(false) {
+        if let Ok(target) = tauri::Url::parse(url) {
+            let _ = window.navigate(target);
         }
     }
+    match show {
+        Show::Focus => focus(&window),
+        Show::Beside => {
+            let _ = window.show();
+        }
+        Show::Hidden => {}
+    }
+    if armed {
+        arm(&rec, &window);
+    }
+    Some(PreviewInfo { preview_id: rec.id, url: url.to_string(), title: preview_title(origin) })
+}
 
+fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, cwd: String, armed: bool, show: Show) -> Result<PreviewInfo, String> {
+    let title = preview_title(&origin);
     let n = NEXT_PREVIEW.fetch_add(1, Ordering::Relaxed);
     let id = preview_label(n);
     let key = new_key();
+    let bar_key = new_key();
     let parsed = tauri::Url::parse(&url).map_err(|_| origin::Refusal::BadUrl.message().to_string())?;
 
     let nav_app = app.clone();
@@ -243,6 +279,8 @@ pub fn open(app: &AppHandle, pane_id: &str, port: u16, armed: bool) -> Result<Pr
         .title(&title)
         .visible(false)
         .initialization_script(picker_script(&origin, &key))
+        // The agent bar: only drawn while an agent uses the page (`crate::browser::bar`).
+        .initialization_script(crate::browser::bar::script(&bar_key))
         // Its own cookies and storage, apart from Potato Workspace's pages (S13).
         .data_directory(crate::app_paths::app_data_dir().join("preview-web"))
         .on_navigation(move |next| match origin::nav(&nav_origin, next.as_str()) {
@@ -280,8 +318,9 @@ pub fn open(app: &AppHandle, pane_id: &str, port: u16, armed: bool) -> Result<Pr
         n,
         origin,
         key,
-        opener: pane.id.clone(),
-        cwd: pane.cwd.clone(),
+        bar_key,
+        opener,
+        cwd,
         armed_until: Arc::new(AtomicU64::new(0)),
         gone: Arc::new(AtomicBool::new(false)),
         warned: Arc::new(AtomicBool::new(false)),
@@ -298,8 +337,17 @@ pub fn open(app: &AppHandle, pane_id: &str, port: u16, armed: bool) -> Result<Pr
             PREVIEWS.lock().retain(|p| p.id != closed_id);
         }
     });
-    place(app, &window, slot);
-    focus(&window);
+    match show {
+        Show::Focus => {
+            place(app, &window, slot);
+            focus(&window);
+        }
+        Show::Beside => {
+            place(app, &window, slot);
+            let _ = window.show();
+        }
+        Show::Hidden => {}
+    }
     if armed {
         arm(&rec, &window);
     }
@@ -307,6 +355,28 @@ pub fn open(app: &AppHandle, pane_id: &str, port: u16, armed: bool) -> Result<Pr
     let pull_rec = rec.clone();
     std::thread::spawn(move || pull_loop(pull_app, pull_rec));
     Ok(PreviewInfo { preview_id: id, url, title })
+}
+
+/// Arms Point in an open preview window (the "Point" button on the agent bar). False when the window is gone.
+pub fn arm_preview(app: &AppHandle, preview_id: &str) -> bool {
+    let Some(rec) = PREVIEWS.lock().iter().find(|p| p.id == preview_id && !p.gone.load(Ordering::Relaxed)).cloned() else { return false };
+    let Some(window) = app.get_webview_window(&rec.id) else { return false };
+    arm(&rec, &window);
+    true
+}
+
+/// What the agent browser needs to know about an open preview window.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrowserWindow {
+    pub preview_id: String,
+    pub bar_key: String,
+}
+
+/// The open preview window of `preview_id`, if it is still there.
+pub fn browser_window(app: &AppHandle, preview_id: &str) -> Option<(BrowserWindow, WebviewWindow)> {
+    let rec = PREVIEWS.lock().iter().find(|p| p.id == preview_id && !p.gone.load(Ordering::Relaxed)).cloned()?;
+    let window = app.get_webview_window(&rec.id)?;
+    Some((BrowserWindow { preview_id: rec.id, bar_key: rec.bar_key }, window))
 }
 
 /// The URL to open for `port` of this pane, and its checked origin.
@@ -449,7 +519,7 @@ fn take(window: &WebviewWindow, key: &str) -> Option<String> {
 
 /// Runs a script that answers a JSON string and returns that text. None when it answers null, anything else, or
 /// nothing in time (`parse_take` rules).
-pub(super) fn ask_text(window: &WebviewWindow, script: String) -> Option<String> {
+pub(crate) fn ask_text(window: &WebviewWindow, script: String) -> Option<String> {
     let (tx, rx) = mpsc::channel();
     window
         .eval_with_callback(script, move |answer| {

@@ -46,3 +46,22 @@ pub fn cancel(pane_id: &str) -> ApiResult {
         Err(error) => Err((502, json!({ "code": "ACP_CANCEL_FAILED", "error": error.to_string() }))),
     }
 }
+
+/// `POST /acp/sessions/{pane}/typing`: a device (a phone, another PC) says it is typing in this chat, so this PC can
+/// show "<name> is typing..." with Take back. `from` is the device's identity id; `None` (the app itself) changes nothing.
+pub fn typing(pane_id: &str, from: Option<&str>) -> ApiResult {
+    let session = get(pane_id).ok_or_else(|| not_a_chat(pane_id))?;
+    let Some(from) = from else { return Ok((200, json!({ "pane_id": pane_id, "ignored": true }))) };
+    match session.device_typing(from) {
+        Ok(()) => Ok((200, json!({ "pane_id": pane_id }))),
+        Err(sentence) => Err((409, json!({ "code": super::drive::TOOK_BACK_CODE, "error": sentence }))),
+    }
+}
+
+/// `POST /acp/sessions/{pane}/claim`: a device that was locked out ("This PC took this back") takes the chat over again.
+pub fn claim(pane_id: &str, from: Option<&str>) -> ApiResult {
+    let session = get(pane_id).ok_or_else(|| not_a_chat(pane_id))?;
+    let Some(from) = from else { return Ok((200, json!({ "pane_id": pane_id, "ignored": true }))) };
+    session.device_claims(from);
+    Ok((200, json!({ "pane_id": pane_id })))
+}

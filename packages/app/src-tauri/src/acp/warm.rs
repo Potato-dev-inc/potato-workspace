@@ -120,8 +120,19 @@ struct Slot<T> {
     last_use: Option<i64>,
 }
 
+/// A key someone asked to warm for a short while (the phone opened its New chat screen): it starts whatever the standby
+/// settings say, and is closed again when nobody used it before `until`.
+struct Hint {
+    folder: PathBuf,
+    until: i64,
+}
+
+/// Most hinted keys at once: a person on a phone picks one agent in one folder; the hints never grow into a pool.
+const MAX_HINTS: usize = 2;
+
 struct Inner<T> {
     slots: BTreeMap<WarmKey, Slot<T>>,
+    hints: BTreeMap<WarmKey, Hint>,
     policy: Policy,
     generation: u64,
     shut: bool,
@@ -141,16 +152,42 @@ pub struct Pool<H: WarmHost> {
 
 impl<H: WarmHost> Pool<H> {
     pub fn new(host: Arc<H>) -> Arc<Self> {
-        Arc::new(Self { host, inner: Mutex::new(Inner { slots: BTreeMap::new(), policy: Policy::default(), generation: 0, shut: false }) })
+        Arc::new(Self { host, inner: Mutex::new(Inner { slots: BTreeMap::new(), hints: BTreeMap::new(), policy: Policy::default(), generation: 0, shut: false }) })
     }
 
     pub fn set_policy(&self, policy: Policy) {
         self.inner.lock().policy = policy;
     }
 
-    /// The keys to have a session for now: the wanted ones, and the ones used lately for an agent that may be reused.
+    /// Asks for a session for `key` for the next `ttl_ms`, whatever the standby settings say. It is started by the next
+    /// `tick` and used by the start that claims it; if nobody does, it is closed when the time is up.
+    pub fn hint(&self, key: &WarmKey, folder: &Path, now: i64, ttl_ms: i64) {
+        let mut guard = self.inner.lock();
+        if guard.shut {
+            return;
+        }
+        guard.hints.retain(|_, hint| hint.until > now);
+        guard.hints.insert(key.clone(), Hint { folder: folder.to_path_buf(), until: now + ttl_ms });
+        while guard.hints.len() > MAX_HINTS {
+            // The one that runs out first goes.
+            let Some(oldest) = guard.hints.iter().min_by_key(|(_, hint)| hint.until).map(|(key, _)| key.clone()) else { break };
+            guard.hints.remove(&oldest);
+        }
+        if let Some(slot) = guard.slots.get_mut(key) {
+            slot.cold = false;
+        }
+    }
+
+    /// A start for `key` is in progress (a claim may wait for it).
+    pub fn is_starting(&self, key: &WarmKey) -> bool {
+        self.inner.lock().slots.get(key).is_some_and(|slot| matches!(slot.state, State::Starting { .. }))
+    }
+
+    /// The keys to have a session for now: the wanted ones, the hinted ones, and the ones used lately for an agent that
+    /// may be reused.
     fn effective(inner: &Inner<H::Item>, now: i64) -> BTreeSet<WarmKey> {
         let mut keys: BTreeSet<WarmKey> = inner.policy.wanted.iter().map(|w| w.key.clone()).collect();
+        keys.extend(inner.hints.iter().filter(|(_, hint)| hint.until > now).map(|(key, _)| key.clone()));
         for (key, slot) in &inner.slots {
             let used_lately = slot.last_use.is_some_and(|at| now - at < inner.policy.recent_ms);
             if used_lately && inner.policy.reusable_agents.contains(&key.agent) {
@@ -178,6 +215,11 @@ impl<H: WarmHost> Pool<H> {
         for want in &wanted {
             inner.slots.entry(want.key.clone()).or_insert_with(|| Slot { folder: want.folder.clone(), state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None });
         }
+        inner.hints.retain(|_, hint| hint.until > now);
+        let hinted: Vec<(WarmKey, PathBuf)> = inner.hints.iter().map(|(key, hint)| (key.clone(), hint.folder.clone())).collect();
+        for (key, folder) in &hinted {
+            inner.slots.entry(key.clone()).or_insert_with(|| Slot { folder: folder.clone(), state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None });
+        }
         let effective = Self::effective(inner, now);
         let idle_ms = inner.policy.idle_ms;
         for (key, slot) in inner.slots.iter_mut() {
@@ -204,8 +246,10 @@ impl<H: WarmHost> Pool<H> {
         let mut taken = Self::taken(inner);
         let mut generation = inner.generation;
         for key in &effective {
-            if taken >= cap {
-                break;
+            // A hinted key has somebody waiting for it: the cap (a standby setting, zero when it is off) does not hold it back.
+            let hinted_key = hinted.iter().any(|(k, _)| k == key);
+            if taken >= cap && !hinted_key {
+                continue;
             }
             let Some(slot) = inner.slots.get_mut(key) else { continue };
             if matches!(slot.state, State::Empty) && !slot.cold && now >= slot.backoff_until {
@@ -279,6 +323,8 @@ impl<H: WarmHost> Pool<H> {
             match std::mem::replace(&mut slot.state, State::Empty) {
                 State::Ready { item, .. } => {
                     if self.host.alive(&item) {
+                        // The hint did its job: no second session is kept ready for it.
+                        inner.hints.remove(key);
                         Some(item)
                     } else {
                         slot.fails += 1;
@@ -333,6 +379,20 @@ impl<H: WarmHost> Pool<H> {
         let hit = self.claim_without_refill(key, folder, now);
         self.tick(now);
         hit
+    }
+
+    /// `claim`, but a session that is still starting for `key` is waited for (at most `wait`): it is already part of the
+    /// way, so waiting is never slower than starting another. A start that failed ends the wait at once.
+    pub fn claim_waiting(self: &Arc<Self>, key: &WarmKey, folder: &Path, wait: Duration) -> Option<H::Item> {
+        let deadline = std::time::Instant::now() + wait;
+        loop {
+            let hit = self.claim_without_refill(key, folder, crate::event_log::now_ms());
+            if hit.is_some() || !self.is_starting(key) || std::time::Instant::now() >= deadline {
+                self.tick(crate::event_log::now_ms());
+                return hit;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
     }
 
     fn spawn(self: &Arc<Self>, jobs: Vec<Job>) {
@@ -494,6 +554,35 @@ pub fn claim(cfg: &AgentConfig, folder: &Path, account: Option<&str>) -> Option<
         return None;
     }
     Some(warm)
+}
+
+/// `claim` for a start that may wait for a session still starting (see `Pool::claim_waiting`).
+pub fn claim_waiting(cfg: &AgentConfig, folder: &Path, account: Option<&str>, wait: Duration) -> Option<WarmChat> {
+    let pool = pool()?;
+    let key = WarmKey::new(&cfg.id, &folder.to_string_lossy(), account);
+    let warm = pool.claim_waiting(&key, folder, wait)?;
+    if warm.config != config_fingerprint(cfg) || warm.account.as_deref() != account.map(str::trim).filter(|a| !a.is_empty()) {
+        pool.host.close(warm);
+        return None;
+    }
+    Some(warm)
+}
+
+/// How long a hint keeps a session for a chat that has not been started yet.
+const HINT_TTL_MS: i64 = 5 * 60_000;
+
+/// The person is about to start a chat with `agent` in `folder` (the phone's New chat screen): starts its session now,
+/// whatever the "Keep agents ready" setting says. False when that agent would not run as a chat, or there is no pool.
+pub fn hint(agent: &str, folder: &Path, account: Option<&str>) -> bool {
+    let Some(pool) = pool() else { return false };
+    if !LiveProbe.runs_as_chat(agent) {
+        return false;
+    }
+    let key = WarmKey::new(agent, &folder.to_string_lossy(), account);
+    let now = crate::event_log::now_ms();
+    pool.hint(&key, folder, now, HINT_TTL_MS);
+    pool.tick(now);
+    true
 }
 
 /// The pool does not start spawning until the app has had this long to come up (the standby pool waits the same).

@@ -17,8 +17,9 @@ fn catalog_version_moved_when_the_listed_surface_was_introduced() {
     let version = catalog_version();
     assert_ne!(version, CATALOG_VERSION_BEFORE_SURFACE);
     // 68 tools before the Team tools were added (team_roster, team_events, team_wait, team_notify): 72, then 73 with companion_recall.
-    assert!(version.starts_with("76-"), "{version}");
-    assert_eq!(external_mcp_tool_count(), 76);
+    // The five agent browser tools (browser_open, browser_read, browser_click, browser_type, browser_console) are the 77th to 81st (show_artifact is the 76th).
+    assert!(version.starts_with("81-"), "{version}");
+    assert_eq!(external_mcp_tool_count(), 81);
 }
 
 #[test]
@@ -125,7 +126,7 @@ fn listed_tool_count_per_mode_is_pinned() {
     assert_eq!(names_for(McpMode::Shell).len(), 16, "{:?}", names_for(McpMode::Shell));
     assert_eq!(names_for(McpMode::Both).len(), 12, "{:?}", names_for(McpMode::Both));
     // The full list behind mode `all`: every tool except the six aliases.
-    assert_eq!(names_for(McpMode::All).len(), 76 - ALIASES.len());
+    assert_eq!(names_for(McpMode::All).len(), 81 - ALIASES.len());
     assert_eq!(names_for(McpMode::All).len() + ALIASES.len(), external_mcp_tool_count());
 }
 
@@ -189,11 +190,11 @@ fn unlisted_advanced_tools_are_still_callable_where_they_were() {
 fn nothing_became_callable_or_uncallable_in_agent_and_shell_modes() {
     // The callable sets of agent and shell are the pre-change lists (33 and 18 names, with
     // set_mode counted in agent mode only through its always-visible rule), plus the four Team
-    // tools in agent mode only. companion_recall (agent, both, all) is the 73rd; run_agents and review_agent are the 74th and 75th; show_artifact (agent, both, all) is the 76th.
-    assert_eq!(callable_tools_for_mode(McpMode::Agent).len(), 41);
+    // tools in agent mode only. companion_recall (agent, both, all) is the 73rd; run_agents and review_agent are the 74th and 75th; show_artifact (agent, both, all) is the 76th; the five browser tools (agent, both, all) are the 77th to 81st.
+    assert_eq!(callable_tools_for_mode(McpMode::Agent).len(), 46);
     assert_eq!(callable_tools_for_mode(McpMode::Shell).len(), 19);
-    assert_eq!(callable_tools_for_mode(McpMode::Both).len(), 76);
-    assert_eq!(callable_tools_for_mode(McpMode::All).len(), 76);
+    assert_eq!(callable_tools_for_mode(McpMode::Both).len(), 81);
+    assert_eq!(callable_tools_for_mode(McpMode::All).len(), 81);
 }
 
 #[test]
@@ -241,12 +242,30 @@ fn instructions_lead_with_the_five_tool_happy_path_in_order() {
     assert!(text.starts_with("For a subagent or delegated task beyond a one-shot lookup, use run_agent"));
     assert!(text.contains("
 Potato Workspace MCP"));
-    assert!(text.len() < 3200, "instructions go out every session: {}", text.len());
+    // 3200 before the agent browser tools were named here (about 115 characters).
+    assert!(text.len() < 3300, "instructions go out every session: {}", text.len());
     assert!(text.contains("Five tools"));
     assert!(text.contains("SCHEMA_DRIFT"));
     assert!(text.contains("Rebuild or reinstall the Potato Workspace MCP"));
     for (alias, _) in ALIASES {
         assert!(text.contains(alias), "instructions should name the hidden alias {alias}");
+    }
+}
+
+#[test]
+fn the_browser_tools_are_callable_by_name_in_agent_mode_but_not_listed_by_default() {
+    let names = ["browser_open", "browser_read", "browser_click", "browser_type", "browser_console"];
+    for name in names {
+        assert_eq!(tool_tier(name), ToolTier::Advanced, "{name}");
+        assert!(tool_visible_in_mode(name, McpMode::Agent), "{name} agent");
+        assert!(tool_visible_in_mode(name, McpMode::Both), "{name} both");
+        assert!(tool_visible_in_mode(name, McpMode::All), "{name} all");
+        assert!(!tool_visible_in_mode(name, McpMode::Shell), "{name} shell: a terminal-control session does not drive a browser");
+        assert!(!names_for(McpMode::Agent).contains(&name), "{name} listed in agent mode");
+        assert!(!names_for(McpMode::Both).contains(&name), "{name} listed in both");
+        assert!(names_for(McpMode::All).contains(&name), "{name} missing from all");
+        // The instructions name them, so an agent can find them without a long tool list.
+        assert!(mcp_instructions().contains(name), "{name}");
     }
 }
 

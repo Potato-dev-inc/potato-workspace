@@ -762,6 +762,15 @@ pub fn merge_keep(reference: &WorktreeRef) -> Result<MergeOutcome, OperationErro
             into,
         });
     }
+    // A copy that changed a fenced file (`agent_rules`) is not kept: the person fences, an agent in a copy cannot get past it.
+    let fences = crate::agent_rules::store().fences(&reference.repo);
+    if !fences.is_empty() {
+        let root = [PathBuf::from(&reference.repo)];
+        let hit: Vec<&str> = changed.files.iter().map(|f| f.path.as_str()).filter(|f| crate::agent_rules::fence::covering(&fences, &root, f).is_some()).collect();
+        if !hit.is_empty() {
+            return Err(err("FENCED", format!("nothing was merged: the copy changed fenced files ({})", hit.iter().take(3).copied().collect::<Vec<_>>().join(", "))));
+        }
+    }
     // Uncommitted work in the origin that touches the same files would be mixed into (or lost
     // to) the merge: stop before anything moves.
     let dirty = git_ok_raw(

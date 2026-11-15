@@ -271,3 +271,78 @@ fn only_agents_with_a_count_whose_helper_runs_as_a_chat_are_wanted() {
     assert!(none.wanted.is_empty());
     assert!(none.reusable_agents.contains("claude"));
 }
+
+#[test]
+fn a_hint_warms_a_key_the_standby_settings_do_not_want_and_ignores_a_zero_cap() {
+    // "Keep agents ready" is off: nothing wanted, cap zero. The phone's New chat screen still gets its session.
+    let (pool, host) = pool(Policy { cap: 0, idle_ms: 20 * 60_000, recent_ms: 6 * 3_600_000, ..Policy::default() });
+    assert_eq!(settle(&pool, &host, 0), 0, "nothing is wanted without a hint");
+    pool.hint(&key("claude"), Path::new("C:/work/app"), 0, 300_000);
+    assert_eq!(settle(&pool, &host, 1_000), 1, "the hinted key starts at once");
+    assert_eq!(pool.ready_counts().get("claude"), Some(&1));
+    assert_eq!(settle(&pool, &host, 2_000), 0, "one session per hint");
+    // It is used: the claim takes it and the hint is spent, so no second session is kept ready.
+    let hit = pool.claim_without_refill(&key("claude"), Path::new("C:/work/app"), 3_000);
+    assert!(hit.is_some(), "the claim finds the hinted session");
+    assert_eq!(settle(&pool, &host, 4_000), 0, "a used hint does not refill");
+    assert_eq!(host.started.lock().len(), 1);
+}
+
+#[test]
+fn a_hint_nobody_uses_is_closed_when_its_time_is_up() {
+    let (pool, host) = pool(Policy { cap: 0, idle_ms: 20 * 60_000, recent_ms: 6 * 3_600_000, ..Policy::default() });
+    pool.hint(&key("claude"), Path::new("C:/work/app"), 0, 60_000);
+    assert_eq!(settle(&pool, &host, 1_000), 1);
+    settle(&pool, &host, 61_000);
+    assert_eq!(host.closed.lock().len(), 1, "the unused session was closed");
+    assert!(pool.is_empty());
+    assert_eq!(settle(&pool, &host, 62_000), 0, "and not started again");
+}
+
+#[test]
+fn at_most_two_hints_stay_alive() {
+    let (pool, host) = pool(Policy { cap: 0, idle_ms: 20 * 60_000, recent_ms: 6 * 3_600_000, ..Policy::default() });
+    for (i, agent) in ["a", "b", "c"].iter().enumerate() {
+        pool.hint(&key(agent), Path::new("C:/work/app"), i as i64, 300_000);
+    }
+    assert_eq!(settle(&pool, &host, 10), 2, "the oldest hint was dropped");
+}
+
+#[test]
+fn a_claim_waits_for_a_session_that_is_still_starting() {
+    let (pool, host) = pool(Policy { cap: 0, idle_ms: 20 * 60_000, recent_ms: 6 * 3_600_000, ..Policy::default() });
+    pool.hint(&key("claude"), Path::new("C:/work/app"), crate::event_log::now_ms(), 300_000);
+    let (close, mut jobs) = pool.plan(crate::event_log::now_ms());
+    assert!(close.is_empty() && jobs.len() == 1);
+    assert!(pool.is_starting(&key("claude")));
+    // A claim now would miss; one that waits gets the session once the (slow) start finishes.
+    assert!(pool.claim_without_refill(&key("claude"), Path::new("C:/work/app"), 5).is_none());
+    let job = jobs.pop().unwrap();
+    let runner = {
+        let pool = pool.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            pool.run(job, crate::event_log::now_ms);
+        })
+    };
+    let begun = std::time::Instant::now();
+    let hit = pool.claim_waiting(&key("claude"), Path::new("C:/work/app"), std::time::Duration::from_secs(5));
+    assert!(hit.is_some(), "the claim waited for the start");
+    assert!(begun.elapsed() >= std::time::Duration::from_millis(100));
+    runner.join().unwrap();
+    assert_eq!(host.started.lock().len(), 1, "no second session was started");
+}
+
+#[test]
+fn a_claim_stops_waiting_when_the_start_failed() {
+    let (pool, host) = pool(Policy { cap: 0, idle_ms: 20 * 60_000, recent_ms: 6 * 3_600_000, ..Policy::default() });
+    *host.fail.lock() = Some(WarmFail { message: "no".into(), auth: false });
+    pool.hint(&key("claude"), Path::new("C:/work/app"), crate::event_log::now_ms(), 300_000);
+    let begun = std::time::Instant::now();
+    let (_, jobs) = pool.plan(crate::event_log::now_ms());
+    for job in jobs {
+        pool.run(job, crate::event_log::now_ms);
+    }
+    assert!(pool.claim_waiting(&key("claude"), Path::new("C:/work/app"), std::time::Duration::from_secs(30)).is_none());
+    assert!(begun.elapsed() < std::time::Duration::from_secs(2), "a failed start ends the wait");
+}

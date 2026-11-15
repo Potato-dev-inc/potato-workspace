@@ -5,6 +5,7 @@ import { t, useT } from '../../../i18n';
 import { DEVICE_CAPS, type DeviceCap, type PairedDeviceInfo } from '@potato-workspace/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../../../lib/tauri';
+import { DEVICE_NAMES_CHANGED } from '../../../lib/deviceNames';
 import { DEVICES_CHANGED_EVENT } from '../../MobilePairingPanel';
 import { Switch } from '../controls';
 import { Btn, Note } from '../settings-ui';
@@ -38,14 +39,18 @@ function DeviceRow({
   device,
   onChange,
   onRevoke,
+  onRename,
   busy,
 }: {
   device: PairedDeviceInfo;
   onChange: (caps: DeviceCap[]) => void;
   onRevoke: () => void;
+  onRename: (name: string) => void;
   busy: boolean;
 }) {
   const t = useT();
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(device.name);
   const caps = deviceCaps(device);
   const toggle = (cap: DeviceCap, on: boolean) =>
     onChange(DEVICE_CAPS.filter((c) => (c === cap ? on : caps.includes(c))));
@@ -53,9 +58,50 @@ function DeviceRow({
     <li className="st-device" data-expired={device.expired ? 'true' : undefined} aria-label={device.name}>
       <div className="st-device-head">
         <div className="st-label">
-          <span>{device.name}</span>
-          <small>{expiryLine(device)}</small>
+          {renaming ? (
+            <input
+              type="text"
+              className="st-input"
+              value={name}
+              maxLength={60}
+              autoFocus
+              aria-label={t('devices.renameLabel', { name: device.name })}
+              data-testid="phone-rename-input"
+              onChange={(e) => setName(e.target.value)}
+            />
+          ) : (
+            <span>{device.name}</span>
+          )}
+          <small>{renaming ? t('devices.renameHint') : expiryLine(device)}</small>
         </div>
+        {renaming ? (
+          <>
+            <Btn
+              small
+              disabled={busy || name.trim() === '' || name.trim() === device.name}
+              onClick={() => {
+                onRename(name.trim());
+                setRenaming(false);
+              }}
+            >
+              {t('devices.renameSave')}
+            </Btn>
+            <Btn small onClick={() => setRenaming(false)}>
+              {t('devices.renameCancel')}
+            </Btn>
+          </>
+        ) : (
+          <Btn
+            small
+            disabled={busy}
+            onClick={() => {
+              setName(device.name);
+              setRenaming(true);
+            }}
+          >
+            {t('devices.rename')}
+          </Btn>
+        )}
         <Btn small onClick={onRevoke} disabled={busy}>
           {device.expired ? t('settings.remove') : t('phone.device.revoke')}
         </Btn>
@@ -131,6 +177,13 @@ export function PairedDevices() {
                 busy={busy === device.id}
                 onChange={(caps) => void run(device.id, () => tauri.setPairedMobileDeviceCaps(device.id, caps))}
                 onRevoke={() => void run(device.id, () => tauri.revokePairedMobileDevice(device.id))}
+                onRename={(name) =>
+                  void run(device.id, async () => {
+                    await tauri.renamePairedMobileDevice(device.id, name);
+                    // Open chats read the names again: "from <name>" follows the rename.
+                    window.dispatchEvent(new Event(DEVICE_NAMES_CHANGED));
+                  })
+                }
               />
             ))}
           </ul>

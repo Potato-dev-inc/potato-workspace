@@ -52,6 +52,15 @@ pub struct Loaded {
 
 /// The items in the journal at `path`. A missing file is an empty list; a bad line is skipped.
 pub fn load(path: &Path) -> Loaded {
+    load_capped(path, Some(MAX_ITEMS))
+}
+
+/// Every item in the journal at `path`, with no cap (the paged "Show earlier" read).
+pub fn load_all(path: &Path) -> Loaded {
+    load_capped(path, None)
+}
+
+fn load_capped(path: &Path, cap: Option<usize>) -> Loaded {
     let Ok(bytes) = std::fs::read(path) else { return Loaded::default() };
     let text = String::from_utf8_lossy(&bytes);
     let mut order: Vec<String> = Vec::new();
@@ -80,9 +89,28 @@ pub fn load(path: &Path) -> Loaded {
             order.push(id);
         }
     }
-    let drop = order.len().saturating_sub(MAX_ITEMS);
+    let drop = cap.map_or(0, |cap| order.len().saturating_sub(cap));
     let items = order.into_iter().skip(drop).filter_map(|id| by_id.remove(&id)).collect();
     Loaded { items, skipped }
+}
+
+/// One page of "Show earlier": items older than the one the reader holds first, in the order they stand.
+#[derive(Debug, Default, PartialEq)]
+pub struct Page {
+    pub items: Vec<ChatItem>,
+    /// There is more before the first item of this page.
+    pub more: bool,
+}
+
+/// Up to `limit` items that stand right before the item `before` (the oldest one the reader holds). `before` that the
+/// journal does not know (the chat started over) gives an empty page. `limit` 0 only says whether there is more.
+pub fn page_before(path: &Path, before: &str, limit: usize) -> Page {
+    let all = load_all(path).items;
+    let Some(at) = all.iter().position(|item| item.id() == before) else { return Page::default() };
+    let start = at.saturating_sub(limit);
+    let more = start > 0;
+    let items = all[start..at].to_vec();
+    Page { items, more }
 }
 
 struct State {

@@ -30,6 +30,7 @@
 //! | `permkind K` | a tool of kind K (`edit`, `read`, ...) asks permission; says what the client answered (`asked:K outcome:selected option:reject_once`) |
 //! | `fswrite` | asks the client to write a file; says the error it got back |
 //! | `mode` | says the session mode (`modes=1`: a `mode` config option; `modes=2`: session modes set with `session/set_mode`) |
+//! | `permwith K cmd:TEXT` / `permwith K path:P` | a tool of kind K asks permission, carrying the command TEXT (`rawInput.command`) or the file P (`locations`, `rawInput.file_path`); says what the client answered (`asked:K outcome:selected option:reject_once`); with `writes=1` and an allowing answer it writes `permwith.txt` |
 //! | `permshape V` | a command that needs permission, with an odd option list: V = `long` (a label of 400 characters, like a long command pattern), `none` (no options), `blank` (options with no name and no kind); says what the client answered |
 //! | `badperm` | a malformed permission request (the app must refuse it, not park it) |
 //! | `empty` | `end_turn` with no output |
@@ -887,6 +888,43 @@ fn run_prompt_inner(shared: &Arc<Shared>, id: &Value, params: &Value) {
             let option = answer.pointer("/result/outcome/optionId").and_then(Value::as_str).unwrap_or("-").to_string();
             if (option.starts_with("allow") || cheat == "deny_ignored") && shared.opts.flag("writes", false) {
                 shared.write_in_cwd(&file);
+            }
+            shared.chunk(&session_id, &format!("asked:{kind} outcome:{outcome} option:{option}"));
+            done("end_turn");
+        }
+        "permwith" => {
+            // `permwith <kind> cmd:<command>` or `permwith <kind> path:<file>`: the question carries what the tool would run or touch.
+            let mut words = text.splitn(3, ' ').skip(1);
+            let kind = words.next().unwrap_or("edit").to_string();
+            let what = words.next().unwrap_or("").to_string();
+            let (title, call_extra) = match (what.strip_prefix("cmd:"), what.strip_prefix("path:")) {
+                (Some(command), _) => (format!("Run {command}"), json!({"rawInput": {"command": command}})),
+                (_, Some(path)) => (format!("Touch {path}"), json!({"locations": [{"path": path}], "rawInput": {"file_path": path}})),
+                _ => ("A tool".to_string(), json!({})),
+            };
+            let mut call = json!({"toolCallId": "pw1", "kind": kind, "status": "pending", "title": title});
+            if let (Some(call), Some(extra)) = (call.as_object_mut(), call_extra.as_object()) {
+                call.extend(extra.clone());
+            }
+            let ask_id = shared.next_request.fetch_add(1, Ordering::SeqCst);
+            let rx = shared.ask(
+                ask_id,
+                "session/request_permission",
+                json!({
+                    "sessionId": session_id,
+                    "toolCall": call,
+                    "options": [
+                        {"optionId": "allow_once", "name": "Allow Once", "kind": "allow_once"},
+                        {"optionId": "allow_always", "name": "Allow for Session", "kind": "allow_always"},
+                        {"optionId": "reject_once", "name": "Reject", "kind": "reject_once"}
+                    ]
+                }),
+            );
+            let Ok(answer) = rx.recv() else { return };
+            let outcome = answer.pointer("/result/outcome/outcome").and_then(Value::as_str).unwrap_or("?").to_string();
+            let option = answer.pointer("/result/outcome/optionId").and_then(Value::as_str).unwrap_or("-").to_string();
+            if option.starts_with("allow") && shared.opts.flag("writes", false) {
+                shared.write_in_cwd("permwith.txt");
             }
             shared.chunk(&session_id, &format!("asked:{kind} outcome:{outcome} option:{option}"));
             done("end_turn");

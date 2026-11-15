@@ -10,7 +10,7 @@ import type { PublicSettings } from './bridge-settings';
 import type { PreviewUrl } from './pane-preview';
 import type { AttentionAnswerBody, AttentionAnswerOutcome, AttentionSnapshot } from './attention';
 import type { Question, QuestionAnswer } from './questions';
-import type { PhoneChatReply } from './sessionChatModel';
+import type { ChatItem, PhoneChatReply } from './sessionChatModel';
 import type { ChatSearchAnswer } from './chatSearch';
 import type { OutboxMessage } from './paneOutbox';
 import type { ChatAttachment } from './attachFiles';
@@ -428,10 +428,29 @@ export interface BridgeClient {
    */
   paneChat?(paneId: string, since?: number): Promise<PhoneChatReply>;
   /**
+   * `GET /panes/{id}/chat/earlier?before=&limit=`: "Show earlier". The items right before the oldest one the phone holds
+   * (`limit` 0 only asks whether there are more). Needs `watch`; the agent's remote rule applies. Absent on old PCs.
+   */
+  paneChatEarlier?(paneId: string, before: string, limit?: number): Promise<{ items: ChatItem[]; more: boolean }>;
+  /** `GET /panes/{id}/picture?path=`: a picture the agent named, as a data URL. Only a file in the chat's project folder (the PC checks). Needs `watch`. */
+  panePicture?(paneId: string, path: string): Promise<{ name: string; mime: string; size: number; dataUrl: string }>;
+  /** `GET /panes/{id}/draft`: the half-written message the PC holds for this chat (empty text: none). Needs `watch`. */
+  paneDraft?(paneId: string): Promise<{ text: string; at: number }>;
+  /** `POST /panes/{id}/draft`: keeps the half-written message on the PC (empty text clears it). Needs `type`. */
+  setPaneDraft?(paneId: string, text: string): Promise<{ text: string; at: number }>;
+  /**
    * `GET /acp/sessions/{pane}`: the state of a chat session over ACP (what it is doing, what waits on the person).
    * Needs `watch`. Absent on clients that are not a phone.
    */
   acpSession?(paneId: string): Promise<AcpChatState>;
+  /** `POST /acp/sessions/{pane}/typing`: tells the PC this phone is typing in the chat (needs `type`). Refused with `TOOK_BACK` after "This PC took this back". */
+  acpTyping?(paneId: string): Promise<unknown>;
+  /** `POST /acp/sessions/{pane}/claim`: "Take over" after the PC took the chat back (needs `type`). */
+  acpClaim?(paneId: string): Promise<unknown>;
+  /** `GET /devices/names`: every device's name by id (this PC, paired phones, paired PCs), for "from <name>" under a message. */
+  deviceNames?(): Promise<Record<string, { name: string; kind: string }>>;
+  /** `POST /pair/me {name}`: this phone tells the PC its own name again (its model). The person's own name for it wins. */
+  tellName?(name: string): Promise<unknown>;
   /** `POST /acp/sessions/{pane}/cancel`: stops the running turn of a chat session (needs `type`). Absent on clients that are not a phone. */
   acpCancel?(paneId: string): Promise<unknown>;
   /**
@@ -447,8 +466,12 @@ export interface BridgeClient {
    */
   /** `GET /phone/new-chat`: the agents and known projects the new-chat screen offers (needs `watch`). Absent on old PCs and non-phone clients. */
   phoneNewChat?(): Promise<PhoneNewChatOptions>;
+  /** `GET /phone/new-chat/models?agent=`: the models one agent offers (the desktop `agent_model_options` answer). Needs `control`. Absent on a PC from before the route (the pill stays hidden). */
+  phoneModelOptions?(agent: string): Promise<unknown>;
   /** `POST /phone/chats`: starts a chat or a terminal in a project the PC knows (needs `control`). */
   phoneStartChat?(args: { agent: string; project: string; lane: 'chat' | 'terminal'; cols?: number; rows?: number; viewer?: string }): Promise<{ pane_id: string; agent: string; lane: string }>;
+  /** `POST /phone/warm`: the New chat screen has an agent and a project picked; the PC starts that agent's chat program ahead of Send (needs `control`). Absent on old PCs. */
+  phoneWarm?(args: { agent: string; project: string }): Promise<{ warming: boolean }>;
   /** `POST /acp/sessions/{pane}/config`: sets the model, mode or effort (needs `control`). `hold` says the person pressed and held for a full-access mode. */
   acpSetConfig?(paneId: string, optionId: string, value: string, hold?: boolean): Promise<AcpChatState>;
   /** `GET /acp/closed`: the closed chats (needs `watch`). */

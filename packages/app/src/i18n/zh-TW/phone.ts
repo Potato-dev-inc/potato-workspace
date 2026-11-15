@@ -6,6 +6,7 @@ export const phone: Partial<Record<EnglishKey, string>> = {
   'phone.menuWaiting_other': '開啟對話清單，{count} 個在等你',
   'phone.newChat': '新對話',
   'phone.drawer.title': '對話',
+  'phone.drawer.helper': '小幫手',
   'phone.drawer.close': '關閉對話清單',
   'phone.search': '搜尋對話',
   'phone.needsYou': '需要你',

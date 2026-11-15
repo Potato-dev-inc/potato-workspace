@@ -62,7 +62,11 @@ export interface HarnessScenario {
      * `live`: the agent is in the middle of a turn (the progress line); `asking`: the turn ended with a question
      * (quick replies).
      */
-    chat?: 'finished' | 'live' | 'asking' | 'plan' | 'rich';
+    /** Serve one companion (Mochi on OpenCode) with a feed and a chat read off the screen. */
+    companion?: boolean;
+    chat?: 'finished' | 'live' | 'asking' | 'plan' | 'rich' | 'render';
+    /** Sent from: the chat has messages from other devices, the names route answers, and the chat state says another device types (`typing`) or that the PC took the chat back (`tookBack`). */
+    sentFrom?: 'typing' | 'tookBack';
   };
   /** Phone route: the abilities this phone was paired with (`GET /pair/me`); default: all four. */
   phoneCaps?: string[];
@@ -131,6 +135,8 @@ export interface HarnessScenario {
   collision?: import('./collision-fixtures').CollisionScenario;
   /** Night Shift: what the state, plans and checks the mocked `night_*` commands answer (see night-fixtures.ts). */
   night?: import('./night-fixtures').NightScenario;
+  /** Routines and Chains: what the mocked `routines_*` commands answer (see routines-fixtures.ts). */
+  routines?: import('./routines-fixtures').RoutinesScenario;
   /** The "Used" strip: what the mocked `usage_snapshot` answers (absent: no signed-in agent, so no strip). */
   usage?: import('../lib/usage').UsageSnapshot;
   /** Package check: the packages the mocked approval carries and what the mocked `package_check_*` commands answer. */
@@ -151,6 +157,8 @@ export interface HarnessScenario {
   chatFirst?: boolean;
   /** Share an agent (Labs `lend_enabled`): the state the mocked `lend_*` commands start from. Absent = the switch is off and nothing shows. */
   lend?: import('./lend-fixtures').LendScenario;
+  /** Devices (Labs `devices_enabled`): the state the mocked `devices_*` commands start from. Absent = the switch is off and nothing shows. */
+  devices?: import('./devices-fixtures').DevicesScenario;
   /** Settings > Labs > Team: overrides on top of the example config (on a team as admin) the mocked `team_config_get` returns. */
   teamConfig?: Partial<import('../lib/team').TeamConfigView>;
   /** Set up agents > Install: what the mocked `agents_install_*` commands answer. */
@@ -161,7 +169,7 @@ export interface HarnessScenario {
     after?: 'running' | 'done_ok' | 'cancelled' | 'restart';
   };
   /** Settings > Phone > Public address: `stable` answers with a linked Stable link, `stable-failed` with a refused secret. */
-  tunnel?: 'stable' | 'stable-failed';
+  tunnel?: 'quick' | 'stable' | 'stable-failed';
   /** Runs once after the first paint (and after the panes loaded); click things, press keys. */
   after?: (api: HarnessDom) => void | Promise<void>;
 }

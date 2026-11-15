@@ -155,6 +155,23 @@
   font: 400 calc(var(--fs, 15px) - 1px)/1.45 var(--font-ui);
   color: var(--muted, var(--label-2));
 }
+.ph .ph-nc-starting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 400 calc(var(--fs, 15px) - 1px)/1.45 var(--font-ui);
+  color: var(--muted, var(--label-2));
+}
+.ph .ph-nc-starting strong {
+  font-weight: 600;
+  color: var(--text, var(--label-1));
+}
+.ph .ph-nc-starting [data-done] {
+  color: var(--faint, var(--label-3));
+}
 .ph .ph-nc-hint--small {
   font-size: calc(var(--fs, 15px) - 3px);
   color: var(--faint, var(--label-3));
@@ -178,6 +195,26 @@
 .ph .ph-nc-tile[aria-checked='true'] {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+.ph .ph-nc-tile[data-needs-terminal] {
+  opacity: 0.5;
+}
+.ph .ph-nc-tile-tag {
+  display: block;
+  width: max-content;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line, var(--sep));
+  font: 500 10px/1.2 var(--font-ui);
+  color: var(--label-3);
+  white-space: nowrap;
+}
+.ph .ph-nc-tile-txt {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
 }
 .ph .ph-nc-tile-name {
   min-width: 0;

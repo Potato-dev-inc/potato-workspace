@@ -12,6 +12,9 @@ pub const DESK_CLIPBOARD: &[u8] = b"pm/desk-clipboard/1";
 /// Files between my computers.
 pub const FILES: &[u8] = b"pm/files/1";
 
+/// Devices: another paired Workspace runs a chat or a terminal here (`agents/remote`). A relay may carry it.
+pub const AGENTS: &[u8] = b"pm/agents/1";
+
 /// Share an agent: model calls from a borrowing PC to the lending PC (`agents/lend`).
 pub const LEND: &[u8] = b"pm/lend/1";
 
@@ -38,3 +41,7 @@ pub fn relay_possible(alpn: &[u8]) -> bool {
 
 /// Pairing two computers. Open only while a code is on screen; direct-only by capability policy (LAN).
 pub const PAIR: &[u8] = b"pm/pair/1";
+
+/// Pairing a far-away device with a single-use pairing link (Devices). Open only while a link is shown; a relay may carry
+/// it, because the link (not an announcement on the network) names the device it is for.
+pub const PAIR_LINK: &[u8] = b"pm/pair-link/1";

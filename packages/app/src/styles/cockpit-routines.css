@@ -1,0 +1,186 @@
+/* Routines and Chains: a full page, dense rows, grayscale tokens only. */
+.cockpit .ck-routines {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 24px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.cockpit .ck-routines-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.cockpit .ck-routines-head-actions,
+.cockpit .ck-routines-actions,
+.cockpit .ck-routines-row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cockpit .ck-routines-h {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label);
+}
+.cockpit .ck-routines-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cockpit .ck-routines-limit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.cockpit .ck-routines-limit-label {
+  font-size: 12.5px;
+  color: var(--label);
+}
+.cockpit .ck-routines-limit-hint {
+  flex-basis: 100%;
+}
+.cockpit .ck-routines-select,
+.cockpit .ck-routines-input {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--label);
+  font: inherit;
+  font-size: 12.5px;
+}
+.cockpit .ck-routines-task {
+  padding: 6px 10px;
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+}
+.cockpit .ck-routines-form,
+.cockpit .ck-routines-then {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.cockpit .ck-routines-then {
+  flex-basis: 100%;
+  margin-top: 6px;
+}
+.cockpit .ck-routines-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.cockpit .ck-routines-when {
+  gap: 8px;
+}
+.cockpit .ck-routines-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cockpit .ck-routines-day,
+.cockpit .ck-routines-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--label);
+}
+.cockpit .ck-routines-list,
+.cockpit .ck-routines-runs,
+.cockpit .ck-routines-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cockpit .ck-routines-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.cockpit .ck-routines-row.is-off {
+  opacity: 0.7;
+}
+.cockpit .ck-routines-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.cockpit .ck-routines-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label);
+}
+.cockpit .ck-routines-steps {
+  margin: 2px 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--label-2, var(--label));
+  overflow-wrap: anywhere;
+}
+.cockpit .ck-routines-pill {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--label-2, var(--label));
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+.cockpit .ck-routines-paused,
+.cockpit .ck-routines-error {
+  color: var(--label);
+}
+.cockpit .ck-routines-error {
+  margin: 0;
+}
+.cockpit .ck-routines-run,
+.cockpit .ck-routines-queue-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 12.5px;
+}
+.cockpit .ck-routines-run-name {
+  color: var(--label);
+  font-weight: 600;
+}
+.cockpit .ck-acp-result-then {
+  margin-left: auto;
+}

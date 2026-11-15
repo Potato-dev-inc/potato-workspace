@@ -21,7 +21,6 @@
   "components/cockpit/Palette.tsx": 1,
   "components/cockpit/PrBlock.tsx": 1,
   "components/cockpit/rail/BackgroundJobs.tsx": 1,
-  "components/mobile/AcpPhoneDock.tsx": 1,
   "components/mobile/CompanionHome.tsx": 1,
   "components/settings/blocks/AddRepoSheet.tsx": 1,
   "components/settings/blocks/AgentDefinitions.tsx": 2,

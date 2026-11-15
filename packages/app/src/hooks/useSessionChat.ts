@@ -1,7 +1,9 @@
 // Read-only chat of one terminal pane: opens the backend's session-file reader while `enabled`, merges the
 // item batches for this pane, and closes the reader again on unmount or when disabled.
 import { errorSentence } from '../lib/sayError';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { chatEarlier } from '../lib/chatMore';
+import { useEarlier, type EarlierState } from './useEarlier';
 import {
   closeSessionChat,
   groupTurns,
@@ -38,6 +40,8 @@ export interface SessionChatHook {
   plan: PlanItem[];
   /** Files the agent's tool calls touched, in order of first touch. */
   outputs: OutputFile[];
+  /** "Show earlier messages": the part of a long chat that is no longer held, read from the chat's journal on the PC. */
+  earlier: EarlierState;
 }
 
 interface Status {
@@ -132,6 +136,10 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
     };
   }, [paneId, enabled, surface]);
 
+  // Older messages, a page at a time (an ACP chat has a journal on the PC; any other chat shows no row).
+  const fetchEarlier = useCallback((before: string, limit: number) => chatEarlier(paneId, before, limit), [paneId]);
+  const earlier = useEarlier({ key: paneId, ready: status.state === 'ready', supported: status.source === 'acp', items, setItems, fetchPage: enabled ? fetchEarlier : null });
+
   // The last result goes back in, so a turn that did not change stays the same object (the view skips it).
   const lastGrouped = useRef<GroupedChat | null>(null);
   const grouped = useMemo(() => (lastGrouped.current = groupTurns(items, lastGrouped.current)), [items]);
@@ -146,5 +154,6 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
     usage: grouped.usage,
     plan: grouped.plan,
     outputs: grouped.outputs,
+    earlier,
   };
 }

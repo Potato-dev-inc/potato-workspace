@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { folderName, useClosedChats, type ClosedChat, type ClosedChatsApi } from '../../../lib/closedChats';
 import { useT, t as tr } from '../../../i18n';
 import type { SplitMemory } from '../split-memory';
-import { dayWordOf, pendingChats, type YesterdayChat, type YesterdaySnapshot } from '../yesterday-memory';
+import { dayWordOf, dismissChats, pendingChats, readDismissed, worthOffering, type YesterdayChat, type YesterdaySnapshot } from '../yesterday-memory';
 
 export interface ContinueYesterdayProps {
   /** What the last run left (yesterday-memory.ts previousRun). */
@@ -32,18 +32,23 @@ export function ContinueCard({ previous, api, openIds, onReopened, onFresh, now 
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
   const [failed, setFailed] = useState<Set<string>>(new Set());
   const [done, setDone] = useState<Set<string>>(new Set());
-  const [hidden, setHidden] = useState(false);
+  const [dismissed, setDismissed] = useState<Set<string>>(() => readDismissed());
   const [busy, setBusy] = useState(false);
 
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const closedById = useMemo(() => new Map<string, ClosedChat>(closed.map((c) => [c.id, c])), [closed]);
+  const realTitle = (chat: YesterdayChat): string | null => closedById.get(chat.id)?.title?.trim() || chat.title?.trim() || null;
   const rows = useMemo(
-    () => pendingChats(previous, openSet, new Set(closedById.keys())).filter((c) => !done.has(c.id)),
-    [previous, openSet, closedById, done],
+    () => worthOffering(pendingChats(previous, openSet, new Set(closedById.keys())).filter((c) => !done.has(c.id)), dismissed, (c) => closedById.get(c.id)?.title?.trim() || c.title?.trim() || null),
+    [previous, openSet, closedById, done, dismissed],
   );
-  if (!previous || hidden || rows.length === 0) return null;
+  if (!previous || rows.length === 0) return null;
 
-  const nameOf = (chat: YesterdayChat): string => closedById.get(chat.id)?.title?.trim() || closedById.get(chat.id)?.label || chat.title || chat.agent;
+  const nameOf = (chat: YesterdayChat): string => realTitle(chat) ?? t('newAgent.continueUntitled');
+  const hide = () => {
+    dismissChats(rows.map((c) => c.id));
+    setDismissed(readDismissed());
+  };
   const ticked = rows.filter((c) => !unticked.has(c.id) && !failed.has(c.id));
   const allTicked = ticked.length === rows.filter((c) => !failed.has(c.id)).length;
   const dayWord = dayWordOf(previous.savedAt, now);
@@ -64,6 +69,7 @@ export function ContinueCard({ previous, api, openIds, onReopened, onFresh, now 
         nowFailed.add(chat.id);
       }
     }
+    dismissChats(opened.length > 0 ? [...nowDone] : []);
     setFailed(nowFailed);
     setDone(nowDone);
     setBusy(false);
@@ -93,6 +99,7 @@ export function ContinueCard({ previous, api, openIds, onReopened, onFresh, now 
                   className="ck-btn ck-btn--secondary ck-btn--sm"
                   onClick={() => {
                     onFresh(freshBrief(chat, name));
+                    dismissChats([chat.id]);
                     setDone((cur) => new Set(cur).add(chat.id));
                   }}
                 >
@@ -103,7 +110,7 @@ export function ContinueCard({ previous, api, openIds, onReopened, onFresh, now 
           }
           return (
             <li key={chat.id}>
-              <label className="ck-na-line ck-na-continue-pick">
+              <label className="ck-na-continue-pick">
                 <input
                   type="checkbox"
                   aria-label={t('newAgent.continueTick', { name })}
@@ -118,20 +125,20 @@ export function ContinueCard({ previous, api, openIds, onReopened, onFresh, now 
                     })
                   }
                 />
-                <span className="ck-na-line-main">{name}</span>
-                <span className="ck-na-line-side">{folderName(chat.cwd) || closedById.get(chat.id)?.label || ''}</span>
+                <span className="ck-na-continue-name">{name}</span>
+                <span className="ck-na-continue-project">{folderName(chat.cwd) || closedById.get(chat.id)?.label || ''}</span>
               </label>
             </li>
           );
         })}
       </ul>
-      <div className="ck-na-foot">
+      <div className="ck-na-foot ck-na-continue-foot">
         {ticked.length > 0 && (
           <button type="button" className="ck-btn ck-btn--primary ck-btn--sm" disabled={busy} onClick={() => void reopen()}>
             {allTicked ? t('newAgent.continueReopenAll', { count: ticked.length }) : t('newAgent.continueReopenPicked', { count: ticked.length })}
           </button>
         )}
-        <button type="button" className="ck-na-link" onClick={() => setHidden(true)}>
+        <button type="button" className="ck-na-link" onClick={hide}>
           {t('newAgent.continueHide')}
         </button>
       </div>

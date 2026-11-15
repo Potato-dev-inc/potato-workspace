@@ -45,6 +45,9 @@ pub struct StartRequest {
     pub separate_copy: bool,
     /// Where plain copies are kept; `None`: the app's data folder. Tests set it.
     pub copy_store: Option<PathBuf>,
+    /// The project the chat belongs to when it works in a copy of it (the rules of Force yes, Fences and Pins are the
+    /// project's). `None`: the folder the chat starts in.
+    pub project: Option<PathBuf>,
 }
 
 /// Why a chat session did not start. `fallback`: the terminal is the way to run this agent instead.
@@ -119,6 +122,9 @@ fn account_launch_env(agent: &str, account: &str) -> Result<crate::tui::LaunchEn
 
 static SWEEPER: OnceLock<SweeperHandle> = OnceLock::new();
 
+/// How long a start waits for a warm session that is still starting (it is part of the way; waiting beats starting another).
+const WARM_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Starts a chat session with `cfg` (no gate). The adapter is started and the session opened before the pane exists,
 /// so a failure leaves nothing behind and the caller can run the agent in a terminal instead (`fallback`).
 pub fn start(deps: &StartDeps, cfg: AgentConfig, mut request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
@@ -133,6 +139,7 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, mut request: StartRequest) -> R
     }
     let made = super::copy::make(&project, &store)?;
     request.folder = made.folder.clone();
+    request.project = Some(project.clone());
     request.separate_copy = false;
     match start_in(deps, cfg, request) {
         Ok(chat) => {
@@ -166,7 +173,7 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     // A session started ahead of time for this agent, folder and account (`acp::warm`): the same chat, minus the adapter's
     // startup. The checks below ran when it was warmed; nothing about the chat differs.
     let account_id = account_env.as_ref().map(|(id, _)| id.clone());
-    let warm = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim(&cfg, &folder, account_id.as_deref()));
+    let warm = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_waiting(&cfg, &folder, account_id.as_deref(), WARM_WAIT));
     crate::startup_timing::mark(&timing_key, if warm.is_some() { "chat_warm_hit" } else { "chat_warm_miss" });
     if warm.is_none() {
         // A reviewed adapter whose last health check failed (or that fails now, when its agent's version is not the tested
@@ -211,7 +218,9 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     };
     crate::startup_timing::carry(&timing_key, &pane_id);
     let chat = AcpChat::build(&pane_id, &label, session.clone(), deps.host.clone(), deps.conversations.clone());
+    chat.set_image_folder(&folder);
     chat.attach();
+    chat.set_project_hint(request.project.as_deref());
     if warm_claimed {
         chat.set_warm_claimed(true);
         // The chat has seen what the session said while it waited (it was kept for this sink); from now on events come live.
@@ -239,6 +248,8 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
 
     // The starting model: request, helper default, app setting, last pick, the agent's own default (`default_model::choose`).
     super::default_model::apply_at_start(&chat, request.model.as_deref(), request.is_helper);
+    // The pins of the project (model, mode, Force yes) and the agent's own Force yes switch (`rules.rs`).
+    super::rules::apply_at_start(&chat, request.model.is_some());
 
     let on_close = {
         let pane_id = pane_id.clone();
@@ -304,6 +315,7 @@ pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
         let (Some(session), Some(record)) = (conversations.session(&id), conversations.record(&id)) else { continue };
         let Ok(cfg) = conversations.config_for(&record.agent) else { continue };
         let chat = AcpChat::build(&id, &cfg.label, session, deps.host.clone(), Some(conversations.clone()));
+        chat.set_image_folder(std::path::Path::new(&record.cwd));
         chat.attach();
         if !cfg!(test) {
             // Test agents are fakes with no tool server by design.
@@ -328,6 +340,7 @@ pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
             on_close,
         );
         chat.set_handles(handles);
+        chat.init_rules();
         chat.set_started_by(record.started_by.as_deref());
         if let Some(note) = record.lane_note.clone() {
             *chat.lane_note.lock() = Some(note);

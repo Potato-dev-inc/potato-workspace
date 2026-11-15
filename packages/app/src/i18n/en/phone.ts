@@ -5,6 +5,7 @@ export const phone = {
   'phone.menuWaiting_other': 'Open chats, {count} waiting',
   'phone.newChat': 'New chat',
   'phone.drawer.title': 'Chats',
+  'phone.drawer.helper': 'Helper',
   'phone.drawer.close': 'Close chats',
   'phone.search': 'Search chats',
   'phone.needsYou': 'Needs you',

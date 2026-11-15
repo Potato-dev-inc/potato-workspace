@@ -119,4 +119,18 @@ describe('SidebarFooter: the Review count as text', () => {
     expect(btn.querySelector('.ck-foot-label')?.textContent).toBe('Review');
     expect(btn.querySelector('.ck-foot-badge')).toBeNull();
   });
+
+  it('Routines is a row of the More menu and opens the page', () => {
+    const onOpenRoutines = vi.fn();
+    act(() =>
+      root.render(
+        <SidebarFooter names={new Map()} onOpenPane={() => {}} mode="orchestration" onMode={() => {}} theme="dark" onToggleTheme={() => {}} onOpenSettings={() => {}} onOpenRoutines={onOpenRoutines} reviewCount={0} />,
+      ),
+    );
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
+    const row = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((i) => i.textContent?.trim() === 'Routines');
+    expect(row).toBeTruthy();
+    act(() => row!.click());
+    expect(onOpenRoutines).toHaveBeenCalledTimes(1);
+  });
 });

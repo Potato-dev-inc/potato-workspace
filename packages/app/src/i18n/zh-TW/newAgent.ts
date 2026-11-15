@@ -150,6 +150,7 @@ export const newAgent: Partial<Record<EnglishKey, string>> = {
   'newAgent.continueFailed': '{name} 無法重新開啟。',
   'newAgent.continueFresh': '用簡短說明重新開始',
   'newAgent.continueHide': '隱藏',
+  'newAgent.continueUntitled': '未命名的對話',
   'newAgent.freshBrief': '請接續之前在 {folder} 的對話「{title}」。先說明停在哪裡、還剩什麼，再繼續做。',
   'chatFirst.need_one': '{count} 個 AI 助理需要終端機',
   'chatFirst.need_other': '{count} 個 AI 助理需要終端機',

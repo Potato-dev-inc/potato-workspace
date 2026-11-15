@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { t as translate, useT } from '../../i18n';
 import type { BridgeClient } from '../../lib/bridge-types';
 import { bridgeOutboxTransport } from '../../lib/paneOutbox-bridge';
+import { sentFromLines, useDeviceNames } from '../../lib/deviceNames';
 import { groupTurns, mergeItems, type GroupedChat, type ChatItem, type ChatSource, type SessionChatState } from '../../lib/sessionChatModel';
 import { usePaneOutbox } from '../../hooks/usePaneOutbox';
 import { usePendingBubbles } from '../../hooks/usePendingBubbles';
@@ -18,6 +19,8 @@ import { useOfflineQueue } from '../../hooks/useOfflineQueue';
 import { canReach, type LinkKind } from '../../lib/phone-link';
 import { readChatCache, writeChatCache } from '../../lib/phone-chat-cache';
 import { writeDraft } from '../../lib/composerDraft';
+import type { PictureSource, RemoteDraft } from '../../lib/chatMore';
+import { useEarlier } from '../../hooks/useEarlier';
 import type { RuleLimit } from '../../lib/pane-rule-view';
 import { PendingMessages } from '../chat/PendingMessages';
 import { MessageActionsSheet, type PressedMessage } from './MessageActions';
@@ -43,8 +46,8 @@ import '../../styles/phone-chat.css';
 
 /** How often the PC is asked while the chat is on screen. */
 export const POLL_MS = 1500;
-/** Items kept in the list; the oldest go first. The PC sends at most 300 at once. */
-const MAX_KEPT = 1500;
+/** Items kept in the list; the oldest go first. The PC sends at most 300 at once; "Show earlier" can bring more (the PC's own window is 4000). */
+const MAX_KEPT = 4000;
 
 // The notes are read when they are shown, so they follow the phone's language.
 export const NO_WATCH_NOTE = 'This phone cannot read chats.';
@@ -95,6 +98,7 @@ export function PhoneChatView({
   acp = false,
   canControl = false,
   canAnswer = true,
+  companion = false,
 }: {
   bridge: BridgeClient | null;
   paneId: string;
@@ -120,6 +124,8 @@ export function PhoneChatView({
   canControl?: boolean;
   /** This phone may answer the agent's questions (`answer`). Without it a line above the box says so. */
   canAnswer?: boolean;
+  /** A companion's chat: no model pill (it has no model to pick) and no "read from the screen" line. */
+  companion?: boolean;
 }) {
   const cached = useMemo(() => readChatCache(paneId), [paneId]);
   const [items, setItems] = useState<ChatItem[]>(cached?.items ?? []);
@@ -201,8 +207,21 @@ export function PhoneChatView({
     return () => window.clearTimeout(timer);
   }, [paneId, items, readAt, reach]);
 
+  // "Show earlier messages": older items from the chat's journal on the PC (a chat session; the PC refuses a locked agent).
+  const fetchEarlier = useMemo(() => (bridge?.paneChatEarlier && canWatch ? (before: string, limit: number) => bridge.paneChatEarlier!(paneId, before, limit) : null), [bridge, paneId, canWatch]);
+  const earlier = useEarlier({ key: paneId, ready: status.state === 'ready', supported: status.source === 'acp', items, setItems, fetchPage: fetchEarlier });
+  // Pictures the agent names come through the same checks on the PC.
+  const pictures = useMemo<PictureSource | null>(
+    () => (bridge?.panePicture && canWatch ? { key: `phone:${paneId}`, load: (path) => bridge.panePicture!(paneId, path) } : null),
+    [bridge, paneId, canWatch],
+  );
+
   const lastGrouped = useRef<GroupedChat | null>(null);
   const grouped = useMemo(() => (lastGrouped.current = groupTurns(items, lastGrouped.current)), [items]);
+  // "from Ren's PC" under a message another device sent; the names are the PC's own record of its devices.
+  const namesLoader = useMemo(() => (bridge?.deviceNames ? () => bridge.deviceNames!() : null), [bridge]);
+  const deviceNames = useDeviceNames(namesLoader);
+  const sentFrom = useMemo(() => sentFromLines(grouped.turns, deviceNames), [grouped.turns, deviceNames]);
 
   // The message box: its messages come over the bridge, and it needs to read the list (`watch`) as well as send.
   const canSend = canWatch && canType && ruleLimit === null;
@@ -304,12 +323,27 @@ export function PhoneChatView({
   const pill =
     acp && bridge?.acpSession ? (
       <PhonePicker bridge={bridge} paneId={paneId} canControl={canControl} fallbackLabel={grouped.model ? t('phone.composer.model', { name: grouped.model }) : t('phone.composer.modelUnknown')} />
-    ) : undefined;
+    ) : companion ? null : undefined;
+
+  // Tells the PC this phone is typing in a chat (only a chat session over ACP has the route; a refusal is not shown here).
+  const isAcpChat = status.source === 'acp';
+  const onTyping = useMemo(() => (isAcpChat && bridge?.acpTyping ? () => void bridge.acpTyping!(paneId).catch(() => undefined) : undefined), [isAcpChat, bridge, paneId]);
+  // The half-written message follows the person between this phone and the PC (kept by the PC; the PC refuses a locked agent).
+  const remoteDraft = useMemo<RemoteDraft | null>(
+    () =>
+      bridge?.paneDraft && bridge.setPaneDraft && reach && canSend
+        ? {
+            read: async () => (await bridge.paneDraft!(paneId)).text ?? '',
+            write: (text) => void bridge.setPaneDraft!(paneId, text).catch(() => undefined),
+          }
+        : null,
+    [bridge, paneId, reach, canSend],
+  );
 
   const composer = ruleLimit !== null ? (
     <PhoneNoControl limit={ruleLimit} onAsk={askControl} />
   ) : canSend ? (
-    <PhoneComposer key={`${paneId}:${editSeed}`} onSend={sendOrKeep} blockedReason={sendBlock} draftKey={paneId} model={grouped.model} working={working} onStop={onStop} pill={pill} upload={upload} quick={quick} fill={fill} asking={!!status.waitingFor} offline={!reach} />
+    <PhoneComposer key={`${paneId}:${editSeed}`} onSend={sendOrKeep} blockedReason={sendBlock} draftKey={paneId} model={grouped.model} working={working} onStop={onStop} pill={pill} upload={upload} quick={quick} fill={fill} asking={!!status.waitingFor} offline={!reach} remoteDraft={remoteDraft} onTyping={onTyping} />
   ) : (
     <p className="ph-chat-send-off" data-testid="phone-chat-no-send">{t('phone.conv.noSend')}</p>
   );
@@ -348,8 +382,12 @@ export function PhoneChatView({
         composer={composer}
         staleAt={!reach && readAt !== null && grouped.turns.length > 0 ? readAt : null}
         onPressMessage={setPressed}
+        sentFrom={sentFrom}
         chatId={paneId}
+        hideScreenNote={companion}
         onOpenArtifact={bridge?.paneArtifact ? (ref, title) => setOpenPage({ ref, title }) : undefined}
+        earlier={earlier}
+        pictures={pictures}
       />
       {openPage && <PhoneArtifactScreen bridge={bridge} paneId={paneId} id={openPage.ref.id} version={openPage.ref.version} title={openPage.title} onClose={() => setOpenPage(null)} />}
       {pressed && <MessageActionsSheet message={pressed} handlers={actions} onClose={() => setPressed(null)} />}

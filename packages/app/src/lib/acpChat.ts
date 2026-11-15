@@ -10,6 +10,7 @@ import { blockOf } from './acpAddon';
 import { RUN_WAYS } from './glossary';
 import { t } from '../i18n';
 import { sendPaneMessage } from './paneOutbox';
+import { desktopSignIn, type ChatSignIn } from './chatMore';
 
 /** `PaneInfo.lane` of a chat session. */
 export const ACP_LANE = 'acp';
@@ -29,6 +30,13 @@ export interface AcpPermission {
   questionId: string | null;
   options: { id: string; name: string; kind: string }[] | null;
   sinceMs: number;
+}
+
+/** Who drives a chat (Rust `acp::chat::drive`). `typing_ms` is how much longer the typing signal counts, from when the state came. */
+export interface AcpDrive {
+  driver?: { id: string; name: string; typing: boolean; typing_ms: number } | null;
+  /** This PC took the chat back; the other device must take over to send. */
+  took_back?: { by: string; by_name: string; from: string | null } | null;
 }
 
 /** The session behind a chat pane (Rust `AcpChat::state`). */
@@ -63,8 +71,17 @@ export interface AcpChatState {
   copy?: { kind: 'git' | 'plain' } | null;
   /** An agent (one that started this chat through Potato Workspace, or any agent tool) may answer the permission cards. Off by default. */
   agentAnswering?: boolean;
+  /** Force yes is on for this chat: the app answers plain asks "yes, once" for the person. Risky asks still come to them. */
+  forceYes?: boolean;
+  /** How many fences the chat's project has. */
+  fences?: number;
   /** Tool kinds the person said "don't ask again" for in this chat (memory only; ends with the chat). */
   autoAllow?: string[];
+  /**
+   * Another device drives this chat (it sent a message or is typing), or this PC took the chat back. Absent when this PC
+   * drives and nothing was taken back.
+   */
+  drive?: AcpDrive | null;
   /** The app closed during a turn (found in the chat journal). The chat says so and offers "Continue" until a new turn starts. */
   interruptedTurn?: boolean;
   /** The agent's own settings (model, mode, effort), as ACP reports them. */
@@ -375,13 +392,19 @@ export interface AcpChatApi {
   cancel: (paneId: string) => Promise<boolean>;
   /** "Keep waiting" on a quiet agent: the quiet window starts again. */
   keepWaiting?: (paneId: string) => Promise<boolean>;
+  /** "Take back": this PC drives the chat again; the other device is told. Resolves to the id of the device that was driving, or null. */
+  takeBack?: (paneId: string) => Promise<string | null>;
   /** "I'm signed in — try again": sends the message that was waiting. Rejects with the agent's reason. */
   retrySignIn?: (paneId: string) => Promise<void>;
+  /** The agent's own sign-in in a hidden pane ("Sign in without a terminal"). Absent: the card opens the agent's terminal as a pane. */
+  signIn?: (paneId: string) => ChatSignIn;
   watch: (cb: (paneId: string, state: AcpChatState) => void) => Promise<UnlistenFn>;
   /** Change one of the agent's settings (model, mode, effort). Refused with `BUSY…` while a turn runs. */
   setConfig: (paneId: string, optionId: string, value: string) => Promise<AcpChatState>;
   /** Let (or stop letting) an agent answer this chat's permission questions. */
   setAgentAnswering: (paneId: string, allowed: boolean) => Promise<AcpChatState>;
+  /** Turn Force yes on or off for this chat (the person's own switch; off by default). */
+  setForceYes?: (paneId: string, on: boolean) => Promise<AcpChatState>;
   /** "Don't ask again in this chat" for one kind of tool call (`on`), or "Turn back on" (off). Refused for deleting and moving. */
   setAutoAllow?: (paneId: string, kind: string, on: boolean) => Promise<AcpChatState>;
   /** Hand the conversation to a terminal pane. `force` stops the running turn first. */
@@ -436,16 +459,19 @@ export const tauriAcpChatApi: AcpChatApi = {
   },
   cancel: (paneId) => call<boolean>('acp_chat_cancel', { paneId }),
   keepWaiting: (paneId) => call<boolean>('acp_chat_keep_waiting', { paneId }),
+  takeBack: (paneId) => call<string | null>('acp_chat_take_back', { paneId }),
   retrySignIn: async (paneId) => {
     if (!isTauri()) throw new Error('Desktop shell required: acp_chat_retry_sign_in');
     await invoke<void>('acp_chat_retry_sign_in', { paneId });
   },
+  signIn: (paneId) => desktopSignIn(paneId),
   watch: async (cb) => {
     if (!isTauri()) return noopUnlisten;
     return listen<{ paneId: string; state: AcpChatState }>('acp-chat-state', (e) => cb(e.payload.paneId, e.payload.state));
   },
   setConfig: (paneId, optionId, value) => call<AcpChatState>('acp_chat_set_config', { paneId, optionId, value }),
   setAgentAnswering: (paneId, allowed) => call<AcpChatState>('acp_chat_set_agent_answering', { paneId, allowed }),
+  setForceYes: (paneId, on) => call<AcpChatState>('acp_chat_set_force_yes', { paneId, on }),
   setAutoAllow: (paneId, kind, on) => call<AcpChatState>('acp_chat_set_auto_allow', { paneId, kind, on }),
   openInTerminal: (conversation, force) => call<HandOver<OpenedInTerminal>>('acp_open_in_terminal', { conversation, force: force ?? false }),
   backToChat: (conversation, force) => call<HandOver<BackInChat>>('acp_back_to_chat', { conversation, force: force ?? false }),
@@ -684,4 +710,13 @@ export const CONTINUE_TEXT = 'Continue where you left off.';
 export function interruptedStrip(state: AcpChatState | null): { text: string } | null {
   if (!state || state.closed || !state.interruptedTurn || state.turnInFlight) return null;
   return { text: 'The app closed during this turn.' };
+}
+
+/** What the strip under a chat says about another device driving it: `null` when this PC drives. `typing` ends by itself (`until`). */
+export function driveStrip(state: AcpChatState | null, now: number, receivedAt: number): { text: string; typing: boolean; id: string; name: string; until: number | null } | null {
+  const driver = state && !state.closed ? state.drive?.driver : null;
+  if (!driver) return null;
+  const until = driver.typing ? receivedAt + driver.typing_ms : null;
+  const typing = until !== null && now < until;
+  return { text: t(typing ? 'drive.typing' : 'drive.driving', { name: driver.name }), typing, id: driver.id, name: driver.name, until: typing ? until : null };
 }

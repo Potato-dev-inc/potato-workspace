@@ -10,6 +10,8 @@ import { pushComposerInsert } from '../../lib/composer-insert';
 import { requestChatTab } from '../../lib/chatTab';
 import { errorSentence } from '../../lib/sayError';
 import { useT } from '../../i18n';
+import { ruleError, tauriAgentRulesApi, type AgentRulesApi } from '../../lib/agentRules';
+import { projectOfCwd } from '../../lib/ship-model';
 import { FloatingMenu } from '../cockpit/FloatingMenu';
 import { EditorMenuItems } from './OpenInEditor';
 import { RailCard } from '../cockpit/rail/RailCard';
@@ -28,6 +30,8 @@ export interface FilesCardProps {
   /** Changes when the agent may have touched files (its status): the marks and the opened folders are read again. */
   refreshKey?: string;
   api?: FilesApi;
+  /** "Fence this folder": where the fence is saved. */
+  rules?: Pick<AgentRulesApi, 'fenceAdd'>;
   search?: (paneId: string, query: string, limit?: number) => Promise<ProjectFileHit[]>;
 }
 
@@ -44,7 +48,7 @@ interface MenuAt {
   anchor: HTMLElement;
 }
 
-export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api = filesApi, search = searchProjectFiles }: FilesCardProps) {
+export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api = filesApi, rules = tauriAgentRulesApi, search = searchProjectFiles }: FilesCardProps) {
   const t = useT();
   const [listings, setListings] = useState<Record<string, FolderListing | undefined>>({});
   const [failed, setFailed] = useState<Record<string, string | undefined>>({});
@@ -157,6 +161,15 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
     setMenu({ path, isDir, anchor: e.currentTarget });
   };
 
+  // The fence belongs to the project (a pane that works on a copy is fenced by its project).
+  const fence = (path: string) => {
+    const project = projectOfCwd(cwd)?.path ?? cwd;
+    const name = baseOf(path);
+    rules.fenceAdd(project, absolutePath(cwd, path)).then(
+      () => say(t('files.fenced', { name })),
+      (err: unknown) => say(t('files.fenceFailed', { name, why: ruleError(err) })),
+    );
+  };
   const say = (text: string) => {
     setNotice(text);
     window.setTimeout(() => setNotice((cur) => (cur === text ? null : cur)), 2500);
@@ -327,6 +340,18 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
             {t('files.menuReveal')}
           </button>
           {!menu.isDir && <EditorMenuItems paneId={paneId} path={menu.path} onDone={() => setMenu(null)} onFail={say} />}
+          <button
+            type="button"
+            role="menuitem"
+            className="ck-menu-item"
+            data-testid="menu-fence"
+            onClick={() => {
+              setMenu(null);
+              fence(menu.path);
+            }}
+          >
+            {menu.isDir ? t('files.fenceFolder') : t('files.fenceFile')}
+          </button>
           {canMention && (
             <button
               type="button"

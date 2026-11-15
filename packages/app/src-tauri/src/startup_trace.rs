@@ -36,6 +36,7 @@ impl Trace {
         step_ms
     }
 
+    #[cfg(test)]
     pub fn steps(&self) -> &[Step] {
         &self.steps
     }

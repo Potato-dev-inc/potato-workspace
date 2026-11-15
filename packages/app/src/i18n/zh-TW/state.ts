@@ -153,6 +153,7 @@ export const state: Partial<Record<EnglishKey, string>> = {
   'state.model.search': '搜尋模型',
   'state.model.loading': '正在載入模型… 你也可以直接輸入模型 ID。',
   'state.model.failed': '無法載入清單，請輸入模型 ID。',
+  'state.model.liveFailed': '讀不到這個 AI 助理的模型清單。可用預設，或直接輸入模型 ID。',
   'state.model.noList': '這個 AI 助理沒有模型清單，請輸入模型 ID。',
   'state.model.use': '使用「{q}」',
   // handoff, bring chats

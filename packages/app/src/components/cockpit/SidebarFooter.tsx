@@ -4,7 +4,7 @@
 // background jobs, else a Night Shift run (plan usage is the bottom bar, UsageBar.tsx).
 import { useRef, useState } from 'react';
 import { FloatingMenu } from './FloatingMenu';
-import { IconChart, IconCheck, IconGlobe, IconMoon, IconMore, IconNote, IconSun, IconTerminal } from './Icons';
+import { IconChart, IconCheck, IconClock, IconGlobe, IconMoon, IconMore, IconNote, IconSun, IconTerminal } from './Icons';
 import { JobsChip } from './rail/JobsChip';
 import { NightChip } from './night/NightChip';
 import '../../styles/individual-mode.css';
@@ -46,6 +46,7 @@ export interface SidebarFooterProps {
   onOpenReview?: () => void;
   reviewCount: number;
   onOpenMorning?: () => void;
+  onOpenRoutines?: () => void;
   /** The Spaces button shows only when this is true and a handler is given. */
   spacesEnabled?: boolean;
   spacesOpen?: boolean;
@@ -144,6 +145,14 @@ export function SidebarFooter(p: SidebarFooterProps) {
                     <IconChart />
                   </span>
                   {t('sidebar.scores')}
+                </button>
+              )}
+              {p.onOpenRoutines && (
+                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenRoutines)}>
+                  <span className="ck-menu-ic">
+                    <IconClock />
+                  </span>
+                  {t('sidebar.routines')}
                 </button>
               )}
               <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onToggleTheme)}>

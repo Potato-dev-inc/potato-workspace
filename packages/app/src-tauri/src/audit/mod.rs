@@ -93,6 +93,14 @@ pub enum Kind {
     WhatBrokeIt,
     /// Branch from here (`crate::branch_from`): `branch.started`.
     Branch,
+    /// Routines and Chains (`crate::routines`): `routines`. The detail carries `event` (`created`, `started`,
+    /// `done`, `failed`, `limit`...). Never a task text or a path.
+    Routines,
+    /// The agent browser (`crate::browser`): `browser.step`, one line per step an agent took on a page.
+    Browser,
+    /// Force yes, Fences and Pins (`crate::agent_rules`): `agent_rules.event`. The detail carries `event`
+    /// (`force_yes_on`, `force_yes_off`, `auto_allowed`, `fence_denied`, `fence_added`, `fence_removed`, `keep_refused`, `pin_saved`).
+    AgentRules,
 }
 
 impl Kind {
@@ -133,6 +141,9 @@ impl Kind {
             Self::ReviewDesk => "review_desk.action",
             Self::WhatBrokeIt => "what_broke_it.undone",
             Self::Branch => "branch.started",
+            Self::Routines => "routines",
+            Self::Browser => "browser.step",
+            Self::AgentRules => "agent_rules.event",
         }
     }
 }

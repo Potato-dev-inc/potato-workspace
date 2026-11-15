@@ -58,6 +58,7 @@ import { acpBadge, ACP_LANE, isTerminalChatLane, quietStrip, runStrip, tauriAcpC
 import { useAcpLanes } from '../../hooks/useAcpLanes';
 import { useShowTerminals } from '../../lib/showTerminals';
 import { AcpConfigChips } from '../chat/AcpConfigChips';
+import { ForceYesChip } from '../chat/ForceYesChip';
 import { HandedToTerminal, handedBlock } from '../chat/HandedToTerminal';
 import { HandOverSheet } from '../chat/HandOverSheet';
 import { useAcpChatState } from '../../hooks/useAcpChatState';
@@ -462,7 +463,7 @@ export function PaneView({
           />
         )}
         {isAcp && <AcpChatDock c={c} paneId={paneId} paneName={name} api={acp} stopper={acpStop} />}
-        {isAcp && result && <AcpResultStrip result={result} />}
+        {isAcp && result && <AcpResultStrip result={result} paneId={paneId} cwd={info.cwd} onNotify={c.notify} />}
         {copyKind !== null && <ChatCopyBar kind={copyKind} summary={chatCopy.summary} busy={chatCopy.busy} onKeep={() => void chatCopy.keep(c.notify)} onThrowAway={() => chatCopy.discard(c.notify)} />}
         {isAcp && <DoneList paneId={paneId} cwd={info.cwd} />}
         <HelperQuestions c={c} ids={helperAsks} />
@@ -585,6 +586,7 @@ export function PaneView({
         <LiveChip paneId={paneId} status={liveStatus} />
         <BudgetChip paneId={paneId} refreshKey={pane.status} onNotify={c.notify} />
         <BorrowedChip paneId={paneId} />
+        {chatAllowed && <ForceYesChip paneId={paneId} isAcp={isAcp} state={acpState} agent={info.agent_type} cwd={info.cwd} chatApi={acp} />}
         <div className="ck-pane-state" data-compact={fold >= 2 ? 'true' : undefined}>
           <DotSpinner status={spinnerStatus(pane.status)} />
           <span className="ck-pane-doing" title={stateLine}>

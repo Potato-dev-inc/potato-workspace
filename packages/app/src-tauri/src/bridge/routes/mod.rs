@@ -3,6 +3,7 @@
 //! (the order matters where a literal path such as `/panes/wait` overlaps a parameterised one).
 
 mod accounts;
+pub(super) mod sender;
 mod acp_chat;
 mod artifacts;
 mod attention;
@@ -10,6 +11,8 @@ pub(super) mod definitions;
 pub(super) mod health;
 mod channels;
 mod chat;
+mod chat_more;
+mod browser_mcp;
 mod companion_mcp;
 mod checkpoints;
 mod chats;
@@ -103,6 +106,7 @@ pub(super) fn dispatch(cx: &Ctx) -> Option<RouteResult> {
         .or_else(|| flight::handle(cx))
         .or_else(|| team_mcp::handle(cx))
         .or_else(|| companion_mcp::handle(cx))
+        .or_else(|| browser_mcp::handle(cx))
         .or_else(|| team::handle(cx))
         .or_else(|| attention::handle(cx))
         .or_else(|| companions::handle(cx))
@@ -112,6 +116,7 @@ pub(super) fn dispatch(cx: &Ctx) -> Option<RouteResult> {
         .or_else(|| phone_chat::handle(cx))
         .or_else(|| phone_upload::handle(cx))
         .or_else(|| phone_result::handle(cx))
+        .or_else(|| chat_more::handle(cx))
         .or_else(|| artifacts::handle(cx))
         .or_else(|| panes::handle(cx))
         .or_else(|| plans::handle(cx))
