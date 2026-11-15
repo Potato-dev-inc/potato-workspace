@@ -5,6 +5,7 @@ import { devicesApi, type Device, type DevicesApi } from '../../lib/devices';
 import { useDevices } from '../devices/useDevices';
 import { agentLabel, cleanName, comingSoonAgents, comingSoonText, DEFAULT_SECS, durationProblem, durationWords, errText, lendApi, MAX_REASON, offerable, supportTag, type LendApi, type LendRequest, type LendState, type Offer, type OffersResult } from '../../lib/lend';
 import { requestNewAgent } from '../../lib/newAgentRequest';
+import { openSettingsAt } from '../../lib/openSettingsAt';
 import { DurationField } from './Duration';
 import { LendSheet } from './LendSheet';
 import { useLend, type LendHandle } from './useLend';
@@ -269,9 +270,19 @@ function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; tea
         </label>
       )}
       {waiting.map((d) => (
-        <p key={d.node} className="lend-note" data-testid="lend-turn-on">
-          {t('lend.request.turnOn', { name: d.name })}
-        </p>
+        <div key={d.node} className="lend-turn-on" data-testid="lend-turn-on">
+          <p className="lend-note">{t('lend.request.turnOn', { name: d.name })}</p>
+          <button
+            type="button"
+            className="lend-btn"
+            onClick={() => {
+              onClose();
+              openSettingsAt('devices');
+            }}
+          >
+            {t('lend.request.openDevices')}
+          </button>
+        </div>
       ))}
       {picked && (
         <fieldset className="lend-cards" aria-label={t('lend.request.what')} data-testid="lend-offers">

@@ -78,6 +78,7 @@ export const settingsLend: Partial<Record<EnglishKey, string>> = {
   'lend.request.yours': '你的申請',
   'lend.request.myOtherPc': '我的另一台電腦',
   'lend.request.turnOn': '請先在 {name} 上開啟「借用我的代理登入」。',
+  'lend.request.openDevices': '開啟裝置頁面',
   'lend.request.sent': '申請已送出',
   'lend.request.readyNote': '可以用了。',
   'lend.request.declinedNote': '對方拒絕了。你可以換個時間再申請一次。',

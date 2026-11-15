@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
+import { sheetHost } from '../../lib/sheet-host';
 import { useSheetKeys } from '../cockpit/Sheet';
 import '../../styles/lend.css';
 
@@ -24,7 +25,7 @@ export function LendSheet({
   head?: ReactNode;
 }) {
   const ref = useSheetKeys(onClose);
-  const host = typeof document === 'undefined' ? null : (document.querySelector('.settings') ?? document.querySelector('.cockpit'));
+  const host = sheetHost();
   const sheet = (
     <div
       className="lend-scrim"

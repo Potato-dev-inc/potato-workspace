@@ -12,6 +12,14 @@
   width: 100%;
   box-sizing: border-box;
   color: var(--label);
+  /* The main area is a flex column that does not grow past the window: this page is the scroll area. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* Rows keep their height (the tab strip scrolls sideways, so it would otherwise shrink to nothing). */
+.cockpit .tpg > * {
+  flex-shrink: 0;
 }
 .cockpit .tpg-head {
   display: flex;

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useT } from '../../i18n';
 import type { CardView, MineView, Recommended, ShelfKind } from '../../lib/shelf';
 import { whoHasLine } from './shelf-model';
@@ -85,10 +86,13 @@ export function RecommendedCard({ rec, teamSize, onAdd }: { rec: Recommended; te
   );
 }
 
-export function MineRow({ item, teamSize, onSuggest }: { item: MineView; teamSize: number; onSuggest: () => void }) {
+export function MineRow({ item, teamSize, onSuggest, onSuggestInstall }: { item: MineView; teamSize: number; onSuggest: () => void; onSuggestInstall?: () => void }) {
   const t = useT();
   const who = whoHasLine(item.have, teamSize, true);
   const reasonId = `shelf-reason-${item.id}`;
+  // A button that cannot work still answers a click: it says why (a disabled button says nothing).
+  const [asked, setAsked] = useState(false);
+  const blocked = !item.shareable;
   return (
     <li className="tpg-card tpg-shelf-card" data-testid={`shelf-mine-${item.id}`}>
       <div className="tpg-person-head">
@@ -98,15 +102,27 @@ export function MineRow({ item, teamSize, onSuggest }: { item: MineView; teamSiz
       </div>
       {item.agents.length > 0 && <p className="tpg-sub">{t('teamHub.shelf.inAgents', { agents: item.agents.join(', ') })}</p>}
       {who && <p className="tpg-sub">{who}</p>}
-      {!item.shareable && item.reason && (
-        <p className="tpg-note" id={reasonId}>
-          {item.reason}
+      {blocked && item.reason && (
+        <p className="tpg-note tpg-shelf-reason" id={reasonId} role={asked ? 'alert' : undefined} data-asked={asked ? 'true' : undefined}>
+          {asked ? t('teamHub.shelf.cannotWhy', { reason: item.reason }) : item.reason}
         </p>
       )}
       <div className="tpg-actions">
-        <button type="button" className="ck-btn ck-btn--secondary" disabled={!item.shareable} aria-describedby={!item.shareable ? reasonId : undefined} onClick={onSuggest}>
+        <button
+          type="button"
+          className="ck-btn ck-btn--secondary"
+          aria-disabled={blocked ? 'true' : undefined}
+          title={blocked ? (item.reason ?? undefined) : undefined}
+          aria-describedby={blocked ? reasonId : undefined}
+          onClick={blocked ? () => setAsked(true) : onSuggest}
+        >
           {t('teamHub.shelf.suggestTo')}
         </button>
+        {blocked && item.install && onSuggestInstall && (
+          <button type="button" className="ck-btn ck-btn--secondary" data-testid={`shelf-install-${item.id}`} onClick={onSuggestInstall}>
+            {t('teamHub.shelf.suggestInstall')}
+          </button>
+        )}
       </div>
     </li>
   );

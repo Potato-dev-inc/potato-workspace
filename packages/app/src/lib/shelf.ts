@@ -36,6 +36,8 @@ export interface MineView {
   skippedFiles: number;
   have: string[];
   suggested: boolean;
+  /** Cannot be sent as it is, but it starts a published package: this is the public install line (no folder of this PC) with its own id. */
+  install: { id: string; shown: string } | null;
 }
 
 export interface CardView {

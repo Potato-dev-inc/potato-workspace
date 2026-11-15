@@ -120,6 +120,44 @@ pub fn scrub_url(url: &str) -> String {
     out
 }
 
+/// Programs that fetch and run a PUBLISHED package by its name (`npx -y @scope/pkg`, `uvx tool`, `docker run image`). When one of
+/// these is started by its full path on this PC, the install line without the path is public and the same for everyone.
+pub const KNOWN_RUNNERS: &[&str] = &["npx", "bunx", "pnpx", "uvx", "pipx", "docker", "podman"];
+
+/// The program's own name from a command: the last path part, without `.exe`, `.cmd`, `.bat` or `.ps1`.
+fn program_name(command: &str) -> String {
+    let last = command.rsplit(['/', '\\']).next().unwrap_or(command).to_ascii_lowercase();
+    for ext in [".exe", ".cmd", ".bat", ".ps1"] {
+        if let Some(stem) = last.strip_suffix(ext) {
+            return stem.to_string();
+        }
+    }
+    last
+}
+
+/// The public install line of a tool that runs a known package runner from a folder on this PC: the runner's name (never its
+/// path) and the arguments. None when it is not such a tool, or when any argument still points at a place on this PC.
+pub fn install_item(server: &ToolServer, home: &Path) -> Option<ShelfItem> {
+    if !matches!(server.transport, Transport::Stdio) {
+        return None;
+    }
+    let command = server.command.clone().unwrap_or_default();
+    if !(looks_like_path(&command) || command.contains(['/', '\\']) || mentions_home(&command, home)) {
+        return None;
+    }
+    let runner = program_name(&command);
+    if !KNOWN_RUNNERS.contains(&runner.as_str()) {
+        return None;
+    }
+    let args = scrub_args(&server.args, home);
+    if args.iter().any(|a| a.contains(PLACEHOLDER_PATH) || looks_like_path(a) || mentions_home(a, home)) {
+        return None;
+    }
+    let names = |m: &BTreeMap<String, String>| -> BTreeMap<String, String> { m.keys().map(|k| (k.clone(), PLACEHOLDER.to_string())).collect() };
+    let tool = ToolDef { transport: Some(ToolTransport::Stdio), command: Some(runner), args, url: None, env: names(&server.env), headers: BTreeMap::new() };
+    ShelfItem { kind: ItemKind::Tool, name: server.name.trim().to_string(), about: String::new(), skill: None, skipped_files: 0, tool: Some(tool) }.clean()
+}
+
 /// A toolbelt or agent-config server as a shelf item, or why it cannot be shared.
 pub fn tool_item(server: &ToolServer, home: &Path) -> Result<ShelfItem, String> {
     let name = server.name.trim().to_string();
