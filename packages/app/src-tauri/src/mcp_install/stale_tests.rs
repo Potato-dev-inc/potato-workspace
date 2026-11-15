@@ -130,3 +130,97 @@ fn a_stale_claude_project_file_is_flagged() {
     as_new_app(|| assert!(claude_mcp_needs_refresh(&dir, McpLaunchSource::Auto)));
     let _ = fs::remove_dir_all(&dir);
 }
+
+const INSTALLED: &str = "C:/Program Files/Potato Workspace/puppet-master-mcp.exe";
+
+fn dev_current() -> McpLaunchSpec {
+    McpLaunchSpec { command: "D:/pm-wt/x/resources/bin/puppet-master-mcp.exe".into(), args: vec![] }
+}
+
+fn host_home(name: &str) -> PathBuf {
+    let home = temp(name);
+    let claude = json!({"mcpServers": {
+        "potato-workspace": {"command": INSTALLED, "args": []},
+        "potato-workspace-dev": {"command": OLD, "args": []},
+    }});
+    fs::write(home.join(".claude.json"), serde_json::to_string_pretty(&claude).unwrap()).unwrap();
+    fs::create_dir_all(home.join(".codex")).unwrap();
+    fs::write(
+        home.join(".codex").join("config.toml"),
+        format!("# keep me\n[mcp_servers.potato-workspace]\ncommand = \"{INSTALLED}\"\nargs = []\n\n[mcp_servers.potato-workspace-dev]\ncommand = \"{OLD}\"\nargs = []\n"),
+    )
+    .unwrap();
+    home
+}
+
+#[test]
+fn a_dev_build_leaves_the_installed_entry_alone_and_refreshes_only_its_own() {
+    let home = host_home("dev-guard");
+    let n = refresh_for_build(false, &dev_current(), Some(&home), &None, claude_user_server_in_home);
+    assert_eq!(n, 2);
+    let claude: Value = serde_json::from_str(&fs::read_to_string(home.join(".claude.json")).unwrap()).unwrap();
+    assert_eq!(claude["mcpServers"]["potato-workspace"]["command"], INSTALLED);
+    assert_eq!(claude["mcpServers"]["potato-workspace-dev"]["command"], dev_current().command);
+    let toml = fs::read_to_string(home.join(".codex").join("config.toml")).unwrap();
+    assert!(toml.contains("# keep me"), "{toml}");
+    let doc: toml::Table = toml.parse().unwrap();
+    assert_eq!(doc["mcp_servers"]["potato-workspace"]["command"].as_str(), Some(INSTALLED));
+    assert_eq!(doc["mcp_servers"]["potato-workspace-dev"]["command"].as_str(), Some(dev_current().command.as_str()));
+    assert_eq!(refresh_for_build(false, &dev_current(), Some(&home), &None, claude_user_server_in_home), 0);
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_dev_build_never_adds_a_missing_dev_entry() {
+    let home = temp("dev-missing");
+    fs::write(home.join(".claude.json"), json!({"mcpServers": {"potato-workspace": {"command": INSTALLED, "args": []}}}).to_string()).unwrap();
+    assert_eq!(refresh_for_build(false, &dev_current(), Some(&home), &None, claude_user_server_in_home), 0);
+    let claude: Value = serde_json::from_str(&fs::read_to_string(home.join(".claude.json")).unwrap()).unwrap();
+    assert!(claude["mcpServers"].get("potato-workspace-dev").is_none());
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn an_installed_build_refreshes_its_own_stale_codex_entry_but_not_the_dev_one() {
+    let home = temp("installed-refresh");
+    let path = home.join(".codex").join("config.toml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        &path,
+        format!("[mcp_servers.potato-workspace]\ncommand = \"{OLD}\"\nargs = []\n\n[mcp_servers.potato-workspace-dev]\ncommand = \"{OLD}\"\nargs = []\n"),
+    )
+    .unwrap();
+    let n = as_new_app(|| refresh_for_build(true, &current(), Some(&home), &None, |_| None));
+    assert_eq!(n, 1);
+    let doc: toml::Table = fs::read_to_string(&path).unwrap().parse().unwrap();
+    assert_eq!(doc["mcp_servers"]["potato-workspace"]["command"].as_str(), Some(NEW));
+    assert_eq!(doc["mcp_servers"]["potato-workspace-dev"]["command"].as_str(), Some(OLD));
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn only_a_release_exe_outside_a_target_folder_counts_as_installed() {
+    let installed = Path::new("C:/Program Files/Potato Workspace/potato-workspace.exe");
+    let dev = Path::new("E:/pm-cargo/x/target/release/potato-workspace.exe");
+    assert_eq!(running_from_installed_location(Some(installed)), !cfg!(debug_assertions));
+    assert!(!running_from_installed_location(Some(dev)));
+    assert!(!running_from_installed_location(None));
+}
+
+#[test]
+fn a_profile_dev_build_never_writes_its_port_file_env_onto_the_installed_entry() {
+    let home = temp("dev-env");
+    let toml_before = format!("[mcp_servers.potato-workspace]
+command = \"{INSTALLED}\"
+args = []
+");
+    fs::create_dir_all(home.join(".codex")).unwrap();
+    fs::write(home.join(".codex").join("config.toml"), &toml_before).unwrap();
+    let json_before = json!({"mcpServers": {"potato-workspace": {"command": INSTALLED, "args": []}}}).to_string();
+    fs::write(home.join(".claude.json"), &json_before).unwrap();
+    let n = as_new_app(|| refresh_for_build(false, &dev_current(), Some(&home), &None, claude_user_server_in_home));
+    assert_eq!(n, 0);
+    assert_eq!(fs::read_to_string(home.join(".codex").join("config.toml")).unwrap(), toml_before);
+    assert_eq!(fs::read_to_string(home.join(".claude.json")).unwrap(), json_before);
+    let _ = fs::remove_dir_all(&home);
+}
