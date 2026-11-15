@@ -276,9 +276,11 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     }
     // The pins of the project (model, mode, Force yes) and the agent's own Force yes switch (`rules.rs`).
     super::rules::apply_at_start(&chat, model.is_some());
+    crate::startup_timing::mark(&pane_id, "chat_settings_applied");
 
     let grant = account_env.as_ref().and_then(|(id, _)| id.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX));
     show_pane(deps, &chat, &session, agent_id, &folder, grant);
+    crate::startup_timing::mark(&pane_id, "chat_pane_shown");
     deps.host.panes_changed();
     deps.host.state_changed(&pane_id, &chat.state());
     task_pane.pane = Some(pane_id);

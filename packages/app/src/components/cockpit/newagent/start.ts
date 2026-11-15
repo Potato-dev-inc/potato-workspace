@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { blockOf, type ChatBlock } from '../../../lib/acpAddon';
 import { configChips, tauriAcpChatApi, type AcpChatApi } from '../../../lib/acpChat';
 import { sendPaneMessage } from '../../../lib/paneOutbox';
+import { markChat } from '../../../lib/chatTiming';
 import type { StartRequest } from './model';
 
 export interface StartDeps {
@@ -92,13 +93,16 @@ export async function runStart(req: StartRequest, deps: StartDeps): Promise<stri
         return null;
       }
       // "Work on a copy" reaches the backend only when it is on, so a start without it is called as before.
+      markChat('start:begin');
       paneId = await (req.isolated ? deps.startChat(req.agentId, req.folder, req.accountId, true) : req.accountId === undefined ? deps.startChat(req.agentId, req.folder) : deps.startChat(req.agentId, req.folder, req.accountId));
+      markChat('start:pane');
       deps.select(paneId);
       // The model goes in before the first message: ACP changes settings between turns.
       if (model && deps.setChatModel) {
         const problem = await deps.setChatModel(paneId, model).catch(() => `${model} was not set; the chat uses its default model.`);
         if (problem) deps.notify(problem);
       }
+      markChat('start:model');
     } else {
       paneId = await (model ? deps.newAgent(req.agentId, req.accountId, req.isolated, req.folder, model) : deps.newAgent(req.agentId, req.accountId, req.isolated, req.folder));
     }
@@ -112,6 +116,7 @@ export async function runStart(req: StartRequest, deps: StartDeps): Promise<stri
   if (!paneId) return null; // the starting view shows why
   try {
     await deps.send(paneId, req.prompt);
+    markChat('start:sent');
   } catch (error) {
     deps.notify(`The agent started, but your message was not sent: ${errText(error)}`);
   }

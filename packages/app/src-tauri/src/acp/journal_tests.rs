@@ -186,3 +186,48 @@ fn attachments_survive_a_restart_and_an_old_record_still_loads() {
     // An item without any is written without the field.
     assert!(!serde_json::to_string(&user(2, "x")).unwrap().contains("attachments"));
 }
+
+fn session_line() -> ChatItem {
+    ChatItem::Session { id: "session".into(), at: None, model: None, cli_version: None }
+}
+
+#[test]
+fn a_session_line_before_the_first_message_is_not_an_earlier_page() {
+    // The chat starts with its session line (not a message): the first message has nothing earlier to show.
+    let d = dir();
+    let path = d.join("c.jsonl");
+    let journal = Journal::at(&path);
+    journal.append(&session_line());
+    journal.append(&user(0, "hello"));
+    journal.append(&assistant("a0", "hi"));
+    journal.flush();
+    settle();
+    let probe = page_before(&path, "u0", 0);
+    assert!(probe.items.is_empty());
+    assert!(!probe.more, "u0 is the first message: nothing earlier");
+    let page = page_before(&path, "a0", 50);
+    assert!(!page.more);
+    let ids: Vec<&str> = page.items.iter().map(|i| i.id()).collect();
+    assert_eq!(ids, vec!["session", "u0"]);
+}
+
+#[test]
+fn a_page_before_the_second_message_still_reaches_the_first() {
+    let d = dir();
+    let path = d.join("c.jsonl");
+    let journal = Journal::at(&path);
+    journal.append(&session_line());
+    journal.append(&user(0, "first"));
+    journal.append(&user(1, "second"));
+    journal.append(&user(2, "third"));
+    journal.flush();
+    settle();
+    // The page before u1 holds u0 and nothing more: the session line is not "more".
+    let last = page_before(&path, "u1", 1);
+    assert_eq!(last.items.iter().map(|i| i.id()).collect::<Vec<_>>(), vec!["u0"]);
+    assert!(!last.more);
+    // A page before u2 with one item still has u0 and u1 behind it: more is true.
+    let middle = page_before(&path, "u2", 1);
+    assert_eq!(middle.items.iter().map(|i| i.id()).collect::<Vec<_>>(), vec!["u1"]);
+    assert!(middle.more);
+}

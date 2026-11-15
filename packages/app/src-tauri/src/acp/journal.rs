@@ -108,9 +108,17 @@ pub fn page_before(path: &Path, before: &str, limit: usize) -> Page {
     let all = load_all(path).items;
     let Some(at) = all.iter().position(|item| item.id() == before) else { return Page::default() };
     let start = at.saturating_sub(limit);
-    let more = start > 0;
+    // "More" counts only the items a reader shows as the conversation. A session line, a usage line or a notice that
+    // stands before the first message is not a reason to offer "Show earlier" (the view would show an empty row).
+    let more = all[..start].iter().any(is_conversation);
     let items = all[start..at].to_vec();
     Page { items, more }
+}
+
+/// The kinds the chat shows in order as the conversation (a message, a step, a turn's end, a thought). The others (the
+/// session line, usage, plan, notices) keep one place and are not "earlier messages" on their own.
+pub fn is_conversation(item: &ChatItem) -> bool {
+    matches!(item, ChatItem::User { .. } | ChatItem::Assistant { .. } | ChatItem::ToolCall { .. } | ChatItem::ToolResult { .. } | ChatItem::TurnEnd { .. } | ChatItem::Thinking { .. })
 }
 
 struct State {

@@ -1090,6 +1090,7 @@ impl AcpChat {
         let wire = self.wire_text(text);
         match self.session.prompt_message(&wire, attachments) {
             Ok(_) => {
+                crate::startup_timing::mark(&self.pane_id, "chat_prompt_sent");
                 self.sign_in_held.lock().take();
                 // A standby the person opened is theirs ("With you") while this turn runs.
                 crate::acp::warm::note_person_send(&self.pane_id);
