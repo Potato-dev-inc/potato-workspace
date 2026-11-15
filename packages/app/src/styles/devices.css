@@ -349,6 +349,20 @@
   border-radius: 999px;
   cursor: pointer;
 }
+/* In the New agent composer row: the same quiet chip as the project and agent pills. */
+.dev-where--row .dev-where-pill {
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--label-2);
+}
+.dev-where--row .dev-where-pill:hover,
+.dev-where--row .dev-where-pill[aria-expanded='true'] {
+  background: var(--fill-hover, var(--fill));
+  color: var(--label);
+}
 .dev-where-menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -389,6 +403,29 @@
 .dev-where-row small {
   color: var(--label-3);
   font-size: 11px;
+}
+
+/* The phone's new-chat screen inside the desktop page: the `.ph` wrapper brings the phone tokens and styles, this keeps it in the
+   page (the phone version is a full-screen layer) and a comfortable width. */
+.ph.dev-ph-embed {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: 720px;
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  background: transparent;
+}
+.ph.dev-ph-embed .ph-nc {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  flex: 1;
+  min-height: 0;
+  padding-top: 0;
+  background: transparent;
 }
 
 /* The simple view of a pane on another device. */

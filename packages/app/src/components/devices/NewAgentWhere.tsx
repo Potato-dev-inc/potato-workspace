@@ -5,7 +5,7 @@
 // button) that opens a terminal there; chats are not offered over SSH.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
-import { devicesApi, runtimesOf, stateSentence, type Device, type DevicesApi, type DevicesView } from '../../lib/devices';
+import { cannotPickWhy, devicesApi, runtimesOf, stateSentence, type Device, type DevicesApi, type DevicesView } from '../../lib/devices';
 import { makeRemoteClient } from '../../lib/runtime/remote';
 import { sshApi, type SshApi, type SshHost } from '../../lib/ssh';
 import { tauriWslApi, type WslApi } from '../../lib/wsl';
@@ -28,13 +28,49 @@ export interface WhereProps {
   wsl?: WslApi;
 }
 
-export function NewAgentWhere({ where, children }: { where?: WhereProps; children: ReactNode }) {
+const STORE_KEY = 'pm.newAgent.where';
+
+/** The place last used for a project ('' = no project). Nothing when nothing was saved or storage is closed. */
+function readPlace(key: string): string | null {
+  try {
+    const all = JSON.parse(window.localStorage.getItem(STORE_KEY) ?? '{}') as Record<string, unknown>;
+    const v = all[key];
+    return typeof v === 'string' && v ? v : null;
+  } catch {
+    return null;
+  }
+}
+function writePlace(key: string, id: string | null): void {
+  try {
+    const all = JSON.parse(window.localStorage.getItem(STORE_KEY) ?? '{}') as Record<string, unknown>;
+    if (id) all[key] = id;
+    else delete all[key];
+    window.localStorage.setItem(STORE_KEY, JSON.stringify(all));
+  } catch {
+    /* the place is simply not remembered */
+  }
+}
+
+/**
+ * `children` is the usual body. As a function it receives the Where pill and draws it itself, inside its own row (the full New
+ * agent page puts it before the project pill); as plain nodes the pill sits above them (the sidebar menu).
+ * `remember` (a project path, or '' for none) turns on "remember the last place per project".
+ */
+export function NewAgentWhere({ where, children, remember }: { where?: WhereProps; children: ReactNode | ((pill: ReactNode) => ReactNode); remember?: string }) {
   const t = useT();
   const api = where?.api ?? devicesApi;
   const sshLayer = where?.ssh ?? sshApi;
   const wslLayer = where?.wsl ?? tauriWslApi;
   /** `null` is This PC; otherwise a device node, `wsl:<distro>` or `ssh:<id>`. */
-  const [pick, setPick] = useState<string | null>(null);
+  const [pick, setPickRaw] = useState<string | null>(() => (remember === undefined ? null : readPlace(remember)));
+  const setPick = (id: string | null) => {
+    setPickRaw(id);
+    if (remember !== undefined) writePlace(remember, id);
+  };
+  // Another project: its own last place.
+  useEffect(() => {
+    if (remember !== undefined) setPickRaw(readPlace(remember));
+  }, [remember]);
   const [open, setOpen] = useState(false);
   const [distros, setDistros] = useState<string[]>([]);
   const [hosts, setHosts] = useState<SshHost[]>([]);
@@ -57,26 +93,28 @@ export function NewAgentWhere({ where, children }: { where?: WhereProps; childre
     };
   }, [enabled, open, wslLayer, sshLayer]);
   const runtimes = useMemo(() => runtimesOf(where?.view ?? null, distros, hosts), [where?.view, distros, hosts]);
-  const picked = where?.view?.devices.find((d) => d.node === pick) ?? null;
+  // A remembered device that is offline now cannot be used: This PC shows, and the memory is kept for next time.
+  const picked = where?.view?.devices.find((d) => d.node === pick && cannotPickWhy(d) === null) ?? null;
   const pickedWsl = pick?.startsWith('wsl:') ? runtimes.find((r) => r.id === pick && r.kind === 'wsl') : undefined;
   const pickedSsh = pick?.startsWith('ssh:') ? runtimes.find((r) => r.id === pick && r.kind === 'ssh') : undefined;
   const bridge = useMemo(() => (picked ? makeRemoteClient(picked.node, api) : null), [picked?.node, api]);
   // A closed menu and a click elsewhere end the picker; a device that went away ends the pick.
   useDismissable(open, { inside: [wrap], anchor: wrap, ignore: ['escape'], onDismiss: () => setOpen(false) });
   useEffect(() => {
-    if (pick && !pick.startsWith('wsl:') && !pick.startsWith('ssh:') && !picked) setPick(null);
-  }, [pick, picked]);
-  if (!enabled) return <>{children}</>;
+    if (pick && !pick.startsWith('wsl:') && !pick.startsWith('ssh:') && !where?.view?.devices.some((d) => d.node === pick)) setPickRaw(null);
+  }, [pick, where?.view]);
+  const inline = typeof children === 'function';
+  const body = (pill: ReactNode): ReactNode => (typeof children === 'function' ? children(pill) : children);
+  if (!enabled) return <>{body(null)}</>;
   const here = picked ? picked.name : pickedWsl ? pickedWsl.label : pickedSsh ? pickedSsh.label : t('devices.thisPc');
   const startedHere = (paneId: string) => {
-    setPick(null);
+    setPickRaw(null);
     where?.onStartedHere?.(paneId);
   };
-  return (
-    <>
-      <div className="dev-where" ref={wrap} data-testid="where">
-        <span>{t('devices.where')}</span>
-        <button type="button" className="dev-where-pill" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="where-pill">
+  const pill = (
+      <div className={`dev-where${inline ? ' dev-where--row' : ''}`} ref={wrap} data-testid="where">
+        {!inline && <span>{t('devices.where')}</span>}
+        <button type="button" className="dev-where-pill" aria-label={inline ? `${t('devices.where')}: ${here}` : undefined} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="where-pill">
           {here} ▾
         </button>
         {open && (
@@ -110,23 +148,32 @@ export function NewAgentWhere({ where, children }: { where?: WhereProps; childre
           </div>
         )}
       </div>
+  );
+  return (
+    <>
+      {!inline && pill}
       {picked && bridge ? (
+        // The phone screens are styled under `.ph` (tokens and layout): the wrapper brings them to the desktop page.
+        <div className="ph dev-ph-embed" data-testid="where-body">
         <PhoneNewChat
           key={picked.node}
+          leading={inline ? pill : null}
           bridge={bridge}
           canControl={picked.level === 'full'}
           onClose={() => setPick(null)}
           onStarted={(paneId, lane) => {
-            setPick(null);
+            // The place stays remembered: the next New agent for this project opens there again.
+            setPickRaw(null);
             where!.onStarted(picked, paneId, lane === 'chat');
           }}
         />
+        </div>
       ) : pickedWsl && pickedWsl.kind === 'wsl' ? (
-        <WslPanel key={pickedWsl.id} distro={pickedWsl.distro} api={wslLayer} onStarted={startedHere} />
+        <WslPanel key={pickedWsl.id} leading={inline ? pill : null} distro={pickedWsl.distro} api={wslLayer} onStarted={startedHere} />
       ) : pickedSsh && pickedSsh.kind === 'ssh' ? (
-        <SshPanel key={pickedSsh.id} host={pickedSsh.host} api={sshLayer} onStarted={startedHere} />
+        <SshPanel key={pickedSsh.id} leading={inline ? pill : null} host={pickedSsh.host} api={sshLayer} onStarted={startedHere} />
       ) : (
-        children
+        body(pill)
       )}
     </>
   );

@@ -1,7 +1,7 @@
 // The body of New agent while a Linux distro of this PC, or an SSH machine, is picked in "Where": an agent, a folder, and one
 // button. A terminal opens there. (A paired device gets the phone-style new chat instead; chats are not offered over SSH.)
 // What the person typed is only handed to the command layer, which checks every part itself.
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import { errorSentence } from '../../lib/sayError';
 import '../../styles/devices.css';
@@ -13,6 +13,8 @@ export interface PlaceAgent {
 
 export interface PlacePanelProps {
   testId: string;
+  /** Drawn first (the desktop's Where pill). */
+  leading?: ReactNode;
   agents: PlaceAgent[];
   /** Said when there is nothing to start. */
   noneText: string;
@@ -51,6 +53,7 @@ export function PlacePanel(p: PlacePanelProps) {
   };
   return (
     <div className="dev-place" data-testid={p.testId}>
+      {p.leading}
       {p.notes?.map((n) => (
         <p key={n} className="dev-note">
           {n}

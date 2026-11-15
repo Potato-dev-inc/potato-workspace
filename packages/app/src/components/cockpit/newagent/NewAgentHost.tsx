@@ -47,8 +47,10 @@ export function NewAgentHost({
   const openIds = useMemo(() => c.registry.paneList.map((p) => p.info.id), [c.registry.paneList]);
 
   return (
-    <NewAgentWhere where={where}>
+    <NewAgentWhere where={where} remember={project?.path ?? ''}>
+      {(pill) => (
     <NewAgentPage
+      leading={pill}
       agents={listing.agents}
       panes={briefs}
       needs={briefs.filter((p) => waiting.has(p.id))}
@@ -67,6 +69,7 @@ export function NewAgentHost({
       onSignIn={(agentId, folder) => c.newAgent(agentId, undefined, false, folder, undefined, 'terminal')}
       onStart={(request) => runStart(request, realStartDeps({ newAgent: c.newAgent, select: c.select, notify: c.notify }))}
     />
+      )}
     </NewAgentWhere>
   );
 }
