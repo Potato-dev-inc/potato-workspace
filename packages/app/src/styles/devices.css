@@ -794,3 +794,23 @@
 .dev-getit .dev-btn {
   padding: 6px 14px;
 }
+
+/* The phone's chat view on a desktop pane: `.ph` brings the phone tokens and styles; `.ph-chat` fills its nearest positioned box. */
+.dev-remote-ph {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--label);
+  font-family: var(--font-ui);
+}
+
+/* The phone's chat view on a desktop pane: `.ph` brings the phone tokens and styles; `.ph-chat` fills its nearest positioned box. */
+.dev-remote-ph {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--label);
+  font-family: var(--font-ui);
+}

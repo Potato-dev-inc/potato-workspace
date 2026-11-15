@@ -186,7 +186,7 @@ export function NewAgentSheet({
                 </span>
                 {!entry.disabled && (
                   <span className="ph-chev" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
+                    <svg viewBox="0 0 24 24" width="20" height="20">
                       <path d="m9 5 7 7-7 7" />
                     </svg>
                   </span>
@@ -397,7 +397,7 @@ export function MenuSheet({
             <button type="button" onClick={onOpenToday} className="ph-row" data-testid="phone-menu-today">
               <span className="ph-rowtext">{t('timeline.phone.title')}</span>
               <span className="ph-chev" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
+                <svg viewBox="0 0 24 24" width="20" height="20">
                   <path d="m9 5 7 7-7 7" />
                 </svg>
               </span>
@@ -412,7 +412,7 @@ export function MenuSheet({
               <button type="button" onClick={onOpenPlans} className="ph-row">
                 <span className="ph-rowtext">{t('phone.menu.plans')}</span>
                 <span className="ph-chev" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
+                  <svg viewBox="0 0 24 24" width="20" height="20">
                     <path d="m9 5 7 7-7 7" />
                   </svg>
                 </span>
@@ -428,7 +428,7 @@ export function MenuSheet({
               <button type="button" onClick={onOpenWhatsNew} className="ph-row" data-testid="phone-menu-whatsnew">
                 <span className="ph-rowtext">{t('phone.menu.whatsNew')}</span>
                 <span className="ph-chev" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
+                  <svg viewBox="0 0 24 24" width="20" height="20">
                     <path d="m9 5 7 7-7 7" />
                   </svg>
                 </span>

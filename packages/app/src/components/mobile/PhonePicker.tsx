@@ -15,7 +15,7 @@ import '../../styles/phone-pick.css';
 
 function Shield() {
   return (
-    <svg className="ph-pick-shield" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className="ph-pick-shield" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
       <path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z" />
       <path d="M12 8v5M12 16v.5" />
     </svg>
@@ -109,7 +109,7 @@ export function PhonePicker({
     <>
       <button type="button" className="ph-comp-model ph-pick-pill" data-testid="phone-pick-pill" aria-haspopup="dialog" aria-label={`${t('phone.pick.open')}: ${pill}`} onClick={() => setOpen(true)}>
         <span>{pill}</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <path d="m7 10 5 5 5-5" />
         </svg>
       </button>
@@ -145,7 +145,7 @@ export function PhonePicker({
                           {full && <span className="ph-pick-desc">{t('phone.pick.fullWarn')}</span>}
                         </span>
                         {on && (
-                          <svg className="ph-pick-tick" viewBox="0 0 24 24" role="img" aria-label={t('phone.pick.current')}>
+                          <svg className="ph-pick-tick" viewBox="0 0 24 24" width="20" height="20" role="img" aria-label={t('phone.pick.current')}>
                             <path d="m5 12.5 4.5 4.5L19 7.5" />
                           </svg>
                         )}

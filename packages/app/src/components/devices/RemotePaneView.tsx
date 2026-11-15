@@ -41,16 +41,19 @@ export function RemotePaneView({ device, row, api = devicesApi, onRetry }: { dev
         {showFiles ? (
           <FilesView device={device} api={api} startAt={{ folderName }} onClose={() => setShowFiles(false)} />
         ) : row.chat ? (
-          <PhoneChatView
-            key={row.paneId}
-            bridge={bridge}
-            paneId={row.paneId}
-            canWatch={device.state !== 'not_allowed'}
-            canType={canType}
-            link={device.state === 'online' ? 'connected' : 'offline'}
-            acp
-            canControl={canType}
-          />
+          // The chat is the phone's view and its styles live under `.ph` (the phone shell), so it needs that class here too.
+          <div className="ph dev-remote-ph" data-testid="remote-chat-scope">
+            <PhoneChatView
+              key={row.paneId}
+              bridge={bridge}
+              paneId={row.paneId}
+              canWatch={device.state !== 'not_allowed'}
+              canType={canType}
+              link={device.state === 'online' ? 'connected' : 'offline'}
+              acp
+              canControl={canType}
+            />
+          </div>
         ) : (
           <RemoteScreen device={device} paneId={row.paneId} api={api} canType={canType} />
         )}

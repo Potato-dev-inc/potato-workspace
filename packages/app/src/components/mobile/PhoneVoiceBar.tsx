@@ -31,12 +31,12 @@ export function PhoneVoiceBar({ words, onKeep, onDrop }: { words: string; onKeep
       </span>
       <span className="ph-voice-time">{clockWords(seconds)}</span>
       <button type="button" className="ph-voice-btn" aria-label={t('phone.voice.drop')} data-testid="phone-voice-drop" onClick={onDrop}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       </button>
       <button type="button" className="ph-voice-btn ph-voice-keep" aria-label={t('phone.voice.keep')} data-testid="phone-voice-keep" onClick={onKeep}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <path d="M5 12.5l4.5 4.5L19 7.5" />
         </svg>
       </button>

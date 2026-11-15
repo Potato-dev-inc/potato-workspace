@@ -310,7 +310,7 @@ export function PhoneComposer({
         <div className="ph-comp-row">
           <div className="ph-comp-plus">
             <button type="button" className="ph-comp-btn" aria-label={t('phone.composer.add')} aria-haspopup="menu" aria-expanded={plus} disabled={blocked} onClick={() => setPlus((v) => !v)}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
               </svg>
             </button>
@@ -339,7 +339,7 @@ export function PhoneComposer({
           </button>
           {stopMode ? (
             <button type="button" className="ph-comp-send ph-comp-stop" data-testid="phone-stop" disabled={stopping} aria-label={t('phone.composer.stop')} onClick={() => void stop()}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
                 <rect x="7" y="7" width="10" height="10" rx="2" />
               </svg>
             </button>
@@ -347,13 +347,13 @@ export function PhoneComposer({
             <>
               {stopBeside && (
                 <button type="button" className="ph-comp-btn ph-comp-stop-small" data-testid="phone-stop-small" disabled={stopping} aria-label={t('phone.composer.stop')} onClick={() => void stop()}>
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
                     <rect x="7" y="7" width="10" height="10" rx="2" />
                   </svg>
                 </button>
               )}
               <button type="submit" className="ph-comp-send" data-ready={!(blocked || busy || empty || tooLong || attach.uploading || mic.recording) || undefined} disabled={blocked || busy || empty || tooLong || attach.uploading || mic.recording} aria-label={t('phone.composer.send')}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
                   <path d="M12 19V5M5 12l7-7 7 7" />
                 </svg>
               </button>

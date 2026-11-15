@@ -40,7 +40,7 @@ export function ContextMeter({ reading }: { reading: ContextReading | null }) {
         aria-controls={open ? `${uid}-pop` : undefined}
         onClick={() => setOpen((v) => !v)}
       >
-        <svg viewBox="0 0 20 20" aria-hidden="true">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
           <circle className="ck-ctx-bg" cx="10" cy="10" r="8" />
           <circle className="ck-ctx-fg" cx="10" cy="10" r="8" strokeDasharray={CIRCUMFERENCE} strokeDashoffset={CIRCUMFERENCE * (1 - percent / 100)} />
         </svg>

@@ -183,7 +183,7 @@ export function ResultCard({
           aria-haspopup="dialog"
         >
           <span className="ph-result-head">
-            <svg className="ph-result-tick" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="ph-result-tick" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
               <path d="m5 12.5 4.5 4.5L19 7.5" />
             </svg>
             {heading}
@@ -340,7 +340,7 @@ function ResultScreen({
           aria-label={t("phone.result.close")}
           onClick={onClose}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
             <path d="M15 5l-7 7 7 7" />
           </svg>
         </button>
